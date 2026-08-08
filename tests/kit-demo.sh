@@ -8,7 +8,10 @@
 # the gate says it catches:
 #
 #   1.  RED    before bootstrap — no root manual, so the gate refuses
-#   2.  GREEN  bootstrap stamps, wires, self-deletes; the gate passes
+#   2.  GREEN  bootstrap stamps AGENTS.md and the two shims, wires,
+#              self-deletes; the gate passes
+#   2b. GREEN  the three entry points exist and the shims are PURE — then RED
+#              when a shim grows content, and RED when AGENTS.md is deleted
 #   3.         a second bootstrap is refused (idempotency)
 #   4.  GREEN  the harness's own fixture tests pass inside the project
 #   4b. GREEN  the skills came through un-stamped and intact, every command in
@@ -90,11 +93,15 @@ assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
 # Snapshot / restore the manual layer, so each red step starts from green.
 save_good() {
+	cp AGENTS.md "$SCRATCH/AGENTS.md.good"
 	cp CLAUDE.md "$SCRATCH/CLAUDE.md.good"
+	cp GEMINI.md "$SCRATCH/GEMINI.md.good"
 	cp constitution/shared-invariants.md "$SCRATCH/shared-invariants.good"
 }
 restore_good() {
+	cp "$SCRATCH/AGENTS.md.good" AGENTS.md
 	cp "$SCRATCH/CLAUDE.md.good" CLAUDE.md
+	cp "$SCRATCH/GEMINI.md.good" GEMINI.md
 	cp "$SCRATCH/shared-invariants.good" constitution/shared-invariants.md
 	rm -f constitution/local-notes.md
 }
@@ -132,8 +139,8 @@ banner "2. GREEN — bootstrap, then the gate"
 assert_status 0 "bootstrap.sh runs" -- sh bootstrap.sh "$PROJECT_NAME" "A throwaway project proving the kit walks."
 printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
 
-assert_file "CLAUDE.md"
-assert_no_file "constitution/CLAUDE.md.template"
+assert_file "AGENTS.md"
+assert_no_file "constitution/AGENTS.md.template"
 assert_no_file "bootstrap.sh"
 assert_no_file "tests/kit-demo.sh"
 assert_no_file ".github/workflows/kit-ci.yml"
@@ -143,8 +150,8 @@ assert_file "constitution/local-workflow.md.template"
 assert_file "scripts/docs-conformance/local-vocabulary.mjs"
 assert_no_file "scripts/docs-conformance/local-vocabulary.mjs.template"
 
-grep -q "$PROJECT_NAME" CLAUDE.md && pass "CLAUDE.md carries the project name" ||
-	fail "CLAUDE.md was not stamped with the project name"
+grep -q "$PROJECT_NAME" AGENTS.md && pass "AGENTS.md carries the project name" ||
+	fail "AGENTS.md was not stamped with the project name"
 grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 	pass "local-vocabulary.mjs carries the project name" ||
 	fail "local-vocabulary.mjs was not stamped"
@@ -152,9 +159,9 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 	fail "core.hooksPath is '$(git config core.hooksPath)', expected .githooks"
 
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
-# nothing, and the gate must see the new CLAUDE.md anyway.
+# nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.2.0"
+assert_out_has "shared-layer 0.3.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else
@@ -162,6 +169,61 @@ else
 fi
 
 save_good
+
+# ---------------------------------------------------------------------------
+banner "2b. The three entry points — one manual, two shims that stay shims"
+# ---------------------------------------------------------------------------
+# AGENTS.md is the manual. CLAUDE.md and GEMINI.md exist so a tool that looks for
+# its own filename finds the same rules — which is only true while they contain
+# nothing but the import. The claim has two halves and both are checked here:
+# the files are there, and they are PURE.
+assert_file "AGENTS.md"
+assert_file "CLAUDE.md"
+assert_file "GEMINI.md"
+
+# Purity, stated as the gate states it: dropping blanks, a shim holds exactly one
+# `@AGENTS.md` line and at most one comment line. Anything else is a rule living
+# in a tool-specific file, which is the whole failure mode.
+for shim in CLAUDE.md GEMINI.md; do
+	imports=$(grep -c '^@AGENTS\.md$' "$shim")
+	other=$(grep -v '^[[:space:]]*$' "$shim" | grep -vc -e '^@AGENTS\.md$' -e '^<!--.*-->$')
+	if [ "$imports" = 1 ] && [ "$other" = 0 ]; then
+		pass "$shim is a pure shim (one @AGENTS.md import, no rules of its own)"
+	else
+		fail "$shim is not a pure shim — $imports import line(s), $other other line(s)"
+		sed 's/^/        | /' "$shim"
+	fi
+done
+
+# RED — a shim that grows a rule. Only the harness sees this: it is a content
+# rule, and the POSIX fallback says in its own NOTICE that it does not check it.
+if [ "$HAVE_NODE" = 1 ]; then
+	printf '\n## Extra rule\n\nAlways squash before merging.\n' >>CLAUDE.md
+	assert_status 1 "check.sh rejects a shim that has grown content" -- sh scripts/check.sh
+	assert_out_has "shim-invalid"
+	assert_out_has "CLAUDE.md"
+	restore_good
+	assert_status 0 "check.sh is green again once the shim is pure" -- sh scripts/check.sh
+
+	# And a deleted shim, which is the other half of the same claim: that tool
+	# now loads no manual at all.
+	mv GEMINI.md "$SCRATCH/GEMINI.md.moved"
+	assert_status 1 "check.sh rejects a missing shim" -- sh scripts/check.sh
+	assert_out_has "shim-invalid"
+	assert_out_has "GEMINI.md"
+	mv "$SCRATCH/GEMINI.md.moved" GEMINI.md
+else
+	skip "shim integrity (no node — the fallback's NOTICE says it cannot see this)"
+fi
+
+# RED — the manual itself renamed away. This one is POSIX, so it holds with or
+# without node: a project whose shims point at nothing is broken whichever
+# engine is available.
+mv AGENTS.md "$SCRATCH/AGENTS.md.moved"
+assert_status 1 "check.sh rejects a deleted AGENTS.md" -- sh scripts/check.sh
+assert_out_has "root-manual-missing"
+mv "$SCRATCH/AGENTS.md.moved" AGENTS.md
+assert_status 0 "check.sh is green again once the manual is back" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------
 banner "3. Idempotency — bootstrap refuses a second run"
@@ -218,7 +280,7 @@ fi
 # Commands as the harness reads them: code spans outside fences, split into
 # words, keeping the tokens that OPEN with a slash command.
 manual_commands() {
-	awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' CLAUDE.md |
+	awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' AGENTS.md |
 		grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n' |
 		grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u
 }
@@ -238,11 +300,11 @@ for cmd in $(manual_commands); do
 	if [ -f ".claude/skills/${cmd#/}/SKILL.md" ]; then
 		resolved=$((resolved + 1))
 	else
-		fail "CLAUDE.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
+		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
 [ "$resolved" -ge 12 ] &&
-	pass "all $resolved slash commands in CLAUDE.md resolve to a skill" ||
+	pass "all $resolved slash commands in AGENTS.md resolve to a skill" ||
 	fail "only $resolved commands resolved — the manual should map the whole chain"
 
 # (c) The other direction. An unreferenced skill is the article-unreferenced
@@ -252,7 +314,7 @@ for d in .claude/skills/*/; do
 	[ -f "$d/SKILL.md" ] || continue
 	name=$(basename "$d")
 	manual_commands | grep -qx "/$name" || {
-		fail ".claude/skills/$name ships but CLAUDE.md never names /$name"
+		fail ".claude/skills/$name ships but AGENTS.md never names /$name"
 		orphans=$((orphans + 1))
 	}
 done
@@ -283,7 +345,7 @@ assert_status 0 "the pre-push hook is executable" -- test -x .githooks/pre-push
 # ---------------------------------------------------------------------------
 banner "6. RED — an unstamped placeholder fails the gate and blocks the push"
 # ---------------------------------------------------------------------------
-printf '\nOwner: {{PROJECT_OWNER}}\n' >>CLAUDE.md
+printf '\nOwner: {{PROJECT_OWNER}}\n' >>AGENTS.md
 assert_status 1 "check.sh rejects the surviving placeholder" -- sh scripts/check.sh
 assert_out_has "placeholder-unstamped"
 
@@ -313,7 +375,7 @@ banner "8. RED — a planted STALE PATH fails the real validator"
 # This is the failure the K0 stopgap could only approximate. The reference now
 # goes through claude-md-refs: whole-code-span matching, configured path roots,
 # and a violation that names the validator and the rule.
-printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>CLAUDE.md
+printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>AGENTS.md
 assert_status 1 "check.sh rejects the stale path reference" -- sh scripts/check.sh
 assert_out_has "ghost-guide"
 if [ "$HAVE_NODE" = 1 ]; then
@@ -328,7 +390,7 @@ banner "9. RED — a planted STALE SLASH COMMAND fails the real validator"
 # Not reachable by the POSIX fallback at all: it needs command-span parsing and
 # skill-directory resolution. This is the coverage the harness buys.
 if [ "$HAVE_NODE" = 1 ]; then
-	printf '\nWhen finished, run `/ghost-command` to wrap up.\n' >>CLAUDE.md
+	printf '\nWhen finished, run `/ghost-command` to wrap up.\n' >>AGENTS.md
 	assert_status 1 "check.sh rejects the dead slash command" -- sh scripts/check.sh
 	assert_out_has "skill-missing"
 	assert_out_has "ghost-command"
@@ -362,7 +424,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 	assert_status 1 "check.sh rejects the unreachable article" -- sh scripts/check.sh
 	assert_out_has "article-unreferenced"
 
-	printf '\nLocal notes live in `constitution/local-notes.md`.\n' >>CLAUDE.md
+	printf '\nLocal notes live in `constitution/local-notes.md`.\n' >>AGENTS.md
 	assert_status 0 "check.sh passes once the root points at it" -- sh scripts/check.sh
 	restore_good
 else
@@ -379,7 +441,7 @@ assert_status 0 "fallback passes on the clean tree" -- env DOCS_CHECK_NO_NODE=1 
 assert_out_has "reduced coverage"
 assert_out_has "engine: fallback"
 
-printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>CLAUDE.md
+printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>AGENTS.md
 assert_status 1 "fallback still catches a stale repo path" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 assert_out_has "ghost-guide"
 restore_good
@@ -392,7 +454,7 @@ restore_good
 # ---------------------------------------------------------------------------
 banner "13. The bypass is real, and loud"
 # ---------------------------------------------------------------------------
-printf '\nOwner: {{PROJECT_OWNER}}\n' >>CLAUDE.md
+printf '\nOwner: {{PROJECT_OWNER}}\n' >>AGENTS.md
 git add -A
 git commit -q --allow-empty -m "docs: reintroduce the bad line to test the bypass"
 out=$(PUSH_WITHOUT_DOCS=1 git push origin main 2>&1)

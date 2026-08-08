@@ -123,7 +123,7 @@ GUARD_TEST_RE='\.(test|spec)\.(ts|tsx|mjs)$|\.feature$'
 #                   live in a library. Clients branch on them.
 #   Prompt surfaces if the product's surface IS prompt text, editing that text
 #                   is editing behavior and the compiler will never say so.
-BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^CLAUDE\.md$|/CLAUDE\.md$|^constitution/|^\.claude/|^\.githooks/|^scripts/
+BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^AGENTS\.md$|/AGENTS\.md$|^CLAUDE\.md$|^GEMINI\.md$|^constitution/|^\.claude/|^\.githooks/|^scripts/
 Architecture decisions|^docs/adr/
 API surface (OpenAPI / GraphQL / protobuf)|^docs/api/openapi\.yaml$|\.graphql$|\.proto$
 Persistence (schema + migrations)|^packages/db/|^prisma/schema\.prisma$|^migrations/|^docs/db-design\.md$

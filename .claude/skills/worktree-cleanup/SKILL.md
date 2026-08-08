@@ -7,7 +7,7 @@ description: Prune merged feature worktrees, fast-forward the root checkout's ba
 
 ## What this does
 
-Closes the lifecycle the root `CLAUDE.md`'s first hard rule opens. Agents create
+Closes the lifecycle the root `AGENTS.md`'s first hard rule opens. Agents create
 `worktree/<slug>` per feature, but after the pull request merges the worktree,
 its local branch, and the diary's "Active worktrees" row are all left behind —
 and the root checkout's base branch goes stale, so the next worktree branches
@@ -73,6 +73,6 @@ Both are environment variables read by the script, both optional:
 
 ## Cross-references
 
-- The root `CLAUDE.md`, hard rule 1 — why the worktrees exist at all.
+- The root `AGENTS.md`, hard rule 1 — why the worktrees exist at all.
 - `/merge-train` — runs this skill as its final step, once a batch has landed.
 - `docs/diary.md` — the update protocol step 3 obeys.

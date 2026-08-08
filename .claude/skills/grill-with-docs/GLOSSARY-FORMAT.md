@@ -1,7 +1,7 @@
 # Glossary format
 
 The project's ubiquitous language lives in `docs/domain-glossary.md` (the root
-`CLAUDE.md` names the real path — trust it over this file if they disagree).
+`AGENTS.md` names the real path — trust it over this file if they disagree).
 That file carries its own writing rules in its header; this sidecar is the short
 version, for use mid-grilling.
 

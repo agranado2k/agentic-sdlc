@@ -20,7 +20,8 @@ The files listed under `files:` in `VERSION`, and nothing else.
 
 They are copied **verbatim** from the kit. They name no product, no command, and
 no vendor, which is exactly what makes them copyable at all. Everything else in
-your repo — `CLAUDE.md`, `README.md`, `docs/`, your adapters — was stamped from
+your repo — `AGENTS.md` and its shims, `README.md`, `docs/`, your adapters — was
+stamped from
 a template and became **yours** the moment bootstrap wrote it. Those never
 update; you own them.
 
@@ -140,7 +141,7 @@ done <"$WORK/from.list"
 
 1. Read what you changed and why. It is almost always a local exception someone
    needed and wrote in the nearest available place.
-2. Move it to a local article — `CLAUDE.md`'s local-rules section, or a
+2. Move it to a local article — `AGENTS.md`'s local-rules section, or a
    `constitution/local-*.md` — where it belongs and where it survives updates.
 3. Restore the shared file to its `FROM_REF` content
    (`kit show "$FROM_REF:$f" >"$f"`), confirm step 3 is clean, and commit that
@@ -248,28 +249,38 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.2.0** (which adds
-`UPDATING.md` and edits the invariants). The consumer has one local edit to a
-shared file — the drift case, because the clean case teaches nothing.
+`constitution/shared-invariants.md` alone), updating to **0.3.0** (by which point
+the guards, the gate, the harness engine and this file have all joined the
+layer). The consumer has one local edit to a shared file — the drift case,
+because the clean case teaches nothing.
 
 Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
 
 ```console
 $ kit tag --list
 v0.1.0
-v0.2.0
+v0.3.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.2.0
+v0.1.0 -> v0.3.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
+scripts/behavior-delta.sh
+scripts/check.sh
+scripts/docs-conformance/context.mjs
+scripts/docs-conformance/index.mjs
+scripts/docs-conformance/runner.mjs
+scripts/docs-conformance/validators/claude-md-refs.mjs
+scripts/guards.lib.sh
+scripts/tdd-pairing-guard-ci.sh
+scripts/tdd-pairing-guard.sh
 UPDATING.md
 $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 330 ++++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 359 ++++++++++++++++++++++++++++++++++++++
  constitution/shared-invariants.md |   8 +-
- 2 files changed, 337 insertions(+), 1 deletion(-)
+ 2 files changed, 366 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -277,12 +288,12 @@ index 7661602..5c18e6a 100644
 --- a/constitution/shared-invariants.md
 +++ b/constitution/shared-invariants.md
 @@ -96,3 +96,3 @@ A rule that is neither is a suggestion. Label it as one or delete it.
-
+ 
 -## 9. Measure the ceiling
 +## 9. Measure the ceiling, don't assume it
-
+ 
 @@ -117,2 +117,8 @@ refactor first, on its own, with the suite green before and after.
-
+ 
 +Per §8 this rule is checkable rather than merely asserted, because the claim is machine-
 +visible: a commit whose declared type says "structure only" while its own diff touches a
 +contract artifact has contradicted itself. Review tooling should surface those commits as
@@ -305,26 +316,44 @@ clean   constitution/shared-invariants.md
 
 $ # step 5 — apply
   updated constitution/shared-invariants.md
+  updated scripts/behavior-delta.sh
+  updated scripts/check.sh
+  updated scripts/docs-conformance/context.mjs
+  updated scripts/docs-conformance/index.mjs
+  updated scripts/docs-conformance/runner.mjs
+  updated scripts/docs-conformance/validators/claude-md-refs.mjs
+  updated scripts/guards.lib.sh
+  updated scripts/tdd-pairing-guard-ci.sh
+  updated scripts/tdd-pairing-guard.sh
   updated UPDATING.md
 
 $ # step 6 — verbatim check, then the gate
 verbatim  constitution/shared-invariants.md
+verbatim  scripts/behavior-delta.sh
+verbatim  scripts/check.sh
+verbatim  scripts/docs-conformance/context.mjs
+verbatim  scripts/docs-conformance/index.mjs
+verbatim  scripts/docs-conformance/runner.mjs
+verbatim  scripts/docs-conformance/validators/claude-md-refs.mjs
+verbatim  scripts/guards.lib.sh
+verbatim  scripts/tdd-pairing-guard-ci.sh
+verbatim  scripts/tdd-pairing-guard.sh
 verbatim  UPDATING.md
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.2.0)
+OK  docs gate: all checks passed (shared-layer 0.3.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.2.0
+0.3.0
 ```
 
 Read the drift block again. The consumer had written a local exception **into**
 the shared rulebook. Step 3 found it in one command; the fix was to move those
-two lines to `CLAUDE.md` and restore the shared file to its 0.1.0 bytes, as its
+two lines to `AGENTS.md` and restore the shared file to its 0.1.0 bytes, as its
 own commit. Only then did step 5 run — and it is a plain overwrite, because
 there was nothing left to merge.
 
 Had the exception stayed where it was, step 5 would have silently destroyed it
 and nobody would have known which paragraph used to be there.
 
-The lesson is step 3. The update itself is four `git show` redirects; what makes
-it cheap or expensive is entirely whether anyone edited a file that was not
-theirs to edit.
+The lesson is step 3. The update itself is a `git show` redirect per shared
+file; what makes it cheap or expensive is entirely whether anyone edited a file
+that was not theirs to edit.

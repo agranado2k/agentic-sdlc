@@ -21,8 +21,14 @@ die() {
 	exit 1
 }
 
-TEMPLATE="constitution/CLAUDE.md.template"
-MANUAL="CLAUDE.md"
+TEMPLATE="constitution/AGENTS.md.template"
+MANUAL="AGENTS.md"
+# The manual is ONE file. AGENTS.md is the filename the agent-tool ecosystem has
+# converged on, and the tools that read a differently-named file get a SHIM: one
+# import line pointing at the manual, no rules of its own. Two manuals is the
+# failure mode this prevents — the moment a tool-specific file can hold a rule,
+# it does, and the rules diverge silently per tool.
+SHIMS="CLAUDE.md GEMINI.md"
 # The docs-gate policy file: seeded with your project name so the portability
 # guard protects the shared layer from your own vocabulary from the first run.
 VOCAB_TEMPLATE="scripts/docs-conformance/local-vocabulary.mjs.template"
@@ -55,6 +61,15 @@ cd "$root"
 # rules is not.
 [ -f "$MANUAL" ] &&
 	die "$MANUAL already exists — this repo looks bootstrapped already. Delete $MANUAL first if you really mean to re-stamp it."
+# Same reasoning one level down: a shim is written unconditionally, so a
+# pre-existing file at that path would be destroyed. If you arrived here with a
+# hand-written CLAUDE.md, its content is the thing worth keeping — move it into
+# the manual yourself, then delete it and re-run.
+for shim in $SHIMS; do
+	if [ -e "$shim" ]; then
+		die "$shim already exists, and bootstrap would overwrite it with a one-line shim. Move its content into $MANUAL, delete $shim, then re-run."
+	fi
+done
 [ -f "$TEMPLATE" ] ||
 	die "$TEMPLATE not found. Either this is not an agentic-sdlc repo, or bootstrap already ran."
 
@@ -108,6 +123,30 @@ sed \
 rm -f "$TEMPLATE"
 echo "  stamped $MANUAL"
 
+# ============================================================================
+# K7 BEGIN — the tool shims (#16)
+# ----------------------------------------------------------------------------
+# One manual, several tool-specific filenames. Each shim is written from
+# scratch — never stamped, never appended to — and holds exactly two lines: a
+# comment saying what it is, and the import line the tool resolves.
+#
+# The comment is an HTML comment on purpose: it renders as nothing and reads as
+# metadata rather than as a rule, which is the whole point. A shim that can hold
+# a rule stops being a shim.
+#
+# The docs gate enforces the shape (`shim-invalid` in the docs-conformance
+# harness), so a shim that grows a second instruction fails the push rather than
+# quietly becoming a rival manual.
+for shim in $SHIMS; do
+	cat >"$shim" <<EOF
+<!-- Shim: the agent manual is $MANUAL. Edit that file, not this one. -->
+@$MANUAL
+EOF
+	echo "  wrote   $shim (shim -> $MANUAL)"
+done
+# K7 END
+# ============================================================================
+
 if [ -f "$VOCAB_TEMPLATE" ]; then
 	sed -e "s|{{PROJECT_NAME}}|$name_js_esc|g" "$VOCAB_TEMPLATE" >"$VOCAB"
 	rm -f "$VOCAB_TEMPLATE"
@@ -137,7 +176,7 @@ echo "  wired core.hooksPath -> .githooks"
 # The templates/docs/ source tree is removed afterwards. A project holding both
 # a stamped docs/diary.md and an unstamped templates/docs/diary.md.template has
 # two answers to the same question, and bootstrap does not run a second time to
-# reconcile them — same reasoning as constitution/CLAUDE.md.template above.
+# reconcile them — same reasoning as constitution/AGENTS.md.template above.
 DOCS_TEMPLATES="templates/docs"
 today=$(date +%Y-%m-%d)
 today_esc=$(esc "$today")
@@ -223,12 +262,14 @@ Bootstrapped: $name
 
 Next:
   1. sh scripts/check.sh          run the docs gate — it should pass now
-  2. read CLAUDE.md               it is loaded into every agent session; every
-                                  line is yours to keep, cut, or replace
+  2. read AGENTS.md               it is loaded into every agent session; every
+                                  line is yours to keep, cut, or replace.
+                                  CLAUDE.md and GEMINI.md are one-line shims
+                                  importing it — never edit those
   3. fill in the two articles     constitution/local-engineering.md.template
                                   constitution/local-workflow.md.template
                                   replace the marks, drop the .template suffix,
-                                  then point CLAUDE.md's article layer at them
+                                  then point AGENTS.md's article layer at them
   4. edit scripts/guards.config.sh
                                   the TDD pairing guard is INACTIVE until you
                                   set GUARD_SOURCE_RE to match your source

@@ -10,13 +10,24 @@
 // The third is reachability: every article must be referenced from the root.
 //
 // The manual is LAYERED, and every layer is checked:
-//   - the root manual (config.claudeMdRefs.rootManual, default `CLAUDE.md`);
+//   - the root manual (config.claudeMdRefs.rootManual, default `AGENTS.md`);
 //   - the on-demand articles under config.claudeMdRefs.constitutionDir — an
 //     agent loads one and obeys it, so a stale command there poisons context
 //     exactly as the root would. Checking only the root would leave the layer
 //     that holds most of the prose completely unguarded;
 //   - the nested package manuals named in config.claudeMdRefs.nestedManuals,
-//     which an agent loads when it works in that tree.
+//     which an agent loads when it works in that tree. They carry the same
+//     filename as the root manual, because "what the manual is called" is one
+//     decision, not one per directory.
+//
+// Beside the manual sit the SHIMS (config.claudeMdRefs.shims): the entry points
+// other agent tools look for. Each must hold nothing but an import of the root
+// manual, plus at most one comment line saying that is all it is. `shim-invalid`
+// is the fourth rule, and the reason it exists is drift: a tool-specific file
+// that CAN hold a rule eventually does, and then the repo has two manuals whose
+// difference nobody can see. Like every other check here it is evaluated only
+// where the root manual exists — an unbootstrapped tree has no shims to be
+// wrong about.
 //
 // Reachability closes the other half of the article hole. Progressive
 // disclosure means an article is loaded only because the root pointed at it, so
@@ -29,7 +40,7 @@
 // a token whose first segment is one of config.claudeMdRefs.pathRoots resolves
 // repo-relative, from any manual; every other path-shaped token inside a NESTED
 // manual resolves against that manual's own directory. So `tests/` named in
-// `apps/api/CLAUDE.md` is the repo's test tree, while `src/tools.ts` is
+// `apps/api/AGENTS.md` is the repo's test tree, while `src/tools.ts` is
 // `apps/api/src/tools.ts`. Repo-level manuals never resolve package-relative.
 //
 // Finally, the shared article carries an extra obligation the others don't: it
@@ -38,10 +49,16 @@
 
 export const id = "claude-md-refs";
 
-const DEFAULT_ROOT_MANUAL = "CLAUDE.md";
+const DEFAULT_ROOT_MANUAL = "AGENTS.md";
 const DEFAULT_CONSTITUTION_DIR = ".claude/constitution";
 const DEFAULT_SKILLS_DIR = ".claude/skills";
-const MANUAL_FILE = "CLAUDE.md";
+
+// A shim's two legal line shapes. The import is the line the tool resolves; the
+// comment is an HTML comment, which renders as nothing and therefore cannot be
+// read as a rule — the distinction the whole rule rests on. Anything else,
+// including a markdown heading or a second import, is content.
+const SHIM_COMMENT = /^<!--[\s\S]*-->$/;
+const shimImportRe = (manual) => new RegExp(`^@${manual.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
 
 // A slash command is a single-segment, kebab-case token: `/tdd`, `/grill-me`.
 // Multi-segment spans (`/api/v1/reports`) are URLs/paths, not commands. Only
@@ -84,7 +101,7 @@ export function run(ctx) {
   const manuals = [
     { file: rootManual, base: "" },
     ...articles.map((file) => ({ file, base: "" })),
-    ...nested.map((dir) => ({ file: `${dir}/${MANUAL_FILE}`, base: dir })),
+    ...nested.map((dir) => ({ file: `${dir}/${rootManual}`, base: dir })),
   ];
 
   const out = manuals.flatMap(({ file, base }) => checkOne(ctx, file, base, pathRe));
@@ -93,10 +110,15 @@ export function run(ctx) {
     out.push(...checkPortability(ctx, file, cfg.portability.deny ?? []));
   }
 
-  // Reachability is only a question when there IS a root to be reached from —
-  // fixtures that model articles alone stay silent, as they do for the root.
+  // Everything below needs a root manual to exist. Reachability is only a
+  // question when there IS a root to be reached from, and a shim is only wrong
+  // when there is a manual for it to have failed to import — fixtures that
+  // model articles alone, and the kit's own unbootstrapped tree, stay silent.
   const root = ctx.read(rootManual);
   if (root == null) return out;
+
+  out.push(...checkShims(ctx, cfg.shims ?? [], rootManual));
+
   const referenced = extractRefs(root, pathRe, "").paths;
   for (const article of articles) {
     if (referenced.has(article)) continue;
@@ -260,6 +282,60 @@ function checkOne(ctx, file, base, pathRe) {
           ? "Create the file or remove the reference — the manual must describe reality."
           : `A nested manual resolves non-repo-rooted paths against its own directory (${base}/). Use a repo-rooted path if you meant the repo-level file.`,
     });
+  }
+
+  return out;
+}
+
+/**
+ * The tool shims must stay shims.
+ *
+ * Legal content, after blank lines are dropped: exactly one import line
+ * (`@<rootManual>`), and at most one HTML-comment line saying that is all the
+ * file is. That is the whole grammar, and it is deliberately unforgiving —
+ * "nothing but an import" is only checkable if there is no room to argue about
+ * what else counts as nothing.
+ *
+ * Called only when the root manual exists (see `run`), so a missing shim is
+ * reported as a real failure rather than as "this tree has no manual layer".
+ */
+function checkShims(ctx, shims, rootManual) {
+  const out = [];
+  const importRe = shimImportRe(rootManual);
+
+  for (const file of shims) {
+    const raw = ctx.read(file);
+    if (raw == null) {
+      out.push({
+        validator: id,
+        file,
+        rule: "shim-invalid",
+        message: `is listed as a shim for ${rootManual} but does not exist — that agent tool loads no manual at all`,
+        hint: `Create it containing exactly \`@${rootManual}\`, or drop it from claudeMdRefs.shims if you do not want that entry point.`,
+      });
+      continue;
+    }
+
+    const lines = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l !== "");
+    const imports = lines.filter((l) => importRe.test(l));
+    const extra = lines.filter((l) => !importRe.test(l) && !SHIM_COMMENT.test(l));
+    const comments = lines.filter((l) => SHIM_COMMENT.test(l));
+
+    if (imports.length !== 1 || extra.length > 0 || comments.length > 1) {
+      out.push({
+        validator: id,
+        file,
+        rule: "shim-invalid",
+        message:
+          imports.length === 0
+            ? `is a shim for ${rootManual} but never imports it`
+            : `is a shim for ${rootManual} but carries content of its own`,
+        hint: `A shim holds one line — \`@${rootManual}\` — plus at most one comment saying so. Rules belong in ${rootManual}; a shim that can hold one becomes a second manual nobody diffs.`,
+      });
+    }
   }
 
   return out;

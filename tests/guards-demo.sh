@@ -188,14 +188,14 @@ banner "10. behavior-delta inventories the branch"
 # ---------------------------------------------------------------------------
 git checkout -q -b refactor/demo
 printf 'export const total = (xs) => xs.length + 0;\n' >src/total.js
-printf '\n# a local rule\n' >>CLAUDE.md
+printf '\n# a local rule\n' >>AGENTS.md
 git add -A
 git commit -q -m "refactor(total): tidy the reducer"
 assert_status 0 "behavior-delta runs against the branch" -- sh -c "cd '$PROJ' && sh scripts/behavior-delta.sh main"
 printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
-# CLAUDE.md is a shipped default surface: a standing instruction edited inside a
+# AGENTS.md is a shipped default surface: a standing instruction edited inside a
 # commit that claims structure-only work is exactly what the check is for.
 assert_out_has "Commit separation"
-assert_out_has "CLAUDE.md"
+assert_out_has "AGENTS.md"
 
 t_done "guards demo"

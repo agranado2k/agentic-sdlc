@@ -122,7 +122,7 @@ constitution/skills/hooks/guards, and the ADRs). This adapter adds six, and each
 is a pattern plus the question it exists to force:
 
 ```sh
-BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^CLAUDE\.md$|/CLAUDE\.md$|^constitution/|^\.claude/|^\.githooks/|^scripts/
+BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^AGENTS\.md$|/AGENTS\.md$|^CLAUDE\.md$|^GEMINI\.md$|^constitution/|^\.claude/|^\.githooks/|^scripts/
 Architecture decisions|^docs/adr/
 API surface (OpenAPI / GraphQL / protobuf)|^docs/api/openapi\.yaml$|\.graphql$|\.proto$
 Persistence (schema + migrations)|^packages/db/|^prisma/schema\.prisma$|^migrations/|^docs/db-design\.md$
