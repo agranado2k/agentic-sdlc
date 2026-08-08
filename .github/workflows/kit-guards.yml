@@ -46,6 +46,12 @@ jobs:
       - name: behavior-delta.sh
         run: sh tests/behavior-delta.test.sh
 
+      # Not a guard, but the same shape and the same risk profile: a script that
+      # deletes branches and worktrees. Its fixtures build real repos with real
+      # bare remotes and real linked worktrees.
+      - name: worktree-cleanup.sh
+        run: sh tests/worktree-cleanup.test.sh
+
       # Bootstraps a throwaway consumer in a temp dir and pushes at a real bare
       # remote through the real hook. It sets its own committer identity and
       # hooks path per fixture, so it needs nothing from the runner's git config.

@@ -44,6 +44,7 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/CLAUDE.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `CLAUDE.md`; then it is yours. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
+| `.claude/skills/` | The twelve skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -51,6 +52,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
+| `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
@@ -79,6 +81,41 @@ day one, personalized with your project name and the bootstrap date:
 
 All four are **yours** the moment they land. They are stamped from templates, not
 copied verbatim, and nothing updates them afterwards.
+
+### The skills
+
+`.claude/skills/` holds twelve skills — the chain at the top of this README, made
+runnable:
+
+`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`) →
+`/review-pr` → `/pr-iterate` → `/merge-train` → `/worktree-cleanup`, plus
+`/grill-with-docs`, `/prototype` and `/diagnose` off to the side.
+
+They are **copied as-is, never stamped**. That is a stronger constraint than the
+templates are under: a template may carry a mark because something fills it in,
+while a skill has to read correctly in a project nobody personalized. So where a
+skill needs a project specific, it points at the artifact this kit already
+establishes — `constitution/local-engineering.md` for the test tiers,
+`scripts/guards.config.sh` for what counts as source and which artifacts are
+contracts, `docs/adr/` for the binding decisions, `docs/domain-glossary.md` for
+the names.
+
+Two consequences worth stating plainly:
+
+- **The root manual's quick-reference is the index, and the gate enforces it.**
+  Every `/command` in `CLAUDE.md` must resolve to `.claude/skills/<name>/SKILL.md`.
+  Delete a skill you do not run and the gate makes you delete its row.
+- **`/review-pr` keeps both axes** (shared invariant §5). Axis 1's six standards
+  sub-agents feed a severity report an agent may act on; Axis 2's seventh
+  sub-agent runs in a fresh context and emits a confirm-list only a human may
+  resolve. The mutation-delta step it can cite is **conditional** — mutation
+  testing is stack-specific, so the skill says to check `adapters/` and to skip
+  the block, loudly, when nothing is wired.
+
+Five of the twelve are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
+changed, and reproduces the licence, and each adapted skill carries the same note
+at its own foot so provenance survives being read out of context.
 
 ## The shared layer, and why it has a version
 
@@ -224,16 +261,19 @@ test tiers and the end-to-end demo against this tree.
 
 ## Status — honest version
 
-The **constitution layer (K1)**, the **guards (K3)**, the **documentation
-set + update recipe (K4)** and the **Node/TS reference adapter (K5)** are in on
-top of the walking skeleton (K0).
+The **constitution layer (K1)**, the **skills (K2)**, the **guards (K3)**, the
+**documentation set + update recipe (K4)** and the **Node/TS reference adapter
+(K5)** are in on top of the walking skeleton (K0).
 
 - `sh tests/kit-demo.sh` builds a throwaway project from this tree, bootstraps
   it, and proves the gate green — then red once per failure mode it claims: an
   unstamped placeholder, a deleted shared-layer file, a stale path, a dead
   slash command, the project's own name leaking into the shared article, and an
   article the root never points at. Includes a real `git push` the hook blocks,
-  and the POSIX fallback run.
+  the POSIX fallback run, and a focused pass over the skills: every `/command`
+  in the bootstrapped manual resolves to a `SKILL.md`, every shipped skill is
+  reachable from the manual, no skill carries an unstamped mark — and then the
+  same gate goes red when a skill is deleted out from under its row.
 - `sh tests/guards-demo.sh` does the same for the guards: an unconfigured push
   that warns and passes, globs configured, a source-only push the hook really
   blocks (origin does not move), and the paired push that lands.
@@ -245,6 +285,10 @@ top of the walking skeleton (K0).
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing installed or activated from it.
 
+- `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
+  things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
+  `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
+
 The kit's own CI runs the harness fixture tests, the portability validator
 against `constitution/shared-invariants.md`, the guard test suites, and the
 demos on every PR (`kit-ci.yml` + `kit-guards.yml`).
@@ -253,7 +297,6 @@ Not here yet, each with its own ticket:
 
 | | Ticket | Brings |
 | --- | --- | --- |
-| K2 | [#4](https://github.com/agranado2k/agentic-sdlc/issues/4) | Twelve de-productized skills — grill-me, to-prd, to-tickets, implement, tdd, review-pr, pr-iterate, diagnose, and the rest. Until they land, the root manual's quick-reference ships without command rows, because the gate would (correctly) reject references to skills that do not exist |
 | K6 | [#8](https://github.com/agranado2k/agentic-sdlc/issues/8) | Dogfood: a throwaway project end-to-end, and the verbatim claim proved by diff |
 
 The PRD is [#1](https://github.com/agranado2k/agentic-sdlc/issues/1). The kit is
@@ -276,6 +319,7 @@ sh tests/adapters-demo.sh                              # K5: the adapters tree, 
 sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
+sh tests/worktree-cleanup.test.sh                      # the pruning rule
 ```
 
 Do not wire `core.hooksPath` in this repo.

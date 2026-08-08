@@ -50,8 +50,13 @@ Conventional Commits. The root states the format; this is the practice around it
        forbids one of them. -->
 - **Rejected**: {{REJECTED_MERGE_METHOD}} — {{REJECTED_MERGE_REASON}}.
 - **The merge action is human** (shared invariant §7). No agent, bot, or
-  automation lands a change. An agent brings a PR to one click away and stops.
+  automation lands a change. An agent brings a PR to one click away and stops —
+  `/pr-iterate` drives a PR to green and explicitly never merges. When you have
+  decided a batch should land, `/merge-train` is you delegating the *mechanics*
+  of that decision, never the decision.
 - Branch protection / required checks: {{REQUIRED_CHECKS}}.
+- After a batch lands, `/worktree-cleanup` prunes the merged worktrees and
+  fast-forwards the root checkout.
 
 ## Before you push
 
@@ -83,7 +88,10 @@ check, say so in the row rather than pretending.
   verifiable from the diff and may be fixed autonomously by an agent; behavior
   findings are not decidable from the diff and go to a human as an explicit
   confirm-list. Never let a behavior question ride into an autonomous fix loop
-  dressed as a standards nit.
+  dressed as a standards nit. `/review-pr` is that split, executable: its §5
+  severity report is axis one, its §5b confirm-list is axis two, and
+  `scripts/behavior-delta.sh` supplies the grounded candidate list for the
+  second from the contract artifacts named in `scripts/guards.config.sh`.
 - **Automated review**: {{REVIEW_AUTOMATION}}. Bot review is {{REVIEW_BINDING}}.
 - **Fresh context per phase** (shared invariant §4): the reviewer must not see
   the implementation history. A reviewer who has read the author's narrative

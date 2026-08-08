@@ -11,10 +11,15 @@
     3. Point the root CLAUDE.md's article layer at the new `.md` path.
 
   From that moment the docs gate holds this file to the same standard as the
-  root manual: every `code span` naming a repo path must resolve, every
-  `/command` must resolve to a skill, and an article the root never references
-  is reported as unreachable. Marks left unstamped fail the gate too — that is
-  the point, `.template` is the only exemption.
+  root manual: every `code span` naming a repo path must resolve, every slash
+  command in a code span must resolve to a skill directory under
+  `.claude/skills/`, and an article the root never references is reported as
+  unreachable. Marks left unstamped fail the gate too — that is the point,
+  `.template` is the only exemption.
+
+  That rule applies to THIS comment block as well: the gate reads code spans, it
+  does not skip HTML comments. Naming a command here that your project does not
+  ship would fail the gate the moment you drop the `.template` suffix.
 
   WRITING FOR THE GATE: put a path in a code span of its own (`scripts/foo.sh`),
   not embedded in a longer span (`sh scripts/foo.sh`) — the validator matches
