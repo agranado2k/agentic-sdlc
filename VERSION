@@ -13,5 +13,14 @@
 
 shared-layer: 0.1.0
 
+# NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
+# only file the guards read policy from, and its whole purpose is to be edited
+# locally. Keeping mechanism shared and policy local is what lets the guard
+# scripts stay byte-identical to the kit's copies.
+
 files:
   constitution/shared-invariants.md
+  scripts/guards.lib.sh
+  scripts/tdd-pairing-guard.sh
+  scripts/tdd-pairing-guard-ci.sh
+  scripts/behavior-delta.sh
