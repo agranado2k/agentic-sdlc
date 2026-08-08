@@ -17,6 +17,31 @@ loads on demand.
   verbatim from the kit and is not edited here — a local exception belongs in a
   local article instead.
 
+## Project documentation
+
+The project's memory. Read the first one before anything else when picking this
+project up — it is the orientation document, and everything else assumes it.
+
+- `docs/diary.md` — the development diary. The **Current state** block at the
+  top is the re-orientation summary and is edited in place; the entries below it
+  are append-only history. Its own update protocol is in the file.
+- `docs/adr/INDEX.md` — the decision records (MADR). The index says what is
+  currently binding and what superseded what; a decision is made in an ADR, not
+  in a chat message. Start a new one from `docs/adr/NNNN-template.md`.
+- `docs/domain-glossary.md` — the ubiquitous language. One name per concept, in
+  code and in conversation. Two names for one thing invite an invented
+  distinction between them.
+- `.github/PULL_REQUEST_TEMPLATE.md` — the PR checklist, including the human
+  confirm-list that keeps behavior findings out of the autonomous fix loop
+  (shared invariant §5).
+
+Keeping these current is not bookkeeping: `scripts/check.sh` fails when this
+manual points at a path that does not exist, and a stale diary silently misleads
+every session that loads it (shared invariant §8).
+
+`UPDATING.md` is the recipe for moving the shared layer forward when the kit
+does. It is not a routine task — read it when `VERSION` needs to change.
+
 ## Local rules
 
 Your stack-specific and process-specific rules go here — the concrete mechanism

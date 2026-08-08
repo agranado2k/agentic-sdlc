@@ -111,7 +111,10 @@ grep -q "Demo Project" CLAUDE.md && pass "CLAUDE.md carries the project name" ||
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new CLAUDE.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.1.0"
+# Read the expected version out of the kit's own manifest rather than pinning a
+# literal: the shared layer moves with every kit ticket, and a hard-coded number
+# here turns "the layer was released" into "an unrelated test went red".
+assert_out_has "shared-layer $(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 
 # ---------------------------------------------------------------------------
 banner "3. Idempotency — bootstrap refuses a second run"

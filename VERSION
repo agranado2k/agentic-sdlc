@@ -3,15 +3,27 @@
 # The SHARED LAYER is the part of this kit that is copied VERBATIM into your
 # project and is not yours to edit. It carries a version so that a project
 # bootstrapped from kit 0.1.0 can later be diffed against kit 0.2.0 and told
-# exactly what moved. That update recipe is K4 (#6); this manifest is the
-# anchor it will diff against.
+# exactly what moved. `UPDATING.md` is that recipe; this manifest is the anchor
+# it diffs against.
 #
 # Everything NOT listed here is yours from the moment bootstrap stamps it:
-# CLAUDE.md, your docs, your adapters. Edit those freely.
+# CLAUDE.md, README.md, docs/diary.md, docs/adr/, docs/domain-glossary.md,
+# .github/PULL_REQUEST_TEMPLATE.md, your adapters. Edit those freely — the whole
+# point of stamping them from a template is that the copy is then yours.
+#
+# THIS FILE IS COPIED WHOLESALE during an update (see UPDATING.md step 5): it
+# carries no project-specific content, only which release you are on and what
+# that release covers. It is deliberately not listed under `files:` — a manifest
+# cannot be an entry in itself.
+#
+# Versioning, pre-1.0: the MINOR bumps whenever the set of shared files or their
+# content changes, so a consumer can always ask "is my layer byte-identical to
+# the release I claim?" and get a yes/no. There is no patch-level for prose.
 #
 # `scripts/check.sh` verifies every file below still exists.
 
-shared-layer: 0.1.0
+shared-layer: 0.2.0
 
 files:
   constitution/shared-invariants.md
+  UPDATING.md
