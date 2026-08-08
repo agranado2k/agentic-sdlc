@@ -35,7 +35,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
 
 # --- ground checks ----------------------------------------------------------
 # Run from the repo root regardless of where the caller invoked it.
