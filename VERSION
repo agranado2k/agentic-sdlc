@@ -8,8 +8,16 @@
 #
 # Everything NOT listed here is yours from the moment bootstrap stamps it:
 # CLAUDE.md, README.md, docs/diary.md, docs/adr/, docs/domain-glossary.md,
-# .github/PULL_REQUEST_TEMPLATE.md, your adapters. Edit those freely — the whole
-# point of stamping them from a template is that the copy is then yours.
+# .github/PULL_REQUEST_TEMPLATE.md, your adapters — and, importantly, the
+# POLICY files, which are meant to grow with your repo:
+#
+#   scripts/docs-conformance/config.mjs            what the docs gate enforces
+#   scripts/docs-conformance/local-vocabulary.mjs  your product's vocabulary
+#   scripts/docs-conformance/test/                 fixture tests; extend freely
+#   scripts/guards.config.sh                       the guards' view of your layout
+#
+# Edit those freely — the whole point of stamping a template is that the copy
+# is then yours.
 #
 # THIS FILE IS COPIED WHOLESALE during an update (see UPDATING.md step 5): it
 # carries no project-specific content, only which release you are on and what
@@ -19,11 +27,28 @@
 # Versioning, pre-1.0: the MINOR bumps whenever the set of shared files or their
 # content changes, so a consumer can always ask "is my layer byte-identical to
 # the release I claim?" and get a yes/no. There is no patch-level for prose.
+# The split is deliberate: the validator ENGINE is shared because a fix to it
+# should reach every project, while the RULES are local because they are the
+# thing each project must own and review.
 #
 # `scripts/check.sh` verifies every file below still exists.
 
 shared-layer: 0.2.0
 
+# NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
+# only file the guards read policy from, and its whole purpose is to be edited
+# locally. Keeping mechanism shared and policy local is what lets the guard
+# scripts stay byte-identical to the kit's copies.
+
 files:
   constitution/shared-invariants.md
   UPDATING.md
+  scripts/guards.lib.sh
+  scripts/tdd-pairing-guard.sh
+  scripts/tdd-pairing-guard-ci.sh
+  scripts/behavior-delta.sh
+  scripts/check.sh
+  scripts/docs-conformance/index.mjs
+  scripts/docs-conformance/context.mjs
+  scripts/docs-conformance/runner.mjs
+  scripts/docs-conformance/validators/claude-md-refs.mjs
