@@ -302,6 +302,12 @@ Not here yet, each with its own ticket:
 The PRD is [#1](https://github.com/agranado2k/agentic-sdlc/issues/1). The kit is
 built ticket-by-ticket by its own `/to-tickets` → `/implement` chain.
 
+## Licence
+
+MIT (`LICENSE`) — and additionally, for the five skills adapted from
+[mattpocock/skills](https://github.com/mattpocock/skills), the upstream MIT
+notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
+
 ## Working on the kit itself
 
 `scripts/check.sh` is written for a *bootstrapped* project, so running it against
