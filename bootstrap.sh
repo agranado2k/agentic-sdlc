@@ -35,7 +35,14 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+
+# NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
+# project wants LATER — on the day it turns a guard on, typically weeks after
+# bootstrap — so it arrives intact and dormant rather than being deleted here or
+# installed automatically. Nothing in it is copied, stamped or activated; see
+# adapters/node-ts/INSTALL.md, "Why bootstrap.sh does not touch this directory".
+# tests/adapters-demo.sh asserts exactly that, byte for byte.
 
 # --- ground checks ----------------------------------------------------------
 # Run from the repo root regardless of where the caller invoked it.
@@ -249,6 +256,26 @@ and scripts/docs-conformance/local-vocabulary.mjs.
 The shared layer (see VERSION) is copied verbatim from the kit and is not
 edited here. Everything else is yours.
 EOF
+
+# ============================================================================
+# K5 BEGIN — the adapters pointer (#7)
+# ----------------------------------------------------------------------------
+# adapters/ is NOT copied, stamped or removed by this script (see KIT_ONLY
+# above). It arrives dormant. All this block does is TELL you it is there —
+# without a mention, a fresh project contains a directory nobody introduced,
+# which is how reference material gets mistaken for a description of the
+# project. A pointer, not an install.
+if [ -d adapters ]; then
+	cat <<'EOF'
+adapters/ holds worked reference wirings — one directory per stack, copied from
+a real project with the reasoning left in. Nothing in it runs, nothing in it was
+stamped, and no gate reads it: it is documentation you can copy from on the day
+you configure a guard. Read adapters/README.md. If no adapter matches your
+stack, `rm -rf adapters` is the right answer.
+EOF
+fi
+# K5 END
+# ============================================================================
 
 # --- self-delete ------------------------------------------------------------
 # Last, so a failure above leaves bootstrap runnable.

@@ -20,13 +20,14 @@ the one you need, when you need it.
    `<type>` is one of `feat` `fix` `refactor` `chore` `docs`. Keep `worktree/`
    out of version control.
 2. **Test first** for any code change — red, green, refactor. Tests are the
-   specification, not an afterthought (shared invariant §3). This stack's test
-   tiers, conventions, and the command that runs them live in
+   specification, not an afterthought (shared invariant §3). `/tdd` is that loop.
+   This stack's test tiers, conventions, and the command that runs them live in
    `constitution/local-engineering.md.template` until you fill it in.
 3. **Tracer bullets, never horizontal layers.** Build a tiny end-to-end slice,
    seek feedback, expand from there (shared invariant §2). Multi-session builds
-   get decomposed into tickets **before** the first session opens; feasibility
-   questions get a throwaway spike, never speculative production code.
+   get decomposed into tickets by `/to-tickets` **before** the first session
+   opens; feasibility questions get a throwaway spike via `/prototype`, never
+   speculative production code.
 4. **Read the recorded decision before changing infrastructure or security
    code.** Decisions live in decision records, not in chat and not in the log;
    a reversal is a new record, never an edit to the old one.
@@ -119,21 +120,53 @@ does. It is not a routine task — read it when `VERSION` needs to change.
 
 ## Local rules
 
+## The chain
+
+The skills in `.claude/skills/` are the lifecycle above, made runnable. Each one
+is a whole document; read the one you are about to use, not all of them. They
+are **yours**: edit them, delete the ones you do not run, add your own.
+
+Spec → tickets → implementation → review → landing:
+
+`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (which drives `/tdd`) →
+`/review-pr` → `/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
+
+Three step out of that line: `/grill-with-docs` replaces `/grill-me` once the
+project has a glossary and decision records worth challenging a plan against,
+`/prototype` answers a feasibility question the spec is blocked on, and
+`/diagnose` is for a bug rather than a feature.
+
 ## Quick reference
 
 | If you need to…                     | Where it is                                     |
 | ----------------------------------- | ----------------------------------------------- |
+| Stress-test a plan before writing it | `/grill-me` — or `/grill-with-docs` to challenge it against the glossary and the decision records |
+| Answer "would that even work?"      | `/prototype` — throwaway spike, outside the repo tree, finding recorded |
+| Turn agreed context into a spec     | `/to-prd`                                        |
+| Split a spec into tracer-bullet tickets | `/to-tickets` — one ticket per fresh session, autonomy label decided at write time |
+| Build one ticket                    | `/implement` — restate, then drive `/tdd` through the seams |
+| Write the code test-first           | `/tdd` — red, green, refactor, one behavior at a time |
+| Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
+| Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
+| Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
+| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
+| Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
+| Know where a skill came from        | `.claude/skills/LICENSE-mattpocock-skills.md`    |
 | Run the docs gate                   | `scripts/check.sh` — also runs on every push     |
 | See what the gate actually checks   | `scripts/docs-conformance/` — one validator per rule |
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — all policy is data there |
 | Keep your product name out of the shared layer | `scripts/docs-conformance/local-vocabulary.mjs` |
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
+| Tell the guards your repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
 | Know which files are shared layer   | `VERSION`                                        |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
 
-> **Kit note —** add a row per skill, hook, and command your project gains. This
-> table is the map an agent reads first; a missing row costs a search, a stale
-> row costs a wrong action.
+> **Kit note —** add a row per skill, hook, and command your project gains, and
+> delete the row when you delete the skill. This table is the map an agent reads
+> first; a missing row costs a search, a stale row costs a wrong action — and
+> the docs gate enforces the second half of that: every slash command named
+> anywhere in this manual must resolve to a skill directory under
+> `.claude/skills/`, each holding its own `SKILL.md`.
 
 ## Precedence
 

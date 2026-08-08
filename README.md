@@ -44,6 +44,7 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/CLAUDE.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `CLAUDE.md`; then it is yours. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
+| `.claude/skills/` | The twelve skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -51,9 +52,11 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
+| `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
+| `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not installed: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
@@ -78,6 +81,41 @@ day one, personalized with your project name and the bootstrap date:
 
 All four are **yours** the moment they land. They are stamped from templates, not
 copied verbatim, and nothing updates them afterwards.
+
+### The skills
+
+`.claude/skills/` holds twelve skills — the chain at the top of this README, made
+runnable:
+
+`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`) →
+`/review-pr` → `/pr-iterate` → `/merge-train` → `/worktree-cleanup`, plus
+`/grill-with-docs`, `/prototype` and `/diagnose` off to the side.
+
+They are **copied as-is, never stamped**. That is a stronger constraint than the
+templates are under: a template may carry a mark because something fills it in,
+while a skill has to read correctly in a project nobody personalized. So where a
+skill needs a project specific, it points at the artifact this kit already
+establishes — `constitution/local-engineering.md` for the test tiers,
+`scripts/guards.config.sh` for what counts as source and which artifacts are
+contracts, `docs/adr/` for the binding decisions, `docs/domain-glossary.md` for
+the names.
+
+Two consequences worth stating plainly:
+
+- **The root manual's quick-reference is the index, and the gate enforces it.**
+  Every `/command` in `CLAUDE.md` must resolve to `.claude/skills/<name>/SKILL.md`.
+  Delete a skill you do not run and the gate makes you delete its row.
+- **`/review-pr` keeps both axes** (shared invariant §5). Axis 1's six standards
+  sub-agents feed a severity report an agent may act on; Axis 2's seventh
+  sub-agent runs in a fresh context and emits a confirm-list only a human may
+  resolve. The mutation-delta step it can cite is **conditional** — mutation
+  testing is stack-specific, so the skill says to check `adapters/` and to skip
+  the block, loudly, when nothing is wired.
+
+Five of the twelve are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
+changed, and reproduces the licence, and each adapted skill carries the same note
+at its own foot so provenance survives being read out of context.
 
 ## The shared layer, and why it has a version
 
@@ -173,6 +211,37 @@ Mechanism is shared layer (copied verbatim, listed in `VERSION`); policy is
 yours (`scripts/guards.config.sh` is deliberately *not* shared). That split is
 what lets a kit update diff cleanly against your copy.
 
+## The adapters, and why they are dormant
+
+The core is stack-free on purpose — that is what makes it copyable — and that
+leaves one question unanswered on day one: *what do those settings actually look
+like for my stack?* `adapters/` answers it by example, and only by example.
+
+`adapters/node-ts/` is the worked wiring for a pnpm/TypeScript workspace with
+Vitest: a filled-in `guards.config.sh` (real source and test globs, six contract
+surfaces beyond the kit's two), a differential Stryker mutation diagnostic with
+its report formatter and label-triggered workflow, and a promptfoo eval tier for
+agent-facing prompt surfaces. Every value in it is a real value from the project
+this framework was extracted from, with the reasoning left in.
+
+**`bootstrap.sh` does not touch this tree.** It copies nothing out of it, stamps
+nothing in it, and deletes nothing from it — so it arrives in your project
+byte-identical and inert. Neither alternative was better: installing an adapter
+would be a stack guess stamped into a file the docs gate then enforces, and
+deleting one would move the only worked example out of reach at exactly the
+moment it becomes useful (the day you turn a guard on, weeks after bootstrap).
+Nothing in `adapters/` is on an execution path: no workflow lives there, no
+guard resolves its config from there, and no gate reads it. If no adapter
+matches your stack, `rm -rf adapters` is the encouraged answer — a Node wiring
+sitting in a Go repo is a stale standing instruction waiting to mislead the next
+agent session.
+
+`sh tests/adapters-demo.sh` states all of that as checks rather than prose: the
+shell and module files parse, the config examples really set what the guards
+read, and a bootstrapped consumer still holds the tree byte-for-byte with
+nothing installed. What it *cannot* check — no Stryker run, no promptfoo run, no
+workflow GitHub has ever parsed — is listed in `adapters/node-ts/INSTALL.md`.
+
 ## CI templates, and why they are not workflows here
 
 `templates/workflows/` holds the CI half of each gate. `bootstrap.sh` copies
@@ -192,15 +261,19 @@ test tiers and the end-to-end demo against this tree.
 
 ## Status — honest version
 
-The **constitution layer (K1)**, the **guards (K3)** and the **documentation
-set + update recipe (K4)** are in on top of the walking skeleton (K0).
+The **constitution layer (K1)**, the **skills (K2)**, the **guards (K3)**, the
+**documentation set + update recipe (K4)** and the **Node/TS reference adapter
+(K5)** are in on top of the walking skeleton (K0).
 
 - `sh tests/kit-demo.sh` builds a throwaway project from this tree, bootstraps
   it, and proves the gate green — then red once per failure mode it claims: an
   unstamped placeholder, a deleted shared-layer file, a stale path, a dead
   slash command, the project's own name leaking into the shared article, and an
   article the root never points at. Includes a real `git push` the hook blocks,
-  and the POSIX fallback run.
+  the POSIX fallback run, and a focused pass over the skills: every `/command`
+  in the bootstrapped manual resolves to a `SKILL.md`, every shipped skill is
+  reachable from the manual, no skill carries an unstamped mark — and then the
+  same gate goes red when a skill is deleted out from under its row.
 - `sh tests/guards-demo.sh` does the same for the guards: an unconfigured push
   that warns and passes, globs configured, a source-only push the hook really
   blocks (origin does not move), and the paired push that lands.
@@ -208,6 +281,13 @@ set + update recipe (K4)** are in on top of the walking skeleton (K0).
   that the gate catches an unstamped mark inside `docs/`), then runs the whole
   `UPDATING.md` recipe on a fake 0.1.0 consumer — including a local edit to a
   shared file, moving it out, and the byte-for-byte verbatim check afterwards.
+- `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the config
+  examples really configure the guards, and a bootstrapped consumer keeps
+  `adapters/` byte-identical with nothing installed or activated from it.
+
+- `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
+  things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
+  `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
 
 The kit's own CI runs the harness fixture tests, the portability validator
 against `constitution/shared-invariants.md`, the guard test suites, and the
@@ -217,8 +297,6 @@ Not here yet, each with its own ticket:
 
 | | Ticket | Brings |
 | --- | --- | --- |
-| K2 | [#4](https://github.com/agranado2k/agentic-sdlc/issues/4) | Twelve de-productized skills — grill-me, to-prd, to-tickets, implement, tdd, review-pr, pr-iterate, diagnose, and the rest. Until they land, the root manual's quick-reference ships without command rows, because the gate would (correctly) reject references to skills that do not exist |
-| K5 | [#7](https://github.com/agranado2k/agentic-sdlc/issues/7) | `adapters/node-ts/` — one worked reference wiring (vitest, Stryker differential, eval tier) |
 | K6 | [#8](https://github.com/agranado2k/agentic-sdlc/issues/8) | Dogfood: a throwaway project end-to-end, and the verbatim claim proved by diff |
 
 The PRD is [#1](https://github.com/agranado2k/agentic-sdlc/issues/1). The kit is
@@ -237,9 +315,11 @@ node scripts/docs-conformance/index.mjs .              # portability of THIS rep
 sh tests/kit-demo.sh                                   # K0+K1: bootstrap + docs gate, end to end
 sh tests/guards-demo.sh                                # K3: the guards, end to end
 sh tests/docs-demo.sh                                  # K4: the docs set + the UPDATING.md recipe
+sh tests/adapters-demo.sh                              # K5: the adapters tree, and that it stays dormant
 sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
+sh tests/worktree-cleanup.test.sh                      # the pruning rule
 ```
 
 Do not wire `core.hooksPath` in this repo.

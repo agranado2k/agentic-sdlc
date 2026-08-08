@@ -11,6 +11,9 @@
 #   2.  GREEN  bootstrap stamps, wires, self-deletes; the gate passes
 #   3.         a second bootstrap is refused (idempotency)
 #   4.  GREEN  the harness's own fixture tests pass inside the project
+#   4b. GREEN  the skills came through un-stamped and intact, every command in
+#              the manual resolves to one, and no skill is orphaned — then RED
+#              when a skill is deleted out from under its row
 #   5.  GREEN  a real `git push` to a real remote passes through the real hook
 #   6.  RED    an unstamped placeholder fails the gate AND blocks the push
 #   7.  RED    a missing shared-layer file fails the gate
@@ -180,6 +183,93 @@ if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "# fail 0"
 else
 	skip "harness fixture tests (no node)"
+fi
+
+# ---------------------------------------------------------------------------
+banner "4b. The skills — the manual's command map, checked both ways"
+# ---------------------------------------------------------------------------
+# The skills are the one part of the kit that is COPIED, not stamped: nothing
+# personalizes them, so they have to read correctly in a project nobody
+# personalized. Three claims, and each is checkable:
+#
+#   (a) they survived bootstrap and carry no unstamped mark;
+#   (b) every /command in the manual resolves to a skill on disk;
+#   (c) every skill shipped is named by the manual — no orphans.
+#
+# (b) is the direction the docs gate already enforces, so the positive form here
+# would be redundant on its own — that is why the step ends by deleting a skill
+# and watching the gate go red. A check that has never failed is a claim.
+assert_file ".claude/skills/LICENSE-mattpocock-skills.md"
+assert_file ".claude/skills/tdd/SKILL.md"
+assert_file "scripts/worktree-cleanup.sh"
+
+# (a) The gate's placeholder rule covers the whole tree; this narrows the report
+# to the skills, because "a mark leaked into a skill" and "a mark leaked into
+# the manual" have completely different causes.
+ob='{'
+cb='}'
+if grep -rq "${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}" .claude/skills 2>/dev/null; then
+	fail "a skill carries an unstamped placeholder — skills are copied, never stamped"
+	grep -rn "${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}" .claude/skills | sed 's/^/        | /'
+else
+	pass "no skill carries an unstamped placeholder"
+fi
+
+# Commands as the harness reads them: code spans outside fences, split into
+# words, keeping the tokens that OPEN with a slash command.
+manual_commands() {
+	awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' CLAUDE.md |
+		grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n' |
+		grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u
+}
+
+# Harness built-ins, mirroring claudeMdRefs.ignoreCommands in config.mjs. They
+# are real commands that are deliberately not repo skills.
+is_ignored() {
+	case "$1" in
+	/loop | /security-review | /review | /init) return 0 ;;
+	esac
+	return 1
+}
+
+resolved=0
+for cmd in $(manual_commands); do
+	is_ignored "$cmd" && continue
+	if [ -f ".claude/skills/${cmd#/}/SKILL.md" ]; then
+		resolved=$((resolved + 1))
+	else
+		fail "CLAUDE.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
+	fi
+done
+[ "$resolved" -ge 12 ] &&
+	pass "all $resolved slash commands in CLAUDE.md resolve to a skill" ||
+	fail "only $resolved commands resolved — the manual should map the whole chain"
+
+# (c) The other direction. An unreferenced skill is the article-unreferenced
+# problem one layer down: nothing points at it, so nobody loads it, so it rots.
+orphans=0
+for d in .claude/skills/*/; do
+	[ -f "$d/SKILL.md" ] || continue
+	name=$(basename "$d")
+	manual_commands | grep -qx "/$name" || {
+		fail ".claude/skills/$name ships but CLAUDE.md never names /$name"
+		orphans=$((orphans + 1))
+	}
+done
+[ "$orphans" = 0 ] && pass "no orphaned skills — every shipped skill is on the map"
+
+# RED — pull one skill out and watch the gate report it. Only the harness can
+# see this: resolving a command needs command-span parsing, which the POSIX
+# fallback deliberately does not do (it says so in its NOTICE).
+if [ "$HAVE_NODE" = 1 ]; then
+	mv .claude/skills/tdd "$SCRATCH/tdd.skill"
+	assert_status 1 "check.sh rejects the manual's now-dead /tdd row" -- sh scripts/check.sh
+	assert_out_has "skill-missing"
+	assert_out_has "/tdd"
+	mv "$SCRATCH/tdd.skill" .claude/skills/tdd
+	assert_status 0 "check.sh is green again once the skill is back" -- sh scripts/check.sh
+else
+	skip "deleted-skill detection (no node)"
 fi
 
 # ---------------------------------------------------------------------------
