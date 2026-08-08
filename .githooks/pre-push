@@ -1,0 +1,29 @@
+#!/bin/sh
+# Pre-push gate — agentic-sdlc walking skeleton (K0).
+#
+# Wired by `git config core.hooksPath .githooks`, which bootstrap.sh runs. That
+# is native git: no hook manager, no package.json, no dependency a project has
+# not chosen yet.
+#
+# One check today — the docs gate (scripts/check.sh). K3 (#5) adds the TDD
+# pairing guard alongside it, using the same shape: a script that owns the rule,
+# a hook that only resolves the range and calls it.
+#
+# The bypass is deliberate and LOUD. A guard with no escape hatch gets disabled
+# wholesale the first time it is wrong; one with a logged hatch stays on. The
+# bypass only defers the failure — CI re-runs the same script (K3 ships the
+# workflow), so nothing merges on a bypass alone.
+
+if [ "${PUSH_WITHOUT_DOCS:-}" = "1" ]; then
+	echo "WARNING  PUSH_WITHOUT_DOCS=1 — docs gate BYPASSED for this push." >&2
+	exit 0
+fi
+
+root=$(git rev-parse --show-toplevel) || exit 1
+
+sh "$root/scripts/check.sh" || {
+	echo "" >&2
+	echo "x pre-push: docs gate failed (see above)." >&2
+	echo "  Fix it, or bypass once with: PUSH_WITHOUT_DOCS=1 git push" >&2
+	exit 1
+}

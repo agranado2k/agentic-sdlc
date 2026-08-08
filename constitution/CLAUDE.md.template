@@ -1,0 +1,41 @@
+# {{PROJECT_NAME}} — agent operating manual
+
+{{PROJECT_DESCRIPTION}}
+
+This file is loaded into **every** agent session in this repo, so it is
+deliberately short. Elaboration lives in the articles below, which an agent
+loads on demand.
+
+## The article layer
+
+- `constitution/shared-invariants.md` — the portable framework rules: specs
+  before code, vertical slices, tests as the target function, fresh context per
+  phase, standards findings separated from behavior findings, human-in-the-loop
+  by label, no autonomous merge, executable process docs, measured ceilings,
+  refactor/behavior separation, context budget. Read it once per project, not
+  once per task. **This file is shared-layer** (see `VERSION`): it is copied
+  verbatim from the kit and is not edited here — a local exception belongs in a
+  local article instead.
+
+## Local rules
+
+Your stack-specific and process-specific rules go here — the concrete mechanism
+for each shared invariant that needs one. K1 (#3) ships `local-engineering` and
+`local-workflow` article templates for this section; until then, write them
+inline or leave this section empty rather than letting the shared article carry
+local vocabulary.
+
+## The gate
+
+Every rule in this manual must be executable or CI-verified — a rule nothing
+checks decays into a lie (shared invariant §8).
+
+- `scripts/check.sh` is this project's docs gate. It fails if an unstamped
+  `{{`-style placeholder survived bootstrap, if a shared-layer file named in
+  `VERSION` is missing, or if this manual references a repo path that does not
+  exist.
+- `.githooks/pre-push` runs that gate before every push. It is wired by
+  `git config core.hooksPath .githooks`, which bootstrap already ran — no hook
+  manager, no dependency.
+
+Run the gate yourself at any time with `sh scripts/check.sh`.
