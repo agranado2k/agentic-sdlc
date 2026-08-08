@@ -1,0 +1,17 @@
+# agentic-sdlc — shared-layer manifest
+#
+# The SHARED LAYER is the part of this kit that is copied VERBATIM into your
+# project and is not yours to edit. It carries a version so that a project
+# bootstrapped from kit 0.1.0 can later be diffed against kit 0.2.0 and told
+# exactly what moved. That update recipe is K4 (#6); this manifest is the
+# anchor it will diff against.
+#
+# Everything NOT listed here is yours from the moment bootstrap stamps it:
+# CLAUDE.md, your docs, your adapters. Edit those freely.
+#
+# `scripts/check.sh` verifies every file below still exists.
+
+shared-layer: 0.1.0
+
+files:
+  constitution/shared-invariants.md
