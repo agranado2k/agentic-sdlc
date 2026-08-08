@@ -90,7 +90,7 @@ Never edit a past entry; correct it with a new one that references it.
 {{PROJECT_DESCRIPTION}}
 
 The repo was created from the `agentic-sdlc` template and personalized by
-`bootstrap.sh`: the root `CLAUDE.md` agent manual, the portable
+`bootstrap.sh`: the root `AGENTS.md` agent manual, the portable
 `constitution/shared-invariants.md` rulebook, the `scripts/check.sh` docs gate
 wired to `.githooks/pre-push`, and this documentation set (diary, ADR index +
 MADR template, domain glossary, PR template).

@@ -8,6 +8,11 @@ map — small on purpose, because every token here is re-read on every request
 (shared invariant §11). The elaboration lives in the articles listed below; read
 the one you need, when you need it.
 
+`AGENTS.md` is the one manual, whichever agent tool reads it. `CLAUDE.md` and
+`GEMINI.md` sit beside it as **shims** — one import line each, no rules of their
+own — so a second manual cannot quietly grow in one tool's file. Edit this file;
+never edit a shim.
+
 > **Kit note —** this file was stamped from the agentic-sdlc template and is now
 > **yours**. Every line below is a starting position, not a fixture: delete what
 > you do not enforce, and add what you do. The one thing that is not yours is
@@ -126,6 +131,12 @@ The skills in `.claude/skills/` are the lifecycle above, made runnable. Each one
 is a whole document; read the one you are about to use, not all of them. They
 are **yours**: edit them, delete the ones you do not run, add your own.
 
+They are written in one agent tool's slash-command format (`.claude/skills/`).
+A tool that does not read that directory still reads this manual and the
+articles — it simply gets the practice as prose, with no slash command to invoke
+it. Each `SKILL.md` is a plain markdown document, so pointing another tool at one
+by path works today; porting them to a second command format does not.
+
 Spec → tickets → implementation → review → landing:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (which drives `/tdd`) →
@@ -159,6 +170,7 @@ project has a glossary and decision records worth challenging a plan against,
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
 | Tell the guards your repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
 | Know which files are shared layer   | `VERSION`                                        |
+| Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
 
 > **Kit note —** add a row per skill, hook, and command your project gains, and

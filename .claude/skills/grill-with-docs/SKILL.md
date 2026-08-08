@@ -18,11 +18,11 @@ If a question can be answered by exploring the codebase, explore the codebase in
 ## Domain awareness
 
 During codebase exploration, also read the project's own documentation. This kit
-puts it in two places, both of them pointed at from the root `CLAUDE.md`:
+puts it in two places, both of them pointed at from the root `AGENTS.md`:
 
 ```
 /
-├── CLAUDE.md                     ← the agent manual; points at both of these
+├── AGENTS.md                     ← the agent manual; points at both of these
 ├── docs/
 │   ├── domain-glossary.md        ← the ubiquitous language
 │   ├── diary.md                  ← the chronology; "Current state" first
@@ -38,7 +38,7 @@ glossary file) per context and let `docs/domain-glossary.md` be the index. Infer
 which context the current topic belongs to; if it is not obvious, ask — an
 ambiguous context is itself a finding.
 
-If the project's layout differs, read `CLAUDE.md`: the manual names where the
+If the project's layout differs, read `AGENTS.md`: the manual names where the
 glossary and the decision records actually live, and it is the authority here,
 not this file.
 

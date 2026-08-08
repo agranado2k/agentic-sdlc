@@ -32,7 +32,7 @@ This ensures the review is focused, actionable, and doesn't generate noise from 
 
 ### 1. Context Discovery (cheap/fast model)
 
-**Action**: Scan the repository to identify existing tools and architectural patterns. Read the root `CLAUDE.md`, the articles it points at under `constitution/`, and the binding records in `docs/adr/INDEX.md`.
+**Action**: Scan the repository to identify existing tools and architectural patterns. Read the root `AGENTS.md`, the articles it points at under `constitution/`, and the binding records in `docs/adr/INDEX.md`.
 
 **Goal**: Determine this repo's established conventions — export styles, error handling, layering, and whichever in-repo helpers the decision records standardize on. Conventions come from the repo, never from the reviewer's habits.
 
@@ -145,7 +145,7 @@ It must **NOT** receive the other six agents' findings, the implementation conve
 | Configuration | the environment/config schema | new/changed defaults, removed vars |
 | Security posture | the header/auth policy | any delta |
 | Agent-facing surface | prompts, tool descriptions, packaged skills | any prompt-surface delta |
-| Process & agent surfaces | `.claude/skills/`, `constitution/`, root and nested `CLAUDE.md`, `.githooks/`, `scripts/` | skills, hooks, gates and standing instructions change how every future session behaves — same confirm treatment; an edited constitution rule with no spec reference is an unapproved policy change, not a docs tidy-up |
+| Process & agent surfaces | `.claude/skills/`, `constitution/`, root and nested `AGENTS.md`, `.githooks/`, `scripts/` | skills, hooks, gates and standing instructions change how every future session behaves — same confirm treatment; an edited constitution rule with no spec reference is an unapproved policy change, not a docs tidy-up |
 
 **Procedure:** run `scripts/behavior-delta.sh` for the grounded candidate list, read each candidate's diff hunk, then classify every behavior delta against the originating spec:
 

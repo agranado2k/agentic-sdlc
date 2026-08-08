@@ -8,7 +8,7 @@
        empty promise in a standing instruction is worse than a missing one:
        every agent session loads it and believes it.
     2. Rename this file to `local-engineering.md` (drop `.template`).
-    3. Point the root CLAUDE.md's article layer at the new `.md` path.
+    3. Point the root AGENTS.md's article layer at the new `.md` path.
 
   From that moment the docs gate holds this file to the same standard as the
   root manual: every `code span` naming a repo path must resolve, every slash
@@ -33,7 +33,7 @@
 
 # Local engineering — this stack's style, architecture, and boundaries
 
-Project-specific elaboration of the root `CLAUDE.md`. Read it before writing
+Project-specific elaboration of the root `AGENTS.md`. Read it before writing
 code, before touching infrastructure, and before adding any dependency. The
 portable reasoning behind several of these rules is in `shared-invariants.md`.
 

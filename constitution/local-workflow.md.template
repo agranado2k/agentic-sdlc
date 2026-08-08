@@ -8,7 +8,7 @@
        process rule nobody enforces decays into a lie (shared invariant §8), and
        an unstamped mark is a rule that was never written at all.
     2. Rename this file to `local-workflow.md` (drop `.template`).
-    3. Point the root CLAUDE.md's article layer at the new `.md` path.
+    3. Point the root AGENTS.md's article layer at the new `.md` path.
 
   From that moment the docs gate holds this file to the same standard as the
   root manual — see the sibling engineering template for the writing rules that
@@ -21,7 +21,7 @@
 
 # Local workflow — commits, merges, review, docs, the log
 
-Project-specific elaboration of the root `CLAUDE.md`'s process rules. The root
+Project-specific elaboration of the root `AGENTS.md`'s process rules. The root
 carries the binding one-liners; this article carries the detail you need when
 you are actually doing the thing.
 
@@ -78,7 +78,7 @@ check, say so in the row rather than pretending.
 | --- | --- |
 | {{TRIGGER_SOURCE_1}} | {{TRIGGER_TARGET_1}} |
 | {{TRIGGER_SOURCE_2}} | {{TRIGGER_TARGET_2}} |
-| A skill, hook, or command | the root `CLAUDE.md` (or the article that owns the rule) |
+| A skill, hook, or command | the root `AGENTS.md` (or the article that owns the rule) |
 | Any manual layer (root, article, or nested) | the other layers, so one home per rule survives: a root rule that grew gets its own article; an article rule that became binding gets promoted to the root. Never leave the same rule in two homes |
 | `constitution/shared-invariants.md` | **nothing here** — it is shared layer. A local exception goes in *this* article; the shared copy stays byte-identical to the kit's |
 

@@ -20,7 +20,7 @@
 #   ALWAYS, in POSIX sh — the checks that are cheap AND exact in shell:
 #     1. placeholder-unstamped  no double-brace mark survived bootstrap
 #     2. shared-layer-missing   every file VERSION lists still exists
-#     3. root-manual-missing    the root agent manual exists at all
+#     3. root-manual-missing    the root agent manual (AGENTS.md) exists at all
 #
 #   (3) stays in shell rather than moving into the harness on purpose: the
 #   harness treats an absent manual as "this repo does not model that layer" and
@@ -129,9 +129,13 @@ fi
 # ---------------------------------------------------------------------------
 # 3. The root agent manual exists  (always, POSIX)
 # ---------------------------------------------------------------------------
-[ -f CLAUDE.md ] || report "root-manual-missing" "CLAUDE.md" \
+# AGENTS.md, not a tool-specific filename: one manual, and the tool-specific
+# files beside it are shims that import it. The harness checks the shims' shape
+# (`shim-invalid`); this shell check owns only the manual's existence, because
+# an absent manual breaks the repo whichever engine is available.
+[ -f AGENTS.md ] || report "root-manual-missing" "AGENTS.md" \
 	"the root agent manual does not exist" \
-	"Run bootstrap.sh to stamp constitution/CLAUDE.md.template into CLAUDE.md. Every other layer hangs off this one."
+	"Run bootstrap.sh to stamp constitution/AGENTS.md.template into AGENTS.md. Every other layer hangs off this one, and CLAUDE.md / GEMINI.md are only shims importing it."
 
 # ---------------------------------------------------------------------------
 # 4. References — the node harness, or the reduced POSIX fallback
@@ -193,7 +197,7 @@ if [ "$engine" = "fallback" ]; then
 			done
 	}
 
-	scan_manual CLAUDE.md
+	scan_manual AGENTS.md
 	for article in constitution/*.md; do
 		[ -e "$article" ] || continue
 		case "$article" in
@@ -210,7 +214,8 @@ if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
-	echo "        package-relative paths, and the portability deny-list on the shared article." >&2
+	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), and the" >&2
+	echo "        portability deny-list on the shared article." >&2
 	echo "        Install node and re-run to get the full harness (scripts/docs-conformance)." >&2
 	echo "" >&2
 fi

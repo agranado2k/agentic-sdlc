@@ -4,16 +4,27 @@ import { denyEntryFromTerms } from "../config.mjs";
 import { run } from "../validators/claude-md-refs.mjs";
 import { cleanup, configWith, ctxFor, hasRule } from "./helpers.mjs";
 
-// A CLAUDE.md whose executable references all resolve. `/tdd` is a repo skill,
-// `/loop` is an agent-harness built-in (config ignore list), the paths exist.
+// A conformant tree: an AGENTS.md whose executable references all resolve
+// (`/tdd` is a repo skill, `/loop` is an agent-harness built-in on the config
+// ignore list, the paths exist), plus the two tool shims that a bootstrapped
+// project always has beside it.
+//
+// The shims belong in the BASE fixture, not in the shim tests alone, because
+// `shim-invalid` fires wherever a root manual exists — which is exactly the
+// semantics under test. A fixture with a manual and no shims is a broken
+// project, and every fixture below that models a manual models a real one.
+const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+
 const CONFORMANT = {
-  "CLAUDE.md": [
+  "AGENTS.md": [
     "# Instructions",
     "Start with `/tdd <task>` for any code change.",
     "Compose with `/loop /pr-iterate <PR#>` for continuous iteration.",
     "Run the gate yourself with `scripts/check.sh` at any time.",
     "The `.githooks/pre-push` hook runs the docs gate.",
   ].join("\n"),
+  "CLAUDE.md": SHIM,
+  "GEMINI.md": SHIM,
   ".claude/skills/tdd/SKILL.md": "# tdd",
   ".claude/skills/pr-iterate/SKILL.md": "# pr-iterate",
   "scripts/check.sh": "#!/bin/sh\n",
@@ -30,7 +41,7 @@ test("passes when every slash command and path reference resolves", () => {
 test("flags a slash command with no skill directory", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nRun \`/ghost-command\` to do nothing.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nRun \`/ghost-command\` to do nothing.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -42,7 +53,7 @@ test("flags a slash command with no skill directory", () => {
 test("ignores commands on the config ignore list (agent-harness built-ins)", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nEscalate with \`/security-review\` before merging.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nEscalate with \`/security-review\` before merging.`,
   });
   const out = run(ctx);
   assert.deepEqual(out, []);
@@ -52,7 +63,7 @@ test("ignores commands on the config ignore list (agent-harness built-ins)", () 
 test("does not treat multi-segment backticked paths as slash commands", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nThe API lives at \`/api/v1/reports\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nThe API lives at \`/api/v1/reports\`.`,
   });
   const out = run(ctx);
   assert.deepEqual(out, []);
@@ -62,7 +73,7 @@ test("does not treat multi-segment backticked paths as slash commands", () => {
 test("flags a referenced script path that does not exist", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nOr let \`scripts/ghost-guard.sh\` fire.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nOr let \`scripts/ghost-guard.sh\` fire.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -85,7 +96,7 @@ test("flags a referenced git hook that does not exist", () => {
 test("flags a referenced docs/ path that does not exist", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nThe registry is \`docs/adr/GHOST-INDEX.md\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nThe registry is \`docs/adr/GHOST-INDEX.md\`.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -97,7 +108,7 @@ test("flags a referenced docs/ path that does not exist", () => {
 test("still resolves references after a fenced code block (``` fences must not desync span pairing)", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": [
+    "AGENTS.md": [
       "# Instructions",
       "1. Use a worktree:",
       "",
@@ -122,7 +133,7 @@ test("still resolves references after a fenced code block (``` fences must not d
 test("still resolves references after a ~~~ fenced block (~~~ fences must not desync span pairing)", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": [
+    "AGENTS.md": [
       "# Instructions",
       "1. Wrap shell snippets in a fence:",
       "",
@@ -145,7 +156,7 @@ test("still resolves references after a ~~~ fenced block (~~~ fences must not de
 test("ignores /-tokens in spans that don't open with a slash command (shell snippets, path args)", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nNever run \`rm -rf /tmp\` or \`chmod +x /usr/local/bin\` here.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nNever run \`rm -rf /tmp\` or \`chmod +x /usr/local/bin\` here.`,
   });
   const out = run(ctx);
   assert.deepEqual(out, []);
@@ -155,7 +166,7 @@ test("ignores /-tokens in spans that don't open with a slash command (shell snip
 test("checks every /-token in a span that opens with a slash command", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nCompose \`/loop /ghost-command <PR#>\` for continuous runs.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nCompose \`/loop /ghost-command <PR#>\` for continuous runs.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -167,8 +178,8 @@ test("checks every /-token in a span that opens with a slash command", () => {
 test("checks .claude/skills and .claude/hooks literal path references", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": [
-      CONFORMANT["CLAUDE.md"],
+    "AGENTS.md": [
+      CONFORMANT["AGENTS.md"],
       "The procedural skill is at `.claude/skills/tdd/SKILL.md`.",
       "See also `.claude/skills/ghost/SKILL.md`.",
       "Enforcement lives in `.claude/hooks/tdd-guard.sh`.",
@@ -182,8 +193,112 @@ test("checks .claude/skills and .claude/hooks literal path references", () => {
   cleanup(ctx);
 });
 
-test("stays silent when CLAUDE.md does not exist (fixtures that don't model it)", () => {
+test("stays silent when AGENTS.md does not exist (fixtures that don't model it)", () => {
   const ctx = ctxFor({ "docs/adr/INDEX.md": "# ADRs" });
+  const out = run(ctx);
+  assert.deepEqual(out, []);
+  cleanup(ctx);
+});
+
+// ── The tool shims ───────────────────────────────────────────────────────────
+// AGENTS.md is the manual; CLAUDE.md and GEMINI.md are entry points other agent
+// tools look for. Each must import the manual and hold nothing else — because a
+// tool-specific file that CAN hold a rule eventually does, and then the repo has
+// two manuals and no way to see the difference between them.
+
+test("accepts a bare shim — the import line and nothing else", () => {
+  const ctx = ctxFor({ ...CONFORMANT, "CLAUDE.md": "@AGENTS.md\n" });
+  const out = run(ctx);
+  assert.deepEqual(out, []);
+  cleanup(ctx);
+});
+
+test("accepts a shim carrying one comment line above the import", () => {
+  const ctx = ctxFor({ ...CONFORMANT, "GEMINI.md": "<!-- imports the manual -->\n\n@AGENTS.md\n" });
+  const out = run(ctx);
+  assert.deepEqual(out, []);
+  cleanup(ctx);
+});
+
+test("flags a shim that has grown content of its own", () => {
+  const ctx = ctxFor({
+    ...CONFORMANT,
+    "CLAUDE.md": `${SHIM}\n## Extra rule\n\nAlways squash before merging.\n`,
+  });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "shim-invalid"));
+  assert.equal(out[0].file, "CLAUDE.md");
+  assert.match(out[0].message, /content of its own/);
+  cleanup(ctx);
+});
+
+// A second comment is a second place to write prose. One line saying "this is a
+// shim" is metadata; a paragraph of them is a manual wearing a comment marker.
+test("flags a shim carrying more than one comment line", () => {
+  const ctx = ctxFor({
+    ...CONFORMANT,
+    "CLAUDE.md": "<!-- a shim -->\n<!-- but also: never force-push -->\n@AGENTS.md\n",
+  });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "shim-invalid"));
+  cleanup(ctx);
+});
+
+test("flags a shim that never imports the manual", () => {
+  const ctx = ctxFor({ ...CONFORMANT, "GEMINI.md": "<!-- a shim -->\n" });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "shim-invalid"));
+  assert.equal(out[0].file, "GEMINI.md");
+  assert.match(out[0].message, /never imports it/);
+  cleanup(ctx);
+});
+
+test("flags a shim importing some other file than the root manual", () => {
+  const ctx = ctxFor({ ...CONFORMANT, "CLAUDE.md": "@constitution/shared-invariants.md\n" });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "shim-invalid"));
+  assert.match(out[0].message, /never imports it/);
+  cleanup(ctx);
+});
+
+test("flags a shim that is listed in config but absent from the tree", () => {
+  const files = { ...CONFORMANT };
+  delete files["GEMINI.md"];
+  const ctx = ctxFor(files);
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "shim-invalid"));
+  assert.equal(out[0].file, "GEMINI.md");
+  assert.match(out[0].message, /does not exist/);
+  cleanup(ctx);
+});
+
+// The kit's own tree is the case this protects: it ships a manual TEMPLATE and
+// no stamped files at all, so the shims are not missing — they have not been
+// written yet. Same reasoning as the root manual and reachability: no manual, no
+// opinion. A rule that fired here would make the kit's own repo permanently red.
+test("stays silent about shims when there is no root manual to shim", () => {
+  const files = { ...CONFORMANT };
+  delete files["AGENTS.md"];
+  delete files["CLAUDE.md"];
+  delete files["GEMINI.md"];
+  const ctx = ctxFor(files);
+  const out = run(ctx);
+  assert.deepEqual(out, []);
+  cleanup(ctx);
+});
+
+// Which entry points exist is policy, not a constant: a project that does not
+// want one deletes it from the list rather than from the validator.
+test("honours an empty shims list", () => {
+  const files = { ...CONFORMANT };
+  delete files["CLAUDE.md"];
+  delete files["GEMINI.md"];
+  const ctx = ctxFor(files, configWith({ shims: [] }));
   const out = run(ctx);
   assert.deepEqual(out, []);
   cleanup(ctx);
@@ -199,8 +314,8 @@ test("stays silent when CLAUDE.md does not exist (fixtures that don't model it)"
 // shared-invariants.md, so putting them there would conflate two rules.
 const WITH_ARTICLE = {
   ...CONFORMANT,
-  "CLAUDE.md": [
-    CONFORMANT["CLAUDE.md"],
+  "AGENTS.md": [
+    CONFORMANT["AGENTS.md"],
     "Elaboration lives in `constitution/local-engineering.md`.",
     "Process detail lives in `constitution/local-workflow.md`.",
   ].join("\n"),
@@ -255,12 +370,12 @@ test("flags a constitution article referenced from the root but missing on disk"
   const out = run(ctx);
   assert.equal(out.length, 1);
   assert.ok(hasRule(out, "path-missing"));
-  assert.equal(out[0].file, "CLAUDE.md");
+  assert.equal(out[0].file, "AGENTS.md");
   assert.match(out[0].message, /local-engineering/);
   cleanup(ctx);
 });
 
-test("checks articles even when the root CLAUDE.md is absent", () => {
+test("checks articles even when the root AGENTS.md is absent", () => {
   const ctx = ctxFor({
     "constitution/local-engineering.md": "Run `/ghost-command` first.",
   });
@@ -280,11 +395,11 @@ test("flags an article the root never references (unreachable — no agent will 
   assert.equal(out.length, 1);
   assert.ok(hasRule(out, "article-unreferenced"));
   assert.equal(out[0].file, "constitution/shared-invariants.md");
-  assert.match(out[0].message, /CLAUDE\.md/);
+  assert.match(out[0].message, /AGENTS\.md/);
   cleanup(ctx);
 });
 
-test("stays silent about reachability when there is no root CLAUDE.md to be reachable from", () => {
+test("stays silent about reachability when there is no root AGENTS.md to be reachable from", () => {
   const ctx = ctxFor({
     "constitution/shared-invariants.md": "# Shared invariants\nTests are the target function.",
   });
@@ -301,7 +416,7 @@ test("honours a non-default constitutionDir", () => {
   const ctx = ctxFor(
     {
       ...CONFORMANT,
-      "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nSee \`.claude/constitution/local-workflow.md\`.`,
+      "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nSee \`.claude/constitution/local-workflow.md\`.`,
       ".claude/constitution/local-workflow.md": "Run `/ghost-command` before pushing.",
     },
     configWith({ constitutionDir: ".claude/constitution" }),
@@ -314,7 +429,7 @@ test("honours a non-default constitutionDir", () => {
 });
 
 // ── Nested package manuals ───────────────────────────────────────────────────
-// An agent loads a nested CLAUDE.md when it works in that tree, so it is a
+// An agent loads a nested AGENTS.md when it works in that tree, so it is a
 // standing instruction exactly like the root — and gets the same checks.
 //
 // THE RESOLUTION RULE (config.claudeMdRefs.pathRoots): a path token whose first
@@ -333,13 +448,13 @@ const NESTED_BASE = {
 
 test("checks a nested package manual's slash commands", () => {
   const ctx = ctxFor(
-    { ...NESTED_BASE, "apps/api/CLAUDE.md": "Run `/ghost-command` before editing a handler." },
+    { ...NESTED_BASE, "apps/api/AGENTS.md": "Run `/ghost-command` before editing a handler." },
     NESTED,
   );
   const out = run(ctx);
   assert.equal(out.length, 1);
   assert.ok(hasRule(out, "skill-missing"));
-  assert.equal(out[0].file, "apps/api/CLAUDE.md");
+  assert.equal(out[0].file, "apps/api/AGENTS.md");
   cleanup(ctx);
 });
 
@@ -347,14 +462,14 @@ test("resolves a nested manual's package-relative path against its own directory
   const ctx = ctxFor(
     {
       ...NESTED_BASE,
-      "apps/api/CLAUDE.md": "Routes are `src/handlers.ts` and `src/ghost.ts`.",
+      "apps/api/AGENTS.md": "Routes are `src/handlers.ts` and `src/ghost.ts`.",
     },
     NESTED,
   );
   const out = run(ctx);
   assert.equal(out.length, 1);
   assert.ok(hasRule(out, "path-missing"));
-  assert.equal(out[0].file, "apps/api/CLAUDE.md");
+  assert.equal(out[0].file, "apps/api/AGENTS.md");
   assert.match(out[0].message, /apps\/api\/src\/ghost\.ts/);
   cleanup(ctx);
 });
@@ -365,7 +480,7 @@ test("resolves a repo-anchored first segment repo-relative even inside a nested 
       ...NESTED_BASE,
       // `tests/e2e/README.md` exists at the REPO root, not under apps/api —
       // the anchored-root rule is what makes that reference legal.
-      "apps/api/CLAUDE.md": "The suite is `tests/e2e/README.md`; routes are `src/handlers.ts`.",
+      "apps/api/AGENTS.md": "The suite is `tests/e2e/README.md`; routes are `src/handlers.ts`.",
     },
     NESTED,
   );
@@ -376,7 +491,7 @@ test("resolves a repo-anchored first segment repo-relative even inside a nested 
 
 test("flags a repo-anchored path that does not exist, referenced from a nested manual", () => {
   const ctx = ctxFor(
-    { ...NESTED_BASE, "apps/api/CLAUDE.md": "See `docs/ghost-surface.md` for the layers." },
+    { ...NESTED_BASE, "apps/api/AGENTS.md": "See `docs/ghost-surface.md` for the layers." },
     NESTED,
   );
   const out = run(ctx);
@@ -390,7 +505,7 @@ test("does not treat bare filenames, globs or identifiers in a nested manual as 
   const ctx = ctxFor(
     {
       ...NESTED_BASE,
-      "apps/api/CLAUDE.md": [
+      "apps/api/AGENTS.md": [
         "`ROUTE_TABLE` is asserted by `server.test.ts` and `handlers.test.ts`.",
         "Tests are `*.test.ts`. The API is `/api/v1`.",
       ].join("\n"),
@@ -408,7 +523,7 @@ test("does not treat bare filenames, globs or identifiers in a nested manual as 
 // one guard calls a path and the other cannot see at all.
 test("resolves an @-scoped package-relative path in a nested manual", () => {
   const ctx = ctxFor(
-    { ...NESTED_BASE, "apps/api/CLAUDE.md": "The shim lives at `@internal/ghost/bar.ts`." },
+    { ...NESTED_BASE, "apps/api/AGENTS.md": "The shim lives at `@internal/ghost/bar.ts`." },
     NESTED,
   );
   const out = run(ctx);
@@ -428,7 +543,7 @@ test("stays silent when a configured nested manual does not exist", () => {
 test("checks tests/ paths referenced from the root manual", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nThe browser tier lives in \`tests/ghost-tier/\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nThe browser tier lives in \`tests/ghost-tier/\`.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -442,7 +557,7 @@ test("checks tests/ paths referenced from the root manual", () => {
 test("flags a slash command adjacent to trailing punctuation", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nWhen finished, run \`/ghost-command.\``,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nWhen finished, run \`/ghost-command.\``,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -454,7 +569,7 @@ test("flags a slash command adjacent to trailing punctuation", () => {
 test("flags a slash command wrapped in punctuation inside a command-bearing span", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nCompose \`/loop (/ghost-command), /tdd\` for continuous runs.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nCompose \`/loop (/ghost-command), /tdd\` for continuous runs.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -469,7 +584,7 @@ test("flags a slash command wrapped in punctuation inside a command-bearing span
 test("parses a double-backtick span quoting a slash command", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nWrite it as \`\` \`/ghost-command\` \`\` in the table.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nWrite it as \`\` \`/ghost-command\` \`\` in the table.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -481,7 +596,7 @@ test("parses a double-backtick span quoting a slash command", () => {
 test("parses a double-backtick span quoting a repo path", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nWrite it as \`\` \`scripts/ghost-guard.sh\` \`\` in the table.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nWrite it as \`\` \`scripts/ghost-guard.sh\` \`\` in the table.`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
@@ -594,7 +709,7 @@ test("flags a tool invocation in the shared article", () => {
 test("flags a repo path in the shared article even when the path exists", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nSee \`constitution/shared-invariants.md\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nSee \`constitution/shared-invariants.md\`.`,
     "docs/adr/INDEX.md": "# ADRs",
     [SHARED]: `${PORTABLE}\nThe registry is \`docs/adr/INDEX.md\`.`,
   });
@@ -608,7 +723,7 @@ test("flags a repo path in the shared article even when the path exists", () => 
 test("flags a slash command in the shared article even when the skill exists", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nSee \`constitution/shared-invariants.md\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nSee \`constitution/shared-invariants.md\`.`,
     [SHARED]: `${PORTABLE}\nStart with \`/tdd\`.`,
   });
   const out = run(ctx);
@@ -626,7 +741,7 @@ test("flags a slash command in the shared article even when the skill exists", (
 test("classifies a .sh script path as a repo path, not a deployment hostname", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
-    "CLAUDE.md": `${CONFORMANT["CLAUDE.md"]}\nSee \`constitution/shared-invariants.md\`.`,
+    "AGENTS.md": `${CONFORMANT["AGENTS.md"]}\nSee \`constitution/shared-invariants.md\`.`,
     [SHARED]: `${PORTABLE}\nRun \`scripts/check.sh\` afterwards.`,
   });
   const out = run(ctx);

@@ -3,7 +3,7 @@ name: Kit — guards
 # THE KIT'S OWN CI, not a consumer's. The workflows a bootstrapped project gets
 # live in templates/workflows/ and are deliberately NOT active here: this repo is
 # a template, so running the consumer gates against its own tree would gate the
-# wrong thing (the kit has a CLAUDE.md.template, not a CLAUDE.md, and no
+# wrong thing (the kit has an AGENTS.md.template, not an AGENTS.md, and no
 # configured source globs — both gates are designed to be inert or red here).
 #
 # What IS the kit's business is that the guards it ships work. That is what this

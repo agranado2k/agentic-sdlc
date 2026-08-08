@@ -7,7 +7,7 @@ This skill takes the current conversation context and codebase understanding and
 
 ## Before you start
 
-- **The tracker.** Publish to whatever issue tracker the project uses; the root `CLAUDE.md` or `constitution/local-workflow.md` names it. If neither does, ask once and then record the answer there rather than in this file.
+- **The tracker.** Publish to whatever issue tracker the project uses; the root `AGENTS.md` or `constitution/local-workflow.md` names it. If neither does, ask once and then record the answer there rather than in this file.
 - **The autonomy label.** Shared invariant §6: every ticket carries an explicit autonomy label, and ambiguity resolves to human-in-the-loop. This kit's mechanism is a single `ready-for-agent` label — its presence means an agent may take the work solo, its absence means a human stays in the loop. There is no literal `HITL` label; absence *is* the signal.
 
 ## Process

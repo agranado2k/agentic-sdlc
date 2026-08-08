@@ -12,7 +12,7 @@ name: Kit CI
 #                   asserted in prose: "no product vocabulary in the core — the
 #                   kit runs the portability validator against ITS shared layer
 #                   in CI". `index.mjs .` at the kit root does exactly that: the
-#                   kit has no root CLAUDE.md (only a .template), so the run
+#                   kit has no root AGENTS.md (only a .template), so the run
 #                   reduces to the article layer, and constitution/shared-
 #                   invariants.md is the one file on the portability list.
 #   3. demo         the end-to-end acceptance test: build a throwaway project

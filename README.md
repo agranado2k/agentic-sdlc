@@ -30,8 +30,9 @@ git add -A && git commit -m "chore: bootstrap from agentic-sdlc"
 $EDITOR scripts/guards.config.sh   # set GUARD_SOURCE_RE
 ```
 
-`bootstrap.sh` stamps `constitution/CLAUDE.md.template` into a root `CLAUDE.md`,
-stamps the documentation set out of `templates/docs/`, wires the pre-push gate
+`bootstrap.sh` stamps `constitution/AGENTS.md.template` into a root `AGENTS.md`,
+writes the two one-line shims (`CLAUDE.md`, `GEMINI.md`) that point at it, stamps
+the documentation set out of `templates/docs/`, wires the pre-push gate
 with native `git config core.hooksPath .githooks` (no hook manager, no
 dependency), prints your next steps, and removes itself. It refuses to run a
 second time rather than overwriting a manual you have since edited.
@@ -41,7 +42,8 @@ second time rather than overwriting a manual you have since edited.
 | Path | What it is |
 | --- | --- |
 | `constitution/shared-invariants.md` | The portable rulebook — eleven invariants that hold regardless of stack, domain, or vendor. **Shared layer:** copied verbatim, not edited locally. |
-| `constitution/CLAUDE.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `CLAUDE.md`; then it is yours. |
+| `constitution/AGENTS.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `AGENTS.md`; then it is yours. |
+| `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
 | `.claude/skills/` | The twelve skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
@@ -61,6 +63,37 @@ second time rather than overwriting a manual you have since edited.
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
 | `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
+
+### One manual, three entry points
+
+The rules live in **`AGENTS.md`** — the filename the agent-tool ecosystem has
+converged on, and the one this kit treats as canonical. Beside it bootstrap
+writes two **shims**, `CLAUDE.md` and `GEMINI.md`, each holding one import line:
+
+```markdown
+<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->
+@AGENTS.md
+```
+
+That is the whole file, and the docs gate keeps it that way: `shim-invalid`
+fires if a shim grows a second instruction, imports something else, or goes
+missing. The rule exists because of the failure it prevents — the moment a
+tool-specific file *can* hold a rule, somebody adds one there, and the repo has
+two manuals whose difference nobody can see. A shim with no room for content
+cannot become a rival manual.
+
+The list is policy, not a constant: `claudeMdRefs.shims` in
+`scripts/docs-conformance/config.mjs` names the entry points, and a project that
+does not want one deletes it from that list rather than from the validator. The
+check is evaluated only where the manual exists, so the kit's own tree — which
+ships an `AGENTS.md.template` and no stamped files — stays silent.
+
+**The honest limit.** This buys you the *rules* in every agent tool, not the
+*commands*. The skills stay in `.claude/skills/` in one tool's slash-command
+format; a tool that does not read that directory gets the practice as prose from
+the manual and the articles, with no `/`-command to invoke it. Each `SKILL.md` is
+plain markdown, so pointing another tool at one by path works today — but porting
+the twelve to a second command format is explicitly out of scope here.
 
 ### The documentation set
 
@@ -103,7 +136,7 @@ the names.
 Two consequences worth stating plainly:
 
 - **The root manual's quick-reference is the index, and the gate enforces it.**
-  Every `/command` in `CLAUDE.md` must resolve to `.claude/skills/<name>/SKILL.md`.
+  Every `/command` in `AGENTS.md` must resolve to `.claude/skills/<name>/SKILL.md`.
   Delete a skill you do not run and the gate makes you delete its row.
 - **`/review-pr` keeps both axes** (shared invariant §5). Axis 1's six standards
   sub-agents feed a severity report an agent may act on; Axis 2's seventh
@@ -120,12 +153,12 @@ at its own foot so provenance survives being read out of context.
 ## The shared layer, and why it has a version
 
 Most of what bootstrap leaves behind is **yours** the moment it lands — your
-`CLAUDE.md`, your local rules, your docs. A small part is not: the files listed
+`AGENTS.md`, your local rules, your docs. A small part is not: the files listed
 under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.2.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.3.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`: read both manifests, read the upstream delta, measure your own
@@ -152,7 +185,7 @@ with `PUSH_WITHOUT_DOCS=1` as a documented, warning-printing escape hatch.
 
 - an unstamped placeholder survived bootstrap (the manual was never personalized);
 - a shared-layer file named in `VERSION` is gone;
-- the root `CLAUDE.md` does not exist at all.
+- the root `AGENTS.md` does not exist at all.
 
 **The reference checks are delegated**, because they are real parsing work:
 
@@ -248,7 +281,7 @@ workflow GitHub has ever parsed — is listed in `adapters/node-ts/INSTALL.md`.
 them into `.github/workflows/` of your project and removes the templates
 directory. They are not live in this repo because **a template repository must
 not run its consumers' CI against its own tree** — the kit has a
-`CLAUDE.md.template` rather than a `CLAUDE.md`, and no configured source globs,
+`AGENTS.md.template` rather than an `AGENTS.md`, and no configured source globs,
 so both consumer gates are designed to be inert or red here.
 
 Commit linting ships as `commitlint.yml.example` — inert, because GitHub Actions
@@ -262,8 +295,9 @@ test tiers and the end-to-end demo against this tree.
 ## Status — honest version
 
 The **constitution layer (K1)**, the **skills (K2)**, the **guards (K3)**, the
-**documentation set + update recipe (K4)** and the **Node/TS reference adapter
-(K5)** are in on top of the walking skeleton (K0).
+**documentation set + update recipe (K4)**, the **Node/TS reference adapter
+(K5)** and the **tool-agnostic manual (K7)** are in on top of the walking
+skeleton (K0).
 
 - `sh tests/kit-demo.sh` builds a throwaway project from this tree, bootstraps
   it, and proves the gate green — then red once per failure mode it claims: an
@@ -273,14 +307,18 @@ The **constitution layer (K1)**, the **skills (K2)**, the **guards (K3)**, the
   the POSIX fallback run, and a focused pass over the skills: every `/command`
   in the bootstrapped manual resolves to a `SKILL.md`, every shipped skill is
   reachable from the manual, no skill carries an unstamped mark — and then the
-  same gate goes red when a skill is deleted out from under its row.
+  same gate goes red when a skill is deleted out from under its row. It also
+  proves the three entry points: `AGENTS.md` plus two shims that really are
+  shims, then red when a shim grows content, red when a shim is deleted, and
+  red when `AGENTS.md` itself is renamed away.
 - `sh tests/guards-demo.sh` does the same for the guards: an unconfigured push
   that warns and passes, globs configured, a source-only push the hook really
   blocks (origin does not move), and the paired push that lands.
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs the whole
-  `UPDATING.md` recipe on a fake 0.1.0 consumer — including a local edit to a
-  shared file, moving it out, and the byte-for-byte verbatim check afterwards.
+  `UPDATING.md` recipe on a fake 0.1.0 consumer updating to 0.3.0 — including a
+  local edit to a shared file, moving it out, and the byte-for-byte verbatim
+  check afterwards. Its transcript is the worked example inside `UPDATING.md`.
 - `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the config
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing installed or activated from it.
@@ -311,7 +349,7 @@ notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
 ## Working on the kit itself
 
 `scripts/check.sh` is written for a *bootstrapped* project, so running it against
-this repo fails on purpose: the kit has a `CLAUDE.md.template`, not a `CLAUDE.md`.
+this repo fails on purpose: the kit has an `AGENTS.md.template`, not an `AGENTS.md`.
 The kit's own gates run the consumer gates inside real throwaway consumers, and
 CI runs all of them:
 

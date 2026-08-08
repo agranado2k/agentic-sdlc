@@ -2,14 +2,15 @@
 #
 # The SHARED LAYER is the part of this kit that is copied VERBATIM into your
 # project and is not yours to edit. It carries a version so that a project
-# bootstrapped from kit 0.1.0 can later be diffed against kit 0.2.0 and told
+# bootstrapped from kit 0.1.0 can later be diffed against kit 0.3.0 and told
 # exactly what moved. `UPDATING.md` is that recipe; this manifest is the anchor
 # it diffs against.
 #
 # Everything NOT listed here is yours from the moment bootstrap stamps it:
-# CLAUDE.md, README.md, docs/diary.md, docs/adr/, docs/domain-glossary.md,
-# .github/PULL_REQUEST_TEMPLATE.md, your adapters — and, importantly, the
-# POLICY files, which are meant to grow with your repo:
+# AGENTS.md (and the CLAUDE.md / GEMINI.md shims beside it), README.md,
+# docs/diary.md, docs/adr/, docs/domain-glossary.md, your adapters, the
+# .github/PULL_REQUEST_TEMPLATE.md — and, importantly, the POLICY files, which
+# are meant to grow with your repo:
 #
 #   scripts/docs-conformance/config.mjs            what the docs gate enforces
 #   scripts/docs-conformance/local-vocabulary.mjs  your product's vocabulary
@@ -33,7 +34,11 @@
 #
 # `scripts/check.sh` verifies every file below still exists.
 
-shared-layer: 0.2.0
+# 0.3.0 — the manual became AGENTS.md. Two shared-layer files changed content:
+# scripts/check.sh now requires AGENTS.md as the root manual, and the
+# claude-md-refs validator defaults to it and gained the `shim-invalid` rule for
+# the tool entry points beside it. No file joined or left the layer.
+shared-layer: 0.3.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

@@ -57,16 +57,32 @@ and it is called out in both files.
 
 | id | checks |
 | --- | --- |
-| `claude-md-refs` | every layer of the agent manual (root `CLAUDE.md`, the articles under `constitutionDir`, and any nested package manuals) references only commands and paths that exist; each article is reachable from the root; the shared article stays free of product / vendor / path / command names |
+| `claude-md-refs` | every layer of the agent manual (root `AGENTS.md`, the articles under `constitutionDir`, and any nested package manuals) references only commands and paths that exist; each article is reachable from the root; the tool shims beside the manual import it and hold nothing else; the shared article stays free of product / vendor / path / command names |
 
 Rules it reports: `skill-missing`, `path-missing`, `article-unreferenced`,
-`portability-leak` (plus `validator-crash` from the runner).
+`shim-invalid`, `portability-leak` (plus `validator-crash` from the runner).
+
+### The shims
+
+`claudeMdRefs.rootManual` is `AGENTS.md`, and `claudeMdRefs.shims` lists the
+entry points other agent tools look for (`CLAUDE.md`, `GEMINI.md`). Each must
+contain exactly one import line — `@AGENTS.md` — plus at most one HTML-comment
+line saying that is all it is; blank lines are ignored and everything else is
+`shim-invalid`. The grammar is deliberately unforgiving: "nothing but an import"
+is only checkable if there is no room to argue about what else counts as
+nothing, and a tool-specific file that can hold a rule becomes a second manual
+nobody diffs.
+
+Like every other manual check, it is evaluated **only where the root manual
+exists**. The kit's own tree ships a `*.template` and no stamped files, so it
+has no shims to be wrong about, and neither does a fixture that models the
+article layer alone.
 
 ## `claude-md-refs` path resolution
 
 A backticked token whose **first segment** is one of `config.claudeMdRefs.pathRoots`
 resolves **repo-relative**, from whichever manual names it — so `tests/` in
-`apps/api/CLAUDE.md` is the repo's test tree. Any other path-shaped token inside
+`apps/api/AGENTS.md` is the repo's test tree. Any other path-shaped token inside
 a **nested** manual resolves against that manual's own directory (`src/tools.ts`
 → `apps/api/src/tools.ts`). Repo-level manuals (root + articles) never resolve
 package-relative. To keep prose out of the check, a package-relative token must

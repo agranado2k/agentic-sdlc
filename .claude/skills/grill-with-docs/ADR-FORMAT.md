@@ -10,7 +10,7 @@ This project records architectural decisions as **ADRs in
   number in sequence per `INDEX.md`. Numbers are never reused, not even for a
   rejected record.
 
-If the root `CLAUDE.md` names different paths, it wins — it is the manual, this
+If the root `AGENTS.md` names different paths, it wins — it is the manual, this
 is a sidecar.
 
 ## ADR, diary entry, or manual?
@@ -25,7 +25,7 @@ home, and everywhere else points at it).
 - **A dated entry in `docs/diary.md`** — the chronological development log: what
   happened, debugging stories, progress. A diary entry may reference an ADR by
   number but is never the source of truth for a decision.
-- **`CLAUDE.md` and the `constitution/` articles** — standing operating
+- **`AGENTS.md` and the `constitution/` articles** — standing operating
   instructions for anyone (human or agent) working in the repo: style rules,
   boundaries, the quick-reference map. They do not *contain* decisions; they
   point at the ADR that made them.

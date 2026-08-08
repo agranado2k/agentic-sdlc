@@ -48,15 +48,41 @@ const localVocabulary = existsSync(localVocabularyFile)
 
 /**
  * The agent manual is a layered set of files, all of them standing instructions
- * the agent obeys: the root `CLAUDE.md`, the on-demand articles under
+ * the agent obeys: the root `AGENTS.md`, the on-demand articles under
  * `constitutionDir`, and any nested package manuals. Every layer gets the same
  * two existence checks — slash commands must resolve to a skill directory,
  * referenced repo paths must exist — plus, for the shared article only, the
  * portability guard further down.
  */
 export const claudeMdRefs = {
-  /** The always-loaded root manual. */
-  rootManual: "CLAUDE.md",
+  /**
+   * The always-loaded root manual.
+   *
+   * `AGENTS.md` rather than a tool-specific filename: the manual is one file,
+   * and the tools that look for a different name are served by the shims below.
+   * This value is also the nested-manual filename — a package manual is
+   * `<dir>/AGENTS.md` — so there is exactly one knob for "what the manual is
+   * called".
+   */
+  rootManual: "AGENTS.md",
+
+  /**
+   * Tool-specific entry points that must contain NOTHING but an import of the
+   * root manual (plus, optionally, one comment line saying so).
+   *
+   * The rule exists because the alternative is silent divergence: the moment a
+   * tool-specific file can hold a rule of its own, somebody adds one there, and
+   * the repo now has two manuals whose difference nobody can see. Keeping the
+   * shims provably empty is what makes "AGENTS.md is the manual" a fact rather
+   * than a convention.
+   *
+   * `shim-invalid` is only evaluated when the root manual exists — an
+   * unbootstrapped tree (the kit itself) and a fixture that does not model the
+   * manual layer both stay silent, exactly as the other manual checks do.
+   * Delete an entry here if you do not want that tool's entry point at all; the
+   * gate follows this list, not a hard-coded pair.
+   */
+  shims: ["CLAUDE.md", "GEMINI.md"],
 
   /**
    * Where the on-demand articles live. The kit puts them in `constitution/`, at
