@@ -7,11 +7,20 @@
 # anchor it will diff against.
 #
 # Everything NOT listed here is yours from the moment bootstrap stamps it:
-# CLAUDE.md, your docs, your adapters. Edit those freely.
+# CLAUDE.md, the local-* articles, your docs, your adapters — and, importantly,
+# the docs-gate POLICY files, which are meant to grow with your repo:
+#
+#   scripts/docs-conformance/config.mjs            what the gate enforces
+#   scripts/docs-conformance/local-vocabulary.mjs  your product's vocabulary
+#   scripts/docs-conformance/test/                 fixture tests; extend freely
+#
+# The split is deliberate: the validator ENGINE is shared because a fix to it
+# should reach every project, while the RULES are local because they are the
+# thing each project must own and review.
 #
 # `scripts/check.sh` verifies every file below still exists.
 
-shared-layer: 0.1.0
+shared-layer: 0.2.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -24,3 +33,8 @@ files:
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh
+  scripts/check.sh
+  scripts/docs-conformance/index.mjs
+  scripts/docs-conformance/context.mjs
+  scripts/docs-conformance/runner.mjs
+  scripts/docs-conformance/validators/claude-md-refs.mjs

@@ -41,8 +41,12 @@ edited.
 | Path | What it is |
 | --- | --- |
 | `constitution/shared-invariants.md` | The portable rulebook — eleven invariants that hold regardless of stack, domain, or vendor. **Shared layer:** copied verbatim, not edited locally. |
-| `constitution/CLAUDE.md.template` | The root agent manual, carrying double-brace placeholder marks that bootstrap stamps. Becomes `CLAUDE.md`; then it is yours. |
-| `scripts/check.sh` | The docs gate. POSIX sh, no runtime dependency. |
+| `constitution/CLAUDE.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `CLAUDE.md`; then it is yours. |
+| `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
+| `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
+| `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
+| `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
+| `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
@@ -50,7 +54,7 @@ edited.
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
-| `tests/` | The kit's own acceptance tests (removed from your project by bootstrap). |
+| `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
 
 ## The shared layer, and why it has a version
 
@@ -60,7 +64,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.1.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.2.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is written and demonstrated in K4 (#6); today `VERSION` is the anchor it will
@@ -75,14 +79,30 @@ Shared invariant §8: a process rule must be executable or CI-verified, because 
 rule nothing checks decays into a lie — and a stale standing instruction is worse
 than an absent one, since every agent session loads it.
 
-`scripts/check.sh` is the smallest honest version of that. It fails when:
+`scripts/check.sh` is that gate. It runs on `git push` via `.githooks/pre-push`,
+with `PUSH_WITHOUT_DOCS=1` as a documented, warning-printing escape hatch.
+
+**Three checks always run, in POSIX sh** — they are cheap and exact in a shell:
 
 - an unstamped placeholder survived bootstrap (the manual was never personalized);
 - a shared-layer file named in `VERSION` is gone;
-- the root `CLAUDE.md` references a repo path that does not exist.
+- the root `CLAUDE.md` does not exist at all.
 
-It claims nothing more. It runs on `git push` via `.githooks/pre-push`, with
-`PUSH_WITHOUT_DOCS=1` as a documented, warning-printing escape hatch.
+**The reference checks are delegated**, because they are real parsing work:
+
+| | Engine | Covers |
+| --- | --- | --- |
+| node on `PATH` | `scripts/docs-conformance/` | every layer of the manual (root, articles, nested package manuals); slash commands must resolve to a skill; repo paths must exist; every article must be reachable from the root; the shared article must stay free of product, vendor, path and command names |
+| no node | POSIX fallback inside `scripts/check.sh` | repo paths in code spans of the root manual and the articles — and it prints a NOTICE naming everything it is *not* checking |
+
+That split is the whole language-agnostic claim, kept honest: a project that has
+not chosen a toolchain still inherits a working gate on day one, and is told
+plainly what it is missing rather than being allowed to believe in coverage it
+does not have. `DOCS_CHECK_NO_NODE=1` forces the fallback, which is how the demo
+proves both engines — including a portability leak the fallback provably misses.
+
+The harness carries its own fixture tests (`scripts/docs-conformance/test/`),
+because a gate whose failure path is untested is a claim, not a check.
 
 Note that the gate scans its own source too, and that files named `*.template`
 are exempt because carrying unstamped marks is their job. Everything else is
@@ -144,21 +164,26 @@ test tiers and the end-to-end demo against this tree.
 
 ## Status — honest version
 
-This is the **walking skeleton (K0)** plus the **guards (K3)**: thin, but
-end-to-end and actually exercised. `sh tests/skeleton-demo.sh` builds a throwaway
-project from this tree, bootstraps it, and proves the gate green — then proves it
-red on an unstamped placeholder and on a deleted shared-layer file, including a
-real `git push` that the hook actually blocks. `sh tests/guards-demo.sh` does the
-same for the guards: bootstrap, an unconfigured push that warns and passes,
-globs configured, a source-only push the hook really blocks (origin does not
-move), and the paired push that lands.
+The **constitution layer (K1)** and the **guards (K3)** are in on top of the
+walking skeleton (K0). `sh tests/kit-demo.sh` builds a throwaway project from
+this tree, bootstraps it, and proves the gate green — then proves it red once
+per failure mode it claims: an unstamped placeholder, a deleted shared-layer
+file, a stale path, a dead slash command, the project's own name leaking into
+the shared article, and an article the root never points at. It includes a real
+`git push` the hook actually blocks, and it runs the POSIX fallback too.
+`sh tests/guards-demo.sh` does the same for the guards: bootstrap, an
+unconfigured push that warns and passes, globs configured, a source-only push
+the hook really blocks (origin does not move), and the paired push that lands.
+
+The kit's own CI runs the harness fixture tests, the portability validator
+against `constitution/shared-invariants.md`, the guard test suites, and both
+demos on every PR (`kit-ci.yml` + `kit-guards.yml`).
 
 Not here yet, each with its own ticket:
 
 | | Ticket | Brings |
 | --- | --- | --- |
-| K1 | [#3](https://github.com/agranado2k/agentic-sdlc/issues/3) | The full docs-conformance harness + `claude-md-refs` validator (slash-command resolution, article reachability, the portability deny-list), `local-engineering` / `local-workflow` templates |
-| K2 | [#4](https://github.com/agranado2k/agentic-sdlc/issues/4) | Twelve de-productized skills — grill-me, to-prd, to-tickets, implement, tdd, review-pr, pr-iterate, diagnose, and the rest |
+| K2 | [#4](https://github.com/agranado2k/agentic-sdlc/issues/4) | Twelve de-productized skills — grill-me, to-prd, to-tickets, implement, tdd, review-pr, pr-iterate, diagnose, and the rest. Until they land, the root manual's quick-reference ships without command rows, because the gate would (correctly) reject references to skills that do not exist |
 | K4 | [#6](https://github.com/agranado2k/agentic-sdlc/issues/6) | Docs skeletons (diary, ADR dir + MADR template, glossary, PR template) and `UPDATING.md` — the shared-layer update recipe |
 | K5 | [#7](https://github.com/agranado2k/agentic-sdlc/issues/7) | `adapters/node-ts/` — one worked reference wiring (vitest, Stryker differential, eval tier) |
 | K6 | [#8](https://github.com/agranado2k/agentic-sdlc/issues/8) | Dogfood: a throwaway project end-to-end, and the verbatim claim proved by diff |
@@ -170,13 +195,17 @@ built ticket-by-ticket by its own `/to-tickets` → `/implement` chain.
 
 `scripts/check.sh` is written for a *bootstrapped* project, so running it against
 this repo fails on purpose: the kit has a `CLAUDE.md.template`, not a `CLAUDE.md`.
-The kit's own gates are its tests, which run the consumer gates inside real
-throwaway consumers. Do not wire `core.hooksPath` in this repo.
+The kit's own gates run the consumer gates inside real throwaway consumers, and
+CI runs all of them:
 
 ```sh
-sh tests/skeleton-demo.sh            # K0: bootstrap + docs gate, end to end
-sh tests/guards-demo.sh              # K3: the guards, end to end
-sh tests/tdd-pairing-guard.test.sh   # the pairing rule
+node --test scripts/docs-conformance/test/*.test.mjs   # the validators' fixture tests
+node scripts/docs-conformance/index.mjs .              # portability of THIS repo's shared layer
+sh tests/kit-demo.sh                                   # K0+K1: bootstrap + docs gate, end to end
+sh tests/guards-demo.sh                                # K3: the guards, end to end
+sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 ```
+
+Do not wire `core.hooksPath` in this repo.
