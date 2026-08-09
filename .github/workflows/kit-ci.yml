@@ -68,6 +68,18 @@ jobs:
       - name: Kit acceptance test
         run: sh tests/kit-demo.sh
 
+  skills:
+    name: /implement delivery contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node, no forge: the skills are documents, and this checks the one
+      # whose text now drives a push, a PR and a review request. What it cannot
+      # reach — `gh pr create` against a live forge, a review workflow firing —
+      # is named in the script's own header rather than mocked.
+      - name: Skill text consistency
+        run: sh tests/implement-deliver.test.sh
+
   adapters:
     name: Adapters are well-formed and dormant
     runs-on: ubuntu-latest
