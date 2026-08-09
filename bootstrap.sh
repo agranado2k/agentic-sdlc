@@ -41,7 +41,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -293,6 +293,13 @@ its own loud bypass: PUSH_WITHOUT_DOCS=1 and PUSH_WITHOUT_TESTS=1. The matching
 CI workflows were installed into .github/workflows/, so a local bypass only
 defers the failure. Commit linting ships DISABLED as
 .github/workflows/commitlint.yml.example — rename it once you have a runner.
+
+Cross-provider AI review ships DISABLED the same way, as
+.github/workflows/ai-review.example.yml: two advisory reviewers from two
+vendors, firing on PR open. Add one or both provider secrets, then rename the
+file — a provider with no secret skips itself, so one key is enough to start.
+This is the review \`/implement\` requests when it delivers a pull request.
+
 Collaborators cloning this repo run \`git config core.hooksPath .githooks\`
 once — hooks path is per-clone config and cannot be committed.
 

@@ -80,6 +80,17 @@ jobs:
       - name: Skill text consistency
         run: sh tests/implement-deliver.test.sh
 
+  workflow-templates:
+    name: Workflow templates parse, and install inert
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # PyYAML is preinstalled on ubuntu-latest, so the parse leg really runs
+      # here. The script degrades to structural checks (and says so) on a
+      # machine with no YAML parser, because the kit's core has no runtime.
+      - name: AI review template acceptance test
+        run: sh tests/ai-review-template.test.sh
+
   adapters:
     name: Adapters are well-formed and dormant
     runs-on: ubuntu-latest
