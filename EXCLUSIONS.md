@@ -106,13 +106,23 @@ its **real user-facing surface** before a human does, which is portable, because
 only the surface varies by stack (a browser for a web app, the binary for a CLI,
 a client for a tool server).
 
-That pattern ships as the **opt-in `/dogfood` skill**, tracked by
-[#27](https://github.com/agranado2k/agentic-sdlc/issues/27) — opt-in rather than
-default because it needs a runnable user-facing surface, and a project without
-one would inherit a command it cannot run. Whether that skill is already in
-`.claude/skills/` on the day you read this, the record here is the same: this is
-a **scoping** decision about what part is portable, not a decision to leave
-dogfooding out.
+That pattern **ships**, as the opt-in `/dogfood` skill
+([#27](https://github.com/agranado2k/agentic-sdlc/issues/27)) — opt-in rather
+than default because it needs a runnable user-facing surface, and a project
+without one would inherit a command it cannot run. `bootstrap.sh` asks once
+(`--with-dogfood` / `--no-dogfood` answer it non-interactively; with no terminal
+to ask on, it skips), and a declined answer removes the skill directory, its
+product article, and the manual's rows about it — so the skipped case leaves
+nothing dangling rather than a commented-out row.
+
+The record stands either way, which is the point of writing it here: this was a
+**scoping** decision about which part of the predecessor's skill was portable,
+never a decision to leave dogfooding out. What stayed behind is what the
+scoping said would stay behind — one product's personas, its flows, its browser
+wiring — plus one thing the port dropped deliberately: the predecessor repaired
+what it found, and this version reports instead, because a fix applied by the
+session that found the problem destroys the only independent reading anyone had
+of it (shared invariant §10).
 
 ---
 

@@ -11,6 +11,12 @@
 #   sh bootstrap.sh "My Project"             # name as an argument
 #   sh bootstrap.sh "My Project" "One line." # name + description
 #
+# Options (they may appear anywhere among the arguments):
+#   --with-dogfood   install the optional /dogfood skill
+#   --no-dogfood     skip it
+# Without either flag the script asks, once, on a terminal; with no terminal to
+# ask on it skips. See the F6 block below for why skip is the safe default.
+#
 # POSIX sh, git only. No node, no package manager — the kit's core is
 # language-agnostic, and bootstrap runs before your project has a toolchain.
 
@@ -48,7 +54,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # bootstrap deletes cannot be copied verbatim or diffed against a later release.
 #
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -81,8 +87,47 @@ done
 	die "$TEMPLATE not found. Either this is not an agentic-sdlc repo, or bootstrap already ran."
 
 # --- gather values ----------------------------------------------------------
-name=${1:-}
-description=${2:-}
+# Options and positionals are parsed in one pass so a flag may sit before or
+# after the name. An UNKNOWN option is a hard error rather than a positional:
+# `--with-dogfod` silently becoming the project name is the kind of typo you
+# only discover in the stamped manual a week later.
+name=""
+description=""
+have_name=0
+have_desc=0
+# ask | yes | no — resolved once, in the F6 block below.
+dogfood_choice=ask
+
+# take_positional <value> — name first, then description, then it is an error.
+take_positional() {
+	if [ "$have_name" = 0 ]; then
+		name=$1
+		have_name=1
+	elif [ "$have_desc" = 0 ]; then
+		description=$1
+		have_desc=1
+	else
+		die "too many arguments. Usage: sh bootstrap.sh [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+	fi
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--with-dogfood) dogfood_choice=yes ;;
+	--no-dogfood) dogfood_choice=no ;;
+	--) # everything after this is positional, even if it looks like a flag
+		shift
+		while [ $# -gt 0 ]; do
+			take_positional "$1"
+			shift
+		done
+		break
+		;;
+	-*) die "unknown option '$1'. Supported: --with-dogfood, --no-dogfood." ;;
+	*) take_positional "$1" ;;
+	esac
+	shift
+done
 
 if [ -z "$name" ]; then
 	if [ -t 0 ]; then
@@ -101,6 +146,64 @@ if [ -z "$description" ]; then
 	fi
 fi
 [ -n "$description" ] || description="An agent-assisted project built on the agentic-sdlc framework."
+
+# ============================================================================
+# F6 BEGIN — the optional /dogfood skill (#27)
+# ----------------------------------------------------------------------------
+# Everything F6 does lives in this block and in one extra `-e` on the stamp
+# below. Same discipline as K4/K5/K7: bootstrap.sh is touched by several kit
+# tickets, and a named block is the difference between a merge and a rewrite.
+#
+# WHY THIS ONE IS OPTIONAL AND THE OTHER THIRTEEN ARE NOT. Every other skill
+# works on the day the repo is created — they operate on specs, tickets,
+# diffs, branches and worktrees, all of which a one-hour-old project already
+# has. `/dogfood` operates on a RUNNING PRODUCT: it walks declared personas
+# through a real user-facing surface. A project with no such surface would
+# inherit a command it cannot run and a row on the manual's map pointing at it,
+# which is the exact failure the docs gate exists to prevent one level up.
+#
+# ONE QUESTION, and only when there is somebody to ask. With no terminal the
+# answer is SKIP, because the two mistakes are not symmetric: a project that
+# skipped it copies the skill back out of the kit in a minute, while a project
+# that took it silently carries a dead command until someone notices.
+#
+# WHAT "SKIP" REMOVES: the skill directory (the way KIT_ONLY files go, further
+# down), the product article that exists only to feed it, and — at stamp time,
+# below — the manual's rows about it. The shims are untouched: they hold one
+# import line and no rules, so there is nothing in them to be conditional about.
+if [ "$dogfood_choice" = ask ]; then
+	if [ -t 0 ]; then
+		printf 'Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
+		read -r dogfood_answer || dogfood_answer=""
+		case "$dogfood_answer" in
+		[Yy] | [Yy][Ee][Ss]) dogfood_choice=yes ;;
+		*) dogfood_choice=no ;;
+		esac
+	else
+		dogfood_choice=no
+	fi
+fi
+
+# "Yes" is only answerable if the skill is actually in this tree. If somebody
+# pruned it before running bootstrap, stamping its rows anyway would hand the
+# project a manual whose own gate rejects it on the first push — so say what
+# happened and fall back to skipping.
+if [ "$dogfood_choice" = yes ] && [ ! -f .claude/skills/dogfood/SKILL.md ]; then
+	echo "  note: /dogfood was requested but .claude/skills/dogfood/ is not in this tree — skipping it" >&2
+	dogfood_choice=no
+fi
+
+# The stamp-time filter for the manual's optional rows. The template marks them
+# with a matched pair of HTML comments; the marker lines themselves ALWAYS go,
+# so a project never inherits scaffolding it did not ask about, and when the
+# skill is declined the lines between them go too.
+if [ "$dogfood_choice" = yes ]; then
+	dogfood_filter='/<!-- DOGFOOD:BEGIN -->/d;/<!-- DOGFOOD:END -->/d'
+else
+	dogfood_filter='/<!-- DOGFOOD:BEGIN -->/,/<!-- DOGFOOD:END -->/d'
+fi
+# F6 END
+# ============================================================================
 
 # A stamped value containing the placeholder syntax would defeat the gate, and a
 # `/` or `&` would corrupt the sed replacement below.
@@ -126,6 +229,7 @@ name_js_esc=$(esc "$(esc_js "$name")")
 sed \
 	-e "s|{{PROJECT_NAME}}|$name_esc|g" \
 	-e "s|{{PROJECT_DESCRIPTION}}|$description_esc|g" \
+	-e "$dogfood_filter" \
 	"$TEMPLATE" >"$MANUAL"
 rm -f "$TEMPLATE"
 echo "  stamped $MANUAL"
@@ -252,6 +356,24 @@ if [ -d templates/workflows ]; then
 	rmdir templates 2>/dev/null || true
 fi
 
+# --- the declined optional skill (F6, #27) ----------------------------------
+# Removed exactly the way the kit-authoring files below are: no archive, no
+# `.disabled` suffix, no commented-out row left in the manual. A skill that is
+# half-present is worse than an absent one — the manual's map and the skills
+# directory are supposed to be the same set, and the gate checks it.
+#
+# The product article goes too: it exists to hold the persona/surface
+# declaration `/dogfood` reads, so on its own it would be an unfilled template
+# nothing points at.
+if [ "$dogfood_choice" != yes ]; then
+	for f in .claude/skills/dogfood constitution/local-product.md.template; do
+		if [ -e "$f" ]; then
+			rm -rf "$f"
+			echo "  removed $f (/dogfood not selected)"
+		fi
+	done
+fi
+
 # --- clean up the kit's own scaffolding -------------------------------------
 for f in $KIT_ONLY; do
 	if [ -e "$f" ]; then
@@ -318,6 +440,35 @@ and scripts/docs-conformance/local-vocabulary.mjs.
 The shared layer (see VERSION) is copied verbatim from the kit and is not
 edited here. Everything else is yours.
 EOF
+
+# ============================================================================
+# F6 BEGIN — what the dogfood answer meant (#27)
+# ----------------------------------------------------------------------------
+# Say it either way. "Nothing happened" is not a report: a project that skipped
+# the skill needs to know it can still have it, and one that took it needs to
+# know the skill will not run until the declaration is filled in.
+if [ "$dogfood_choice" = yes ]; then
+	cat <<'EOF'
+
+/dogfood is installed, and it does NOT work yet. It walks your personas through
+your real user-facing surface, and both of those are yours to declare: fill in
+the DOGFOOD DECLARATION in constitution/local-product.md.template, drop the
+.template suffix, and point AGENTS.md's article layer at it — the same three
+steps as the other two local articles. Until then the skill stops and says so,
+which is the correct behaviour: a guessed persona produces a report about a
+user who does not exist.
+EOF
+else
+	cat <<'EOF'
+
+/dogfood was NOT installed — it needs a runnable user-facing surface, and the
+default is to skip. Nothing is lost: copy .claude/skills/dogfood/ and
+constitution/local-product.md.template out of the kit on the day you have one,
+and add a row for it to AGENTS.md's quick reference.
+EOF
+fi
+# F6 END
+# ============================================================================
 
 # ============================================================================
 # K5 BEGIN — the adapters pointer (#7)
