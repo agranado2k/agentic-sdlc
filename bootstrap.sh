@@ -40,8 +40,15 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # OWN shared layer, and inheriting it would give a fresh project a workflow that
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
+# EXCLUSIONS.md goes the same way, and it is the one entry here that is not a
+# test: it records what the KIT deliberately does not ship, which is a sentence
+# with no referent inside a consumer project — a reader there would take it for a
+# record of their own decisions. It is prose, not scaffolding, but its lifetime
+# is the kit's. That is also why it is not shared layer (see VERSION): a file
+# bootstrap deletes cannot be copied verbatim or diffed against a later release.
+#
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after

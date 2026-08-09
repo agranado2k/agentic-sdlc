@@ -24,6 +24,8 @@ name: Kit CI
 #   5. workflow-templates
 #                   the workflow templates parse, and install inert.
 #   6. adapters     the adapter trees are well-formed and stay dormant.
+#   7. exclusions   the deliberate-exclusions record has not gone stale — every
+#                   skill it says the kit does not ship is really not shipped.
 #
 # The guard scripts and the capability-tier resolver have their own file
 # (kit-guards.yml) — separate work streams do not collide on one YAML.
@@ -116,3 +118,16 @@ jobs:
       # What it cannot assert is listed in adapters/node-ts/INSTALL.md.
       - name: Adapters acceptance test
         run: sh tests/adapters-demo.sh
+
+  exclusions:
+    name: Exclusions record is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the record is a document, and the check is a comparison
+      # between what it claims and what `.claude/skills/` actually contains.
+      # The reason it runs in CI rather than only locally is that it goes stale
+      # by someone ADDING a skill — an action taken in a pull request that has
+      # no reason to think about EXCLUSIONS.md at all.
+      - name: Deliberate-exclusions record
+        run: sh tests/exclusions.test.sh
