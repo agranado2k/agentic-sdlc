@@ -41,7 +41,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/implement-deliver.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -276,10 +276,17 @@ Next:
                                   trees. Until then it warns on every push and
                                   blocks nothing — on purpose, because it cannot
                                   know your layout and will not guess it.
-  5. fill in docs/diary.md        the "Current state" block at the top is what
+  5. edit scripts/agents.config.sh
+                                  map the four capability tiers (planner,
+                                  implementer, mechanical, reviewer) onto your
+                                  provider's model ids. Unmapped is a working
+                                  state: every tier then runs on the session's
+                                  own model and the resolver warns once. The
+                                  kit ships no model id on purpose — they rot.
+  6. fill in docs/diary.md        the "Current state" block at the top is what
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is
-  6. git add -A && git commit     bootstrap committed nothing on purpose
+  7. git add -A && git commit     bootstrap committed nothing on purpose
 
 Both gates run automatically before every push (.githooks/pre-push), each with
 its own loud bypass: PUSH_WITHOUT_DOCS=1 and PUSH_WITHOUT_TESTS=1. The matching
