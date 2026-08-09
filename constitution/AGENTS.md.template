@@ -139,8 +139,9 @@ by path works today; porting them to a second command format does not.
 
 Spec → tickets → implementation → review → landing:
 
-`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (which drives `/tdd`) →
-`/review-pr` → `/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
+`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (which drives `/tdd`, and
+ends at an open PR carrying an independent review) → `/review-pr` →
+`/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
 
 Three step out of that line: `/grill-with-docs` replaces `/grill-me` once the
 project has a glossary and decision records worth challenging a plan against,
@@ -155,7 +156,7 @@ project has a glossary and decision records worth challenging a plan against,
 | Answer "would that even work?"      | `/prototype` — throwaway spike, outside the repo tree, finding recorded |
 | Turn agreed context into a spec     | `/to-prd`                                        |
 | Split a spec into tracer-bullet tickets | `/to-tickets` — one ticket per fresh session, autonomy label decided at write time |
-| Build one ticket                    | `/implement` — restate, then drive `/tdd` through the seams |
+| Build one ticket                    | `/implement` — restate, drive `/tdd` through the seams, then deliver: push, open the PR, request an independent review. Stops there; the merge is yours |
 | Write the code test-first           | `/tdd` — red, green, refactor, one behavior at a time |
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |

@@ -120,9 +120,10 @@ copied verbatim, and nothing updates them afterwards.
 `.claude/skills/` holds twelve skills — the chain at the top of this README, made
 runnable:
 
-`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`) →
-`/review-pr` → `/pr-iterate` → `/merge-train` → `/worktree-cleanup`, plus
-`/grill-with-docs`, `/prototype` and `/diagnose` off to the side.
+`/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
+an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
+`/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype` and
+`/diagnose` off to the side.
 
 They are **copied as-is, never stamped**. That is a stronger constraint than the
 templates are under: a template may carry a mark because something fills it in,
@@ -133,8 +134,17 @@ establishes — `constitution/local-engineering.md` for the test tiers,
 contracts, `docs/adr/` for the binding decisions, `docs/domain-glossary.md` for
 the names.
 
-Two consequences worth stating plainly:
+Three consequences worth stating plainly:
 
+- **`/implement` delivers to the PR boundary and stops there.** The session does
+  not end at a local commit: it pushes, opens the PR (body carrying the
+  restatement it opened with, plus the demo evidence), and requests one
+  independent review — preferring a **forge review workflow**, because CI holds
+  the secrets and can therefore reach a reviewer from a different vendor than
+  the session that wrote the code, and falling back to a fresh-context
+  `/review-pr` subagent on a different model tier when no workflow is wired.
+  What it never does is land it: shared invariant §7 puts a human's name on the
+  merge, and driving the PR to green afterwards is `/pr-iterate`'s loop.
 - **The root manual's quick-reference is the index, and the gate enforces it.**
   Every `/command` in `AGENTS.md` must resolve to `.claude/skills/<name>/SKILL.md`.
   Delete a skill you do not run and the gate makes you delete its row.
