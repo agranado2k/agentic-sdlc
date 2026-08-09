@@ -46,7 +46,7 @@ second time rather than overwriting a manual you have since edited.
 | `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
-| `.claude/skills/` | The twelve skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `.claude/skills/` | The thirteen skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -96,7 +96,7 @@ ships an `AGENTS.md.template` and no stamped files — stays silent.
 format; a tool that does not read that directory gets the practice as prose from
 the manual and the articles, with no `/`-command to invoke it. Each `SKILL.md` is
 plain markdown, so pointing another tool at one by path works today — but porting
-the twelve to a second command format is explicitly out of scope here.
+the thirteen to a second command format is explicitly out of scope here.
 
 ### The documentation set
 
@@ -120,13 +120,13 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.claude/skills/` holds twelve skills — the chain at the top of this README, made
+`.claude/skills/` holds thirteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
-`/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype` and
-`/diagnose` off to the side.
+`/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
+`/diagnose` and `/improve-codebase-architecture` off to the side.
 
 They are **copied as-is, never stamped**. That is a stronger constraint than the
 templates are under: a template may carry a mark because something fills it in,
@@ -158,7 +158,7 @@ Three consequences worth stating plainly:
   testing is stack-specific, so the skill says to check `adapters/` and to skip
   the block, loudly, when nothing is wired.
 
-Five of the twelve are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+Six of the thirteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context.
@@ -420,7 +420,7 @@ built ticket-by-ticket by its own `/to-tickets` → `/implement` chain.
 
 ## Licence
 
-MIT (`LICENSE`) — and additionally, for the five skills adapted from
+MIT (`LICENSE`) — and additionally, for the six skills adapted from
 [mattpocock/skills](https://github.com/mattpocock/skills), the upstream MIT
 notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
 

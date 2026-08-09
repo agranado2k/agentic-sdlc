@@ -303,7 +303,7 @@ for cmd in $(manual_commands); do
 		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
-[ "$resolved" -ge 12 ] &&
+[ "$resolved" -ge 13 ] &&
 	pass "all $resolved slash commands in AGENTS.md resolve to a skill" ||
 	fail "only $resolved commands resolved — the manual should map the whole chain"
 
