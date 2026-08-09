@@ -200,6 +200,7 @@ fi
 
 for f in \
 	adapters/README.md \
+	adapters/claude-code/README.md \
 	adapters/node-ts/README.md \
 	adapters/node-ts/INSTALL.md \
 	adapters/node-ts/guards.config.sh.example \

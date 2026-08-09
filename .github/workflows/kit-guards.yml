@@ -46,6 +46,12 @@ jobs:
       - name: behavior-delta.sh
         run: sh tests/behavior-delta.test.sh
 
+      # Not a guard either, but the same config-as-data shape: mechanism in a
+      # shared lib, policy in a local config, and an unconfigured default that
+      # warns and passes rather than blocking a fresh project.
+      - name: agents.lib.sh (capability tiers)
+        run: sh tests/agents-tiers.test.sh
+
       # Not a guard, but the same shape and the same risk profile: a script that
       # deletes branches and worktrees. Its fixtures build real repos with real
       # bare remotes and real linked worktrees.

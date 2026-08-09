@@ -51,6 +51,35 @@ never edit a shim.
    it warns and passes). Bypasses (`PUSH_WITHOUT_TESTS=1`, the `tdd-exempt` PR
    label in CI) are loud and deliberate, never routine.
 
+## Capability tiers
+
+Work in this repo is sized to one of **four tiers**, and the tier is a
+cost/benefit decision made when the ticket is written — not when the agent is
+spawned, and never by the agent about itself.
+
+| Tier | The work | The signal |
+| --- | --- | --- |
+| `planner` | Decomposition, design, architecture, triage of an ambiguous bug | Reads broadly, writes little; a wrong answer costs a whole wave downstream |
+| `implementer` | Building one ticket test-first through seams it has to find | The default for real work |
+| `mechanical` | Renames across call sites, codemods, dependency bumps, the contract half of expand–migrate–contract | A checkable definition of done — the suite is the oracle, not the model |
+| `reviewer` | Adversarial reading of a finished diff in fresh context | Undersize it and review becomes a rubber stamp |
+
+`/to-tickets` stamps a tier on every ticket and shows it at the quiz for
+override; `/implement` reads its ticket's tier when it spawns.
+
+**This manual names no model, and neither does any other file the kit ships.**
+Model identifiers rot on a vendor's schedule, so the tier → model mapping is
+data in `scripts/agents.config.sh` and the resolver is
+`scripts/agents.lib.sh` (`sh scripts/agents.lib.sh implementer` prints the
+mapped id). An unmapped tier is a working state: the resolver warns once, prints
+nothing, and the spawn inherits the session's own model. Which harness parameter
+receives that value is a wiring detail — see `adapters/claude-code/README.md`
+for one worked example.
+
+> **Kit note —** the tiers above are the kit's vocabulary and the skills speak
+> it by name. Re-point them at whatever models you like; renaming them means
+> editing the skills too.
+
 ## Agent trust boundary
 
 Your session — and any subagent you spawn — can hold all three legs of the
@@ -169,6 +198,8 @@ project has a glossary and decision records worth challenging a plan against,
 | Keep your product name out of the shared layer | `scripts/docs-conformance/local-vocabulary.mjs` |
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
 | Tell the guards your repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
+| Map a capability tier to a model    | `scripts/agents.config.sh` — yours; the kit names no model |
+| Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>`; unmapped warns once and inherits the session model |
 | Know which files are shared layer   | `VERSION`                                        |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |

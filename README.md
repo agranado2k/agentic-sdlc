@@ -51,6 +51,8 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
+| `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
+| `scripts/agents.config.sh` | **Yours.** Tier → model id, for your provider. Ships empty on purpose — the kit names no model, because model ids rot faster than anything else it could carry. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
@@ -243,6 +245,27 @@ checks nothing. So the kit ships the mechanism and asks you for the policy.
 Mechanism is shared layer (copied verbatim, listed in `VERSION`); policy is
 yours (`scripts/guards.config.sh` is deliberately *not* shared). That split is
 what lets a kit update diff cleanly against your copy.
+
+## Capability tiers — the kit names no model
+
+The planner decides what each ticket is *worth* running, on cost/benefit, using
+four names the whole chain speaks: `planner`, `implementer`, `mechanical`,
+`reviewer`. `/to-tickets` stamps a tier on every ticket and shows the mix at its
+quiz; `/implement` reads its ticket's tier when it spawns.
+
+The kit ships the vocabulary (in the manual) and the resolver
+(`scripts/agents.lib.sh`, shared layer) and **never a model identifier**. Those
+rot on a vendor's schedule and differ per provider, so the mapping is yours, in
+`scripts/agents.config.sh`, which ships empty:
+
+```sh
+sh scripts/agents.lib.sh mechanical   # prints your mapped id — or nothing
+```
+
+Unmapped is a working state, the same way an unconfigured guard is: the resolver
+warns once, prints nothing, and the spawn inherits the session's own model —
+exactly today's behaviour. Where that value goes in a spawn call is the one
+harness-specific detail, and it lives in `adapters/claude-code/README.md`.
 
 ## The adapters, and why they are dormant
 
