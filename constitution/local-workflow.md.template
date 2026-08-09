@@ -137,6 +137,11 @@ resolver warns once so the gap is visible rather than assumed away.
   `scripts/behavior-delta.sh` supplies the grounded candidate list for the
   second from the contract artifacts named in `scripts/guards.config.sh`.
 - **Automated review**: {{REVIEW_AUTOMATION}}. Bot review is {{REVIEW_BINDING}}.
+  This is also the mechanism `/implement` requests when it delivers: a review
+  workflow fires on PR open and runs where the secrets are, so it can reach a
+  reviewer from a different vendor than the session that wrote the code. With
+  nothing wired here, `/implement` falls back to an in-harness `/review-pr`
+  subagent on a different model tier — same review, narrower reach.
 - **Fresh context per phase** (shared invariant §4): the reviewer must not see
   the implementation history. A reviewer who has read the author's narrative
   reviews the narrative instead of the diff.

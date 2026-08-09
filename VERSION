@@ -39,13 +39,11 @@
 # scripts/check.sh now requires AGENTS.md as the root manual, and the
 # claude-md-refs validator defaults to it and gained the `shim-invalid` rule for
 # the tool entry points beside it. No file joined or left the layer.
-# PENDING BUMP — deliberately not applied in this branch. scripts/agents.lib.sh
-# JOINED the layer below, which is a MINOR bump by the rule above. It is left
-# for whoever closes the current wave to apply ONCE, because sibling branches in
-# the same wave also change shared files and three branches each bumping to
-# 0.4.0 is three conflicts and no shared meaning. Consumers are unaffected until
-# a release is cut.
-shared-layer: 0.3.0
+# 0.4.0 — feedback wave 1: scripts/agents.lib.sh (the capability-tier resolver)
+# joined the layer, and /implement gained the Deliver phase (push → PR →
+# independent review; skills are not manifest-listed, but the shared invariants
+# they cite are unchanged).
+shared-layer: 0.4.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
