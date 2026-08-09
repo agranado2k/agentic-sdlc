@@ -512,3 +512,55 @@ interleave with another ticket's block.
 the recipe or the shared layer, re-run the demo and re-paste it: a worked example
 nobody re-runs is exactly the stale standing instruction shared invariant §8 is
 about.
+
+## References — where the ideas come from
+
+This framework is a synthesis, not an invention. These are the sources it
+draws on, so humans and agents alike can trace any practice here back to its
+origin.
+
+### Methodology
+
+- **Matt Pocock — [AI Hero](https://www.aihero.dev)**. The core chain
+  (grill → PRD → tickets → implement → review) and much of its vocabulary:
+  - [Tracer bullets](https://www.aihero.dev/tracer-bullets) — tickets as
+    demoable vertical slices sized to one context window, and the standing
+    rule against building horizontal layers in isolation.
+  - [A complete guide to AGENTS.md](https://www.aihero.dev/a-complete-guide-to-agents-md)
+    — the instruction budget and progressive disclosure behind the root manual.
+  - The skill write-ups:
+    [to-tickets](https://www.aihero.dev/skills-to-tickets),
+    [implement](https://www.aihero.dev/skills-implement),
+    [code-review](https://www.aihero.dev/skills-code-review).
+  - [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — six of
+    the fourteen skills are adapted from it; the upstream notice and the
+    per-skill provenance table live in
+    `.claude/skills/LICENSE-mattpocock-skills.md`.
+  - The talk ["A Workflow for AI Coding"](https://www.youtube.com/watch?v=-QFHIoCo-Ko)
+    (AI Engineer 2026), with third-party walkthroughs by
+    [Sean Weldon](https://www.sean-weldon.com/blog/2026-04-27-workflow-for-ai-coding-matt-pocock)
+    and [explainx](https://explainx.ai/blog/matt-pocock-ai-coding-real-engineers-workshop-2026).
+- **Robert C. Martin — [swarm-forge](https://github.com/unclebob/swarm-forge)**
+  — the layered constitution shape (one root manual → shared articles → local
+  articles) and mutation testing as review *evidence* rather than reviewer
+  taste.
+- **Kieran Klaassen** — the dogfood verification harness idea behind the
+  opt-in `/dogfood` skill: synthetic personas exercising the product's real
+  user-facing surface before a human does. Credited by name in the
+  predecessor project's history; no public link was recorded there.
+- **John Ousterhout — *A Philosophy of Software Design*** — deep modules and
+  "design it twice", the working vocabulary of
+  `/improve-codebase-architecture` and its sidecars.
+
+### Standards
+
+- [AGENTS.md](https://agents.md) — the cross-tool manual format. The kit's
+  `CLAUDE.md` / `GEMINI.md` are one-line import shims pointing at it.
+- [Conventional Commits](https://www.conventionalcommits.org) — the commit
+  convention the guards, hooks and skills assume.
+- [MADR](https://adr.github.io/madr/) — the decision-record format
+  `/grill-with-docs` writes.
+
+The framework was first built and exercised inside a working product
+repository and extracted here afterwards; `EXCLUSIONS.md` records what
+deliberately stayed behind, and why.
