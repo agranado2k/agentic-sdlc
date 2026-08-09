@@ -58,7 +58,8 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
-| `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. |
+| `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. Two ship live (the docs gate, the TDD pairing gate); two ship as `.example` — commit linting, and the AI review below. |
+| `templates/workflows/ai-review.example.yml` | The cross-provider review workflow: two advisory reviewers from two vendors, one identical prompt, firing on PR open. This is what `/implement` requests when it delivers. **Inert on arrival** — rename it once a provider secret exists. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
 | `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not installed: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
@@ -322,6 +323,42 @@ reads `.yml`. It is the one gate whose reference implementation needs node, and
 the kit does not decide that your project uses node. Rename it when you are
 ready; the header explains what to do if you are not on node.
 
+### Cross-provider AI review
+
+`ai-review.example.yml` ships inert the same way, and is the mechanism
+`/implement` reaches for when it delivers a PR. It holds **two** advisory
+reviewers — one Anthropic, one Google — because the reason to run a review in CI
+rather than inside the authoring session is structural: **CI holds the secrets,
+so it can call a reviewer from a different vendor than the model that wrote the
+code**, and a reviewer sharing the author's model family shares the author's
+blind spots.
+
+The shape, and what a third provider would change:
+
+- **One file, two filled variants.** The cross-provider leg *is* the feature, so
+  a single-provider example would ship the plumbing and drop the point. Both
+  jobs are live YAML, not commented-out alternatives, and neither vendor is the
+  default — the kit picks no model and no vendor anywhere else either.
+- **Three marked choice points per job** — `PROVIDER CHOICE 1/3` the invocation,
+  `2/3` the secret name, `3/3` the prompt. Adding a reviewer means copying a job
+  and changing those three things.
+- **The two prompts are byte-identical**, and `tests/ai-review-template.test.sh`
+  asserts it. Asking two vendors different questions and then comparing their
+  answers measures the prompts, not the models.
+- **The prompt references your manual instead of restating it** — `AGENTS.md`,
+  the `constitution/` articles, your decision records. The one rule it spells
+  out is the two-axis split (shared invariant §5), because that describes the
+  shape of the review's own output: standards findings an agent may act on, and
+  a behavior confirm-list the bot is told not to answer or resolve.
+- **Advisory, never gating.** Every review step is `continue-on-error`, the runs
+  are concurrency-cancelled per PR, and the header says plainly not to put these
+  jobs in your required status checks — the moment a bot's opinion can block a
+  merge, a vendor outage is an outage in your ability to ship.
+
+Renaming it with only one provider secret configured is a working state: each
+job checks for its own key and skips itself with a `::notice::` when it is
+absent, so the file is never red by default.
+
 The kit's own CI is `.github/workflows/kit-guards.yml`, which runs the guard
 test tiers and the end-to-end demo against this tree.
 
@@ -355,6 +392,14 @@ skeleton (K0).
 - `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the config
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing installed or activated from it.
+
+- `sh tests/ai-review-template.test.sh` covers the cross-provider review
+  template: every workflow template really parses as YAML (on python3 or ruby —
+  it skips loudly rather than pretending when neither is there), the advisory
+  invariants are in the file rather than only in its header, no merge or approve
+  verb is reachable, the two provider prompts are byte-identical, the extraction
+  source's own vocabulary did not come along, and a real bootstrap leaves the
+  file installed, byte-identical, and still an `.example` with no live twin.
 
 - `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,

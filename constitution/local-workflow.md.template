@@ -142,6 +142,10 @@ resolver warns once so the gap is visible rather than assumed away.
   reviewer from a different vendor than the session that wrote the code. With
   nothing wired here, `/implement` falls back to an in-harness `/review-pr`
   subagent on a different model tier — same review, narrower reach.
+  The kit ships that workflow rather than describing it:
+  `.github/workflows/ai-review.example.yml` holds two advisory reviewers from
+  two vendors, asked one identical prompt. It is **inert** until you rename it
+  and add a provider secret; record here which providers you actually wired.
 - **Fresh context per phase** (shared invariant §4): the reviewer must not see
   the implementation history. A reviewer who has read the author's narrative
   reviews the narrative instead of the diff.
