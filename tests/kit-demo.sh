@@ -144,6 +144,10 @@ assert_no_file "constitution/AGENTS.md.template"
 assert_no_file "bootstrap.sh"
 assert_no_file "tests/kit-demo.sh"
 assert_no_file ".github/workflows/kit-ci.yml"
+# The kit's record of what the KIT does not ship. Inside a project that sentence
+# has no referent, so it leaves with the rest of the kit-authoring material —
+# and the project's own exclusions record, if it wants one, starts empty.
+assert_no_file "EXCLUSIONS.md"
 assert_file "constitution/shared-invariants.md"
 assert_file "constitution/local-engineering.md.template"
 assert_file "constitution/local-workflow.md.template"

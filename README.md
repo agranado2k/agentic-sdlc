@@ -63,6 +63,7 @@ second time rather than overwriting a manual you have since edited.
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
 | `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not installed: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
+| `EXCLUSIONS.md` | What the kit deliberately does **not** ship, and why — one entry per considered-and-rejected skill or mechanism, plus the standing rule that keeps it current. Kit-repo meta: removed by bootstrap, not shared layer. |
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
 | `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
@@ -157,6 +158,15 @@ Three consequences worth stating plainly:
   resolve. The mutation-delta step it can cite is **conditional** — mutation
   testing is stack-specific, so the skill says to check `adapters/` and to skip
   the block, loudly, when nothing is wired.
+
+**What is *not* here is recorded too.** `EXCLUSIONS.md` names every skill or
+mechanism that was considered and left out, with the reason attached — and the
+standing rule that an exclusion is written down in the same pull request that
+makes it. It exists because a skill once went missing for two releases and
+nothing in the repo could say whether that was a decision or a slip; an absence
+looks the same either way until somebody writes the reason down. It is
+kit-repo meta and bootstrap removes it, so your project starts that record
+empty rather than inheriting this one.
 
 Six of the thirteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
@@ -401,6 +411,13 @@ skeleton (K0).
   source's own vocabulary did not come along, and a real bootstrap leaves the
   file installed, byte-identical, and still an `.example` with no live twin.
 
+- `sh tests/exclusions.test.sh` keeps `EXCLUSIONS.md` honest: every command it
+  says the kit does not ship really has no skill directory, every entry carries
+  a reason and not just a name, `/ce-dogfood` stays recorded as optional rather
+  than excluded — and the staleness check itself is proved by running it against
+  a fixture that names a skill which *does* ship. It also checks the record's
+  own wiring: bootstrap deletes it, and `VERSION` does not list it.
+
 - `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
   `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
@@ -442,6 +459,7 @@ sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
+sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 ```
 
 Do not wire `core.hooksPath` in this repo.
