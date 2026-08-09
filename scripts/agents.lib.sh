@@ -58,9 +58,25 @@
 # gate stayed green. Add a MAPPING in the config; do not add a tier here.
 AGENT_TIERS='planner implementer mechanical reviewer'
 
-# Set by direct execution; a sourcing caller relies on order 1 or 2 above.
+# MODULE GLOBALS, and why they diverge from guards.lib.sh's convention.
+#
+# guards.lib.sh takes its "directory of the calling script" as a PARAMETER,
+# because it is only ever sourced by a script that knows where it lives. This
+# file is also EXECUTED directly (`sh scripts/agents.lib.sh implementer` — the
+# seam an agent following a SKILL.md actually uses), and in that case the only
+# thing that knows the directory is `$0`, which is read at the bottom of the
+# file, long after resolve_tier's signature is fixed at one argument: the tier.
+# Threading the directory through as a second parameter would put a value the
+# CALLER cannot supply into the caller's hands. So it is a global, set once by
+# the direct-execution branch, and overridable by a sourcing caller that wants
+# order 3.
+#
+# The other two globals are per-process memos: config loading and the unmapped
+# warning both have to happen at most once no matter how many tiers a single
+# process resolves.
 _agents_here=${_agents_here:-.}
 _agents_config_loaded=0
+_agents_config_tried=0
 _agents_warned=0
 
 agents_usage() {
@@ -73,8 +89,19 @@ agents_usage() {
 # Returns 0 when a config was loaded, 1 when none exists anywhere (not an
 # error — see the unconfigured default above), 2 when an explicitly named one
 # is missing.
+#
+# The MISS is memoized too, not only the hit. An unconfigured project is the
+# common case, and every resolve_tier call in it would otherwise re-run
+# `git rev-parse` and two stat calls to reach the same "no" — a caller that
+# resolves four tiers pays for that four times, for nothing.
+#
+# Only the genuine "no config anywhere" miss is remembered. An explicitly named
+# AGENTS_CONFIG that does not exist keeps failing on every call, loudly: that is
+# a caller error, and a caller error that reports itself once and then goes
+# quiet is worse than one that keeps saying so.
 agents_load_config() {
 	[ "$_agents_config_loaded" = 1 ] && return 0
+	[ "$_agents_config_tried" = 1 ] && return 1
 
 	if [ -n "${AGENTS_CONFIG:-}" ]; then
 		if [ ! -f "$AGENTS_CONFIG" ]; then
@@ -99,6 +126,7 @@ agents_load_config() {
 		return 0
 	fi
 
+	_agents_config_tried=1
 	return 1
 }
 

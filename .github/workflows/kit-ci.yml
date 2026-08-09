@@ -4,7 +4,9 @@ name: Kit CI
 # bootstrap.sh deletes this file, because a fresh project has no business
 # running the kit's acceptance test against the kit's shared layer.
 #
-# Three jobs, in increasing order of what they'd cost you to learn late:
+# Six jobs. The first three are the kit's own foundations, in increasing order
+# of what they'd cost you to learn late; the last three each check one artifact
+# the kit ships to its consumers.
 #
 #   1. harness      the docs-conformance validators' fixture tests. If these are
 #                   red, every downstream green is meaningless.
@@ -18,6 +20,13 @@ name: Kit CI
 #   3. demo         the end-to-end acceptance test: build a throwaway project
 #                   from this tree, bootstrap it, and prove the gate green — and
 #                   then prove it red, once per failure mode it claims to catch.
+#   4. skills       the /implement delivery contract, checked as text.
+#   5. workflow-templates
+#                   the workflow templates parse, and install inert.
+#   6. adapters     the adapter trees are well-formed and stay dormant.
+#
+# The guard scripts and the capability-tier resolver have their own file
+# (kit-guards.yml) — separate work streams do not collide on one YAML.
 #
 # Node is used here without apology: this is the kit's own repo, and the harness
 # is the one part of the framework that has a runtime. A consumer project that

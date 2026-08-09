@@ -102,6 +102,38 @@ assert_out_lacks() {
 	esac
 }
 
+# assert_file_has <file> <literal> [<why>]
+# assert_file_lacks <file> <literal> [<why>]
+#
+# Several suites in this kit assert about DOCUMENTS rather than about exit
+# codes — a skill, a workflow template, a prompt. The assertion is always the
+# same shape: does this file contain this literal string. `grep -F` and not a
+# pattern, because the literals are real content (`--auto`, `AXIS 1 —
+# STANDARDS`, `types: [opened, …]`) and regex metacharacters in them would
+# silently change what is being checked.
+#
+# The optional third argument is the REASON the rule exists, not a replacement
+# label: it is appended to both the pass and the fail line, so the output says
+# why a check matters at the moment it fires — which is the only moment anyone
+# reads it. A failing `lacks` also prints the offending lines with numbers,
+# because "it is in there somewhere" is not an actionable failure.
+assert_file_has() {
+	if grep -qF -- "$2" "$1"; then
+		pass "$1 says '$2'${3:+ ($3)}"
+	else
+		fail "$1 never says '$2'${3:+ — $3}"
+	fi
+}
+
+assert_file_lacks() {
+	if grep -qF -- "$2" "$1"; then
+		fail "$1 contains '$2'${3:+ — $3}"
+		grep -nF -- "$2" "$1" | sed 's/^/        | /'
+	else
+		pass "no '$2' in $1${3:+ ($3)}"
+	fi
+}
+
 t_done() {
 	printf '\n'
 	if [ "$failures" = 0 ]; then

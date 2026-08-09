@@ -8,10 +8,11 @@
 #   about the file is machine-checkable — it parses as YAML, it carries the
 #   invariants it claims (PR triggers, advisory steps, concurrency cancel,
 #   read-only contents), it names no merge/approve/push verb, its two provider
-#   jobs differ only at the three marked choice points, its two prompts have not
-#   drifted apart, and the prompt points at this kit's manual rather than at the
-#   product it was extracted from. Then bootstrap really runs, and the file is
-#   really still inert on the other side.
+#   jobs differ only at the three marked choice points, both of them read the
+#   ONE prompt file rather than carrying a prompt of their own, and that prompt
+#   points at this kit's manual rather than at the product it was extracted
+#   from. Then bootstrap really runs, and both files are really still inert on
+#   the other side.
 #
 #   NOT simulable at all, and deliberately not faked: whether GitHub Actions
 #   accepts the workflow, whether either vendor's action still takes these
@@ -33,35 +34,27 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 TPL="templates/workflows/ai-review.example.yml"
 TPL_ABS="$ROOT/$TPL"
+# The prompt is its own file, read by both provider jobs. Half the assertions
+# below are about IT rather than about the workflow, so it gets its own handle.
+PROMPT="templates/workflows/ai-review-prompt.md"
+PROMPT_ABS="$ROOT/$PROMPT"
 
 cd "$ROOT" || exit 2
 t_init
 
 skip() { printf '  skip  %s\n' "$*"; }
-has() { grep -qF -- "$1" "$TPL_ABS"; }
-
-assert_has() {
-	if has "$1"; then
-		pass "the template says '$1'"
-	else
-		fail "the template never says '$1'"
-	fi
-}
-
-assert_lacks() {
-	if has "$1"; then
-		fail "the template contains '$1' — $2"
-		grep -nF -- "$1" "$TPL_ABS" | sed 's/^/        | /'
-	else
-		pass "no '$1' anywhere in the template ($2)"
-	fi
-}
+# assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
+# implementation, used here and by the /implement contract suite.
 
 # ---------------------------------------------------------------------------
-banner "0. The file under test, and the suffix that keeps it off"
+banner "0. The files under test, and the suffix that keeps the workflow off"
 # ---------------------------------------------------------------------------
 [ -f "$TPL_ABS" ] && pass "$TPL exists" || {
 	fail "$TPL is missing — nothing else in this suite means anything"
+	t_done "AI review workflow template"
+}
+[ -f "$PROMPT_ABS" ] && pass "$PROMPT exists" || {
+	fail "$PROMPT is missing — both jobs read it, so neither has a prompt"
 	t_done "AI review workflow template"
 }
 
@@ -102,6 +95,13 @@ if [ -n "$PARSER" ]; then
 	pass "YAML parser available ($PARSER)"
 	for f in "$ROOT"/templates/workflows/*; do
 		[ -e "$f" ] || continue
+		# YAML only. templates/workflows/ also carries the prompt file, which is
+		# prose and would either fail the parse or "pass" it as one long scalar —
+		# either way the result would say nothing about the workflows.
+		case "$f" in
+		*.yml | *.yaml) ;;
+		*) continue ;;
+		esac
 		if err=$(yaml_parse "$f" 2>&1); then
 			pass "$(basename "$f") parses as YAML"
 		else
@@ -127,10 +127,25 @@ banner "2. The invariants the header claims are actually in the file"
 # ---------------------------------------------------------------------------
 # Each of these is a line the header promises. A header that promises what the
 # YAML does not do is worse than no header: it is a rule nothing checks.
-assert_has "types: [opened, synchronize, ready_for_review, reopened]"
-assert_has "cancel-in-progress: true"
-assert_has "contents: read"
-assert_has "pull-requests: write"
+assert_file_has "$TPL" "types: [opened, synchronize, ready_for_review, reopened]"
+assert_file_has "$TPL" "cancel-in-progress: true"
+assert_file_has "$TPL" "contents: read"
+assert_file_has "$TPL" "pull-requests: write"
+
+# The trigger invariant, which is a security boundary and not a preference: on
+# `pull_request` a fork PR runs without secrets and every job gates itself off.
+# `pull_request_target` would run this file with the base repo's secrets against
+# a fork author's code — the provider key and a write token, handed over.
+#
+# Structural, not a substring search: the header EXPLAINS the swap and must go
+# on naming it, so what is forbidden is the trigger — the word at the head of a
+# YAML key, outside a comment.
+if grep -Eq '^[[:space:]]*pull_request_target:' "$TPL_ABS"; then
+	fail "pull_request_target is wired as a trigger — it would run the reviewer with your secrets against a fork author's code"
+	grep -nE '^[[:space:]]*pull_request_target:' "$TPL_ABS" | sed 's/^/        | /'
+else
+	pass "no pull_request_target trigger — fork PRs run secret-free and skip"
+fi
 
 # Advisory means every step that talks to a vendor is continue-on-error. Two
 # provider jobs, so two of them; a third provider added without one turns a
@@ -142,21 +157,23 @@ coe=$(grep -c 'continue-on-error: true' "$TPL_ABS")
 
 # The instruction not to make these required checks is the operator-facing half
 # of "advisory", and it lives nowhere else.
-assert_has "REQUIRED STATUS CHECKS"
+assert_file_has "$TPL" "REQUIRED STATUS CHECKS"
 
 # ---------------------------------------------------------------------------
 banner "3. Nothing here can land a change (shared invariant §7)"
 # ---------------------------------------------------------------------------
 # These jobs hold a token with write on the PR conversation. The boundary
 # between "posts a review" and "lands the change" is exactly this list.
-assert_lacks "gh pr merge" "merging is the human's action (shared invariant §7)"
-assert_lacks "pr review --approve" "a bot approving is not review"
-assert_lacks "git push" "a review workflow never writes to the branch"
-assert_lacks "contents: write" "read-only on contents is what makes it a reviewer"
-assert_lacks "--auto" "auto-merge is a merge with a delay"
+for f in "$TPL" "$PROMPT"; do
+	assert_file_lacks "$f" "gh pr merge" "merging is the human's action (shared invariant §7)"
+	assert_file_lacks "$f" "pr review --approve" "a bot approving is not review"
+	assert_file_lacks "$f" "git push" "a review workflow never writes to the branch"
+done
+assert_file_lacks "$TPL" "contents: write" "read-only on contents is what makes it a reviewer"
+assert_file_lacks "$TPL" "--auto" "auto-merge is a merge with a delay"
 # And the prompt has to say it too — permissions stop the action, the prompt
 # stops the attempt (and the confusing half-done state it leaves behind).
-assert_has "do not approve, do not merge"
+assert_file_has "$PROMPT" "do not approve, do not merge"
 
 # ---------------------------------------------------------------------------
 banner "4. Two providers, and the three choice points marked in both"
@@ -167,8 +184,15 @@ banner "4. Two providers, and the three choice points marked in both"
 # than two workflows glued together: they say which lines a third provider
 # changes.
 for job in "claude-review:" "gemini-review:"; do
-	assert_has "$job"
+	assert_file_has "$TPL" "$job"
 done
+
+# A draft PR is unfinished by definition, and `ready_for_review` is already a
+# trigger — so both jobs skip drafts and fire when the flag comes off.
+drafts=$(grep -c 'github.event.pull_request.draft == false' "$TPL_ABS")
+[ "$drafts" -ge 2 ] &&
+	pass "both provider jobs skip draft pull requests ($drafts guards)" ||
+	fail "only $drafts draft guard(s) — a provider would review unfinished work"
 
 for choice in "PROVIDER CHOICE 1/3" "PROVIDER CHOICE 2/3" "PROVIDER CHOICE 3/3"; do
 	n=$(grep -cF -- "$choice" "$TPL_ABS")
@@ -186,33 +210,44 @@ gates=$(grep -c 'Is this provider configured?' "$TPL_ABS")
 	fail "only $gates secret gates — an unconfigured provider would fail on every PR"
 
 # ---------------------------------------------------------------------------
-banner "5. The two prompts have not drifted apart"
+banner "5. ONE prompt, in a file, read by both jobs"
 # ---------------------------------------------------------------------------
 # Asking two vendors different questions and comparing the answers measures the
-# prompts, not the models — which destroys the only reason to run two.
-extract_prompts() {
-	awk '
-		function ind(l,	n) { n = match(l, /[^ ]/); return n ? n - 1 : -1 }
-		/^[ ]*prompt: \|[ ]*$/ && !collecting { collecting = 1; base = ind($0); n++; next }
-		collecting {
-			if ($0 ~ /^[ ]*$/) { print n "\t"; next }
-			if (ind($0) > base) { print n "\t" substr($0, base + 3); next }
-			collecting = 0
-		}
-	' "$TPL_ABS"
-}
-extract_prompts >"$SCRATCH/prompts.txt"
-sed -n 's/^1	//p' "$SCRATCH/prompts.txt" >"$SCRATCH/p1.txt"
-sed -n 's/^2	//p' "$SCRATCH/prompts.txt" >"$SCRATCH/p2.txt"
+# prompts, not the models — which destroys the only reason to run two. This used
+# to be checked by extracting two inline blocks and diffing them; the prompt is
+# now a single file, so the property is structural instead of asserted: a file
+# cannot drift from itself. What CAN regress is a job quietly growing a prompt
+# of its own again, and that is what this section catches.
 
-if [ ! -s "$SCRATCH/p1.txt" ] || [ ! -s "$SCRATCH/p2.txt" ]; then
-	fail "could not extract two block prompts from the template"
-elif cmp -s "$SCRATCH/p1.txt" "$SCRATCH/p2.txt"; then
-	pass "both provider prompts are byte-identical ($(wc -l <"$SCRATCH/p1.txt" | tr -d ' ') lines each)"
+# Every provider job reads the file, and there are at least two of them. The
+# count is of reading STEPS (the sed that rewrites the markers), not of every
+# mention, so a header paragraph about the file cannot stand in for a job.
+reads=$(grep -c 'ai-review-prompt.md$' "$TPL_ABS")
+[ "$reads" -ge 2 ] &&
+	pass "$reads jobs load $PROMPT" ||
+	fail "only $reads job(s) load the prompt file — a provider job is not reading it"
+
+# THE anti-drift assertion. `prompt: |` (or `>`) is how an inline prompt block
+# is written in this file's style, and both jobs must instead pass the loaded
+# file through a step output.
+if grep -Eq '^[[:space:]]*prompt:[[:space:]]*[|>]' "$TPL_ABS"; then
+	fail "an inline block prompt is back in the template — the file is no longer the single source"
+	grep -nE '^[[:space:]]*prompt:[[:space:]]*[|>]' "$TPL_ABS" | sed 's/^/        | /'
 else
-	fail "the two provider prompts have drifted apart"
-	diff "$SCRATCH/p1.txt" "$SCRATCH/p2.txt" | sed 's/^/        | /'
+	pass "no inline block prompt anywhere — every job is fed the file"
 fi
+feeds=$(grep -c 'steps.prompt.outputs.prompt' "$TPL_ABS")
+[ "$feeds" -ge 2 ] &&
+	pass "both jobs pass the loaded prompt to their provider ($feeds inputs)" ||
+	fail "only $feeds job(s) feed the loaded prompt to a provider action"
+
+# The two markers the loader substitutes. They are NOT workflow expressions —
+# a workflow expression inside a file is never expanded — so the file and the sed that
+# rewrites it have to keep naming the same tokens.
+for marker in "%%PR_NUMBER%%" "%%REPOSITORY%%"; do
+	assert_file_has "$PROMPT" "$marker" "substituted by the loader step"
+	assert_file_has "$TPL" "$marker" "the loader step must still substitute it"
+done
 
 # ---------------------------------------------------------------------------
 banner "6. The prompt is de-productized — it points at the manual, not at rules"
@@ -220,32 +255,29 @@ banner "6. The prompt is de-productized — it points at the manual, not at rule
 # This template was extracted from a real project whose prompts enumerated that
 # project's own decision records. Copying those in would ship a second, stale
 # copy of somebody else's rulebook. The generalized prompt REFERENCES instead.
-assert_has "AGENTS.md"
-assert_has "constitution/"
-assert_has "shared-invariants.md"
-assert_has "docs/adr/"
+assert_file_has "$PROMPT" "AGENTS.md"
+assert_file_has "$PROMPT" "constitution/"
+assert_file_has "$PROMPT" "shared-invariants.md"
+assert_file_has "$PROMPT" "docs/adr/"
 
 # The two-axis split is the one rule the prompt states rather than references,
 # because it describes the shape of the review's own output and no reviewer
 # infers it (shared invariant §5).
-assert_has "AXIS 1 — STANDARDS"
-assert_has "AXIS 2 — BEHAVIOR"
-assert_has "CONFIRM-LIST"
+assert_file_has "$PROMPT" "AXIS 1 — STANDARDS"
+assert_file_has "$PROMPT" "AXIS 2 — BEHAVIOR"
+assert_file_has "$PROMPT" "CONFIRM-LIST"
 # Axis 2 is human-only. A bot that answers its own confirm-list has quietly
 # converted a human decision into an autonomous one.
-assert_has "Do not answer them yourself, do not resolve them"
+assert_file_has "$PROMPT" "Do not answer them yourself, do not resolve them"
 
 # The extraction source's product vocabulary must not have come along for the
 # ride. Numbered ADR citations are the tell: they are true of exactly one repo.
 # Each token here is a literal SUBSTRING search, so it has to be one that cannot
 # occur innocently — "viewer" was tried and rejected, because "reviewer".
 for leak in "ADR-0" "Centaur" "fp-ts" "Remeda" "Origin-Agent-Cluster" "db-design"; do
-	if has "$leak"; then
-		fail "'$leak' leaked in from the extraction source — this template is project-agnostic"
-		grep -nF -- "$leak" "$TPL_ABS" | sed 's/^/        | /'
-	else
-		pass "no '$leak' — the source project's vocabulary stayed behind"
-	fi
+	for f in "$TPL" "$PROMPT"; do
+		assert_file_lacks "$f" "$leak" "the source project's vocabulary stayed behind"
+	done
 done
 
 # ---------------------------------------------------------------------------
@@ -295,9 +327,22 @@ assert_out_has "ai-review.example.yml"
 	pass ".github/workflows/ai-review.example.yml was installed" ||
 	fail "the template was not installed into .github/workflows/"
 
+# The prompt file rides along, and it MUST: the workflow reads it by path after
+# checkout, so a copy loop that only handled `*.yml` would install a review that
+# fails on its first run. bootstrap's loop copies every entry in
+# templates/workflows/, which is what makes a non-YAML sibling viable at all.
+[ -f "$PROJ/.github/workflows/ai-review-prompt.md" ] &&
+	pass ".github/workflows/ai-review-prompt.md was installed beside the workflow" ||
+	fail "the prompt file was not installed — the workflow would read a missing path"
+if cmp -s "$PROMPT_ABS" "$PROJ/.github/workflows/ai-review-prompt.md"; then
+	pass "the prompt installed byte-for-byte identical (copied, not stamped)"
+else
+	fail "the installed prompt differs from the kit's copy"
+fi
+
 # THE inertness assertion. Anything GitHub Actions would load is a live
 # workflow; the example must not be one, and must not have grown a live twin.
-for live in ai-review.yml ai-review.yaml ai-review.example.yaml; do
+for live in ai-review.yml ai-review.yaml ai-review.example.yaml ai-review-prompt.yml; do
 	[ -e "$PROJ/.github/workflows/$live" ] &&
 		fail ".github/workflows/$live exists — the review workflow installed ACTIVE" ||
 		pass "no .github/workflows/$live — nothing loadable was installed"

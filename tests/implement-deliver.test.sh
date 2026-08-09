@@ -29,8 +29,8 @@
 # scopes reference checking to the manual layer (root manual + articles + nested
 # manuals) and deliberately excludes `.claude/skills/**`. So the skills' own
 # references need a check of their own, and this is it for the one skill whose
-# references now include a forge, a hook, and a config file that does not exist
-# yet.
+# references now reach outside the manual layer entirely — a forge, a hook, and
+# the capability-tier config.
 #
 # Usage: sh tests/implement-deliver.test.sh
 
@@ -51,24 +51,8 @@ skill_spans() {
 		grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
 }
 
-has() { grep -qF -- "$1" "$SKILL_ABS"; }
-
-assert_has() {
-	if has "$1"; then
-		pass "the skill says '$1'"
-	else
-		fail "the skill never says '$1'"
-	fi
-}
-
-assert_lacks() {
-	if has "$1"; then
-		fail "the skill contains '$1' — $2"
-		grep -nF -- "$1" "$SKILL_ABS" | sed 's/^/        | /'
-	else
-		pass "no '$1' anywhere in the skill ($2)"
-	fi
-}
+# assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
+# implementation, used here and by the AI review template suite.
 
 # line_of <literal> — first matching line number, or empty.
 line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
@@ -86,23 +70,23 @@ banner "1. The Deliver phase exists, and ends where shared invariant §7 says"
 # ---------------------------------------------------------------------------
 # The ticket's requirement is not merely "push and open a PR" — it is that the
 # autonomy boundary stays visible in the text that extends autonomy.
-assert_has "## Deliver"
-assert_has "shared invariant §7"
-assert_has "one click away"
-assert_has "gh pr create"
-assert_has "git push -u origin HEAD"
+assert_file_has "$SKILL" "## Deliver"
+assert_file_has "$SKILL" "shared invariant §7"
+assert_file_has "$SKILL" "one click away"
+assert_file_has "$SKILL" "gh pr create"
+assert_file_has "$SKILL" "git push -u origin HEAD"
 
 # ---------------------------------------------------------------------------
 banner "2. Delivery stops short of landing — no merge verb is reachable"
 # ---------------------------------------------------------------------------
 # Each of these would be a way to land, approve, or force a change from inside
 # the session. A skill that names one has quietly renegotiated §7.
-assert_lacks "gh pr merge" "merging is the human's action (shared invariant §7)"
-assert_lacks "--auto" "auto-merge is a merge with a delay, not a non-merge"
-assert_lacks "--admin" "an admin override bypasses the very gate §7 protects"
-assert_lacks "--force" "delivery never rewrites a pushed branch"
-assert_lacks "--no-verify" "the pre-push hook is the gate, not an obstacle"
-assert_lacks "pr review --approve" "an author approving its own PR is not review"
+assert_file_lacks "$SKILL" "gh pr merge" "merging is the human's action (shared invariant §7)"
+assert_file_lacks "$SKILL" "--auto" "auto-merge is a merge with a delay, not a non-merge"
+assert_file_lacks "$SKILL" "--admin" "an admin override bypasses the very gate §7 protects"
+assert_file_lacks "$SKILL" "--force" "delivery never rewrites a pushed branch"
+assert_file_lacks "$SKILL" "--no-verify" "the pre-push hook is the gate, not an obstacle"
+assert_file_lacks "$SKILL" "pr review --approve" "an author approving its own PR is not review"
 
 # ---------------------------------------------------------------------------
 banner "3. The review request is mechanism-ORDERED: forge workflows first"
@@ -131,39 +115,34 @@ else
 fi
 
 # The REASON has to survive too, or the order looks arbitrary to the next editor.
-assert_has "different vendor"
-assert_has "different model tier"
-assert_has "fresh context"
+assert_file_has "$SKILL" "different vendor"
+assert_file_has "$SKILL" "different model tier"
+assert_file_has "$SKILL" "fresh context"
 
 # ---------------------------------------------------------------------------
-banner "4. F2's tier config is referenced CONDITIONALLY — neither ticket blocks the other"
+banner "4. The tier config the skill sends the agent to actually exists"
 # ---------------------------------------------------------------------------
-# The sibling ticket adds `scripts/agents.config.sh`. This skill may name it, but
-# only in a form that reads correctly both before and after that lands. Both
-# outcomes are green here, which is the property being tested: this suite does
-# not care which PR merges first.
+# The skill tells the agent to read `scripts/agents.config.sh` to pick the
+# reviewer's model tier. That file ships in this kit, so the reference either
+# resolves or the skill is wrong — the tolerant "not landed yet" branches this
+# check carried while the two tickets were in flight described a state that no
+# longer exists, and a test that passes in a state that cannot occur is not
+# testing anything.
 TIER_CFG="scripts/agents.config.sh"
-if has "$TIER_CFG"; then
-	if [ -e "$ROOT/$TIER_CFG" ]; then
-		pass "$TIER_CFG has landed and the skill's reference resolves"
-	elif grep -F -- "$TIER_CFG" "$SKILL_ABS" | grep -qi 'when .*exist'; then
-		pass "$TIER_CFG does not exist yet, and the skill names it conditionally"
-	else
-		fail "$TIER_CFG is named unconditionally but does not exist — this blocks on the tier-config ticket"
-	fi
-else
-	pass "the skill does not name a tier config (acceptable: it names no unresolvable path)"
-fi
+assert_file_has "$SKILL" "$TIER_CFG"
+[ -e "$ROOT/$TIER_CFG" ] &&
+	pass "$TIER_CFG exists — the skill's tier reference resolves" ||
+	fail "$TIER_CFG does not exist, but the skill sends the agent to read it"
 
 # ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
-assert_has "/pr-iterate"
+assert_file_has "$SKILL" "/pr-iterate"
 # The iterate loop's own mechanics — thread resolution, reply endpoints, the
 # poll — belong to that skill. Two skills owning one PR's review loop is how a
 # comment gets answered twice and a fix gets pushed on top of itself.
-assert_lacks "resolveReviewThread" "resolving review threads is /pr-iterate's job"
-assert_lacks "comments/\$COMMENT_ID/replies" "replying to review threads is /pr-iterate's job"
+assert_file_lacks "$SKILL" "resolveReviewThread" "resolving review threads is /pr-iterate's job"
+assert_file_lacks "$SKILL" "comments/\$COMMENT_ID/replies" "replying to review threads is /pr-iterate's job"
 
 # ---------------------------------------------------------------------------
 banner "6. Every slash command the skill names resolves to a skill on disk"
@@ -201,7 +180,12 @@ path_verdict() {
 	p=$1
 	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
 	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	grep -qF -- "$p" "$ROOT/bootstrap.sh" && { echo "installed by bootstrap.sh"; return 0; }
+	# The KIT_ONLY= line is bootstrap's DELETION list — the files it removes on
+	# the way out. A plain grep of bootstrap.sh reads a name there as proof the
+	# file is installed, which is the exact inverse of the truth, so a path that
+	# only ever appears on that line must not earn this verdict.
+	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -qv '^KIT_ONLY=' &&
+		{ echo "installed by bootstrap.sh"; return 0; }
 	grep -F -- "$p" "$SKILL_ABS" | grep -qi 'when .*exist' && { echo "named conditionally"; return 0; }
 	return 1
 }
