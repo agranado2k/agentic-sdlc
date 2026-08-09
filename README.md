@@ -20,6 +20,9 @@ gh repo create my-project --template agranado2k/agentic-sdlc --private --clone
 cd my-project
 
 # 2. Bootstrap. Runs once, then deletes itself. Commits nothing.
+#    It asks one question — whether to include the optional /dogfood skill.
+#    Answer it up front with --with-dogfood / --no-dogfood if you prefer;
+#    with no terminal to ask on, it skips.
 sh bootstrap.sh "My Project" "One line about what it does."
 
 # 3. Check the gate is green, then make the first commit yours.
@@ -46,7 +49,8 @@ second time rather than overwriting a manual you have since edited.
 | `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
-| `.claude/skills/` | The thirteen skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
+| `.claude/skills/` | Fourteen skills — the lifecycle made runnable. Thirteen always; `/dogfood` is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -97,7 +101,7 @@ ships an `AGENTS.md.template` and no stamped files — stays silent.
 format; a tool that does not read that directory gets the practice as prose from
 the manual and the articles, with no `/`-command to invoke it. Each `SKILL.md` is
 plain markdown, so pointing another tool at one by path works today — but porting
-the thirteen to a second command format is explicitly out of scope here.
+them to a second command format is explicitly out of scope here.
 
 ### The documentation set
 
@@ -121,13 +125,35 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.claude/skills/` holds thirteen skills — the chain at the top of this README, made
+`.claude/skills/` holds fourteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
 `/diagnose` and `/improve-codebase-architecture` off to the side.
+
+**Thirteen of the fourteen are unconditional; `/dogfood` is opt-in.** Every other
+skill works on the day the repo is created, because it operates on specs,
+tickets, diffs and branches — things a one-hour-old project already has.
+`/dogfood` operates on a *running product*: it walks the personas you declare
+through the surface you declare (a browser for a web app, the binary for a CLI,
+a client for an API or a tool server) before a human does, and hands the friction
+and breakage it hits to `/to-tickets` as candidate tickets. **It never fixes what
+it finds** — a repair by the session that found the problem destroys the only
+independent reading anyone had of it, and smuggles a behavior change into a
+verification pass (shared invariant §10).
+
+So bootstrap asks, once: *Include the /dogfood skill? Needs a runnable
+user-facing surface.* `--with-dogfood` and `--no-dogfood` answer it
+non-interactively, and with no terminal to ask on it skips — the two mistakes
+are not symmetric, since a project that skipped it can copy the skill back in a
+minute, while one that took it carries a command it cannot run. Declining
+removes three things together: the skill directory, the
+`constitution/local-product.md.template` article that exists only to feed it,
+and the manual's rows about it. Nothing is left commented out, and
+`sh tests/dogfood-optin.test.sh` proves it by planting the removed reference
+back and watching the gate report `skill-missing`.
 
 They are **copied as-is, never stamped**. That is a stronger constraint than the
 templates are under: a template may carry a mark because something fills it in,
@@ -168,10 +194,12 @@ looks the same either way until somebody writes the reason down. It is
 kit-repo meta and bootstrap removes it, so your project starts that record
 empty rather than inheriting this one.
 
-Six of the thirteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+Six of the fourteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
-at its own foot so provenance survives being read out of context.
+at its own foot so provenance survives being read out of context. That file also
+records the eight that have **no** upstream — including `/dogfood`, checked
+against the upstream repository rather than assumed.
 
 ## The shared layer, and why it has a version
 
@@ -417,6 +445,18 @@ skeleton (K0).
   than excluded — and the staleness check itself is proved by running it against
   a fixture that names a skill which *does* ship. It also checks the record's
   own wiring: bootstrap deletes it, and `VERSION` does not list it.
+
+- `sh tests/dogfood-optin.test.sh` covers the one skill that is optional.
+  Bootstrap is run three ways against three throwaway copies of the kit — with
+  the skill, without it, and with neither flag nor a terminal to ask on — and
+  each result is held to the gate. The load-bearing leg is the declined one:
+  nothing in that tree may mention the command, and the proof is not the grep
+  but the validator, which must report `skill-missing` the moment the removed
+  row is planted back. A typo'd flag is checked too, because
+  `--with-dogfod` silently becoming the project name is a mistake you find a
+  week later in the stamped manual. (`sh tests/kit-demo.sh` bootstraps
+  `--with-dogfood`: it asserts the maximal set, so its "every command resolves,
+  no skill is orphaned" pass covers the optional skill as well.)
 
 - `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,

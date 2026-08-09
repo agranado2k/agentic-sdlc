@@ -120,10 +120,16 @@ Load the article that covers what you are about to do — do not preload them al
   test tiers, what this repo is *not*.
 - `constitution/local-workflow.md.template` — this repo's process: commits,
   merges, review, the docs-trigger matrix, the log protocol.
+<!-- DOGFOOD:BEGIN -->
+- `constitution/local-product.md.template` — the product: who uses it, and
+  through which surface. Small on purpose — it exists because `/dogfood` cannot
+  run without a declared surface and a declared set of personas, and that is
+  knowledge only this repo has.
+<!-- DOGFOOD:END -->
 
-> **Kit note —** the two local articles ship as `.template` files carrying
-> double-brace marks. Fill the marks in, drop the `.template` suffix, and change
-> the two pointers above to the `.md` paths. The gate then holds them to the
+> **Kit note —** every `local-*` article above ships as a `.template` file
+> carrying double-brace marks. Fill the marks in, drop the `.template` suffix,
+> and change its pointer above to the `.md` path. The gate then holds them to the
 > same standard as this file: every path and command they name must exist, and
 > an article this root never points at is reported as unreachable.
 
@@ -180,6 +186,16 @@ an area that has become hard to change — it finds and designs the deepening,
 then re-enters the line at `/to-tickets`, because a behaviour-preserving refactor
 is a ticket of its own and never a passenger on a feature diff (shared invariant
 §10).
+<!-- DOGFOOD:BEGIN -->
+
+One more sits *beside* the line rather than on it. `/dogfood` walks this
+project's own personas through its real user-facing surface — a browser, a
+binary, an API client, a tool client — before a human does, and hands what it
+hits to `/to-tickets` as candidate tickets. It fixes nothing itself, on purpose:
+a repair by the session that found the problem destroys the only independent
+reading anyone had of it. Its personas and surfaces are declared in
+`constitution/local-product.md.template`.
+<!-- DOGFOOD:END -->
 
 ## Quick reference
 
@@ -194,6 +210,9 @@ is a ticket of its own and never a passenger on a feature diff (shared invariant
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — deepening candidates, interface design, glossary discipline; hands off to `/to-tickets` |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
+<!-- DOGFOOD:BEGIN -->
+| Use the product before a user does  | `/dogfood` — declared personas, real surface, findings out as candidate tickets; it never fixes what it finds |
+<!-- DOGFOOD:END -->
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |

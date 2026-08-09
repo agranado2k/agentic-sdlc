@@ -26,6 +26,11 @@ name: Kit CI
 #   6. adapters     the adapter trees are well-formed and stay dormant.
 #   7. exclusions   the deliberate-exclusions record has not gone stale — every
 #                   skill it says the kit does not ship is really not shipped.
+#   8. dogfood-optin
+#                   the one OPTIONAL skill, both ways: bootstrap with it, without
+#                   it, and with no terminal to ask on. Job 3 only ever sees the
+#                   first of those, and the failure mode worth catching lives in
+#                   the second — a declined skill that left a row behind.
 #
 # The guard scripts and the capability-tier resolver have their own file
 # (kit-guards.yml) — separate work streams do not collide on one YAML.
@@ -131,3 +136,19 @@ jobs:
       # no reason to think about EXCLUSIONS.md at all.
       - name: Deliberate-exclusions record
         run: sh tests/exclusions.test.sh
+
+  dogfood-optin:
+    name: The optional skill, both ways
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node IS needed here, unlike the exclusions job: the load-bearing check
+      # plants a `/dogfood` reference into the tree that declined the skill and
+      # requires the real validator to report `skill-missing`. A grep can show
+      # the reference is absent; only the harness can show the gate would have
+      # caught it if it were not.
+      - name: Opt-in /dogfood acceptance test
+        run: sh tests/dogfood-optin.test.sh

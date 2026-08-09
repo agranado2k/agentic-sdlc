@@ -34,6 +34,16 @@ carry no upstream. `review-pr/` began as an in-house reviewer command in a
 private repository and was substantially rewritten here — the second axis (the
 spec & behavior confirm-list, shared invariant §5) has no upstream at all.
 
+`dogfood/` (the optional skill — see the README) has **no upstream either**, and
+the check was made rather than assumed: `mattpocock/skills` was re-read on
+2026-08-09 and ships no dogfooding, QA, end-to-end or browser skill of any kind.
+It was generalized from an end-to-end QA command in that same extraction-source
+project, whose own commit history credits the dogfooding pattern it implements
+to Kieran Klaassen's publicly described verification harness. The pattern is
+prior art and is credited as such; the wording here is this kit's, and the port
+deliberately dropped two things the source had — the browser-only assumption,
+and the repair loop.
+
 ---
 
 ```
