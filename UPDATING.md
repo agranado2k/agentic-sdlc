@@ -264,7 +264,7 @@ addition.
 
 ---
 
-## Worked example
+## Worked example — Part 1
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
@@ -376,3 +376,307 @@ and nobody would have known which paragraph used to be there.
 The lesson is step 3. The update itself is a `git show` redirect per shared
 file; what makes it cheap or expensive is entirely whether anyone edited a file
 that was not theirs to edit.
+
+---
+
+# Part 2 — the parts that are yours
+
+Everything bootstrap stamped, installed or left behind is **yours**: the skills
+under `.claude/skills/`, `AGENTS.md` and the `constitution/local-*.md` articles,
+the workflows under `.github/workflows/`, the config files, `README.md`, `docs/`,
+and `adapters/`.
+
+"Yours" does not mean frozen. The kit keeps improving them, and a release's
+actual *features* usually live here rather than in the shared layer — 0.4.0's
+value is a Deliver phase in `/implement`, tier-aware planning in `/to-tickets`,
+two new skills and a cross-provider review workflow, none of which is
+manifest-listed. What "yours" means is that **nothing here is ever overwritten
+without you looking at it**, and that there is no verbatim check at the end: the
+docs gate is the check.
+
+Do Part 2 *after* Part 1 and commit it separately (shared invariant §10). Part 1
+is a mechanical overwrite anybody can re-derive; Part 2 is a series of
+judgements, and a reviewer reading the two mixed together can check neither.
+
+## Step 8 — list what changed outside the shared layer
+
+Reuse the bare clone, the two refs, and the two manifests from steps 0 and 1.
+
+```sh
+kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
+sort -u "$WORK/from.list" "$WORK/to.list" >"$WORK/shared.all"
+comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
+
+cat "$WORK/changed.yours"
+```
+
+Some of what prints is not in your repo and never was. Bootstrap deletes the
+kit's own scaffolding (`tests/`, `.github/workflows/kit-*.yml`, `EXCLUSIONS.md`,
+and `bootstrap.sh` itself) and consumes `templates/docs/` into `docs/`. A path
+you do not have is not an update — skip those lines.
+
+## Step 9 — take each category by its own rule
+
+One rule per category, because the categories differ in what a local edit
+*means*:
+
+| Category | Paths | The rule |
+| --- | --- | --- |
+| **Skills** (9a) | `.claude/skills/*/` | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
+| **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
+| **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what you have not customized; new files are plain adds |
+| **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Diff the KEY SETS — the new shared code may read a key you do not set |
+| **Adapters** (9e) | `adapters/` | opt-in, whole-directory. Take a tree or leave it; never half of one |
+
+### 9a. Skills — a three-way, not a copy
+
+A skill is prose an agent loads, and adapting it to your repo is the intended
+way to make the chain fit. So "is it byte-identical to the release?" is the
+wrong question here; the right one is **"what did the kit change, and did I
+change the same lines?"**
+
+```sh
+S=.claude/skills/implement/SKILL.md
+
+kit diff "$FROM_REF" "$TO_REF" -- "$S"       # what the KIT changed
+kit show "$FROM_REF:$S" | diff -u - "$S"     # what YOU changed since bootstrap
+```
+
+Four outcomes, and only one of them needs a human:
+
+- **kit clean, you clean** — nothing to do.
+- **kit changed, you clean** — take it: `kit show "$TO_REF:$S" >"$S"`.
+- **kit clean, you changed** — nothing to do. Your version stands.
+- **both changed** — merge; do not pick a side:
+
+  ```sh
+  kit show "$FROM_REF:$S" >"$WORK/base"
+  kit show "$TO_REF:$S" >"$WORK/theirs"
+  git merge-file "$S" "$WORK/base" "$WORK/theirs"
+  ```
+
+  `git merge-file` merges in place and exits non-zero after writing conflict
+  markers where the two edits overlap. Read those; there is no verbatim check to
+  fall back on, which is exactly why this category is not automatable.
+
+**If you deliberately forked a skill, write the fork down** — one line in a
+local article ("`/review-pr`'s Axis-2 section is ours; we replaced the
+confirm-list format"). That single line is the whole difference between a fork
+and drift, because the next update is run by somebody who was not there. It is
+the same rule as Part 1's step 3, moved one category over: the exception lives
+in a local article, not in the file the kit owns.
+
+**A new skill is a directory copy, and it is not installed until the manual
+points at it.**
+
+```sh
+kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
+
+kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
+```
+
+Then add its row to `AGENTS.md`'s quick reference **by hand**. That is not
+bookkeeping. The docs gate resolves every `/command` in the manual layer to a
+skill directory, so a row whose skill you did not copy fails your next push
+(`skill-missing`) — and a skill with no row is a command nobody in this repo
+will ever find.
+
+**A removed skill** (`--diff-filter=D`) is the reverse: delete the directory and
+the row in the same commit, and let the gate catch the half you forgot.
+
+### 9b. The manual and the local articles — hunt for missing SECTIONS
+
+`AGENTS.md` was stamped from `constitution/AGENTS.md.template`; each
+`constitution/local-*.md` was stamped from its `.template` sibling. All of them
+are yours, and bootstrap refuses to run twice, so a release's changes to those
+templates reach you only if you carry them.
+
+```sh
+kit diff "$FROM_REF" "$TO_REF" -- constitution/
+```
+
+Read that diff for **new sections**, not new lines. When a release introduces a
+*concept*, it introduces it here, and your stamped copy simply has no paragraph
+about it. 0.3.0 → 0.4.0 adds a "Capability tiers" section to the manual template
+and a matching block to the workflow article: skip them and your repo has skills
+that speak four tier names and no file that says what they mean.
+
+Copy the new sections across by hand, adapting the wording to your repo. Never
+re-stamp a template over a manual you have been editing for six months.
+
+### 9c. Templates — copy only what you have not customized
+
+`templates/workflows/` is installed into `.github/workflows/` **once**, at
+bootstrap, and bootstrap never overwrites a file that is already there (it prints
+`kept …`). So a release's changes here reach you only by hand.
+
+```sh
+kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
+	dest=".github/workflows/$(basename "$wf")"
+	if [ ! -e "$dest" ]; then
+		echo "NEW       $dest"
+	elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
+		echo "UNTOUCHED $dest"
+	else
+		echo "YOURS     $dest"
+	fi
+done
+```
+
+`NEW` and `UNTOUCHED` are both `kit show "$TO_REF:$wf" >"$dest"`. `YOURS` is a
+three-way merge, exactly as in 9a.
+
+**A workflow can have a file it needs beside it.** 0.4.0's
+`ai-review.example.yml` reads `.github/workflows/ai-review-prompt.md` at run
+time; take one without the other and you have a workflow that fails on its first
+run. Take a template together with its neighbours, and keep the `.example`
+suffix until you have added a provider secret — it ships inert on purpose.
+
+`templates/docs/` is a different case: bootstrap consumed it and deleted it. Its
+descendants — `README.md`, `docs/diary.md`, `docs/adr/`, the PR template — are
+ordinary files of yours now. A kit change there is something you may read and
+borrow from; it is never something to copy over the top.
+
+### 9d. Config files — never overwrite, always diff the KEY SET
+
+**This is the category that breaks silently**, because both failure modes are
+quiet. Overwrite the file and your provider and model choices vanish with no
+error. Skip it and the release's new shared code reads a key you never set,
+resolves it to empty, and carries on.
+
+The config files are the ones `VERSION` names in its "everything NOT shared"
+comment: `scripts/guards.config.sh`, `scripts/agents.config.sh`,
+`scripts/docs-conformance/config.mjs`,
+`scripts/docs-conformance/local-vocabulary.mjs`.
+
+**First ask whether the file existed at the release you are on.** If it did not,
+this is an ADD and there is nothing of yours to preserve:
+
+```sh
+C=scripts/agents.config.sh
+
+if kit cat-file -e "$FROM_REF:$C" 2>/dev/null; then
+	echo "MERGE  $C existed at $FROM_REF — diff the keys, below"
+else
+	echo "ADD    $C is new at $TO_REF — copy it whole"
+	kit show "$TO_REF:$C" >"$C"
+fi
+```
+
+That is the 0.3.0 → 0.4.0 case: `scripts/agents.config.sh` did **not** exist at
+0.3.0 — it arrived with the tier resolver — so a 0.3.0 consumer copies the whole
+file and then edits it. Nothing is at risk, which is precisely why it is worth
+checking rather than assuming: the same path is a destructive overwrite for a
+consumer who *did* have it.
+
+**For the MERGE case, never `kit show >` the file.** Diff the key sets instead:
+
+```sh
+keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
+
+kit show "$TO_REF:$C" >"$WORK/config.new"
+keys "$WORK/config.new" >"$WORK/keys.new"
+keys "$C" >"$WORK/keys.mine"
+
+comm -13 "$WORK/keys.mine" "$WORK/keys.new"   # keys the RELEASE expects, you lack
+comm -23 "$WORK/keys.mine" "$WORK/keys.new"   # keys only you have — yours, or removed upstream
+```
+
+Add each missing key to your file **with your value**, and bring the kit's
+comment block for it across so the next reader knows what it is for. An unset key
+is not automatically a bug — `agents.config.sh` ships all four tiers empty and
+unset is a documented working state — but it has to be a key you decided to leave
+unset, not one you never saw.
+
+Then re-read `scripts/agents.lib.sh` (or whatever shared code reads the config).
+It is shared layer, so Part 1 already replaced it: what it reads *now* is the
+authority on what your config has to provide.
+
+### 9e. Adapters — opt-in, whole-directory
+
+`adapters/` is reference material. Nothing in it runs, nothing was stamped from
+it, and no gate reads it. If you deleted the tree at bootstrap — a documented,
+supported answer — a release's changes there are none of your business.
+
+If you kept it, take whole directories:
+
+```sh
+kit archive "$TO_REF" adapters | tar -x
+```
+
+Never merge a single adapter file. Each directory is one worked wiring that has
+to stay internally consistent; half of the release's on top of half of yours is a
+configuration nobody has ever run.
+
+## Step 10 — verify with the gate, then commit
+
+Part 2 has no verbatim claim to check, so the gate is the check — and it is not a
+formality here. It is what catches the quick-reference row whose skill you did not
+copy, the article the manual points at that you never created, and the path
+reference that moved.
+
+```sh
+sh scripts/check.sh
+```
+
+```sh
+git add -A
+git commit -m "chore: adopt kit ${TO_REF#v} outside the shared layer"
+```
+
+Note it in `docs/diary.md` alongside the Part 1 entry. Part 2 is where the
+release's behaviour actually changed, so it is the half a future reader will want
+explained.
+
+## Optional skills — adopting or declining one after bootstrap
+
+The kit ships exactly one **optional** skill, `/dogfood`, and bootstrap asked
+about it **once, at bootstrap**. There is no second question: bootstrap deleted
+itself, and no update step will ever ask again. So both directions are manual,
+and both are more than a directory.
+
+**Adopting `/dogfood` later** — you now have a runnable user-facing surface:
+
+```sh
+kit archive "$TO_REF" .claude/skills/dogfood | tar -x
+kit show "$TO_REF:constitution/local-product.md.template" \
+	>constitution/local-product.md.template
+```
+
+Then, by hand, the part no command can do for you:
+
+1. add `/dogfood`'s row to `AGENTS.md`'s quick reference (the kit's template
+   carries it between `<!-- DOGFOOD:BEGIN -->` / `<!-- DOGFOOD:END -->` markers —
+   `kit show "$TO_REF:constitution/AGENTS.md.template"` shows you exactly which
+   lines bootstrap would have kept);
+2. fill in the DOGFOOD DECLARATION in `constitution/local-product.md.template`,
+   drop the `.template` suffix, and point `AGENTS.md`'s article layer at the
+   result — the same three steps as the other local articles. Until you do, the
+   skill stops and says so, which is correct: a guessed persona produces a report
+   about a user who does not exist.
+
+```sh
+sh scripts/check.sh
+```
+
+**Declining it later** is the exact reverse, and the order matters — remove the
+references first, then the files, so the gate is red in between rather than
+green over a half-removal:
+
+```sh
+rm -rf .claude/skills/dogfood
+rm -f constitution/local-product.md constitution/local-product.md.template
+```
+
+…and remove *every* mention from the manual layer: the quick-reference row, the
+paragraph that introduces it, and the article-layer pointer.
+
+```sh
+sh scripts/check.sh
+```
+
+**The gate is the proof that nothing dangles.** A `/dogfood` mention left
+anywhere in the manual layer with no skill directory behind it is `skill-missing`
+and fails the push — which is the point. A half-removed skill is worse than
+either whole state: the manual promises a command the repo does not have, and
+every session loads that promise.

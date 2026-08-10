@@ -403,11 +403,406 @@ else
 	pass "an edited shared file is detected as DRIFT"
 fi
 
+# ###########################################################################
+# PART C — the NON-SHARED update path (UPDATING.md, Part 2)
+# ###########################################################################
+#
+# Part B proves the shared layer moves. This proves the OTHER half, and it
+# starts by proving the half-update is real: a consumer that runs Part 1 alone
+# on a 0.3.0 -> 0.4.0 update lands the capability-tier RESOLVER (shared layer)
+# with no config for it to read, no skill that calls it, and none of the
+# release's actual features. Then Part 2's steps are run and each of those
+# comes back.
+#
+# The fake 0.3.0 kit is built by REMOVING the 0.4.0 wave's non-shared additions
+# from this tree, the same way B0 rolls the rulebook back. Two of the removals
+# are partial-file edits (the Deliver phase out of /implement, the tier rubric
+# out of /to-tickets) because a three-way take is only demonstrable when the kit
+# changed a file the consumer also has.
+
+banner "C0. Build a fake 0.3.0 kit — the wave's non-shared parts removed"
+
+OLD3="$SCRATCH/kit-0.3.0"
+mkdir -p "$OLD3"
+cp -R "$KIT/." "$OLD3/"
+rm -rf "$OLD3/.git"
+
+# Whole additions of the 0.4.0 wave.
+rm -rf "$OLD3/.claude/skills/improve-codebase-architecture"
+rm -rf "$OLD3/.claude/skills/dogfood"
+rm -rf "$OLD3/adapters/claude-code"
+rm -f "$OLD3/constitution/local-product.md.template"
+rm -f "$OLD3/scripts/agents.config.sh"
+rm -f "$OLD3/scripts/agents.lib.sh"
+rm -f "$OLD3/templates/workflows/ai-review.example.yml"
+rm -f "$OLD3/templates/workflows/ai-review-prompt.md"
+
+# The 0.3.0 manifest: today's, minus the file that joined at 0.4.0.
+sed '/^  scripts\/agents\.lib\.sh$/d; s/^shared-layer: 0\.4\.0$/shared-layer: 0.3.0/' \
+	"$KIT/VERSION" >"$OLD3/VERSION"
+
+# The 0.3.0 manual template: no capability tiers, no /improve-codebase-architecture.
+# Every reference has to go, not just the prose — the docs gate resolves each
+# `/command` to a skill directory and each backticked path to a real file, so a
+# leftover row would make the fixture red before the test starts.
+awk '
+	/^## Capability tiers$/ { sec = 1; next }
+	sec && /^## / { sec = 0 }
+	sec { next }
+	/^Four step out of that line/ { par = 1 }
+	par {
+		if ($0 ~ /^§10\)\.$/) {
+			par = 0
+			print "Three step out of that line: `/grill-with-docs`, `/prototype` and `/diagnose`."
+		}
+		next
+	}
+	/improve-codebase-architecture/ { next }
+	/agents\.config\.sh/ { next }
+	/agents\.lib\.sh/ { next }
+	{ print }
+' "$KIT/constitution/AGENTS.md.template" >"$OLD3/constitution/AGENTS.md.template"
+
+# The 0.3.0 local workflow article: no tier block.
+awk '
+	/^## Capability tiers/ { sec = 1; next }
+	sec && /^## / { sec = 0 }
+	sec { next }
+	{ print }
+' "$KIT/constitution/local-workflow.md.template" >"$OLD3/constitution/local-workflow.md.template"
+
+# /implement without its Deliver phase (the consumer will take this verbatim).
+awk '
+	/^## Deliver — / { sec = 1; next }
+	sec && /^## / { sec = 0 }
+	sec { next }
+	{ print }
+' "$KIT/.claude/skills/implement/SKILL.md" >"$OLD3/.claude/skills/implement/SKILL.md"
+
+# /to-tickets without the tier rubric (the consumer will three-way-merge this).
+awk '
+	/^9\. \*\*Capability tier/ { sec = 1 }
+	sec && /^## Trust boundary$/ { sec = 0 }
+	sec { next }
+	/^- Naming a model in a ticket/ { next }
+	{ print }
+' "$KIT/.claude/skills/to-tickets/SKILL.md" >"$OLD3/.claude/skills/to-tickets/SKILL.md"
+
+for f in .claude/skills/implement/SKILL.md .claude/skills/to-tickets/SKILL.md \
+	constitution/AGENTS.md.template constitution/local-workflow.md.template; do
+	if cmp -s "$OLD3/$f" "$KIT/$f"; then
+		fail "the fake 0.3.0 $f is identical to 0.4.0 — no delta to adopt"
+	else
+		pass "fake 0.3.0 $f differs from 0.4.0"
+	fi
+done
+
+# Both ends as real refs in one repo, exactly as B0 does it.
+HIST3="$SCRATCH/kit-history-3"
+mkdir -p "$HIST3"
+cp -R "$OLD3/." "$HIST3/"
+cd "$HIST3" || exit 2
+git init -q -b main
+git config user.name "Kit Release"
+git config user.email "kit@example.invalid"
+git config commit.gpgsign false
+git config tag.gpgSign false
+git config tag.forceSignAnnotated false
+git add -A >/dev/null
+git commit -q -m "release 0.3.0"
+git tag v0.3.0
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -R "$NEWKIT/." "$HIST3/"
+git add -A >/dev/null
+git commit -q -m "release 0.4.0"
+git tag v0.4.0
+pass "kit history built with tags v0.3.0 and v0.4.0"
+
+banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
+
+C3="$SCRATCH/consumer-0.3.0"
+mkdir -p "$C3"
+cp -R "$OLD3/." "$C3/"
+rm -rf "$C3/.git"
+cd "$C3" || exit 2
+git init -q -b main
+git config user.name "Tier Consumer"
+git config user.email "tier@example.invalid"
+git config commit.gpgsign false
+sh bootstrap.sh --no-dogfood "Tier Consumer" "A project that bootstrapped at shared-layer 0.3.0." >/dev/null 2>&1
+git add -A >/dev/null
+git commit -q -m "chore: bootstrap from agentic-sdlc"
+assert_status 0 "the 0.3.0 consumer's gate is green before the update" -- sh scripts/check.sh
+assert_no_file ".claude/skills/dogfood"
+
+# One local edit to a SKILL — legitimate here, unlike B's edit to a shared file.
+# Skills are meant to be adapted; this is what makes 9a a three-way rather than
+# a copy.
+awk 'NR == 4 { print; print ""; print "> LOCAL: tickets in this repo also carry a `Team:` line."; next } { print }' \
+	.claude/skills/to-tickets/SKILL.md >"$SCRATCH/tt" && mv "$SCRATCH/tt" .claude/skills/to-tickets/SKILL.md
+git commit -qam "docs: our local note on /to-tickets"
+pass "consumer carries one local edit to a skill (legitimate — skills are theirs)"
+
+banner "C2. Part 1 ALONE leaves an inert half-update"
+
+# Steps 0-6 of UPDATING.md, run without narration: Part B already proved them.
+WORK1=$(mktemp -d)
+git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
+kit1() { git --git-dir="$WORK1/kit.git" "$@"; }
+manifest1() {
+	kit1 show "$1:VERSION" | awk '
+		/^files:/       { inlist = 1; next }
+		!inlist         { next }
+		/^[ \t]*#/      { next }
+		/^[ \t]*$/      { next }
+		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
+		                { inlist = 0 }
+	'
+}
+manifest1 v0.3.0 | sort >"$WORK1/from.list"
+manifest1 v0.4.0 | sort >"$WORK1/to.list"
+while IFS= read -r f; do
+	mkdir -p "$(dirname "$f")"
+	kit1 show "v0.4.0:$f" >"$f"
+done <"$WORK1/to.list"
+kit1 show "v0.4.0:VERSION" >VERSION
+git add -A >/dev/null
+git commit -q -m "chore: update shared layer 0.3.0 -> 0.4.0"
+
+assert_file "scripts/agents.lib.sh"
+assert_has "VERSION" "shared-layer: 0.4.0"
+assert_status 0 "the gate is green after Part 1 alone" -- sh scripts/check.sh
+
+# …and yet nothing the release is FOR has arrived. This is the gap F8 closes.
+assert_no_file "scripts/agents.config.sh"
+assert_no_file ".claude/skills/improve-codebase-architecture/SKILL.md"
+assert_no_file ".github/workflows/ai-review.example.yml"
+if grep -qF "## Deliver" .claude/skills/implement/SKILL.md; then
+	fail "/implement already has the Deliver phase — the fixture proves nothing"
+else
+	pass "/implement still has no Deliver phase after Part 1"
+fi
+# The resolver is here, and it is inert: no config anywhere, so every tier is
+# unmapped. It still exits 0 — an unmapped tier is a working state — which is
+# exactly why nothing about this half-update is loud.
+assert_status 0 "the resolver runs but resolves nothing" -- sh scripts/agents.lib.sh implementer
+if [ -n "$(sh scripts/agents.lib.sh implementer 2>/dev/null)" ]; then
+	fail "the resolver printed a model with no config present"
+else
+	pass "the resolver prints nothing — a resolver with no mapping and no callers"
+fi
+
+# ---------------------------------------------------------------------------
+banner "C3. RUN PART 2 — the transcript below is UPDATING.md's second worked example"
+# ---------------------------------------------------------------------------
+printf '\n'
+
+recipe2() {
+	WORK=$WORK1
+	kit() { kit1 "$@"; }
+	# NOT re-derived from VERSION: step 5 already moved it to 0.4.0. Part 2 runs
+	# in the same session as Part 1 and reuses its refs.
+	FROM_REF=v0.3.0
+	TO_REF=v0.4.0
+
+	# --- Step 8: what changed outside the shared layer -----------------------
+	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
+	sort -u "$WORK/from.list" "$WORK/to.list" >"$WORK/shared.all"
+	comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
+
+	echo "\$ comm -23 \"\$WORK/changed.all\" \"\$WORK/shared.all\" >\"\$WORK/changed.yours\""
+	echo "\$ cat \"\$WORK/changed.yours\""
+	cat "$WORK/changed.yours"
+
+	# --- Step 9a: skills ------------------------------------------------------
+	echo ""
+	echo "\$ # 9a — /implement: the kit changed it, we did not"
+	S=.claude/skills/implement/SKILL.md
+	echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$S\""
+	kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
+	echo "\$ kit show \"\$FROM_REF:\$S\" | diff -u - \"\$S\" | head -1"
+	kit show "$FROM_REF:$S" | diff -u - "$S" | head -1 | grep . || echo "(no local edit — take it)"
+	kit show "$TO_REF:$S" >"$S"
+	echo "  took    $S"
+
+	echo ""
+	echo "\$ # 9a — /to-tickets: BOTH changed. Three-way, not a copy."
+	T=.claude/skills/to-tickets/SKILL.md
+	kit show "$FROM_REF:$T" >"$WORK/base"
+	kit show "$TO_REF:$T" >"$WORK/theirs"
+	echo "\$ git merge-file \"\$T\" \"\$WORK/base\" \"\$WORK/theirs\""
+	if git merge-file "$T" "$WORK/base" "$WORK/theirs"; then
+		echo "  merged clean — the kit's delta and our local note both survive"
+	else
+		echo "  CONFLICT — resolve by reading; there is no verbatim check here"
+	fi
+
+	echo ""
+	echo "\$ kit diff --name-only --diff-filter=A \"\$FROM_REF\" \"\$TO_REF\" -- .claude/skills"
+	kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
+	echo "\$ kit archive \"\$TO_REF\" .claude/skills/improve-codebase-architecture | tar -x"
+	kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
+
+	# The row is a HAND edit, and the gate is why it is not optional.
+	echo "\$ sh scripts/check.sh   # the skill is here; the manual does not know"
+	sh scripts/check.sh
+
+	# --- Step 9b: the manual -------------------------------------------------
+	echo ""
+	echo "\$ # 9b — new SECTIONS in the manual template we were stamped from"
+	echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- constitution/"
+	kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
+	echo "\$ # copied across by hand: the Capability tiers section, and two rows"
+	kit show "$TO_REF:constitution/AGENTS.md.template" |
+		awk '
+			/^## Capability tiers$/ { s = 1; print; next }
+			s && /^## / { s = 0 }
+			s { print }
+		' >"$WORK/tiers.section"
+	awk -v sec="$WORK/tiers.section" '
+		/^## Quick reference$/ { while ((getline l < sec) > 0) print l }
+		{ print }
+		/^\| Rescue an area that has become hard to change/ { next }
+	' AGENTS.md >"$WORK/manual" && mv "$WORK/manual" AGENTS.md
+	{
+		echo "| Rescue an area that has become hard to change | \`/improve-codebase-architecture\` — deepening candidates, interface design, glossary discipline; hands off to \`/to-tickets\` |"
+		echo "| Map a capability tier to a model    | \`scripts/agents.config.sh\` — yours; the kit names no model |"
+		echo "| Resolve a tier at spawn time        | \`scripts/agents.lib.sh\` — \`sh scripts/agents.lib.sh <tier>\` |"
+	} >>AGENTS.md
+	echo "  edited  AGENTS.md (new section + three quick-reference rows)"
+
+	# --- Step 9c: templates ---------------------------------------------------
+	echo ""
+	echo "\$ # 9c — workflow templates: installed once at bootstrap, never after"
+	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
+		dest=".github/workflows/$(basename "$wf")"
+		if [ ! -e "$dest" ]; then
+			echo "NEW       $dest"
+		elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
+			echo "UNTOUCHED $dest"
+		else
+			echo "YOURS     $dest"
+		fi
+	done
+	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
+		dest=".github/workflows/$(basename "$wf")"
+		[ -e "$dest" ] || kit show "$TO_REF:$wf" >"$dest"
+	done
+	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
+
+	# --- Step 9d: config ------------------------------------------------------
+	echo ""
+	echo "\$ # 9d — config: ADD or MERGE? Ask before you write."
+	C=scripts/agents.config.sh
+	echo "\$ # kit cat-file -e \"\$FROM_REF:\$C\" — did it exist at the release we are on?"
+	if kit cat-file -e "$FROM_REF:$C" 2>/dev/null; then
+		echo "MERGE  $C existed at $FROM_REF — diff the key sets"
+		keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
+		kit show "$TO_REF:$C" >"$WORK/config.new"
+		keys "$WORK/config.new" >"$WORK/keys.new"
+		keys "$C" >"$WORK/keys.mine"
+		comm -13 "$WORK/keys.mine" "$WORK/keys.new"
+	else
+		echo "ADD    $C is new at $TO_REF — nothing of ours to preserve"
+		kit show "$TO_REF:$C" >"$C"
+		echo "\$ sed -n 's/^\\(AGENT_TIER_[A-Z]*\\)=.*/\\1/p' \"\$C\""
+		sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
+	fi
+
+	# --- Step 9e: adapters ----------------------------------------------------
+	echo ""
+	echo "\$ # 9e — adapters: whole directories, or none"
+	echo "\$ kit archive \"\$TO_REF\" adapters | tar -x"
+	kit archive "$TO_REF" adapters | tar -x
+	ls adapters
+
+	# --- Step 10: the gate is the check --------------------------------------
+	echo ""
+	echo "\$ sh scripts/check.sh"
+	sh scripts/check.sh
+	gate2=$?
+	return $gate2
+}
+
+recipe2
+recipe2_status=$?
+printf '\n'
+
+banner "C4. Assertions on the fully updated consumer"
+cd "$C3" || exit 2
+if [ "$recipe2_status" = 0 ]; then
+	pass "Part 2 finished with a green gate"
+else
+	fail "Part 2 finished with gate exit $recipe2_status"
+fi
+
+# The ticket's headline claim: a skill actually arrives.
+assert_file ".claude/skills/improve-codebase-architecture/SKILL.md"
+assert_same "$KIT/.claude/skills/improve-codebase-architecture/SKILL.md" \
+	".claude/skills/improve-codebase-architecture/SKILL.md" \
+	"the new skill arrived intact"
+assert_has "AGENTS.md" "/improve-codebase-architecture"
+
+# The changed skill was taken; the locally-edited one was MERGED, not clobbered.
+assert_has ".claude/skills/implement/SKILL.md" "## Deliver"
+assert_has ".claude/skills/to-tickets/SKILL.md" "## The tier rubric"
+assert_has ".claude/skills/to-tickets/SKILL.md" "LOCAL: tickets in this repo"
+
+# The config that makes the shared resolver mean something.
+assert_file "scripts/agents.config.sh"
+assert_has "scripts/agents.config.sh" "AGENT_TIER_PLANNER"
+assert_has "AGENTS.md" "Capability tiers"
+
+# The workflow, and the prompt file it reads at run time.
+assert_file ".github/workflows/ai-review.example.yml"
+assert_file ".github/workflows/ai-review-prompt.md"
+assert_no_file ".github/workflows/ai-review.yml"
+
+assert_file "adapters/claude-code/README.md"
+
+banner "C5. The gate is what makes the hand edits non-optional"
+# A quick-reference row whose skill was never copied is the failure mode Part 2's
+# 9a warns about. If the gate did not catch it, "add the row by hand" would be
+# advice nothing enforces.
+printf '| Do a thing | `/not-a-real-skill` — nope |\n' >>AGENTS.md
+assert_status 1 "the gate rejects a row with no skill behind it" -- sh scripts/check.sh
+case "$LAST_OUT" in
+*"skill-missing"*) pass "reported as skill-missing" ;;
+*) fail "not reported as skill-missing: $LAST_OUT" ;;
+esac
+sed '/not-a-real-skill/d' AGENTS.md >"$SCRATCH/manual.clean"
+cp "$SCRATCH/manual.clean" AGENTS.md
+assert_status 0 "green again once the row is removed" -- sh scripts/check.sh
+
+banner "C6. Adopting the optional /dogfood skill after bootstrap"
+# Bootstrap asked once and deleted itself. Adoption is three things, and the
+# gate proves the third is not optional.
+kit1 archive v0.4.0 .claude/skills/dogfood | tar -x
+kit1 show "v0.4.0:constitution/local-product.md.template" \
+	>constitution/local-product.md.template
+assert_file ".claude/skills/dogfood/SKILL.md"
+assert_status 0 "the gate is green with the skill present but unannounced" -- sh scripts/check.sh
+printf '| Use the product before a user does | `/dogfood` — declared personas, real surface |\n' >>AGENTS.md
+assert_status 0 "the gate is green once the manual's row is added by hand" -- sh scripts/check.sh
+assert_has "AGENTS.md" "/dogfood"
+
+banner "C7. Declining it later — the reverse, proved by the gate"
+rm -rf .claude/skills/dogfood
+assert_status 1 "removing the skill but not the row fails the gate" -- sh scripts/check.sh
+case "$LAST_OUT" in
+*"skill-missing"*) pass "the dangling reference is reported as skill-missing" ;;
+*) fail "a dangling /dogfood reference was not caught: $LAST_OUT" ;;
+esac
+sed '/dogfood/d' AGENTS.md >"$SCRATCH/manual.nodog"
+cp "$SCRATCH/manual.nodog" AGENTS.md
+rm -f constitution/local-product.md.template
+assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
+
 # ---------------------------------------------------------------------------
 banner "Result"
 # ---------------------------------------------------------------------------
 if [ "$failures" = 0 ]; then
-	echo "  ALL GREEN — the docs set is personalized and the update recipe works."
+	echo "  ALL GREEN — the docs set is personalized and both halves of the update recipe work."
 	exit 0
 fi
 echo "  $failures assertion(s) failed."
