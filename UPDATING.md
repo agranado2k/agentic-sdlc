@@ -268,21 +268,22 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.3.0** (by which point
-the guards, the gate, the harness engine and this file have all joined the
-layer). The consumer has one local edit to a shared file — the drift case,
-because the clean case teaches nothing.
+`constitution/shared-invariants.md` alone), updating to **0.4.0** (by which point
+the guards, the gate, the harness engine, the tier resolver and this file have
+all joined the layer). The consumer has one local edit to a shared file — the
+drift case, because the clean case teaches nothing.
 
 Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
 
 ```console
 $ kit tag --list
 v0.1.0
-v0.3.0
+v0.4.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.3.0
+v0.1.0 -> v0.4.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
+scripts/agents.lib.sh
 scripts/behavior-delta.sh
 scripts/check.sh
 scripts/docs-conformance/context.mjs
@@ -297,9 +298,9 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 359 ++++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 811 ++++++++++++++++++++++++++++++++++++++
  constitution/shared-invariants.md |   8 +-
- 2 files changed, 366 insertions(+), 1 deletion(-)
+ 2 files changed, 818 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -335,6 +336,7 @@ clean   constitution/shared-invariants.md
 
 $ # step 5 — apply
   updated constitution/shared-invariants.md
+  updated scripts/agents.lib.sh
   updated scripts/behavior-delta.sh
   updated scripts/check.sh
   updated scripts/docs-conformance/context.mjs
@@ -348,6 +350,7 @@ $ # step 5 — apply
 
 $ # step 6 — verbatim check, then the gate
 verbatim  constitution/shared-invariants.md
+verbatim  scripts/agents.lib.sh
 verbatim  scripts/behavior-delta.sh
 verbatim  scripts/check.sh
 verbatim  scripts/docs-conformance/context.mjs
@@ -359,9 +362,9 @@ verbatim  scripts/tdd-pairing-guard-ci.sh
 verbatim  scripts/tdd-pairing-guard.sh
 verbatim  UPDATING.md
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.3.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.3.0
+0.4.0
 ```
 
 Read the drift block again. The consumer had written a local exception **into**
@@ -685,3 +688,124 @@ anywhere in the manual layer with no skill directory behind it is `skill-missing
 and fails the push — which is the point. A half-removed skill is worse than
 either whole state: the manual promises a command the repo does not have, and
 every session loads that promise.
+
+---
+
+## Worked example — Part 2
+
+The same test, a different consumer. This one bootstrapped at shared-layer
+**0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
+legitimate edit — skills are yours), and has just finished Part 1: its `VERSION`
+says 0.4.0, `scripts/agents.lib.sh` is on disk, and the gate is green.
+
+**And nothing the release is for has arrived.** `tests/docs-demo.sh` asserts
+exactly that before running a single Part 2 command: no `scripts/agents.config.sh`,
+no `/improve-codebase-architecture`, no review workflow, no Deliver phase in
+`/implement`, and a resolver that runs, prints nothing, and exits 0 — because an
+unmapped tier is a working state, which is precisely why the half-update is
+silent. Part 2 is what fixes it:
+
+```console
+$ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
+$ cat "$WORK/changed.yours"
+.claude/skills/dogfood/SKILL.md
+.claude/skills/implement/SKILL.md
+.claude/skills/improve-codebase-architecture/DEEPENING.md
+.claude/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
+.claude/skills/improve-codebase-architecture/LANGUAGE.md
+.claude/skills/improve-codebase-architecture/PRESENTING.md
+.claude/skills/improve-codebase-architecture/SKILL.md
+.claude/skills/to-tickets/SKILL.md
+adapters/claude-code/README.md
+constitution/AGENTS.md.template
+constitution/local-product.md.template
+constitution/local-workflow.md.template
+scripts/agents.config.sh
+templates/workflows/ai-review-prompt.md
+templates/workflows/ai-review.example.yml
+VERSION
+
+$ # 9a — /implement: the kit changed it, we did not
+$ kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
+ .claude/skills/implement/SKILL.md | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+$ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
+(no local edit — take it)
+  took    .claude/skills/implement/SKILL.md
+
+$ # 9a — /to-tickets: BOTH changed. Three-way, not a copy.
+$ git merge-file "$T" "$WORK/base" "$WORK/theirs"
+  merged clean — the kit's delta and our local note both survive
+
+$ kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
+.claude/skills/dogfood/SKILL.md
+.claude/skills/improve-codebase-architecture/DEEPENING.md
+.claude/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
+.claude/skills/improve-codebase-architecture/LANGUAGE.md
+.claude/skills/improve-codebase-architecture/PRESENTING.md
+.claude/skills/improve-codebase-architecture/SKILL.md
+$ kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
+$ sh scripts/check.sh   # the skill is here; the manual does not know
+OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
+
+$ # 9b — new SECTIONS in the manual template we were stamped from
+$ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
+ constitution/AGENTS.md.template         |  41 ++++++++++++-
+ constitution/local-product.md.template  | 103 ++++++++++++++++++++++++++++++++
+ constitution/local-workflow.md.template |  43 +++++++++++++
+ 3 files changed, 186 insertions(+), 1 deletion(-)
+$ # copied across by hand: the Capability tiers section, and two rows
+  edited  AGENTS.md (new section + three quick-reference rows)
+
+$ # 9c — workflow templates: installed once at bootstrap, never after
+NEW       .github/workflows/ai-review-prompt.md
+NEW       .github/workflows/ai-review.example.yml
+UNTOUCHED .github/workflows/commitlint.yml.example
+UNTOUCHED .github/workflows/docs-gate.yml
+UNTOUCHED .github/workflows/tdd-pairing.yml
+  took    .github/workflows/ai-review.example.yml + its prompt file
+
+$ # 9d — config: ADD or MERGE? Ask before you write.
+$ # kit cat-file -e "$FROM_REF:$C" — did it exist at the release we are on?
+ADD    scripts/agents.config.sh is new at v0.4.0 — nothing of ours to preserve
+$ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
+AGENT_TIER_PLANNER
+AGENT_TIER_IMPLEMENTER
+AGENT_TIER_MECHANICAL
+AGENT_TIER_REVIEWER
+
+$ # 9e — adapters: whole directories, or none
+$ kit archive "$TO_REF" adapters | tar -x
+claude-code
+node-ts
+README.md
+
+$ sh scripts/check.sh
+OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
+```
+
+Four things in that transcript are worth reading twice.
+
+**`ADD    scripts/agents.config.sh is new at v0.4.0`.** The tier→model map did
+not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
+whole file — nothing of theirs is at risk — and then edits it. That is *this*
+pair of releases, not a rule: the same path is a destructive overwrite for a
+consumer who already had the file, which is why 9d asks before it writes.
+
+**`merged clean — the kit's delta and our local note both survive`.** The kit
+added a tier rubric to `/to-tickets`; the consumer had added a line of their own.
+A copy would have destroyed one of them, and a byte comparison would have called
+a legitimate local adaptation "drift". Neither is the right question for a skill.
+
+**The gate ran twice, and the first run was green.** After the new skill's
+directory landed but before its quick-reference row was written by hand, nothing
+was broken — a skill with no row is merely invisible. The gate's teeth are on the
+other side: a row with no skill is `skill-missing` and fails the push, which is
+what makes "add the row by hand" a step rather than a suggestion. The test proves
+both directions, and proves them again for `/dogfood` adopted and then declined
+after bootstrap.
+
+**`NEW       .github/workflows/ai-review-prompt.md`.** The workflow next to it
+reads that file at run time. Taking one and not the other produces a review
+workflow that fails on its first PR — which is why 9c says take a template with
+its neighbours.
