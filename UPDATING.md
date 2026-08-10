@@ -1,7 +1,26 @@
-# Updating the shared layer
+# Updating from a kit release
 
-Your project took a copy of the **shared layer** when it was bootstrapped. This
-is how you move that copy forward when the kit releases a newer one.
+Your project took a copy of the kit when it was bootstrapped. **Two different
+things came with it, and they update by two different rules** — because they
+are two different kinds of thing:
+
+| | What it covers | The right question at update time |
+| --- | --- | --- |
+| **Part 1** — steps 0–7 below | the files listed under `files:` in `VERSION` — the **shared layer** | *Is my copy byte-identical to the release?* |
+| **Part 2** — steps 8–10 | skills, the manual and its articles, templates, config files, adapters | *What did the kit change, and did I change the same thing?* |
+
+Part 1's files are a **copy**, so a byte comparison answers the question
+completely. Part 2's files are **not** a copy: bootstrap stamped or installed
+them and they became yours, and editing them is the intended workflow. A byte
+comparison there answers the wrong question — it flags every local edit you were
+invited to make, and following it would tell you to overwrite your own work.
+
+**Both halves are one update.** Part 1 on its own is an *inert half-update*, and
+0.4.0 is the worked example: `scripts/agents.lib.sh` (the capability-tier
+resolver) joined the shared layer, so Part 1 delivers it — while the config it
+reads, the skills that call it, and the manual section that defines its
+vocabulary are all Part 2. Take Part 1 only and you land a resolver with no
+mapping and no callers.
 
 It is a **manual, reviewable update**, not a dependency bump — deliberately. The
 shared layer is prose that every agent session loads; a silent upgrade of the
@@ -14,16 +33,16 @@ human to read the diff.
 
 ---
 
-## What the shared layer is
+## Part 1 — what the shared layer is
 
 The files listed under `files:` in `VERSION`, and nothing else.
 
 They are copied **verbatim** from the kit. They name no product, no command, and
 no vendor, which is exactly what makes them copyable at all. Everything else in
-your repo — `AGENTS.md` and its shims, `README.md`, `docs/`, your adapters — was
-stamped from
-a template and became **yours** the moment bootstrap wrote it. Those never
-update; you own them.
+your repo — `AGENTS.md` and its shims, `README.md`, `docs/`, your skills, your
+adapters — was stamped from a template and became **yours** the moment bootstrap
+wrote it. Those are never *overwritten* for you; carrying a release's changes
+into them is a decision you make, file by file, and that is Part 2.
 
 `VERSION` records which release of the layer you are on:
 
