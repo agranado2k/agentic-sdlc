@@ -410,10 +410,15 @@ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
 cat "$WORK/changed.yours"
 ```
 
+Do **not** re-derive `FROM_REF` from `VERSION` here: step 5 already moved it to
+the release you are adopting. Part 2 runs in the same session as Part 1, on the
+same two refs.
+
 Some of what prints is not in your repo and never was. Bootstrap deletes the
 kit's own scaffolding (`tests/`, `.github/workflows/kit-*.yml`, `EXCLUSIONS.md`,
 and `bootstrap.sh` itself) and consumes `templates/docs/` into `docs/`. A path
-you do not have is not an update — skip those lines.
+you do not have is not an update — skip those lines. `VERSION` prints too,
+because it is not an entry in its own manifest; step 5 already copied it.
 
 ## Step 9 — take each category by its own rule
 

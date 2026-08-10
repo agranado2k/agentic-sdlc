@@ -209,13 +209,24 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.3.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.4.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
-is `UPDATING.md`: read both manifests, read the upstream delta, measure your own
-drift, apply, then **verify the verbatim claim byte-for-byte** before bumping the
-marker. It is demonstrated end to end by `sh tests/docs-demo.sh`, whose transcript
-is the worked example inside `UPDATING.md` itself.
+is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
+measure your own drift, apply, then **verify the verbatim claim byte-for-byte**
+before bumping the marker.
+
+`UPDATING.md` **Part 2** covers everything the manifest does not, because that is
+where most of a release's actual features live: skills, the manual and its local
+articles, the workflow templates, the config files, the adapters. Those are not a
+copy — you were invited to edit them — so "byte-identical to the release" is the
+wrong question there, and each category gets its own: a three-way review for
+skills, missing *sections* for the manual, **never overwrite, diff the key sets**
+for config files, whole directories for adapters. Part 1 alone is an inert
+half-update: 0.4.0's tier resolver is shared layer, while the config it reads and
+the skills that call it are not. Both halves are demonstrated end to end by
+`sh tests/docs-demo.sh`, whose two transcripts are the worked examples inside
+`UPDATING.md` itself.
 
 The gate fails if a shared-layer file goes missing, so the manifest cannot
 silently stop describing reality.
@@ -423,10 +434,20 @@ skeleton (K0).
   that warns and passes, globs configured, a source-only push the hook really
   blocks (origin does not move), and the paired push that lands.
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
-  that the gate catches an unstamped mark inside `docs/`), then runs the whole
-  `UPDATING.md` recipe on a fake 0.1.0 consumer updating to 0.3.0 — including a
-  local edit to a shared file, moving it out, and the byte-for-byte verbatim
-  check afterwards. Its transcript is the worked example inside `UPDATING.md`.
+  that the gate catches an unstamped mark inside `docs/`), then runs **both
+  halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
+  0.1.0 consumer updating to 0.4.0, including a local edit to a shared file,
+  moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
+  everything else — on a consumer bootstrapped at 0.3.0: it first holds that
+  consumer to the *inert half-update* Part 1 alone produces (the capability-tier
+  resolver arrives; its config, its callers and the wave's two new skills do
+  not), then runs Part 2's steps and proves each of them lands — a new skill
+  byte-identical, a changed skill taken, a locally-edited skill three-way merged
+  rather than clobbered, `scripts/agents.config.sh` as an ADD, the review
+  workflow together with the prompt file it reads. The hand edits are held
+  non-optional by the gate, in both directions, including adopting and then
+  declining the optional `/dogfood` skill after bootstrap. Both transcripts are
+  the worked examples inside `UPDATING.md`.
 - `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the config
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing installed or activated from it.

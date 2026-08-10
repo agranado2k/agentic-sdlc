@@ -7,14 +7,21 @@
 #      current-state block, ADR index + MADR template, domain glossary, PR
 #      template, and a consumer README that describes the project instead of the
 #      kit — and the docs gate is green on it.
-#   B. The UPDATING.md recipe WORKS. A fake older consumer (shared-layer 0.1.0)
-#      is diffed against a newer kit (0.4.0) and updated with the exact commands
-#      in UPDATING.md, including the drift case, a file joining the layer, and
-#      the verbatim check.
+#   B. UPDATING.md's PART 1 works — the shared layer. A fake older consumer
+#      (shared-layer 0.1.0) is diffed against a newer kit (0.4.0) and updated
+#      with the exact commands in UPDATING.md, including the drift case, a file
+#      joining the layer, and the verbatim check.
+#   C. UPDATING.md's PART 2 works — everything else. A consumer bootstrapped at
+#      0.3.0 runs Part 1 alone and is held to the INERT HALF-UPDATE that
+#      produces (the tier resolver, with no config and no callers); then Part
+#      2's steps are run and the skills, the manual section, the workflow
+#      template, the config and the adapters all arrive. Optional-skill
+#      adoption and removal are exercised in both directions.
 #
-# Part B's output is the transcript quoted in UPDATING.md's worked example. If
-# you change the recipe, re-run this and re-paste it — a worked example nobody
-# re-runs is the "stale standing instruction" shared invariant §8 is about.
+# Parts B and C each produce the transcript quoted in the matching worked
+# example in UPDATING.md. If you change either recipe, re-run this and re-paste
+# both — a worked example nobody re-runs is the "stale standing instruction"
+# shared invariant §8 is about.
 #
 # Usage: sh tests/docs-demo.sh
 
