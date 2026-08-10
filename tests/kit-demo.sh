@@ -136,7 +136,18 @@ assert_out_has "root-manual-missing"
 # ---------------------------------------------------------------------------
 banner "2. GREEN — bootstrap, then the gate"
 # ---------------------------------------------------------------------------
-assert_status 0 "bootstrap.sh runs" -- sh bootstrap.sh "$PROJECT_NAME" "A throwaway project proving the kit walks."
+# `--with-dogfood` is deliberate, and it is the stricter of the two answers.
+# One skill is optional at bootstrap (F6, #27), so "the manual and the skills
+# directory are the same set" has two correct shapes. This demo takes the
+# MAXIMAL one: every command the kit can ship must resolve, and every skill it
+# can ship must be on the map — a superset assertion, so a break in either
+# direction shows up here. The other shape (the skill declined, and NOTHING
+# dangling afterwards) is a different claim about a different tree, and it gets
+# its own suite rather than a branch inside this one:
+# `sh tests/dogfood-optin.test.sh` runs bootstrap three ways and holds each
+# result to the same gate. The flag is also what keeps this script
+# non-interactive — without it, bootstrap would ask a question on a terminal.
+assert_status 0 "bootstrap.sh runs" -- sh bootstrap.sh --with-dogfood "$PROJECT_NAME" "A throwaway project proving the kit walks."
 printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
 
 assert_file "AGENTS.md"
@@ -144,6 +155,11 @@ assert_no_file "constitution/AGENTS.md.template"
 assert_no_file "bootstrap.sh"
 assert_no_file "tests/kit-demo.sh"
 assert_no_file ".github/workflows/kit-ci.yml"
+# The kit's record of what the KIT does not ship. Inside a project that sentence
+# has no referent, so it leaves with the rest of the kit-authoring material —
+# and the project's own exclusions record, if it wants one, starts empty.
+assert_no_file "EXCLUSIONS.md"
+assert_no_file "tests/dogfood-optin.test.sh"
 assert_file "constitution/shared-invariants.md"
 assert_file "constitution/local-engineering.md.template"
 assert_file "constitution/local-workflow.md.template"
@@ -161,7 +177,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.3.0"
+assert_out_has "shared-layer 0.4.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else
@@ -303,7 +319,9 @@ for cmd in $(manual_commands); do
 		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
-[ "$resolved" -ge 12 ] &&
+# 14, not 13: this project was bootstrapped with `--with-dogfood` above, so the
+# optional skill is part of the set the manual must map.
+[ "$resolved" -ge 14 ] &&
 	pass "all $resolved slash commands in AGENTS.md resolve to a skill" ||
 	fail "only $resolved commands resolved — the manual should map the whole chain"
 

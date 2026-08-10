@@ -198,4 +198,59 @@ printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
 assert_out_has "Commit separation"
 assert_out_has "AGENTS.md"
 
+# ---------------------------------------------------------------------------
+banner "11. Capability tiers — the same config-as-data deal, end to end"
+# ---------------------------------------------------------------------------
+# The tier resolver is not a guard, but it is the same bargain: the kit ships
+# mechanism and a vocabulary, the project ships policy, and the unconfigured
+# state warns and works rather than blocking. This proves it on a REAL
+# bootstrapped consumer rather than on a fixture config.
+assert_file "scripts/agents.config.sh"
+assert_file "scripts/agents.lib.sh"
+
+# Unconfigured: every tier resolves to nothing (inherit the session's model),
+# with one warning — not four.
+tier_out=$(sh scripts/agents.lib.sh implementer 2>"$SCRATCH/tier.err")
+tier_err=$(cat "$SCRATCH/tier.err")
+[ -z "$tier_out" ] && pass "an unconfigured tier resolves to nothing on stdout" ||
+	fail "an unconfigured tier printed '$tier_out'"
+case "$tier_err" in
+*UNMAPPED*) pass "…and says so on stderr" ;;
+*) fail "no UNMAPPED warning on stderr: $tier_err" ;;
+esac
+
+warned=$(sh -c '. ./scripts/agents.lib.sh
+	resolve_tier planner
+	resolve_tier implementer
+	resolve_tier mechanical
+	resolve_tier reviewer' 2>&1 >/dev/null | grep -c UNMAPPED)
+[ "$warned" = 1 ] && pass "four unconfigured lookups warn exactly once" ||
+	fail "four unconfigured lookups warned $warned time(s)"
+
+# The consumer maps the tiers its provider actually gives it.
+cat >>scripts/agents.config.sh <<'EOF'
+
+# --- configured by the demo --------------------------------------------------
+AGENT_TIER_PLANNER='demo-strong'
+AGENT_TIER_IMPLEMENTER='demo-standard'
+AGENT_TIER_MECHANICAL='demo-cheap'
+AGENT_TIER_REVIEWER='demo-strong'
+EOF
+
+# A decomposition with a MIXED tier assignment — the shape /to-tickets produces —
+# resolved through the real resolver, in the real project.
+mixed=$(for t in planner mechanical mechanical implementer reviewer; do
+	sh scripts/agents.lib.sh "$t"
+done 2>/dev/null | tr '\n' ' ')
+if [ "$mixed" = "demo-strong demo-cheap demo-cheap demo-standard demo-strong " ]; then
+	pass "a mixed-tier decomposition resolves to its mapped models: $mixed"
+else
+	fail "mixed-tier resolution produced '$mixed'"
+fi
+
+assert_status 2 "an invented tier is refused, not silently defaulted" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementor"
+assert_out_has "unknown capability tier"
+
+assert_status 0 "the docs gate is still green with the tiers configured" -- sh -c "cd '$PROJ' && sh scripts/check.sh"
+
 t_done "guards demo"

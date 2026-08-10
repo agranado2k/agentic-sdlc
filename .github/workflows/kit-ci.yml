@@ -4,7 +4,9 @@ name: Kit CI
 # bootstrap.sh deletes this file, because a fresh project has no business
 # running the kit's acceptance test against the kit's shared layer.
 #
-# Three jobs, in increasing order of what they'd cost you to learn late:
+# Six jobs. The first three are the kit's own foundations, in increasing order
+# of what they'd cost you to learn late; the last three each check one artifact
+# the kit ships to its consumers.
 #
 #   1. harness      the docs-conformance validators' fixture tests. If these are
 #                   red, every downstream green is meaningless.
@@ -18,6 +20,20 @@ name: Kit CI
 #   3. demo         the end-to-end acceptance test: build a throwaway project
 #                   from this tree, bootstrap it, and prove the gate green — and
 #                   then prove it red, once per failure mode it claims to catch.
+#   4. skills       the /implement delivery contract, checked as text.
+#   5. workflow-templates
+#                   the workflow templates parse, and install inert.
+#   6. adapters     the adapter trees are well-formed and stay dormant.
+#   7. exclusions   the deliberate-exclusions record has not gone stale — every
+#                   skill it says the kit does not ship is really not shipped.
+#   8. dogfood-optin
+#                   the one OPTIONAL skill, both ways: bootstrap with it, without
+#                   it, and with no terminal to ask on. Job 3 only ever sees the
+#                   first of those, and the failure mode worth catching lives in
+#                   the second — a declined skill that left a row behind.
+#
+# The guard scripts and the capability-tier resolver have their own file
+# (kit-guards.yml) — separate work streams do not collide on one YAML.
 #
 # Node is used here without apology: this is the kit's own repo, and the harness
 # is the one part of the framework that has a runtime. A consumer project that
@@ -80,6 +96,17 @@ jobs:
       - name: Skill text consistency
         run: sh tests/implement-deliver.test.sh
 
+  workflow-templates:
+    name: Workflow templates parse, and install inert
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # PyYAML is preinstalled on ubuntu-latest, so the parse leg really runs
+      # here. The script degrades to structural checks (and says so) on a
+      # machine with no YAML parser, because the kit's core has no runtime.
+      - name: AI review template acceptance test
+        run: sh tests/ai-review-template.test.sh
+
   adapters:
     name: Adapters are well-formed and dormant
     runs-on: ubuntu-latest
@@ -96,3 +123,32 @@ jobs:
       # What it cannot assert is listed in adapters/node-ts/INSTALL.md.
       - name: Adapters acceptance test
         run: sh tests/adapters-demo.sh
+
+  exclusions:
+    name: Exclusions record is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the record is a document, and the check is a comparison
+      # between what it claims and what `.claude/skills/` actually contains.
+      # The reason it runs in CI rather than only locally is that it goes stale
+      # by someone ADDING a skill — an action taken in a pull request that has
+      # no reason to think about EXCLUSIONS.md at all.
+      - name: Deliberate-exclusions record
+        run: sh tests/exclusions.test.sh
+
+  dogfood-optin:
+    name: The optional skill, both ways
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node IS needed here, unlike the exclusions job: the load-bearing check
+      # plants a `/dogfood` reference into the tree that declined the skill and
+      # requires the real validator to report `skill-missing`. A grep can show
+      # the reference is absent; only the harness can show the gate would have
+      # caught it if it were not.
+      - name: Opt-in /dogfood acceptance test
+        run: sh tests/dogfood-optin.test.sh

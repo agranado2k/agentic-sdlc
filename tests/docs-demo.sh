@@ -8,7 +8,7 @@
 #      template, and a consumer README that describes the project instead of the
 #      kit — and the docs gate is green on it.
 #   B. The UPDATING.md recipe WORKS. A fake older consumer (shared-layer 0.1.0)
-#      is diffed against a newer kit (0.3.0) and updated with the exact commands
+#      is diffed against a newer kit (0.4.0) and updated with the exact commands
 #      in UPDATING.md, including the drift case, a file joining the layer, and
 #      the verbatim check.
 #
@@ -135,8 +135,8 @@ banner "A5. The gate is green on the whole set"
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 assert_status 0 "shared layer reported" -- sh scripts/check.sh
 case "$LAST_OUT" in
-*"shared-layer 0.3.0"*) pass "gate reports shared-layer 0.3.0" ;;
-*) fail "gate did not report shared-layer 0.3.0: $LAST_OUT" ;;
+*"shared-layer 0.4.0"*) pass "gate reports shared-layer 0.4.0" ;;
+*) fail "gate did not report shared-layer 0.4.0: $LAST_OUT" ;;
 esac
 
 banner "A6. The gate is NOT vacuous over the new docs"
@@ -166,7 +166,7 @@ esac
 # Scenario, constructed in a scratch dir:
 #   kit v0.1.0 — shared layer is constitution/shared-invariants.md alone, and
 #                its §9/§10 are one heading and one paragraph shorter
-#   kit v0.3.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
+#   kit v0.4.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
 #                JOINS the shared layer
 #   consumer   — bootstrapped from v0.1.0, and someone edited the shared file
 #                locally (the drift case — the clean case teaches nothing)
@@ -194,13 +194,13 @@ sed -e "s/^## 9\. Measure the ceiling, don't assume it$/## 9. Measure the ceilin
 	"$KIT/constitution/shared-invariants.md" >"$OLDKIT/constitution/shared-invariants.md"
 
 if cmp -s "$OLDKIT/constitution/shared-invariants.md" "$KIT/constitution/shared-invariants.md"; then
-	fail "the fake 0.1.0 rulebook is identical to 0.3.0 — the scenario has no delta"
+	fail "the fake 0.1.0 rulebook is identical to 0.4.0 — the scenario has no delta"
 else
-	pass "fake 0.1.0 rulebook differs from 0.3.0"
+	pass "fake 0.1.0 rulebook differs from 0.4.0"
 fi
 
-# A .git-free copy of the kit as it stands: the v0.3.0 release tree.
-NEWKIT="$SCRATCH/kit-0.3.0"
+# A .git-free copy of the kit as it stands: the v0.4.0 release tree.
+NEWKIT="$SCRATCH/kit-0.4.0"
 mkdir -p "$NEWKIT"
 cp -R "$KIT/." "$NEWKIT/"
 rm -rf "$NEWKIT/.git"
@@ -222,10 +222,10 @@ git tag v0.1.0
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$NEWKIT/." "$HIST/"
 git add -A >/dev/null
-git commit -q -m "release 0.3.0"
-git tag v0.3.0
-if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.3.0 >/dev/null; then
-	pass "kit history built with tags v0.1.0 and v0.3.0"
+git commit -q -m "release 0.4.0"
+git tag v0.4.0
+if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.4.0 >/dev/null; then
+	pass "kit history built with tags v0.1.0 and v0.4.0"
 else
 	fail "kit history tags were not created"
 fi
@@ -264,7 +264,7 @@ recipe() {
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
-	TO_REF=v0.3.0
+	TO_REF=v0.4.0
 
 	echo "\$ kit tag --list"
 	kit tag --list
@@ -384,7 +384,7 @@ assert_same "$KIT/UPDATING.md" "UPDATING.md" \
 	"UPDATING.md joined the layer and is byte-identical to the kit's"
 assert_same "$KIT/constitution/shared-invariants.md" "constitution/shared-invariants.md" \
 	"constitution/shared-invariants.md is byte-identical to the kit's"
-assert_has "VERSION" "shared-layer: 0.3.0"
+assert_has "VERSION" "shared-layer: 0.4.0"
 assert_has "AGENTS.md" "Local exception to shared invariant 4"
 
 # The whole point: the local exception survived the update, in a file that is

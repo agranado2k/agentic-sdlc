@@ -20,6 +20,9 @@ gh repo create my-project --template agranado2k/agentic-sdlc --private --clone
 cd my-project
 
 # 2. Bootstrap. Runs once, then deletes itself. Commits nothing.
+#    It asks one question — whether to include the optional /dogfood skill.
+#    Answer it up front with --with-dogfood / --no-dogfood if you prefer;
+#    with no terminal to ask on, it skips.
 sh bootstrap.sh "My Project" "One line about what it does."
 
 # 3. Check the gate is green, then make the first commit yours.
@@ -46,20 +49,25 @@ second time rather than overwriting a manual you have since edited.
 | `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
-| `.claude/skills/` | The twelve skills — the lifecycle made runnable. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
+| `.claude/skills/` | Fourteen skills — the lifecycle made runnable. Thirteen always; `/dogfood` is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
+| `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
+| `scripts/agents.config.sh` | **Yours.** Tier → model id, for your provider. Ships empty on purpose — the kit names no model, because model ids rot faster than anything else it could carry. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
-| `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. |
+| `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. Two ship live (the docs gate, the TDD pairing gate); two ship as `.example` — commit linting, and the AI review below. |
+| `templates/workflows/ai-review.example.yml` | The cross-provider review workflow: two advisory reviewers from two vendors, one identical prompt, firing on PR open. This is what `/implement` requests when it delivers. **Inert on arrival** — rename it once a provider secret exists. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
 | `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not installed: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
+| `EXCLUSIONS.md` | What the kit deliberately does **not** ship, and why — one entry per considered-and-rejected skill or mechanism, plus the standing rule that keeps it current. Kit-repo meta: removed by bootstrap, not shared layer. |
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
 | `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
@@ -93,7 +101,7 @@ ships an `AGENTS.md.template` and no stamped files — stays silent.
 format; a tool that does not read that directory gets the practice as prose from
 the manual and the articles, with no `/`-command to invoke it. Each `SKILL.md` is
 plain markdown, so pointing another tool at one by path works today — but porting
-the twelve to a second command format is explicitly out of scope here.
+them to a second command format is explicitly out of scope here.
 
 ### The documentation set
 
@@ -117,13 +125,35 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.claude/skills/` holds twelve skills — the chain at the top of this README, made
+`.claude/skills/` holds fourteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
-`/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype` and
-`/diagnose` off to the side.
+`/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
+`/diagnose` and `/improve-codebase-architecture` off to the side.
+
+**Thirteen of the fourteen are unconditional; `/dogfood` is opt-in.** Every other
+skill works on the day the repo is created, because it operates on specs,
+tickets, diffs and branches — things a one-hour-old project already has.
+`/dogfood` operates on a *running product*: it walks the personas you declare
+through the surface you declare (a browser for a web app, the binary for a CLI,
+a client for an API or a tool server) before a human does, and hands the friction
+and breakage it hits to `/to-tickets` as candidate tickets. **It never fixes what
+it finds** — a repair by the session that found the problem destroys the only
+independent reading anyone had of it, and smuggles a behavior change into a
+verification pass (shared invariant §10).
+
+So bootstrap asks, once: *Include the /dogfood skill? Needs a runnable
+user-facing surface.* `--with-dogfood` and `--no-dogfood` answer it
+non-interactively, and with no terminal to ask on it skips — the two mistakes
+are not symmetric, since a project that skipped it can copy the skill back in a
+minute, while one that took it carries a command it cannot run. Declining
+removes three things together: the skill directory, the
+`constitution/local-product.md.template` article that exists only to feed it,
+and the manual's rows about it. Nothing is left commented out, and
+`sh tests/dogfood-optin.test.sh` proves it by planting the removed reference
+back and watching the gate report `skill-missing`.
 
 They are **copied as-is, never stamped**. That is a stronger constraint than the
 templates are under: a template may carry a mark because something fills it in,
@@ -155,10 +185,21 @@ Three consequences worth stating plainly:
   testing is stack-specific, so the skill says to check `adapters/` and to skip
   the block, loudly, when nothing is wired.
 
-Five of the twelve are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+**What is *not* here is recorded too.** `EXCLUSIONS.md` names every skill or
+mechanism that was considered and left out, with the reason attached — and the
+standing rule that an exclusion is written down in the same pull request that
+makes it. It exists because a skill once went missing for two releases and
+nothing in the repo could say whether that was a decision or a slip; an absence
+looks the same either way until somebody writes the reason down. It is
+kit-repo meta and bootstrap removes it, so your project starts that record
+empty rather than inheriting this one.
+
+Six of the fourteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
-at its own foot so provenance survives being read out of context.
+at its own foot so provenance survives being read out of context. That file also
+records the eight that have **no** upstream — including `/dogfood`, checked
+against the upstream repository rather than assumed.
 
 ## The shared layer, and why it has a version
 
@@ -254,6 +295,27 @@ Mechanism is shared layer (copied verbatim, listed in `VERSION`); policy is
 yours (`scripts/guards.config.sh` is deliberately *not* shared). That split is
 what lets a kit update diff cleanly against your copy.
 
+## Capability tiers — the kit names no model
+
+The planner decides what each ticket is *worth* running, on cost/benefit, using
+four names the whole chain speaks: `planner`, `implementer`, `mechanical`,
+`reviewer`. `/to-tickets` stamps a tier on every ticket and shows the mix at its
+quiz; `/implement` reads its ticket's tier when it spawns.
+
+The kit ships the vocabulary (in the manual) and the resolver
+(`scripts/agents.lib.sh`, shared layer) and **never a model identifier**. Those
+rot on a vendor's schedule and differ per provider, so the mapping is yours, in
+`scripts/agents.config.sh`, which ships empty:
+
+```sh
+sh scripts/agents.lib.sh mechanical   # prints your mapped id — or nothing
+```
+
+Unmapped is a working state, the same way an unconfigured guard is: the resolver
+warns once, prints nothing, and the spawn inherits the session's own model —
+exactly today's behaviour. Where that value goes in a spawn call is the one
+harness-specific detail, and it lives in `adapters/claude-code/README.md`.
+
 ## The adapters, and why they are dormant
 
 The core is stack-free on purpose — that is what makes it copyable — and that
@@ -299,6 +361,42 @@ reads `.yml`. It is the one gate whose reference implementation needs node, and
 the kit does not decide that your project uses node. Rename it when you are
 ready; the header explains what to do if you are not on node.
 
+### Cross-provider AI review
+
+`ai-review.example.yml` ships inert the same way, and is the mechanism
+`/implement` reaches for when it delivers a PR. It holds **two** advisory
+reviewers — one Anthropic, one Google — because the reason to run a review in CI
+rather than inside the authoring session is structural: **CI holds the secrets,
+so it can call a reviewer from a different vendor than the model that wrote the
+code**, and a reviewer sharing the author's model family shares the author's
+blind spots.
+
+The shape, and what a third provider would change:
+
+- **One file, two filled variants.** The cross-provider leg *is* the feature, so
+  a single-provider example would ship the plumbing and drop the point. Both
+  jobs are live YAML, not commented-out alternatives, and neither vendor is the
+  default — the kit picks no model and no vendor anywhere else either.
+- **Three marked choice points per job** — `PROVIDER CHOICE 1/3` the invocation,
+  `2/3` the secret name, `3/3` the prompt. Adding a reviewer means copying a job
+  and changing those three things.
+- **The two prompts are byte-identical**, and `tests/ai-review-template.test.sh`
+  asserts it. Asking two vendors different questions and then comparing their
+  answers measures the prompts, not the models.
+- **The prompt references your manual instead of restating it** — `AGENTS.md`,
+  the `constitution/` articles, your decision records. The one rule it spells
+  out is the two-axis split (shared invariant §5), because that describes the
+  shape of the review's own output: standards findings an agent may act on, and
+  a behavior confirm-list the bot is told not to answer or resolve.
+- **Advisory, never gating.** Every review step is `continue-on-error`, the runs
+  are concurrency-cancelled per PR, and the header says plainly not to put these
+  jobs in your required status checks — the moment a bot's opinion can block a
+  merge, a vendor outage is an outage in your ability to ship.
+
+Renaming it with only one provider secret configured is a working state: each
+job checks for its own key and skips itself with a `::notice::` when it is
+absent, so the file is never red by default.
+
 The kit's own CI is `.github/workflows/kit-guards.yml`, which runs the guard
 test tiers and the end-to-end demo against this tree.
 
@@ -333,6 +431,33 @@ skeleton (K0).
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing installed or activated from it.
 
+- `sh tests/ai-review-template.test.sh` covers the cross-provider review
+  template: every workflow template really parses as YAML (on python3 or ruby —
+  it skips loudly rather than pretending when neither is there), the advisory
+  invariants are in the file rather than only in its header, no merge or approve
+  verb is reachable, the two provider prompts are byte-identical, the extraction
+  source's own vocabulary did not come along, and a real bootstrap leaves the
+  file installed, byte-identical, and still an `.example` with no live twin.
+
+- `sh tests/exclusions.test.sh` keeps `EXCLUSIONS.md` honest: every command it
+  says the kit does not ship really has no skill directory, every entry carries
+  a reason and not just a name, `/ce-dogfood` stays recorded as optional rather
+  than excluded — and the staleness check itself is proved by running it against
+  a fixture that names a skill which *does* ship. It also checks the record's
+  own wiring: bootstrap deletes it, and `VERSION` does not list it.
+
+- `sh tests/dogfood-optin.test.sh` covers the one skill that is optional.
+  Bootstrap is run three ways against three throwaway copies of the kit — with
+  the skill, without it, and with neither flag nor a terminal to ask on — and
+  each result is held to the gate. The load-bearing leg is the declined one:
+  nothing in that tree may mention the command, and the proof is not the grep
+  but the validator, which must report `skill-missing` the moment the removed
+  row is planted back. A typo'd flag is checked too, because
+  `--with-dogfod` silently becoming the project name is a mistake you find a
+  week later in the stamped manual. (`sh tests/kit-demo.sh` bootstraps
+  `--with-dogfood`: it asserts the maximal set, so its "every command resolves,
+  no skill is orphaned" pass covers the optional skill as well.)
+
 - `sh tests/worktree-cleanup.test.sh` covers the one new script that deletes
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
   `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
@@ -352,7 +477,7 @@ built ticket-by-ticket by its own `/to-tickets` → `/implement` chain.
 
 ## Licence
 
-MIT (`LICENSE`) — and additionally, for the five skills adapted from
+MIT (`LICENSE`) — and additionally, for the six skills adapted from
 [mattpocock/skills](https://github.com/mattpocock/skills), the upstream MIT
 notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
 
@@ -374,6 +499,7 @@ sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
+sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 ```
 
 Do not wire `core.hooksPath` in this repo.
@@ -386,3 +512,55 @@ interleave with another ticket's block.
 the recipe or the shared layer, re-run the demo and re-paste it: a worked example
 nobody re-runs is exactly the stale standing instruction shared invariant §8 is
 about.
+
+## References — where the ideas come from
+
+This framework is a synthesis, not an invention. These are the sources it
+draws on, so humans and agents alike can trace any practice here back to its
+origin.
+
+### Methodology
+
+- **Matt Pocock — [AI Hero](https://www.aihero.dev)**. The core chain
+  (grill → PRD → tickets → implement → review) and much of its vocabulary:
+  - [Tracer bullets](https://www.aihero.dev/tracer-bullets) — tickets as
+    demoable vertical slices sized to one context window, and the standing
+    rule against building horizontal layers in isolation.
+  - [A complete guide to AGENTS.md](https://www.aihero.dev/a-complete-guide-to-agents-md)
+    — the instruction budget and progressive disclosure behind the root manual.
+  - The skill write-ups:
+    [to-tickets](https://www.aihero.dev/skills-to-tickets),
+    [implement](https://www.aihero.dev/skills-implement),
+    [code-review](https://www.aihero.dev/skills-code-review).
+  - [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — six of
+    the fourteen skills are adapted from it; the upstream notice and the
+    per-skill provenance table live in
+    `.claude/skills/LICENSE-mattpocock-skills.md`.
+  - The talk ["A Workflow for AI Coding"](https://www.youtube.com/watch?v=-QFHIoCo-Ko)
+    (AI Engineer 2026), with third-party walkthroughs by
+    [Sean Weldon](https://www.sean-weldon.com/blog/2026-04-27-workflow-for-ai-coding-matt-pocock)
+    and [explainx](https://explainx.ai/blog/matt-pocock-ai-coding-real-engineers-workshop-2026).
+- **Robert C. Martin — [swarm-forge](https://github.com/unclebob/swarm-forge)**
+  — the layered constitution shape (one root manual → shared articles → local
+  articles) and mutation testing as review *evidence* rather than reviewer
+  taste.
+- **Kieran Klaassen** — the dogfood verification harness idea behind the
+  opt-in `/dogfood` skill: synthetic personas exercising the product's real
+  user-facing surface before a human does. Credited by name in the
+  predecessor project's history; no public link was recorded there.
+- **John Ousterhout — *A Philosophy of Software Design*** — deep modules and
+  "design it twice", the working vocabulary of
+  `/improve-codebase-architecture` and its sidecars.
+
+### Standards
+
+- [AGENTS.md](https://agents.md) — the cross-tool manual format. The kit's
+  `CLAUDE.md` / `GEMINI.md` are one-line import shims pointing at it.
+- [Conventional Commits](https://www.conventionalcommits.org) — the commit
+  convention the guards, hooks and skills assume.
+- [MADR](https://adr.github.io/madr/) — the decision-record format
+  `/grill-with-docs` writes.
+
+The framework was first built and exercised inside a working product
+repository and extracted here afterwards; `EXCLUSIONS.md` records what
+deliberately stayed behind, and why.

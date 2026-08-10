@@ -1,0 +1,103 @@
+<!--
+  TEMPLATE — constitution/local-product.md
+
+  The product article: who uses this thing, and how they reach it. It is the
+  smallest of the three local articles and it exists for a specific reason —
+  `/dogfood` cannot run without it. That skill drives the product the way a user
+  does, and "the way a user does" is knowledge only this repo has.
+
+  To adopt it:
+
+    1. Fill in the DOGFOOD DECLARATION below. Replace every {{MARK}} with the
+       real thing, or delete the row. An unfilled declaration is worse than a
+       missing one: `/dogfood` reads it and believes it.
+    2. Rename this file to `local-product.md` (drop `.template`).
+    3. Point the root AGENTS.md's article layer at the new `.md` path.
+
+  From that moment the docs gate holds this file to the same standard as the
+  root manual: every `code span` naming a repo path must resolve, every slash
+  command in a code span must resolve to a skill directory under
+  `.claude/skills/`, and an article the root never references is reported as
+  unreachable. Marks left unstamped fail the gate too — `.template` is the only
+  exemption.
+
+  This article arrived with the `/dogfood` skill, and bootstrap removes both
+  together when the skill is declined. Nothing stops you from growing it into a
+  fuller product article (what the product is for, what it deliberately does
+  not do, who the stakeholders are) — but the declaration is the part something
+  actually reads.
+
+  This article is for the PRODUCT. The stack goes in local-engineering.md,
+  process in local-workflow.md, and portable rules are already in
+  shared-invariants.md — point at them, never restate them (one home per rule,
+  shared invariant §11).
+-->
+
+# Local product — who uses this, and how they reach it
+
+Project-specific elaboration of the root `AGENTS.md`. Read it before running
+`/dogfood`, and before making any change to a user-facing entry point.
+
+## DOGFOOD DECLARATION
+
+<!-- ========================================================================
+     This section is the one `/dogfood` reads. Keep it accurate or delete it —
+     a stale persona produces a report about a user who does not exist, which
+     reads exactly like evidence.
+     ===================================================================== -->
+
+### SURFACES — the real thing a person touches
+
+<!-- One row per surface the product genuinely exposes today. NOT a test
+     harness, NOT an internal script: the thing a user reaches for. A project
+     with more than one (a web app AND a public API) declares both, and
+     `/dogfood` walks each persona through the one they actually use.
+
+     The "How to bring it up" column is a real command. If it needs seed data,
+     a login, or a fixture account, say so here — the skill will not guess, and
+     it will not create accounts on your behalf. -->
+
+| Surface | What it is | How to bring it up | Notes / prerequisites |
+| --- | --- | --- | --- |
+| {{SURFACE_1_NAME}} | {{SURFACE_1_KIND}} — e.g. web app in a browser, CLI binary, HTTP API, tool server | `{{SURFACE_1_START_COMMAND}}` | {{SURFACE_1_PREREQS}} |
+| {{SURFACE_2_NAME}} | {{SURFACE_2_KIND}} | `{{SURFACE_2_START_COMMAND}}` | {{SURFACE_2_PREREQS}} |
+
+**Ready means reachable, not started.** {{READINESS_CHECK}} is how you know the
+surface is actually up — a process that has spawned is not a product that
+answers.
+
+### PERSONAS — who is trying to do what
+
+<!-- A persona is a goal plus an entry point plus a permission level. Two
+     personas who differ only in name are one persona; two who differ in what
+     they are ALLOWED to do are always two.
+
+     Keep this list short and real. Three personas that match actual users beat
+     eight that were invented to fill the table. -->
+
+| Persona | Goal | Enters at | Permission level | Surface |
+| --- | --- | --- | --- | --- |
+| {{PERSONA_1}} | {{PERSONA_1_GOAL}} | {{PERSONA_1_ENTRY}} | {{PERSONA_1_PERMISSIONS}} | {{SURFACE_1_NAME}} |
+| {{PERSONA_2}} | {{PERSONA_2_GOAL}} | {{PERSONA_2_ENTRY}} | {{PERSONA_2_PERMISSIONS}} | {{SURFACE_1_NAME}} |
+| {{PERSONA_3}} | {{PERSONA_3_GOAL}} | {{PERSONA_3_ENTRY}} | {{PERSONA_3_PERMISSIONS}} | {{SURFACE_2_NAME}} |
+
+### Where a dogfood session may and may not go
+
+<!-- The blast radius, stated by you rather than assumed by an agent. -->
+
+- **Environments it may drive**: {{DOGFOOD_ALLOWED_ENVIRONMENTS}} — and never a
+  shared production environment unless it is named on that list.
+- **Data it may create**: {{DOGFOOD_TEST_DATA_POLICY}}
+- **Credentials**: {{DOGFOOD_CREDENTIALS_POLICY}} — a session that needs a login
+  is given one deliberately; it never signs itself up for a real account.
+- **Off limits entirely**: {{DOGFOOD_FORBIDDEN}} — journeys that send mail, move
+  money, or delete other people's data belong here until you decide otherwise.
+
+## What the product is for
+
+<!-- Optional, and the first thing worth adding once the declaration above is
+     real: the one-paragraph statement of the job the product does, in the
+     glossary's words. It is what tells a reviewer whether a behavior change
+     serves the product or merely compiles. -->
+
+{{PRODUCT_STATEMENT}}
