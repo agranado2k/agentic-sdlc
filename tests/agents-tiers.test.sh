@@ -124,8 +124,14 @@ capture() {
 #
 # The per-shell cases below can only run against a shell that is installed.
 # Silently skipping one would let a machine (or a CI image) quietly drop an
-# entire axis while still printing ALL GREEN, so a skip says so out loud.
-note() { printf '  --    %s\n' "$*"; }
+# entire axis while still printing ALL GREEN, so a skip says so out loud —
+# per case here, and counted again beside the final summary, where a reader
+# who only checks the last lines will actually see it.
+SKIPPED=0
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
+}
 
 # SHELLS — the shells the per-shell axes below sweep.
 #
@@ -514,4 +520,7 @@ case $? in
 *) fail "the shipped config does not define all four tier variables" ;;
 esac
 
+if [ "$SKIPPED" -gt 0 ]; then
+	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
+fi
 t_done "agents tier resolution"
