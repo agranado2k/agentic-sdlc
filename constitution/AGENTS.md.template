@@ -182,9 +182,9 @@ Several step out of that line: `/grill-with-docs` replaces `/grill-me` once the
 project has a glossary and decision records worth challenging a plan against,
 `/prototype` answers a feasibility question the spec is blocked on, `/diagnose`
 is for a bug rather than a feature, `/explain-diff` turns a diff, branch or PR
-into an interactive explainer so a review or a merge starts from
-understanding, and `/improve-codebase-architecture` is for
-an area that has become hard to change — it finds and designs the deepening,
+into an interactive explainer so a review or a merge starts from understanding,
+and `/improve-codebase-architecture` is for an area that has become hard to
+change — it finds and designs the deepening,
 then re-enters the line at `/to-tickets`, because a behaviour-preserving refactor
 is a ticket of its own and never a passenger on a feature diff (shared invariant
 §10).
