@@ -861,7 +861,7 @@ recipe2() {
 			fi
 		elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$wf"; then
 			echo "UNCHANGED $dest"
-		elif kit show "$FROM_REF:$wf" | cmp -s - "$dest"; then
+		elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
 			echo "UNTOUCHED $dest"
 		else
 			echo "YOURS     $dest"

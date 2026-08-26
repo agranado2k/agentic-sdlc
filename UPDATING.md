@@ -707,7 +707,7 @@ kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; 
 		fi
 	elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$wf"; then
 		echo "UNCHANGED $dest"                # the release did not touch it
-	elif kit show "$FROM_REF:$wf" | cmp -s - "$dest"; then
+	elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
 		echo "UNTOUCHED $dest"                # yours is the old release's, verbatim
 	else
 		echo "YOURS     $dest"                # you customized it
@@ -715,7 +715,9 @@ kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; 
 done
 ```
 
-- **`NEW`** and **`UNTOUCHED`** are both `kit show "$TO_REF:$wf" >"$dest"`.
+- **`NEW`** and **`UNTOUCHED`** are both `kit show "$TO_REF:$wf" >"$dest"` — a
+  redirect is safe *here*, unlike step 5's: workflow templates are plain 100644
+  files, so there is no mode bit to lose on the way in.
 - **`YOURS`** is a three-way merge, exactly as in 9a.
 - **`UNCHANGED`** and **`DECLINED`** are *nothing to do*.
 
