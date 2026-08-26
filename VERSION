@@ -47,16 +47,20 @@
 # was not cosmetic — this release is the first one whose value sits mostly
 # outside the shared layer, so a consumer following the old recipe would have
 # taken the resolver above and nothing that reads or calls it.
-# 0.5.0 — constitution/shared-code-craft.md joined the layer: the portable
-# code-writing rules (smallest sufficient diff, named constants, flat control
-# flow, named states over boolean parameters, explicit blocks, comments that
-# carry the why, layering respected, visibility widenings surfaced, and
-# diagrams drawn as SVG in HTML reports — never ASCII art). Two shared files
-# changed content to hold it to the same standard as the invariants:
-# scripts/check.sh's reduced fallback now skips the new article the way it
-# skips shared-invariants.md, and UPDATING.md's worked examples were
-# re-captured at 0.5.0. The starter policy (config.mjs, not shared) adds the
-# article to the portability deny-list's file set.
+# 0.5.0 — constitution/shared-code-craft.md joined the layer: ten portable
+# rules for the code an agent writes, from the smallest sufficient diff to
+# diagrams drawn as SVG in HTML reports, never ASCII art. Two shared files
+# changed content with it: scripts/check.sh's reduced fallback now skips the
+# new article the way it skips shared-invariants.md, and UPDATING.md now
+# documents what an article joining the layer does — Part 1 alone ends with a
+# RED gate (article-unreferenced) until the consumer's own manual points at
+# the new article; deliberate, and the worked examples are re-captured showing
+# it. The wave's non-manifest half, recovered by Part 2: /tdd, /implement and
+# /review-pr point at the article, the manual and local-engineering templates
+# carry the pointers, /improve-codebase-architecture's report rendering became
+# self-contained inline SVG, and the starter config.mjs (yours, step 9d) adds
+# the article to the portability file set — existing consumers merge that hunk
+# by hand.
 shared-layer: 0.5.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

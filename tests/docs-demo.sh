@@ -187,6 +187,18 @@ cp -R "$KIT/." "$OLDKIT/"
 strip_nested_worktrees "$KIT" "$OLDKIT"
 rm -rf "$OLDKIT/.git"
 rm -f "$OLDKIT/UPDATING.md" # UPDATING.md did not exist at 0.1.0
+# Neither did the code-craft article (it joins at 0.5.0) — and a faithful old
+# kit must not REFERENCE it either, or the article-unreferenced red in B1's
+# step 6 (the whole point of the article-joins-the-layer case) could never
+# fire and the recipe's claim about it would be untestable.
+rm -f "$OLDKIT/constitution/shared-code-craft.md"
+awk '
+	/^- `constitution\/shared-code-craft\.md`/ { craft = 1; next }
+	craft && /^- `constitution\// { craft = 0 }
+	craft { next }
+	/shared-code-craft/ { next }
+	{ print }
+' "$KIT/constitution/AGENTS.md.template" >"$OLDKIT/constitution/AGENTS.md.template"
 
 cat >"$OLDKIT/VERSION" <<'EOF'
 # agentic-sdlc — shared-layer manifest
@@ -369,6 +381,23 @@ recipe() {
 		fi
 	done <"$WORK/to.list"
 	echo "\$ sh scripts/check.sh"
+	sh scripts/check.sh 2>&1
+	first_gate=$?
+	if [ "$first_gate" = 0 ]; then
+		echo "UNEXPECTED: green before the manual pointer — the fixture is not faithful"
+		rm -rf "$WORK"
+		return 1
+	fi
+	echo ""
+	echo "\$ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is"
+	echo "\$ # yours (the root manual — Part 2 territory). Add it and re-run."
+	{
+		echo ""
+		echo "Craft rules for the code itself: \`constitution/shared-code-craft.md\` —"
+		echo "load it before writing or reviewing code (shared layer, see \`VERSION\`)."
+	} >>AGENTS.md
+	git commit -qam "docs: point the manual at the code-craft article (0.5.0 Part 2)"
+	echo "\$ sh scripts/check.sh"
 	sh scripts/check.sh
 	gate=$?
 	echo "\$ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION"
@@ -398,6 +427,7 @@ assert_same "$KIT/constitution/shared-code-craft.md" "constitution/shared-code-c
 	"constitution/shared-code-craft.md joined the layer and is byte-identical to the kit's"
 assert_has "VERSION" "shared-layer: 0.5.0"
 assert_has "AGENTS.md" "Local exception to shared invariant 4"
+assert_has "AGENTS.md" "shared-code-craft"
 
 # The whole point: the local exception survived the update, in a file that is
 # the consumer's own.
@@ -450,6 +480,10 @@ rm -f "$OLD3/scripts/agents.lib.sh"
 rm -f "$OLD3/templates/workflows/ai-review.example.yml"
 rm -f "$OLD3/templates/workflows/ai-review-prompt.md"
 
+# And the 0.5.0 wave's shared addition: a faithful 0.3.0 has neither the
+# code-craft article nor any manual reference to it (same reasoning as B0).
+rm -f "$OLD3/constitution/shared-code-craft.md"
+
 # The 0.3.0 manifest: today's, minus the files that joined after it — the tier
 # resolver at 0.4.0 and the code-craft article at 0.5.0. The article's FILE
 # stays in the fake tree (the consumer's stamped manual references it), exactly
@@ -462,6 +496,10 @@ sed '/^  scripts\/agents\.lib\.sh$/d; /^  constitution\/shared-code-craft\.md$/d
 # `/command` to a skill directory and each backticked path to a real file, so a
 # leftover row would make the fixture red before the test starts.
 awk '
+	/^- `constitution\/shared-code-craft\.md`/ { craft = 1; next }
+	craft && /^- `constitution\// { craft = 0 }
+	craft { next }
+	/shared-code-craft/ { next }
 	/^## Capability tiers$/ { sec = 1; next }
 	sec && /^## / { sec = 0 }
 	sec { next }
@@ -587,9 +625,14 @@ git commit -q -m "chore: update shared layer 0.3.0 -> 0.5.0"
 
 assert_file "scripts/agents.lib.sh"
 assert_has "VERSION" "shared-layer: 0.5.0"
-assert_status 0 "the gate is green after Part 1 alone" -- sh scripts/check.sh
+# Part 1 landed a constitution ARTICLE, and the manual that should point at it
+# is the consumer's own — Part 2 territory. So the gate goes red here, by
+# design: article-unreferenced is what forces the two halves to land together.
+assert_status 1 "the gate is RED after Part 1 alone — the article landed, its manual pointer is Part 2" -- sh scripts/check.sh
+assert_out_has "article-unreferenced"
 
-# …and yet nothing the release is FOR has arrived. This is the gap F8 closes.
+# …and beyond the red, nothing the release is FOR has arrived. This is the gap
+# F8 closes.
 assert_no_file "scripts/agents.config.sh"
 assert_no_file ".claude/skills/improve-codebase-architecture/SKILL.md"
 assert_no_file ".github/workflows/ai-review.example.yml"
@@ -660,8 +703,8 @@ recipe2() {
 	kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
 
 	# The row is a HAND edit, and the gate is why it is not optional.
-	echo "\$ sh scripts/check.sh   # the skill is here; the manual does not know"
-	sh scripts/check.sh
+	echo "\$ sh scripts/check.sh   # still red from Part 1: the ARTICLE is here; the manual does not know"
+	sh scripts/check.sh 2>&1
 
 	# --- Step 9b: the manual -------------------------------------------------
 	echo ""
@@ -685,7 +728,12 @@ recipe2() {
 		echo "| Map a capability tier to a model    | \`scripts/agents.config.sh\` — yours; the kit names no model |"
 		echo "| Resolve a tier at spawn time        | \`scripts/agents.lib.sh\` — \`sh scripts/agents.lib.sh <tier>\` |"
 	} >>AGENTS.md
-	echo "  edited  AGENTS.md (new section + three quick-reference rows)"
+	{
+		echo ""
+		echo "Craft rules for the code itself: \`constitution/shared-code-craft.md\` —"
+		echo "load it before writing or reviewing code (shared layer, see \`VERSION\`)."
+	} >>AGENTS.md
+	echo "  edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)"
 
 	# --- Step 9c: templates ---------------------------------------------------
 	echo ""
@@ -758,6 +806,9 @@ assert_same "$KIT/.claude/skills/improve-codebase-architecture/SKILL.md" \
 	".claude/skills/improve-codebase-architecture/SKILL.md" \
 	"the new skill arrived intact"
 assert_has "AGENTS.md" "/improve-codebase-architecture"
+assert_same "$KIT/constitution/shared-code-craft.md" "constitution/shared-code-craft.md" \
+	"the code-craft article arrived intact"
+assert_has "AGENTS.md" "shared-code-craft"
 
 # The changed skill was taken; the locally-edited one was MERGED, not clobbered.
 assert_has ".claude/skills/implement/SKILL.md" "## Deliver"

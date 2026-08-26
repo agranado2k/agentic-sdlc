@@ -213,7 +213,13 @@ done <"$WORK/to.list"
 sh scripts/check.sh
 ```
 
-Every line `verbatim`, and the gate green. Then commit:
+Every line `verbatim`, and the gate green — with one designed exception. **When
+a constitution article joins the layer** (0.5.0's `shared-code-craft.md` is the
+first), step 6 ends **red** with `article-unreferenced`: the article is shared
+layer, but the *pointer* to it lives in your root manual, which is yours. That
+red is the recipe working — it is what forces the shared half and the manual
+half of the update to land together. Add one pointer line to the manual's
+article layer, re-run the gate, and only then commit:
 
 ```sh
 git add -A
@@ -254,6 +260,10 @@ Step 5 writes it for you. Two things to check afterwards:
 - **The gate now requires it.** `scripts/check.sh` fails if a file named in
   `VERSION` is missing, so deleting it later fails your push rather than silently
   degrading.
+- **A constitution article additionally needs a pointer.** The gate refuses an
+  article the root manual never references (`article-unreferenced`), so step 6
+  stays red until one line joins `AGENTS.md`'s article layer. Deliberate: an
+  article nothing points at binds nobody, and would drift unnoticed.
 
 ## When a shared file's path changes
 
@@ -299,9 +309,9 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 814 ++++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 856 ++++++++++++++++++++++++++++++++++++++
  constitution/shared-invariants.md |   8 +-
- 2 files changed, 821 insertions(+), 1 deletion(-)
+ 2 files changed, 863 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -364,6 +374,21 @@ verbatim  scripts/guards.lib.sh
 verbatim  scripts/tdd-pairing-guard-ci.sh
 verbatim  scripts/tdd-pairing-guard.sh
 verbatim  UPDATING.md
+$ sh scripts/check.sh
+FAIL  docs gate: violations found
+
+FAIL  docs conformance: violations found
+
+  [claude-md-refs] (1)
+    x constitution/shared-code-craft.md [article-unreferenced] — is not referenced from AGENTS.md — no agent will ever be pointed at it
+      -> Add a pointer to it in AGENTS.md's article layer, or delete the article — an unreachable standing instruction binds nobody and drifts unnoticed.
+
+1 violation(s) across 1 validator(s).
+
+Fix them, or see .githooks/pre-push for the logged bypass.
+
+$ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
+$ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
 OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
@@ -699,14 +724,18 @@ every session loads that promise.
 The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), and has just finished Part 1: its `VERSION`
-says 0.5.0, `scripts/agents.lib.sh` is on disk, and the gate is green.
+says 0.5.0 and `scripts/agents.lib.sh` is on disk — and the gate is **red** with
+`article-unreferenced`, because Part 1 landed the code-craft article and nothing
+in this consumer's manual points at it yet. That pointer is step 9b's hand edit,
+which is the point.
 
 **And nothing the release is for has arrived.** `tests/docs-demo.sh` asserts
 exactly that before running a single Part 2 command: no `scripts/agents.config.sh`,
 no `/improve-codebase-architecture`, no review workflow, no Deliver phase in
 `/implement`, and a resolver that runs, prints nothing, and exits 0 — because an
-unmapped tier is a working state, which is precisely why the half-update is
-silent. Part 2 is what fixes it:
+unmapped tier is a working state. Beyond the article's red gate, the half-update
+is *silent*, which is why that red is the only alarm that fires. Part 2 is what
+fixes all of it:
 
 ```console
 $ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
@@ -748,17 +777,28 @@ $ kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
 .claude/skills/improve-codebase-architecture/PRESENTING.md
 .claude/skills/improve-codebase-architecture/SKILL.md
 $ kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
-$ sh scripts/check.sh   # the skill is here; the manual does not know
-OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
+$ sh scripts/check.sh   # still red from Part 1: the ARTICLE is here; the manual does not know
+FAIL  docs gate: violations found
+
+FAIL  docs conformance: violations found
+
+  [claude-md-refs] (1)
+    x constitution/shared-code-craft.md [article-unreferenced] — is not referenced from AGENTS.md — no agent will ever be pointed at it
+      -> Add a pointer to it in AGENTS.md's article layer, or delete the article — an unreachable standing instruction binds nobody and drifts unnoticed.
+
+1 violation(s) across 1 validator(s).
+
+Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template         |  41 ++++++++++++-
- constitution/local-product.md.template  | 103 ++++++++++++++++++++++++++++++++
+ constitution/AGENTS.md.template         |  47 +++++++++++++-
+ constitution/local-product.md.template  | 103 +++++++++++++++++++++++++++++++
  constitution/local-workflow.md.template |  43 +++++++++++++
- 3 files changed, 186 insertions(+), 1 deletion(-)
+ constitution/shared-code-craft.md       | 106 ++++++++++++++++++++++++++++++++
+ 4 files changed, 298 insertions(+), 1 deletion(-)
 $ # copied across by hand: the Capability tiers section, and two rows
-  edited  AGENTS.md (new section + three quick-reference rows)
+  edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
 $ # 9c — workflow templates: installed once at bootstrap, never after
 NEW       .github/workflows/ai-review-prompt.md
@@ -800,13 +840,15 @@ added a tier rubric to `/to-tickets`; the consumer had added a line of their own
 A copy would have destroyed one of them, and a byte comparison would have called
 a legitimate local adaptation "drift". Neither is the right question for a skill.
 
-**The gate ran twice, and the first run was green.** After the new skill's
-directory landed but before its quick-reference row was written by hand, nothing
-was broken — a skill with no row is merely invisible. The gate's teeth are on the
-other side: a row with no skill is `skill-missing` and fails the push, which is
-what makes "add the row by hand" a step rather than a suggestion. The test proves
-both directions, and proves them again for `/dogfood` adopted and then declined
-after bootstrap.
+**The gate ran twice, and the first run was red.** Red since Part 1, in fact —
+`article-unreferenced`, the shared article with no manual pointer — and landing
+the new skill's directory changed nothing, because the two absences are treated
+oppositely on purpose: a skill with no row is merely invisible, while an article
+with no pointer is a violation. The teeth meet in the middle — a row with no
+skill is `skill-missing`, an article with no pointer is `article-unreferenced` —
+which is what makes 9b's hand edits steps rather than suggestions. The test
+proves both directions, and proves them again for `/dogfood` adopted and then
+declined after bootstrap.
 
 **`NEW       .github/workflows/ai-review-prompt.md`.** The workflow next to it
 reads that file at run time. Taking one and not the other produces a review
