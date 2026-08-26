@@ -341,27 +341,123 @@ done
 # ---------------------------------------------------------------------------
 banner "Where the configuration comes from"
 # ---------------------------------------------------------------------------
-resolve_in() {
-	_ri_dir=$1
-	shift
+# Every case here INSTALLS the library into the fixture rather than pointing at
+# the kit's own copy from a borrowed working directory. That is not a detail:
+# resolution orders 2 and 3 are anchored on where the LIBRARY lives, so a
+# fixture that leaves it behind is not testing the rule it claims to.
+#
+# install_lib <dir> — put the library under test at <dir>/agents.lib.sh.
+install_lib() {
+	mkdir -p "$1"
+	cp "$LIB" "$1/agents.lib.sh"
+}
+
+# resolve_from <cwd> <lib> <tier…> — run an INSTALLED library from a chosen
+# working directory, with no AGENTS_CONFIG. The two are separate arguments on
+# purpose: the whole trust question below is what happens when they disagree.
+resolve_from() {
+	_rf_cwd=$1
+	_rf_lib=$2
+	shift 2
 	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-	R_OUT=$(cd "$_ri_dir" && unset AGENTS_CONFIG && sh "$LIB" "$@" 2>"$R_ERR")
+	R_OUT=$(cd "$_rf_cwd" && unset AGENTS_CONFIG && sh "$_rf_lib" "$@" 2>"$R_ERR")
 	R_STATUS=$?
 	R_ERR_TEXT=$(cat "$R_ERR")
 	rm -f "$R_ERR"
 }
 
+# Order 2 — the root of the repo the LIBRARY lives in. The library goes in
+# tools/ and the config in scripts/, so that only order 2 can join them: with
+# both in scripts/ the case would pass on order 3 and prove nothing.
 t_repo
-write_config "$REPO/scripts/agents.config.sh" "$CONFIG_FULL"
-resolve_in "$REPO" mechanical
+OWN=$REPO
+install_lib "$OWN/tools"
+write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
+resolve_from "$OWN" "$OWN/tools/agents.lib.sh" mechanical
 assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.sh is found with no env var set"
 
-# The explicit pointer wins over the repo's own file — that is what makes the
+# Order 3 — a sibling agents.config.sh, for a library that is not in a repo at
+# all. Run from a different directory to show the answer does not depend on
+# where the caller stands.
+LOOSE="$SCRATCH/loose"
+install_lib "$LOOSE"
+write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
+resolve_from "$SCRATCH" "$LOOSE/agents.lib.sh" reviewer
+assert_resolved "model-for-reviewing" "a sibling agents.config.sh is found for a library outside any repo"
+
+# ---------------------------------------------------------------------------
+banner "…and NOT from the repo the caller happens to be standing in"
+# ---------------------------------------------------------------------------
+# A config file is SOURCED — which is to say EXECUTED — so "where does the
+# config come from" is a trust question, not a convenience one. Resolution used
+# to ask `git rev-parse --show-toplevel` about the process's CURRENT DIRECTORY,
+# which meant an operator resolving a tier while standing in a cloned
+# third-party repo ran that clone's scripts/agents.config.sh. The root manual's
+# trust boundary names cloned third-party repos as untrusted content, and
+# untrusted content is data, never code to run.
+#
+# The fixture is the real shape of it: the operator's own project, invoked by
+# absolute path, from inside somebody else's clone.
+t_repo
+FOREIGN=$REPO
+write_config "$FOREIGN/scripts/agents.config.sh" "$(
+	cat <<'EOF'
+echo "FOREIGN-CONFIG-EXECUTED" >&2
+AGENT_TIER_MECHANICAL='model-the-foreign-repo-chose'
+EOF
+)"
+
+resolve_from "$FOREIGN" "$OWN/tools/agents.lib.sh" mechanical
+assert_resolved "model-for-mechanical" "the library's own repo supplies the mapping, not the cwd's repo"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# The same, with no config of its own to fall back on: the answer must be
+# "nothing", never the stranger's mapping.
+t_repo
+BARE=$REPO
+install_lib "$BARE/tools"
+resolve_from "$FOREIGN" "$BARE/tools/agents.lib.sh" mechanical
+[ -z "$R_OUT" ] && pass "a library with no config of its own resolves to nothing in a foreign repo" ||
+	fail "resolved '$R_OUT' from the cwd's repo"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# ---------------------------------------------------------------------------
+banner "A sourcing caller that has not said where it is discovers nothing"
+# ---------------------------------------------------------------------------
+# The consequence of anchoring on the library rather than the cwd. A file being
+# sourced cannot portably learn its own path, so a sourcing caller that sets
+# neither $AGENTS_CONFIG nor $_agents_here gives the resolver nothing to anchor
+# on — and the alternative to "nothing" is the cwd's repo, which is the rule
+# just removed. It warns and passes, exactly like any other unmapped state.
+R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+R_OUT=$(cd "$OWN" && unset AGENTS_CONFIG && sh -c ". ./tools/agents.lib.sh; resolve_tier mechanical" 2>"$R_ERR")
+R_STATUS=$?
+R_ERR_TEXT=$(cat "$R_ERR")
+rm -f "$R_ERR"
+[ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ] && pass "a bare sourcing caller resolves to nothing rather than to the cwd's repo" ||
+	fail "a bare sourcing caller got status $R_STATUS, stdout '$R_OUT'"
+assert_err_has "UNMAPPED"
+
+# …and saying where it is restores discovery, without ever consulting the cwd.
+R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+R_OUT=$(cd "$FOREIGN" && unset AGENTS_CONFIG &&
+	sh -c "_agents_here='$OWN/tools'; . '$OWN/tools/agents.lib.sh'; resolve_tier mechanical" 2>"$R_ERR")
+R_STATUS=$?
+R_ERR_TEXT=$(cat "$R_ERR")
+rm -f "$R_ERR"
+[ "$R_OUT" = "model-for-mechanical" ] && pass "a sourcing caller that sets \$_agents_here gets its own repo's mapping" ||
+	fail "a sourcing caller with \$_agents_here set printed '$R_OUT'"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# ---------------------------------------------------------------------------
+banner "The explicit pointer, and the absence of any config at all"
+# ---------------------------------------------------------------------------
+# The explicit pointer wins over the library's own repo — that is what makes the
 # whole thing testable in the first place.
 AGENTS_CONFIG="$EMPTY"
 export AGENTS_CONFIG
 R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-R_OUT=$(cd "$REPO" && sh "$LIB" mechanical 2>"$R_ERR")
+R_OUT=$(cd "$OWN" && sh "$OWN/tools/agents.lib.sh" mechanical 2>"$R_ERR")
 R_STATUS=$?
 R_ERR_TEXT=$(cat "$R_ERR")
 rm -f "$R_ERR"
@@ -380,8 +476,7 @@ assert_err_has "does not exist"
 # No config file anywhere: identical to an unconfigured one. A project that has
 # deleted the file is not a project that wants a hard failure on every spawn.
 unset AGENTS_CONFIG
-t_repo
-resolve_in "$REPO" implementer
+resolve_from "$BARE" "$BARE/tools/agents.lib.sh" implementer
 [ "$R_STATUS" = 0 ] && pass "no config file at all still exits 0" || fail "no config file exited $R_STATUS"
 [ -z "$R_OUT" ] && pass "no config file resolves to nothing (session model)" || fail "no config file printed '$R_OUT'"
 assert_err_has "UNMAPPED"

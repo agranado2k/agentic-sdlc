@@ -7,6 +7,17 @@
 #                                               nothing if the tier is unmapped
 #   . scripts/agents.lib.sh; resolve_tier …  -> the same, as a shell function
 #
+# Sourcing is side-effect-free in every shell, including zsh (see the bottom of
+# the file). A sourcing caller must say where the config lives, though, because
+# a sourced file cannot portably learn its own path:
+#
+#   AGENTS_CONFIG=scripts/agents.config.sh . scripts/agents.lib.sh   # explicit
+#   _agents_here=scripts; . scripts/agents.lib.sh                    # or by dir
+#
+# With neither set, orders 2 and 3 below are both skipped and every tier reports
+# UNMAPPED — deliberately, since the only other candidate is whatever repository
+# the process happens to be standing in (see agents_load_config).
+#
 # WHY THE KIT NEVER NAMES A MODEL
 # ---------------------------------------------------------------------------
 # Model identifiers rot faster than any other constant a framework could carry:
@@ -46,8 +57,12 @@
 #                              is an ERROR (exit 2): the caller named a file, so
 #                              falling back silently would run a mapping nobody
 #                              asked for. Tests rely on this.
-#   2. <repo root>/scripts/agents.config.sh
+#   2. <root of the repo THIS FILE lives in>/scripts/agents.config.sh
 #   3. <this file's directory>/agents.config.sh
+#
+# Orders 2 and 3 are anchored on this file, never on the caller's working
+# directory: a config is sourced, and sourcing one out of whatever repo an
+# operator happens to be standing in would execute a stranger's code.
 #
 # Exit codes:  0 resolved (a value, or deliberately nothing) · 2 usage error,
 #              unknown tier, or an explicit config that does not exist.
@@ -68,13 +83,20 @@ AGENT_TIERS='planner implementer mechanical reviewer'
 # file, long after resolve_tier's signature is fixed at one argument: the tier.
 # Threading the directory through as a second parameter would put a value the
 # CALLER cannot supply into the caller's hands. So it is a global, set once by
-# the direct-execution branch, and overridable by a sourcing caller that wants
-# order 3.
+# the direct-execution branch, and settable by a sourcing caller — which is the
+# only way such a caller gets orders 2 and 3 at all.
+#
+# It defaults to EMPTY, and that is deliberate rather than tidy: it used to
+# default to `.`, which quietly made resolution order 3 mean "a config file in
+# whatever directory the process is standing in" — a different and much wider
+# rule than the one documented above, and the same trust problem order 2 had.
+# Empty means orders 2 and 3 are both skipped, so a sourcing caller that has
+# not said where it is gets $AGENTS_CONFIG or nothing.
 #
 # The other two globals are per-process memos: config loading and the unmapped
 # warning both have to happen at most once no matter how many tiers a single
 # process resolves.
-_agents_here=${_agents_here:-.}
+_agents_here=${_agents_here:-}
 _agents_config_loaded=0
 _agents_config_tried=0
 _agents_warned=0
@@ -113,17 +135,36 @@ agents_load_config() {
 		return 0
 	fi
 
-	_al_root=$(git rev-parse --show-toplevel 2>/dev/null) || _al_root=
-	if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
-		. "$_al_root/scripts/agents.config.sh"
-		_agents_config_loaded=1
-		return 0
-	fi
+	# Orders 2 and 3 are both anchored on $_agents_here — where the LIBRARY
+	# lives — and never on the directory the caller happens to be standing in.
+	#
+	# A config file is SOURCED, which is to say EXECUTED, so this is a trust
+	# question and not a convenience one. Order 2 used to ask `git rev-parse
+	# --show-toplevel` about the process's CURRENT DIRECTORY: resolving a tier
+	# with the cwd inside a cloned third-party repo therefore ran that clone's
+	# scripts/agents.config.sh. The root manual's trust boundary names cloned
+	# third-party repos as untrusted content, and untrusted content is data,
+	# never code to run. Asking git about $_agents_here takes the cwd out of
+	# the trust path altogether rather than validating it, and it keeps working
+	# when the cwd is in no repository at all.
+	#
+	# When $_agents_here is EMPTY there is nothing to anchor on, so both orders
+	# are skipped and a caller gets $AGENTS_CONFIG or nothing. That is why it no
+	# longer defaults to `.`: `.` silently meant "the process's current
+	# directory", which is the same wider rule in its order-3 clothes.
+	if [ -n "$_agents_here" ]; then
+		_al_root=$(git -C "$_agents_here" rev-parse --show-toplevel 2>/dev/null) || _al_root=
+		if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
+			. "$_al_root/scripts/agents.config.sh"
+			_agents_config_loaded=1
+			return 0
+		fi
 
-	if [ -f "$_agents_here/agents.config.sh" ]; then
-		. "$_agents_here/agents.config.sh"
-		_agents_config_loaded=1
-		return 0
+		if [ -f "$_agents_here/agents.config.sh" ]; then
+			. "$_agents_here/agents.config.sh"
+			_agents_config_loaded=1
+			return 0
+		fi
 	fi
 
 	_agents_config_tried=1
