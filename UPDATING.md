@@ -313,8 +313,11 @@ Sometimes one file's change needs a discussion you are not having today. Take
 the rest:
 
 ```sh
-kit show "$TO_REF:constitution/shared-invariants.md" >constitution/shared-invariants.md
+kit archive "$TO_REF" -- constitution/shared-invariants.md | tar -x
 ```
+
+Same tool as step 5, for the same reason: one file taken with a `>` redirect is
+one file whose mode you may have just changed.
 
 …and then **do not bump `shared-layer:`**. A partial take is not the release.
 Leave the marker at `FROM_REF`, and record what you deferred and why — in the
@@ -385,9 +388,9 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1002 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1005 +++++++++++++++++++++++++++++++++++++
  constitution/shared-invariants.md |    8 +-
- 2 files changed, 1009 insertions(+), 1 deletion(-)
+ 2 files changed, 1012 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -472,9 +475,9 @@ there was nothing left to merge.
 Had the exception stayed where it was, step 5 would have silently destroyed it
 and nobody would have known which paragraph used to be there.
 
-The lesson is step 3. The update itself is a `git show` redirect per shared
-file; what makes it cheap or expensive is entirely whether anyone edited a file
-that was not theirs to edit.
+The lesson is step 3. The update itself is one `git archive` extract over the
+whole manifest; what makes it cheap or expensive is entirely whether anyone
+edited a file that was not theirs to edit.
 
 ---
 
