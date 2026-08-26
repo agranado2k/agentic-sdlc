@@ -331,15 +331,19 @@ for cmd in $(manual_commands); do
 		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
-# The floor is the shipped roster itself, derived from disk rather than
-# hand-maintained: a sixteenth skill widens it on arrival, and a hunk that
-# drops a skill dir together with its manual row still shrinks $resolved below
-# it. (This fixture was bootstrapped with `--with-dogfood` above, so the
-# optional skill is part of the set the manual must map.)
+# The manual-side floor is the shipped roster itself, derived from disk rather
+# than hand-maintained: a new skill widens it on arrival. Deriving BOTH sides
+# means a hunk deleting a skill dir together with its manual row shrinks them
+# in lockstep, so the roster keeps its own explicit minimum below — the one
+# count that must move deliberately, on add or remove, never from drift.
+# (This fixture was bootstrapped with `--with-dogfood` above, so the optional
+# skill is part of the set the manual must map.)
 shipped=0
 for d in .claude/skills/*/; do
-	[ -f "${d}SKILL.md" ] && shipped=$((shipped + 1))
+	[ -f "$d/SKILL.md" ] && shipped=$((shipped + 1))
 done
+[ "$shipped" -ge 15 ] ||
+	fail "skill roster shrank to $shipped — deleting a skill must lower this floor deliberately"
 [ "$resolved" -ge "$shipped" ] &&
 	pass "all $resolved slash commands in AGENTS.md resolve to a skill (shipped roster: $shipped)" ||
 	fail "only $resolved commands resolved of a $shipped-skill roster — the manual should map the whole chain"
