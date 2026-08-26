@@ -58,7 +58,7 @@ Verify CRUD symmetry, status codes, and response-shape data leaks. When a public
 
 #### Agent 3 — Pattern & Refactor Enforcer
 
-Check adherence to existing patterns. Identify code that can be simplified or modularized. The patterns are not yours to choose: they are what `constitution/local-engineering.md` and the accepted records in `docs/adr/` say they are, and a finding here must cite one of them.
+Check adherence to existing patterns. Identify code that can be simplified or modularized. The patterns are not yours to choose: they are what `constitution/local-engineering.md`, the portable craft rules in `constitution/shared-code-craft.md`, and the accepted records in `docs/adr/` say they are, and a finding here must cite one of them.
 
 #### Agent 4 — Simplicity Advocate
 
