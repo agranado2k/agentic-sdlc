@@ -387,6 +387,9 @@ recipe() {
 		echo "  removed $f (left the shared layer at $TO_REF)"
 	done
 	kit show "$TO_REF:VERSION" >VERSION
+	if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
+		echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
+	fi
 
 	# --- Step 6: verify -----------------------------------------------------
 	echo ""
@@ -397,12 +400,15 @@ recipe() {
 	gate=$?
 	echo "\$ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION"
 	sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-	rm -rf "$WORK"
+	echo "Part 1 complete — shared layer at $TO_REF. The update is not done: go to step 8."
+	# NOT `rm -rf "$WORK"`: the bare clone, the refs and both manifests are what
+	# step 8 reuses. The cleanup lives at the end of step 10.
 	return $gate
 }
 
-recipe
+recipe >"$SCRATCH/part1.transcript" 2>&1
 recipe_status=$?
+cat "$SCRATCH/part1.transcript"
 printf '\n'
 
 banner "B2. Assertions on the updated consumer"
@@ -436,6 +442,23 @@ if cmp -s "$KIT/constitution/shared-invariants.md" constitution/shared-invariant
 else
 	pass "an edited shared file is detected as DRIFT"
 fi
+
+banner "B4. Step 5 says out loud that it replaced the recipe being followed"
+# UPDATING.md is manifest-listed, so step 5 overwrote the very file the operator
+# opened. Silence there is how a 0.3.0 consumer reaches the end of step 6 — in
+# THEIR copy, the last step — and stops, half-updated, with a green gate.
+assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.4.0 — RE-READ IT"
+assert_has "$SCRATCH/part1.transcript" "The update is not done: go to step 8."
+# The note is a condition, not an unconditional echo. Same predicate, same two
+# refs, aimed at a shared file this release did not touch: silent.
+if git -C "$HIST" diff --quiet v0.1.0 v0.4.0 -- scripts/check.sh; then
+	pass "the same predicate stays silent for a file the release did not change"
+else
+	fail "scripts/check.sh moved between the fixture's releases — pick another control"
+fi
+
+# Part B stops at step 7, so nothing here reaches step 10's cleanup.
+rm -rf "$WORK"
 
 # ###########################################################################
 # PART C — the NON-SHARED update path (UPDATING.md, Part 2)

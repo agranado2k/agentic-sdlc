@@ -193,7 +193,20 @@ done
 
 # the manifest itself, wholesale — version marker and file list together
 kit show "$TO_REF:VERSION" >VERSION
+
+# THIS FILE is shared layer, so the loop above just replaced it.
+if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
+	echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
+fi
 ```
+
+**If that last line printed, stop and re-read this file from disk.** You opened
+the recipe that shipped with `$FROM_REF`; step 5 has just overwritten it with
+`$TO_REF`'s, and the copy in front of you is the old one. A release that changed
+its own update recipe is precisely a release whose recipe change you need — 0.4.0
+is the worked example: it is the release that added Part 2, and a consumer
+following 0.3.0's copy reaches the end of step 6 and stops, because in that copy
+step 6 *was* the end.
 
 **`kit archive | tar -x`, not `kit show >`.** A `>` redirect writes bytes and
 nothing else: the **mode bit is lost**, so a shared file that is `100755` in the
@@ -238,11 +251,19 @@ Every line `verbatim`, and the gate green. Then commit:
 ```sh
 git add -A
 git commit -m "chore: update shared layer ${FROM_REF#v} -> ${TO_REF#v}"
-rm -rf "$WORK"
+
+echo "Part 1 complete — shared layer at $TO_REF. The update is not done: go to step 8."
 ```
 
 Note it in `docs/diary.md` — a change to the rules every session loads is a
 diary entry by the update protocol ("decision reversed or vendor changed").
+
+**Do not stop here, and do not read the green gate as "done".** The gate is
+green because the shared layer is intact, which is all it checks. It cannot see
+that the config the new shared code reads, the skills that call it and the manual
+section that names its vocabulary have not arrived — those are Part 2, steps
+8–10, and the only honest end of an update is the end of step 10. `$WORK` stays
+where it is; step 8 reuses it.
 
 ---
 
@@ -678,7 +699,12 @@ sh scripts/check.sh
 ```sh
 git add -A
 git commit -m "chore: adopt kit ${TO_REF#v} outside the shared layer"
+
+rm -rf "$WORK"   # the bare clone and both manifests — the update is over
 ```
+
+That `rm` belongs *here* and nowhere earlier: `$WORK` holds the bare clone, both
+manifests and `changed.yours`, and every step from 8 on reuses them.
 
 Note it in `docs/diary.md` alongside the Part 1 entry. Part 2 is where the
 release's behaviour actually changed, so it is the half a future reader will want
