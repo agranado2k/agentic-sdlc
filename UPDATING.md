@@ -94,9 +94,10 @@ TO_REF=               # ← what you want: fill it in from the list above
 # gate green, nothing adopted. This recipe cannot ship a working default —
 # whatever release number were written here would be the wrong one by the time
 # you read it.
-[ -n "$TO_REF" ] || echo "TO_REF is unset — pick a release from the list above"
+[ -n "$TO_REF" ] ||
+	{ echo "TO_REF is unset — pick a release from the list above" >&2; false; }
 [ "$FROM_REF" != "$TO_REF" ] ||
-	echo "FROM_REF = TO_REF = $FROM_REF — you are already on it; there is nothing to update"
+	{ echo "FROM_REF = TO_REF = $FROM_REF — you are already on it; there is nothing to update" >&2; false; }
 ```
 
 > **Pre-1.0 note.** Until the kit cuts tagged releases, `FROM_REF`/`TO_REF` can
@@ -111,15 +112,24 @@ carries them for free. An agent running one command per tool call, a CI job with
 a step per stage, or a human resuming tomorrow does not — and each of those
 arrives at step 1 with `kit: command not found` or an empty `$WORK`.
 
-Write the state down rather than carrying it. Run step 0 this way — with a fixed
-`$WORK` rather than a temp one, because a path you cannot name is a path the next
-process cannot find:
+Write the state down rather than carrying it. Run step 0's clone this way — with
+a fixed `$WORK` rather than a temp one, because a path you cannot name is a path
+the next process cannot find. User-scoped and mode 700, because a fixed name
+under a shared `/tmp` is otherwise a name somebody else can claim first and a
+directory somebody else can read:
 
 ```sh
-WORK=/tmp/kit-update             # not mktemp -d: you have to name this twice
-mkdir -p "$WORK"
+WORK="${TMPDIR:-/tmp}/kit-update-$(id -u)"   # not mktemp -d: you must name it twice
+mkdir -p -m 700 "$WORK"
 git clone --bare --quiet "$KIT_URL" "$WORK/kit.git"
+```
 
+Then — **still in this same process** — pick `FROM_REF` and `TO_REF` exactly as
+above, and only after that write the state down. An `env.sh` written before the
+refs are picked persists empty refs, and every later step then succeeds on the
+silent no-op the two guards above exist to catch:
+
+```sh
 cat >"$WORK/env.sh" <<EOF
 WORK=$WORK
 FROM_REF=$FROM_REF
@@ -128,10 +138,10 @@ kit() { git --git-dir="$WORK/kit.git" "\$@"; }
 EOF
 ```
 
-Then start every later step with `. /tmp/kit-update/env.sh`, and delete the
-directory at the end of step 10 as usual. The refs go in the file too: `FROM_REF`
-must **not** be re-derived from `VERSION` after step 5 (see step 8), and a fresh
-process is exactly where somebody would re-derive it.
+Then start every later step with `. "${TMPDIR:-/tmp}/kit-update-$(id -u)/env.sh"`,
+and delete the directory at the end of step 10 as usual. The refs go in the file
+too: `FROM_REF` must **not** be re-derived from `VERSION` after step 5 (see step
+8), and a fresh process is exactly where somebody would re-derive it.
 
 ## Step 1 — read both manifests
 
