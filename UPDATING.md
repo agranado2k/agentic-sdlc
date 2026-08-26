@@ -16,7 +16,7 @@ comparison there answers the wrong question — it flags every local edit you we
 invited to make, and following it would tell you to overwrite your own work.
 
 **Both halves are one update.** Part 1 on its own is an *inert half-update*, and
-0.4.0 is the worked example: `scripts/agents.lib.sh` (the capability-tier
+the 0.4.0 wave is the illustration: `scripts/agents.lib.sh` (the capability-tier
 resolver) joined the shared layer, so Part 1 delivers it — while the config it
 reads, the skills that call it, and the manual section that defines its
 vocabulary are all Part 2. Take Part 1 only and you land a resolver with no
@@ -268,9 +268,9 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.4.0** (by which point
-the guards, the gate, the harness engine, the tier resolver and this file have
-all joined the layer). The consumer has one local edit to a shared file — the
+`constitution/shared-invariants.md` alone), updating to **0.5.0** (by which point
+the guards, the gate, the harness engine, the tier resolver, the code-craft
+article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
 
 Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
@@ -278,11 +278,12 @@ Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
 ```console
 $ kit tag --list
 v0.1.0
-v0.4.0
+v0.5.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.4.0
+v0.1.0 -> v0.5.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
+constitution/shared-code-craft.md
 scripts/agents.lib.sh
 scripts/behavior-delta.sh
 scripts/check.sh
@@ -298,9 +299,9 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 811 ++++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 814 ++++++++++++++++++++++++++++++++++++++
  constitution/shared-invariants.md |   8 +-
- 2 files changed, 818 insertions(+), 1 deletion(-)
+ 2 files changed, 821 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -335,6 +336,7 @@ $ # the exception moves to a local article; the shared file is restored
 clean   constitution/shared-invariants.md
 
 $ # step 5 — apply
+  updated constitution/shared-code-craft.md
   updated constitution/shared-invariants.md
   updated scripts/agents.lib.sh
   updated scripts/behavior-delta.sh
@@ -349,6 +351,7 @@ $ # step 5 — apply
   updated UPDATING.md
 
 $ # step 6 — verbatim check, then the gate
+verbatim  constitution/shared-code-craft.md
 verbatim  constitution/shared-invariants.md
 verbatim  scripts/agents.lib.sh
 verbatim  scripts/behavior-delta.sh
@@ -362,9 +365,9 @@ verbatim  scripts/tdd-pairing-guard-ci.sh
 verbatim  scripts/tdd-pairing-guard.sh
 verbatim  UPDATING.md
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.4.0
+0.5.0
 ```
 
 Read the drift block again. The consumer had written a local exception **into**
@@ -571,8 +574,8 @@ else
 fi
 ```
 
-That is the 0.3.0 → 0.4.0 case: `scripts/agents.config.sh` did **not** exist at
-0.3.0 — it arrived with the tier resolver — so a 0.3.0 consumer copies the whole
+That is the 0.3.0 → 0.5.0 case: `scripts/agents.config.sh` did **not** exist at
+0.3.0 — it arrived with the 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole
 file and then edits it. Nothing is at risk, which is precisely why it is worth
 checking rather than assuming: the same path is a destructive overwrite for a
 consumer who *did* have it.
@@ -696,7 +699,7 @@ every session loads that promise.
 The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), and has just finished Part 1: its `VERSION`
-says 0.4.0, `scripts/agents.lib.sh` is on disk, and the gate is green.
+says 0.5.0, `scripts/agents.lib.sh` is on disk, and the gate is green.
 
 **And nothing the release is for has arrived.** `tests/docs-demo.sh` asserts
 exactly that before running a single Part 2 command: no `scripts/agents.config.sh`,
@@ -746,7 +749,7 @@ $ kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
 .claude/skills/improve-codebase-architecture/SKILL.md
 $ kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
 $ sh scripts/check.sh   # the skill is here; the manual does not know
-OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
@@ -767,7 +770,7 @@ UNTOUCHED .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: ADD or MERGE? Ask before you write.
 $ # kit cat-file -e "$FROM_REF:$C" — did it exist at the release we are on?
-ADD    scripts/agents.config.sh is new at v0.4.0 — nothing of ours to preserve
+ADD    scripts/agents.config.sh is new at v0.5.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -781,12 +784,12 @@ node-ts
 README.md
 
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
 ```
 
 Four things in that transcript are worth reading twice.
 
-**`ADD    scripts/agents.config.sh is new at v0.4.0`.** The tier→model map did
+**`ADD    scripts/agents.config.sh is new at v0.5.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

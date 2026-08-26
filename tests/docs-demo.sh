@@ -8,7 +8,7 @@
 #      template, and a consumer README that describes the project instead of the
 #      kit — and the docs gate is green on it.
 #   B. UPDATING.md's PART 1 works — the shared layer. A fake older consumer
-#      (shared-layer 0.1.0) is diffed against a newer kit (0.4.0) and updated
+#      (shared-layer 0.1.0) is diffed against a newer kit (0.5.0) and updated
 #      with the exact commands in UPDATING.md, including the drift case, a file
 #      joining the layer, and the verbatim check.
 #   C. UPDATING.md's PART 2 works — everything else. A consumer bootstrapped at
@@ -143,8 +143,8 @@ banner "A5. The gate is green on the whole set"
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 assert_status 0 "shared layer reported" -- sh scripts/check.sh
 case "$LAST_OUT" in
-*"shared-layer 0.4.0"*) pass "gate reports shared-layer 0.4.0" ;;
-*) fail "gate did not report shared-layer 0.4.0: $LAST_OUT" ;;
+*"shared-layer 0.5.0"*) pass "gate reports shared-layer 0.5.0" ;;
+*) fail "gate did not report shared-layer 0.5.0: $LAST_OUT" ;;
 esac
 
 banner "A6. The gate is NOT vacuous over the new docs"
@@ -174,7 +174,7 @@ esac
 # Scenario, constructed in a scratch dir:
 #   kit v0.1.0 — shared layer is constitution/shared-invariants.md alone, and
 #                its §9/§10 are one heading and one paragraph shorter
-#   kit v0.4.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
+#   kit v0.5.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
 #                JOINS the shared layer
 #   consumer   — bootstrapped from v0.1.0, and someone edited the shared file
 #                locally (the drift case — the clean case teaches nothing)
@@ -203,13 +203,13 @@ sed -e "s/^## 9\. Measure the ceiling, don't assume it$/## 9. Measure the ceilin
 	"$KIT/constitution/shared-invariants.md" >"$OLDKIT/constitution/shared-invariants.md"
 
 if cmp -s "$OLDKIT/constitution/shared-invariants.md" "$KIT/constitution/shared-invariants.md"; then
-	fail "the fake 0.1.0 rulebook is identical to 0.4.0 — the scenario has no delta"
+	fail "the fake 0.1.0 rulebook is identical to 0.5.0 — the scenario has no delta"
 else
-	pass "fake 0.1.0 rulebook differs from 0.4.0"
+	pass "fake 0.1.0 rulebook differs from 0.5.0"
 fi
 
-# A .git-free copy of the kit as it stands: the v0.4.0 release tree.
-NEWKIT="$SCRATCH/kit-0.4.0"
+# A .git-free copy of the kit as it stands: the v0.5.0 release tree.
+NEWKIT="$SCRATCH/kit-0.5.0"
 mkdir -p "$NEWKIT"
 cp -R "$KIT/." "$NEWKIT/"
 strip_nested_worktrees "$KIT" "$NEWKIT"
@@ -232,10 +232,10 @@ git tag v0.1.0
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$NEWKIT/." "$HIST/"
 git add -A >/dev/null
-git commit -q -m "release 0.4.0"
-git tag v0.4.0
-if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.4.0 >/dev/null; then
-	pass "kit history built with tags v0.1.0 and v0.4.0"
+git commit -q -m "release 0.5.0"
+git tag v0.5.0
+if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.5.0 >/dev/null; then
+	pass "kit history built with tags v0.1.0 and v0.5.0"
 else
 	fail "kit history tags were not created"
 fi
@@ -274,7 +274,7 @@ recipe() {
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
-	TO_REF=v0.4.0
+	TO_REF=v0.5.0
 
 	echo "\$ kit tag --list"
 	kit tag --list
@@ -394,7 +394,9 @@ assert_same "$KIT/UPDATING.md" "UPDATING.md" \
 	"UPDATING.md joined the layer and is byte-identical to the kit's"
 assert_same "$KIT/constitution/shared-invariants.md" "constitution/shared-invariants.md" \
 	"constitution/shared-invariants.md is byte-identical to the kit's"
-assert_has "VERSION" "shared-layer: 0.4.0"
+assert_same "$KIT/constitution/shared-code-craft.md" "constitution/shared-code-craft.md" \
+	"constitution/shared-code-craft.md joined the layer and is byte-identical to the kit's"
+assert_has "VERSION" "shared-layer: 0.5.0"
 assert_has "AGENTS.md" "Local exception to shared invariant 4"
 
 # The whole point: the local exception survived the update, in a file that is
@@ -419,7 +421,7 @@ fi
 #
 # Part B proves the shared layer moves. This proves the OTHER half, and it
 # starts by proving the half-update is real: a consumer that runs Part 1 alone
-# on a 0.3.0 -> 0.4.0 update lands the capability-tier RESOLVER (shared layer)
+# on a 0.3.0 -> 0.5.0 update lands the capability-tier RESOLVER (shared layer)
 # with no config for it to read, no skill that calls it, and none of the
 # release's actual features. Then Part 2's steps are run and each of those
 # comes back.
@@ -448,8 +450,11 @@ rm -f "$OLD3/scripts/agents.lib.sh"
 rm -f "$OLD3/templates/workflows/ai-review.example.yml"
 rm -f "$OLD3/templates/workflows/ai-review-prompt.md"
 
-# The 0.3.0 manifest: today's, minus the file that joined at 0.4.0.
-sed '/^  scripts\/agents\.lib\.sh$/d; s/^shared-layer: 0\.4\.0$/shared-layer: 0.3.0/' \
+# The 0.3.0 manifest: today's, minus the files that joined after it — the tier
+# resolver at 0.4.0 and the code-craft article at 0.5.0. The article's FILE
+# stays in the fake tree (the consumer's stamped manual references it), exactly
+# as B0 keeps it in the fake 0.1.0 tree; only the manifest entry leaves.
+sed '/^  scripts\/agents\.lib\.sh$/d; /^  constitution\/shared-code-craft\.md$/d; s/^shared-layer: 0\.5\.0$/shared-layer: 0.3.0/' \
 	"$KIT/VERSION" >"$OLD3/VERSION"
 
 # The 0.3.0 manual template: no capability tiers, no /improve-codebase-architecture.
@@ -502,9 +507,9 @@ awk '
 for f in .claude/skills/implement/SKILL.md .claude/skills/to-tickets/SKILL.md \
 	constitution/AGENTS.md.template constitution/local-workflow.md.template; do
 	if cmp -s "$OLD3/$f" "$KIT/$f"; then
-		fail "the fake 0.3.0 $f is identical to 0.4.0 — no delta to adopt"
+		fail "the fake 0.3.0 $f is identical to 0.5.0 — no delta to adopt"
 	else
-		pass "fake 0.3.0 $f differs from 0.4.0"
+		pass "fake 0.3.0 $f differs from 0.5.0"
 	fi
 done
 
@@ -525,9 +530,9 @@ git tag v0.3.0
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$NEWKIT/." "$HIST3/"
 git add -A >/dev/null
-git commit -q -m "release 0.4.0"
-git tag v0.4.0
-pass "kit history built with tags v0.3.0 and v0.4.0"
+git commit -q -m "release 0.5.0"
+git tag v0.5.0
+pass "kit history built with tags v0.3.0 and v0.5.0"
 
 banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 
@@ -571,17 +576,17 @@ manifest1() {
 	'
 }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
-manifest1 v0.4.0 | sort >"$WORK1/to.list"
+manifest1 v0.5.0 | sort >"$WORK1/to.list"
 while IFS= read -r f; do
 	mkdir -p "$(dirname "$f")"
-	kit1 show "v0.4.0:$f" >"$f"
+	kit1 show "v0.5.0:$f" >"$f"
 done <"$WORK1/to.list"
-kit1 show "v0.4.0:VERSION" >VERSION
+kit1 show "v0.5.0:VERSION" >VERSION
 git add -A >/dev/null
-git commit -q -m "chore: update shared layer 0.3.0 -> 0.4.0"
+git commit -q -m "chore: update shared layer 0.3.0 -> 0.5.0"
 
 assert_file "scripts/agents.lib.sh"
-assert_has "VERSION" "shared-layer: 0.4.0"
+assert_has "VERSION" "shared-layer: 0.5.0"
 assert_status 0 "the gate is green after Part 1 alone" -- sh scripts/check.sh
 
 # …and yet nothing the release is FOR has arrived. This is the gap F8 closes.
@@ -611,10 +616,10 @@ printf '\n'
 recipe2() {
 	WORK=$WORK1
 	kit() { kit1 "$@"; }
-	# NOT re-derived from VERSION: step 5 already moved it to 0.4.0. Part 2 runs
+	# NOT re-derived from VERSION: step 5 already moved it to 0.5.0. Part 2 runs
 	# in the same session as Part 1 and reuses its refs.
 	FROM_REF=v0.3.0
-	TO_REF=v0.4.0
+	TO_REF=v0.5.0
 
 	# --- Step 8: what changed outside the shared layer -----------------------
 	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
@@ -788,8 +793,8 @@ assert_status 0 "green again once the row is removed" -- sh scripts/check.sh
 banner "C6. Adopting the optional /dogfood skill after bootstrap"
 # Bootstrap asked once and deleted itself. Adoption is three things, and the
 # gate proves the third is not optional.
-kit1 archive v0.4.0 .claude/skills/dogfood | tar -x
-kit1 show "v0.4.0:constitution/local-product.md.template" \
+kit1 archive v0.5.0 .claude/skills/dogfood | tar -x
+kit1 show "v0.5.0:constitution/local-product.md.template" \
 	>constitution/local-product.md.template
 assert_file ".claude/skills/dogfood/SKILL.md"
 assert_status 0 "the gate is green with the skill present but unannounced" -- sh scripts/check.sh

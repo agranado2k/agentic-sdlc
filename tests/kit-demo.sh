@@ -173,6 +173,7 @@ assert_no_file ".github/workflows/kit-ci.yml"
 assert_no_file "EXCLUSIONS.md"
 assert_no_file "tests/dogfood-optin.test.sh"
 assert_file "constitution/shared-invariants.md"
+assert_file "constitution/shared-code-craft.md"
 assert_file "constitution/local-engineering.md.template"
 assert_file "constitution/local-workflow.md.template"
 assert_file "scripts/docs-conformance/local-vocabulary.mjs"
@@ -189,7 +190,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.4.0"
+assert_out_has "shared-layer 0.5.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else
