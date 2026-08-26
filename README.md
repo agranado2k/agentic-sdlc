@@ -537,10 +537,13 @@ Do not wire `core.hooksPath` in this repo.
 between a `K<n> BEGIN` / `K<n> END` banner — keep yours inside one, and do not
 interleave with another ticket's block.
 
-`UPDATING.md` quotes a transcript produced by `tests/docs-demo.sh`. If you change
-the recipe or the shared layer, re-run the demo and re-paste it: a worked example
-nobody re-runs is exactly the stale standing instruction shared invariant §8 is
-about.
+`UPDATING.md` quotes two transcripts produced by `tests/docs-demo.sh`. If you
+change the recipe or the shared layer, re-run the demo and re-paste them — and
+the demo will tell you when you have to: its last section compares both `console`
+blocks in `UPDATING.md` byte for byte against the run it just did, and fails on a
+stale one. A worked example nobody re-runs is exactly the stale standing
+instruction shared invariant §8 is about, so this one is re-run on every pass.
+Re-paste; never hand-edit a transcript to match.
 
 ## References — where the ideas come from
 

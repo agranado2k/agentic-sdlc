@@ -18,10 +18,12 @@
 #      template, the config and the adapters all arrive. Optional-skill
 #      adoption and removal are exercised in both directions.
 #
-# Parts B and C each produce the transcript quoted in the matching worked
-# example in UPDATING.md. If you change either recipe, re-run this and re-paste
-# both — a worked example nobody re-runs is the "stale standing instruction"
-# shared invariant §8 is about.
+#   D. Both worked examples in UPDATING.md are the transcripts B and C just
+#      produced — compared byte for byte, so "re-run and re-paste" is a check
+#      and not a request. A worked example nobody re-runs is the "stale standing
+#      instruction" shared invariant §8 is about; D is what stops this one
+#      becoming that. When it fails, re-run this script and re-paste the block
+#      it names. Never hand-edit a transcript to match.
 #
 # Usage: sh tests/docs-demo.sh
 
@@ -29,6 +31,12 @@ set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 SCRATCH=$(mktemp -d) || exit 2
+
+# Sourced for one helper: strip_nested_worktrees. This suite predates lib.sh and
+# carries its own banner/pass/fail/assert_status, defined BELOW so they override
+# lib.sh's — same names, and this file's versions are the ones its output shape
+# depends on.
+. "$KIT/tests/lib.sh"
 
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
@@ -71,6 +79,32 @@ assert_same() {
 	fi
 }
 
+# step6_check <kit-command> <ref> <list-file>
+#
+# UPDATING.md step 6's verification, as the recipe writes it: a shared file is
+# verbatim only if BOTH its bytes and its executable bit match the release. Git
+# records one mode bit (100755 vs 100644) and nothing else, so that — not the
+# full octal — is what is compared; `tar -x` applies the umask to the rest.
+step6_check() {
+	_k=$1
+	_r=$2
+	while IFS= read -r f; do
+		_want=$("$_k" ls-tree "$_r" -- "$f" | awk '{print $1}')
+		case "$_want" in
+		100755) _wx=yes ;;
+		*) _wx=no ;;
+		esac
+		if [ -x "$f" ]; then _hx=yes; else _hx=no; fi
+		if ! "$_k" show "$_r:$f" | cmp -s - "$f"; then
+			echo "DRIFT     $f"
+		elif [ "$_wx" != "$_hx" ]; then
+			echo "MODE      $f (kit has $_want)"
+		else
+			echo "verbatim  $f"
+		fi
+	done <"$3"
+}
+
 # assert_status <expected> <label> -- <command...>
 assert_status() {
 	expected=$1
@@ -88,6 +122,14 @@ assert_status() {
 }
 
 TODAY=$(date +%Y-%m-%d)
+
+# Both transcripts this script produces are compared byte-for-byte against the
+# worked examples pasted into UPDATING.md (section D). `git diff --stat` scales
+# its graph to the terminal width, and git reads COLUMNS before it asks the
+# terminal — so pin it, or the same run produces different bytes on a wide
+# terminal than in a pipe.
+COLUMNS=80
+export COLUMNS
 
 # ###########################################################################
 # PART A — bootstrap produces the personalized documentation set
@@ -368,27 +410,22 @@ recipe() {
 	# --- Step 5: apply ------------------------------------------------------
 	echo ""
 	echo "\$ # step 5 — apply"
-	while IFS= read -r f; do
-		mkdir -p "$(dirname "$f")"
-		kit show "$TO_REF:$f" >"$f"
-		echo "  updated $f"
-	done <"$WORK/to.list"
+	# shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
+	kit archive "$TO_REF" -- $(cat "$WORK/to.list") | tar -x
+	sed 's/^/  updated /' "$WORK/to.list"
 	comm -23 "$WORK/from.list" "$WORK/to.list" | while IFS= read -r f; do
 		git rm -q --ignore-unmatch -- "$f" 2>/dev/null || rm -f "$f"
 		echo "  removed $f (left the shared layer at $TO_REF)"
 	done
 	kit show "$TO_REF:VERSION" >VERSION
+	if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
+		echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
+	fi
 
 	# --- Step 6: verify -----------------------------------------------------
 	echo ""
-	echo "\$ # step 6 — verbatim check, then the gate"
-	while IFS= read -r f; do
-		if kit show "$TO_REF:$f" | cmp -s - "$f"; then
-			echo "verbatim  $f"
-		else
-			echo "DRIFT     $f"
-		fi
-	done <"$WORK/to.list"
+	echo "\$ # step 6 — verbatim check (bytes AND mode), then the gate"
+	step6_check kit "$TO_REF" "$WORK/to.list"
 	echo "\$ sh scripts/check.sh"
 	sh scripts/check.sh 2>&1
 	first_gate=$?
@@ -412,12 +449,15 @@ recipe() {
 	gate=$?
 	echo "\$ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION"
 	sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-	rm -rf "$WORK"
+	echo "Part 1 complete — shared layer at $TO_REF. The update is not done: go to step 8."
+	# NOT `rm -rf "$WORK"`: the bare clone, the refs and both manifests are what
+	# step 8 reuses. The cleanup lives at the end of step 10.
 	return $gate
 }
 
-recipe
+recipe >"$SCRATCH/part1.transcript" 2>&1
 recipe_status=$?
+cat "$SCRATCH/part1.transcript"
 printf '\n'
 
 banner "B2. Assertions on the updated consumer"
@@ -454,6 +494,23 @@ if cmp -s "$KIT/constitution/shared-invariants.md" constitution/shared-invariant
 else
 	pass "an edited shared file is detected as DRIFT"
 fi
+
+banner "B4. Step 5 says out loud that it replaced the recipe being followed"
+# UPDATING.md is manifest-listed, so step 5 overwrote the very file the operator
+# opened. Silence there is how a 0.3.0 consumer reaches the end of step 6 — in
+# THEIR copy, the last step — and stops, half-updated, with a green gate.
+assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.5.0 — RE-READ IT"
+assert_has "$SCRATCH/part1.transcript" "The update is not done: go to step 8."
+# The note is a condition, not an unconditional echo. Same predicate, same two
+# refs, aimed at a shared file this release did not touch: silent.
+if git -C "$HIST" diff --quiet v0.1.0 v0.5.0 -- scripts/check.sh; then
+	pass "the same predicate stays silent for a file the release did not change"
+else
+	fail "scripts/check.sh moved between the fixture's releases — pick another control"
+fi
+
+# Part B stops at step 7, so nothing here reaches step 10's cleanup.
+rm -rf "$WORK"
 
 # ###########################################################################
 # PART C — the NON-SHARED update path (UPDATING.md, Part 2)
@@ -607,6 +664,15 @@ awk 'NR == 4 { print; print ""; print "> LOCAL: tickets in this repo also carry 
 git commit -qam "docs: our local note on /to-tickets"
 pass "consumer carries one local edit to a skill (legitimate — skills are theirs)"
 
+# A workflow this consumer DELETED on purpose: it folded the pairing gate into
+# its own CI. `.github/workflows/tdd-pairing.yml` exists at 0.3.0 and does not
+# change in 0.4.0, so its absence is a decision — the case 9c's `[ ! -e ]` test
+# cannot tell from "you never had this".
+assert_file ".github/workflows/tdd-pairing.yml"
+rm -f .github/workflows/tdd-pairing.yml
+git commit -qam "ci: fold the pairing gate into our own workflow"
+assert_status 0 "the gate is green with a workflow deliberately removed" -- sh scripts/check.sh
+
 banner "C2. Part 1 ALONE leaves an inert half-update"
 
 # Steps 0-6 of UPDATING.md, run without narration: Part B already proved them.
@@ -625,10 +691,8 @@ manifest1() {
 }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
 manifest1 v0.5.0 | sort >"$WORK1/to.list"
-while IFS= read -r f; do
-	mkdir -p "$(dirname "$f")"
-	kit1 show "v0.5.0:$f" >"$f"
-done <"$WORK1/to.list"
+# shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
+kit1 archive v0.5.0 -- $(cat "$WORK1/to.list") | tar -x
 kit1 show "v0.5.0:VERSION" >VERSION
 git add -A >/dev/null
 git commit -q -m "chore: update shared layer 0.3.0 -> 0.5.0"
@@ -660,6 +724,44 @@ if [ -n "$(sh scripts/agents.lib.sh implementer 2>/dev/null)" ]; then
 else
 	pass "the resolver prints nothing — a resolver with no mapping and no callers"
 fi
+
+banner "C2b. Step 5 carries the MODE, and step 6 checks it"
+# `scripts/agents.lib.sh` is 100755 in the kit and JOINS the layer at 0.4.0 —
+# the exact shape that bites: a `kit show >` redirect writes bytes and drops the
+# mode bit, and a content-only verbatim check then calls the result correct.
+# Only files JOINING the layer are exposed, because a file you already had keeps
+# whatever mode it landed with at bootstrap.
+if [ -x scripts/agents.lib.sh ]; then
+	pass "an executable shared file landed executable in the consumer"
+else
+	fail "scripts/agents.lib.sh landed non-executable — step 5 dropped the mode bit"
+fi
+
+step6_check kit1 v0.5.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
+if grep -qv '^verbatim  ' "$SCRATCH/step6.clean"; then
+	fail "step 6 reported something other than verbatim after a clean apply"
+	sed 's/^/        | /' "$SCRATCH/step6.clean"
+else
+	pass "step 6 reports every shared file verbatim after the apply"
+fi
+
+# …and that green is not free. Break ONLY the mode and the check must fire —
+# otherwise it is a check that reports success on the failure it exists for.
+chmod -x scripts/agents.lib.sh
+step6_check kit1 v0.5.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
+case "$(grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode")" in
+MODE*) pass "step 6 catches a mode-only difference" ;;
+*)
+	fail "step 6 did not catch a mode-only difference"
+	grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode" | sed 's/^/        | /'
+	;;
+esac
+if kit1 show "v0.5.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
+	pass "the bytes are still identical — which is why the mode leg has to exist"
+else
+	fail "the mode-only break changed the bytes too — the fixture proves nothing"
+fi
+chmod +x scripts/agents.lib.sh
 
 # ---------------------------------------------------------------------------
 banner "C3. RUN PART 2 — the transcript below is UPDATING.md's second worked example"
@@ -750,18 +852,29 @@ recipe2() {
 	echo "\$ # 9c — workflow templates: installed once at bootstrap, never after"
 	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
 		dest=".github/workflows/$(basename "$wf")"
+
 		if [ ! -e "$dest" ]; then
-			echo "NEW       $dest"
-		elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
+			if kit cat-file -e "$FROM_REF:$wf" 2>/dev/null; then
+				echo "DECLINED  $dest"
+			else
+				echo "NEW       $dest"
+			fi
+		elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$wf"; then
+			echo "UNCHANGED $dest"
+		elif kit show "$FROM_REF:$wf" | cmp -s - "$dest"; then
 			echo "UNTOUCHED $dest"
 		else
 			echo "YOURS     $dest"
 		fi
-	done
-	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
-		dest=".github/workflows/$(basename "$wf")"
-		[ -e "$dest" ] || kit show "$TO_REF:$wf" >"$dest"
-	done
+	done >"$WORK/workflows.verdicts"
+	cat "$WORK/workflows.verdicts"
+
+	# NEW and UNTOUCHED are a copy. UNCHANGED, DECLINED and YOURS are not.
+	while read -r verdict dest; do
+		case "$verdict" in
+		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/${dest##*/}" >"$dest" ;;
+		esac
+	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
 
 	# --- Step 9d: config ------------------------------------------------------
@@ -798,8 +911,9 @@ recipe2() {
 	return $gate2
 }
 
-recipe2
+recipe2 >"$SCRATCH/part2.transcript" 2>&1
 recipe2_status=$?
+cat "$SCRATCH/part2.transcript"
 printf '\n'
 
 banner "C4. Assertions on the fully updated consumer"
@@ -835,6 +949,34 @@ assert_file ".github/workflows/ai-review.example.yml"
 assert_file ".github/workflows/ai-review-prompt.md"
 assert_no_file ".github/workflows/ai-review.yml"
 
+banner "C4b. 9c does not undo a deliberate deletion"
+# The destructive case: a `[ ! -e "$dest" ]` classifier reads "you deliberately
+# removed this" as "you never had this" and copies it back — silently re-adding a
+# duplicate gate to every PR. The release did not touch this file; there is
+# nothing to adopt, and re-adding it is not an update.
+assert_no_file ".github/workflows/tdd-pairing.yml"
+
+# classified <regex for a workflow basename> — 9c's verdict line, as printed.
+classified() {
+	grep -E "^[A-Z]+[[:space:]]+\.github/workflows/$1([[:space:]]|\$)" \
+		"$SCRATCH/part2.transcript" | head -1
+}
+# assert_verdict <expected word> <basename regex> <why it matters>
+assert_verdict() {
+	_line=$(classified "$2")
+	case "$_line" in
+	"$1"*) pass "9c says $1 for $2 — $3" ;;
+	*)
+		fail "9c said '${_line:-nothing}' for $2, expected $1 — $3"
+		;;
+	esac
+}
+assert_verdict DECLINED 'tdd-pairing\.yml' "unchanged upstream, and gone on purpose"
+# …and it still says NEW for a workflow that is genuinely new. That is the
+# distinction `[ ! -e "$dest" ]` alone could not make: under the old rule both of
+# these printed NEW and both were copied in.
+assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
+
 assert_file "adapters/claude-code/README.md"
 
 banner "C5. The gate is what makes the hand edits non-optional"
@@ -863,6 +1005,27 @@ printf '| Use the product before a user does | `/dogfood` — declared personas,
 assert_status 0 "the gate is green once the manual's row is added by hand" -- sh scripts/check.sh
 assert_has "AGENTS.md" "/dogfood"
 
+banner "C6b. The article the skill needs — and the ORDER the gate enforces"
+# The kit's DOGFOOD block names `constitution/local-product.md.template`, because
+# in the KIT it is a template. Copy that pointer into your manual first and then
+# drop the suffix — the written order — and the manual names a path you have just
+# renamed away.
+sed 's/{{[A-Za-z0-9_]*}}/a filled-in value/g' constitution/local-product.md.template \
+	>constitution/local-product.md
+rm -f constitution/local-product.md.template
+printf -- '- `constitution/local-product.md.template` — what `/dogfood` needs: personas and surfaces.\n' \
+	>>AGENTS.md
+assert_status 1 "the manual pointing at the .template it no longer has fails the gate" -- sh scripts/check.sh
+case "$LAST_OUT" in
+*path-missing* | *article-unreferenced*) pass "reported as a dangling article reference" ;;
+*) fail "the wrong order was not reported: $LAST_OUT" ;;
+esac
+# The documented order: fill it in and drop the suffix FIRST, then point the
+# manual at the `.md` that now exists.
+sed 's|constitution/local-product\.md\.template|constitution/local-product.md|' AGENTS.md \
+	>"$SCRATCH/manual.product" && cp "$SCRATCH/manual.product" AGENTS.md
+assert_status 0 "green once the pointer names the .md the rename produced" -- sh scripts/check.sh
+
 banner "C7. Declining it later — the reverse, proved by the gate"
 rm -rf .claude/skills/dogfood
 assert_status 1 "removing the skill but not the row fails the gate" -- sh scripts/check.sh
@@ -872,8 +1035,51 @@ case "$LAST_OUT" in
 esac
 sed '/dogfood/d' AGENTS.md >"$SCRATCH/manual.nodog"
 cp "$SCRATCH/manual.nodog" AGENTS.md
-rm -f constitution/local-product.md.template
+rm -f constitution/local-product.md constitution/local-product.md.template
 assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
+
+# ###########################################################################
+# PART D — the worked examples in UPDATING.md are THIS run's output
+# ###########################################################################
+#
+# Shared invariant §8: a worked example nobody re-runs is a stale standing
+# instruction. UPDATING.md's two ```console blocks are transcripts of the two
+# recipes above, so "re-run and re-paste" can be a check rather than a request —
+# and a reader who compares their own output against a transcript is comparing
+# against something that was true this morning.
+
+banner "D. UPDATING.md's worked examples match the run above"
+
+# console_block <file> <n> — the contents of the Nth ```console fence.
+console_block() {
+	awk -v want="$2" '
+		/^```console$/ { n++; if (n == want) { inblock = 1; next } }
+		inblock && /^```$/ { exit }
+		inblock { print }
+	' "$1"
+}
+
+# Leading and trailing blank lines are markdown formatting, not transcript.
+trim_blank_edges() {
+	awk '{ line[NR] = $0; if (NF) { if (!first) first = NR; last = NR } }
+	     END { for (i = first; i <= last; i++) print line[i] }'
+}
+
+# assert_transcript <n> <captured file> <label>
+assert_transcript() {
+	console_block "$KIT/UPDATING.md" "$1" | trim_blank_edges >"$SCRATCH/doc.$1"
+	trim_blank_edges <"$2" >"$SCRATCH/run.$1"
+	if cmp -s "$SCRATCH/doc.$1" "$SCRATCH/run.$1"; then
+		pass "UPDATING.md's $3 worked example is byte-identical to this run"
+	else
+		fail "UPDATING.md's $3 worked example is STALE — re-run this script and re-paste it"
+		diff -u "$SCRATCH/doc.$1" "$SCRATCH/run.$1" |
+			sed -e '1,2d' -e 's/^/        | /'
+	fi
+}
+
+assert_transcript 1 "$SCRATCH/part1.transcript" "Part 1"
+assert_transcript 2 "$SCRATCH/part2.transcript" "Part 2"
 
 # ---------------------------------------------------------------------------
 banner "Result"
