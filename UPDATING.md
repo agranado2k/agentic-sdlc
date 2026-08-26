@@ -385,9 +385,9 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 811 ++++++++++++++++++++++++++++++++++++++
- constitution/shared-invariants.md |   8 +-
- 2 files changed, 818 insertions(+), 1 deletion(-)
+ UPDATING.md                       | 1002 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-invariants.md |    8 +-
+ 2 files changed, 1009 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -434,8 +434,9 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
   updated UPDATING.md
+  NOTE  UPDATING.md changed in v0.4.0 — RE-READ IT before continuing
 
-$ # step 6 — verbatim check, then the gate
+$ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  constitution/shared-invariants.md
 verbatim  scripts/agents.lib.sh
 verbatim  scripts/behavior-delta.sh
@@ -452,7 +453,15 @@ $ sh scripts/check.sh
 OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
 0.4.0
+Part 1 complete — shared layer at v0.4.0. The update is not done: go to step 8.
 ```
+
+**Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
+is step 5 telling this consumer that the recipe it is running is no longer the
+recipe on disk — at 0.1.0 there was no `UPDATING.md` at all, and at 0.4.0 there
+is one with a Part 2 in it. And the run does not end on the green gate; it ends
+by naming step 8. A green gate here means "the shared layer is intact", which is
+a smaller claim than "you are updated".
 
 Read the drift block again. The consumer had written a local exception **into**
 the shared rulebook. Step 3 found it in one command; the fix was to move those
@@ -860,8 +869,17 @@ every session loads that promise.
 
 The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
-legitimate edit — skills are yours), and has just finished Part 1: its `VERSION`
-says 0.4.0, `scripts/agents.lib.sh` is on disk, and the gate is green.
+legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
+on purpose** after folding that gate into its own CI, and has just finished Part
+1: its `VERSION` says 0.4.0, `scripts/agents.lib.sh` is on disk, and the gate is
+green.
+
+> **The file list below is this pair of releases, and this consumer.** What
+> `changed.yours` prints is every non-shared path the kit touched between *your*
+> two refs — a real `v0.3.0 → v0.4.0` clone prints more lines than the fixture
+> here, because the fixture models only the parts of the wave the example is
+> about. Read the transcript for the **shape** of each decision, never as a list
+> to check yours against: a line you have and this one does not is normal.
 
 **And nothing the release is for has arrived.** `tests/docs-demo.sh` asserts
 exactly that before running a single Part 2 command: no `scripts/agents.config.sh`,
@@ -925,9 +943,9 @@ $ # copied across by hand: the Capability tiers section, and two rows
 $ # 9c — workflow templates: installed once at bootstrap, never after
 NEW       .github/workflows/ai-review-prompt.md
 NEW       .github/workflows/ai-review.example.yml
-UNTOUCHED .github/workflows/commitlint.yml.example
-UNTOUCHED .github/workflows/docs-gate.yml
-UNTOUCHED .github/workflows/tdd-pairing.yml
+UNCHANGED .github/workflows/commitlint.yml.example
+UNCHANGED .github/workflows/docs-gate.yml
+DECLINED  .github/workflows/tdd-pairing.yml
   took    .github/workflows/ai-review.example.yml + its prompt file
 
 $ # 9d — config: ADD or MERGE? Ask before you write.
@@ -949,7 +967,7 @@ $ sh scripts/check.sh
 OK  docs gate: all checks passed (shared-layer 0.4.0, engine: harness)
 ```
 
-Four things in that transcript are worth reading twice.
+Five things in that transcript are worth reading twice.
 
 **`ADD    scripts/agents.config.sh is new at v0.4.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
@@ -974,3 +992,11 @@ after bootstrap.
 reads that file at run time. Taking one and not the other produces a review
 workflow that fails on its first PR — which is why 9c says take a template with
 its neighbours.
+
+**`DECLINED  .github/workflows/tdd-pairing.yml`, one line below two `NEW`s.**
+All three are files that are not in `.github/workflows/`, and only two of them
+are missing by accident. This consumer folded the pairing gate into its own CI
+and deleted the kit's copy; the release did not touch that file, so there is
+nothing to adopt and nothing to decide. A classifier that only asks "is it
+there?" prints `NEW` for all three, and the reader — reasonably — adds a
+duplicate gate to every PR of theirs.

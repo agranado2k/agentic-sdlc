@@ -18,10 +18,12 @@
 #      template, the config and the adapters all arrive. Optional-skill
 #      adoption and removal are exercised in both directions.
 #
-# Parts B and C each produce the transcript quoted in the matching worked
-# example in UPDATING.md. If you change either recipe, re-run this and re-paste
-# both — a worked example nobody re-runs is the "stale standing instruction"
-# shared invariant §8 is about.
+#   D. Both worked examples in UPDATING.md are the transcripts B and C just
+#      produced — compared byte for byte, so "re-run and re-paste" is a check
+#      and not a request. A worked example nobody re-runs is the "stale standing
+#      instruction" shared invariant §8 is about; D is what stops this one
+#      becoming that. When it fails, re-run this script and re-paste the block
+#      it names. Never hand-edit a transcript to match.
 #
 # Usage: sh tests/docs-demo.sh
 
@@ -111,6 +113,14 @@ assert_status() {
 }
 
 TODAY=$(date +%Y-%m-%d)
+
+# Both transcripts this script produces are compared byte-for-byte against the
+# worked examples pasted into UPDATING.md (section D). `git diff --stat` scales
+# its graph to the terminal width, and git reads COLUMNS before it asks the
+# terminal — so pin it, or the same run produces different bytes on a wide
+# terminal than in a pipe.
+COLUMNS=80
+export COLUMNS
 
 # ###########################################################################
 # PART A — bootstrap produces the personalized documentation set
@@ -961,6 +971,49 @@ sed '/dogfood/d' AGENTS.md >"$SCRATCH/manual.nodog"
 cp "$SCRATCH/manual.nodog" AGENTS.md
 rm -f constitution/local-product.md constitution/local-product.md.template
 assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
+
+# ###########################################################################
+# PART D — the worked examples in UPDATING.md are THIS run's output
+# ###########################################################################
+#
+# Shared invariant §8: a worked example nobody re-runs is a stale standing
+# instruction. UPDATING.md's two ```console blocks are transcripts of the two
+# recipes above, so "re-run and re-paste" can be a check rather than a request —
+# and a reader who compares their own output against a transcript is comparing
+# against something that was true this morning.
+
+banner "D. UPDATING.md's worked examples match the run above"
+
+# console_block <file> <n> — the contents of the Nth ```console fence.
+console_block() {
+	awk -v want="$2" '
+		/^```console$/ { n++; if (n == want) { inblock = 1; next } }
+		inblock && /^```$/ { exit }
+		inblock { print }
+	' "$1"
+}
+
+# Leading and trailing blank lines are markdown formatting, not transcript.
+trim_blank_edges() {
+	awk '{ line[NR] = $0; if (NF) { if (!first) first = NR; last = NR } }
+	     END { for (i = first; i <= last; i++) print line[i] }'
+}
+
+# assert_transcript <n> <captured file> <label>
+assert_transcript() {
+	console_block "$KIT/UPDATING.md" "$1" | trim_blank_edges >"$SCRATCH/doc.$1"
+	trim_blank_edges <"$2" >"$SCRATCH/run.$1"
+	if cmp -s "$SCRATCH/doc.$1" "$SCRATCH/run.$1"; then
+		pass "UPDATING.md's $3 worked example is byte-identical to this run"
+	else
+		fail "UPDATING.md's $3 worked example is STALE — re-run this script and re-paste it"
+		diff -u "$SCRATCH/doc.$1" "$SCRATCH/run.$1" |
+			sed -e '1,2d' -e 's/^/        | /'
+	fi
+}
+
+assert_transcript 1 "$SCRATCH/part1.transcript" "Part 1"
+assert_transcript 2 "$SCRATCH/part2.transcript" "Part 2"
 
 # ---------------------------------------------------------------------------
 banner "Result"
