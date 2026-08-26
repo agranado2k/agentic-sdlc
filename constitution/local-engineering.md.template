@@ -49,10 +49,8 @@ portable reasoning behind several of these rules is in `shared-invariants.md`.
 <!-- The rules an agent gets wrong by default, and that review keeps repeating.
      Anything a formatter or linter already enforces does NOT belong here — it
      is enforced, therefore it is not a standing instruction. The portable craft
-     rules (smallest diff, named constants, flat control flow, explicit blocks,
-     visibility widenings surfaced) are already in `shared-code-craft.md` —
-     point at them, never restate them. This section holds only what is
-     STACK-specific. -->
+     rules are already in `shared-code-craft.md` — point at them, never
+     restate them. This section holds only what is STACK-specific. -->
 
 - {{STYLE_RULE_1}}
 - {{STYLE_RULE_2}}
