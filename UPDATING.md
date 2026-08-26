@@ -234,7 +234,7 @@ done
 # the manifest itself, wholesale — version marker and file list together
 kit show "$TO_REF:VERSION" >VERSION
 
-# THIS FILE is shared layer, so the loop above just replaced it.
+# THIS FILE is shared layer, so the extract above just replaced it.
 if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
 	echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
 fi
@@ -646,7 +646,7 @@ than a special case: **the manual layer is checked, so a paragraph you borrow ha
 to be true in *your* repo.** Drop the sentence, or re-point it at your own
 harness note, as you copy.
 
-### 9c. Templates — copy only what you have not customized
+### 9c. Templates — take what moved, keep what you removed
 
 `templates/workflows/` is installed into `.github/workflows/` **once**, at
 bootstrap, and bootstrap never overwrites a file that is already there (it prints
