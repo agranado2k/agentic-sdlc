@@ -154,7 +154,7 @@ fi
 # below. Same discipline as K4/K5/K7: bootstrap.sh is touched by several kit
 # tickets, and a named block is the difference between a merge and a rewrite.
 #
-# WHY THIS ONE IS OPTIONAL AND THE OTHER FOURTEEN ARE NOT. Every other skill
+# WHY THIS ONE IS OPTIONAL AND THE OTHERS ARE NOT. Every other skill
 # works on the day the repo is created — they operate on specs, tickets,
 # diffs, branches and worktrees, all of which a one-hour-old project already
 # has. `/dogfood` operates on a RUNNING PRODUCT: it walks declared personas

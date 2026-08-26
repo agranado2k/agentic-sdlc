@@ -178,7 +178,7 @@ Spec → tickets → implementation → review → landing:
 ends at an open PR carrying an independent review) → `/review-pr` →
 `/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
 
-Five step out of that line: `/grill-with-docs` replaces `/grill-me` once the
+Several step out of that line: `/grill-with-docs` replaces `/grill-me` once the
 project has a glossary and decision records worth challenging a plan against,
 `/prototype` answers a feasibility question the spec is blocked on, `/diagnose`
 is for a bug rather than a feature, `/explain-diff` turns a diff, branch or PR

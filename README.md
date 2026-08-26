@@ -50,7 +50,7 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
-| `.claude/skills/` | Fifteen skills — the lifecycle made runnable. Fourteen always; `/dogfood` is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `.claude/skills/` | The skills — the lifecycle made runnable. All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -134,7 +134,7 @@ an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/diagnose`, `/explain-diff` and `/improve-codebase-architecture` off to the
 side.
 
-**Fourteen of the fifteen are unconditional; `/dogfood` is opt-in.** Every other
+**All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
 tickets, diffs and branches — things a one-hour-old project already has.
 `/dogfood` operates on a *running product*: it walks the personas you declare
@@ -195,7 +195,7 @@ looks the same either way until somebody writes the reason down. It is
 kit-repo meta and bootstrap removes it, so your project starts that record
 empty rather than inheriting this one.
 
-Six of the fifteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
@@ -561,7 +561,7 @@ origin.
     [implement](https://www.aihero.dev/skills-implement),
     [code-review](https://www.aihero.dev/skills-code-review).
   - [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — six of
-    the fifteen skills are adapted from it; the upstream notice and the
+    the skills are adapted from it; the upstream notice and the
     per-skill provenance table live in
     `.claude/skills/LICENSE-mattpocock-skills.md`.
   - The talk ["A Workflow for AI Coding"](https://www.youtube.com/watch?v=-QFHIoCo-Ko)
