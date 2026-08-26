@@ -111,6 +111,18 @@ banner "Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------
 mkdir -p "$PROJ"
 cp -R "$KIT/." "$PROJ/"
+# Drop nested worktrees: the kit is developed in worktrees checked out under the
+# repo, `cp -R` takes them along, and a fixture carrying a sibling branch's
+# checkout is testing whatever that branch happens to contain. "Use this
+# template" never hands anyone one.
+git -C "$KIT" worktree list --porcelain 2>/dev/null |
+	sed -n 's/^worktree //p' |
+	while IFS= read -r wt; do
+		case "$wt" in
+		"$KIT") ;;
+		"$KIT"/*) rm -rf "$PROJ/${wt#"$KIT"/}" ;;
+		esac
+	done
 rm -rf "$PROJ/.git"
 cd "$PROJ" || exit 2
 

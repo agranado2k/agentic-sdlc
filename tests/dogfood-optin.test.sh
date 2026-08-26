@@ -42,6 +42,7 @@ mk_project() {
 	PROJ="$SCRATCH/$1"
 	mkdir -p "$PROJ"
 	cp -R "$ROOT/." "$PROJ/"
+	strip_nested_worktrees "$ROOT" "$PROJ"
 	rm -rf "$PROJ/.git"
 	git -C "$PROJ" init -q -b main
 	git -C "$PROJ" config user.name "Dogfood Fixture"
@@ -57,9 +58,18 @@ assert_absent() {
 	if [ -e "$1" ]; then fail "$2 — $1 is still there"; else pass "$2"; fi
 }
 
-# assert_no_mention <dir> <literal> — nothing in the tree names it, .git aside.
+# assert_no_mention <dir> <literal> — nothing in the tree names it, .git and
+# UPDATING.md aside.
+#
+# UPDATING.md is excluded on purpose, and the exclusion is narrow. The claim
+# under test is "no DEAD ROW ON THE COMMAND MAP" — a place that names /dogfood
+# as though you could run it. UPDATING.md is the opposite: it is shared layer,
+# every consumer has it, and it must name the optional skill in both directions
+# to say how to adopt or drop it later. Silencing it here would be wrong if
+# nothing else covered it, so the call site pairs this with a positive
+# assertion that the adoption instructions are still there.
 assert_no_mention() {
-	_hits=$(grep -rIF -- "$2" "$1" 2>/dev/null | grep -v '^Binary' | grep -v "^$1/\.git/" || true)
+	_hits=$(grep -rIF -- "$2" "$1" 2>/dev/null | grep -v '^Binary' | grep -v "^$1/\.git/" | grep -v "^$1/UPDATING\.md:" || true)
 	if [ -z "$_hits" ]; then
 		pass "nothing in the tree mentions '$2'${3:+ ($3)}"
 	else
@@ -131,6 +141,14 @@ assert_absent "$PROJ/.claude/skills/dogfood" "the skill directory is removed, li
 assert_absent "$PROJ/$ARTICLE" "the declaration article goes with it — it exists only to feed the skill"
 assert_file_lacks "$PROJ/AGENTS.md" "/dogfood" "the quick-reference row went with the skill"
 assert_no_mention "$PROJ" "/dogfood" "a command nothing ships is a dead row on the map"
+# The other half of that exclusion: UPDATING.md must still tell this consumer
+# how to adopt the skill they just declined. A recipe that goes quiet about the
+# choice you did not make is how an option becomes invisible.
+if grep -qF -- 'Adopting `/dogfood` later' "$PROJ/UPDATING.md" 2>/dev/null; then
+	pass "UPDATING.md still explains how to adopt /dogfood later"
+else
+	fail "UPDATING.md does not explain how to adopt /dogfood after declining it"
+fi
 assert_status 0 "the docs gate is green with the skill skipped" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
