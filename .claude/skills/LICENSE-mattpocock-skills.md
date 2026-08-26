@@ -58,8 +58,11 @@ HTML format rules are his, near-verbatim. What this kit changed follows the
 same pattern as the six above — one project's specifics replaced by the kit's
 artifacts: a branch scope lock in the style of `/review-pr`, grounding in
 `docs/domain-glossary.md` and `docs/adr/`, quiz answer-position randomization
-(a fix the gist's own comment thread surfaced), and an explicit
-explain-never-review boundary.
+(a fix the gist's own comment thread surfaced), an explicit
+explain-never-review boundary, a restatement of the agent trust boundary over
+the explained material, HTML-escaping + CSP requirements for diff-derived
+content, a `$TMPDIR`-resolved output location in place of the gist's bare
+`/tmp`, and a secret-redaction rule for the generated page.
 
 Its `MICROWORLDS.md` sidecar is the kit's own writing, not part of the gist:
 a catalog of playable-explanation patterns synthesizing Seymour Papert's
