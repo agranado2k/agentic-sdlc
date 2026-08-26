@@ -45,7 +45,7 @@ second time rather than overwriting a manual you have since edited.
 | Path | What it is |
 | --- | --- |
 | `constitution/shared-invariants.md` | The portable rulebook — eleven invariants that hold regardless of stack, domain, or vendor. **Shared layer:** copied verbatim, not edited locally. |
-| `constitution/shared-code-craft.md` | The portable rules for the code itself — smallest sufficient diff, named constants, flat control flow, named states over booleans, explicit blocks, comments that carry the why, layering, visibility widenings surfaced, and diagrams drawn as SVG in HTML reports, never ASCII. **Shared layer** too. |
+| `constitution/shared-code-craft.md` | The portable rules for the code an agent writes — ten of them, from the smallest sufficient diff to diagrams drawn as SVG in HTML reports, never ASCII. **Shared layer** too. |
 | `constitution/AGENTS.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `AGENTS.md`; then it is yours. |
 | `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |

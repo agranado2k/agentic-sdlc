@@ -116,13 +116,11 @@ Load the article that covers what you are about to do — do not preload them al
   not once per task. **This file is shared layer** (see `VERSION`): it is copied
   verbatim from the kit and is not edited here — a local exception belongs in a
   local article instead, and the shared copy stays byte-identical.
-- `constitution/shared-code-craft.md` — how the code itself is written: the
-  smallest sufficient diff, prose kept short, named constants, flat control
-  flow, named states over boolean parameters, explicit blocks, comments that
-  carry the why, layering respected, visibility widenings surfaced as design
-  decisions, and diagrams drawn as SVG in HTML reports — never ASCII art. Load
-  it before writing or reviewing code. **Shared layer** too (see `VERSION`),
-  same terms as the invariants.
+- `constitution/shared-code-craft.md` — how the code itself is written: ten
+  portable rules for the diff an agent produces, from the smallest sufficient
+  diff to diagrams drawn as SVG in HTML reports, never ASCII art. Load it
+  before writing or reviewing code. **Shared layer** too (see `VERSION`), same
+  terms as the invariants.
 - `constitution/local-engineering.md.template` — this stack: style, boundaries,
   test tiers, what this repo is *not*.
 - `constitution/local-workflow.md.template` — this repo's process: commits,
@@ -214,7 +212,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Split a spec into tracer-bullet tickets | `/to-tickets` — one ticket per fresh session, autonomy label decided at write time |
 | Build one ticket                    | `/implement` — restate, drive `/tdd` through the seams, then deliver: push, open the PR, request an independent review. Stops there; the merge is yours |
 | Write the code test-first           | `/tdd` — red, green, refactor, one behavior at a time |
-| Hold the code itself to a standard  | `constitution/shared-code-craft.md` — smallest diff, flat flow, named states; diagrams as SVG in HTML reports, never ASCII |
+| Hold the code itself to a standard  | `constitution/shared-code-craft.md` — the ten portable craft rules; load it before writing or reviewing code |
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — deepening candidates, interface design, glossary discipline; hands off to `/to-tickets` |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
