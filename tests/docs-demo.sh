@@ -809,7 +809,7 @@ recipe2() {
 	# NEW and UNTOUCHED are a copy. UNCHANGED, DECLINED and YOURS are not.
 	while read -r verdict dest; do
 		case "$verdict" in
-		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/$(basename "$dest")" >"$dest" ;;
+		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/${dest##*/}" >"$dest" ;;
 		esac
 	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
