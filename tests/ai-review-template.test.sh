@@ -306,6 +306,7 @@ banner "8. Bootstrap installs it — and it is still INERT on the other side"
 PROJ="$SCRATCH/consumer"
 mkdir -p "$PROJ"
 cp -R "$ROOT/." "$PROJ/"
+strip_nested_worktrees "$ROOT" "$PROJ"
 rm -rf "$PROJ/.git"
 (
 	cd "$PROJ" || exit 2

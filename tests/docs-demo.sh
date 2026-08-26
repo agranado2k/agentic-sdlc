@@ -89,6 +89,7 @@ PROJ="$SCRATCH/demo-project"
 banner "A0. Setup — simulate 'Use this template'"
 mkdir -p "$PROJ"
 cp -R "$KIT/." "$PROJ/"
+strip_nested_worktrees "$KIT" "$PROJ"
 rm -rf "$PROJ/.git"
 cd "$PROJ" || exit 2
 git init -q -b main
@@ -183,6 +184,7 @@ banner "B0. Build the fake older kit (v0.1.0) and a consumer on it"
 OLDKIT="$SCRATCH/kit-0.1.0"
 mkdir -p "$OLDKIT"
 cp -R "$KIT/." "$OLDKIT/"
+strip_nested_worktrees "$KIT" "$OLDKIT"
 rm -rf "$OLDKIT/.git"
 rm -f "$OLDKIT/UPDATING.md" # UPDATING.md did not exist at 0.1.0
 
@@ -210,6 +212,7 @@ fi
 NEWKIT="$SCRATCH/kit-0.4.0"
 mkdir -p "$NEWKIT"
 cp -R "$KIT/." "$NEWKIT/"
+strip_nested_worktrees "$KIT" "$NEWKIT"
 rm -rf "$NEWKIT/.git"
 
 # The two ends, as real git refs in one repo.
@@ -432,6 +435,7 @@ banner "C0. Build a fake 0.3.0 kit — the wave's non-shared parts removed"
 OLD3="$SCRATCH/kit-0.3.0"
 mkdir -p "$OLD3"
 cp -R "$KIT/." "$OLD3/"
+strip_nested_worktrees "$KIT" "$OLD3"
 rm -rf "$OLD3/.git"
 
 # Whole additions of the 0.4.0 wave.

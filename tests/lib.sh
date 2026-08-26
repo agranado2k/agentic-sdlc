@@ -143,3 +143,25 @@ t_done() {
 	printf '  %s assertion(s) failed — %s\n' "$failures" "${1:-suite}"
 	exit 1
 }
+
+# strip_nested_worktrees <src_repo> <dest_tree> — drop any git worktree that
+# lives INSIDE the source repo from a tree that was just `cp -R`'d out of it.
+#
+# Why this exists: the kit's own convention is to develop in worktrees checked
+# out under the repo, and `cp -R` takes them along. A fixture built that way is
+# testing whatever a sibling branch happens to have in it — /dogfood's suite
+# went red on main because an unrelated branch's checkout mentioned the command
+# the suite asserts is absent. "Use this template" never hands anyone a nested
+# worktree, so neither should a fixture that simulates it.
+strip_nested_worktrees() {
+	_swt_src=$1
+	_swt_dest=$2
+	git -C "$_swt_src" worktree list --porcelain 2>/dev/null |
+		sed -n 's/^worktree //p' |
+		while IFS= read -r _swt_path; do
+			case "$_swt_path" in
+			"$_swt_src") ;;
+			"$_swt_src"/*) rm -rf "$_swt_dest/${_swt_path#"$_swt_src"/}" ;;
+			esac
+		done
+}
