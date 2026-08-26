@@ -87,13 +87,10 @@ The explanation has these sections, in this order:
     and make sure to include example data in it.
 - **Don't use ASCII diagrams.** Always use simple HTML designs for your
   diagrams, HTML lists for lists of things, etc.
-- When the load-bearing concept of the change is **dynamic** — time,
-  concurrency, state transitions, load — consider embedding one **micro-world**:
-  a small manipulable simulation the reader learns from by poking.
-  [MICROWORLDS.md](./MICROWORLDS.md) carries the catalog of world types, the
-  when-to-use heuristics, and the honesty rules (one world per explanation;
-  simulate the model, not the code; label the fidelity; play it before
-  shipping). A static change needs diagrams, not a toy.
+- When the load-bearing concept of the change is **dynamic**, consider
+  embedding one **micro-world**: a small manipulable simulation the reader
+  learns from by poking. [MICROWORLDS.md](./MICROWORLDS.md) carries the
+  catalog of world types, the when-to-use heuristics, and the honesty rules.
 - For code blocks, always use `<pre>` tags. If you use a custom styled div
   instead, it **must** have `white-space: pre-wrap` in its CSS, or the browser
   will collapse all newlines into a single line. Before saving the file, scan
@@ -123,9 +120,7 @@ that the explainer has no agenda.
 ---
 
 *Adapted from Geoffrey Litt's `explain-diff-html` skill
-([gist](https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524)),
-shared in ["Understanding is the new bottleneck"](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)
-— see `.claude/skills/LICENSE-mattpocock-skills.md` for the provenance record.
-The sections and format rules are his; this kit added the scope lock, the
-glossary/ADR grounding, the quiz answer randomization, the no-review
-boundary, and the `MICROWORLDS.md` sidecar.*
+([gist](https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524),
+no licence declared), shared in ["Understanding is the new bottleneck"](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)
+— see `.claude/skills/LICENSE-mattpocock-skills.md` for the provenance record
+and the list of what this kit changed.*

@@ -90,9 +90,9 @@ micro-world.
 ---
 
 *This sidecar is the kit's own synthesis. The micro-world idea is Seymour
-Papert's, carried into agent-era explanations by Geoffrey Litt
-("Understanding is the new bottleneck") and by Simon Willison's
-interactive-explanations pattern (the algorithm-theater entry is his
-animated-word-cloud example, generalized); the cognitive-debt framing is
-Margaret-Anne Storey's. See the References section of the kit README for
-links.*
+Papert's (*Mindstorms*, "Mathland"), carried into agent-era explanations by
+[Geoffrey Litt](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)
+and by [Simon Willison's interactive-explanations pattern](https://simonwillison.net/guides/agentic-engineering-patterns/interactive-explanations/)
+(the algorithm-theater entry is his animated-word-cloud example,
+generalized); the cognitive-debt framing is
+[Margaret-Anne Storey's](https://margaretstorey.com/blog/2026/02/09/cognitive-debt/).*

@@ -65,10 +65,8 @@ content, a `$TMPDIR`-resolved output location in place of the gist's bare
 `/tmp`, and a secret-redaction rule for the generated page.
 
 Its `MICROWORLDS.md` sidecar is the kit's own writing, not part of the gist:
-a catalog of playable-explanation patterns synthesizing Seymour Papert's
-micro-worlds idea, Simon Willison's interactive-explanations pattern, and the
-cognitive-debt framing of Margaret-Anne Storey, as credited in its own
-footer and in the kit README's References section.
+a catalog of playable-explanation patterns whose sources are credited, with
+links, in the sidecar's own footer.
 
 ---
 
