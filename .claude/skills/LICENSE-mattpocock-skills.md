@@ -61,6 +61,12 @@ artifacts: a branch scope lock in the style of `/review-pr`, grounding in
 (a fix the gist's own comment thread surfaced), and an explicit
 explain-never-review boundary.
 
+Its `MICROWORLDS.md` sidecar is the kit's own writing, not part of the gist:
+a catalog of playable-explanation patterns synthesizing Seymour Papert's
+micro-worlds idea, Simon Willison's interactive-explanations pattern, and the
+cognitive-debt framing of Margaret-Anne Storey, as credited in its own
+footer and in the kit README's References section.
+
 ---
 
 ```
