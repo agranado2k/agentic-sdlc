@@ -219,7 +219,10 @@ first), step 6 ends **red** with `article-unreferenced`: the article is shared
 layer, but the *pointer* to it lives in your root manual, which is yours. That
 red is the recipe working — it is what forces the shared half and the manual
 half of the update to land together. Add one pointer line to the manual's
-article layer, re-run the gate, and only then commit:
+article layer, re-run the gate, and only then commit. One caveat: that rule
+lives in the node harness — the reduced no-node fallback cannot check article
+reachability (its NOTICE says exactly that), so without the runtime this red
+never fires and remembering the pointer is on you. Then:
 
 ```sh
 git add -A
@@ -263,7 +266,8 @@ Step 5 writes it for you. Two things to check afterwards:
 - **A constitution article additionally needs a pointer.** The gate refuses an
   article the root manual never references (`article-unreferenced`), so step 6
   stays red until one line joins `AGENTS.md`'s article layer. Deliberate: an
-  article nothing points at binds nobody, and would drift unnoticed.
+  article nothing points at binds nobody, and would drift unnoticed. (Node
+  engine only — the reduced fallback cannot check reachability, and says so.)
 
 ## When a shared file's path changes
 
@@ -309,9 +313,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 856 ++++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 861 ++++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md | 106 +++++
  constitution/shared-invariants.md |   8 +-
- 2 files changed, 863 insertions(+), 1 deletion(-)
+ 3 files changed, 974 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
