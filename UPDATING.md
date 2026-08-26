@@ -458,7 +458,7 @@ One rule per category, because the categories differ in what a local edit
 | --- | --- | --- |
 | **Skills** (9a) | `.claude/skills/*/` | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
 | **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
-| **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what you have not customized; new files are plain adds |
+| **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what the release changed and you have not customized; a template you deleted stays deleted |
 | **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Diff the KEY SETS — the new shared code may read a key you do not set |
 | **Adapters** (9e) | `adapters/` | opt-in, whole-directory. Take a tree or leave it; never half of one |
 
@@ -547,18 +547,40 @@ bootstrap, and bootstrap never overwrites a file that is already there (it print
 ```sh
 kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
 	dest=".github/workflows/$(basename "$wf")"
+
 	if [ ! -e "$dest" ]; then
-		echo "NEW       $dest"
-	elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
-		echo "UNTOUCHED $dest"
+		if kit cat-file -e "$FROM_REF:$wf" 2>/dev/null; then
+			echo "DECLINED  $dest"        # you had it and removed it
+		else
+			echo "NEW       $dest"        # first appearance in this release
+		fi
+	elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$wf"; then
+		echo "UNCHANGED $dest"                # the release did not touch it
+	elif kit show "$FROM_REF:$wf" | cmp -s - "$dest"; then
+		echo "UNTOUCHED $dest"                # yours is the old release's, verbatim
 	else
-		echo "YOURS     $dest"
+		echo "YOURS     $dest"                # you customized it
 	fi
 done
 ```
 
-`NEW` and `UNTOUCHED` are both `kit show "$TO_REF:$wf" >"$dest"`. `YOURS` is a
-three-way merge, exactly as in 9a.
+- **`NEW`** and **`UNTOUCHED`** are both `kit show "$TO_REF:$wf" >"$dest"`.
+- **`YOURS`** is a three-way merge, exactly as in 9a.
+- **`UNCHANGED`** and **`DECLINED`** are *nothing to do*.
+
+**`DECLINED` is the outcome that matters, and it is why this loop asks two
+questions instead of one.** "The file is not there" cannot tell *you never had
+this* from *you deliberately removed it* — and bootstrap installed every template
+that existed at the release you bootstrapped from, so for those, absence is
+always a decision. Folding two gates into one CI workflow and deleting the kit's
+copy is a normal, supported thing to have done; a recipe that reads that as `NEW`
+tells you to re-add a duplicate gate to every PR, and you will do it, because the
+line said `NEW`.
+
+If a release *changed* something you declined, the verdict is still `DECLINED` —
+re-adopting it is a decision, not an update. Read `kit diff "$FROM_REF" "$TO_REF"
+-- "$wf"` if you want to reconsider, and if you take it back, say so where the
+decision was written down.
 
 **A workflow can have a file it needs beside it.** 0.4.0's
 `ai-review.example.yml` reads `.github/workflows/ai-review-prompt.md` at run

@@ -578,6 +578,15 @@ awk 'NR == 4 { print; print ""; print "> LOCAL: tickets in this repo also carry 
 git commit -qam "docs: our local note on /to-tickets"
 pass "consumer carries one local edit to a skill (legitimate — skills are theirs)"
 
+# A workflow this consumer DELETED on purpose: it folded the pairing gate into
+# its own CI. `.github/workflows/tdd-pairing.yml` exists at 0.3.0 and does not
+# change in 0.4.0, so its absence is a decision — the case 9c's `[ ! -e ]` test
+# cannot tell from "you never had this".
+assert_file ".github/workflows/tdd-pairing.yml"
+rm -f .github/workflows/tdd-pairing.yml
+git commit -qam "ci: fold the pairing gate into our own workflow"
+assert_status 0 "the gate is green with a workflow deliberately removed" -- sh scripts/check.sh
+
 banner "C2. Part 1 ALONE leaves an inert half-update"
 
 # Steps 0-6 of UPDATING.md, run without narration: Part B already proved them.
@@ -747,18 +756,29 @@ recipe2() {
 	echo "\$ # 9c — workflow templates: installed once at bootstrap, never after"
 	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
 		dest=".github/workflows/$(basename "$wf")"
+
 		if [ ! -e "$dest" ]; then
-			echo "NEW       $dest"
-		elif kit show "$FROM_REF:$wf" 2>/dev/null | cmp -s - "$dest"; then
+			if kit cat-file -e "$FROM_REF:$wf" 2>/dev/null; then
+				echo "DECLINED  $dest"
+			else
+				echo "NEW       $dest"
+			fi
+		elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$wf"; then
+			echo "UNCHANGED $dest"
+		elif kit show "$FROM_REF:$wf" | cmp -s - "$dest"; then
 			echo "UNTOUCHED $dest"
 		else
 			echo "YOURS     $dest"
 		fi
-	done
-	kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; do
-		dest=".github/workflows/$(basename "$wf")"
-		[ -e "$dest" ] || kit show "$TO_REF:$wf" >"$dest"
-	done
+	done >"$WORK/workflows.verdicts"
+	cat "$WORK/workflows.verdicts"
+
+	# NEW and UNTOUCHED are a copy. UNCHANGED, DECLINED and YOURS are not.
+	while read -r verdict dest; do
+		case "$verdict" in
+		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/$(basename "$dest")" >"$dest" ;;
+		esac
+	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
 
 	# --- Step 9d: config ------------------------------------------------------
@@ -795,8 +815,9 @@ recipe2() {
 	return $gate2
 }
 
-recipe2
+recipe2 >"$SCRATCH/part2.transcript" 2>&1
 recipe2_status=$?
+cat "$SCRATCH/part2.transcript"
 printf '\n'
 
 banner "C4. Assertions on the fully updated consumer"
@@ -828,6 +849,34 @@ assert_has "AGENTS.md" "Capability tiers"
 assert_file ".github/workflows/ai-review.example.yml"
 assert_file ".github/workflows/ai-review-prompt.md"
 assert_no_file ".github/workflows/ai-review.yml"
+
+banner "C4b. 9c does not undo a deliberate deletion"
+# The destructive case: a `[ ! -e "$dest" ]` classifier reads "you deliberately
+# removed this" as "you never had this" and copies it back — silently re-adding a
+# duplicate gate to every PR. The release did not touch this file; there is
+# nothing to adopt, and re-adding it is not an update.
+assert_no_file ".github/workflows/tdd-pairing.yml"
+
+# classified <regex for a workflow basename> — 9c's verdict line, as printed.
+classified() {
+	grep -E "^[A-Z]+[[:space:]]+\.github/workflows/$1([[:space:]]|\$)" \
+		"$SCRATCH/part2.transcript" | head -1
+}
+# assert_verdict <expected word> <basename regex> <why it matters>
+assert_verdict() {
+	_line=$(classified "$2")
+	case "$_line" in
+	"$1"*) pass "9c says $1 for $2 — $3" ;;
+	*)
+		fail "9c said '${_line:-nothing}' for $2, expected $1 — $3"
+		;;
+	esac
+}
+assert_verdict DECLINED 'tdd-pairing\.yml' "unchanged upstream, and gone on purpose"
+# …and it still says NEW for a workflow that is genuinely new. That is the
+# distinction `[ ! -e "$dest" ]` alone could not make: under the old rule both of
+# these printed NEW and both were copied in.
+assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
 
 assert_file "adapters/claude-code/README.md"
 
