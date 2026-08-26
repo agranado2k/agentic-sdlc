@@ -331,9 +331,9 @@ for cmd in $(manual_commands); do
 		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
-# 14, not 13: this project was bootstrapped with `--with-dogfood` above, so the
+# 15, not 14: this project was bootstrapped with `--with-dogfood` above, so the
 # optional skill is part of the set the manual must map.
-[ "$resolved" -ge 14 ] &&
+[ "$resolved" -ge 15 ] &&
 	pass "all $resolved slash commands in AGENTS.md resolve to a skill" ||
 	fail "only $resolved commands resolved — the manual should map the whole chain"
 
