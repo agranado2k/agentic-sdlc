@@ -32,6 +32,15 @@ SCRATCH=$(mktemp -d) || exit 2
 
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
+# The shared helper library. This suite overrides several helpers below with
+# variants of its own, but `assert_out_has` and `strip_nested_worktrees` come
+# from here — the sourcing was missing, so both were silently
+# command-not-found: one C2 assertion never asserted and the nested-worktree
+# stripping never stripped, while the suite stayed green. Exactly the vacuity
+# class this suite exists to catch.
+# shellcheck source=./lib.sh
+. "$KIT/tests/lib.sh"
+
 failures=0
 
 banner() { printf '\n=== %s ===\n' "$*"; }
@@ -384,7 +393,8 @@ recipe() {
 	sh scripts/check.sh 2>&1
 	first_gate=$?
 	if [ "$first_gate" = 0 ]; then
-		echo "UNEXPECTED: green before the manual pointer — the fixture is not faithful"
+		echo "UNEXPECTED: green before the manual pointer — the fixture is not faithful,"
+		echo "or node is missing (the reduced fallback cannot check article reachability)"
 		rm -rf "$WORK"
 		return 1
 	fi
@@ -485,9 +495,9 @@ rm -f "$OLD3/templates/workflows/ai-review-prompt.md"
 rm -f "$OLD3/constitution/shared-code-craft.md"
 
 # The 0.3.0 manifest: today's, minus the files that joined after it — the tier
-# resolver at 0.4.0 and the code-craft article at 0.5.0. The article's FILE
-# stays in the fake tree (the consumer's stamped manual references it), exactly
-# as B0 keeps it in the fake 0.1.0 tree; only the manifest entry leaves.
+# resolver at 0.4.0 and the code-craft article at 0.5.0 (whose file and manual
+# references were stripped above, exactly as B0 strips them from the fake
+# 0.1.0 kit).
 sed '/^  scripts\/agents\.lib\.sh$/d; /^  constitution\/shared-code-craft\.md$/d; s/^shared-layer: 0\.5\.0$/shared-layer: 0.3.0/' \
 	"$KIT/VERSION" >"$OLD3/VERSION"
 
