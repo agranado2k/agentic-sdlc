@@ -42,7 +42,11 @@
 # 0.4.0 — feedback wave 1: scripts/agents.lib.sh (the capability-tier resolver)
 # joined the layer, and /implement gained the Deliver phase (push → PR →
 # independent review; skills are not manifest-listed, but the shared invariants
-# they cite are unchanged).
+# they cite are unchanged). UPDATING.md changed content too, and materially: it
+# now has a SECOND half covering everything this manifest does NOT list. That
+# was not cosmetic — this release is the first one whose value sits mostly
+# outside the shared layer, so a consumer following the old recipe would have
+# taken the resolver above and nothing that reads or calls it.
 shared-layer: 0.4.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
