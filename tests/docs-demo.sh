@@ -929,6 +929,27 @@ printf '| Use the product before a user does | `/dogfood` — declared personas,
 assert_status 0 "the gate is green once the manual's row is added by hand" -- sh scripts/check.sh
 assert_has "AGENTS.md" "/dogfood"
 
+banner "C6b. The article the skill needs — and the ORDER the gate enforces"
+# The kit's DOGFOOD block names `constitution/local-product.md.template`, because
+# in the KIT it is a template. Copy that pointer into your manual first and then
+# drop the suffix — the written order — and the manual names a path you have just
+# renamed away.
+sed 's/{{[A-Za-z0-9_]*}}/a filled-in value/g' constitution/local-product.md.template \
+	>constitution/local-product.md
+rm -f constitution/local-product.md.template
+printf -- '- `constitution/local-product.md.template` — what `/dogfood` needs: personas and surfaces.\n' \
+	>>AGENTS.md
+assert_status 1 "the manual pointing at the .template it no longer has fails the gate" -- sh scripts/check.sh
+case "$LAST_OUT" in
+*path-missing* | *article-unreferenced*) pass "reported as a dangling article reference" ;;
+*) fail "the wrong order was not reported: $LAST_OUT" ;;
+esac
+# The documented order: fill it in and drop the suffix FIRST, then point the
+# manual at the `.md` that now exists.
+sed 's|constitution/local-product\.md\.template|constitution/local-product.md|' AGENTS.md \
+	>"$SCRATCH/manual.product" && cp "$SCRATCH/manual.product" AGENTS.md
+assert_status 0 "green once the pointer names the .md the rename produced" -- sh scripts/check.sh
+
 banner "C7. Declining it later — the reverse, proved by the gate"
 rm -rf .claude/skills/dogfood
 assert_status 1 "removing the skill but not the row fails the gate" -- sh scripts/check.sh
@@ -938,7 +959,7 @@ case "$LAST_OUT" in
 esac
 sed '/dogfood/d' AGENTS.md >"$SCRATCH/manual.nodog"
 cp "$SCRATCH/manual.nodog" AGENTS.md
-rm -f constitution/local-product.md.template
+rm -f constitution/local-product.md constitution/local-product.md.template
 assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------

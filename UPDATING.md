@@ -725,33 +725,42 @@ kit show "$TO_REF:constitution/local-product.md.template" \
 	>constitution/local-product.md.template
 ```
 
-Then, by hand, the part no command can do for you:
+Then, by hand, the part no command can do for you — **in this order**:
 
-1. add `/dogfood`'s row to `AGENTS.md`'s quick reference (the kit's template
-   carries it between `<!-- DOGFOOD:BEGIN -->` / `<!-- DOGFOOD:END -->` markers —
-   `kit show "$TO_REF:constitution/AGENTS.md.template"` shows you exactly which
-   lines bootstrap would have kept);
-2. fill in the DOGFOOD DECLARATION in `constitution/local-product.md.template`,
-   drop the `.template` suffix, and point `AGENTS.md`'s article layer at the
-   result — the same three steps as the other local articles. Until you do, the
-   skill stops and says so, which is correct: a guessed persona produces a report
-   about a user who does not exist.
+1. **Fill in the DOGFOOD DECLARATION in `constitution/local-product.md.template`
+   and drop the `.template` suffix**, exactly as with the other local articles.
+   Until it is filled in, the skill stops and says so, which is correct: a
+   guessed persona produces a report about a user who does not exist.
+2. **Then copy the manual's `/dogfood` lines across, naming the `.md` you just
+   produced.** `kit show "$TO_REF:constitution/AGENTS.md.template"` shows exactly
+   which lines bootstrap would have kept — they sit between
+   `<!-- DOGFOOD:BEGIN -->` and `<!-- DOGFOOD:END -->`, and there are three of
+   them: the quick-reference row, the paragraph that introduces the skill, and
+   the article-layer pointer. **In the kit those lines name
+   `constitution/local-product.md.template`, because in the kit it is still a
+   template.** In your repo it is not. Re-point them at
+   `constitution/local-product.md` as you copy — the same "change its pointer to
+   the `.md` path" the manual's own kit note asks for.
+
+Do it in the other order — rows first, rename second — and the gate stops you:
+the pointer names a path you have just renamed away (`path-missing`) and the
+article nobody points at is `article-unreferenced`. That is the framework
+working, and it is still two steps you can simply take in the right order.
 
 ```sh
 sh scripts/check.sh
 ```
 
-**Declining it later** is the exact reverse, and the order matters — remove the
-references first, then the files, so the gate is red in between rather than
-green over a half-removal:
+**Declining it later** is the exact reverse, and the order matters just as much —
+references first, then the files, so the gate is red in between rather than green
+over a half-removal. So: remove *every* mention from the manual layer — the
+quick-reference row, the paragraph that introduces it, and the article-layer
+pointer — and only then delete what they pointed at.
 
 ```sh
 rm -rf .claude/skills/dogfood
 rm -f constitution/local-product.md constitution/local-product.md.template
 ```
-
-…and remove *every* mention from the manual layer: the quick-reference row, the
-paragraph that introduces it, and the article-layer pointer.
 
 ```sh
 sh scripts/check.sh
