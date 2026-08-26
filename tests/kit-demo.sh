@@ -331,11 +331,22 @@ for cmd in $(manual_commands); do
 		fail "AGENTS.md references $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
 	fi
 done
-# 14, not 13: this project was bootstrapped with `--with-dogfood` above, so the
-# optional skill is part of the set the manual must map.
-[ "$resolved" -ge 14 ] &&
-	pass "all $resolved slash commands in AGENTS.md resolve to a skill" ||
-	fail "only $resolved commands resolved — the manual should map the whole chain"
+# The manual-side floor is the shipped roster itself, derived from disk rather
+# than hand-maintained: a new skill widens it on arrival. Deriving BOTH sides
+# means a hunk deleting a skill dir together with its manual row shrinks them
+# in lockstep, so the roster keeps its own explicit minimum below — the one
+# count that must move deliberately, on add or remove, never from drift.
+# (This fixture was bootstrapped with `--with-dogfood` above, so the optional
+# skill is part of the set the manual must map.)
+shipped=0
+for d in .claude/skills/*/; do
+	[ -f "$d/SKILL.md" ] && shipped=$((shipped + 1))
+done
+[ "$shipped" -ge 15 ] ||
+	fail "skill roster shrank to $shipped — deleting a skill must lower this floor deliberately"
+[ "$resolved" -ge "$shipped" ] &&
+	pass "all $resolved slash commands in AGENTS.md resolve to a skill (shipped roster: $shipped)" ||
+	fail "only $resolved commands resolved of a $shipped-skill roster — the manual should map the whole chain"
 
 # (c) The other direction. An unreferenced skill is the article-unreferenced
 # problem one layer down: nothing points at it, so nobody loads it, so it rots.
@@ -497,6 +508,25 @@ else
 fi
 LAST_OUT=$out
 assert_out_has "BYPASSED"
+
+# ---------------------------------------------------------------------------
+banner "14. The README names every suite a contributor is asked to run"
+# ---------------------------------------------------------------------------
+# This list went stale silently: four suites shipped without being added, and
+# nothing noticed until someone read the two lists side by side. A contributor
+# who runs what the README says and pushes a red branch was failed by the
+# README, not by their own carelessness. tests/lib.sh is a helper, not a suite.
+missing_from_readme=""
+for suite in "$KIT"/tests/*.sh; do
+	base=${suite##*/}
+	[ "$base" = "lib.sh" ] && continue
+	grep -qF "tests/$base" "$KIT/README.md" || missing_from_readme="$missing_from_readme $base"
+done
+if [ -z "$missing_from_readme" ]; then
+	pass "every suite in tests/ is named in the README"
+else
+	fail "the README does not name:$missing_from_readme"
+fi
 
 # ---------------------------------------------------------------------------
 banner "Result"
