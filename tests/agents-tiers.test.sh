@@ -120,6 +120,20 @@ capture() {
 	rm -f "$R_ERR"
 }
 
+# capture_in <dir> <command...> — capture, run from <dir>. The cwd is an INPUT
+# to these cases (it is exactly what discovery must and must not read), so the
+# runner takes it explicitly; env tweaks like `unset AGENTS_CONFIG` belong
+# inside the command, where the case states them.
+capture_in() {
+	_ci_dir=$1
+	shift
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$(cd "$_ci_dir" && "$@" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
 # note <text> — a visible line that is neither a pass nor a fail.
 #
 # The per-shell cases below can only run against a shell that is installed.
@@ -435,22 +449,13 @@ banner "A sourcing caller that has not said where it is discovers nothing"
 # neither $AGENTS_CONFIG nor $_agents_here gives the resolver nothing to anchor
 # on — and the alternative to "nothing" is the cwd's repo, which is the rule
 # just removed. It warns and passes, exactly like any other unmapped state.
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-R_OUT=$(cd "$OWN" && unset AGENTS_CONFIG && sh -c ". ./tools/agents.lib.sh; resolve_tier mechanical" 2>"$R_ERR")
-R_STATUS=$?
-R_ERR_TEXT=$(cat "$R_ERR")
-rm -f "$R_ERR"
+capture_in "$OWN" sh -c "unset AGENTS_CONFIG; . ./tools/agents.lib.sh; resolve_tier mechanical"
 [ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ] && pass "a bare sourcing caller resolves to nothing rather than to the cwd's repo" ||
 	fail "a bare sourcing caller got status $R_STATUS, stdout '$R_OUT'"
 assert_err_has "UNMAPPED"
 
 # …and saying where it is restores discovery, without ever consulting the cwd.
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-R_OUT=$(cd "$FOREIGN" && unset AGENTS_CONFIG &&
-	sh -c "_agents_here='$OWN/tools'; . '$OWN/tools/agents.lib.sh'; resolve_tier mechanical" 2>"$R_ERR")
-R_STATUS=$?
-R_ERR_TEXT=$(cat "$R_ERR")
-rm -f "$R_ERR"
+capture_in "$FOREIGN" sh -c "unset AGENTS_CONFIG; _agents_here='$OWN/tools'; . '$OWN/tools/agents.lib.sh'; resolve_tier mechanical"
 [ "$R_OUT" = "model-for-mechanical" ] && pass "a sourcing caller that sets \$_agents_here gets its own repo's mapping" ||
 	fail "a sourcing caller with \$_agents_here set printed '$R_OUT'"
 assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
@@ -462,11 +467,7 @@ banner "The explicit pointer, and the absence of any config at all"
 # whole thing testable in the first place.
 AGENTS_CONFIG="$EMPTY"
 export AGENTS_CONFIG
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-R_OUT=$(cd "$OWN" && sh "$OWN/tools/agents.lib.sh" mechanical 2>"$R_ERR")
-R_STATUS=$?
-R_ERR_TEXT=$(cat "$R_ERR")
-rm -f "$R_ERR"
+capture_in "$OWN" sh "$OWN/tools/agents.lib.sh" mechanical
 [ -z "$R_OUT" ] && pass "AGENTS_CONFIG overrides the repo-root config" ||
 	fail "AGENTS_CONFIG did not override the repo-root config (got '$R_OUT')"
 
