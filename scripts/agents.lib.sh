@@ -166,8 +166,16 @@ resolve_tier() {
 		return 2
 	fi
 
-	agents_load_config
-	_rt_load=$?
+	# `|| _rt_load=$?` rather than a bare call, and it is load-bearing. Most
+	# consumer scripts and hooks run `set -e`, under which a BARE call to a
+	# function that returns 1 terminates the caller before its status can be
+	# read — and 1 is agents_load_config's NORMAL "no config anywhere" answer,
+	# the state every freshly bootstrapped project is in. A bare call therefore
+	# killed the commonest caller in the commonest state, and killed it
+	# silently: no value, no warning, no error. A command in an AND-OR list is
+	# exempt from `set -e`, so here the status survives to be read.
+	_rt_load=0
+	agents_load_config || _rt_load=$?
 	[ "$_rt_load" = 2 ] && return 2
 
 	# Tier name -> variable name. The tier is already whitelisted above, so the

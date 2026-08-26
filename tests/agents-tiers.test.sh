@@ -305,6 +305,40 @@ capture sh -c ". '$LIB'; echo SURVIVED"
 assert_survived "sh: sourcing the library returns control to the caller"
 
 # ---------------------------------------------------------------------------
+banner "A caller running 'set -e' survives an unconfigured resolve"
+# ---------------------------------------------------------------------------
+# The third thing every case above the per-shell axes had in common: a shell
+# with default options. Most consumer scripts and hooks run `set -e`, and under
+# it a BARE call to a function that returns 1 terminates the caller before its
+# status can even be read.
+#
+# agents_load_config returns 1 on the "no config anywhere" path — which is not
+# an error, it is this kit's shipped default state. So the commonest caller, in
+# the commonest project state, died before the UNMAPPED warning was ever
+# printed: no value, no warning, no error, just a script that stopped.
+#
+# $SCRATCH is the working directory on purpose: no config beside it and no
+# repository above it, which is exactly the state a resolve has to survive.
+set_e_resolve() {
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$(cd "$SCRATCH" && unset AGENTS_CONFIG &&
+		"$1" -c "set -e; . '$LIB'; resolve_tier planner; echo SURVIVED" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
+for shell_bin in $SHELLS; do
+	if ! command -v "$shell_bin" >/dev/null 2>&1; then
+		note "$shell_bin is not installed here — its 'set -e' case did not run"
+		continue
+	fi
+	set_e_resolve "$shell_bin"
+	assert_survived "$shell_bin with 'set -e': an unmapped tier returns to the caller instead of killing it"
+	assert_err_has "UNMAPPED"
+done
+
+# ---------------------------------------------------------------------------
 banner "Where the configuration comes from"
 # ---------------------------------------------------------------------------
 resolve_in() {
