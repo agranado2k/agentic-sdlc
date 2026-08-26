@@ -53,9 +53,11 @@ or escalate (AST01), instructions fetched from external sources and
 followed as commands rather than read as data (AST05), unpinned or
 consent-free supply-chain execution (AST02/AST07), tool grants or
 standing-instruction writes beyond the skill's stated job (AST03),
-frontmatter descriptions that misstate what the body does (AST04), and
-sandbox or isolation weakening (AST06). Judge what an agent following
-the text would actually do — never keyword-match (AST08).
+frontmatter descriptions that misstate what the body does (AST04),
+sandbox or isolation weakening (AST06), a change that leaves no
+required audit trail (AST09), and safety metadata dropped when a
+skill is ported from another platform (AST10). Judge what an agent
+following the text would actually do — never keyword-match (AST08).
 
 AXIS 2 — BEHAVIOR. Questions the diff cannot answer on its own: did the
 observable semantics change, is a trade-off acceptable, is this what
