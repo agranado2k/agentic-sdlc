@@ -84,14 +84,54 @@ Now pick the two points you are comparing.
 
 ```sh
 FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"   # what you have
-TO_REF=v0.3.0                                                              # what you want
 
 kit tag --list        # the releases on offer
+
+TO_REF=               # ← what you want: fill it in from the list above
+
+# Two guards, because what they catch is SILENT. An unset TO_REF, or one equal
+# to FROM_REF, makes every step below succeed on a no-op: clean, all verbatim,
+# gate green, nothing adopted. This recipe cannot ship a working default —
+# whatever release number were written here would be the wrong one by the time
+# you read it.
+[ -n "$TO_REF" ] || echo "TO_REF is unset — pick a release from the list above"
+[ "$FROM_REF" != "$TO_REF" ] ||
+	echo "FROM_REF = TO_REF = $FROM_REF — you are already on it; there is nothing to update"
 ```
 
 > **Pre-1.0 note.** Until the kit cuts tagged releases, `FROM_REF`/`TO_REF` can
 > be any git ref the clone can resolve — `main`, a branch, a SHA. Everything
-> below works unchanged; only the `v`-prefixed defaults above assume tags.
+> below works unchanged; only the `v`-prefixed derivation above assumes tags.
+
+### If your steps are separate processes
+
+`$WORK`, the `kit()` function and both refs are shell state created here that
+**every later step needs**, all the way through step 10. One terminal session
+carries them for free. An agent running one command per tool call, a CI job with
+a step per stage, or a human resuming tomorrow does not — and each of those
+arrives at step 1 with `kit: command not found` or an empty `$WORK`.
+
+Write the state down rather than carrying it. Run step 0 this way — with a fixed
+`$WORK` rather than a temp one, because a path you cannot name is a path the next
+process cannot find:
+
+```sh
+WORK=/tmp/kit-update             # not mktemp -d: you have to name this twice
+mkdir -p "$WORK"
+git clone --bare --quiet "$KIT_URL" "$WORK/kit.git"
+
+cat >"$WORK/env.sh" <<EOF
+WORK=$WORK
+FROM_REF=$FROM_REF
+TO_REF=$TO_REF
+kit() { git --git-dir="$WORK/kit.git" "\$@"; }
+EOF
+```
+
+Then start every later step with `. /tmp/kit-update/env.sh`, and delete the
+directory at the end of step 10 as usual. The refs go in the file too: `FROM_REF`
+must **not** be re-derived from `VERSION` after step 5 (see step 8), and a fresh
+process is exactly where somebody would re-derive it.
 
 ## Step 1 — read both manifests
 
@@ -559,6 +599,41 @@ that speak four tier names and no file that says what they mean.
 Copy the new sections across by hand, adapting the wording to your repo. Never
 re-stamp a template over a manual you have been editing for six months.
 
+**First check that there is a manual you have been editing.** That headline rule
+assumes you stamped the article; plenty of repos never did. Bootstrap leaves
+`constitution/local-*.md.template` in place with its marks intact, the manual
+points at the `.template` path, and the gate accepts it — an unfilled article is
+a legitimate state, not a broken one. For that state the right action is the
+*opposite* of the headline: nothing of yours is in the file, so take the new one
+whole.
+
+```sh
+A=constitution/local-workflow.md
+[ -e "$A" ] || A="$A.template"     # never stamped — still the template
+
+if kit show "$FROM_REF:constitution/local-workflow.md.template" | cmp -s - "$A"; then
+	echo "UNSTAMPED $A — nothing of yours in it; take the new template whole"
+	kit show "$TO_REF:constitution/local-workflow.md.template" >"$A"
+else
+	echo "YOURS     $A — hunt for new SECTIONS, as above"
+fi
+```
+
+The test is "is my copy byte-identical to the `.template` it came from", not
+"does its name end in `.template`" — a stamped `.md` nobody has edited yet is the
+same case and gets the same answer. Once you have edited it, this returns `YOURS`
+by itself and never fires again.
+
+**A section you carry may cite a tree you declined.** 0.4.0's "Capability tiers"
+section — the one this release asks you to copy — ends by pointing at
+`adapters/claude-code/README.md`, and `adapters` is a path root the docs gate
+resolves. If you deleted `adapters/` at bootstrap (9e says that is a supported
+answer), copying the section verbatim makes your next push red with
+`path-missing`, and neither section warns you. That is the general rule rather
+than a special case: **the manual layer is checked, so a paragraph you borrow has
+to be true in *your* repo.** Drop the sentence, or re-point it at your own
+harness note, as you copy.
+
 ### 9c. Templates — copy only what you have not customized
 
 `templates/workflows/` is installed into `.github/workflows/` **once**, at
@@ -674,6 +749,13 @@ authority on what your config has to provide.
 `adapters/` is reference material. Nothing in it runs, nothing was stamped from
 it, and no gate reads it. If you deleted the tree at bootstrap — a documented,
 supported answer — a release's changes there are none of your business.
+
+**With one exception, and 9b is where it reaches you.** No gate reads the
+adapters, but the gate absolutely reads the *manual*, and a section you copy in
+9b may cite an `adapters/…` path. A declined tree therefore constrains what your
+manual may say: cite a file in a tree you do not have and step 10 goes red with
+`path-missing`. Declining is a standing decision, and the manual layer has to
+keep agreeing with it.
 
 If you kept it, take whole directories:
 
