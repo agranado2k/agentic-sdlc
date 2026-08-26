@@ -74,8 +74,9 @@ The explanation has these sections, in this order:
   resolve the OS temp directory from `$TMPDIR`, falling back to `/tmp` (or
   `%TEMP%` on Windows), and start the filename with today's date in
   `YYYY-MM-DD-` format so the files stay time-sorted. For example:
-  `$TMPDIR/2026-01-12-explanation-<slug>.html`. Tell the user the path when
-  done.
+  `$TMPDIR/2026-01-12-explanation-<slug>.html`. Keep the `<slug>` to
+  `[a-z0-9-]` — it usually derives from a branch or PR title you did not
+  write. Tell the user the path when done.
 - Write with the clarity and flow of Martin Kleppmann — engaging, classic
   style, with smooth transitions between sections.
 - Tips on diagrams: pick a **small number of diagram families** that can be
@@ -96,12 +97,19 @@ The explanation has these sections, in this order:
   will collapse all newlines into a single line. Before saving the file, scan
   each code block in the HTML source and confirm its CSS includes
   `white-space: pre` or `pre-wrap`.
-- **Escape what the diff wrote.** Every piece of diff-derived text — code
-  excerpts, commit messages, identifiers — must be HTML-entity-escaped before
-  it lands in the page, or an attacker-authored diff containing
-  `</pre><script>` runs live in the reviewer's browser. Put a restrictive
-  `<meta http-equiv="Content-Security-Policy">` (no remote scripts, no
-  network) in the page head, and extend the pre-save scan to confirm both.
+- **Escape what the diff wrote — per sink.** Every piece of diff-derived text
+  — code excerpts, commit messages, identifiers — must be neutralized for the
+  sink it lands in: HTML-entity-escaped in the page body (or an
+  attacker-authored diff containing `</pre><script>` runs live in the
+  reviewer's browser), and JSON-serialized with `<` escaped as `\u003c` when
+  embedded as data inside the inline script (quiz arrays, toy data), where
+  entity escaping does not apply. Put a
+  `<meta http-equiv="Content-Security-Policy">` with `object-src 'none';
+  base-uri 'none'; form-action 'none'` and no remote or network sources in
+  the page head — that is defense-in-depth against exfiltration, not a
+  substitute for the escaping, which is the sole injection control on a page
+  that must run its own inline script. Extend the pre-save scan to cover both
+  sinks.
 - **Redact secrets.** Credentials, tokens and PII encountered in the diff or
   the surrounding code never reach the explainer — replace them with
   placeholders in prose, code blocks and toy data alike. The file lives
