@@ -32,12 +32,6 @@ set -u
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 SCRATCH=$(mktemp -d) || exit 2
 
-# Sourced for one helper: strip_nested_worktrees. This suite predates lib.sh and
-# carries its own banner/pass/fail/assert_status, defined BELOW so they override
-# lib.sh's — same names, and this file's versions are the ones its output shape
-# depends on.
-. "$KIT/tests/lib.sh"
-
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 # The shared helper library. This suite overrides several helpers below with
