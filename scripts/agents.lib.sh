@@ -193,10 +193,31 @@ resolve_tier() {
 # Direct execution: the seam an agent following a SKILL.md actually uses, since
 # an agent runs commands rather than sourcing shell libraries. Sourcing callers
 # fall through with only the functions defined.
-case "$0" in
-*/agents.lib.sh | agents.lib.sh)
-	_agents_here=$(dirname "$0")
-	resolve_tier "$@"
-	exit $?
-	;;
+#
+# THE $0 TEST ALONE IS NOT ENOUGH, and the shell it fails in is the shell most
+# operators type into. zsh sets $0 to the SOURCED FILE'S path (FUNCTION_ARGZERO,
+# on by default), so `source scripts/agents.lib.sh` matched the pattern below:
+# the library ran resolve_tier against the SHELL'S own arguments and then
+# `exit`ed, killing the interactive session that sourced it. sh, bash and ksh
+# all leave $0 as the caller's own, so there the pattern already tells the truth.
+#
+# ZSH_EVAL_CONTEXT is zsh's own answer to the question. It is a colon-joined
+# stack of what the shell is currently doing, and every file being sourced
+# pushes a `file` component onto it — `cmdarg:file`, `toplevel:file`,
+# `toplevel:shfunc:file`. zsh EXECUTING this script is plain `toplevel`, with no
+# `file`. Nothing else sets the variable, so under sh/bash/ksh it is empty and
+# this test costs one unmatched `case`.
+_agents_sourced=0
+case "${ZSH_EVAL_CONTEXT:-}" in
+*:file | *:file:*) _agents_sourced=1 ;;
 esac
+
+if [ "$_agents_sourced" = 0 ]; then
+	case "$0" in
+	*/agents.lib.sh | agents.lib.sh)
+		_agents_here=$(dirname "$0")
+		resolve_tier "$@"
+		exit $?
+		;;
+	esac
+fi

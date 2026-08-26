@@ -93,6 +93,21 @@ assert_err_lacks() {
 	esac
 }
 
+# assert_survived <label> — the caller reached the line AFTER the library call.
+#
+# What several cases below have to assert is not "what did it resolve" but "did
+# the caller live". A library that kills the shell that sourced it fails in a
+# way no value assertion can see: there is no output to compare, because there
+# is no caller left to print it.
+assert_survived() {
+	if [ "$R_STATUS" = 0 ] && [ "$R_OUT" = "SURVIVED" ]; then
+		pass "$1"
+	else
+		fail "$1 — got status $R_STATUS, stdout '$R_OUT'"
+		printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+	fi
+}
+
 # capture <command...> — run it, keeping stdout and stderr apart, exactly as
 # `resolve` does. `resolve` hard-codes `sh "$LIB"`; the cases below need to pick
 # the shell and to choose between executing and sourcing, so they need a runner
@@ -247,6 +262,47 @@ for shell_bin in $SHELLS; do
 	capture "$shell_bin" "$LIB" implementer
 	assert_resolved "model-for-implementing" "$shell_bin: running the file directly still resolves"
 done
+
+# ---------------------------------------------------------------------------
+banner "…and SOURCING must not kill the caller, in every shell either"
+# ---------------------------------------------------------------------------
+# The other half of the same guard. The library decides "was I executed or was I
+# sourced?" by looking at $0 — and $0 does not mean the same thing in every
+# shell. zsh sets it to the SOURCED FILE'S path (FUNCTION_ARGZERO, on by
+# default), so `source scripts/agents.lib.sh` matched the "I was executed"
+# pattern: the library ran resolve_tier against the SHELL'S own arguments, and
+# then `exit`ed — taking the caller's shell with it. An operator whose shell is
+# zsh lost their session to a library that only claimed to define functions.
+#
+# Two cases, deliberately. The first is portable and runs anywhere: `sh -c CODE
+# ARGV0` sets $0 to ARGV0, which puts plain sh in exactly the position zsh puts
+# itself in — a file being sourced whose $0 is its own path — alongside the
+# ZSH_EVAL_CONTEXT value zsh really exports there. It pins the MECHANISM on
+# every machine. The second drives a real zsh and is the black-box proof. It is
+# the one that can be skipped for want of a zsh, which is why it is not the
+# only one.
+ZSH_EVAL_CONTEXT='toplevel:file'
+export ZSH_EVAL_CONTEXT
+capture sh -c '. "$0"; echo SURVIVED' "$LIB"
+assert_survived "a sourced library whose \$0 is its own path returns control to the caller"
+unset ZSH_EVAL_CONTEXT
+
+if command -v zsh >/dev/null 2>&1; then
+	capture zsh -c "source '$LIB'; echo SURVIVED"
+	assert_survived "zsh: sourcing the library does not run the CLI and does not exit the shell"
+
+	capture zsh -c "source '$LIB'; resolve_tier reviewer"
+	[ "$R_OUT" = "model-for-reviewing" ] && pass "zsh: the sourced function resolves" ||
+		fail "zsh: sourced resolve_tier printed '$R_OUT', expected 'model-for-reviewing'"
+else
+	note "zsh is not installed here — the real-shell sourcing case did not run"
+fi
+
+capture bash -c "source '$LIB'; echo SURVIVED"
+assert_survived "bash: sourcing the library returns control to the caller"
+
+capture sh -c ". '$LIB'; echo SURVIVED"
+assert_survived "sh: sourcing the library returns control to the caller"
 
 # ---------------------------------------------------------------------------
 banner "Where the configuration comes from"
