@@ -45,12 +45,13 @@ second time rather than overwriting a manual you have since edited.
 | Path | What it is |
 | --- | --- |
 | `constitution/shared-invariants.md` | The portable rulebook — eleven invariants that hold regardless of stack, domain, or vendor. **Shared layer:** copied verbatim, not edited locally. |
+| `constitution/shared-code-craft.md` | The portable rules for the code an agent writes — ten of them, from the smallest sufficient diff to diagrams drawn as SVG in HTML reports, never ASCII. **Shared layer** too. |
 | `constitution/AGENTS.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `AGENTS.md`; then it is yours. |
 | `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
-| `.claude/skills/` | Fourteen skills — the lifecycle made runnable. Thirteen always; `/dogfood` is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `.claude/skills/` | The skills — the lifecycle made runnable. All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list. Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -125,15 +126,16 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.claude/skills/` holds fourteen skills — the chain at the top of this README, made
+`.claude/skills/` holds fifteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
-`/diagnose` and `/improve-codebase-architecture` off to the side.
+`/diagnose`, `/explain-diff` and `/improve-codebase-architecture` off to the
+side.
 
-**Thirteen of the fourteen are unconditional; `/dogfood` is opt-in.** Every other
+**All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
 tickets, diffs and branches — things a one-hour-old project already has.
 `/dogfood` operates on a *running product*: it walks the personas you declare
@@ -194,12 +196,14 @@ looks the same either way until somebody writes the reason down. It is
 kit-repo meta and bootstrap removes it, so your project starts that record
 empty rather than inheriting this one.
 
-Six of the fourteen are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
+Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
 under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
 records the eight that have **no** upstream — including `/dogfood`, checked
-against the upstream repository rather than assumed.
+against the upstream repository rather than assumed — and the one with a
+different upstream: `/explain-diff`, adapted from Geoffrey Litt's
+publicly shared skill.
 
 ## The shared layer, and why it has a version
 
@@ -521,6 +525,10 @@ sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
+sh tests/agents-tiers.test.sh                          # the capability-tier resolver
+sh tests/implement-deliver.test.sh                     # /implement's Deliver phase
+sh tests/ai-review-template.test.sh                    # the cross-provider review template
+sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
 ```
 
 Do not wire `core.hooksPath` in this repo.
@@ -557,7 +565,7 @@ origin.
     [implement](https://www.aihero.dev/skills-implement),
     [code-review](https://www.aihero.dev/skills-code-review).
   - [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — six of
-    the fourteen skills are adapted from it; the upstream notice and the
+    the skills are adapted from it; the upstream notice and the
     per-skill provenance table live in
     `.claude/skills/LICENSE-mattpocock-skills.md`.
   - The talk ["A Workflow for AI Coding"](https://www.youtube.com/watch?v=-QFHIoCo-Ko)
@@ -575,6 +583,17 @@ origin.
 - **John Ousterhout — *A Philosophy of Software Design*** — deep modules and
   "design it twice", the working vocabulary of
   `/improve-codebase-architecture` and its sidecars.
+- **Geoffrey Litt — ["Understanding is the new
+  bottleneck"](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)**
+  — the case that as agents write more of the code, human understanding, not
+  verification, becomes the constraint. `/explain-diff` is adapted from the
+  [skill he published](https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524)
+  alongside it; the cognitive-debt framing it fights comes from
+  [Margaret-Anne Storey](https://margaretstorey.com/blog/2026/02/09/cognitive-debt/),
+  and [Simon Willison's interactive-explanations
+  pattern](https://simonwillison.net/guides/agentic-engineering-patterns/interactive-explanations/)
+  is the same idea taken further — explanations you can *play with*, not just
+  read.
 
 ### Standards
 
