@@ -68,6 +68,32 @@ assert_same() {
 	fi
 }
 
+# step6_check <kit-command> <ref> <list-file>
+#
+# UPDATING.md step 6's verification, as the recipe writes it: a shared file is
+# verbatim only if BOTH its bytes and its executable bit match the release. Git
+# records one mode bit (100755 vs 100644) and nothing else, so that — not the
+# full octal — is what is compared; `tar -x` applies the umask to the rest.
+step6_check() {
+	_k=$1
+	_r=$2
+	while IFS= read -r f; do
+		_want=$("$_k" ls-tree "$_r" -- "$f" | awk '{print $1}')
+		case "$_want" in
+		100755) _wx=yes ;;
+		*) _wx=no ;;
+		esac
+		if [ -x "$f" ]; then _hx=yes; else _hx=no; fi
+		if ! "$_k" show "$_r:$f" | cmp -s - "$f"; then
+			echo "DRIFT     $f"
+		elif [ "$_wx" != "$_hx" ]; then
+			echo "MODE      $f (kit has $_want)"
+		else
+			echo "verbatim  $f"
+		fi
+	done <"$3"
+}
+
 # assert_status <expected> <label> -- <command...>
 assert_status() {
 	expected=$1
@@ -353,11 +379,9 @@ recipe() {
 	# --- Step 5: apply ------------------------------------------------------
 	echo ""
 	echo "\$ # step 5 — apply"
-	while IFS= read -r f; do
-		mkdir -p "$(dirname "$f")"
-		kit show "$TO_REF:$f" >"$f"
-		echo "  updated $f"
-	done <"$WORK/to.list"
+	# shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
+	kit archive "$TO_REF" -- $(cat "$WORK/to.list") | tar -x
+	sed 's/^/  updated /' "$WORK/to.list"
 	comm -23 "$WORK/from.list" "$WORK/to.list" | while IFS= read -r f; do
 		git rm -q --ignore-unmatch -- "$f" 2>/dev/null || rm -f "$f"
 		echo "  removed $f (left the shared layer at $TO_REF)"
@@ -366,14 +390,8 @@ recipe() {
 
 	# --- Step 6: verify -----------------------------------------------------
 	echo ""
-	echo "\$ # step 6 — verbatim check, then the gate"
-	while IFS= read -r f; do
-		if kit show "$TO_REF:$f" | cmp -s - "$f"; then
-			echo "verbatim  $f"
-		else
-			echo "DRIFT     $f"
-		fi
-	done <"$WORK/to.list"
+	echo "\$ # step 6 — verbatim check (bytes AND mode), then the gate"
+	step6_check kit "$TO_REF" "$WORK/to.list"
 	echo "\$ sh scripts/check.sh"
 	sh scripts/check.sh
 	gate=$?
@@ -578,10 +596,8 @@ manifest1() {
 }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
 manifest1 v0.4.0 | sort >"$WORK1/to.list"
-while IFS= read -r f; do
-	mkdir -p "$(dirname "$f")"
-	kit1 show "v0.4.0:$f" >"$f"
-done <"$WORK1/to.list"
+# shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
+kit1 archive v0.4.0 -- $(cat "$WORK1/to.list") | tar -x
 kit1 show "v0.4.0:VERSION" >VERSION
 git add -A >/dev/null
 git commit -q -m "chore: update shared layer 0.3.0 -> 0.4.0"
@@ -608,6 +624,44 @@ if [ -n "$(sh scripts/agents.lib.sh implementer 2>/dev/null)" ]; then
 else
 	pass "the resolver prints nothing — a resolver with no mapping and no callers"
 fi
+
+banner "C2b. Step 5 carries the MODE, and step 6 checks it"
+# `scripts/agents.lib.sh` is 100755 in the kit and JOINS the layer at 0.4.0 —
+# the exact shape that bites: a `kit show >` redirect writes bytes and drops the
+# mode bit, and a content-only verbatim check then calls the result correct.
+# Only files JOINING the layer are exposed, because a file you already had keeps
+# whatever mode it landed with at bootstrap.
+if [ -x scripts/agents.lib.sh ]; then
+	pass "an executable shared file landed executable in the consumer"
+else
+	fail "scripts/agents.lib.sh landed non-executable — step 5 dropped the mode bit"
+fi
+
+step6_check kit1 v0.4.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
+if grep -qv '^verbatim  ' "$SCRATCH/step6.clean"; then
+	fail "step 6 reported something other than verbatim after a clean apply"
+	sed 's/^/        | /' "$SCRATCH/step6.clean"
+else
+	pass "step 6 reports every shared file verbatim after the apply"
+fi
+
+# …and that green is not free. Break ONLY the mode and the check must fire —
+# otherwise it is a check that reports success on the failure it exists for.
+chmod -x scripts/agents.lib.sh
+step6_check kit1 v0.4.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
+case "$(grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode")" in
+MODE*) pass "step 6 catches a mode-only difference" ;;
+*)
+	fail "step 6 did not catch a mode-only difference"
+	grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode" | sed 's/^/        | /'
+	;;
+esac
+if kit1 show "v0.4.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
+	pass "the bytes are still identical — which is why the mode leg has to exist"
+else
+	fail "the mode-only break changed the bytes too — the fixture proves nothing"
+fi
+chmod +x scripts/agents.lib.sh
 
 # ---------------------------------------------------------------------------
 banner "C3. RUN PART 2 — the transcript below is UPDATING.md's second worked example"

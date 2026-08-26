@@ -179,12 +179,10 @@ you on no release at all.
 ## Step 5 — apply
 
 ```sh
-# every file in the TARGET manifest, taken verbatim
-while IFS= read -r f; do
-	mkdir -p "$(dirname "$f")"
-	kit show "$TO_REF:$f" >"$f"
-	echo "  updated $f"
-done <"$WORK/to.list"
+# every file in the TARGET manifest, taken verbatim — bytes AND mode
+# shellcheck disable=SC2046
+kit archive "$TO_REF" -- $(cat "$WORK/to.list") | tar -x
+sed 's/^/  updated /' "$WORK/to.list"
 
 # anything that LEFT the shared layer is no longer kit-owned. Deleting is the
 # usual answer; keeping it means it is now an ordinary file of yours.
@@ -197,21 +195,43 @@ done
 kit show "$TO_REF:VERSION" >VERSION
 ```
 
+**`kit archive | tar -x`, not `kit show >`.** A `>` redirect writes bytes and
+nothing else: the **mode bit is lost**, so a shared file that is `100755` in the
+kit lands `100644` in your repo and fails the first time anything runs it. Git
+carries exactly one mode bit and `git archive` carries it across; a redirect
+cannot. It only bites files *joining* the layer — a file you already had keeps
+the mode bootstrap gave it — which is precisely why it is easy to miss. (`tar`
+creates the intermediate directories, so there is no `mkdir -p` to do.)
+
 ## Step 6 — verify the verbatim claim, then the gate
 
 The version marker is only worth something if it is checkable. This is the check:
 
 ```sh
 while IFS= read -r f; do
-	if kit show "$TO_REF:$f" | cmp -s - "$f"; then
-		echo "verbatim  $f"
-	else
+	want=$(kit ls-tree "$TO_REF" -- "$f" | awk '{print $1}')
+	case "$want" in
+	100755) wx=yes ;;
+	*) wx=no ;;
+	esac
+	if [ -x "$f" ]; then hx=yes; else hx=no; fi
+
+	if ! kit show "$TO_REF:$f" | cmp -s - "$f"; then
 		echo "DRIFT     $f"
+	elif [ "$wx" != "$hx" ]; then
+		echo "MODE      $f (kit has $want)"
+	else
+		echo "verbatim  $f"
 	fi
 done <"$WORK/to.list"
 
 sh scripts/check.sh
 ```
+
+The mode leg is not decoration. A content-only `cmp` reports `verbatim` for a
+file whose executable bit is wrong — a green check over the exact failure step 5
+used to produce. Git records one mode bit and no more, so that is all this
+compares; the rest of the permissions come from your umask and are yours.
 
 Every line `verbatim`, and the gate green. Then commit:
 
@@ -246,11 +266,17 @@ an update.
 
 ## When a file joins the shared layer
 
-Step 5 writes it for you. Two things to check afterwards:
+Step 5 writes it for you. Three things to check afterwards:
 
-- **You may already have a file at that path.** `kit show >` overwrote it. If it
-  had local content, recover it from git and move that content to a local
-  article — the path is kit-owned from this release on.
+- **You may already have a file at that path.** Step 5 overwrote it. If it had
+  local content, recover it from git and move that content to a local article —
+  the path is kit-owned from this release on.
+- **Its MODE has to arrive with it.** A joining file is the only case where the
+  mode can be wrong: a file you already had keeps the one bootstrap gave it,
+  while a new one gets whatever step 5 wrote. That is why step 5 uses
+  `kit archive | tar -x` and why step 6 compares the executable bit — a shared
+  *script* that arrives non-executable fails the first time something runs it,
+  and a byte comparison calls it verbatim.
 - **The gate now requires it.** `scripts/check.sh` fails if a file named in
   `VERSION` is missing, so deleting it later fails your push rather than silently
   degrading.
