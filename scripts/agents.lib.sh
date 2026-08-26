@@ -139,11 +139,26 @@ resolve_tier() {
 		return 2
 	fi
 
+	# The accept-check is a LITERAL `case`, not a loop over $AGENT_TIERS, for two
+	# independent reasons.
+	#
+	# PORTABILITY, the one that was actually broken: `for t in $AGENT_TIERS`
+	# relies on the shell word-splitting an unquoted expansion, and zsh does not
+	# (SH_WORD_SPLIT is off by default). Under `zsh scripts/agents.lib.sh
+	# implementer` the loop saw ONE word — the whole string — so every real tier
+	# name was rejected as unknown. A `case` compares patterns, never words, and
+	# behaves identically in sh, bash, ksh and zsh.
+	#
+	# TRUST, which comes free with it: a config file is SOURCED, so anything
+	# held in a global is something a config could reassign — and a whitelist
+	# that data can rewrite is not a whitelist. Written out here, neither the
+	# rule nor the eval below can be moved by a config. AGENT_TIERS survives as
+	# the single source for the MESSAGES; this literal is the authority.
 	_rt_tier=$1
-	_rt_known=0
-	for _rt_t in $AGENT_TIERS; do
-		[ "$_rt_t" = "$_rt_tier" ] && _rt_known=1 && break
-	done
+	case "$_rt_tier" in
+	planner | implementer | mechanical | reviewer) _rt_known=1 ;;
+	*) _rt_known=0 ;;
+	esac
 	if [ "$_rt_known" = 0 ]; then
 		echo "x agents: unknown capability tier '$_rt_tier'." >&2
 		echo "  The vocabulary is closed: $AGENT_TIERS." >&2

@@ -93,6 +93,33 @@ assert_err_lacks() {
 	esac
 }
 
+# capture <command...> — run it, keeping stdout and stderr apart, exactly as
+# `resolve` does. `resolve` hard-codes `sh "$LIB"`; the cases below need to pick
+# the shell and to choose between executing and sourcing, so they need a runner
+# that takes the whole command.
+capture() {
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$("$@" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
+# note <text> — a visible line that is neither a pass nor a fail.
+#
+# The per-shell cases below can only run against a shell that is installed.
+# Silently skipping one would let a machine (or a CI image) quietly drop an
+# entire axis while still printing ALL GREEN, so a skip says so out loud.
+note() { printf '  --    %s\n' "$*"; }
+
+# SHELLS — the shells the per-shell axes below sweep.
+#
+# `sh` alone is the blind spot this suite had: every case above it invokes the
+# library through `sh`, so nothing ever exercised a caller in bash or in zsh,
+# and both differ from sh in ways this library depends on ($0 under zsh, and
+# `set -e` semantics that are identical but were never checked at all).
+SHELLS='sh bash zsh'
+
 FULL="$SCRATCH/full.config.sh"
 EMPTY="$SCRATCH/empty.config.sh"
 write_config "$FULL" "$CONFIG_FULL"
@@ -195,6 +222,31 @@ R_ERR_TEXT=$(cat "$R_ERR")
 rm -f "$R_ERR"
 [ "$R_STATUS" = 0 ] && pass "AGENTS_TIER_QUIET=1 still exits 0" || fail "quiet mode exited $R_STATUS"
 assert_err_lacks "UNMAPPED"
+
+# ---------------------------------------------------------------------------
+banner "The executed seam works in EVERY shell, not just sh"
+# ---------------------------------------------------------------------------
+# Every case above this line reaches the library through `sh`, and that is the
+# blind spot. `sh scripts/agents.lib.sh <tier>` is the seam every SKILL.md
+# names — an agent runs commands rather than sourcing shell libraries — but the
+# operator who runs it by hand runs it in their own shell, and a project's own
+# scripts run it in theirs.
+#
+# zsh is where that stops being theoretical: it does not word-split an unquoted
+# parameter expansion (SH_WORD_SPLIT is off by default), so a membership test
+# written as `for t in $AGENT_TIERS` sees ONE word there — the whole string —
+# and every real tier name is reported as unknown.
+AGENTS_CONFIG="$FULL"
+export AGENTS_CONFIG
+
+for shell_bin in $SHELLS; do
+	if ! command -v "$shell_bin" >/dev/null 2>&1; then
+		note "$shell_bin is not installed here — its direct-execution case did not run"
+		continue
+	fi
+	capture "$shell_bin" "$LIB" implementer
+	assert_resolved "model-for-implementing" "$shell_bin: running the file directly still resolves"
+done
 
 # ---------------------------------------------------------------------------
 banner "Where the configuration comes from"
