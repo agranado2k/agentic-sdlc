@@ -521,6 +521,10 @@ sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
+sh tests/agents-tiers.test.sh                          # the capability-tier resolver
+sh tests/implement-deliver.test.sh                     # /implement's Deliver phase
+sh tests/ai-review-template.test.sh                    # the cross-provider review template
+sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
 ```
 
 Do not wire `core.hooksPath` in this repo.

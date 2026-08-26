@@ -499,6 +499,25 @@ LAST_OUT=$out
 assert_out_has "BYPASSED"
 
 # ---------------------------------------------------------------------------
+banner "14. The README names every suite a contributor is asked to run"
+# ---------------------------------------------------------------------------
+# This list went stale silently: four suites shipped without being added, and
+# nothing noticed until someone read the two lists side by side. A contributor
+# who runs what the README says and pushes a red branch was failed by the
+# README, not by their own carelessness. tests/lib.sh is a helper, not a suite.
+missing_from_readme=""
+for suite in "$KIT"/tests/*.sh; do
+	base=${suite##*/}
+	[ "$base" = "lib.sh" ] && continue
+	grep -qF "tests/$base" "$KIT/README.md" || missing_from_readme="$missing_from_readme $base"
+done
+if [ -z "$missing_from_readme" ]; then
+	pass "every suite in tests/ is named in the README"
+else
+	fail "the README does not name:$missing_from_readme"
+fi
+
+# ---------------------------------------------------------------------------
 banner "Result"
 # ---------------------------------------------------------------------------
 if [ "$failures" = 0 ]; then
