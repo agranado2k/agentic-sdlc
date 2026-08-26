@@ -11,8 +11,12 @@
 # the file). A sourcing caller must say where the config lives, though, because
 # a sourced file cannot portably learn its own path:
 #
-#   AGENTS_CONFIG=scripts/agents.config.sh . scripts/agents.lib.sh   # explicit
+#   AGENTS_CONFIG=scripts/agents.config.sh; . scripts/agents.lib.sh  # explicit
 #   _agents_here=scripts; . scripts/agents.lib.sh                    # or by dir
+#
+# Two statements on purpose: a prefix assignment on `.` persists only in plain
+# sh — bash and zsh drop it before the sourced code runs, and the recipe would
+# quietly resolve UNMAPPED.
 #
 # With neither set, orders 2 and 3 below are both skipped and every tier reports
 # UNMAPPED — deliberately, since the only other candidate is whatever repository
@@ -190,11 +194,12 @@ resolve_tier() {
 	# name was rejected as unknown. A `case` compares patterns, never words, and
 	# behaves identically in sh, bash, ksh and zsh.
 	#
-	# TRUST, which comes free with it: a config file is SOURCED, so anything
-	# held in a global is something a config could reassign — and a whitelist
-	# that data can rewrite is not a whitelist. Written out here, neither the
-	# rule nor the eval below can be moved by a config. AGENT_TIERS survives as
-	# the single source for the MESSAGES; this literal is the authority.
+	# TRUST, a smaller share of it: a sourced config is trusted code — it
+	# could redefine resolve_tier wholesale, so this literal is NOT a security
+	# boundary against a hostile config. What it does buy: the accepted set
+	# can no longer drift via a reassigned global or a shell's splitting
+	# rules. AGENT_TIERS survives as the single source for the MESSAGES; this
+	# literal is the authority.
 	_rt_tier=$1
 	case "$_rt_tier" in
 	planner | implementer | mechanical | reviewer) _rt_known=1 ;;
