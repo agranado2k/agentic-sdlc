@@ -266,6 +266,9 @@ assert_file_has "$PROMPT" "docs/adr/"
 assert_file_has "$PROMPT" "AXIS 1 — STANDARDS"
 assert_file_has "$PROMPT" "AXIS 2 — BEHAVIOR"
 assert_file_has "$PROMPT" "CONFIRM-LIST"
+# The agentic-skill lens is stated rather than referenced for the same reason:
+# the CI jobs read only this file, never /review-pr.
+assert_file_has "$PROMPT" "OWASP Agentic Skills Top 10"
 # Axis 2 is human-only. A bot that answers its own confirm-list has quietly
 # converted a human decision into an autonomous one.
 assert_file_has "$PROMPT" "Do not answer them yourself, do not resolve them"
