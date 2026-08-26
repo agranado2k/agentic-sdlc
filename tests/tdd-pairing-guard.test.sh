@@ -33,10 +33,19 @@ EOF
 configure() { t_write "$1" "scripts/guards.config.sh" "$2
 "; }
 
+# This suite runs the KIT's guard against throwaway repos — a cross-repo call,
+# which is exactly what discovery now refuses (a config is code; standing in a
+# repo must not run its code). So the config each case writes is handed over
+# explicitly, the sanctioned way to cross repos. Same-repo discovery gets its
+# own positive case at the bottom of the file.
 run_guard() {
 	_repo=$1
 	shift
-	(cd "$_repo" && sh "$GUARD" "$@")
+	if [ -f "$_repo/scripts/guards.config.sh" ]; then
+		(cd "$_repo" && GUARDS_CONFIG="$_repo/scripts/guards.config.sh" sh "$GUARD" "$@")
+	else
+		(cd "$_repo" && sh "$GUARD" "$@")
+	fi
 }
 
 # A repo with one base commit; the caller commits the head. Sets `repo` (its
@@ -194,5 +203,40 @@ assert_out_has "src/report.ts"
 
 assert_status 2 "a GUARDS_CONFIG that does not exist is an error, not a silent fallback" -- sh -c "cd '$repo' && GUARDS_CONFIG='$SCRATCH/no-such.config.sh' sh '$GUARD' '$BASE' '$head'"
 assert_out_has "does not exist"
+
+# ---------------------------------------------------------------------------
+banner "Config discovery is anchored, never a reward for standing somewhere"
+# ---------------------------------------------------------------------------
+# guards.config.sh is SOURCED — code, not data. Order 2 therefore loads the
+# cwd repo's config only when that repo is ALSO the one the guard came from.
+
+# The consumer shape, positive: a repo carrying its own copies of the guard,
+# the loader and a config — the hook/CI reality — still discovers by cwd.
+new_repo_with_base
+mkdir -p "$repo/scripts"
+cp "$GUARD" "$KIT/scripts/guards.lib.sh" "$repo/scripts/"
+configure "$repo" "$CONFIG_STD"
+t_write "$repo" "src/own.ts" "export const own = 1;
+"
+head=$(t_commit "$repo" "feat: unpaired source change")
+assert_status 1 "a repo's own guard still discovers that repo's config by cwd" -- \
+	sh -c "cd '$repo' && sh scripts/tdd-pairing-guard.sh '$BASE' '$head'"
+assert_out_has "src/own.ts"
+
+# The attack shape, refused: the kit's guard run while standing in a foreign
+# clone must not execute that clone's config. The canary prints on stderr the
+# moment the config is sourced, so its absence is proof of non-execution.
+new_repo_with_base
+configure "$repo" "echo 'FOREIGN-GUARDS-CONFIG-EXECUTED' >&2
+GUARD_SOURCE_RE='^src/'
+GUARD_TEST_RE='\\.test\\.'"
+t_write "$repo" "src/mark.ts" "export const mark = 1;
+"
+head=$(t_commit "$repo" "feat: unpaired source change")
+assert_status 0 "a foreign clone's config is refused, and the guard runs unconfigured" -- \
+	sh -c "cd '$repo' && sh '$GUARD' '$BASE' '$head'"
+assert_out_lacks "FOREIGN-GUARDS-CONFIG-EXECUTED"
+assert_out_has "refusing to source"
+assert_out_has "GUARDS_CONFIG"
 
 t_done "tdd-pairing-guard.sh"
