@@ -1167,7 +1167,10 @@ if command -v zsh >/dev/null 2>&1; then
 		"zsh and sh leave the local article in the same state"
 	assert_same "$SCRATCH/9b.sh.out" "$SCRATCH/9b.zsh.out" \
 		"zsh and sh reach the same 9b verdict"
-	if grep -q 'onstitution/' "$SCRATCH/9b.zsh.out"; then
+	# `v0.3.0onstitution/…` is the mangled ref, and `fatal:` is git refusing it.
+	# Match the digit-then-`onstitution` boundary, not the bare word: every
+	# correct verdict line names `constitution/…` and contains it as a substring.
+	if grep -qE '[0-9]onstitution/|^fatal:' "$SCRATCH/9b.zsh.out"; then
 		fail "zsh: a history modifier ate the ref — the expansion is still unbraced"
 	else
 		pass "zsh: the ref reached git intact"
@@ -1211,6 +1214,36 @@ if grep -q '^TOOK' "$SCRATCH/take.out"; then
 else
 	pass "the take helper reported failure rather than a silent empty write"
 fi
+fi
+
+banner "C4f. No ref expansion in the recipe is one letter from a zsh modifier"
+# C4d proves the behaviour on the block that was caught. This proves the SHAPE
+# across the whole document, because the next one will be introduced by an
+# ordinary edit: `"$TO_REF:$C"` is safe and `"$TO_REF:constitution/…"` is not,
+# and the only difference is what the author happened to type after the colon.
+#
+# The rule the recipe now keeps: a `ref:path` expansion is followed by a `$` or
+# by a brace, never by a bare letter. `$` can never begin a modifier; `${REF}`
+# ends the expansion before the colon is read. Anything else is one rename away
+# from handing git a ref that does not exist — and from a `cmp` that answers on
+# empty input rather than failing.
+#
+# Prose that deliberately QUOTES the unsafe spelling uses `$path`/`$C` after the
+# colon, so it is not matched here — the counterexample is allowed to exist.
+zsh_modifier_risk=$(grep -nE '"\$[A-Za-z0-9_]+:[A-Za-z]' "$KIT/UPDATING.md" || true)
+if [ -z "$zsh_modifier_risk" ]; then
+	pass "every ref expansion in UPDATING.md is braced or followed by a \$"
+else
+	fail "UPDATING.md has ref expansions a zsh history modifier can eat"
+	printf '%s\n' "$zsh_modifier_risk" | sed 's/^/        | /'
+fi
+# …and the check is not vacuous: the pattern it hunts for has to match when it
+# is present.
+printf 'kit show "$TO_REF:constitution/x.md"\n' >"$SCRATCH/shape.probe"
+if grep -qE '"\$[A-Za-z0-9_]+:[A-Za-z]' "$SCRATCH/shape.probe"; then
+	pass "the shape check matches an unbraced ref expansion when there is one"
+else
+	fail "the shape check cannot detect the shape it exists for"
 fi
 
 banner "C5. The gate is what makes the hand edits non-optional"

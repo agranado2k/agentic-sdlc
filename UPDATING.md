@@ -66,6 +66,11 @@ exercise.
 - A clean working tree (`git status` empty). Step 5 overwrites files in place.
 - You are on a branch, not `main` — this lands as a reviewed PR like anything
   else. Shared invariant §7: an agent may take it to one click away and stops.
+- **Every block below is POSIX `sh`, and `sh` is what you should run it in**
+  (`sh` for a whole block, `sh -c '…'` for one line). It is also written to be
+  safe in `bash` and `zsh`, because the shell you paste into is your login
+  shell and on macOS that is `zsh` — but a shell that is neither of those three
+  is not something this recipe has been run in.
 
 ## Step 0 — point at the kit
 
@@ -180,7 +185,7 @@ than assuming your local one is current.
 
 ```sh
 manifest() {
-	kit show "$1:VERSION" | awk '
+	kit show "${1}:VERSION" | awk '
 		/^files:/       { inlist = 1; next }
 		!inlist         { next }
 		/^[ \t]*#/      { next }
@@ -272,7 +277,7 @@ comm -23 "$WORK/from.list" "$WORK/to.list" | while IFS= read -r f; do
 done
 
 # the manifest itself, wholesale — version marker and file list together
-kit show "$TO_REF:VERSION" >VERSION
+kit_take "$TO_REF" VERSION VERSION
 
 # THIS FILE is shared layer, so the extract above just replaced it.
 if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
@@ -754,14 +759,27 @@ whole.
 ```sh
 A=constitution/local-workflow.md
 [ -e "$A" ] || A="$A.template"     # never stamped — still the template
+SRC=constitution/local-workflow.md.template
 
-if kit show "$FROM_REF:constitution/local-workflow.md.template" | cmp -s - "$A"; then
+if kit show "${FROM_REF}:$SRC" | cmp -s - "$A"; then
 	echo "UNSTAMPED $A — nothing of yours in it; take the new template whole"
-	kit show "$TO_REF:constitution/local-workflow.md.template" >"$A"
+	kit_take "$TO_REF" "$SRC" "$A"
 else
 	echo "YOURS     $A — hunt for new SECTIONS, as above"
 fi
 ```
+
+**Note the braces on `${FROM_REF}`, and keep them.** Every `$REF:` in this recipe
+is followed by a `$` or by a brace, never by a bare letter, and that is not
+style. `zsh` — macOS's default shell, and one an operator will paste this into —
+applies **history modifiers** to `$var:x` *inside double quotes*: drop the braces
+and the `:c` beginning `constitution/…` is taken as a modifier, so git is handed
+`v0.9.0` followed by `onstitution/…`. It resolves nothing, so `kit show` prints
+`fatal:` and nothing else — and the `cmp` above then compares your article
+against **empty input** and answers `YOURS` for a file that is verbatim the
+template. Silence in the wrong arm; the take you needed never runs. `:c` is not
+the only one reachable (`:a :e :h :l :q :r :s :t :u :x` and `:g&` all are), which
+is why the rule is "brace it", not "avoid the letter c".
 
 The test is "is my copy byte-identical to the `.template` it came from", not
 "does its name end in `.template`" — a stamped `.md` nobody has edited yet is the
@@ -976,8 +994,8 @@ and both are more than a directory.
 
 ```sh
 kit archive "$TO_REF" .claude/skills/dogfood | tar -x
-kit show "$TO_REF:constitution/local-product.md.template" \
-	>constitution/local-product.md.template
+kit_take "$TO_REF" constitution/local-product.md.template \
+	constitution/local-product.md.template
 ```
 
 Then, by hand, the part no command can do for you — **in this order**:
@@ -987,7 +1005,7 @@ Then, by hand, the part no command can do for you — **in this order**:
    Until it is filled in, the skill stops and says so, which is correct: a
    guessed persona produces a report about a user who does not exist.
 2. **Then copy the manual's `/dogfood` lines across, naming the `.md` you just
-   produced.** `kit show "$TO_REF:constitution/AGENTS.md.template"` shows exactly
+   produced.** `kit show "${TO_REF}:constitution/AGENTS.md.template"` shows exactly
    which lines bootstrap would have kept — they sit between
    `<!-- DOGFOOD:BEGIN -->` and `<!-- DOGFOOD:END -->`, and there are three of
    them: the quick-reference row, the paragraph that introduces the skill, and
