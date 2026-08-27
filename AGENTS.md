@@ -6,9 +6,17 @@ project, and a shared layer those projects can be updated against later.
 
 <!-- agentic-sdlc:kit-own — this manual is the KIT's own. It is written for the
 people and agents who AUTHOR the kit, not for a project built from it, so
-`bootstrap.sh` removes it (with the shims and the kit's `docs/`) before stamping
-the consumer's manual from `constitution/AGENTS.md.template`. The sentinel above
-is the string bootstrap keys that removal on — do not delete it. -->
+`bootstrap.sh` removes it (with the shims and the kit's own documentation files)
+before stamping the consumer's manual from `constitution/AGENTS.md.template`.
+`agentic-sdlc:kit-own`, the first token of this comment, is the string bootstrap
+keys that removal on: KIT AUTHORS, do not delete it.
+
+READERS WHO ARRIVED HERE FROM "Use this template": this file is not yours and
+bootstrap deletes it on its first run — do not edit it expecting your changes to
+survive. Write your rules into the manual bootstrap stamps for you, after it
+runs. Editing this one costs you a re-run rather than your work: bootstrap
+refuses to start when git can see local changes to a file it is about to
+replace. -->
 
 Binding for any LLM-driven agent working in this repo. This file is the **root
 layer** of a layered constitution: orientation, the hard rules, and the command

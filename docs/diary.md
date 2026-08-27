@@ -122,3 +122,29 @@ kit-own files removed by hand, and the two projects must be identical.
 
 The decision, its alternatives, and the honest limitations are in
 `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`.
+
+### 2026-08-27 — The kit-own strip stopped being able to delete a consumer's work
+
+Follow-up to the entry above, from the independent review on PR #48. The strip
+was guarded on *whether* to run, and on nothing about *what* it removed. Two
+demonstrated losses: `rm -rf docs/adr` took an ADR a consumer had written before
+their first bootstrap (an uncommitted one unrecoverably), and a consumer who
+personalized the kit's `AGENTS.md` in place — leaving the sentinel comment where
+its own text tells them to — had those edits deleted with exit 0.
+
+Both are closed by making the block name exactly what it deletes and check that
+it still owns it. `KIT_OWN` is now a list of **files**, so `docs/adr/` is never
+removed as a directory and a consumer's decision record is out of the strip's
+reach entirely; and a third condition refuses the whole run, before deleting
+anything, when git reports a local modification to any file on the list. What
+that condition cannot see — an edit already committed, or a tree with no commits
+at all — is recorded as a trade-off in ADR-0001 rather than papered over: the
+alternative was a shipped hash of every kit-own file, and a stale hash would
+refuse *every* consumer's first run.
+
+The second finding was the sharper one: the sentinel guard could be deleted from
+`bootstrap.sh` outright and all fourteen suites stayed green. Hard rule 9 says a
+rule with no failing check is a claim, and this was one. `tests/self-host.test.sh`
+gained section E — a fixture per guard, each one a consumer who wrote something
+in the window between "Use this template" and their first bootstrap. Removing
+any one of the three conditions turns it red.
