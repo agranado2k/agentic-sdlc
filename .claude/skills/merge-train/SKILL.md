@@ -125,6 +125,12 @@ with the run log.
 Run **`/worktree-cleanup`** — the merged PRs' worktrees are now prunable, and
 the root checkout's base branch should fast-forward to include the batch.
 
+If the batch bumped `VERSION`, the train is not over at cleanup: cut and push
+the release tag (`git tag -a v<version> <merge sha> && git push origin
+v<version>`), or `tests/self-host.test.sh` F3 stays red on main by design — an
+untagged bump is a release no consumer can reach. Tagging is part of landing
+the bump, and it carries the operator's name exactly like the merge did.
+
 ## Output format
 
 ```
