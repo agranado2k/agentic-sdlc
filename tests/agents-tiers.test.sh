@@ -124,6 +124,68 @@ assert_err_lacks() {
 	esac
 }
 
+# assert_survived <label> — the caller reached the line AFTER the library call.
+#
+# What several cases below have to assert is not "what did it resolve" but "did
+# the caller live". A library that kills the shell that sourced it fails in a
+# way no value assertion can see: there is no output to compare, because there
+# is no caller left to print it.
+assert_survived() {
+	if [ "$R_STATUS" = 0 ] && [ "$R_OUT" = "SURVIVED" ]; then
+		pass "$1"
+	else
+		fail "$1 — got status $R_STATUS, stdout '$R_OUT'"
+		printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+	fi
+}
+
+# capture <command...> — run it, keeping stdout and stderr apart, exactly as
+# `resolve` does. `resolve` hard-codes `sh "$LIB"`; the cases below need to pick
+# the shell and to choose between executing and sourcing, so they need a runner
+# that takes the whole command.
+capture() {
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$("$@" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
+# capture_in <dir> <command...> — capture, run from <dir>. The cwd is an INPUT
+# to these cases (it is exactly what discovery must and must not read), so the
+# runner takes it explicitly; env tweaks like `unset AGENTS_CONFIG` belong
+# inside the command, where the case states them.
+capture_in() {
+	_ci_dir=$1
+	shift
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$(cd "$_ci_dir" && "$@" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
+# note <text> — a visible line that is neither a pass nor a fail.
+#
+# The per-shell cases below can only run against a shell that is installed.
+# Silently skipping one would let a machine (or a CI image) quietly drop an
+# entire axis while still printing ALL GREEN, so a skip says so out loud —
+# per case here, and counted again beside the final summary, where a reader
+# who only checks the last lines will actually see it.
+SKIPPED=0
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
+}
+
+# SHELLS — the shells the per-shell axes below sweep.
+#
+# `sh` alone is the blind spot this suite had: every case above it invokes the
+# library through `sh`, so nothing ever exercised a caller in bash or in zsh,
+# and both differ from sh in ways this library depends on ($0 under zsh, and
+# `set -e` semantics that are identical but were never checked at all).
+SHELLS='sh bash zsh'
+
 FULL="$SCRATCH/full.config.sh"
 EMPTY="$SCRATCH/empty.config.sh"
 DOMAINS="$SCRATCH/domains.config.sh"
@@ -298,7 +360,7 @@ resolve implementor content
 assert_err_has "unknown capability tier"
 
 # ---------------------------------------------------------------------------
-banner "No domain argument — byte-for-byte the behaviour that shipped at 0.5.0"
+banner "No domain argument — byte-for-byte the behaviour that shipped at 0.6.0"
 # ---------------------------------------------------------------------------
 # The whole point of making the argument optional: every existing caller — the
 # skills, the adapters' worked example, a consumer's own script — keeps working
@@ -369,32 +431,215 @@ rm -f "$R_ERR"
 assert_err_lacks "UNMAPPED"
 
 # ---------------------------------------------------------------------------
-banner "Where the configuration comes from"
+banner "The executed seam works in EVERY shell, not just sh"
 # ---------------------------------------------------------------------------
-resolve_in() {
-	_ri_dir=$1
-	shift
+# Every case above this line reaches the library through `sh`, and that is the
+# blind spot. `sh scripts/agents.lib.sh <tier>` is the seam every SKILL.md
+# names — an agent runs commands rather than sourcing shell libraries — but the
+# operator who runs it by hand runs it in their own shell, and a project's own
+# scripts run it in theirs.
+#
+# zsh is where that stops being theoretical: it does not word-split an unquoted
+# parameter expansion (SH_WORD_SPLIT is off by default), so a membership test
+# written as `for t in $AGENT_TIERS` sees ONE word there — the whole string —
+# and every real tier name is reported as unknown.
+AGENTS_CONFIG="$FULL"
+export AGENTS_CONFIG
+
+for shell_bin in $SHELLS; do
+	if ! command -v "$shell_bin" >/dev/null 2>&1; then
+		note "$shell_bin is not installed here — its direct-execution case did not run"
+		continue
+	fi
+	capture "$shell_bin" "$LIB" implementer
+	assert_resolved "model-for-implementing" "$shell_bin: running the file directly still resolves"
+done
+
+# ---------------------------------------------------------------------------
+banner "…and SOURCING must not kill the caller, in every shell either"
+# ---------------------------------------------------------------------------
+# The other half of the same guard. The library decides "was I executed or was I
+# sourced?" by looking at $0 — and $0 does not mean the same thing in every
+# shell. zsh sets it to the SOURCED FILE'S path (FUNCTION_ARGZERO, on by
+# default), so `source scripts/agents.lib.sh` matched the "I was executed"
+# pattern: the library ran resolve_tier against the SHELL'S own arguments, and
+# then `exit`ed — taking the caller's shell with it. An operator whose shell is
+# zsh lost their session to a library that only claimed to define functions.
+#
+# Two cases, deliberately. The first is portable and runs anywhere: `sh -c CODE
+# ARGV0` sets $0 to ARGV0, which puts plain sh in exactly the position zsh puts
+# itself in — a file being sourced whose $0 is its own path — alongside the
+# ZSH_EVAL_CONTEXT value zsh really exports there. It pins the MECHANISM on
+# every machine. The second drives a real zsh and is the black-box proof. It is
+# the one that can be skipped for want of a zsh, which is why it is not the
+# only one.
+ZSH_EVAL_CONTEXT='toplevel:file'
+export ZSH_EVAL_CONTEXT
+capture sh -c '. "$0"; echo SURVIVED' "$LIB"
+assert_survived "a sourced library whose \$0 is its own path returns control to the caller"
+unset ZSH_EVAL_CONTEXT
+
+if command -v zsh >/dev/null 2>&1; then
+	capture zsh -c "source '$LIB'; echo SURVIVED"
+	assert_survived "zsh: sourcing the library does not run the CLI and does not exit the shell"
+
+	capture zsh -c "source '$LIB'; resolve_tier reviewer"
+	[ "$R_OUT" = "model-for-reviewing" ] && pass "zsh: the sourced function resolves" ||
+		fail "zsh: sourced resolve_tier printed '$R_OUT', expected 'model-for-reviewing'"
+else
+	note "zsh is not installed here — the real-shell sourcing case did not run"
+fi
+
+capture bash -c "source '$LIB'; echo SURVIVED"
+assert_survived "bash: sourcing the library returns control to the caller"
+
+capture sh -c ". '$LIB'; echo SURVIVED"
+assert_survived "sh: sourcing the library returns control to the caller"
+
+# ---------------------------------------------------------------------------
+banner "A caller running 'set -e' survives an unconfigured resolve"
+# ---------------------------------------------------------------------------
+# The third thing every case above the per-shell axes had in common: a shell
+# with default options. Most consumer scripts and hooks run `set -e`, and under
+# it a BARE call to a function that returns 1 terminates the caller before its
+# status can even be read.
+#
+# agents_load_config returns 1 on the "no config anywhere" path — which is not
+# an error, it is this kit's shipped default state. So the commonest caller, in
+# the commonest project state, died before the UNMAPPED warning was ever
+# printed: no value, no warning, no error, just a script that stopped.
+#
+# $SCRATCH is the working directory on purpose: no config beside it and no
+# repository above it, which is exactly the state a resolve has to survive.
+set_e_resolve() {
 	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-	R_OUT=$(cd "$_ri_dir" && unset AGENTS_CONFIG && sh "$LIB" "$@" 2>"$R_ERR")
+	R_OUT=$(cd "$SCRATCH" && unset AGENTS_CONFIG &&
+		"$1" -c "set -e; . '$LIB'; resolve_tier planner; echo SURVIVED" 2>"$R_ERR")
 	R_STATUS=$?
 	R_ERR_TEXT=$(cat "$R_ERR")
 	rm -f "$R_ERR"
 }
 
+for shell_bin in $SHELLS; do
+	if ! command -v "$shell_bin" >/dev/null 2>&1; then
+		note "$shell_bin is not installed here — its 'set -e' case did not run"
+		continue
+	fi
+	set_e_resolve "$shell_bin"
+	assert_survived "$shell_bin with 'set -e': an unmapped tier returns to the caller instead of killing it"
+	assert_err_has "UNMAPPED"
+done
+
+# ---------------------------------------------------------------------------
+banner "Where the configuration comes from"
+# ---------------------------------------------------------------------------
+# Every case here INSTALLS the library into the fixture rather than pointing at
+# the kit's own copy from a borrowed working directory. That is not a detail:
+# resolution orders 2 and 3 are anchored on where the LIBRARY lives, so a
+# fixture that leaves it behind is not testing the rule it claims to.
+#
+# install_lib <dir> — put the library under test at <dir>/agents.lib.sh.
+install_lib() {
+	mkdir -p "$1"
+	cp "$LIB" "$1/agents.lib.sh"
+}
+
+# resolve_from <cwd> <lib> <tier…> — run an INSTALLED library from a chosen
+# working directory, with no AGENTS_CONFIG. The two are separate arguments on
+# purpose: the whole trust question below is what happens when they disagree.
+resolve_from() {
+	_rf_cwd=$1
+	_rf_lib=$2
+	shift 2
+	R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	R_OUT=$(cd "$_rf_cwd" && unset AGENTS_CONFIG && sh "$_rf_lib" "$@" 2>"$R_ERR")
+	R_STATUS=$?
+	R_ERR_TEXT=$(cat "$R_ERR")
+	rm -f "$R_ERR"
+}
+
+# Order 2 — the root of the repo the LIBRARY lives in. The library goes in
+# tools/ and the config in scripts/, so that only order 2 can join them: with
+# both in scripts/ the case would pass on order 3 and prove nothing.
 t_repo
-write_config "$REPO/scripts/agents.config.sh" "$CONFIG_FULL"
-resolve_in "$REPO" mechanical
+OWN=$REPO
+install_lib "$OWN/tools"
+write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
+resolve_from "$OWN" "$OWN/tools/agents.lib.sh" mechanical
 assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.sh is found with no env var set"
 
-# The explicit pointer wins over the repo's own file — that is what makes the
+# Order 3 — a sibling agents.config.sh, for a library that is not in a repo at
+# all. Run from a different directory to show the answer does not depend on
+# where the caller stands.
+LOOSE="$SCRATCH/loose"
+install_lib "$LOOSE"
+write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
+resolve_from "$SCRATCH" "$LOOSE/agents.lib.sh" reviewer
+assert_resolved "model-for-reviewing" "a sibling agents.config.sh is found for a library outside any repo"
+
+# ---------------------------------------------------------------------------
+banner "…and NOT from the repo the caller happens to be standing in"
+# ---------------------------------------------------------------------------
+# A config file is SOURCED — which is to say EXECUTED — so "where does the
+# config come from" is a trust question, not a convenience one. Resolution used
+# to ask `git rev-parse --show-toplevel` about the process's CURRENT DIRECTORY,
+# which meant an operator resolving a tier while standing in a cloned
+# third-party repo ran that clone's scripts/agents.config.sh. The root manual's
+# trust boundary names cloned third-party repos as untrusted content, and
+# untrusted content is data, never code to run.
+#
+# The fixture is the real shape of it: the operator's own project, invoked by
+# absolute path, from inside somebody else's clone.
+t_repo
+FOREIGN=$REPO
+write_config "$FOREIGN/scripts/agents.config.sh" "$(
+	cat <<'EOF'
+echo "FOREIGN-CONFIG-EXECUTED" >&2
+AGENT_TIER_MECHANICAL='model-the-foreign-repo-chose'
+EOF
+)"
+
+resolve_from "$FOREIGN" "$OWN/tools/agents.lib.sh" mechanical
+assert_resolved "model-for-mechanical" "the library's own repo supplies the mapping, not the cwd's repo"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# The same, with no config of its own to fall back on: the answer must be
+# "nothing", never the stranger's mapping.
+t_repo
+BARE=$REPO
+install_lib "$BARE/tools"
+resolve_from "$FOREIGN" "$BARE/tools/agents.lib.sh" mechanical
+[ -z "$R_OUT" ] && pass "a library with no config of its own resolves to nothing in a foreign repo" ||
+	fail "resolved '$R_OUT' from the cwd's repo"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# ---------------------------------------------------------------------------
+banner "A sourcing caller that has not said where it is discovers nothing"
+# ---------------------------------------------------------------------------
+# The consequence of anchoring on the library rather than the cwd. A file being
+# sourced cannot portably learn its own path, so a sourcing caller that sets
+# neither $AGENTS_CONFIG nor $_agents_here gives the resolver nothing to anchor
+# on — and the alternative to "nothing" is the cwd's repo, which is the rule
+# just removed. It warns and passes, exactly like any other unmapped state.
+capture_in "$OWN" sh -c "unset AGENTS_CONFIG; . ./tools/agents.lib.sh; resolve_tier mechanical"
+[ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ] && pass "a bare sourcing caller resolves to nothing rather than to the cwd's repo" ||
+	fail "a bare sourcing caller got status $R_STATUS, stdout '$R_OUT'"
+assert_err_has "UNMAPPED"
+
+# …and saying where it is restores discovery, without ever consulting the cwd.
+capture_in "$FOREIGN" sh -c "unset AGENTS_CONFIG; _agents_here='$OWN/tools'; . '$OWN/tools/agents.lib.sh'; resolve_tier mechanical"
+[ "$R_OUT" = "model-for-mechanical" ] && pass "a sourcing caller that sets \$_agents_here gets its own repo's mapping" ||
+	fail "a sourcing caller with \$_agents_here set printed '$R_OUT'"
+assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+
+# ---------------------------------------------------------------------------
+banner "The explicit pointer, and the absence of any config at all"
+# ---------------------------------------------------------------------------
+# The explicit pointer wins over the library's own repo — that is what makes the
 # whole thing testable in the first place.
 AGENTS_CONFIG="$EMPTY"
 export AGENTS_CONFIG
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-R_OUT=$(cd "$REPO" && sh "$LIB" mechanical 2>"$R_ERR")
-R_STATUS=$?
-R_ERR_TEXT=$(cat "$R_ERR")
-rm -f "$R_ERR"
+capture_in "$OWN" sh "$OWN/tools/agents.lib.sh" mechanical
 [ -z "$R_OUT" ] && pass "AGENTS_CONFIG overrides the repo-root config" ||
 	fail "AGENTS_CONFIG did not override the repo-root config (got '$R_OUT')"
 
@@ -410,8 +655,7 @@ assert_err_has "does not exist"
 # No config file anywhere: identical to an unconfigured one. A project that has
 # deleted the file is not a project that wants a hard failure on every spawn.
 unset AGENTS_CONFIG
-t_repo
-resolve_in "$REPO" implementer
+resolve_from "$BARE" "$BARE/tools/agents.lib.sh" implementer
 [ "$R_STATUS" = 0 ] && pass "no config file at all still exits 0" || fail "no config file exited $R_STATUS"
 [ -z "$R_OUT" ] && pass "no config file resolves to nothing (session model)" || fail "no config file printed '$R_OUT'"
 assert_err_has "UNMAPPED"
@@ -465,4 +709,84 @@ else
 	pass "the shipped config assigns no domain variable"
 fi
 
+# ---------------------------------------------------------------------------
+banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
+# ---------------------------------------------------------------------------
+# The kit follows its own rule (root AGENTS.md, "Capability tiers"): the
+# resolver's existing $AGENTS_CONFIG seam, pointed at the kit-only mapping,
+# resolves all four tiers to a real value with no UNMAPPED warning. This is
+# the seam a kit session actually types:
+#   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
+KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
+[ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
+
+AGENTS_CONFIG="$KIT_CONFIG"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	if [ "$R_STATUS" = 0 ] && [ -n "$R_OUT" ]; then
+		pass "kit config resolves '$tier' to a non-empty value ('$R_OUT')"
+	else
+		fail "kit config did not resolve '$tier' — status $R_STATUS, stdout '$R_OUT'"
+		printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	assert_err_lacks "UNMAPPED"
+done
+
+# The consumer-shipped file is untouched by this: it still resolves every tier
+# to EMPTY. The kit names no model to consumers, even while naming one to
+# itself.
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	if [ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ]; then
+		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY"
+	else
+		fail "scripts/agents.config.sh (shipped) resolved '$tier' to '$R_OUT', expected empty"
+	fi
+	assert_err_has "UNMAPPED"
+done
+unset AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
+banner "The kit's own wrapper — scripts/agents.kit.sh (f13 review M-2)"
+# ---------------------------------------------------------------------------
+# AGENTS.md hard rule 10: in this repo, `sh scripts/agents.kit.sh <tier>`
+# replaces the plain `sh scripts/agents.lib.sh <tier>` a SKILL.md literally
+# says, because the plain command resolves through the empty shipped config
+# here too. The wrapper's whole job is setting $AGENTS_CONFIG itself, so it
+# must resolve the kit's own mapping regardless of what the CALLER'S
+# environment says — proved here by pointing AGENTS_CONFIG at the shipped
+# (empty) file before invoking it. A pass that depended on the caller's
+# environment instead of the wrapper's own assignment would be the bug this
+# section exists to catch.
+KIT_WRAPPER="$KIT/scripts/agents.kit.sh"
+[ -f "$KIT_WRAPPER" ] && pass "scripts/agents.kit.sh exists" || fail "scripts/agents.kit.sh is missing"
+
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+	W_OUT=$(sh "$KIT_WRAPPER" "$tier" 2>"$W_ERR")
+	W_STATUS=$?
+	W_ERR_TEXT=$(cat "$W_ERR")
+	rm -f "$W_ERR"
+	if [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ]; then
+		pass "scripts/agents.kit.sh resolves '$tier' to a non-empty value ('$W_OUT') despite AGENTS_CONFIG pointing at the shipped empty file"
+	else
+		fail "scripts/agents.kit.sh did not resolve '$tier' — status $W_STATUS, stdout '$W_OUT'"
+		printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	case "$W_ERR_TEXT" in
+	*UNMAPPED*) fail "scripts/agents.kit.sh warned UNMAPPED for '$tier' — it should have resolved" ;;
+	*) pass "scripts/agents.kit.sh did not warn UNMAPPED for '$tier'" ;;
+	esac
+done
+
+unset AGENTS_CONFIG
+
+if [ "$SKIPPED" -gt 0 ]; then
+	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
+fi
 t_done "agents tier resolution"

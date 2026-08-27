@@ -7,9 +7,11 @@
 # end against a throwaway copy of the kit, red and green, once per failure mode
 # the gate says it catches:
 #
-#   1.  RED    before bootstrap — no root manual, so the gate refuses
-#   2.  GREEN  bootstrap stamps AGENTS.md and the two shims, wires,
-#              self-deletes; the gate passes
+#   1.  RED    with no root manual, the gate refuses — proved on the tree the
+#              template hands you, minus the KIT's own manual layer, which is
+#              what bootstrap strips in step 2
+#   2.  GREEN  bootstrap strips the kit's own files, stamps AGENTS.md and the
+#              two shims, wires, self-deletes; the gate passes
 #   2b. GREEN  the three entry points exist and the shims are PURE — then RED
 #              when a shim grows content, and RED when AGENTS.md is deleted
 #   3.         a second bootstrap is refused (idempotency)
@@ -88,6 +90,19 @@ assert_out_lacks() {
 	esac
 }
 
+# The double-brace MARK, assembled from variables so this script never contains
+# a literal one.
+#
+# It has to PLANT marks (steps 6 and 13) and SEARCH for them (step 4b), and the
+# kit repo is itself bootstrapped now — so `scripts/check.sh`'s placeholder rule
+# runs over this file too. That rule exempts only `*.template` sources,
+# deliberately: a gate blind to its own tooling is not a gate, which is why
+# check.sh spells its own pattern out of variables in the same way.
+ob='{'
+cb='}'
+mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
+mark_re="${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}"
+
 assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
 assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
@@ -138,12 +153,28 @@ pass "fresh repo at \$SCRATCH/demo-project with a bare origin"
 	skip "node is NOT available — harness steps will be skipped, fallback still proven"
 
 # ---------------------------------------------------------------------------
-banner "1. RED — the gate fails BEFORE bootstrap"
+banner "1. RED — the gate fails on a tree with no manual of its own"
 # ---------------------------------------------------------------------------
 # If it passed here, it would be passing on a tree with no agent manual at all,
 # and the green in step 2 would mean nothing.
-assert_status 1 "check.sh rejects an unbootstrapped tree" -- sh scripts/check.sh
+#
+# A tree freshly created from the template is NOT that tree, though: the kit
+# follows its own framework, so it arrives carrying the kit's own AGENTS.md and
+# shims (docs/adr/0001-the-kit-self-hosts-its-own-constitution.md). Those are
+# what bootstrap strips in step 2 before stamping yours. So the non-vacuity
+# claim is made where it is actually true — with the kit's manual layer taken
+# out of the way, exactly as bootstrap is about to take it out.
+for kit_own in AGENTS.md CLAUDE.md GEMINI.md; do
+	mv "$kit_own" "$SCRATCH/$kit_own.kit"
+done
+assert_status 1 "check.sh rejects a tree with no root manual" -- sh scripts/check.sh
 assert_out_has "root-manual-missing"
+for kit_own in AGENTS.md CLAUDE.md GEMINI.md; do
+	mv "$SCRATCH/$kit_own.kit" "$kit_own"
+done
+# And back to where "Use this template" leaves you: the kit's own layer present,
+# and bootstrap yet to run.
+assert_status 0 "the kit's own manual layer passes the kit's own gate" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------
 banner "2. GREEN — bootstrap, then the gate"
@@ -190,7 +221,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.6.0"
+assert_out_has "shared-layer 0.7.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else
@@ -297,11 +328,9 @@ assert_file "scripts/worktree-cleanup.sh"
 # (a) The gate's placeholder rule covers the whole tree; this narrows the report
 # to the skills, because "a mark leaked into a skill" and "a mark leaked into
 # the manual" have completely different causes.
-ob='{'
-cb='}'
-if grep -rq "${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}" .claude/skills 2>/dev/null; then
+if grep -rq "$mark_re" .claude/skills 2>/dev/null; then
 	fail "a skill carries an unstamped placeholder — skills are copied, never stamped"
-	grep -rn "${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}" .claude/skills | sed 's/^/        | /'
+	grep -rn "$mark_re" .claude/skills | sed 's/^/        | /'
 else
 	pass "no skill carries an unstamped placeholder"
 fi
@@ -387,7 +416,7 @@ assert_status 0 "the pre-push hook is executable" -- test -x .githooks/pre-push
 # ---------------------------------------------------------------------------
 banner "6. RED — an unstamped placeholder fails the gate and blocks the push"
 # ---------------------------------------------------------------------------
-printf '\nOwner: {{PROJECT_OWNER}}\n' >>AGENTS.md
+printf '\nOwner: %s\n' "$(mark PROJECT_OWNER)" >>AGENTS.md
 assert_status 1 "check.sh rejects the surviving placeholder" -- sh scripts/check.sh
 assert_out_has "placeholder-unstamped"
 
@@ -496,7 +525,7 @@ restore_good
 # ---------------------------------------------------------------------------
 banner "13. The bypass is real, and loud"
 # ---------------------------------------------------------------------------
-printf '\nOwner: {{PROJECT_OWNER}}\n' >>AGENTS.md
+printf '\nOwner: %s\n' "$(mark PROJECT_OWNER)" >>AGENTS.md
 git add -A
 git commit -q --allow-empty -m "docs: reintroduce the bad line to test the bypass"
 out=$(PUSH_WITHOUT_DOCS=1 git push origin main 2>&1)

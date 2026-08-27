@@ -27,6 +27,22 @@ die() {
 	exit 1
 }
 
+# The double-brace MARK, assembled from two variables so this script never
+# contains a literal one.
+#
+# `scripts/check.sh` scans every file in the tree for a surviving mark and
+# exempts only `*.template` sources — deliberately, because a gate blind to its
+# own tooling is not a gate, and check.sh spells its own pattern out of
+# variables for exactly this reason. Now that the kit repo is itself
+# bootstrapped (docs/adr/0001-the-kit-self-hosts-its-own-constitution.md), that
+# scan runs over THIS file too, so the kit-authoring scripts that have to NAME
+# the mark spell it the same way rather than carving an exemption into a
+# shared-layer file every consumer also receives.
+ob='{'
+cb='}'
+# mark <NAME> — the placeholder as it appears in a template, e.g. PROJECT_NAME.
+mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
+
 TEMPLATE="constitution/AGENTS.md.template"
 MANUAL="AGENTS.md"
 # The manual is ONE file. AGENTS.md is the filename the agent-tool ecosystem has
@@ -46,15 +62,29 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # OWN shared layer, and inheriting it would give a fresh project a workflow that
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
-# EXCLUSIONS.md goes the same way, and it is the one entry here that is not a
-# test: it records what the KIT deliberately does not ship, which is a sentence
-# with no referent inside a consumer project — a reader there would take it for a
-# record of their own decisions. It is prose, not scaffolding, but its lifetime
-# is the kit's. That is also why it is not shared layer (see VERSION): a file
-# bootstrap deletes cannot be copied verbatim or diffed against a later release.
+# EXCLUSIONS.md goes the same way, and it is one of two entries here that are
+# not a test: it records what the KIT deliberately does not ship, which is a
+# sentence with no referent inside a consumer project — a reader there would
+# take it for a record of their own decisions. It is prose, not scaffolding,
+# but its lifetime is the kit's. That is also why it is not shared layer (see
+# VERSION): a file bootstrap deletes cannot be copied verbatim or diffed
+# against a later release.
 #
-# Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
+# scripts/agents.kit.config.sh is the other non-test entry, and a different
+# class again: it is the kit's OWN capability-tier -> model mapping (AGENTS.md,
+# "Capability tiers"). scripts/agents.config.sh — the file every consumer
+# edits — ships EMPTY by principle, because the kit names no model to a
+# consumer; but this repo is itself a consumer of the mechanism it ships, and
+# needs a real mapping so its own subagents do not silently fall back to
+# whatever model the session happens to be running on. Naming a model is
+# exactly the kind of content with no business surviving into a stamped
+# project. scripts/agents.kit.sh sits beside it for the same reason: it exists
+# only to reach a config that does not exist in a stamped project, so keeping
+# it would ship a broken command rather than a useless one.
+#
+# Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
+# script, adds its entry here.
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -68,6 +98,102 @@ KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh
 root=$(git rev-parse --show-toplevel 2>/dev/null) ||
 	die "not inside a git repository. Run \`git init\` (or clone from the template) first — bootstrap wires a git hook and has nothing to wire otherwise."
 cd "$root"
+
+# ============================================================================
+# F12 BEGIN — the kit's own bootstrapped state (#f12)
+# ----------------------------------------------------------------------------
+# The kit repo follows the framework it ships: it has a root AGENTS.md written
+# for its own authoring context, the two shims beside it, and a documentation
+# set. Every one of those files is sitting in the tree you just created your
+# repo from — so they have to come OUT before the idempotency check below, which
+# would otherwise read the kit's own manual as evidence that YOUR repo is
+# already bootstrapped and refuse every consumer's first run.
+#
+# Removed and then re-created from the templates, not kept: a manual describing
+# how to author the kit is worse than no manual inside a project that is not the
+# kit. Everything on this list has a stamped replacement further down (K4, K7),
+# which is why the strip is safe rather than lossy — the two-run byte-identity
+# check in `tests/self-host.test.sh` is what holds that claim.
+#
+# The list is FILES, one per line-item, never a directory. `rm -rf docs/adr`
+# would take the first ADR a consumer wrote in the window between creating their
+# repo and running this script — the exact window in which people write one —
+# and an uncommitted one would be gone for good. Deleting only the names the kit
+# itself ships means a consumer's `docs/adr/0002-….md` is never in reach of this
+# block at all. `tests/self-host.test.sh` section E holds that, and also holds
+# that every file in the kit's own `docs/adr/` is named here — a kit ADR added
+# later and forgotten shows up as a failing assertion rather than as a leak.
+#
+# THREE CONDITIONS, all required, because this deletes files without asking:
+#   1. constitution/AGENTS.md.template is still here — i.e. this tree has not
+#      been stamped yet. A bootstrapped project has no template, so a second run
+#      strips nothing and still hits "already exists" below.
+#   2. the root manual carries the kit-own SENTINEL. That is what keeps the old
+#      safety intact for the one case that would otherwise regress: a repo
+#      created from the template whose owner hand-wrote an AGENTS.md BEFORE
+#      running bootstrap. Their file has no sentinel, so nothing is removed and
+#      they get the same refusal they get today.
+#   3. every file about to be deleted is still the kit's — git reports no local
+#      modification to it. A consumer who personalized the manual IN PLACE (the
+#      sentinel comment survives an edit, so condition 2 cannot see them) gets a
+#      refusal naming the file instead of a silent delete and exit 0. Refusing
+#      is cheap; silently overwriting an afternoon of local rules is not — the
+#      same reasoning as the idempotency check below.
+#
+# What condition 3 can and cannot see: a modification git has not been told
+# about yet — the overwhelmingly common shape, since the file arrived in the
+# template's own initial commit and an edit sits in the working tree. It cannot
+# see an edit the consumer already COMMITTED (that one is at least recoverable
+# from their own history), and it is skipped entirely in a tree with no commits,
+# where there is no "as it arrived" to compare against. Ruling those out would
+# take a shipped hash of every kit-own file — including `docs/diary.md`, which
+# this repo rewrites in every ticket — and a stale hash would refuse EVERY
+# consumer's first run. A protection whose failure mode is worse than the bug is
+# not worth the maintenance.
+KIT_OWN_SENTINEL="agentic-sdlc:kit-own"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md"
+
+if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+	have_head=1
+else
+	have_head=0
+fi
+
+# kit_own_touched <path> — true when git can see a local change to a tracked
+# kit-own file. Untracked or historyless means "no evidence either way", which
+# reads as untouched: see the note above.
+kit_own_touched() {
+	[ "$have_head" = 1 ] || return 1
+	git ls-files --error-unmatch -- "$1" >/dev/null 2>&1 || return 1
+	! git diff --quiet HEAD -- "$1"
+}
+
+if [ -f "$TEMPLATE" ] && [ -f "$MANUAL" ] && grep -q "$KIT_OWN_SENTINEL" "$MANUAL" 2>/dev/null; then
+	# Check the WHOLE set before deleting any of it. A refusal that fires halfway
+	# through leaves a half-stripped tree, which is a worse place to stand than
+	# either end of the run.
+	for f in $KIT_OWN; do
+		[ -f "$f" ] || continue
+		if kit_own_touched "$f"; then
+			die "$f is the kit's own file and you have local changes to it — bootstrap replaces it and would take your edits with it.
+  Save what you wrote somewhere outside the repo, restore the file with \`git checkout -- $f\`, and run bootstrap again.
+  (Everything the kit ships at that path is re-created from the templates; write your own rules into the manual bootstrap stamps, not into this one.)"
+		fi
+	done
+	for f in $KIT_OWN; do
+		if [ -f "$f" ]; then
+			rm -f "$f"
+			echo "  removed $f (the kit's own; yours is stamped below)"
+		fi
+	done
+	# Only if now empty. K4 re-creates both, and a directory still holding
+	# something is holding a consumer's file — `rmdir` refuses, which is the
+	# behavior we want and the reason this is not `rm -rf`.
+	rmdir docs/adr 2>/dev/null || true
+	rmdir docs 2>/dev/null || true
+fi
+# F12 END
+# ============================================================================
 
 # Idempotency: refuse the second run rather than re-stamping over a manual you
 # have since edited. Refusing is cheap; silently overwriting a week of local
@@ -227,8 +353,8 @@ description_esc=$(esc "$description")
 name_js_esc=$(esc "$(esc_js "$name")")
 
 sed \
-	-e "s|{{PROJECT_NAME}}|$name_esc|g" \
-	-e "s|{{PROJECT_DESCRIPTION}}|$description_esc|g" \
+	-e "s|$(mark PROJECT_NAME)|$name_esc|g" \
+	-e "s|$(mark PROJECT_DESCRIPTION)|$description_esc|g" \
 	-e "$dogfood_filter" \
 	"$TEMPLATE" >"$MANUAL"
 rm -f "$TEMPLATE"
@@ -259,7 +385,7 @@ done
 # ============================================================================
 
 if [ -f "$VOCAB_TEMPLATE" ]; then
-	sed -e "s|{{PROJECT_NAME}}|$name_js_esc|g" "$VOCAB_TEMPLATE" >"$VOCAB"
+	sed -e "s|$(mark PROJECT_NAME)|$name_js_esc|g" "$VOCAB_TEMPLATE" >"$VOCAB"
 	rm -f "$VOCAB_TEMPLATE"
 	echo "  stamped $VOCAB"
 fi
@@ -296,9 +422,9 @@ today_esc=$(esc "$today")
 stamp() {
 	mkdir -p "$(dirname "$2")"
 	sed \
-		-e "s|{{PROJECT_NAME}}|$name_esc|g" \
-		-e "s|{{PROJECT_DESCRIPTION}}|$description_esc|g" \
-		-e "s|{{BOOTSTRAP_DATE}}|$today_esc|g" \
+		-e "s|$(mark PROJECT_NAME)|$name_esc|g" \
+		-e "s|$(mark PROJECT_DESCRIPTION)|$description_esc|g" \
+		-e "s|$(mark BOOTSTRAP_DATE)|$today_esc|g" \
 		"$1" >"$2"
 	echo "  stamped $2"
 }

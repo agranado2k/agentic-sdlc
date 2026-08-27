@@ -39,7 +39,9 @@ export function denyEntryFromTerms({ id, terms, reason }) {
  *
  * The kit itself has no product, so in the kit repo the template is never
  * stamped and this list is empty — which is the correct reading: the kit's own
- * shared layer must be free of *any* product vocabulary.
+ * shared layer must be free of *any* product vocabulary. (The kit repo IS
+ * otherwise bootstrapped, and runs this gate on itself; only the vocabulary
+ * file is deliberately absent there.)
  */
 const localVocabularyFile = join(here, "local-vocabulary.mjs");
 const localVocabulary = existsSync(localVocabularyFile)
@@ -77,8 +79,8 @@ export const claudeMdRefs = {
    * than a convention.
    *
    * `shim-invalid` is only evaluated when the root manual exists — an
-   * unbootstrapped tree (the kit itself) and a fixture that does not model the
-   * manual layer both stay silent, exactly as the other manual checks do.
+   * unbootstrapped tree and a fixture that does not model the manual layer both
+   * stay silent, exactly as the other manual checks do.
    * Delete an entry here if you do not want that tool's entry point at all; the
    * gate follows this list, not a hard-coded pair.
    */
