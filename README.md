@@ -561,11 +561,15 @@ interleave with another ticket's block.
 
 `bootstrap.sh` also contains the one thing in the kit that deletes files at the
 *start* of a run: the `F12` block, which removes the kit's own manual, shims and
-`docs/` before the "already bootstrapped" check would trip on them. It is
-guarded on two conditions — the template is still present, **and** the root
-manual carries the `agentic-sdlc:kit-own` sentinel — so a consumer's second run
-and a hand-written manual are both left alone. Do not delete that sentinel
-comment from `AGENTS.md`.
+documentation files before the "already bootstrapped" check would trip on them.
+It names **exact files, never a directory**, and is guarded on three conditions:
+the template is still present, the root manual carries the `agentic-sdlc:kit-own`
+sentinel, **and** git reports no local modification to anything on the list. So a
+consumer's second run, a hand-written manual, a decision they recorded in
+`docs/adr/` and a manual they personalized in place are all left alone — the
+last of those with a refusal that names the file. Do not delete that sentinel
+comment from `AGENTS.md`, and add any new kit-own file to the list beside it —
+`tests/self-host.test.sh` section E is what holds both.
 
 `UPDATING.md` quotes two transcripts produced by `tests/docs-demo.sh`. If you
 change the recipe or the shared layer, re-run the demo and re-paste them — and

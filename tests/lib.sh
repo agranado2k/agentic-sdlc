@@ -25,6 +25,13 @@ LAST_STATUS=0
 # a hole shaped like its own tooling is not a gate. check.sh spells its own
 # pattern the same way, for the same reason. Suites that must PLANT a mark to
 # prove the gate catches it therefore spell it rather than write it.
+#
+# There are three copies of this helper, and at least one of them must stay a
+# copy: `mark` in `bootstrap.sh` ships into a consumer tree that has no `tests/`
+# to source from, so it cannot be deduplicated into this file at any price.
+# `mark` in `tests/kit-demo.sh` is the third; that suite carries its own harness
+# and sources nothing at all. If you are here to remove duplication, remove that
+# one — never bootstrap's.
 _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }

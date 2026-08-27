@@ -101,7 +101,16 @@ cd "$root"
 # which is why the strip is safe rather than lossy — the two-run byte-identity
 # check in `tests/self-host.test.sh` is what holds that claim.
 #
-# TWO CONDITIONS, both required, because this deletes files without asking:
+# The list is FILES, one per line-item, never a directory. `rm -rf docs/adr`
+# would take the first ADR a consumer wrote in the window between creating their
+# repo and running this script — the exact window in which people write one —
+# and an uncommitted one would be gone for good. Deleting only the names the kit
+# itself ships means a consumer's `docs/adr/0002-….md` is never in reach of this
+# block at all. `tests/self-host.test.sh` section E holds that, and also holds
+# that every file in the kit's own `docs/adr/` is named here — a kit ADR added
+# later and forgotten shows up as a failing assertion rather than as a leak.
+#
+# THREE CONDITIONS, all required, because this deletes files without asking:
 #   1. constitution/AGENTS.md.template is still here — i.e. this tree has not
 #      been stamped yet. A bootstrapped project has no template, so a second run
 #      strips nothing and still hits "already exists" below.
@@ -110,18 +119,63 @@ cd "$root"
 #      created from the template whose owner hand-wrote an AGENTS.md BEFORE
 #      running bootstrap. Their file has no sentinel, so nothing is removed and
 #      they get the same refusal they get today.
+#   3. every file about to be deleted is still the kit's — git reports no local
+#      modification to it. A consumer who personalized the manual IN PLACE (the
+#      sentinel comment survives an edit, so condition 2 cannot see them) gets a
+#      refusal naming the file instead of a silent delete and exit 0. Refusing
+#      is cheap; silently overwriting an afternoon of local rules is not — the
+#      same reasoning as the idempotency check below.
+#
+# What condition 3 can and cannot see: a modification git has not been told
+# about yet — the overwhelmingly common shape, since the file arrived in the
+# template's own initial commit and an edit sits in the working tree. It cannot
+# see an edit the consumer already COMMITTED (that one is at least recoverable
+# from their own history), and it is skipped entirely in a tree with no commits,
+# where there is no "as it arrived" to compare against. Ruling those out would
+# take a shipped hash of every kit-own file — including `docs/diary.md`, which
+# this repo rewrites in every ticket — and a stale hash would refuse EVERY
+# consumer's first run. A protection whose failure mode is worse than the bug is
+# not worth the maintenance.
 KIT_OWN_SENTINEL="agentic-sdlc:kit-own"
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr .github/PULL_REQUEST_TEMPLATE.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md"
+
+if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+	have_head=1
+else
+	have_head=0
+fi
+
+# kit_own_touched <path> — true when git can see a local change to a tracked
+# kit-own file. Untracked or historyless means "no evidence either way", which
+# reads as untouched: see the note above.
+kit_own_touched() {
+	[ "$have_head" = 1 ] || return 1
+	git ls-files --error-unmatch -- "$1" >/dev/null 2>&1 || return 1
+	! git diff --quiet HEAD -- "$1"
+}
 
 if [ -f "$TEMPLATE" ] && [ -f "$MANUAL" ] && grep -q "$KIT_OWN_SENTINEL" "$MANUAL" 2>/dev/null; then
+	# Check the WHOLE set before deleting any of it. A refusal that fires halfway
+	# through leaves a half-stripped tree, which is a worse place to stand than
+	# either end of the run.
 	for f in $KIT_OWN; do
-		if [ -e "$f" ]; then
-			rm -rf "$f"
+		[ -f "$f" ] || continue
+		if kit_own_touched "$f"; then
+			die "$f is the kit's own file and you have local changes to it — bootstrap replaces it and would take your edits with it.
+  Save what you wrote somewhere outside the repo, restore the file with \`git checkout -- $f\`, and run bootstrap again.
+  (Everything the kit ships at that path is re-created from the templates; write your own rules into the manual bootstrap stamps, not into this one.)"
+		fi
+	done
+	for f in $KIT_OWN; do
+		if [ -f "$f" ]; then
+			rm -f "$f"
 			echo "  removed $f (the kit's own; yours is stamped below)"
 		fi
 	done
-	# Only if now empty — K4 re-creates it, and a project that arrived with docs
-	# of its own keeps them.
+	# Only if now empty. K4 re-creates both, and a directory still holding
+	# something is holding a consumer's file — `rmdir` refuses, which is the
+	# behavior we want and the reason this is not `rm -rf`.
+	rmdir docs/adr 2>/dev/null || true
 	rmdir docs 2>/dev/null || true
 fi
 # F12 END

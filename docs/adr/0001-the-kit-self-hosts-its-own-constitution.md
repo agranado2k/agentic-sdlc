@@ -105,18 +105,27 @@ removes the kit's own files before it stamps a consumer's.**
 3. The kit carries `docs/diary.md`, `docs/adr/` (this record, its index, and the
    MADR skeleton), `docs/domain-glossary.md`, and
    `.github/PULL_REQUEST_TEMPLATE.md`.
-4. `bootstrap.sh` removes `AGENTS.md`, the shims, `docs/diary.md`,
-   `docs/domain-glossary.md`, `docs/adr/` and `.github/PULL_REQUEST_TEMPLATE.md`
-   **before** the "already bootstrapped" check, under **two** conditions, both
+4. `bootstrap.sh` removes the kit's own files **before** the "already
+   bootstrapped" check. The list is **exact file paths** — `AGENTS.md`, the two
+   shims, `docs/diary.md`, `docs/domain-glossary.md`, the three files the kit
+   ships in `docs/adr/`, and `.github/PULL_REQUEST_TEMPLATE.md` — never a
+   directory, so a decision the consumer recorded in `docs/adr/` before their
+   first bootstrap is not in the strip's reach at all. Three conditions, all
    required:
    - `constitution/AGENTS.md.template` still exists (this tree has not been
      stamped), **and**
-   - the root manual carries the sentinel string `agentic-sdlc:kit-own`.
+   - the root manual carries the sentinel string `agentic-sdlc:kit-own`, **and**
+   - git reports no local modification to any file about to be deleted. The
+     whole set is checked before any of it is removed, so a refusal never leaves
+     a half-stripped tree.
 
-   The sentinel is what preserves today's safety for the one case that would
-   otherwise regress: a repo created from the template whose owner hand-wrote an
+   The sentinel preserves today's safety for the case that would otherwise
+   regress: a repo created from the template whose owner hand-wrote an
    `AGENTS.md` before running bootstrap. Their file has no sentinel, nothing is
-   removed, and they get the same refusal they get today.
+   removed, and they get the same refusal they get today. The modification check
+   covers the case the sentinel cannot see — an owner who personalized the kit's
+   manual **in place**, leaving the sentinel comment where it is — and turns a
+   silent delete and exit 0 into a refusal that names the file.
 5. Kit-authoring files that must **name** a double-brace mark spell it from
    variables (`ob` / `cb` and a `mark` helper) rather than carrying a literal
    one. No exemption is added to the gate, and no kit-only policy file exists.
@@ -126,7 +135,10 @@ removes the kit's own files before it stamps a consumer's.**
 7. `tests/self-host.test.sh` is the suite. Its load-bearing assertion is
    **byte-identity**: bootstrap runs twice, once against the real tree and once
    against the same tree with the kit-own files removed by hand, and the two
-   resulting projects must be identical file for file.
+   resulting projects must be identical file for file. Section E is the other
+   half — one fixture per guard, each one a consumer who wrote something in the
+   window between "Use this template" and their first bootstrap. Removing any of
+   the three conditions from `bootstrap.sh` turns section E red.
 8. **Explicit non-goal**: this does not give the kit a general seam for
    kit-only gate policy. It removes the need for one today; it does not build
    one for tomorrow.
@@ -139,11 +151,22 @@ removes the kit's own files before it stamps a consumer's.**
 - **Good**: no shared-layer file changed, so `VERSION` stays at 0.5.0, no
   `UPDATING.md` entry is owed, and no pinned transcript had to be re-captured.
 - **Bad / trade-off**: `bootstrap.sh` now deletes files at the *start* of its
-  run. That is the highest-consequence line in the script, and it is guarded by
-  a string match. The guard is double (template present **and** sentinel
-  present), and the byte-identity suite covers the outcome, but a future editor
-  who deletes the sentinel comment from `AGENTS.md` breaks consumer bootstrap in
-  a way that only `tests/self-host.test.sh` will catch.
+  run. That is the highest-consequence line in the script. Three conditions and
+  an exact file list guard it, section E drives each one red before green, and
+  the byte-identity suite covers the outcome — but a future editor who deletes
+  the sentinel comment from `AGENTS.md` still breaks consumer bootstrap in a way
+  that only `tests/self-host.test.sh` will catch.
+- **Bad / trade-off**: the modification check sees what git has been told about.
+  An edit the consumer already **committed** before their first bootstrap, and
+  any tree with no commits at all, look untouched to it. Closing that would take
+  a shipped hash of every kit-own file — including `docs/diary.md`, rewritten in
+  every ticket here — and a stale hash would refuse every consumer's first run.
+  A guard whose failure mode is worse than the bug it prevents is not worth the
+  maintenance, so the residue is recorded rather than engineered away.
+- **Bad / trade-off**: the file list has to be maintained. A kit ADR added later
+  and not added to `KIT_OWN` would ride into every consumer's tree; section E
+  asserts that every file in the kit's `docs/adr/` is named there, so it fails
+  in the same change rather than in somebody's project.
 - **Bad / trade-off**: the mark-spelling convention makes three kit-authoring
   files slightly less direct to read. `s|$(mark PROJECT_NAME)|…|g` is a step
   removed from `s|{{…}}|…|g`. This is the same cost `scripts/check.sh` already

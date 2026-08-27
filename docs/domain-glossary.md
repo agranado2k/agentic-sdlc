@@ -69,9 +69,11 @@ Grouped by the seam each term belongs to. Entry shape:
     provably no rules.
 - **Kit-own file** — a file that exists at the kit root because the kit follows
   its own framework, and that `bootstrap.sh` removes before stamping a
-  consumer's equivalent: the root `AGENTS.md`, the shims, and the kit's `docs/`.
-  Recognised by the sentinel `agentic-sdlc:kit-own` in the manual.
-  Ref: ADR-0001.
+  consumer's equivalent: the root `AGENTS.md`, the shims, and the kit's own
+  documentation files. Enumerated by exact path in `KIT_OWN`, and recognised as
+  a set by the sentinel `agentic-sdlc:kit-own` in the manual. A file at one of
+  those paths that the consumer has locally modified is not kit-own any more,
+  and bootstrap refuses rather than deleting it. Ref: ADR-0001.
   - _Avoid_: "kit-only" — that is the *other* list in `bootstrap.sh`
     (`KIT_ONLY`: the tests and CI, removed at the END of the run). The two are
     different sets removed at different times for different reasons.
