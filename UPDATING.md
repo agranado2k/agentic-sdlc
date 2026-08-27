@@ -248,7 +248,7 @@ done <"$WORK/from.list"
 2. Move it to a local article — `AGENTS.md`'s local-rules section, or a
    `constitution/local-*.md` — where it belongs and where it survives updates.
 3. Restore the shared file to its `FROM_REF` content
-   (`kit show "$FROM_REF:$f" >"$f"`), confirm step 3 is clean, and commit that
+   (`kit_take "$FROM_REF" "$f" "$f"`), confirm step 3 is clean, and commit that
    as its **own** change. Untangling drift and adopting a new release in one
    commit makes both unreviewable (shared invariant §10).
 4. If the exception is genuinely universal rather than local, it is a kit issue,
@@ -300,6 +300,13 @@ carries exactly one mode bit and `git archive` carries it across; a redirect
 cannot. It only bites files *joining* the layer — a file you already had keeps
 the mode bootstrap gave it — which is precisely why it is easy to miss. (`tar`
 creates the intermediate directories, so there is no `mkdir -p` to do.)
+
+`kit_take` does not change that, and is not a substitute for it: it writes bytes
+too, and deliberately leaves the destination's mode alone. It is for **Part 2**,
+where every file is one you already have and its mode is already right. `VERSION`
+uses it above only because a bad `$TO_REF` should not be able to empty your
+version marker — the one file in this step that is not in the manifest and so is
+not re-checked by step 6.
 
 ## Step 6 — verify the verbatim claim, then the gate
 
@@ -507,10 +514,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1125 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1220 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  106 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1238 insertions(+), 1 deletion(-)
+ 3 files changed, 1333 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -689,19 +696,25 @@ kit show "$FROM_REF:$S" | diff -u - "$S"     # what YOU changed since bootstrap
 Four outcomes, and only one of them needs a human:
 
 - **kit clean, you clean** — nothing to do.
-- **kit changed, you clean** — take it: `kit show "$TO_REF:$S" >"$S"`.
+- **kit changed, you clean** — take it: `kit_take "$TO_REF" "$S" "$S"`.
 - **kit clean, you changed** — nothing to do. Your version stands.
 - **both changed** — merge; do not pick a side:
 
   ```sh
-  kit show "$FROM_REF:$S" >"$WORK/base"
-  kit show "$TO_REF:$S" >"$WORK/theirs"
+  kit_take "$FROM_REF" "$S" "$WORK/base" || { echo "no $S at $FROM_REF"; false; }
+  kit_take "$TO_REF" "$S" "$WORK/theirs" || { echo "no $S at $TO_REF"; false; }
   git merge-file "$S" "$WORK/base" "$WORK/theirs"
   ```
 
   `git merge-file` merges in place and exits non-zero after writing conflict
   markers where the two edits overlap. Read those; there is no verbatim check to
   fall back on, which is exactly why this category is not automatable.
+
+  The two takes are guarded even though they only write scratch files, because
+  `git merge-file` writes **`$S` itself**. Hand it an empty `theirs` — which is
+  what a plain `kit show … >"$WORK/theirs"` leaves behind when the kit renamed
+  the skill — and every line of your file reads as "deleted upstream", so the
+  merge empties it. Guarding a temp file is guarding `$S`, one step removed.
 
 **If you deliberately forked a skill, write the fork down** — one line in a
 local article ("`/review-pr`'s Axis-2 section is ours; we replaced the
@@ -822,9 +835,12 @@ kit ls-tree --name-only "$TO_REF" templates/workflows/ | while IFS= read -r wf; 
 done
 ```
 
-- **`NEW`** and **`UNTOUCHED`** are both `kit show "$TO_REF:$wf" >"$dest"` — a
-  redirect is safe *here*, unlike step 5's: workflow templates are plain 100644
-  files, so there is no mode bit to lose on the way in.
+- **`NEW`** and **`UNTOUCHED`** are both `kit_take "$TO_REF" "$wf" "$dest"` —
+  and unlike step 5 there is no mode to carry, because workflow templates are
+  plain 100644 files. `UNTOUCHED` is the one that needs the guarded take: the
+  destination is a file you already have, and `$wf` came from a listing of
+  `$TO_REF`, so the only way it is absent there is a race with a re-tag — rare,
+  and it costs you a workflow.
 - **`YOURS`** is a three-way merge, exactly as in 9a.
 - **`UNCHANGED`** and **`DECLINED`** are *nothing to do*.
 
@@ -917,7 +933,7 @@ Step 0 explains the shape; this is the branch where it was first paid for.
 ```sh
 keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
 
-kit show "$TO_REF:$C" >"$WORK/config.new"
+kit_take "$TO_REF" "$C" "$WORK/config.new" || { echo "no $C at $TO_REF"; false; }
 keys "$WORK/config.new" >"$WORK/keys.new"
 keys "$C" >"$WORK/keys.mine"
 
@@ -1144,14 +1160,18 @@ UNCHANGED .github/workflows/docs-gate.yml
 DECLINED  .github/workflows/tdd-pairing.yml
   took    .github/workflows/ai-review.example.yml + its prompt file
 
-$ # 9d — config: ADD or MERGE? Ask before you write.
-$ # kit cat-file -e "$FROM_REF:$C" — did it exist at the release we are on?
-ADD    scripts/agents.config.sh is new at v0.9.0 — nothing of ours to preserve
+$ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
+$ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
+ADD     scripts/agents.config.sh is new at v0.9.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
 AGENT_TIER_MECHANICAL
 AGENT_TIER_REVIEWER
+$ # …and the same three questions for the config bootstrap STAMPED
+STAMPED scripts/docs-conformance/local-vocabulary.mjs — the kit has no such path at either ref
+$ kit diff --stat "$FROM_REF" "$TO_REF" -- "$C.template"
+(the source template did not change in this release)
 
 $ # 9e — adapters: whole directories, or none
 $ kit archive "$TO_REF" adapters | tar -x

@@ -148,6 +148,19 @@ assert_block() {
 	fi
 }
 
+# kit_take <ref> <path in the kit> <your file>
+#
+# UPDATING.md step 0's take helper, mirrored — and pinned to the document's own
+# text by C4e, which extracts and runs the real thing. `kit` and `$WORK` resolve
+# at call time, so this one definition serves both recipes below.
+kit_take() {
+	kit show "${1}:$2" >"$WORK/take.$$" || {
+		rm -f "$WORK/take.$$"
+		return 1
+	}
+	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
+}
+
 # assert_status <expected> <label> -- <command...>
 assert_status() {
 	expected=$1
@@ -398,7 +411,7 @@ recipe() {
 
 	# --- Step 1: read both manifests ----------------------------------------
 	manifest() {
-		kit show "$1:VERSION" | awk '
+		kit show "${1}:VERSION" | awk '
 			/^files:/       { inlist = 1; next }
 			!inlist         { next }
 			/^[ \t]*#/      { next }
@@ -452,7 +465,7 @@ recipe() {
 		echo "§4 is waived for the QA phase in this repo."
 	} >>AGENTS.md
 	while IFS= read -r f; do
-		kit show "$FROM_REF:$f" >"$f"
+		kit_take "$FROM_REF" "$f" "$f"
 	done <"$WORK/from.list"
 	git commit -qam "refactor: move the local exception out of the shared layer"
 	while IFS= read -r f; do
@@ -469,7 +482,7 @@ recipe() {
 		git rm -q --ignore-unmatch -- "$f" 2>/dev/null || rm -f "$f"
 		echo "  removed $f (left the shared layer at $TO_REF)"
 	done
-	kit show "$TO_REF:VERSION" >VERSION
+	kit_take "$TO_REF" VERSION VERSION
 	if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
 		echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
 	fi
@@ -743,7 +756,7 @@ WORK1=$(mktemp -d)
 git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
 kit1() { git --git-dir="$WORK1/kit.git" "$@"; }
 manifest1() {
-	kit1 show "$1:VERSION" | awk '
+	kit1 show "${1}:VERSION" | awk '
 		/^files:/       { inlist = 1; next }
 		!inlist         { next }
 		/^[ \t]*#/      { next }
@@ -856,14 +869,14 @@ recipe2() {
 	kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
 	echo "\$ kit show \"\$FROM_REF:\$S\" | diff -u - \"\$S\" | head -1"
 	kit show "$FROM_REF:$S" | diff -u - "$S" | head -1 | grep . || echo "(no local edit — take it)"
-	kit show "$TO_REF:$S" >"$S"
+	kit_take "$TO_REF" "$S" "$S"
 	echo "  took    $S"
 
 	echo ""
 	echo "\$ # 9a — /to-tickets: BOTH changed. Three-way, not a copy."
 	T=.claude/skills/to-tickets/SKILL.md
-	kit show "$FROM_REF:$T" >"$WORK/base"
-	kit show "$TO_REF:$T" >"$WORK/theirs"
+	kit_take "$FROM_REF" "$T" "$WORK/base"
+	kit_take "$TO_REF" "$T" "$WORK/theirs"
 	echo "\$ git merge-file \"\$T\" \"\$WORK/base\" \"\$WORK/theirs\""
 	if git merge-file "$T" "$WORK/base" "$WORK/theirs"; then
 		echo "  merged clean — the kit's delta and our local note both survive"
@@ -887,7 +900,7 @@ recipe2() {
 	echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- constitution/"
 	kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
 	echo "\$ # copied across by hand: the Capability tiers section, and two rows"
-	kit show "$TO_REF:constitution/AGENTS.md.template" |
+	kit show "${TO_REF}:constitution/AGENTS.md.template" |
 		awk '
 			/^## Capability tiers$/ { s = 1; print; next }
 			s && /^## / { s = 0 }
@@ -935,26 +948,26 @@ recipe2() {
 	# NEW and UNTOUCHED are a copy. UNCHANGED, DECLINED and YOURS are not.
 	while read -r verdict dest; do
 		case "$verdict" in
-		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/${dest##*/}" >"$dest" ;;
+		NEW | UNTOUCHED) kit_take "$TO_REF" "templates/workflows/${dest##*/}" "$dest" ;;
 		esac
 	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
 
 	# --- Step 9d: config ------------------------------------------------------
 	echo ""
-	echo "\$ # 9d — config: ADD or MERGE? Ask before you write."
+	echo "\$ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first."
 	C=scripts/agents.config.sh
-	echo "\$ # kit cat-file -e \"\$FROM_REF:\$C\" — did it exist at the release we are on?"
-	if kit cat-file -e "$FROM_REF:$C" 2>/dev/null; then
-		echo "MERGE  $C existed at $FROM_REF — diff the key sets"
+	echo "\$ # kit cat-file -e \"\${FROM_REF}:\$C\" — did it exist at the release we are on?"
+	if kit cat-file -e "${FROM_REF}:$C" 2>/dev/null; then
+		echo "MERGE   $C existed at $FROM_REF — diff the key sets"
 		keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
-		kit show "$TO_REF:$C" >"$WORK/config.new"
+		kit_take "$TO_REF" "$C" "$WORK/config.new"
 		keys "$WORK/config.new" >"$WORK/keys.new"
 		keys "$C" >"$WORK/keys.mine"
 		comm -13 "$WORK/keys.mine" "$WORK/keys.new"
-	else
-		echo "ADD    $C is new at $TO_REF — nothing of ours to preserve"
-		kit show "$TO_REF:$C" >"$C"
+	elif kit cat-file -e "${TO_REF}:$C" 2>/dev/null; then
+		echo "ADD     $C is new at $TO_REF — nothing of ours to preserve"
+		kit_take "$TO_REF" "$C" "$C"
 		# printf, not echo: this is the one echoed line carrying a literal
 		# backslash, and `echo` is where shells still disagree — dash expands
 		# `\1` to a control character, bash and the macOS shell print it as
@@ -962,6 +975,24 @@ recipe2() {
 		# transcript must not record which shell captured it.
 		printf '%s\n' "\$ sed -n 's/^\\(AGENT_TIER_[A-Z]*\\)=.*/\\1/p' \"\$C\""
 		sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
+	else
+		echo "STAMPED $C — the kit has no such path at either ref"
+	fi
+
+	# The third verdict, on a real file rather than in the abstract: the
+	# vocabulary config is STAMPED from a `.template`, so the kit has that path
+	# at NEITHER ref. This is the arm that used to print ADD and empty the file.
+	echo "\$ # …and the same three questions for the config bootstrap STAMPED"
+	C=scripts/docs-conformance/local-vocabulary.mjs
+	if kit cat-file -e "${FROM_REF}:$C" 2>/dev/null; then
+		echo "MERGE   $C existed at $FROM_REF — diff the key sets"
+	elif kit cat-file -e "${TO_REF}:$C" 2>/dev/null; then
+		echo "ADD     $C is new at $TO_REF — nothing of ours to preserve"
+	else
+		echo "STAMPED $C — the kit has no such path at either ref"
+		echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$C.template\""
+		kit diff --stat "$FROM_REF" "$TO_REF" -- "$C.template" | grep . ||
+			echo "(the source template did not change in this release)"
 	fi
 
 	# --- Step 9e: adapters ----------------------------------------------------
