@@ -733,6 +733,38 @@ for tier in planner implementer mechanical reviewer; do
 	assert_err_lacks "UNMAPPED"
 done
 
+# The kit's own SECOND axis, and the reason it has one. This repo writes two
+# genuinely different kinds of artifact under a single `implementer` tier: the
+# POSIX sh under scripts/ and the harness under scripts/docs-conformance/, and
+# the PROSE that is most of the product — the manual, the constitution
+# articles, the skills. One tier name was answering two questions.
+#
+# So `content` is mapped here and `code` deliberately is NOT. An unmapped
+# domain falls back to the plain tier silently, which is the correct answer for
+# code; writing AGENT_TIER_IMPLEMENTER_CODE to the same id the tier already
+# resolves to would be a non-decision recorded as a decision — the mirror of
+# the "a Domain: on every ticket" anti-pattern /to-tickets warns about.
+resolve implementer
+KIT_IMPLEMENTER=$R_OUT
+
+resolve implementer content
+if [ "$R_STATUS" = 0 ] && [ -n "$R_OUT" ] && [ "$R_OUT" != "$KIT_IMPLEMENTER" ]; then
+	pass "kit config routes 'implementer content' ('$R_OUT') away from the plain tier ('$KIT_IMPLEMENTER')"
+else
+	fail "kit config did not route 'implementer content' — status $R_STATUS, stdout '$R_OUT', plain tier '$KIT_IMPLEMENTER'"
+	printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+fi
+assert_err_lacks "UNMAPPED"
+
+resolve implementer code
+if [ "$R_STATUS" = 0 ] && [ "$R_OUT" = "$KIT_IMPLEMENTER" ]; then
+	pass "kit config leaves 'implementer code' on the plain tier ('$R_OUT') — an unmapped domain is the ordinary case"
+else
+	fail "kit config resolved 'implementer code' to '$R_OUT', expected the plain tier's '$KIT_IMPLEMENTER'"
+	printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+fi
+assert_err_lacks "UNMAPPED"
+
 # The consumer-shipped file is untouched by this: it still resolves every tier
 # to EMPTY. The kit names no model to consumers, even while naming one to
 # itself.
@@ -784,6 +816,43 @@ for tier in planner implementer mechanical reviewer; do
 	esac
 done
 
+# The wrapper substitutes for scripts/agents.lib.sh, so it has to carry the
+# WHOLE signature — including the optional domain. It forwards "$@" rather than
+# a fixed one-argument form precisely so this holds, and this is the assertion
+# that keeps it true: a wrapper that quietly dropped the second argument would
+# still resolve every tier above and pass that entire section, while silently
+# undoing the axis for every kit session that follows hard rule 10.
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_PLAIN=$(sh "$KIT_WRAPPER" implementer 2>"$W_ERR")
+rm -f "$W_ERR"
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_OUT=$(sh "$KIT_WRAPPER" implementer content 2>"$W_ERR")
+W_STATUS=$?
+W_ERR_TEXT=$(cat "$W_ERR")
+rm -f "$W_ERR"
+if [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ] && [ "$W_OUT" != "$W_PLAIN" ]; then
+	pass "scripts/agents.kit.sh passes the domain through — 'implementer content' resolves '$W_OUT', not the plain tier's '$W_PLAIN'"
+else
+	fail "scripts/agents.kit.sh dropped the domain — status $W_STATUS, stdout '$W_OUT', plain tier '$W_PLAIN'"
+	printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+fi
+
+# …and the domain's exit codes survive the extra hop too: a malformed token is
+# the resolver's error to report, and the wrapper must not swallow it.
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_OUT=$(sh "$KIT_WRAPPER" implementer CONTENT 2>"$W_ERR")
+W_STATUS=$?
+W_ERR_TEXT=$(cat "$W_ERR")
+rm -f "$W_ERR"
+[ "$W_STATUS" = 2 ] && pass "scripts/agents.kit.sh propagates exit 2 for a malformed domain" ||
+	fail "scripts/agents.kit.sh exited $W_STATUS for a malformed domain, expected 2"
+case "$W_ERR_TEXT" in
+*"malformed task domain"*) pass "scripts/agents.kit.sh propagates the resolver's diagnostic" ;;
+*)
+	fail "scripts/agents.kit.sh swallowed the resolver's diagnostic"
+	printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+	;;
+esac
 unset AGENTS_CONFIG
 
 if [ "$SKIPPED" -gt 0 ]; then

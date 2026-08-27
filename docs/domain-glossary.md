@@ -116,6 +116,15 @@ Grouped by the seam each term belongs to. Entry shape:
   `scripts/agents.config.sh`. The kit names no model anywhere.
   - _Avoid_: "model", "agent size" — the tier is a decision about the *work*,
     deliberately made before anyone knows which model will run it.
+- **Task domain** — the resolver's optional *second* axis: what the work is made
+  **of**, where the tier is how big it is. `content`, `code`, `html-report`. A
+  ticket carries one only when the medium would change which model you would
+  pick. Unlike the four tier names its vocabulary is **open and local**, so an
+  unmapped domain falls back to the plain tier silently; what is not open is its
+  **shape** (`[a-z][a-z0-9-]*`), because the token is interpolated into the
+  variable name `AGENT_TIER_<TIER>_<DOMAIN>`.
+  - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
+    on every ticket is the same non-decision as one tier on every ticket.
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
   demoable, not a horizontal layer. In this repo a tracer bullet is typically a
   rule, the check that enforces it, and the suite that drives that check red
