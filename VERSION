@@ -102,8 +102,8 @@
 # capture pins themselves live in that suite — kit-only, not shared — so what
 # a consumer takes here is the re-captured prose and nothing else: a re-read of
 # the two worked examples, and no command of theirs changes.
-# 0.9.0 — the self-hosting follow-ups. No file joined or left the layer; ONE
-# shared file changed content, and only in its comments:
+# 0.9.0 — the self-hosting follow-ups. No file joined or left the layer; two
+# shared files changed content. The substantive one, and only in its comments:
 # scripts/docs-conformance/validators/claude-md-refs.mjs described "the kit's
 # own unbootstrapped tree" as its example of a tree the shim and reachability
 # rules stay silent on. The kit has self-hosted since ADR-0001, so that example
@@ -119,6 +119,10 @@
 # was written and the fixture carried the CURRENT version instead. The marker
 # line is now matched by SHAPE, and an assertion right after the fixture is
 # built proves the rollback happened.
+# The second content change is UPDATING.md, per this manifest's own precedent
+# that a re-pin is a content change: its worked-example prose and transcripts
+# moved 0.8.0 -> 0.9.0 with the release, nothing else. The recipe itself is
+# untouched.
 shared-layer: 0.9.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
