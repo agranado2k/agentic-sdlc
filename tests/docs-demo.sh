@@ -558,8 +558,19 @@ rm -f "$OLD3/constitution/shared-code-craft.md"
 # resolver at 0.4.0 and the code-craft article at 0.5.0 (whose file and manual
 # references were stripped above, exactly as B0 strips them from the fake
 # 0.1.0 kit).
-sed '/^  scripts\/agents\.lib\.sh$/d; /^  constitution\/shared-code-craft\.md$/d; s/^shared-layer: 0\.6\.0$/shared-layer: 0.3.0/' \
+#
+# The marker line is matched by SHAPE, never by the literal version this kit
+# happens to be on: a pinned `s/^shared-layer: 0\.6\.0$/` stops matching the
+# first release after it is written, and a rewrite that stops matching is
+# silent.
+sed '/^  scripts\/agents\.lib\.sh$/d; /^  constitution\/shared-code-craft\.md$/d; s/^shared-layer: *[0-9][0-9.]*$/shared-layer: 0.3.0/' \
 	"$KIT/VERSION" >"$OLD3/VERSION"
+# The rollback is the fixture's whole premise, so assert it happened. Matching
+# the marker by SHAPE rather than by a pinned literal is what keeps that true:
+# the pinned form went silently dead the first release after it was written, the
+# fixture then carried the CURRENT version, and C2's "the update landed 0.x.0"
+# assertion passed on a version that had never moved.
+assert_has "$OLD3/VERSION" "shared-layer: 0.3.0"
 
 # The 0.3.0 manual template: no capability tiers, no /improve-codebase-architecture.
 # Every reference has to go, not just the prose — the docs gate resolves each
