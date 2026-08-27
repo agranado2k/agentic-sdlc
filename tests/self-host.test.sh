@@ -167,4 +167,119 @@ else
 	sed 's/^/        | /' "$SCRATCH/bootstrap.diff"
 fi
 
+# ---------------------------------------------------------------------------
+banner "E. Consumer content in the strip's reach is never silently destroyed"
+# ---------------------------------------------------------------------------
+# Sections C and D prove the strip works. This one proves its GUARDS work, and
+# it exists because they did not have a check that could fail: the sentinel
+# condition could be deleted from bootstrap.sh outright and every suite in this
+# repo stayed green. A rule with no failing check is a claim (hard rule 9), and
+# this is the highest-consequence line in the kit — the one that deletes a
+# consumer's files, before they have run anything else, without asking.
+#
+# The window matters. Bootstrap runs ONCE, right after "Use this template", and
+# that is exactly when somebody writes their first ADR or personalizes the
+# manual they were just handed. Every fixture below is that person.
+#
+# Fixtures here COMMIT, unlike C and D: "Use this template" hands you a repo
+# with an initial commit, and bootstrap's third condition compares against it.
+
+# consumer_repo <dest> — a consumer's tree as GitHub hands it over.
+consumer_repo() {
+	t_kit_copy "$1"
+	git -C "$1" add -A
+	git -C "$1" commit -q -m "Initial commit from template"
+}
+
+# --- E1: a manual the consumer wrote themselves, before bootstrapping -------
+# No sentinel, so condition 2 stops the strip. This is the case the F12 comment,
+# the README and the PR description all claim is safe, and until now no suite
+# said so: removing the sentinel check turns all four assertions below red.
+HAND="$SCRATCH/hand-written"
+consumer_repo "$HAND"
+printf '# House rules\n\nOurs, hand written, no sentinel anywhere.\n' >"$HAND/AGENTS.md"
+git -C "$HAND" add AGENTS.md
+git -C "$HAND" commit -q -m "docs: our own manual"
+cp "$HAND/AGENTS.md" "$SCRATCH/hand-written.AGENTS.md"
+
+assert_status 1 "a hand-written manual with no sentinel is refused" -- \
+	sh -c "cd '$HAND' && sh bootstrap.sh --no-dogfood 'Other Name' 'One line.'"
+assert_out_has "already exists"
+if cmp -s "$HAND/AGENTS.md" "$SCRATCH/hand-written.AGENTS.md"; then
+	pass "the hand-written manual is byte-identical after the refusal"
+else
+	fail "bootstrap rewrote or deleted a manual that is not the kit's"
+fi
+[ -f "$HAND/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
+	pass "nothing was stripped — the refusal came before any deletion" ||
+	fail "bootstrap deleted files on a run it went on to refuse"
+
+# --- E2: decisions the consumer recorded before bootstrapping ---------------
+# The strip names FILES. A directory-wide `rm -rf docs/adr` takes these two with
+# it, and the uncommitted one is gone for good.
+ADRS="$SCRATCH/consumer-adrs"
+consumer_repo "$ADRS"
+printf '# We will use Postgres\n\nRecorded and committed before the first bootstrap.\n' \
+	>"$ADRS/docs/adr/0002-we-will-use-postgres.md"
+git -C "$ADRS" add docs/adr/0002-we-will-use-postgres.md
+git -C "$ADRS" commit -q -m "docs: our first decision"
+printf '# We will queue with SQS\n\nStill a draft, never committed.\n' \
+	>"$ADRS/docs/adr/0003-draft.md"
+
+assert_status 0 "bootstrap still runs on a tree holding consumer ADRs" -- \
+	sh -c "cd '$ADRS' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$ADRS/docs/adr/0002-we-will-use-postgres.md" "Recorded and committed" \
+	"a consumer's committed ADR is not the kit's to delete"
+assert_file_has "$ADRS/docs/adr/0003-draft.md" "Still a draft" \
+	"an uncommitted ADR is unrecoverable — git history cannot give it back"
+[ -e "$ADRS/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
+	fail "the kit's own ADR survived beside the consumer's" ||
+	pass "the kit's own ADR was stripped from beside the consumer's"
+
+# --- E3: the kit's manual, personalized in place ----------------------------
+# An edit leaves the sentinel comment intact — it says so itself — so condition
+# 2 cannot see this consumer at all. Condition 3 is what turns a silent delete
+# and exit 0 into a refusal that names the file.
+EDITED="$SCRATCH/edited-manual"
+consumer_repo "$EDITED"
+printf '\n## Our house rule\n\nAlways rebase, never merge.\n' >>"$EDITED/AGENTS.md"
+
+assert_status 1 "the kit's manual with local edits is refused, not deleted" -- \
+	sh -c "cd '$EDITED' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "local changes"
+assert_file_has "$EDITED/AGENTS.md" "Always rebase, never merge." \
+	"the edit survives — the refusal is the point of condition 3"
+# And the refusal is atomic: the whole set is checked before any of it is
+# deleted, so a tree that gets refused is a tree nothing happened to.
+for f in CLAUDE.md GEMINI.md docs/diary.md docs/adr/INDEX.md .github/PULL_REQUEST_TEMPLATE.md; do
+	[ -f "$EDITED/$f" ] &&
+		pass "$f survived the refusal (the strip is all-or-nothing)" ||
+		fail "$f was deleted before the refusal fired — the tree is half-stripped"
+done
+
+# --- E4: the enumeration cannot silently go stale ---------------------------
+# Naming files instead of a directory buys the safety above and owes one debt:
+# a kit ADR added later has to join the list. This is that debt's check.
+kit_own_line=$(grep '^KIT_OWN=' "$KIT/bootstrap.sh")
+for a in "$KIT"/docs/adr/*; do
+	[ -f "$a" ] || continue
+	rel="docs/adr/$(basename "$a")"
+	case "$kit_own_line" in
+	*"$rel"*) pass "bootstrap names $rel explicitly" ;;
+	*) fail "$rel is one of the kit's own but is not on bootstrap's KIT_OWN list — it would ride into every consumer's tree" ;;
+	esac
+done
+# …and the other half of the same debt: not one entry may be a DIRECTORY, or the
+# enumeration is decorative and everything beside it goes too.
+kit_own_files=$(printf '%s\n' "$kit_own_line" | sed 's/^KIT_OWN=//; s/"//g')
+dir_entries=0
+for entry in $kit_own_files; do
+	if [ -d "$KIT/$entry" ]; then
+		fail "bootstrap's KIT_OWN names the DIRECTORY $entry — everything a consumer put in it goes with the strip"
+		dir_entries=$((dir_entries + 1))
+	fi
+done
+[ "$dir_entries" = 0 ] &&
+	pass "every KIT_OWN entry is a file the kit ships, not a directory"
+
 t_done "self-host"
