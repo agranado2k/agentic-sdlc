@@ -36,10 +36,18 @@ configure() { t_write "$1" "scripts/guards.config.sh" "$2
 # run_ci <repo> [VAR=VALUE ...] — the guard as CI invokes it. The three env vars
 # it reads are cleared first, so a case that omits one is really testing the
 # absence rather than inheriting the developer's shell.
+# Cross-repo note: this suite runs the KIT's CI wrapper against throwaway
+# repos, and discovery refuses a foreign repo's config (a config is code) — so
+# the config each case writes is handed over explicitly, before "$@" so a case
+# can still override it.
 run_ci() {
 	_repo=$1
 	shift
-	(cd "$_repo" && env BASE_SHA= HEAD_SHA= GITHUB_EVENT_PATH= "$@" sh "$GUARD_CI")
+	if [ -f "$_repo/scripts/guards.config.sh" ]; then
+		(cd "$_repo" && env BASE_SHA= HEAD_SHA= GITHUB_EVENT_PATH= GUARDS_CONFIG="$_repo/scripts/guards.config.sh" "$@" sh "$GUARD_CI")
+	else
+		(cd "$_repo" && env BASE_SHA= HEAD_SHA= GITHUB_EVENT_PATH= "$@" sh "$GUARD_CI")
+	fi
 }
 
 # event_payload <repo> <file> <label>... — the `pull_request` payload GitHub
@@ -182,6 +190,7 @@ else
 	payload=$(event_payload "$repo" "exempt.json" "tdd-exempt")
 	assert_status 1 "no JSON parser on PATH means not exempt, not exempt-by-default" -- sh -c "
 		cd '$repo' && PATH='$SCRATCH/minbin' BASE_SHA='$BASE' HEAD_SHA='$HEAD' \
+			GUARDS_CONFIG='$repo/scripts/guards.config.sh' \
 			GITHUB_EVENT_PATH='$payload' sh '$GUARD_CI'
 	"
 fi
