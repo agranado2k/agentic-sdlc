@@ -104,8 +104,11 @@
 AGENT_TIERS='planner implementer mechanical reviewer'
 
 # The domain has no list here on purpose — see THE SECOND AXIS above. What it
-# has instead is a SHAPE, and this is it, written once so the usage text and the
-# check cannot drift apart.
+# has instead is a SHAPE, and this is it, written once so the usage text and
+# the error text below cannot drift apart. It does NOT also drive the case
+# pattern that enforces the shape — that pattern spells out the alphabet
+# instead of quoting this string, for the locale reason documented where it
+# lives. So this string and that pattern CAN drift; keep them in sync by hand.
 AGENT_DOMAIN_SHAPE='[a-z][a-z0-9-]*'
 
 # MODULE GLOBALS, and why they diverge from guards.lib.sh's convention.
