@@ -160,6 +160,14 @@
 #   What a consumer takes: a re-read of UPDATING.md, and one habit change — the
 # takes in Part 2 are `kit_take` calls now, which needs step 0's helper in
 # scope. Nothing else of theirs changes. The wave has no non-manifest half.
+#   The wave's second content change, landed before the v0.10.0 tag was cut so
+# one release carries the incident AND its standing rules: shared-code-craft
+# gains §11 (never point a redirect at a file you cannot lose) and §12 (declare
+# the shell, then write for it) — the same two data-loss shapes, generalized
+# from recipe fix to portable craft; UPDATING.md's step-0 "Pre-1.0" tag caveat
+# retires (every release is tagged now, and the kit's self-host suite holds it
+# to that). The non-manifest half this second change DOES have: /review-pr's
+# Security Sentinel gains a shell-hazard audit citing the two rules by number.
 shared-layer: 0.10.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
