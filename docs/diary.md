@@ -20,7 +20,7 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.7.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.8.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
@@ -218,3 +218,27 @@ new job over the `skills:` key, Kit CI went dark on the branch, and the
 independent review caught it while the naive substring form of F stayed green.
 README's worked example now quotes the current `shared-layer:` marker, held to
 `VERSION` by the same section; historical release references stay as history.
+
+## 2026-08-27 — the transcripts were locale-dependent; shared layer 0.8.0
+
+The docs-demo CI job added in the entry above failed on its very first run, and
+it failed on the thing it was added to watch. `tests/docs-demo.sh`'s section D
+compares `UPDATING.md`'s two pinned transcripts against a live run byte for
+byte; the pinned bytes had only ever been captured on macOS under a UTF-8
+locale, where `sort` and `comm` place `UPDATING.md` after `scripts/...`, while
+the CI runner's C locale places it before `constitution/...`. Same commands,
+same verdicts, different order — and a byte comparison is right to call that a
+difference.
+
+The fix is one line beside the existing `COLUMNS=80` pin, and for the same
+reason: `LC_ALL=C`, the one collation every platform has, so the capture no
+longer records the capturer's machine. Both transcripts were then re-captured
+under it. That re-capture is content inside a shared-layer file, so it is a
+release and not an edit (hard rule 3): **shared layer 0.8.0**, no file joining
+or leaving, `UPDATING.md` the only shared file whose bytes moved. The locale pin
+itself lives in the kit-only suite, so a consumer taking 0.8.0 re-reads two
+worked examples and changes no command of their own.
+
+Worth naming: the dependence was latent from the day the transcripts existed.
+Nothing about it was newly broken — the suite had simply never run anywhere but
+the machine that captured them, and a second platform is what a CI job buys.

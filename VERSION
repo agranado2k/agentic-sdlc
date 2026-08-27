@@ -90,7 +90,19 @@
 # consumer's own scripts/agents.config.sh (theirs, never overwritten) documents
 # the AGENT_TIER_<TIER>_<DOMAIN> convention — existing consumers merge that
 # comment hunk by hand, or skip it and lose nothing but the documentation.
-shared-layer: 0.7.0
+# 0.8.0 — the transcripts became platform-independent. No file joined or left
+# the layer; ONE shared file changed content: UPDATING.md, whose two worked
+# examples are re-captured under LC_ALL=C. `sort` and `comm` order by the
+# locale's collation, so the manifest lists inside those transcripts came out in
+# one order on the machine that captured them (macOS, UTF-8: `UPDATING.md` after
+# `scripts/...`) and another in the C locale (`UPDATING.md` before
+# `constitution/...`). The dependence was latent from the day the transcripts
+# existed and surfaced the day tests/docs-demo.sh gained a CI job, whose runner
+# is the second platform the byte-for-byte comparison had ever seen. The
+# capture-locale pin itself lives in that suite — kit-only, not shared — so what
+# a consumer takes here is the re-captured prose and nothing else: a re-read of
+# the two worked examples, and no command of theirs changes.
+shared-layer: 0.8.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
