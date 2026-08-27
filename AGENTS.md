@@ -75,7 +75,12 @@ pushes straight past both gates.
    an edit: bump the minor in `VERSION`, record what moved and how a consumer
    takes it in `UPDATING.md`, and re-capture the pinned transcripts that
    `tests/docs-demo.sh` quotes. If a ticket seems to require a shared-layer edit
-   and did not budget for that, stop and say so instead.
+   and did not budget for that, stop and say so instead. The release is not
+   landed until the bump's merge commit carries its `v<version>` tag — an
+   untagged bump is a release no consumer can reach, and `self-host.test.sh` F3
+   stays red on main until the tag exists. Release notes are written from the
+   tag's content, never from main: main is usually ahead, and notes that
+   describe it overclaim what the tag ships.
 4. **Tracer bullets, never horizontal layers.** Build a tiny end-to-end slice,
    seek feedback, expand from there (shared invariant §2). In this repo a slice
    is demoable: a rule, the check that enforces it, and the suite that proves

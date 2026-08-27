@@ -93,7 +93,11 @@ jobs:
     name: The kit passes its own gate
     runs-on: ubuntu-latest
     steps:
+      # fetch-tags, because F3 asks whether the declared shared layer has its
+      # release tag — a bare checkout fetches none and would false-alarm.
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22

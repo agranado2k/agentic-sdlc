@@ -365,4 +365,61 @@ else
 	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
 fi
 
+# --- F3: the shared layer is REACHABLE — a declared release has its tag ----
+# The lesson of the v0.9.0 wave, learned in a consumer's clone: UPDATING.md
+# derives FROM_REF/TO_REF from release tags, so a VERSION bump that never gets
+# its tag is a release no consumer can follow — declared, unshipped, invisible.
+# Two legs, both ways:
+#   (i)  the marker VERSION declares has a v-tag. RED on push to main — the
+#        deliberate forcing function that makes cutting the tag part of
+#        landing the bump — and a spoken note on pull requests, where the tag
+#        rightly does not exist yet. Locally (no CI env) the tolerant arm runs.
+#   (ii) the tag's content still matches the tree: a manifest-listed file that
+#        drifted past the tag with no bump is the 0.5.0-interval failure — an
+#        unreleased change wearing a released version's number. RED always,
+#        pull requests included, because the drift is already in the diff.
+
+# The manifest parser scripts/check.sh and UPDATING.md step 1 both use — same
+# awk, so all three read one file format the same way.
+manifest_files() {
+	awk '
+		/^files:/       { inlist = 1; next }
+		!inlist         { next }
+		/^[ \t]*#/      { next }
+		/^[ \t]*$/      { next }
+		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
+		                { inlist = 0 }
+	' "$KIT/VERSION"
+}
+
+if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1; then
+	pass "the declared shared layer has its tag (v$version_now)"
+	drift=0
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		if ! git -C "$KIT" cat-file -e "v$version_now:$f" 2>/dev/null; then
+			# Absent at the tag is its own failure, not "differs": a joined
+			# file — even an EMPTY one, which a bare cmp against empty stdin
+			# would wave through — is a layer change wearing an old number.
+			fail "$f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
+			drift=$((drift + 1))
+		elif git -C "$KIT" show "v$version_now:$f" 2>/dev/null | cmp -s - "$KIT/$f"; then
+			:
+		else
+			fail "$f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
+			drift=$((drift + 1))
+		fi
+	done <<EOF
+$(manifest_files)
+EOF
+	[ "$drift" = 0 ] &&
+		pass "every manifest-listed file is byte-identical to v$version_now"
+else
+	if [ "${GITHUB_EVENT_NAME:-}" = "push" ]; then
+		fail "shared-layer $version_now has NO tag — an untagged bump is a release no consumer can reach. Cut it: git tag -a v$version_now <merge sha> && git push origin v$version_now"
+	else
+		printf '  --    v%s does not exist yet — fine before the bump merges; on main this stays RED until the tag is cut\n' "$version_now"
+	fi
+fi
+
 t_done "self-host"
