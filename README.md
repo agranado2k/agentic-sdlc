@@ -487,9 +487,18 @@ skeleton (K0).
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
   `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
 
+- `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
+  rules. The kit's manual layer exists and its shims really are shims, the docs
+  gate is green at the kit root on both engines — and then the half that could
+  break every consumer: bootstrap runs twice, once against this tree as it is
+  and once against the same tree with the kit's own files removed by hand, and
+  the two stamped projects must be byte-identical. A spot-check only finds the
+  leaks somebody thought of.
+
 The kit's own CI runs the harness fixture tests, the portability validator
-against `constitution/shared-invariants.md`, the guard test suites, and the
-demos on every PR (`kit-ci.yml` + `kit-guards.yml`).
+against `constitution/shared-invariants.md`, the docs gate at this repo's own
+root, the guard test suites, and the demos on every PR (`kit-ci.yml` +
+`kit-guards.yml`).
 
 Not here yet, each with its own ticket:
 
@@ -508,14 +517,29 @@ notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
 
 ## Working on the kit itself
 
-`scripts/check.sh` is written for a *bootstrapped* project, so running it against
-this repo fails on purpose: the kit has an `AGENTS.md.template`, not an `AGENTS.md`.
-The kit's own gates run the consumer gates inside real throwaway consumers, and
-CI runs all of them:
+**The kit follows its own framework.** This repo is bootstrapped: it has its own
+root `AGENTS.md` — hand-written for the kit-authoring context, not a stamped copy
+of the template it ships — the two shims beside it, a `docs/` set, and a GREEN
+`sh scripts/check.sh` at its own root, enforced by the `self-host` job in
+`kit-ci.yml`. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md` for
+why, and for how `bootstrap.sh` keeps a consumer's first run working anyway: it
+strips the kit's own files before stamping yours, so what you receive is exactly
+what you received before the kit had any.
+
+Wire the hook in your clone, once — hooks path is per-clone config and cannot be
+committed:
 
 ```sh
+git config core.hooksPath .githooks
+```
+
+Then the gates and the suites. CI runs all of them:
+
+```sh
+sh scripts/check.sh                                    # the docs gate, on THIS repo
 node --test scripts/docs-conformance/test/*.test.mjs   # the validators' fixture tests
 node scripts/docs-conformance/index.mjs .              # portability of THIS repo's shared layer
+sh tests/self-host.test.sh                             # the kit keeps its own rules, and still stamps clean
 sh tests/kit-demo.sh                                   # K0+K1: bootstrap + docs gate, end to end
 sh tests/guards-demo.sh                                # K3: the guards, end to end
 sh tests/docs-demo.sh                                  # K4: the docs set + the UPDATING.md recipe
@@ -531,11 +555,21 @@ sh tests/ai-review-template.test.sh                    # the cross-provider revi
 sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
 ```
 
-Do not wire `core.hooksPath` in this repo.
-
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
 between a `K<n> BEGIN` / `K<n> END` banner — keep yours inside one, and do not
 interleave with another ticket's block.
+
+`bootstrap.sh` also contains the one thing in the kit that deletes files at the
+*start* of a run: the `F12` block, which removes the kit's own manual, shims and
+documentation files before the "already bootstrapped" check would trip on them.
+It names **exact files, never a directory**, and is guarded on three conditions:
+the template is still present, the root manual carries the `agentic-sdlc:kit-own`
+sentinel, **and** git reports no local modification to anything on the list. So a
+consumer's second run, a hand-written manual, a decision they recorded in
+`docs/adr/` and a manual they personalized in place are all left alone — the
+last of those with a refusal that names the file. Do not delete that sentinel
+comment from `AGENTS.md`, and add any new kit-own file to the list beside it —
+`tests/self-host.test.sh` section E is what holds both.
 
 `UPDATING.md` quotes two transcripts produced by `tests/docs-demo.sh`. If you
 change the recipe or the shared layer, re-run the demo and re-paste them — and

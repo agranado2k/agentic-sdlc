@@ -359,8 +359,8 @@ done
 	pass "commitlint.yml.example installs the same way (the contract this copies)" ||
 	fail "commitlint.yml.example is not installed as an example — the contracts have diverged"
 
-# Copied verbatim, never stamped: a workflow with an unstamped {{MARK}} in it
-# would be a broken file the docs gate then reports on forever.
+# Copied verbatim, never stamped: a workflow carrying a surviving double-brace
+# mark would be a broken file the docs gate then reports on forever.
 if cmp -s "$TPL_ABS" "$PROJ/.github/workflows/ai-review.example.yml"; then
 	pass "installed byte-for-byte identical to the kit's copy (copied, not stamped)"
 else
