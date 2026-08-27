@@ -514,10 +514,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1220 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1263 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  106 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1333 insertions(+), 1 deletion(-)
+ 3 files changed, 1376 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -676,7 +676,7 @@ One rule per category, because the categories differ in what a local edit
 | **Skills** (9a) | `.claude/skills/*/` | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
 | **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
 | **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what the release changed and you have not customized; a template you deleted stays deleted |
-| **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Diff the KEY SETS — the new shared code may read a key you do not set |
+| **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) or read the diff (`.mjs`) — the new shared code may read a key you do not set |
 | **Adapters** (9e) | `adapters/` | opt-in, whole-directory. Take a tree or leave it; never half of one |
 
 ### 9a. Skills — a three-way, not a copy
@@ -869,7 +869,7 @@ descendants — `README.md`, `docs/diary.md`, `docs/adr/`, the PR template — a
 ordinary files of yours now. A kit change there is something you may read and
 borrow from; it is never something to copy over the top.
 
-### 9d. Config files — never overwrite, always diff the KEY SET
+### 9d. Config files — never overwrite, and never guess which ref has them
 
 **This is the category that breaks silently**, because both failure modes are
 quiet. Overwrite the file and your provider and model choices vanish with no
@@ -877,9 +877,18 @@ error. Skip it and the release's new shared code reads a key you never set,
 resolves it to empty, and carries on.
 
 The config files are the ones `VERSION` names in its "everything NOT shared"
-comment: `scripts/guards.config.sh`, `scripts/agents.config.sh`,
-`scripts/docs-conformance/config.mjs`,
-`scripts/docs-conformance/local-vocabulary.mjs`.
+comment, and the list is deliberately reproduced here with what each one *is*,
+because both facts change what you do with it:
+
+| Config | In the kit it is | Compared by |
+| --- | --- | --- |
+| `scripts/guards.config.sh` | a file at that path | key sets (`NAME=`) |
+| `scripts/agents.config.sh` | a file at that path, since 0.4.0 | key sets (`NAME=`) |
+| `scripts/docs-conformance/config.mjs` | a file at that path | reading the diff |
+| `scripts/docs-conformance/local-vocabulary.mjs` | **only a `.template`** | reading the diff of the `.template` |
+
+The fourth row is not a footnote. It is why the first question below has to be
+asked about *both* refs rather than one.
 
 **Ask about BOTH refs before you write anything.** Two questions, three answers
 — and the third one is the one that eats files:
@@ -928,7 +937,10 @@ the two questions above are asked in the wrong order — or a release renames th
 path — the consumer's config is zero bytes and the only copy is in git history.
 Step 0 explains the shape; this is the branch where it was first paid for.
 
-**For the MERGE case, never `kit show >` the file.** Diff the key sets instead:
+**For the MERGE case, never `kit show >` the file.** How you compare depends on
+what shape the config is, and the four above are two different shapes:
+
+**The `.sh` configs are `NAME=value` lines, so diff the key sets.**
 
 ```sh
 keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
@@ -937,8 +949,16 @@ kit_take "$TO_REF" "$C" "$WORK/config.new" || { echo "no $C at $TO_REF"; false; 
 keys "$WORK/config.new" >"$WORK/keys.new"
 keys "$C" >"$WORK/keys.mine"
 
-comm -13 "$WORK/keys.mine" "$WORK/keys.new"   # keys the RELEASE expects, you lack
-comm -23 "$WORK/keys.mine" "$WORK/keys.new"   # keys only you have — yours, or removed upstream
+# A key extractor that finds NOTHING has not found "no new keys" — it has failed
+# to read the file, and the two `comm`s would then print nothing whatever the
+# truth is. So they only run when there is something to compare.
+if [ -s "$WORK/keys.new" ]; then
+	comm -13 "$WORK/keys.mine" "$WORK/keys.new"   # keys the RELEASE expects, you lack
+	comm -23 "$WORK/keys.mine" "$WORK/keys.new"   # keys only you have — yours, or removed upstream
+else
+	echo "keys(): no NAME= lines in $C — wrong tool for this file; read the diff" >&2
+	false
+fi
 ```
 
 Add each missing key to your file **with your value**, and bring the kit's
@@ -946,6 +966,29 @@ comment block for it across so the next reader knows what it is for. An unset ke
 is not automatically a bug — `agents.config.sh` ships all four tiers empty and
 unset is a documented working state — but it has to be a key you decided to leave
 unset, not one you never saw.
+
+**The `.mjs` configs are read, not extracted — and that is not a gap to fill
+later.** `keys()` above understands shell assignments only, so pointing it at
+`config.mjs` or `local-vocabulary.mjs` yields an empty set, and two empty sets
+`comm` as "nothing missing" no matter what changed. The guard line above is what
+turns that silence into a sentence. But **a smarter extractor would not fix
+this**, because the changes that matter in these files are not new keys:
+
+```sh
+kit diff "$FROM_REF" "$TO_REF" -- scripts/docs-conformance/config.mjs
+```
+
+0.5.0 is the worked example, and it is the one this method missed in the field.
+`constitution/shared-code-craft.md` joined the shared layer, and the consumer's
+own `config.mjs` had to add that path to the **array under `portability.files`**
+or the gate would never check the new article for vocabulary leaks. Every key in
+that file was already present at both refs. A key-set diff reports `(nothing)`
+and is telling the truth about keys while being useless about the release.
+
+So: read the diff, with the same question 9b asks of the manual — *what does the
+release now expect this file to say?* Then edit yours by hand. It is the smallest
+of the five categories and the one where being told a false "nothing to do" costs
+the most, because the thing it silently skips is a gate that stops checking.
 
 Then re-read `scripts/agents.lib.sh` (or whatever shared code reads the config).
 It is shared layer, so Part 1 already replaced it: what it reads *now* is the

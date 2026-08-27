@@ -1277,6 +1277,49 @@ else
 	fail "the shape check cannot detect the shape it exists for"
 fi
 
+banner "C4g. 9d's key-set diff refuses to answer about a file it cannot read"
+# `keys()` is a shell-assignment extractor: `sed -n 's/^\(NAME\)=.*/\1/p'`. Two
+# of the four config files 9d names are `.mjs`, and it finds nothing in either.
+# `comm` on two empty sets then prints nothing — which reads exactly like "no
+# new keys" and is in fact "I could not read this file".
+#
+# The recipe now routes `.mjs` to a read of the diff, and the block itself
+# refuses rather than answering vacuously. That refusal is the check.
+cd "$C3" || exit 2
+assert_block '^keys\(\)' "$SCRATCH/keys.sh" "UPDATING.md's 9d key-set block is extractable"
+if [ -s "$SCRATCH/keys.sh" ]; then
+	{
+		echo "WORK=$SCRATCH"
+		echo "TO_REF=v0.9.0"
+		echo "C=scripts/docs-conformance/config.mjs"
+		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
+		cat "$SCRATCH/take.sh"
+		cat "$SCRATCH/keys.sh"
+	} >"$SCRATCH/keys-case.sh"
+	sh "$SCRATCH/keys-case.sh" >"$SCRATCH/keys.out" 2>&1
+	keys_status=$?
+	sed 's/^/      > /' "$SCRATCH/keys.out"
+	if [ "$keys_status" != 0 ]; then
+		pass "the key-set block exits non-zero on a config it cannot parse"
+	else
+		fail "the key-set block reported success for a .mjs — a vacuous 'nothing missing'"
+	fi
+	if grep -q 'wrong tool for this file' "$SCRATCH/keys.out"; then
+		pass "…and it says which file and what to do instead"
+	else
+		fail "…but it did not say why; a silent non-zero is not better than a silent zero"
+	fi
+	# Not vacuous the other way: the same block on the SHELL config it was
+	# written for must work, and print the keys the release expects.
+	sed 's|^C=.*|C=scripts/agents.config.sh|' "$SCRATCH/keys-case.sh" >"$SCRATCH/keys-sh-case.sh"
+	sh "$SCRATCH/keys-sh-case.sh" >"$SCRATCH/keys.sh.out" 2>&1 &&
+		pass "the same block still succeeds on a NAME= config" ||
+		{
+			fail "the key-set block broke on the shell config it exists for"
+			sed 's/^/        | /' "$SCRATCH/keys.sh.out"
+		}
+fi
+
 banner "C5. The gate is what makes the hand edits non-optional"
 # A quick-reference row whose skill was never copied is the failure mode Part 2's
 # 9a warns about. If the gate did not catch it, "add the row by hand" would be
