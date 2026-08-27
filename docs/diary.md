@@ -20,7 +20,7 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.8.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.9.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
@@ -48,6 +48,11 @@ record that it was ever open.
   kit's own unbootstrapped tree" in two comments. They are correct as general
   statements and wrong only as an example. Fixing them is a shared-layer edit,
   so it waits for the next release that has to bump `VERSION` anyway.
+  **RESOLVED 2026-08-27:** that release is 0.9.0, and the fix rode it exactly as
+  planned. Both examples now name a tree whose manual has not been written yet
+  — *not* a freshly-created consumer repo, which was the obvious replacement and
+  is equally false: a repo made from the template carries the kit's own
+  `AGENTS.md` and both shims until `bootstrap.sh` strips them.
 
 ### Memory pointers for future-me
 
@@ -251,3 +256,39 @@ Nothing about them was newly broken — the suite had simply never run anywhere
 but the machine that captured them, and a second platform is what a CI job buys.
 Locally, `dash tests/docs-demo.sh` now reproduces the runner's shell, so the
 next one of these does not need a CI round-trip to find.
+
+## 2026-08-27 — both #51 follow-ups closed; shared layer 0.9.0
+
+The entry above left two follow-ups. Both are closed here, and they land
+together because one of them costs a release and the other does not.
+
+The kit-only one first, because it is the more interesting defect.
+`tests/docs-demo.sh` builds its fake 0.3.0 consumer by rewriting this tree's
+`VERSION`, and the rewrite was pinned to one literal — `s/^shared-layer:
+0\.6\.0$/shared-layer: 0.3.0/`. It stopped matching the day 0.7.0 shipped, and a
+`sed` that stops matching is silent: the fixture has carried the CURRENT version
+ever since, so C2's `assert_has "VERSION" "shared-layer: 0.8.0"` — the assertion
+that the update *landed* — was passing on a version that had never moved. The
+fix is to match the marker line by **shape** (`shared-layer: *[0-9][0-9.]*`, the
+form `tests/self-host.test.sh` already uses), plus an assertion right after the
+fixture is built that the rollback happened, so the next dead rewrite is RED
+rather than quiet. Same lesson as the locale and `echo` pins above: a fixture
+that encodes today's incidental value is a check with an expiry date on it.
+
+The shared-layer one is the release. `claude-md-refs.mjs` still offered "the
+kit's own unbootstrapped tree" as its example of a tree the shim and
+reachability rules stay silent on, and the kit has self-hosted since ADR-0001.
+Worth naming, because it was the tempting fix: **a freshly-created consumer repo
+is not that tree either.** The kit is a template repository, so a repo made from
+it carries the kit's own `AGENTS.md` and both shims until `bootstrap.sh` strips
+them — swapping one dead example for another would have re-opened this question
+under a new name. Both comments now name a tree whose manual has not been
+written yet, which is true in any repo the validator ships to.
+
+That is a byte change to a manifest-listed file, so hard rule 3 makes it a
+release: **shared layer 0.9.0**, no file joining or leaving, comments only, zero
+behaviour change — the validator's 52 fixture tests pass unchanged. A consumer
+taking 0.9.0 re-reads two comments and changes no command of their own. The
+fixture fix is the wave's non-manifest half and never reaches them at all; both
+pinned transcripts were re-captured, and the only bytes that moved in them were
+the release number.
