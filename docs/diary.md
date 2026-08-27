@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.9.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.10.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. |
+| **Active worktrees** | `worktree/f11-recipe-dataloss` (`feat/f11-recipe-dataloss`) — issue #54, the two data-loss bugs in `UPDATING.md`. |
 
 ### Open questions / unresolved decisions
 
@@ -292,3 +292,56 @@ taking 0.9.0 re-reads two comments and changes no command of their own. The
 fixture fix is the wave's non-manifest half and never reaches them at all; both
 pinned transcripts were re-captured, and the only bytes that moved in them were
 the release number.
+
+## 2026-08-27 — the update recipe stopped eating consumer files; shared layer 0.10.0
+
+The second real consumer update (google-books-clojure 0.4.0 → 0.9.0, its PR #17)
+confirmed the ten fixes from #37 working in the field and then found two things
+that **destroy files**, plus three smaller ones. Issue #54. Both destroyers had
+been in `UPDATING.md` since Part 2 existed, and neither could be seen from
+inside this repo, because the kit is not a consumer of its own recipe.
+
+**The first is a shape, not a line.** `kit show "$REF:$path" >"$mine"` was how
+the recipe said "take the release's copy", and the shell truncates `$mine`
+*before* `kit` is started. 9d is where it was caught: it names
+`scripts/docs-conformance/local-vocabulary.mjs`, the kit ships that path only as
+a `.template` (bootstrap stamps it), so `cat-file -e "$FROM_REF:$C"` is false —
+and 9d read that one `no` as "then it is new at `$TO_REF`", printed
+`ADD … copy it whole`, and ran a take that could not succeed. 1807 bytes → 0 in
+the fixture; 29 → 0 in the field. The audit found **seven more sites** with the
+same shape, including two that only write scratch files and still cost you the
+real one: an empty `theirs` handed to `git merge-file` reads as "deleted
+upstream" and empties `$S` in place. Step 0 now defines `kit_take` — fetch to a
+temp file, write only on success — and every take goes through it.
+
+**The second is the shell nobody declared.** zsh applies history modifiers to
+`$var:x` *inside double quotes*, so `"$TO_REF:constitution/…"` was `$TO_REF`
+with `:c` applied plus a literal `onstitution/…`. Measured on zsh 5.9, the
+reachable modifiers straight after a colon are `a A c e h l P q Q r s t u x`
+and `g&` — and `:s` aborts outright with "no previous substitution". Four lines
+had a bare letter there; `"$TO_REF:$C"` and `"$TO_REF:VERSION"` did not, which
+is exactly why it hid. The article went 45 bytes → 0 and the `cmp` above it
+answered `YOURS` having compared against empty input.
+
+**What made the fix testable is that the new cases run the document's own text.**
+Everything else in `tests/docs-demo.sh` is a hand-written mirror pinned to
+`UPDATING.md` by section D's transcript comparison — but a branch that destroys
+a file prints nothing into a transcript, so there is no D to pin it with, and a
+mirror can be fixed in the suite while the document a consumer follows stays
+broken. `recipe_block` extracts a fenced block by its first line and the case
+executes it, one of them under a real `zsh -f`. `C4f` then greps the whole
+document for the shape, so the *next* one is caught by an edit rather than by a
+consumer.
+
+The three smaller fixes: 9d routes `.mjs` configs to a read of the diff (a key
+extractor would not have helped — the change it missed at 0.5.0 was a new
+element inside `portability.files`, not a new key) and refuses to answer at all
+rather than reporting a vacuous "nothing missing"; step 8 says the kit's own
+self-hosted `AGENTS.md`, shims, `README.md` and `docs/` are never a consumer's
+base, since those *are* paths a consumer has; and the "re-read this file after
+step 5" rule moved into **Before you start**, because the step-5 `NOTE` lives in
+the new recipe and the consumer who needs it is reading the old one.
+
+**Shared layer 0.10.0.** No file joined or left; one manifest-listed file
+changed content, materially. Both transcripts re-captured. A consumer takes a
+re-read and one habit change: Part 2's takes are `kit_take` calls now.
