@@ -239,6 +239,15 @@ or leaving, `UPDATING.md` the only shared file whose bytes moved. The locale pin
 itself lives in the kit-only suite, so a consumer taking 0.8.0 re-reads two
 worked examples and changes no command of their own.
 
-Worth naming: the dependence was latent from the day the transcripts existed.
-Nothing about it was newly broken — the suite had simply never run anywhere but
-the machine that captured them, and a second platform is what a CI job buys.
+The locale was not the only thing the capture had recorded. With it pinned, CI
+found a second one immediately: 9d's `sed` command is echoed as a literal, and
+`echo` is where shells still disagree — dash turned its `\1` into a control
+character, the macOS shell printed it as written. `printf '%s\n'` never
+interprets its operand, so that line now reads the same from either. Same class
+of defect, same fix shape as `COLUMNS`.
+
+Worth naming: both dependences were latent from the day the transcripts existed.
+Nothing about them was newly broken — the suite had simply never run anywhere
+but the machine that captured them, and a second platform is what a CI job buys.
+Locally, `dash tests/docs-demo.sh` now reproduces the runner's shell, so the
+next one of these does not need a CI round-trip to find.

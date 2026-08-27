@@ -99,7 +99,7 @@
 # `constitution/...`). The dependence was latent from the day the transcripts
 # existed and surfaced the day tests/docs-demo.sh gained a CI job, whose runner
 # is the second platform the byte-for-byte comparison had ever seen. The
-# capture-locale pin itself lives in that suite — kit-only, not shared — so what
+# capture pins themselves live in that suite — kit-only, not shared — so what
 # a consumer takes here is the re-captured prose and nothing else: a re-read of
 # the two worked examples, and no command of theirs changes.
 shared-layer: 0.8.0

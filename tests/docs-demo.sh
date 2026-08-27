@@ -895,7 +895,12 @@ recipe2() {
 	else
 		echo "ADD    $C is new at $TO_REF — nothing of ours to preserve"
 		kit show "$TO_REF:$C" >"$C"
-		echo "\$ sed -n 's/^\\(AGENT_TIER_[A-Z]*\\)=.*/\\1/p' \"\$C\""
+		# printf, not echo: this is the one echoed line carrying a literal
+		# backslash, and `echo` is where shells still disagree — dash expands
+		# `\1` to a control character, bash and the macOS shell print it as
+		# written. Same class as the COLUMNS and LC_ALL pins above: the
+		# transcript must not record which shell captured it.
+		printf '%s\n' "\$ sed -n 's/^\\(AGENT_TIER_[A-Z]*\\)=.*/\\1/p' \"\$C\""
 		sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 	fi
 
