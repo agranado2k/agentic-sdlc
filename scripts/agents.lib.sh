@@ -7,6 +7,21 @@
 #                                               nothing if the tier is unmapped
 #   . scripts/agents.lib.sh; resolve_tier …  -> the same, as a shell function
 #
+# Sourcing is side-effect-free in every shell, including zsh (see the bottom of
+# the file). A sourcing caller must say where the config lives, though, because
+# a sourced file cannot portably learn its own path:
+#
+#   AGENTS_CONFIG=scripts/agents.config.sh; . scripts/agents.lib.sh  # explicit
+#   _agents_here=scripts; . scripts/agents.lib.sh                    # or by dir
+#
+# Two statements on purpose: a prefix assignment on `.` persists only in plain
+# sh — bash and zsh drop it before the sourced code runs, and the recipe would
+# quietly resolve UNMAPPED.
+#
+# With neither set, orders 2 and 3 below are both skipped and every tier reports
+# UNMAPPED — deliberately, since the only other candidate is whatever repository
+# the process happens to be standing in (see agents_load_config).
+#
 # WHY THE KIT NEVER NAMES A MODEL
 # ---------------------------------------------------------------------------
 # Model identifiers rot faster than any other constant a framework could carry:
@@ -46,8 +61,12 @@
 #                              is an ERROR (exit 2): the caller named a file, so
 #                              falling back silently would run a mapping nobody
 #                              asked for. Tests rely on this.
-#   2. <repo root>/scripts/agents.config.sh
+#   2. <root of the repo THIS FILE lives in>/scripts/agents.config.sh
 #   3. <this file's directory>/agents.config.sh
+#
+# Orders 2 and 3 are anchored on this file, never on the caller's working
+# directory: a config is sourced, and sourcing one out of whatever repo an
+# operator happens to be standing in would execute a stranger's code.
 #
 # Exit codes:  0 resolved (a value, or deliberately nothing) · 2 usage error,
 #              unknown tier, or an explicit config that does not exist.
@@ -68,13 +87,20 @@ AGENT_TIERS='planner implementer mechanical reviewer'
 # file, long after resolve_tier's signature is fixed at one argument: the tier.
 # Threading the directory through as a second parameter would put a value the
 # CALLER cannot supply into the caller's hands. So it is a global, set once by
-# the direct-execution branch, and overridable by a sourcing caller that wants
-# order 3.
+# the direct-execution branch, and settable by a sourcing caller — which is the
+# only way such a caller gets orders 2 and 3 at all.
+#
+# It defaults to EMPTY, and that is deliberate rather than tidy: it used to
+# default to `.`, which quietly made resolution order 3 mean "a config file in
+# whatever directory the process is standing in" — a different and much wider
+# rule than the one documented above, and the same trust problem order 2 had.
+# Empty means orders 2 and 3 are both skipped, so a sourcing caller that has
+# not said where it is gets $AGENTS_CONFIG or nothing.
 #
 # The other two globals are per-process memos: config loading and the unmapped
 # warning both have to happen at most once no matter how many tiers a single
 # process resolves.
-_agents_here=${_agents_here:-.}
+_agents_here=${_agents_here:-}
 _agents_config_loaded=0
 _agents_config_tried=0
 _agents_warned=0
@@ -113,17 +139,36 @@ agents_load_config() {
 		return 0
 	fi
 
-	_al_root=$(git rev-parse --show-toplevel 2>/dev/null) || _al_root=
-	if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
-		. "$_al_root/scripts/agents.config.sh"
-		_agents_config_loaded=1
-		return 0
-	fi
+	# Orders 2 and 3 are both anchored on $_agents_here — where the LIBRARY
+	# lives — and never on the directory the caller happens to be standing in.
+	#
+	# A config file is SOURCED, which is to say EXECUTED, so this is a trust
+	# question and not a convenience one. Order 2 used to ask `git rev-parse
+	# --show-toplevel` about the process's CURRENT DIRECTORY: resolving a tier
+	# with the cwd inside a cloned third-party repo therefore ran that clone's
+	# scripts/agents.config.sh. The root manual's trust boundary names cloned
+	# third-party repos as untrusted content, and untrusted content is data,
+	# never code to run. Asking git about $_agents_here takes the cwd out of
+	# the trust path altogether rather than validating it, and it keeps working
+	# when the cwd is in no repository at all.
+	#
+	# When $_agents_here is EMPTY there is nothing to anchor on, so both orders
+	# are skipped and a caller gets $AGENTS_CONFIG or nothing. That is why it no
+	# longer defaults to `.`: `.` silently meant "the process's current
+	# directory", which is the same wider rule in its order-3 clothes.
+	if [ -n "$_agents_here" ]; then
+		_al_root=$(git -C "$_agents_here" rev-parse --show-toplevel 2>/dev/null) || _al_root=
+		if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
+			. "$_al_root/scripts/agents.config.sh"
+			_agents_config_loaded=1
+			return 0
+		fi
 
-	if [ -f "$_agents_here/agents.config.sh" ]; then
-		. "$_agents_here/agents.config.sh"
-		_agents_config_loaded=1
-		return 0
+		if [ -f "$_agents_here/agents.config.sh" ]; then
+			. "$_agents_here/agents.config.sh"
+			_agents_config_loaded=1
+			return 0
+		fi
 	fi
 
 	_agents_config_tried=1
@@ -139,11 +184,27 @@ resolve_tier() {
 		return 2
 	fi
 
+	# The accept-check is a LITERAL `case`, not a loop over $AGENT_TIERS, for two
+	# independent reasons.
+	#
+	# PORTABILITY, the one that was actually broken: `for t in $AGENT_TIERS`
+	# relies on the shell word-splitting an unquoted expansion, and zsh does not
+	# (SH_WORD_SPLIT is off by default). Under `zsh scripts/agents.lib.sh
+	# implementer` the loop saw ONE word — the whole string — so every real tier
+	# name was rejected as unknown. A `case` compares patterns, never words, and
+	# behaves identically in sh, bash, ksh and zsh.
+	#
+	# TRUST, a smaller share of it: a sourced config is trusted code — it
+	# could redefine resolve_tier wholesale, so this literal is NOT a security
+	# boundary against a hostile config. What it does buy: the accepted set
+	# can no longer drift via a reassigned global or a shell's splitting
+	# rules. AGENT_TIERS survives as the single source for the MESSAGES; this
+	# literal is the authority.
 	_rt_tier=$1
-	_rt_known=0
-	for _rt_t in $AGENT_TIERS; do
-		[ "$_rt_t" = "$_rt_tier" ] && _rt_known=1 && break
-	done
+	case "$_rt_tier" in
+	planner | implementer | mechanical | reviewer) _rt_known=1 ;;
+	*) _rt_known=0 ;;
+	esac
 	if [ "$_rt_known" = 0 ]; then
 		echo "x agents: unknown capability tier '$_rt_tier'." >&2
 		echo "  The vocabulary is closed: $AGENT_TIERS." >&2
@@ -151,8 +212,16 @@ resolve_tier() {
 		return 2
 	fi
 
-	agents_load_config
-	_rt_load=$?
+	# `|| _rt_load=$?` rather than a bare call, and it is load-bearing. Most
+	# consumer scripts and hooks run `set -e`, under which a BARE call to a
+	# function that returns 1 terminates the caller before its status can be
+	# read — and 1 is agents_load_config's NORMAL "no config anywhere" answer,
+	# the state every freshly bootstrapped project is in. A bare call therefore
+	# killed the commonest caller in the commonest state, and killed it
+	# silently: no value, no warning, no error. A command in an AND-OR list is
+	# exempt from `set -e`, so here the status survives to be read.
+	_rt_load=0
+	agents_load_config || _rt_load=$?
 	[ "$_rt_load" = 2 ] && return 2
 
 	# Tier name -> variable name. The tier is already whitelisted above, so the
@@ -178,10 +247,31 @@ resolve_tier() {
 # Direct execution: the seam an agent following a SKILL.md actually uses, since
 # an agent runs commands rather than sourcing shell libraries. Sourcing callers
 # fall through with only the functions defined.
-case "$0" in
-*/agents.lib.sh | agents.lib.sh)
-	_agents_here=$(dirname "$0")
-	resolve_tier "$@"
-	exit $?
-	;;
+#
+# THE $0 TEST ALONE IS NOT ENOUGH, and the shell it fails in is the shell most
+# operators type into. zsh sets $0 to the SOURCED FILE'S path (FUNCTION_ARGZERO,
+# on by default), so `source scripts/agents.lib.sh` matched the pattern below:
+# the library ran resolve_tier against the SHELL'S own arguments and then
+# `exit`ed, killing the interactive session that sourced it. sh, bash and ksh
+# all leave $0 as the caller's own, so there the pattern already tells the truth.
+#
+# ZSH_EVAL_CONTEXT is zsh's own answer to the question. It is a colon-joined
+# stack of what the shell is currently doing, and every file being sourced
+# pushes a `file` component onto it — `cmdarg:file`, `toplevel:file`,
+# `toplevel:shfunc:file`. zsh EXECUTING this script is plain `toplevel`, with no
+# `file`. Nothing else sets the variable, so under sh/bash/ksh it is empty and
+# this test costs one unmatched `case`.
+_agents_sourced=0
+case "${ZSH_EVAL_CONTEXT:-}" in
+*:file | *:file:*) _agents_sourced=1 ;;
 esac
+
+if [ "$_agents_sourced" = 0 ]; then
+	case "$0" in
+	*/agents.lib.sh | agents.lib.sh)
+		_agents_here=$(dirname "$0")
+		resolve_tier "$@"
+		exit $?
+		;;
+	esac
+fi
