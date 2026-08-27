@@ -514,10 +514,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1263 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  106 ++++
+ UPDATING.md                       | 1287 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  106 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1376 insertions(+), 1 deletion(-)
+ 3 files changed, 1400 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -660,11 +660,35 @@ Do **not** re-derive `FROM_REF` from `VERSION` here: step 5 already moved it to
 the release you are adopting. Part 2 runs in the same session as Part 1, on the
 same two refs.
 
-Some of what prints is not in your repo and never was. Bootstrap deletes the
-kit's own scaffolding (`tests/`, `.github/workflows/kit-*.yml`, `EXCLUSIONS.md`,
-and `bootstrap.sh` itself) and consumes `templates/docs/` into `docs/`. A path
-you do not have is not an update — skip those lines. `VERSION` prints too,
-because it is not an entry in its own manifest; step 5 already copied it.
+**Two different kinds of line in there get skipped, for two different reasons,
+and only the first kind is obvious.**
+
+**Paths you do not have.** Bootstrap deletes the kit's own scaffolding (`tests/`,
+`.github/workflows/kit-*.yml`, `EXCLUSIONS.md`, and `bootstrap.sh` itself) and
+consumes `templates/docs/` into `docs/`. A path you do not have is not an update
+— skip those lines. `VERSION` prints too, because it is not an entry in its own
+manifest; step 5 already copied it.
+
+**Paths you DO have, that are the kit's copy of a file you own.** The kit
+self-hosts the constitution it ships, so it has its own `AGENTS.md`, its
+`CLAUDE.md` / `GEMINI.md` shims, its `README.md`, its `docs/diary.md`, its
+`docs/adr/*` and its `docs/domain-glossary.md` — and every one of those is a real
+path in your repo too. "A path you do not have" does not dismiss them, so say it
+plainly instead: **the kit's own manual and docs are never your base.** They are
+one project's filled-in copy, exactly as yours is; two consumers of the kit are
+not each other's upstream.
+
+The trap is `AGENTS.md`, because it is the one where the mistake produces a
+plausible-looking diff. Your manual's base is `constitution/AGENTS.md.template`
+(9b), which is the file bootstrap stamped and the only kit file your manual
+descends from. Diff against the kit's root `AGENTS.md` instead and you are
+reading someone else's local rules — hard rule numbering, worktree conventions,
+a capability-tier wrapper that exists in the kit and nowhere else — and every one
+of them looks like a section you are missing. `README.md`, `docs/diary.md` and
+`docs/adr/` are the same shape one notch less dangerous: 9c already says a kit
+change under `templates/docs/`' descendants is something to read and borrow
+from, never something to copy over the top. This is that rule, stated where the
+line actually appears in front of you.
 
 ## Step 9 — take each category by its own rule
 
