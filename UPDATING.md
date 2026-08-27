@@ -392,9 +392,9 @@ Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
 ```console
 $ kit tag --list
 v0.1.0
-v0.5.0
+v0.6.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.5.0
+v0.1.0 -> v0.6.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 constitution/shared-code-craft.md
@@ -464,7 +464,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
   updated UPDATING.md
-  NOTE  UPDATING.md changed in v0.5.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.6.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  constitution/shared-code-craft.md
@@ -496,10 +496,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.6.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.5.0
-Part 1 complete — shared layer at v0.5.0. The update is not done: go to step 8.
+0.6.0
+Part 1 complete — shared layer at v0.6.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1012,7 +1012,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: ADD or MERGE? Ask before you write.
 $ # kit cat-file -e "$FROM_REF:$C" — did it exist at the release we are on?
-ADD    scripts/agents.config.sh is new at v0.5.0 — nothing of ours to preserve
+ADD    scripts/agents.config.sh is new at v0.6.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1026,7 +1026,7 @@ node-ts
 README.md
 
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.6.0, engine: harness)
 ```
 
 Five things in that transcript are worth reading twice.

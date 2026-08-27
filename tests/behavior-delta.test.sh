@@ -37,7 +37,15 @@ EOF
 configure() { t_write "$1" "scripts/guards.config.sh" "$2
 "; }
 
-run_delta() { (cd "$1" && sh "$DELTA" main); }
+# Cross-repo note: the KIT's script against a throwaway repo — discovery
+# refuses a foreign repo's config (a config is code), so hand it over.
+run_delta() {
+	if [ -f "$1/scripts/guards.config.sh" ]; then
+		(cd "$1" && GUARDS_CONFIG="$1/scripts/guards.config.sh" sh "$DELTA" main)
+	else
+		(cd "$1" && sh "$DELTA" main)
+	fi
+}
 
 # branch <repo> <name> — start a feature branch off main.
 branch() { git -C "$1" checkout -q -b "$2"; }

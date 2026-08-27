@@ -190,7 +190,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.5.0"
+assert_out_has "shared-layer 0.6.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else
