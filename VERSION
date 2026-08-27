@@ -61,7 +61,17 @@
 # self-contained inline SVG, and the starter config.mjs (yours, step 9d) adds
 # the article to the portability file set — existing consumers merge that hunk
 # by hand.
-shared-layer: 0.5.0
+# 0.6.0 — the config-discovery trust wave: the loaders stopped treating "the
+# repository the process is standing in" as an identity. scripts/guards.lib.sh
+# sources the cwd repo's guards.config.sh only when that repo is also the one
+# the calling guard lives in (a config is sourced, i.e. CODE), refuses with a
+# stderr note otherwise, discovers nothing without an anchor, and scrubs the
+# GIT_DIR/GIT_WORK_TREE a git hook inherits so a linked-worktree push cannot
+# make a repo's own config look foreign. scripts/agents.lib.sh (the same hole,
+# fixed in the sibling PR of this wave) anchors its discovery on the library's
+# own location. No file joined or left the layer; both changes are content
+# changes to manifest-listed files, which is what this MINOR records.
+shared-layer: 0.6.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
