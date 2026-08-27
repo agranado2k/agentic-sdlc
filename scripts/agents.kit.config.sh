@@ -77,15 +77,35 @@ AGENT_TIER_MECHANICAL='haiku'
 AGENT_TIER_REVIEWER='fable'
 
 # ---------------------------------------------------------------------------
-# OPTIONAL SECOND AXIS: TASK DOMAIN — NOT ACTIVE YET
+# OPTIONAL SECOND AXIS: TASK DOMAIN
 # ---------------------------------------------------------------------------
-# branch feat/f14-domain-routing adds an optional AGENT_TIER_<TIER>_<DOMAIN>
-# seam to the resolver (`sh scripts/agents.lib.sh <tier> <domain>`, preferring
-# the domain-specific variable and falling back to the plain tier one). That
-# branch is not merged, so nothing below is active — commented out on
-# purpose, the same way scripts/agents.config.sh on that branch ships its own
-# domain examples unset. Once f14 lands, domain-specific entries belong here
-# too, e.g.:
+# The resolver takes an optional second argument, the task DOMAIN
+# (`sh scripts/agents.kit.sh <tier> <domain>`): it prefers
+# AGENT_TIER_<TIER>_<DOMAIN> and falls back to the plain tier variable above
+# when that is unset or empty. The tier is a cost/benefit shape and says
+# nothing about what the work is made OF, which is what the domain adds.
 #
-#   AGENT_TIER_IMPLEMENTER_CONTENT='fable'   # kit prose: manual, articles, skills
-#   AGENT_TIER_IMPLEMENTER_CODE='opus'       # scripts/, docs-conformance/
+# Unlike the four tier names, the domain vocabulary is OPEN and local: these
+# tokens are THIS repo's, chosen because they change the answer, and an
+# unmapped one falls back to the tier silently and correctly.
+#
+# scripts/agents.config.sh — the file consumers get — still assigns nothing
+# here, on either axis. A domain mapping is still a model identifier, and the
+# kit names one only to itself.
+
+# The kit's product is mostly PROSE: the root manual and the AGENTS.md
+# template, the constitution articles, every SKILL.md, UPDATING.md. Writing it
+# is `implementer` work by tier — one ticket, test-first, seams to find — but
+# it is not code, and the strongest prose model available is a different answer
+# from the strongest coding one.
+AGENT_TIER_IMPLEMENTER_CONTENT='fable'
+
+# THERE IS DELIBERATELY NO AGENT_TIER_IMPLEMENTER_CODE. The plain tier above
+# already resolves code work to 'opus'; naming the domain to repeat that value
+# would record a non-decision as a decision, and would then have to be kept in
+# sync with the tier it duplicates. The fallback IS the mapping for code.
+#
+# Same reasoning for the other three tiers: planner and reviewer are already on
+# the strongest model available for either medium, and mechanical work is
+# oracle-checked whatever it is made of. Add a domain here when — and only
+# when — the medium would change the answer.

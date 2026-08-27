@@ -30,11 +30,13 @@
 # scripts/agents.lib.sh itself is shared layer (see VERSION) and stays
 # byte-identical to every project that runs it — this wrapper changes nothing
 # about the resolver, it only sets the seam already exposed for exactly this
-# case and delegates. `"$@"` rather than a fixed one-argument form so a future
-# resolver signature (e.g. feat/f14-domain-routing's optional
-# `<tier> <domain>`) needs no change here.
+# case and delegates. `"$@"` rather than a fixed one-argument form, so the
+# resolver's WHOLE signature reaches it — including the optional task domain,
+# which a wrapper that took `$1` alone would silently drop while still
+# resolving every tier correctly. tests/agents-tiers.test.sh asserts the
+# pass-through for exactly that reason.
 #
 # Usage:
-#   sh scripts/agents.kit.sh <tier>
+#   sh scripts/agents.kit.sh <tier> [domain]
 set -eu
 AGENTS_CONFIG=scripts/agents.kit.config.sh exec sh scripts/agents.lib.sh "$@"

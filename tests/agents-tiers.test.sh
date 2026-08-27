@@ -16,6 +16,14 @@
 # be ripped out on day one. So an unmapped tier warns once, prints nothing, and
 # exits 0 — "nothing configured" resolves to "inherit the session's own model".
 #
+# The seam has a SECOND, optional axis: `resolve_tier <tier> [domain]`. The two
+# vocabularies behave oppositely on purpose, and the suite is mostly about that
+# asymmetry — the tier's is closed, so an unknown one is a caller bug (exit 2);
+# the domain's is open project policy, so an unmapped one is a working state
+# that falls back to the tier, silently. What the domain does NOT get is a free
+# pass on its shape: it is interpolated into a variable name, so anything
+# outside `[a-z][a-z0-9-]*` is refused before it reaches the eval.
+#
 # Usage: sh tests/agents-tiers.test.sh
 
 set -u
@@ -44,6 +52,29 @@ AGENT_TIER_PLANNER=''
 AGENT_TIER_IMPLEMENTER=''
 AGENT_TIER_MECHANICAL=''
 AGENT_TIER_REVIEWER=''
+EOF
+)
+
+# The SECOND dimension. A project that has decided prose and code deserve
+# different models says so here, per tier — and says nothing at all about the
+# tiers and domains it has no opinion about, which is the case the fallback
+# exists for.
+#
+# `html-report` is in here deliberately: the token vocabulary allows a hyphen
+# and shell variable names do not, so the resolver has to fold one into the
+# other, and a suite that only ever tried single-word domains would not notice
+# which way it folded.
+CONFIG_DOMAINS=$(
+	cat <<'EOF'
+AGENT_TIER_PLANNER=''
+AGENT_TIER_IMPLEMENTER='model-for-implementing'
+AGENT_TIER_MECHANICAL='model-for-mechanical'
+AGENT_TIER_REVIEWER='model-for-reviewing'
+
+AGENT_TIER_IMPLEMENTER_CONTENT='model-for-writing-prose'
+AGENT_TIER_IMPLEMENTER_HTML_REPORT='model-for-writing-html'
+AGENT_TIER_REVIEWER_CONTENT='model-for-reading-prose'
+AGENT_TIER_PLANNER_CONTENT='model-for-planning-prose'
 EOF
 )
 
@@ -157,8 +188,10 @@ SHELLS='sh bash zsh'
 
 FULL="$SCRATCH/full.config.sh"
 EMPTY="$SCRATCH/empty.config.sh"
+DOMAINS="$SCRATCH/domains.config.sh"
 write_config "$FULL" "$CONFIG_FULL"
 write_config "$EMPTY" "$CONFIG_EMPTY"
+write_config "$DOMAINS" "$CONFIG_DOMAINS"
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks nothing gets an error, not a guess"
@@ -170,8 +203,9 @@ resolve
 [ "$R_STATUS" = 2 ] && pass "no tier argument exits 2" || fail "no tier argument exited $R_STATUS, expected 2"
 assert_err_has "usage"
 
-resolve implementer extra
-[ "$R_STATUS" = 2 ] && pass "a second argument exits 2" || fail "a second argument exited $R_STATUS, expected 2"
+resolve implementer content extra
+[ "$R_STATUS" = 2 ] && pass "a third argument exits 2" || fail "a third argument exited $R_STATUS, expected 2"
+assert_err_has "usage"
 
 # ---------------------------------------------------------------------------
 banner "The vocabulary is closed — an unknown tier is a caller bug"
@@ -207,6 +241,144 @@ assert_resolved "model-for-mechanical" "mechanical resolves to its configured mo
 
 resolve reviewer
 assert_resolved "model-for-reviewing" "reviewer resolves to its configured model"
+
+# ---------------------------------------------------------------------------
+banner "The optional DOMAIN — same tier, different medium, different model"
+# ---------------------------------------------------------------------------
+# The tier says how much judgement the work is worth. It does not say what the
+# work is made OF, and "write the launch announcement" and "write the retry
+# logic" are the same cost/benefit shape resolving to the same model for no
+# reason other than the resolver having only one axis.
+#
+# So a second, OPTIONAL argument: the domain. `AGENT_TIER_<TIER>_<DOMAIN>` wins
+# when it is set, and the plain `AGENT_TIER_<TIER>` catches everything else.
+AGENTS_CONFIG="$DOMAINS"
+export AGENTS_CONFIG
+
+resolve implementer content
+assert_resolved "model-for-writing-prose" "a mapped tier+domain resolves to the domain's model"
+assert_err_lacks "UNMAPPED"
+
+resolve reviewer content
+assert_resolved "model-for-reading-prose" "the domain axis is per-tier, not a single global override"
+
+# ---------------------------------------------------------------------------
+banner "An unmapped domain falls back to the tier — silently"
+# ---------------------------------------------------------------------------
+# The domain vocabulary is OPEN, unlike the closed four tiers: it is project
+# policy, invented by whoever writes the tickets, and a project that maps only
+# 'content' has not made a mistake by leaving 'code' alone. So an unmapped
+# domain is a WORKING state and not a warning — it means "no special opinion
+# about this medium", which is exactly what the tier mapping already answers.
+# Warning about it would train people to ignore the warning that matters.
+resolve implementer code
+assert_resolved "model-for-implementing" "an unmapped domain falls back to the plain tier mapping"
+assert_err_lacks "UNMAPPED"
+[ -z "$R_ERR_TEXT" ] && pass "…and says nothing at all on stderr" ||
+	fail "an unmapped domain wrote to stderr: $R_ERR_TEXT"
+
+resolve mechanical content
+assert_resolved "model-for-mechanical" "a tier with no domain mappings at all still resolves"
+
+# The fallback is per-VARIABLE, not per-tier-having-any-domain-at-all: the tier
+# below is unmapped, its domain is mapped, and the domain must still win.
+resolve planner content
+assert_resolved "model-for-planning-prose" "a mapped domain resolves even when the plain tier is empty"
+assert_err_lacks "UNMAPPED"
+
+# …and the mirror: unmapped tier, unmapped domain, so the ordinary unmapped-tier
+# warning fires unchanged. The domain adds no second diagnostic.
+resolve planner code
+[ "$R_STATUS" = 0 ] && pass "an unmapped tier+domain still exits 0" || fail "unmapped tier+domain exited $R_STATUS"
+[ -z "$R_OUT" ] && pass "…and prints nothing (the spawn inherits the session's model)" ||
+	fail "unmapped tier+domain printed '$R_OUT'"
+assert_err_has "UNMAPPED"
+assert_err_has "AGENT_TIER_PLANNER"
+
+# ---------------------------------------------------------------------------
+banner "A hyphenated domain token folds to an underscore in the variable"
+# ---------------------------------------------------------------------------
+# `html-report` is a legal token and `AGENT_TIER_IMPLEMENTER_HTML-REPORT` is not
+# a legal variable name. The fold has to be pinned, or the same config would
+# work or not work depending on which half of the kit last guessed.
+resolve implementer html-report
+assert_resolved "model-for-writing-html" "domain 'html-report' reads AGENT_TIER_IMPLEMENTER_HTML_REPORT"
+
+# ---------------------------------------------------------------------------
+banner "The domain is INTERPOLATED into a variable name, so its shape is checked"
+# ---------------------------------------------------------------------------
+# Everything above ends in an `eval` of a constructed name. The tier survives
+# that because its vocabulary is closed and whitelisted; the domain's is open,
+# so the shape check IS the whitelist. `[a-z][a-z0-9-]*` and nothing else —
+# anything that could carry a `$`, a backtick, a quote or a semicolon into the
+# eval is a caller bug, exit 2, and never a silent fallback to the tier.
+for bad in 'CONTENT' 'Content' '9code' 'code_x' 'code.x' 'code/x' '-code' '' \
+	'a;echo pwned' 'a$(echo pwned)' 'a`echo pwned`' 'a"b' "a'b" 'a b'; do
+	resolve implementer "$bad"
+	if [ "$R_STATUS" = 2 ]; then
+		pass "malformed domain '$bad' exits 2"
+	else
+		fail "malformed domain '$bad' exited $R_STATUS, expected 2"
+	fi
+	[ -z "$R_OUT" ] && pass "…and resolves to nothing" || fail "malformed domain '$bad' printed '$R_OUT'"
+done
+
+# 'CONTENT'/'Content' above only prove the shape check right in whatever locale
+# invoked this suite — and that locale is typically LC_ALL=C in CI, the one
+# locale where a bracket RANGE (the bug agents.lib.sh:216 warns about) would
+# still look fine: `[!a-z]*` mis-collates case under en_US.UTF-8, not under C.
+# So a regression back to a range passes the loop above unless the suite is run
+# from an en_US.UTF-8 terminal. Pin both locales explicitly for these two
+# tokens so the regression cannot ship green by accident of who runs the suite.
+# en_US.UTF-8 may not be installed on a minimal CI image; skip that half rather
+# than fail the suite over a missing locale.
+for _at_locale in C en_US.UTF-8; do
+	if [ "$_at_locale" != "C" ] && ! locale -a 2>/dev/null | grep -qi '^en_US\.utf-\?8$'; then
+		continue
+	fi
+	for bad in CONTENT Content; do
+		LC_ALL=$_at_locale resolve implementer "$bad"
+		if [ "$R_STATUS" = 2 ] && [ -z "$R_OUT" ]; then
+			pass "LC_ALL=$_at_locale: malformed domain '$bad' exits 2"
+		else
+			fail "LC_ALL=$_at_locale: malformed domain '$bad' exited $R_STATUS, stdout '$R_OUT', expected 2 and empty"
+		fi
+	done
+done
+
+# The message has to name the rule, not just say no: the caller is an agent
+# reading stderr, and "invalid domain" without the shape is a dead end.
+resolve implementer CONTENT
+assert_err_has "domain"
+assert_err_has "CONTENT"
+
+# An unknown TIER is still a caller bug even when the domain is impeccable —
+# the second axis does not soften the first.
+resolve implementor content
+[ "$R_STATUS" = 2 ] && pass "an unknown tier with a valid domain still exits 2" ||
+	fail "unknown tier with a domain exited $R_STATUS, expected 2"
+assert_err_has "unknown capability tier"
+
+# ---------------------------------------------------------------------------
+banner "No domain argument — byte-for-byte the behaviour that shipped at 0.6.0"
+# ---------------------------------------------------------------------------
+# The whole point of making the argument optional: every existing caller — the
+# skills, the adapters' worked example, a consumer's own script — keeps working
+# without being touched.
+resolve implementer
+assert_resolved "model-for-implementing" "one argument still resolves the plain tier mapping"
+assert_err_lacks "UNMAPPED"
+
+resolve planner
+[ "$R_STATUS" = 0 ] && pass "one argument on an unmapped tier still exits 0" || fail "exited $R_STATUS"
+assert_err_has "UNMAPPED"
+
+# The sourced half of the seam takes the domain too — a caller that resolves
+# several tiers in one process should not have to shell out to get the second
+# axis.
+sourced=$(sh -c ". '$LIB'; resolve_tier implementer content" 2>/dev/null)
+[ "$sourced" = "model-for-writing-prose" ] && pass "the sourced function takes a domain too" ||
+	fail "sourced resolve_tier with a domain printed '$sourced'"
 
 # ---------------------------------------------------------------------------
 banner "Unconfigured — warn, print nothing, and PASS"
@@ -521,6 +693,22 @@ case $? in
 *) fail "the shipped config does not define all four tier variables" ;;
 esac
 
+# The domain axis is documented where the mapping lives, because the config is
+# the only file a consumer opens when they want to change what runs on what.
+assert_file_has "$SHIPPED" "AGENT_TIER_<TIER>_<DOMAIN>" \
+	"the optional second axis is documented where the mapping is edited"
+
+# …and documented ONLY. The kit ships no domain mapping for the same reason it
+# ships no tier mapping: it would be naming a model. The domain half of the
+# pattern allows digits too — AGENT_DOMAIN_SHAPE does — so the guard's charset
+# has to match, or a token like 'code2' would evade it.
+if grep -qE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z0-9_]+=" "$SHIPPED"; then
+	fail "the shipped config assigns a domain variable — the kit ships the axis, never a mapping"
+	grep -nE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z0-9_]+=" "$SHIPPED" | sed 's/^/        | /'
+else
+	pass "the shipped config assigns no domain variable"
+fi
+
 # ---------------------------------------------------------------------------
 banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
 # ---------------------------------------------------------------------------
@@ -544,6 +732,38 @@ for tier in planner implementer mechanical reviewer; do
 	fi
 	assert_err_lacks "UNMAPPED"
 done
+
+# The kit's own SECOND axis, and the reason it has one. This repo writes two
+# genuinely different kinds of artifact under a single `implementer` tier: the
+# POSIX sh under scripts/ and the harness under scripts/docs-conformance/, and
+# the PROSE that is most of the product — the manual, the constitution
+# articles, the skills. One tier name was answering two questions.
+#
+# So `content` is mapped here and `code` deliberately is NOT. An unmapped
+# domain falls back to the plain tier silently, which is the correct answer for
+# code; writing AGENT_TIER_IMPLEMENTER_CODE to the same id the tier already
+# resolves to would be a non-decision recorded as a decision — the mirror of
+# the "a Domain: on every ticket" anti-pattern /to-tickets warns about.
+resolve implementer
+KIT_IMPLEMENTER=$R_OUT
+
+resolve implementer content
+if [ "$R_STATUS" = 0 ] && [ -n "$R_OUT" ] && [ "$R_OUT" != "$KIT_IMPLEMENTER" ]; then
+	pass "kit config routes 'implementer content' ('$R_OUT') away from the plain tier ('$KIT_IMPLEMENTER')"
+else
+	fail "kit config did not route 'implementer content' — status $R_STATUS, stdout '$R_OUT', plain tier '$KIT_IMPLEMENTER'"
+	printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+fi
+assert_err_lacks "UNMAPPED"
+
+resolve implementer code
+if [ "$R_STATUS" = 0 ] && [ "$R_OUT" = "$KIT_IMPLEMENTER" ]; then
+	pass "kit config leaves 'implementer code' on the plain tier ('$R_OUT') — an unmapped domain is the ordinary case"
+else
+	fail "kit config resolved 'implementer code' to '$R_OUT', expected the plain tier's '$KIT_IMPLEMENTER'"
+	printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+fi
+assert_err_lacks "UNMAPPED"
 
 # The consumer-shipped file is untouched by this: it still resolves every tier
 # to EMPTY. The kit names no model to consumers, even while naming one to
@@ -595,6 +815,44 @@ for tier in planner implementer mechanical reviewer; do
 	*) pass "scripts/agents.kit.sh did not warn UNMAPPED for '$tier'" ;;
 	esac
 done
+
+# The wrapper substitutes for scripts/agents.lib.sh, so it has to carry the
+# WHOLE signature — including the optional domain. It forwards "$@" rather than
+# a fixed one-argument form precisely so this holds, and this is the assertion
+# that keeps it true: a wrapper that quietly dropped the second argument would
+# still resolve every tier above and pass that entire section, while silently
+# undoing the axis for every kit session that follows hard rule 10.
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_PLAIN=$(sh "$KIT_WRAPPER" implementer 2>"$W_ERR")
+rm -f "$W_ERR"
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_OUT=$(sh "$KIT_WRAPPER" implementer content 2>"$W_ERR")
+W_STATUS=$?
+W_ERR_TEXT=$(cat "$W_ERR")
+rm -f "$W_ERR"
+if [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ] && [ "$W_OUT" != "$W_PLAIN" ]; then
+	pass "scripts/agents.kit.sh passes the domain through — 'implementer content' resolves '$W_OUT', not the plain tier's '$W_PLAIN'"
+else
+	fail "scripts/agents.kit.sh dropped the domain — status $W_STATUS, stdout '$W_OUT', plain tier '$W_PLAIN'"
+	printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+fi
+
+# …and the domain's exit codes survive the extra hop too: a malformed token is
+# the resolver's error to report, and the wrapper must not swallow it.
+W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+W_OUT=$(sh "$KIT_WRAPPER" implementer CONTENT 2>"$W_ERR")
+W_STATUS=$?
+W_ERR_TEXT=$(cat "$W_ERR")
+rm -f "$W_ERR"
+[ "$W_STATUS" = 2 ] && pass "scripts/agents.kit.sh propagates exit 2 for a malformed domain" ||
+	fail "scripts/agents.kit.sh exited $W_STATUS for a malformed domain, expected 2"
+case "$W_ERR_TEXT" in
+*"malformed task domain"*) pass "scripts/agents.kit.sh propagates the resolver's diagnostic" ;;
+*)
+	fail "scripts/agents.kit.sh swallowed the resolver's diagnostic"
+	printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+	;;
+esac
 unset AGENTS_CONFIG
 
 if [ "$SKIPPED" -gt 0 ]; then

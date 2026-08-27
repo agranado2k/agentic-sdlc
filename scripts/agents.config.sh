@@ -60,6 +60,42 @@
 # Examples of the SHAPE (not real identifiers — deliberately):
 #   AGENT_TIER_PLANNER='<your provider's strongest reasoning model>'
 #   AGENT_TIER_MECHANICAL='<your provider's cheapest capable model>'
+#
+# ---------------------------------------------------------------------------
+# OPTIONAL SECOND AXIS: TASK DOMAIN
+# ---------------------------------------------------------------------------
+# The four variables above answer "how much judgement is this work worth?".
+# They do not answer "what is this work made OF?" — and "write the launch
+# announcement" and "write the retry logic" are the same tier while being the
+# kind of different that may deserve different models.
+#
+# So each tier takes an optional, more specific variable:
+#
+#   AGENT_TIER_<TIER>_<DOMAIN>='<the model for that medium at that tier>'
+#
+# and `sh scripts/agents.lib.sh <tier> <domain>` prefers it, falling back to the
+# plain `AGENT_TIER_<TIER>` when it is unset or empty. A ticket carries the
+# domain on an optional `Domain:` line, stamped by /to-tickets when the medium
+# would change which model you would pick.
+#
+# THE DOMAIN VOCABULARY IS YOURS. Unlike the four tiers — which the kit fixes,
+# because the skills say those words out loud — the domains are whatever
+# distinctions your repo actually has. `code` and `content` is the common split;
+# a repo whose hard part is queries might add `sql`. The token is
+# `[a-z][a-z0-9-]*`, and a hyphen in it becomes an underscore in the variable
+# name (`html-report` -> `..._HTML_REPORT`).
+#
+# A domain you never map is NOT an error and NOT a warning: it falls back to the
+# tier, which is the right answer for every medium you have no opinion about.
+# Map the two or three that pay for themselves and leave the rest alone.
+#
+# Examples of the SHAPE (still not real identifiers):
+#   AGENT_TIER_IMPLEMENTER_CODE='<your provider's best coding model>'
+#   AGENT_TIER_IMPLEMENTER_CONTENT='<your provider's best writing model>'
+#   AGENT_TIER_REVIEWER_CONTENT='<the model you trust to review prose>'
+#
+# The kit ships none of these set, for the same reason it ships the four tiers
+# empty: a mapping is a model identifier, and the kit never names one.
 
 # ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage

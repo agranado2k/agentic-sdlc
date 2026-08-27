@@ -251,6 +251,31 @@ fi
 assert_status 2 "an invented tier is refused, not silently defaulted" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementor"
 assert_out_has "unknown capability tier"
 
+# The second axis, on the same real consumer: the project decides that prose at
+# the implementer tier is worth a different model, and says so in ITS config.
+cat >>scripts/agents.config.sh <<'EOF'
+AGENT_TIER_IMPLEMENTER_CONTENT='demo-wordsmith'
+EOF
+
+domains=$(for d in code content; do
+	sh scripts/agents.lib.sh implementer "$d"
+done 2>/dev/null | tr '\n' ' ')
+if [ "$domains" = "demo-standard demo-wordsmith " ]; then
+	pass "a mapped domain routes away from the tier's model, an unmapped one falls back: $domains"
+else
+	fail "domain resolution produced '$domains'"
+fi
+
+# Falling back is SILENT — the unmapped domain above is the ordinary case, and a
+# warning for it would be one the operator learns to scroll past.
+quiet=$(sh scripts/agents.lib.sh implementer code 2>&1 >/dev/null)
+[ -z "$quiet" ] && pass "an unmapped domain says nothing on stderr" ||
+	fail "an unmapped domain warned: $quiet"
+
+# An open vocabulary is not an unchecked one: the token lands in a variable name.
+assert_status 2 "a malformed domain is refused before it reaches the eval" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementer 'CODE;echo pwned'"
+assert_out_has "malformed task domain"
+
 assert_status 0 "the docs gate is still green with the tiers configured" -- sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 t_done "guards demo"

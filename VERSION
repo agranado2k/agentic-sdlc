@@ -71,7 +71,26 @@
 # fixed in the sibling PR of this wave) anchors its discovery on the library's
 # own location. No file joined or left the layer; both changes are content
 # changes to manifest-listed files, which is what this MINOR records.
-shared-layer: 0.6.0
+# 0.7.0 — task-domain routing. No file joined or left the layer; ONE shared file
+# changed content: scripts/agents.lib.sh's resolver gained an optional second
+# argument, the task DOMAIN, so `sh scripts/agents.lib.sh implementer content`
+# reads AGENT_TIER_IMPLEMENTER_CONTENT and falls back to AGENT_TIER_IMPLEMENTER
+# when it is unset. Called with one argument it is byte-for-byte the 0.6.0
+# behaviour, which is what makes this wave safe to adopt without touching a
+# single caller. The two vocabularies are deliberately opposite: the four tiers
+# stay CLOSED (an unknown one is still exit 2) while domains are OPEN local
+# policy, so an unmapped domain falls back to the tier in silence — and because
+# the token is interpolated into a variable name, its SHAPE ([a-z][a-z0-9-]*) is
+# checked instead, exit 2 on anything else. UPDATING.md changed content too, for
+# the 0.7.0 recipe delta. The wave's non-manifest half, recovered by Part 2:
+# /to-tickets stamps an optional `Domain:` line when the medium of the work
+# would change which model you would pick, /implement passes it as the second
+# argument, the manual template's "Capability tiers" section explains the axis,
+# and the claude-code adapter note works a domain-qualified spawn through. The
+# consumer's own scripts/agents.config.sh (theirs, never overwritten) documents
+# the AGENT_TIER_<TIER>_<DOMAIN> convention — existing consumers merge that
+# comment hunk by hand, or skip it and lose nothing but the documentation.
+shared-layer: 0.7.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
