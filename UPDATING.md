@@ -134,9 +134,11 @@ TO_REF=               # ← what you want: fill it in from the list above
 	{ echo "FROM_REF = TO_REF = $FROM_REF — you are already on it; there is nothing to update" >&2; false; }
 ```
 
-> **Pre-1.0 note.** Until the kit cuts tagged releases, `FROM_REF`/`TO_REF` can
-> be any git ref the clone can resolve — `main`, a branch, a SHA. Everything
-> below works unchanged; only the `v`-prefixed derivation above assumes tags.
+> **Release refs.** Releases are the `v`-prefixed tags — `kit tag --list` above
+> is the offer, and `tests/self-host.test.sh` holds the kit to tagging every
+> bump. Any ref the clone can resolve still works for an experiment, but an
+> update you record in `VERSION` should come from a tag: an untagged ref is a
+> point in someone's history, not a release.
 
 ### If your steps are separate processes
 
@@ -522,10 +524,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1304 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  106 +++
+ UPDATING.md                       | 1306 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1417 insertions(+), 1 deletion(-)
+ 3 files changed, 1442 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1219,11 +1221,11 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template         |  52 ++++++++++++++++
- constitution/local-product.md.template  | 103 +++++++++++++++++++++++++++++++
- constitution/local-workflow.md.template |  43 +++++++++++++
- constitution/shared-code-craft.md       | 106 ++++++++++++++++++++++++++++++++
- 4 files changed, 304 insertions(+)
+ constitution/AGENTS.md.template         |  52 +++++++++++++
+ constitution/local-product.md.template  | 103 +++++++++++++++++++++++++
+ constitution/local-workflow.md.template |  43 +++++++++++
+ constitution/shared-code-craft.md       | 129 ++++++++++++++++++++++++++++++++
+ 4 files changed, 327 insertions(+)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
