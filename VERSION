@@ -102,7 +102,28 @@
 # capture pins themselves live in that suite — kit-only, not shared — so what
 # a consumer takes here is the re-captured prose and nothing else: a re-read of
 # the two worked examples, and no command of theirs changes.
-shared-layer: 0.8.0
+# 0.9.0 — the self-hosting follow-ups. No file joined or left the layer; two
+# shared files changed content. The substantive one, and only in its comments:
+# scripts/docs-conformance/validators/claude-md-refs.mjs described "the kit's
+# own unbootstrapped tree" as its example of a tree the shim and reachability
+# rules stay silent on. The kit has self-hosted since ADR-0001, so that example
+# named a state nothing is in any more — and a repo created from the template
+# is not it either, since it carries the kit's own AGENTS.md and both shims
+# until bootstrap strips them. The general statements were always right; only
+# the example moved, to a tree whose manual has not been written yet. Zero
+# behaviour change: the validator's 52 fixture tests pass unchanged, and a
+# consumer taking 0.9.0 re-reads two comments and changes no command of theirs.
+# The wave's non-manifest half is a kit-only test fix that a consumer never
+# sees: tests/docs-demo.sh built its fake 0.3.0 consumer with a sed pinned to
+# one literal version, so the rollback went silently dead the release after it
+# was written and the fixture carried the CURRENT version instead. The marker
+# line is now matched by SHAPE, and an assertion right after the fixture is
+# built proves the rollback happened.
+# The second content change is UPDATING.md, per this manifest's own precedent
+# that a re-pin is a content change: its worked-example prose and transcripts
+# moved 0.8.0 -> 0.9.0 with the release, nothing else. The recipe itself is
+# untouched.
+shared-layer: 0.9.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
