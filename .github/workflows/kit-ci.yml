@@ -4,7 +4,7 @@ name: Kit CI
 # bootstrap.sh deletes this file, because a fresh project has no business
 # running the kit's acceptance test against the kit's shared layer.
 #
-# Nine jobs. The first four are the kit's own foundations, in increasing order
+# Ten jobs. The first five are the kit's own foundations, in increasing order
 # of what they'd cost you to learn late; the rest each check one artifact the
 # kit ships to its consumers.
 #
@@ -29,13 +29,20 @@ name: Kit CI
 #   4. demo         the end-to-end acceptance test: build a throwaway project
 #                   from this tree, bootstrap it, and prove the gate green — and
 #                   then prove it red, once per failure mode it claims to catch.
-#   5. skills       the /implement delivery contract, checked as text.
-#   6. workflow-templates
+#   5. docs-demo    the other acceptance surface: the stamped docs set is
+#                   personalized, and BOTH halves of the UPDATING.md recipe run
+#                   end to end against the pinned transcripts UPDATING.md
+#                   quotes. Until 2026-08-27 this suite had no job here, so the
+#                   byte-for-byte transcript check gating UPDATING.md was
+#                   local-only — tests/self-host.test.sh section F now fails if
+#                   any suite loses its job again.
+#   6. skills       the /implement delivery contract, checked as text.
+#   7. workflow-templates
 #                   the workflow templates parse, and install inert.
-#   7. adapters     the adapter trees are well-formed and stay dormant.
-#   8. exclusions   the deliberate-exclusions record has not gone stale — every
+#   8. adapters     the adapter trees are well-formed and stay dormant.
+#   9. exclusions   the deliberate-exclusions record has not gone stale — every
 #                   skill it says the kit does not ship is really not shipped.
-#   9. dogfood-optin
+#  10. dogfood-optin
 #                   the one OPTIONAL skill, both ways: bootstrap with it, without
 #                   it, and with no terminal to ask on. Job 4 only ever sees the
 #                   first of those, and the failure mode worth catching lives in
@@ -113,6 +120,22 @@ jobs:
           node-version: 22
       - name: Kit acceptance test
         run: sh tests/kit-demo.sh
+
+  docs-demo:
+    name: Docs set + UPDATING recipe (end-to-end)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The suite bootstraps throwaway consumers and runs the gate on them, so
+      # it needs the same node the demo job does. Its load-bearing half is the
+      # byte-for-byte comparison of UPDATING.md's two worked-example transcripts
+      # against a live re-run of the recipe — the check that catches a
+      # shared-layer wave whose transcripts were spliced by hand.
+      - name: Docs + updating acceptance test
+        run: sh tests/docs-demo.sh
 
   skills:
     name: /implement delivery contract

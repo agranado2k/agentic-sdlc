@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.7.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.8.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. |
+| **Active worktrees** | `worktree/f15-diary-followups` (`fix/f15-diary-followups`, PR #51). |
 
 ### Open questions / unresolved decisions
 
@@ -204,3 +204,50 @@ Follow-up candidates, both pre-existing and both surfaced by the #49 sync
 session: `tests/docs-demo.sh` is named in `README.md` as a suite but no CI job
 runs it, so the transcript byte-comparison gating `UPDATING.md` is local-only;
 and `README.md`'s architecture section still says `shared-layer: 0.4.0`.
+
+## 2026-08-27 — the two merge-train follow-ups became checks
+
+Both follow-up candidates from the entry above are closed on
+`fix/f15-diary-followups` (PR #51), each as a check rather than a fix alone
+(hard rule 9): `tests/docs-demo.sh` gained its Kit CI job, and
+`tests/self-host.test.sh` gained a section F that fails when any suite in
+`tests/` has no workflow `run:` line — or when a workflow carries a job with
+duplicate keys, which the forge answers by loading nothing. That second
+tripwire is not hypothetical: the first draft of this very change pasted the
+new job over the `skills:` key, Kit CI went dark on the branch, and the
+independent review caught it while the naive substring form of F stayed green.
+README's worked example now quotes the current `shared-layer:` marker, held to
+`VERSION` by the same section; historical release references stay as history.
+
+## 2026-08-27 — the transcripts were locale-dependent; shared layer 0.8.0
+
+The docs-demo CI job added in the entry above failed on its very first run, and
+it failed on the thing it was added to watch. `tests/docs-demo.sh`'s section D
+compares `UPDATING.md`'s two pinned transcripts against a live run byte for
+byte; the pinned bytes had only ever been captured on macOS under a UTF-8
+locale, where `sort` and `comm` place `UPDATING.md` after `scripts/...`, while
+the CI runner's C locale places it before `constitution/...`. Same commands,
+same verdicts, different order — and a byte comparison is right to call that a
+difference.
+
+The fix is one line beside the existing `COLUMNS=80` pin, and for the same
+reason: `LC_ALL=C`, the one collation every platform has, so the capture no
+longer records the capturer's machine. Both transcripts were then re-captured
+under it. That re-capture is content inside a shared-layer file, so it is a
+release and not an edit (hard rule 3): **shared layer 0.8.0**, no file joining
+or leaving, `UPDATING.md` the only shared file whose bytes moved. The locale pin
+itself lives in the kit-only suite, so a consumer taking 0.8.0 re-reads two
+worked examples and changes no command of their own.
+
+The locale was not the only thing the capture had recorded. With it pinned, CI
+found a second one immediately: 9d's `sed` command is echoed as a literal, and
+`echo` is where shells still disagree — dash turned its `\1` into a control
+character, the macOS shell printed it as written. `printf '%s\n'` never
+interprets its operand, so that line now reads the same from either. Same class
+of defect, same fix shape as `COLUMNS`.
+
+Worth naming: both dependences were latent from the day the transcripts existed.
+Nothing about them was newly broken — the suite had simply never run anywhere
+but the machine that captured them, and a second platform is what a CI job buys.
+Locally, `dash tests/docs-demo.sh` now reproduces the runner's shell, so the
+next one of these does not need a CI round-trip to find.
