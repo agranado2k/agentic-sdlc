@@ -299,4 +299,38 @@ done
 [ "$dir_entries" = 0 ] &&
 	pass "every KIT_OWN entry is a file the kit ships, not a directory"
 
+# ---------------------------------------------------------------------------
+banner "F. The kit's public face stays current"
+# ---------------------------------------------------------------------------
+# Two staleness modes the merge train of 2026-08-27 caught in the wild, each
+# now a check instead of a diary follow-up (hard rule 9).
+
+# --- F1: every suite runs in CI ---------------------------------------------
+# README.md names every suite; nothing said every suite is WIRED. A suite with
+# no CI job is local-only — its claim holds exactly as long as somebody
+# remembers to run it, which is the failure mode docs-demo.sh actually shipped.
+workflow_runs=$(cat "$KIT"/.github/workflows/*.yml)
+for suite in "$KIT"/tests/*.sh; do
+	rel="tests/$(basename "$suite")"
+	[ "$rel" = "tests/lib.sh" ] && continue # the harness, not a suite
+	case "$workflow_runs" in
+	*"sh $rel"*) pass "$rel is invoked by a workflow in .github/workflows/" ;;
+	*) fail "$rel has no CI job — it is a suite in name only until a workflow runs it" ;;
+	esac
+done
+
+# --- F2: README's shared-layer claim tracks VERSION -------------------------
+# README quotes the manifest's marker as a worked example. An example pinned to
+# a dead release teaches the reader the wrong current state — the same defect
+# class the diary's Current state block guards against, one file over.
+version_now=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
+[ -n "$version_now" ] || fail "VERSION carries no shared-layer marker to compare against"
+stale_readme=$(grep -n 'shared-layer: *[0-9][0-9.]*' "$KIT/README.md" | grep -v "shared-layer: *$version_now" || true)
+if [ -z "$stale_readme" ]; then
+	pass "every shared-layer marker README quotes is the current one ($version_now)"
+else
+	fail "README quotes a shared-layer marker that is not $version_now:"
+	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
+fi
+
 t_done "self-host"
