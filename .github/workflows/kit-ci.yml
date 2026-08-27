@@ -136,6 +136,8 @@ jobs:
       # shared-layer wave whose transcripts were spliced by hand.
       - name: Docs + updating acceptance test
         run: sh tests/docs-demo.sh
+
+  skills:
     name: /implement delivery contract
     runs-on: ubuntu-latest
     steps:

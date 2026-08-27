@@ -309,7 +309,13 @@ banner "F. The kit's public face stays current"
 # README.md names every suite; nothing said every suite is WIRED. A suite with
 # no CI job is local-only — its claim holds exactly as long as somebody
 # remembers to run it, which is the failure mode docs-demo.sh actually shipped.
-workflow_runs=$(cat "$KIT"/.github/workflows/*.yml)
+#
+# Only real `run:` lines count — a comment mentioning a suite must not satisfy
+# this — and quotes are stripped so `run: sh "tests/x.sh"` still matches. A
+# suite invoked through a variable is NOT recognized and fails red: the safe
+# direction, and the price of keeping this a text check rather than a parser.
+workflow_runs=$(sed -n 's/^[[:space:]]*run:[[:space:]]*//p' \
+	"$KIT"/.github/workflows/*.yml | tr -d '"'\''')
 for suite in "$KIT"/tests/*.sh; do
 	rel="tests/$(basename "$suite")"
 	[ "$rel" = "tests/lib.sh" ] && continue # the harness, not a suite
@@ -319,13 +325,39 @@ for suite in "$KIT"/tests/*.sh; do
 	esac
 done
 
+# A run line is only as good as the workflow that carries it: a file the forge
+# refuses to load runs NOTHING, while every `run:` line in it still reads as
+# wired above. The observed failure mode is a job block pasted over a sibling,
+# leaving one job with two `name:`/`runs-on:`/`steps:` — so hold every job to
+# unique immediate keys. Indentation-based on purpose: both kit workflows are
+# hand-written two-space YAML, and this is a tripwire for one edit class, not
+# a parser.
+for wf in "$KIT"/.github/workflows/*.yml; do
+	dup=$(awk '
+		/^  [A-Za-z0-9_-]+:/ { delete seen }
+		/^    [A-Za-z0-9_-]+:/ {
+			key = $1
+			if (key in seen) { print FILENAME ": duplicate key " key " in one job"; bad = 1 }
+			seen[key] = 1
+		}
+		END { exit bad }
+	' "$wf") || {
+		fail "$(basename "$wf") has a job with duplicate keys — the forge will refuse the whole workflow"
+		printf '%s\n' "$dup" | sed 's/^/        | /'
+		continue
+	}
+	pass "$(basename "$wf") has no job with duplicate keys"
+done
+
 # --- F2: README's shared-layer claim tracks VERSION -------------------------
 # README quotes the manifest's marker as a worked example. An example pinned to
 # a dead release teaches the reader the wrong current state — the same defect
 # class the diary's Current state block guards against, one file over.
 version_now=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
 [ -n "$version_now" ] || fail "VERSION carries no shared-layer marker to compare against"
-stale_readme=$(grep -n 'shared-layer: *[0-9][0-9.]*' "$KIT/README.md" | grep -v "shared-layer: *$version_now" || true)
+# The marker's dots are regex wildcards to grep; escape them, or 0x7x0 passes.
+version_re=$(printf '%s' "$version_now" | sed 's/\./\\./g')
+stale_readme=$(grep -n 'shared-layer: *[0-9][0-9.]*' "$KIT/README.md" | grep -v "shared-layer: *$version_re" || true)
 if [ -z "$stale_readme" ]; then
 	pass "every shared-layer marker README quotes is the current one ($version_now)"
 else
