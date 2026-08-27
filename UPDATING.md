@@ -135,10 +135,10 @@ TO_REF=               # ← what you want: fill it in from the list above
 ```
 
 > **Release refs.** Releases are the `v`-prefixed tags — `kit tag --list` above
-> is the offer, and `tests/self-host.test.sh` holds the kit to tagging every
-> bump. Any ref the clone can resolve still works for an experiment, but an
-> update you record in `VERSION` should come from a tag: an untagged ref is a
-> point in someone's history, not a release.
+> is the offer, and the kit holds itself to tagging every bump. Any ref the
+> clone can resolve still works for an experiment, but an update you record in
+> `VERSION` should come from a tag: an untagged ref is a point in someone's
+> history, not a release.
 
 ### If your steps are separate processes
 

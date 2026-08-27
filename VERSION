@@ -159,7 +159,8 @@
 # needs it because that consumer is on the old recipe.
 #   What a consumer takes: a re-read of UPDATING.md, and one habit change — the
 # takes in Part 2 are `kit_take` calls now, which needs step 0's helper in
-# scope. Nothing else of theirs changes. The wave has no non-manifest half.
+# scope. Nothing else of theirs changes. That first change has no
+# non-manifest half of its own.
 #   The wave's second content change, landed before the v0.10.0 tag was cut so
 # one release carries the incident AND its standing rules: shared-code-craft
 # gains §11 (never point a redirect at a file you cannot lose) and §12 (declare
