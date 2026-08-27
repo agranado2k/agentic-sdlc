@@ -80,6 +80,27 @@ kit() { git --git-dir="$WORK/kit.git" "$@"; }
 A bare clone: you are only ever *reading* out of it, and a second working tree
 on disk is one more thing to get out of sync.
 
+One more helper, and it is the one that keeps this recipe from destroying your
+work. Part 2 repeatedly **takes** a file — writes the release's copy over one of
+yours — and the obvious spelling, `kit show "$REF:$path" >"$mine"`, is unsafe:
+the shell opens and **truncates `$mine` before `kit` is even started**, so a path
+that is absent at that ref leaves you with zero bytes and a `fatal:` on stderr.
+Absent is not exotic — a skill the kit renamed, an article you never stamped, a
+config the kit ships only as a `.template`. Fetch first, write second:
+
+```sh
+kit_take() {                       # kit_take <ref> <path in the kit> <your file>
+	kit show "${1}:$2" >"$WORK/take.$$" || { rm -f "$WORK/take.$$"; return 1; }
+	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
+}
+```
+
+`cat >` rather than `mv` on the last line deliberately: it still truncates, but
+only once the bytes are in hand, and it leaves your file's existing mode alone
+(step 5 explains why a mode matters and why `>` cannot carry one). A take that
+finds nothing returns non-zero and writes nothing, so `kit_take … || echo "…"`
+is a verdict you can print rather than a file you have to restore from git.
+
 Now pick the two points you are comparing.
 
 ```sh
@@ -134,7 +155,16 @@ cat >"$WORK/env.sh" <<EOF
 WORK=$WORK
 FROM_REF=$FROM_REF
 TO_REF=$TO_REF
-kit() { git --git-dir="$WORK/kit.git" "\$@"; }
+EOF
+
+# The two functions go in with a QUOTED heredoc, so their `$` survive as written
+# rather than being expanded now against this shell's empty variables.
+cat >>"$WORK/env.sh" <<'EOF'
+kit() { git --git-dir="$WORK/kit.git" "$@"; }
+kit_take() {
+	kit show "${1}:$2" >"$WORK/take.$$" || { rm -f "$WORK/take.$$"; return 1; }
+	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
+}
 EOF
 ```
 
@@ -817,25 +847,52 @@ comment: `scripts/guards.config.sh`, `scripts/agents.config.sh`,
 `scripts/docs-conformance/config.mjs`,
 `scripts/docs-conformance/local-vocabulary.mjs`.
 
-**First ask whether the file existed at the release you are on.** If it did not,
-this is an ADD and there is nothing of yours to preserve:
+**Ask about BOTH refs before you write anything.** Two questions, three answers
+— and the third one is the one that eats files:
 
 ```sh
 C=scripts/agents.config.sh
 
-if kit cat-file -e "$FROM_REF:$C" 2>/dev/null; then
-	echo "MERGE  $C existed at $FROM_REF — diff the keys, below"
+if kit cat-file -e "${FROM_REF}:$C" 2>/dev/null; then
+	echo "MERGE   $C existed at $FROM_REF — diff the keys, below"
+elif kit cat-file -e "${TO_REF}:$C" 2>/dev/null; then
+	echo "ADD     $C is new at $TO_REF — copy it whole"
+	kit_take "$TO_REF" "$C" "$C"
 else
-	echo "ADD    $C is new at $TO_REF — copy it whole"
-	kit show "$TO_REF:$C" >"$C"
+	echo "STAMPED $C — the kit has no such path at either ref; see below"
 fi
 ```
 
-That is the 0.3.0 → 0.9.0 case: `scripts/agents.config.sh` did **not** exist at
-0.3.0 — it arrived with the 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole
-file and then edits it. Nothing is at risk, which is precisely why it is worth
-checking rather than assuming: the same path is a destructive overwrite for a
-consumer who *did* have it.
+`MERGE` is the 0.4.0 → 0.9.0 case for this file, and `ADD` is the 0.3.0 → 0.9.0
+one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
+0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
+edits it. Nothing is at risk there, which is precisely why it is worth checking
+rather than assuming: the same path is a destructive overwrite for a consumer who
+*did* have it.
+
+**`STAMPED` is not a rare third case — it is half the list above.**
+`scripts/docs-conformance/local-vocabulary.mjs` is yours because bootstrap
+*stamped* it from `local-vocabulary.mjs.template`, and the kit therefore has that
+path at **neither** ref, in every release there has ever been. A branch that asks
+only about `FROM_REF` reads that `no` as "then it is new upstream", prints
+`ADD … copy it whole` — which was never true of this path — and runs a take that
+cannot succeed. It is the same `.template`-versus-stamped asymmetry 9b handles
+one category over, and 9d has to answer it the same way: **the file to compare
+against is the `.template`**, and there is nothing at `$C` to take.
+
+```sh
+kit diff "$FROM_REF" "$TO_REF" -- "$C.template"   # what the kit changed in the SOURCE
+```
+
+Read that diff and carry across what applies, exactly as in 9b. Never re-stamp
+the template over the file — the whole point of stamping is that the copy became
+yours.
+
+Note what `kit_take` bought in the `ADD` arm even so. The obvious spelling,
+`kit show "$TO_REF:$C" >"$C"`, truncates `$C` before `kit` runs, so the moment
+the two questions above are asked in the wrong order — or a release renames the
+path — the consumer's config is zero bytes and the only copy is in git history.
+Step 0 explains the shape; this is the branch where it was first paid for.
 
 **For the MERGE case, never `kit show >` the file.** Diff the key sets instead:
 
