@@ -96,6 +96,27 @@ is to be looked at. Which reports exist and how they render is process
 knowledge — the practice documents that produce them say, and each names this
 rule rather than restating it.
 
+## 11. Never point a redirect at a file you cannot lose
+
+A `>` truncates its destination the moment the shell parses it — before the
+producing command runs, let alone succeeds. Point one at a file you need, and
+a command that fails leaves zero bytes where the file was: data loss dressed
+as a syntax convenience. Produce into scratch, check the producer's exit, and
+only then move the bytes onto the real destination. The rule costs one
+temporary file and removes silent truncation from the failure modes a review
+has to imagine.
+
+## 12. Declare the shell, then write for it
+
+A snippet that never names its interpreter runs under whatever shell the
+operator happens to live in, and an interactive shell rewrites what a strict
+one passes through — an unbraced expansion with a colon after it can silently
+become a history modifier and hand the next command an argument that does not
+exist. Name the shell every snippet is for, and brace the expansion wherever
+text follows it: `${REF}` ends the parse where `$REF` invites
+reinterpretation. The gap between the shell that ran the tests and the shell
+that runs the operator is a bug's favorite hiding place.
+
 ---
 
 Most of these rules condense long-standing advice for human engineers, restated
@@ -103,4 +124,6 @@ for coding agents by Fabien Sanglard in his *agent.md* essay; they earned their
 place here by naming mistakes agents demonstrably make. One deliberate reversal:
 where that essay asks for drawings in ASCII, §10 inverts the medium — this
 framework's reports render as HTML, and a medium that can carry a real vector
-drawing makes character art a downgrade, not a convenience.
+drawing makes character art a downgrade, not a convenience. §11 and §12 are
+this project's own: each condenses a reproduced data-loss incident from its
+history, not a line from the essay.

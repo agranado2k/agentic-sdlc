@@ -200,7 +200,7 @@ they are also the files a change here has to earn.
   not once per task. It must stay copyable verbatim into a repo that shares none
   of this one's vocabulary, and `portability-leak` in the docs gate is what
   holds it to that.
-- `constitution/shared-code-craft.md` — how the code itself is written: ten
+- `constitution/shared-code-craft.md` — how the code itself is written: twelve
   portable rules for the diff an agent produces, from the smallest sufficient
   diff to diagrams drawn as SVG in HTML reports, never ASCII art. Load it before
   writing or reviewing code. Same portability contract as the invariants.
@@ -275,7 +275,7 @@ answers produce a clean project.
 | Split a spec into tracer-bullet tickets | `/to-tickets` — one ticket per fresh session, autonomy label decided at write time |
 | Build one ticket                    | `/implement` — restate, drive `/tdd` through the seams, then deliver: push, open the PR, request an independent review. Stops there; the merge is yours |
 | Write the code test-first           | `/tdd` — red, green, refactor, one behavior at a time |
-| Hold the code itself to a standard  | `constitution/shared-code-craft.md` — the ten portable craft rules |
+| Hold the code itself to a standard  | `constitution/shared-code-craft.md` — the twelve portable craft rules |
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer; teaches, never reviews |

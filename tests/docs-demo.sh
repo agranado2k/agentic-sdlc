@@ -1268,6 +1268,41 @@ else
 	fail "UPDATING.md has ref expansions a zsh history modifier can eat"
 	printf '%s\n' "$zsh_modifier_risk" | sed 's/^/        | /'
 fi
+
+# ---------------------------------------------------------------------------
+banner "C4h. Every kit-show redirect in the recipe lands in \$WORK"
+# ---------------------------------------------------------------------------
+# The other data-loss shape, pinned the same way C4f pins the zsh one: a `>`
+# truncates its target before `kit show` runs, so inside the recipe's fenced
+# blocks the only file a show may write is scratch under $WORK — every real
+# destination goes through kit_take, which pays the truncation on a temp path
+# and moves bytes only once they exist. Fence-scoped so prose that QUOTES the
+# unsafe spelling (the incident report does) stays legal; `2>` is not a file
+# redirect and `>>` does not truncate, so both stay legal; the $WORK target may
+# be spelled bare, quoted, or braced — §12 recommends the braced form, and a
+# guard must not flag the spelling the craft rule asks for. Fences may be
+# indented (one in this document is).
+c4h_scan() {
+	awk '
+		/^[ \t]*```/ { inblock = !inblock; next }
+		inblock && /kit show/ && /[^2&>]>[^>]/ && $0 !~ /[^2&>]>[ \t]*"?\$\{?WORK\}?"?\// { print NR ": " $0 }
+	' "$1"
+}
+redirect_risk=$(c4h_scan "$KIT/UPDATING.md")
+if [ -z "$redirect_risk" ]; then
+	pass "every kit-show redirect inside a fenced block lands in \$WORK"
+else
+	fail "UPDATING.md points a kit-show redirect at a file the consumer cannot lose"
+	printf '%s\n' "$redirect_risk" | sed 's/^/        | /'
+fi
+# …and this check is not vacuous either: the unsafe shape must be caught when
+# it is present.
+printf '%s\n' '```sh' 'kit show "${TO_REF}:x" >"their-file"' '```' >"$SCRATCH/c4h-bait.md"
+if [ -n "$(c4h_scan "$SCRATCH/c4h-bait.md")" ]; then
+	pass "the C4h pattern catches the unsafe shape when it is present"
+else
+	fail "the C4h pattern missed its own bait — the guard is vacuous"
+fi
 # …and the check is not vacuous: the pattern it hunts for has to match when it
 # is present.
 printf 'kit show "$TO_REF:constitution/x.md"\n' >"$SCRATCH/shape.probe"
