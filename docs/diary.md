@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f15-diary-followups` (`fix/f15-diary-followups`, PR #51). |
+| **Active worktrees** | None. |
 
 ### Open questions / unresolved decisions
 
