@@ -52,6 +52,19 @@ fail() {
 	failures=$((failures + 1))
 }
 
+# note <text> — a visible line that is neither a pass nor a fail.
+#
+# Some cases below can only run against a shell that is installed. Silently
+# skipping one would let a machine (or a CI image) quietly drop an entire axis
+# while still printing ALL GREEN, so a skip says so out loud — here, and again
+# beside the final summary, where a reader who only checks the last lines will
+# actually see it. Same convention as tests/agents-tiers.test.sh.
+SKIPPED=0
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
+}
+
 assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
 assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
@@ -97,6 +110,42 @@ step6_check() {
 			echo "verbatim  $f"
 		fi
 	done <"$3"
+}
+
+# recipe_block <awk-pattern> — the body of the ```sh fence in UPDATING.md whose
+# FIRST line matches, printed verbatim.
+#
+# The two data-loss cases below run the recipe's OWN TEXT rather than a copy of
+# it. Every other executable claim in this suite is mirrored by hand (recipe,
+# recipe2, step6_check) and pinned to the document by section D's transcript
+# comparison — but a branch that destroys a file prints nothing into a
+# transcript, so there is no D to pin it with. A mirror is exactly the wrong
+# instrument there: it can be fixed in this file while the document a consumer
+# actually follows stays broken, which is the shape of the bug that shipped.
+recipe_block() {
+	awk -v pat="$1" '
+		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
+		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
+		grab {
+			n++
+			if (n == 1 && $0 ~ pat) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$KIT/UPDATING.md"
+}
+
+# assert_block <pattern> <destination> <label> — extract, and refuse to be vacuous.
+#
+# An extractor that finds nothing would make every assertion below it pass on an
+# empty script. That is the same vacuity 9d's own key-set diff falls into, so it
+# gets the same treatment: no match is a failure, loudly.
+assert_block() {
+	recipe_block "$1" >"$2"
+	if [ -s "$2" ]; then
+		pass "$3"
+	else
+		fail "$3 — no such block in UPDATING.md; this suite can no longer find the recipe it tests"
+	fi
 }
 
 # assert_status <expected> <label> -- <command...>
@@ -998,6 +1047,172 @@ assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
 
 assert_file "adapters/claude-code/README.md"
 
+# ---------------------------------------------------------------------------
+# The two data-loss cases. Both run UPDATING.md's own text (see recipe_block).
+# ---------------------------------------------------------------------------
+
+# recipe_prelude <file> — the shell state steps 8-10 assume, written to <file>.
+# Step 0 created it in the real recipe; the cases below re-create it so one
+# block can be run on its own.
+recipe_prelude() {
+	cat >"$1" <<EOF
+WORK=\$(mktemp -d)
+kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
+FROM_REF=v0.3.0
+TO_REF=v0.9.0
+EOF
+	recipe_block '^kit_take\(\)' >>"$1"
+}
+
+banner "C4c. 9d does not destroy a config the kit ships only as a .template"
+# `scripts/docs-conformance/local-vocabulary.mjs` is one of the four config
+# files 9d names, and in the kit that path exists ONLY as
+# `local-vocabulary.mjs.template` — bootstrap stamps it, which is why the
+# consumer has the `.mjs` and the kit never does, at EITHER ref.
+#
+# So 9d's opening question, "did it exist at the release you are on?", is false
+# — and a branch that reads one `no` as "then it is new at the target" runs
+# `kit show "$TO_REF:$C" >"$C"`. The shell truncates the consumer's file before
+# kit is started; kit then exits 128 having written nothing. The product
+# vocabulary that arms the portability guard is gone, and the line above it said
+# `ADD … copy it whole`, which was never true of this path.
+#
+# 9b already handles this exact `.template`-vs-stamped asymmetry. 9d is the same
+# question asked one category over, and it needs the same three answers.
+cd "$C3" || exit 2
+VOCAB=scripts/docs-conformance/local-vocabulary.mjs
+assert_file "$VOCAB"
+assert_has "$VOCAB" "Tier Consumer"
+cp "$VOCAB" "$SCRATCH/vocab.saved"
+vocab_before=$(wc -c <"$VOCAB")
+
+recipe_prelude "$SCRATCH/prelude.sh"
+assert_block '^C=scripts/' "$SCRATCH/9d.sh" "UPDATING.md's 9d config block is extractable"
+# The same block, pointed at another of the four files 9d itself lists.
+sed '1s|^C=.*|C=scripts/docs-conformance/local-vocabulary.mjs|' "$SCRATCH/9d.sh" \
+	>"$SCRATCH/9d.vocab.sh"
+sh -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9d.vocab.sh" \
+	>"$SCRATCH/9d.vocab.out" 2>&1
+sed 's/^/      > /' "$SCRATCH/9d.vocab.out"
+
+vocab_after=$(wc -c <"$VOCAB")
+if [ "$vocab_after" = "$vocab_before" ]; then
+	pass "9d left the stamped-from-template config at its $vocab_before bytes"
+else
+	fail "9d destroyed $VOCAB — $vocab_before bytes before, $vocab_after after"
+fi
+assert_has "$VOCAB" "Tier Consumer"
+# …and the verdict is not the false claim that put the redirect there.
+if grep -q '^ADD ' "$SCRATCH/9d.vocab.out"; then
+	fail "9d said ADD for a path that is absent at the TARGET ref too"
+else
+	pass "9d did not claim the path is new at the release being adopted"
+fi
+# Restore, so a RED run of the case above does not cascade into every later
+# section: an empty local-vocabulary.mjs is a broken import, and the gate would
+# then fail for a reason that is not the one under test.
+cp "$SCRATCH/vocab.saved" "$VOCAB"
+
+banner "C4d. 9b behaves the same under zsh as under sh"
+# The recipe never says which shell it is written for, and macOS — this
+# framework's own target — defaults to zsh. zsh applies HISTORY MODIFIERS to
+# `$var:x` even inside double quotes, so `"$TO_REF:constitution/…"` is `$TO_REF`
+# with the `:c` modifier applied, followed by the literal `onstitution/…`. The
+# ref never reaches git.
+#
+# 9b is where that lands on a file, in both of its arms: the take truncates the
+# local article to zero before the failing `kit show` writes anything, and the
+# `cmp` arm above it — reading the same broken expansion — compares against
+# EMPTY input and answers `YOURS` for an article that is verbatim the template.
+#
+# `"$TO_REF:$C"`, `"$FROM_REF:$f"` and `"$TO_REF:VERSION"` are unaffected (`$`
+# and `V` are not modifiers), which is exactly why this hid.
+#
+# The fixture is the UNSTAMPED case — a consumer who never filled the article
+# in, so bootstrap left the `.template` and it is byte-identical to FROM_REF's.
+# The correct outcome is therefore a TAKE, and the assertion is not "the bytes
+# never move" (they should) but the two things that are true either way: the two
+# shells must agree, and no shell may leave a zero-byte article behind.
+if command -v zsh >/dev/null 2>&1; then
+	assert_block '^A=constitution/local-workflow\.md$' "$SCRATCH/9b.sh" \
+		"UPDATING.md's 9b unstamped-article block is extractable"
+
+	# One pristine fixture tree per shell. 9b touches only this one path, so a
+	# directory holding only it is a faithful stage and isolates the mutation.
+	for _sh in sh zsh; do
+		rm -rf "$SCRATCH/9b-$_sh"
+		mkdir -p "$SCRATCH/9b-$_sh/constitution"
+		kit1 show "v0.3.0:constitution/local-workflow.md.template" \
+			>"$SCRATCH/9b-$_sh/constitution/local-workflow.md.template"
+	done
+	art_before=$(wc -c <"$SCRATCH/9b-sh/constitution/local-workflow.md.template")
+
+	# `zsh -f`: no user rc files, so this measures the shell and not the
+	# operator's dotfiles.
+	(cd "$SCRATCH/9b-sh" && sh -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9b.sh") \
+		>"$SCRATCH/9b.sh.out" 2>&1
+	(cd "$SCRATCH/9b-zsh" && zsh -f -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9b.sh") \
+		>"$SCRATCH/9b.zsh.out" 2>&1
+	sed 's/^/      > sh:  /' "$SCRATCH/9b.sh.out"
+	sed 's/^/      > zsh: /' "$SCRATCH/9b.zsh.out"
+
+	_zart="$SCRATCH/9b-zsh/constitution/local-workflow.md.template"
+	art_after=$(wc -c <"$_zart")
+	if [ "$art_after" -gt 0 ]; then
+		pass "zsh: 9b left $art_after bytes in the local article (started at $art_before)"
+	else
+		fail "zsh: 9b destroyed the local article — $art_before bytes before, 0 after"
+	fi
+	assert_same "$SCRATCH/9b-sh/constitution/local-workflow.md.template" "$_zart" \
+		"zsh and sh leave the local article in the same state"
+	assert_same "$SCRATCH/9b.sh.out" "$SCRATCH/9b.zsh.out" \
+		"zsh and sh reach the same 9b verdict"
+	if grep -q 'onstitution/' "$SCRATCH/9b.zsh.out"; then
+		fail "zsh: a history modifier ate the ref — the expansion is still unbraced"
+	else
+		pass "zsh: the ref reached git intact"
+	fi
+else
+	note "zsh is not installed here — 9b's real-shell case did not run, and a CI image without zsh proves less than this host would"
+fi
+
+banner "C4e. A take of a path that is NOT at the ref leaves your file alone"
+# 9d is where the truncate-before-failure shape was caught, but the shape is the
+# bug: `kit show "$REF:$path" >"$mine"` is the recipe's idiom for "take the
+# release's copy", and the shell empties `$mine` before kit is started. Every
+# one of those in the recipe is one absent path away from the same 1807-byte
+# loss — a renamed skill in 9a, a `.template`-only config in 9d, an article in
+# 9b. So the recipe carries ONE take helper and this is its case.
+assert_block '^kit_take\(\)' "$SCRATCH/take.sh" \
+	"UPDATING.md defines a take helper (step 0)"
+# The two assertions below would both PASS against a helper that does not exist
+# — `command not found` writes nothing either — so they only run once there is
+# something to run. A vacuous green is what this suite exists to prevent.
+if [ -s "$SCRATCH/take.sh" ]; then
+mkdir -p "$SCRATCH/take-fixture"
+printf 'mine, and irreplaceable\n' >"$SCRATCH/take-fixture/mine"
+take_before=$(wc -c <"$SCRATCH/take-fixture/mine")
+{
+	echo "WORK=$SCRATCH/take-fixture"
+	echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
+	cat "$SCRATCH/take.sh"
+	echo 'kit_take v0.9.0 no/such/path/at/this/ref "$WORK/mine" && echo "TOOK" || echo "declined to write"'
+} >"$SCRATCH/take-case.sh"
+sh "$SCRATCH/take-case.sh" >"$SCRATCH/take.out" 2>&1
+sed 's/^/      > /' "$SCRATCH/take.out"
+take_after=$(wc -c <"$SCRATCH/take-fixture/mine" 2>/dev/null || echo missing)
+if [ "$take_after" = "$take_before" ]; then
+	pass "a failed take left the destination at its $take_before bytes"
+else
+	fail "a failed take wrote over the destination — $take_before bytes before, $take_after after"
+fi
+if grep -q '^TOOK' "$SCRATCH/take.out"; then
+	fail "the take helper reported success for a path that is not at the ref"
+else
+	pass "the take helper reported failure rather than a silent empty write"
+fi
+fi
+
 banner "C5. The gate is what makes the hand edits non-optional"
 # A quick-reference row whose skill was never copied is the failure mode Part 2's
 # 9a warns about. If the gate did not catch it, "add the row by hand" would be
@@ -1103,6 +1318,9 @@ assert_transcript 2 "$SCRATCH/part2.transcript" "Part 2"
 # ---------------------------------------------------------------------------
 banner "Result"
 # ---------------------------------------------------------------------------
+if [ "$SKIPPED" -gt 0 ]; then
+	printf '  --    %s case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
+fi
 if [ "$failures" = 0 ]; then
 	echo "  ALL GREEN — the docs set is personalized and both halves of the update recipe work."
 	exit 0
