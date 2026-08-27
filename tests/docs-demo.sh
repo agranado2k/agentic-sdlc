@@ -1278,11 +1278,14 @@ banner "C4h. Every kit-show redirect in the recipe lands in \$WORK"
 # destination goes through kit_take, which pays the truncation on a temp path
 # and moves bytes only once they exist. Fence-scoped so prose that QUOTES the
 # unsafe spelling (the incident report does) stays legal; `2>` is not a file
-# redirect and stays legal too.
+# redirect and `>>` does not truncate, so both stay legal; the $WORK target may
+# be spelled bare, quoted, or braced — §12 recommends the braced form, and a
+# guard must not flag the spelling the craft rule asks for. Fences may be
+# indented (one in this document is).
 c4h_scan() {
 	awk '
-		/^```/ { inblock = !inblock; next }
-		inblock && /kit show/ && /[^2&]>/ && $0 !~ /[^2&]>[ \t]*"?\$WORK\// { print NR ": " $0 }
+		/^[ \t]*```/ { inblock = !inblock; next }
+		inblock && /kit show/ && /[^2&>]>[^>]/ && $0 !~ /[^2&>]>[ \t]*"?\$\{?WORK\}?"?\// { print NR ": " $0 }
 	' "$1"
 }
 redirect_risk=$(c4h_scan "$KIT/UPDATING.md")
