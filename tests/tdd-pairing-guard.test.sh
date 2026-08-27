@@ -223,6 +223,15 @@ assert_status 1 "a repo's own guard still discovers that repo's config by cwd" -
 	sh -c "cd '$repo' && sh scripts/tdd-pairing-guard.sh '$BASE' '$head'"
 assert_out_has "src/own.ts"
 
+# The same shape from inside a git hook: git exports GIT_DIR to hooks (linked
+# worktrees especially), and a pinned identity makes rev-parse answer for the
+# pinned repo — or the anchor directory itself — unless the anchor's call
+# scrubs it. A repo's own config must not look foreign on a worktree push.
+assert_status 1 "a pinned GIT_DIR does not make a repo's own config look foreign" -- \
+	sh -c "cd '$repo' && GIT_DIR='$repo/.git' sh scripts/tdd-pairing-guard.sh '$BASE' '$head'"
+assert_out_has "src/own.ts"
+assert_out_lacks "refusing to source"
+
 # The attack shape, refused: the kit's guard run while standing in a foreign
 # clone must not execute that clone's config. The canary prints on stderr the
 # moment the config is sourced, so its absence is proof of non-execution.

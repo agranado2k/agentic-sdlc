@@ -13,10 +13,12 @@
 #   2. <repo root of the cwd>/scripts/guards.config.sh — the repo being
 #      guarded. Sourced ONLY when that root is also the calling script's own
 #      repo root: a config is sourced, i.e. CODE, and standing in a repository
-#      must never be enough to run its code as you (same class of hole as the
-#      agents.lib.sh cwd-discovery fix). On a mismatch the loader says so on
-#      stderr and falls through; crossing repos on purpose is what
-#      $GUARDS_CONFIG is for.
+#      must never be enough to run its code as you. (Discovery deliberately
+#      stays cwd-based — the cwd repo IS the guard's subject, its config
+#      describes the diff being classified — so the check verifies ownership
+#      rather than re-anchoring discovery elsewhere.) On a mismatch the loader
+#      says so on stderr and REFUSES: discovery ends there, unconfigured.
+#      Crossing repos on purpose is what $GUARDS_CONFIG is for.
 #   3. <calling script's directory>/guards.config.sh
 #
 # A missing config is NOT an error. Each guard decides what an unconfigured repo
@@ -48,12 +50,18 @@ guards_load_config() {
 
 	_gl_root=$(git rev-parse --show-toplevel 2>/dev/null) || _gl_root=
 	if [ -n "$_gl_root" ] && [ -f "$_gl_root/scripts/guards.config.sh" ]; then
-		_gl_own=$(git -C "$_gl_here" rev-parse --show-toplevel 2>/dev/null) || _gl_own=
+		# The anchor's rev-parse runs with inherited git identity scrubbed:
+		# git exports GIT_DIR into hooks (linked worktrees especially), and a
+		# pinned GIT_DIR makes rev-parse answer for the pinned repo — or for
+		# the anchor directory itself — instead of for the anchor's own tree,
+		# refusing a repo its own config on every worktree push.
+		_gl_own=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_gl_here" rev-parse --show-toplevel) 2>/dev/null ) || _gl_own=
 		if [ "$_gl_root" = "$_gl_own" ]; then
 			. "$_gl_root/scripts/guards.config.sh"
 			return 0
 		fi
-		echo "guards: refusing to source $_gl_root/scripts/guards.config.sh — it belongs to the repository this process is standing in, not to the guard's own ($_gl_own). A config is code; set GUARDS_CONFIG to cross repositories on purpose." >&2
+		echo "guards: refusing to source $_gl_root/scripts/guards.config.sh — it belongs to the repository this process is standing in, not to the guard's own (${_gl_own:-unknown}). A config is code; set GUARDS_CONFIG to cross repositories on purpose." >&2
+		return 1
 	fi
 
 	if [ -f "$_gl_here/guards.config.sh" ]; then
