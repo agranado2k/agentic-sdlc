@@ -67,6 +67,19 @@ spawned, and never by the agent about itself.
 `/to-tickets` stamps a tier on every ticket and shows it at the quiz for
 override; `/implement` reads its ticket's tier when it spawns.
 
+A tier is a **cost/benefit shape**, not a description of the work's medium —
+"write the launch announcement" and "write the retry logic" are both
+`implementer`. Where that distinction is worth paying for, a ticket may also
+carry an optional **`Domain:`** line — a lowercase token naming what the work is
+made of (`code`, `content`, `sql`, `html-report`) — and the resolver takes it as
+a second argument: `sh scripts/agents.lib.sh implementer content` prefers
+`AGENT_TIER_IMPLEMENTER_CONTENT` and falls back to `AGENT_TIER_IMPLEMENTER`.
+Unlike the four tiers, **the domain vocabulary is open and local**: it is data in
+your config, invented by the repo that finds the distinction useful, and a domain
+you have not mapped is not an error — it resolves to the tier, silently, which is
+the right answer for every medium you have no opinion about. A ticket with no
+`Domain:` line is the ordinary case.
+
 **This manual names no model, and neither does any other file the kit ships.**
 Model identifiers rot on a vendor's schedule, so the tier → model mapping is
 data in `scripts/agents.config.sh` and the resolver is

@@ -359,6 +359,62 @@ Step 5 writes it for you. Three things to check afterwards:
   article nothing points at binds nobody, and would drift unnoticed. (Node
   engine only — the reduced fallback cannot check reachability, and says so.)
 
+## When a shared file's BEHAVIOUR changes
+
+Most releases move prose. Some move **code**, and step 5 replaces it without
+asking, because that is what "verbatim copy" means. The question a code change
+leaves you with is not *did I get the bytes* — step 6 answers that — but **does
+anything I own need to change to match**.
+
+Read the release's `VERSION` comment block first: it says what changed and, for
+each change, which half of the wave it sits in. Then ask, in this order:
+
+- **Did the shared code's contract NARROW?** A new required argument, a removed
+  variable, a stricter check. Your own callers — scripts, hooks, anything in a
+  local article that quotes a command — have to be found and fixed, and Part 1
+  alone will have already broken them. Nothing but the release notes will tell
+  you; the gate only checks the layer is intact.
+- **Did it WIDEN?** A new optional argument, a new variable it will read if you
+  set one. Nothing of yours breaks, and nothing of yours has to change — but the
+  feature is inert until Part 2 brings across the skills that use it and, in
+  most cases, until you add something to a config file of your own (9d).
+
+**0.6.0 is a widening, and the cleanest example of one yet.**
+`scripts/agents.lib.sh` gained an optional second argument, the task **domain**:
+
+```sh
+sh scripts/agents.lib.sh implementer            # exactly as before
+sh scripts/agents.lib.sh implementer content    # new: prefers
+                                                # AGENT_TIER_IMPLEMENTER_CONTENT
+```
+
+Called with one argument it behaves as it did at 0.5.0, so a consumer on 0.5.0
+runs Part 1, gets the new resolver, and **nothing they own needs to change at
+all**. What the release is *for* is Part 2 and one edit of your own:
+
+- **9d, your `scripts/agents.config.sh`** — optional, and the only place a
+  mapping can live. Add `AGENT_TIER_<TIER>_<DOMAIN>` variables for the
+  distinctions your repo actually has (`AGENT_TIER_IMPLEMENTER_CONTENT` is the
+  usual first one) and leave the rest alone: an unmapped domain falls back to
+  the plain tier, silently and correctly. The kit's copy gained only a comment
+  block describing the convention — the key-set diff in 9d will show no new
+  keys, because the kit ships every mapping empty and always will. Take the
+  comment across by hand if you want the documentation next to the data;
+  skipping it costs you nothing but the documentation.
+- **9a, the skills** — `/to-tickets` learned to stamp an optional `Domain:` line
+  when the medium of the work would change which model you would pick, and
+  `/implement` learned to pass that line through as the second argument. Without
+  these two hunks the resolver's new axis is reachable only by hand.
+- **9b, the manual** — the "Capability tiers" section gained a paragraph on the
+  domain axis and the fact that its vocabulary is open and local, unlike the
+  four closed tier names.
+- **9e, the adapters** — if you kept the tree, `adapters/claude-code/README.md`
+  works a domain-qualified spawn through end to end.
+
+Take Part 1 alone here and you are not broken, merely unchanged: the seam is
+present and nothing reaches it. That is the same inert half-update this file
+opens with, in its mildest form.
+
 ## When a shared file's path changes
 
 Treat it as one leaving and one joining: it falls out of `from.list` and into
@@ -372,7 +428,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.5.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.6.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -382,9 +438,9 @@ Refs are local paths here rather than tags, per the pre-1.0 note in step 0.
 ```console
 $ kit tag --list
 v0.1.0
-v0.5.0
+v0.6.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.5.0
+v0.1.0 -> v0.6.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 constitution/shared-code-craft.md
@@ -403,10 +459,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1054 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1110 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  106 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1167 insertions(+), 1 deletion(-)
+ 3 files changed, 1223 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -454,7 +510,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
   updated UPDATING.md
-  NOTE  UPDATING.md changed in v0.5.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.6.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  constitution/shared-code-craft.md
@@ -486,10 +542,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.6.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.5.0
-Part 1 complete — shared layer at v0.5.0. The update is not done: go to step 8.
+0.6.0
+Part 1 complete — shared layer at v0.6.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -760,7 +816,7 @@ else
 fi
 ```
 
-That is the 0.3.0 → 0.5.0 case: `scripts/agents.config.sh` did **not** exist at
+That is the 0.3.0 → 0.6.0 case: `scripts/agents.config.sh` did **not** exist at
 0.3.0 — it arrived with the 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole
 file and then edits it. Nothing is at risk, which is precisely why it is worth
 checking rather than assuming: the same path is a destructive overwrite for a
@@ -907,14 +963,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.5.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.6.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.5.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.6.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -982,11 +1038,11 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template         |  39 ++++++++++++
+ constitution/AGENTS.md.template         |  52 ++++++++++++++++
  constitution/local-product.md.template  | 103 +++++++++++++++++++++++++++++++
  constitution/local-workflow.md.template |  43 +++++++++++++
  constitution/shared-code-craft.md       | 106 ++++++++++++++++++++++++++++++++
- 4 files changed, 291 insertions(+)
+ 4 files changed, 304 insertions(+)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
@@ -1000,7 +1056,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: ADD or MERGE? Ask before you write.
 $ # kit cat-file -e "$FROM_REF:$C" — did it exist at the release we are on?
-ADD    scripts/agents.config.sh is new at v0.5.0 — nothing of ours to preserve
+ADD    scripts/agents.config.sh is new at v0.6.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1014,12 +1070,12 @@ node-ts
 README.md
 
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.5.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.6.0, engine: harness)
 ```
 
 Five things in that transcript are worth reading twice.
 
-**`ADD    scripts/agents.config.sh is new at v0.5.0`.** The tier→model map did
+**`ADD    scripts/agents.config.sh is new at v0.6.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
