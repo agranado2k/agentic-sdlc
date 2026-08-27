@@ -63,6 +63,11 @@ Audit for injection of every kind the stack admits (SQL/NoSQL, command, template
 - **Governance trail (AST09) — MEDIUM.** A new or changed skill/hook that leaves no audit trail this repo requires (changelog or UPDATING entry, decision record when it changes policy). Axis 2 already confirms *that* these surfaces changed; this check is about whether the change is inventoried.
 - **Cross-platform porting (AST10) — MEDIUM.** A skill ported from another agent platform whose permission or safety metadata was dropped in translation — flag only what the diff shows was lost.
 
+**Shell-hazard audit — when the diff touches shell code or operator-facing command snippets.** Two shapes with reproduced data-loss incidents in this framework's own history; judge each changed command by what it does on FAILURE, not success, and cite `constitution/shared-code-craft.md` §11–§12 by number the way ADRs and AST numbers are cited:
+
+- **Truncate-before-failure (§11) — HIGH.** A `>` aimed at a file the repo or operator cannot lose, fed by a command that can fail — the redirect empties the target before the producer runs. Scratch-then-move is the fix; flag the bare form even when today's producer "cannot fail", because the next edit changes the producer, not the redirect.
+- **Interpreter drift (§12) — HIGH.** A snippet with no declared shell, or an unbraced expansion followed by text an interactive shell can reinterpret (`"$REF:x"` forms). The finding is the unpinned form itself, never whether the author's own shell happens to bite today — the operator's shell is not the author's.
+
 #### Agent 2 — API & CRUD Contract Manager
 
 Verify CRUD symmetry, status codes, and response-shape data leaks. When a public interface changed, check that its **contract artifact** changed with it — the artifacts are enumerated in `scripts/guards.config.sh` under `BEHAVIOR_DELTA_SURFACES`, which is the one place this repo says where behavior is externalized.
