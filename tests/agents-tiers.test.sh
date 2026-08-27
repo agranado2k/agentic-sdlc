@@ -308,9 +308,11 @@ AGENTS_CONFIG="$SHIPPED"
 export AGENTS_CONFIG
 for tier in planner implementer mechanical reviewer; do
 	resolve "$tier"
-	[ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ] &&
-		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY" ||
+	if [ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ]; then
+		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY"
+	else
 		fail "scripts/agents.config.sh (shipped) resolved '$tier' to '$R_OUT', expected empty"
+	fi
 	assert_err_has "UNMAPPED"
 done
 unset AGENTS_CONFIG
