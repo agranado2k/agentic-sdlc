@@ -148,3 +148,35 @@ rule with no failing check is a claim, and this was one. `tests/self-host.test.s
 gained section E — a fixture per guard, each one a consumer who wrote something
 in the window between "Use this template" and their first bootstrap. Removing
 any one of the three conditions turns it red.
+
+### 2026-08-27 — The kit maps its own capability tiers
+
+The tier -> model resolver (`scripts/agents.lib.sh`) has always shipped with an
+empty mapping by principle: the kit names no model to a consumer. That left the
+kit's own sessions unmapped too — every subagent this repo spawns silently ran
+on whatever model the session itself happened to be, regardless of the tier its
+ticket was stamped with, which is the exact cost blindness the tier mechanism
+exists to remove, happening inside the tool that preaches it.
+
+`scripts/agents.kit.config.sh` closes that: a second, kit-only mapping, never
+shipped (`bootstrap.sh`'s `KIT_ONLY` deletion list, same as `tests/`), reached
+through the resolver's existing `$AGENTS_CONFIG` seam. The picks: planner and
+reviewer on the strongest model available (`fable`), implementer on the best
+coding workhorse (`opus`), mechanical on the cheapest capable model (`haiku`) —
+and the reviewer is never the same model as the implementer, on principle: a
+review from the implementer's own model is an editorial pass wearing a second
+hat, not an adversarial read. `docs/adr/0001-…` and this repo's own PR reviews
+(starting with PR #50) now run on that policy.
+
+Independent review on PR #50 (a different model than the implementer, per the
+policy above) found the mechanism sound but the reach incomplete: every
+`SKILL.md` that spawns a subagent instructs the plain `sh scripts/agents.lib.sh
+<tier>`, which resolves through the empty shipped config in this repo too — the
+kit-only mapping only engages if the session remembers to prefix
+`AGENTS_CONFIG=scripts/agents.kit.config.sh`, which a SKILL.md followed
+literally does not do. Skills ship unstamped, so none of them may be edited to
+name a kit-only file. The fix is `scripts/agents.kit.sh`, a kit-only wrapper
+(same deletion list) that sets the seam and delegates — one name to substitute
+for `scripts/agents.lib.sh`, promoted to `AGENTS.md` hard rule 10 so the
+substitution is unmissable at the point of spawning, rather than an environment
+prefix a session has to recall and type correctly every time.

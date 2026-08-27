@@ -127,6 +127,23 @@ grep -q "$PROJECT_NAME" "$PROJ/docs/domain-glossary.md" &&
 	pass "docs/domain-glossary.md is the stamped starter, not the kit's glossary" ||
 	fail "docs/domain-glossary.md was not stamped — the kit's glossary survived"
 
+# The kit's own tier -> model mapping (f13) never reaches a consumer: it names
+# a model, and the kit names no model to consumers. It is kit-authoring only,
+# same deletion list as tests/ and the kit's own CI.
+[ -e "$PROJ/scripts/agents.kit.config.sh" ] &&
+	fail "scripts/agents.kit.config.sh leaked into the project — the kit's own model mapping reached a consumer" ||
+	pass "no scripts/agents.kit.config.sh in the project — the kit's own mapping stayed kit-side"
+# Its wrapper (f13 review M-2) is kit-authoring only for the same reason: it
+# exists only to reach a kit-only config that no longer exists in a stamped
+# project, so it would be dead weight at best and a broken command at worst.
+[ -e "$PROJ/scripts/agents.kit.sh" ] &&
+	fail "scripts/agents.kit.sh leaked into the project — the kit's own resolver wrapper reached a consumer" ||
+	pass "no scripts/agents.kit.sh in the project — the kit's own wrapper stayed kit-side"
+# The consumer's own mapping file still ships, still empty.
+[ -f "$PROJ/scripts/agents.config.sh" ] &&
+	pass "scripts/agents.config.sh (the consumer-shipped mapping) is still present" ||
+	fail "scripts/agents.config.sh did not reach the project"
+
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 

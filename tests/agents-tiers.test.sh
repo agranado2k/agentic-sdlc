@@ -521,6 +521,82 @@ case $? in
 *) fail "the shipped config does not define all four tier variables" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
+# ---------------------------------------------------------------------------
+# The kit follows its own rule (root AGENTS.md, "Capability tiers"): the
+# resolver's existing $AGENTS_CONFIG seam, pointed at the kit-only mapping,
+# resolves all four tiers to a real value with no UNMAPPED warning. This is
+# the seam a kit session actually types:
+#   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
+KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
+[ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
+
+AGENTS_CONFIG="$KIT_CONFIG"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	if [ "$R_STATUS" = 0 ] && [ -n "$R_OUT" ]; then
+		pass "kit config resolves '$tier' to a non-empty value ('$R_OUT')"
+	else
+		fail "kit config did not resolve '$tier' — status $R_STATUS, stdout '$R_OUT'"
+		printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	assert_err_lacks "UNMAPPED"
+done
+
+# The consumer-shipped file is untouched by this: it still resolves every tier
+# to EMPTY. The kit names no model to consumers, even while naming one to
+# itself.
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	if [ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ]; then
+		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY"
+	else
+		fail "scripts/agents.config.sh (shipped) resolved '$tier' to '$R_OUT', expected empty"
+	fi
+	assert_err_has "UNMAPPED"
+done
+unset AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
+banner "The kit's own wrapper — scripts/agents.kit.sh (f13 review M-2)"
+# ---------------------------------------------------------------------------
+# AGENTS.md hard rule 10: in this repo, `sh scripts/agents.kit.sh <tier>`
+# replaces the plain `sh scripts/agents.lib.sh <tier>` a SKILL.md literally
+# says, because the plain command resolves through the empty shipped config
+# here too. The wrapper's whole job is setting $AGENTS_CONFIG itself, so it
+# must resolve the kit's own mapping regardless of what the CALLER'S
+# environment says — proved here by pointing AGENTS_CONFIG at the shipped
+# (empty) file before invoking it. A pass that depended on the caller's
+# environment instead of the wrapper's own assignment would be the bug this
+# section exists to catch.
+KIT_WRAPPER="$KIT/scripts/agents.kit.sh"
+[ -f "$KIT_WRAPPER" ] && pass "scripts/agents.kit.sh exists" || fail "scripts/agents.kit.sh is missing"
+
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+	W_OUT=$(sh "$KIT_WRAPPER" "$tier" 2>"$W_ERR")
+	W_STATUS=$?
+	W_ERR_TEXT=$(cat "$W_ERR")
+	rm -f "$W_ERR"
+	if [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ]; then
+		pass "scripts/agents.kit.sh resolves '$tier' to a non-empty value ('$W_OUT') despite AGENTS_CONFIG pointing at the shipped empty file"
+	else
+		fail "scripts/agents.kit.sh did not resolve '$tier' — status $W_STATUS, stdout '$W_OUT'"
+		printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	case "$W_ERR_TEXT" in
+	*UNMAPPED*) fail "scripts/agents.kit.sh warned UNMAPPED for '$tier' — it should have resolved" ;;
+	*) pass "scripts/agents.kit.sh did not warn UNMAPPED for '$tier'" ;;
+	esac
+done
+unset AGENTS_CONFIG
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi

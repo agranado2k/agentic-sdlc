@@ -62,15 +62,29 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # OWN shared layer, and inheriting it would give a fresh project a workflow that
 # fails for reasons that are none of its business. Consumer CI workflow
 # templates are installed separately below (K3).
-# EXCLUSIONS.md goes the same way, and it is the one entry here that is not a
-# test: it records what the KIT deliberately does not ship, which is a sentence
-# with no referent inside a consumer project — a reader there would take it for a
-# record of their own decisions. It is prose, not scaffolding, but its lifetime
-# is the kit's. That is also why it is not shared layer (see VERSION): a file
-# bootstrap deletes cannot be copied verbatim or diffed against a later release.
+# EXCLUSIONS.md goes the same way, and it is one of two entries here that are
+# not a test: it records what the KIT deliberately does not ship, which is a
+# sentence with no referent inside a consumer project — a reader there would
+# take it for a record of their own decisions. It is prose, not scaffolding,
+# but its lifetime is the kit's. That is also why it is not shared layer (see
+# VERSION): a file bootstrap deletes cannot be copied verbatim or diffed
+# against a later release.
 #
-# Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
+# scripts/agents.kit.config.sh is the other non-test entry, and a different
+# class again: it is the kit's OWN capability-tier -> model mapping (AGENTS.md,
+# "Capability tiers"). scripts/agents.config.sh — the file every consumer
+# edits — ships EMPTY by principle, because the kit names no model to a
+# consumer; but this repo is itself a consumer of the mechanism it ships, and
+# needs a real mapping so its own subagents do not silently fall back to
+# whatever model the session happens to be running on. Naming a model is
+# exactly the kind of content with no business surviving into a stamped
+# project. scripts/agents.kit.sh sits beside it for the same reason: it exists
+# only to reach a config that does not exist in a stamped project, so keeping
+# it would ship a broken command rather than a useless one.
+#
+# Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
+# script, adds its entry here.
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
