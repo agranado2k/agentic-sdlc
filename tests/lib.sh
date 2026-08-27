@@ -16,6 +16,19 @@ failures=0
 LAST_OUT=""
 LAST_STATUS=0
 
+# t_mark <NAME> — the double-brace placeholder mark, e.g. `t_mark PROJECT_OWNER`.
+#
+# Assembled from variables so no suite contains a LITERAL mark. The kit repo is
+# itself bootstrapped now (docs/adr/0001-the-kit-self-hosts-its-own-constitution.md),
+# so `scripts/check.sh`'s placeholder rule runs over these scripts too — and
+# that rule exempts only `*.template` sources, deliberately, because a gate with
+# a hole shaped like its own tooling is not a gate. check.sh spells its own
+# pattern the same way, for the same reason. Suites that must PLANT a mark to
+# prove the gate catches it therefore spell it rather than write it.
+_t_ob='{'
+_t_cb='}'
+t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
+
 t_init() {
 	SCRATCH=$(mktemp -d) || exit 2
 	trap 't_cleanup' EXIT INT TERM HUP

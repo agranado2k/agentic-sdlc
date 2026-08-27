@@ -27,6 +27,22 @@ die() {
 	exit 1
 }
 
+# The double-brace MARK, assembled from two variables so this script never
+# contains a literal one.
+#
+# `scripts/check.sh` scans every file in the tree for a surviving mark and
+# exempts only `*.template` sources — deliberately, because a gate blind to its
+# own tooling is not a gate, and check.sh spells its own pattern out of
+# variables for exactly this reason. Now that the kit repo is itself
+# bootstrapped (docs/adr/0001-the-kit-self-hosts-its-own-constitution.md), that
+# scan runs over THIS file too, so the kit-authoring scripts that have to NAME
+# the mark spell it the same way rather than carving an exemption into a
+# shared-layer file every consumer also receives.
+ob='{'
+cb='}'
+# mark <NAME> — the placeholder as it appears in a template, e.g. PROJECT_NAME.
+mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
+
 TEMPLATE="constitution/AGENTS.md.template"
 MANUAL="AGENTS.md"
 # The manual is ONE file. AGENTS.md is the filename the agent-tool ecosystem has
@@ -54,7 +70,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # bootstrap deletes cannot be copied verbatim or diffed against a later release.
 #
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -68,6 +84,48 @@ KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/guards-demo.sh
 root=$(git rev-parse --show-toplevel 2>/dev/null) ||
 	die "not inside a git repository. Run \`git init\` (or clone from the template) first — bootstrap wires a git hook and has nothing to wire otherwise."
 cd "$root"
+
+# ============================================================================
+# F12 BEGIN — the kit's own bootstrapped state (#f12)
+# ----------------------------------------------------------------------------
+# The kit repo follows the framework it ships: it has a root AGENTS.md written
+# for its own authoring context, the two shims beside it, and a documentation
+# set. Every one of those files is sitting in the tree you just created your
+# repo from — so they have to come OUT before the idempotency check below, which
+# would otherwise read the kit's own manual as evidence that YOUR repo is
+# already bootstrapped and refuse every consumer's first run.
+#
+# Removed and then re-created from the templates, not kept: a manual describing
+# how to author the kit is worse than no manual inside a project that is not the
+# kit. Everything on this list has a stamped replacement further down (K4, K7),
+# which is why the strip is safe rather than lossy — the two-run byte-identity
+# check in `tests/self-host.test.sh` is what holds that claim.
+#
+# TWO CONDITIONS, both required, because this deletes files without asking:
+#   1. constitution/AGENTS.md.template is still here — i.e. this tree has not
+#      been stamped yet. A bootstrapped project has no template, so a second run
+#      strips nothing and still hits "already exists" below.
+#   2. the root manual carries the kit-own SENTINEL. That is what keeps the old
+#      safety intact for the one case that would otherwise regress: a repo
+#      created from the template whose owner hand-wrote an AGENTS.md BEFORE
+#      running bootstrap. Their file has no sentinel, so nothing is removed and
+#      they get the same refusal they get today.
+KIT_OWN_SENTINEL="agentic-sdlc:kit-own"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr .github/PULL_REQUEST_TEMPLATE.md"
+
+if [ -f "$TEMPLATE" ] && [ -f "$MANUAL" ] && grep -q "$KIT_OWN_SENTINEL" "$MANUAL" 2>/dev/null; then
+	for f in $KIT_OWN; do
+		if [ -e "$f" ]; then
+			rm -rf "$f"
+			echo "  removed $f (the kit's own; yours is stamped below)"
+		fi
+	done
+	# Only if now empty — K4 re-creates it, and a project that arrived with docs
+	# of its own keeps them.
+	rmdir docs 2>/dev/null || true
+fi
+# F12 END
+# ============================================================================
 
 # Idempotency: refuse the second run rather than re-stamping over a manual you
 # have since edited. Refusing is cheap; silently overwriting a week of local
@@ -227,8 +285,8 @@ description_esc=$(esc "$description")
 name_js_esc=$(esc "$(esc_js "$name")")
 
 sed \
-	-e "s|{{PROJECT_NAME}}|$name_esc|g" \
-	-e "s|{{PROJECT_DESCRIPTION}}|$description_esc|g" \
+	-e "s|$(mark PROJECT_NAME)|$name_esc|g" \
+	-e "s|$(mark PROJECT_DESCRIPTION)|$description_esc|g" \
 	-e "$dogfood_filter" \
 	"$TEMPLATE" >"$MANUAL"
 rm -f "$TEMPLATE"
@@ -259,7 +317,7 @@ done
 # ============================================================================
 
 if [ -f "$VOCAB_TEMPLATE" ]; then
-	sed -e "s|{{PROJECT_NAME}}|$name_js_esc|g" "$VOCAB_TEMPLATE" >"$VOCAB"
+	sed -e "s|$(mark PROJECT_NAME)|$name_js_esc|g" "$VOCAB_TEMPLATE" >"$VOCAB"
 	rm -f "$VOCAB_TEMPLATE"
 	echo "  stamped $VOCAB"
 fi
@@ -296,9 +354,9 @@ today_esc=$(esc "$today")
 stamp() {
 	mkdir -p "$(dirname "$2")"
 	sed \
-		-e "s|{{PROJECT_NAME}}|$name_esc|g" \
-		-e "s|{{PROJECT_DESCRIPTION}}|$description_esc|g" \
-		-e "s|{{BOOTSTRAP_DATE}}|$today_esc|g" \
+		-e "s|$(mark PROJECT_NAME)|$name_esc|g" \
+		-e "s|$(mark PROJECT_DESCRIPTION)|$description_esc|g" \
+		-e "s|$(mark BOOTSTRAP_DATE)|$today_esc|g" \
 		"$1" >"$2"
 	echo "  stamped $2"
 }

@@ -200,7 +200,7 @@ esac
 
 banner "A6. The gate is NOT vacuous over the new docs"
 # If an unstamped mark could survive in docs/, "personalized" would be unchecked.
-printf '\n- **Owner** — {{PROJECT_OWNER}}\n' >>docs/domain-glossary.md
+printf '\n- **Owner** — %s\n' "$(t_mark PROJECT_OWNER)" >>docs/domain-glossary.md
 assert_status 1 "check.sh rejects an unstamped mark in docs/" -- sh scripts/check.sh
 case "$LAST_OUT" in
 *"domain-glossary"*) pass "the violation names the glossary" ;;
