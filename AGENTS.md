@@ -112,9 +112,28 @@ override; `/implement` reads its ticket's tier when it spawns.
 Model identifiers rot on a vendor's schedule, so the tier → model mapping is
 data in `scripts/agents.config.sh` and the resolver is `scripts/agents.lib.sh`
 (`sh scripts/agents.lib.sh implementer` prints the mapped id). An unmapped tier
-is a working state — the kit's own copy is deliberately unmapped: the resolver
-warns once, prints nothing, and the spawn inherits the session's own model.
-`adapters/claude-code/README.md` is one worked example of the wiring.
+is a working state: the resolver warns once, prints nothing, and the spawn
+inherits the session's own model. `adapters/claude-code/README.md` is one
+worked example of the wiring.
+
+`scripts/agents.config.sh` — the file above — ships EMPTY to every consumer,
+by principle, and stays that way. But this repo is itself a consumer of the
+mechanism it ships: a session working here spawns subagents too, and an
+unmapped resolver would mean the kit's own agents silently inherit the session
+model regardless of what tier their ticket was stamped. So the kit carries a
+second, kit-only mapping — `scripts/agents.kit.config.sh`, never shipped (it
+is on `bootstrap.sh`'s kit-authoring deletion list, the same as `tests/`) —
+resolved through the resolver's existing `$AGENTS_CONFIG` seam:
+
+```sh
+AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
+```
+
+The policy behind that mapping: plan on the strongest model available;
+execute spawned per tier, and per domain once `feat/f14-domain-routing`'s
+optional `AGENT_TIER_<TIER>_<DOMAIN>` seam lands; the reviewer is never the
+same model that implemented — a review from the implementer's own model is an
+editorial pass wearing a second hat, not an adversarial read.
 
 ## Agent trust boundary
 
@@ -236,8 +255,8 @@ answers produce a clean project.
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — policy as data. Its POSIX twin lives in `scripts/check.sh`; the two lists move together |
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
-| Map a capability tier to a model    | `scripts/agents.config.sh` — deliberately unmapped here |
-| Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>` |
+| Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
+| Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>`; in this repo, `AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>` |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
 | Ship a consumer CI workflow         | `templates/workflows/` — installed into a project's `.github/workflows/` |

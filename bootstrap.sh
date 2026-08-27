@@ -70,7 +70,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # bootstrap deletes cannot be copied verbatim or diffed against a later release.
 #
 # Space-separated; each kit ticket that adds a demo adds its script here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after

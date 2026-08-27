@@ -277,4 +277,42 @@ case $? in
 *) fail "the shipped config does not define all four tier variables" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
+# ---------------------------------------------------------------------------
+# The kit follows its own rule (root AGENTS.md, "Capability tiers"): the
+# resolver's existing $AGENTS_CONFIG seam, pointed at the kit-only mapping,
+# resolves all four tiers to a real value with no UNMAPPED warning. This is
+# the seam a kit session actually types:
+#   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
+KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
+[ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
+
+AGENTS_CONFIG="$KIT_CONFIG"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	if [ "$R_STATUS" = 0 ] && [ -n "$R_OUT" ]; then
+		pass "kit config resolves '$tier' to a non-empty value ('$R_OUT')"
+	else
+		fail "kit config did not resolve '$tier' — status $R_STATUS, stdout '$R_OUT'"
+		printf '%s\n' "$R_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	assert_err_lacks "UNMAPPED"
+done
+
+# The consumer-shipped file is untouched by this: it still resolves every tier
+# to EMPTY. The kit names no model to consumers, even while naming one to
+# itself.
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	resolve "$tier"
+	[ "$R_STATUS" = 0 ] && [ -z "$R_OUT" ] &&
+		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY" ||
+		fail "scripts/agents.config.sh (shipped) resolved '$tier' to '$R_OUT', expected empty"
+	assert_err_has "UNMAPPED"
+done
+unset AGENTS_CONFIG
+
 t_done "agents tier resolution"
