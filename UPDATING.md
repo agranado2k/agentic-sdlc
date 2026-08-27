@@ -71,6 +71,14 @@ exercise.
   safe in `bash` and `zsh`, because the shell you paste into is your login
   shell and on macOS that is `zsh` — but a shell that is neither of those three
   is not something this recipe has been run in.
+- **After step 5, re-read this file from disk before you continue.** It is
+  itself shared layer, so step 5 replaces the copy you are reading with the one
+  that ships with the release you are adopting — and a release that changed its
+  own update recipe is exactly the release whose recipe change you need. Step 5
+  prints a `NOTE` when it happens, but that note lives in the *new* recipe, so
+  the consumer who most needs it is following an old copy that never had it.
+  This line is here to be the one thing every past copy of this file could have
+  carried: **do not finish an update on the recipe you started it with.**
 
 ## Step 0 — point at the kit
 
@@ -514,10 +522,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1287 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1295 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  106 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1400 insertions(+), 1 deletion(-)
+ 3 files changed, 1408 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
