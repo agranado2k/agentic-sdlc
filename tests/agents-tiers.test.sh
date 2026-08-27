@@ -261,6 +261,29 @@ for bad in 'CONTENT' 'Content' '9code' 'code_x' 'code.x' 'code/x' '-code' '' \
 	[ -z "$R_OUT" ] && pass "…and resolves to nothing" || fail "malformed domain '$bad' printed '$R_OUT'"
 done
 
+# 'CONTENT'/'Content' above only prove the shape check right in whatever locale
+# invoked this suite — and that locale is typically LC_ALL=C in CI, the one
+# locale where a bracket RANGE (the bug agents.lib.sh:216 warns about) would
+# still look fine: `[!a-z]*` mis-collates case under en_US.UTF-8, not under C.
+# So a regression back to a range passes the loop above unless the suite is run
+# from an en_US.UTF-8 terminal. Pin both locales explicitly for these two
+# tokens so the regression cannot ship green by accident of who runs the suite.
+# en_US.UTF-8 may not be installed on a minimal CI image; skip that half rather
+# than fail the suite over a missing locale.
+for _at_locale in C en_US.UTF-8; do
+	if [ "$_at_locale" != "C" ] && ! locale -a 2>/dev/null | grep -qi '^en_US\.utf-\?8$'; then
+		continue
+	fi
+	for bad in CONTENT Content; do
+		LC_ALL=$_at_locale resolve implementer "$bad"
+		if [ "$R_STATUS" = 2 ] && [ -z "$R_OUT" ]; then
+			pass "LC_ALL=$_at_locale: malformed domain '$bad' exits 2"
+		else
+			fail "LC_ALL=$_at_locale: malformed domain '$bad' exited $R_STATUS, stdout '$R_OUT', expected 2 and empty"
+		fi
+	done
+done
+
 # The message has to name the rule, not just say no: the caller is an agent
 # reading stderr, and "invalid domain" without the shape is a dead end.
 resolve implementer CONTENT
