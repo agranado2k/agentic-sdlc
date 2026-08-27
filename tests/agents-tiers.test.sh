@@ -455,10 +455,12 @@ assert_file_has "$SHIPPED" "AGENT_TIER_<TIER>_<DOMAIN>" \
 	"the optional second axis is documented where the mapping is edited"
 
 # …and documented ONLY. The kit ships no domain mapping for the same reason it
-# ships no tier mapping: it would be naming a model.
-if grep -qE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z_]+=" "$SHIPPED"; then
+# ships no tier mapping: it would be naming a model. The domain half of the
+# pattern allows digits too — AGENT_DOMAIN_SHAPE does — so the guard's charset
+# has to match, or a token like 'code2' would evade it.
+if grep -qE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z0-9_]+=" "$SHIPPED"; then
 	fail "the shipped config assigns a domain variable — the kit ships the axis, never a mapping"
-	grep -nE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z_]+=" "$SHIPPED" | sed 's/^/        | /'
+	grep -nE "^[[:space:]]*AGENT_TIER_[A-Z]+_[A-Z0-9_]+=" "$SHIPPED" | sed 's/^/        | /'
 else
 	pass "the shipped config assigns no domain variable"
 fi
