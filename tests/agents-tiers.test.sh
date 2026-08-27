@@ -315,4 +315,40 @@ for tier in planner implementer mechanical reviewer; do
 done
 unset AGENTS_CONFIG
 
+# ---------------------------------------------------------------------------
+banner "The kit's own wrapper — scripts/agents.kit.sh (f13 review M-2)"
+# ---------------------------------------------------------------------------
+# AGENTS.md hard rule 10: in this repo, `sh scripts/agents.kit.sh <tier>`
+# replaces the plain `sh scripts/agents.lib.sh <tier>` a SKILL.md literally
+# says, because the plain command resolves through the empty shipped config
+# here too. The wrapper's whole job is setting $AGENTS_CONFIG itself, so it
+# must resolve the kit's own mapping regardless of what the CALLER'S
+# environment says — proved here by pointing AGENTS_CONFIG at the shipped
+# (empty) file before invoking it. A pass that depended on the caller's
+# environment instead of the wrapper's own assignment would be the bug this
+# section exists to catch.
+KIT_WRAPPER="$KIT/scripts/agents.kit.sh"
+[ -f "$KIT_WRAPPER" ] && pass "scripts/agents.kit.sh exists" || fail "scripts/agents.kit.sh is missing"
+
+AGENTS_CONFIG="$SHIPPED"
+export AGENTS_CONFIG
+for tier in planner implementer mechanical reviewer; do
+	W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
+	W_OUT=$(sh "$KIT_WRAPPER" "$tier" 2>"$W_ERR")
+	W_STATUS=$?
+	W_ERR_TEXT=$(cat "$W_ERR")
+	rm -f "$W_ERR"
+	if [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ]; then
+		pass "scripts/agents.kit.sh resolves '$tier' to a non-empty value ('$W_OUT') despite AGENTS_CONFIG pointing at the shipped empty file"
+	else
+		fail "scripts/agents.kit.sh did not resolve '$tier' — status $W_STATUS, stdout '$W_OUT'"
+		printf '%s\n' "$W_ERR_TEXT" | sed 's/^/        | /'
+	fi
+	case "$W_ERR_TEXT" in
+	*UNMAPPED*) fail "scripts/agents.kit.sh warned UNMAPPED for '$tier' — it should have resolved" ;;
+	*) pass "scripts/agents.kit.sh did not warn UNMAPPED for '$tier'" ;;
+	esac
+done
+unset AGENTS_CONFIG
+
 t_done "agents tier resolution"

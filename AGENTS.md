@@ -99,6 +99,11 @@ pushes straight past both gates.
 9. **A rule with no failing check is a claim.** Shared invariant §8. Every gate
    and guard in this repo has a suite that drives it RED before it drives it
    green; add one in the same change that adds the rule.
+10. **In THIS repo, resolve a tier with `sh scripts/agents.kit.sh <tier>`, not
+    the plain `sh scripts/agents.lib.sh <tier>` a SKILL.md literally says.**
+    The plain command is correct for a consumer; here it resolves through the
+    empty shipped `scripts/agents.config.sh` and silently does nothing. See
+    "Capability tiers" below.
 
 ## Capability tiers
 
@@ -130,18 +135,29 @@ mechanism it ships: a session working here spawns subagents too, and an
 unmapped resolver would mean the kit's own agents silently inherit the session
 model regardless of what tier their ticket was stamped. So the kit carries a
 second, kit-only mapping — `scripts/agents.kit.config.sh`, never shipped (it
-is on `bootstrap.sh`'s kit-authoring deletion list, the same as `tests/`) —
-resolved through the resolver's existing `$AGENTS_CONFIG` seam:
+is on `bootstrap.sh`'s kit-authoring deletion list, the same as `tests/`).
+
+Every SKILL.md that spawns a subagent says, verbatim, `sh scripts/agents.lib.sh
+<tier>` — correct for a consumer, and it has to stay that way: skills ship
+unstamped, so none of them may name a kit-only file (see "The chain" below).
+Typed literally in THIS repo, that command resolves through the empty shipped
+config and prints nothing. **Hard rule 10** is the fix: run
+`sh scripts/agents.kit.sh <tier>` in its place, every time a skill says to
+spawn. The wrapper sets the resolver's existing `$AGENTS_CONFIG` seam and
+delegates —
 
 ```sh
 AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 ```
 
-The policy behind that mapping: plan on the strongest model available;
-execute spawned per tier, and per domain once `feat/f14-domain-routing`'s
-optional `AGENT_TIER_<TIER>_<DOMAIN>` seam lands; the reviewer is never the
-same model that implemented — a review from the implementer's own model is an
-editorial pass wearing a second hat, not an adversarial read.
+— so it is one name to substitute rather than an environment prefix to type
+correctly every time.
+
+The policy behind the mapping: plan on the strongest model available; execute
+spawned per tier, and per domain once `feat/f14-domain-routing`'s optional
+`AGENT_TIER_<TIER>_<DOMAIN>` seam lands; the reviewer is never the same model
+that implemented — a review from the implementer's own model is an editorial
+pass wearing a second hat, not an adversarial read.
 
 ## Agent trust boundary
 
@@ -264,7 +280,7 @@ answers produce a clean project.
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
-| Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>`; in this repo, `AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>` |
+| Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier>` instead (hard rule 10) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
 | Ship a consumer CI workflow         | `templates/workflows/` — installed into a project's `.github/workflows/` |

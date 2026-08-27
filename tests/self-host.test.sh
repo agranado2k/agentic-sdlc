@@ -133,6 +133,12 @@ grep -q "$PROJECT_NAME" "$PROJ/docs/domain-glossary.md" &&
 [ -e "$PROJ/scripts/agents.kit.config.sh" ] &&
 	fail "scripts/agents.kit.config.sh leaked into the project — the kit's own model mapping reached a consumer" ||
 	pass "no scripts/agents.kit.config.sh in the project — the kit's own mapping stayed kit-side"
+# Its wrapper (f13 review M-2) is kit-authoring only for the same reason: it
+# exists only to reach a kit-only config that no longer exists in a stamped
+# project, so it would be dead weight at best and a broken command at worst.
+[ -e "$PROJ/scripts/agents.kit.sh" ] &&
+	fail "scripts/agents.kit.sh leaked into the project — the kit's own resolver wrapper reached a consumer" ||
+	pass "no scripts/agents.kit.sh in the project — the kit's own wrapper stayed kit-side"
 # The consumer's own mapping file still ships, still empty.
 [ -f "$PROJ/scripts/agents.config.sh" ] &&
 	pass "scripts/agents.config.sh (the consumer-shipped mapping) is still present" ||
