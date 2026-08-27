@@ -93,10 +93,15 @@ jobs:
     name: The kit passes its own gate
     runs-on: ubuntu-latest
     steps:
-      # fetch-tags, because F3 asks whether the declared shared layer has its
-      # release tag — a bare checkout fetches none and would false-alarm.
+      # Full-depth checkout, because F3 asks whether the declared shared layer
+      # has its release tag. fetch-tags alone is NOT enough: at the default
+      # depth of 1 it fetches the tag REF but not its target commit whenever
+      # the tag sits behind the tip, so peeling fails and F3 false-alarms
+      # "NO tag" on every commit after the tagged one — observed live on the
+      # first post-tag push. Depth 0 fetches the history the tag points into.
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           fetch-tags: true
       - uses: actions/setup-node@v4
         with:
