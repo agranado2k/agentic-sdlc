@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. |
+| **Active worktrees** | `worktree/f15-diary-followups` (`fix/f15-diary-followups`, PR #51). |
 
 ### Open questions / unresolved decisions
 
@@ -204,3 +204,17 @@ Follow-up candidates, both pre-existing and both surfaced by the #49 sync
 session: `tests/docs-demo.sh` is named in `README.md` as a suite but no CI job
 runs it, so the transcript byte-comparison gating `UPDATING.md` is local-only;
 and `README.md`'s architecture section still says `shared-layer: 0.4.0`.
+
+## 2026-08-27 — the two merge-train follow-ups became checks
+
+Both follow-up candidates from the entry above are closed on
+`fix/f15-diary-followups` (PR #51), each as a check rather than a fix alone
+(hard rule 9): `tests/docs-demo.sh` gained its Kit CI job, and
+`tests/self-host.test.sh` gained a section F that fails when any suite in
+`tests/` has no workflow `run:` line — or when a workflow carries a job with
+duplicate keys, which the forge answers by loading nothing. That second
+tripwire is not hypothetical: the first draft of this very change pasted the
+new job over the `skills:` key, Kit CI went dark on the branch, and the
+independent review caught it while the naive substring form of F stayed green.
+README's worked example now quotes the current `shared-layer:` marker, held to
+`VERSION` by the same section; historical release references stay as history.
