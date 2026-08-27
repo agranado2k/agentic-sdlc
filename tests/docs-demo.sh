@@ -8,7 +8,7 @@
 #      template, and a consumer README that describes the project instead of the
 #      kit — and the docs gate is green on it.
 #   B. UPDATING.md's PART 1 works — the shared layer. A fake older consumer
-#      (shared-layer 0.1.0) is diffed against a newer kit (0.9.0) and updated
+#      (shared-layer 0.1.0) is diffed against a newer kit (0.10.0) and updated
 #      with the exact commands in UPDATING.md, including the drift case, a file
 #      joining the layer, and the verbatim check.
 #   C. UPDATING.md's PART 2 works — everything else. A consumer bootstrapped at
@@ -50,6 +50,19 @@ pass() { printf '  ok    %s\n' "$*"; }
 fail() {
 	printf '  FAIL  %s\n' "$*"
 	failures=$((failures + 1))
+}
+
+# note <text> — a visible line that is neither a pass nor a fail.
+#
+# Some cases below can only run against a shell that is installed. Silently
+# skipping one would let a machine (or a CI image) quietly drop an entire axis
+# while still printing ALL GREEN, so a skip says so out loud — here, and again
+# beside the final summary, where a reader who only checks the last lines will
+# actually see it. Same convention as tests/agents-tiers.test.sh.
+SKIPPED=0
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
 }
 
 assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
@@ -97,6 +110,55 @@ step6_check() {
 			echo "verbatim  $f"
 		fi
 	done <"$3"
+}
+
+# recipe_block <awk-pattern> — the body of the ```sh fence in UPDATING.md whose
+# FIRST line matches, printed verbatim.
+#
+# The two data-loss cases below run the recipe's OWN TEXT rather than a copy of
+# it. Every other executable claim in this suite is mirrored by hand (recipe,
+# recipe2, step6_check) and pinned to the document by section D's transcript
+# comparison — but a branch that destroys a file prints nothing into a
+# transcript, so there is no D to pin it with. A mirror is exactly the wrong
+# instrument there: it can be fixed in this file while the document a consumer
+# actually follows stays broken, which is the shape of the bug that shipped.
+recipe_block() {
+	awk -v pat="$1" '
+		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
+		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
+		grab {
+			n++
+			if (n == 1 && $0 ~ pat) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$KIT/UPDATING.md"
+}
+
+# assert_block <pattern> <destination> <label> — extract, and refuse to be vacuous.
+#
+# An extractor that finds nothing would make every assertion below it pass on an
+# empty script. That is the same vacuity 9d's own key-set diff falls into, so it
+# gets the same treatment: no match is a failure, loudly.
+assert_block() {
+	recipe_block "$1" >"$2"
+	if [ -s "$2" ]; then
+		pass "$3"
+	else
+		fail "$3 — no such block in UPDATING.md; this suite can no longer find the recipe it tests"
+	fi
+}
+
+# kit_take <ref> <path in the kit> <your file>
+#
+# UPDATING.md step 0's take helper, mirrored — and pinned to the document's own
+# text by C4e, which extracts and runs the real thing. `kit` and `$WORK` resolve
+# at call time, so this one definition serves both recipes below.
+kit_take() {
+	kit show "${1}:$2" >"$WORK/take.$$" || {
+		rm -f "$WORK/take.$$"
+		return 1
+	}
+	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
 }
 
 # assert_status <expected> <label> -- <command...>
@@ -197,8 +259,8 @@ banner "A5. The gate is green on the whole set"
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 assert_status 0 "shared layer reported" -- sh scripts/check.sh
 case "$LAST_OUT" in
-*"shared-layer 0.9.0"*) pass "gate reports shared-layer 0.9.0" ;;
-*) fail "gate did not report shared-layer 0.9.0: $LAST_OUT" ;;
+*"shared-layer 0.10.0"*) pass "gate reports shared-layer 0.10.0" ;;
+*) fail "gate did not report shared-layer 0.10.0: $LAST_OUT" ;;
 esac
 
 banner "A6. The gate is NOT vacuous over the new docs"
@@ -228,7 +290,7 @@ esac
 # Scenario, constructed in a scratch dir:
 #   kit v0.1.0 — shared layer is constitution/shared-invariants.md alone, and
 #                its §9/§10 are one heading and one paragraph shorter
-#   kit v0.9.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
+#   kit v0.10.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
 #                JOINS the shared layer
 #   consumer   — bootstrapped from v0.1.0, and someone edited the shared file
 #                locally (the drift case — the clean case teaches nothing)
@@ -269,13 +331,13 @@ sed -e "s/^## 9\. Measure the ceiling, don't assume it$/## 9. Measure the ceilin
 	"$KIT/constitution/shared-invariants.md" >"$OLDKIT/constitution/shared-invariants.md"
 
 if cmp -s "$OLDKIT/constitution/shared-invariants.md" "$KIT/constitution/shared-invariants.md"; then
-	fail "the fake 0.1.0 rulebook is identical to 0.9.0 — the scenario has no delta"
+	fail "the fake 0.1.0 rulebook is identical to 0.10.0 — the scenario has no delta"
 else
-	pass "fake 0.1.0 rulebook differs from 0.9.0"
+	pass "fake 0.1.0 rulebook differs from 0.10.0"
 fi
 
-# A .git-free copy of the kit as it stands: the v0.9.0 release tree.
-NEWKIT="$SCRATCH/kit-0.9.0"
+# A .git-free copy of the kit as it stands: the v0.10.0 release tree.
+NEWKIT="$SCRATCH/kit-0.10.0"
 mkdir -p "$NEWKIT"
 cp -R "$KIT/." "$NEWKIT/"
 strip_nested_worktrees "$KIT" "$NEWKIT"
@@ -298,10 +360,10 @@ git tag v0.1.0
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$NEWKIT/." "$HIST/"
 git add -A >/dev/null
-git commit -q -m "release 0.9.0"
-git tag v0.9.0
-if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.9.0 >/dev/null; then
-	pass "kit history built with tags v0.1.0 and v0.9.0"
+git commit -q -m "release 0.10.0"
+git tag v0.10.0
+if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.10.0 >/dev/null; then
+	pass "kit history built with tags v0.1.0 and v0.10.0"
 else
 	fail "kit history tags were not created"
 fi
@@ -340,7 +402,7 @@ recipe() {
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
-	TO_REF=v0.9.0
+	TO_REF=v0.10.0
 
 	echo "\$ kit tag --list"
 	kit tag --list
@@ -349,7 +411,7 @@ recipe() {
 
 	# --- Step 1: read both manifests ----------------------------------------
 	manifest() {
-		kit show "$1:VERSION" | awk '
+		kit show "${1}:VERSION" | awk '
 			/^files:/       { inlist = 1; next }
 			!inlist         { next }
 			/^[ \t]*#/      { next }
@@ -403,7 +465,7 @@ recipe() {
 		echo "§4 is waived for the QA phase in this repo."
 	} >>AGENTS.md
 	while IFS= read -r f; do
-		kit show "$FROM_REF:$f" >"$f"
+		kit_take "$FROM_REF" "$f" "$f"
 	done <"$WORK/from.list"
 	git commit -qam "refactor: move the local exception out of the shared layer"
 	while IFS= read -r f; do
@@ -420,7 +482,7 @@ recipe() {
 		git rm -q --ignore-unmatch -- "$f" 2>/dev/null || rm -f "$f"
 		echo "  removed $f (left the shared layer at $TO_REF)"
 	done
-	kit show "$TO_REF:VERSION" >VERSION
+	kit_take "$TO_REF" VERSION VERSION
 	if ! kit diff --quiet "$FROM_REF" "$TO_REF" -- UPDATING.md; then
 		echo "  NOTE  UPDATING.md changed in $TO_REF — RE-READ IT before continuing"
 	fi
@@ -478,7 +540,7 @@ assert_same "$KIT/constitution/shared-invariants.md" "constitution/shared-invari
 	"constitution/shared-invariants.md is byte-identical to the kit's"
 assert_same "$KIT/constitution/shared-code-craft.md" "constitution/shared-code-craft.md" \
 	"constitution/shared-code-craft.md joined the layer and is byte-identical to the kit's"
-assert_has "VERSION" "shared-layer: 0.9.0"
+assert_has "VERSION" "shared-layer: 0.10.0"
 assert_has "AGENTS.md" "Local exception to shared invariant 4"
 assert_has "AGENTS.md" "shared-code-craft"
 
@@ -502,11 +564,11 @@ banner "B4. Step 5 says out loud that it replaced the recipe being followed"
 # UPDATING.md is manifest-listed, so step 5 overwrote the very file the operator
 # opened. Silence there is how a 0.3.0 consumer reaches the end of step 6 — in
 # THEIR copy, the last step — and stops, half-updated, with a green gate.
-assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.9.0 — RE-READ IT"
+assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.10.0 — RE-READ IT"
 assert_has "$SCRATCH/part1.transcript" "The update is not done: go to step 8."
 # The note is a condition, not an unconditional echo. Same predicate, same two
 # refs, aimed at a shared file this release did not touch: silent.
-if git -C "$HIST" diff --quiet v0.1.0 v0.9.0 -- scripts/check.sh; then
+if git -C "$HIST" diff --quiet v0.1.0 v0.10.0 -- scripts/check.sh; then
 	pass "the same predicate stays silent for a file the release did not change"
 else
 	fail "scripts/check.sh moved between the fixture's releases — pick another control"
@@ -521,7 +583,7 @@ rm -rf "$WORK"
 #
 # Part B proves the shared layer moves. This proves the OTHER half, and it
 # starts by proving the half-update is real: a consumer that runs Part 1 alone
-# on a 0.3.0 -> 0.9.0 update lands the capability-tier RESOLVER (shared layer)
+# on a 0.3.0 -> 0.10.0 update lands the capability-tier RESOLVER (shared layer)
 # with no config for it to read, no skill that calls it, and none of the
 # release's actual features. Then Part 2's steps are run and each of those
 # comes back.
@@ -626,9 +688,9 @@ awk '
 for f in .claude/skills/implement/SKILL.md .claude/skills/to-tickets/SKILL.md \
 	constitution/AGENTS.md.template constitution/local-workflow.md.template; do
 	if cmp -s "$OLD3/$f" "$KIT/$f"; then
-		fail "the fake 0.3.0 $f is identical to 0.9.0 — no delta to adopt"
+		fail "the fake 0.3.0 $f is identical to 0.10.0 — no delta to adopt"
 	else
-		pass "fake 0.3.0 $f differs from 0.9.0"
+		pass "fake 0.3.0 $f differs from 0.10.0"
 	fi
 done
 
@@ -649,9 +711,9 @@ git tag v0.3.0
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "$NEWKIT/." "$HIST3/"
 git add -A >/dev/null
-git commit -q -m "release 0.9.0"
-git tag v0.9.0
-pass "kit history built with tags v0.3.0 and v0.9.0"
+git commit -q -m "release 0.10.0"
+git tag v0.10.0
+pass "kit history built with tags v0.3.0 and v0.10.0"
 
 banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 
@@ -694,7 +756,7 @@ WORK1=$(mktemp -d)
 git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
 kit1() { git --git-dir="$WORK1/kit.git" "$@"; }
 manifest1() {
-	kit1 show "$1:VERSION" | awk '
+	kit1 show "${1}:VERSION" | awk '
 		/^files:/       { inlist = 1; next }
 		!inlist         { next }
 		/^[ \t]*#/      { next }
@@ -704,15 +766,15 @@ manifest1() {
 	'
 }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
-manifest1 v0.9.0 | sort >"$WORK1/to.list"
+manifest1 v0.10.0 | sort >"$WORK1/to.list"
 # shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
-kit1 archive v0.9.0 -- $(cat "$WORK1/to.list") | tar -x
-kit1 show "v0.9.0:VERSION" >VERSION
+kit1 archive v0.10.0 -- $(cat "$WORK1/to.list") | tar -x
+kit1 show "v0.10.0:VERSION" >VERSION
 git add -A >/dev/null
-git commit -q -m "chore: update shared layer 0.3.0 -> 0.9.0"
+git commit -q -m "chore: update shared layer 0.3.0 -> 0.10.0"
 
 assert_file "scripts/agents.lib.sh"
-assert_has "VERSION" "shared-layer: 0.9.0"
+assert_has "VERSION" "shared-layer: 0.10.0"
 # Part 1 landed a constitution ARTICLE, and the manual that should point at it
 # is the consumer's own — Part 2 territory. So the gate goes red here, by
 # design: article-unreferenced is what forces the two halves to land together.
@@ -751,7 +813,7 @@ else
 	fail "scripts/agents.lib.sh landed non-executable — step 5 dropped the mode bit"
 fi
 
-step6_check kit1 v0.9.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
+step6_check kit1 v0.10.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
 if grep -qv '^verbatim  ' "$SCRATCH/step6.clean"; then
 	fail "step 6 reported something other than verbatim after a clean apply"
 	sed 's/^/        | /' "$SCRATCH/step6.clean"
@@ -762,7 +824,7 @@ fi
 # …and that green is not free. Break ONLY the mode and the check must fire —
 # otherwise it is a check that reports success on the failure it exists for.
 chmod -x scripts/agents.lib.sh
-step6_check kit1 v0.9.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
+step6_check kit1 v0.10.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
 case "$(grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode")" in
 MODE*) pass "step 6 catches a mode-only difference" ;;
 *)
@@ -770,7 +832,7 @@ MODE*) pass "step 6 catches a mode-only difference" ;;
 	grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode" | sed 's/^/        | /'
 	;;
 esac
-if kit1 show "v0.9.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
+if kit1 show "v0.10.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
 	pass "the bytes are still identical — which is why the mode leg has to exist"
 else
 	fail "the mode-only break changed the bytes too — the fixture proves nothing"
@@ -785,10 +847,10 @@ printf '\n'
 recipe2() {
 	WORK=$WORK1
 	kit() { kit1 "$@"; }
-	# NOT re-derived from VERSION: step 5 already moved it to 0.9.0. Part 2 runs
+	# NOT re-derived from VERSION: step 5 already moved it to 0.10.0. Part 2 runs
 	# in the same session as Part 1 and reuses its refs.
 	FROM_REF=v0.3.0
-	TO_REF=v0.9.0
+	TO_REF=v0.10.0
 
 	# --- Step 8: what changed outside the shared layer -----------------------
 	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
@@ -807,14 +869,14 @@ recipe2() {
 	kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
 	echo "\$ kit show \"\$FROM_REF:\$S\" | diff -u - \"\$S\" | head -1"
 	kit show "$FROM_REF:$S" | diff -u - "$S" | head -1 | grep . || echo "(no local edit — take it)"
-	kit show "$TO_REF:$S" >"$S"
+	kit_take "$TO_REF" "$S" "$S"
 	echo "  took    $S"
 
 	echo ""
 	echo "\$ # 9a — /to-tickets: BOTH changed. Three-way, not a copy."
 	T=.claude/skills/to-tickets/SKILL.md
-	kit show "$FROM_REF:$T" >"$WORK/base"
-	kit show "$TO_REF:$T" >"$WORK/theirs"
+	kit_take "$FROM_REF" "$T" "$WORK/base"
+	kit_take "$TO_REF" "$T" "$WORK/theirs"
 	echo "\$ git merge-file \"\$T\" \"\$WORK/base\" \"\$WORK/theirs\""
 	if git merge-file "$T" "$WORK/base" "$WORK/theirs"; then
 		echo "  merged clean — the kit's delta and our local note both survive"
@@ -838,7 +900,7 @@ recipe2() {
 	echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- constitution/"
 	kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
 	echo "\$ # copied across by hand: the Capability tiers section, and two rows"
-	kit show "$TO_REF:constitution/AGENTS.md.template" |
+	kit show "${TO_REF}:constitution/AGENTS.md.template" |
 		awk '
 			/^## Capability tiers$/ { s = 1; print; next }
 			s && /^## / { s = 0 }
@@ -886,26 +948,26 @@ recipe2() {
 	# NEW and UNTOUCHED are a copy. UNCHANGED, DECLINED and YOURS are not.
 	while read -r verdict dest; do
 		case "$verdict" in
-		NEW | UNTOUCHED) kit show "$TO_REF:templates/workflows/${dest##*/}" >"$dest" ;;
+		NEW | UNTOUCHED) kit_take "$TO_REF" "templates/workflows/${dest##*/}" "$dest" ;;
 		esac
 	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
 
 	# --- Step 9d: config ------------------------------------------------------
 	echo ""
-	echo "\$ # 9d — config: ADD or MERGE? Ask before you write."
+	echo "\$ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first."
 	C=scripts/agents.config.sh
-	echo "\$ # kit cat-file -e \"\$FROM_REF:\$C\" — did it exist at the release we are on?"
-	if kit cat-file -e "$FROM_REF:$C" 2>/dev/null; then
-		echo "MERGE  $C existed at $FROM_REF — diff the key sets"
+	echo "\$ # kit cat-file -e \"\${FROM_REF}:\$C\" — did it exist at the release we are on?"
+	if kit cat-file -e "${FROM_REF}:$C" 2>/dev/null; then
+		echo "MERGE   $C existed at $FROM_REF — diff the key sets"
 		keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
-		kit show "$TO_REF:$C" >"$WORK/config.new"
+		kit_take "$TO_REF" "$C" "$WORK/config.new"
 		keys "$WORK/config.new" >"$WORK/keys.new"
 		keys "$C" >"$WORK/keys.mine"
 		comm -13 "$WORK/keys.mine" "$WORK/keys.new"
-	else
-		echo "ADD    $C is new at $TO_REF — nothing of ours to preserve"
-		kit show "$TO_REF:$C" >"$C"
+	elif kit cat-file -e "${TO_REF}:$C" 2>/dev/null; then
+		echo "ADD     $C is new at $TO_REF — nothing of ours to preserve"
+		kit_take "$TO_REF" "$C" "$C"
 		# printf, not echo: this is the one echoed line carrying a literal
 		# backslash, and `echo` is where shells still disagree — dash expands
 		# `\1` to a control character, bash and the macOS shell print it as
@@ -913,6 +975,24 @@ recipe2() {
 		# transcript must not record which shell captured it.
 		printf '%s\n' "\$ sed -n 's/^\\(AGENT_TIER_[A-Z]*\\)=.*/\\1/p' \"\$C\""
 		sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
+	else
+		echo "STAMPED $C — the kit has no such path at either ref"
+	fi
+
+	# The third verdict, on a real file rather than in the abstract: the
+	# vocabulary config is STAMPED from a `.template`, so the kit has that path
+	# at NEITHER ref. This is the arm that used to print ADD and empty the file.
+	echo "\$ # …and the same three questions for the config bootstrap STAMPED"
+	C=scripts/docs-conformance/local-vocabulary.mjs
+	if kit cat-file -e "${FROM_REF}:$C" 2>/dev/null; then
+		echo "MERGE   $C existed at $FROM_REF — diff the key sets"
+	elif kit cat-file -e "${TO_REF}:$C" 2>/dev/null; then
+		echo "ADD     $C is new at $TO_REF — nothing of ours to preserve"
+	else
+		echo "STAMPED $C — the kit has no such path at either ref"
+		echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$C.template\""
+		kit diff --stat "$FROM_REF" "$TO_REF" -- "$C.template" | grep . ||
+			echo "(the source template did not change in this release)"
 	fi
 
 	# --- Step 9e: adapters ----------------------------------------------------
@@ -998,6 +1078,248 @@ assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
 
 assert_file "adapters/claude-code/README.md"
 
+# ---------------------------------------------------------------------------
+# The two data-loss cases. Both run UPDATING.md's own text (see recipe_block).
+# ---------------------------------------------------------------------------
+
+# recipe_prelude <file> — the shell state steps 8-10 assume, written to <file>.
+# Step 0 created it in the real recipe; the cases below re-create it so one
+# block can be run on its own.
+recipe_prelude() {
+	cat >"$1" <<EOF
+WORK=\$(mktemp -d)
+kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
+FROM_REF=v0.3.0
+TO_REF=v0.10.0
+EOF
+	recipe_block '^kit_take\(\)' >>"$1"
+}
+
+banner "C4c. 9d does not destroy a config the kit ships only as a .template"
+# `scripts/docs-conformance/local-vocabulary.mjs` is one of the four config
+# files 9d names, and in the kit that path exists ONLY as
+# `local-vocabulary.mjs.template` — bootstrap stamps it, which is why the
+# consumer has the `.mjs` and the kit never does, at EITHER ref.
+#
+# So 9d's opening question, "did it exist at the release you are on?", is false
+# — and a branch that reads one `no` as "then it is new at the target" runs
+# `kit show "$TO_REF:$C" >"$C"`. The shell truncates the consumer's file before
+# kit is started; kit then exits 128 having written nothing. The product
+# vocabulary that arms the portability guard is gone, and the line above it said
+# `ADD … copy it whole`, which was never true of this path.
+#
+# 9b already handles this exact `.template`-vs-stamped asymmetry. 9d is the same
+# question asked one category over, and it needs the same three answers.
+cd "$C3" || exit 2
+VOCAB=scripts/docs-conformance/local-vocabulary.mjs
+assert_file "$VOCAB"
+assert_has "$VOCAB" "Tier Consumer"
+cp "$VOCAB" "$SCRATCH/vocab.saved"
+vocab_before=$(wc -c <"$VOCAB")
+
+recipe_prelude "$SCRATCH/prelude.sh"
+assert_block '^C=scripts/' "$SCRATCH/9d.sh" "UPDATING.md's 9d config block is extractable"
+# The same block, pointed at another of the four files 9d itself lists.
+sed '1s|^C=.*|C=scripts/docs-conformance/local-vocabulary.mjs|' "$SCRATCH/9d.sh" \
+	>"$SCRATCH/9d.vocab.sh"
+sh -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9d.vocab.sh" \
+	>"$SCRATCH/9d.vocab.out" 2>&1
+sed 's/^/      > /' "$SCRATCH/9d.vocab.out"
+
+vocab_after=$(wc -c <"$VOCAB")
+if [ "$vocab_after" = "$vocab_before" ]; then
+	pass "9d left the stamped-from-template config at its $vocab_before bytes"
+else
+	fail "9d destroyed $VOCAB — $vocab_before bytes before, $vocab_after after"
+fi
+assert_has "$VOCAB" "Tier Consumer"
+# …and the verdict is not the false claim that put the redirect there.
+if grep -q '^ADD ' "$SCRATCH/9d.vocab.out"; then
+	fail "9d said ADD for a path that is absent at the TARGET ref too"
+else
+	pass "9d did not claim the path is new at the release being adopted"
+fi
+# Restore, so a RED run of the case above does not cascade into every later
+# section: an empty local-vocabulary.mjs is a broken import, and the gate would
+# then fail for a reason that is not the one under test.
+cp "$SCRATCH/vocab.saved" "$VOCAB"
+
+banner "C4d. 9b behaves the same under zsh as under sh"
+# The recipe never says which shell it is written for, and macOS — this
+# framework's own target — defaults to zsh. zsh applies HISTORY MODIFIERS to
+# `$var:x` even inside double quotes, so `"$TO_REF:constitution/…"` is `$TO_REF`
+# with the `:c` modifier applied, followed by the literal `onstitution/…`. The
+# ref never reaches git.
+#
+# 9b is where that lands on a file, in both of its arms: the take truncates the
+# local article to zero before the failing `kit show` writes anything, and the
+# `cmp` arm above it — reading the same broken expansion — compares against
+# EMPTY input and answers `YOURS` for an article that is verbatim the template.
+#
+# `"$TO_REF:$C"`, `"$FROM_REF:$f"` and `"$TO_REF:VERSION"` are unaffected (`$`
+# and `V` are not modifiers), which is exactly why this hid.
+#
+# The fixture is the UNSTAMPED case — a consumer who never filled the article
+# in, so bootstrap left the `.template` and it is byte-identical to FROM_REF's.
+# The correct outcome is therefore a TAKE, and the assertion is not "the bytes
+# never move" (they should) but the two things that are true either way: the two
+# shells must agree, and no shell may leave a zero-byte article behind.
+if command -v zsh >/dev/null 2>&1; then
+	assert_block '^A=constitution/local-workflow\.md$' "$SCRATCH/9b.sh" \
+		"UPDATING.md's 9b unstamped-article block is extractable"
+
+	# One pristine fixture tree per shell. 9b touches only this one path, so a
+	# directory holding only it is a faithful stage and isolates the mutation.
+	for _sh in sh zsh; do
+		rm -rf "$SCRATCH/9b-$_sh"
+		mkdir -p "$SCRATCH/9b-$_sh/constitution"
+		kit1 show "v0.3.0:constitution/local-workflow.md.template" \
+			>"$SCRATCH/9b-$_sh/constitution/local-workflow.md.template"
+	done
+	art_before=$(wc -c <"$SCRATCH/9b-sh/constitution/local-workflow.md.template")
+
+	# `zsh -f`: no user rc files, so this measures the shell and not the
+	# operator's dotfiles.
+	(cd "$SCRATCH/9b-sh" && sh -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9b.sh") \
+		>"$SCRATCH/9b.sh.out" 2>&1
+	(cd "$SCRATCH/9b-zsh" && zsh -f -c '. "$1"; . "$2"' _ "$SCRATCH/prelude.sh" "$SCRATCH/9b.sh") \
+		>"$SCRATCH/9b.zsh.out" 2>&1
+	sed 's/^/      > sh:  /' "$SCRATCH/9b.sh.out"
+	sed 's/^/      > zsh: /' "$SCRATCH/9b.zsh.out"
+
+	_zart="$SCRATCH/9b-zsh/constitution/local-workflow.md.template"
+	art_after=$(wc -c <"$_zart")
+	if [ "$art_after" -gt 0 ]; then
+		pass "zsh: 9b left $art_after bytes in the local article (started at $art_before)"
+	else
+		fail "zsh: 9b destroyed the local article — $art_before bytes before, 0 after"
+	fi
+	assert_same "$SCRATCH/9b-sh/constitution/local-workflow.md.template" "$_zart" \
+		"zsh and sh leave the local article in the same state"
+	assert_same "$SCRATCH/9b.sh.out" "$SCRATCH/9b.zsh.out" \
+		"zsh and sh reach the same 9b verdict"
+	# `v0.3.0onstitution/…` is the mangled ref, and `fatal:` is git refusing it.
+	# Match the digit-then-`onstitution` boundary, not the bare word: every
+	# correct verdict line names `constitution/…` and contains it as a substring.
+	if grep -qE '[0-9]onstitution/|^fatal:' "$SCRATCH/9b.zsh.out"; then
+		fail "zsh: a history modifier ate the ref — the expansion is still unbraced"
+	else
+		pass "zsh: the ref reached git intact"
+	fi
+else
+	note "zsh is not installed here — 9b's real-shell case did not run, and a CI image without zsh proves less than this host would"
+fi
+
+banner "C4e. A take of a path that is NOT at the ref leaves your file alone"
+# 9d is where the truncate-before-failure shape was caught, but the shape is the
+# bug: `kit show "$REF:$path" >"$mine"` is the recipe's idiom for "take the
+# release's copy", and the shell empties `$mine` before kit is started. Every
+# one of those in the recipe is one absent path away from the same 1807-byte
+# loss — a renamed skill in 9a, a `.template`-only config in 9d, an article in
+# 9b. So the recipe carries ONE take helper and this is its case.
+assert_block '^kit_take\(\)' "$SCRATCH/take.sh" \
+	"UPDATING.md defines a take helper (step 0)"
+# The two assertions below would both PASS against a helper that does not exist
+# — `command not found` writes nothing either — so they only run once there is
+# something to run. A vacuous green is what this suite exists to prevent.
+if [ -s "$SCRATCH/take.sh" ]; then
+mkdir -p "$SCRATCH/take-fixture"
+printf 'mine, and irreplaceable\n' >"$SCRATCH/take-fixture/mine"
+take_before=$(wc -c <"$SCRATCH/take-fixture/mine")
+{
+	echo "WORK=$SCRATCH/take-fixture"
+	echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
+	cat "$SCRATCH/take.sh"
+	echo 'kit_take v0.10.0 no/such/path/at/this/ref "$WORK/mine" && echo "TOOK" || echo "declined to write"'
+} >"$SCRATCH/take-case.sh"
+sh "$SCRATCH/take-case.sh" >"$SCRATCH/take.out" 2>&1
+sed 's/^/      > /' "$SCRATCH/take.out"
+take_after=$(wc -c <"$SCRATCH/take-fixture/mine" 2>/dev/null || echo missing)
+if [ "$take_after" = "$take_before" ]; then
+	pass "a failed take left the destination at its $take_before bytes"
+else
+	fail "a failed take wrote over the destination — $take_before bytes before, $take_after after"
+fi
+if grep -q '^TOOK' "$SCRATCH/take.out"; then
+	fail "the take helper reported success for a path that is not at the ref"
+else
+	pass "the take helper reported failure rather than a silent empty write"
+fi
+fi
+
+banner "C4f. No ref expansion in the recipe is one letter from a zsh modifier"
+# C4d proves the behaviour on the block that was caught. This proves the SHAPE
+# across the whole document, because the next one will be introduced by an
+# ordinary edit: `"$TO_REF:$C"` is safe and `"$TO_REF:constitution/…"` is not,
+# and the only difference is what the author happened to type after the colon.
+#
+# The rule the recipe now keeps: a `ref:path` expansion is followed by a `$` or
+# by a brace, never by a bare letter. `$` can never begin a modifier; `${REF}`
+# ends the expansion before the colon is read. Anything else is one rename away
+# from handing git a ref that does not exist — and from a `cmp` that answers on
+# empty input rather than failing.
+#
+# Prose that deliberately QUOTES the unsafe spelling uses `$path`/`$C` after the
+# colon, so it is not matched here — the counterexample is allowed to exist.
+zsh_modifier_risk=$(grep -nE '"\$[A-Za-z0-9_]+:[A-Za-z]' "$KIT/UPDATING.md" || true)
+if [ -z "$zsh_modifier_risk" ]; then
+	pass "every ref expansion in UPDATING.md is braced or followed by a \$"
+else
+	fail "UPDATING.md has ref expansions a zsh history modifier can eat"
+	printf '%s\n' "$zsh_modifier_risk" | sed 's/^/        | /'
+fi
+# …and the check is not vacuous: the pattern it hunts for has to match when it
+# is present.
+printf 'kit show "$TO_REF:constitution/x.md"\n' >"$SCRATCH/shape.probe"
+if grep -qE '"\$[A-Za-z0-9_]+:[A-Za-z]' "$SCRATCH/shape.probe"; then
+	pass "the shape check matches an unbraced ref expansion when there is one"
+else
+	fail "the shape check cannot detect the shape it exists for"
+fi
+
+banner "C4g. 9d's key-set diff refuses to answer about a file it cannot read"
+# `keys()` is a shell-assignment extractor: `sed -n 's/^\(NAME\)=.*/\1/p'`. Two
+# of the four config files 9d names are `.mjs`, and it finds nothing in either.
+# `comm` on two empty sets then prints nothing — which reads exactly like "no
+# new keys" and is in fact "I could not read this file".
+#
+# The recipe now routes `.mjs` to a read of the diff, and the block itself
+# refuses rather than answering vacuously. That refusal is the check.
+cd "$C3" || exit 2
+assert_block '^keys\(\)' "$SCRATCH/keys.sh" "UPDATING.md's 9d key-set block is extractable"
+if [ -s "$SCRATCH/keys.sh" ]; then
+	{
+		echo "WORK=$SCRATCH"
+		echo "TO_REF=v0.10.0"
+		echo "C=scripts/docs-conformance/config.mjs"
+		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
+		cat "$SCRATCH/take.sh"
+		cat "$SCRATCH/keys.sh"
+	} >"$SCRATCH/keys-case.sh"
+	sh "$SCRATCH/keys-case.sh" >"$SCRATCH/keys.out" 2>&1
+	keys_status=$?
+	sed 's/^/      > /' "$SCRATCH/keys.out"
+	if [ "$keys_status" != 0 ]; then
+		pass "the key-set block exits non-zero on a config it cannot parse"
+	else
+		fail "the key-set block reported success for a .mjs — a vacuous 'nothing missing'"
+	fi
+	if grep -q 'wrong tool for this file' "$SCRATCH/keys.out"; then
+		pass "…and it says which file and what to do instead"
+	else
+		fail "…but it did not say why; a silent non-zero is not better than a silent zero"
+	fi
+	# Not vacuous the other way: the same block on the SHELL config it was
+	# written for must work, and print the keys the release expects.
+	sed 's|^C=.*|C=scripts/agents.config.sh|' "$SCRATCH/keys-case.sh" >"$SCRATCH/keys-sh-case.sh"
+	sh "$SCRATCH/keys-sh-case.sh" >"$SCRATCH/keys.sh.out" 2>&1 &&
+		pass "the same block still succeeds on a NAME= config" ||
+		{
+			fail "the key-set block broke on the shell config it exists for"
+			sed 's/^/        | /' "$SCRATCH/keys.sh.out"
+		}
+fi
+
 banner "C5. The gate is what makes the hand edits non-optional"
 # A quick-reference row whose skill was never copied is the failure mode Part 2's
 # 9a warns about. If the gate did not catch it, "add the row by hand" would be
@@ -1015,8 +1337,8 @@ assert_status 0 "green again once the row is removed" -- sh scripts/check.sh
 banner "C6. Adopting the optional /dogfood skill after bootstrap"
 # Bootstrap asked once and deleted itself. Adoption is three things, and the
 # gate proves the third is not optional.
-kit1 archive v0.9.0 .claude/skills/dogfood | tar -x
-kit1 show "v0.9.0:constitution/local-product.md.template" \
+kit1 archive v0.10.0 .claude/skills/dogfood | tar -x
+kit1 show "v0.10.0:constitution/local-product.md.template" \
 	>constitution/local-product.md.template
 assert_file ".claude/skills/dogfood/SKILL.md"
 assert_status 0 "the gate is green with the skill present but unannounced" -- sh scripts/check.sh
@@ -1103,6 +1425,9 @@ assert_transcript 2 "$SCRATCH/part2.transcript" "Part 2"
 # ---------------------------------------------------------------------------
 banner "Result"
 # ---------------------------------------------------------------------------
+if [ "$SKIPPED" -gt 0 ]; then
+	printf '  --    %s case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
+fi
 if [ "$failures" = 0 ]; then
 	echo "  ALL GREEN — the docs set is personalized and both halves of the update recipe work."
 	exit 0

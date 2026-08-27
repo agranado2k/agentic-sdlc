@@ -129,6 +129,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # zsh is INSTALLED rather than hoped for. The suite's C4d case runs
+      # UPDATING.md's 9b block through a real zsh, because zsh's history
+      # modifiers on `"$REF:literal"` are the whole of the second data-loss bug
+      # 0.10.0 fixes — and the case skips loudly (it does not fail) on a host
+      # without one. A loud skip is right for an operator's laptop and wrong
+      # here: this job is the only place that proof is compulsory, and a runner
+      # image that quietly drops zsh would retire the case without anyone
+      # deciding to. `apt-get` because the shell is a runner package, not a
+      # project dependency.
+      - name: Install zsh (C4d runs the recipe through it)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
       # The suite bootstraps throwaway consumers and runs the gate on them, so
       # it needs the same node the demo job does. Its load-bearing half is the
       # byte-for-byte comparison of UPDATING.md's two worked-example transcripts
