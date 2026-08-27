@@ -397,7 +397,13 @@ if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1;
 	drift=0
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
-		if git -C "$KIT" show "v$version_now:$f" 2>/dev/null | cmp -s - "$KIT/$f"; then
+		if ! git -C "$KIT" cat-file -e "v$version_now:$f" 2>/dev/null; then
+			# Absent at the tag is its own failure, not "differs": a joined
+			# file — even an EMPTY one, which a bare cmp against empty stdin
+			# would wave through — is a layer change wearing an old number.
+			fail "$f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
+			drift=$((drift + 1))
+		elif git -C "$KIT" show "v$version_now:$f" 2>/dev/null | cmp -s - "$KIT/$f"; then
 			:
 		else
 			fail "$f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
