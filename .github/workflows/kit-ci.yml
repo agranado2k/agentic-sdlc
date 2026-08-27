@@ -4,31 +4,40 @@ name: Kit CI
 # bootstrap.sh deletes this file, because a fresh project has no business
 # running the kit's acceptance test against the kit's shared layer.
 #
-# Six jobs. The first three are the kit's own foundations, in increasing order
-# of what they'd cost you to learn late; the last three each check one artifact
-# the kit ships to its consumers.
+# Nine jobs. The first four are the kit's own foundations, in increasing order
+# of what they'd cost you to learn late; the rest each check one artifact the
+# kit ships to its consumers.
 #
 #   1. harness      the docs-conformance validators' fixture tests. If these are
 #                   red, every downstream green is meaningless.
 #   2. portability  the PRD's success criterion, run as a check rather than
 #                   asserted in prose: "no product vocabulary in the core — the
 #                   kit runs the portability validator against ITS shared layer
-#                   in CI". `index.mjs .` at the kit root does exactly that: the
-#                   kit has no root AGENTS.md (only a .template), so the run
-#                   reduces to the article layer, and constitution/shared-
-#                   invariants.md is the one file on the portability list.
-#   3. demo         the end-to-end acceptance test: build a throwaway project
+#                   in CI". `index.mjs .` at the kit root does that, and since
+#                   the kit self-hosts its own constitution (docs/adr/0001-…) it
+#                   now does MORE: the root AGENTS.md is real, so the same run
+#                   also resolves the kit manual's commands and paths, checks
+#                   the two shims, and holds every article reachable. The
+#                   portability deny-list still lands on the two shared
+#                   articles, which is the criterion this job is named for.
+#   3. self-host    the whole docs gate at the kit's own root — `check.sh`, not
+#                   just the harness — plus the suite that proves bootstrap
+#                   still strips the kit's own files. Job 2 runs one engine over
+#                   the manual layer; this one runs the gate a consumer runs,
+#                   against the repo that ships it. A framework whose own repo
+#                   cannot pass its own gate is selling a rule it does not keep.
+#   4. demo         the end-to-end acceptance test: build a throwaway project
 #                   from this tree, bootstrap it, and prove the gate green — and
 #                   then prove it red, once per failure mode it claims to catch.
-#   4. skills       the /implement delivery contract, checked as text.
-#   5. workflow-templates
+#   5. skills       the /implement delivery contract, checked as text.
+#   6. workflow-templates
 #                   the workflow templates parse, and install inert.
-#   6. adapters     the adapter trees are well-formed and stay dormant.
-#   7. exclusions   the deliberate-exclusions record has not gone stale — every
+#   7. adapters     the adapter trees are well-formed and stay dormant.
+#   8. exclusions   the deliberate-exclusions record has not gone stale — every
 #                   skill it says the kit does not ship is really not shipped.
-#   8. dogfood-optin
+#   9. dogfood-optin
 #                   the one OPTIONAL skill, both ways: bootstrap with it, without
-#                   it, and with no terminal to ask on. Job 3 only ever sees the
+#                   it, and with no terminal to ask on. Job 4 only ever sees the
 #                   first of those, and the failure mode worth catching lives in
 #                   the second — a declined skill that left a row behind.
 #
@@ -72,6 +81,27 @@ jobs:
           node-version: 22
       - name: Portability validator against the kit's own shared layer
         run: node scripts/docs-conformance/index.mjs .
+
+  self-host:
+    name: The kit passes its own gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The gate itself, at the kit root — the same invocation the pre-push hook
+      # makes and the same one a consumer inherits. Node is present, so this is
+      # the full harness; the suite below also runs it with DOCS_CHECK_NO_NODE=1
+      # to cover the POSIX fallback a consumer without a runtime would get.
+      - name: Docs gate at the kit root
+        run: sh scripts/check.sh
+      # And the other half of self-hosting: bootstrap must still strip the kit's
+      # own files, so a consumer's stamped project is byte-identical to what it
+      # was before the kit had any. That claim is only worth having as a check —
+      # a leak here would ride into every project made from the template.
+      - name: Self-host acceptance test
+        run: sh tests/self-host.test.sh
 
   demo:
     name: Bootstrap demo (end-to-end)
