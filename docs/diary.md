@@ -26,6 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
+| **Active worktrees** | None. |
 
 ### Open questions / unresolved decisions
 
@@ -180,3 +181,26 @@ name a kit-only file. The fix is `scripts/agents.kit.sh`, a kit-only wrapper
 for `scripts/agents.lib.sh`, promoted to `AGENTS.md` hard rule 10 so the
 substitution is unmissable at the point of spawning, rather than an environment
 prefix a session has to recall and type correctly every time.
+
+## 2026-08-27 — merge train lands the self-hosting wave
+
+`/merge-train 48 50 49`, operator-started. Order: #48 (self-hosting) → #50
+(kit-only tier mapping, stacked) → #49 (domain routing, shared layer 0.7.0).
+Two cars went stale mid-train because `main` had also taken #46/#47: #50's
+conflict was one additive hunk in `tests/agents-tiers.test.sh`, resolved on the
+head branch; #49 needed a full sync pass — four conflicted files, a VERSION
+renumber (0.6.0 → 0.7.0, since main's config-discovery wave had claimed 0.6.0),
+one mechanical transcript re-convergence, and the activation of
+`AGENT_TIER_IMPLEMENTER_CONTENT='fable'` now that the domain seam and the kit
+mapping coexist. Every merge went through the forge API with post-merge
+workflows observed green; all seven worktrees (f9 × 2, f10, f11, f12, f13, f14)
+were pruned as merged and `main` fast-forwarded to `fe0e171`.
+
+The Current state table above gained its **Active worktrees** row in this same
+change — the row the `/worktree-cleanup` skill expects to refresh did not exist
+before, so its absence is recorded here rather than silently backfilled.
+
+Follow-up candidates, both pre-existing and both surfaced by the #49 sync
+session: `tests/docs-demo.sh` is named in `README.md` as a suite but no CI job
+runs it, so the transcript byte-comparison gating `UPDATING.md` is local-only;
+and `README.md`'s architecture section still says `shared-layer: 0.4.0`.
