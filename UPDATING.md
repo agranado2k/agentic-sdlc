@@ -1020,8 +1020,8 @@ templates/workflows/ai-review.example.yml
 
 $ # 9a — /implement: the kit changed it, we did not
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
- .claude/skills/implement/SKILL.md | 19 +++++++++++++++++++
- 1 file changed, 19 insertions(+)
+ .claude/skills/implement/SKILL.md | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
 $ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
