@@ -248,4 +248,12 @@ assert_out_lacks "FOREIGN-GUARDS-CONFIG-EXECUTED"
 assert_out_has "refusing to source"
 assert_out_has "GUARDS_CONFIG"
 
+# Operator-confirmed contract: an ANCHORLESS load discovers nothing. The only
+# default an anchorless caller could get is the cwd — which is the hole. Same
+# hostile fixture: the loader, sourced bare, must return 1 with the canary
+# silent.
+assert_status 1 "an anchorless load discovers nothing, even standing in a repo carrying a config" -- \
+	sh -c "cd '$repo' && unset GUARDS_CONFIG && . '$KIT/scripts/guards.lib.sh' && guards_load_config"
+assert_out_lacks "FOREIGN-GUARDS-CONFIG-EXECUTED"
+
 t_done "tdd-pairing-guard.sh"
