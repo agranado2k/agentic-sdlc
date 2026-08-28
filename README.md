@@ -519,6 +519,15 @@ skeleton (K0).
   plan-first sentences. Then the referee proves itself non-vacuous: one broken
   fence, and the spine goes red.
 
+- `sh tests/review-pr-output.test.sh` pins the `/review-pr` output contract as
+  text, the way the delivery-contract suite pins `/implement`: the summary-first
+  order (verdict, badge count table, clean-audits line before any finding), the
+  four badge+label pairs, the finding anatomy (`fix:` line, evidence fold,
+  INITIAL-N ids), the disjoint glyph vocabularies of the two axes, the
+  confirm-list's verbatim-liftable line shape and 🔀→⚠️→✅ order, the
+  one-top-level-comment and inline-only posting rules, and the absence of any
+  ANSI escape — the report is markdown for two hosts, not a terminal program.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -586,6 +595,7 @@ sh tests/implement-deliver.test.sh                     # /implement's Deliver ph
 sh tests/ai-review-template.test.sh                    # the cross-provider review template
 sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
 sh tests/setup-demo.sh                                 # the one-line agent setup, from its own bytes
+sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
