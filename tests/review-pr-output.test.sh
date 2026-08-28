@@ -19,6 +19,10 @@
 #      ids, the confirm-list's glyph-first line shape and 🔀→⚠️→✅ order, one
 #      top-level comment for Axis 2, inline-only for Axis 1, no ANSI anywhere,
 #      the tone rules that keep the report format out of PR threads.
+#   6. Cross-skill agreement (#64): /pr-iterate reports the review with the
+#      same badge+label vocabulary, the ⚠️/🔀 tokens it lifts verbatim are
+#      byte-identical across the two documents, and its human-only block
+#      stays badge-free.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -200,11 +204,23 @@ for tok in "⚠️ UNSPECIFIED" "🔀 MIXED COMMIT"; do
 done
 # The badges never leak into the human-only lane: /pr-iterate's ⚠️-first
 # report section stays badge-free, exactly as §5b stays badge-free here.
+# The endpoint is verified first: if the `Status:` line is renamed, the sed
+# range runs to EOF and the badge scan would fire with the WRONG diagnosis —
+# still red, but a misleading signpost (review of PR #67, L-2).
 iter_confirm=$(sed -n '/⚠️ For you/,/^Status:/p' "$ROOT/$ITER")
+iter_confirm_end=$(printf '%s\n' "$iter_confirm" | tail -1)
 case "$iter_confirm" in
 "") fail "/pr-iterate's output format lost its '⚠️ For you' block — hard rule 4's surface moved" ;;
-*🔴* | *🟠* | *🟡* | *🔵*) fail "/pr-iterate's human-only block carries a severity badge — the axes' vocabularies must stay disjoint everywhere" ;;
-*) pass "/pr-iterate's human-only block stays badge-free" ;;
+*)
+	if [ "$iter_confirm_end" != "Status:" ]; then
+		fail "/pr-iterate's human-only block no longer ends at 'Status:' — the extraction's endpoint moved; fix the range before trusting the badge scan"
+	else
+		case "$iter_confirm" in
+		*🔴* | *🟠* | *🟡* | *🔵*) fail "/pr-iterate's human-only block carries a severity badge — the axes' vocabularies must stay disjoint everywhere" ;;
+		*) pass "/pr-iterate's human-only block stays badge-free, and its extraction endpoint holds" ;;
+		esac
+	fi
+	;;
 esac
 
 t_done "/review-pr output contract"
