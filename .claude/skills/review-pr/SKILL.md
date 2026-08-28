@@ -184,7 +184,7 @@ Missing requirements (spec asked, diff doesn't deliver) are also Axis-2 findings
 
 ### 5. Severity-Based Summary Report (MANDATORY — Axis 1)
 
-After all agents complete, you MUST present the **Axis 1 (standards)** findings as one report following the output contract below. The report is GitHub-flavored markdown and nothing else — the same bytes render in the terminal and as PR-comment text, so: no ANSI escapes ever, no raw HTML beyond the `<details>`/`<summary>` fold, tables kept to two or three columns so a phone does not scroll them.
+After all agents complete, you MUST present the **Axis 1 (standards)** findings as one report following the output contract below. The report is GitHub-flavored markdown and nothing else — the same bytes render in the terminal and as PR-comment text wherever a host posts them (§6 says what this skill itself posts, and Axis-1 findings go inline there), so: no ANSI escapes ever, no raw HTML beyond the `<details>`/`<summary>` fold, tables kept to two or three columns so a phone does not scroll them.
 
 **Summary first.** The reader decides "is this blocked, and what do I fix first?" in the first screenful, before any finding detail:
 
@@ -204,7 +204,7 @@ Clean audits: <the lenses that found nothing, comma-separated — one line, neve
 
 The badge is **redundant** encoding: the text label always accompanies it, because color is never the only channel a reader has. The count table is the exhaustive record — all four buckets always appear, zeros included. The severity buckets keep their meanings: CRITICAL is vulnerabilities, data leaks, broken functionality, divergent duplicate logic already drifted into a latent bug; HIGH is missing tests, broken contracts, major pattern violations, a reimplemented helper duplicating an existing export; MEDIUM is redundant tests, unnecessary complexity, copy-paste blocks worth extracting once; LOW is minor simplifications and style.
 
-**Then the findings**, one section per **non-empty** severity (empty sections are omitted — the table already said zero), headed by badge + label: `#### 🔴 CRITICAL`, `#### 🟠 HIGH`, `#### 🟡 MEDIUM`, `#### 🔵 LOW`. Each finding uses this anatomy:
+**Then the findings** — all four severity sections, always, in this order, headed by badge + label: `#### 🔴 CRITICAL`, `#### 🟠 HIGH`, `#### 🟡 MEDIUM`, `#### 🔵 LOW`. An empty section carries exactly one line — `— none found.` — so absence is stated, never inferred, and the reader's eye learns where each bucket lives. Each finding uses this anatomy:
 
 ```
 #### 🟠 HIGH
