@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f21-one-line-setup` (`feat/f21-one-line-setup`) — the one-line agent setup, issue #59. |
+| **Active worktrees** | The #62 output-contract wave: `worktree/f22-review-output` (`feat/f22-review-output`, ticket #63), with #64 and #65 stacked on it. f21 merged as PR #61. |
 
 ### Open questions / unresolved decisions
 
@@ -378,3 +378,25 @@ then proves itself non-vacuous by breaking a fence and watching the spine go
 red. Both docs and the suite are kit-only (`KIT_ONLY`, deleted at bootstrap),
 so the slice cost **no VERSION bump**. kit-demo's check 14 and self-host F1
 forced the README row and the CI wiring, exactly as designed.
+
+---
+
+## 2026-08-28 — f22: the /review-pr output contract (issue #63, wave #62)
+
+The review's content was never the problem — its readability was. PRD #62
+(researched against the CLI tools people actually praise: rustc, ruff, pytest,
+ESLint, the forge CLI's accessibility work) turned the §5 report into an
+explicit output contract: verdict + badge count table + clean-audits line
+first, findings in rustc-style anatomy (what/where line with a code-span
+anchor, `cites:` as the error code, `fix:` as the help line, evidence behind a
+fold), severity badged 🔴🟠🟡🔵 with the text label always alongside — color is
+never the only channel. The two axes keep disjoint glyph vocabularies so the
+human-only confirm-list is unmistakable, and its line shape stayed byte-stable:
+the ⚠️/🔀 tokens are a machine contract `/pr-iterate` lifts verbatim.
+
+`tests/review-pr-output.test.sh` pins it all as text (the delivery-contract
+suite's pattern): tokens, orderings by line number, region-scoped glyph
+disjointness, no-ANSI. Landed RED (16 failures when the landed suite replays against the pre-contract skill) before the skill edit turned
+it green. Skills are not shared layer — no VERSION movement. Tickets #64
+(pr-iterate adopts the vocabulary) and #65 (the AI-review prompt ports the
+contract) stack on this branch.
