@@ -36,7 +36,10 @@ below. The plan names:
   **never push**: the first push carries your human's name, not yours.
 
 Only when the conversation genuinely answers none of this do you ask instead
-of proposing. When the human says yes, fill in the values:
+of proposing. Run the numbered steps below **in one shell session** — the
+fences share the variables you set here (only the release tag is persisted to
+a file, in step 1, so it survives a fresh shell). When the human says yes,
+fill in the values:
 
 ```sh
 PROJECT_NAME="My Project"
@@ -51,9 +54,15 @@ human on the line, and the decision is theirs, not a default's.
 
 ## 1. Make the clone yours
 
-The clone's history is the kit's, not your project's:
+The clone's history is the kit's, not your project's. The first line is a
+guard, not decoration: `rm -rf .git` is irreversible, and it must never run
+anywhere but inside the fresh kit clone — if the guard refuses, stop and
+re-check where you are. The second line records the release into a scratch
+file before the strip destroys the tags it would be derived from:
 
 ```sh
+[ -f bootstrap.sh ] && [ -d setup ] || { echo "not the kit clone; refusing to strip"; exit 1; }
+printf '%s\n' "${KIT_TAG:-$(git describe --tags --exact-match)}" >.agentic-sdlc-release
 rm -rf .git
 git init -b main
 ```
@@ -84,12 +93,14 @@ configuration, so every collaborator's fresh clone re-runs
 
 ## 4. First commit — local only
 
-`$KIT_TAG` is still set from the resolve step; it records which release this
-project started from:
+The scratch file from step 1 carries the release this project started from;
+read it, remove it, and put the release in the subject:
 
 ```sh
+KIT_RELEASE=$(cat .agentic-sdlc-release)
+rm .agentic-sdlc-release
 git add -A
-git commit -m "chore: bootstrap from agentic-sdlc $KIT_TAG"
+git commit -m "chore: bootstrap from agentic-sdlc $KIT_RELEASE"
 ```
 
 ## 5. The remote — propose, create at most, push never

@@ -31,7 +31,8 @@ the gate, and a local first commit. It never pushes; the first push is yours.
 # 1. Clone at the newest release tag — a certified release, never mid-wave main.
 KIT_URL=https://github.com/agranado2k/agentic-sdlc.git
 KIT_TAG=$(git ls-remote --tags --refs "$KIT_URL" 'refs/tags/v*' |
-	sed 's|.*refs/tags/||' | sort -t . -k 1.2,1n -k 2,2n -k 3,3n | tail -n 1)
+	sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+	sort -t . -k 1.2,1n -k 2,2n -k 3,3n | tail -n 1)
 git clone --branch "$KIT_TAG" "$KIT_URL" my-project && cd my-project
 rm -rf .git && git init -b main
 

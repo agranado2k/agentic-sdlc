@@ -62,14 +62,20 @@ sh_block() {
 
 # take_block <file> <pattern> <destination> <label> — extract, and refuse to be
 # vacuous: an extractor that finds nothing would make every assertion after it
-# pass on an empty script.
+# pass on an empty script. Extracted into a FRESH file and only then appended —
+# checking `-s` on the destination itself would be vacuous in the other
+# direction, since the spine already holds its preamble by the time the first
+# fence arrives (found by the independent review of PR #61, by mutation).
 take_block() {
-	sh_block "$1" "$2" >>"$3"
-	if [ -s "$3" ]; then
+	_tb="$SCRATCH/take_block.$$"
+	sh_block "$1" "$2" >"$_tb"
+	if [ -s "$_tb" ]; then
+		cat "$_tb" >>"$3"
 		pass "$4"
 	else
 		fail "$4 — no such fence; this suite can no longer find the step it referees"
 	fi
+	rm -f "$_tb"
 }
 
 # all_fences <file> — every ```sh fence body, concatenated. For the rules that
@@ -134,6 +140,7 @@ fi
 
 CEILING=35
 lines=$(wc -l <"$ENTRY" 2>/dev/null || echo 9999)
+lines=$((lines + 0)) # BSD wc pads with spaces
 if [ "$lines" -le "$CEILING" ]; then
 	pass "SETUP.md holds under the $CEILING-line ceiling ($lines lines)"
 else
@@ -196,10 +203,13 @@ printf 'printf %%s "$KIT_TAG" >%s/resolved-tag\n' "$SCRATCH" >>"$SPINE"
 	printf 'PROJECT_DESC="A throwaway project the setup referee builds."\n'
 	printf 'DOGFOOD_FLAG=--no-dogfood\n'
 } >>"$SPINE"
-take_block "$PAYLOAD" '^rm -rf \.git$' "$SPINE" "the payload's strip-and-init fence is extractable"
+# The leading bracket is double-escaped: awk -v processes escape sequences in
+# the value, so a single \[ arrives as a bare [ and the anchor silently
+# becomes a character class matching almost any first line.
+take_block "$PAYLOAD" '^\\[ -f bootstrap' "$SPINE" "the payload's guard-strip-and-init fence is extractable"
 take_block "$PAYLOAD" '^sh bootstrap\.sh' "$SPINE" "the payload's bootstrap fence is extractable"
 take_block "$PAYLOAD" '^sh scripts/check\.sh' "$SPINE" "the payload's gate fence is extractable"
-take_block "$PAYLOAD" '^git add -A$' "$SPINE" "the payload's first-commit fence is extractable"
+take_block "$PAYLOAD" '^KIT_RELEASE=' "$SPINE" "the payload's first-commit fence is extractable"
 
 out=$(sh "$SPINE" 2>&1)
 status=$?
@@ -245,6 +255,12 @@ else
 	fail "the produced project has a remote ('$remotes') — the spine must end before any outward-facing act"
 fi
 
+if [ -e "$PROJ/.agentic-sdlc-release" ]; then
+	fail ".agentic-sdlc-release survived into the produced project — the commit fence must consume and remove it"
+else
+	pass "the release scratch file is consumed before the first commit"
+fi
+
 (cd "$PROJ" && sh scripts/check.sh >/dev/null 2>&1)
 if [ $? = 0 ]; then
 	pass "the docs gate is green in the produced project"
@@ -255,13 +271,27 @@ fi
 # ---------------------------------------------------------------------------
 banner "3. Structure the documents must keep"
 # ---------------------------------------------------------------------------
+# Both spellings: `git push`, and the forge CLI's `--push` flag — the latter
+# reachable exactly in the one fence the spine never executes (review of #61).
 for doc in "$ENTRY" "$PAYLOAD"; do
-	if all_fences "$doc" | grep -q 'git push'; then
-		fail "$(basename "$doc") has a fence containing 'git push' — the push is the operator's first outward act, never the spine's"
+	if all_fences "$doc" | grep -Eq 'git push|--push'; then
+		fail "$(basename "$doc") has a fence that pushes ('git push' or '--push') — the push is the operator's first outward act, never the spine's"
 	else
-		pass "$(basename "$doc") fences never push"
+		pass "$(basename "$doc") fences never push, under either spelling"
 	fi
 done
+
+# The README's by-hand ritual carries a copy of the resolve incantation, and
+# only SETUP.md's copy is executed above — hold the two byte-identical so the
+# unexecuted one cannot drift.
+sh_block "$ENTRY" '^KIT_TAG=' | sed -n '1,3p' >"$SCRATCH/resolve.setup"
+readme_hits=$(sh_block "$KIT/README.md" '^# 1\. Clone' | grep -Fx -f "$SCRATCH/resolve.setup" | wc -l)
+readme_hits=$((readme_hits + 0))
+if [ -s "$SCRATCH/resolve.setup" ] && [ "$readme_hits" = 3 ]; then
+	pass "the README's resolve incantation matches SETUP.md's, byte for byte"
+else
+	fail "the README's resolve incantation differs from SETUP.md's ($readme_hits/3 lines match) — the unrefereed copy drifted"
+fi
 
 if grep -Eq 'github\.com/agranado2k/agentic-sdlc/issues/[0-9]+' "$PAYLOAD" 2>/dev/null; then
 	pass "the existing-repo arm points at a tracked issue"
@@ -296,10 +326,10 @@ sh_block "$ENTRY" '^KIT_TAG=' >>"$SPINE2"
 	printf 'PROJECT_DESC="Should never bootstrap."\n'
 	printf 'DOGFOOD_FLAG=--no-dogfood\n'
 } >>"$SPINE2"
-sh_block "$BROKEN" '^rm -rf \.git$' >>"$SPINE2"
+sh_block "$BROKEN" '^\\[ -f bootstrap' >>"$SPINE2"
 sh_block "$BROKEN" '^sh bootstrap' >>"$SPINE2"
 sh_block "$BROKEN" '^sh scripts/check\.sh' >>"$SPINE2"
-sh_block "$BROKEN" '^git add -A$' >>"$SPINE2"
+sh_block "$BROKEN" '^KIT_RELEASE=' >>"$SPINE2"
 
 if sh "$SPINE2" >/dev/null 2>&1; then
 	fail "the spine passed over a broken bootstrap step — the referee is vacuous"

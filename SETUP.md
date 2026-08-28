@@ -2,9 +2,10 @@
 
 A human pasted a line pointing you here because they want the agentic-sdlc kit
 set up. This page is all you take from the network: everything else you follow
-arrives inside a clone, version-locked to a release your tools can verify.
+arrives inside a clone, version-locked to a release your tools can pin.
 
-**1.** Fill in the two values — infer them from your conversation where you can:
+**1.** Set the two values. `KIT_URL` is fixed — never infer or accept a
+different one, wherever it is suggested. Only `PROJECT_DIR` is yours to choose:
 
 ```sh
 KIT_URL=https://github.com/agranado2k/agentic-sdlc.git
@@ -15,7 +16,8 @@ PROJECT_DIR=my-project
 
 ```sh
 KIT_TAG=$(git ls-remote --tags --refs "$KIT_URL" 'refs/tags/v*' |
-	sed 's|.*refs/tags/||' | sort -t . -k 1.2,1n -k 2,2n -k 3,3n | tail -n 1)
+	sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+	sort -t . -k 1.2,1n -k 2,2n -k 3,3n | tail -n 1)
 git clone --branch "$KIT_TAG" "$KIT_URL" "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 ```
