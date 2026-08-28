@@ -260,6 +260,30 @@ assert_file_has "$PROMPT" "constitution/"
 assert_file_has "$PROMPT" "shared-invariants.md"
 assert_file_has "$PROMPT" "docs/adr/"
 
+# ---------------------------------------------------------------------------
+banner "6b. The prompt asks for the same output contract the local review emits"
+# ---------------------------------------------------------------------------
+# One vocabulary across every reviewer of a PR (#65): the workflow reviewers'
+# review body opens summary-first with the badge severity encoding, findings
+# use the same anatomy, and the confirm-list keeps its glyph-first line shape
+# with no badge inside it. The tokens are pinned the same way the local
+# skill's are in tests/review-pr-output.test.sh — two documents, one contract.
+for pair in "🔴 CRITICAL" "🟠 HIGH" "🟡 MEDIUM" "🔵 LOW"; do
+	assert_file_has "$PROMPT" "$pair"
+done
+assert_file_has "$PROMPT" "**Verdict:**"
+assert_file_has "$PROMPT" "Clean audits:"
+assert_file_has "$PROMPT" "↳ fix:"
+assert_file_has "$PROMPT" "<details>"
+assert_file_has "$PROMPT" "never the only channel"
+assert_file_has "$PROMPT" "— none found."
+# The Axis-2 tag vocabulary is named, not left to each vendor to invent —
+# without these, one model emits its own dialect and the one-file
+# byte-identity mechanism cannot prevent it (review of PR #68, M-1).
+for tag in "🔀 MIXED COMMIT" "⚠️ UNSPECIFIED" "✅ SPECIFIED" "❌ MISSING"; do
+	assert_file_has "$PROMPT" "$tag"
+done
+
 # The two-axis split is the one rule the prompt states rather than references,
 # because it describes the shape of the review's own output and no reviewer
 # infers it (shared invariant §5).
