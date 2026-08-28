@@ -524,10 +524,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1306 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1358 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1442 insertions(+), 1 deletion(-)
+ 3 files changed, 1494 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -715,10 +715,57 @@ One rule per category, because the categories differ in what a local edit
 
 ### 9a. Skills — a three-way, not a copy
 
-A skill is prose an agent loads, and adapting it to your repo is the intended
-way to make the chain fit. So "is it byte-identical to the release?" is the
-wrong question here; the right one is **"what did the kit change, and did I
-change the same lines?"**
+**Start with the inventory, not the diff.** Since 0.11.0 the kit's `VERSION`
+carries a `skills:` section — every skill the release ships, by name. It is
+**state, not delta**: however many releases this update spans, and however
+many earlier windows were skimmed or skipped, the comparison below prints
+exactly what your project lacks. Step 8's `changed.yours` cannot promise that
+— a skill added before your `FROM_REF` is in no diff you will ever run, which
+is precisely how a real consumer lost a whole skill with a green gate. Only
+the newer ref's list is read, so a `FROM_REF` that predates the section does
+not matter.
+
+```sh
+kit show "${TO_REF}:VERSION" | awk '
+	/^skills:/      { inlist = 1; next }
+	!inlist         { next }
+	/^[ \t]*#/      { next }
+	/^[ \t]*$/      { next }
+	/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
+	                { inlist = 0 }
+' | sort >"$WORK/skills.manifest"
+
+for d in .claude/skills/*/; do
+	[ -d "$d" ] || continue
+	basename "$d"
+done | sort >"$WORK/skills.installed"
+
+comm -23 "$WORK/skills.manifest" "$WORK/skills.installed"   # skills you LACK
+```
+
+Read each printed name against what you know: it is either a **decline you
+recorded** (the optional skill you said no to, a fork you wrote down — nothing
+to do) or a **feature nobody ever told you about** — adopt it as a new skill
+(the directory copy further down), and read its release's history note in the
+newer `VERSION` for the wiring that shipped with it, because a skill's whole
+value can hang on one bullet in another skill and one marker in a template.
+Only the first word of a manifest entry is the name; anything after it is
+annotation.
+
+**Arriving from 0.10.0 or older, check `/explain-diff` by name.** It shipped
+in the v0.8.0 window and predates this inventory, so it is the skill the list
+above most likely prints. Adopting it is the directory copy plus **two wiring
+points**: your `/implement` skill's Deliver phase gains the appendix bullet
+(that arrives as an ordinary 9a take or merge of `/implement` below), and your
+pull-request template gains the `<!-- explain-diff-appendix -->` marker
+paragraph (that is a 9c template take). The copy without the wiring installs a
+skill nothing invokes.
+
+After the inventory, the per-skill question for what you DO have. A skill is
+prose an agent loads, and adapting it to your repo is the intended way to make
+the chain fit. So "is it byte-identical to the release?" is the wrong question
+here; the right one is **"what did the kit change, and did I change the same
+lines?"**
 
 ```sh
 S=.claude/skills/implement/SKILL.md
@@ -1185,6 +1232,11 @@ constitution/local-workflow.md.template
 scripts/agents.config.sh
 templates/workflows/ai-review-prompt.md
 templates/workflows/ai-review.example.yml
+
+$ # 9a — the INVENTORY first: state, not delta (one is a decline, one is a gap)
+$ comm -23 "$WORK/skills.manifest" "$WORK/skills.installed"   # skills you LACK
+dogfood
+improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"

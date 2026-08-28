@@ -186,8 +186,11 @@
 # list): the skills manifest referee joined tests/ (kit-only); consumers on
 # ≤0.10.0 adopting /explain-diff need the skill directory PLUS its two wiring
 # points — the Deliver-phase appendix bullet in /implement and the
-# explain-diff-appendix marker in the PR template. (This note grows with the
-# wave's stacked tickets; it is finished only at the v0.11.0 tag.)
+# explain-diff-appendix marker in the PR template. UPDATING.md moved with the
+# manifest: step 9a now OPENS with the inventory fence (manifest vs installed,
+# printed before any per-skill diff) and carries that retroactive note under
+# "Arriving from 0.10.0 or older". (This note grows with the wave's stacked
+# tickets; it is finished only at the v0.11.0 tag.)
 shared-layer: 0.11.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

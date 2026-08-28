@@ -80,7 +80,10 @@ pushes straight past both gates.
    untagged bump is a release no consumer can reach, and `self-host.test.sh` F3
    stays red on main until the tag exists. Release notes are written from the
    tag's content, never from main: main is usually ahead, and notes that
-   describe it overclaim what the tag ships.
+   describe it overclaim what the tag ships. The bump's history note in
+   `VERSION` also enumerates the wave's **non-manifest half** — skills,
+   wiring, template movements — because that list is what the recipe's Part 2
+   points a consumer at; `self-host.test.sh` F5 holds the current note to it.
 4. **Tracer bullets, never horizontal layers.** Build a tiny end-to-end slice,
    seek feedback, expand from there (shared invariant §2). In this repo a slice
    is demoable: a rule, the check that enforces it, and the suite that proves
