@@ -55,13 +55,27 @@ assert_file_has "$SKILL" "**Verdict:**"
 assert_file_has "$SKILL" "Clean audits:"
 assert_file_has "$SKILL" "| | Severity | Count |"
 
+# Anchored INSIDE the summary template, not on a prose mention: verdict, then
+# clean-audits, then the count table, all between the template's own header and
+# the findings paragraph. (The first shape anchored on prose and one mutant —
+# verdict moved out of the fence — survived; found by the review of PR #66.)
+rs=$(line_of "### Review Summary")
 v=$(line_of "**Verdict:**")
-first_section=$(line_of "#### 🔴 CRITICAL")
-if [ -n "$v" ] && [ -n "$first_section" ] && [ "$v" -lt "$first_section" ]; then
-	pass "the verdict line (line $v) is specified before the first severity section (line $first_section)"
+c=$(line_of "Clean audits:")
+th=$(line_of "| | Severity | Count |")
+tf=$(line_of "**Then the findings**")
+if [ -n "$rs" ] && [ -n "$v" ] && [ -n "$c" ] && [ -n "$th" ] && [ -n "$tf" ] &&
+	[ "$rs" -lt "$v" ] && [ "$v" -lt "$c" ] && [ "$c" -lt "$th" ] && [ "$th" -lt "$tf" ]; then
+	pass "summary template order holds: header ($rs) < verdict ($v) < clean audits ($c) < count table ($th) < findings ($tf)"
 else
-	fail "summary does not come first — verdict='$v', first severity section='$first_section'"
+	fail "summary-first broke — header='$rs' verdict='$v' clean-audits='$c' table='$th' findings='$tf'"
 fi
+
+# All four sections always appear; an empty one states its emptiness (operator
+# amendment to PRD #62 at the PR #66 confirm-list: sections are kept, absence
+# is stated, the count table's zeros remain the numeric record).
+assert_file_has "$SKILL" "all four severity sections, always"
+assert_file_has "$SKILL" "— none found."
 
 # ---------------------------------------------------------------------------
 banner "2. Severity badges — color as REDUNDANT encoding, all four buckets"
@@ -76,7 +90,8 @@ assert_file_has "$SKILL" "never the only channel"
 # ---------------------------------------------------------------------------
 banner "3. Finding anatomy: what/where line, citation, fix line, evidence fold"
 # ---------------------------------------------------------------------------
-assert_file_has "$SKILL" "fix:"
+assert_file_has "$SKILL" "↳ fix:"
+assert_file_has "$SKILL" "↳ cites:"
 assert_file_has "$SKILL" "<details>"
 assert_file_has "$SKILL" "file:line"
 # The ID scheme is a machine invariant — /pr-iterate cites findings across

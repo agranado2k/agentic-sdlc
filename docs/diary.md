@@ -396,7 +396,7 @@ the ⚠️/🔀 tokens are a machine contract `/pr-iterate` lifts verbatim.
 
 `tests/review-pr-output.test.sh` pins it all as text (the delivery-contract
 suite's pattern): tokens, orderings by line number, region-scoped glyph
-disjointness, no-ANSI. Landed RED (14 failures) before the skill edit turned
+disjointness, no-ANSI. Landed RED (16 failures when the landed suite replays against the pre-contract skill) before the skill edit turned
 it green. Skills are not shared layer — no VERSION movement. Tickets #64
 (pr-iterate adopts the vocabulary) and #65 (the AI-review prompt ports the
 contract) stack on this branch.
