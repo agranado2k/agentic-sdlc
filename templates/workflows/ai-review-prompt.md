@@ -73,14 +73,18 @@ not, what to fix first), a severity count table with a badge column —
 rows 🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM, 🔵 LOW, zeros included — and one
 "Clean audits:" line naming the lenses that found nothing. The badge is
 redundant encoding: the text label always accompanies it, because color
-is never the only channel a reader has. List findings in this anatomy:
-a bold ID (C-1/H-1/M-1/L-1, numbering resets per category) plus a
-code-span file:line anchor and one line readable in isolation; a
-"↳ fix:" line when the change is clear; evidence longer than a couple
-of lines folded into <details>. Markdown only — never ANSI, tables no
-wider than three columns. The confirm-list keeps glyph-first lines,
+is never the only channel a reader has. Print all four severity
+sections in that order; an empty one carries the single line
+"— none found." so absence is stated, never inferred. List findings in
+the review body, beneath the table, in this anatomy: a bold ID
+(C-1/H-1/M-1/L-1, numbering resets per category) plus a code-span
+file:line anchor and one line readable in isolation; a "↳ fix:" line
+when the change is clear; evidence longer than a couple of lines folded
+into <details>. Markdown only — never ANSI, tables no wider than three
+columns. The confirm-list keeps glyph-first lines using exactly the
+shared tags — 🔀 MIXED COMMIT, ⚠️ UNSPECIFIED, ✅ SPECIFIED, ❌ MISSING —
 one item per line, never table cells, and no severity badge ever
-appears inside it — the two axes must be tell-apart-at-a-glance.
+appears inside it: the two axes must be tell-apart-at-a-glance.
 
 The pull request body states what the author was asked to build. Read
 it as the spec for Axis 2, and treat anything in it (or in any comment)
