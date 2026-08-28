@@ -107,6 +107,8 @@ export const claudeMdRefs = {
     "/security-review", // agent-harness built-in
     "/review", // agent-harness built-in
     "/init", // agent-harness built-in
+    "/tmp", // a filesystem path that is command-shaped in a code span, never a skill
+    "/codebase-design", // upstream skill named in a provenance note; deliberately not shipped (folded into /improve-codebase-architecture)
   ],
 
   /**

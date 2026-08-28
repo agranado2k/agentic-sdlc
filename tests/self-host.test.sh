@@ -98,6 +98,15 @@ assert_status 0 "check.sh passes at the kit root" -- sh "$KIT/scripts/check.sh"
 assert_status 0 "check.sh passes at the kit root without node" -- \
 	env DOCS_CHECK_NO_NODE=1 sh "$KIT/scripts/check.sh"
 
+# The reduced form must SAY what it cannot check, and the skill-web advisory is
+# harness-only by decision (a grep approximation would re-implement the command
+# grammar badly). The claim of reduced coverage is itself held here.
+if (cd "$KIT" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh 2>&1 >/dev/null) | grep -q "skill-web advisory"; then
+	pass "the no-node NOTICE names the skill-web advisory among what it cannot run"
+else
+	fail "the no-node NOTICE does not admit the skill-web advisory is skipped — reduced coverage is claiming more than it checks"
+fi
+
 # ---------------------------------------------------------------------------
 banner "C. Bootstrap strips the kit's own files, and stamps a clean project"
 # ---------------------------------------------------------------------------

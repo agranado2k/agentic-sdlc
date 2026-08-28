@@ -214,8 +214,9 @@ if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
-	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), and the" >&2
-	echo "        portability deny-list on the shared article." >&2
+	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), the" >&2
+	echo "        portability deny-list on the shared article, and cross-skill references" >&2
+	echo "        (the skill-web advisory)." >&2
 	echo "        Install node and re-run to get the full harness (scripts/docs-conformance)." >&2
 	echo "" >&2
 fi
