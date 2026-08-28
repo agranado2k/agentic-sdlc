@@ -207,7 +207,7 @@ Status:
   Checks:        <green>/<total> green · <failing> failing · <pending> pending
   Bot threads:   <open>/<total> open
   Human threads: <unresolved>/<total>
-  /review-pr:    <C>/<H>/<M>/<L> Axis-1 findings
+  /review-pr:    🔴 <C> CRITICAL · 🟠 <H> HIGH · 🟡 <M> MEDIUM · 🔵 <L> LOW
 
 This iteration:
   Applied:    <list of fixes with commit SHAs; mark source: bot|local|check>

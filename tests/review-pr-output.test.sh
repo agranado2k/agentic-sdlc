@@ -164,4 +164,32 @@ else
 	pass "no ANSI escape byte anywhere in the skill"
 fi
 
+# ---------------------------------------------------------------------------
+banner "6. Cross-skill agreement — /pr-iterate speaks the same vocabulary (#64)"
+# ---------------------------------------------------------------------------
+# Two documents, one vocabulary: /pr-iterate's status block reports the local
+# review with the same badges, and the human-only tokens it lifts verbatim
+# (hard rule 4) are byte-identical to the ones the review template emits. A
+# mismatch here is two skills describing one report differently — the drift
+# this suite exists to stop.
+ITER=".claude/skills/pr-iterate/SKILL.md"
+[ -f "$ROOT/$ITER" ] && pass "$ITER exists" ||
+	fail "$ITER is missing — the cross-skill half of the contract has no counterpart"
+
+for pair in "🔴 CRITICAL" "🟠 HIGH" "🟡 MEDIUM" "🔵 LOW"; do
+	assert_file_has "$ITER" "$pair"
+done
+for tok in "⚠️ UNSPECIFIED" "🔀 MIXED COMMIT"; do
+	assert_file_has "$ITER" "$tok"
+	assert_file_has "$SKILL" "$tok"
+done
+# The badges never leak into the human-only lane: /pr-iterate's ⚠️-first
+# report section stays badge-free, exactly as §5b stays badge-free here.
+iter_confirm=$(sed -n '/⚠️ For you/,/^Status:/p' "$ROOT/$ITER")
+case "$iter_confirm" in
+"") fail "/pr-iterate's output format lost its '⚠️ For you' block — hard rule 4's surface moved" ;;
+*🔴* | *🟠* | *🟡* | *🔵*) fail "/pr-iterate's human-only block carries a severity badge — the axes' vocabularies must stay disjoint everywhere" ;;
+*) pass "/pr-iterate's human-only block stays badge-free" ;;
+esac
+
 t_done "/review-pr output contract"
