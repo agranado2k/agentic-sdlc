@@ -503,9 +503,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.10.0
+v0.11.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.10.0
+v0.1.0 -> v0.11.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -575,7 +575,7 @@ $ # step 5 — apply
   updated scripts/guards.lib.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
-  NOTE  UPDATING.md changed in v0.10.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.11.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -607,10 +607,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.10.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.11.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.10.0
-Part 1 complete — shared layer at v0.10.0. The update is not done: go to step 8.
+0.11.0
+Part 1 complete — shared layer at v0.11.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1239,7 +1239,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.10.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.11.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1257,7 +1257,7 @@ claude-code
 node-ts
 
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.10.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.11.0, engine: harness)
 ```
 
 Six things in that transcript are worth reading twice.
