@@ -8,16 +8,33 @@ Spec → tracer-bullet tickets → test-first implementation → two-axis review
 Constitution-layered agent instructions, CI-verified process docs, guards that
 block what prose used to merely request.
 
-**Use it as a GitHub template**, run one bootstrap script, and your new repo has
-an agent operating manual, the portable rulebook underneath it, and a gate that
-fails when the two stop describing reality.
+**Paste one line into a coding agent** (or run the same ritual by hand), and
+your new repo has an agent operating manual, the portable rulebook underneath
+it, and a gate that fails when the two stop describing reality.
 
 ## Quickstart
 
+**With a coding agent** — paste this line and answer its plan:
+
+> Set up the agentic-sdlc kit by following
+> <https://raw.githubusercontent.com/agranado2k/agentic-sdlc/main/SETUP.md>
+
+`SETUP.md` is a deliberately frozen entry point: the agent resolves the newest
+release tag, clones the kit **at that tag**, and follows
+`setup/agent-bootstrap.md` from inside the clone — one checkpoint (project
+name, description, the optional `/dogfood` skill, the remote), then bootstrap,
+the gate, and a local first commit. It never pushes; the first push is yours.
+
+**By hand** — the same ritual, manually:
+
 ```sh
-# 1. Create your repo from this template ("Use this template" on GitHub, or:)
-gh repo create my-project --template agranado2k/agentic-sdlc --private --clone
-cd my-project
+# 1. Clone at the newest release tag — a certified release, never mid-wave main.
+KIT_URL=https://github.com/agranado2k/agentic-sdlc.git
+KIT_TAG=$(git ls-remote --tags --refs "$KIT_URL" 'refs/tags/v*' |
+	sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+	sort -t . -k 1.2,1n -k 2,2n -k 3,3n | tail -n 1)
+git clone --branch "$KIT_TAG" "$KIT_URL" my-project && cd my-project
+rm -rf .git && git init -b main
 
 # 2. Bootstrap. Runs once, then deletes itself. Commits nothing.
 #    It asks one question — whether to include the optional /dogfood skill.
@@ -27,11 +44,15 @@ sh bootstrap.sh "My Project" "One line about what it does."
 
 # 3. Check the gate is green, then make the first commit yours.
 sh scripts/check.sh
-git add -A && git commit -m "chore: bootstrap from agentic-sdlc"
+git add -A && git commit -m "chore: bootstrap from agentic-sdlc $KIT_TAG"
 
 # 4. Turn the TDD pairing guard on. It ships INACTIVE — see "The guards".
 $EDITOR scripts/guards.config.sh   # set GUARD_SOURCE_RE
 ```
+
+("Use this template" on GitHub still exists, but it snapshots the default
+branch — you would get whatever main holds that day, not a release. The
+clone-at-tag ritual above is the supported way in, for humans and agents both.)
 
 `bootstrap.sh` stamps `constitution/AGENTS.md.template` into a root `AGENTS.md`,
 writes the two one-line shims (`CLAUDE.md`, `GEMINI.md`) that point at it, stamps
@@ -71,6 +92,7 @@ second time rather than overwriting a manual you have since edited.
 | `EXCLUSIONS.md` | What the kit deliberately does **not** ship, and why — one entry per considered-and-rejected skill or mechanism, plus the standing rule that keeps it current. Kit-repo meta: removed by bootstrap, not shared layer. |
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
+| `SETUP.md` + `setup/agent-bootstrap.md` | The one-line agent setup: the frozen entry doc the pasted line fetches, and the tag-pinned procedure it hands off to. Kit-only — both removed by bootstrap. |
 | `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
 
 ### One manual, three entry points
@@ -487,6 +509,16 @@ skeleton (K0).
   things: merged-and-clean is pruned, merged-but-dirty and unmerged are kept,
   `--dry-run` changes nothing, and a typo'd flag exits 2 rather than running.
 
+- `sh tests/setup-demo.sh` referees the one-line agent setup (`SETUP.md` +
+  `setup/agent-bootstrap.md`) by executing the documents' **own fenced
+  blocks** against a scratch origin tagged twice: the resolve step must pick
+  `v10.0.0` over `v9.0.0` (a lexicographic sort dies there), the spine must
+  end at a bootstrapped, gate-green project whose first commit is local and
+  whose remote list is empty — never a push — and `SETUP.md` must stay frozen:
+  under its line ceiling, naming no version, carrying the trust-posture and
+  plan-first sentences. Then the referee proves itself non-vacuous: one broken
+  fence, and the spine goes red.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -553,6 +585,7 @@ sh tests/agents-tiers.test.sh                          # the capability-tier res
 sh tests/implement-deliver.test.sh                     # /implement's Deliver phase
 sh tests/ai-review-template.test.sh                    # the cross-provider review template
 sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
+sh tests/setup-demo.sh                                 # the one-line agent setup, from its own bytes
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

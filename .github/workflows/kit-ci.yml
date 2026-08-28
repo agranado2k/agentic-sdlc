@@ -225,3 +225,17 @@ jobs:
       # caught it if it were not.
       - name: Opt-in /dogfood acceptance test
         run: sh tests/dogfood-optin.test.sh
+
+  setup-demo:
+    name: One-line agent setup (end-to-end)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The suite executes SETUP.md's and setup/agent-bootstrap.md's own fenced
+      # blocks against a scratch origin — node so the produced project's docs
+      # gate runs the full harness rather than the POSIX fallback.
+      - name: Setup docs referee
+        run: sh tests/setup-demo.sh

@@ -293,6 +293,7 @@ answers produce a clean project.
 | Run the docs gate on this repo      | `scripts/check.sh` — also runs on every push     |
 | Run the whole suite                 | every script in `tests/`, e.g. `sh tests/kit-demo.sh` — the end-to-end bootstrap acceptance test |
 | Prove the kit keeps its own rules   | `tests/self-host.test.sh` — the root gate is green, and bootstrap still strips the kit's own files |
+| Prove the one-line agent setup works | `tests/setup-demo.sh` — executes `SETUP.md` + `setup/agent-bootstrap.md`'s own fenced spine, and holds the entry doc frozen |
 | See what the gate actually checks   | `scripts/docs-conformance/` — one validator per rule |
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — policy as data. Its POSIX twin lives in `scripts/check.sh`; the two lists move together |
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |

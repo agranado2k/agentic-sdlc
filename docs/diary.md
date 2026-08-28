@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-08-27
+## Current state — 2026-08-28
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -23,10 +23,10 @@ is in flight. Do not restate the README.
 | **Phase** | The kit is shipping. Shared layer 0.10.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Deployed / live** | Nothing is deployed — the kit's delivery is "Use this template" plus `sh bootstrap.sh`. |
+| **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. |
+| **Active worktrees** | `worktree/f21-one-line-setup` (`feat/f21-one-line-setup`) — the one-line agent setup, issue #59. |
 
 ### Open questions / unresolved decisions
 
@@ -345,3 +345,36 @@ the new recipe and the consumer who needs it is reading the old one.
 **Shared layer 0.10.0.** No file joined or left; one manifest-listed file
 changed content, materially. Both transcripts re-captured. A consumer takes a
 re-read and one habit change: Part 2's takes are `kit_take` calls now.
+
+---
+
+## 2026-08-28 — f21: the one-line agent setup (issue #59)
+
+The kit's front door caught up with how projects start now: a human pastes one
+line into a coding agent, and the agent does the ritual. The design came out of
+a `/grill-me` walk (PRD #59), and its spine is the trust argument, not the
+convenience: the AWS-style "follow this raw URL" shape is fetch-and-act on
+remote instructions — the exact thing the kit's own agent trust boundary
+forbids — so the kit ships a **two-stage entry** instead. `SETUP.md` (root,
+fetched at main, deliberately frozen: line ceiling, no version string) says
+only: resolve the newest `v*` tag with `git ls-remote`, clone AT it, then
+follow `setup/agent-bootstrap.md` **from inside the clone** — content
+version-locked to the release it installs, arriving by the same trust act as
+any clone. Along the way the README Quickstart unified onto clone-at-tag for
+humans too: "Use this template" snapshots mid-wave main, which is exactly what
+F3 certifies releases against, so the docs stopped selling it.
+
+The payload doc's new-project arm is a fenced `sh` spine (strip `.git`, init,
+bootstrap with an **explicit** dogfood flag, gate, local first commit — never a
+push; the remote is proposed at the one human checkpoint and the first push
+stays the human's). Its existing-repo arm is an honest pointer to #60 — newly
+tractable because the executor is an agent that can merge, not a script that
+can only refuse or clobber, and sliced out per hard rule 4.
+
+`tests/setup-demo.sh` referees both documents by executing their own fenced
+bytes (the Part D pattern) against a scratch origin tagged `v9.0.0` and
+`v10.0.0` — the resolve step must pick v10, killing lexicographic resolvers —
+then proves itself non-vacuous by breaking a fence and watching the spine go
+red. Both docs and the suite are kit-only (`KIT_ONLY`, deleted at bootstrap),
+so the slice cost **no VERSION bump**. kit-demo's check 14 and self-host F1
+forced the README row and the CI wiring, exactly as designed.
