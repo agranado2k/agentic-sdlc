@@ -178,6 +178,9 @@
 # consumer is invited to adapt a skill's prose, so the manifest answers "do I
 # HAVE it?", and only that. The update recipe diffs this list against the
 # consumer's installed set — state, not delta, so skipped windows heal.
+# UPDATING.md changed content with the bump (the worked-example transcripts
+# and their surrounding prose re-pinned — a content change by this manifest's
+# own precedent).
 #   NON-MANIFEST HALF of this wave, enumerated (the discipline this release
 # introduces — every release from here names what shipped outside the files:
 # list): the skills manifest referee joined tests/ (kit-only); consumers on

@@ -1458,6 +1458,34 @@ assert_transcript 1 "$SCRATCH/part1.transcript" "Part 1"
 assert_transcript 2 "$SCRATCH/part2.transcript" "Part 2"
 
 # ---------------------------------------------------------------------------
+banner "D2. The worked examples' PROSE tracks the release the transcripts pin"
+# ---------------------------------------------------------------------------
+# D holds the fenced transcripts byte-identical; the prose AROUND them rotted
+# unrefereed on three consecutive releases — "updating to **0.9.0**" survived
+# a 0.10.0 re-pin, and the ADD commentary bold-quoted a transcript line the
+# transcript no longer contained. Same F2 pattern as README's marker: match
+# each co-moving sentence by SHAPE, then require the current version on it.
+# A shape that stops matching is its own failure — a probe that finds nothing
+# would otherwise pass on a document it can no longer read.
+D2V=$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)
+prose_probe() {
+	_pp_line=$(grep -E "$2" "$KIT/UPDATING.md" | head -1)
+	if [ -z "$_pp_line" ]; then
+		fail "worked-example prose shape not found ($1) — move this probe with the document, do not delete it"
+	elif printf '%s' "$_pp_line" | grep -qF "$D2V"; then
+		pass "worked-example prose tracks $D2V: $1"
+	else
+		fail "STALE worked-example prose ($1) does not name $D2V:"
+		printf '        | %s\n' "$_pp_line"
+	fi
+}
+prose_probe "Part 1's 'updating to' intro"        'updating to \*\*0\.'
+prose_probe "9c's MERGE/ADD case sentence"        'is the 0\.4\.0 → 0\.'
+prose_probe "Part 2 intro's VERSION-says line"    'its `VERSION` says 0\.'
+prose_probe "Part 2 intro's clone-arrow note"     'a real `v0\.3\.0 → v0\.'
+prose_probe "the ADD commentary bold-quote"       'is new at v0\.'
+
+# ---------------------------------------------------------------------------
 banner "Result"
 # ---------------------------------------------------------------------------
 if [ "$SKIPPED" -gt 0 ]; then

@@ -469,7 +469,11 @@ else
 		pass "skills: in VERSION and .claude/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
 	fi
 
-	leaked=$(manifest_files | sort | comm -12 - "$SCRATCH/skills.manifest")
+	# First word only on BOTH sides: skills.manifest already holds first words,
+	# and an annotated entry that leaked into the files list would otherwise
+	# arrive as its whole line and never match. Paths have no spaces here, so
+	# the files side loses nothing.
+	leaked=$(manifest_files | awk '{ print $1 }' | sort | comm -12 - "$SCRATCH/skills.manifest")
 	if [ -n "$leaked" ]; then
 		fail "skills entries leak into the files: parser: $(printf '%s' "$leaked" | tr '\n' ' ')— the shared-file list would copy skill names as paths"
 	else

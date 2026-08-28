@@ -490,7 +490,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.10.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.11.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -940,7 +940,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.10.0 case for this file, and `ADD` is the 0.3.0 → 0.10.0
+`MERGE` is the 0.4.0 → 0.11.0 case for this file, and `ADD` is the 0.3.0 → 0.11.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1146,14 +1146,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.10.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.11.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.10.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.11.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -1262,7 +1262,7 @@ OK  docs gate: all checks passed (shared-layer 0.11.0, engine: harness)
 
 Six things in that transcript are worth reading twice.
 
-**`ADD     scripts/agents.config.sh is new at v0.10.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.11.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
