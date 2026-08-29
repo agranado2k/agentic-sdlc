@@ -168,7 +168,10 @@ is installed and each remaining conflict printed one line of the form
 `COLLISION <class> <path> <verb>` — those are the doors, and the run resolved
 none of them. Lines that begin `kept` are not doors: project memory (their
 diary, their decision records, their README) is never overwritten, full stop.
-Commit the batch before opening any door:
+Commit the batch before opening any door — and look at `git status` first:
+`git add -A` stages *everything*, including stray untracked files the repo
+was already carrying; if there are any, stage the installed paths instead so
+the adoption branch stays only the adoption:
 
 ```sh
 git add -A
@@ -195,15 +198,28 @@ the shape of the proposal:
   articles it points at; their original file is removed **only after** the
   distillation commit exists, which preserves it verbatim in history forever.
   Never splice their rules into a shared article.
-- **`rename-or-decline`** (a skill of theirs under a kit skill's name):
-  propose renaming theirs, or declining the kit's. If the kit's is declined,
-  say so in a local article, and expect the gate's skill-web advisory to
-  mention the gap — that warning is the decline being visible, not an error.
+- **`rename-or-decline`** (a skill of theirs under a kit skill's name): two
+  real resolutions, and only one of them is direct. **Rename theirs** — it
+  moves, the kit's copy arrives on the re-run, done. **Decline the kit's** —
+  adopt mode has no mechanical way to see a decline (its door closes only on
+  an absent path or the kit's own bytes), so the flow is rename-for-the-
+  duration: move theirs aside in one commit, let the clean run land the
+  kit's copy, then **swap back** in a final commit — delete the kit's copy,
+  restore your human's skill at the name, and remove the kit's
+  quick-reference row for it from the manual, because a row whose skill is
+  not the kit's promise fails the gate as `skill-missing`, a violation, not
+  an advisory. Cross-skill references to that name then resolve against
+  *their* skill — confirm with your human that it can stand in for what the
+  chain expects, and record the decline in a local article.
 - **`chain`** (their pre-push hook, or a workflow name the kit also ships):
-  propose keeping both — their hook moves to a name the kit's hook can call,
-  or the two workflows coexist under distinct names. Their automation keeps
-  running exactly as before until they approve its door; the kit wires
-  nothing until the final clean run.
+  propose keeping both — their hook moves aside, or the two workflows coexist
+  under distinct names. Their automation keeps running exactly as before
+  until they approve its door; the kit wires nothing until the final clean
+  run. **The chaining itself happens after that run**: the installed
+  pre-push hook is yours from the moment it lands (it is not shared layer),
+  so once the run exits 0, edit it to invoke their renamed hook — editing it
+  *before* the re-run just re-opens the door, because the classifier expects
+  the kit's own bytes there.
 
 A `kept` line may still deserve one **optional** proposal: seeding their
 diary with the Current-state block protocol, or their decision records with
@@ -215,7 +231,13 @@ skipped without consequence.
 Run the same adopt fence from E1 again. Doors you resolved disappear; what
 remains is what is still pending. When it exits 0 the run finishes the job —
 manual stamped, shims written, hook wired — and retires the scratch clone's
-bootstrap. Nothing is left to re-run: the clone can be deleted.
+bootstrap. Nothing is left to re-run: the clone can be deleted. That
+finishing output is working-tree changes like any other; commit it, or the
+branch proposes an adoption it does not contain:
+
+```sh
+git add -A && git commit -m "chore: adopt agentic-sdlc — the finishing run"
+```
 
 ### E4. Prove it, then hand the keyboard back
 

@@ -330,13 +330,16 @@ banner "G. The payload document's existing-repo arm — its own fences drive the
 # is a doc that drifted from the mode it documents.
 PAYLOAD="$KIT/setup/agent-bootstrap.md"
 
-assert_file_lacks "$PAYLOAD" "Not supported yet" "the arm exists now — 'yet' arrived"
+assert_file_lacks "$PAYLOAD" "supported yet" "the arm exists now — 'yet' arrived (single-line token, so this pin CAN fire)"
 assert_file_has "$PAYLOAD" "one at a time" "per-collision approval is the arm's spine"
 assert_file_has "$PAYLOAD" "COLLISION" "the arm teaches the machine contract it consumes"
 assert_file_has "$PAYLOAD" "Exit code 3" "pending is a documented state, not a surprise"
 assert_file_has "$PAYLOAD" "never push" "propose-only, same as the new-project arm"
 assert_file_has "$PAYLOAD" "distill" "the marquee collision has its walkthrough"
 assert_file_lacks "$PAYLOAD" "issues/60" "the open-spec pointer retired with the spec"
+assert_file_has "$PAYLOAD" "swap back" "declining the kit's skill has a flow that actually finishes"
+assert_file_has "$PAYLOAD" "edit it to invoke" "their chained hook runs again after the clean exit"
+assert_file_has "$PAYLOAD" "the finishing run" "E3's output gets committed, not just proposed"
 
 # take_g <first-line awk pattern> <dest> — first fenced sh block whose first
 # line matches; extraction to a fresh file, then refuse-to-be-vacuous.
@@ -363,7 +366,9 @@ take_g '^git switch -c' "$SCRATCH/arm.branch"
 # The $ is doubled for awk -v (escape processing eats one) so the anchor stays
 # an anchor rather than becoming an end-of-line match mid-pattern.
 take_g '^sh "\\$KIT_CLONE/bootstrap' "$SCRATCH/arm.adopt"
-take_g '^git add -A' "$SCRATCH/arm.commit"
+take_g '^git add -A$' "$SCRATCH/arm.commit"
+take_g '^git add -A && git commit' "$SCRATCH/arm.finish"
+take_g '^sh scripts/check' "$SCRATCH/arm.gate"
 
 # Fresh fixture pair, then the DOC's own fences do the driving.
 mk_kitcopy
@@ -402,10 +407,45 @@ t_run arm_env "$SCRATCH/arm.commit"
 t_run arm_env "$SCRATCH/arm.adopt"
 [ "$LAST_STATUS" = 0 ] && pass "the same adopt fence flips to 0 once the doors are resolved" ||
 	fail "the re-run fence exited $LAST_STATUS, expected 0"
-assert_status 0 "the doc-driven adoption ends at a green gate" -- \
-	sh -c "cd '$TARGET' && sh scripts/check.sh"
+t_run arm_env "$SCRATCH/arm.finish"
+[ "$LAST_STATUS" = 0 ] && pass "the doc's finishing-run commit fence records the clean exit's output" ||
+	fail "the finishing commit fence failed: $LAST_OUT"
+git -C "$TARGET" diff --quiet && git -C "$TARGET" diff --cached --quiet &&
+	pass "nothing uncommitted after the finishing commit — the branch is one reviewable unit" ||
+	fail "the finishing run's output sits uncommitted after E3"
+t_run arm_env "$SCRATCH/arm.gate"
+[ "$LAST_STATUS" = 0 ] && pass "the doc-driven adoption ends at a green gate (E4's own fence)" ||
+	fail "E4's gate fence exited $LAST_STATUS"
 [ "$(git -C "$TARGET" remote | wc -l | tr -d ' ')" = "0" ] &&
 	pass "no remote was added and nothing was pushed — propose-only held" ||
 	fail "the doc-driven flow touched a remote"
+
+# ---------------------------------------------------------------------------
+banner "H. The decline dance — the door closes, the swap-back holds the gate green"
+# ---------------------------------------------------------------------------
+# Declining the kit's skill while keeping yours at the name has no mechanical
+# expression in the classifier (the door closes only on absent or
+# byte-identical), so the arm documents a rename-for-the-duration flow. This
+# section proves that flow FINISHES: exit 0, then the swap-back commit, then
+# a green gate with references resolving against THEIR skill.
+mk_kitcopy
+mk_target
+t_write "$TARGET" ".claude/skills/prototype/SKILL.md" "their own spike skill
+"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their skill"
+t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$LAST_STATUS" = 3 ] && pass "their same-name skill parks the run" || fail "expected exit 3, got $LAST_STATUS"
+assert_out_has "COLLISION skill .claude/skills/prototype rename-or-decline"
+(cd "$TARGET" && mv .claude/skills/prototype .claude/skills/their-prototype-hold)
+assert_status 0 "renamed for the duration, the run finishes clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+(
+	cd "$TARGET" || exit 2
+	rm -rf .claude/skills/prototype
+	mv .claude/skills/their-prototype-hold .claude/skills/prototype
+	grep -v '/prototype' AGENTS.md >AGENTS.md.decline && mv AGENTS.md.decline AGENTS.md
+)
+assert_status 0 "after the swap-back, the gate is green — their skill stands in at the name" -- \
+	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
 t_done "adopt demo"
