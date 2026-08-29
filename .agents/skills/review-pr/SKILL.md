@@ -161,7 +161,7 @@ It must **NOT** receive the other six agents' findings, the implementation conve
 | Configuration | the environment/config schema | new/changed defaults, removed vars |
 | Security posture | the header/auth policy | any delta |
 | Agent-facing surface | prompts, tool descriptions, packaged skills | any prompt-surface delta |
-| Process & agent surfaces | `.claude/skills/`, `constitution/`, root and nested `AGENTS.md`, `.githooks/`, `scripts/` | skills, hooks, gates and standing instructions change how every future session behaves — same confirm treatment; an edited constitution rule with no spec reference is an unapproved policy change, not a docs tidy-up |
+| Process & agent surfaces | `.agents/skills/` (and its `.claude/skills/` symlink bridge), `constitution/`, root and nested `AGENTS.md`, `.githooks/`, `scripts/` | skills, hooks, gates and standing instructions change how every future session behaves — same confirm treatment; an edited constitution rule with no spec reference is an unapproved policy change, not a docs tidy-up |
 
 **Procedure:** run `scripts/behavior-delta.sh` for the grounded candidate list, read each candidate's diff hunk, then classify every behavior delta against the originating spec:
 

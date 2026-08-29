@@ -17,7 +17,7 @@
   From that moment the docs gate holds this file to the same standard as the
   root manual: every `code span` naming a repo path must resolve, every slash
   command in a code span must resolve to a skill directory under
-  `.claude/skills/`, and an article the root never references is reported as
+  `.agents/skills/`, and an article the root never references is reported as
   unreachable. Marks left unstamped fail the gate too — `.template` is the only
   exemption.
 

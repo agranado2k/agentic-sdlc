@@ -148,6 +148,15 @@ assert_status 0 "bootstrap --no-dogfood runs" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Without' 'A project with no surface yet.' </dev/null"
 
 assert_absent "$PROJ/.claude/skills/dogfood" "the skill directory is removed, like any kit-only file"
+assert_absent "$PROJ/.agents/skills/dogfood" "the canonical home is removed too — the decline strips both addresses"
+# A dangling symlink passes every -e based absence check, so the one failure
+# shape the neutral-home move added — canonical removed, bridge left dead —
+# gets its own link-aware pin.
+if [ -L "$PROJ/.claude/skills/dogfood" ]; then
+	fail "a dangling .claude/skills/dogfood symlink survived the decline"
+else
+	pass "no dangling symlink survives the decline"
+fi
 assert_absent "$PROJ/$ARTICLE" "the declaration article goes with it — it exists only to feed the skill"
 assert_file_lacks "$PROJ/AGENTS.md" "/dogfood" "the quick-reference row went with the skill"
 assert_no_mention "$PROJ" "/dogfood" "a command nothing ships is a dead row on the map"

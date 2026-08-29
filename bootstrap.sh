@@ -200,7 +200,7 @@ if [ "$ADOPT" = 1 ]; then
 			a_dog=no
 		fi
 	fi
-	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.claude/skills/dogfood/SKILL.md" ]; then
+	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.agents/skills/dogfood/SKILL.md" ]; then
 		echo "  note: /dogfood was requested but the kit clone does not carry it — skipping" >&2
 		a_dog=no
 	fi
@@ -320,22 +320,41 @@ if [ "$ADOPT" = 1 ]; then
 	a_exists "README.md" && a_keep "README.md" || a_stamp "templates/docs/README.md.template" "README.md"
 
 	# --- 4. skills: the kit's set, name collisions surfaced -----------------
-	for d in "$a_kit"/.claude/skills/*/; do
+	# Canonical home is the vendor-neutral .agents/skills/; .claude/skills/<s>
+	# is a committed per-skill symlink (the shape one harness's docs support).
+	# A collision is a NON-IDENTICAL occupant at EITHER address; identical
+	# content at the old address is our own earlier install (or a consumer's
+	# deliberate real copy) and stays silent. The symlink is laid
+	# scratch-then-move like every other copy.
+	a_link_skill() {
+		rm -f "$a_scratch/link.$$"
+		ln -s "../../.agents/skills/$1" "$a_scratch/link.$$" &&
+			mv "$a_scratch/link.$$" ".claude/skills/$1"
+	}
+	mkdir -p .claude/skills
+	for d in "$a_kit"/.agents/skills/*/; do
 		[ -d "$d" ] || continue
 		s=$(basename "$d")
 		[ "$s" = "dogfood" ] && [ "$a_dog" != yes ] && continue
-		if a_exists ".claude/skills/$s"; then
-			if diff -rq "$a_kit/.claude/skills/$s" ".claude/skills/$s" >/dev/null 2>&1; then
+		if a_exists ".agents/skills/$s"; then
+			if diff -rq "$a_kit/.agents/skills/$s" ".agents/skills/$s" >/dev/null 2>&1; then
 				: # our own earlier install — silent on re-runs
+			else
+				a_hit skill ".agents/skills/$s" rename-or-decline
+			fi
+		elif a_exists ".claude/skills/$s" && [ ! -L ".claude/skills/$s" ]; then
+			if diff -rq "$a_kit/.agents/skills/$s" ".claude/skills/$s" >/dev/null 2>&1; then
+				: # identical real copy at the old address — theirs to keep
 			else
 				a_hit skill ".claude/skills/$s" rename-or-decline
 			fi
 		else
-			a_copy_dir ".claude/skills/$s" ".claude/skills/$s"
+			a_copy_dir ".agents/skills/$s" ".agents/skills/$s"
+			[ -L ".claude/skills/$s" ] || a_link_skill "$s"
 		fi
 	done
-	a_exists ".claude/skills/LICENSE-mattpocock-skills.md" ||
-		a_copy ".claude/skills/LICENSE-mattpocock-skills.md" ".claude/skills/LICENSE-mattpocock-skills.md"
+	a_exists ".agents/skills/LICENSE-mattpocock-skills.md" ||
+		a_copy ".agents/skills/LICENSE-mattpocock-skills.md" ".agents/skills/LICENSE-mattpocock-skills.md"
 
 	# --- 5. policy and local files: install only where absent ---------------
 	if ! a_exists "scripts/docs-conformance/config.mjs"; then
@@ -650,8 +669,8 @@ fi
 # pruned it before running bootstrap, stamping its rows anyway would hand the
 # project a manual whose own gate rejects it on the first push — so say what
 # happened and fall back to skipping.
-if [ "$dogfood_choice" = yes ] && [ ! -f .claude/skills/dogfood/SKILL.md ]; then
-	echo "  note: /dogfood was requested but .claude/skills/dogfood/ is not in this tree — skipping it" >&2
+if [ "$dogfood_choice" = yes ] && [ ! -f .agents/skills/dogfood/SKILL.md ]; then
+	echo "  note: /dogfood was requested but .agents/skills/dogfood/ is not in this tree — skipping it" >&2
 	dogfood_choice=no
 fi
 
@@ -816,8 +835,10 @@ fi
 # declaration `/dogfood` reads, so on its own it would be an unfilled template
 # nothing points at.
 if [ "$dogfood_choice" != yes ]; then
-	for f in .claude/skills/dogfood constitution/local-product.md.template; do
-		if [ -e "$f" ]; then
+	# -L as well as -e: once the canonical dir is gone, the .claude/skills
+	# symlink is dangling, and a bare -e follows it to "no".
+	for f in .agents/skills/dogfood .claude/skills/dogfood constitution/local-product.md.template; do
+		if [ -e "$f" ] || [ -L "$f" ]; then
 			rm -rf "$f"
 			echo "  removed $f (/dogfood not selected)"
 		fi
@@ -952,7 +973,7 @@ else
 	cat <<'EOF'
 
 /dogfood was NOT installed — it needs a runnable user-facing surface, and the
-default is to skip. Nothing is lost: copy .claude/skills/dogfood/ and
+default is to skip. Nothing is lost: copy .agents/skills/dogfood/ and
 constitution/local-product.md.template out of the kit on the day you have one,
 and add a row for it to AGENTS.md's quick reference.
 EOF

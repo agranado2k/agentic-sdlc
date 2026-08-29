@@ -490,7 +490,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.13.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.14.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -503,9 +503,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.13.0
+v0.14.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.13.0
+v0.1.0 -> v0.14.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -527,10 +527,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1391 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1461 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1527 insertions(+), 1 deletion(-)
+ 3 files changed, 1597 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -581,7 +581,7 @@ $ # step 5 — apply
   updated scripts/guards.lib.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
-  NOTE  UPDATING.md changed in v0.13.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.14.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -616,10 +616,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.13.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.14.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.13.0
-Part 1 complete — shared layer at v0.13.0. The update is not done: go to step 8.
+0.14.0
+Part 1 complete — shared layer at v0.14.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -647,7 +647,9 @@ edited a file that was not theirs to edit.
 # Part 2 — the parts that are yours
 
 Everything bootstrap stamped, installed or left behind is **yours**: the skills
-under `.claude/skills/`, `AGENTS.md` and the `constitution/local-*.md` articles,
+(canonical under `.agents/skills/` since 0.14.0, with `.claude/skills/`
+symlinks; a pre-0.14.0 project has real files at `.claude/skills/` and that
+stays legal), `AGENTS.md` and the `constitution/local-*.md` articles,
 the workflows under `.github/workflows/`, the config files, `README.md`, `docs/`,
 and `adapters/`.
 
@@ -716,7 +718,7 @@ One rule per category, because the categories differ in what a local edit
 
 | Category | Paths | The rule |
 | --- | --- | --- |
-| **Skills** (9a) | `.claude/skills/*/` | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
+| **Skills** (9a) | `.agents/skills/*/` (kit-side since 0.14.0; yours are wherever bootstrap put them) | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
 | **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
 | **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what the release changed and you have not customized; a template you deleted stays deleted |
 | **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) or read the diff (`.mjs`) — the new shared code may read a key you do not set |
@@ -781,16 +783,24 @@ here; the right one is **"what did the kit change, and did I change the same
 lines?"**
 
 ```sh
-S=.claude/skills/implement/SKILL.md
+S=.claude/skills/implement/SKILL.md          # YOURS — wherever your copy lives
+K=.agents/skills/implement/SKILL.md          # the KIT's — canonical since 0.14.0
 
-kit diff "$FROM_REF" "$TO_REF" -- "$S"       # what the KIT changed
+kit diff -M "$FROM_REF" "$TO_REF" -- "$S" "$K"   # what the KIT changed; -M pairs
+                                                 # the 0.14.0 home move as a rename
 kit show "$FROM_REF:$S" | diff -u - "$S"     # what YOU changed since bootstrap
 ```
+
+(Crossing the 0.14.0 boundary, the kit side of the diff is at `$K`; at older
+refs it was at `$S`. Listing both paths with `-M` gives one clean content
+diff either way. Your own copy's address never has to move — see the 0.14.0
+migration note below for making the move if you want it.)
 
 Four outcomes, and only one of them needs a human:
 
 - **kit clean, you clean** — nothing to do.
-- **kit changed, you clean** — take it: `kit_take "$TO_REF" "$S" "$S"`.
+- **kit changed, you clean** — take it: `kit_take "$TO_REF" "$K" "$S"` (the
+  kit-side path, written to yours).
 - **kit clean, you changed** — nothing to do. Your version stands.
 - **both changed** — merge; do not pick a side:
 
@@ -821,10 +831,19 @@ in a local article, not in the file the kit owns.
 points at it.**
 
 ```sh
-kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
+kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- \
+	.agents/skills .claude/skills | grep '^\.agents/skills/' || true
 
-kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
+kit archive "$TO_REF" .agents/skills/improve-codebase-architecture | tar -x
+ln -s ../../.agents/skills/improve-codebase-architecture \
+	.claude/skills/improve-codebase-architecture
 ```
+
+(`-M` over both homes pairs the 0.14.0 move as renames, so only genuinely new
+files print; the grep keeps the kit's `.claude/skills` symlink entries out of
+the list. The `ln -s` lays the bridge the harness that reads only
+`.claude/skills` needs — skip it if your project migrated and your gate policy
+names `.agents/skills`.)
 
 Then add its row to `AGENTS.md`'s quick reference **by hand**. That is not
 bookkeeping. The docs gate resolves every `/command` in the manual layer to a
@@ -1000,7 +1019,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.13.0 case for this file, and `ADD` is the 0.3.0 → 0.13.0
+`MERGE` is the 0.4.0 → 0.14.0 case for this file, and `ADD` is the 0.3.0 → 0.14.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1146,7 +1165,8 @@ and both are more than a directory.
 **Adopting `/dogfood` later** — you now have a runnable user-facing surface:
 
 ```sh
-kit archive "$TO_REF" .claude/skills/dogfood | tar -x
+kit archive "$TO_REF" .agents/skills/dogfood | tar -x
+ln -s ../../.agents/skills/dogfood .claude/skills/dogfood
 kit_take "$TO_REF" constitution/local-product.md.template \
 	constitution/local-product.md.template
 ```
@@ -1192,7 +1212,7 @@ quick-reference row, the paragraph that introduces it, and the article-layer
 pointer — and only then delete what they pointed at.
 
 ```sh
-rm -rf .claude/skills/dogfood
+rm -rf .agents/skills/dogfood .claude/skills/dogfood
 rm -f constitution/local-product.md constitution/local-product.md.template
 ```
 
@@ -1214,14 +1234,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.13.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.14.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.13.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.14.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -1237,20 +1257,63 @@ fixes all of it:
 ```console
 $ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
 $ cat "$WORK/changed.yours"
-.claude/skills/dogfood/SKILL.md
+.agents/skills/LICENSE-mattpocock-skills.md
+.agents/skills/diagnose/SKILL.md
+.agents/skills/diagnose/scripts/hitl-loop.template.sh
+.agents/skills/dogfood/SKILL.md
+.agents/skills/explain-diff/MICROWORLDS.md
+.agents/skills/explain-diff/SKILL.md
+.agents/skills/grill-me/SKILL.md
+.agents/skills/grill-with-docs/ADR-FORMAT.md
+.agents/skills/grill-with-docs/GLOSSARY-FORMAT.md
+.agents/skills/grill-with-docs/SKILL.md
+.agents/skills/implement/SKILL.md
+.agents/skills/improve-codebase-architecture/DEEPENING.md
+.agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
+.agents/skills/improve-codebase-architecture/LANGUAGE.md
+.agents/skills/improve-codebase-architecture/PRESENTING.md
+.agents/skills/improve-codebase-architecture/SKILL.md
+.agents/skills/merge-train/SKILL.md
+.agents/skills/pr-iterate/SKILL.md
+.agents/skills/prototype/SKILL.md
+.agents/skills/review-pr/SKILL.md
+.agents/skills/tdd/SKILL.md
+.agents/skills/tdd/deep-modules.md
+.agents/skills/tdd/interface-design.md
+.agents/skills/tdd/mocking.md
+.agents/skills/tdd/refactoring.md
+.agents/skills/tdd/tests.md
+.agents/skills/to-prd/SKILL.md
+.agents/skills/to-tickets/SKILL.md
+.agents/skills/worktree-cleanup/SKILL.md
+.claude/skills/LICENSE-mattpocock-skills.md
+.claude/skills/diagnose
+.claude/skills/dogfood
+.claude/skills/explain-diff
+.claude/skills/grill-me
+.claude/skills/grill-with-docs
+.claude/skills/implement
 .claude/skills/implement/SKILL.md
-.claude/skills/improve-codebase-architecture/DEEPENING.md
-.claude/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
-.claude/skills/improve-codebase-architecture/LANGUAGE.md
-.claude/skills/improve-codebase-architecture/PRESENTING.md
-.claude/skills/improve-codebase-architecture/SKILL.md
-.claude/skills/to-tickets/SKILL.md
+.claude/skills/improve-codebase-architecture
+.claude/skills/merge-train
+.claude/skills/pr-iterate
+.claude/skills/prototype
+.claude/skills/review-pr
+.claude/skills/tdd
+.claude/skills/to-prd
+.claude/skills/to-tickets
+.claude/skills/worktree-cleanup
+AGENTS.md
+EXCLUSIONS.md
+README.md
 VERSION
 adapters/claude-code/README.md
 constitution/AGENTS.md.template
+constitution/local-engineering.md.template
 constitution/local-product.md.template
 constitution/local-workflow.md.template
 scripts/agents.config.sh
+setup/agent-bootstrap.md
 templates/workflows/ai-review-prompt.md
 templates/workflows/ai-review.example.yml
 
@@ -1260,9 +1323,10 @@ dogfood
 improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
-$ kit diff --stat "$FROM_REF" "$TO_REF" -- "$S"
- .claude/skills/implement/SKILL.md | 20 ++++++++++++++++++++
- 1 file changed, 20 insertions(+)
+$ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$S" "$K"
+ .agents/skills/implement/SKILL.md | 60 +++++++++++++++++++++++++++++++++++++++
+ .claude/skills/implement/SKILL.md | 40 --------------------------
+ 2 files changed, 60 insertions(+), 40 deletions(-)
 $ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
@@ -1271,14 +1335,17 @@ $ # 9a — /to-tickets: BOTH changed. Three-way, not a copy.
 $ git merge-file "$T" "$WORK/base" "$WORK/theirs"
   merged clean — the kit's delta and our local note both survive
 
-$ kit diff --name-only --diff-filter=A "$FROM_REF" "$TO_REF" -- .claude/skills
-.claude/skills/dogfood/SKILL.md
-.claude/skills/improve-codebase-architecture/DEEPENING.md
-.claude/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
-.claude/skills/improve-codebase-architecture/LANGUAGE.md
-.claude/skills/improve-codebase-architecture/PRESENTING.md
-.claude/skills/improve-codebase-architecture/SKILL.md
-$ kit archive "$TO_REF" .claude/skills/improve-codebase-architecture | tar -x
+$ kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^.agents/skills/'
+.agents/skills/LICENSE-mattpocock-skills.md
+.agents/skills/dogfood/SKILL.md
+.agents/skills/implement/SKILL.md
+.agents/skills/improve-codebase-architecture/DEEPENING.md
+.agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
+.agents/skills/improve-codebase-architecture/LANGUAGE.md
+.agents/skills/improve-codebase-architecture/PRESENTING.md
+.agents/skills/improve-codebase-architecture/SKILL.md
+$ kit archive "$TO_REF" .agents/skills/improve-codebase-architecture | tar -x
+$ ln -s ../../.agents/skills/improve-codebase-architecture .claude/skills/improve-codebase-architecture
 $ sh scripts/check.sh   # still red from Part 1: the ARTICLE is here; the manual does not know
 FAIL  docs gate: violations found
 
@@ -1287,6 +1354,8 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .claude/skills/implement/SKILL.md [skill-path-missing] — references `adapters/claude-code/README.md` but neither it nor `adapters/claude-code/README.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .claude/skills/implement/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [skill-paths] ! .claude/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .claude/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
@@ -1305,11 +1374,12 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template         |  52 +++++++++++++
- constitution/local-product.md.template  | 103 +++++++++++++++++++++++++
- constitution/local-workflow.md.template |  43 +++++++++++
- constitution/shared-code-craft.md       | 129 ++++++++++++++++++++++++++++++++
- 4 files changed, 327 insertions(+)
+ constitution/AGENTS.md.template            |  58 ++++++++++++-
+ constitution/local-engineering.md.template |   2 +-
+ constitution/local-product.md.template     | 103 +++++++++++++++++++++++
+ constitution/local-workflow.md.template    |  43 ++++++++++
+ constitution/shared-code-craft.md          | 129 +++++++++++++++++++++++++++++
+ 5 files changed, 331 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
@@ -1323,7 +1393,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.13.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.14.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1342,12 +1412,12 @@ node-ts
 ruby
 
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.13.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.14.0, engine: harness)
 ```
 
 Six things in that transcript are worth reading twice.
 
-**`ADD     scripts/agents.config.sh is new at v0.13.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.14.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

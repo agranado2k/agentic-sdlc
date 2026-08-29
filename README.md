@@ -74,11 +74,11 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/shared-invariants.md` | The portable rulebook — eleven invariants that hold regardless of stack, domain, or vendor. **Shared layer:** copied verbatim, not edited locally. |
 | `constitution/shared-code-craft.md` | The portable rules for the code an agent writes — ten of them, from the smallest sufficient diff to diagrams drawn as SVG in HTML reports, never ASCII. **Shared layer** too. |
 | `constitution/AGENTS.md.template` | The root agent manual: hard rules, agent trust boundary, article-layer pointers, quick-reference map. Carries double-brace marks that bootstrap stamps. Becomes `AGENTS.md`; then it is yours. |
-| `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.claude/skills/LICENSE-mattpocock-skills.md`. |
+| `LICENSE` | MIT. The skills adapted from mattpocock/skills carry their upstream notice separately, in `.agents/skills/LICENSE-mattpocock-skills.md`. |
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
-| `.claude/skills/` | The skills — the lifecycle made runnable. All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `.agents/skills/` | The skills — the lifecycle made runnable, at the vendor-neutral home (`.claude/skills/` holds one committed symlink per skill for the harness that reads only that address). All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, the skill-web advisory (a warning when an installed skill references one you lack), and the skill-paths advisory (a dead path inside a skill body warns — version skew is a sanctioned mid-update state). Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
@@ -126,7 +126,7 @@ check is evaluated only where the manual exists, so the kit's own tree — which
 ships an `AGENTS.md.template` and no stamped files — stays silent.
 
 **The honest limit.** This buys you the *rules* in every agent tool, not the
-*commands*. The skills stay in `.claude/skills/` in one tool's slash-command
+*commands*. The skills live at `.agents/skills/` in the open Agent Skills
 format; a tool that does not read that directory gets the practice as prose from
 the manual and the articles, with no `/`-command to invoke it. Each `SKILL.md` is
 plain markdown, so pointing another tool at one by path works today — but porting
@@ -154,7 +154,7 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.claude/skills/` holds fifteen skills — the chain at the top of this README, made
+`.agents/skills/` holds fifteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
@@ -206,7 +206,7 @@ Three consequences worth stating plainly:
   What it never does is land it: shared invariant §7 puts a human's name on the
   merge, and driving the PR to green afterwards is `/pr-iterate`'s loop.
 - **The root manual's quick-reference is the index, and the gate enforces it.**
-  Every `/command` in `AGENTS.md` must resolve to `.claude/skills/<name>/SKILL.md`.
+  Every `/command` in `AGENTS.md` must resolve to a skill directory (`.agents/skills/<name>/SKILL.md`, reachable through its `.claude/skills` symlink too).
   Delete a skill you do not run and the gate makes you delete its row.
 - **`/review-pr` keeps both axes** (shared invariant §5). Axis 1's six standards
   sub-agents feed a severity report an agent may act on; Axis 2's seventh
@@ -225,7 +225,7 @@ kit-repo meta and bootstrap removes it, so your project starts that record
 empty rather than inheriting this one.
 
 Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpocock/skills)
-under MIT; `.claude/skills/LICENSE-mattpocock-skills.md` records which, what
+under MIT; `.agents/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
 records the eight that have **no** upstream — including `/dogfood`, checked
@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.13.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.14.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.13.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.14.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -569,7 +569,7 @@ built ticket-by-ticket by its own `/to-tickets` → `/implement` chain.
 
 MIT (`LICENSE`) — and additionally, for the six skills adapted from
 [mattpocock/skills](https://github.com/mattpocock/skills), the upstream MIT
-notice reproduced in `.claude/skills/LICENSE-mattpocock-skills.md`.
+notice reproduced in `.agents/skills/LICENSE-mattpocock-skills.md`.
 
 ## Working on the kit itself
 
@@ -660,7 +660,7 @@ origin.
   - [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) — six of
     the skills are adapted from it; the upstream notice and the
     per-skill provenance table live in
-    `.claude/skills/LICENSE-mattpocock-skills.md`.
+    `.agents/skills/LICENSE-mattpocock-skills.md`.
   - The talk ["A Workflow for AI Coding"](https://www.youtube.com/watch?v=-QFHIoCo-Ko)
     (AI Engineer 2026), with third-party walkthroughs by
     [Sean Weldon](https://www.sean-weldon.com/blog/2026-04-27-workflow-for-ai-coding-matt-pocock)

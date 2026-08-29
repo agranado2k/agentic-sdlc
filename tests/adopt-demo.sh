@@ -230,6 +230,14 @@ cmp -s "$SCRATCH/theirs/README.md" "$TARGET/README.md" &&
 	fail "the clean path overwrote their README"
 [ -f "$TARGET/.claude/skills/dogfood/SKILL.md" ] && pass "dogfood installed under --with-dogfood" ||
 	fail "--with-dogfood did not install the skill"
+# The adopt arm installs both addresses: canonical real files at the neutral
+# home, and the per-skill symlink bridge at the vendor-named one (issue #97).
+[ -f "$TARGET/.agents/skills/dogfood/SKILL.md" ] && [ ! -L "$TARGET/.agents/skills/dogfood" ] &&
+	pass "the adopt arm lays the canonical home as real files" ||
+	fail "the adopt arm did not install .agents/skills/dogfood as real files (issue #97)"
+[ -L "$TARGET/.claude/skills/dogfood" ] &&
+	pass "the adopt arm lays the per-skill symlink bridge" ||
+	fail "the adopt arm's .claude/skills/dogfood is not a symlink (issue #97)"
 assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" "docs/dogfood-reports/" \
 	"the exemption ships with the skill"
 assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" "markers consumed on the accept path too"

@@ -82,4 +82,4 @@ A PRD that spans more than one context window goes through `/to-tickets` before 
 
 ---
 
-*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.claude/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism.*
+*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism.*

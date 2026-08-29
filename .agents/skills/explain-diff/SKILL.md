@@ -130,5 +130,5 @@ that the explainer has no agenda.
 *Adapted from Geoffrey Litt's `explain-diff-html` skill
 ([gist](https://gist.github.com/geoffreylitt/a29df1b5f9865506e8952488eac3d524),
 no licence declared), shared in ["Understanding is the new bottleneck"](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)
-— see `.claude/skills/LICENSE-mattpocock-skills.md` for the provenance record
+— see `.agents/skills/LICENSE-mattpocock-skills.md` for the provenance record
 and the list of what this kit changed.*

@@ -158,7 +158,7 @@ if [ "$engine" = "fallback" ]; then
 	# Keep this list in step with `claudeMdRefs.pathRoots` in
 	# scripts/docs-conformance/config.mjs — two engines, one policy, and the
 	# duplication is the price of running without a runtime.
-	path_roots='constitution scripts docs tests adapters .githooks .github .claude'
+	path_roots='constitution scripts docs tests adapters .githooks .github .agents .claude'
 
 	scan_manual() {
 		manual=$1

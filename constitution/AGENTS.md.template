@@ -180,11 +180,15 @@ does. It is not a routine task — read it when `VERSION` needs to change.
 
 ## The chain
 
-The skills in `.claude/skills/` are the lifecycle above, made runnable. Each one
+The skills in `.agents/skills/` — the vendor-neutral home the Agent Skills
+ecosystem reads, bridged into `.claude/skills/` by committed per-skill
+symlinks — are the lifecycle above, made runnable. Each one
 is a whole document; read the one you are about to use, not all of them. They
 are **yours**: edit them, delete the ones you do not run, add your own.
 
-They are written in one agent tool's slash-command format (`.claude/skills/`).
+They are written in the Agent Skills open format; `.claude/skills/` holds
+one symlink per skill so the one harness that reads only that address still
+discovers them.
 A tool that does not read that directory still reads this manual and the
 articles — it simply gets the practice as prose, with no slash command to invoke
 it. Each `SKILL.md` is a plain markdown document, so pointing another tool at one
@@ -242,7 +246,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
-| Know where a skill came from        | `.claude/skills/LICENSE-mattpocock-skills.md`    |
+| Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Run the docs gate                   | `scripts/check.sh` — also runs on every push     |
 | See what the gate actually checks   | `scripts/docs-conformance/` — one validator per rule |
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — all policy is data there |
@@ -260,7 +264,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 > first; a missing row costs a search, a stale row costs a wrong action — and
 > the docs gate enforces the second half of that: every slash command named
 > anywhere in this manual must resolve to a skill directory under
-> `.claude/skills/`, each holding its own `SKILL.md`.
+> `.agents/skills/`, each holding its own `SKILL.md`.
 
 ## Precedence
 

@@ -40,7 +40,7 @@ The product is the framework, so almost none of it is application code:
   no package manager. It is the full docs gate; `scripts/check.sh` falls back to
   a reduced POSIX form when node is absent, and says so.
 - **Markdown that is executable in practice** — the constitution articles, the
-  skills under `.claude/skills/`, and the stampable sources under
+  skills under `.agents/skills/`, and the stampable sources under
   `constitution/` and `templates/`. An agent obeys these, so a stale line here
   is a defect, not a typo.
 
@@ -244,7 +244,9 @@ and rule 3 above is when you owe it an entry.
 
 ## The chain
 
-The skills in `.claude/skills/` are the lifecycle above, made runnable. Each one
+The skills in `.agents/skills/` — the vendor-neutral home, bridged into
+`.claude/skills/` by committed per-skill symlinks — are the lifecycle above,
+made runnable. Each one
 is a whole document; read the one you are about to use, not all of them. They
 ship to consumers unstamped, so they must read correctly in a repo nobody
 personalized — which is exactly why editing one is a kit change with a suite
@@ -292,7 +294,7 @@ answers produce a clean project.
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
-| Know where a skill came from        | `.claude/skills/LICENSE-mattpocock-skills.md`    |
+| Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Run the docs gate on this repo      | `scripts/check.sh` — also runs on every push     |
 | Run the whole suite                 | every script in `tests/`, e.g. `sh tests/kit-demo.sh` — the end-to-end bootstrap acceptance test |
 | Prove the kit keeps its own rules   | `tests/self-host.test.sh` — the root gate is green, and bootstrap still strips the kit's own files |
@@ -315,7 +317,7 @@ answers produce a clean project.
 Add a row per skill, script and gate this repo gains, and delete the row when
 you delete the thing. The gate enforces one half of that already: every slash
 command named anywhere in this manual must resolve to a skill directory under
-`.claude/skills/`, each holding its own `SKILL.md`.
+`.agents/skills/`, each holding its own `SKILL.md`.
 
 ## Precedence
 

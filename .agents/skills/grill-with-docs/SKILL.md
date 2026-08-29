@@ -90,4 +90,4 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 
 ---
 
-*Adapted from `engineering/grill-with-docs` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.claude/skills/LICENSE-mattpocock-skills.md`. Upstream keeps the ubiquitous language in a root `CONTEXT.md` and proposes its own ADR template; both sidecars were rewritten to point at the artifacts this kit establishes.*
+*Adapted from `engineering/grill-with-docs` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream keeps the ubiquitous language in a root `CONTEXT.md` and proposes its own ADR template; both sidecars were rewritten to point at the artifacts this kit establishes.*

@@ -222,6 +222,27 @@ grep -q '^\*\*Mutation decision\*\*:' constitution/local-engineering.md.template
 	pass "the engineering article template carries the mutation-decision anchor" ||
 	fail "the engineering article template has no mutation-decision anchor line (issue #85)"
 
+# The skills' neutral home (issue #97): canonical files live at
+# .agents/skills/ — the vendor-neutral address the Agent Skills ecosystem
+# reads — and .claude/skills/<name> is a committed per-skill symlink, the
+# shape one harness's docs support. Both addresses must work in a produced
+# project, or one family of tools goes blind.
+if [ -f .agents/skills/tdd/SKILL.md ] && [ ! -L .agents/skills/tdd ]; then
+	pass "the canonical skill home is real files at .agents/skills/"
+else
+	fail "no real skill at .agents/skills/tdd — the neutral home is missing (issue #97)"
+fi
+if [ -L .claude/skills/tdd ] && [ -f .claude/skills/tdd/SKILL.md ]; then
+	pass ".claude/skills/tdd is a symlink that resolves — the harness bridge holds"
+else
+	fail ".claude/skills/tdd is not a resolving symlink — the harness bridge is broken (issue #97)"
+fi
+if [ -L .claude/skills/dogfood ] && [ -f .agents/skills/dogfood/SKILL.md ]; then
+	pass "the accepted optional skill exists on both addresses"
+else
+	fail "the accepted optional skill is missing an address (issue #97)"
+fi
+
 grep -q "$PROJECT_NAME" AGENTS.md && pass "AGENTS.md carries the project name" ||
 	fail "AGENTS.md was not stamped with the project name"
 grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
@@ -233,7 +254,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.13.0"
+assert_out_has "shared-layer 0.14.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else

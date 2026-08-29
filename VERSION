@@ -262,7 +262,27 @@
 # says the same, and the stamped manual's chain section carries the
 # precondition in one harness-neutral sentence.
 
-shared-layer: 0.13.0
+# 0.14.0 — the skills' vendor-neutral home (#97, PRD #100). No file joined or
+# left the layer; two manifest-listed files changed content. UPDATING.md: the
+# recipe's kit-side skill paths follow the move below (the per-skill three-way
+# gains a yours/kit's split with a rename-aware diff, new-skill detection
+# spans both homes, the adopt fences lay the harness bridge), and the pinned
+# transcripts moved with it. scripts/check.sh: the reduced fallback's path
+# roots gain the new home. The skills themselves are name-manifested, not
+# byte-manifested, so the move itself is the wave's non-manifest half.
+#   NON-MANIFEST HALF, enumerated: every skill's canonical home is now
+# .agents/skills/ — the vendor-neutral address the Agent Skills ecosystem
+# reads — and .claude/skills/ holds one committed relative symlink per skill,
+# the per-skill-entry shape the one harness that reads only that address
+# documents and follows. bootstrap lays both sides in a fresh project, strips
+# both on a dogfood decline, and the adopt arm classifies skill collisions
+# against whichever address the target repo occupies. The gate's path roots
+# (your config.mjs) gain the new home; your skillsDir is yours and keeps
+# working at either address, since the gate reads through the symlinks. The
+# manual templates, README and setup payload name the canonical home. A
+# pre-0.14.0 project's real files at .claude/skills/ stay a legal permanent
+# state — the migration recipe arrives with this wave's later slices.
+shared-layer: 0.14.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
