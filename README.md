@@ -519,6 +519,15 @@ skeleton (K0).
   plan-first sentences. Then the referee proves itself non-vacuous: one broken
   fence, and the spine goes red.
 
+- `sh tests/adopt-demo.sh` referees the existing-repo adoption arm: a fixture
+  repo carrying one deliberate collision per class (their manual, their
+  memory, a name-colliding skill, their hook, a file at a shared-layer path)
+  is driven through `bootstrap.sh --adopt` — the safe set installs, five
+  stable `COLLISION` lines print, the run exits 3 resolving nothing, re-runs
+  are idempotent, and once every collision is resolved the same command flips
+  to 0, wires the hook, and leaves the adopted repo's own gate green with the
+  team's memory byte-identical throughout.
+
 - `sh tests/review-pr-output.test.sh` pins the `/review-pr` output contract as
   text, the way the delivery-contract suite pins `/implement`: the summary-first
   order (verdict, badge count table, clean-audits line before any finding), the
@@ -596,6 +605,7 @@ sh tests/ai-review-template.test.sh                    # the cross-provider revi
 sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
 sh tests/setup-demo.sh                                 # the one-line agent setup, from its own bytes
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
+sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
