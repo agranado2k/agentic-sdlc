@@ -758,3 +758,31 @@ test("stays silent about portability when the shared article does not exist", ()
   assert.deepEqual(out, []);
   cleanup(ctx);
 });
+
+test("a slash command resolves at the legacy skills address too — pre-move layouts stay legal", () => {
+  // The 0.14.0 home move: skillsDir points at .agents/skills, but a consumer
+  // whose skills still live at .claude/skills (staying put, or the adopt
+  // arm's identical-copy case) is a sanctioned permanent state, not a
+  // violation.
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const ctx = ctxFor({
+    "AGENTS.md": "Write it test-first with `/tdd`.\n",
+    "CLAUDE.md": SHIM,
+    "GEMINI.md": SHIM,
+    ".claude/skills/tdd/SKILL.md": "# tdd\n",
+  });
+  const out = run(ctx).filter((f) => f.rule === "skill-missing");
+  assert.deepEqual(out, []);
+  cleanup(ctx);
+});
+
+test("a command with a skill at neither address is still skill-missing", () => {
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const ctx = ctxFor({
+    "AGENTS.md": "Run `/ghost` for nothing.\n",
+    "CLAUDE.md": SHIM,
+    "GEMINI.md": SHIM,
+  });
+  assert.ok(hasRule(run(ctx), "skill-missing"));
+  cleanup(ctx);
+});

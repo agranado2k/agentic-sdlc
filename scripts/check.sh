@@ -217,8 +217,9 @@ if [ "$engine" = "fallback" ]; then
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), the" >&2
 	echo "        portability deny-list on the shared article, cross-skill references" >&2
 	echo "        (the skill-web advisory), path references inside skill bodies" >&2
-	echo "        (the skill-paths rule), and the engineering article's mutation" >&2
-	echo "        decision (the mutation-decision advisory)." >&2
+	echo "        (the skill-paths rule), the engineering article's mutation" >&2
+	echo "        decision (the mutation-decision advisory), and materialized" >&2
+	echo "        skill-bridge symlinks (the skill-bridge advisory)." >&2
 	echo "        Install node and re-run to get the full harness (scripts/docs-conformance)." >&2
 	echo "" >&2
 fi

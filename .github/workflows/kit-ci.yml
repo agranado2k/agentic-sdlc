@@ -203,7 +203,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # No node: the record is a document, and the check is a comparison
-      # between what it claims and what `.claude/skills/` actually contains.
+      # between what it claims and what `.agents/skills/` actually contains.
       # The reason it runs in CI rather than only locally is that it goes stale
       # by someone ADDING a skill — an action taken in a pull request that has
       # no reason to think about EXCLUSIONS.md at all.

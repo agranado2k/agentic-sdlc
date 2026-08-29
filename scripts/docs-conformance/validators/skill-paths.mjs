@@ -37,7 +37,7 @@ import { pathRefs, pathTokenRe } from "./claude-md-refs.mjs";
 
 export const id = "skill-paths";
 
-const DEFAULT_SKILLS_DIR = ".claude/skills";
+const DEFAULT_SKILLS_DIR = ".agents/skills";
 
 export function run(ctx) {
   const out = [];

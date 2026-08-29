@@ -51,7 +51,10 @@ export const id = "claude-md-refs";
 
 const DEFAULT_ROOT_MANUAL = "AGENTS.md";
 const DEFAULT_CONSTITUTION_DIR = ".claude/constitution";
-const DEFAULT_SKILLS_DIR = ".claude/skills";
+const DEFAULT_SKILLS_DIR = ".agents/skills";
+// The pre-0.14.0 skills address. Deliberately NOT configurable: it names one
+// historical layout, and a knob would invite pointing it somewhere new.
+export const LEGACY_SKILLS_DIR = ".claude/skills";
 
 // A shim's two legal line shapes. The import is the line the tool resolves; the
 // comment is an HTML comment, which renders as nothing and therefore cannot be
@@ -289,12 +292,17 @@ function checkOne(ctx, file, base, pathRe) {
 
   for (const name of [...commands].sort()) {
     if (ignore.has(`/${name}`)) continue;
-    if (!ctx.exists(`${skillsDir}/${name}/SKILL.md`)) {
+    // The LEGACY fallback mirrors skill-paths' .template rule: one resolution
+    // covers both sides of the 0.14.0 home move. A project whose skills still
+    // live at the pre-move address — staying put, or the adopt arm's
+    // identical-copy case — is a sanctioned permanent state, so a command
+    // resolves at the configured home OR the legacy one.
+    if (!ctx.exists(`${skillsDir}/${name}/SKILL.md`) && !ctx.exists(`${LEGACY_SKILLS_DIR}/${name}/SKILL.md`)) {
       out.push({
         validator: id,
         file,
         rule: "skill-missing",
-        message: `references \`/${name}\` but ${skillsDir}/${name}/SKILL.md does not exist`,
+        message: `references \`/${name}\` but ${skillsDir}/${name}/SKILL.md does not exist (nor at the legacy ${LEGACY_SKILLS_DIR})`,
         hint: "Create the skill, remove the reference, or add it to claudeMdRefs.ignoreCommands with a reason.",
       });
     }

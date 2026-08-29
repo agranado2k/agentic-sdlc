@@ -18,11 +18,11 @@
 // built-in (`/loop`) is not a skill for either validator, and one exemption
 // with one recorded reason should serve both.
 
-import { commandRefs } from "./claude-md-refs.mjs";
+import { commandRefs, LEGACY_SKILLS_DIR } from "./claude-md-refs.mjs";
 
 export const id = "skill-web";
 
-const DEFAULT_SKILLS_DIR = ".claude/skills";
+const DEFAULT_SKILLS_DIR = ".agents/skills";
 
 export function run(ctx) {
   const out = [];
@@ -38,6 +38,9 @@ export function run(ctx) {
     for (const ref of [...commandRefs(raw)].sort()) {
       if (ignore.has(`/${ref}`)) continue;
       if (ctx.exists(`${skillsDir}/${ref}/SKILL.md`)) continue;
+      // Same legacy fallback as skill-missing: a sibling still living at the
+      // pre-0.14.0 address is installed, not dangling.
+      if (ctx.exists(`${LEGACY_SKILLS_DIR}/${ref}/SKILL.md`)) continue;
       out.push({
         validator: id,
         severity: "warning",

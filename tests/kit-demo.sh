@@ -428,11 +428,17 @@ done
 # see this: resolving a command needs command-span parsing, which the POSIX
 # fallback deliberately does not do (it says so in its NOTICE).
 if [ "$HAVE_NODE" = 1 ]; then
-	mv .claude/skills/tdd "$SCRATCH/tdd.skill"
+	# BOTH addresses: since the legacy fallback, a skill present at either one
+	# resolves — which is the point — so only removing canonical AND bridge
+	# makes the row truly dead. (Moving just the symlink used to be enough,
+	# and the fallback correctly made that stop failing.)
+	mv .agents/skills/tdd "$SCRATCH/tdd.skill"
+	mv .claude/skills/tdd "$SCRATCH/tdd.bridge"
 	assert_status 1 "check.sh rejects the manual's now-dead /tdd row" -- sh scripts/check.sh
 	assert_out_has "skill-missing"
 	assert_out_has "/tdd"
-	mv "$SCRATCH/tdd.skill" .claude/skills/tdd
+	mv "$SCRATCH/tdd.skill" .agents/skills/tdd
+	mv "$SCRATCH/tdd.bridge" .claude/skills/tdd
 	assert_status 0 "check.sh is green again once the skill is back" -- sh scripts/check.sh
 else
 	skip "deleted-skill detection (no node)"

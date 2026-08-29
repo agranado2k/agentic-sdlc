@@ -461,9 +461,24 @@ manifest_skills() {
 }
 
 manifest_skills | sort >"$SCRATCH/skills.manifest"
-for d in "$KIT"/.claude/skills/*/; do
+for d in "$KIT"/.agents/skills/*/; do
 	basename "$d"
 done | sort >"$SCRATCH/skills.shipped"
+
+# The bridge holds, per skill: every canonical directory has a .claude/skills
+# symlink that resolves back to it, and no bridge entry is a stray real file.
+bridge_bad=""
+for d in "$KIT"/.agents/skills/*/; do
+	s=$(basename "$d")
+	if [ ! -L "$KIT/.claude/skills/$s" ] || [ ! -f "$KIT/.claude/skills/$s/SKILL.md" ]; then
+		bridge_bad="$bridge_bad $s"
+	fi
+done
+if [ -z "$bridge_bad" ]; then
+	pass "every canonical skill has a resolving .claude/skills symlink bridge"
+else
+	fail "bridge broken or missing for:$bridge_bad — the harness that reads only .claude/skills goes blind there"
+fi
 
 if [ ! -s "$SCRATCH/skills.manifest" ]; then
 	fail "VERSION has no skills: section — the skill set ships unversioned, and a consumer's update has no state to diff against"
@@ -475,7 +490,7 @@ else
 	elif [ -n "$unlisted" ]; then
 		fail "shipped but not manifest-listed: $(printf '%s' "$unlisted" | tr '\n' ' ')— invisible to every consumer's update, the exact gap the manifest closes"
 	else
-		pass "skills: in VERSION and .claude/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
+		pass "skills: in VERSION and .agents/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
 	fi
 
 	# First word only on BOTH sides: skills.manifest already holds first words,
