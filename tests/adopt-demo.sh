@@ -37,10 +37,18 @@ PROJECT_DESC="An existing repository adopting the kit."
 banner "A. Fixtures — a scratch kit clone, and a target with one collision per class"
 # ---------------------------------------------------------------------------
 KITCOPY="$SCRATCH/kit-clone"
-mkdir -p "$KITCOPY"
-cp -R "$KIT/." "$KITCOPY/"
-strip_nested_worktrees "$KIT" "$KITCOPY"
-rm -rf "$KITCOPY/.git"
+
+# mk_kitcopy — a fresh scratch kit clone; adopt self-deletes bootstrap on a
+# clean exit, so sections that need a live one rebuild it.
+mk_kitcopy() {
+	rm -rf "$KITCOPY"
+	mkdir -p "$KITCOPY"
+	cp -R "$KIT/." "$KITCOPY/"
+	strip_nested_worktrees "$KIT" "$KITCOPY"
+	rm -rf "$KITCOPY/.git"
+}
+
+mk_kitcopy
 [ -f "$KITCOPY/bootstrap.sh" ] && pass "the scratch kit clone carries bootstrap.sh" ||
 	fail "kit copy failed — nothing else can run"
 
@@ -211,8 +219,7 @@ assert_status 0 "the adopted repo's own gate is green" -- \
 # ---------------------------------------------------------------------------
 banner "E. A collision-free repo adopts in ONE run — and dogfood's yes works too"
 # ---------------------------------------------------------------------------
-rm -rf "$KITCOPY" && mkdir -p "$KITCOPY" && cp -R "$KIT/." "$KITCOPY/" &&
-	strip_nested_worktrees "$KIT" "$KITCOPY" && rm -rf "$KITCOPY/.git"
+mk_kitcopy
 mk_target
 assert_status 0 "a clean tree adopts fully, first run" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
@@ -232,8 +239,7 @@ assert_status 0 "the clean adoption's gate is green" -- \
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
 # ---------------------------------------------------------------------------
-rm -rf "$KITCOPY" && mkdir -p "$KITCOPY" && cp -R "$KIT/." "$KITCOPY/" &&
-	strip_nested_worktrees "$KIT" "$KITCOPY" && rm -rf "$KITCOPY/.git"
+mk_kitcopy
 mk_target
 assert_status 1 "adopt without a project name dies with usage, not a half-adoption" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood"
@@ -256,6 +262,64 @@ for bait in \
 		pass "the format probe rejects: $bait"
 	fi
 done
+
+# ---------------------------------------------------------------------------
+banner "F2. Review regressions — links, modes, and the flag flip (PR #84 findings)"
+# ---------------------------------------------------------------------------
+# H-1: a DANGLING symlink at a kit path is still THEIRS — presence tests that
+# use `[ -e ]` alone read it as absent, and a follow-through cp then writes
+# OUTSIDE the repo and exits 0. It must be a collision, and nothing may land
+# beyond the target's boundary.
+mk_kitcopy
+mk_target
+OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX")
+mkdir -p "$TARGET/scripts"
+ln -s "$OUTSIDE/stolen.sh" "$TARGET/scripts/check.sh"
+git -C "$TARGET" add -A 2>/dev/null || true
+assert_status 3 "a dangling symlink at a shared path is a collision, not an install" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION shared scripts/check.sh relocate"
+[ -e "$OUTSIDE/stolen.sh" ] &&
+	fail "adopt wrote THROUGH their symlink to a path outside the repo" ||
+	pass "nothing landed outside the target — the link was never followed"
+[ -L "$TARGET/scripts/check.sh" ] &&
+	pass "their symlink itself is untouched" ||
+	fail "adopt replaced their symlink without a yes"
+
+# M-2: their file MODES are theirs too — the clean exit must not chmod a
+# pre-existing 644 script into 755.
+mk_target
+t_write "$TARGET" "scripts/theirs.sh" "#!/bin/sh
+echo their tool
+"
+chmod 644 "$TARGET/scripts/theirs.sh"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their tool"
+assert_status 0 "a clean tree with their own script adopts fully" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+case "$(ls -l "$TARGET/scripts/theirs.sh")" in
+-rw-r--r--*) pass "their 644 script kept its mode through the clean exit" ;;
+*) fail "the clean exit changed their script's mode: $(ls -l "$TARGET/scripts/theirs.sh")" ;;
+esac
+[ -x "$TARGET/.githooks/pre-push" ] && pass "the kit's hook still arrived executable" ||
+	fail "the kit's hook lost its executable bit"
+
+# M-1: flipping the dogfood flag between runs, with the gate policy already
+# installed stripped, must SAY that the kept config lacks the exemption the
+# skill now needs — a silent contradiction is a latent gate warning.
+mk_kitcopy
+mk_target
+t_write "$TARGET" ".githooks/pre-push" "#!/bin/sh
+echo their hook
+"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their hook"
+t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$LAST_STATUS" = 3 ] && pass "first run parks on the hook collision" || fail "expected exit 3, got $LAST_STATUS"
+t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "kept scripts/docs-conformance/config.mjs"
+case "$LAST_OUT" in
+*"docs/dogfood-reports/"*) pass "the flag flip names the exemption the kept config now lacks" ;;
+*) fail "the dogfood flag flipped against a kept config and nothing said so — a latent gate warning ships silently" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "G. The payload document's existing-repo arm — its own fences drive the flow"
@@ -302,8 +366,7 @@ take_g '^sh "\\$KIT_CLONE/bootstrap' "$SCRATCH/arm.adopt"
 take_g '^git add -A' "$SCRATCH/arm.commit"
 
 # Fresh fixture pair, then the DOC's own fences do the driving.
-rm -rf "$KITCOPY" && mkdir -p "$KITCOPY" && cp -R "$KIT/." "$KITCOPY/" &&
-	strip_nested_worktrees "$KIT" "$KITCOPY" && rm -rf "$KITCOPY/.git"
+mk_kitcopy
 mk_target
 t_write "$TARGET" "AGENTS.md" "# Their rules
 "

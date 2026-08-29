@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f30-adopt-mode` — wave #81 (#82 adopt mode + #83 payload arm, PR #84 + stacked). |
+| **Active worktrees** | `worktree/f30-adopt-mode` — wave #81 (#82 + #83, both in PR #84 — see its process disclosure). |
 
 ### Open questions / unresolved decisions
 
