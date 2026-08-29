@@ -239,8 +239,12 @@
 # records no mutation decision prints a warning, never a failure, because the
 # article is consumer-owned prose and version skew is a sanctioned state;
 # promotion to a violation is a named future path, alongside skill-web's and
-# skill-paths'. UPDATING.md's Part 2 transcript moved with the wave (the
-# adapters listing gained a line, and the pinned versions advanced).
+# skill-paths'. One manifest-listed file changed content with it:
+# validators/claude-md-refs.mjs now EXPORTS its fence-stripper, so the new
+# validator reads quoted material by the gate's one definition of it.
+# UPDATING.md's transcripts moved with the wave (the adapters listing gained
+# a line, the manifest lists gained the validator, and the pinned versions
+# advanced).
 #   NON-MANIFEST HALF, enumerated: the engineering article template replaces
 # its bare mutation-tool blank with a labeled anchor line — "Mutation
 # decision:", filled in one of exactly two honest forms, a tool plus its

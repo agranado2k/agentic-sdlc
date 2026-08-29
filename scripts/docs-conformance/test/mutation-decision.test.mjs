@@ -47,6 +47,59 @@ test("a label with nothing after it is not a decision", () => {
   cleanup(ctx);
 });
 
+test("an empty label mid-document is not a decision — the match must not cross the line break", () => {
+  // The realistic shape: the anchor line sits above further sections, so a
+  // regex whose whitespace class eats the newline would read the next
+  // heading's first character as the decision (found by the independent
+  // review of this wave, by executing the module).
+  const ctx = ctxFor({
+    "constitution/local-engineering.md":
+      "# Engineering\n\n**Mutation decision**:\n\n## Code review\n\nWords.\n",
+  });
+  assert.ok(hasRule(run(ctx), "mutation-decision-missing"));
+  cleanup(ctx);
+});
+
+test("CRLF line endings: an empty label still warns, a filled one is still silent", () => {
+  const empty = ctxFor({
+    "constitution/local-engineering.md": "# E\r\n\r\n**Mutation decision**:\r\nNext line.\r\n",
+  });
+  assert.ok(hasRule(run(empty), "mutation-decision-missing"));
+  cleanup(empty);
+  const filled = ctxFor({
+    "constitution/local-engineering.md": "# E\r\n\r\n**Mutation decision**: mutant — on demand.\r\n",
+  });
+  assert.deepEqual(run(filled), []);
+  cleanup(filled);
+});
+
+test("a label only inside a fenced code block is quoted material, not a decision", () => {
+  const ctx = ctxFor({
+    "constitution/local-engineering.md": [
+      "# Engineering",
+      "",
+      "```md",
+      "**Mutation decision**: the convention, quoted as an example.",
+      "```",
+      "",
+      "No decision of our own.",
+      "",
+    ].join("\n"),
+  });
+  assert.ok(hasRule(run(ctx), "mutation-decision-missing"));
+  cleanup(ctx);
+});
+
+test("the mutationDecision.article override points the rule at a different file", () => {
+  // configWith only spreads claudeMdRefs, so build the config literally.
+  const cfg = { ...defaultConfig, mutationDecision: { article: "docs/eng.md" } };
+  const ctx = ctxFor({ "docs/eng.md": SILENT }, cfg);
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].file, "docs/eng.md");
+  cleanup(ctx);
+});
+
 test("no stamped article, no finding — the templates-stamped rule owns that state", () => {
   // The mark is spelled from parts: a literal one outside a .template is
   // itself a gate violation, and this test file is not a template.

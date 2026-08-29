@@ -21,9 +21,17 @@
 // state belongs to the templates-stamped and article-reachability rules, not
 // to this one.
 
+import { stripFences } from "./claude-md-refs.mjs";
+
 export const id = "mutation-decision";
 
-const ANCHOR_RE = /^\*\*Mutation decision\*\*:\s*\S/m;
+// [^\S\n]* — horizontal whitespace only. A bare \s* would eat the line break
+// and read the NEXT line's first character as the decision, silently
+// accepting an empty label above further sections (found by the independent
+// review of this wave, by executing the module). \r before a CRLF break is
+// harmless either way: the class can consume it, but \S never matches the
+// \n that follows.
+const ANCHOR_RE = /^\*\*Mutation decision\*\*:[^\S\n]*\S/m;
 
 export function run(ctx) {
   const refsCfg = ctx.config.claudeMdRefs ?? {};
@@ -33,7 +41,9 @@ export function run(ctx) {
 
   if (!ctx.exists(article)) return [];
   const raw = ctx.read(article);
-  if (raw == null || ANCHOR_RE.test(raw)) return [];
+  // Fences are stripped first: an article QUOTING the anchor convention in a
+  // code block has not made the decision.
+  if (raw == null || ANCHOR_RE.test(stripFences(raw))) return [];
 
   return [
     {
