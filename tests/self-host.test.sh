@@ -502,4 +502,19 @@ else
 	fail "VERSION's $version_now note is missing or has no 'NON-MANIFEST HALF' enumeration — the recipe's Part 2 has nothing to point a consumer at"
 fi
 
+# …and the check is not vacuous: the same awk over a copy whose marker is
+# rewritten must fail (the C4f/C4h bait convention — a green-on-arrival check
+# earns its keep by proving it can go red).
+sed 's/NON-MANIFEST HALF/nonmanifest part/' "$KIT/VERSION" >"$SCRATCH/version.f5bait"
+if awk -v v="$version_now" '
+	$0 ~ ("^# " v " — ") { innote = 1 }
+	innote && /NON-MANIFEST HALF/ { hit = 1 }
+	/^shared-layer:/ { innote = 0 }
+	END { exit !hit }
+' "$SCRATCH/version.f5bait"; then
+	fail "F5's pattern passed a note whose enumeration marker was rewritten — the check is vacuous"
+else
+	pass "F5's pattern fails when the enumeration marker is absent"
+fi
+
 t_done "self-host"

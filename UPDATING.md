@@ -524,10 +524,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1358 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1362 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1494 insertions(+), 1 deletion(-)
+ 3 files changed, 1498 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -723,7 +723,9 @@ exactly what your project lacks. Step 8's `changed.yours` cannot promise that
 — a skill added before your `FROM_REF` is in no diff you will ever run, which
 is precisely how a real consumer lost a whole skill with a green gate. Only
 the newer ref's list is read, so a `FROM_REF` that predates the section does
-not matter.
+not matter — and a `TO_REF` that predates it makes the fence say so rather
+than print an empty gap list, because a silence that means "I could not look"
+must never read as "nothing is missing".
 
 ```sh
 kit show "${TO_REF}:VERSION" | awk '
@@ -734,6 +736,8 @@ kit show "${TO_REF}:VERSION" | awk '
 	/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
 	                { inlist = 0 }
 ' | sort >"$WORK/skills.manifest"
+[ -s "$WORK/skills.manifest" ] ||
+	echo "no skills: manifest at ${TO_REF} (pre-0.11.0 kit?) — the inventory cannot answer" >&2
 
 for d in .claude/skills/*/; do
 	[ -d "$d" ] || continue

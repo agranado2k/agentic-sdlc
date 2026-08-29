@@ -872,6 +872,8 @@ recipe2() {
 		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
 		                { inlist = 0 }
 	' | sort >"$WORK/skills.manifest"
+	[ -s "$WORK/skills.manifest" ] ||
+		echo "no skills: manifest at ${TO_REF} (pre-0.11.0 kit?) — the inventory cannot answer" >&2
 	for d in .claude/skills/*/; do
 		[ -d "$d" ] || continue
 		basename "$d"
@@ -1409,6 +1411,25 @@ if [ -s "$SCRATCH/9a-inventory.sh" ]; then
 		pass "the inventory is quiet about the skill the update just adopted"
 	fi
 fi
+# …and the block REFUSES rather than answering vacuously when the target ref
+# predates the manifest: `kit` is the block's one seam, so the bait stubs it
+# with a pre-0.11.0 VERSION (files: only, no skills:) and the block must say
+# it cannot answer — the same anti-silence rule 9d/C4g already keeps.
+if [ -s "$SCRATCH/9a-inventory.sh" ]; then
+	{
+		echo "WORK=$SCRATCH"
+		echo "TO_REF=v0.0.0"
+		echo 'kit() { printf "%s\n" "shared-layer: 0.1.0" "files:" "  UPDATING.md"; }'
+		cat "$SCRATCH/9a-inventory.sh"
+	} >"$SCRATCH/9a-premanifest-case.sh"
+	sh "$SCRATCH/9a-premanifest-case.sh" >"$SCRATCH/9a-premanifest.out" 2>&1
+	if grep -q "cannot answer" "$SCRATCH/9a-premanifest.out"; then
+		pass "the inventory refuses to answer about a ref with no skills: manifest"
+	else
+		fail "the inventory was silent on a pre-manifest ref — an empty gap list that means 'could not look'"
+	fi
+fi
+
 # The retroactive half: a consumer arriving from <=0.10.0 predates the
 # manifest, and the skill most likely to be silently absent is named by name,
 # wiring points included.
