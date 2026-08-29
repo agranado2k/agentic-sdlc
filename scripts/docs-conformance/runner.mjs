@@ -7,10 +7,13 @@
 // so they arrive as data, not as a rewrite.
 
 import * as claudeMdRefs from "./validators/claude-md-refs.mjs";
+import * as skillWeb from "./validators/skill-web.mjs";
 
-export const VALIDATORS = [claudeMdRefs];
+export const VALIDATORS = [claudeMdRefs, skillWeb];
 
-/** Run all validators against the context; returns a flat list of violations. */
+/** Run all validators against the context; returns a flat list of findings —
+ * violations and warnings alike. `index.mjs` splits them by severity; only it
+ * decides the exit code. */
 export function runAll(ctx) {
   const violations = [];
   for (const validator of VALIDATORS) {

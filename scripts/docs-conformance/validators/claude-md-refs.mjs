@@ -224,7 +224,7 @@ function stripFences(raw) {
  * violation can show both the reference and where it resolved to.
  */
 function extractRefs(raw, pathRe, base) {
-  const commands = new Set();
+  const commands = commandRefs(raw);
   const paths = new Map();
   for (const text of codeSpans(stripFences(raw))) {
     if (pathRe.test(text)) {
@@ -232,10 +232,22 @@ function extractRefs(raw, pathRe, base) {
     } else if (base && isPackageRelative(text)) {
       paths.set(text, `${base}/${text}`);
     }
+  }
+  return { commands, paths };
+}
+
+/**
+ * The slash-command extraction alone, exported so the skill-web validator
+ * reads references with the SAME grammar this manual validator uses — one
+ * definition of "what is a command reference", two consumers.
+ */
+export function commandRefs(raw) {
+  const commands = new Set();
+  for (const text of codeSpans(stripFences(raw))) {
     if (!COMMAND_SPAN.test(text)) continue;
     for (const m of text.matchAll(COMMAND_TOKEN)) commands.add(m[1]);
   }
-  return { commands, paths };
+  return commands;
 }
 
 function isPackageRelative(token) {

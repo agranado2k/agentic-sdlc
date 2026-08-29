@@ -189,8 +189,18 @@
 # explain-diff-appendix marker in the PR template. UPDATING.md moved with the
 # manifest: step 9a now OPENS with the inventory fence (manifest vs installed,
 # printed before any per-skill diff) and carries that retroactive note under
-# "Arriving from 0.10.0 or older". (This note grows with the wave's stacked
-# tickets; it is finished only at the v0.11.0 tag.)
+# "Arriving from 0.10.0 or older". The half-adopted STATE got its own detector:
+# scripts/docs-conformance/validators/skill-web.mjs joined the layer — it scans
+# installed skill bodies for references to skills that are not installed and
+# WARNS, never fails (declining a skill is a legal recorded state; the gate's
+# engine now separates advisories from violations, and the reduced POSIX form
+# says it cannot run this scan). It reads claudeMdRefs.ignoreCommands, so one
+# exemption list serves both validators — and that list gained two entries
+# ("/tmp" and "/codebase-design", both command-shaped quoted non-references in
+# the shipped skill prose). config.mjs is YOURS and is never overwritten, so
+# an updating consumer must take those two entries by hand at step 9d, or the
+# first gate run after the update warns on the kit's own skills. (This note grows with the wave's
+# stacked tickets; it is finished only at the v0.11.0 tag.)
 shared-layer: 0.11.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
@@ -220,6 +230,7 @@ files:
   scripts/docs-conformance/context.mjs
   scripts/docs-conformance/runner.mjs
   scripts/docs-conformance/validators/claude-md-refs.mjs
+  scripts/docs-conformance/validators/skill-web.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap
