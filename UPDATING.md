@@ -528,10 +528,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1460 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1514 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1596 insertions(+), 1 deletion(-)
+ 3 files changed, 1650 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -858,6 +858,60 @@ will ever find.
 
 **A removed skill** (`--diff-filter=D`) is the reverse: delete the directory and
 the row in the same commit, and let the gate catch the half you forgot.
+
+### 9a-bis. The 0.14.0 home move — optional, and reversible by not doing it
+
+At **0.14.0** the kit's own skills moved to `.agents/skills/`, the address the
+Agent Skills ecosystem reads, with one committed symlink per skill left at
+`.claude/skills/` so the harness that reads only that address still finds
+them. Your project's skills did not move: bootstrap put them where your
+release put them, and they are yours.
+
+**Staying put is a legal permanent state, not a debt.** A `/command` resolves
+at your configured skills directory *or* at `.claude/skills`, forever — the
+gate carries that fallback deliberately, so a project that never migrates
+never goes red for it, and never sees a warning about it either. Migrate only
+if you want the neutral address: a second agent tool in the room, or a
+contributor who looks for skills where the ecosystem documents them.
+
+If you do want it, this is the whole move. It relocates only what is still a
+real directory at the old address, laying the bridge as it goes, and it is
+safe to re-run — an interrupted migration is finished by running it again:
+
+```sh
+mkdir -p .agents/skills
+for d in .claude/skills/*/; do
+	[ -d "$d" ] || continue
+	s=$(basename "$d")
+	[ -L ".claude/skills/$s" ] && continue   # already bridged
+	[ -e ".agents/skills/$s" ] && continue   # already canonical
+	mv ".claude/skills/$s" ".agents/skills/$s"
+	ln -s "../../.agents/skills/$s" ".claude/skills/$s"
+done
+for f in .claude/skills/*.md; do
+	[ -f "$f" ] || continue
+	[ -L "$f" ] && continue
+	b=$(basename "$f")
+	[ -e ".agents/skills/$b" ] && continue
+	mv "$f" ".agents/skills/$b"
+	ln -s "../../.agents/skills/$b" ".claude/skills/$b"
+done
+sh scripts/check.sh
+```
+
+Two notes on what it does **not** do. It never touches a skill you already
+moved, and it never rewrites a symlink — so a half-migrated tree converges
+rather than tangling. And it leaves `claudeMdRefs.skillsDir` in your
+`scripts/docs-conformance/config.mjs` alone: that file is yours, both
+addresses resolve, and pointing it at `.agents/skills` is a one-word edit you
+can make whenever you like — or never.
+
+**On Windows, check the bridge survived the checkout.** A clone with
+`core.symlinks=false` materializes each link as a small text file holding its
+target, and the harness that reads `.claude/skills` then sees no skills at all
+— silently. The gate warns about exactly that shape (`skill-bridge-broken`);
+the fix is a checkout that supports symlinks, or working from WSL, which the
+kit's POSIX-sh gates already assume.
 
 ### 9b. The manual and the local articles — hunt for missing SECTIONS
 

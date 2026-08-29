@@ -289,7 +289,13 @@
 # working at either address, since the gate reads through the symlinks. The
 # manual templates, README and setup payload name the canonical home. A
 # pre-0.14.0 project's real files at .claude/skills/ stay a legal permanent
-# state — the migration recipe arrives with this wave's later slices.
+# state: a slash command resolves at your skillsDir OR at the legacy
+# address, forever, and nothing warns about it. UPDATING.md's step 9a-bis
+# carries the optional migration as one re-runnable fenced block (move the
+# real directories, lay the bridge, leave your skillsDir alone) plus the
+# Windows note the tripwire advisory backs; tests/docs-demo.sh C8 executes
+# that block against a genuine pre-move consumer, twice, and holds its end
+# state to what a fresh bootstrap produces.
 shared-layer: 0.14.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

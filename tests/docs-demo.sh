@@ -1519,6 +1519,73 @@ cp "$SCRATCH/manual.nodog" AGENTS.md
 rm -f constitution/local-product.md constitution/local-product.md.template
 assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
 
+banner "C8. The 0.14.0 migration — the document's own fence, executed"
+# The skills' home moved to `.agents/skills/` at 0.14.0, and this consumer is
+# the population the migration is FOR: bootstrapped long before the move, with
+# real skill directories at the old address. So the recipe's migration block is
+# extracted and RUN here, C4e-style — a migration nobody executes is a standing
+# instruction that rots, and this one is load-bearing for every existing
+# project. Its end state has to be the layout a fresh bootstrap produces.
+cd "$C3" || exit 2
+legacy_before=$(find .claude/skills -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+if [ "$legacy_before" -gt 0 ]; then
+	pass "the consumer is a genuine pre-move tree ($legacy_before real skill directories at the old address)"
+else
+	fail "the fixture has no legacy-layout skills — the migration below would prove nothing"
+fi
+
+assert_block '^mkdir -p \.agents/skills' "$SCRATCH/migrate.sh" \
+	"UPDATING.md's 0.14.0 migration block is extractable"
+if [ -s "$SCRATCH/migrate.sh" ]; then
+	if sh "$SCRATCH/migrate.sh" >"$SCRATCH/migrate.out" 2>&1; then
+		pass "the migration block runs clean on a pre-move consumer"
+	else
+		fail "the migration block exited non-zero"
+		sed 's/^/        | /' "$SCRATCH/migrate.out"
+	fi
+
+	# The end state is the layout bootstrap produces: real files canonical,
+	# a resolving symlink per skill at the old address, nothing left behind.
+	mig_bad=""
+	for d in .agents/skills/*/; do
+		[ -d "$d" ] || continue
+		s=$(basename "$d")
+		[ -L ".agents/skills/$s" ] && mig_bad="$mig_bad canonical-is-a-link:$s"
+		[ -L ".claude/skills/$s" ] && [ -f ".claude/skills/$s/SKILL.md" ] ||
+			mig_bad="$mig_bad no-bridge:$s"
+	done
+	if [ -z "$mig_bad" ]; then
+		pass "every migrated skill is real at the canonical home and bridged at the old one"
+	else
+		fail "the migration left a broken shape:$mig_bad"
+	fi
+	if find .claude/skills -mindepth 1 -maxdepth 1 -type d 2>/dev/null | grep -q .; then
+		fail "a real skill directory survived at the old address — the move did not complete"
+	else
+		pass "nothing real is left at the old address — only the bridge"
+	fi
+	assert_status 0 "the migrated consumer's gate is green" -- sh scripts/check.sh
+
+	# …and running it TWICE is a no-op, because a consumer who is interrupted
+	# mid-recipe re-runs the block rather than reasoning about what it did.
+	if sh "$SCRATCH/migrate.sh" >"$SCRATCH/migrate2.out" 2>&1; then
+		pass "the migration block is idempotent — a second run is a no-op"
+	else
+		fail "a second run of the migration block failed"
+		sed 's/^/        | /' "$SCRATCH/migrate2.out"
+	fi
+	assert_status 0 "the gate is still green after the second run" -- sh scripts/check.sh
+fi
+
+# The other half of the decision: STAYING PUT is legal, permanently. The
+# recipe has to say so — a migration that reads as mandatory turns a
+# sanctioned layout into a silent debt.
+if grep -qiF 'staying put' "$KIT/UPDATING.md"; then
+	pass "the recipe states that keeping the old address is a legal permanent state"
+else
+	fail "UPDATING.md never says staying put is legal — the migration reads as mandatory"
+fi
+
 # ###########################################################################
 # PART D — the worked examples in UPDATING.md are THIS run's output
 # ###########################################################################
