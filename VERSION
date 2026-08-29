@@ -195,13 +195,17 @@
 # WARNS, never fails (declining a skill is a legal recorded state; the gate's
 # engine now separates advisories from violations, and the reduced POSIX form
 # says it cannot run this scan). It reads claudeMdRefs.ignoreCommands, so one
-# exemption list serves both validators. scripts/agents.lib.sh also changed
-# content: the resolver's usage and unknown-tier messages no longer read a
-# module global a sourced config could reassign — the four tier names are
-# literals at every site, so the diagnostics can no longer disagree with the
-# check. No behavior change to resolution, exit codes, or stdout. (This note
-# grows with the wave's stacked tickets; it is finished only at the v0.11.0
-# tag.)
+# exemption list serves both validators — and that list gained two entries
+# ("/tmp" and "/codebase-design", both command-shaped quoted non-references in
+# the shipped skill prose). config.mjs is YOURS and is never overwritten, so
+# an updating consumer must take those two entries by hand at step 9d, or the
+# first gate run after the update warns on the kit's own skills.
+# scripts/agents.lib.sh also changed content: the resolver's usage and
+# unknown-tier messages no longer read a module global a sourced config could
+# reassign — the four tier names are literals at every site, so the
+# diagnostics can no longer disagree with the check. No behavior change to
+# resolution, exit codes, or stdout. (This note grows with the wave's stacked
+# tickets; it is finished only at the v0.11.0 tag.)
 shared-layer: 0.11.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
