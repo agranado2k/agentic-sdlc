@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.11.0 in flight (wave #70 — the v0.11.0 tag lands at the end of its merge train); the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.11.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f25-skills-manifest` (PR #75), `worktree/f26-manifest-recipe` (PR #76), `worktree/f27-skill-web` (PR #77), `worktree/f28-tiers-literal` (#74) — wave #70 stack. |
+| **Active worktrees** | None. The #70 skills-adoption wave landed as PRs #75/#76/#77/#78 and was tagged v0.11.0 (2026-08-29). |
 
 ### Open questions / unresolved decisions
 
