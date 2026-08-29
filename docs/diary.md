@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f30-adopt-mode` — wave #81 stack base (#82, adopt mode). |
+| **Active worktrees** | `worktree/f30-adopt-mode` — wave #81 (#82 adopt mode + #83 payload arm, PR #84 + stacked). |
 
 ### Open questions / unresolved decisions
 
@@ -529,3 +529,23 @@ byte-for-byte (self-host D held throughout). `tests/adopt-demo.sh` landed
 first, 40 failures RED, and drives the whole contract: five collision
 classes, byte-truth anchors on everything theirs, the flip to 0, the adopted
 repo's own gate green, format-probe baits. Zero shared-layer movement.
+
+## 2026-08-29 — f30 (second slice): the payload's existing-repo arm (issue #83, wave #81)
+
+The Which-arm pointer stops saying "not yet". The payload document gains the
+arm: this clone reframed as the scratch kit directory, one plan for the
+batch (E0), the dedicated adoption branch and the doc's own fenced adopt run
+(E1), then the doors — every COLLISION line resolved propose → approve →
+apply → commit, one at a time, with per-verb guidance (relocate never merges
+the shared layer; distill maps their manual's rules into the local articles
+and lets git history preserve the original; rename-or-decline makes a
+declined kit skill visible via the skill-web advisory; chain keeps their
+automation running until its own yes). Kept lines are explicitly not doors,
+with seeding as an optional proposal. E3 re-runs the same fence to 0; E4
+proves the gate and hands the keyboard back — never a push, same as the
+new-project arm.
+
+adopt-demo section G referees it the setup-demo way: the doc's promises
+pinned as text, and its own fences extracted and executed — branch, adopt
+(exit 3 on a colliding tree), commit, resolve, the same fence to 0, gate
+green, zero remotes. Landed RED (12 failures) before the arm was written.

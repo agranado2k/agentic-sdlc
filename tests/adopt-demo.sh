@@ -257,4 +257,92 @@ for bait in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "G. The payload document's existing-repo arm — its own fences drive the flow"
+# ---------------------------------------------------------------------------
+# #83: the Which-arm pointer stops saying "not yet" and becomes the arm. The
+# doc's promises are pinned as text, and its fenced steps are extracted and
+# EXECUTED (the setup-demo Part-D pattern): a doc whose own bytes cannot run
+# is a doc that drifted from the mode it documents.
+PAYLOAD="$KIT/setup/agent-bootstrap.md"
+
+assert_file_lacks "$PAYLOAD" "Not supported yet" "the arm exists now — 'yet' arrived"
+assert_file_has "$PAYLOAD" "one at a time" "per-collision approval is the arm's spine"
+assert_file_has "$PAYLOAD" "COLLISION" "the arm teaches the machine contract it consumes"
+assert_file_has "$PAYLOAD" "Exit code 3" "pending is a documented state, not a surprise"
+assert_file_has "$PAYLOAD" "never push" "propose-only, same as the new-project arm"
+assert_file_has "$PAYLOAD" "distill" "the marquee collision has its walkthrough"
+assert_file_lacks "$PAYLOAD" "issues/60" "the open-spec pointer retired with the spec"
+
+# take_g <first-line awk pattern> <dest> — first fenced sh block whose first
+# line matches; extraction to a fresh file, then refuse-to-be-vacuous.
+take_g() {
+	awk -v pat="$1" '
+		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
+		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
+		grab {
+			n++
+			if (n == 1 && $0 ~ pat) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$PAYLOAD" >"$SCRATCH/take_g.$$"
+	if [ -s "$SCRATCH/take_g.$$" ]; then
+		cat "$SCRATCH/take_g.$$" >"$2"
+		pass "extracted the arm's fence: $1"
+	else
+		: >"$2"
+		fail "no fenced block starting '$1' in the payload — the spine below cannot run"
+	fi
+}
+
+take_g '^git switch -c' "$SCRATCH/arm.branch"
+# The $ is doubled for awk -v (escape processing eats one) so the anchor stays
+# an anchor rather than becoming an end-of-line match mid-pattern.
+take_g '^sh "\\$KIT_CLONE/bootstrap' "$SCRATCH/arm.adopt"
+take_g '^git add -A' "$SCRATCH/arm.commit"
+
+# Fresh fixture pair, then the DOC's own fences do the driving.
+rm -rf "$KITCOPY" && mkdir -p "$KITCOPY" && cp -R "$KIT/." "$KITCOPY/" &&
+	strip_nested_worktrees "$KIT" "$KITCOPY" && rm -rf "$KITCOPY/.git"
+mk_target
+t_write "$TARGET" "AGENTS.md" "# Their rules
+"
+t_write "$TARGET" ".githooks/pre-push" "#!/bin/sh
+echo their hook
+"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their state"
+
+arm_env() {
+	{
+		echo "KIT_CLONE='$KITCOPY'"
+		echo "PROJECT_NAME='$PROJECT_NAME'"
+		echo "PROJECT_DESC='$PROJECT_DESC'"
+		echo "DOGFOOD_FLAG=--no-dogfood"
+		cat "$@"
+	} >"$SCRATCH/arm.run"
+	(cd "$TARGET" && sh "$SCRATCH/arm.run")
+}
+
+t_run arm_env "$SCRATCH/arm.branch" "$SCRATCH/arm.adopt"
+[ "$LAST_STATUS" = 3 ] && pass "the doc's own branch + adopt fences reach exit 3 on a colliding tree" ||
+	fail "the doc's fences exited $LAST_STATUS, expected 3"
+assert_out_has "COLLISION manual AGENTS.md distill"
+[ "$(git -C "$TARGET" branch --show-current)" = "chore/adopt-kit" ] &&
+	pass "adoption runs on the dedicated branch the doc creates" ||
+	fail "the branch fence did not land on the adoption branch"
+
+t_run arm_env "$SCRATCH/arm.commit"
+[ "$LAST_STATUS" = 0 ] && pass "the doc's commit fence records the safe set" ||
+	fail "the commit fence failed: $LAST_OUT"
+
+(cd "$TARGET" && mv AGENTS.md docs-legacy-rules.md && mv .githooks/pre-push .githooks/pre-push.local)
+t_run arm_env "$SCRATCH/arm.adopt"
+[ "$LAST_STATUS" = 0 ] && pass "the same adopt fence flips to 0 once the doors are resolved" ||
+	fail "the re-run fence exited $LAST_STATUS, expected 0"
+assert_status 0 "the doc-driven adoption ends at a green gate" -- \
+	sh -c "cd '$TARGET' && sh scripts/check.sh"
+[ "$(git -C "$TARGET" remote | wc -l | tr -d ' ')" = "0" ] &&
+	pass "no remote was added and nothing was pushed — propose-only held" ||
+	fail "the doc-driven flow touched a remote"
+
 t_done "adopt demo"
