@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { run } from "../validators/skill-bridge.mjs";
 import { cleanup, ctxFor, hasRule, makeFixture } from "./helpers.mjs";
@@ -59,7 +60,23 @@ test("no .claude/skills directory, no finding", () => {
 });
 
 test("the kit's own tree is silent — its bridges are real symlinks", () => {
-  const here = new URL(".", import.meta.url).pathname;
+  const here = dirname(fileURLToPath(import.meta.url));
   const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
   assert.deepEqual(run(ctx), []);
+});
+
+test("the hint names the canonical path repo-relatively, and only claims it is there when it is", () => {
+  const present = ctxFor({
+    ".agents/skills/tdd/SKILL.md": "# tdd\n",
+    ".claude/skills/tdd": TARGET,
+  });
+  const withSkill = run(present);
+  assert.match(withSkill[0].hint, /is intact at \.agents\/skills\/tdd\./);
+  cleanup(present);
+
+  // Both copies lost: the hint must not assert a file that is not there.
+  const absent = ctxFor({ ".claude/skills/tdd": TARGET });
+  const withoutSkill = run(absent);
+  assert.match(withoutSkill[0].hint, /should be at \.agents\/skills\/tdd\./);
+  cleanup(absent);
 });

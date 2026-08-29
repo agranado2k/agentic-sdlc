@@ -33,11 +33,30 @@ export function run(ctx) {
     let raw;
     try {
       raw = ctx.read(entry);
-    } catch {
-      continue; // a directory — a real skill dir or a resolving symlink
+    } catch (err) {
+      // EISDIR is the healthy shape (a real skill dir, or a symlink that
+      // resolves to one). Anything else — a permission error, say — must not
+      // be swallowed into a silent pass: report it rather than pretend the
+      // entry was fine.
+      if (err?.code === "EISDIR") continue;
+      out.push({
+        validator: id,
+        severity: "warning",
+        file: entry,
+        rule: "skill-bridge-unreadable",
+        message: `could not be read (${err?.code ?? "unknown error"}) — the bridge cannot be checked here`,
+        hint: "Fix the permissions or remove the entry; an unreadable bridge slot hides whether the harness can see this skill at all.",
+      });
+      continue;
     }
     if (raw == null) continue; // dangling symlink — the gate's path rules own that
     if (!MATERIALIZED_RE.test(raw)) continue; // ordinary file (a licence, a stray)
+    // The materialized text is relative to the LINK's directory; the hint
+    // below names a repo-relative path, so strip the climb. Never assert the
+    // canonical copy is there without looking — on a tree that lost both, a
+    // confident "it is intact at" would send the reader hunting for a file
+    // that does not exist.
+    const canonical = raw.trim().replace(/^(\.\.\/)+/, "");
     out.push({
       validator: id,
       severity: "warning",
@@ -45,7 +64,9 @@ export function run(ctx) {
       rule: "skill-bridge-broken",
       message:
         "is a regular file holding a symlink target — this checkout materialized the skill bridge, and the harness that reads only this address sees no skills",
-      hint: "Re-checkout with symlinks enabled (`git config core.symlinks true`, then restore the files) or work from an environment that supports them (the kit's gates already require POSIX sh — WSL on Windows). The skills themselves are intact at .agents/skills/.",
+      hint: `Re-checkout with symlinks enabled (\`git config core.symlinks true\`, then restore the files) or work from an environment that supports them (the kit's gates already require POSIX sh — WSL on Windows). The skill itself ${
+        ctx.exists(canonical) ? "is intact at" : "should be at"
+      } ${canonical}.`,
     });
   }
   return out;

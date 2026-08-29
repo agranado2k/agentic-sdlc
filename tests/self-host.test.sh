@@ -474,10 +474,30 @@ for d in "$KIT"/.agents/skills/*/; do
 		bridge_bad="$bridge_bad $s"
 	fi
 done
+# The licence is a FILE symlink, not a directory one, and bootstrap lays it
+# deliberately so an adopted tree matches a templated one — the directory
+# glob above would never see it.
+for f in "$KIT"/.agents/skills/*.md; do
+	[ -f "$f" ] || continue
+	b=$(basename "$f")
+	if [ ! -L "$KIT/.claude/skills/$b" ] || [ ! -f "$KIT/.claude/skills/$b" ]; then
+		bridge_bad="$bridge_bad $b"
+	fi
+done
 if [ -z "$bridge_bad" ]; then
-	pass "every canonical skill has a resolving .claude/skills symlink bridge"
+	pass "every canonical skill and sidecar has a resolving .claude/skills bridge"
 else
 	fail "bridge broken or missing for:$bridge_bad — the harness that reads only .claude/skills goes blind there"
+fi
+
+# …and the leg is not vacuous: the same test against a name that has no
+# bridge must report it. A condition that can only ever be true guards
+# nothing (the F5 convention, applied here).
+if [ ! -L "$KIT/.claude/skills/no-such-skill-bridge" ] ||
+	[ ! -f "$KIT/.claude/skills/no-such-skill-bridge/SKILL.md" ]; then
+	pass "the bridge test fails for a name with no bridge — it can go red"
+else
+	fail "the bridge test passed for a nonexistent bridge — the condition is vacuous"
 fi
 
 if [ ! -s "$SCRATCH/skills.manifest" ]; then

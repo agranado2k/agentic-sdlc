@@ -271,7 +271,13 @@
 # the gate that diagnoses it). The skill-reading validators' baked default
 # follows the canonical home, and slash-command resolution gains a LEGACY
 # fallback: a skill living only at the pre-move address still resolves, so
-# staying put stays green. Manifest-listed content changes: UPDATING.md: the
+# staying put stays green — and both the slash-command web and the skill-body
+# scan ENUMERATE both homes, so a tree that never moved keeps its full
+# coverage instead of silently dropping to zero. Manifest-listed content
+# changes, beyond the joining file: validators/claude-md-refs.mjs,
+# validators/skill-web.mjs, validators/skill-paths.mjs and
+# docs-conformance/runner.mjs (the flip, the fallback, the dual enumeration
+# and its registration), plus UPDATING.md: the
 # recipe's kit-side skill paths follow the move below (the per-skill three-way
 # gains a yours/kit's split with a rename-aware diff, new-skill detection
 # spans both homes, the adopt fences lay the harness bridge), and the pinned

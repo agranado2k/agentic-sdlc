@@ -302,7 +302,9 @@ function checkOne(ctx, file, base, pathRe) {
         validator: id,
         file,
         rule: "skill-missing",
-        message: `references \`/${name}\` but ${skillsDir}/${name}/SKILL.md does not exist (nor at the legacy ${LEGACY_SKILLS_DIR})`,
+        message: `references \`/${name}\` but ${skillsDir}/${name}/SKILL.md does not exist${
+          skillsDir === LEGACY_SKILLS_DIR ? "" : ` (nor at the legacy ${LEGACY_SKILLS_DIR})`
+        }`,
         hint: "Create the skill, remove the reference, or add it to claudeMdRefs.ignoreCommands with a reason.",
       });
     }
