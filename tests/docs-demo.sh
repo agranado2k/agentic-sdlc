@@ -1575,6 +1575,36 @@ if [ -s "$SCRATCH/migrate.sh" ]; then
 		sed 's/^/        | /' "$SCRATCH/migrate2.out"
 	fi
 	assert_status 0 "the gate is still green after the second run" -- sh scripts/check.sh
+
+	# The sidecar loop has its own bridge, and nothing above asserts it: the
+	# shape check walks directories only, so a licence or reference file
+	# would ride on whether the manual happened to name it.
+	side_bad=""
+	for f in .agents/skills/*.md; do
+		[ -f "$f" ] || continue
+		b=$(basename "$f")
+		[ -L ".claude/skills/$b" ] && [ -f ".claude/skills/$b" ] || side_bad="$side_bad $b"
+	done
+	if [ -z "$side_bad" ]; then
+		pass "migrated sidecar files are bridged too"
+	else
+		fail "sidecar bridge missing for:$side_bad — the second loop's link is unproven"
+	fi
+
+	# A half-migration made with cp instead of mv leaves TWO real copies and
+	# no bridge. The block cannot decide which one wins — but it must not
+	# skip in silence, or "re-run it and it converges" is false.
+	rm -rf .agents/skills/tdd .claude/skills/tdd
+	mkdir -p .claude/skills/tdd .agents/skills/tdd
+	printf '# tdd (theirs, at the old address)\n' >.claude/skills/tdd/SKILL.md
+	printf '# tdd (a copy they made canonical)\n' >.agents/skills/tdd/SKILL.md
+	sh "$SCRATCH/migrate.sh" >"$SCRATCH/migrate3.out" 2>&1
+	if grep -q 'tdd' "$SCRATCH/migrate3.out"; then
+		pass "a copy-style half-migration is reported, not skipped in silence"
+	else
+		fail "the block skipped a two-copy skill silently — the convergence claim is false"
+		sed 's/^/        | /' "$SCRATCH/migrate3.out"
+	fi
 fi
 
 # The other half of the decision: STAYING PUT is legal, permanently. The
@@ -1584,6 +1614,16 @@ if grep -qiF 'staying put' "$KIT/UPDATING.md"; then
 	pass "the recipe states that keeping the old address is a legal permanent state"
 else
 	fail "UPDATING.md never says staying put is legal — the migration reads as mandatory"
+fi
+
+# …and it BOUNDS that promise. The fallback covers SLASH COMMANDS; a literal
+# path reference is a violation with no fallback, and step 9b hands a
+# staying-put consumer a manual row naming the canonical path. Unbounded, the
+# promise walks them into a red gate the recipe told them could not happen.
+if grep -qF 'literal path' "$KIT/UPDATING.md"; then
+	pass "the recipe bounds the promise — literal paths are not covered by the command fallback"
+else
+	fail "UPDATING.md promises 'never red' without bounding it to command resolution (a 9b row naming the canonical path IS a violation for a staying-put tree)"
 fi
 
 # ###########################################################################

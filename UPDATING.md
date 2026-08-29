@@ -528,10 +528,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1520 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1546 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1656 insertions(+), 1 deletion(-)
+ 3 files changed, 1682 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -868,11 +868,22 @@ them. Your project's skills did not move: bootstrap put them where your
 release put them, and they are yours.
 
 **Staying put is a legal permanent state, not a debt.** A `/command` resolves
-at your configured skills directory *or* at `.claude/skills`, forever — the
-gate carries that fallback deliberately, so a project that never migrates
-never goes red for it, and never sees a warning about it either. Migrate only
-if you want the neutral address: a second agent tool in the room, or a
-contributor who looks for skills where the ecosystem documents them.
+at your configured skills directory *or* at `.claude/skills`, forever, and
+both addresses are scanned — the gate carries that fallback deliberately, so
+a project that never migrates keeps its full coverage, never goes red for the
+command web, and never sees a warning about it either. Migrate only if you
+want the neutral address: a second agent tool in the room, or a contributor
+who looks for skills where the ecosystem documents them.
+
+**One bound on that promise, and it bites at step 9b.** The fallback covers
+slash commands; a **literal path** written in your manual is checked against
+the filesystem with no fallback, and a dead one is a violation, not a
+warning. The kit's own manual template now writes that licence pointer as
+`.agents/skills/LICENSE-mattpocock-skills.md`. So if you stay put and take
+that row across at 9b verbatim, your next push fails on `path-missing` — take
+the row, then point it at the address your tree actually uses. Same rule as
+every other 9b take: the section is the thing you want, the path inside it is
+yours to fit.
 
 If you do want it, this is the whole move. It relocates only what is still a
 real directory at the old address, laying the bridge as it goes, and it is
@@ -883,8 +894,11 @@ mkdir -p .agents/skills
 for d in .claude/skills/*/; do
 	[ -d "$d" ] || continue
 	s=$(basename "$d")
-	[ -L ".claude/skills/$s" ] && continue   # already bridged
-	[ -e ".agents/skills/$s" ] && continue   # already canonical
+	[ -L ".claude/skills/$s" ] && continue   # already bridged — nothing to do
+	if [ -e ".agents/skills/$s" ]; then
+		echo "SKIPPED $s — it exists at BOTH addresses; delete the one you do not want, then re-run" >&2
+		continue
+	fi
 	mv ".claude/skills/$s" ".agents/skills/$s"
 	ln -s "../../.agents/skills/$s" ".claude/skills/$s"
 done
@@ -892,19 +906,31 @@ for f in .claude/skills/*.md; do
 	[ -f "$f" ] || continue
 	[ -L "$f" ] && continue
 	b=$(basename "$f")
-	[ -e ".agents/skills/$b" ] && continue
+	if [ -e ".agents/skills/$b" ]; then
+		echo "SKIPPED $b — it exists at BOTH addresses; delete the one you do not want, then re-run" >&2
+		continue
+	fi
 	mv "$f" ".agents/skills/$b"
 	ln -s "../../.agents/skills/$b" ".claude/skills/$b"
 done
 sh scripts/check.sh
 ```
 
-Two notes on what it does **not** do. It never touches a skill you already
-moved, and it never rewrites a symlink — so a half-migrated tree converges
-rather than tangling. And it leaves `claudeMdRefs.skillsDir` in your
-`scripts/docs-conformance/config.mjs` alone: that file is yours, both
-addresses resolve, and pointing it at `.agents/skills` is a one-word edit you
-can make whenever you like — or never.
+Three notes on what it does **not** do. It never rewrites a symlink, and it
+never moves a skill you already moved — so an interrupted run is finished by
+re-running it. It does **not** silently reconcile a skill that exists as a
+real directory at *both* addresses, which is what a `cp` instead of a `mv`
+leaves behind: it prints `SKIPPED` and leaves the choice to you, because
+which copy is the real one is not a question a recipe can answer. And it
+leaves `claudeMdRefs.skillsDir` in your `scripts/docs-conformance/config.mjs`
+alone: that file is yours, both addresses resolve, and pointing it at
+`.agents/skills` is a one-word edit you can make whenever you like — or
+never.
+
+It relocates every real directory under `.claude/skills/`, whether or not it
+holds a `SKILL.md`. That is deliberate: a notes folder you keep beside your
+skills stays reachable at both addresses afterwards, and a rule that inspected
+contents would strand exactly the files nobody remembers putting there.
 
 **On Windows, check the bridge survived the checkout.** A clone with
 `core.symlinks=false` materializes each link as a small text file holding its
