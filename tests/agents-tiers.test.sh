@@ -226,6 +226,60 @@ assert_err_has "reviewer"
 resolve ""
 [ "$R_STATUS" = 2 ] && pass "an empty tier exits 2" || fail "empty tier exited $R_STATUS, expected 2"
 
+# …and the four names in the MESSAGES cannot be reassigned out from under the
+# check. The accept-check is a literal `case` (0.6.0's fix), but a sourced
+# config used to be able to reassign the module global the usage and error
+# text read — so a sourcing caller whose config carried a stray assignment got
+# diagnostics naming tiers that do not exist, from a resolver whose check was
+# still correct. The message and the check must not be able to disagree: load
+# a config that tries exactly that, then ask for an unknown tier, and every
+# real name must still be on stderr.
+cat >"$SCRATCH/reassign.config.sh" <<'EOF'
+AGENT_TIERS='alpha beta'
+AGENT_TIER_IMPLEMENTER='model-for-implementing'
+EOF
+capture sh -c "
+	. '$LIB'
+	AGENTS_CONFIG='$SCRATCH/reassign.config.sh'
+	resolve_tier implementer >/dev/null 2>&1   # loads the config (memoized)
+	resolve_tier no-such-tier
+"
+[ "$R_STATUS" = 2 ] && pass "unknown tier still exits 2 after a reassigning config loaded" ||
+	fail "exited $R_STATUS, expected 2"
+for _name in planner implementer mechanical reviewer; do
+	case "$R_ERR_TEXT" in
+	*"$_name"*) pass "the closed-vocabulary message still names '$_name'" ;;
+	*) fail "after a config reassigned the old global, the message lost '$_name': the diagnostics lie while the check holds" ;;
+	esac
+done
+case "$R_ERR_TEXT" in
+*"alpha beta"*) fail "the message repeats the config's reassigned vocabulary — diagnostics follow the global, not the check" ;;
+*) pass "the config's fake vocabulary never reaches the message" ;;
+esac
+
+# The USAGE text is the other converted message site, and the comment binds
+# all three literal sites to move together — so it gets the same pin, or a
+# regression that reintroduces a variable feeding only the usage line would
+# pass every case above.
+capture sh -c "
+	. '$LIB'
+	AGENTS_CONFIG='$SCRATCH/reassign.config.sh'
+	resolve_tier implementer >/dev/null 2>&1   # loads the config (memoized)
+	resolve_tier
+"
+[ "$R_STATUS" = 2 ] && pass "no-argument usage still exits 2 after a reassigning config loaded" ||
+	fail "exited $R_STATUS, expected 2"
+for _name in planner implementer mechanical reviewer; do
+	case "$R_ERR_TEXT" in
+	*"$_name"*) pass "the usage text still names '$_name'" ;;
+	*) fail "after a config reassigned the old global, the usage text lost '$_name'" ;;
+	esac
+done
+case "$R_ERR_TEXT" in
+*"alpha beta"*) fail "the usage text repeats the config's reassigned vocabulary" ;;
+*) pass "the config's fake vocabulary never reaches the usage text" ;;
+esac
+
 # ---------------------------------------------------------------------------
 banner "Configured — every tier resolves to its mapped value"
 # ---------------------------------------------------------------------------
