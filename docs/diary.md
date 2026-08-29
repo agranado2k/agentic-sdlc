@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. PRD #79 landed as PR #80 and was tagged v0.12.0 (2026-08-29). |
+| **Active worktrees** | `worktree/f30-adopt-mode` — wave #81 (#82 + #83, both in PR #84 — see its process disclosure). |
 
 ### Open questions / unresolved decisions
 
@@ -504,3 +504,48 @@ on decline, which tests/dogfood-optin.test.sh promptly proved necessary.
 
 Shared layer 0.11.0 → 0.12.0 (validator joins files:), transcripts
 re-captured, D2/F5 held their ground automatically. Tag v0.12.0 at landing.
+
+## 2026-08-29 — f30: adopt mode (issue #82, wave #81)
+
+The existing-repo arm's first slice. `bootstrap.sh --adopt`, run from inside a
+target repository against the scratch kit clone, classifies every kit file
+per PRD #81's class table, installs the non-colliding set in one pass, prints
+one stable `COLLISION <class> <path> <verb>` line per conflict, and exits 3 —
+resolving nothing. Re-runs are idempotent (installed files compare equal and
+stay silent; the expected manual is stamped into scratch so a re-run never
+collides with its own earlier output), and once the agent's human-approved
+resolutions land, the same command flips to 0: manual stamped, shims written,
+hook wired — wiring happens only on the clean exit, so a parked adoption
+leaves the team's automation exactly as it found it — and bootstrap retires
+itself from the scratch clone.
+
+One design refinement against the grill table, disclosed in the PR: project
+memory present is a `kept` line, never a COLLISION — a verdict must be
+resolvable, and "your diary exists" never stops being true; the seeding
+proposal is #83's payload prose. The F13 block sits BEFORE the F12 strip and
+the idempotency refusals, which would otherwise read a target's own manual as
+"already bootstrapped"; everything below it is the new-project arm, untouched
+byte-for-byte (self-host D held throughout). `tests/adopt-demo.sh` landed
+first, 40 failures RED, and drives the whole contract: five collision
+classes, byte-truth anchors on everything theirs, the flip to 0, the adopted
+repo's own gate green, format-probe baits. Zero shared-layer movement.
+
+## 2026-08-29 — f30 (second slice): the payload's existing-repo arm (issue #83, wave #81)
+
+The Which-arm pointer stops saying "not yet". The payload document gains the
+arm: this clone reframed as the scratch kit directory, one plan for the
+batch (E0), the dedicated adoption branch and the doc's own fenced adopt run
+(E1), then the doors — every COLLISION line resolved propose → approve →
+apply → commit, one at a time, with per-verb guidance (relocate never merges
+the shared layer; distill maps their manual's rules into the local articles
+and lets git history preserve the original; rename-or-decline makes a
+declined kit skill visible via the skill-web advisory; chain keeps their
+automation running until its own yes). Kept lines are explicitly not doors,
+with seeding as an optional proposal. E3 re-runs the same fence to 0; E4
+proves the gate and hands the keyboard back — never a push, same as the
+new-project arm.
+
+adopt-demo section G referees it the setup-demo way: the doc's promises
+pinned as text, and its own fences extracted and executed — branch, adopt
+(exit 3 on a colliding tree), commit, resolve, the same fence to 0, gate
+green, zero remotes. Landed RED (12 failures) before the arm was written.

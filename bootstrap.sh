@@ -43,6 +43,35 @@ cb='}'
 # mark <NAME> — the placeholder as it appears in a template, e.g. PROJECT_NAME.
 mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
 
+# --- single-source constants both arms share --------------------------------
+# The new-project arm (F6/K4/K7 below) and the adopt arm (F13) write the same
+# bytes in several places. One definition each, or the two arms drift the day
+# one of them is edited alone.
+#
+# `|` as the sed delimiter, and the values are escaped for it plus `&` and `\`.
+esc() {
+	printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+}
+# The vocabulary file is JavaScript, and the name lands inside a double-quoted
+# string literal there. Escape for JS first, then for sed — in that order, or
+# the sed pass would escape the backslashes the JS pass just added.
+esc_js() {
+	printf '%s' "$1" | sed -e 's/["\\]/\\&/g'
+}
+# A shim's exact bytes: the gate's shim-invalid rule rejects anything else, so
+# there is exactly one writer.
+shim_body() {
+	printf '%s\n%s\n' "<!-- Shim: the agent manual is $MANUAL. Edit that file, not this one. -->" "@$MANUAL"
+}
+# The optional-skill marker filters, one pair per comment dialect: KEEP drops
+# only the scaffolding markers, STRIP drops the whole marked block.
+DOGFOOD_MD_KEEP='/<!-- DOGFOOD:BEGIN -->/d;/<!-- DOGFOOD:END -->/d'
+DOGFOOD_MD_STRIP='/<!-- DOGFOOD:BEGIN -->/,/<!-- DOGFOOD:END -->/d'
+DOGFOOD_JS_KEEP='/\/\/ DOGFOOD:BEGIN/d;/\/\/ DOGFOOD:END/d'
+DOGFOOD_JS_STRIP='/\/\/ DOGFOOD:BEGIN/,/\/\/ DOGFOOD:END/d'
+# The one question, asked by whichever arm runs.
+DOGFOOD_PROMPT='Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
+
 TEMPLATE="constitution/AGENTS.md.template"
 MANUAL="AGENTS.md"
 # The manual is ONE file. AGENTS.md is the filename the agent-tool ecosystem has
@@ -84,7 +113,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
 # script, adds its entry here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -98,6 +127,313 @@ KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test
 root=$(git rev-parse --show-toplevel 2>/dev/null) ||
 	die "not inside a git repository. Run \`git init\` (or clone from the template) first — bootstrap wires a git hook and has nothing to wire otherwise."
 cd "$root"
+
+# ============================================================================
+# F13 BEGIN — ADOPT MODE: the existing-repo arm (#82, PRD #81)
+# ----------------------------------------------------------------------------
+# `--adopt` runs FROM INSIDE a target repository, against the scratch kit
+# clone this script lives in. A script meeting a collision can only refuse or
+# clobber, so adopt mode does exactly and only what a script is good at:
+# CLASSIFY every kit file per the recorded per-class policy, INSTALL the
+# non-colliding set in one pass, and REPORT each conflict as one stable line —
+#
+#     COLLISION <class> <path> <verb>
+#
+# — resolving nothing itself. Exit 3 means "partial: collisions pending" (the
+# agent and the human resolve them per the payload document's existing-repo
+# arm, one approval at a time, then re-run this same command); exit 0 means
+# the tree was — or has become — clean, and the run completes exactly as the
+# new-project arm does: stamped manual, shims, hook wired, self-deletion.
+# Re-runs are idempotent: an installed file compares equal and stays silent.
+#
+# This block sits BEFORE the F12 strip and the idempotency refusals on
+# purpose: those checks read "AGENTS.md exists" as "already bootstrapped",
+# which is exactly wrong for a target repo whose manual is the adoption's
+# hardest collision. Everything below F13 END is the new-project arm,
+# untouched.
+ADOPT=0
+for a_arg in "$@"; do
+	[ "$a_arg" = "--adopt" ] && ADOPT=1
+done
+if [ "$ADOPT" = 1 ]; then
+	a_kit=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd) ||
+		die "cannot resolve the kit clone's own directory from $0"
+	[ -f "$a_kit/constitution/AGENTS.md.template" ] && [ -f "$a_kit/VERSION" ] ||
+		die "--adopt needs an UNSTAMPED kit clone beside the script — constitution/AGENTS.md.template or VERSION is missing next to $0"
+	[ "$a_kit" = "$root" ] &&
+		die "--adopt runs from inside the TARGET repository, against a kit clone elsewhere: cd <your repo> && sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+
+	# Arguments: same vocabulary as the new-project arm, parsed self-contained
+	# so an unknown flag dies instead of becoming a project name.
+	a_name="" a_desc="" a_have=0 a_dog=ask
+	for a_arg in "$@"; do
+		case "$a_arg" in
+		--adopt) ;;
+		--with-dogfood) a_dog=yes ;;
+		--no-dogfood) a_dog=no ;;
+		-*) die "unknown option '$a_arg' for --adopt. Supported: --with-dogfood, --no-dogfood." ;;
+		*)
+			if [ "$a_have" = 0 ]; then
+				a_name=$a_arg a_have=1
+			elif [ "$a_have" = 1 ]; then
+				a_desc=$a_arg a_have=2
+			else
+				die "too many arguments. Usage: sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+			fi
+			;;
+		esac
+	done
+	[ "$a_have" = 2 ] ||
+		die "usage: sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+	case "$a_name$a_desc" in
+	*'{{'* | *'}}'*) die "project name/description must not contain '{{' or '}}'." ;;
+	esac
+	if [ "$a_dog" = ask ]; then
+		if [ -t 0 ]; then
+			printf %s "$DOGFOOD_PROMPT"
+			read -r a_ans || a_ans=""
+			case "$a_ans" in
+			[Yy] | [Yy][Ee][Ss]) a_dog=yes ;;
+			*) a_dog=no ;;
+			esac
+		else
+			a_dog=no
+		fi
+	fi
+	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.claude/skills/dogfood/SKILL.md" ]; then
+		echo "  note: /dogfood was requested but the kit clone does not carry it — skipping" >&2
+		a_dog=no
+	fi
+
+	a_name_esc=$(esc "$a_name")
+	a_desc_esc=$(esc "$a_desc")
+	a_name_js_esc=$(esc "$(esc_js "$a_name")")
+	a_today_esc=$(esc "$(date +%Y-%m-%d)")
+	a_scratch=$(mktemp -d) || die "cannot create a scratch directory"
+	trap 'rm -rf "$a_scratch"' EXIT
+
+	a_collisions=0
+	a_hit() {
+		printf 'COLLISION %s %s %s\n' "$1" "$2" "$3"
+		a_collisions=$((a_collisions + 1))
+	}
+	# Presence, as OWNERSHIP: a symlink is theirs even when its destination is
+	# gone. `[ -e ]` alone reads a dangling link as an empty slot, and a copy
+	# into that slot writes THROUGH the link — outside the repo, on a clean
+	# exit. That is the one hole a classifier absolutely may not have.
+	a_exists() { [ -e "$1" ] || [ -L "$1" ]; }
+	# a_stamp <kit-relative template> <destination> — always via scratch: sed
+	# writes a temp file and the bytes move only once they exist (craft §11).
+	a_stamp() {
+		sed \
+			-e "s|$(mark PROJECT_NAME)|$a_name_esc|g" \
+			-e "s|$(mark PROJECT_DESCRIPTION)|$a_desc_esc|g" \
+			-e "s|$(mark BOOTSTRAP_DATE)|$a_today_esc|g" \
+			"$a_kit/$1" >"$a_scratch/stamp.$$" || die "stamping $1 failed"
+		mkdir -p "$(dirname "$2")"
+		mv "$a_scratch/stamp.$$" "$2"
+		echo "  stamped $2"
+	}
+	# Scratch-then-move, files and directories alike: mv replaces whatever name
+	# is at the destination (a link included) instead of writing through it —
+	# the same §11 posture a_stamp already keeps. The destinations are only
+	# ever absent slots (a_exists gated), so this is defense in depth, not the
+	# primary control.
+	a_copy() {
+		mkdir -p "$(dirname "$2")"
+		cp -p "$a_kit/$1" "$a_scratch/copy.$$" && mv "$a_scratch/copy.$$" "$2"
+		echo "  installed $2"
+	}
+	a_copy_dir() {
+		mkdir -p "$(dirname "$2")"
+		rm -rf "$a_scratch/dir.$$"
+		cp -Rp "$a_kit/$1" "$a_scratch/dir.$$" && mv "$a_scratch/dir.$$" "$2"
+		echo "  installed $2/"
+	}
+	# kept, and said so once per run: project memory and policy already in
+	# place is a fact, not a conflict — a verdict must be resolvable, and
+	# "your diary exists" never stops being true.
+	a_keep() { echo "  kept $1 (yours — never overwritten)"; }
+
+	# --- 1. the shared layer: byte-verbatim or a relocation proposal --------
+	# This awk is the manifest parser scripts/check.sh, UPDATING.md step 1 and
+	# two suites also carry — four twins by prior decision (a consumer's copy
+	# must parse VERSION with no other file in reach). Move them together.
+	a_manifest() {
+		awk '
+			/^files:/       { inlist = 1; next }
+			!inlist         { next }
+			/^[ \t]*#/      { next }
+			/^[ \t]*$/      { next }
+			/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
+			                { inlist = 0 }
+		' "$a_kit/VERSION"
+	}
+	for f in $(a_manifest) VERSION; do
+		if a_exists "$f"; then
+			cmp -s "$a_kit/$f" "$f" || a_hit shared "$f" relocate
+		else
+			a_copy "$f" "$f"
+		fi
+	done
+
+	# --- 2. the manual and its shims: one group, all or nothing -------------
+	# Stamp what the manual SHOULD be into scratch first, so a re-run that
+	# meets its own earlier output stays silent instead of colliding with it.
+	a_manual_pending=0
+	sed \
+		-e "s|$(mark PROJECT_NAME)|$a_name_esc|g" \
+		-e "s|$(mark PROJECT_DESCRIPTION)|$a_desc_esc|g" \
+		-e "$([ "$a_dog" = yes ] && printf '%s' "$DOGFOOD_MD_KEEP" || printf '%s' "$DOGFOOD_MD_STRIP")" \
+		"$a_kit/constitution/AGENTS.md.template" >"$a_scratch/manual.expected"
+	for shim in $SHIMS; do
+		shim_body >"$a_scratch/shim.$shim"
+	done
+	if a_exists "$MANUAL" && ! cmp -s "$a_scratch/manual.expected" "$MANUAL"; then
+		a_hit manual "$MANUAL" distill
+		a_manual_pending=1
+	fi
+	for shim in $SHIMS; do
+		if a_exists "$shim" && ! cmp -s "$a_scratch/shim.$shim" "$shim"; then
+			a_hit manual "$shim" distill
+			a_manual_pending=1
+		fi
+	done
+	if [ "$a_manual_pending" = 0 ]; then
+		if ! a_exists "$MANUAL"; then
+			mkdir -p "$(dirname "$MANUAL")" 2>/dev/null || true
+			mv "$a_scratch/manual.expected" "$MANUAL"
+			echo "  stamped $MANUAL"
+		fi
+		for shim in $SHIMS; do
+			a_exists "$shim" || { mv "$a_scratch/shim.$shim" "$shim"; echo "  wrote   $shim (shim -> $MANUAL)"; }
+		done
+	fi
+
+	# --- 3. project memory: install where absent, keep where present --------
+	a_exists "docs/diary.md" && a_keep "docs/diary.md" || a_stamp "templates/docs/diary.md.template" "docs/diary.md"
+	a_exists "docs/domain-glossary.md" && a_keep "docs/domain-glossary.md" || a_stamp "templates/docs/domain-glossary.md.template" "docs/domain-glossary.md"
+	a_exists "docs/adr/INDEX.md" && a_keep "docs/adr/INDEX.md" || a_stamp "templates/docs/adr/INDEX.md.template" "docs/adr/INDEX.md"
+	a_exists "docs/adr/NNNN-template.md" && a_keep "docs/adr/NNNN-template.md" || a_copy "templates/docs/adr/NNNN-template.md" "docs/adr/NNNN-template.md"
+	a_exists ".github/PULL_REQUEST_TEMPLATE.md" && a_keep ".github/PULL_REQUEST_TEMPLATE.md" || a_copy "templates/docs/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST_TEMPLATE.md"
+	# Their README is their front page; an adopted repo keeps it, always.
+	a_exists "README.md" && a_keep "README.md" || a_stamp "templates/docs/README.md.template" "README.md"
+
+	# --- 4. skills: the kit's set, name collisions surfaced -----------------
+	for d in "$a_kit"/.claude/skills/*/; do
+		[ -d "$d" ] || continue
+		s=$(basename "$d")
+		[ "$s" = "dogfood" ] && [ "$a_dog" != yes ] && continue
+		if a_exists ".claude/skills/$s"; then
+			if diff -rq "$a_kit/.claude/skills/$s" ".claude/skills/$s" >/dev/null 2>&1; then
+				: # our own earlier install — silent on re-runs
+			else
+				a_hit skill ".claude/skills/$s" rename-or-decline
+			fi
+		else
+			a_copy_dir ".claude/skills/$s" ".claude/skills/$s"
+		fi
+	done
+	a_exists ".claude/skills/LICENSE-mattpocock-skills.md" ||
+		a_copy ".claude/skills/LICENSE-mattpocock-skills.md" ".claude/skills/LICENSE-mattpocock-skills.md"
+
+	# --- 5. policy and local files: install only where absent ---------------
+	if ! a_exists "scripts/docs-conformance/config.mjs"; then
+		# The dogfood-marked exemption block travels with the skill, exactly
+		# as the new-project arm stamps it (both markers or neither; the kit's
+		# own copy always carries the pair).
+		sed \
+			-e "$([ "$a_dog" = yes ] && printf '%s' "$DOGFOOD_JS_KEEP" || printf '%s' "$DOGFOOD_JS_STRIP")" \
+			"$a_kit/scripts/docs-conformance/config.mjs" >"$a_scratch/config.mjs" ||
+			die "preparing the gate policy file failed"
+		mkdir -p scripts/docs-conformance
+		mv "$a_scratch/config.mjs" "scripts/docs-conformance/config.mjs"
+		echo "  installed scripts/docs-conformance/config.mjs"
+	else
+		a_keep "scripts/docs-conformance/config.mjs"
+		# A kept policy file plus a dogfood YES can contradict each other — the
+		# flag may have flipped between runs, or their config predates the
+		# exemption. The gate would only whisper about it later (a skill-path
+		# advisory on the skill's first report), so say it now, while the human
+		# is already approving things.
+		if [ "$a_dog" = yes ] && ! grep -q 'docs/dogfood-reports/' "scripts/docs-conformance/config.mjs"; then
+			echo "  note: config.mjs is yours and was kept, but it lacks the dogfood exemption the" >&2
+			echo "  note: skill needs — add \"docs/dogfood-reports/\" to skillPaths.exemptTokens by hand," >&2
+			echo "  note: or the gate will warn the day the first dogfood report is written." >&2
+		fi
+	fi
+	if ! a_exists "scripts/docs-conformance/local-vocabulary.mjs"; then
+		sed -e "s|$(mark PROJECT_NAME)|$a_name_js_esc|g" \
+			"$a_kit/scripts/docs-conformance/local-vocabulary.mjs.template" >"$a_scratch/vocab.mjs" ||
+			die "stamping the vocabulary failed"
+		mv "$a_scratch/vocab.mjs" "scripts/docs-conformance/local-vocabulary.mjs"
+		echo "  stamped scripts/docs-conformance/local-vocabulary.mjs"
+	else
+		a_keep "scripts/docs-conformance/local-vocabulary.mjs"
+	fi
+	for f in scripts/guards.config.sh scripts/agents.config.sh scripts/worktree-cleanup.sh \
+		scripts/docs-conformance/README.md \
+		constitution/local-engineering.md.template constitution/local-workflow.md.template; do
+		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
+	done
+	if [ "$a_dog" = yes ]; then
+		f=constitution/local-product.md.template
+		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
+	fi
+	for d in scripts/docs-conformance/test adapters; do
+		if a_exists "$d"; then
+			a_keep "$d/"
+		else
+			a_copy_dir "$d" "$d"
+		fi
+	done
+
+	# --- 6. automation: additive, with chaining proposals -------------------
+	for wf in "$a_kit"/templates/workflows/*; do
+		[ -e "$wf" ] || continue
+		dest=".github/workflows/$(basename "$wf")"
+		if a_exists "$dest"; then
+			cmp -s "$wf" "$dest" || a_hit workflow "$dest" chain
+		else
+			a_copy "templates/workflows/$(basename "$wf")" "$dest"
+		fi
+	done
+	if a_exists ".githooks/pre-push"; then
+		cmp -s "$a_kit/.githooks/pre-push" ".githooks/pre-push" ||
+			a_hit hook ".githooks/pre-push" chain
+	else
+		a_copy ".githooks/pre-push" ".githooks/pre-push"
+	fi
+	a_hookspath=$(git config core.hooksPath 2>/dev/null || true)
+	if [ -n "$a_hookspath" ] && [ "$a_hookspath" != ".githooks" ]; then
+		# Their config value can carry a space; the verdict token must not. The
+		# stable key IS the finding.
+		a_hit hook "core.hooksPath" chain
+	fi
+
+	# --- the verdict ---------------------------------------------------------
+	if [ "$a_collisions" -gt 0 ]; then
+		echo ""
+		echo "adopt: $a_collisions collision(s) pending — nothing above was resolved for you."
+		echo "adopt: resolve each with your human, one approval at a time (the payload document's"
+		echo "adopt: existing-repo arm is the walkthrough), then re-run this exact command."
+		exit 3
+	fi
+	# Clean: wire and finish exactly as the new-project arm would. The hook is
+	# wired only here, on the clean exit, so a parked adoption leaves the
+	# target's own automation exactly as it found it.
+	git config core.hooksPath .githooks
+	echo "  wired core.hooksPath -> .githooks"
+	# No chmod sweep: their files' modes are theirs (a 644 script of theirs must
+	# stay 644), and every kit file arrived through cp -p with its own mode.
+	echo ""
+	echo "adopt: complete. The gate is yours now — run: sh scripts/check.sh"
+	echo "adopt: the scratch kit clone at $a_kit can be deleted; its bootstrap has retired itself."
+	rm -f "$a_kit/bootstrap.sh"
+	exit 0
+fi
+# F13 END
+# ============================================================================
 
 # ============================================================================
 # F12 BEGIN — the kit's own bootstrapped state (#f12)
@@ -299,7 +635,7 @@ fi
 # import line and no rules, so there is nothing in them to be conditional about.
 if [ "$dogfood_choice" = ask ]; then
 	if [ -t 0 ]; then
-		printf 'Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
+		printf %s "$DOGFOOD_PROMPT"
 		read -r dogfood_answer || dogfood_answer=""
 		case "$dogfood_answer" in
 		[Yy] | [Yy][Ee][Ss]) dogfood_choice=yes ;;
@@ -324,9 +660,9 @@ fi
 # so a project never inherits scaffolding it did not ask about, and when the
 # skill is declined the lines between them go too.
 if [ "$dogfood_choice" = yes ]; then
-	dogfood_filter='/<!-- DOGFOOD:BEGIN -->/d;/<!-- DOGFOOD:END -->/d'
+	dogfood_filter=$DOGFOOD_MD_KEEP
 else
-	dogfood_filter='/<!-- DOGFOOD:BEGIN -->/,/<!-- DOGFOOD:END -->/d'
+	dogfood_filter=$DOGFOOD_MD_STRIP
 fi
 # F6 END
 # ============================================================================
@@ -338,16 +674,7 @@ case "$name$description" in
 esac
 
 # --- stamp ------------------------------------------------------------------
-# `|` as the sed delimiter, and the values are escaped for it plus `&` and `\`.
-esc() {
-	printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
-}
-# The vocabulary file is JavaScript, and the name lands inside a double-quoted
-# string literal there. Escape for JS first, then for sed — in that order, or
-# the sed pass would escape the backslashes the JS pass just added.
-esc_js() {
-	printf '%s' "$1" | sed -e 's/["\\]/\\&/g'
-}
+# esc/esc_js live at the top of the file — both arms stamp with them.
 name_esc=$(esc "$name")
 description_esc=$(esc "$description")
 name_js_esc=$(esc "$(esc_js "$name")")
@@ -375,10 +702,7 @@ echo "  stamped $MANUAL"
 # harness), so a shim that grows a second instruction fails the push rather than
 # quietly becoming a rival manual.
 for shim in $SHIMS; do
-	cat >"$shim" <<EOF
-<!-- Shim: the agent manual is $MANUAL. Edit that file, not this one. -->
-@$MANUAL
-EOF
+	shim_body >"$shim"
 	echo "  wrote   $shim (shim -> $MANUAL)"
 done
 # K7 END
@@ -517,10 +841,10 @@ if [ -f "$dogfood_cfg" ]; then
 	0) ;; # nothing to stamp — already consumed, or a consumer's own config
 	2)
 		if [ "$dogfood_choice" = yes ]; then
-			sed '/\/\/ DOGFOOD:BEGIN/d;/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+			sed "$DOGFOOD_JS_KEEP" "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
 				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
 		else
-			sed '/\/\/ DOGFOOD:BEGIN/,/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+			sed "$DOGFOOD_JS_STRIP" "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
 				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
 		fi
 		;;
