@@ -25,8 +25,8 @@ const CONFORMANT = {
   ].join("\n"),
   "CLAUDE.md": SHIM,
   "GEMINI.md": SHIM,
-  ".claude/skills/tdd/SKILL.md": "# tdd",
-  ".claude/skills/pr-iterate/SKILL.md": "# pr-iterate",
+  ".agents/skills/tdd/SKILL.md": "# tdd",
+  ".agents/skills/pr-iterate/SKILL.md": "# pr-iterate",
   "scripts/check.sh": "#!/bin/sh\n",
   ".githooks/pre-push": "sh scripts/check.sh\n",
 };
@@ -175,13 +175,15 @@ test("checks every /-token in a span that opens with a slash command", () => {
   cleanup(ctx);
 });
 
-test("checks .claude/skills and .claude/hooks literal path references", () => {
+test("checks skill and hook literal path references, at both skill roots", () => {
   const ctx = ctxFor({
     ...CONFORMANT,
+    ".claude/skills/legacy-note.md": "a file living at the pre-0.14.0 root\n",
     "AGENTS.md": [
       CONFORMANT["AGENTS.md"],
-      "The procedural skill is at `.claude/skills/tdd/SKILL.md`.",
-      "See also `.claude/skills/ghost/SKILL.md`.",
+      "The procedural skill is at `.agents/skills/tdd/SKILL.md`.",
+      "A note still at the old root: `.claude/skills/legacy-note.md`.",
+      "See also `.agents/skills/ghost/SKILL.md`.",
       "Enforcement lives in `.claude/hooks/tdd-guard.sh`.",
     ].join("\n"),
   });
@@ -769,7 +771,7 @@ test("a slash command resolves at the legacy skills address too — pre-move lay
     "AGENTS.md": "Write it test-first with `/tdd`.\n",
     "CLAUDE.md": SHIM,
     "GEMINI.md": SHIM,
-    ".claude/skills/tdd/SKILL.md": "# tdd\n",
+    ".agents/skills/tdd/SKILL.md": "# tdd\n",
   });
   const out = run(ctx).filter((f) => f.rule === "skill-missing");
   assert.deepEqual(out, []);

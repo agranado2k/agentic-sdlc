@@ -126,3 +126,47 @@ test("end to end: a dangling reference warns on stderr and the gate still exits 
   assert.match(res.stderr, /explain-diff/);
   assert.match(res.stdout, /OK {2}docs conformance/);
 });
+
+test("a skill living only at the legacy address is SCANNED, not just resolvable", () => {
+  // The flip's blind spot (found by the independent review of PR #105 by
+  // building the tree and running the validator): resolution learned about
+  // the legacy home, enumeration did not — so a staying-put tree got zero
+  // body coverage instead of the warnings it had before.
+  const ctx = ctxFor({
+    ".claude/skills/implement/SKILL.md": "# implement\nEnd by running `/explain-diff`.\n",
+  });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "skill-web-dangling"));
+  assert.equal(out[0].file, ".claude/skills/implement/SKILL.md");
+  cleanup(ctx);
+});
+
+test("a sibling installed only at the legacy address is not dangling", () => {
+  const ctx = ctxFor({
+    ".agents/skills/implement/SKILL.md": "# implement\nHand off to `/review-pr`.\n",
+    ".claude/skills/review-pr/SKILL.md": "# review-pr\n",
+  });
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
+
+test("a skill at BOTH addresses is scanned once, not twice", () => {
+  const body = "# implement\nEnd by running `/ghost-skill`.\n";
+  const ctx = ctxFor({
+    ".agents/skills/implement/SKILL.md": body,
+    ".claude/skills/implement/SKILL.md": body,
+  });
+  assert.equal(run(ctx).length, 1);
+  cleanup(ctx);
+});
+
+test("the baked default is the canonical home — a config that names no skillsDir still scans", () => {
+  // Every other fixture inherits defaultConfig, which sets skillsDir
+  // explicitly, so DEFAULT_SKILLS_DIR is unreachable under test without
+  // this case (mutation-proven by the same review).
+  const cfg = { ...defaultConfig, claudeMdRefs: { ...defaultConfig.claudeMdRefs, skillsDir: undefined } };
+  const ctx = ctxFor({ ".agents/skills/a/SKILL.md": "Run `/ghost` then stop.\n" }, cfg);
+  assert.ok(hasRule(run(ctx), "skill-web-dangling"));
+  cleanup(ctx);
+});

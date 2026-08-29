@@ -153,3 +153,18 @@ test("the kit's own skill interiors pass", () => {
   const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
   assert.deepEqual(run(ctx), []);
 });
+
+test("a skill body at the legacy address is scanned too — staying put keeps its coverage", () => {
+  const ctx = ctxFor({
+    ".claude/skills/a/SKILL.md": "Read `scripts/no-such-thing.sh` before starting.\n",
+  });
+  assert.ok(hasRule(run(ctx), "skill-path-missing"));
+  cleanup(ctx);
+});
+
+test("the baked default is the canonical home — a config naming no skillsDir still scans", () => {
+  const cfg = { ...defaultConfig, claudeMdRefs: { ...defaultConfig.claudeMdRefs, skillsDir: undefined } };
+  const ctx = ctxFor({ ".agents/skills/a/SKILL.md": "Read `scripts/no-such-thing.sh`.\n" }, cfg);
+  assert.ok(hasRule(run(ctx), "skill-path-missing"));
+  cleanup(ctx);
+});
