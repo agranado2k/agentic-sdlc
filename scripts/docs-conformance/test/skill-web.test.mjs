@@ -93,6 +93,28 @@ test("the kit's own skill web is complete", () => {
   assert.deepEqual(run(ctx), []);
 });
 
+test("warnings and violations together: both blocks print and the gate still fails", () => {
+  // The severity boundary's mixed case: an advisory must not swallow a real
+  // violation (the run fails), and a violation must not swallow the advisory
+  // (both blocks print). A regression that early-exits after either block
+  // passes the warn-only and violation-only tests and only this one.
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const root = makeFixture({
+    "AGENTS.md": "Run `/ghost-command` for nothing.\n",
+    "CLAUDE.md": SHIM,
+    "GEMINI.md": SHIM,
+    ".claude/skills/implement/SKILL.md": "End by appending the `/explain-diff` output.\n",
+  });
+  const res = spawnSync(process.execPath, [join(here, "..", "index.mjs"), root], {
+    encoding: "utf8",
+  });
+  assert.equal(res.status, 1, `expected exit 1, got ${res.status}\n${res.stderr}`);
+  assert.match(res.stderr, /WARN {2}docs conformance: advisories/);
+  assert.match(res.stderr, /skill-web-dangling/);
+  assert.match(res.stderr, /FAIL {2}docs conformance: violations found/);
+  assert.match(res.stderr, /skill-missing/);
+});
+
 test("end to end: a dangling reference warns on stderr and the gate still exits 0", () => {
   const { [".claude/skills/explain-diff/SKILL.md"]: _gone, ...half } = WEB;
   const root = makeFixture(half);
