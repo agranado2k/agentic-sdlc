@@ -326,10 +326,33 @@ if [ "$ADOPT" = 1 ]; then
 	# content at the old address is our own earlier install (or a consumer's
 	# deliberate real copy) and stays silent. The symlink is laid
 	# scratch-then-move like every other copy.
+	# A symlinked PARENT would route every write below through it — outside
+	# the repo, on a clean exit (the same hole the classifier's leaf checks
+	# close, one level up). Refuse before touching either side; this is a
+	# broken precondition, not a resolvable collision.
+	for a_parent in .claude .claude/skills .agents .agents/skills; do
+		[ -L "$a_parent" ] &&
+			die "adopt: $a_parent is a symlink — refusing to write through it. Make it a real directory (or remove the link) and re-run."
+	done
 	a_link_skill() {
 		rm -f "$a_scratch/link.$$"
 		ln -s "../../.agents/skills/$1" "$a_scratch/link.$$" &&
 			mv "$a_scratch/link.$$" ".claude/skills/$1"
+	}
+	# The bridge slot's states, classified: absent -> lay ours; our own link
+	# -> nothing to do; anything else (foreign or dangling link, a stray
+	# file) -> a collision at that address. Returns 0 when the canonical
+	# install may proceed. Their identical REAL directory is handled by the
+	# caller before this runs — that one is theirs to keep, bridge and all.
+	a_bridge() {
+		if [ -L ".claude/skills/$1" ]; then
+			[ "$(readlink ".claude/skills/$1")" = "../../.agents/skills/$1" ] && return 0
+			a_hit skill ".claude/skills/$1" rename-or-decline
+			return 1
+		elif a_exists ".claude/skills/$1"; then
+			return 2 # a real occupant — the caller decides identical vs collision
+		fi
+		a_link_skill "$1"
 	}
 	mkdir -p .claude/skills
 	for d in "$a_kit"/.agents/skills/*/; do
@@ -338,7 +361,9 @@ if [ "$ADOPT" = 1 ]; then
 		[ "$s" = "dogfood" ] && [ "$a_dog" != yes ] && continue
 		if a_exists ".agents/skills/$s"; then
 			if diff -rq "$a_kit/.agents/skills/$s" ".agents/skills/$s" >/dev/null 2>&1; then
-				: # our own earlier install — silent on re-runs
+				# Our own earlier install (or their identical copy) — repair
+				# a missing bridge so a clean exit never leaves a red gate.
+				a_bridge "$s" || :
 			else
 				a_hit skill ".agents/skills/$s" rename-or-decline
 			fi
@@ -349,12 +374,25 @@ if [ "$ADOPT" = 1 ]; then
 				a_hit skill ".claude/skills/$s" rename-or-decline
 			fi
 		else
-			a_copy_dir ".agents/skills/$s" ".agents/skills/$s"
-			[ -L ".claude/skills/$s" ] || a_link_skill "$s"
+			# The bridge slot decides whether the install may proceed: a
+			# foreign or dangling link there is a collision, and canonical
+			# holds back until it is resolved (all-or-nothing per skill).
+			if a_bridge "$s"; then
+				a_copy_dir ".agents/skills/$s" ".agents/skills/$s"
+			fi
 		fi
 	done
-	a_exists ".agents/skills/LICENSE-mattpocock-skills.md" ||
+	if ! a_exists ".agents/skills/LICENSE-mattpocock-skills.md"; then
 		a_copy ".agents/skills/LICENSE-mattpocock-skills.md" ".agents/skills/LICENSE-mattpocock-skills.md"
+	fi
+	# The licence gets the same bridge the skills do — an adopted tree should
+	# not differ from a templated one by one entry.
+	if [ ! -L ".claude/skills/LICENSE-mattpocock-skills.md" ] &&
+		! a_exists ".claude/skills/LICENSE-mattpocock-skills.md"; then
+		rm -f "$a_scratch/link.$$"
+		ln -s "../../.agents/skills/LICENSE-mattpocock-skills.md" "$a_scratch/link.$$" &&
+			mv "$a_scratch/link.$$" ".claude/skills/LICENSE-mattpocock-skills.md"
+	fi
 
 	# --- 5. policy and local files: install only where absent ---------------
 	if ! a_exists "scripts/docs-conformance/config.mjs"; then

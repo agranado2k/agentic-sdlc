@@ -330,6 +330,67 @@ case "$LAST_OUT" in
 esac
 
 # ---------------------------------------------------------------------------
+banner "F3. Neutral-home review regressions (PR #104 findings)"
+# ---------------------------------------------------------------------------
+# H-2: a target whose .claude/skills (or .agents) is itself a SYMLINK would
+# have every bridge written THROUGH it — outside the repo, exit 0. The arm
+# must refuse before touching either side, and nothing may land beyond the
+# target's boundary.
+mk_kitcopy
+mk_target
+OUTSIDE=$(mktemp -d "$SCRATCH/outside-skills.XXXXXX")
+mkdir -p "$TARGET/.claude"
+ln -s "$OUTSIDE" "$TARGET/.claude/skills"
+assert_status 1 "a symlinked .claude/skills is a refusal, not a write-through" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "is a symlink"
+[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
+	pass "nothing landed outside the target through the linked skills dir" ||
+	fail "adopt wrote through the symlinked .claude/skills into foreign ground"
+
+mk_kitcopy
+mk_target
+OUTSIDE2=$(mktemp -d "$SCRATCH/outside-agents.XXXXXX")
+ln -s "$OUTSIDE2" "$TARGET/.agents"
+assert_status 1 "a symlinked .agents is the same refusal" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -z "$(ls -A "$OUTSIDE2" 2>/dev/null)" ] &&
+	pass "nothing landed outside the target through the linked .agents" ||
+	fail "adopt wrote through the symlinked .agents into foreign ground"
+
+# M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
+# target, or dangling) is a non-identical occupant — a COLLISION, never a
+# silent keep that leaves the gate red after a "complete" adopt.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills"
+ln -s /nonexistent/evil "$TARGET/.claude/skills/tdd"
+assert_status 3 "a foreign symlink at a bridge slot is a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd rename-or-decline"
+[ -e "$TARGET/.agents/skills/tdd" ] &&
+	fail "canonical /tdd was installed despite the unresolved bridge collision" ||
+	pass "canonical /tdd held back until the bridge collision is resolved"
+
+# M-2: a target already holding a byte-identical canonical skill but no
+# bridge must adopt clean AND leave the bridge laid — exit 0 with a red gate
+# is the shape this pin forbids.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills"
+cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
+git -C "$TARGET" add -A 2>/dev/null || true
+assert_status 0 "an identical canonical skill without its bridge adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -L "$TARGET/.claude/skills/tdd" ] && [ -f "$TARGET/.claude/skills/tdd/SKILL.md" ] &&
+	pass "the missing bridge was repaired on the clean path" ||
+	fail "an identical canonical skill was left with no bridge — clean exit, red gate"
+# L-2: the licence file gets the same bridge the skills do.
+[ -L "$TARGET/.claude/skills/LICENSE-mattpocock-skills.md" ] &&
+	pass "the licence bridge is laid too — adopted trees match template trees" ||
+	fail "the licence bridge is missing — adopted trees differ from template trees by one entry"
+
+# ---------------------------------------------------------------------------
 banner "G. The payload document's existing-repo arm — its own fences drive the flow"
 # ---------------------------------------------------------------------------
 # #83: the Which-arm pointer stops saying "not yet" and becomes the arm. The

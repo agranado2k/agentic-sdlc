@@ -518,7 +518,6 @@ scripts/docs-conformance/index.mjs
 scripts/docs-conformance/runner.mjs
 scripts/docs-conformance/validators/claude-md-refs.mjs
 scripts/docs-conformance/validators/mutation-decision.mjs
-scripts/docs-conformance/validators/skill-bridge.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
@@ -528,10 +527,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1458 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1463 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1594 insertions(+), 1 deletion(-)
+ 3 files changed, 1599 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -577,7 +576,6 @@ $ # step 5 — apply
   updated scripts/docs-conformance/runner.mjs
   updated scripts/docs-conformance/validators/claude-md-refs.mjs
   updated scripts/docs-conformance/validators/mutation-decision.mjs
-  updated scripts/docs-conformance/validators/skill-bridge.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
@@ -597,7 +595,6 @@ verbatim  scripts/docs-conformance/index.mjs
 verbatim  scripts/docs-conformance/runner.mjs
 verbatim  scripts/docs-conformance/validators/claude-md-refs.mjs
 verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
-verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
@@ -842,9 +839,11 @@ ln -s ../../.agents/skills/improve-codebase-architecture \
 	.claude/skills/improve-codebase-architecture
 ```
 
-(`-M` over both homes pairs the 0.14.0 move as renames, so only genuinely new
-files print; the grep keeps the kit's `.claude/skills` symlink entries out of
-the list. The `ln -s` lays the bridge the harness that reads only
+(`-M` over both homes pairs the 0.14.0 move as renames, so mostly only
+genuinely new files print — but a file edited heavily across the move can
+break the pairing and print anyway, so cross-check the list against 9a's
+inventory before copying anything. The grep keeps the kit's `.claude/skills`
+symlink entries out of the list. The `ln -s` lays the bridge the harness that reads only
 `.claude/skills` needs — skip it if your project migrated and your gate policy
 names `.agents/skills`.)
 
@@ -1338,7 +1337,7 @@ $ # 9a — /to-tickets: BOTH changed. Three-way, not a copy.
 $ git merge-file "$T" "$WORK/base" "$WORK/theirs"
   merged clean — the kit's delta and our local note both survive
 
-$ kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^.agents/skills/'
+$ kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^\.agents/skills/' || true
 .agents/skills/LICENSE-mattpocock-skills.md
 .agents/skills/dogfood/SKILL.md
 .agents/skills/implement/SKILL.md
@@ -1354,9 +1353,15 @@ FAIL  docs gate: violations found
 
 WARN  docs conformance: advisories (gate stays green)
 
-  [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
+  [skill-paths] ! .claude/skills/implement/SKILL.md [skill-path-missing] — references `adapters/claude-code/README.md` but neither it nor `adapters/claude-code/README.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
-  [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
+  [skill-paths] ! .claude/skills/implement/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [skill-paths] ! .claude/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [skill-paths] ! .claude/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [skill-paths] ! .claude/skills/to-tickets/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
 FAIL  docs conformance: violations found
