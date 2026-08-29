@@ -924,7 +924,7 @@ recipe2() {
 	fi
 
 	echo ""
-	echo "\$ kit diff --name-only --diff-filter=A -M \"\$FROM_REF\" \"\$TO_REF\" -- .agents/skills .claude/skills | grep '^.agents/skills/'"
+	echo "\$ kit diff --name-only --diff-filter=A -M \"\$FROM_REF\" \"\$TO_REF\" -- .agents/skills .claude/skills | grep '^\\.agents/skills/' || true"
 	kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^\.agents/skills/' || true
 	echo "\$ kit archive \"\$TO_REF\" .agents/skills/improve-codebase-architecture | tar -x"
 	kit archive "$TO_REF" .agents/skills/improve-codebase-architecture | tar -x

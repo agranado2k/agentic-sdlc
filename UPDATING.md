@@ -527,10 +527,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1461 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1463 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1597 insertions(+), 1 deletion(-)
+ 3 files changed, 1599 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -839,9 +839,11 @@ ln -s ../../.agents/skills/improve-codebase-architecture \
 	.claude/skills/improve-codebase-architecture
 ```
 
-(`-M` over both homes pairs the 0.14.0 move as renames, so only genuinely new
-files print; the grep keeps the kit's `.claude/skills` symlink entries out of
-the list. The `ln -s` lays the bridge the harness that reads only
+(`-M` over both homes pairs the 0.14.0 move as renames, so mostly only
+genuinely new files print — but a file edited heavily across the move can
+break the pairing and print anyway, so cross-check the list against 9a's
+inventory before copying anything. The grep keeps the kit's `.claude/skills`
+symlink entries out of the list. The `ln -s` lays the bridge the harness that reads only
 `.claude/skills` needs — skip it if your project migrated and your gate policy
 names `.agents/skills`.)
 
@@ -1335,7 +1337,7 @@ $ # 9a — /to-tickets: BOTH changed. Three-way, not a copy.
 $ git merge-file "$T" "$WORK/base" "$WORK/theirs"
   merged clean — the kit's delta and our local note both survive
 
-$ kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^.agents/skills/'
+$ kit diff --name-only --diff-filter=A -M "$FROM_REF" "$TO_REF" -- .agents/skills .claude/skills | grep '^\.agents/skills/' || true
 .agents/skills/LICENSE-mattpocock-skills.md
 .agents/skills/dogfood/SKILL.md
 .agents/skills/implement/SKILL.md
