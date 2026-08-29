@@ -894,6 +894,13 @@ Next:
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is
   7. git add -A && git commit     bootstrap committed nothing on purpose
+  8. start your next agent session IN THIS DIRECTORY
+                                  a harness discovers skills from the directory
+                                  a session starts in, so the slash commands the
+                                  manual's chain names are invisible to a session
+                                  launched a level above. In Claude Code, /cd
+                                  moves a live session here (2.1.246 or newer);
+                                  --add-dir does it at startup
 
 Both gates run automatically before every push (.githooks/pre-push), each with
 its own loud bypass: PUSH_WITHOUT_DOCS=1 and PUSH_WITHOUT_TESTS=1. The matching
