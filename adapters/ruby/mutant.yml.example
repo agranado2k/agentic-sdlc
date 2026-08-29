@@ -1,0 +1,34 @@
+# .mutant.yml — copy to your repo ROOT under that name, then edit the three
+# EDIT-ME keys. Transcribed from a working Ruby/RSpec consumer of this kit
+# (issue #85); verify against the mutant documentation for your installed
+# version — config keys are the tool's contract, not this kit's.
+
+# The test framework mutant drives to try to kill each mutant.
+integration:
+  name: rspec
+
+# EDIT ME — what `require` pulls in your code. Usually your gem or app's
+# top-level file name, without the .rb.
+requires:
+  - my_project
+
+# EDIT ME — load-path additions, so the requires above resolve.
+includes:
+  - lib
+
+# EDIT ME — the namespaces to mutate. Start narrow (one class), widen as the
+# runtime stays tolerable; `*` at the end matches the whole namespace.
+matcher:
+  subjects:
+    - MyProject*
+
+# Free for open-source projects; a private repo needs a licence key instead.
+# Decide this at stack-setup time — it is part of the mutation decision the
+# engineering article records.
+usage: opensource
+
+# Keep the diagnostic honest without making it a gate: abort on process
+# failure, but no coverage threshold — the score is something you READ
+# (shared invariant §9), not a bar that blocks a push.
+coverage_criteria:
+  process_abort: true

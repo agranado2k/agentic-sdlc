@@ -162,6 +162,33 @@ case $? in
 *) fail "$MUTATION_EXAMPLE is incomplete or its patterns misclassify" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "A5. The ruby adapter keeps its field notes and its shape"
+# ---------------------------------------------------------------------------
+# The ruby adapter's chief value is the reasoning left in: two structural
+# blind spots of its mutation tool that read as catastrophic coverage when
+# the tests are fine (issue #85). Lose the notes and the adapter is a config
+# file; lose the table row and the adapter is invisible.
+RUBY_README="adapters/ruby/README.md"
+if grep -q 'Data\.define' "$RUBY_README" 2>/dev/null &&
+	grep -q 'module_function' "$RUBY_README" 2>/dev/null; then
+	pass "$RUBY_README carries both mutant blind-spot field notes"
+else
+	fail "$RUBY_README lost a field note (Data.define / module_function) — the 1.5%-coverage trap is unexplained again"
+fi
+
+if grep -q 'opensource' "$RUBY_README" 2>/dev/null; then
+	pass "$RUBY_README records the licence posture (opensource usage)"
+else
+	fail "$RUBY_README never mentions the opensource usage mode — the first run dies on licensing instead of mutants"
+fi
+
+if grep -qE '^\| \[`ruby/`\]' adapters/README.md 2>/dev/null; then
+	pass "adapters/README.md's table has the ruby row"
+else
+	fail "adapters/README.md's table has no ruby row — the adapter exists but the index does not say so"
+fi
+
 # mutation-delta.sh must REFUSE to run with no config rather than guessing a
 # package — a silent default here would measure the wrong tree and report a
 # score for it.
@@ -209,7 +236,9 @@ for f in \
 	adapters/node-ts/mutation/stryker.config.mjs.example \
 	adapters/node-ts/evals/promptfooconfig.yaml \
 	adapters/node-ts/workflows/mutation-delta.yml \
-	adapters/node-ts/workflows/prompt-evals.yml; do
+	adapters/node-ts/workflows/prompt-evals.yml \
+	adapters/ruby/README.md \
+	adapters/ruby/mutant.yml.example; do
 	[ -f "$f" ] && pass "$f survived bootstrap" || fail "$f is missing after bootstrap"
 done
 
