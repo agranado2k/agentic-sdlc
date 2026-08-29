@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f25-skills-manifest` (PR #75, stack base) and `worktree/f26-manifest-recipe` (#72) — wave #70. |
+| **Active worktrees** | `worktree/f25-skills-manifest` (PR #75), `worktree/f26-manifest-recipe` (PR #76), `worktree/f27-skill-web` (#73) — wave #70 stack. |
 
 ### Open questions / unresolved decisions
 
@@ -446,3 +446,19 @@ failures before the recipe edit. The release-note discipline got its own
 check too: self-host F5 requires the current version's history note to carry
 its NON-MANIFEST HALF enumeration, mutation-proven, with hard rule 3 in
 `AGENTS.md` naming the obligation.
+
+## 2026-08-28 — f27: the skill-web advisory (issue #73, wave #70)
+
+Third slice of #70: the half-adopted state gets a detector. A new shared-layer
+validator (`skill-web`) scans installed skill bodies for slash-command
+references and reports each one that resolves to no installed skill — as a
+WARNING, never a violation, because declining a skill is a legal recorded
+state; the gate's engine now separates advisories (printed to stderr, exit
+untouched) from violations. One grammar and one exemption list serve both
+validators: skill-web imports claude-md-refs' `commandRefs` and reads the same
+`ignoreCommands`, which gained `/tmp` and `/codebase-design` — two quoted
+non-references the new scan surfaced in the kit's own tree on its first run
+(the validator paid for itself before it shipped). The reduced POSIX form
+cannot run the scan and now says so; self-host pins the admission. Fixture
+tests landed RED (module absent), with an end-to-end leg proving warn+exit-0
+and a real-repo leg holding the kit's own web complete.
