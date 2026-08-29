@@ -422,4 +422,63 @@ else
 	fi
 fi
 
+# --- F4: the skills manifest names exactly the shipped set ------------------
+#
+# Skills are versioned as a SET — by name and release, never by bytes: adapting
+# a skill's prose locally is the intended workflow, so a byte check would flag
+# every invited edit. What the manifest owes a consumer is the NAME list, and
+# it owes it as STATE, not delta: the update recipe diffs `skills:` in VERSION
+# against the consumer's installed set, so any number of skipped update windows
+# still yields the exact missing list. A manifest that drifts from the shipped
+# directories re-opens the gap it exists to close, in one of two ways: a
+# shipped skill the manifest misses is invisible to every consumer forever,
+# and a manifest entry with no directory promises a skill the release does not
+# ship. Both directions fail here.
+#
+# An entry may carry an annotation after the name (the optional skill does);
+# only the first word is the name. The list also must NOT leak into the files:
+# parser above — `skills:` is a sibling section, and a parser that swallowed it
+# would tell step 5 of the recipe to copy skill names as shared files.
+
+manifest_skills() {
+	awk '
+		/^skills:/      { inlist = 1; next }
+		!inlist         { next }
+		/^[ \t]*#/      { next }
+		/^[ \t]*$/      { next }
+		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
+		                { inlist = 0 }
+	' "$KIT/VERSION"
+}
+
+manifest_skills | sort >"$SCRATCH/skills.manifest"
+for d in "$KIT"/.claude/skills/*/; do
+	basename "$d"
+done | sort >"$SCRATCH/skills.shipped"
+
+if [ ! -s "$SCRATCH/skills.manifest" ]; then
+	fail "VERSION has no skills: section — the skill set ships unversioned, and a consumer's update has no state to diff against"
+else
+	unshipped=$(comm -23 "$SCRATCH/skills.manifest" "$SCRATCH/skills.shipped")
+	unlisted=$(comm -13 "$SCRATCH/skills.manifest" "$SCRATCH/skills.shipped")
+	if [ -n "$unshipped" ]; then
+		fail "manifest-listed but not shipped: $(printf '%s' "$unshipped" | tr '\n' ' ')— VERSION promises a skill this release does not carry"
+	elif [ -n "$unlisted" ]; then
+		fail "shipped but not manifest-listed: $(printf '%s' "$unlisted" | tr '\n' ' ')— invisible to every consumer's update, the exact gap the manifest closes"
+	else
+		pass "skills: in VERSION and .claude/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
+	fi
+
+	# First word only on BOTH sides: skills.manifest already holds first words,
+	# and an annotated entry that leaked into the files list would otherwise
+	# arrive as its whole line and never match. Paths have no spaces here, so
+	# the files side loses nothing.
+	leaked=$(manifest_files | awk '{ print $1 }' | sort | comm -12 - "$SCRATCH/skills.manifest")
+	if [ -n "$leaked" ]; then
+		fail "skills entries leak into the files: parser: $(printf '%s' "$leaked" | tr '\n' ' ')— the shared-file list would copy skill names as paths"
+	else
+		pass "the files: parser stops before skills: — no entry leaks between the sections"
+	fi
+fi
+
 t_done "self-host"

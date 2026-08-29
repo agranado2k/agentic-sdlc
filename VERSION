@@ -169,7 +169,26 @@
 # retires (every release is tagged now, and the kit's self-host suite holds it
 # to that). The non-manifest half this second change DOES have: /review-pr's
 # Security Sentinel gains a shell-hazard audit citing the two rules by number.
-shared-layer: 0.10.0
+# 0.11.0 — the skills adoption wave: VERSION gains the `skills:` section below,
+# a NAME-LEVEL manifest of every skill this release ships. It exists because
+# delta-based adoption failed in the field: /explain-diff shipped inside the
+# v0.8.0 window, and a consumer whose update ranges never included that window
+# lost the feature with no signal — shared layer byte-identical, gate green,
+# and an entire PR-flow capability silently absent. Names, never bytes: a
+# consumer is invited to adapt a skill's prose, so the manifest answers "do I
+# HAVE it?", and only that. The update recipe diffs this list against the
+# consumer's installed set — state, not delta, so skipped windows heal.
+# UPDATING.md changed content with the bump (the worked-example transcripts
+# and their surrounding prose re-pinned — a content change by this manifest's
+# own precedent).
+#   NON-MANIFEST HALF of this wave, enumerated (the discipline this release
+# introduces — every release from here names what shipped outside the files:
+# list): the skills manifest referee joined tests/ (kit-only); consumers on
+# ≤0.10.0 adopting /explain-diff need the skill directory PLUS its two wiring
+# points — the Deliver-phase appendix bullet in /implement and the
+# explain-diff-appendix marker in the PR template. (This note grows with the
+# wave's stacked tickets; it is finished only at the v0.11.0 tag.)
+shared-layer: 0.11.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -198,3 +217,30 @@ files:
   scripts/docs-conformance/context.mjs
   scripts/docs-conformance/runner.mjs
   scripts/docs-conformance/validators/claude-md-refs.mjs
+
+# The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
+# of files: above. A skill's prose is yours to adapt from the moment bootstrap
+# installs it, so the byte question the shared layer answers ("is my copy
+# verbatim?") is the wrong one here; the only question this list answers is
+# "does my project HAVE every skill this release ships?" — and it answers it
+# as STATE, so an update from any older release, however many windows were
+# skipped, still yields the exact missing list. Only the first word of an
+# entry is the name; anything after it is annotation. One skill is optional
+# (bootstrap asks before installing it) — declining it is a clean state, not
+# a gap.
+skills:
+  diagnose
+  dogfood            optional — bootstrap asks; declining is a recorded choice
+  explain-diff
+  grill-me
+  grill-with-docs
+  implement
+  improve-codebase-architecture
+  merge-train
+  pr-iterate
+  prototype
+  review-pr
+  tdd
+  to-prd
+  to-tickets
+  worktree-cleanup

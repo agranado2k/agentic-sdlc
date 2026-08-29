@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.10.0; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.11.0 in flight (wave #70 — the v0.11.0 tag lands at the end of its merge train); the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The #62 output-contract wave landed as PRs #66/#67/#68 (2026-08-28); f21 merged earlier as PR #61. |
+| **Active worktrees** | `worktree/f25-skills-manifest` — wave #70's stack base (skills manifest + 0.11.0 bump). |
 
 ### Open questions / unresolved decisions
 
@@ -400,3 +400,28 @@ disjointness, no-ANSI. Landed RED (16 failures when the landed suite replays aga
 it green. Skills are not shared layer — no VERSION movement. Tickets #64
 (pr-iterate adopts the vocabulary) and #65 (the AI-review prompt ports the
 contract) stack on this branch.
+
+## 2026-08-28 — f25: the skills manifest (issue #71, wave #70)
+
+Dogfooding in a real consumer surfaced the gap (#69): centaur-spec sat on
+shared-layer 0.10.0 — byte-identical, gate green — with no `/explain-diff`
+anywhere in its tree. The feature shipped inside the v0.8.0 window, and Part 2
+of the recipe is delta-based: a consumer whose update ranges never included
+that window loses the feature forever, because no later window re-lists it and
+no state check exists to heal the miss.
+
+The fix's first slice: `VERSION` gains a `skills:` section — a NAME-level
+manifest of the fifteen skills the release ships (names, never bytes: adapting
+a skill's prose is the invited workflow). Self-host gains F4, the referee that
+holds the manifest to the tree in both directions (shipped-but-unlisted,
+listed-but-unshipped) plus a parser-separation leg proving `skills:` entries
+never leak into the `files:` list — all four `files:` parsers already stop at
+the first non-indented line, and now a check says so. Landed RED (no section)
+before the manifest turned it green; both mutation directions proven.
+
+Shared layer bumps to 0.11.0 (VERSION and UPDATING.md both moved), so the
+wave's stacked siblings (#72 recipe, #73 absence gate, #74 resolver hardening)
+ride the same release; the v0.11.0 tag is cut at the end of the landing train,
+and self-host F3 on main stays deliberately red between the bump's merge and
+that tag. Transcripts re-captured — the only delta was version strings, which
+is itself evidence the parsers took the new section in stride.
