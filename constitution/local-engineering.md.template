@@ -86,9 +86,14 @@ distinct signal; naming which one you ran is part of reporting a change.
 <!-- The last two rows are real today and are deliberately NOT placeholders:
      they ship with the kit and they work in an empty repo. -->
 
-**Measuring a tier is not a tier** (shared invariant §9). {{MUTATION_TOOL}} asks
+**Measuring a tier is not a tier** (shared invariant §9). A mutation tool asks
 whether the first row's tests are load-bearing; run it on demand, never as a
 gate — surviving mutants are the objective form of "this test enforces nothing".
+The line below is a decision made at stack-setup time, out loud, and it has
+exactly two honest forms: a named tool with its on-demand command, or an
+explicit `none — <the reason>`. Silence is neither.
+
+**Mutation decision**: {{MUTATION_DECISION}}
 
 ## Infrastructure
 

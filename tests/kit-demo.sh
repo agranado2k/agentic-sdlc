@@ -210,6 +210,18 @@ assert_file "constitution/local-workflow.md.template"
 assert_file "scripts/docs-conformance/local-vocabulary.mjs"
 assert_no_file "scripts/docs-conformance/local-vocabulary.mjs.template"
 
+# The mutation decision (issue #85): bootstrap's Next: list must name it
+# beside the other day-one decisions, and the engineering article template
+# must carry the labeled anchor a consumer fills — a tool plus its on-demand
+# command, or an explicit "none" with the reason. A blank an agent can
+# honestly fill with silence is how a real consumer shipped without one.
+printf '%s\n' "$LAST_OUT" | grep -qi 'mutation decision' &&
+	pass "bootstrap's Next: output names the mutation decision" ||
+	fail "bootstrap's Next: output never names the mutation decision (issue #85)"
+grep -q '^\*\*Mutation decision\*\*:' constitution/local-engineering.md.template &&
+	pass "the engineering article template carries the mutation-decision anchor" ||
+	fail "the engineering article template has no mutation-decision anchor line (issue #85)"
+
 grep -q "$PROJECT_NAME" AGENTS.md && pass "AGENTS.md carries the project name" ||
 	fail "AGENTS.md was not stamped with the project name"
 grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
