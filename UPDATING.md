@@ -517,6 +517,7 @@ scripts/docs-conformance/context.mjs
 scripts/docs-conformance/index.mjs
 scripts/docs-conformance/runner.mjs
 scripts/docs-conformance/validators/claude-md-refs.mjs
+scripts/docs-conformance/validators/mutation-decision.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
@@ -526,10 +527,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1388 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1391 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1524 insertions(+), 1 deletion(-)
+ 3 files changed, 1527 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -574,6 +575,7 @@ $ # step 5 — apply
   updated scripts/docs-conformance/index.mjs
   updated scripts/docs-conformance/runner.mjs
   updated scripts/docs-conformance/validators/claude-md-refs.mjs
+  updated scripts/docs-conformance/validators/mutation-decision.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
@@ -592,6 +594,7 @@ verbatim  scripts/docs-conformance/context.mjs
 verbatim  scripts/docs-conformance/index.mjs
 verbatim  scripts/docs-conformance/runner.mjs
 verbatim  scripts/docs-conformance/validators/claude-md-refs.mjs
+verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh

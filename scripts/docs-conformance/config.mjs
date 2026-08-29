@@ -283,4 +283,16 @@ const skillPaths = {
   ],
 };
 
-export default { claudeMdRefs, skillPaths };
+/**
+ * Policy for the mutation-decision advisory: which file is YOUR engineering
+ * article once it is stamped. The validator warns (never fails) when that
+ * article exists but carries no `**Mutation decision**:` line in either of
+ * its two honest forms — a tool with its on-demand command, or an explicit
+ * none-with-reason. Point `article` elsewhere if your article lives under a
+ * different name; the default follows `claudeMdRefs.constitutionDir`.
+ */
+const mutationDecision = {
+  // article: "constitution/local-engineering.md",
+};
+
+export default { claudeMdRefs, mutationDecision, skillPaths };

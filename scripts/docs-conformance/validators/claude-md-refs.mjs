@@ -227,8 +227,12 @@ function normalizeSpan(raw) {
  * treatment — a manual reaches for `~~~` precisely to show a ``` fence
  * verbatim, which is the case that leaves stray backticks behind. Fences may be
  * indented (lists), so anchor on optional leading whitespace.
+ *
+ * Exported: every validator that scans document content is expected to strip
+ * fences first (skill-paths does via pathRefs; mutation-decision imports this
+ * directly), so quoted material never counts as the real thing.
  */
-function stripFences(raw) {
+export function stripFences(raw) {
   return raw.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[ \t]*$/gm, "");
 }
 
