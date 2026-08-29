@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-08-28
+## Current state — 2026-08-29
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.12.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.13.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The #81 adoption wave landed as PR #84 (2026-08-29); the one-line setup now covers both arms. |
+| **Active worktrees** | None. The 0.13.0 wave (PRDs #88/#89) landed as PRs #94/#95/#96/#98 and tagged v0.13.0 (2026-08-29). Open feedback: #87 (worktree vs topmost-config linters), #97 (vendor-named skills directory). |
 
 ### Open questions / unresolved decisions
 
@@ -549,3 +549,35 @@ adopt-demo section G referees it the setup-demo way: the doc's promises
 pinned as text, and its own fences extracted and executed — branch, adopt
 (exit 3 on a colliding tree), commit, resolve, the same fence to 0, gate
 green, zero remotes. Landed RED (12 failures) before the arm was written.
+
+## 2026-08-29 — f31–f34: the 0.13.0 wave — the mutation decision made out loud, and the chain made visible (issues #85/#86, PRDs #88/#89)
+
+Both defects came from one real consumer run (the tic-tac-toe build). The
+skill-visibility half (#86 → PR #94): the one-line setup runs a level above
+the project, where a harness never discovers the clone's skills — four
+surfaces now say how the chain comes into scope (the payload's new step 4
+with its native-read-then-verify clause, bootstrap's Next: item 8, the
+README quickstart, one harness-neutral sentence in the stamped manual), all
+five promises pinned by setup-demo, RED-first.
+
+The mutation half (#85 → PRs #95/#96/#98): the decision became a labeled
+anchor in the engineering article template with exactly two honest forms —
+a tool plus its on-demand command, or none-with-reason — named in
+bootstrap's Next: and the payload's hand-back; adapters/ruby arrived as the
+second worked stack example (mutant-rspec, with the Data.define and
+module_function field notes that made a healthy suite read 1.5%); and the
+gate gained its third advisory, warning when a stamped article records no
+decision. The bump moved mid-wave: the ruby adapter changed the pinned
+`ls adapters` transcript line, a transcript change is an UPDATING.md change,
+so 0.13.0 rode PR #96 instead of the validator slice — docs-demo going red
+is what surfaced it.
+
+Two review catches worth remembering: the 0.13.0 VERSION note filed above
+0.12.0's made F5 vacuous (window spanned both notes — F5's awk now closes at
+the next heading, with a bait pinning exactly that), and the advisory's
+anchor regex crossed the line break (`\s*` ate the newline, accepting an
+empty label mid-document — now horizontal-only, fence-stripped via the
+newly-exported stripFences, CRLF-proven). Tag v0.13.0 cut at #98's merge;
+one CI rerun for the usual tag race. Feedback filed during the wave: #87
+(in-tree worktrees vs topmost-config linters) and #97 (the `.claude/skills`
+name reads vendor-locked — needs a grill).
