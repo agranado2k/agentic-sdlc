@@ -500,6 +500,23 @@ if [ "$dogfood_choice" != yes ]; then
 	done
 fi
 
+# The gate policy's dogfood-only exemption travels with the skill: the token
+# it exempts names the report directory only that skill ever creates, and a
+# declined tree must not mention the command anywhere (the opt-in suite holds
+# it to that). Same marker-pair contract as the manual's optional rows, in
+# the comment syntax this file speaks: declined, the whole block goes;
+# accepted, only the scaffolding markers go.
+dogfood_cfg=scripts/docs-conformance/config.mjs
+if [ -f "$dogfood_cfg" ]; then
+	if [ "$dogfood_choice" = yes ]; then
+		sed '/\/\/ DOGFOOD:BEGIN/d;/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+			mv "$dogfood_cfg.stamp" "$dogfood_cfg"
+	else
+		sed '/\/\/ DOGFOOD:BEGIN/,/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+			mv "$dogfood_cfg.stamp" "$dogfood_cfg"
+	fi
+fi
+
 # --- clean up the kit's own scaffolding -------------------------------------
 for f in $KIT_ONLY; do
 	if [ -e "$f" ]; then

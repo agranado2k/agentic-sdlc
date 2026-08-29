@@ -74,7 +74,7 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
 | `.claude/skills/` | The skills — the lifecycle made runnable. All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
-| `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, and the skill-web advisory (a warning when an installed skill references one you lack). Dependency-free ESM, with its own fixture tests. |
+| `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, the skill-web advisory (a warning when an installed skill references one you lack), and the skill-paths advisory (a dead path inside a skill body warns — version skew is a sanctioned mid-update state). Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
@@ -235,7 +235,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.11.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.12.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -462,7 +462,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.11.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.12.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
