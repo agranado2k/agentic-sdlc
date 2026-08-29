@@ -500,12 +500,21 @@ fi
 # exist and must carry the enumeration marker. (The dots in the version are
 # regex-any here, which can only ever make the match more permissive.)
 
-if awk -v v="$version_now" '
-	$0 ~ ("^# " v " — ") { innote = 1 }
-	innote && /NON-MANIFEST HALF/ { hit = 1 }
-	/^shared-layer:/ { innote = 0 }
-	END { exit !hit }
-' "$KIT/VERSION"; then
+# The window closes at the NEXT note heading as well as at shared-layer: —
+# without that, a current note filed above an older one would let the older
+# note's marker satisfy this check (found vacuous exactly that way by the
+# independent review of the 0.13.0 wave).
+f5_check() {
+	awk -v v="$version_now" '
+		$0 ~ ("^# " v " — ") { innote = 1; next }
+		innote && /^# [0-9]+\.[0-9]+\.[0-9]+ — / { innote = 0 }
+		innote && /NON-MANIFEST HALF/ { hit = 1 }
+		/^shared-layer:/ { innote = 0 }
+		END { exit !hit }
+	' "$1"
+}
+
+if f5_check "$KIT/VERSION"; then
 	pass "the $version_now history note enumerates its NON-MANIFEST HALF"
 else
 	fail "VERSION's $version_now note is missing or has no 'NON-MANIFEST HALF' enumeration — the recipe's Part 2 has nothing to point a consumer at"
@@ -515,15 +524,27 @@ fi
 # rewritten must fail (the C4f/C4h bait convention — a green-on-arrival check
 # earns its keep by proving it can go red).
 sed 's/NON-MANIFEST HALF/nonmanifest part/' "$KIT/VERSION" >"$SCRATCH/version.f5bait"
-if awk -v v="$version_now" '
-	$0 ~ ("^# " v " — ") { innote = 1 }
-	innote && /NON-MANIFEST HALF/ { hit = 1 }
-	/^shared-layer:/ { innote = 0 }
-	END { exit !hit }
-' "$SCRATCH/version.f5bait"; then
+if f5_check "$SCRATCH/version.f5bait"; then
 	fail "F5's pattern passed a note whose enumeration marker was rewritten — the check is vacuous"
 else
 	pass "F5's pattern fails when the enumeration marker is absent"
+fi
+
+# …and the window really is ONE note: gut only the current note's marker while
+# an OLDER note keeps its own, and the check must still fail. This is the
+# vacuity the review reproduced — a current note filed out of order borrowed
+# the 0.12.0 note's marker and passed.
+awk -v v="$version_now" '
+	$0 ~ ("^# " v " — ") { innote = 1; print; next }
+	innote && /^# [0-9]+\.[0-9]+\.[0-9]+ — / { innote = 0 }
+	/^shared-layer:/ { innote = 0 }
+	innote { gsub(/NON-MANIFEST HALF/, "nonmanifest part") }
+	{ print }
+' "$KIT/VERSION" >"$SCRATCH/version.f5bait2"
+if f5_check "$SCRATCH/version.f5bait2"; then
+	fail "F5 passed when only an OLDER note carries the marker — the window spans more than the current note"
+else
+	pass "F5's window is the current note alone — an older note's marker cannot stand in"
 fi
 
 t_done "self-host"
