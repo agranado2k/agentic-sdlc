@@ -500,6 +500,34 @@ if [ "$dogfood_choice" != yes ]; then
 	done
 fi
 
+# The gate policy's dogfood-only exemption travels with the skill: the token
+# it exempts names the report directory only that skill ever creates, and a
+# declined tree must not mention the command anywhere (the opt-in suite holds
+# it to that). Same marker-pair contract as the manual's optional rows, in
+# the comment syntax this file speaks: declined, the whole block goes;
+# accepted, only the scaffolding markers go.
+dogfood_cfg=scripts/docs-conformance/config.mjs
+if [ -f "$dogfood_cfg" ]; then
+	# Both markers or neither: the decline branch's RANGE delete would run to
+	# end-of-file on a lone BEGIN — a truncated policy file with exit 0, the
+	# silent-data-loss shape §11 exists for. A lone marker is a broken pair
+	# somebody edited; refuse loudly rather than guess which half they meant.
+	dogfood_marks=$(grep -c '// DOGFOOD:\(BEGIN\|END\)' "$dogfood_cfg" || true)
+	case "$dogfood_marks" in
+	0) ;; # nothing to stamp — already consumed, or a consumer's own config
+	2)
+		if [ "$dogfood_choice" = yes ]; then
+			sed '/\/\/ DOGFOOD:BEGIN/d;/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
+		else
+			sed '/\/\/ DOGFOOD:BEGIN/,/\/\/ DOGFOOD:END/d' "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
+				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
+		fi
+		;;
+	*) die "$dogfood_cfg carries a broken DOGFOOD marker pair ($dogfood_marks marker(s)) — fix the pair before stamping" ;;
+	esac
+fi
+
 # --- clean up the kit's own scaffolding -------------------------------------
 for f in $KIT_ONLY; do
 	if [ -e "$f" ]; then

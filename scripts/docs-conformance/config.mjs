@@ -258,4 +258,29 @@ export const claudeMdRefs = {
   },
 };
 
-export default { claudeMdRefs };
+/**
+ * Policy for the skill-paths validator: skill interiors (SKILL.md + sidecar
+ * markdown) must not name repo paths that resolve nowhere. Two exemption
+ * shapes, both reviewable here rather than buried in the validator:
+ *
+ *   - exemptFiles: whole files whose interiors are skipped — for
+ *     upstream-verbatim documents this repo is not free to edit.
+ *   - exemptTokens: exact path tokens that are legitimately absent until
+ *     something creates them. Each entry carries its reason; an entry whose
+ *     reason has expired is a line to delete, not to keep.
+ */
+const skillPaths = {
+  exemptFiles: [],
+  exemptTokens: [
+    // DOGFOOD:BEGIN — this block leaves with the skill when it is declined
+    // Created by the dogfood skill's first run in a project that opted in — a
+    // report directory no repo carries before its first report.
+    "docs/dogfood-reports/",
+    // DOGFOOD:END
+    // Installed by bootstrap from templates/workflows/ — real in every stamped
+    // project, absent in the kit tree the skill also ships from.
+    ".github/workflows/ai-review.example.yml",
+  ],
+};
+
+export default { claudeMdRefs, skillPaths };

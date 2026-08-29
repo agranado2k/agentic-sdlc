@@ -127,9 +127,11 @@ the root checkout's base branch should fast-forward to include the batch.
 
 If the batch bumped `VERSION`, the train is not over at cleanup: cut and push
 the release tag (`git tag -a v<version> <merge sha> && git push origin
-v<version>`), or `tests/self-host.test.sh` F3 stays red on main by design — an
-untagged bump is a release no consumer can reach. Tagging is part of landing
-the bump, and it carries the operator's name exactly like the merge did.
+v<version>`) — an untagged bump is a release no consumer can reach, and a
+repo whose CI enforces release integrity (the kit's own does, in its
+self-host suite's F3) stays red on main by design until the tag exists.
+Tagging is part of landing the bump, and it carries the operator's name
+exactly like the merge did.
 
 ## Output format
 

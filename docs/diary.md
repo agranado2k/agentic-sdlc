@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.11.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.12.0 in flight (PRD #79 — tag v0.12.0 lands with its PR); the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The #70 skills-adoption wave landed as PRs #75/#76/#77/#78 and was tagged v0.11.0 (2026-08-29). |
+| **Active worktrees** | `worktree/f29-skill-paths` — PRD #79 (skill-paths validator, 0.12.0 bump). |
 
 ### Open questions / unresolved decisions
 
@@ -478,3 +478,29 @@ failed against the old resolver (four lost names plus the fake vocabulary
 echoed back) and pass now. No behavior change to resolution, exit codes, or
 stdout; `agents.lib.sh` is shared layer, so the change rides the wave's
 0.11.0 bump.
+
+## 2026-08-29 — f29: skill interiors join the gate (PRD #79, from #18)
+
+K2's oldest caveat, closed: every installed skill body — SKILL.md and its
+sidecars — now has its repo-path references resolved by a new shared-layer
+validator (skill-paths), with the template fallback that makes one rule right
+on both sides of bootstrap (a token resolves if the file exists or its
+.template source does). The grammar is claude-md-refs' own pathTokenRe and a
+new pathRefs export — one definition of "path reference", three consumers.
+
+Two discoveries paid for the slice before it shipped. First, the scan's dry
+run caught the kit pointing every consumer at a file bootstrap deletes:
+/merge-train's step-5 note code-spanned the kit-only self-host suite; the
+prose now names the mechanism without the path. Second, the PRD's severity
+decision did not survive contact with the recipe demo: the fixtures model
+sanctioned consumer states — green-before-update, mid-skew between skills and
+articles — and violations made those states illegal. Findings are WARNINGS on
+the 0.11.0 advisory channel instead, with the deviation recorded in the
+release note. Exemptions are config policy in two shapes (whole files for
+upstream-verbatim documents; exact tokens for paths created later — the
+dogfood report directory and the bootstrap-installed review workflow), and
+the dogfood token travels with the skill: bootstrap strips its marked block
+on decline, which tests/dogfood-optin.test.sh promptly proved necessary.
+
+Shared layer 0.11.0 → 0.12.0 (validator joins files:), transcripts
+re-captured, D2/F5 held their ground automatically. Tag v0.12.0 at landing.

@@ -204,9 +204,35 @@
 # unknown-tier messages no longer read a module global a sourced config could
 # reassign — the four tier names are literals at every site, so the
 # diagnostics can no longer disagree with the check. No behavior change to
-# resolution, exit codes, or stdout. (This note grows with the wave's stacked
-# tickets; it is finished only at the v0.11.0 tag.)
-shared-layer: 0.11.0
+# resolution, exit codes, or stdout. (This note grew with the wave's stacked
+# tickets and was finished at the v0.11.0 tag.)
+# 0.12.0 — skill interiors join the gate (#79, from K2's oldest caveat, #18).
+# One file joined the layer: scripts/docs-conformance/validators/skill-paths.mjs.
+# Every installed skill body — SKILL.md and the sidecar markdown beside it —
+# now has its repo-path references resolved, as WARNINGS on the 0.11.0
+# advisory channel. Warnings by discovery, not by softness: the spec ordered
+# violations, and implementation found the legal reading — VERSION SKEW. The
+# recipe is per-category and demands a green gate BEFORE an update starts, so
+# a consumer mid-skew (skills referencing an article a later release
+# delivers) is a sanctioned state the kit's own recipe demo models; a red
+# gate would outlaw the starting point of every update.
+# One rule covers both sides of bootstrap: a token
+# resolves if the file exists OR its .template source does, so a skill naming
+# a stamped article is right in a consumer and right in the kit. The grammar
+# is claude-md-refs' own pathTokenRe/pathRefs over the same pathRoots — one
+# definition of "what is a path reference", now three consumers.
+#   NON-MANIFEST HALF, enumerated: your config.mjs (yours, never overwritten)
+# gains a skillPaths section — exemptFiles for upstream-verbatim documents,
+# and exemptTokens for paths that are legitimately absent until created (the
+# shipped entries: the dogfood report directory, made by the skill's first
+# run, and the example review workflow, installed by bootstrap from the
+# templates tree). Take that section by hand at step 9d, or the gate warns on
+# the kit's own shipped skills. The validator's fixture tests join the
+# consumer-owned test directory alongside the others. One skill changed with
+# the wave: /merge-train's step-5 release note no longer names the kit's own
+# self-host suite by path — the first thing the new scan caught was the kit
+# pointing every consumer at a file bootstrap deletes (take via 9a).
+shared-layer: 0.12.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -236,6 +262,7 @@ files:
   scripts/docs-conformance/runner.mjs
   scripts/docs-conformance/validators/claude-md-refs.mjs
   scripts/docs-conformance/validators/skill-web.mjs
+  scripts/docs-conformance/validators/skill-paths.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

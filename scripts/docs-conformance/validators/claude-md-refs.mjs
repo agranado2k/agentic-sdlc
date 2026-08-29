@@ -136,10 +136,26 @@ export function run(ctx) {
 }
 
 /** Build the repo-anchored path matcher from the configured roots. */
-function pathTokenRe(roots) {
+// Exported alongside commandRefs below, and for the same reason: the
+// skill-paths validator must ask "what counts as a repo-path reference?" and
+// get THIS answer, not a re-derivation of it.
+export function pathTokenRe(roots) {
   if (roots.length === 0) return /(?!)/;
   const alt = roots.map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return new RegExp(`^(?:${alt})/[\\w./-]+$`);
+}
+
+/**
+ * The repo-path extraction alone — code spans only, fences stripped, no
+ * package-relative resolution (skills are repo-level documents, like the root
+ * manual and the articles: they have no package to be relative to).
+ */
+export function pathRefs(raw, pathRe) {
+  const paths = new Set();
+  for (const text of codeSpans(stripFences(raw))) {
+    if (pathRe.test(text)) paths.add(text);
+  }
+  return paths;
 }
 
 /**
