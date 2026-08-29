@@ -257,6 +257,29 @@ case "$R_ERR_TEXT" in
 *) pass "the config's fake vocabulary never reaches the message" ;;
 esac
 
+# The USAGE text is the other converted message site, and the comment binds
+# all three literal sites to move together — so it gets the same pin, or a
+# regression that reintroduces a variable feeding only the usage line would
+# pass every case above.
+capture sh -c "
+	. '$LIB'
+	AGENTS_CONFIG='$SCRATCH/reassign.config.sh'
+	resolve_tier implementer >/dev/null 2>&1   # loads the config (memoized)
+	resolve_tier
+"
+[ "$R_STATUS" = 2 ] && pass "no-argument usage still exits 2 after a reassigning config loaded" ||
+	fail "exited $R_STATUS, expected 2"
+for _name in planner implementer mechanical reviewer; do
+	case "$R_ERR_TEXT" in
+	*"$_name"*) pass "the usage text still names '$_name'" ;;
+	*) fail "after a config reassigned the old global, the usage text lost '$_name'" ;;
+	esac
+done
+case "$R_ERR_TEXT" in
+*"alpha beta"*) fail "the usage text repeats the config's reassigned vocabulary" ;;
+*) pass "the config's fake vocabulary never reaches the usage text" ;;
+esac
+
 # ---------------------------------------------------------------------------
 banner "Configured — every tier resolves to its mapped value"
 # ---------------------------------------------------------------------------
