@@ -162,6 +162,17 @@ case $? in
 *) fail "$MUTATION_EXAMPLE is incomplete or its patterns misclassify" ;;
 esac
 
+# mutation-delta.sh must REFUSE to run with no config rather than guessing a
+# package — a silent default here would measure the wrong tree and report a
+# score for it.
+out=$(MUTATION_CONFIG=/nonexistent/mutation.config.sh sh adapters/node-ts/mutation/mutation-delta.sh --list 2>&1)
+if [ $? = 2 ] && printf '%s' "$out" | grep -q 'does not exist'; then
+	pass "mutation-delta.sh errors (exit 2) on an explicit config that does not exist"
+else
+	fail "mutation-delta.sh did not reject a missing explicit MUTATION_CONFIG"
+	printf '%s\n' "$out" | sed 's/^/        | /'
+fi
+
 # ---------------------------------------------------------------------------
 banner "A5. The ruby adapter keeps its field notes and its shape"
 # ---------------------------------------------------------------------------
@@ -187,17 +198,6 @@ if grep -qE '^\| \[`ruby/`\]' adapters/README.md 2>/dev/null; then
 	pass "adapters/README.md's table has the ruby row"
 else
 	fail "adapters/README.md's table has no ruby row — the adapter exists but the index does not say so"
-fi
-
-# mutation-delta.sh must REFUSE to run with no config rather than guessing a
-# package — a silent default here would measure the wrong tree and report a
-# score for it.
-out=$(MUTATION_CONFIG=/nonexistent/mutation.config.sh sh adapters/node-ts/mutation/mutation-delta.sh --list 2>&1)
-if [ $? = 2 ] && printf '%s' "$out" | grep -q 'does not exist'; then
-	pass "mutation-delta.sh errors (exit 2) on an explicit config that does not exist"
-else
-	fail "mutation-delta.sh did not reject a missing explicit MUTATION_CONFIG"
-	printf '%s\n' "$out" | sed 's/^/        | /'
 fi
 
 # ---------------------------------------------------------------------------
