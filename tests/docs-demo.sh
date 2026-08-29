@@ -863,6 +863,25 @@ recipe2() {
 
 	# --- Step 9a: skills ------------------------------------------------------
 	echo ""
+	echo "\$ # 9a — the INVENTORY first: state, not delta (one is a decline, one is a gap)"
+	kit show "${TO_REF}:VERSION" | awk '
+		/^skills:/      { inlist = 1; next }
+		!inlist         { next }
+		/^[ \t]*#/      { next }
+		/^[ \t]*$/      { next }
+		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
+		                { inlist = 0 }
+	' | sort >"$WORK/skills.manifest"
+	[ -s "$WORK/skills.manifest" ] ||
+		echo "no skills: manifest at ${TO_REF} (pre-0.11.0 kit?) — the inventory cannot answer" >&2
+	for d in .claude/skills/*/; do
+		[ -d "$d" ] || continue
+		basename "$d"
+	done | sort >"$WORK/skills.installed"
+	echo "\$ comm -23 \"\$WORK/skills.manifest\" \"\$WORK/skills.installed\"   # skills you LACK"
+	comm -23 "$WORK/skills.manifest" "$WORK/skills.installed"
+
+	echo ""
 	echo "\$ # 9a — /implement: the kit changed it, we did not"
 	S=.claude/skills/implement/SKILL.md
 	echo "\$ kit diff --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$S\""
@@ -1354,6 +1373,68 @@ if [ -s "$SCRATCH/keys.sh" ]; then
 			sed 's/^/        | /' "$SCRATCH/keys.sh.out"
 		}
 fi
+
+banner "C4i. 9a opens with the skills INVENTORY — state, not delta"
+# The gap this closes (#69): Part 2 is delta-based, and a feature announced in
+# one update window is never re-listed — a consumer whose ranges skip that
+# window loses it forever, gate green. Since 0.11.0 VERSION carries a skills:
+# manifest, and 9a now opens by diffing it against the installed set: the
+# missing list is exact however many windows were skipped. The transcript
+# above already exercised the mirror; this section extracts and runs the
+# DOCUMENT's own block, C4e-style, so the two cannot drift apart silently.
+cd "$C3" || exit 2
+assert_has "$SCRATCH/part2.transcript" "skills you LACK"
+assert_block '^kit show' "$SCRATCH/9a-inventory.sh" \
+	"UPDATING.md's 9a inventory block is extractable"
+if [ -s "$SCRATCH/9a-inventory.sh" ]; then
+	{
+		echo "WORK=$SCRATCH"
+		echo "TO_REF=v0.11.0"
+		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
+		cat "$SCRATCH/9a-inventory.sh"
+	} >"$SCRATCH/9a-inventory-case.sh"
+	sh "$SCRATCH/9a-inventory-case.sh" >"$SCRATCH/9a-inventory.out" 2>&1 ||
+		fail "the 9a inventory block exited non-zero on a healthy consumer"
+	# This consumer adopted /improve-codebase-architecture in C3 and declined
+	# /dogfood at bootstrap — so the inventory must print exactly the decline,
+	# and must NOT print the skill that is installed. Both directions, or the
+	# check is vacuous.
+	if grep -qx "dogfood" "$SCRATCH/9a-inventory.out"; then
+		pass "the inventory names the declined optional skill — a recorded choice, visible"
+	else
+		fail "the inventory missed dogfood — a missing skill it cannot see is #69 again"
+		sed 's/^/        | /' "$SCRATCH/9a-inventory.out"
+	fi
+	if grep -q "improve-codebase-architecture" "$SCRATCH/9a-inventory.out"; then
+		fail "the inventory lists a skill that IS installed — the comparison is inverted or stale"
+	else
+		pass "the inventory is quiet about the skill the update just adopted"
+	fi
+fi
+# …and the block REFUSES rather than answering vacuously when the target ref
+# predates the manifest: `kit` is the block's one seam, so the bait stubs it
+# with a pre-0.11.0 VERSION (files: only, no skills:) and the block must say
+# it cannot answer — the same anti-silence rule 9d/C4g already keeps.
+if [ -s "$SCRATCH/9a-inventory.sh" ]; then
+	{
+		echo "WORK=$SCRATCH"
+		echo "TO_REF=v0.0.0"
+		echo 'kit() { printf "%s\n" "shared-layer: 0.1.0" "files:" "  UPDATING.md"; }'
+		cat "$SCRATCH/9a-inventory.sh"
+	} >"$SCRATCH/9a-premanifest-case.sh"
+	sh "$SCRATCH/9a-premanifest-case.sh" >"$SCRATCH/9a-premanifest.out" 2>&1
+	if grep -q "cannot answer" "$SCRATCH/9a-premanifest.out"; then
+		pass "the inventory refuses to answer about a ref with no skills: manifest"
+	else
+		fail "the inventory was silent on a pre-manifest ref — an empty gap list that means 'could not look'"
+	fi
+fi
+
+# The retroactive half: a consumer arriving from <=0.10.0 predates the
+# manifest, and the skill most likely to be silently absent is named by name,
+# wiring points included.
+assert_has "$KIT/UPDATING.md" "Arriving from 0.10.0 or older"
+assert_has "$KIT/UPDATING.md" "explain-diff-appendix"
 
 banner "C5. The gate is what makes the hand edits non-optional"
 # A quick-reference row whose skill was never copied is the failure mode Part 2's

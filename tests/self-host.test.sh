@@ -481,4 +481,40 @@ else
 	fi
 fi
 
+# --- F5: the current release note enumerates its non-manifest half ----------
+#
+# The manifest (F4) covers skills; everything else a wave ships outside the
+# files: list — wiring bullets, template markers, workflow changes — has
+# exactly one carrier: the release's history note in VERSION, which Part 2 of
+# the recipe points consumers at. A wave that forgets the enumeration re-opens
+# the #69 gap for every non-skill feature, so the CURRENT version's note must
+# exist and must carry the enumeration marker. (The dots in the version are
+# regex-any here, which can only ever make the match more permissive.)
+
+if awk -v v="$version_now" '
+	$0 ~ ("^# " v " — ") { innote = 1 }
+	innote && /NON-MANIFEST HALF/ { hit = 1 }
+	/^shared-layer:/ { innote = 0 }
+	END { exit !hit }
+' "$KIT/VERSION"; then
+	pass "the $version_now history note enumerates its NON-MANIFEST HALF"
+else
+	fail "VERSION's $version_now note is missing or has no 'NON-MANIFEST HALF' enumeration — the recipe's Part 2 has nothing to point a consumer at"
+fi
+
+# …and the check is not vacuous: the same awk over a copy whose marker is
+# rewritten must fail (the C4f/C4h bait convention — a green-on-arrival check
+# earns its keep by proving it can go red).
+sed 's/NON-MANIFEST HALF/nonmanifest part/' "$KIT/VERSION" >"$SCRATCH/version.f5bait"
+if awk -v v="$version_now" '
+	$0 ~ ("^# " v " — ") { innote = 1 }
+	innote && /NON-MANIFEST HALF/ { hit = 1 }
+	/^shared-layer:/ { innote = 0 }
+	END { exit !hit }
+' "$SCRATCH/version.f5bait"; then
+	fail "F5's pattern passed a note whose enumeration marker was rewritten — the check is vacuous"
+else
+	pass "F5's pattern fails when the enumeration marker is absent"
+fi
+
 t_done "self-host"

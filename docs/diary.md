@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/f25-skills-manifest` — wave #70's stack base (skills manifest + 0.11.0 bump). |
+| **Active worktrees** | `worktree/f25-skills-manifest` (PR #75, stack base) and `worktree/f26-manifest-recipe` (#72) — wave #70. |
 
 ### Open questions / unresolved decisions
 
@@ -425,3 +425,24 @@ ride the same release; the v0.11.0 tag is cut at the end of the landing train,
 and self-host F3 on main stays deliberately red between the bump's merge and
 that tag. Transcripts re-captured — the only delta was version strings, which
 is itself evidence the parsers took the new section in stride.
+
+## 2026-08-28 — f26: the recipe reads the inventory (issue #72, wave #70)
+
+Second slice of the #70 wave, stacked on f25. `UPDATING.md`'s step 9a now
+OPENS with the inventory: a fenced, copy-runnable diff of the newer release's
+`skills:` manifest against the consumer's installed set — state, not delta,
+printed before any per-skill three-way. The worked example demonstrates both
+classes a printed name can be: `dogfood` (a recorded decline — nothing to do)
+and `improve-codebase-architecture` (a gap the update then adopts). The
+retroactive note names `/explain-diff` and its two wiring points for every
+consumer arriving from ≤0.10.0 — the exact consumer #69 was filed about.
+
+Referees: docs-demo C4i extracts and runs the DOCUMENT's own fence against the
+scratch consumer (C4e pattern), asserting it prints the declined skill and
+stays quiet about the installed one; both worked-example transcripts
+re-captured (two passes — the transcript quotes UPDATING.md's own line count,
+so the paste moves the number once before the fixpoint). Landed RED: four
+failures before the recipe edit. The release-note discipline got its own
+check too: self-host F5 requires the current version's history note to carry
+its NON-MANIFEST HALF enumeration, mutation-proven, with hard rule 3 in
+`AGENTS.md` naming the obligation.
