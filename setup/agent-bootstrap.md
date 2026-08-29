@@ -32,7 +32,7 @@ below. The plan names:
   project will have a runnable user-facing surface (a UI, a CLI, an API);
   skip it when there is nothing a persona could walk through;
 - the **release** you resolved (`$KIT_TAG`) and the directory you cloned into;
-- your **remote plan** (step 5) — and that you will commit locally and
+- your **remote plan** (step 6) — and that you will commit locally and
   **never push**: the first push carries your human's name, not yours.
 
 Only when the conversation genuinely answers none of this do you ask instead
@@ -75,7 +75,7 @@ sh bootstrap.sh "$DOGFOOD_FLAG" "$PROJECT_NAME" "$PROJECT_DESC"
 
 This stamps `AGENTS.md` and the docs set with your values, removes the kit's
 own files — `tests/`, `SETUP.md`, this document — and deletes itself. It
-commits nothing; that is step 4, and the refusals it may print (a pre-existing
+commits nothing; that is step 5, and the refusals it may print (a pre-existing
 manual, a second run) are safety checks to surface to your human, not to work
 around.
 
@@ -91,7 +91,27 @@ wired the pre-push hook for *this* clone; `core.hooksPath` is per-clone
 configuration, so every collaborator's fresh clone re-runs
 `git config core.hooksPath .githooks` — the stamped manual says so too.)
 
-## 4. First commit — local only
+## 4. Bring the chain into scope
+
+The project you just stamped is driven through slash commands — the skills
+under its `.claude/skills/`. A harness discovers skills from the directory a
+session starts in, and your session started a level **above** this project
+(`SETUP.md` cloned into a subdirectory), so the chain is invisible to you
+until you load it. Open the stamped `AGENTS.md` with your
+**native file-read tool, not a shell command** — a harness that loads a
+nested project's context does so the first time you read a file there
+natively, and no amount of shell `cat` triggers it. Then check that the
+chain's commands (`/tdd`, `/grill-me`, …) are actually available
+**before you report done**.
+
+If they still are not, that is a finding to surface, never a shrug: tell your
+human the commands live in the project directory, and that the session can be
+moved there (in Claude Code ≥ 2.1.246, `/cd <dir>`; at startup,
+`claude --add-dir <dir>`) or the next one started there. The decision is
+theirs — your job is to make the gap visible instead of quietly falling back
+to reading each skill as prose.
+
+## 5. First commit — local only
 
 The scratch file from step 1 carries the release this project started from;
 read it, remove it, and put the release in the subject:
@@ -103,7 +123,7 @@ git add -A
 git commit -m "chore: bootstrap from agentic-sdlc $KIT_RELEASE"
 ```
 
-## 5. The remote — propose, create at most, push never
+## 6. The remote — propose, create at most, push never
 
 If the plan's yes covered it and the forge CLI is available, you may create
 the remote and wire it, for example:
@@ -117,7 +137,12 @@ on their forge, then `git remote add origin <url>`). Either way you **never
 push** — hand the keyboard back instead: the project's first outward-facing
 act belongs to its human. Point them at the stamped `AGENTS.md`'s next steps
 (fill the two `local-*` articles, set `GUARD_SOURCE_RE` in
-`scripts/guards.config.sh`) and you are done.
+`scripts/guards.config.sh`) and you are done. One of those article lines is
+the **mutation decision**, and it is a decision, not a blank: whoever fills
+the engineering article — you, if asked — names a tool and its on-demand
+command, or writes `none` with the reason, and surfaces the choice to your
+human either way. Filling it with silence is how a project ships tests
+nobody has ever measured.
 
 ## The existing-repository arm
 

@@ -25,6 +25,12 @@ release tag, clones the kit **at that tag**, and follows
 name, description, the optional `/dogfood` skill, the remote), then bootstrap,
 the gate, and a local first commit. It never pushes; the first push is yours.
 
+When the agent finishes, start your next session **in the project directory**:
+a harness's slash commands are discovered from the directory a session starts
+in, and the setup itself ran one level above it — so the kit's chain
+(`/grill-me`, `/tdd`, …) only appears to a session started (or moved — in
+Claude Code ≥ 2.1.246, `/cd <dir>`) inside the project.
+
 **By hand** — the same ritual, manually:
 
 ```sh

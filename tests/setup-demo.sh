@@ -188,6 +188,15 @@ else
 	fail "the payload's fill-in fence does not name DOGFOOD_FLAG"
 fi
 
+# The mutation decision (issue #85): the hand-back guidance must name it, so
+# whoever fills the engineering article makes the choice out loud instead of
+# defaulting to none in silence.
+if grep -qi 'mutation decision' "$PAYLOAD" 2>/dev/null; then
+	pass "the payload's hand-back names the mutation decision"
+else
+	fail "the payload never names the mutation decision — the article gets filled with silence (issue #85)"
+fi
+
 SPINE="$SCRATCH/spine.sh"
 PROJ="$SCRATCH/proj"
 {
@@ -268,6 +277,23 @@ else
 	fail "the docs gate is red in the produced project"
 fi
 
+# Skill visibility (issue #86): the session that runs this setup is launched a
+# level ABOVE the project, where a harness never discovers the project's
+# skills — so the human-facing "Next:" output must say where the slash
+# commands come into scope, and the stamped manual must state the
+# precondition beside the chain it applies to.
+if printf '%s\n' "$out" | grep -q 'start your next agent session IN THIS DIRECTORY'; then
+	pass "bootstrap's Next: output tells the human where the slash commands come into scope"
+else
+	fail "bootstrap's Next: output never mentions skill discovery — the human's first /command fails silently (issue #86)"
+fi
+
+if grep -q 'sessions started in this directory' "$PROJ/AGENTS.md" 2>/dev/null; then
+	pass "the stamped manual states the chain's visibility precondition"
+else
+	fail "the stamped manual's chain section never says the commands need a session started here (issue #86)"
+fi
+
 # ---------------------------------------------------------------------------
 banner "3. Structure the documents must keep"
 # ---------------------------------------------------------------------------
@@ -303,6 +329,28 @@ if grep -qi 'existing' "$PAYLOAD" 2>/dev/null; then
 	pass "the payload carries the branch point (new project vs existing repo)"
 else
 	fail "the payload has no existing-repo branch point — landing that arm later should change an else-arm, not the doc's shape"
+fi
+
+# Skill visibility (issue #86), the agent-facing half: the payload must tell
+# the installing agent to load the stamped manual with its NATIVE file reader
+# (a shell cat never triggers a harness's nested-context load), and to verify
+# the chain's commands actually appeared before reporting done.
+if grep -q 'native file-read tool' "$PAYLOAD" 2>/dev/null; then
+	pass "the payload tells the agent to open the stamped manual with its native file reader"
+else
+	fail "the payload never says 'native file-read tool' — the installing agent has no way to bring the skills into scope (issue #86)"
+fi
+
+if grep -q 'before you report done' "$PAYLOAD" 2>/dev/null; then
+	pass "the payload makes command visibility a verified claim, not an assumption"
+else
+	fail "the payload never verifies the chain's commands are available before reporting done (issue #86)"
+fi
+
+if grep -q 'slash commands are discovered from' "$KIT/README.md" 2>/dev/null; then
+	pass "the README quickstart tells the human where the slash commands come into scope"
+else
+	fail "the README quickstart never mentions skill discovery — the by-hand reader hits the same silent gap (issue #86)"
 fi
 
 # ---------------------------------------------------------------------------
