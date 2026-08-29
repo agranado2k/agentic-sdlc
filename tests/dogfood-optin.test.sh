@@ -127,6 +127,16 @@ assert_exists "$PROJ/$ARTICLE" "the declaration article survived bootstrap"
 assert_file_has "$PROJ/AGENTS.md" '`/dogfood`' "the quick-reference row is on the map"
 assert_file_lacks "$PROJ/AGENTS.md" "DOGFOOD:BEGIN" "the stamp-time markers are consumed, not shipped"
 assert_file_lacks "$PROJ/AGENTS.md" "DOGFOOD:END" "the stamp-time markers are consumed, not shipped"
+# The gate policy's marker pair is held to the same contract as the manual's:
+# an accepting project keeps the exemption its skill needs, minus the
+# scaffolding that carried it. Without these two, neutering the accept-path
+# sed passes this whole suite (proven by mutation at review).
+assert_file_has "$PROJ/scripts/docs-conformance/config.mjs" "docs/dogfood-reports/" \
+	"the dogfood exemption token ships with the skill"
+assert_file_lacks "$PROJ/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" \
+	"the policy file's stamp-time markers are consumed, not shipped"
+assert_file_lacks "$PROJ/scripts/docs-conformance/config.mjs" "DOGFOOD:END" \
+	"the policy file's stamp-time markers are consumed, not shipped"
 assert_status 0 "the docs gate is green with the skill included" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 

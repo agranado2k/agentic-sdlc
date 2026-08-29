@@ -526,10 +526,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1379 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1387 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1515 insertions(+), 1 deletion(-)
+ 3 files changed, 1523 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1169,6 +1169,14 @@ Do it in the other order — rows first, rename second — and the gate stops yo
 the pointer names a path you have just renamed away (`path-missing`) and the
 article nobody points at is `article-unreferenced`. That is the framework
 working, and it is still two steps you can simply take in the right order.
+
+3. **Restore the skill's gate exemption.** Bootstrap stripped it when you
+   declined: re-add `"docs/dogfood-reports/"` to `skillPaths.exemptTokens` in
+   `scripts/docs-conformance/config.mjs` (yours, so this is an ordinary edit),
+   or accept a standing `skill-path-missing` advisory until the skill's first
+   run creates that directory. The gate stays green either way — the advisory
+   channel is why — but a warning you have decided to ignore is training, and
+   the wrong kind.
 
 ```sh
 sh scripts/check.sh
