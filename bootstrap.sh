@@ -876,7 +876,12 @@ Next:
   3. fill in the two articles     constitution/local-engineering.md.template
                                   constitution/local-workflow.md.template
                                   replace the marks, drop the .template suffix,
-                                  then point AGENTS.md's article layer at them
+                                  then point AGENTS.md's article layer at them.
+                                  The engineering article includes the
+                                  mutation decision: name a tool and its
+                                  on-demand command, or "none" with the reason —
+                                  never leave it to silence (adapters/ holds
+                                  worked wirings to copy the shape from)
   4. edit scripts/guards.config.sh
                                   the TDD pairing guard is INACTIVE until you
                                   set GUARD_SOURCE_RE to match your source

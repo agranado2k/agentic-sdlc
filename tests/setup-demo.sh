@@ -188,6 +188,15 @@ else
 	fail "the payload's fill-in fence does not name DOGFOOD_FLAG"
 fi
 
+# The mutation decision (issue #85): the hand-back guidance must name it, so
+# whoever fills the engineering article makes the choice out loud instead of
+# defaulting to none in silence.
+if grep -qi 'mutation decision' "$PAYLOAD" 2>/dev/null; then
+	pass "the payload's hand-back names the mutation decision"
+else
+	fail "the payload never names the mutation decision — the article gets filled with silence (issue #85)"
+fi
+
 SPINE="$SCRATCH/spine.sh"
 PROJ="$SCRATCH/proj"
 {

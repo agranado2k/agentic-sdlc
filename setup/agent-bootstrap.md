@@ -137,7 +137,12 @@ on their forge, then `git remote add origin <url>`). Either way you **never
 push** — hand the keyboard back instead: the project's first outward-facing
 act belongs to its human. Point them at the stamped `AGENTS.md`'s next steps
 (fill the two `local-*` articles, set `GUARD_SOURCE_RE` in
-`scripts/guards.config.sh`) and you are done.
+`scripts/guards.config.sh`) and you are done. One of those article lines is
+the **mutation decision**, and it is a decision, not a blank: whoever fills
+the engineering article — you, if asked — names a tool and its on-demand
+command, or writes `none` with the reason, and surfaces the choice to your
+human either way. Filling it with silence is how a project ships tests
+nobody has ever measured.
 
 ## The existing-repository arm
 
