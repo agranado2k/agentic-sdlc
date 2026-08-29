@@ -232,7 +232,33 @@
 # the wave: /merge-train's step-5 release note no longer names the kit's own
 # self-host suite by path — the first thing the new scan caught was the kit
 # pointing every consumer at a file bootstrap deletes (take via 9a).
-shared-layer: 0.12.0
+# 0.13.0 — the mutation decision, made out loud (#85, PRD #89 — and the
+# skill-visibility guidance of #86, PRD #88). One file joins the layer with
+# this wave: scripts/docs-conformance/validators/mutation-decision.mjs — an
+# advisory on the 0.11.0 warning channel: a stamped engineering article that
+# records no mutation decision prints a warning, never a failure, because the
+# article is consumer-owned prose and version skew is a sanctioned state;
+# promotion to a violation is a named future path, alongside skill-web's and
+# skill-paths'. UPDATING.md's Part 2 transcript moved with the wave (the
+# adapters listing gained a line, and the pinned versions advanced).
+#   NON-MANIFEST HALF, enumerated: the engineering article template replaces
+# its bare mutation-tool blank with a labeled anchor line — "Mutation
+# decision:", filled in one of exactly two honest forms, a tool plus its
+# on-demand command or an explicit none-with-reason (your article is yours:
+# add the line by hand if you filled an older template). bootstrap's Next:
+# list names the decision beside the other day-one choices, and the setup
+# payload's hand-back tells the installing agent to surface it, never to
+# default to silence. adapters/ruby/ arrives as the second worked stack
+# example: mutant-rspec on demand, with the two field notes (value-object
+# block methods and module-function doubles are invisible to the kill loop)
+# that make a catastrophic first score read correctly. From the
+# skill-visibility half: the setup payload gains step 4 (native-read the
+# stamped manual, verify the chain's commands before reporting done),
+# bootstrap's Next: gains the start-your-session-here item, the kit README
+# says the same, and the stamped manual's chain section carries the
+# precondition in one harness-neutral sentence.
+
+shared-layer: 0.13.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
