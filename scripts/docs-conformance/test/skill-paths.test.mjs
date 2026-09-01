@@ -168,3 +168,18 @@ test("the baked default is the canonical home — a config naming no skillsDir s
   assert.ok(hasRule(run(ctx), "skill-path-missing"));
   cleanup(ctx);
 });
+
+test("a skill at BOTH addresses is scanned once, and it is the CONFIGURED home that wins", () => {
+  // Divergent bodies on purpose — see the twin case in skill-web.test.mjs.
+  // With identical ones, both the de-duplication and the ordering could be
+  // deleted outright and this suite stayed green.
+  const ctx = ctxFor({
+    ".agents/skills/implement/SKILL.md": "Read `scripts/ghost-canonical.sh`.\n",
+    ".claude/skills/implement/SKILL.md": "Read `scripts/ghost-legacy.sh`.\n",
+  });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].file, ".agents/skills/implement/SKILL.md");
+  assert.match(out[0].message, /ghost-canonical\.sh/);
+  cleanup(ctx);
+});

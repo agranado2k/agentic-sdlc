@@ -467,37 +467,94 @@ done | sort >"$SCRATCH/skills.shipped"
 
 # The bridge holds, per skill: every canonical directory has a .claude/skills
 # symlink that resolves back to it, and no bridge entry is a stray real file.
-bridge_bad=""
-for d in "$KIT"/.agents/skills/*/; do
-	s=$(basename "$d")
-	if [ ! -L "$KIT/.claude/skills/$s" ] || [ ! -f "$KIT/.claude/skills/$s/SKILL.md" ]; then
-		bridge_bad="$bridge_bad $s"
-	fi
-done
-# The licence is a FILE symlink, not a directory one, and bootstrap lays it
-# deliberately so an adopted tree matches a templated one — the directory
-# glob above would never see it.
-for f in "$KIT"/.agents/skills/*.md; do
-	[ -f "$f" ] || continue
-	b=$(basename "$f")
-	if [ ! -L "$KIT/.claude/skills/$b" ] || [ ! -f "$KIT/.claude/skills/$b" ]; then
-		bridge_bad="$bridge_bad $b"
-	fi
-done
+# Written as a function over a root so the SAME code can be pointed at a tree
+# built to fail it — the f5_check convention below, applied here.
+bridge_bad_for() {
+	_root="$1"
+	_bad=""
+	for _d in "$_root"/.agents/skills/*/; do
+		[ -d "$_d" ] || continue
+		_s=$(basename "$_d")
+		if [ ! -L "$_root/.claude/skills/$_s" ] || [ ! -f "$_root/.claude/skills/$_s/SKILL.md" ]; then
+			_bad="$_bad $_s"
+		fi
+	done
+	# The licence is a FILE symlink, not a directory one, and bootstrap lays it
+	# deliberately so an adopted tree matches a templated one — the directory
+	# glob above would never see it.
+	for _f in "$_root"/.agents/skills/*.md; do
+		[ -f "$_f" ] || continue
+		_b=$(basename "$_f")
+		if [ ! -L "$_root/.claude/skills/$_b" ] || [ ! -f "$_root/.claude/skills/$_b" ]; then
+			_bad="$_bad $_b"
+		fi
+	done
+	printf '%s' "$_bad"
+}
+
+bridge_bad=$(bridge_bad_for "$KIT")
 if [ -z "$bridge_bad" ]; then
 	pass "every canonical skill and sidecar has a resolving .claude/skills bridge"
 else
 	fail "bridge broken or missing for:$bridge_bad — the harness that reads only .claude/skills goes blind there"
 fi
 
-# …and the leg is not vacuous: the same test against a name that has no
-# bridge must report it. A condition that can only ever be true guards
-# nothing (the F5 convention, applied here).
-if [ ! -L "$KIT/.claude/skills/no-such-skill-bridge" ] ||
-	[ ! -f "$KIT/.claude/skills/no-such-skill-bridge/SKILL.md" ]; then
-	pass "the bridge test fails for a name with no bridge — it can go red"
+# …and the leg is not vacuous. The previous form of this probe asked whether a
+# name that was never created lacks a bridge, which is true of any nonexistent
+# path however the loop above behaves — it passed even when the loop was broken.
+# Drive the real code instead: a tree with a canonical skill and a canonical
+# sidecar, neither bridged, must come back naming both.
+probe_root="$SCRATCH/bridge-probe"
+mkdir -p "$probe_root/.agents/skills/probe-skill" "$probe_root/.claude/skills"
+: >"$probe_root/.agents/skills/probe-skill/SKILL.md"
+: >"$probe_root/.agents/skills/probe-sidecar.md"
+probe_bad=$(bridge_bad_for "$probe_root")
+case " $probe_bad " in
+*" probe-skill "*)
+	case " $probe_bad " in
+	*" probe-sidecar.md "*)
+		pass "the bridge check reports an unbridged skill AND an unbridged sidecar — it can go red"
+		;;
+	*) fail "the bridge check missed an unbridged SIDECAR (got:$probe_bad) — the *.md leg is vacuous" ;;
+	esac
+	;;
+*) fail "the bridge check missed an unbridged SKILL (got:$probe_bad) — the directory leg is vacuous" ;;
+esac
+
+# The delta guard has to SEE the canonical skills home, or a wave that
+# rewrites every skill in the kit reports no agent-surface change at all.
+# tests/behavior-delta.test.sh cannot cover this: it drives the script with a
+# synthetic four-surface config of its own, so the kit's real one is never
+# read there and the entry could be deleted with that suite green.
+#
+# surface_covers <path> — the path matches some pattern in the kit's own
+# BEHAVIOR_DELTA_SURFACES. Each record is `Label|re|re|…`; a label cannot
+# match a path, so splitting on | and testing every field is enough.
+surface_covers() {
+	# The patterns come out through a FILE, not a pipe: a `while read` on the
+	# right of a pipe runs in a subshell, so its `return` would leave the
+	# loop rather than the function and every call answered "no match".
+	# shellcheck source=/dev/null
+	( . "$KIT/scripts/guards.config.sh" >/dev/null 2>&1
+	  printf '%s\n' "$BEHAVIOR_DELTA_SURFACES" | tr '|' '\n' ) >"$SCRATCH/surfaces.re"
+	while IFS= read -r _re; do
+		[ -n "$_re" ] || continue
+		printf '%s\n' "$1" | grep -Eq "$_re" && return 0
+	done <"$SCRATCH/surfaces.re"
+	return 1
+}
+
+if surface_covers ".agents/skills/tdd/SKILL.md"; then
+	pass "the delta guard's surfaces cover the canonical skills home"
 else
-	fail "the bridge test passed for a nonexistent bridge — the condition is vacuous"
+	fail "BEHAVIOR_DELTA_SURFACES does not match .agents/skills/… — a wave that rewrites every skill would report no agent-surface change"
+fi
+# …and the check discriminates: a path on no surface must not match, or the
+# leg above would pass for any string at all.
+if surface_covers "some/ordinary/file.txt"; then
+	fail "the surface check matched a path on no surface — it is vacuous"
+else
+	pass "the surface check rejects a path on no surface — it can go red"
 fi
 
 if [ ! -s "$SCRATCH/skills.manifest" ]; then
