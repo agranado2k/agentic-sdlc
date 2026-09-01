@@ -63,6 +63,26 @@ portable reasoning behind several of these rules is in `shared-invariants.md`.
      module boundaries, the direction dependencies are allowed to point, the
      patterns that are mandatory and the ones that are explicitly rejected. -->
 
+The three lines below are decisions made at stack-setup time, out loud — the
+design brief. Each has exactly two honest forms: the decision, or an explicit
+`none — <the reason>`. A blank is neither: an Architecture section nobody
+decided is decided by the first feature diff instead, and every later diff
+conforms to the accident. `/design-brief` asks these questions and records
+the answers; re-run it when the shape stops fitting.
+
+**Paradigm**: {{PARADIGM}}
+<!-- Functional, object-oriented, or a stated mix — and where the line is
+     (e.g. "pure functions in the domain, classes only at the adapters"). -->
+
+**Architectural style**: {{ARCHITECTURAL_STYLE}}
+<!-- The style the layering follows (ports and adapters, layered, modular
+     monolith, event-driven, …) and the one rule a newcomer would break. -->
+
+**Context map**: {{CONTEXT_MAP}}
+<!-- Where the bounded contexts and the edges between them are declared —
+     usually "see the context map in the glossary" — or `none — <reason>`
+     while the project is one context. -->
+
 - **Boundaries**: {{ARCHITECTURE_BOUNDARIES}}
 - **Data access**: {{DATA_ACCESS_PATTERN}}
 - **Names come from the glossary** — code, tests, commits, PR titles. A new term
