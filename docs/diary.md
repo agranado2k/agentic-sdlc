@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-08-29
+## Current state — 2026-09-01
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,13 +20,13 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.13.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.14.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.13.0 wave (PRDs #88/#89) landed as PRs #94/#95/#96/#98 and tagged v0.13.0 (2026-08-29). Open feedback: #87 (worktree vs topmost-config linters), #97 (vendor-named skills directory). |
+| **Active worktrees** | None. The 0.14.0 wave (PRD #100, from #97) landed as PRs #104/#105/#106 and tagged v0.14.0 (2026-09-01): skills are canonical at `.agents/skills/`, bridged into `.claude/skills/` by committed per-skill symlinks. Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
 ### Open questions / unresolved decisions
 
@@ -581,3 +581,49 @@ newly-exported stripFences, CRLF-proven). Tag v0.13.0 cut at #98's merge;
 one CI rerun for the usual tag race. Feedback filed during the wave: #87
 (in-tree worktrees vs topmost-config linters) and #97 (the `.claude/skills`
 name reads vendor-locked — needs a grill).
+
+## 2026-09-01 — the vendor-neutral home (0.14.0), and reviews that read the fix
+
+#97's complaint was one word wide: `.claude/skills` names a vendor for a set
+of skills that are all LLM-agnostic. `/grill-me` turned it into PRD #100 and
+three tickets, landed as PRs #104/#105/#106, tagged v0.14.0.
+
+The move itself: skills are canonical at `.agents/skills/` — the address the
+Agent Skills ecosystem reads, and the alias Gemini CLI documents — with a
+committed relative symlink per skill left at `.claude/skills/<name>`, because
+the one harness that reads only that address documents that a per-skill entry
+may be a symlink. `git mv` kept every file a rename. Staying put is a legal
+permanent state, so the gate resolves and SCANS both homes, and UPDATING.md
+carries a re-runnable migration fence rather than an instruction.
+
+**The wave's real lesson is about review timing.** Each PR's independent
+review had been posted seconds after its fix commit landed, so all three
+described findings that were already fixed — no reviewer had ever read a
+fix. Reviewing the fix commits on their own found more than the original
+reviews did, and the worst of it was in the migration fence: `[ -e
+".agents/skills/$s" ]` is true when the two addresses are two names for ONE
+directory, so a directory-level bridge was reported as a two-copy conflict
+whose advice — "delete the one you do not want" — removes the only copy.
+Reproduced on three shapes before it was fixed. The same pass found the
+fence unchained (`mv` failing still laid a bridge INSIDE the skill), a false
+"re-running finishes it", and a zsh abort that skipped the gate entirely for
+any project with no sidecar file — in a document that promises zsh.
+
+Three hard-rule-9 holes in the same pass, all mutation-proved: the legacy
+fallback in claude-md-refs — the whole staying-put promise — could be deleted
+with the suite 98/98 green, because the case claiming to cover it pointed at
+the CANONICAL address; the baked default was unreachable under test; and
+self-host's "can it go red" probe asked whether a never-created name lacks a
+bridge, which is true however the loop behaves.
+
+Two design calls came back from the operator and both inverted a default.
+The adopt arm's symlink refusal asked the wrong question — "is this parent a
+link?" rather than "where does this land?" — so it now refuses only on
+escape or dangle, covers EVERY directory the arm writes beneath instead of a
+hand-picked four, runs before section 1 (it had been firing at section 4,
+after three sections had written), and accepts a bridge by where it resolves
+rather than how it is spelled. And the diverged shadow — one skill name, two
+different bodies, one at each address — is now named by skill-bridge as an
+ADVISORY: written as a violation it turned adopt-demo red on the leg that
+blesses exactly that shape, since it is the adopt arm's own collision
+resolution. A build must not fail for a layout the kit hands you.
