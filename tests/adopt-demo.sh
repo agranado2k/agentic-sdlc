@@ -426,6 +426,61 @@ assert_status 0 "a directory-level skills bridge adopts clean" -- \
 assert_status 0 "the directory-bridged tree's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
+# A bridge that is CORRECT but spelled differently — an absolute path to the
+# same canonical directory — is ours, not a foreign occupant. The old
+# byte-compare called it a collision and told the operator to
+# "rename-or-decline", which is advice with nothing to act on: nothing needs
+# renaming, the link already points exactly where the kit would point it. The
+# gate agrees, and said OK on this very tree while adopt parked the run.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
+cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
+ln -s "$TARGET/.agents/skills/tdd" "$TARGET/.claude/skills/tdd"
+assert_status 0 "an absolutely-spelled bridge to the same target adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+printf '%s\n' "$LAST_OUT" | grep -q 'COLLISION skill .claude/skills/tdd' &&
+	fail "an equivalent bridge was reported as a collision — the check is comparing spelling, not destination" ||
+	pass "an equivalent bridge is recognised as ours, whatever its spelling"
+
+# …including one laid BEFORE its canonical skill exists, which is the state
+# the relative spelling is already forgiven in: the leaf dangles, the parent
+# does not, so the destination is still knowable.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
+ln -s "$TARGET/.agents/skills/prototype" "$TARGET/.claude/skills/prototype"
+assert_status 0 "an absolutely-spelled bridge laid ahead of its skill adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/.agents/skills/prototype/SKILL.md" ] &&
+	pass "the canonical skill was installed under the pre-laid bridge" ||
+	fail "the canonical skill was held back by a bridge that already pointed at it"
+
+# The two halves of "points home" are separately load-bearing, and the
+# foreign-link case below exercises neither: it fails both at once. These
+# isolate them.
+#
+# Right leaf name, wrong home — a link to THEIR tdd. Resolvable, so the
+# destination check is the only thing that can catch it.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills" "$TARGET/their-skills/tdd"
+printf '# theirs\n' >"$TARGET/their-skills/tdd/SKILL.md"
+ln -s ../../their-skills/tdd "$TARGET/.claude/skills/tdd"
+assert_status 3 "a resolvable link to a DIFFERENT home is still a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd"
+
+# Right home, wrong leaf — /tdd pointing at the prototype skill. The
+# destination check passes; only the leaf name catches it.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills" "$TARGET/.agents/skills"
+ln -s ../../.agents/skills/prototype "$TARGET/.claude/skills/tdd"
+assert_status 3 "a link into the canonical home under the WRONG name is a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd"
+
 # M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
 # target, or dangling) is a non-identical occupant — a COLLISION, never a
 # silent keep that leaves the gate red after a "complete" adopt.
