@@ -836,3 +836,22 @@ test("a command with a skill at neither address is still skill-missing", () => {
   assert.ok(hasRule(run(ctx), "skill-missing"));
   cleanup(ctx);
 });
+
+test("a command resolves at the canonical home even when the config names the legacy one", () => {
+  // Resolution was asymmetric the same way enumeration was: configured onto
+  // .claude/skills, the canonical home was never probed, so a consumer who
+  // took the kit's skills but never edited their config got skill-missing
+  // for every one of them.
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const ctx = ctxFor(
+    {
+      "AGENTS.md": "Write it test-first with `/tdd`.\n",
+      "CLAUDE.md": SHIM,
+      "GEMINI.md": SHIM,
+      ".agents/skills/tdd/SKILL.md": "# tdd\n",
+    },
+    configWith({ skillsDir: ".claude/skills" }),
+  );
+  assert.deepEqual(run(ctx).filter((f) => f.rule === "skill-missing"), []);
+  cleanup(ctx);
+});

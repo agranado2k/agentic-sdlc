@@ -18,7 +18,7 @@
 // built-in (`/loop`) is not a skill for either validator, and one exemption
 // with one recorded reason should serve both.
 
-import { commandRefs, LEGACY_SKILLS_DIR } from "./claude-md-refs.mjs";
+import { commandRefs, LEGACY_SKILLS_DIR, skillHomes } from "./claude-md-refs.mjs";
 
 export const id = "skill-web";
 
@@ -37,7 +37,7 @@ export function run(ctx) {
   // De-duplicated by skill name — a skill present at both addresses is one
   // skill, scanned once, from the configured home.
   const seen = new Set();
-  for (const dir of skillsDir === LEGACY_SKILLS_DIR ? [skillsDir] : [skillsDir, LEGACY_SKILLS_DIR]) {
+  for (const dir of skillHomes(skillsDir)) {
     for (const name of ctx.list(dir)) {
       if (seen.has(name)) continue;
       const file = `${dir}/${name}/SKILL.md`;

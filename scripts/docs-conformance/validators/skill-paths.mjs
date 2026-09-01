@@ -33,7 +33,7 @@
 // pathRoots the manual validator reads, and the same code-span/fence rules —
 // one definition of "what is a path reference", now three consumers.
 
-import { LEGACY_SKILLS_DIR, pathRefs, pathTokenRe } from "./claude-md-refs.mjs";
+import { LEGACY_SKILLS_DIR, pathRefs, pathTokenRe, skillHomes } from "./claude-md-refs.mjs";
 
 export const id = "skill-paths";
 
@@ -54,7 +54,7 @@ export function run(ctx) {
   // coverage to zero in silence. De-duplicated by skill name; the configured
   // home wins when a skill sits at both.
   const seen = new Set();
-  const homes = skillsDir === LEGACY_SKILLS_DIR ? [skillsDir] : [skillsDir, LEGACY_SKILLS_DIR];
+  const homes = skillHomes(skillsDir);
   for (const dir of homes) {
     for (const name of ctx.list(dir)) {
       if (seen.has(name)) continue;

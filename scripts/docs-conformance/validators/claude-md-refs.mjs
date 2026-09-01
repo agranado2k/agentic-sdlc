@@ -51,7 +51,7 @@ export const id = "claude-md-refs";
 
 const DEFAULT_ROOT_MANUAL = "AGENTS.md";
 const DEFAULT_CONSTITUTION_DIR = ".claude/constitution";
-const DEFAULT_SKILLS_DIR = ".agents/skills";
+export const DEFAULT_SKILLS_DIR = ".agents/skills";
 // The pre-0.14.0 skills address. Deliberately NOT configurable: it names one
 // historical layout, and a knob would invite pointing it somewhere new.
 export const LEGACY_SKILLS_DIR = ".claude/skills";
@@ -89,6 +89,19 @@ const COMMAND_TOKEN = /(?:^|[\s([{"'|])\/([a-z][a-z0-9-]*)(?=$|[\s)\]}"'|,.;:!?]
 // nested manual went unchecked. A bare package specifier (`@scope/name`) is
 // still not a path — the dotted-final-segment rule below sees to that.
 const PKG_RELATIVE = /^[\w.@-]+(?:\/[\w.@-]+)*\/?$/;
+
+/**
+ * The homes a skill may live in, configured one first, then the two the kit
+ * knows by name — de-duplicated, so a project already on one of them lists it
+ * once. Symmetric on purpose: the earlier form appended the legacy home only
+ * when the configured home was NOT it, which left a project configured ONTO
+ * the legacy address unable to see the canonical one at all. That is the
+ * layout a pre-0.14.0 consumer carries in a config nobody has edited, so it
+ * was the least deserving of a blind spot.
+ */
+export function skillHomes(skillsDir) {
+  return [...new Set([skillsDir, DEFAULT_SKILLS_DIR, LEGACY_SKILLS_DIR])];
+}
 
 export function run(ctx) {
   const cfg = ctx.config.claudeMdRefs ?? {};
@@ -297,7 +310,7 @@ function checkOne(ctx, file, base, pathRe) {
     // live at the pre-move address — staying put, or the adopt arm's
     // identical-copy case — is a sanctioned permanent state, so a command
     // resolves at the configured home OR the legacy one.
-    if (!ctx.exists(`${skillsDir}/${name}/SKILL.md`) && !ctx.exists(`${LEGACY_SKILLS_DIR}/${name}/SKILL.md`)) {
+    if (!skillHomes(skillsDir).some((d) => ctx.exists(`${d}/${name}/SKILL.md`))) {
       out.push({
         validator: id,
         file,

@@ -183,3 +183,10 @@ test("a skill at BOTH addresses is scanned once, and it is the CONFIGURED home t
   assert.match(out[0].message, /ghost-canonical\.sh/);
   cleanup(ctx);
 });
+
+test("a project configured onto the LEGACY home still scans the canonical one", () => {
+  const cfg = { ...defaultConfig, claudeMdRefs: { ...defaultConfig.claudeMdRefs, skillsDir: ".claude/skills" } };
+  const ctx = ctxFor({ ".agents/skills/a/SKILL.md": "Read `scripts/no-such-thing.sh`.\n" }, cfg);
+  assert.ok(hasRule(run(ctx), "skill-path-missing"));
+  cleanup(ctx);
+});
