@@ -59,7 +59,7 @@ export function run(ctx) {
       file: article,
       rule: "design-brief-missing",
       message: `records no design brief — none of ${labels} carries a decision`,
-      hint: "Fill at least one anchor: name the decision, or write `none — <reason>`. An Architecture section nobody decided is decided by the first feature diff instead; `/design-brief` is the skill that asks the questions and records the answers.",
+      hint: "Fill at least one anchor: name the decision, or write `none — <reason>`. An Architecture section nobody decided is decided by the first feature diff instead.",
     },
   ];
 }
