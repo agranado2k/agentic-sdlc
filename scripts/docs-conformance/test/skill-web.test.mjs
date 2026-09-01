@@ -176,3 +176,14 @@ test("the baked default is the canonical home — a config that names no skillsD
   assert.ok(hasRule(run(ctx), "skill-web-dangling"));
   cleanup(ctx);
 });
+
+test("a project configured onto the LEGACY home still sees the canonical one", () => {
+  // The asymmetry this replaces: with skillsDir at .claude/skills the
+  // enumeration listed that home ALONE, so a skill sitting at .agents/skills
+  // — which is where the kit's own installer puts them — got zero coverage.
+  // That config is what a pre-0.14.0 consumer carries untouched.
+  const cfg = { ...defaultConfig, claudeMdRefs: { ...defaultConfig.claudeMdRefs, skillsDir: ".claude/skills" } };
+  const ctx = ctxFor({ ".agents/skills/a/SKILL.md": "Run `/ghost` then stop.\n" }, cfg);
+  assert.ok(hasRule(run(ctx), "skill-web-dangling"));
+  cleanup(ctx);
+});

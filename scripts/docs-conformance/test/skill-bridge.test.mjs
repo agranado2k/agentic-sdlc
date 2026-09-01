@@ -104,3 +104,46 @@ test("an unreadable bridge entry is reported, not silently passed", { skip: proc
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// The wrong-pass this validator gained in 0.14.0: with a skill real at BOTH
+// addresses and the two bodies DIVERGED, every rule in the gate looked at the
+// configured home and reported nothing about the copy the other harness runs.
+test("a diverged real copy at the legacy address is reported, not passed over", () => {
+  const ctx = ctxFor({
+    ".agents/skills/tdd/SKILL.md": "# tdd\nThe canonical one.\n",
+    ".claude/skills/tdd/SKILL.md": "# tdd\nA STALE fork that still runs.\n",
+  });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.ok(hasRule(out, "skill-shadowed"));
+  assert.equal(out[0].file, ".claude/skills/tdd/SKILL.md");
+  // An advisory: the adopt arm's collision resolution produces exactly this
+  // shape on purpose, so it must not fail a build — but it must be SAID.
+  assert.equal(out[0].severity, "warning");
+  cleanup(ctx);
+});
+
+test("an IDENTICAL real copy at the legacy address stays silent — that is the adopt arm's sanctioned keep", () => {
+  const body = "# tdd\nOne body, two addresses.\n";
+  const ctx = ctxFor({
+    ".agents/skills/tdd/SKILL.md": body,
+    ".claude/skills/tdd/SKILL.md": body,
+  });
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
+
+test("one directory under two names is silent — the bodies are the same file", () => {
+  const root = makeFixture({ ".agents/skills/tdd/SKILL.md": "# tdd\n" });
+  mkdirSync(join(root, ".claude"), { recursive: true });
+  symlinkSync("../.agents/skills", join(root, ".claude/skills"));
+  const ctx = makeContext({ repoRoot: root, config: defaultConfig });
+  assert.deepEqual(run(ctx), []);
+});
+
+test("a project configured ONTO the legacy home has no shadow to report — it is one address", () => {
+  const cfg = { ...defaultConfig, claudeMdRefs: { ...defaultConfig.claudeMdRefs, skillsDir: ".claude/skills" } };
+  const ctx = ctxFor({ ".claude/skills/tdd/SKILL.md": "# tdd\n" }, cfg);
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
