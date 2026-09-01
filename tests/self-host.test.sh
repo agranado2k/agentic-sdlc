@@ -521,6 +521,42 @@ case " $probe_bad " in
 *) fail "the bridge check missed an unbridged SKILL (got:$probe_bad) — the directory leg is vacuous" ;;
 esac
 
+# The delta guard has to SEE the canonical skills home, or a wave that
+# rewrites every skill in the kit reports no agent-surface change at all.
+# tests/behavior-delta.test.sh cannot cover this: it drives the script with a
+# synthetic four-surface config of its own, so the kit's real one is never
+# read there and the entry could be deleted with that suite green.
+#
+# surface_covers <path> — the path matches some pattern in the kit's own
+# BEHAVIOR_DELTA_SURFACES. Each record is `Label|re|re|…`; a label cannot
+# match a path, so splitting on | and testing every field is enough.
+surface_covers() {
+	# The patterns come out through a FILE, not a pipe: a `while read` on the
+	# right of a pipe runs in a subshell, so its `return` would leave the
+	# loop rather than the function and every call answered "no match".
+	# shellcheck source=/dev/null
+	( . "$KIT/scripts/guards.config.sh" >/dev/null 2>&1
+	  printf '%s\n' "$BEHAVIOR_DELTA_SURFACES" | tr '|' '\n' ) >"$SCRATCH/surfaces.re"
+	while IFS= read -r _re; do
+		[ -n "$_re" ] || continue
+		printf '%s\n' "$1" | grep -Eq "$_re" && return 0
+	done <"$SCRATCH/surfaces.re"
+	return 1
+}
+
+if surface_covers ".agents/skills/tdd/SKILL.md"; then
+	pass "the delta guard's surfaces cover the canonical skills home"
+else
+	fail "BEHAVIOR_DELTA_SURFACES does not match .agents/skills/… — a wave that rewrites every skill would report no agent-surface change"
+fi
+# …and the check discriminates: a path on no surface must not match, or the
+# leg above would pass for any string at all.
+if surface_covers "some/ordinary/file.txt"; then
+	fail "the surface check matched a path on no surface — it is vacuous"
+else
+	pass "the surface check rejects a path on no surface — it can go red"
+fi
+
 if [ ! -s "$SCRATCH/skills.manifest" ]; then
 	fail "VERSION has no skills: section — the skill set ships unversioned, and a consumer's update has no state to diff against"
 else

@@ -333,6 +333,8 @@ if [ "$ADOPT" = 1 ]; then
 	for a_parent in .claude .claude/skills .agents .agents/skills; do
 		[ -L "$a_parent" ] &&
 			die "adopt: $a_parent is a symlink — refusing to write through it. Make it a real directory (or remove the link) and re-run."
+		[ -e "$a_parent" ] && [ ! -d "$a_parent" ] &&
+			die "adopt: $a_parent is a file, not a directory — refusing to write beneath it. Move it aside and re-run."
 	done
 	a_link_skill() {
 		rm -f "$a_scratch/link.$$"
@@ -382,7 +384,15 @@ if [ "$ADOPT" = 1 ]; then
 			fi
 		fi
 	done
-	if ! a_exists ".agents/skills/LICENSE-mattpocock-skills.md"; then
+	# The licence is classified like a skill, not merely kept. `a_exists` is
+	# ownership, so a DANGLING link at the canonical address counted as
+	# present and the file was skipped — a clean exit whose gate is red on
+	# every skill, because each one names this path literally. Same verdict
+	# the skills get: hold, and let a human decide.
+	if [ -L ".agents/skills/LICENSE-mattpocock-skills.md" ] &&
+		[ ! -e ".agents/skills/LICENSE-mattpocock-skills.md" ]; then
+		a_hit skill ".agents/skills/LICENSE-mattpocock-skills.md" rename-or-decline
+	elif ! a_exists ".agents/skills/LICENSE-mattpocock-skills.md"; then
 		a_copy ".agents/skills/LICENSE-mattpocock-skills.md" ".agents/skills/LICENSE-mattpocock-skills.md"
 	fi
 	# The licence gets the same bridge the skills do — an adopted tree should
