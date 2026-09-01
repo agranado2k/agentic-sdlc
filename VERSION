@@ -262,8 +262,22 @@
 # says the same, and the stamped manual's chain section carries the
 # precondition in one harness-neutral sentence.
 
-# 0.14.0 — the skills' vendor-neutral home (#97, PRD #100). No file joined or
-# left the layer; two manifest-listed files changed content. UPDATING.md: the
+# 0.14.0 — the skills' vendor-neutral home (#97, PRD #100). One file joins
+# the layer with the wave's gate slice:
+# scripts/docs-conformance/validators/skill-bridge.mjs — an advisory that
+# names the one failure shape the move added (a core.symlinks=false checkout
+# materializing the bridge as text files, blinding the harness that reads
+# only the old address; never a violation — a broken checkout must still run
+# the gate that diagnoses it). The skill-reading validators' baked default
+# follows the canonical home, and slash-command resolution gains a LEGACY
+# fallback: a skill living only at the pre-move address still resolves, so
+# staying put stays green — and both the slash-command web and the skill-body
+# scan ENUMERATE both homes, so a tree that never moved keeps its full
+# coverage instead of silently dropping to zero. Manifest-listed content
+# changes, beyond the joining file: validators/claude-md-refs.mjs,
+# validators/skill-web.mjs, validators/skill-paths.mjs and
+# docs-conformance/runner.mjs (the flip, the fallback, the dual enumeration
+# and its registration), plus UPDATING.md: the
 # recipe's kit-side skill paths follow the move below (the per-skill three-way
 # gains a yours/kit's split with a rename-aware diff, new-skill detection
 # spans both homes, the adopt fences lay the harness bridge), and the pinned
@@ -314,6 +328,7 @@ files:
   scripts/docs-conformance/validators/skill-web.mjs
   scripts/docs-conformance/validators/skill-paths.mjs
   scripts/docs-conformance/validators/mutation-decision.mjs
+  scripts/docs-conformance/validators/skill-bridge.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

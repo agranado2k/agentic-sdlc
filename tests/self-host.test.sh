@@ -461,9 +461,65 @@ manifest_skills() {
 }
 
 manifest_skills | sort >"$SCRATCH/skills.manifest"
-for d in "$KIT"/.claude/skills/*/; do
+for d in "$KIT"/.agents/skills/*/; do
 	basename "$d"
 done | sort >"$SCRATCH/skills.shipped"
+
+# The bridge holds, per skill: every canonical directory has a .claude/skills
+# symlink that resolves back to it, and no bridge entry is a stray real file.
+# Written as a function over a root so the SAME code can be pointed at a tree
+# built to fail it — the f5_check convention below, applied here.
+bridge_bad_for() {
+	_root="$1"
+	_bad=""
+	for _d in "$_root"/.agents/skills/*/; do
+		[ -d "$_d" ] || continue
+		_s=$(basename "$_d")
+		if [ ! -L "$_root/.claude/skills/$_s" ] || [ ! -f "$_root/.claude/skills/$_s/SKILL.md" ]; then
+			_bad="$_bad $_s"
+		fi
+	done
+	# The licence is a FILE symlink, not a directory one, and bootstrap lays it
+	# deliberately so an adopted tree matches a templated one — the directory
+	# glob above would never see it.
+	for _f in "$_root"/.agents/skills/*.md; do
+		[ -f "$_f" ] || continue
+		_b=$(basename "$_f")
+		if [ ! -L "$_root/.claude/skills/$_b" ] || [ ! -f "$_root/.claude/skills/$_b" ]; then
+			_bad="$_bad $_b"
+		fi
+	done
+	printf '%s' "$_bad"
+}
+
+bridge_bad=$(bridge_bad_for "$KIT")
+if [ -z "$bridge_bad" ]; then
+	pass "every canonical skill and sidecar has a resolving .claude/skills bridge"
+else
+	fail "bridge broken or missing for:$bridge_bad — the harness that reads only .claude/skills goes blind there"
+fi
+
+# …and the leg is not vacuous. The previous form of this probe asked whether a
+# name that was never created lacks a bridge, which is true of any nonexistent
+# path however the loop above behaves — it passed even when the loop was broken.
+# Drive the real code instead: a tree with a canonical skill and a canonical
+# sidecar, neither bridged, must come back naming both.
+probe_root="$SCRATCH/bridge-probe"
+mkdir -p "$probe_root/.agents/skills/probe-skill" "$probe_root/.claude/skills"
+: >"$probe_root/.agents/skills/probe-skill/SKILL.md"
+: >"$probe_root/.agents/skills/probe-sidecar.md"
+probe_bad=$(bridge_bad_for "$probe_root")
+case " $probe_bad " in
+*" probe-skill "*)
+	case " $probe_bad " in
+	*" probe-sidecar.md "*)
+		pass "the bridge check reports an unbridged skill AND an unbridged sidecar — it can go red"
+		;;
+	*) fail "the bridge check missed an unbridged SIDECAR (got:$probe_bad) — the *.md leg is vacuous" ;;
+	esac
+	;;
+*) fail "the bridge check missed an unbridged SKILL (got:$probe_bad) — the directory leg is vacuous" ;;
+esac
 
 # The delta guard has to SEE the canonical skills home, or a wave that
 # rewrites every skill in the kit reports no agent-surface change at all.
@@ -511,7 +567,7 @@ else
 	elif [ -n "$unlisted" ]; then
 		fail "shipped but not manifest-listed: $(printf '%s' "$unlisted" | tr '\n' ' ')— invisible to every consumer's update, the exact gap the manifest closes"
 	else
-		pass "skills: in VERSION and .claude/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
+		pass "skills: in VERSION and .agents/skills/ name the same set ($(wc -l <"$SCRATCH/skills.manifest" | tr -d ' ') skills)"
 	fi
 
 	# First word only on BOTH sides: skills.manifest already holds first words,

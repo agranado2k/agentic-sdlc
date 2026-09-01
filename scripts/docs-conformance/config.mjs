@@ -96,7 +96,7 @@ export const claudeMdRefs = {
   constitutionDir: "constitution",
 
   /** Where a `/command` resolves: `<skillsDir>/<name>/SKILL.md`. */
-  skillsDir: ".claude/skills",
+  skillsDir: ".agents/skills",
 
   /**
    * Commands that are real but are not repo skills. Each carries its reason
