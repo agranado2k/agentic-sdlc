@@ -255,6 +255,35 @@ if [ "$ADOPT" = 1 ]; then
 	# "your diary exists" never stops being true.
 	a_keep() { echo "  kept $1 (yours — never overwritten)"; }
 
+	# A symlinked PARENT routes every write below through it. What matters is
+	# WHERE it lands: a link that stays inside the repository is a layout
+	# choice — the one-link `.claude/skills -> ../.agents/skills` bridge
+	# UPDATING.md blesses is exactly that — and the project's files still end
+	# up in the project, which is the whole requirement. A link that leaves
+	# the repository (or resolves nowhere) is the hole: the files land
+	# outside, on a clean exit, and git never sees them. So the test is
+	# containment, not symlink-ness, and it covers EVERY directory this arm
+	# writes beneath rather than a hand-picked four.
+	a_root=$(pwd -P)
+	# a_escapes <path> — the path is a link that does not resolve to
+	# somewhere inside this repository.
+	a_escapes() {
+		[ -L "$1" ] || return 1
+		a_dest=$(cd "$1" 2>/dev/null && pwd -P)
+		[ -n "$a_dest" ] || return 0 # dangling — nothing to write into
+		case "$a_dest/" in
+		"$a_root"/*) return 1 ;;
+		*) return 0 ;;
+		esac
+	}
+	for a_parent in .claude .claude/skills .agents .agents/skills \
+		.githooks .github .github/workflows constitution docs docs/adr \
+		scripts scripts/docs-conformance; do
+		a_escapes "$a_parent" &&
+			die "adopt: $a_parent is a symlink that does not resolve inside this repository — refusing to write the project's own files outside it. Point it inside the repo (or make it a real directory) and re-run."
+		[ -e "$a_parent" ] && [ ! -d "$a_parent" ] &&
+			die "adopt: $a_parent is a file, not a directory — refusing to write beneath it. Move it aside and re-run."
+	done
 	# --- 1. the shared layer: byte-verbatim or a relocation proposal --------
 	# This awk is the manifest parser scripts/check.sh, UPDATING.md step 1 and
 	# two suites also carry — four twins by prior decision (a consumer's copy
@@ -326,16 +355,6 @@ if [ "$ADOPT" = 1 ]; then
 	# content at the old address is our own earlier install (or a consumer's
 	# deliberate real copy) and stays silent. The symlink is laid
 	# scratch-then-move like every other copy.
-	# A symlinked PARENT would route every write below through it — outside
-	# the repo, on a clean exit (the same hole the classifier's leaf checks
-	# close, one level up). Refuse before touching either side; this is a
-	# broken precondition, not a resolvable collision.
-	for a_parent in .claude .claude/skills .agents .agents/skills; do
-		[ -L "$a_parent" ] &&
-			die "adopt: $a_parent is a symlink — refusing to write through it. Make it a real directory (or remove the link) and re-run."
-		[ -e "$a_parent" ] && [ ! -d "$a_parent" ] &&
-			die "adopt: $a_parent is a file, not a directory — refusing to write beneath it. Move it aside and re-run."
-	done
 	a_link_skill() {
 		rm -f "$a_scratch/link.$$"
 		ln -s "../../.agents/skills/$1" "$a_scratch/link.$$" &&
@@ -347,6 +366,9 @@ if [ "$ADOPT" = 1 ]; then
 	# install may proceed. Their identical REAL directory is handled by the
 	# caller before this runs — that one is theirs to keep, bridge and all.
 	a_bridge() {
+		# When the two addresses ARE one directory, the alias is already the
+		# bridge and a per-skill link would point at itself.
+		[ "$a_same_home" = yes ] && return 0
 		if [ -L ".claude/skills/$1" ]; then
 			[ "$(readlink ".claude/skills/$1")" = "../../.agents/skills/$1" ] && return 0
 			a_hit skill ".claude/skills/$1" rename-or-decline
@@ -356,7 +378,15 @@ if [ "$ADOPT" = 1 ]; then
 		fi
 		a_link_skill "$1"
 	}
-	mkdir -p .claude/skills
+	mkdir -p .claude/skills .agents/skills
+	# Do the two skill addresses name the same directory? They do under a
+	# directory-level bridge, and then every per-skill link below would be
+	# self-referential. Resolved once, after the mkdir, so the answer is the
+	# same for the licence as for the skills.
+	a_same_home=no
+	a_old_home=$(cd .claude/skills 2>/dev/null && pwd -P)
+	a_new_home=$(cd .agents/skills 2>/dev/null && pwd -P)
+	[ -n "$a_new_home" ] && [ "$a_old_home" = "$a_new_home" ] && a_same_home=yes
 	for d in "$a_kit"/.agents/skills/*/; do
 		[ -d "$d" ] || continue
 		s=$(basename "$d")
@@ -397,7 +427,8 @@ if [ "$ADOPT" = 1 ]; then
 	fi
 	# The licence gets the same bridge the skills do — an adopted tree should
 	# not differ from a templated one by one entry.
-	if [ ! -L ".claude/skills/LICENSE-mattpocock-skills.md" ] &&
+	if [ "$a_same_home" != yes ] &&
+		[ ! -L ".claude/skills/LICENSE-mattpocock-skills.md" ] &&
 		! a_exists ".claude/skills/LICENSE-mattpocock-skills.md"; then
 		rm -f "$a_scratch/link.$$"
 		ln -s "../../.agents/skills/LICENSE-mattpocock-skills.md" "$a_scratch/link.$$" &&

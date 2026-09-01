@@ -341,7 +341,9 @@ banner "F3. Neutral-home review regressions (PR #104 findings)"
 # the loop in bootstrap.sh left this suite entirely green, and each dropped
 # name is a real write-through (28 files outside the repo for .agents/skills,
 # 17 for .claude).
-for a_link in .claude/skills .agents/skills .claude .agents; do
+for a_link in .claude/skills .agents/skills .claude .agents \
+	.githooks .github .github/workflows constitution docs docs/adr \
+	scripts scripts/docs-conformance; do
 	mk_kitcopy
 	mk_target
 	OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX")
@@ -356,6 +358,12 @@ for a_link in .claude/skills .agents/skills .claude .agents; do
 	[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
 		pass "nothing landed outside the target through the linked $a_link" ||
 		fail "adopt wrote through the symlinked $a_link into foreign ground"
+	# …and nothing landed INSIDE either. A refusal that fires after three
+	# sections have written is a half-adopted repo behind a message that
+	# reads like nothing happened, so the check has to precede every write.
+	[ -e "$TARGET/AGENTS.md" ] &&
+		fail "adopt wrote AGENTS.md before refusing $a_link — the refusal runs after the manual is installed" ||
+		pass "nothing landed inside the target either — the refusal precedes every write"
 done
 
 # The same refusal owes the same answer to a REGULAR FILE at one of those
@@ -372,6 +380,51 @@ for a_file in .claude .agents; do
 		pass "the file at $a_file is untouched by the refusal" ||
 		fail "adopt replaced or removed the regular file at $a_file"
 done
+
+# A DANGLING parent resolves nowhere at all, so "inside the repo" cannot be
+# established — and writing through it would create the destination wherever
+# the link happens to point. Refused with the escaping ones.
+mk_kitcopy
+mk_target
+ln -s ../nowhere-at-all "$TARGET/docs"
+assert_status 1 "a dangling parent link is refused too" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "does not resolve inside this repository"
+[ -e "$TARGET/../nowhere-at-all" ] &&
+	fail "adopt created the dangling link's destination outside the repo" ||
+	pass "the dangling link's destination was never created"
+
+# …and the mirror of that rule: a link that stays INSIDE the repository is a
+# layout choice, not a hole. The project's files still land in the project,
+# which is the whole requirement, so adopt must proceed rather than refuse.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/documentation"
+rm -rf "$TARGET/docs"
+ln -s documentation "$TARGET/docs"
+assert_status 0 "a parent linked INSIDE the repo is adopted, not refused" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/documentation/diary.md" ] &&
+	pass "the files landed inside the repo, through the link" ||
+	fail "adopt refused or misplaced files for an in-repo link — nothing landed at documentation/"
+
+# The one-link skills bridge UPDATING.md blesses: .claude/skills IS
+# .agents/skills. A per-skill link there would point at itself, so the arm
+# must lay none — and the tree must still pass the gate.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude"
+ln -s ../.agents/skills "$TARGET/.claude/skills"
+assert_status 0 "a directory-level skills bridge adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/.agents/skills/tdd/SKILL.md" ] &&
+	pass "skills installed at the canonical home under a directory-level bridge" ||
+	fail "no canonical skill installed under a directory-level bridge"
+[ -L "$TARGET/.agents/skills/tdd" ] &&
+	fail "a self-referential per-skill link was laid inside the shared home" ||
+	pass "no self-referential per-skill link was laid — the alias IS the bridge"
+assert_status 0 "the directory-bridged tree's gate is green" -- \
+	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
 # M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
 # target, or dangling) is a non-identical occupant — a COLLISION, never a
