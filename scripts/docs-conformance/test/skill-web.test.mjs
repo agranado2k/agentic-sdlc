@@ -151,13 +151,19 @@ test("a sibling installed only at the legacy address is not dangling", () => {
   cleanup(ctx);
 });
 
-test("a skill at BOTH addresses is scanned once, not twice", () => {
-  const body = "# implement\nEnd by running `/ghost-skill`.\n";
+test("a skill at BOTH addresses is scanned once, and it is the CONFIGURED home that wins", () => {
+  // The two bodies must DIFFER, or the case cannot see which address was
+  // read: with identical bodies, reversing the enumeration order left the
+  // suite green, so "the configured home wins" was a comment and a commit
+  // message rather than an assertion.
   const ctx = ctxFor({
-    ".agents/skills/implement/SKILL.md": body,
-    ".claude/skills/implement/SKILL.md": body,
+    ".agents/skills/implement/SKILL.md": "# implement\nEnd by running `/ghost-canonical`.\n",
+    ".claude/skills/implement/SKILL.md": "# implement\nEnd by running `/ghost-legacy`.\n",
   });
-  assert.equal(run(ctx).length, 1);
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].file, ".agents/skills/implement/SKILL.md");
+  assert.match(out[0].message, /ghost-canonical/);
   cleanup(ctx);
 });
 

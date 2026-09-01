@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -79,4 +79,28 @@ test("the hint names the canonical path repo-relatively, and only claims it is t
   const withoutSkill = run(absent);
   assert.match(withoutSkill[0].hint, /should be at \.agents\/skills\/tdd\./);
   cleanup(absent);
+});
+
+// The catch arm discriminates EISDIR (the healthy shapes) from everything
+// else. Without a case that actually throws something else, reverting it to a
+// bare `continue` — swallowing a permission error into a silent pass — leaves
+// the suite green, which is hard rule 9's definition of a claim. chmod cannot
+// lock root out of a read, so the mode-dependent half is skipped there rather
+// than asserted falsely.
+test("an unreadable bridge entry is reported, not silently passed", { skip: process.getuid?.() === 0 && "chmod does not restrain root" }, () => {
+  const root = makeFixture({ ".claude/skills/locked": "not link-shaped, and about to be unreadable\n" });
+  const entry = join(root, ".claude/skills/locked");
+  chmodSync(entry, 0o000);
+  try {
+    const ctx = makeContext({ repoRoot: root, config: defaultConfig });
+    const out = run(ctx);
+    assert.equal(out.length, 1);
+    assert.ok(hasRule(out, "skill-bridge-unreadable"));
+    assert.equal(out[0].severity, "warning");
+    assert.equal(out[0].file, ".claude/skills/locked");
+    assert.match(out[0].message, /EACCES/);
+  } finally {
+    chmodSync(entry, 0o644);
+    rmSync(root, { recursive: true, force: true });
+  }
 });

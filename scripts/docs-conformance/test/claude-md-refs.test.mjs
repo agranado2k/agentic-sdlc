@@ -767,15 +767,63 @@ test("a slash command resolves at the legacy skills address too — pre-move lay
   // arm's identical-copy case) is a sanctioned permanent state, not a
   // violation.
   const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  // The skill lives ONLY at the legacy address. Pointing this fixture at the
+  // canonical one (as it first did) made the case indistinguishable from the
+  // ordinary one above it: the legacy probe could be deleted outright and the
+  // whole suite stayed green — the compatibility promise this wave sells,
+  // with no failing check behind it.
   const ctx = ctxFor({
     "AGENTS.md": "Write it test-first with `/tdd`.\n",
     "CLAUDE.md": SHIM,
     "GEMINI.md": SHIM,
-    ".agents/skills/tdd/SKILL.md": "# tdd\n",
+    ".claude/skills/tdd/SKILL.md": "# tdd\n",
   });
   const out = run(ctx).filter((f) => f.rule === "skill-missing");
   assert.deepEqual(out, []);
   cleanup(ctx);
+});
+
+test("the baked default is the canonical home — a config naming no skillsDir still resolves", () => {
+  // Every other fixture inherits defaultConfig, which sets skillsDir
+  // explicitly, so DEFAULT_SKILLS_DIR is unreachable under test without this
+  // case: flipping the constant back to .claude/skills left the suite green.
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const cfg = configWith({ skillsDir: undefined });
+  const ctx = ctxFor(
+    {
+      "AGENTS.md": "Write it test-first with `/tdd`.\n",
+      "CLAUDE.md": SHIM,
+      "GEMINI.md": SHIM,
+      ".agents/skills/tdd/SKILL.md": "# tdd\n",
+    },
+    cfg,
+  );
+  assert.deepEqual(run(ctx).filter((f) => f.rule === "skill-missing"), []);
+  cleanup(ctx);
+});
+
+test("the skill-missing message names the legacy address only when it is not already the configured one", () => {
+  const SHIM = "<!-- Shim: the agent manual is AGENTS.md. Edit that file, not this one. -->\n@AGENTS.md\n";
+  const files = {
+    "AGENTS.md": "Run `/ghost` for nothing.\n",
+    "CLAUDE.md": SHIM,
+    "GEMINI.md": SHIM,
+  };
+
+  // Canonical default: the reader is told both addresses were checked.
+  const canonical = ctxFor(files);
+  const fromCanonical = run(canonical).filter((f) => f.rule === "skill-missing");
+  assert.equal(fromCanonical.length, 1);
+  assert.match(fromCanonical[0].message, /nor at the legacy \.claude\/skills/);
+  cleanup(canonical);
+
+  // A project configured ONTO the legacy home must not be told the gate also
+  // looked at the legacy home — it is the same directory, named twice.
+  const legacy = ctxFor(files, configWith({ skillsDir: ".claude/skills" }));
+  const fromLegacy = run(legacy).filter((f) => f.rule === "skill-missing");
+  assert.equal(fromLegacy.length, 1);
+  assert.doesNotMatch(fromLegacy[0].message, /nor at the legacy/);
+  cleanup(legacy);
 });
 
 test("a command with a skill at neither address is still skill-missing", () => {

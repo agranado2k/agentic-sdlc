@@ -467,38 +467,59 @@ done | sort >"$SCRATCH/skills.shipped"
 
 # The bridge holds, per skill: every canonical directory has a .claude/skills
 # symlink that resolves back to it, and no bridge entry is a stray real file.
-bridge_bad=""
-for d in "$KIT"/.agents/skills/*/; do
-	s=$(basename "$d")
-	if [ ! -L "$KIT/.claude/skills/$s" ] || [ ! -f "$KIT/.claude/skills/$s/SKILL.md" ]; then
-		bridge_bad="$bridge_bad $s"
-	fi
-done
-# The licence is a FILE symlink, not a directory one, and bootstrap lays it
-# deliberately so an adopted tree matches a templated one — the directory
-# glob above would never see it.
-for f in "$KIT"/.agents/skills/*.md; do
-	[ -f "$f" ] || continue
-	b=$(basename "$f")
-	if [ ! -L "$KIT/.claude/skills/$b" ] || [ ! -f "$KIT/.claude/skills/$b" ]; then
-		bridge_bad="$bridge_bad $b"
-	fi
-done
+# Written as a function over a root so the SAME code can be pointed at a tree
+# built to fail it — the f5_check convention below, applied here.
+bridge_bad_for() {
+	_root="$1"
+	_bad=""
+	for _d in "$_root"/.agents/skills/*/; do
+		[ -d "$_d" ] || continue
+		_s=$(basename "$_d")
+		if [ ! -L "$_root/.claude/skills/$_s" ] || [ ! -f "$_root/.claude/skills/$_s/SKILL.md" ]; then
+			_bad="$_bad $_s"
+		fi
+	done
+	# The licence is a FILE symlink, not a directory one, and bootstrap lays it
+	# deliberately so an adopted tree matches a templated one — the directory
+	# glob above would never see it.
+	for _f in "$_root"/.agents/skills/*.md; do
+		[ -f "$_f" ] || continue
+		_b=$(basename "$_f")
+		if [ ! -L "$_root/.claude/skills/$_b" ] || [ ! -f "$_root/.claude/skills/$_b" ]; then
+			_bad="$_bad $_b"
+		fi
+	done
+	printf '%s' "$_bad"
+}
+
+bridge_bad=$(bridge_bad_for "$KIT")
 if [ -z "$bridge_bad" ]; then
 	pass "every canonical skill and sidecar has a resolving .claude/skills bridge"
 else
 	fail "bridge broken or missing for:$bridge_bad — the harness that reads only .claude/skills goes blind there"
 fi
 
-# …and the leg is not vacuous: the same test against a name that has no
-# bridge must report it. A condition that can only ever be true guards
-# nothing (the F5 convention, applied here).
-if [ ! -L "$KIT/.claude/skills/no-such-skill-bridge" ] ||
-	[ ! -f "$KIT/.claude/skills/no-such-skill-bridge/SKILL.md" ]; then
-	pass "the bridge test fails for a name with no bridge — it can go red"
-else
-	fail "the bridge test passed for a nonexistent bridge — the condition is vacuous"
-fi
+# …and the leg is not vacuous. The previous form of this probe asked whether a
+# name that was never created lacks a bridge, which is true of any nonexistent
+# path however the loop above behaves — it passed even when the loop was broken.
+# Drive the real code instead: a tree with a canonical skill and a canonical
+# sidecar, neither bridged, must come back naming both.
+probe_root="$SCRATCH/bridge-probe"
+mkdir -p "$probe_root/.agents/skills/probe-skill" "$probe_root/.claude/skills"
+: >"$probe_root/.agents/skills/probe-skill/SKILL.md"
+: >"$probe_root/.agents/skills/probe-sidecar.md"
+probe_bad=$(bridge_bad_for "$probe_root")
+case " $probe_bad " in
+*" probe-skill "*)
+	case " $probe_bad " in
+	*" probe-sidecar.md "*)
+		pass "the bridge check reports an unbridged skill AND an unbridged sidecar — it can go red"
+		;;
+	*) fail "the bridge check missed an unbridged SIDECAR (got:$probe_bad) — the *.md leg is vacuous" ;;
+	esac
+	;;
+*) fail "the bridge check missed an unbridged SKILL (got:$probe_bad) — the directory leg is vacuous" ;;
+esac
 
 if [ ! -s "$SCRATCH/skills.manifest" ]; then
 	fail "VERSION has no skills: section — the skill set ships unversioned, and a consumer's update has no state to diff against"
