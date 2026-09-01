@@ -336,27 +336,42 @@ banner "F3. Neutral-home review regressions (PR #104 findings)"
 # have every bridge written THROUGH it — outside the repo, exit 0. The arm
 # must refuse before touching either side, and nothing may land beyond the
 # target's boundary.
-mk_kitcopy
-mk_target
-OUTSIDE=$(mktemp -d "$SCRATCH/outside-skills.XXXXXX")
-mkdir -p "$TARGET/.claude"
-ln -s "$OUTSIDE" "$TARGET/.claude/skills"
-assert_status 1 "a symlinked .claude/skills is a refusal, not a write-through" -- \
-	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "is a symlink"
-[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
-	pass "nothing landed outside the target through the linked skills dir" ||
-	fail "adopt wrote through the symlinked .claude/skills into foreign ground"
+# All FOUR parents the refusal names get the same probe. Covering only two of
+# them was itself a hard-rule-9 hole: dropping either of the other two from
+# the loop in bootstrap.sh left this suite entirely green, and each dropped
+# name is a real write-through (28 files outside the repo for .agents/skills,
+# 17 for .claude).
+for a_link in .claude/skills .agents/skills .claude .agents; do
+	mk_kitcopy
+	mk_target
+	OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX")
+	# The link's own parent has to exist for the nested cases, and must not
+	# itself be a link — this probe is about ONE symlinked parent at a time.
+	a_dir=$(dirname "$a_link")
+	[ "$a_dir" = "." ] || mkdir -p "$TARGET/$a_dir"
+	ln -s "$OUTSIDE" "$TARGET/$a_link"
+	assert_status 1 "a symlinked $a_link is a refusal, not a write-through" -- \
+		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+	assert_out_has "is a symlink"
+	[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
+		pass "nothing landed outside the target through the linked $a_link" ||
+		fail "adopt wrote through the symlinked $a_link into foreign ground"
+done
 
-mk_kitcopy
-mk_target
-OUTSIDE2=$(mktemp -d "$SCRATCH/outside-agents.XXXXXX")
-ln -s "$OUTSIDE2" "$TARGET/.agents"
-assert_status 1 "a symlinked .agents is the same refusal" -- \
-	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-[ -z "$(ls -A "$OUTSIDE2" 2>/dev/null)" ] &&
-	pass "nothing landed outside the target through the linked .agents" ||
-	fail "adopt wrote through the symlinked .agents into foreign ground"
+# The same refusal owes the same answer to a REGULAR FILE at one of those
+# names. Without it the run died later, at the mkdir, having already laid
+# bridges — a partial write behind a message that says nothing about why.
+for a_file in .claude .agents; do
+	mk_kitcopy
+	mk_target
+	printf 'not a directory\n' >"$TARGET/$a_file"
+	assert_status 1 "a regular file at $a_file is refused up front" -- \
+		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+	assert_out_has "is a file, not a directory"
+	[ -f "$TARGET/$a_file" ] &&
+		pass "the file at $a_file is untouched by the refusal" ||
+		fail "adopt replaced or removed the regular file at $a_file"
+done
 
 # M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
 # target, or dangling) is a non-identical occupant — a COLLISION, never a
@@ -385,6 +400,17 @@ assert_status 0 "an identical canonical skill without its bridge adopts clean" -
 [ -L "$TARGET/.claude/skills/tdd" ] && [ -f "$TARGET/.claude/skills/tdd/SKILL.md" ] &&
 	pass "the missing bridge was repaired on the clean path" ||
 	fail "an identical canonical skill was left with no bridge — clean exit, red gate"
+# L-1: a DANGLING canonical licence is a collision, not a silent keep. Every
+# shipped skill names this path literally, so keeping the dead link means a
+# clean "adopt: complete" whose very next gate run is red on all of them.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills"
+ln -s /nonexistent/licence "$TARGET/.agents/skills/LICENSE-mattpocock-skills.md"
+assert_status 3 "a dangling canonical licence is a collision, not a clean exit" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .agents/skills/LICENSE-mattpocock-skills.md"
+
 # L-2: the licence file gets the same bridge the skills do.
 [ -L "$TARGET/.claude/skills/LICENSE-mattpocock-skills.md" ] &&
 	pass "the licence bridge is laid too — adopted trees match template trees" ||
