@@ -529,10 +529,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1593 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1609 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1729 insertions(+), 1 deletion(-)
+ 3 files changed, 1745 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1544,10 +1544,26 @@ node-ts
 ruby
 
 $ sh scripts/check.sh
+WARN  docs conformance: advisories (gate stays green)
+
+  [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+
+OK  docs conformance: all checks passed
+
 OK  docs gate: all checks passed (shared-layer 0.15.0, engine: harness)
 ```
 
-Six things in that transcript are worth reading twice.
+Seven things in that transcript are worth reading twice.
+
+**`WARN  docs conformance: advisories (gate stays green)`, on the final run.**
+That block is the gate's warning channel, relayed through `scripts/check.sh`
+since 0.15.0 — before that a green wrapper swallowed it, so an advisory was
+audible only to someone running the harness by hand. What it names here is
+real and sanctioned: the skill-paths advisory sees a skill pointing at the
+provenance file 9a delivers, in a consumer that took 9a's delta for one skill
+and not the file beside it. Read every advisory the way you read this one: a
+finding about prose you own, printed so you can decide, never a failed push.
 
 **`ADD     scripts/agents.config.sh is new at v0.15.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the

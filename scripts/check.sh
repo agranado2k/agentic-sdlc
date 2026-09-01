@@ -229,6 +229,14 @@ posix_failed=0
 [ -s "$vfile" ] && posix_failed=1
 
 if [ "$posix_failed" = 0 ] && [ "$harness_status" = 0 ]; then
+	# A green harness may still carry ADVISORIES — findings on the warning
+	# channel that never fail the gate. Relay them: this wrapper is the entry
+	# point the hook and CI run, and a warning only the harness printed was a
+	# warning nobody saw (found by hand, ticket #108; refereed by
+	# tests/docs-gate-advisory.test.sh). Quiet when there is nothing to advise.
+	case "$harness_out" in
+	*"WARN  docs conformance"*) printf '%s\n\n' "$harness_out" >&2 ;;
+	esac
 	echo "OK  docs gate: all checks passed (shared-layer ${shared_version:-unknown}, engine: $engine)"
 	exit 0
 fi

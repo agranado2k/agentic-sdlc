@@ -310,8 +310,13 @@
 # in either honest form prints a warning, never a failure, because the article
 # is consumer-owned prose and an article filled from a pre-0.15.0 template is
 # sanctioned version skew; promotion to a violation is a named future path,
-# alongside the other advisories'. scripts/check.sh changed content: the
-# reduced fallback's notice names the scan it cannot run. UPDATING.md moved
+# alongside the other advisories'. scripts/check.sh changed content twice:
+# the reduced fallback's notice names the scan it cannot run, and — the fix
+# this slice's demo forced — a GREEN gate now relays the harness's advisories
+# to stderr instead of swallowing them. Every advisory since 0.11.0 had been
+# audible only from the harness run directly, never through the wrapper the
+# hook and CI actually run; tests/docs-gate-advisory.test.sh (kit-only) holds
+# the relay from here on. UPDATING.md moved
 # with the bump (the pinned versions advanced; the transcripts re-captured).
 # This note grows with the wave's stacked tickets — the tactical craft rule,
 # the housekeeping advisory — and is finished at the v0.15.0 tag.

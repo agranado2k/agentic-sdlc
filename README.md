@@ -543,6 +543,10 @@ skeleton (K0).
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
 
+- `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
+  audible where the operator actually looks: an advisory the harness reports
+  on a green tree is relayed by `scripts/check.sh` — the entry point the hook
+  and CI run — and a tree with nothing to advise prints no advisory block.
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -612,6 +616,7 @@ sh tests/dogfood-optin.test.sh                         # the one optional skill,
 sh tests/setup-demo.sh                                 # the one-line agent setup, from its own bytes
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
+sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
