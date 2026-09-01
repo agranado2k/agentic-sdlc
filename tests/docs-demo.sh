@@ -1605,6 +1605,199 @@ if [ -s "$SCRATCH/migrate.sh" ]; then
 		fail "the block skipped a two-copy skill silently — the convergence claim is false"
 		sed 's/^/        | /' "$SCRATCH/migrate3.out"
 	fi
+
+	# ---------------------------------------------------------------------
+	# The block is executable text a consumer runs against their own repo,
+	# so each shape below is a tree built to make it misbehave. They are
+	# built from scratch rather than by mutating $C3: the interesting ones
+	# need .claude/skills to BE a symlink, which is not a shape a real
+	# consumer tree can be bent into halfway.
+	# ---------------------------------------------------------------------
+
+	# mig_fixture <dir> — an empty project the block can run in.
+	mig_fixture() {
+		rm -rf "$SCRATCH/$1"
+		mkdir -p "$SCRATCH/$1/scripts"
+		printf 'exit 0\n' >"$SCRATCH/$1/scripts/check.sh"
+	}
+
+	# One directory reached by TWO NAMES is not a two-copy conflict, and
+	# reporting it as one is a data-loss bug, not a cosmetic one: the
+	# SKIPPED line tells the reader to "delete the one you do not want",
+	# and either name they pick takes the only copy with it. Three shapes
+	# reach that state; all three must pass over in silence.
+	for shape in dir-bridge reverse-parent per-skill-link; do
+		mig_fixture "alias-$shape"
+		(
+			cd "$SCRATCH/alias-$shape" || exit 2
+			case "$shape" in
+			dir-bridge) # .claude/skills -> ../.agents/skills
+				mkdir -p .agents/skills/tdd .claude
+				printf '# tdd\n' >.agents/skills/tdd/SKILL.md
+				ln -s ../.agents/skills .claude/skills
+				;;
+			reverse-parent) # .agents/skills -> ../.claude/skills
+				mkdir -p .claude/skills/tdd .agents
+				printf '# tdd\n' >.claude/skills/tdd/SKILL.md
+				ln -s ../.claude/skills .agents/skills
+				;;
+			per-skill-link) # .agents/skills/tdd -> ../../.claude/skills/tdd
+				mkdir -p .claude/skills/tdd .agents/skills
+				printf '# tdd\n' >.claude/skills/tdd/SKILL.md
+				ln -s ../../.claude/skills/tdd .agents/skills/tdd
+				;;
+			esac
+			sh "$SCRATCH/migrate.sh" >"$SCRATCH/alias-$shape.out" 2>&1
+		)
+		if grep -qi 'SKIPPED' "$SCRATCH/alias-$shape.out"; then
+			fail "$shape: the block called one directory under two names a two-copy conflict — its advice deletes the only copy"
+			sed 's/^/        | /' "$SCRATCH/alias-$shape.out"
+		elif [ -f "$SCRATCH/alias-$shape/.agents/skills/tdd/SKILL.md" ]; then
+			pass "$shape: two names for one directory is passed over in silence, copy intact"
+		else
+			fail "$shape: the skill did not survive the migration block"
+		fi
+	done
+
+	# The sidecar loop's own two-copy case. The directory leg above proves
+	# nothing about it — they are separate loops with separate messages,
+	# and only the directory one had a case.
+	mig_fixture side-conflict
+	(
+		cd "$SCRATCH/side-conflict" || exit 2
+		mkdir -p .claude/skills .agents/skills
+		printf 'theirs\n' >.claude/skills/NOTES.md
+		printf 'a copy\n' >.agents/skills/NOTES.md
+		sh "$SCRATCH/migrate.sh" >"$SCRATCH/side-conflict.out" 2>&1
+	)
+	if grep -q 'NOTES.md' "$SCRATCH/side-conflict.out"; then
+		pass "a two-copy SIDECAR is reported too — the second loop has its own voice"
+	else
+		fail "the sidecar loop skipped a two-copy file silently"
+		sed 's/^/        | /' "$SCRATCH/side-conflict.out"
+	fi
+
+	# Idempotency asserted on OUTPUT, not just exit status. With the
+	# already-bridged guards removed the block still exits 0 on a migrated
+	# tree — it just shouts a false conflict about every skill, whose
+	# advice is the deletion above. Exit status cannot see that.
+	mig_fixture rerun
+	(
+		cd "$SCRATCH/rerun" || exit 2
+		mkdir -p .claude/skills/tdd
+		printf '# tdd\n' >.claude/skills/tdd/SKILL.md
+		printf 'lic\n' >.claude/skills/LICENCE.md
+		sh "$SCRATCH/migrate.sh" >/dev/null 2>&1
+		sh "$SCRATCH/migrate.sh" >"$SCRATCH/rerun.out" 2>&1
+	)
+	if [ -s "$SCRATCH/rerun.out" ]; then
+		fail "a second run on a migrated tree said something — an already-bridged skill or sidecar is being re-reported"
+		sed 's/^/        | /' "$SCRATCH/rerun.out"
+	else
+		pass "a second run on a migrated tree is SILENT, not merely exit 0"
+	fi
+
+	# "An interrupted run is finished by running it again" covers the window
+	# between the mv and the ln: a skill already real at the canonical
+	# address with no bridge yet. Both loops walk the OLD address, so
+	# neither can see it — only the repair pass can.
+	mig_fixture interrupted
+	(
+		cd "$SCRATCH/interrupted" || exit 2
+		mkdir -p .agents/skills/tdd .claude/skills
+		printf '# tdd\n' >.agents/skills/tdd/SKILL.md
+		sh "$SCRATCH/migrate.sh" >/dev/null 2>&1
+	)
+	if [ -L "$SCRATCH/interrupted/.claude/skills/tdd" ]; then
+		pass "a re-run bridges a skill the previous run moved but did not link — the interruption really is recoverable"
+	else
+		fail "a skill moved-but-unbridged stayed unbridged on a re-run — 'finished by running it again' is false"
+	fi
+
+	# The already-bridged guard earns its place on a link at the old address
+	# that RESOLVES somewhere other than the canonical home — someone's own
+	# arrangement, pointing outside both. The pwd comparison cannot help
+	# (the two sides are genuinely different directories) and the canonical
+	# slot is empty, so without the guard the block moves the link itself
+	# into the canonical home and calls that a migration.
+	mig_fixture foreign-bridge
+	(
+		cd "$SCRATCH/foreign-bridge" || exit 2
+		mkdir -p .claude/skills .agents/skills elsewhere/tdd
+		printf '# theirs\n' >elsewhere/tdd/SKILL.md
+		ln -s ../../elsewhere/tdd .claude/skills/tdd
+		sh "$SCRATCH/migrate.sh" >/dev/null 2>&1
+	)
+	if [ -e "$SCRATCH/foreign-bridge/.agents/skills/tdd" ] ||
+		[ -L "$SCRATCH/foreign-bridge/.agents/skills/tdd" ]; then
+		fail "a link pointing outside both homes was moved into the canonical slot — the block rewrote someone's own arrangement"
+	elif [ -L "$SCRATCH/foreign-bridge/.claude/skills/tdd" ]; then
+		pass "a link that resolves outside both homes is left exactly where it is"
+	else
+		fail "a foreign bridge vanished — the block deleted a link it should not touch"
+	fi
+
+	# Its sibling shape, and the reason the guard is not just the pwd check
+	# spelled twice: a bridge whose canonical is already gone is DANGLING,
+	# and a dangling link never matches the loop's `*/` pattern at all.
+	mig_fixture stale-bridge
+	(
+		cd "$SCRATCH/stale-bridge" || exit 2
+		mkdir -p .claude/skills .agents/skills
+		ln -s ../../.agents/skills/tdd .claude/skills/tdd
+		sh "$SCRATCH/migrate.sh" >/dev/null 2>&1
+	)
+	if [ -L "$SCRATCH/stale-bridge/.claude/skills/tdd" ]; then
+		pass "a bridge whose canonical is gone is left exactly where it is"
+	else
+		fail "a stale bridge vanished — the block deleted a link it should not touch"
+	fi
+
+	# A failed mv must not be followed by its ln: the link would land INSIDE
+	# the skill directory that did not move, leaving junk a re-run keeps.
+	mig_fixture mv-fails
+	(
+		cd "$SCRATCH/mv-fails" || exit 2
+		mkdir -p .claude/skills/tdd .agents/skills
+		printf '# tdd\n' >.claude/skills/tdd/SKILL.md
+		chmod 555 .agents/skills
+		sh "$SCRATCH/migrate.sh" >/dev/null 2>&1
+		chmod 755 .agents/skills
+	)
+	# -L, not -e: the stray link points at ../../.agents/… from INSIDE the
+	# skill directory, so it resolves to nothing and -e is false either way.
+	if [ -L "$SCRATCH/mv-fails/.claude/skills/tdd/tdd" ]; then
+		fail "a failed mv still laid its bridge — the link landed inside the skill it failed to move"
+	else
+		pass "a failed mv does not lay a bridge — mv and ln are chained"
+	fi
+
+	# The block declares POSIX sh and the recipe promises bash and zsh too.
+	# zsh aborts a whole block on a pattern that matches nothing, so a
+	# project with no sidecar file never reaches the gate — the one shell
+	# the recipe names as the likely paste target.
+	if command -v zsh >/dev/null 2>&1; then
+		mig_fixture zsh-nullglob
+		# The gate line is the LAST line of the block, so a marker written by
+		# it is the only proof the block ran to the end. Asserting the bridge
+		# instead proves nothing: the directory loop lays it before the
+		# sidecar pattern is ever reached.
+		printf 'touch reached-the-end\n' >"$SCRATCH/zsh-nullglob/scripts/check.sh"
+		(
+			cd "$SCRATCH/zsh-nullglob" || exit 2
+			mkdir -p .claude/skills/tdd
+			printf '# tdd\n' >.claude/skills/tdd/SKILL.md
+			zsh "$SCRATCH/migrate.sh" >"$SCRATCH/zsh-nullglob.out" 2>&1
+		)
+		if [ -f "$SCRATCH/zsh-nullglob/reached-the-end" ]; then
+			pass "the block completes under zsh with no sidecar file — an unmatched pattern does not abort it"
+		else
+			fail "zsh aborted the block on an unmatched pattern — the recipe promises zsh and a sidecar-less project is the common case"
+			sed 's/^/        | /' "$SCRATCH/zsh-nullglob.out"
+		fi
+	else
+		note "zsh is not installed — the unmatched-pattern leg is skipped"
+	fi
 fi
 
 # The other half of the decision: STAYING PUT is legal, permanently. The

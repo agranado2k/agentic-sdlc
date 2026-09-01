@@ -528,10 +528,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1546 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  129 ++++
+ UPDATING.md                       | 1589 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  129 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1682 insertions(+), 1 deletion(-)
+ 3 files changed, 1725 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -870,20 +870,31 @@ release put them, and they are yours.
 **Staying put is a legal permanent state, not a debt.** A `/command` resolves
 at your configured skills directory *or* at `.claude/skills`, forever, and
 both addresses are scanned — the gate carries that fallback deliberately, so
-a project that never migrates keeps its full coverage, never goes red for the
-command web, and never sees a warning about it either. Migrate only if you
-want the neutral address: a second agent tool in the room, or a contributor
-who looks for skills where the ecosystem documents them.
+a project that never migrates keeps its full coverage and never goes red for
+the command web. Migrate only if you want the neutral address: a second agent
+tool in the room, or a contributor who looks for skills where the ecosystem
+documents them.
 
-**One bound on that promise, and it bites at step 9b.** The fallback covers
-slash commands; a **literal path** written in your manual is checked against
-the filesystem with no fallback, and a dead one is a violation, not a
-warning. The kit's own manual template now writes that licence pointer as
-`.agents/skills/LICENSE-mattpocock-skills.md`. So if you stay put and take
-that row across at 9b verbatim, your next push fails on `path-missing` — take
-the row, then point it at the address your tree actually uses. Same rule as
-every other 9b take: the section is the thing you want, the path inside it is
-yours to fit.
+**The promise covers the command web, and nothing else — the bound bites
+twice.** The fallback resolves `/commands` at either address. A **literal
+path** is not a command: it is checked against the filesystem with no
+fallback, so a `.agents/skills/…` path in a tree that has no `.agents/skills`
+is simply dead, and every file the kit ships that names one carries that dead
+path into a staying-put project.
+
+- **At 9a**, the skills themselves. Eleven of the 0.14.0 skill files point at
+  a sibling by literal path — most at
+  `.agents/skills/LICENSE-mattpocock-skills.md`. Take them into a staying-put
+  tree and every gate run prints a `skill-path-missing` **advisory** for each.
+  Advisories never fail a build, so this is noise rather than a wall, but it
+  is noise on every run until you either migrate or rewrite the paths.
+- **At 9b**, the manual. The template writes that same licence pointer as
+  `.agents/skills/LICENSE-mattpocock-skills.md`, and in the manual a dead
+  literal path is a **violation**, not an advisory — take that row verbatim
+  and your next push fails on `path-missing`.
+
+Both have the same fix, and it is the same rule as every other 9b take: the
+section is the thing you want, the path inside it is yours to fit.
 
 If you do want it, this is the whole move. It relocates only what is still a
 real directory at the old address, laying the bridge as it goes, and it is
@@ -891,41 +902,73 @@ safe to re-run — an interrupted migration is finished by running it again:
 
 ```sh
 mkdir -p .agents/skills
+here=$(cd .agents/skills && pwd -P)
+# zsh aborts a block on a pattern that matches nothing, where sh and bash
+# leave it unexpanded for the guards below to drop. sh never runs this line.
+[ -n "${ZSH_VERSION-}" ] && setopt no_nomatch
 for d in .claude/skills/*/; do
 	[ -d "$d" ] || continue
 	s=$(basename "$d")
 	[ -L ".claude/skills/$s" ] && continue   # already bridged — nothing to do
-	if [ -e ".agents/skills/$s" ]; then
-		echo "SKIPPED $s — it exists at BOTH addresses; delete the one you do not want, then re-run" >&2
+	if [ -e ".agents/skills/$s" ] || [ -L ".agents/skills/$s" ]; then
+		# One directory reached by two names is NOT a conflict, and must never
+		# be reported as one: the advice below would delete the only copy.
+		[ -L ".agents/skills/$s" ] && continue
+		[ "$(cd ".claude/skills/$s" && pwd -P)" = "$(cd ".agents/skills/$s" && pwd -P)" ] && continue
+		echo "SKIPPED $s — a SEPARATE real directory exists at both addresses; delete the one you do not want, then re-run" >&2
 		continue
 	fi
-	mv ".claude/skills/$s" ".agents/skills/$s"
-	ln -s "../../.agents/skills/$s" ".claude/skills/$s"
+	mv ".claude/skills/$s" ".agents/skills/$s" &&
+		ln -s "../../.agents/skills/$s" ".claude/skills/$s"
 done
 for f in .claude/skills/*.md; do
 	[ -f "$f" ] || continue
 	[ -L "$f" ] && continue
 	b=$(basename "$f")
-	if [ -e ".agents/skills/$b" ]; then
-		echo "SKIPPED $b — it exists at BOTH addresses; delete the one you do not want, then re-run" >&2
+	if [ -e ".agents/skills/$b" ] || [ -L ".agents/skills/$b" ]; then
+		[ -L ".agents/skills/$b" ] && continue
+		[ "$(cd .claude/skills && pwd -P)" = "$here" ] && continue
+		echo "SKIPPED $b — a SEPARATE real file exists at both addresses; delete the one you do not want, then re-run" >&2
 		continue
 	fi
-	mv "$f" ".agents/skills/$b"
-	ln -s "../../.agents/skills/$b" ".claude/skills/$b"
+	mv "$f" ".agents/skills/$b" &&
+		ln -s "../../.agents/skills/$b" ".claude/skills/$b"
 done
+# Finish anything a previous interrupted run moved but did not yet bridge.
+# The loops above walk the OLD address, so they cannot see those on a re-run.
+if [ -d .claude/skills ] && [ ! -L .claude/skills ]; then
+	for n in .agents/skills/*/ .agents/skills/*.md; do
+		[ -e "$n" ] || continue
+		b=$(basename "$n")
+		[ -e ".claude/skills/$b" ] || [ -L ".claude/skills/$b" ] ||
+			ln -s "../../.agents/skills/$b" ".claude/skills/$b"
+	done
+fi
 sh scripts/check.sh
 ```
 
-Three notes on what it does **not** do. It never rewrites a symlink, and it
-never moves a skill you already moved — so an interrupted run is finished by
-re-running it. It does **not** silently reconcile a skill that exists as a
-real directory at *both* addresses, which is what a `cp` instead of a `mv`
-leaves behind: it prints `SKIPPED` and leaves the choice to you, because
-which copy is the real one is not a question a recipe can answer. And it
-leaves `claudeMdRefs.skillsDir` in your `scripts/docs-conformance/config.mjs`
-alone: that file is yours, both addresses resolve, and pointing it at
-`.agents/skills` is a one-word edit you can make whenever you like — or
-never.
+Four notes on what it does **not** do. It never rewrites a symlink, and it
+never moves a skill you already moved — so an interrupted run really is
+finished by running it again, including the window between the `mv` and the
+`ln -s`, which the final loop closes by bridging anything already sitting at
+the canonical address unbridged.
+
+It does **not** silently reconcile a skill that exists as a **separate real
+directory** at both addresses, which is what a `cp` instead of a `mv` leaves
+behind: it prints `SKIPPED` and leaves the choice to you, because which copy
+is the real one is not a question a recipe can answer.
+
+It does **not** mistake one directory reached by two names for that conflict
+— a bridge laid at the directory level rather than per skill, or a link
+pointing back the other way. There is one copy there, so the block passes
+over it in silence. This distinction is the reason the `SKIPPED` line says
+*separate*: acting on that advice when the two names share a directory would
+delete the only copy you have.
+
+And it leaves `claudeMdRefs.skillsDir` in your
+`scripts/docs-conformance/config.mjs` alone: that file is yours, both
+addresses resolve, and pointing it at `.agents/skills` is a one-word edit you
+can make whenever you like — or never.
 
 It relocates every real directory under `.claude/skills/`, whether or not it
 holds a `SKILL.md`. That is deliberate: a notes folder you keep beside your
