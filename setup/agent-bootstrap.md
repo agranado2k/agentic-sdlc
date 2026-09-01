@@ -94,7 +94,9 @@ configuration, so every collaborator's fresh clone re-runs
 ## 4. Bring the chain into scope
 
 The project you just stamped is driven through slash commands — the skills
-under its `.claude/skills/`. A harness discovers skills from the directory a
+under its `.agents/skills/`, bridged into `.claude/skills/` by per-skill
+symlinks for the harness that reads only that address. A harness discovers
+skills from the directory a
 session starts in, and your session started a level **above** this project
 (`SETUP.md` cloned into a subdirectory), so the chain is invisible to you
 until you load it. Open the stamped `AGENTS.md` with your

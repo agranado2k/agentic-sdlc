@@ -134,6 +134,7 @@ export const claudeMdRefs = {
     "adapters",
     ".githooks",
     ".github",
+    ".agents/skills",
     ".claude/hooks",
     ".claude/skills",
     ".claude/constitution",

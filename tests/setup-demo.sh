@@ -242,7 +242,15 @@ else
 	fail "the produced project has no stamped AGENTS.md"
 fi
 
-for gone in bootstrap.sh SETUP.md setup tests EXCLUSIONS.md .claude/skills/dogfood; do
+# The neutral home (issue #97): the spine's produced project carries the
+# canonical skill files and the per-skill symlink bridge.
+if [ -f "$PROJ/.agents/skills/tdd/SKILL.md" ] && [ -L "$PROJ/.claude/skills/tdd" ]; then
+	pass "the produced project has the neutral home and the symlink bridge"
+else
+	fail "the produced project lacks .agents/skills canonical files or the .claude/skills symlinks (issue #97)"
+fi
+
+for gone in bootstrap.sh SETUP.md setup tests EXCLUSIONS.md .claude/skills/dogfood .agents/skills/dogfood; do
 	if [ -e "$PROJ/$gone" ]; then
 		fail "$gone survived into the produced project — it is kit-only (or declined) and bootstrap must delete it"
 	else

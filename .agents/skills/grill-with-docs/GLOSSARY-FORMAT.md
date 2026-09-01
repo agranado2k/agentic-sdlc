@@ -71,7 +71,7 @@ exists to prevent.
 
 *Replaces the upstream `CONTEXT-FORMAT.md` from
 [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see
-`.claude/skills/LICENSE-mattpocock-skills.md`. Upstream puts the language in a
+`.agents/skills/LICENSE-mattpocock-skills.md`. Upstream puts the language in a
 root `CONTEXT.md` with a `CONTEXT-MAP.md` for multi-context repos; this kit
 already ships a glossary document, so the skill writes into that one instead of
 creating a second home for the same rule.*

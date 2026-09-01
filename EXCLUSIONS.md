@@ -26,7 +26,7 @@ Two corollaries:
 - **An entry that stops being true gets deleted, in the PR that makes it
   untrue.** `tests/exclusions.test.sh` enforces this half mechanically: every
   entry marked `(excluded)` below must have no matching directory in
-  `.claude/skills/`. A record that confidently names something the kit *does*
+  `.agents/skills/`. A record that confidently names something the kit *does*
   ship is worse than no record at all.
 
 The entry format is load-bearing, not decorative: `### /<command> (excluded)`

@@ -230,6 +230,14 @@ cmp -s "$SCRATCH/theirs/README.md" "$TARGET/README.md" &&
 	fail "the clean path overwrote their README"
 [ -f "$TARGET/.claude/skills/dogfood/SKILL.md" ] && pass "dogfood installed under --with-dogfood" ||
 	fail "--with-dogfood did not install the skill"
+# The adopt arm installs both addresses: canonical real files at the neutral
+# home, and the per-skill symlink bridge at the vendor-named one (issue #97).
+[ -f "$TARGET/.agents/skills/dogfood/SKILL.md" ] && [ ! -L "$TARGET/.agents/skills/dogfood" ] &&
+	pass "the adopt arm lays the canonical home as real files" ||
+	fail "the adopt arm did not install .agents/skills/dogfood as real files (issue #97)"
+[ -L "$TARGET/.claude/skills/dogfood" ] &&
+	pass "the adopt arm lays the per-skill symlink bridge" ||
+	fail "the adopt arm's .claude/skills/dogfood is not a symlink (issue #97)"
 assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" "docs/dogfood-reports/" \
 	"the exemption ships with the skill"
 assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" "markers consumed on the accept path too"
@@ -320,6 +328,201 @@ case "$LAST_OUT" in
 *"docs/dogfood-reports/"*) pass "the flag flip names the exemption the kept config now lacks" ;;
 *) fail "the dogfood flag flipped against a kept config and nothing said so — a latent gate warning ships silently" ;;
 esac
+
+# ---------------------------------------------------------------------------
+banner "F3. Neutral-home review regressions (PR #104 findings)"
+# ---------------------------------------------------------------------------
+# H-2: a target whose .claude/skills (or .agents) is itself a SYMLINK would
+# have every bridge written THROUGH it — outside the repo, exit 0. The arm
+# must refuse before touching either side, and nothing may land beyond the
+# target's boundary.
+# All FOUR parents the refusal names get the same probe. Covering only two of
+# them was itself a hard-rule-9 hole: dropping either of the other two from
+# the loop in bootstrap.sh left this suite entirely green, and each dropped
+# name is a real write-through (28 files outside the repo for .agents/skills,
+# 17 for .claude).
+for a_link in .claude/skills .agents/skills .claude .agents \
+	.githooks .github .github/workflows constitution docs docs/adr \
+	scripts scripts/docs-conformance; do
+	mk_kitcopy
+	mk_target
+	OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX")
+	# The link's own parent has to exist for the nested cases, and must not
+	# itself be a link — this probe is about ONE symlinked parent at a time.
+	a_dir=$(dirname "$a_link")
+	[ "$a_dir" = "." ] || mkdir -p "$TARGET/$a_dir"
+	ln -s "$OUTSIDE" "$TARGET/$a_link"
+	assert_status 1 "a symlinked $a_link is a refusal, not a write-through" -- \
+		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+	assert_out_has "is a symlink"
+	[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
+		pass "nothing landed outside the target through the linked $a_link" ||
+		fail "adopt wrote through the symlinked $a_link into foreign ground"
+	# …and nothing landed INSIDE either. A refusal that fires after three
+	# sections have written is a half-adopted repo behind a message that
+	# reads like nothing happened, so the check has to precede every write.
+	[ -e "$TARGET/AGENTS.md" ] &&
+		fail "adopt wrote AGENTS.md before refusing $a_link — the refusal runs after the manual is installed" ||
+		pass "nothing landed inside the target either — the refusal precedes every write"
+done
+
+# The same refusal owes the same answer to a REGULAR FILE at one of those
+# names. Without it the run died later, at the mkdir, having already laid
+# bridges — a partial write behind a message that says nothing about why.
+for a_file in .claude .agents; do
+	mk_kitcopy
+	mk_target
+	printf 'not a directory\n' >"$TARGET/$a_file"
+	assert_status 1 "a regular file at $a_file is refused up front" -- \
+		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+	assert_out_has "is a file, not a directory"
+	[ -f "$TARGET/$a_file" ] &&
+		pass "the file at $a_file is untouched by the refusal" ||
+		fail "adopt replaced or removed the regular file at $a_file"
+done
+
+# A DANGLING parent resolves nowhere at all, so "inside the repo" cannot be
+# established — and writing through it would create the destination wherever
+# the link happens to point. Refused with the escaping ones.
+mk_kitcopy
+mk_target
+ln -s ../nowhere-at-all "$TARGET/docs"
+assert_status 1 "a dangling parent link is refused too" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "does not resolve inside this repository"
+[ -e "$TARGET/../nowhere-at-all" ] &&
+	fail "adopt created the dangling link's destination outside the repo" ||
+	pass "the dangling link's destination was never created"
+
+# …and the mirror of that rule: a link that stays INSIDE the repository is a
+# layout choice, not a hole. The project's files still land in the project,
+# which is the whole requirement, so adopt must proceed rather than refuse.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/documentation"
+rm -rf "$TARGET/docs"
+ln -s documentation "$TARGET/docs"
+assert_status 0 "a parent linked INSIDE the repo is adopted, not refused" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/documentation/diary.md" ] &&
+	pass "the files landed inside the repo, through the link" ||
+	fail "adopt refused or misplaced files for an in-repo link — nothing landed at documentation/"
+
+# The one-link skills bridge UPDATING.md blesses: .claude/skills IS
+# .agents/skills. A per-skill link there would point at itself, so the arm
+# must lay none — and the tree must still pass the gate.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude"
+ln -s ../.agents/skills "$TARGET/.claude/skills"
+assert_status 0 "a directory-level skills bridge adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/.agents/skills/tdd/SKILL.md" ] &&
+	pass "skills installed at the canonical home under a directory-level bridge" ||
+	fail "no canonical skill installed under a directory-level bridge"
+[ -L "$TARGET/.agents/skills/tdd" ] &&
+	fail "a self-referential per-skill link was laid inside the shared home" ||
+	pass "no self-referential per-skill link was laid — the alias IS the bridge"
+assert_status 0 "the directory-bridged tree's gate is green" -- \
+	sh -c "cd '$TARGET' && sh scripts/check.sh"
+
+# A bridge that is CORRECT but spelled differently — an absolute path to the
+# same canonical directory — is ours, not a foreign occupant. The old
+# byte-compare called it a collision and told the operator to
+# "rename-or-decline", which is advice with nothing to act on: nothing needs
+# renaming, the link already points exactly where the kit would point it. The
+# gate agrees, and said OK on this very tree while adopt parked the run.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
+cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
+ln -s "$TARGET/.agents/skills/tdd" "$TARGET/.claude/skills/tdd"
+assert_status 0 "an absolutely-spelled bridge to the same target adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+printf '%s\n' "$LAST_OUT" | grep -q 'COLLISION skill .claude/skills/tdd' &&
+	fail "an equivalent bridge was reported as a collision — the check is comparing spelling, not destination" ||
+	pass "an equivalent bridge is recognised as ours, whatever its spelling"
+
+# …including one laid BEFORE its canonical skill exists, which is the state
+# the relative spelling is already forgiven in: the leaf dangles, the parent
+# does not, so the destination is still knowable.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
+ln -s "$TARGET/.agents/skills/prototype" "$TARGET/.claude/skills/prototype"
+assert_status 0 "an absolutely-spelled bridge laid ahead of its skill adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -f "$TARGET/.agents/skills/prototype/SKILL.md" ] &&
+	pass "the canonical skill was installed under the pre-laid bridge" ||
+	fail "the canonical skill was held back by a bridge that already pointed at it"
+
+# The two halves of "points home" are separately load-bearing, and the
+# foreign-link case below exercises neither: it fails both at once. These
+# isolate them.
+#
+# Right leaf name, wrong home — a link to THEIR tdd. Resolvable, so the
+# destination check is the only thing that can catch it.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills" "$TARGET/their-skills/tdd"
+printf '# theirs\n' >"$TARGET/their-skills/tdd/SKILL.md"
+ln -s ../../their-skills/tdd "$TARGET/.claude/skills/tdd"
+assert_status 3 "a resolvable link to a DIFFERENT home is still a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd"
+
+# Right home, wrong leaf — /tdd pointing at the prototype skill. The
+# destination check passes; only the leaf name catches it.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills" "$TARGET/.agents/skills"
+ln -s ../../.agents/skills/prototype "$TARGET/.claude/skills/tdd"
+assert_status 3 "a link into the canonical home under the WRONG name is a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd"
+
+# M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
+# target, or dangling) is a non-identical occupant — a COLLISION, never a
+# silent keep that leaves the gate red after a "complete" adopt.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.claude/skills"
+ln -s /nonexistent/evil "$TARGET/.claude/skills/tdd"
+assert_status 3 "a foreign symlink at a bridge slot is a collision" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .claude/skills/tdd rename-or-decline"
+[ -e "$TARGET/.agents/skills/tdd" ] &&
+	fail "canonical /tdd was installed despite the unresolved bridge collision" ||
+	pass "canonical /tdd held back until the bridge collision is resolved"
+
+# M-2: a target already holding a byte-identical canonical skill but no
+# bridge must adopt clean AND leave the bridge laid — exit 0 with a red gate
+# is the shape this pin forbids.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills"
+cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
+git -C "$TARGET" add -A 2>/dev/null || true
+assert_status 0 "an identical canonical skill without its bridge adopts clean" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ -L "$TARGET/.claude/skills/tdd" ] && [ -f "$TARGET/.claude/skills/tdd/SKILL.md" ] &&
+	pass "the missing bridge was repaired on the clean path" ||
+	fail "an identical canonical skill was left with no bridge — clean exit, red gate"
+# L-1: a DANGLING canonical licence is a collision, not a silent keep. Every
+# shipped skill names this path literally, so keeping the dead link means a
+# clean "adopt: complete" whose very next gate run is red on all of them.
+mk_kitcopy
+mk_target
+mkdir -p "$TARGET/.agents/skills"
+ln -s /nonexistent/licence "$TARGET/.agents/skills/LICENSE-mattpocock-skills.md"
+assert_status 3 "a dangling canonical licence is a collision, not a clean exit" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "COLLISION skill .agents/skills/LICENSE-mattpocock-skills.md"
+
+# L-2: the licence file gets the same bridge the skills do.
+[ -L "$TARGET/.claude/skills/LICENSE-mattpocock-skills.md" ] &&
+	pass "the licence bridge is laid too — adopted trees match template trees" ||
+	fail "the licence bridge is missing — adopted trees differ from template trees by one entry"
 
 # ---------------------------------------------------------------------------
 banner "G. The payload document's existing-repo arm — its own fences drive the flow"

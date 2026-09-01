@@ -63,6 +63,6 @@ contract; tools should produce records in that shape.
 
 *Replaces the upstream `ADR-FORMAT.md` from
 [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see
-`.claude/skills/LICENSE-mattpocock-skills.md`. Upstream proposes its own ADR
+`.agents/skills/LICENSE-mattpocock-skills.md`. Upstream proposes its own ADR
 template; this kit ships a MADR skeleton and an index, so the skill writes into
 those.*

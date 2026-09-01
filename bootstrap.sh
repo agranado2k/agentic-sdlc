@@ -200,7 +200,7 @@ if [ "$ADOPT" = 1 ]; then
 			a_dog=no
 		fi
 	fi
-	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.claude/skills/dogfood/SKILL.md" ]; then
+	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.agents/skills/dogfood/SKILL.md" ]; then
 		echo "  note: /dogfood was requested but the kit clone does not carry it — skipping" >&2
 		a_dog=no
 	fi
@@ -255,6 +255,35 @@ if [ "$ADOPT" = 1 ]; then
 	# "your diary exists" never stops being true.
 	a_keep() { echo "  kept $1 (yours — never overwritten)"; }
 
+	# A symlinked PARENT routes every write below through it. What matters is
+	# WHERE it lands: a link that stays inside the repository is a layout
+	# choice — the one-link `.claude/skills -> ../.agents/skills` bridge
+	# UPDATING.md blesses is exactly that — and the project's files still end
+	# up in the project, which is the whole requirement. A link that leaves
+	# the repository (or resolves nowhere) is the hole: the files land
+	# outside, on a clean exit, and git never sees them. So the test is
+	# containment, not symlink-ness, and it covers EVERY directory this arm
+	# writes beneath rather than a hand-picked four.
+	a_root=$(pwd -P)
+	# a_escapes <path> — the path is a link that does not resolve to
+	# somewhere inside this repository.
+	a_escapes() {
+		[ -L "$1" ] || return 1
+		a_dest=$(cd "$1" 2>/dev/null && pwd -P)
+		[ -n "$a_dest" ] || return 0 # dangling — nothing to write into
+		case "$a_dest/" in
+		"$a_root"/*) return 1 ;;
+		*) return 0 ;;
+		esac
+	}
+	for a_parent in .claude .claude/skills .agents .agents/skills \
+		.githooks .github .github/workflows constitution docs docs/adr \
+		scripts scripts/docs-conformance; do
+		a_escapes "$a_parent" &&
+			die "adopt: $a_parent is a symlink that does not resolve inside this repository — refusing to write the project's own files outside it. Point it inside the repo (or make it a real directory) and re-run."
+		[ -e "$a_parent" ] && [ ! -d "$a_parent" ] &&
+			die "adopt: $a_parent is a file, not a directory — refusing to write beneath it. Move it aside and re-run."
+	done
 	# --- 1. the shared layer: byte-verbatim or a relocation proposal --------
 	# This awk is the manifest parser scripts/check.sh, UPDATING.md step 1 and
 	# two suites also carry — four twins by prior decision (a consumer's copy
@@ -320,22 +349,107 @@ if [ "$ADOPT" = 1 ]; then
 	a_exists "README.md" && a_keep "README.md" || a_stamp "templates/docs/README.md.template" "README.md"
 
 	# --- 4. skills: the kit's set, name collisions surfaced -----------------
-	for d in "$a_kit"/.claude/skills/*/; do
+	# Canonical home is the vendor-neutral .agents/skills/; .claude/skills/<s>
+	# is a committed per-skill symlink (the shape one harness's docs support).
+	# A collision is a NON-IDENTICAL occupant at EITHER address; identical
+	# content at the old address is our own earlier install (or a consumer's
+	# deliberate real copy) and stays silent. The symlink is laid
+	# scratch-then-move like every other copy.
+	a_link_skill() {
+		rm -f "$a_scratch/link.$$"
+		ln -s "../../.agents/skills/$1" "$a_scratch/link.$$" &&
+			mv "$a_scratch/link.$$" ".claude/skills/$1"
+	}
+	# The bridge slot's states, classified: absent -> lay ours; our own link
+	# -> nothing to do; anything else (foreign or dangling link, a stray
+	# file) -> a collision at that address. Returns 0 when the canonical
+	# install may proceed. Their identical REAL directory is handled by the
+	# caller before this runs — that one is theirs to keep, bridge and all.
+	# A bridge's identity is WHERE it points, not how it is spelled. The
+	# byte-compare in a_bridge is the fast path for our own spelling; this
+	# asks the same question of every other one — an absolute path, a repo
+	# reached through a link — so a bridge that is already correct is not
+	# reported as a foreign occupant the operator is told to rename, which
+	# is advice with nothing to act on. The link's PARENT is resolved rather
+	# than the link itself, so a bridge laid before its canonical skill
+	# exists still reads as ours, exactly as the relative spelling does.
+	a_points_home() {
+		a_p_target=$(readlink ".claude/skills/$1")
+		[ "$(basename "$a_p_target")" = "$1" ] || return 1
+		a_p_dir=$(cd ".claude/skills" 2>/dev/null &&
+			cd "$(dirname "$a_p_target")" 2>/dev/null && pwd -P)
+		[ -n "$a_p_dir" ] && [ "$a_p_dir" = "$a_new_home" ]
+	}
+	a_bridge() {
+		# When the two addresses ARE one directory, the alias is already the
+		# bridge and a per-skill link would point at itself.
+		[ "$a_same_home" = yes ] && return 0
+		if [ -L ".claude/skills/$1" ]; then
+			[ "$(readlink ".claude/skills/$1")" = "../../.agents/skills/$1" ] && return 0
+			a_points_home "$1" && return 0
+			a_hit skill ".claude/skills/$1" rename-or-decline
+			return 1
+		elif a_exists ".claude/skills/$1"; then
+			return 2 # a real occupant — the caller decides identical vs collision
+		fi
+		a_link_skill "$1"
+	}
+	mkdir -p .claude/skills .agents/skills
+	# Do the two skill addresses name the same directory? They do under a
+	# directory-level bridge, and then every per-skill link below would be
+	# self-referential. Resolved once, after the mkdir, so the answer is the
+	# same for the licence as for the skills.
+	a_same_home=no
+	a_old_home=$(cd .claude/skills 2>/dev/null && pwd -P)
+	a_new_home=$(cd .agents/skills 2>/dev/null && pwd -P)
+	[ -n "$a_new_home" ] && [ "$a_old_home" = "$a_new_home" ] && a_same_home=yes
+	for d in "$a_kit"/.agents/skills/*/; do
 		[ -d "$d" ] || continue
 		s=$(basename "$d")
 		[ "$s" = "dogfood" ] && [ "$a_dog" != yes ] && continue
-		if a_exists ".claude/skills/$s"; then
-			if diff -rq "$a_kit/.claude/skills/$s" ".claude/skills/$s" >/dev/null 2>&1; then
-				: # our own earlier install — silent on re-runs
+		if a_exists ".agents/skills/$s"; then
+			if diff -rq "$a_kit/.agents/skills/$s" ".agents/skills/$s" >/dev/null 2>&1; then
+				# Our own earlier install (or their identical copy) — repair
+				# a missing bridge so a clean exit never leaves a red gate.
+				a_bridge "$s" || :
+			else
+				a_hit skill ".agents/skills/$s" rename-or-decline
+			fi
+		elif a_exists ".claude/skills/$s" && [ ! -L ".claude/skills/$s" ]; then
+			if diff -rq "$a_kit/.agents/skills/$s" ".claude/skills/$s" >/dev/null 2>&1; then
+				: # identical real copy at the old address — theirs to keep
 			else
 				a_hit skill ".claude/skills/$s" rename-or-decline
 			fi
 		else
-			a_copy_dir ".claude/skills/$s" ".claude/skills/$s"
+			# The bridge slot decides whether the install may proceed: a
+			# foreign or dangling link there is a collision, and canonical
+			# holds back until it is resolved (all-or-nothing per skill).
+			if a_bridge "$s"; then
+				a_copy_dir ".agents/skills/$s" ".agents/skills/$s"
+			fi
 		fi
 	done
-	a_exists ".claude/skills/LICENSE-mattpocock-skills.md" ||
-		a_copy ".claude/skills/LICENSE-mattpocock-skills.md" ".claude/skills/LICENSE-mattpocock-skills.md"
+	# The licence is classified like a skill, not merely kept. `a_exists` is
+	# ownership, so a DANGLING link at the canonical address counted as
+	# present and the file was skipped — a clean exit whose gate is red on
+	# every skill, because each one names this path literally. Same verdict
+	# the skills get: hold, and let a human decide.
+	if [ -L ".agents/skills/LICENSE-mattpocock-skills.md" ] &&
+		[ ! -e ".agents/skills/LICENSE-mattpocock-skills.md" ]; then
+		a_hit skill ".agents/skills/LICENSE-mattpocock-skills.md" rename-or-decline
+	elif ! a_exists ".agents/skills/LICENSE-mattpocock-skills.md"; then
+		a_copy ".agents/skills/LICENSE-mattpocock-skills.md" ".agents/skills/LICENSE-mattpocock-skills.md"
+	fi
+	# The licence gets the same bridge the skills do — an adopted tree should
+	# not differ from a templated one by one entry.
+	if [ "$a_same_home" != yes ] &&
+		[ ! -L ".claude/skills/LICENSE-mattpocock-skills.md" ] &&
+		! a_exists ".claude/skills/LICENSE-mattpocock-skills.md"; then
+		rm -f "$a_scratch/link.$$"
+		ln -s "../../.agents/skills/LICENSE-mattpocock-skills.md" "$a_scratch/link.$$" &&
+			mv "$a_scratch/link.$$" ".claude/skills/LICENSE-mattpocock-skills.md"
+	fi
 
 	# --- 5. policy and local files: install only where absent ---------------
 	if ! a_exists "scripts/docs-conformance/config.mjs"; then
@@ -650,8 +764,8 @@ fi
 # pruned it before running bootstrap, stamping its rows anyway would hand the
 # project a manual whose own gate rejects it on the first push — so say what
 # happened and fall back to skipping.
-if [ "$dogfood_choice" = yes ] && [ ! -f .claude/skills/dogfood/SKILL.md ]; then
-	echo "  note: /dogfood was requested but .claude/skills/dogfood/ is not in this tree — skipping it" >&2
+if [ "$dogfood_choice" = yes ] && [ ! -f .agents/skills/dogfood/SKILL.md ]; then
+	echo "  note: /dogfood was requested but .agents/skills/dogfood/ is not in this tree — skipping it" >&2
 	dogfood_choice=no
 fi
 
@@ -816,8 +930,10 @@ fi
 # declaration `/dogfood` reads, so on its own it would be an unfilled template
 # nothing points at.
 if [ "$dogfood_choice" != yes ]; then
-	for f in .claude/skills/dogfood constitution/local-product.md.template; do
-		if [ -e "$f" ]; then
+	# -L as well as -e: once the canonical dir is gone, the .claude/skills
+	# symlink is dangling, and a bare -e follows it to "no".
+	for f in .agents/skills/dogfood .claude/skills/dogfood constitution/local-product.md.template; do
+		if [ -e "$f" ] || [ -L "$f" ]; then
 			rm -rf "$f"
 			echo "  removed $f (/dogfood not selected)"
 		fi
@@ -952,7 +1068,7 @@ else
 	cat <<'EOF'
 
 /dogfood was NOT installed — it needs a runnable user-facing surface, and the
-default is to skip. Nothing is lost: copy .claude/skills/dogfood/ and
+default is to skip. Nothing is lost: copy .agents/skills/dogfood/ and
 constitution/local-product.md.template out of the kit on the day you have one,
 and add a row for it to AGENTS.md's quick reference.
 EOF

@@ -145,5 +145,5 @@ nothing for this skill to do, and should skip it until it does.
 *Provenance: written for this kit, generalized from an end-to-end QA command in
 the project the framework was extracted from — which was browser-only, and
 repaired what it found. Neither survived the port; see
-`.claude/skills/LICENSE-mattpocock-skills.md` for which skills here carry an
+`.agents/skills/LICENSE-mattpocock-skills.md` for which skills here carry an
 upstream and which do not.*

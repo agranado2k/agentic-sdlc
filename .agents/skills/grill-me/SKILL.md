@@ -11,4 +11,4 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 ---
 
-*Adapted from `productivity/grill-me` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.claude/skills/LICENSE-mattpocock-skills.md`. Use `/grill-with-docs` instead when the project has a glossary and decision records worth challenging the plan against.*
+*Adapted from `productivity/grill-me` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Use `/grill-with-docs` instead when the project has a glossary and decision records worth challenging the plan against.*
