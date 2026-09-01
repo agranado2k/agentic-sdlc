@@ -365,12 +365,28 @@ if [ "$ADOPT" = 1 ]; then
 	# file) -> a collision at that address. Returns 0 when the canonical
 	# install may proceed. Their identical REAL directory is handled by the
 	# caller before this runs — that one is theirs to keep, bridge and all.
+	# A bridge's identity is WHERE it points, not how it is spelled. The
+	# byte-compare in a_bridge is the fast path for our own spelling; this
+	# asks the same question of every other one — an absolute path, a repo
+	# reached through a link — so a bridge that is already correct is not
+	# reported as a foreign occupant the operator is told to rename, which
+	# is advice with nothing to act on. The link's PARENT is resolved rather
+	# than the link itself, so a bridge laid before its canonical skill
+	# exists still reads as ours, exactly as the relative spelling does.
+	a_points_home() {
+		a_p_target=$(readlink ".claude/skills/$1")
+		[ "$(basename "$a_p_target")" = "$1" ] || return 1
+		a_p_dir=$(cd ".claude/skills" 2>/dev/null &&
+			cd "$(dirname "$a_p_target")" 2>/dev/null && pwd -P)
+		[ -n "$a_p_dir" ] && [ "$a_p_dir" = "$a_new_home" ]
+	}
 	a_bridge() {
 		# When the two addresses ARE one directory, the alias is already the
 		# bridge and a per-skill link would point at itself.
 		[ "$a_same_home" = yes ] && return 0
 		if [ -L ".claude/skills/$1" ]; then
 			[ "$(readlink ".claude/skills/$1")" = "../../.agents/skills/$1" ] && return 0
+			a_points_home "$1" && return 0
 			a_hit skill ".claude/skills/$1" rename-or-decline
 			return 1
 		elif a_exists ".claude/skills/$1"; then
