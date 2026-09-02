@@ -529,10 +529,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1609 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1607 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  129 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1745 insertions(+), 1 deletion(-)
+ 3 files changed, 1743 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1548,8 +1548,6 @@ WARN  docs conformance: advisories (gate stays green)
 
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
-
-OK  docs conformance: all checks passed
 
 OK  docs gate: all checks passed (shared-layer 0.15.0, engine: harness)
 ```
