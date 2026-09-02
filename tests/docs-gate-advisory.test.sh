@@ -3,8 +3,8 @@
 #
 # The docs gate has a warning channel since 0.11.0: a validator may report a
 # finding with severity "warning", the harness prints it and still exits 0.
-# Every advisory the kit ships (skill-web, skill-paths, skill-bridge,
-# mutation-decision, design-brief) rides that channel, and every release note
+# Every advisory the kit ships (the glossary's **Advisory** entry is the
+# roster) rides that channel, and every release note
 # since has said "prints a warning, never a failure".
 #
 # What nothing checked, found by running ticket #108's demo by hand: the
@@ -86,6 +86,7 @@ DOCS_CHECK_NO_NODE=1
 export DOCS_CHECK_NO_NODE
 assert_status 0 "the fallback gate exits 0" -- sh scripts/check.sh
 assert_out_has "design-brief advisory"
+assert_out_has "housekeeping-due advisory"
 unset DOCS_CHECK_NO_NODE
 
 t_done "docs gate advisory visibility"
