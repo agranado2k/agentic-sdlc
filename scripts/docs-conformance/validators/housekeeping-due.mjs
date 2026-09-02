@@ -23,13 +23,21 @@ export const id = "housekeeping-due";
 
 export const ROW_LABEL = "Last housekeeping";
 export const DEFAULT_WINDOW_DAYS = 30;
-const DEFAULT_DIARY = "docs/diary.md";
+export const DEFAULT_DIARY = "docs/diary.md";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // The row as the template stamps it: a table row whose first cell is the bold
-// label, whose second cell starts with an ISO date. Anything after the date on
-// the row is the pass's one-line note and is not read.
-const ROW_RE = /^\|[^\S\n]*\*\*Last housekeeping\*\*[^\S\n]*\|[^\S\n]*(\S*)/m;
+// label, whose second cell starts with an ISO date. The date is read up to
+// the next whitespace OR the closing pipe, so a compact row (`| 2026-01-01 |`
+// with no space before the pipe) reads the same as a spaced one. Anything
+// after the date on the row is the pass's one-line note and is not read. The
+// row is matched anywhere in the fence-stripped diary, not only in the
+// Current state block: the template puts it there, and a consumer who moved
+// it still recorded a pass.
+const ROW_RE = new RegExp(
+  `^\\|[^\\S\\n]*\\*\\*${ROW_LABEL}\\*\\*[^\\S\\n]*\\|[^\\S\\n]*([^\\s|]*)`,
+  "m",
+);
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function run(ctx) {
@@ -52,7 +60,7 @@ export function run(ctx) {
         severity: "warning",
         file: diary,
         rule: "housekeeping-row-missing",
-        message: `has no \`**${ROW_LABEL}**\` row with an ISO date in its Current state table`,
+        message: `has no \`**${ROW_LABEL}**\` row with a valid ISO date anywhere in the diary`,
         hint: `Add the row \`| **${ROW_LABEL}** | YYYY-MM-DD — <what the pass found> |\`, dated the last housekeeping pass (or today, if none has run yet). The housekeeping-due advisory reads it and nudges after ${windowDays} days (housekeepingDue.windowDays in the gate config).`,
       },
     ];
@@ -62,6 +70,20 @@ export function run(ctx) {
   // read one day high or low against the operator's clock — within a window
   // measured in weeks, not a distinction worth a time zone in the diary.
   const ageDays = Math.floor((Date.now() - Date.parse(dateText)) / DAY_MS);
+  // A row dated in the future is the one shape that would silence the nudge
+  // indefinitely — a mistyped year — so it is a malformed row, not a fresh one.
+  if (ageDays < 0) {
+    return [
+      {
+        validator: id,
+        severity: "warning",
+        file: diary,
+        rule: "housekeeping-row-missing",
+        message: `has a \`**${ROW_LABEL}**\` row dated ${dateText}, which is in the future`,
+        hint: "A future date would silence the housekeeping nudge forever. Date the row the day of the last pass, or today.",
+      },
+    ];
+  }
   if (ageDays <= windowDays) return [];
 
   return [

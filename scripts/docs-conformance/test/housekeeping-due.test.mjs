@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import defaultConfig from "../config.mjs";
 import { makeContext } from "../context.mjs";
-import { run } from "../validators/housekeeping-due.mjs";
+import { DEFAULT_DIARY, DEFAULT_WINDOW_DAYS, ROW_LABEL, run } from "../validators/housekeeping-due.mjs";
 import { cleanup, ctxFor, hasRule, makeFixture } from "./helpers.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -119,9 +119,51 @@ test("no diary, no finding — a tree without one is not this rule's business", 
   cleanup(ctx);
 });
 
-test("the kit's own tree is silent — its diary carries a fresh row", () => {
-  const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
+test("the defaults hold with no housekeepingDue section in the config at all", () => {
+  // The code path every consumer takes at first contact: their config.mjs
+  // predates the section. The validator must read the diary at its default
+  // path with the default window rather than crash or go silent.
+  const { housekeepingDue, ...withoutSection } = defaultConfig;
+  assert.ok(housekeepingDue, "the shipped config carries the section this test removes");
+  assert.equal(DEFAULT_DIARY, "docs/diary.md");
+  assert.equal(DEFAULT_WINDOW_DAYS, 30);
+  const stale = ctxFor({ [DEFAULT_DIARY]: diaryWith(iso(DEFAULT_WINDOW_DAYS + 1)) }, withoutSection);
+  const out = run(stale);
+  assert.ok(hasRule(out, "housekeeping-due"));
+  assert.match(out[0].message, new RegExp(`${DEFAULT_WINDOW_DAYS} days`));
+  cleanup(stale);
+  const fresh = ctxFor({ [DEFAULT_DIARY]: diaryWith(iso(DEFAULT_WINDOW_DAYS)) }, withoutSection);
+  assert.deepEqual(run(fresh), []);
+  cleanup(fresh);
+});
+
+test("a compact row — no space before the closing pipe — reads the same as a spaced one", () => {
+  const ctx = ctxFor({ "docs/diary.md": diaryWith(null).replace("| **Active worktrees** |", `| **${ROW_LABEL}** |${iso(0)}|\n| **Active worktrees** |`) });
   assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
+
+test("an ISO-shaped date that is not a date is a missing row, never 'NaN days ago'", () => {
+  const ctx = ctxFor({ "docs/diary.md": diaryWith("2026-13-45 — typo") });
+  const out = run(ctx);
+  assert.ok(hasRule(out, "housekeeping-row-missing"));
+  assert.doesNotMatch(out[0].message, /NaN/);
+  cleanup(ctx);
+});
+
+test("a future-dated row is malformed, not fresh — it would silence the nudge forever", () => {
+  const ctx = ctxFor({ "docs/diary.md": diaryWith(iso(-1)) });
+  const out = run(ctx);
+  assert.ok(hasRule(out, "housekeeping-row-missing"));
+  assert.match(out[0].message, /future/);
+  cleanup(ctx);
+});
+
+test("the kit's own diary carries the row — its freshness is the advisory channel's business, never this suite's", () => {
+  // Asserting freshness here would turn a deliberately never-failing advisory
+  // into a CI failure on a calendar date. The shape is what the suite holds.
+  const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
+  assert.ok(!hasRule(run(ctx), "housekeeping-row-missing"), "the kit's diary has no valid Last housekeeping row");
 });
 
 test("end to end: a stale row warns on stderr and the gate still exits 0", () => {

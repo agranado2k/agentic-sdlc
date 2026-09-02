@@ -394,20 +394,40 @@ esac
 	fail "shared-code-craft.md has $craft_sections numbered sections — extend this check's number words"
 # Prose wraps, so the count and its noun can sit on different lines: join the
 # file before probing, and read every "<word> portable [craft] rules" phrase.
+# Each manual names the count TWICE — the article-layer sentence and the
+# quick-reference row — so the probe holds the number of phrases as well as
+# their content: a reworded sentence that drops the count would otherwise
+# narrow the check silently.
+craft_probe() {
+	_cp_manual=$1
+	_cp_expect=$2
+	_cp_phrases=$(tr '\n' ' ' <"$_cp_manual" | tr -s ' ' |
+		grep -oi '[a-z]* portable \(craft \)\{0,1\}rules' || true)
+	_cp_found=$(printf '%s\n' "$_cp_phrases" | grep -c . || true)
+	[ "$_cp_found" -ge "$_cp_expect" ] || return 1
+	_cp_stale=$(printf '%s\n' "$_cp_phrases" | tr 'A-Z' 'a-z' | grep -v "^$craft_word " || true)
+	[ -z "$_cp_stale" ] || { printf '%s\n' "$_cp_stale"; return 2; }
+	return 0
+}
 for manual in constitution/AGENTS.md.template AGENTS.md; do
-	phrases=$(tr '\n' ' ' <"$KIT/$manual" | tr -s ' ' | grep -o '[a-z]* portable \(craft \)\{0,1\}rules' || true)
-	if [ -z "$phrases" ]; then
-		fail "$manual no longer names the craft-rule count in the shape this check reads — move the probe with the document"
-		continue
-	fi
-	stale=$(printf '%s\n' "$phrases" | grep -v "^$craft_word " || true)
-	if [ -z "$stale" ]; then
-		pass "$manual says $craft_word portable craft rules, matching the article's $craft_sections sections"
+	if out=$(craft_probe "$KIT/$manual" 2); then
+		pass "$manual says $craft_word portable craft rules in both places, matching the article's $craft_sections sections"
+	elif [ $? = 1 ]; then
+		fail "$manual names the craft-rule count fewer than twice — a count sentence was reworded out of the probe's reach"
 	else
 		fail "$manual names a craft-rule count that is not $craft_word (the article has $craft_sections sections):"
-		printf '%s\n' "$stale" | sed 's/^/        | /'
+		printf '%s\n' "$out" | sed 's/^/        | /'
 	fi
 done
+# The probe can go red, in both directions: a wrong word, and a lost sentence.
+printf 'the ten portable craft rules; and the ten portable rules\n' >"$SCRATCH/craft.wrong"
+craft_probe "$SCRATCH/craft.wrong" 2 >/dev/null; [ $? = 2 ] &&
+	pass "the craft-count probe rejects a manual naming the wrong count" ||
+	fail "the craft-count probe passed a manual naming the wrong count — the check is vacuous"
+printf 'the %s portable craft rules\n' "$craft_word" >"$SCRATCH/craft.one"
+craft_probe "$SCRATCH/craft.one" 2 >/dev/null; [ $? = 1 ] &&
+	pass "the craft-count probe rejects a manual that lost one of its count sentences" ||
+	fail "the craft-count probe passed a manual with a count sentence missing"
 
 # --- F3: the shared layer is REACHABLE — a declared release has its tag ----
 # The lesson of the v0.9.0 wave, learned in a consumer's clone: UPDATING.md
