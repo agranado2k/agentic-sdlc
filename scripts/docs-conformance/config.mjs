@@ -310,4 +310,22 @@ const designBrief = {
   // article: "constitution/local-engineering.md",
 };
 
-export default { claudeMdRefs, designBrief, mutationDecision, skillPaths };
+/**
+ * Policy for the housekeeping-due advisory: how long a project may go
+ * between housekeeping passes before the gate says so. The diary's Current
+ * state table carries a `**Last housekeeping**` row holding the ISO date of
+ * the last pass; the validator warns (never fails) once that date is older
+ * than `windowDays`, and warns naming the row when the row is absent.
+ *
+ * The default is a month: long enough that a quiet repo is not nagged on
+ * every push, short enough that a manual's drift is caught before a second
+ * release ships on top of it. A fast-moving repo may want two weeks; a
+ * dormant one, a quarter. Point `diary` elsewhere if yours lives under a
+ * different name.
+ */
+const housekeepingDue = {
+  windowDays: 30,
+  // diary: "docs/diary.md",
+};
+
+export default { claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillPaths };
