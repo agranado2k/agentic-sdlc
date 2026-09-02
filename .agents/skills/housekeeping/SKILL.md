@@ -32,6 +32,18 @@ finding leaves as a candidate ticket through `/to-tickets`, a deepening
 candidate for `/improve-codebase-architecture`, or a re-question for
 `/design-brief`. The one write this pass performs is the diary stamp.
 
+## Three states to check before starting
+
+- **A first pass.** Every "against the last pass" below has nothing to compare
+  with: record the baseline in the report (the root's line count, the suite's
+  score, the skills last touched) so the next pass has one, and say so.
+- **No stamped engineering article** — the article is still its `.template`,
+  or the repo has none (a template repository is one). Item 4 then reads the
+  repo's own suites and records that no measurement is wired; that is itself
+  the finding, once the codebase has a layer worth measuring.
+- **Nothing to prune.** Item 5 on a repo with no worktrees reports "nothing to
+  prune", which is a result, not a skip.
+
 ## The checklist
 
 Each item names its source, so the pass is the same every time. The full
@@ -101,12 +113,14 @@ to — is in `CHECKLIST.md`; this is the order.
    Windows), write `<tmpdir>/housekeeping-<YYYYMMDDTHHMMSSZ>.md`: one entry
    per finding with its item number, its evidence, and its route. A pass
    that finds nothing says so, per item.
-5. Hand the findings to their routes: the ticket candidates to `/to-tickets`
-   (its quiz is where the human decides which become tickets), the deepening
-   candidates and the re-question to their skills, by name.
-6. **Stamp the row**: `| **Last housekeeping** | <today, ISO> — <one line: how
-   many findings, and the one that matters most> |` in the diary's Current
-   state table. One local commit, `docs(housekeeping): …`; this skill never
+5. Name each finding's route in the report — `/to-tickets` for the ticket
+   candidates, the architecture skill for the deepenings, the brief for the
+   re-question — and stop there: invoking them is the human's next act, and
+   this pass's one write stays the stamp.
+6. **Stamp the row**: `| **Last housekeeping** | <today, ISO, UTC> — <one line:
+   how many findings, and the one that matters most> |` in the diary's Current
+   state table. UTC, because the advisory that reads the row compares against
+   UTC midnight, and the report's own timestamp is UTC too. One local commit, `docs(housekeeping): …`; this skill never
    pushes.
 
 ## Anti-patterns
