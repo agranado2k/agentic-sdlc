@@ -34,7 +34,9 @@ carry no upstream. `design-brief/` was written for this kit in its 0.15.0 wave a
 carries no upstream either: its design-it-twice mechanics are the architecture
 skill's `INTERFACE-DESIGN.md` applied at the scale of a whole system, and its
 vocabulary is credited at its own foot (Ousterhout for complexity, Evans for the
-context map). `review-pr/` began as an in-house reviewer command in a
+context map). `housekeeping/` is this kit's too: its agent-file audit
+condenses Addy Osmani's "Audit your Agent files" (2026), its red-flag list is
+Ousterhout's, and its never-fix rule is the dogfood skill's, kept for the same reason. `review-pr/` began as an in-house reviewer command in a
 private repository and was substantially rewritten here — the second axis (the
 spec & behavior confirm-list, shared invariant §5) has no upstream at all.
 

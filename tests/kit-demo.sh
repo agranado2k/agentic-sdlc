@@ -422,7 +422,7 @@ shipped=0
 for d in .claude/skills/*/; do
 	[ -f "$d/SKILL.md" ] && shipped=$((shipped + 1))
 done
-[ "$shipped" -ge 16 ] ||
+[ "$shipped" -ge 17 ] ||
 	fail "skill roster shrank to $shipped — deleting a skill must lower this floor deliberately"
 [ "$resolved" -ge "$shipped" ] &&
 	pass "all $resolved slash commands in AGENTS.md resolve to a skill (shipped roster: $shipped)" ||

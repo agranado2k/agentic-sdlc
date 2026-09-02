@@ -267,6 +267,14 @@ jobs:
       - name: Design-brief skill-text suite
         run: sh tests/design-brief-skill.test.sh
 
+  housekeeping:
+    name: /housekeeping contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Housekeeping skill-text suite
+        run: sh tests/housekeeping-skill.test.sh
+
   adopt-demo:
     name: Existing-repo adoption arm
     runs-on: ubuntu-latest
