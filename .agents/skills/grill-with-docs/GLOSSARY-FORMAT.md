@@ -45,27 +45,50 @@ And the half that is usually missing:
 - **Rename in one change.** Changing a term means renaming it across the whole
   codebase and updating the glossary in the same commit. No aliases.
 
-## Multiple contexts
+## Multiple contexts, and the context map
 
-When the repo has several bounded contexts, either give each one a `##` section
-in the single glossary, or give each one its own file and make
-`docs/domain-glossary.md` the index that lists them and how they relate:
+When the repo has several bounded contexts, give each one a `##` section in the
+single glossary. A repo whose glossary has stopped being readable in one
+session-start scan may give each context its own file and make
+`docs/domain-glossary.md` the index that lists them:
 
 ```md
 ## Contexts
 
 - [Ordering](../src/ordering/GLOSSARY.md) — receives and tracks customer orders
 - [Billing](../src/billing/GLOSSARY.md) — generates invoices and processes payments
-
-## Relationships
-
-- **Ordering → Fulfillment**: Ordering emits `OrderPlaced`; Fulfillment consumes it to start picking
-- **Ordering ↔ Billing**: shared types for `CustomerId` and `Money`
 ```
 
-Prefer the single file until it stops being readable in one session-start scan.
-Two glossaries that both define the same term are the drift this whole document
-exists to prevent.
+Prefer the single file: two glossaries that both define the same term are the
+drift this whole document exists to prevent.
+
+The edges between contexts live in the glossary's **Context map** section, and
+the one rule that makes it worth maintaining mid-grilling: **every edge is
+declared from both sides, with the same relationship word on both lines** —
+only the role differs. Two declarations that name different relationships are
+the disagreement itself, surfaced before it is a bug; an edge declared from one
+side only is half a decision, visible because the other context's block does not
+mention it. The glossary's Context map header comment carries the one-line gloss
+of each relationship in Evans's set.
+
+```md
+## Context map
+
+### Ordering
+
+- **Ordering → Fulfillment**: anti-corruption layer — upstream; publishes `OrderPlaced`.
+
+### Fulfillment
+
+- **Fulfillment → Ordering**: anti-corruption layer — downstream; consumes
+  `OrderPlaced`, translated into `PickRequest` at the edge; nothing of
+  Ordering's model leaks past it.
+```
+
+When a grilling answer names a new context, adds an edge, or changes a
+relationship, update both sides in the same breath. The phrase "strategic
+design" is on the glossary's banned-words list: say **context map** for the
+edges and **subdomain classification** for the core / supporting / generic split.
 
 ---
 

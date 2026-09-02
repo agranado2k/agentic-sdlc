@@ -161,6 +161,49 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Demo** — a suite whose output is meant to be *read*: `tests/kit-demo.sh`,
   `tests/docs-demo.sh`. They build a throwaway project and walk it through every
   failure mode the kit claims to catch, red and green.
+- **Context map** — the glossary section where every edge between contexts is
+  declared from both sides, one relationship per edge named identically on
+  both lines. Two declarations of one edge that disagree are the finding.
+  Ref: PRD #107; the section below is the kit's own.
+  - _Avoid_: "strategic design" — banned below; "context diagram" — a picture
+    of the map is not the map.
+- **Subdomain classification** — the design brief's split of a system's
+  subdomains into core (where the product wins), supporting (needed, not
+  differentiating) and generic (buy or copy). It decides where the design
+  investment goes, and the brief's decision record carries it. Ref: PRD #107.
+  - _Avoid_: "strategic design" — same reason.
+
+---
+
+## Context map
+
+The kit's three sections are its contexts, and the edges between them are
+declared here from both sides, in the shape the consumer template teaches.
+The map is a chain with a shared kernel closing it, not a cycle of
+conformists: `VERSION` is the one file two contexts own together.
+
+### Distribution
+
+- **Distribution → Enforcement**: conformist — upstream; the shared layer's
+  manifest and the rule ids are read by the gate exactly as spelled here.
+- **Distribution → Process**: shared kernel — co-owner; `VERSION` is the
+  kernel — the manifest half is Distribution's, the history note is
+  Process's, and only a release action changes either.
+
+### Enforcement
+
+- **Enforcement → Distribution**: conformist — downstream; the gate reads the
+  manifest and the rule ids as given and never defines a shared file.
+- **Enforcement → Process**: conformist — upstream; the verdicts (green, red,
+  advisory) are the words the chain moves on, and a push lands only on green.
+
+### Process
+
+- **Process → Enforcement**: conformist — downstream; the chain never
+  redefines what green means.
+- **Process → Distribution**: shared kernel — co-owner; the release action
+  (bump, note, tag) writes the kernel's note half and ships the manifest
+  half unchanged.
 
 ---
 
@@ -179,3 +222,7 @@ banned word and the word to use instead.
   edit) and shared-layer mechanism. Say which.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
+- **strategic design** — ambiguous between Evans's name for context mapping
+  and Ousterhout's "strategic" (design as continuous investment), which is
+  the sense the kit's design brief reserves the word for. Use **context map**
+  and **subdomain classification**.

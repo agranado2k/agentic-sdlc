@@ -242,6 +242,15 @@ assert_has "docs/diary.md" "### $TODAY — Bootstrapped from the agentic-sdlc ki
 # setting a calendar.
 assert_has "docs/diary.md" "| **Last housekeeping** | $TODAY"
 assert_has "docs/domain-glossary.md" "canonical terms for Aurora Ledger"
+# The context map (PRD #107, ticket #109): the stamped glossary carries the
+# section where every edge between contexts is declared from both sides, and
+# bans the phrase the kit reserves for Ousterhout's sense of "strategic".
+assert_has "docs/domain-glossary.md" "## Context map"
+# The body, not the heading or its comment: one edge, declared from both
+# sides with the same relationship word and opposite roles.
+assert_has "docs/domain-glossary.md" "**<Context name> → <Second context name>**: conformist — upstream"
+assert_has "docs/domain-glossary.md" "**<Second context name> → <Context name>**: conformist — downstream"
+assert_has "docs/domain-glossary.md" "**strategic design** — ambiguous here"
 assert_has "docs/adr/INDEX.md" "architectural decision for Aurora Ledger"
 
 # The K0 README advertised the kit itself. A project whose README tells readers
