@@ -530,10 +530,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1632 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1662 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1786 insertions(+), 1 deletion(-)
+ 3 files changed, 1816 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -612,11 +612,6 @@ verbatim  scripts/tdd-pairing-guard.sh
 $ sh scripts/check.sh
 FAIL  docs gate: violations found
 
-WARN  docs conformance: advisories (gate stays green)
-
-  [skill-web] ! .agents/skills/housekeeping/SKILL.md [skill-web-dangling] — references `/dogfood` but .agents/skills/dogfood/SKILL.md is not installed
-      -> Adopt the skill (see the skills inventory in the update recipe), record the decline in a local article, or add it to claudeMdRefs.ignoreCommands with a reason.
-
 FAIL  docs conformance: violations found
 
   [claude-md-refs] (1)
@@ -630,11 +625,6 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-WARN  docs conformance: advisories (gate stays green)
-
-  [skill-web] ! .agents/skills/housekeeping/SKILL.md [skill-web-dangling] — references `/dogfood` but .agents/skills/dogfood/SKILL.md is not installed
-      -> Adopt the skill (see the skills inventory in the update recipe), record the decline in a local article, or add it to claudeMdRefs.ignoreCommands with a reason.
-
 OK  docs gate: all checks passed (shared-layer 0.15.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
 0.15.0
@@ -794,6 +784,18 @@ points**: your `/implement` skill's Deliver phase gains the appendix bullet
 pull-request template gains the `<!-- explain-diff-appendix -->` marker
 paragraph (that is a 9c template take). The copy without the wiring installs a
 skill nothing invokes.
+
+**Arriving from 0.14.0 or older, the inventory prints two names:
+`design-brief` and `housekeeping`.** Both are directory copies plus wiring.
+`/design-brief` is the day-one architecture decision — it needs its
+quick-reference row and chain sentence in your manual (a 9b take), the
+three anchors in your engineering article to write into (9b again), and the
+rule 11 that `/to-tickets` gains in this release plus the re-entry paragraph
+`/improve-codebase-architecture` gains (both ordinary 9a merges of skills you
+already have). `/housekeeping` needs its manual row (9b), the diary's
+`**Last housekeeping**` row it stamps (9c), and the `housekeepingDue` section
+in your gate config that sets its cadence (9d). Either copy without its
+wiring is a skill nothing invokes.
 
 After the inventory, the per-skill question for what you DO have. A skill is
 prose an agent loads, and adapting it to your repo is the intended way to make
@@ -1018,6 +1020,19 @@ that speak four tier names and no file that says what they mean.
 Copy the new sections across by hand, adapting the wording to your repo. Never
 re-stamp a template over a manual you have been editing for six months.
 
+**Arriving from 0.14.0 or older, four things in this category.** The
+engineering article's Architecture section gains three anchor lines —
+`**Paradigm**:`, `**Architectural style**:`, `**Context map**:` — each a
+decision or an explicit `none — <reason>`, bold label at the start of its own
+line, never a bullet; the design-brief advisory warns on a stamped article
+that carries none of them, so add the lines (the template's comment beside
+each says what it asks) or run `/design-brief` and let it write them. The
+manual template's chain section gains two sentences and its quick-reference
+table two rows, for `/design-brief` and `/housekeeping` — carry them, or the
+skills you took at 9a have no map entry. And the manual's two mentions of the
+craft article's count say **thirteen** rules now; the template had read "ten"
+since 0.10.0, so yours almost certainly says ten too.
+
 **First check that there is a manual you have been editing.** That headline rule
 assumes you stamped the article; plenty of repos never did. Bootstrap leaves
 `constitution/local-*.md.template` in place with its marks intact, the manual
@@ -1067,6 +1082,17 @@ to be true in *your* repo.** Drop the sentence, or re-point it at your own
 harness note, as you copy.
 
 ### 9c. Templates — take what moved, keep what you removed
+
+**Arriving from 0.14.0 or older, two of your docs gained a section.** The
+glossary template grew a **Context map** section — one block per context, one
+line per edge, every edge declared from both sides with the same relationship
+word and opposite roles — and its banned-words list gained "strategic design"
+(say context map). The diary template's Current state table grew a
+`**Last housekeeping**` row holding an ISO date, which the housekeeping-due
+advisory reads and `/housekeeping` stamps. Both are under `templates/docs/`,
+which bootstrap consumed into your `docs/` once: read the release's diff of
+the two templates and add the section and the row to your own files by hand,
+dating the row your last pass or today.
 
 `templates/workflows/` is installed into `.github/workflows/` **once**, at
 bootstrap, and bootstrap never overwrites a file that is already there (it prints
@@ -1146,6 +1172,14 @@ because both facts change what you do with it:
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
+
+**Arriving from 0.14.0 or older, `config.mjs` gained two policy sections**:
+`designBrief` (which article the design-brief advisory reads; the default is
+the engineering article) and `housekeepingDue` (`windowDays`, default 30, and
+an optional `diary` path). Both are read with defaults when absent, so a
+config that predates them still works; take them so the cadence and the
+article are yours to change, and so the comment beside `windowDays` says why
+a month.
 
 **Ask about BOTH refs before you write anything.** Two questions, three answers
 — and the third one is the one that eats files:
@@ -1514,8 +1548,6 @@ WARN  docs conformance: advisories (gate stays green)
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .claude/skills/to-tickets/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
-  [skill-web] ! .claude/skills/housekeeping/SKILL.md [skill-web-dangling] — references `/dogfood` but .agents/skills/dogfood/SKILL.md is not installed
-      -> Adopt the skill (see the skills inventory in the update recipe), record the decline in a local article, or add it to claudeMdRefs.ignoreCommands with a reason.
 
 FAIL  docs conformance: violations found
 
@@ -1571,8 +1603,6 @@ WARN  docs conformance: advisories (gate stays green)
 
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
-  [skill-web] ! .claude/skills/housekeeping/SKILL.md [skill-web-dangling] — references `/dogfood` but .agents/skills/dogfood/SKILL.md is not installed
-      -> Adopt the skill (see the skills inventory in the update recipe), record the decline in a local article, or add it to claudeMdRefs.ignoreCommands with a reason.
 
 OK  docs gate: all checks passed (shared-layer 0.15.0, engine: harness)
 ```

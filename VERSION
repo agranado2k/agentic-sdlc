@@ -334,8 +334,8 @@
 # enforced inside the object that owns it, a value with meaning is its own
 # type, and every name is the glossary's — credited to Evans in the closing
 # paragraph beside the essay the rest condenses. A consumer takes it as a
-# re-read of one section and changes no command of theirs. This note grows
-# with the wave's stacked tickets and is finished at the v0.15.0 tag.
+# re-read of one section and changes no command of theirs. That is the
+# manifest half; the tag closes it.
 #   NON-MANIFEST HALF, enumerated: the engineering article template's
 # Architecture section gains three labeled anchor lines — "Paradigm:",
 # "Architectural style:" and "Context map:" — each filled in one of exactly
@@ -369,8 +369,16 @@
 # with a named source, Ousterhout's red-flag scan routed to the architecture
 # skill or back to the brief, never a fix, one write (the diary stamp) —
 # with its CHECKLIST sidecar and bridge symlink; the advisory's hint and the
-# brief's entry points name it by command. Take it via 9a. The wave's later
-# tickets add to this list.
+# brief's entry points name it by command. Take it via 9a. From #113: the
+# brief's entry points — bootstrap's Next: list and the setup payload's
+# hand-back name the design brief beside the mutation decision (kit-side;
+# nothing of yours moves), /to-tickets gains rule 11 (a ticket that adds an
+# abstraction or crosses a context edge cites the brief or reopens it) and
+# /improve-codebase-architecture sends a style-level finding back to the
+# brief (both via 9a), and the manual template's chain section and
+# quick-reference rows name both new skills (via 9b). UPDATING.md's step 9
+# carries an "Arriving from 0.14.0" note per category with the take for
+# each item above. That is the whole non-manifest half.
 shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
