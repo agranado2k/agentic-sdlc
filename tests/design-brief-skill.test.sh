@@ -223,4 +223,21 @@ grep -q 'design-brief' "$ROOT/.agents/skills/LICENSE-mattpocock-skills.md" &&
 	pass "the provenance file accounts for design-brief" ||
 	fail "the provenance file does not account for design-brief"
 
+# ---------------------------------------------------------------------------
+banner "10. The entry points are wired, not just named"
+# ---------------------------------------------------------------------------
+# The skill says where it is invoked from; each of those places must actually
+# say so, or the brief is a command nobody is ever sent to.
+# The bootstrap Next list and the setup hand-back are asserted where they are
+# rendered — tests/kit-demo.sh and tests/setup-demo.sh — not repeated here.
+grep -q '/design-brief' "$ROOT/.agents/skills/to-tickets/SKILL.md" &&
+	pass "/to-tickets carries the rule that a new abstraction or a crossed edge cites the brief" ||
+	fail "/to-tickets never names /design-brief — the planner's re-question rule is missing (ticket #113)"
+grep -q '/design-brief' "$ROOT/.agents/skills/improve-codebase-architecture/SKILL.md" &&
+	pass "/improve-codebase-architecture names the re-entry into the brief" ||
+	fail "/improve-codebase-architecture never names /design-brief (ticket #113)"
+grep -q 'strategic programming' "$ROOT/README.md" &&
+	pass "README's further reading pins the word to Ousterhout's strategic programming" ||
+	fail "README's Ousterhout entry does not name strategic programming (ticket #113)"
+
 t_done "/design-brief contract"

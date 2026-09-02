@@ -218,6 +218,12 @@ assert_no_file "scripts/docs-conformance/local-vocabulary.mjs.template"
 printf '%s\n' "$LAST_OUT" | grep -qi 'mutation decision' &&
 	pass "bootstrap's Next: output names the mutation decision" ||
 	fail "bootstrap's Next: output never names the mutation decision (issue #85)"
+# The design brief (PRD #107, ticket #113): the same list names the other
+# day-one decision, so the shape of the system is chosen out loud before the
+# first feature diff chooses it by accident.
+printf '%s\n' "$LAST_OUT" | grep -qi 'design brief' &&
+	pass "bootstrap's Next: output names the design brief" ||
+	fail "bootstrap's Next: output never names the design brief (ticket #113)"
 grep -q '^\*\*Mutation decision\*\*:' constitution/local-engineering.md.template &&
 	pass "the engineering article template carries the mutation-decision anchor" ||
 	fail "the engineering article template has no mutation-decision anchor line (issue #85)"

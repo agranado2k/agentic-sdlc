@@ -196,6 +196,14 @@ if grep -qi 'mutation decision' "$PAYLOAD" 2>/dev/null; then
 else
 	fail "the payload never names the mutation decision — the article gets filled with silence (issue #85)"
 fi
+# The design brief (ticket #113): the hand-back surfaces it beside the
+# mutation decision, so the installing agent asks rather than fills the
+# architecture anchors with silence.
+if grep -qi 'design brief' "$PAYLOAD" 2>/dev/null; then
+	pass "the payload's hand-back names the design brief"
+else
+	fail "the payload never names the design brief — the anchors get filled with silence (ticket #113)"
+fi
 
 SPINE="$SCRATCH/spine.sh"
 PROJ="$SCRATCH/proj"

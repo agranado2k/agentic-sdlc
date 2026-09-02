@@ -686,9 +686,18 @@ origin.
   opt-in `/dogfood` skill: synthetic personas exercising the product's real
   user-facing surface before a human does. Credited by name in the
   predecessor project's history; no public link was recorded there.
-- **John Ousterhout — *A Philosophy of Software Design*** — deep modules and
-  "design it twice", the working vocabulary of
-  `/improve-codebase-architecture` and its sidecars.
+- **John Ousterhout — *A Philosophy of Software Design*** (2nd ed., 2021) —
+  the source of the kit's word **strategic**: chapter 3, "Working Code Isn't
+  Enough", sets strategic programming against tactical programming and asks
+  for a continuous design investment; chapter 2 defines complexity as dependencies
+  plus obscurity, with change amplification, cognitive load and unknown
+  unknowns as its symptoms; chapter 4's deep modules and chapter 11's "design
+  it twice" are the working vocabulary of `/improve-codebase-architecture`
+  and `/design-brief`; chapter 19's software-trends critiques (inheritance,
+  test-driven development, design patterns over-applied) are what the brief
+  answers; and the book's fourteen red flags are what the housekeeping pass
+  scans for. Chapter numbers verified against the second edition's table of
+  contents (ADR-0002).
 - **Geoffrey Litt — ["Understanding is the new
   bottleneck"](https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck)**
   — the case that as agents write more of the code, human understanding, not
