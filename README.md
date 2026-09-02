@@ -154,14 +154,14 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.agents/skills/` holds sixteen skills — the chain at the top of this README, made
+`.agents/skills/` holds seventeen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
-`/diagnose`, `/explain-diff`, `/improve-codebase-architecture` and
-`/design-brief` off to the side.
+`/diagnose`, `/explain-diff`, `/improve-codebase-architecture`,
+`/design-brief` and `/housekeeping` off to the side.
 
 **All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
@@ -554,6 +554,11 @@ skeleton (K0).
   points, spec-only frontmatter, and every path and command it names
   resolving.
 
+- `sh tests/housekeeping-skill.test.sh` pins the `/housekeeping` contract as
+  text: eight checklist items each with a named source, the red flags and
+  their two routes, the never-fix rule, the one permitted write, planner-tier
+  work, spec-only frontmatter, and every path and command resolving.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -625,6 +630,7 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
+sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
@@ -695,7 +701,7 @@ origin.
   it twice" are the working vocabulary of `/improve-codebase-architecture`
   and `/design-brief`; chapter 19's software-trends critiques (inheritance,
   test-driven development, design patterns over-applied) are what the brief
-  answers; and the book's fourteen red flags are what the housekeeping pass
+  answers; and the book's fourteen red flags are what `/housekeeping`
   scans for. Chapter numbers verified against the second edition's table of
   contents (ADR-0002).
 - **Geoffrey Litt — ["Understanding is the new

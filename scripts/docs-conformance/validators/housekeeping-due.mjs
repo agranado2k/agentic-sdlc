@@ -93,7 +93,7 @@ export function run(ctx) {
       file: diary,
       rule: "housekeeping-due",
       message: `last housekeeping was ${dateText}, ${ageDays} days ago — the window is ${windowDays} days`,
-      hint: "Run the housekeeping pass and stamp the row with today's date. Standing instructions rot on a calendar: the pass is where drifted counts, dead rows, unreferenced articles and unmeasured suites get found. Widen housekeepingDue.windowDays in the gate config if a month is the wrong cadence for this repo.",
+      hint: "Run `/housekeeping` and let it stamp the row with today's date. Standing instructions rot on a calendar: the pass is where drifted counts, dead rows, unreferenced articles and unmeasured suites get found. Widen housekeepingDue.windowDays in the gate config if a month is the wrong cadence for this repo.",
     },
   ];
 }

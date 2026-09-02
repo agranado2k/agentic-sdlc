@@ -216,6 +216,10 @@ is a ticket of its own and never a passenger on a feature diff (shared invariant
 §10). `/design-brief` sits before the first feature diff and again whenever the
 shape stops fitting: it decides paradigm, style and context map twice, compares
 on complexity, and records the choice where every later session reads it.
+`/housekeeping` runs on a calendar rather than an event — the docs gate's
+housekeeping-due advisory is what sends you to it — and audits the standing
+instructions, measures the suite, and scans for the red flags that reopen the
+brief; it never fixes, and its findings enter the line at `/to-tickets`.
 <!-- DOGFOOD:BEGIN -->
 
 One more sits *beside* the line rather than on it. `/dogfood` walks this
@@ -240,6 +244,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Hold the code itself to a standard  | `constitution/shared-code-craft.md` — the thirteen portable craft rules; load it before writing or reviewing code |
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Decide the shape of the system out loud | `/design-brief` — design it twice, compare on complexity, then record paradigm, style and context map as anchors, a glossary section and a decision record; stops for your yes before writing |
+| Run the recurring housekeeping pass | `/housekeeping` — audit the agent files, the glossary, the records, the measurement, the worktrees and the diary, then scan for Ousterhout's red flags; never fixes, files candidate tickets, stamps the diary row |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — deepening candidates, interface design, glossary discipline; hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer: background, intuition, walkthrough, quiz; teaches, never reviews |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |

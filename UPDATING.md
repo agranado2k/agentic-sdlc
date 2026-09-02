@@ -530,10 +530,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1615 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1618 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1769 insertions(+), 1 deletion(-)
+ 3 files changed, 1772 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1403,6 +1403,8 @@ $ cat "$WORK/changed.yours"
 .agents/skills/grill-with-docs/ADR-FORMAT.md
 .agents/skills/grill-with-docs/GLOSSARY-FORMAT.md
 .agents/skills/grill-with-docs/SKILL.md
+.agents/skills/housekeeping/CHECKLIST.md
+.agents/skills/housekeeping/SKILL.md
 .agents/skills/implement/SKILL.md
 .agents/skills/improve-codebase-architecture/DEEPENING.md
 .agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
@@ -1429,6 +1431,7 @@ $ cat "$WORK/changed.yours"
 .claude/skills/explain-diff
 .claude/skills/grill-me
 .claude/skills/grill-with-docs
+.claude/skills/housekeeping
 .claude/skills/implement
 .claude/skills/implement/SKILL.md
 .claude/skills/improve-codebase-architecture

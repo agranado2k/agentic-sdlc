@@ -163,7 +163,7 @@ Grouped by the seam each term belongs to. Entry shape:
   failure mode the kit claims to catch, red and green.
 - **Strategic** — Ousterhout's sense, only: design as a continuous investment,
   judged by the complexity it removes (dependencies plus obscurity). The
-  design brief is one strategic act; the housekeeping pass's red-flag scan is
+  design brief is one strategic act; `/housekeeping`'s red-flag scan is
   its periodic re-question. Ref: ADR-0002.
   - _Avoid_: "strategic design" (Evans's phrase — say context map);
     "strategic vs tactical" for the human/agent split (that is the tier and
