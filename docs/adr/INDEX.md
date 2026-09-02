@@ -18,6 +18,7 @@ alone answers "what is currently binding?" without opening 40 files.
 |---|---|---|
 | [0001](0001-the-kit-self-hosts-its-own-constitution.md) | The kit self-hosts its own constitution | Accepted 2026-08-27 |
 | [0002](0002-strategic-means-ousterhout.md) | "Strategic" means Ousterhout's strategic programming; Evans's work is the context map | Accepted 2026-09-02 |
+| [0003](0003-the-kit-maps-its-own-tiers.md) | The kit carries its own tier-to-model mapping, and never ships it | Accepted 2026-09-02 — supersedes the diary-recorded decision of 2026-08-27 below |
 
 ## Conventions
 
@@ -47,4 +48,6 @@ leave a back-reference in the diary entry.
 - **2026-08-27 — the kit's `scripts/agents.config.sh` stays unmapped.** The kit
   names no model anywhere, including in its own copy of the tier mapping. Every
   tier here inherits the session's model and the resolver warns once, which is
-  the state a consumer starts in too.
+  the state a consumer starts in too. **Superseded by ADR-0003** (2026-09-02):
+  the shipped config stays empty, but the kit carries a kit-only mapping of its
+  own, reached through the resolver's config seam and never shipped.
