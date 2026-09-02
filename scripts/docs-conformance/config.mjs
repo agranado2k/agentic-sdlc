@@ -296,4 +296,18 @@ const mutationDecision = {
   // article: "constitution/local-engineering.md",
 };
 
-export default { claudeMdRefs, mutationDecision, skillPaths };
+/**
+ * Policy for the design-brief advisory: the same article, read for the three
+ * architecture anchors the 0.15.0 template stamps — `**Paradigm**:`,
+ * `**Architectural style**:` and `**Context map**:`. The validator warns
+ * (never fails) when the stamped article carries none of them in either
+ * honest form — a decision, or an explicit none-with-reason. One recorded
+ * anchor is a brief; which ones a project fills is the project's call. Point
+ * `article` elsewhere if yours lives under a different name; the default
+ * follows `claudeMdRefs.constitutionDir`.
+ */
+const designBrief = {
+  // article: "constitution/local-engineering.md",
+};
+
+export default { claudeMdRefs, designBrief, mutationDecision, skillPaths };

@@ -80,7 +80,7 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
 | `.agents/skills/` | The skills — the lifecycle made runnable, at the vendor-neutral home (`.claude/skills/` holds one committed symlink per skill for the harness that reads only that address). All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
 | `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
-| `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, the skill-web advisory (a warning when an installed skill references one you lack), and the skill-paths advisory (a dead path inside a skill body warns — version skew is a sanctioned mid-update state). Dependency-free ESM, with its own fixture tests. |
+| `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, and the advisories — warnings that never fail the gate, relayed by `scripts/check.sh` on a green run; `docs/domain-glossary.md` keeps the roster (a skill referencing one you lack, a dead path inside a skill body, a materialized bridge symlink, an engineering article with no mutation decision or no design brief — version skew is a sanctioned mid-update state). Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.14.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.15.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.14.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.15.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -543,6 +543,11 @@ skeleton (K0).
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
 
+- `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
+  audible where the operator actually looks: an advisory the harness reports
+  on a green tree is relayed by `scripts/check.sh` — the entry point the hook
+  and CI run — and a tree with nothing to advise prints no advisory block.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -612,6 +617,7 @@ sh tests/dogfood-optin.test.sh                         # the one optional skill,
 sh tests/setup-demo.sh                                 # the one-line agent setup, from its own bytes
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
+sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

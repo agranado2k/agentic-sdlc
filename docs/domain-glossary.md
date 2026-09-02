@@ -103,6 +103,23 @@ Grouped by the seam each term belongs to. Entry shape:
   loaded when relevant and binding while loaded. Every article must be reachable
   from the root manual (`article-unreferenced`), because an article nothing
   points at binds nobody and rots unseen.
+- **Advisory** — a gate finding on the warning channel: printed to stderr by
+  the harness and relayed by `scripts/check.sh` on a green run, never failing
+  the push. The decision-anchor advisories name a promotion path in their
+  validator's header comment. The kit has five (`skill-web`, `skill-paths`,
+  `skill-bridge`, `mutation-decision`, `design-brief` — the count moves with
+  `scripts/docs-conformance/runner.mjs`). An advisory is the posture for a
+  rule about consumer-owned prose, where version skew is a sanctioned state.
+  - _Avoid_: "soft failure" — an advisory does not fail; "lint warning" — it
+    reports a missing decision, not a style slip.
+- **Anchor** — a labeled decision line in a stamped article, `**Label**:`
+  followed by the decision, with exactly two honest forms: the decision, or an
+  explicit `none — <reason>`. The template stamps the label with a mark after
+  it; an advisory referees the filled article. The kit has four: the mutation
+  decision, and the design brief's paradigm, architectural style and context
+  map.
+  - _Avoid_: "placeholder" — a placeholder is the unstamped mark the gate
+    rejects; an anchor is the line that survives stamping.
 - **Portability** — the property the shared articles must keep: copyable
   verbatim into a repo that shares none of this one's vocabulary. Enforced as a
   deny-list (`portability-leak`) over product names, hostnames, vendors,

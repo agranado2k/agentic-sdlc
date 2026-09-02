@@ -302,7 +302,36 @@
 # Windows note the tripwire advisory backs; tests/docs-demo.sh C8 executes
 # that block against a genuine pre-move consumer, twice, and holds its end
 # state to what a fresh bootstrap produces.
-shared-layer: 0.14.0
+# 0.15.0 — strategic design, out loud (PRD #107). One file joins the layer
+# with the wave's first slice (#108):
+# scripts/docs-conformance/validators/design-brief.mjs — an advisory on the
+# 0.11.0 warning channel: a stamped engineering article that carries none of
+# the three architecture anchors (Paradigm, Architectural style, Context map)
+# in either honest form prints a warning, never a failure, because the article
+# is consumer-owned prose and an article filled from a pre-0.15.0 template is
+# sanctioned version skew; promotion to a violation is a named future path,
+# as mutation-decision's and skill-bridge's are. docs-conformance/runner.mjs
+# changed content (the registration). scripts/check.sh changed content twice:
+# the reduced fallback's notice names the scan it cannot run, and — the fix
+# this slice's demo forced — a GREEN gate now relays the harness's advisories
+# to stderr instead of swallowing them. Every advisory since 0.11.0 had been
+# audible only from the harness run directly, never through the wrapper the
+# hook and CI actually run; tests/docs-gate-advisory.test.sh (kit-only) holds
+# the relay from here on. UPDATING.md moved
+# with the bump (the pinned versions advanced; the transcripts re-captured).
+# This note grows with the wave's stacked tickets — the tactical craft rule,
+# the housekeeping advisory — and is finished at the v0.15.0 tag.
+#   NON-MANIFEST HALF, enumerated: the engineering article template's
+# Architecture section gains three labeled anchor lines — "Paradigm:",
+# "Architectural style:" and "Context map:" — each filled in one of exactly
+# two honest forms, a decision or an explicit none-with-reason, in the shape
+# the 0.13.0 mutation decision established (your article is yours: add the
+# lines by hand if you filled an older template). Your config.mjs (yours,
+# never overwritten) gains a designBrief policy section mirroring
+# mutationDecision's; take it by hand at step 9d or accept the default, which
+# reads the same article. The kit glossary gains **anchor** and **advisory**
+# as terms. The wave's later tickets add to this list.
+shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -334,6 +363,7 @@ files:
   scripts/docs-conformance/validators/skill-web.mjs
   scripts/docs-conformance/validators/skill-paths.mjs
   scripts/docs-conformance/validators/mutation-decision.mjs
+  scripts/docs-conformance/validators/design-brief.mjs
   scripts/docs-conformance/validators/skill-bridge.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part

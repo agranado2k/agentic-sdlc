@@ -222,6 +222,17 @@ grep -q '^\*\*Mutation decision\*\*:' constitution/local-engineering.md.template
 	pass "the engineering article template carries the mutation-decision anchor" ||
 	fail "the engineering article template has no mutation-decision anchor line (issue #85)"
 
+# The design brief (PRD #107, ticket #108): the same shape, three times over,
+# for the architecture decisions nobody asked out loud before — a stamped
+# article carries a labeled anchor per decision, each filled with a choice or
+# an explicit "none" with the reason. A blank Architecture section is how a
+# first feature diff picks an architecture by accident.
+for anchor in 'Paradigm' 'Architectural style' 'Context map'; do
+	grep -q "^\*\*$anchor\*\*:" constitution/local-engineering.md.template &&
+		pass "the engineering article template carries the $anchor anchor" ||
+		fail "the engineering article template has no '$anchor' anchor line (ticket #108)"
+done
+
 # The skills' neutral home (issue #97): canonical files live at
 # .agents/skills/ — the vendor-neutral address the Agent Skills ecosystem
 # reads — and .claude/skills/<name> is a committed per-skill symlink, the
@@ -254,7 +265,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.14.0"
+assert_out_has "shared-layer 0.15.0"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: harness"
 else

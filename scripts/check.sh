@@ -41,7 +41,9 @@
 # Set DOCS_CHECK_NO_NODE=1 to force the fallback (the kit's demo does, to prove
 # both engines).
 #
-# Exit: 0 clean, 1 violations found, 2 could not run.
+# Exit: 0 clean, 1 violations found, 2 could not run. A clean run may still
+# write the harness's advisory block to stderr — advisories are relayed on a
+# green gate and never change the exit code.
 
 set -u
 
@@ -52,6 +54,10 @@ cd "$repo_root" || {
 }
 
 HARNESS="scripts/docs-conformance/index.mjs"
+# The header the harness prints above its advisory block. Keep this in step
+# with `scripts/docs-conformance/index.mjs` — two engines, one contract; the
+# advisory suite goes red if the two drift.
+advisory_header="WARN  docs conformance"
 
 vfile=$(mktemp) || exit 2
 trap 'rm -f "$vfile"' EXIT INT TERM HUP
@@ -218,8 +224,9 @@ if [ "$engine" = "fallback" ]; then
 	echo "        portability deny-list on the shared article, cross-skill references" >&2
 	echo "        (the skill-web advisory), path references inside skill bodies" >&2
 	echo "        (the skill-paths rule), the engineering article's mutation" >&2
-	echo "        decision (the mutation-decision advisory), and materialized" >&2
-	echo "        skill-bridge symlinks (the skill-bridge advisory)." >&2
+	echo "        decision (the mutation-decision advisory) and its design brief" >&2
+	echo "        (the design-brief advisory), and materialized skill-bridge" >&2
+	echo "        symlinks (the skill-bridge advisory)." >&2
 	echo "        Install node and re-run to get the full harness (scripts/docs-conformance)." >&2
 	echo "" >&2
 fi
@@ -228,6 +235,16 @@ posix_failed=0
 [ -s "$vfile" ] && posix_failed=1
 
 if [ "$posix_failed" = 0 ] && [ "$harness_status" = 0 ]; then
+	# A green harness may still carry ADVISORIES — findings on the warning
+	# channel that never fail the gate. Relay them: this wrapper is the entry
+	# point the hook and CI run, and a warning only the harness printed is a
+	# warning nobody saw. Quiet when there is nothing to advise, and trimmed
+	# to the advisory block — the harness's own OK line is not repeated.
+	case "$harness_out" in
+	*"$advisory_header"*)
+		printf '%s\n' "$harness_out" | sed '/^OK  docs conformance/d' >&2
+		;;
+	esac
 	echo "OK  docs gate: all checks passed (shared-layer ${shared_version:-unknown}, engine: $engine)"
 	exit 0
 fi
