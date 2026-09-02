@@ -117,6 +117,12 @@ fi
 # The REASON has to survive too, or the order looks arbitrary to the next editor.
 assert_file_has "$SKILL" "different vendor"
 assert_file_has "$SKILL" "different model tier"
+# The rule itself, and the case that defeats a plain tier lookup (#144): the
+# session implemented on the model the reviewer tier maps to, so the reviewer
+# is resolved through a domain that names that situation. Consumer-correct:
+# the skill names the command and the domain, never a model.
+assert_file_has "$SKILL" "the reviewer is never the model that implemented"
+assert_file_has "$SKILL" "sh scripts/agents.lib.sh reviewer self-implemented"
 assert_file_has "$SKILL" "fresh context"
 
 # ---------------------------------------------------------------------------

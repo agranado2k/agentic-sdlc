@@ -836,6 +836,44 @@ done
 unset AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "The reviewer is never the implementer — the kit's mapping, and the probe (#144)"
+# ---------------------------------------------------------------------------
+# The policy the root manual states and ADR-0003 clause 4 defers to this
+# ticket: a review from the implementer's own model is an editorial pass
+# wearing a second hat. Two halves, one probe. (1) The mapping resolves
+# reviewer and implementer to different models. (2) The mapping names the
+# reviewer for the case the plain lookup cannot see — the session itself
+# implemented, on the reviewer's model — as the domain `self-implemented`,
+# and that answer differs from the reviewer's. The probe runs on the kit's
+# config and then on two throwaways that break each half, so it is proven
+# able to fail before it is trusted.
+reviewer_rule_gaps() { # <config>
+	_rg_rev=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" reviewer 2>/dev/null)
+	_rg_imp=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" implementer 2>/dev/null)
+	_rg_self=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" reviewer self-implemented 2>/dev/null)
+	[ -n "$_rg_rev" ] && [ "$_rg_rev" = "$_rg_imp" ] &&
+		echo "reviewer and implementer both map to '$_rg_rev'"
+	[ -n "$_rg_rev" ] && [ "$_rg_self" = "$_rg_rev" ] &&
+		echo "'reviewer self-implemented' resolves to the reviewer's own model '$_rg_rev' — no fallback for a diff the session wrote"
+	return 0
+}
+gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
+[ -z "$gaps" ] &&
+	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
+	fail "the kit's own mapping breaks the reviewer rule — $gaps"
+SAME="$SCRATCH/same.config.sh"
+sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
+case "$(reviewer_rule_gaps "$SAME")" in
+*"both map to 'model-for-implementing'"*) pass "the probe reports a mapping where reviewer equals implementer" ;;
+*) fail "the probe missed reviewer == implementer" ;;
+esac
+# $FULL maps no self-implemented domain, so the fallback IS the reviewer.
+case "$(reviewer_rule_gaps "$FULL")" in
+*"no fallback for a diff the session wrote"*) pass "the probe reports a mapping with no self-implemented answer" ;;
+*) fail "the probe missed a missing self-implemented mapping" ;;
+esac
+
+# ---------------------------------------------------------------------------
 banner "The kit's own wrapper — scripts/agents.kit.sh (f13 review M-2)"
 # ---------------------------------------------------------------------------
 # AGENTS.md hard rule 10: in this repo, `sh scripts/agents.kit.sh <tier>`

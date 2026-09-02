@@ -173,8 +173,10 @@ scripts/agents.kit.sh implementer content` prefers
 when it is unset. The two vocabularies are deliberately opposite: the four tier
 names above are **closed** (an unknown one is exit 2), while domains are **open
 local policy**, so an unmapped one falls back to the tier in silence. This repo
-maps exactly one — `content`, for the prose that is most of the kit's product,
-which is `implementer` work by tier and not code by medium. `code` is
+maps two — `content`, for the prose that is most of the kit's product, which
+is `implementer` work by tier and not code by medium; and `self-implemented`
+on the reviewer tier, for a diff the session itself wrote on the reviewer's
+model, since the reviewer is never the model that implemented. `code` is
 deliberately unmapped: the plain tier is already its answer, and repeating that
 value under a domain name would record a non-decision. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change which model you would
