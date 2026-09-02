@@ -19,10 +19,10 @@ a root and two or three local articles — engineering, workflow, and product
 when the optional skill is installed — that the root points at. The kit ships those articles as templates and has none of
 its own — the root manual says so, and the "What this repo is" section is
 named as the kit's equivalent. So the kit's root carries what a consumer
-splits across three files: orientation, the hard rules, the tier practice
+splits across three or four files: orientation, the hard rules, the tier practice
 that a consumer's workflow article would hold, and the command map. Measured
 against a consumer's root alone it is long; measured against a consumer's
-root plus its two articles it is short.
+root plus its articles it is short.
 
 The 67-line tiers section is the one candidate for an article. It exists
 because the kit is the only repo where a skill's literal spawn command is
@@ -31,7 +31,7 @@ which ship unstamped.
 
 ## Decision drivers
 
-- One home per rule (shared invariant §11): a kit-only article would be a
+- One home per rule (shared invariant §11): a kit-own article would be a
   fourth home for standing instructions, and a kit-own file for bootstrap to
   strip.
 - The manual's own claim, "the kit has no `local-*` article of its own", is
@@ -45,7 +45,9 @@ which ship unstamped.
 1. **Keep one root, record the budget, hold it with a check** *(chosen)* —
    the root stays the kit's only local article; its size is capped at 350
    lines by a self-host probe; growth past that is a decision, not a drift.
-2. **A kit-only article for the tier practice** — rejected: a new kit-own
+   Against the 200-line reference: that number is for a root whose
+   elaboration lives in articles, and this root's does not.
+2. **A kit-own article for the tier practice** — rejected: a new kit-own
    file, a new deletion-list entry, a fourth home for rules, and the loss of
    the manual's "no local article" claim, to move 67 lines that every kit
    session needs anyway (hard rule 10 is the most-tripped rule in the repo).
@@ -62,9 +64,9 @@ Chosen: **one root, a recorded budget, a check**.
    consumer's root and two local articles carry together.
 2. Its budget is **350 lines**. The self-host suite fails when the root
    exceeds it, with its own bait.
-3. Growth past the budget is a decision: split into a kit-only article and
-   supersede this record, or raise the budget here with the reason. Never a
-   silent line.
+3. Growth past the budget is a decision: split into a kit-own article, or
+   supersede this record with one naming the new budget and why. Never a
+   silent line, and never an edit to this number in place.
 4. The tiers section stays in the root. Its duplication with the kit-only
    config's header is a housekeeping finding, not part of this decision.
 5. **Explicit non-goal**: this record says nothing about a consumer's root.
@@ -86,7 +88,7 @@ Chosen: **one root, a recorded budget, a check**.
 
 ## More information
 
-- Implemented in: ticket #134 of PRD #124; the housekeeping report of
-  2026-09-02, item 1.1.
+- Implemented in: ticket #134 of PRD #124, filed by the first housekeeping
+  pass (2026-09-02).
 - Related: shared invariant §11; ADR-0001 (the kit follows its own
   framework); Addy Osmani, "Audit your Agent files" (the 200-line reference).
