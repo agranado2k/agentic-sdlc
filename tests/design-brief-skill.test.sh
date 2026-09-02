@@ -42,7 +42,28 @@ banner "0. The files under test"
 # ---------------------------------------------------------------------------
 [ -f "$SKILL_ABS" ] && pass "$SKILL exists" || {
 	fail "$SKILL is missing — nothing else in this suite means anything"
-	t_done "/design-brief contract"
+	# ---------------------------------------------------------------------------
+banner "10. The entry points are wired, not just named"
+# ---------------------------------------------------------------------------
+# The skill says where it is invoked from; each of those places must actually
+# say so, or the brief is a command nobody is ever sent to.
+grep -q 'design brief' "$ROOT/bootstrap.sh" &&
+	pass "bootstrap's Next list names the design brief" ||
+	fail "bootstrap.sh never names the design brief — the day-one entry point is missing (ticket #113)"
+grep -q 'design brief' "$ROOT/setup/agent-bootstrap.md" &&
+	pass "the setup payload's hand-back names the design brief" ||
+	fail "setup/agent-bootstrap.md never names the design brief (ticket #113)"
+grep -q '/design-brief' "$ROOT/.agents/skills/to-tickets/SKILL.md" &&
+	pass "/to-tickets carries the rule that a new abstraction or a crossed edge cites the brief" ||
+	fail "/to-tickets never names /design-brief — the planner's re-question rule is missing (ticket #113)"
+grep -q '/design-brief' "$ROOT/.agents/skills/improve-codebase-architecture/SKILL.md" &&
+	pass "/improve-codebase-architecture names the re-entry into the brief" ||
+	fail "/improve-codebase-architecture never names /design-brief (ticket #113)"
+grep -q 'strategic programming' "$ROOT/README.md" &&
+	pass "README's further reading pins the word to Ousterhout's strategic programming" ||
+	fail "README's Ousterhout entry does not name strategic programming (ticket #113)"
+
+t_done "/design-brief contract"
 }
 [ -f "$ROOT/$SIDECAR" ] && pass "$SIDECAR exists — the shapes the brief writes live beside the procedure" ||
 	fail "$SIDECAR is missing — the skill has nowhere to keep the shapes it writes"

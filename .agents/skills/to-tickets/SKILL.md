@@ -19,6 +19,7 @@ Turn a PRD (an issue from `/to-prd`, or a spec agreed in this conversation) into
 8. **No file paths or line numbers in ticket bodies** — they go stale before the ticket is picked up. Describe behavior and seams instead.
 9. **Capability tier, decided at write time** — stamp `Tier: <planner|implementer|mechanical|reviewer>` on every ticket body. The rubric is below. You are the only actor in the chain with a view of the whole decomposition, which is why this call is yours and not the implementing session's: an agent asked to size itself has every incentive to answer "the strongest one".
 10. **Task domain, only when it changes the answer** — optionally add a `Domain: <token>` line. The rubric is below rule 9's.
+11. **A new abstraction or a crossed edge cites the brief.** A ticket that introduces a new layer, pattern or module kind, or whose work crosses an edge in the glossary's context map, names the design brief it conforms to — the engineering article's anchors and the decision record behind them. If no brief covers it, the ticket's first line is to reopen `/design-brief`, and the ticket waits on that answer: an architecture chosen inside a feature ticket is the accident the brief exists to prevent.
 
 ## The tier rubric
 

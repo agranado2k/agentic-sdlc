@@ -628,3 +628,28 @@ different bodies, one at each address — is now named by skill-bridge as an
 ADVISORY: written as a violation it turned adopt-demo red on the leg that
 blesses exactly that shape, since it is the adopt arm's own collision
 resolution. A build must not fail for a layout the kit hands you.
+
+### 2026-09-02 — The design brief got its entry points, and the Ousterhout attributions were checked
+
+PRD #107's plan cited *A Philosophy of Software Design* by chapter from
+memory and said so. Ticket #113 owed the check. Against the second edition's
+table of contents (the author's page confirms the edition; the full chapter
+list was taken from a chapter-by-chapter edition that reproduces it, and the
+chapter texts were corroborated from reader notes quoting them): chapter 3
+"Working Code Isn't Enough" for strategic versus tactical programming and
+the 10–20% investment; chapter 2 for complexity as dependencies plus
+obscurity with its three symptoms; chapter 4 "Modules Should Be Deep";
+chapter 11 "Design it Twice"; chapter 19 "Software Trends" for inheritance,
+agile, unit tests, test-driven development, design patterns and getters;
+and the fourteen red flags by their exact names. **Nothing was corrected**:
+every attribution the PRD and ADR-0002 made stands. One caveat is recorded
+rather than hidden — the publisher's own pages refused the fetch, so the
+table of contents rests on a faithful secondary edition plus the author's
+page, not on the publisher.
+
+With that settled, the brief is wired in: bootstrap's Next list and the
+setup payload's hand-back name it beside the mutation decision, `/to-tickets`
+gains the rule that a new abstraction or a crossed context edge cites the
+brief or reopens it, and `/improve-codebase-architecture` sends a style-level
+finding back to the brief instead of into its deepening loop.
+

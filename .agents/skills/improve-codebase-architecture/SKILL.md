@@ -119,6 +119,12 @@ Mark it clearly on the card, citing the record by its own id — *"contradicts t
 record on X, but worth reopening because…"*. Don't list every theoretical
 refactor a decision forbids; a review that argues with the archive gets ignored.
 
+**Style-level findings re-enter the brief, not this loop.** A candidate that
+contradicts the recorded architectural style or paradigm — the engineering
+article's anchors and the decision record behind them — is not a deepening;
+it is a re-question of the shape. Send it to `/design-brief` first, and let a
+revised brief decide whether the deepening still stands.
+
 [PRESENTING.md](./PRESENTING.md) carries that contract in full — the card
 layout, the visualisation patterns, the tone rules, and a worked single-file
 HTML rendering for projects that can view one.

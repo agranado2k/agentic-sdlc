@@ -144,7 +144,13 @@ the **mutation decision**, and it is a decision, not a blank: whoever fills
 the engineering article — you, if asked — names a tool and its on-demand
 command, or writes `none` with the reason, and surfaces the choice to your
 human either way. Filling it with silence is how a project ships tests
-nobody has ever measured.
+nobody has ever measured. The article's Architecture section carries the
+other day-one decision, the **design brief** — paradigm, architectural style,
+context map — and the same rule holds: those anchors are decided, never left
+blank. Propose running `/design-brief` as the project's first act after this
+hand-back; it designs the shape twice, compares on complexity, and writes
+nothing until your human says yes. A blank Architecture section is decided by
+the first feature diff instead.
 
 ## The existing-repository arm
 

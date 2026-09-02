@@ -997,7 +997,13 @@ Next:
                                   mutation decision: name a tool and its
                                   on-demand command, or "none" with the reason —
                                   never leave it to silence (adapters/ holds
-                                  worked wirings to copy the shape from)
+                                  worked wirings to copy the shape from).
+                                  Its Architecture section carries the other
+                                  day-one decision, the design brief: run
+                                  /design-brief before the first feature diff
+                                  — it designs the shape twice and records
+                                  paradigm, style and context map after your
+                                  yes, or "none" with the reason on each
   4. edit scripts/guards.config.sh
                                   the TDD pairing guard is INACTIVE until you
                                   set GUARD_SOURCE_RE to match your source
