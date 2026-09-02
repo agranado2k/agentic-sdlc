@@ -702,3 +702,26 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+
+### 2026-09-02 — The demo suites build their fixtures one way
+
+Ticket #131 of PRD #124. Every demo suite built its throwaway kits and
+consumers by hand — `cp -R`, strip nested worktrees, drop `.git`, `git init`,
+identity, signing switches, commit, tag, wipe, copy, commit, tag — and the docs
+demo carried that ritual five times over. The architecture review classed it
+as a shallow module in the large: the same twelve lines, with the only thing
+that differed (which release the fixture simulates) buried in the middle.
+
+`tests/lib.sh` now carries four builders — a `.git`-free kit copy with nested
+worktrees stripped, a repo with a fixture identity and every signing switch
+off, a two-tag history, and a consumer bootstrapped from a tree with one
+commit. The deliberate content surgery that gives a fixture its meaning (a
+rollback of a shared article, a manifest rewritten to an older release) stays
+at the call site, between the copy and the history: it is the scenario, and
+hiding it would hide the point. The docs demo adopted them; its section D
+transcripts did not move, which is the refactor's proof, and the suite is 71
+lines shorter. `tests/fixture-builders.test.sh` pins each builder's promise on
+its own, including the nested-worktree case the helper exists for.
+
+The kit demo and the self-host suite keep their own setup on purpose — their
+adoption is a ticket of its own, not a passenger on this one.

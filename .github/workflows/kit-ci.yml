@@ -267,6 +267,14 @@ jobs:
       - name: Design-brief skill-text suite
         run: sh tests/design-brief-skill.test.sh
 
+  fixture-builders:
+    name: The harness's fixture builders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fixture-builder suite
+        run: sh tests/fixture-builders.test.sh
+
   housekeeping:
     name: /housekeeping contract
     runs-on: ubuntu-latest

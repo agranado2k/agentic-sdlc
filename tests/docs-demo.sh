@@ -203,15 +203,9 @@ export LC_ALL
 PROJ="$SCRATCH/demo-project"
 
 banner "A0. Setup — simulate 'Use this template'"
-mkdir -p "$PROJ"
-cp -R "$KIT/." "$PROJ/"
-strip_nested_worktrees "$KIT" "$PROJ"
-rm -rf "$PROJ/.git"
+t_kit_tree "$KIT" "$PROJ"
+t_git_identity "$PROJ" "Docs Demo" "demo@example.invalid"
 cd "$PROJ" || exit 2
-git init -q -b main
-git config user.name "Docs Demo"
-git config user.email "demo@example.invalid"
-git config commit.gpgsign false
 pass "fresh repo at \$SCRATCH/demo-project"
 
 banner "A1. Bootstrap"
@@ -312,10 +306,7 @@ esac
 banner "B0. Build the fake older kit (v0.1.0) and a consumer on it"
 
 OLDKIT="$SCRATCH/kit-0.1.0"
-mkdir -p "$OLDKIT"
-cp -R "$KIT/." "$OLDKIT/"
-strip_nested_worktrees "$KIT" "$OLDKIT"
-rm -rf "$OLDKIT/.git"
+t_kit_tree "$KIT" "$OLDKIT"
 rm -f "$OLDKIT/UPDATING.md" # UPDATING.md did not exist at 0.1.0
 # Neither did the code-craft article (it joins at 0.5.0) — and a faithful old
 # kit must not REFERENCE it either, or the article-unreferenced red in B1's
@@ -352,49 +343,16 @@ fi
 
 # A .git-free copy of the kit as it stands: the v0.15.0 release tree.
 NEWKIT="$SCRATCH/kit-0.15.0"
-mkdir -p "$NEWKIT"
-cp -R "$KIT/." "$NEWKIT/"
-strip_nested_worktrees "$KIT" "$NEWKIT"
-rm -rf "$NEWKIT/.git"
+t_kit_tree "$KIT" "$NEWKIT"
 
 # The two ends, as real git refs in one repo.
 HIST="$SCRATCH/kit-history"
-mkdir -p "$HIST"
-cp -R "$OLDKIT/." "$HIST/"
+t_kit_history "$HIST" "$OLDKIT" v0.1.0 "$NEWKIT" v0.15.0
 cd "$HIST" || exit 2
-git init -q -b main
-git config user.name "Kit Release"
-git config user.email "kit@example.invalid"
-git config commit.gpgsign false
-git config tag.gpgSign false
-git config tag.forceSignAnnotated false
-git add -A >/dev/null
-git commit -q -m "release 0.1.0"
-git tag v0.1.0
-find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-cp -R "$NEWKIT/." "$HIST/"
-git add -A >/dev/null
-git commit -q -m "release 0.15.0"
-git tag v0.15.0
-if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.15.0 >/dev/null; then
-	pass "kit history built with tags v0.1.0 and v0.15.0"
-else
-	fail "kit history tags were not created"
-fi
 
 # A consumer bootstrapped at 0.1.0.
 CONSUMER="$SCRATCH/older-consumer"
-mkdir -p "$CONSUMER"
-cp -R "$OLDKIT/." "$CONSUMER/"
-rm -rf "$CONSUMER/.git"
-cd "$CONSUMER" || exit 2
-git init -q -b main
-git config user.name "Older Consumer"
-git config user.email "older@example.invalid"
-git config commit.gpgsign false
-sh bootstrap.sh "Older Consumer" "A project that bootstrapped at shared-layer 0.1.0." >/dev/null 2>&1
-git add -A >/dev/null
-git commit -q -m "chore: bootstrap from agentic-sdlc"
+t_consumer_from "$OLDKIT" "$CONSUMER" "Older Consumer" "older@example.invalid" "Older Consumer" "A project that bootstrapped at shared-layer 0.1.0."
 assert_status 0 "the 0.1.0 consumer's gate is green before the update" -- sh scripts/check.sh
 
 # The local edit that should never have been made to a verbatim file.
@@ -611,10 +569,7 @@ rm -rf "$WORK"
 banner "C0. Build a fake 0.3.0 kit — the wave's non-shared parts removed"
 
 OLD3="$SCRATCH/kit-0.3.0"
-mkdir -p "$OLD3"
-cp -R "$KIT/." "$OLD3/"
-strip_nested_worktrees "$KIT" "$OLD3"
-rm -rf "$OLD3/.git"
+t_kit_tree "$KIT" "$OLD3"
 
 # A 0.3.0 consumer predates the 0.14.0 neutral-home move: its skills are REAL
 # directories at .claude/skills and .agents does not exist. The copy above
@@ -729,39 +684,13 @@ find "$OLD3" \( -name '*.md' -o -name '*.md.template' \) -type f \
 
 # Both ends as real refs in one repo, exactly as B0 does it.
 HIST3="$SCRATCH/kit-history-3"
-mkdir -p "$HIST3"
-cp -R "$OLD3/." "$HIST3/"
+t_kit_history "$HIST3" "$OLD3" v0.3.0 "$NEWKIT" v0.15.0
 cd "$HIST3" || exit 2
-git init -q -b main
-git config user.name "Kit Release"
-git config user.email "kit@example.invalid"
-git config commit.gpgsign false
-git config tag.gpgSign false
-git config tag.forceSignAnnotated false
-git add -A >/dev/null
-git commit -q -m "release 0.3.0"
-git tag v0.3.0
-find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-cp -R "$NEWKIT/." "$HIST3/"
-git add -A >/dev/null
-git commit -q -m "release 0.15.0"
-git tag v0.15.0
-pass "kit history built with tags v0.3.0 and v0.15.0"
 
 banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 
 C3="$SCRATCH/consumer-0.3.0"
-mkdir -p "$C3"
-cp -R "$OLD3/." "$C3/"
-rm -rf "$C3/.git"
-cd "$C3" || exit 2
-git init -q -b main
-git config user.name "Tier Consumer"
-git config user.email "tier@example.invalid"
-git config commit.gpgsign false
-sh bootstrap.sh --no-dogfood "Tier Consumer" "A project that bootstrapped at shared-layer 0.3.0." >/dev/null 2>&1
-git add -A >/dev/null
-git commit -q -m "chore: bootstrap from agentic-sdlc"
+t_consumer_from "$OLD3" "$C3" "Tier Consumer" "tier@example.invalid" --no-dogfood "Tier Consumer" "A project that bootstrapped at shared-layer 0.3.0."
 assert_status 0 "the 0.3.0 consumer's gate is green before the update" -- sh scripts/check.sh
 assert_no_file ".claude/skills/dogfood"
 

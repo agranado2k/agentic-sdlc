@@ -548,6 +548,14 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/fixture-builders.test.sh` pins the four fixture builders in
+  `tests/lib.sh` that every demo suite makes its throwaway kits and consumers
+  with: a `.git`-free kit copy with nested worktrees stripped, a repo with a
+  fixture identity and every signing switch off, a two-tag history whose tags
+  resolve to their trees, and a consumer bootstrapped from a tree with one
+  commit. The demo suites are the builders' oracle in the large — the docs
+  demo's pinned transcripts did not move when it adopted them.
+
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
   the human stop before every write, the decision record, the two entry
@@ -629,6 +637,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
+sh tests/fixture-builders.test.sh                      # the harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 ```
