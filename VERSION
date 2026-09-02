@@ -336,56 +336,51 @@
 # paragraph beside the essay the rest condenses. A consumer takes it as a
 # re-read of one section and changes no command of theirs. That is the
 # manifest half; the tag closes it.
-#   NON-MANIFEST HALF, enumerated: the engineering article template's
-# Architecture section gains three labeled anchor lines — "Paradigm:",
-# "Architectural style:" and "Context map:" — each filled in one of exactly
-# two honest forms, a decision or an explicit none-with-reason, in the shape
-# the 0.13.0 mutation decision established (your article is yours: add the
-# lines by hand if you filled an older template). Your config.mjs (yours,
-# never overwritten) gains a designBrief policy section mirroring
-# mutationDecision's; take it by hand at step 9d or accept the default, which
-# reads the same article. The kit glossary gains **anchor** and **advisory**
-# as terms. From #111: the diary template's Current state table gains the
-# `**Last housekeeping**` row, stamped with the bootstrap date (your diary is
-# yours: add the row by hand, dated your last pass or today), and your
-# config.mjs gains the housekeepingDue section with the window as data. From
-# #110: the manual template's article-layer line and quick-reference row say
-# THIRTEEN craft rules — the count had read "ten" since 0.10.0 added §11 and
-# §12, and a stamped consumer inherited the wrong number for five releases;
-# the self-host suite now holds both manuals to the article's section count
-# (your stamped manual is yours: correct the word by hand). From #109: the
-# glossary template gains a Context map section — one line per edge, the
-# same relationship named from both sides, roles opposite — and "strategic
-# design" joins its banned words (say context map); the grilling skill's
-# glossary sidecar teaches the both-sides rule. Your glossary is yours: add
-# the section by hand from the template's comment. From #112: the
-# /design-brief skill joins the roster (design it twice at architecture
-# scale, compare on complexity, stop for a yes, then write the three anchors,
-# the glossary's context map and one decision record) with its BRIEF-FORMAT
-# sidecar and its bridge symlink; the kit's own decision record 0002 pins
-# "strategic" to Ousterhout's sense. Take the skill via 9a. From #113: the
-# brief's entry points — bootstrap's Next: list and the setup payload's
-# hand-back name the design brief beside the mutation decision (kit-side;
-# nothing of yours moves), /to-tickets gains rule 11 (a ticket that adds an
-# abstraction or crosses a context edge cites the brief or reopens it) and
-# /improve-codebase-architecture sends a style-level finding back to the
-# brief (both via 9a), and the manual template's chain section and
-# quick-reference rows name both new skills (via 9b). From #114: the
-# /housekeeping skill joins the roster — the recurring pass the
-# housekeeping-due advisory sends an agent to: eight checklist items each
-# with a named source, Ousterhout's red-flag scan routed to the architecture
-# skill or back to the brief, never a fix, one write (the diary stamp) —
-# with its CHECKLIST sidecar and bridge symlink; the advisory's hint and the
-# brief's entry points name it by command. Take it via 9a. From #113: the
-# brief's entry points — bootstrap's Next: list and the setup payload's
-# hand-back name the design brief beside the mutation decision (kit-side;
-# nothing of yours moves), /to-tickets gains rule 11 (a ticket that adds an
-# abstraction or crosses a context edge cites the brief or reopens it) and
-# /improve-codebase-architecture sends a style-level finding back to the
-# brief (both via 9a), and the manual template's chain section and
-# quick-reference rows name both new skills (via 9b). UPDATING.md's step 9
-# carries an "Arriving from 0.14.0" note per category with the take for
-# each item above. That is the whole non-manifest half.
+#   NON-MANIFEST HALF, enumerated, in ticket order. From #108: the
+# engineering article template's Architecture section gains three labeled
+# anchor lines — "Paradigm:", "Architectural style:" and "Context map:" —
+# each filled in one of exactly two honest forms, a decision or an explicit
+# none-with-reason, in the shape the 0.13.0 mutation decision established
+# (your article is yours: add the lines by hand if you filled an older
+# template); your config.mjs (yours, never overwritten) gains a designBrief
+# policy section mirroring mutationDecision's — take it by hand at step 9d or
+# accept the default, which reads the same article; the kit glossary gains
+# **anchor** and **advisory** as terms. From #109: the glossary template
+# gains a Context map section — one line per edge, the same relationship
+# named from both sides, roles opposite — and "strategic design" joins its
+# banned words (say context map); the grilling skill's glossary sidecar
+# teaches the both-sides rule; your glossary is yours: add the section by
+# hand from the template's comment. From #110: the manual template's
+# article-layer line and quick-reference row say THIRTEEN craft rules — the
+# count had read "ten" since 0.10.0 added §11 and §12, and a stamped
+# consumer inherited the wrong number for five releases; the self-host suite
+# now holds both manuals to the article's section count (your stamped manual
+# is yours: correct the word by hand). From #111: the diary template's
+# Current state table gains the `**Last housekeeping**` row, stamped with the
+# bootstrap date (your diary is yours: add the row by hand, dated your last
+# pass or today), and your config.mjs gains the housekeepingDue section with
+# the window as data. From #112: the /design-brief skill joins the roster
+# (design it twice at architecture scale, compare on complexity, stop for a
+# yes, then write the three anchors, the glossary's context map and one
+# decision record) with its BRIEF-FORMAT sidecar and its bridge symlink; the
+# kit's own decision record 0002 pins "strategic" to Ousterhout's sense; take
+# the skill via 9a. From #113: the brief's entry points — bootstrap's Next:
+# list and the setup payload's hand-back name the design brief beside the
+# mutation decision (kit-side; nothing of yours moves), /to-tickets gains
+# rule 11 (a ticket that adds an abstraction or crosses a context edge cites
+# the brief or reopens it) and /improve-codebase-architecture sends a
+# style-level finding back to the brief (both via 9a), and the manual
+# template's chain section and quick-reference rows name both new skills
+# (via 9b). From #114: the /housekeeping skill joins the roster — the
+# recurring pass the housekeeping-due advisory sends an agent to: eight
+# checklist items each with a named source, Ousterhout's red-flag scan routed
+# to the architecture skill or back to the brief, never a fix of its own,
+# one write (the diary stamp) and one delegated action (the cleanup skill's
+# pruning) — with its CHECKLIST sidecar and bridge symlink; the advisory's
+# hint and the brief's entry points name it by command; take it via 9a.
+# From #115: UPDATING.md's step 9 carries an "Arriving from 0.14.0" note per
+# category with the take for each item above. That is the whole non-manifest
+# half.
 shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

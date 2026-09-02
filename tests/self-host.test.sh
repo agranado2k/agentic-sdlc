@@ -429,6 +429,29 @@ craft_probe "$SCRATCH/craft.one" 2 >/dev/null; [ $? = 1 ] &&
 	pass "the craft-count probe rejects a manual that lost one of its count sentences" ||
 	fail "the craft-count probe passed a manual with a count sentence missing"
 
+# --- F5b: no ticket is enumerated twice in the current note -----------------
+# Stacked branches each grew the current note; merging them up pasted one
+# ticket's clause twice, and F5 only checks the marker exists. Read the
+# current note (from its heading to the version line), count each "From #N"
+# reference, and fail on any that appears more than once — with its own bait.
+current_note() {
+	awk -v v="$1" '
+		$0 ~ ("^# " v " ") { on = 1 }
+		on && /^shared-layer:/ { exit }
+		on { print }
+	' "$2"
+}
+dup_refs() { current_note "$1" "$2" | grep -o 'From #[0-9]*' | sort | uniq -d; }
+if [ -n "$(dup_refs "$version_now" "$KIT/VERSION")" ]; then
+	fail "the $version_now note enumerates a ticket twice: $(dup_refs "$version_now" "$KIT/VERSION" | tr '\n' ' ')"
+else
+	pass "the $version_now note enumerates each ticket once"
+fi
+{ printf '# %s — bait\n# From #1: a. From #1: again.\n#   NON-MANIFEST HALF: x\nshared-layer: %s\n' "$version_now" "$version_now"; } >"$SCRATCH/version.f5bbait"
+[ -n "$(dup_refs "$version_now" "$SCRATCH/version.f5bbait")" ] &&
+	pass "the duplicate-clause probe rejects a note that repeats a ticket" ||
+	fail "the duplicate-clause probe passed a note that repeats a ticket — the check is vacuous"
+
 # --- F3: the shared layer is REACHABLE — a declared release has its tag ----
 # The lesson of the v0.9.0 wave, learned in a consumer's clone: UPDATING.md
 # derives FROM_REF/TO_REF from release tags, so a VERSION bump that never gets

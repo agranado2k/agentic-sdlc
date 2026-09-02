@@ -530,10 +530,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1662 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1667 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1816 insertions(+), 1 deletion(-)
+ 3 files changed, 1821 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -785,17 +785,22 @@ pull-request template gains the `<!-- explain-diff-appendix -->` marker
 paragraph (that is a 9c template take). The copy without the wiring installs a
 skill nothing invokes.
 
-**Arriving from 0.14.0 or older, the inventory prints two names:
-`design-brief` and `housekeeping`.** Both are directory copies plus wiring.
-`/design-brief` is the day-one architecture decision — it needs its
-quick-reference row and chain sentence in your manual (a 9b take), the
-three anchors in your engineering article to write into (9b again), and the
-rule 11 that `/to-tickets` gains in this release plus the re-entry paragraph
-`/improve-codebase-architecture` gains (both ordinary 9a merges of skills you
-already have). `/housekeeping` needs its manual row (9b), the diary's
-`**Last housekeeping**` row it stamps (9c), and the `housekeepingDue` section
-in your gate config that sets its cadence (9d). Either copy without its
-wiring is a skill nothing invokes.
+**Arriving from 0.14.0 or older, the inventory prints at least two names you
+have not seen before: `design-brief` and `housekeeping`.** Both are directory
+copies plus wiring, and the two takes are symmetric. `/design-brief` needs its
+quick-reference row and chain sentence in your manual (9b), the three anchors
+in your engineering article to write into (9b again), the `designBrief`
+section in your gate config that names the article its advisory reads (9d),
+and the rule 11 that `/to-tickets` gains in this release plus the re-entry
+paragraph `/improve-codebase-architecture` gains (both ordinary 9a merges of
+skills you already have). `/housekeeping` needs its quick-reference row and
+chain sentence (9b), the diary's `**Last housekeeping**` row it stamps (9c),
+and the `housekeepingDue` section in your gate config that sets its cadence
+(9d). Either copy without its wiring is a skill nothing invokes. Two items of
+the release's wiring are kit-side and reach you only at bootstrap — the
+bootstrap `Next:` list's design-brief item and the setup payload's hand-back
+sentence — so there is nothing of yours to take for them; your manual's row
+(9b) is what does their job in a repo that already exists.
 
 After the inventory, the per-skill question for what you DO have. A skill is
 prose an agent loads, and adapting it to your repo is the intended way to make
