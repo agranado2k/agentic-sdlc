@@ -44,7 +44,9 @@ carries two meanings.
 ## What this skill does not do
 
 It **decides and records**; it does not implement. It never writes a line of
-product code, and it never writes anything at all before the human says yes.
+product code, and it writes nothing **in the repo tree** before the human says
+yes — the one artifact it produces before the yes is the comparison report,
+which lives outside the tree.
 The output is a recommendation, then — after the yes — three anchor lines, a
 glossary section and a decision record. Prefactoring the brief implies goes to
 `/to-tickets`; a deepening it exposes goes to `/improve-codebase-architecture`.
@@ -135,12 +137,12 @@ code craft §10), at most two pages, and tell the human the absolute path.
 **Stop here for a human yes before writing anything into the repo.** The
 brief is a judgment call with an irreversible consequence — every later diff
 conforms to it — so it carries no autonomy label and no agent takes it solo.
-If the answer is no, or a different candidate, nothing on disk has changed;
-revise and present again.
+If the answer is no, or a different candidate, nothing in the repo tree has
+changed; revise and present again.
 
 ### 5. Record — only after the yes
 
-Write, in this order, in the shapes `BRIEF-FORMAT.md` gives exactly:
+Write, in this order, in the shapes [BRIEF-FORMAT.md](./BRIEF-FORMAT.md) gives exactly:
 
 1. **The three anchors** in the engineering article's Architecture section:
    `**Paradigm**:`, `**Architectural style**:`, `**Context map**:`. Each is
@@ -151,10 +153,9 @@ Write, in this order, in the shapes `BRIEF-FORMAT.md` gives exactly:
 3. **One decision record** (MADR, from the project's ADR template, indexed in
    the same commit): the chosen shape, the candidate it beat and why, the
    patterns adopted and rejected, the explicit non-goals — and the
-   **coexistence clause**: test-driven development drives every ticket's
-   tactical loop, and this brief plus the periodic red-flag scan are the
-   strategic investment around it. Ousterhout's critique of test-first is
-   answered once, here, so no session re-argues it.
+   **coexistence clause** between test-driven development and this brief,
+   in the sidecar's words, so Ousterhout's critique of test-first is answered
+   once and no session re-argues it.
 
 The three writes are **one local commit**, `docs(design-brief): …`, so the
 brief lands as one reviewable decision. This skill never pushes: delivery
@@ -192,7 +193,7 @@ crosses a context edge cites this brief or reopens it.
 ---
 
 *Written for this kit. The design-it-twice mechanics are the architecture
-skill's `INTERFACE-DESIGN.md` applied at the scale of a whole system; the
+skill's [INTERFACE-DESIGN.md](../improve-codebase-architecture/INTERFACE-DESIGN.md) applied at the scale of a whole system; the
 complexity vocabulary is John Ousterhout's (*A Philosophy of Software
 Design*), and the context-map vocabulary is Eric Evans's (*Domain-Driven
 Design*), kept under the kit's names.*

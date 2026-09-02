@@ -543,15 +543,16 @@ skeleton (K0).
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
 
+- `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
+  audible where the operator actually looks: an advisory the harness reports
+  on a green tree is relayed by `scripts/check.sh` — the entry point the hook
+  and CI run — and a tree with nothing to advise prints no advisory block.
+
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
   the human stop before every write, the decision record, the two entry
   points, spec-only frontmatter, and every path and command it names
   resolving.
-- `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
-  audible where the operator actually looks: an advisory the harness reports
-  on a green tree is relayed by `scripts/check.sh` — the entry point the hook
-  and CI run — and a tree with nothing to advise prints no advisory block.
 
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
