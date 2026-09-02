@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-01
+## Current state — 2026-09-02
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,14 +20,14 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.14.0, tagged; the constitution, both gates, the guards, the skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.15.0, tagged at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
-| **Last housekeeping** | 2026-09-02 — the row arrives with the 0.15.0 wave (ticket #111); the first real pass is `/housekeeping`'s first run, once #114 lands. Two findings already queued for it: the manual template's rule count and the tdd sidecar's ASCII diagrams. |
+| **Last housekeeping** | 2026-09-02 — the row arrived with the 0.15.0 wave; no pass has run yet. `/housekeeping`'s first real run is the wave's follow-up, and one finding is already queued for it: the tdd sidecar's ASCII diagrams against craft rule §10 (the manual template's rule count was fixed by #110). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.14.0 wave (PRD #100, from #97) landed as PRs #104/#105/#106 and tagged v0.14.0 (2026-09-01): skills are canonical at `.agents/skills/`, bridged into `.claude/skills/` by committed per-skill symlinks. Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
+| **Active worktrees** | None. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121 and the two that closed it, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
 ### Open questions / unresolved decisions
 
@@ -652,4 +652,53 @@ setup payload's hand-back name it beside the mutation decision, `/to-tickets`
 gains the rule that a new abstraction or a crossed context edge cites the
 brief or reopens it, and `/improve-codebase-architecture` sends a style-level
 finding back to the brief instead of into its deepening loop.
+
+### 2026-09-02 — The 0.15.0 wave landed: the shape of the system, decided out loud
+
+PRD #107 asked three questions the chain had never asked: what shape is this
+system, which context am I in and whose word is this, and when was this last
+looked at. The wave answered all three and pinned one word on the way.
+
+**The word.** "Strategic" now means Ousterhout's strategic programming — design
+as a continuous investment judged by complexity, dependencies plus obscurity —
+and nothing else (ADR-0002). Evans's work is kept whole under the kit's names:
+the **context map** and the **subdomain classification**; "strategic design" is
+a banned phrase. The chapter attributions were checked against the second
+edition and none needed correcting.
+
+**The shape.** The engineering article's Architecture section carries three
+anchors — paradigm, architectural style, context map — in the mutation
+decision's two-honest-forms shape, and the `design-brief` advisory warns when
+a stamped article carries none. `/design-brief` is the skill that fills them:
+it designs the architecture twice under opposite constraints, compares on
+complexity, stops for a human yes, and only then writes the anchors, the
+glossary's context map and one decision record with the coexistence clause
+that answers Ousterhout's critique of test-first once. Its first real run, on
+the kit itself, stopped at the yes with the tree untouched — and returned ten
+findings about its own text, nine of which shipped before its PR opened.
+
+**The map.** The glossary's Context map section declares every edge from both
+sides with one relationship word and opposite roles, so a disagreement is two
+lines that do not match. The first draft got that wrong — it paired different
+words across an edge and conflated role with relationship — and the fresh-context
+review caught it. The kit's own map is a chain closed by a shared kernel, not a
+cycle of conformists: `VERSION` is the one file two contexts own together.
+
+**The clock.** The diary's Current state table carries a **Last housekeeping**
+row, and the `housekeeping-due` advisory warns when it is older than the gate
+config's window. `/housekeeping` is the pass it sends an agent to: eight
+sourced items, Ousterhout's red-flag scan in fresh context, a module-level flag
+to the architecture skill and a style-level one back to the brief, never a fix,
+one write. The craft article gained §13, the tactical half of Domain-Driven
+Design, and the manual template's rule count — "ten" since 0.10.0 — was finally
+held to the article by a probe that fails on the drift it was born from.
+
+**What the wave found on the way.** The gate wrapper had swallowed every
+advisory on a green run since 0.11.0; `scripts/check.sh` now relays them, with
+a suite that drives the path red first. Two ticket demos run by hand caught
+what the suites stamp around: a stamped article naming a skill that has not
+shipped fails the gate as `skill-missing`, and a skill naming the optional
+`/dogfood` leaves a dangling reference in a project that declined it. Every
+review this wave was a fresh-context read on a different model, and every one
+found at least one assertion that could not go red.
 
