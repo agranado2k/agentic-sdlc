@@ -302,7 +302,7 @@
 # Windows note the tripwire advisory backs; tests/docs-demo.sh C8 executes
 # that block against a genuine pre-move consumer, twice, and holds its end
 # state to what a fresh bootstrap produces.
-# 0.15.0 — strategic design, out loud (PRD #107). One file joins the layer
+# 0.15.0 — the shape of the system, decided out loud (PRD #107). One file joins the layer
 # with the wave's first slice (#108):
 # scripts/docs-conformance/validators/design-brief.mjs — an advisory on the
 # 0.11.0 warning channel: a stamped engineering article that carries none of
@@ -353,8 +353,13 @@
 # THIRTEEN craft rules — the count had read "ten" since 0.10.0 added §11 and
 # §12, and a stamped consumer inherited the wrong number for four releases;
 # the self-host suite now holds both manuals to the article's section count
-# (your stamped manual is yours: correct the word by hand). The wave's later
-# tickets add to this list.
+# (your stamped manual is yours: correct the word by hand). From #109: the
+# glossary template gains a Context map section — one line per edge, the
+# same relationship named from both sides, roles opposite — and "strategic
+# design" joins its banned words (say context map); the grilling skill's
+# glossary sidecar teaches the both-sides rule. Your glossary is yours: add
+# the section by hand from the template's comment. The wave's later tickets
+# add to this list.
 shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
