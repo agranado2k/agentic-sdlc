@@ -702,3 +702,30 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+
+### 2026-09-02 — The optional skill became data in bootstrap
+
+Ticket #130 of PRD #124. Bootstrap named its one optional skill at twenty-odd
+sites — both arms' flag parsing, four usage strings, the prompt, two marker
+filters per comment syntax, the manual's stamp, the policy file's stamp, the
+decline's removals, the adopt arm's copy, and two closing notes — and the
+marker-pair arity check ran on the policy file only, after the manual had
+already been stamped. A lone marker in the manual's template would have
+truncated the manual to end-of-file with exit 0.
+
+Now the top of `bootstrap.sh` declares an optional set: one entry per
+optional skill, naming its marker token, the files carrying the pair with
+their comment dialect, the paths that travel with it, the gate-policy token
+it adds, the prompt and the two notes. Everything below reads the set. The
+pair check runs on every marked file before anything is stamped or removed,
+so a refusal names the file and leaves the tree as it found it; the opt-in
+suite's new section proves that for both marked files and goes red under two
+mutations (preflight removed; check neutered). Both arms stamp byte-identical
+trees and output for both answers against the previous bootstrap — that was
+the demo, run outside the suites. The kit-only deletion list stays a separate
+set: those files are the kit's own, never a consumer's choice. The seam is in
+the stamper, not the gate, as ADR-0001 already decided.
+
+One thing learned on the way: bash 3.2, which macOS still runs as `sh`,
+misparses a heredoc inside `$( )` when the body carries an apostrophe. The
+notes are plain strings for that reason, and the comment says so.

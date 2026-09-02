@@ -205,4 +205,24 @@ assert_status 1 "an unknown option exits rather than stamping a manual named '--
 	sh -c "cd '$PROJ' && sh bootstrap.sh --with-dogfod 'Demo Typo' </dev/null"
 assert_absent "$PROJ/AGENTS.md" "nothing was stamped"
 
+# ---------------------------------------------------------------------------
+banner "7. A marked file missing one side of its pair is refused, naming the file"
+# ---------------------------------------------------------------------------
+# The decline's range delete would run to end-of-file on a lone BEGIN — a
+# truncated manual with exit 0. So the pair check runs on EVERY marked file
+# before anything is stamped or removed, the manual's template included, and
+# a refusal leaves the tree as it found it. Each marked file, in its own
+# comment syntax, one END short.
+for marked in "constitution/AGENTS.md.template" "scripts/docs-conformance/config.mjs"; do
+	mk_project "lone-$(basename "$marked")"
+	awk '/DOGFOOD:END/ && !dropped { dropped = 1; next } { print }' "$PROJ/$marked" >"$PROJ/$marked.tmp" &&
+		mv "$PROJ/$marked.tmp" "$PROJ/$marked"
+	assert_status 1 "bootstrap refuses a lone DOGFOOD marker in $marked" -- \
+		sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Lone' 'One marker short.' </dev/null"
+	assert_out_has "$marked"
+	assert_out_has "broken DOGFOOD marker pair"
+	assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal ($marked)"
+	assert_exists "$PROJ/.agents/skills/dogfood/SKILL.md" "nothing was removed before the refusal ($marked)"
+done
+
 t_done "opt-in /dogfood skill"
