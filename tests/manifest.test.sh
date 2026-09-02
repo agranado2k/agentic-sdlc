@@ -26,13 +26,28 @@ banner "0. The module exists and is sourceable"
 # ---------------------------------------------------------------------------
 [ -f "$ROOT/$MODULE" ] && pass "$MODULE exists" || {
 	fail "$MODULE is missing — nothing else in this suite means anything"
-	t_done "manifest parser"
+	# ---------------------------------------------------------------------------
+banner "5. The gate fails CLOSED without its parser"
+# ---------------------------------------------------------------------------
+# The wrapper sources the module; a consumer whose copy is missing or empty
+# must get a red gate, never a zero-iteration check that reads as green.
+PROJ="$SCRATCH/proj"; mkdir -p "$PROJ"; cp -R "$ROOT/." "$PROJ/"; strip_nested_worktrees "$ROOT" "$PROJ"; rm -rf "$PROJ/.git"
+( cd "$PROJ" && git init -q -b main && rm -f scripts/manifest.lib.sh && sh scripts/check.sh >"$SCRATCH/noparser.out" 2>&1; echo $? >"$SCRATCH/noparser.rc" )
+[ "$(cat "$SCRATCH/noparser.rc")" = 1 ] && grep -q "shared-layer-missing" "$SCRATCH/noparser.out" &&
+	pass "a missing manifest module is a red gate (shared-layer-missing), not a silent pass" ||
+	{ fail "with the module missing the gate exited $(cat "$SCRATCH/noparser.rc") — it fails OPEN"; sed 's/^/        | /' "$SCRATCH/noparser.out" | head -5; }
+( cd "$PROJ" && printf '#!/bin/sh\n' >scripts/manifest.lib.sh && sh scripts/check.sh >"$SCRATCH/emptyparser.out" 2>&1; echo $? >"$SCRATCH/emptyparser.rc" )
+[ "$(cat "$SCRATCH/emptyparser.rc")" = 2 ] && grep -q "manifest_section" "$SCRATCH/emptyparser.out" &&
+	pass "a module that defines nothing stops the gate with exit 2, naming the function" ||
+	{ fail "with an empty module the gate exited $(cat "$SCRATCH/emptyparser.rc") — expected 2"; sed 's/^/        | /' "$SCRATCH/emptyparser.out" | head -5; }
+
+t_done "manifest parser"
 }
 # shellcheck disable=SC1090
 . "$ROOT/$MODULE"
 command -v manifest_section >/dev/null 2>&1 && pass "sourcing defines manifest_section" ||
 	{ fail "sourcing $MODULE does not define manifest_section"; t_done "manifest parser"; }
-grep -q "^  $MODULE\$" "$ROOT/VERSION" && pass "$MODULE is manifest-listed (shared layer)" ||
+manifest_section files <"$ROOT/VERSION" | grep -qx "$MODULE" && pass "$MODULE is manifest-listed (shared layer)" ||
 	fail "$MODULE is not in VERSION's files: — a consumer's gate would source a file it does not have"
 
 # ---------------------------------------------------------------------------
@@ -53,9 +68,13 @@ not-indented-line-ends-the-list
   tests/should-not-appear.sh
 
 skills:
+  # a comment inside the skills list
   diagnose
+
   dogfood            optional — bootstrap asks; declining is a recorded choice
   tdd
+notes:
+  not-a-skill
 EOF
 
 out=$(manifest_section files <"$FIX")
@@ -84,6 +103,11 @@ manifest_section skills <"$FIX" | grep -q 'check.sh' &&
 # "no skills: manifest at this ref" being a silence it can test for.
 printf 'shared-layer: 1.0.0\nfiles:\n  a/b.sh\n' | manifest_section skills >"$SCRATCH/absent"
 [ ! -s "$SCRATCH/absent" ] && pass "an absent section prints nothing and exits 0" || fail "an absent section printed something"
+
+# A malformed section name is a caller bug: exit 2, nothing printed.
+manifest_section 'Files' </dev/null >"$SCRATCH/bad.out" 2>"$SCRATCH/bad.err"; bad_rc=$?
+[ "$bad_rc" = 2 ] && [ ! -s "$SCRATCH/bad.out" ] && pass "a capitalised section name exits 2 with nothing on stdout" ||
+	fail "a capitalised section name exited $bad_rc (expected 2) — the guard is a no-op under this locale"
 
 # Tabs are indentation too.
 printf 'files:\n\tscripts/x.sh\n' | manifest_section files | grep -qx 'scripts/x.sh' &&
@@ -142,17 +166,12 @@ module_skills=$(manifest_section skills <"$FIX" | sort)
 # ---------------------------------------------------------------------------
 banner "3. The copies are gone — one grammar, sourced"
 # ---------------------------------------------------------------------------
-# Every kit-side reader sources the module; a surviving inline copy is drift
-# waiting to happen. The recipe's two copies are the sanctioned exceptions.
-for f in bootstrap.sh scripts/check.sh tests/self-host.test.sh tests/docs-demo.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/kit-demo.sh; do
-	[ -f "$ROOT/$f" ] || continue
-	if grep -q 'inlist = 1' "$ROOT/$f"; then
-		fail "$f still carries an inline manifest parser — source $MODULE instead"
-	else
-		pass "$f carries no inline manifest parser"
-	fi
-done
-copies=$(grep -c 'inlist = 1' "$ROOT/UPDATING.md")
+# Repo-wide, not a hand-kept list: the only file allowed to carry the awk's
+# section matchers is the recipe, and it carries exactly two.
+carriers=$(cd "$ROOT" && git grep -l -E '/\^(files|skills):/' -- . ':!worktree' 2>/dev/null || true)
+[ "$carriers" = "UPDATING.md" ] && pass "the only file carrying an inline manifest parser is UPDATING.md" ||
+	{ fail "inline manifest parsers survive outside the recipe:"; printf '%s\n' "$carriers" | sed 's/^/        | /'; }
+copies=$(grep -c -E '/\^(files|skills):/' "$ROOT/UPDATING.md")
 [ "$copies" = 2 ] && pass "UPDATING.md keeps exactly its two self-contained copies" ||
 	fail "UPDATING.md has $copies parser copies, expected 2 (files: and skills:)"
 

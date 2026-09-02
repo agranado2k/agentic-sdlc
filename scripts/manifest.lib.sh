@@ -25,9 +25,11 @@
 # Exit: 0 always for a readable stream; 2 when the section name is malformed.
 
 manifest_section() {
+	# Spelled out rather than a-z: under a UTF-8 locale a range can admit
+	# capitals on some shells, and a section name is a caller-supplied literal.
 	case "${1:-}" in
-	'' | *[!a-z-]*)
-		echo "manifest_section: section must be a lowercase word (files, skills); got '${1:-}'" >&2
+	'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz-]*)
+		printf '%s\n' "manifest_section: section must be a lowercase word (files, skills); got '${1:-}'" >&2
 		return 2
 		;;
 	esac

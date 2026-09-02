@@ -212,8 +212,19 @@ comm -13 "$WORK/from.list" "$WORK/to.list"   # files JOINING the shared layer
 comm -23 "$WORK/from.list" "$WORK/to.list"   # files LEAVING it
 ```
 
-That awk is the same parser `scripts/check.sh` uses. Two parsers for one file
-format is two chances to disagree about what your own manifest says.
+That awk is the grammar `scripts/manifest.lib.sh` holds and `scripts/check.sh`
+sources; the copy is here because this recipe runs in a consumer whose local
+module is still the old one, and the kit's own suite holds the two equal. Two
+grammars for one file format is two chances to disagree about what your own
+manifest says — which is why the name of an entry is its first word in both
+sections, and anything after it is annotation.
+
+**Arriving from 0.15.0 or older.** `scripts/manifest.lib.sh` joins the shared
+layer at 0.16.0 and `scripts/check.sh` sources it, so the two land together at
+step 5 and the gate fails closed without the module. This recipe's own parser
+changed dialect with them: it used to print the whole trimmed line, and now
+prints the first word, so an annotated `files:` entry reads the same here as
+in the gate.
 
 ## Step 2 — read the upstream delta
 
@@ -531,10 +542,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1670 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1681 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1824 insertions(+), 1 deletion(-)
+ 3 files changed, 1835 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
