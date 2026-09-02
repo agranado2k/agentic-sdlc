@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import defaultConfig from "../config.mjs";
 import { makeContext } from "../context.mjs";
-import { run } from "../validators/design-brief.mjs";
+import { ANCHORS, run } from "../validators/design-brief.mjs";
 import { cleanup, ctxFor, hasRule, makeFixture } from "./helpers.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -22,10 +23,14 @@ const ALL_THREE = [
   "**Context map**: see the glossary's context map; Billing conforms to Ledger.",
   "",
 ].join("\n");
-const ONE_OF_THREE = "# Engineering\n\n**Paradigm**: functional — no classes outside adapters.\n";
 const NONE_FORM =
   "# Engineering\n\n**Context map**: none — a single context until the second product line exists.\n";
 const SILENT = "# Engineering\n\n## Architecture\n\nIt has one. Trust us.\n";
+
+// The ticket's acceptance criterion, spelled independently of the validator:
+// a test that iterated the validator's own list would stay green with a label
+// silently dropped from it.
+const LABELS = ["Paradigm", "Architectural style", "Context map"];
 
 test("an article carrying all three anchors is silent", () => {
   const ctx = ctxFor({ "constitution/local-engineering.md": ALL_THREE });
@@ -33,10 +38,31 @@ test("an article carrying all three anchors is silent", () => {
   cleanup(ctx);
 });
 
-test("one anchor is enough — a decision was recorded", () => {
-  const ctx = ctxFor({ "constitution/local-engineering.md": ONE_OF_THREE });
-  assert.deepEqual(run(ctx), []);
-  cleanup(ctx);
+test("the rule reads exactly the three labels the ticket named", () => {
+  assert.deepEqual(ANCHORS, LABELS);
+});
+
+test("each anchor alone is a brief — every label is load-bearing", () => {
+  // The hole the independent review of this slice reproduced: only two of
+  // the three labels were exercised, so a validator blind to the middle one
+  // passed the suite.
+  for (const label of LABELS) {
+    const ctx = ctxFor({
+      "constitution/local-engineering.md": `# Engineering\n\n**${label}**: decided — see the brief.\n`,
+    });
+    assert.deepEqual(run(ctx), [], `${label} alone should be silent`);
+    cleanup(ctx);
+  }
+});
+
+test("the template stamps exactly the labels the rule reads", () => {
+  const template = readFileSync(
+    join(here, "..", "..", "..", "constitution", "local-engineering.md.template"),
+    "utf8",
+  );
+  for (const label of LABELS) {
+    assert.match(template, new RegExp(`^\\*\\*${label}\\*\\*:`, "m"), `template lacks ${label}`);
+  }
 });
 
 test("an explicit none-with-reason is silent — a recorded choice is the point", () => {
@@ -54,18 +80,9 @@ test("an article with no anchor at all warns — and only warns", () => {
   assert.equal(out[0].file, "constitution/local-engineering.md");
   // The message names all three anchors, so the fix is readable from the
   // warning alone.
-  for (const label of ["Paradigm", "Architectural style", "Context map"]) {
+  for (const label of LABELS) {
     assert.match(out[0].message, new RegExp(label));
   }
-  cleanup(ctx);
-});
-
-test("labels with nothing after them are not decisions", () => {
-  const ctx = ctxFor({
-    "constitution/local-engineering.md":
-      "# Engineering\n\n**Paradigm**:\n**Architectural style**:\n**Context map**:\n",
-  });
-  assert.ok(hasRule(run(ctx), "design-brief-missing"));
   cleanup(ctx);
 });
 
@@ -78,17 +95,20 @@ test("an empty label mid-document is not a decision — the match must not cross
   cleanup(ctx);
 });
 
-test("CRLF line endings: an empty label still warns, a filled one is still silent", () => {
-  const empty = ctxFor({
+test("CRLF line endings: an empty label still warns", () => {
+  const ctx = ctxFor({
     "constitution/local-engineering.md": "# E\r\n\r\n**Paradigm**:\r\nNext line.\r\n",
   });
-  assert.ok(hasRule(run(empty), "design-brief-missing"));
-  cleanup(empty);
-  const filled = ctxFor({
+  assert.ok(hasRule(run(ctx), "design-brief-missing"));
+  cleanup(ctx);
+});
+
+test("CRLF line endings: a filled label is still silent", () => {
+  const ctx = ctxFor({
     "constitution/local-engineering.md": "# E\r\n\r\n**Paradigm**: functional.\r\n",
   });
-  assert.deepEqual(run(filled), []);
-  cleanup(filled);
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
 });
 
 test("anchors only inside a fenced code block are quoted material, not decisions", () => {

@@ -45,14 +45,22 @@ sh bootstrap.sh --no-dogfood "Advisory Demo" "A throwaway to prove the warning c
 # Stamp the article: drop the template's header comment (it quotes an example
 # path the gate would resolve), fill every mark, remove the three anchors.
 awk 'BEGIN { skip = 1 } skip && /^-->/ { skip = 0; next } !skip' \
-	constitution/local-engineering.md.template |
-	sed -e '/^\*\*Paradigm\*\*:/d' -e '/^\*\*Architectural style\*\*:/d' -e '/^\*\*Context map\*\*:/d' \
-		-e "s/$(t_mark '[A-Z_0-9]*')/filled/g" >constitution/local-engineering.md
+	constitution/local-engineering.md.template >"$SCRATCH/article.stripped" || { fail "awk could not strip the header comment"; t_done "docs gate advisory visibility"; }
+sed -e '/^\*\*Paradigm\*\*:/d' -e '/^\*\*Architectural style\*\*:/d' -e '/^\*\*Context map\*\*:/d' \
+	-e "s/$(t_mark '[A-Z_0-9]*')/filled/g" "$SCRATCH/article.stripped" >constitution/local-engineering.md || { fail "sed could not stamp the article"; t_done "docs gate advisory visibility"; }
 rm constitution/local-engineering.md.template
 sed -i.bak 's#`constitution/local-engineering.md.template`#`constitution/local-engineering.md`#' AGENTS.md && rm AGENTS.md.bak
-grep -q '^\*\*Paradigm\*\*:' constitution/local-engineering.md &&
-	fail "the fixture still carries an anchor — it cannot drive the advisory" ||
-	pass "the stamped article carries no architecture anchor"
+# Positive shape first: a degenerate (empty) article would also trip the
+# advisory, so prove the fixture is a real stamped article — the mutation
+# anchor survived, filled — before proving what it lacks.
+grep -q '^\*\*Mutation decision\*\*: filled' constitution/local-engineering.md &&
+	pass "the stamped article is real — the mutation anchor survived the stamp, filled" ||
+	fail "the fixture degraded — no filled mutation anchor, so this is not a stamped article"
+for anchor in 'Paradigm' 'Architectural style' 'Context map'; do
+	grep -q "^\*\*$anchor\*\*:" constitution/local-engineering.md &&
+		fail "the fixture still carries the $anchor anchor — it cannot drive the advisory" ||
+		pass "the stamped article carries no $anchor anchor"
+done
 
 banner "1. The harness reports the advisory and exits 0 — the channel itself works"
 assert_status 0 "the harness exits 0 on a warning-only tree" -- node scripts/docs-conformance/index.mjs .
@@ -68,6 +76,10 @@ printf '\n**Paradigm**: functional — pure domain, classes only at the adapters
 assert_status 0 "the gate is green once one anchor is filled" -- sh scripts/check.sh
 assert_out_lacks "design-brief-missing"
 assert_out_lacks "advisories"
+# The probe that tells "relay advisories" from "relay everything": on a clean
+# tree the harness still prints its own OK line, and an unconditional relay
+# would echo it here.
+assert_out_lacks "docs conformance"
 
 banner "4. The reduced POSIX form says it cannot run this scan"
 DOCS_CHECK_NO_NODE=1
