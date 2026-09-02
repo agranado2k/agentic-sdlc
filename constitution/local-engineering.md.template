@@ -68,7 +68,9 @@ design brief. Each has exactly two honest forms: the decision, or an explicit
 `none — <the reason>`. A blank is neither: an Architecture section nobody
 decided is decided by the first feature diff instead, and every later diff
 conforms to the accident. Decide each one with the brief in front of you,
-and revisit them when the shape stops fitting.
+and revisit them when the shape stops fitting. The three lines stay as they
+are shaped — a bold label at the start of its own line, not a bullet — because
+that shape is what the gate reads.
 
 **Paradigm**: {{PARADIGM}}
 <!-- Functional, object-oriented, or a stated mix — and where the line is

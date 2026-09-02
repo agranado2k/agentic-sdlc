@@ -9,8 +9,9 @@
 // it names; a single recorded decision is a brief, and which anchors a
 // project fills is the project's call.
 //
-// Findings here are WARNINGS, the same posture as skill-web, skill-paths and
-// mutation-decision, and for the same structural reason: the stamped article
+// Findings here are WARNINGS, the same posture as the other advisories (the
+// glossary's **Advisory** entry is the roster), and for the same structural
+// reason: the stamped article
 // is CONSUMER-OWNED prose, and an article filled from a pre-0.15.0 template is
 // sanctioned version skew, not a defect — a red gate would punish every
 // consumer whose article predates the anchors. The promotion path, if the
@@ -26,9 +27,9 @@ import { stripFences } from "./claude-md-refs.mjs";
 
 export const id = "design-brief";
 
-// The labels are API: the template stamps them, the design-brief skill writes
-// them, and this rule reads them. One list, exported so a test can hold the
-// three surfaces to it.
+// The labels are API: the template stamps them and this rule reads them. One
+// list, exported so the fixture suite can hold the template's labels to it and
+// exercise each one alone.
 export const ANCHORS = ["Paradigm", "Architectural style", "Context map"];
 
 // [^\S\n]* — horizontal whitespace only, for the reason mutation-decision

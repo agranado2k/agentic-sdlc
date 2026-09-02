@@ -310,7 +310,8 @@
 # in either honest form prints a warning, never a failure, because the article
 # is consumer-owned prose and an article filled from a pre-0.15.0 template is
 # sanctioned version skew; promotion to a violation is a named future path,
-# alongside the other advisories'. scripts/check.sh changed content twice:
+# as mutation-decision's and skill-bridge's are. docs-conformance/runner.mjs
+# changed content (the registration). scripts/check.sh changed content twice:
 # the reduced fallback's notice names the scan it cannot run, and — the fix
 # this slice's demo forced — a GREEN gate now relays the harness's advisories
 # to stderr instead of swallowing them. Every advisory since 0.11.0 had been
