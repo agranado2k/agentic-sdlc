@@ -186,6 +186,27 @@ strip_nested_worktrees() {
 		done
 }
 
+# The manifest grammar, shared with the gate and bootstrap. Sourced here so
+# every suite reads VERSION one way.
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "$0")/.." && pwd)/scripts/manifest.lib.sh"
+
+# t_assert_skill_in_roster <name> — the three roster surfaces every shipped
+# skill must appear on: VERSION's skills: manifest, the consumer manual
+# template's quick-reference table, and the provenance file.
+t_assert_skill_in_roster() {
+	_sr_root="${ROOT:-$(pwd)}"
+	manifest_section skills <"$_sr_root/VERSION" | grep -qx -- "$1" &&
+		pass "VERSION's skills manifest names $1" ||
+		fail "VERSION's skills manifest does not name $1 — no consumer will ever be told it exists"
+	grep -q "\`/$1\`" "$_sr_root/constitution/AGENTS.md.template" &&
+		pass "the consumer manual template names /$1" ||
+		fail "the consumer manual template never names /$1 — a stamped project cannot find it"
+	grep -q -- "$1" "$_sr_root/.agents/skills/LICENSE-mattpocock-skills.md" &&
+		pass "the provenance file accounts for $1" ||
+		fail "the provenance file does not account for $1"
+}
+
 # t_ignored_commands — the slash commands the gate's policy file exempts from
 # skill resolution (`claudeMdRefs.ignoreCommands` in config.mjs), one per line.
 # Read from the file rather than mirrored: three hand-kept copies of that list

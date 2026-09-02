@@ -117,14 +117,11 @@ else
 		"has no 'shared-layer: <version>' line" \
 		"The manifest must state the version it pins, or the update recipe has no anchor to diff from."
 
-	awk '
-		/^files:/           { inlist = 1; next }
-		!inlist             { next }
-		/^[ \t]*#/          { next }
-		/^[ \t]*$/          { next }
-		/^[ \t]+[^ \t]/     { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
-		                    { inlist = 0 }
-	' VERSION | while IFS= read -r shared; do
+	# One grammar for the manifest, shared with bootstrap and the suites; the
+	# module is itself manifest-listed, so a consumer's gate has it.
+	# shellcheck disable=SC1091
+	. "$repo_root/scripts/manifest.lib.sh"
+	manifest_section files <VERSION | while IFS= read -r shared; do
 		[ -e "$shared" ] && continue
 		report "shared-layer-missing" "$shared" \
 			"is listed in VERSION as shared layer but does not exist" \
