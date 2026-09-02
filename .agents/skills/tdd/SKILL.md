@@ -129,4 +129,4 @@ And keep the refactor out of the behavior commit (shared invariant §10) — a r
 
 ---
 
-*Adapted from `engineering/tdd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. The project-context prelude above is this kit's; the five sidecars (`tests.md`, `mocking.md`, `deep-modules.md`, `interface-design.md`, `refactoring.md`) are upstream verbatim. Their examples are written in one language; the principles are not.*
+*Adapted from `engineering/tdd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. The project-context prelude above is this kit's; the four sidecars are verbatim; `deep-modules.md`'s two diagrams are redrawn as fenced diagram-language blocks, since craft rule §10 forbids character art

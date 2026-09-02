@@ -158,6 +158,12 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Suite** — one executable script under `tests/`. `tests/lib.sh` is the shared
   harness and is not a suite. "The suite" (singular, unqualified) means all of
   them.
+- **Diagram language** — mermaid, in a fenced block, wherever a shipped
+  markdown document needs a picture; the forge renders it, and craft rule §10
+  forbids the alternative. Each block carries an accessible title and
+  description. HTML reports draw inline SVG instead. Ref: the architecture
+  skill's presenting contract.
+  - _Avoid_: "ASCII diagram", "box drawing" — the thing §10 bans.
 - **Demo** — a suite whose output is meant to be *read*: `tests/kit-demo.sh`,
   `tests/docs-demo.sh`. They build a throwaway project and walk it through every
   failure mode the kit claims to catch, red and green.

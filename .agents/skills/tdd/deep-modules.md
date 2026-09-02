@@ -6,27 +6,29 @@ From "A Philosophy of Software Design":
 
 ```mermaid
 flowchart TB
-    subgraph deep["Deep module"]
-        di["Interface — a few methods, simple parameters"]
-        dimpl["Implementation — the complex logic, hidden behind the interface"]
-        di --- dimpl
+    accTitle: A deep module
+    accDescr: One small interface node sits above a subgraph of five implementation nodes, so the interface is narrow and the implementation behind it is tall.
+    i["Interface: two methods, simple parameters"]
+    subgraph impl["Implementation, hidden behind the interface"]
+        direction TB
+        a["parse"] --> b["validate"] --> c["resolve"] --> d["cache"] --> e["report"]
     end
+    i --> impl
 ```
 
 **Shallow module** = large interface + little implementation (avoid)
 
 ```mermaid
 flowchart TB
-    subgraph shallow["Shallow module"]
-        si["Interface — many methods, complex parameters"]
-        simpl["Implementation — thin; it mostly passes through"]
-        si --- simpl
+    accTitle: A shallow module
+    accDescr: Five sibling interface nodes sit above one lone implementation node, so the interface is as wide as the implementation is thin.
+    subgraph iface["Interface: many methods, each with its own parameters"]
+        direction LR
+        m1["get"] ~~~ m2["set"] ~~~ m3["has"] ~~~ m4["list"] ~~~ m5["clear"]
     end
+    x["Implementation: a pass-through"]
+    iface --> x
 ```
-
-The picture to hold: a deep module is a narrow top over a tall body, a
-shallow one is a wide top over almost nothing. Callers pay for the width of
-the top on every use; maintainers get the height of the body as locality.
 
 When designing interfaces, ask:
 
