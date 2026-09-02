@@ -2,22 +2,21 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-02
-- **Deciders**: Arthur Granado (operator), via PRD #124's quiz; the question was filed by the first housekeeping pass, item 1
-- **Supersedes / amends**: —
+- **Deciders**: Arthur Granado (operator), via PRD #124's quiz
+- **Supersedes / amends**: amends ADR-0001 §4 in one respect — the records directory holds one more kit-own record, which bootstrap's kit-own list strips
 - **Superseded by**: —
 
 ## Context and problem statement
 
 The root manual is loaded into every session and re-read on every request;
-shared invariant §11 calls its size a budget every request pays. The first
-housekeeping pass measured the kit's root at 334 lines against the 200-line
-reference point Osmani names for an agent file, and asked whether the
-capability-tier elaboration (67 lines) and the kit-only wiring should move to
-an on-demand article.
+shared invariant §11 calls its size a budget every request pays. The kit's
+root measures 334 lines against the 200-line reference point Osmani names for
+an agent file, and the question was whether the capability-tier elaboration
+(67 lines) and the kit-only wiring should move to an on-demand article.
 
 The kit is not an ordinary consumer. A consumer's standing instructions are
-three files: a root and two local articles, engineering and workflow, that
-the root points at. The kit ships those articles as templates and has none of
+a root and two or three local articles — engineering, workflow, and product
+when the optional skill is installed — that the root points at. The kit ships those articles as templates and has none of
 its own — the root manual says so, and the "What this repo is" section is
 named as the kit's equivalent. So the kit's root carries what a consumer
 splits across three files: orientation, the hard rules, the tier practice
