@@ -1,9 +1,9 @@
 # ADR-0003: The kit carries its own tier-to-model mapping, and never ships it
 
 - **Status**: Accepted
-- **Date**: 2026-09-02 (the practice dates from 2026-08-27; this record is the supersession the index owed)
+- **Date**: 2026-09-02
 - **Deciders**: Arthur Granado (operator); recorded by the first housekeeping pass, item 3
-- **Supersedes / amends**: supersedes the index's diary-recorded decision of 2026-08-27, "the kit's `scripts/agents.config.sh` stays unmapped — the kit names no model anywhere, including in its own copy of the tier mapping"
+- **Supersedes / amends**: supersedes the index's diary-recorded decision of 2026-08-27, "the kit's `scripts/agents.config.sh` stays unmapped — the kit names no model anywhere, including in its own copy of the tier mapping" (the practice dates from that day; this record is the supersession the index owed); amends ADR-0001 §4 in one respect — five records under `docs/adr/` now, not four, and bootstrap's kit-own list strips this one too
 - **Superseded by**: —
 
 ## Context and problem statement
@@ -19,11 +19,9 @@ that decision showed up inside it: every subagent this repo spawns — a
 reviewer in fresh context, a planner's exploration, a mechanical fan-out —
 inherited the session's model regardless of the tier its ticket was stamped
 with. That is the exact blindness the tier mechanism exists to remove,
-happening in the tool that preaches it. A kit-only mapping was added that day
-(`scripts/agents.kit.config.sh`, reached through the resolver's existing
-config seam and wrapped by `scripts/agents.kit.sh`), the diary recorded it,
-and the root manual gained hard rule 10 — but the index line was never marked
-superseded. The first housekeeping pass (2026-09-02) found a binding index
+happening in the tool that preaches it. A kit-only mapping was added that day,
+the diary recorded it, and the root manual gained hard rule 10 — but the index
+line was never marked superseded. The first housekeeping pass (2026-09-02) found a binding index
 line contradicted by a file with five model identifiers in it and no record
 of the reversal.
 
@@ -39,9 +37,8 @@ of the reversal.
 
 ## Considered options
 
-1. **A kit-only mapping, never shipped** *(chosen)* — a second config file on
-   bootstrap's kit-only deletion list, resolved through the resolver's
-   existing `AGENTS_CONFIG` seam by a one-line wrapper.
+1. **A kit-only mapping, never shipped** *(chosen)* — the shape clauses 2
+   and 3 below record.
 2. **Keep the kit unmapped** — rejected: every kit session's subagents run on
    the session's model, and the reviewer tier in particular becomes an
    editorial pass on the implementer's own model.
@@ -59,21 +56,20 @@ Chosen: **a kit-only mapping, never shipped**.
    ships names a model.
 2. `scripts/agents.kit.config.sh` maps the four tiers and the `content`
    domain for this repository only. It is on bootstrap's kit-only deletion
-   list and never reaches a consumer. Its header states that its identifiers
-   rot and when they were last checked.
+   list and never reaches a consumer. Its identifiers rot on the vendor's
+   schedule; its header carries the last-checked date.
 3. `scripts/agents.kit.sh` is the wrapper that sets the resolver's config
    seam and delegates. In this repository a skill's literal
    `sh scripts/agents.lib.sh <tier>` is replaced by it every time — root
    manual hard rule 10 — because skills ship unstamped and may not name a
    kit-only file.
-4. The policy behind the mapping: plan on the strongest model available;
-   execute per tier and per domain; **the reviewer is never the same model
-   that implemented**. When the implementer was the session itself and the
-   session runs on the model the reviewer tier maps to, the reviewer runs on
-   the implementer tier's model instead, and the report says so.
+4. The policy behind the mapping, as the root manual already states it:
+   plan on the strongest model available; execute per tier and per domain;
+   the reviewer is never the same model that implemented. How that rule
+   holds when the session itself implemented is wired and checked by its
+   own ticket, not decided here.
 5. **Explicit non-goal**: this record does not choose models. The identifiers
-   are data in the kit-only file and rot on their own schedule; re-checking
-   them is housekeeping, not a decision.
+   are data in the kit-only file and rot on their own schedule.
 
 ## Consequences
 
@@ -84,9 +80,10 @@ Chosen: **a kit-only mapping, never shipped**.
   keeping the shipped file empty.
 - **Neutral**: a consumer sees nothing of this; their resolver, config and
   skills are unchanged.
-- **Honest limitation**: the mapping's identifiers are checked by a human on a
-  calendar, not by a gate. A rotten identifier fails at spawn time, which is
-  later than a reader would like.
+- **Honest limitation**: nothing owns the re-check of the mapping's
+  identifiers — no gate, no checklist item; the header's last-checked date is
+  a note, not a rule. A rotten identifier fails at spawn time, which is later
+  than a reader would like.
 
 ## More information
 

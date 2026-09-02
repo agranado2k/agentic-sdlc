@@ -629,6 +629,8 @@ ADVISORY: written as a violation it turned adopt-demo red on the leg that
 blesses exactly that shape, since it is the adopt arm's own collision
 resolution. A build must not fail for a layout the kit hands you.
 
+*Promoted to ADR-0003 (2026-09-02), which supersedes the index's diary-recorded line.*
+
 ### 2026-09-02 — The design brief got its entry points, and the Ousterhout attributions were checked
 
 PRD #107's plan cited *A Philosophy of Software Design* by chapter from
