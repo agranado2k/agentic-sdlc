@@ -702,7 +702,6 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
-
 ### 2026-09-02 — The records and their index are held to each other
 
 Ticket #145 of PRD #124, filed by PR #140's review. The index under

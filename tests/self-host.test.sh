@@ -314,12 +314,18 @@ done
 # decision nobody can read. One probe covers both halves; it runs on the kit
 # and then on two baits, because a rule with no failing check is a claim
 # (hard rule 9). Numbered records only: the template is NNNN, not digits.
+# One notion of "row" for both directions: a table line `| [N](file) …`,
+# extracted once. A record linked only from the index's prose is NOT
+# indexed — the table is what the reader scans. A link's `#fragment` is
+# dropped before the file test.
 adr_index_gaps() {
+	_rows=$(sed -n 's/^| \[[0-9][0-9]*\](\([^)#]*\)[^)]*).*/\1/p' "$1/INDEX.md")
 	for _a in "$1"/[0-9][0-9][0-9][0-9]-*.md; do
 		[ -f "$_a" ] || continue
-		grep -q -F "]($(basename "$_a"))" "$1/INDEX.md" || echo "unindexed: $(basename "$_a")"
+		printf '%s\n' "$_rows" | grep -q -x -F "$(basename "$_a")" || echo "unindexed: $(basename "$_a")"
 	done
-	sed -n 's/^| \[[0-9][0-9]*\](\([^)]*\)).*/\1/p' "$1/INDEX.md" | while IFS= read -r _f; do
+	printf '%s\n' "$_rows" | while IFS= read -r _f; do
+		[ -n "$_f" ] || continue
 		[ -f "$1/$_f" ] || echo "no such record: $_f"
 	done
 }
@@ -334,11 +340,23 @@ case "$(adr_index_gaps "$BAIT")" in
 *"unindexed: 9999-bait-without-a-row.md"*) pass "the probe catches a record with no index row" ;;
 *) fail "the probe missed an unindexed record" ;;
 esac
+# Linked from prose only, never given a row: still unindexed.
+printf '\n- See [9999](9999-bait-without-a-row.md) — mentioned, never tabled.\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"unindexed: 9999-bait-without-a-row.md"*) pass "a record linked only from the index's prose is still unindexed" ;;
+*) fail "a prose-only link passed as an index row" ;;
+esac
 rm -f "$BAIT/9999-bait-without-a-row.md"
 printf '| [9998](9998-row-without-a-record.md) | Bait | Accepted 2026-09-02 |\n' >>"$BAIT/INDEX.md"
 case "$(adr_index_gaps "$BAIT")" in
 *"no such record: 9998-row-without-a-record.md"*) pass "the probe catches an index row with no record" ;;
 *) fail "the probe missed a row with no file" ;;
+esac
+# A row whose link carries a fragment still names its record.
+printf '| [9997](0001-the-kit-self-hosts-its-own-constitution.md#decision-outcome) | Bait | Accepted 2026-09-02 |\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"#decision-outcome"*) fail "a row link with a fragment was reported as a missing record" ;;
+*) pass "a row link with a fragment resolves to its record" ;;
 esac
 
 # ---------------------------------------------------------------------------
