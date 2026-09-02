@@ -1,6 +1,6 @@
 ---
 name: design-brief
-description: Make strategic design a recorded act. Read the brief, the glossary and the decision records, design the architecture twice, compare the candidates on complexity, and — after a human yes — record the paradigm, the architectural style, the context map and the patterns adopted or rejected as three anchors in the engineering article, a glossary section, and one decision record. Use at bootstrap hand-back before the first feature diff, when a planner sees the shape no longer fitting, or when the housekeeping pass or the architecture skill raises a style-level red flag.
+description: Make the shape of the system a recorded strategic act. Read the brief, the glossary and the decision records, design the architecture twice, compare the candidates on complexity, and — after a human yes — record the paradigm, the architectural style, the context map and the patterns adopted or rejected as three anchors in the engineering article, a glossary section, and one decision record. Use at bootstrap hand-back before the first feature diff, when a planner sees the shape no longer fitting, or when the housekeeping pass or the architecture skill raises a style-level red flag.
 ---
 
 # /design-brief — decide the shape out loud, then write it down
