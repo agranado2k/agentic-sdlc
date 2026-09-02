@@ -57,45 +57,45 @@ page of explanation, that page is an ADR and the entry points at it.
 
 <!--
 The edges between the contexts above — which context's model flows into
-which, and on what terms. One line per edge, under the context that is
-speaking, and EVERY edge is declared from both sides: the upstream says what
-it publishes, the downstream says what it takes and how. Two declarations of
-one edge that do not match are the disagreement itself, made visible before
-it becomes a bug. An edge declared from one side only is half a decision — a
-reader can tell, because the other context's list does not mention it.
+which, and on what terms. One line per edge, in the shape
 
-The relationships are Evans's set. Name one per edge:
+  - **<Context A> → <Context B>**: <relationship> — <role>; <what crosses>.
 
-  - upstream / downstream — the upstream's model flows to the downstream;
-    changes go one way, and the downstream has no veto.
+and EVERY edge is declared from both sides, each under the context that is
+speaking: the same relationship word on both lines, and only the role
+differs (upstream on one, downstream on the other). Two declarations of one
+edge that name different relationships are the disagreement itself, made
+visible before it becomes a bug. An edge declared from one side only is half
+a decision — a reader can tell, because the other context's block does not
+mention it.
+
+The relationships are Evans's set. Name exactly one per edge:
+
+  - upstream / downstream — not a relationship but the two ROLES on any
+    edge: the upstream's model flows to the downstream, and the downstream
+    has no veto.
   - conformist — the downstream adopts the upstream's model as-is, no
     translation.
   - anti-corruption layer — the downstream translates the upstream's model
     into its own at the edge, and nothing upstream leaks past it.
-  - published language — a documented interchange model both sides translate
-    to and from, owned by neither.
+  - published language — a documented interchange model both sides
+    translate to and from, owned by neither.
   - shared kernel — a small, named subset of the model owned jointly and
-    changed only by agreement of both.
+    changed only by agreement of both; the roles are then "co-owner".
   - separate ways — no integration at all; duplication accepted on purpose.
-
-Entry shape, one block per context:
-
-  ### <Context>
-  - **<Context> → <Other>** — <this side's role>: <relationship>. <What crosses
-    the edge, in the glossary's words>.
 
 The design brief writes this section; the grilling loop keeps it current.
 -->
 
 ### <Context name>
 
-- **<Context name> → <Second context name>** — upstream: published language.
-  Publishes `<Event>`, spelled exactly as the term above.
+- **<Context name> → <Second context name>**: conformist — upstream;
+  publishes `<Event>`, spelled exactly as the term above.
 
 ### <Second context name>
 
-- **<Second context name> → <Context name>** — downstream: conformist to the
-  published language. Consumes `<Event>`; keeps no model of its own for it.
+- **<Second context name> → <Context name>**: conformist — downstream;
+  consumes `<Event>` as-is and keeps no model of its own for it.
 
 ---
 
