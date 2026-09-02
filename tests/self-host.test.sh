@@ -374,6 +374,41 @@ else
 	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
 fi
 
+# --- F2b: the manuals' craft-rule count tracks the article -----------------
+# The manual template and the kit's own manual both say how many portable
+# craft rules the shared article carries, and the number rotted twice in a
+# row: "ten" survived §11 and §12 joining in 0.10.0, and stamped consumers
+# inherited the wrong count for four releases. Count the article's numbered
+# sections, spell the number the way prose does, and hold every sentence that
+# names the count to it. A sentence that stops matching the shape is its own
+# failure — a probe that finds nothing must not pass.
+craft_sections=$(grep -c '^## [0-9][0-9]*\. ' "$KIT/constitution/shared-code-craft.md")
+case "$craft_sections" in
+10) craft_word=ten ;; 11) craft_word=eleven ;; 12) craft_word=twelve ;;
+13) craft_word=thirteen ;; 14) craft_word=fourteen ;; 15) craft_word=fifteen ;;
+16) craft_word=sixteen ;; 17) craft_word=seventeen ;; 18) craft_word=eighteen ;;
+19) craft_word=nineteen ;; 20) craft_word=twenty ;;
+*) craft_word="" ;;
+esac
+[ -n "$craft_word" ] ||
+	fail "shared-code-craft.md has $craft_sections numbered sections — extend this check's number words"
+# Prose wraps, so the count and its noun can sit on different lines: join the
+# file before probing, and read every "<word> portable [craft] rules" phrase.
+for manual in constitution/AGENTS.md.template AGENTS.md; do
+	phrases=$(tr '\n' ' ' <"$KIT/$manual" | tr -s ' ' | grep -o '[a-z]* portable \(craft \)\{0,1\}rules' || true)
+	if [ -z "$phrases" ]; then
+		fail "$manual no longer names the craft-rule count in the shape this check reads — move the probe with the document"
+		continue
+	fi
+	stale=$(printf '%s\n' "$phrases" | grep -v "^$craft_word " || true)
+	if [ -z "$stale" ]; then
+		pass "$manual says $craft_word portable craft rules, matching the article's $craft_sections sections"
+	else
+		fail "$manual names a craft-rule count that is not $craft_word (the article has $craft_sections sections):"
+		printf '%s\n' "$stale" | sed 's/^/        | /'
+	fi
+done
+
 # --- F3: the shared layer is REACHABLE — a declared release has its tag ----
 # The lesson of the v0.9.0 wave, learned in a consumer's clone: UPDATING.md
 # derives FROM_REF/TO_REF from release tags, so a VERSION bump that never gets
