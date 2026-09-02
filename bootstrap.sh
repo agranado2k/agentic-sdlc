@@ -601,7 +601,7 @@ fi
 # consumer's first run. A protection whose failure mode is worse than the bug is
 # not worth the maintenance.
 KIT_OWN_SENTINEL="agentic-sdlc:kit-own"
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/0002-strategic-means-ousterhout.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/0002-strategic-means-ousterhout.md docs/adr/0004-the-root-manual-is-the-kits-local-article.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md"
 
 if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
 	have_head=1
