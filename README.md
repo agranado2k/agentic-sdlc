@@ -687,8 +687,8 @@ origin.
   predecessor project's history; no public link was recorded there.
 - **John Ousterhout — *A Philosophy of Software Design*** (2nd ed., 2021) —
   the source of the kit's word **strategic**: chapter 3, "Working Code Isn't
-  Enough", sets strategic against tactical programming and asks for a
-  continuous design investment; chapter 2 defines complexity as dependencies
+  Enough", sets strategic programming against tactical programming and asks
+  for a continuous design investment; chapter 2 defines complexity as dependencies
   plus obscurity, with change amplification, cognitive load and unknown
   unknowns as its symptoms; chapter 4's deep modules and chapter 11's "design
   it twice" are the working vocabulary of `/improve-codebase-architecture`

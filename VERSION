@@ -363,7 +363,14 @@
 # scale, compare on complexity, stop for a yes, then write the three anchors,
 # the glossary's context map and one decision record) with its BRIEF-FORMAT
 # sidecar and its bridge symlink; the kit's own decision record 0002 pins
-# "strategic" to Ousterhout's sense. Take the skill via 9a. The wave's later
+# "strategic" to Ousterhout's sense. Take the skill via 9a. From #113: the
+# brief's entry points — bootstrap's Next: list and the setup payload's
+# hand-back name the design brief beside the mutation decision (kit-side;
+# nothing of yours moves), /to-tickets gains rule 11 (a ticket that adds an
+# abstraction or crosses a context edge cites the brief or reopens it) and
+# /improve-codebase-architecture sends a style-level finding back to the
+# brief (both via 9a), and the manual template's chain section and
+# quick-reference rows name both new skills (via 9b). The wave's later
 # tickets add to this list.
 shared-layer: 0.15.0
 
