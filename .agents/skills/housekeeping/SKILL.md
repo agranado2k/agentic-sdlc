@@ -1,6 +1,6 @@
 ---
 name: housekeeping
-description: Run the recurring housekeeping pass — audit the agent files for rot, the glossary against the code, the decision index, the mutation measurement, the worktrees and the diary, then scan the codebase for Ousterhout's red flags and route each finding to the skill that owns it. It never fixes what it finds; findings leave as candidate tickets, and its one write is stamping the diary's Last housekeeping row. Use when the docs gate's housekeeping-due advisory fires, on the cadence the gate config names, or before cutting a release.
+description: Run the recurring housekeeping pass — audit the agent files for rot, the glossary against the code, the decision index, the mutation measurement, the worktrees and the diary, then scan the codebase for Ousterhout's red flags and route each finding to the skill that owns it. It never fixes what it finds; findings leave as candidate tickets. Its one write of its own is stamping the diary's Last housekeeping row, and its one delegated action is the worktree pruning it hands to the cleanup skill. Use when the docs gate's housekeeping-due advisory fires, on the cadence the gate config names, or before cutting a release.
 ---
 
 # /housekeeping — the pass that keeps the standing instructions true
@@ -30,7 +30,10 @@ the drift destroys the only independent reading anyone had of it, and it
 smuggles a behaviour change into an audit (shared invariant §10). Every
 finding leaves as a candidate ticket through `/to-tickets`, a deepening
 candidate for `/improve-codebase-architecture`, or a re-question for
-`/design-brief`. The one write this pass performs is the diary stamp.
+`/design-brief`. The one write this pass performs itself is the diary stamp;
+the one action it delegates is item 5's pruning, which `/worktree-cleanup`
+performs on worktrees and branches already merged — nothing unmerged is
+touched.
 
 ## Three states to check before starting
 

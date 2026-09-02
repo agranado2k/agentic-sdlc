@@ -10,8 +10,8 @@ carries the item number, the evidence (a path, a count, a diff), and the route.
 the Agent Skills specification.*
 
 - **The root manual's size.** Count its lines and compare with the count the
-  last pass recorded in its stamp note (a first pass records the baseline). Growth is a finding to explain, not a
-  failure: the always-loaded root is a budget every request pays (shared
+  last pass recorded in its stamp note (a first pass records the baseline).
+  Growth is a finding to explain, not a failure: the always-loaded root is a budget every request pays (shared
   invariant §11). The reference point Osmani names is two hundred lines; a
   root well past it has elaboration that belongs in an article read on demand.
 - **Rows whose target moved.** Every quick-reference row resolves — the gate
@@ -27,7 +27,8 @@ the Agent Skills specification.*
   to see what is lost. Installing a skill and keeping it are separate
   decisions.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
-  description under its cap and leading with the use case; the body under
+  description under the specification's 1024 characters and leading with the
+  use case; the body under
   five hundred lines; supporting files one level deep; no hard-coded date,
   version or model name; the description still true of the body.
 - **Memory.** Whatever the harness keeps outside the repo — preferences,
@@ -85,14 +86,15 @@ stale `none` is a ticket to make the decision again.
 
 *Source: the root manual's first hard rule.*
 
-- Run `/worktree-cleanup`.
-- Compare the diary's Active worktrees row with `git worktree list`; a
-  worktree on disk with no row, or a row with no worktree, is a finding.
+- First compare the diary's Active worktrees row with `git worktree list`;
+  a worktree on disk with no row, or a row with no worktree, is a finding —
+  recorded before anything is pruned, or the pruning erases the evidence.
+- Then run `/worktree-cleanup`.
 
-Route: the cleanup is the one action this item takes, and it is
-`/worktree-cleanup`'s to perform, invoked by this pass; on a repo with no
-worktrees the item reports "nothing to prune". The row mismatch is a diary
-correction the stamp commit may carry, since the diary is this pass's file.
+Route: the pruning is the one action this pass delegates, and it is
+`/worktree-cleanup`'s to perform on what is already merged; on a repo with no
+worktrees the item reports "nothing to prune". The row mismatch is a finding
+for the report, not an edit: the stamp is this pass's only write.
 
 ## 6. The diary's Current state
 
@@ -103,8 +105,9 @@ correction the stamp commit may carry, since the diary is this pass's file.
 - Open questions: any resolved elsewhere without being marked; any older than
   two windows with no owner.
 
-Route: corrections ride the stamp commit — the Current state block is edited
-in place by design. Anything needing a decision is a candidate ticket.
+Route: findings for the report, each a candidate ticket. The Current state
+block is edited in place by design, but not by this pass — its only write is
+the stamp.
 
 ## 7. The red-flag scan
 
@@ -131,13 +134,10 @@ red flag it meets with the file, the flag, and the cost in complexity terms
   interface**, **vague name**, **hard to pick name**, **hard to describe**,
   **nonobvious code** — the naming and comment flags, reported together.
 
-Route, decided by the pass, not the scan:
-
-- One module, one flag: a deepening candidate for
-  `/improve-codebase-architecture`, with the file and the flag.
-- The same flag across a subsystem, or every change crossing every context,
-  or a flag that traces to the recorded paradigm or style: a shape question —
-  reopen `/design-brief`.
+Route: decided by the pass, not the scan, per `SKILL.md`'s Routing section —
+`/improve-codebase-architecture` for one module with one flag, `/design-brief`
+for a flag across a subsystem or traced to the recorded style, `/to-tickets`
+for the rest.
 
 ## 8. The cadence
 
@@ -150,6 +150,5 @@ Route, decided by the pass, not the scan:
 
 ## The stamp
 
-`| **Last housekeeping** | YYYY-MM-DD — N findings; the one that matters: … |`
-in the diary's Current state table, dated today, in one local commit that
-also carries any diary corrections from items 5 and 6. Nothing else.
+The row's exact shape and clock are in the procedure's step 6 in `SKILL.md`;
+one local commit, the row and nothing else.

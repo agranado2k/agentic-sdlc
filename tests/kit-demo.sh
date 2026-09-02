@@ -422,6 +422,20 @@ shipped=0
 for d in .claude/skills/*/; do
 	[ -f "$d/SKILL.md" ] && shipped=$((shipped + 1))
 done
+# README's prose count of the skills is checked by nothing else; hold the
+# number word to the shipped roster (the manual-side floor is below).
+case "$shipped" in
+15) roster_word=fifteen ;; 16) roster_word=sixteen ;; 17) roster_word=seventeen ;;
+18) roster_word=eighteen ;; 19) roster_word=nineteen ;; 20) roster_word=twenty ;;
+*) roster_word="" ;;
+esac
+if [ -z "$roster_word" ]; then
+	fail "$shipped skills shipped — extend the roster number words in this check"
+elif grep -q "holds $roster_word skills" "$KIT/README.md"; then
+	pass "README says the kit holds $roster_word skills, matching the $shipped shipped"
+else
+	fail "README's skill count does not say $roster_word ($shipped shipped): $(grep -o 'holds [a-z]* skills' "$KIT/README.md")"
+fi
 [ "$shipped" -ge 17 ] ||
 	fail "skill roster shrank to $shipped — deleting a skill must lower this floor deliberately"
 [ "$resolved" -ge "$shipped" ] &&

@@ -54,18 +54,7 @@ fi
 # ---------------------------------------------------------------------------
 banner "1. Frontmatter: the open standard's fields, nothing harness-specific"
 # ---------------------------------------------------------------------------
-keys=$(awk 'NR == 1 { next } /^---/ { exit } /^[a-z_-]+:/ { sub(/:.*/, ""); print }' "$SKILL_ABS")
-for k in $keys; do
-	case "$k" in
-	name | description | license | compatibility | metadata | allowed-tools) ;;
-	*) fail "frontmatter key '$k' is not one the Agent Skills specification defines" ;;
-	esac
-done
-printf '%s\n' "$keys" | grep -qx name && pass "frontmatter carries name" || fail "frontmatter lacks name"
-printf '%s\n' "$keys" | grep -qx description && pass "frontmatter carries description" || fail "frontmatter lacks description"
-desc_len=$(awk '/^description:/ { sub(/^description: */, ""); print length($0); exit }' "$SKILL_ABS")
-[ "${desc_len:-0}" -le 1024 ] && pass "description is $desc_len chars, within the specification's 1024" ||
-	fail "description is $desc_len chars — the specification caps it at 1024"
+t_assert_skill_frontmatter "$(dirname "$SKILL_ABS")"
 
 # ---------------------------------------------------------------------------
 banner "2. Every checklist item names its source"
@@ -91,12 +80,19 @@ sidecar_sources=$(grep -c '^\*Source:' "$SIDECAR_ABS")
 # ---------------------------------------------------------------------------
 banner "3. The red flags, and the two routes"
 # ---------------------------------------------------------------------------
+# The flags and the routes are held in BOTH files: the sidecar is the half
+# the pass executes item by item.
 for flag in 'shallow module' 'information leakage' 'temporal decomposition' 'pass-through method' 'conjoined methods' 'repetition' 'vague name'; do
 	assert_file_has "$SKILL" "$flag"
 done
-assert_file_has "$SKILL" "/improve-codebase-architecture"
-assert_file_has "$SKILL" "/design-brief"
-assert_file_has "$SKILL" "/to-tickets"
+for flag in 'Shallow module' 'Information leakage' 'Temporal decomposition' 'Pass-through method' 'Conjoined methods' 'Repetition' 'vague name'; do
+	assert_file_has "$SIDECAR" "$flag"
+done
+for f in "$SKILL" "$SIDECAR"; do
+	assert_file_has "$f" "/improve-codebase-architecture"
+	assert_file_has "$f" "/design-brief"
+	assert_file_has "$f" "/to-tickets"
+done
 # Routing is decided in the skill, in a section of its own.
 grep -q '^## Routing' "$SKILL_ABS" && pass "routing has its own section" || fail "no Routing section"
 
@@ -107,22 +103,21 @@ assert_file_has "$SKILL" "never fixes"
 assert_file_has "$SKILL" "Last housekeeping"
 assert_file_has "$SKILL" "one write"
 assert_file_has "$SKILL" "planner"
-assert_file_lacks "$SKILL" "gh pr merge" "the pass records; it never merges"
-assert_file_lacks "$SKILL" "git push" "the pass records; it never pushes"
-assert_file_lacks "$SKILL" "--force" "the pass rewrites nothing"
+for f in "$SKILL" "$SIDECAR"; do
+	assert_file_lacks "$f" "gh pr merge" "the pass records; it never merges"
+	assert_file_lacks "$f" "git push" "the pass records; it never pushes"
+	assert_file_lacks "$f" "--force" "the pass rewrites nothing"
+done
+assert_file_has "$SKILL" "one delegated action"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-is_ignored() {
-	case "$1" in
-	/loop | /security-review | /review | /init | /tmp | /codebase-design) return 0 ;;
-	esac
-	return 1
-}
+# The exemptions are read from the gate's policy file (tests/lib.sh), never
+# mirrored.
 resolved=0
 for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	is_ignored "$cmd" && continue
+	t_is_ignored_command "$cmd" && continue
 	if [ -f ".agents/skills/${cmd#/}/SKILL.md" ]; then
 		resolved=$((resolved + 1))
 	else
@@ -140,7 +135,10 @@ path_verdict() {
 	p=$1
 	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
 	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -qv '^KIT_ONLY=' &&
+	# Only a line that creates or copies the path counts. A comment or the
+	# KIT_ONLY deletion list mentioning it proves the opposite of installed.
+	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
+		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
 		{ echo "installed by bootstrap.sh"; return 0; }
 	return 1
 }

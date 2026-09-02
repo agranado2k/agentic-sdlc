@@ -427,11 +427,11 @@ files:
 skills:
   design-brief
   diagnose
-  housekeeping
   dogfood            optional — bootstrap asks; declining is a recorded choice
   explain-diff
   grill-me
   grill-with-docs
+  housekeeping
   implement
   improve-codebase-architecture
   merge-train
