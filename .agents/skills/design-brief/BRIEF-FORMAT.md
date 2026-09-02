@@ -99,9 +99,11 @@ architecture?"*. The sections the brief must fill, beyond the template's own:
 
 ## 4. The comparison report — outside the repo tree
 
-`<tmpdir>/design-brief-<timestamp>.md` (or `.html`). Header: repo name, date,
-the subdomain classification. Then one section per candidate in the order of
-the procedure's five points, then the comparison, then the recommendation.
+`<tmpdir>/design-brief-<YYYYMMDDTHHMMSSZ>.md` (or `.html`). Header: repo name,
+date, the subdomain classification. Then **the exploration's data** — the
+counts and hot spots the comparison will cite, so no number in the report
+arrives unsourced — then one section per candidate in the order of the
+procedure's five points, then the comparison, then the recommendation.
 Diagrams, when the argument needs them, are real drawings in the HTML
 rendering — never ASCII art. The report is a conversation artifact; the
 decision record is what the repo keeps.
