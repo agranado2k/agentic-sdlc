@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-09-02
 - **Deciders**: Arthur Granado (operator), at the PRD #107 grilling
-- **Supersedes / amends**: —
+- **Supersedes / amends**: amends ADR-0001 §4 in one respect — the kit ships four records under `docs/adr/` now, not three, and bootstrap's kit-own list strips this one too
 - **Superseded by**: —
 
 ## Context and problem statement
