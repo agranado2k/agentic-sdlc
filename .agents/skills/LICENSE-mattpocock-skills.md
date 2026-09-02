@@ -10,7 +10,7 @@ named one project's stack with pointers at the artifacts this kit establishes
 | --- | --- | --- |
 | `grill-me/` | `productivity/grill-me` | verbatim |
 | `grill-with-docs/` | `engineering/grill-with-docs` | glossary sidecar retargeted at `docs/domain-glossary.md`; ADR sidecar rewritten for MADR |
-| `tdd/` | `engineering/tdd` | project-context prelude added to `SKILL.md`; the five sidecars are verbatim |
+| `tdd/` | `engineering/tdd` | project-context prelude added to `SKILL.md`; four sidecars are verbatim, and `deep-modules.md`'s two diagrams are redrawn as fenced diagram-language blocks (craft rule §10 forbids character art) |
 | `diagnose/` | `engineering/diagnose` | tool names in the feedback-loop list generalised; the architectural hand-off at the end names `/improve-codebase-architecture` and the decision record it produces |
 | `to-prd/` | `engineering/to-prd` | tracker/label setup replaced by the kit's autonomy-label mechanism |
 | `improve-codebase-architecture/` | `engineering/improve-codebase-architecture` **+** `engineering/codebase-design` | upstream splits the vocabulary into a separate `/codebase-design` skill; this kit ships no such skill, so that skill's glossary and its `DEEPENING.md` / `DESIGN-IT-TWICE.md` are folded in here as `LANGUAGE.md`, `DEEPENING.md` and `INTERFACE-DESIGN.md`. `CONTEXT.md` → `docs/domain-glossary.md`; the illustrative `ADR-0007` → citing a record by its own id; named stand-ins and third-party services → the role they play; upstream's `HTML-REPORT.md` → `PRESENTING.md`, a rendering-agnostic contract keeping the HTML scaffold as one worked example. Added: the capability-tier resolution for the sub-agents it spawns, and the `/to-tickets` hand-off that keeps a deepening out of a feature diff |

@@ -4,27 +4,29 @@ From "A Philosophy of Software Design":
 
 **Deep module** = small interface + lots of implementation
 
-```
-┌─────────────────────┐
-│   Small Interface   │  ← Few methods, simple params
-├─────────────────────┤
-│                     │
-│                     │
-│  Deep Implementation│  ← Complex logic hidden
-│                     │
-│                     │
-└─────────────────────┘
+```mermaid
+flowchart TB
+    subgraph deep["Deep module"]
+        di["Interface — a few methods, simple parameters"]
+        dimpl["Implementation — the complex logic, hidden behind the interface"]
+        di --- dimpl
+    end
 ```
 
 **Shallow module** = large interface + little implementation (avoid)
 
+```mermaid
+flowchart TB
+    subgraph shallow["Shallow module"]
+        si["Interface — many methods, complex parameters"]
+        simpl["Implementation — thin; it mostly passes through"]
+        si --- simpl
+    end
 ```
-┌─────────────────────────────────┐
-│       Large Interface           │  ← Many methods, complex params
-├─────────────────────────────────┤
-│  Thin Implementation            │  ← Just passes through
-└─────────────────────────────────┘
-```
+
+The picture to hold: a deep module is a narrow top over a tall body, a
+shallow one is a wide top over almost nothing. Callers pay for the width of
+the top on every use; maintainers get the height of the body as locality.
 
 When designing interfaces, ask:
 
