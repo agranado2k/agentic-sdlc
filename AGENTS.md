@@ -266,7 +266,9 @@ into an interactive explainer, and `/improve-codebase-architecture` is for an
 area that has become hard to change — it finds and designs the deepening, then
 re-enters the line at `/to-tickets`, because a behaviour-preserving refactor is
 a ticket of its own and never a passenger on a feature diff (shared invariant
-§10).
+§10). `/design-brief` sits before the first feature diff and again whenever the
+shape stops fitting: it decides paradigm, style and context map twice, compares
+on complexity, and records the choice where every later session reads it.
 
 One more sits *beside* the line: `/dogfood` walks a project's declared personas
 through its real user-facing surface. It is the kit's one OPTIONAL skill —
@@ -287,6 +289,7 @@ answers produce a clean project.
 | Write the code test-first           | `/tdd` — red, green, refactor, one behavior at a time |
 | Hold the code itself to a standard  | `constitution/shared-code-craft.md` — the thirteen portable craft rules |
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
+| Decide the shape of the system out loud | `/design-brief` — design it twice, compare on complexity, then record paradigm, style and context map as anchors, a glossary section and a decision record; stops for your yes before writing |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer; teaches, never reviews |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |

@@ -185,3 +185,16 @@ strip_nested_worktrees() {
 			esac
 		done
 }
+
+# t_ignored_commands — the slash commands the gate's policy file exempts from
+# skill resolution (`claudeMdRefs.ignoreCommands` in config.mjs), one per line.
+# Read from the file rather than mirrored: three hand-kept copies of that list
+# had already drifted by the time this helper existed.
+t_ignored_commands() {
+	sed -n '/ignoreCommands: \[/,/\]/p' "${ROOT:-$(pwd)}/scripts/docs-conformance/config.mjs" |
+		grep -o '"/[a-z][a-z0-9-]*"' | tr -d '"'
+}
+
+# t_is_ignored_command <cmd> — true when the policy file exempts it.
+t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
+

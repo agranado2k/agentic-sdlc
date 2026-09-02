@@ -358,8 +358,13 @@
 # same relationship named from both sides, roles opposite — and "strategic
 # design" joins its banned words (say context map); the grilling skill's
 # glossary sidecar teaches the both-sides rule. Your glossary is yours: add
-# the section by hand from the template's comment. The wave's later tickets
-# add to this list.
+# the section by hand from the template's comment. From #112: the
+# /design-brief skill joins the roster (design it twice at architecture
+# scale, compare on complexity, stop for a yes, then write the three anchors,
+# the glossary's context map and one decision record) with its BRIEF-FORMAT
+# sidecar and its bridge symlink; the kit's own decision record 0002 pins
+# "strategic" to Ousterhout's sense. Take the skill via 9a. The wave's later
+# tickets add to this list.
 shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
@@ -407,6 +412,7 @@ files:
 # (bootstrap asks before installing it) — declining it is a clean state, not
 # a gap.
 skills:
+  design-brief
   diagnose
   dogfood            optional — bootstrap asks; declining is a recorded choice
   explain-diff

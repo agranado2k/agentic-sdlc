@@ -17,6 +17,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-the-kit-self-hosts-its-own-constitution.md) | The kit self-hosts its own constitution | Accepted 2026-08-27 |
+| [0002](0002-strategic-means-ousterhout.md) | "Strategic" means Ousterhout's strategic programming; Evans's work is the context map | Accepted 2026-09-02 |
 
 ## Conventions
 

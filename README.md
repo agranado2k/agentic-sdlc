@@ -154,14 +154,14 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.agents/skills/` holds fifteen skills — the chain at the top of this README, made
+`.agents/skills/` holds sixteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
-`/diagnose`, `/explain-diff` and `/improve-codebase-architecture` off to the
-side.
+`/diagnose`, `/explain-diff`, `/improve-codebase-architecture` and
+`/design-brief` off to the side.
 
 **All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
@@ -548,6 +548,12 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
+  text: the three anchors it writes, design-it-twice compared on complexity,
+  the human stop before every write, the decision record, the two entry
+  points, spec-only frontmatter, and every path and command it names
+  resolving.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -618,6 +624,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
+sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

@@ -530,10 +530,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1610 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1615 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1764 insertions(+), 1 deletion(-)
+ 3 files changed, 1769 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1392,6 +1392,8 @@ fixes all of it:
 $ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
 $ cat "$WORK/changed.yours"
 .agents/skills/LICENSE-mattpocock-skills.md
+.agents/skills/design-brief/BRIEF-FORMAT.md
+.agents/skills/design-brief/SKILL.md
 .agents/skills/diagnose/SKILL.md
 .agents/skills/diagnose/scripts/hitl-loop.template.sh
 .agents/skills/dogfood/SKILL.md
@@ -1421,6 +1423,7 @@ $ cat "$WORK/changed.yours"
 .agents/skills/to-tickets/SKILL.md
 .agents/skills/worktree-cleanup/SKILL.md
 .claude/skills/LICENSE-mattpocock-skills.md
+.claude/skills/design-brief
 .claude/skills/diagnose
 .claude/skills/dogfood
 .claude/skills/explain-diff
@@ -1489,6 +1492,8 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
+      -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [skill-paths] ! .claude/skills/design-brief/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .claude/skills/implement/SKILL.md [skill-path-missing] — references `adapters/claude-code/README.md` but neither it nor `adapters/claude-code/README.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.

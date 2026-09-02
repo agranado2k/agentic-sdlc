@@ -259,6 +259,14 @@ jobs:
       - name: Advisory-visibility suite
         run: sh tests/docs-gate-advisory.test.sh
 
+  design-brief:
+    name: /design-brief contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Design-brief skill-text suite
+        run: sh tests/design-brief-skill.test.sh
+
   adopt-demo:
     name: Existing-repo adoption arm
     runs-on: ubuntu-latest
