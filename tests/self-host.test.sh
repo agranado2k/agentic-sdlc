@@ -374,6 +374,21 @@ else
 	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
 fi
 
+# --- F2a: the root manual stays under its budget ---------------------------
+# ADR-0004: the kit's root is also its local article, and 350 lines is its
+# budget — a rule only because this check can fail. Growth past it is a
+# decision (split, or raise the number in the record), never a silent line.
+ROOT_BUDGET=350
+root_lines=$(wc -l <"$KIT/AGENTS.md" | tr -d ' ')
+[ "$root_lines" -le "$ROOT_BUDGET" ] &&
+	pass "AGENTS.md is $root_lines lines, within the $ROOT_BUDGET-line budget (ADR-0004)" ||
+	fail "AGENTS.md is $root_lines lines — over the $ROOT_BUDGET-line budget ADR-0004 records; split it or supersede the record"
+# The check can go red: a manual one line over the budget fails it.
+awk -v n="$((ROOT_BUDGET + 1))" 'BEGIN { for (i = 0; i < n; i++) print "line" }' >"$SCRATCH/root.bait"
+[ "$(wc -l <"$SCRATCH/root.bait" | tr -d ' ')" -le "$ROOT_BUDGET" ] &&
+	fail "the root-budget probe passed a manual over the budget — the check is vacuous" ||
+	pass "the root-budget probe rejects a manual over the budget"
+
 # --- F2b: the manuals' craft-rule count tracks the article -----------------
 # The manual template and the kit's own manual both say how many portable
 # craft rules the shared article carries, and the number rotted twice in a
