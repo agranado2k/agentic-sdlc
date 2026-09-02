@@ -55,30 +55,7 @@ fi
 # ---------------------------------------------------------------------------
 banner "1. Frontmatter: the open standard's fields, nothing harness-specific"
 # ---------------------------------------------------------------------------
-# Top-level keys, any case: an unexpected key is a finding whatever its case.
-keys=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { sub(/:.*/, ""); print tolower($0) }' "$SKILL_ABS")
-for k in $keys; do
-	case "$k" in
-	name | description | license | compatibility | metadata | allowed-tools) ;;
-	*) fail "frontmatter key '$k' is not one the Agent Skills specification defines — the kit ships vendor-neutral skills" ;;
-	esac
-done
-printf '%s\n' "$keys" | grep -qx name && pass "frontmatter carries name" || fail "frontmatter lacks name"
-printf '%s\n' "$keys" | grep -qx description && pass "frontmatter carries description" || fail "frontmatter lacks description"
-# The specification: name equals the directory, description at most 1024
-# characters (read to the next key, not to the line end), the body under 500
-# lines, supporting files one level deep.
-fm_name=$(awk 'NR == 1 { next } /^---/ { exit } /^name:/ { sub(/^name: */, ""); print; exit }' "$SKILL_ABS")
-[ "$fm_name" = "$(basename "$(dirname "$SKILL_ABS")")" ] && pass "frontmatter name equals the directory name" ||
-	fail "frontmatter name '$fm_name' is not the directory name"
-desc_len=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { indesc = ($0 ~ /^description:/); if (indesc) { sub(/^description: */, ""); n += length($0) } ; next } indesc { n += length($0) + 1 } END { print n + 0 }' "$SKILL_ABS")
-[ "${desc_len:-0}" -le 1024 ] && pass "description is $desc_len chars, within the specification's 1024" ||
-	fail "description is $desc_len chars — the specification caps it at 1024"
-body_lines=$(wc -l <"$SKILL_ABS" | tr -d ' ')
-[ "$body_lines" -le 500 ] && pass "SKILL.md is $body_lines lines, under the 500 the specification recommends" ||
-	fail "SKILL.md is $body_lines lines — over the 500 the specification recommends; move reference material to a sidecar"
-deep=$(find "$(dirname "$SKILL_ABS")" -mindepth 2 -type f | head -1)
-[ -z "$deep" ] && pass "supporting files are one level deep" || fail "a supporting file is nested deeper than one level: $deep"
+t_assert_skill_frontmatter "$(dirname "$SKILL_ABS")"
 
 # ---------------------------------------------------------------------------
 banner "2. It records the three anchors the engineering article stamps"

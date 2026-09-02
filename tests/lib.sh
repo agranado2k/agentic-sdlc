@@ -198,3 +198,34 @@ t_ignored_commands() {
 # t_is_ignored_command <cmd> — true when the policy file exempts it.
 t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
 
+# t_assert_skill_frontmatter <skill dir> — the Agent Skills specification's
+# frontmatter rules, held once for every skill suite: keys limited to the
+# fields the specification defines (any case — an unexpected key is a finding
+# whatever its case), name equal to the directory, description under 1024
+# characters read to the next key, the body under 500 lines, supporting files
+# one level deep.
+t_assert_skill_frontmatter() {
+	_sf_dir=$1
+	_sf_file="$_sf_dir/SKILL.md"
+	_sf_keys=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { sub(/:.*/, ""); print tolower($0) }' "$_sf_file")
+	for _sf_k in $_sf_keys; do
+		case "$_sf_k" in
+		name | description | license | compatibility | metadata | allowed-tools) ;;
+		*) fail "$_sf_file: frontmatter key '$_sf_k' is not one the Agent Skills specification defines — the kit ships vendor-neutral skills" ;;
+		esac
+	done
+	printf '%s\n' "$_sf_keys" | grep -qx name && pass "$_sf_file carries name" || fail "$_sf_file lacks name"
+	printf '%s\n' "$_sf_keys" | grep -qx description && pass "$_sf_file carries description" || fail "$_sf_file lacks description"
+	_sf_name=$(awk 'NR == 1 { next } /^---/ { exit } /^name:/ { sub(/^name: */, ""); print; exit }' "$_sf_file")
+	[ "$_sf_name" = "$(basename "$_sf_dir")" ] && pass "frontmatter name equals the directory name" ||
+		fail "frontmatter name '$_sf_name' is not the directory name"
+	_sf_desc=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { indesc = ($0 ~ /^description:/); if (indesc) { sub(/^description: */, ""); n += length($0) } ; next } indesc { n += length($0) + 1 } END { print n + 0 }' "$_sf_file")
+	[ "${_sf_desc:-0}" -le 1024 ] && pass "description is $_sf_desc chars, within the specification's 1024" ||
+		fail "description is $_sf_desc chars — the specification caps it at 1024"
+	_sf_lines=$(wc -l <"$_sf_file" | tr -d ' ')
+	[ "$_sf_lines" -le 500 ] && pass "SKILL.md is $_sf_lines lines, under the 500 the specification recommends" ||
+		fail "SKILL.md is $_sf_lines lines — over the 500 the specification recommends; move reference material to a sidecar"
+	_sf_deep=$(find "$_sf_dir" -mindepth 2 -type f | head -1)
+	[ -z "$_sf_deep" ] && pass "supporting files are one level deep" || fail "a supporting file is nested deeper than one level: $_sf_deep"
+}
+
