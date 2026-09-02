@@ -236,6 +236,11 @@ assert_has "README.md" "A double-entry ledger for small cooperatives."
 assert_has "docs/diary.md" "Current state — $TODAY"
 assert_has "docs/diary.md" "Living history of the Aurora Ledger build"
 assert_has "docs/diary.md" "### $TODAY — Bootstrapped from the agentic-sdlc kit"
+# The housekeeping clock (PRD #107, ticket #111): the stamped diary's Current
+# state carries the row the housekeeping-due advisory reads, dated the day of
+# the bootstrap, so the first nudge arrives one window later without anyone
+# setting a calendar.
+assert_has "docs/diary.md" "| **Last housekeeping** | $TODAY"
 assert_has "docs/domain-glossary.md" "canonical terms for Aurora Ledger"
 assert_has "docs/adr/INDEX.md" "architectural decision for Aurora Ledger"
 

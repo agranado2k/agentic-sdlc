@@ -25,6 +25,7 @@ is in flight. Do not restate the README.
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
+| **Last housekeeping** | 2026-09-02 — the row arrives with the 0.15.0 wave (ticket #111); the first real pass is the housekeeping skill's first run, once #114 lands. Two findings already queued for it: the manual template's rule count and the tdd sidecar's ASCII diagrams. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
 | **Active worktrees** | None. The 0.14.0 wave (PRD #100, from #97) landed as PRs #104/#105/#106 and tagged v0.14.0 (2026-09-01): skills are canonical at `.agents/skills/`, bridged into `.claude/skills/` by committed per-skill symlinks. Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
