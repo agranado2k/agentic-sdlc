@@ -328,8 +328,14 @@
 # than the window the gate config names (housekeepingDue.windowDays, default
 # 30) — or warns naming the row when it is absent. Never a failure: an
 # overdue pass must not block a hotfix. scripts/check.sh's reduced notice
-# names it; runner.mjs registers it. This note grows with the wave's stacked
-# tickets — the tactical craft rule — and is finished at the v0.15.0 tag.
+# names it; runner.mjs registers it. With #110 a manifest-listed ARTICLE
+# changed content: constitution/shared-code-craft.md gains §13, the tactical
+# half of Domain-Driven Design in one portable paragraph — an invariant is
+# enforced inside the object that owns it, a value with meaning is its own
+# type, and every name is the glossary's — credited to Evans in the closing
+# paragraph beside the essay the rest condenses. A consumer takes it as a
+# re-read of one section and changes no command of theirs. This note grows
+# with the wave's stacked tickets and is finished at the v0.15.0 tag.
 #   NON-MANIFEST HALF, enumerated: the engineering article template's
 # Architecture section gains three labeled anchor lines — "Paradigm:",
 # "Architectural style:" and "Context map:" — each filled in one of exactly
@@ -342,8 +348,13 @@
 # as terms. From #111: the diary template's Current state table gains the
 # `**Last housekeeping**` row, stamped with the bootstrap date (your diary is
 # yours: add the row by hand, dated your last pass or today), and your
-# config.mjs gains the housekeepingDue section with the window as data. The
-# wave's later tickets add to this list.
+# config.mjs gains the housekeepingDue section with the window as data. From
+# #110: the manual template's article-layer line and quick-reference row say
+# THIRTEEN craft rules — the count had read "ten" since 0.10.0 added §11 and
+# §12, and a stamped consumer inherited the wrong number for five releases;
+# the self-host suite now holds both manuals to the article's section count
+# (your stamped manual is yours: correct the word by hand). The wave's later
+# tickets add to this list.
 shared-layer: 0.15.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
