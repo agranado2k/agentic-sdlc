@@ -137,7 +137,11 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Task domain** — the resolver's optional *second* axis: what the work is made
   **of**, where the tier is how big it is. `content`, `code`, `html-report`. A
   ticket carries one only when the medium would change which model you would
-  pick. Unlike the four tier names its vocabulary is **open and local**, so an
+  pick. The axis also admits a token that names a **situation** rather than a
+  medium, chosen at spawn time and never stamped on a ticket: `self-implemented`
+  on the reviewer tier is the worked example — the session wrote the diff on
+  the model the reviewer tier maps to, so the reviewer needs a second answer.
+  Unlike the four tier names its vocabulary is **open and local**, so an
   unmapped domain falls back to the plain tier silently; what is not open is its
   **shape** (`[a-z][a-z0-9-]*`), because the token is interpolated into the
   variable name `AGENT_TIER_<TIER>_<DOMAIN>`.

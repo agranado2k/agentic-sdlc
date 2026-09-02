@@ -176,11 +176,12 @@ local policy**, so an unmapped one falls back to the tier in silence. This repo
 maps two — `content`, for the prose that is most of the kit's product, which
 is `implementer` work by tier and not code by medium; and `self-implemented`
 on the reviewer tier, for a diff the session itself wrote on the reviewer's
-model, since the reviewer is never the model that implemented. `code` is
+model — a situation rather than a medium, chosen at spawn time. `code` is
 deliberately unmapped: the plain tier is already its answer, and repeating that
 value under a domain name would record a non-decision. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change which model you would
-pick, and `/implement` passes it through as the second argument.
+pick, and `/implement` passes it through as the second argument; a
+situation domain is never stamped on a ticket.
 
 ## Agent trust boundary
 

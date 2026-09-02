@@ -81,7 +81,9 @@ AGENT_TIER_REVIEWER='fable'
 #    diff is exactly that, and this wave met it on every PR. Then the
 #    reviewer above IS the implementer, and the rule needs a second answer.
 #    It is resolved through the domain axis below, as
-#    `sh scripts/agents.kit.sh reviewer self-implemented`, and
+#    `sh scripts/agents.kit.sh reviewer self-implemented` — a domain that
+#    names a situation rather than a medium, which the open vocabulary
+#    allows and the glossary's "Task domain" entry records — and
 #    tests/agents-tiers.test.sh holds it to differing from the reviewer.
 AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='opus'
 
@@ -109,11 +111,8 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='opus'
 # from the strongest coding one.
 AGENT_TIER_IMPLEMENTER_CONTENT='fable'
 
-# The second domain this repo maps is the reviewer's, above:
-# AGENT_TIER_REVIEWER_SELF_IMPLEMENTED — not a medium but a situation, which
-# the open vocabulary allows; it exists because the reviewer must never be the
-# model that implemented, and the plain tier cannot say so when the session
-# itself is that model.
+# The second domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
+# sits in the reviewer block above with its reasoning.
 #
 # THERE IS DELIBERATELY NO AGENT_TIER_IMPLEMENTER_CODE. The plain tier above
 # already resolves code work to 'opus'; naming the domain to repeat that value

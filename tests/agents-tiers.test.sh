@@ -838,8 +838,8 @@ unset AGENTS_CONFIG
 # ---------------------------------------------------------------------------
 banner "The reviewer is never the implementer — the kit's mapping, and the probe (#144)"
 # ---------------------------------------------------------------------------
-# The policy the root manual states and ADR-0003 clause 4 defers to this
-# ticket: a review from the implementer's own model is an editorial pass
+# The policy the root manual states, and which the review of PR #140 (H-1)
+# deferred to this ticket: a review from the implementer's own model is an editorial pass
 # wearing a second hat. Two halves, one probe. (1) The mapping resolves
 # reviewer and implementer to different models. (2) The mapping names the
 # reviewer for the case the plain lookup cannot see — the session itself
@@ -848,9 +848,11 @@ banner "The reviewer is never the implementer — the kit's mapping, and the pro
 # config and then on two throwaways that break each half, so it is proven
 # able to fail before it is trusted.
 reviewer_rule_gaps() { # <config>
-	_rg_rev=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" reviewer 2>/dev/null)
-	_rg_imp=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" implementer 2>/dev/null)
-	_rg_self=$(AGENTS_CONFIG="$1" AGENTS_QUIET=1 sh "$LIB" reviewer self-implemented 2>/dev/null)
+	_rg_rev=$(AGENTS_CONFIG="$1" sh "$LIB" reviewer 2>/dev/null)
+	_rg_imp=$(AGENTS_CONFIG="$1" sh "$LIB" implementer 2>/dev/null)
+	_rg_self=$(AGENTS_CONFIG="$1" sh "$LIB" reviewer self-implemented 2>/dev/null)
+	[ -z "$_rg_rev" ] &&
+		echo "the reviewer tier is unmapped — the rule has nothing to compare"
 	[ -n "$_rg_rev" ] && [ "$_rg_rev" = "$_rg_imp" ] &&
 		echo "reviewer and implementer both map to '$_rg_rev'"
 	[ -n "$_rg_rev" ] && [ "$_rg_self" = "$_rg_rev" ] &&
@@ -860,7 +862,7 @@ reviewer_rule_gaps() { # <config>
 gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
 [ -z "$gaps" ] &&
 	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
-	fail "the kit's own mapping breaks the reviewer rule — $gaps"
+	fail "the kit's own mapping breaks the reviewer rule — $(printf '%s' "$gaps" | tr '\n' ';')"
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
@@ -871,6 +873,11 @@ esac
 case "$(reviewer_rule_gaps "$FULL")" in
 *"no fallback for a diff the session wrote"*) pass "the probe reports a mapping with no self-implemented answer" ;;
 *) fail "the probe missed a missing self-implemented mapping" ;;
+esac
+# An unmapped reviewer is not a pass — the rule has nothing to compare.
+case "$(reviewer_rule_gaps "$EMPTY")" in
+*"the reviewer tier is unmapped"*) pass "the probe reports a mapping with no reviewer at all, rather than passing vacuously" ;;
+*) fail "the probe passed an unmapped reviewer" ;;
 esac
 
 # ---------------------------------------------------------------------------
