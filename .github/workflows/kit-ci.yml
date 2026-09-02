@@ -267,6 +267,14 @@ jobs:
       - name: Design-brief skill-text suite
         run: sh tests/design-brief-skill.test.sh
 
+  no-box-art:
+    name: No character art in the shipped prose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Craft §10 suite
+        run: sh tests/no-box-art.test.sh
+
   housekeeping:
     name: /housekeeping contract
     runs-on: ubuntu-latest

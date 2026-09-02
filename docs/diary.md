@@ -702,3 +702,16 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+
+### 2026-09-02 — Craft rule §10 got its failing check
+
+Ticket #146 of PRD #124, filed by PR #141's review. The craft article says
+diagrams are drawings, never character art, and the kit shipped two skills
+that drew boxes and trees in prose until #141 redrew them. Nothing would have
+noticed a third. `tests/no-box-art.test.sh` scans the shipped prose — the
+skills, the constitution and the templates — for the Unicode Box Drawing
+block, byte-wise under `LC_ALL=C` so it needs no locale, and plants a box
+under each root to prove the scan reports it. The harness's own fixture
+tests use box characters as comment rules; they are code, not documents, and
+stay outside the scan. The suite stacks on #141: on main it is red, which is
+the point.

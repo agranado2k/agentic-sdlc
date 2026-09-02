@@ -548,6 +548,13 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
+  box-drawing character anywhere in the shipped prose — the skills, the
+  constitution and the templates — with a planted box under each root proving
+  the scan reports it, and ordinary dashes, arrows and accents left alone. The
+  harness's fixture tests, which use box characters as comment rules, are
+  code and out of scope.
+
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
   the human stop before every write, the decision record, the two entry
@@ -631,6 +638,7 @@ sh tests/adopt-demo.sh                                 # the existing-repo adopt
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
