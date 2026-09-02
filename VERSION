@@ -351,7 +351,7 @@
 # config.mjs gains the housekeepingDue section with the window as data. From
 # #110: the manual template's article-layer line and quick-reference row say
 # THIRTEEN craft rules — the count had read "ten" since 0.10.0 added §11 and
-# §12, and a stamped consumer inherited the wrong number for four releases;
+# §12, and a stamped consumer inherited the wrong number for five releases;
 # the self-host suite now holds both manuals to the article's section count
 # (your stamped manual is yours: correct the word by hand). The wave's later
 # tickets add to this list.
