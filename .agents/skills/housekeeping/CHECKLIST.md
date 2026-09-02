@@ -10,7 +10,7 @@ carries the item number, the evidence (a path, a count, a diff), and the route.
 the Agent Skills specification.*
 
 - **The root manual's size.** Count its lines and compare with the count the
-  last pass recorded in its stamp note. Growth is a finding to explain, not a
+  last pass recorded in its stamp note (a first pass records the baseline). Growth is a finding to explain, not a
   failure: the always-loaded root is a budget every request pays (shared
   invariant §11). The reference point Osmani names is two hundred lines; a
   root well past it has elaboration that belongs in an article read on demand.
@@ -70,7 +70,9 @@ Route: candidate tickets.
 *Source: shared invariant §9.*
 
 - Run the command the engineering article's **Mutation decision** line names,
-  on the pure, cheap tier. Record the score beside the last pass's.
+  on the pure, cheap tier. Record the score beside the last pass's. With no
+  stamped article, read the repo's own suites and record that nothing is
+  measured — a finding in its own right once there is a layer to measure.
 - A score that fell is a finding about the tests that stopped enforcing.
 - A decision line reading `none — <reason>` is re-read against the codebase
   as it is now: a reason that was true at one file and one script may not be
@@ -87,15 +89,16 @@ stale `none` is a ticket to make the decision again.
 - Compare the diary's Active worktrees row with `git worktree list`; a
   worktree on disk with no row, or a row with no worktree, is a finding.
 
-Route: the cleanup is the one action this item takes, and it is the skill's,
-not this pass's; the row mismatch is a diary correction the stamp commit may
-carry, since the diary is this pass's file.
+Route: the cleanup is the one action this item takes, and it is
+`/worktree-cleanup`'s to perform, invoked by this pass; on a repo with no
+worktrees the item reports "nothing to prune". The row mismatch is a diary
+correction the stamp commit may carry, since the diary is this pass's file.
 
 ## 6. The diary's Current state
 
 *Source: the diary's own update protocol.*
 
-- The last-commit line against `git log -1`.
+- The last-commit line, where the diary carries one, against `git log -1`.
 - The phase line against what has shipped since.
 - Open questions: any resolved elsewhere without being marked; any older than
   two windows with no owner.
