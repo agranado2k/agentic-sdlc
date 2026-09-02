@@ -124,16 +124,21 @@ constitution/local-product.md.template out of the kit on the day you have one,
 and add a row for it to AGENTS.md's quick reference."
 
 # --- reading the set ---------------------------------------------------------
+# An entry's name is its skill directory, which may carry a hyphen; in a
+# variable name the hyphen folds to an underscore, the same fold the tier
+# resolver applies to a domain token. `dogfood` has none; a second optional
+# skill's ticket owns the fixture that exercises the fold.
+opt_var() { printf '%s' "$1" | tr '-' '_'; }
 # opt_field <name> <field> — one field of an entry; empty when unset.
-opt_field() { eval "printf '%s' \"\${optional_$1_$2:-}\""; }
+opt_field() { eval "printf '%s' \"\${optional_$(opt_var "$1")_$2:-}\""; }
 # opt_in_set <name> — 0 when <name> is an optional skill.
 opt_in_set() {
-	for _o in $OPTIONAL_SKILLS; do [ "$_o" = "$1" ] && return 0; done
+	for _ois in $OPTIONAL_SKILLS; do [ "$_ois" = "$1" ] && return 0; done
 	return 1
 }
 # The answer per skill: ask | yes | no. Both arms resolve it the same way.
-opt_choice() { eval "printf '%s' \"\${optional_choice_$1:-ask}\""; }
-opt_set_choice() { eval "optional_choice_$1=\$2"; }
+opt_choice() { eval "printf '%s' \"\${optional_choice_$(opt_var "$1"):-ask}\""; }
+opt_set_choice() { eval "optional_choice_$(opt_var "$1")=\$2"; }
 # opt_declined <name> — 0 when <name> is optional and not accepted.
 opt_declined() { opt_in_set "$1" && [ "$(opt_choice "$1")" != yes ]; }
 # opt_flag <arg> — takes --with-<name> / --no-<name> for a skill in the set;
@@ -198,35 +203,57 @@ opt_decide() {
 # markers. The marker lines themselves ALWAYS go, so a project never inherits
 # scaffolding it did not ask about; declined, the lines between them go too.
 #
-# opt_marker_expr <choice> <dialect> <token> — the sed filter for one pair.
-opt_marker_expr() {
-	case "$2" in
-	md) _b="<!-- $3:BEGIN -->" _e="<!-- $3:END -->" ;;
-	js) _b="\\/\\/ $3:BEGIN" _e="\\/\\/ $3:END" ;;
-	*) die "the optional set names an unknown marker dialect '$2'" ;;
+# opt_marks <dialect> <token> — the one dialect table: sets _mb and _me to
+# the BEGIN and END marker lines as plain text.
+opt_marks() {
+	case "$1" in
+	md) _mb="<!-- $2:BEGIN -->" _me="<!-- $2:END -->" ;;
+	js) _mb="// $2:BEGIN" _me="// $2:END" ;;
+	*) die "the optional set names an unknown marker dialect '$1'" ;;
 	esac
+}
+# opt_marker_expr <choice> <dialect> <token> — the sed filter for one pair,
+# the plain markers escaped for a sed address.
+opt_marker_expr() {
+	opt_marks "$2" "$3"
+	_sb=$(printf '%s' "$_mb" | sed 's|/|\\/|g')
+	_se=$(printf '%s' "$_me" | sed 's|/|\\/|g')
 	if [ "$1" = yes ]; then
-		printf '/%s/d;/%s/d' "$_b" "$_e"
+		printf '/%s/d;/%s/d' "$_sb" "$_se"
 	else
-		printf '/%s/,/%s/d' "$_b" "$_e"
+		printf '/%s/,/%s/d' "$_sb" "$_se"
 	fi
 }
-# opt_pair_check <file> <dialect> <token> — as many BEGINs as ENDs. 0 when the
-# file carries the pair(s), 1 when it carries none; anything else dies naming
-# the file. A decline's RANGE delete would run to end-of-file on a lone BEGIN
-# — a truncated file with exit 0, the silent-data-loss shape §11 exists for.
-# A lone marker is a broken pair somebody edited; refuse loudly rather than
-# guess which half they meant.
+# opt_pair_check <file> <dialect> <token> — every BEGIN is followed by its
+# END before the next BEGIN, and nothing is left open. 0 when the file
+# carries the pair(s), 1 when it carries none; anything else dies naming the
+# file and the line. A decline's RANGE delete would run to end-of-file on a
+# lone or out-of-order BEGIN — a truncated file with exit 0, the
+# silent-data-loss shape §11 exists for. A broken pair is one somebody
+# edited; refuse loudly rather than guess which half they meant.
 opt_pair_check() {
-	case "$2" in
-	md) _pb="<!-- $3:BEGIN -->" _pe="<!-- $3:END -->" ;;
-	js) _pb="// $3:BEGIN" _pe="// $3:END" ;;
+	opt_marks "$2" "$3"
+	_verdict=$(awk -v b="$_mb" -v e="$_me" '
+		index($0, b) { if (open) { print "broken: a second BEGIN at line " NR " before the END"; exit } open = 1; nb++; next }
+		index($0, e) { if (!open) { print "broken: an END at line " NR " with no BEGIN before it"; exit } open = 0; ne++ }
+		END { if (open) print "broken: the BEGIN at line " nb " has no END"; else print nb + 0 }
+	' "$1")
+	case "$_verdict" in
+	broken:*) die "$1 carries a broken $3 marker pair (${_verdict#broken: }) — fix the pair before stamping" ;;
+	0) return 1 ;;
 	esac
-	_nb=$(grep -c -F -- "$_pb" "$1" || true)
-	_ne=$(grep -c -F -- "$_pe" "$1" || true)
-	[ "$_nb" = "$_ne" ] ||
-		die "$1 carries a broken $3 marker pair ($_nb BEGIN, $_ne END) — fix the pair before stamping"
-	[ "$_nb" != 0 ]
+	return 0
+}
+# opt_reject_marks <text> — a stamped value carrying a marker token would
+# write a marker into the manual and break the pair the preflight just
+# passed, so it is refused where '{{' is, before anything is stamped.
+opt_reject_marks() {
+	for _o in $OPTIONAL_SKILLS; do
+		case "$1" in
+		*"$(opt_field "$_o" marker):BEGIN"* | *"$(opt_field "$_o" marker):END"*)
+			die "project name/description must not contain a $(opt_field "$_o" marker) marker." ;;
+		esac
+	done
 }
 # opt_preflight <tree> — every marked file present in <tree> carries its pairs
 # whole, checked BEFORE anything is stamped or removed, so a refusal leaves
@@ -387,6 +414,7 @@ if [ "$ADOPT" = 1 ]; then
 	case "$a_name$a_desc" in
 	*'{{'* | *'}}'*) die "project name/description must not contain '{{' or '}}'." ;;
 	esac
+	opt_reject_marks "$a_name$a_desc"
 	opt_decide "$a_kit" "the kit clone"
 	opt_preflight "$a_kit"
 
@@ -930,6 +958,7 @@ opt_preflight .
 case "$name$description" in
 *'{{'* | *'}}'*) die "project name/description must not contain '{{' or '}}'." ;;
 esac
+opt_reject_marks "$name$description"
 
 # --- stamp ------------------------------------------------------------------
 # esc/esc_js live at the top of the file — both arms stamp with them.
