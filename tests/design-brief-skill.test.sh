@@ -124,9 +124,11 @@ assert_file_lacks "$SKILL" "git push" "the brief records; delivery is /implement
 # ---------------------------------------------------------------------------
 banner "7. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
+# Mirrors `claudeMdRefs.ignoreCommands` in scripts/docs-conformance/config.mjs:
+# real commands that are not repo skills, and command-shaped paths.
 is_ignored() {
 	case "$1" in
-	/loop | /security-review | /review | /init) return 0 ;;
+	/loop | /security-review | /review | /init | /tmp | /codebase-design) return 0 ;;
 	esac
 	return 1
 }
