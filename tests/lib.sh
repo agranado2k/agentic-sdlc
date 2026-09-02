@@ -176,17 +176,22 @@ t_done() {
 # ---------------------------------------------------------------------------
 
 # t_kit_tree <kit> <dest> — a .git-free copy of the kit's working tree at
-# <dest>, nested worktrees stripped.
+# <dest>, nested worktrees stripped. The source is resolved to its physical
+# path first: git reports worktrees that way, and the strip matches on the
+# prefix, so a symlinked source (macOS's /var → /private/var, say) would
+# otherwise keep every nested worktree in silence.
 t_kit_tree() {
+	_kt_src=$(cd "$1" && pwd -P) || exit 2
 	mkdir -p "$2"
-	cp -R "$1/." "$2/"
-	strip_nested_worktrees "$1" "$2"
+	cp -R "$_kt_src/." "$2/"
+	strip_nested_worktrees "$_kt_src" "$2"
 	rm -rf "$2/.git"
 }
 
 # t_git_identity <dir> <name> <email> — init a repo on main with a fixture
-# identity and every signing switch off, so a fixture commits and tags on any
-# machine.
+# identity, every signing switch off, and the machine's hooks out of reach,
+# so a fixture commits and tags on any machine — the same neutralisation
+# t_repo gives the small fixtures.
 t_git_identity() {
 	git -C "$1" init -q -b main
 	git -C "$1" config user.name "$2"
@@ -194,6 +199,7 @@ t_git_identity() {
 	git -C "$1" config commit.gpgsign false
 	git -C "$1" config tag.gpgSign false
 	git -C "$1" config tag.forceSignAnnotated false
+	git -C "$1" config core.hooksPath .git/no-such-hooks
 }
 
 # t_kit_history <hist> <old tree> <old tag> <new tree> <new tag> — one repo
