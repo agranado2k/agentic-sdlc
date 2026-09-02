@@ -161,6 +161,18 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Demo** — a suite whose output is meant to be *read*: `tests/kit-demo.sh`,
   `tests/docs-demo.sh`. They build a throwaway project and walk it through every
   failure mode the kit claims to catch, red and green.
+- **Strategic** — Ousterhout's sense, only: design as a continuous investment,
+  judged by the complexity it removes (dependencies plus obscurity). The
+  design brief is one strategic act; the housekeeping pass's red-flag scan is
+  its periodic re-question. Ref: ADR-0002.
+  - _Avoid_: "strategic design" (Evans's phrase — say context map);
+    "strategic vs tactical" for the human/agent split (that is the tier and
+    the autonomy label).
+- **Design brief** — the recorded output of one `/design-brief` run: the
+  three anchors in the engineering article, the glossary's context map, and
+  one decision record. Made after a human yes, never before. Ref: ADR-0002.
+  - _Avoid_: "architecture doc" — a brief is three anchors and a record, not
+    a document that grows.
 - **Context map** — the glossary section where every edge between contexts is
   declared from both sides, one relationship per edge named identically on
   both lines. Two declarations of one edge that disagree are the finding.
