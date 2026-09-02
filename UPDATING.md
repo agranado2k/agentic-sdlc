@@ -518,6 +518,7 @@ scripts/docs-conformance/index.mjs
 scripts/docs-conformance/runner.mjs
 scripts/docs-conformance/validators/claude-md-refs.mjs
 scripts/docs-conformance/validators/design-brief.mjs
+scripts/docs-conformance/validators/housekeeping-due.mjs
 scripts/docs-conformance/validators/mutation-decision.mjs
 scripts/docs-conformance/validators/skill-bridge.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
@@ -529,10 +530,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1607 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  129 +++
+ UPDATING.md                       | 1610 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1743 insertions(+), 1 deletion(-)
+ 3 files changed, 1764 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -578,6 +579,7 @@ $ # step 5 — apply
   updated scripts/docs-conformance/runner.mjs
   updated scripts/docs-conformance/validators/claude-md-refs.mjs
   updated scripts/docs-conformance/validators/design-brief.mjs
+  updated scripts/docs-conformance/validators/housekeeping-due.mjs
   updated scripts/docs-conformance/validators/mutation-decision.mjs
   updated scripts/docs-conformance/validators/skill-bridge.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
@@ -599,6 +601,7 @@ verbatim  scripts/docs-conformance/index.mjs
 verbatim  scripts/docs-conformance/runner.mjs
 verbatim  scripts/docs-conformance/validators/claude-md-refs.mjs
 verbatim  scripts/docs-conformance/validators/design-brief.mjs
+verbatim  scripts/docs-conformance/validators/housekeeping-due.mjs
 verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
 verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
@@ -1506,12 +1509,12 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template            |  58 ++++++++++++-
+ constitution/AGENTS.md.template            |  58 +++++++++++-
  constitution/local-engineering.md.template |   2 +-
- constitution/local-product.md.template     | 103 +++++++++++++++++++++++
- constitution/local-workflow.md.template    |  43 ++++++++++
- constitution/shared-code-craft.md          | 129 +++++++++++++++++++++++++++++
- 5 files changed, 331 insertions(+), 4 deletions(-)
+ constitution/local-product.md.template     | 103 ++++++++++++++++++++
+ constitution/local-workflow.md.template    |  43 +++++++++
+ constitution/shared-code-craft.md          | 147 +++++++++++++++++++++++++++++
+ 5 files changed, 349 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
