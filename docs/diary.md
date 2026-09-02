@@ -704,3 +704,11 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+### 2026-09-02 — The kit-only tier mapping got its record (ADR-0003)
+
+The index had carried, since 2026-08-27, a diary-recorded line saying the kit
+names no model anywhere, including its own tier mapping — and the same day the
+kit had mapped its own tiers in a file bootstrap strips. The housekeeping
+pass found the contradiction; ADR-0003 is the supersession the index owed,
+and the index line now says so.
+
