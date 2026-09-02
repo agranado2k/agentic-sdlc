@@ -308,6 +308,39 @@ done
 [ "$dir_entries" = 0 ] &&
 	pass "every KIT_OWN entry is a file the kit ships, not a directory"
 
+# --- E5: every record has an index row, and every row has a record ---------
+# The index is what says which decisions are binding. A record with no row is
+# invisible to the reader the index exists for; a row with no file is a
+# decision nobody can read. One probe covers both halves; it runs on the kit
+# and then on two baits, because a rule with no failing check is a claim
+# (hard rule 9). Numbered records only: the template is NNNN, not digits.
+adr_index_gaps() {
+	for _a in "$1"/[0-9][0-9][0-9][0-9]-*.md; do
+		[ -f "$_a" ] || continue
+		grep -q -F "]($(basename "$_a"))" "$1/INDEX.md" || echo "unindexed: $(basename "$_a")"
+	done
+	sed -n 's/^| \[[0-9][0-9]*\](\([^)]*\)).*/\1/p' "$1/INDEX.md" | while IFS= read -r _f; do
+		[ -f "$1/$_f" ] || echo "no such record: $_f"
+	done
+}
+gaps=$(adr_index_gaps "$KIT/docs/adr")
+[ -z "$gaps" ] &&
+	pass "every record under docs/adr/ has an index row, and every row names a record" ||
+	fail "docs/adr/ and its index disagree — $(printf '%s' "$gaps" | tr '\n' ';')"
+BAIT="$SCRATCH/adr-bait"
+mkdir -p "$BAIT" && cp "$KIT"/docs/adr/*.md "$BAIT"/
+printf '# ADR-9999: Bait\n' >"$BAIT/9999-bait-without-a-row.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"unindexed: 9999-bait-without-a-row.md"*) pass "the probe catches a record with no index row" ;;
+*) fail "the probe missed an unindexed record" ;;
+esac
+rm -f "$BAIT/9999-bait-without-a-row.md"
+printf '| [9998](9998-row-without-a-record.md) | Bait | Accepted 2026-09-02 |\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"no such record: 9998-row-without-a-record.md"*) pass "the probe catches an index row with no record" ;;
+*) fail "the probe missed a row with no file" ;;
+esac
+
 # ---------------------------------------------------------------------------
 banner "F. The kit's public face stays current"
 # ---------------------------------------------------------------------------

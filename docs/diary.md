@@ -702,3 +702,13 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+
+### 2026-09-02 — The records and their index are held to each other
+
+Ticket #145 of PRD #124, filed by PR #140's review. The index under
+`docs/adr/` is what says which decisions are binding, and nothing checked
+that every record had a row there or that every row named a file. The
+self-host suite's kit-own section gains that probe (E5): one function reads
+both directions, runs on the kit, and then on two baits — a record with no
+row, a row with no record — so the check is proven able to fail before it is
+trusted. Numbered records only; the template's `NNNN` is not a number.
