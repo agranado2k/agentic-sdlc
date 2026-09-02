@@ -702,3 +702,33 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+### 2026-09-02 — The kit makes its own mutation decision
+
+Shared invariant §9 asks every consumer to decide how its pure, cheap layer is
+measured, and the first housekeeping pass found the kit had never decided for
+itself: seven validators, 138 fixture tests, and nothing that could say
+whether those tests enforce anything. The kit has no engineering article to
+carry the decision line, so this entry is the record.
+
+**Decision**: Stryker, on demand, against the validators under
+`scripts/docs-conformance/validators/`, with the fixture tests as the target
+function. `sh scripts/mutation.kit.sh` runs it (about eight minutes on a
+laptop); both the wrapper and its config are kit-only and never shipped. The
+tool arrives through `npx` each time — the kit commits no package manifest and
+the harness stays dependency-free. It is never a gate.
+
+**Baseline, 2026-09-02, at `d29673c`:** mutation score **76.53 %** — 639
+mutants, 468 killed, 21 timed out, 150 survived, none uncovered. Per file:
+skill-web 85.29, housekeeping-due 83.33, skill-paths 82.61, design-brief
+75.68, claude-md-refs 75.28, skill-bridge 73.33, mutation-decision 65.52.
+Most survivors are hint strings and message text no fixture asserts on, which
+is a true statement about the suites: they hold verdicts, not wording. The
+survivors worth a ticket are the ones that change a verdict — a `sort` dropped
+from a scan without a test noticing, a default skills directory emptied — and
+`/housekeeping` item 4 reads this number next pass.
+
+Two things the run taught: Stryker's sandbox copy fails on the kit's per-skill
+symlinks, so the config runs in place; and an in-place run restored one file's
+content but dropped its executable bit, which the wrapper now checks for and
+restores, loudly.
+
