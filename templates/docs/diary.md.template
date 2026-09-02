@@ -27,7 +27,7 @@ is in flight. Do not restate the README.
 | **Deployed / live** | Nothing yet. |
 | **Active worktrees** | None. |
 | **Spec status** | No spec yet. |
-| **Last housekeeping** | {{BOOTSTRAP_DATE}} — bootstrapped; nothing to audit yet. The docs gate nudges once this date is a month old. |
+| **Last housekeeping** | {{BOOTSTRAP_DATE}} — bootstrapped; nothing to audit yet. The docs gate nudges once this date is older than its housekeeping window (`housekeepingDue.windowDays` in the gate config). |
 
 ### Open questions / unresolved decisions
 
