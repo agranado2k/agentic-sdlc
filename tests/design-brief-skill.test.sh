@@ -42,28 +42,7 @@ banner "0. The files under test"
 # ---------------------------------------------------------------------------
 [ -f "$SKILL_ABS" ] && pass "$SKILL exists" || {
 	fail "$SKILL is missing — nothing else in this suite means anything"
-	# ---------------------------------------------------------------------------
-banner "10. The entry points are wired, not just named"
-# ---------------------------------------------------------------------------
-# The skill says where it is invoked from; each of those places must actually
-# say so, or the brief is a command nobody is ever sent to.
-grep -q 'design brief' "$ROOT/bootstrap.sh" &&
-	pass "bootstrap's Next list names the design brief" ||
-	fail "bootstrap.sh never names the design brief — the day-one entry point is missing (ticket #113)"
-grep -q 'design brief' "$ROOT/setup/agent-bootstrap.md" &&
-	pass "the setup payload's hand-back names the design brief" ||
-	fail "setup/agent-bootstrap.md never names the design brief (ticket #113)"
-grep -q '/design-brief' "$ROOT/.agents/skills/to-tickets/SKILL.md" &&
-	pass "/to-tickets carries the rule that a new abstraction or a crossed edge cites the brief" ||
-	fail "/to-tickets never names /design-brief — the planner's re-question rule is missing (ticket #113)"
-grep -q '/design-brief' "$ROOT/.agents/skills/improve-codebase-architecture/SKILL.md" &&
-	pass "/improve-codebase-architecture names the re-entry into the brief" ||
-	fail "/improve-codebase-architecture never names /design-brief (ticket #113)"
-grep -q 'strategic programming' "$ROOT/README.md" &&
-	pass "README's further reading pins the word to Ousterhout's strategic programming" ||
-	fail "README's Ousterhout entry does not name strategic programming (ticket #113)"
-
-t_done "/design-brief contract"
+	t_done "/design-brief contract"
 }
 [ -f "$ROOT/$SIDECAR" ] && pass "$SIDECAR exists — the shapes the brief writes live beside the procedure" ||
 	fail "$SIDECAR is missing — the skill has nowhere to keep the shapes it writes"
@@ -76,7 +55,8 @@ fi
 # ---------------------------------------------------------------------------
 banner "1. Frontmatter: the open standard's fields, nothing harness-specific"
 # ---------------------------------------------------------------------------
-keys=$(awk 'NR == 1 { next } /^---/ { exit } /^[a-z_-]+:/ { sub(/:.*/, ""); print }' "$SKILL_ABS")
+# Top-level keys, any case: an unexpected key is a finding whatever its case.
+keys=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { sub(/:.*/, ""); print tolower($0) }' "$SKILL_ABS")
 for k in $keys; do
 	case "$k" in
 	name | description | license | compatibility | metadata | allowed-tools) ;;
@@ -85,35 +65,66 @@ for k in $keys; do
 done
 printf '%s\n' "$keys" | grep -qx name && pass "frontmatter carries name" || fail "frontmatter lacks name"
 printf '%s\n' "$keys" | grep -qx description && pass "frontmatter carries description" || fail "frontmatter lacks description"
-desc_len=$(awk '/^description:/ { sub(/^description: */, ""); print length($0); exit }' "$SKILL_ABS")
+# The specification: name equals the directory, description at most 1024
+# characters (read to the next key, not to the line end), the body under 500
+# lines, supporting files one level deep.
+fm_name=$(awk 'NR == 1 { next } /^---/ { exit } /^name:/ { sub(/^name: */, ""); print; exit }' "$SKILL_ABS")
+[ "$fm_name" = "$(basename "$(dirname "$SKILL_ABS")")" ] && pass "frontmatter name equals the directory name" ||
+	fail "frontmatter name '$fm_name' is not the directory name"
+desc_len=$(awk 'NR == 1 { next } /^---/ { exit } /^[A-Za-z0-9_-]+:/ { indesc = ($0 ~ /^description:/); if (indesc) { sub(/^description: */, ""); n += length($0) } ; next } indesc { n += length($0) + 1 } END { print n + 0 }' "$SKILL_ABS")
 [ "${desc_len:-0}" -le 1024 ] && pass "description is $desc_len chars, within the specification's 1024" ||
 	fail "description is $desc_len chars — the specification caps it at 1024"
+body_lines=$(wc -l <"$SKILL_ABS" | tr -d ' ')
+[ "$body_lines" -le 500 ] && pass "SKILL.md is $body_lines lines, under the 500 the specification recommends" ||
+	fail "SKILL.md is $body_lines lines — over the 500 the specification recommends; move reference material to a sidecar"
+deep=$(find "$(dirname "$SKILL_ABS")" -mindepth 2 -type f | head -1)
+[ -z "$deep" ] && pass "supporting files are one level deep" || fail "a supporting file is nested deeper than one level: $deep"
 
 # ---------------------------------------------------------------------------
 banner "2. It records the three anchors the engineering article stamps"
 # ---------------------------------------------------------------------------
-for anchor in 'Paradigm' 'Architectural style' 'Context map'; do
-	assert_file_has "$SKILL" "**$anchor**:"
+# The labels come from the template that stamps them, never typed a third
+# time: the skill and its sidecar must agree with the document the advisory
+# reads.
+TEMPLATE="constitution/local-engineering.md.template"
+anchors=$(sed -n '/^## Architecture/,/^## /p' "$ROOT/$TEMPLATE" | grep -o '^\*\*[A-Za-z ]*\*\*:' )
+n_anchors=$(printf '%s\n' "$anchors" | grep -c .)
+[ "$n_anchors" = 3 ] && pass "the template's Architecture section stamps three anchors" ||
+	fail "the template's Architecture section stamps $n_anchors anchors, not three — this suite's premise moved"
+printf '%s\n' "$anchors" | while IFS= read -r anchor; do
+	assert_file_has "$SKILL" "$anchor"
+	assert_file_has "$SIDECAR" "$anchor"
 done
 assert_file_has "$SKILL" "none — "
+assert_file_has "$SIDECAR" "none — "
+# The sidecar's edge shape is the glossary template's: same relationship word
+# on both sides, roles opposite.
+assert_file_has "$SIDECAR" "— upstream;"
+assert_file_has "$SIDECAR" "— downstream;"
+assert_file_has "$SIDECAR" "same relationship word on both lines"
 
 # ---------------------------------------------------------------------------
 banner "3. Design it twice, compared on complexity — and a recommendation, not a menu"
 # ---------------------------------------------------------------------------
-assert_file_has "$SKILL" "esign it twice"
-assert_file_has "$SKILL" "dependencies"
-assert_file_has "$SKILL" "obscurity"
+# Anchored on the claims' own tokens, not on common English words a rewrite
+# would keep by accident.
+assert_file_has "$SKILL" "### 3. Design it twice"
+assert_file_has "$SKILL" "*minimise dependencies*"
+assert_file_has "$SKILL" "*minimise obscurity*"
+assert_file_has "$SKILL" "dependencies plus obscurity"
+assert_file_has "$SKILL" "The named risk is"
 assert_file_has "$SKILL" "over-application"
-assert_file_has "$SKILL" "core"
-assert_file_has "$SKILL" "supporting"
-assert_file_has "$SKILL" "generic"
+assert_file_has "$SKILL" "**core** ("
+assert_file_has "$SKILL" "**supporting** ("
+assert_file_has "$SKILL" "**generic** ("
 assert_file_has "$SKILL" "from both sides"
+assert_file_has "$SKILL" "A menu is not a"
 
 # ---------------------------------------------------------------------------
 banner "4. The human stop precedes every write"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "before writing anything"
-assert_file_has "$SKILL" "nothing on disk"
+assert_file_has "$SKILL" "nothing in the repo tree"
 # The stop must come BEFORE the recording step in the procedure's order.
 stop_line=$(grep -n "before writing anything" "$SKILL_ABS" | head -1 | cut -d: -f1)
 record_line=$(grep -n "^### .*Record" "$SKILL_ABS" | head -1 | cut -d: -f1)
@@ -126,11 +137,20 @@ fi
 # ---------------------------------------------------------------------------
 banner "5. The decision record, the coexistence clause, and the two entry points"
 # ---------------------------------------------------------------------------
-assert_file_has "$SKILL" "decision record"
-assert_file_has "$SKILL" "test-driven development"
-assert_file_has "$SKILL" "hand-back"
+assert_file_has "$SKILL" "**One decision record**"
+assert_file_has "$SKILL" "**coexistence clause**"
+assert_file_has "$SIDECAR" "test-driven development drives every"
+assert_file_has "$SKILL" "## Entry points"
+assert_file_has "$SKILL" "**Bootstrap hand-back.**"
 assert_file_has "$SKILL" "housekeeping"
 assert_file_has "$SKILL" "/improve-codebase-architecture"
+assert_file_has "$SKILL" "**The context map** in the glossary"
+# No model identifier anywhere the skill or its sidecar: the tier resolves it.
+if grep -Eiq 'claude-[a-z]+-[0-9]|gpt-[0-9]|gemini-[0-9]|\b(opus|sonnet|haiku) [0-9]' "$SKILL_ABS" "$ROOT/$SIDECAR"; then
+	fail "the skill names a model identifier — the tier resolves the model, a ticket outlives the id"
+else
+	pass "no model identifier in the skill or its sidecar"
+fi
 # Strategic means Ousterhout here, and the skill says so where a reader meets
 # the word first.
 assert_file_has "$SKILL" "Ousterhout"
@@ -145,17 +165,11 @@ assert_file_lacks "$SKILL" "git push" "the brief records; delivery is /implement
 # ---------------------------------------------------------------------------
 banner "7. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-# Mirrors `claudeMdRefs.ignoreCommands` in scripts/docs-conformance/config.mjs:
-# real commands that are not repo skills, and command-shaped paths.
-is_ignored() {
-	case "$1" in
-	/loop | /security-review | /review | /init | /tmp | /codebase-design) return 0 ;;
-	esac
-	return 1
-}
+# The exemptions are read from the gate's policy file (tests/lib.sh), never
+# mirrored: a mirror had already drifted once in this skill's own history.
 resolved=0
 for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	is_ignored "$cmd" && continue
+	t_is_ignored_command "$cmd" && continue
 	if [ -f ".agents/skills/${cmd#/}/SKILL.md" ]; then
 		resolved=$((resolved + 1))
 	else
@@ -173,7 +187,10 @@ path_verdict() {
 	p=$1
 	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
 	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -qv '^KIT_ONLY=' &&
+	# Only a line that creates or copies the path counts. A comment or the
+	# KIT_ONLY deletion list mentioning it proves the opposite of installed.
+	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
+		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
 		{ echo "installed by bootstrap.sh"; return 0; }
 	return 1
 }
@@ -205,5 +222,22 @@ grep -q '`/design-brief`' "$ROOT/constitution/AGENTS.md.template" &&
 grep -q 'design-brief' "$ROOT/.agents/skills/LICENSE-mattpocock-skills.md" &&
 	pass "the provenance file accounts for design-brief" ||
 	fail "the provenance file does not account for design-brief"
+
+# ---------------------------------------------------------------------------
+banner "10. The entry points are wired, not just named"
+# ---------------------------------------------------------------------------
+# The skill says where it is invoked from; each of those places must actually
+# say so, or the brief is a command nobody is ever sent to.
+# The bootstrap Next list and the setup hand-back are asserted where they are
+# rendered — tests/kit-demo.sh and tests/setup-demo.sh — not repeated here.
+grep -q '/design-brief' "$ROOT/.agents/skills/to-tickets/SKILL.md" &&
+	pass "/to-tickets carries the rule that a new abstraction or a crossed edge cites the brief" ||
+	fail "/to-tickets never names /design-brief — the planner's re-question rule is missing (ticket #113)"
+grep -q '/design-brief' "$ROOT/.agents/skills/improve-codebase-architecture/SKILL.md" &&
+	pass "/improve-codebase-architecture names the re-entry into the brief" ||
+	fail "/improve-codebase-architecture never names /design-brief (ticket #113)"
+grep -q 'strategic programming' "$ROOT/README.md" &&
+	pass "README's further reading pins the word to Ousterhout's strategic programming" ||
+	fail "README's Ousterhout entry does not name strategic programming (ticket #113)"
 
 t_done "/design-brief contract"

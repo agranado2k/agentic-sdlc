@@ -363,7 +363,14 @@
 # scale, compare on complexity, stop for a yes, then write the three anchors,
 # the glossary's context map and one decision record) with its BRIEF-FORMAT
 # sidecar and its bridge symlink; the kit's own decision record 0002 pins
-# "strategic" to Ousterhout's sense. Take the skill via 9a. From #114: the
+# "strategic" to Ousterhout's sense. Take the skill via 9a. From #113: the
+# brief's entry points — bootstrap's Next: list and the setup payload's
+# hand-back name the design brief beside the mutation decision (kit-side;
+# nothing of yours moves), /to-tickets gains rule 11 (a ticket that adds an
+# abstraction or crosses a context edge cites the brief or reopens it) and
+# /improve-codebase-architecture sends a style-level finding back to the
+# brief (both via 9a), and the manual template's chain section and
+# quick-reference rows name both new skills (via 9b). From #114: the
 # /housekeeping skill joins the roster — the recurring pass the
 # housekeeping-due advisory sends an agent to: eight checklist items each
 # with a named source, Ousterhout's red-flag scan routed to the architecture
