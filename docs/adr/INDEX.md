@@ -44,6 +44,11 @@ was never decided". If one grows consequential enough, promote it to an ADR and
 leave a back-reference in the diary entry.
 -->
 
+- **2026-09-02 — the kit's own mutation decision.** Stryker, pinned to one
+  release, on demand against the docs-gate validators with their fixture
+  tests as the target function, never as a gate; `scripts/mutation.kit.sh` is
+  the command and the diary entry "The kit makes its own mutation decision"
+  carries the baseline. Kit-only, never shipped.
 - **2026-08-27 — the kit's `scripts/agents.config.sh` stays unmapped.** The kit
   names no model anywhere, including in its own copy of the tier mapping. Every
   tier here inherits the session's model and the resolver warns once, which is

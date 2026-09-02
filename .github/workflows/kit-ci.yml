@@ -267,6 +267,14 @@ jobs:
       - name: Design-brief skill-text suite
         run: sh tests/design-brief-skill.test.sh
 
+  mutation-kit:
+    name: The kit's mutation wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mutation-wrapper suite
+        run: sh tests/mutation-kit.test.sh
+
   housekeeping:
     name: /housekeeping contract
     runs-on: ubuntu-latest

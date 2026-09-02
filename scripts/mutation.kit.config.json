@@ -12,14 +12,12 @@
     "clear-text",
     "progress"
   ],
-  "tempDirName": ".stryker-tmp",
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": null
+  },
   "timeoutMS": 60000,
   "concurrency": 4,
-  "inPlace": true,
-  "ignorePatterns": [
-    "worktree",
-    "node_modules",
-    ".stryker-tmp",
-    "reports"
-  ]
+  "inPlace": true
 }

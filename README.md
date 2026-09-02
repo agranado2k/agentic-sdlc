@@ -548,6 +548,12 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/mutation-kit.test.sh` drives the kit's own mutation wrapper,
+  `scripts/mutation.kit.sh`, through a stub Stryker: the pinned `--dry-run`
+  command, usage errors and a non-kit tree refused with exit 2, the exit code
+  propagated, a dropped executable bit handed back without touching content,
+  and Stryker's backup kept after a failed run.
+
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
   the human stop before every write, the decision record, the two entry
@@ -631,6 +637,7 @@ sh tests/adopt-demo.sh                                 # the existing-repo adopt
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

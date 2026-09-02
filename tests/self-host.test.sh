@@ -148,6 +148,14 @@ grep -q "$PROJECT_NAME" "$PROJ/docs/domain-glossary.md" &&
 [ -e "$PROJ/scripts/agents.kit.sh" ] &&
 	fail "scripts/agents.kit.sh leaked into the project — the kit's own resolver wrapper reached a consumer" ||
 	pass "no scripts/agents.kit.sh in the project — the kit's own wrapper stayed kit-side"
+# The kit's mutation measurement (#132) is kit-authoring only for the same
+# reason: it measures files a consumer may have changed, with a tool the kit
+# does not ship, on a decision that is the consumer's to make.
+for f in scripts/mutation.kit.sh scripts/mutation.kit.config.json; do
+	[ -e "$PROJ/$f" ] &&
+		fail "$f leaked into the project — the kit's own mutation measurement reached a consumer" ||
+		pass "no $f in the project — the kit's own measurement stayed kit-side"
+done
 # The consumer's own mapping file still ships, still empty.
 [ -f "$PROJ/scripts/agents.config.sh" ] &&
 	pass "scripts/agents.config.sh (the consumer-shipped mapping) is still present" ||
