@@ -160,6 +160,54 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Demo** — a suite whose output is meant to be *read*: `tests/kit-demo.sh`,
   `tests/docs-demo.sh`. They build a throwaway project and walk it through every
   failure mode the kit claims to catch, red and green.
+- **Context map** — the glossary section where every edge between contexts is
+  declared from both sides, each with its Evans relationship (upstream /
+  downstream, conformist, anti-corruption layer, published language, shared
+  kernel, separate ways). Two declarations of one edge that disagree are the
+  finding. The design brief writes it; the grilling loop keeps it current.
+  Ref: PRD #107.
+  - _Avoid_: "strategic design" — banned below; "context diagram" — a picture
+    of the map is not the map.
+- **Subdomain classification** — the design brief's split of a system's
+  subdomains into core (where the product wins), supporting (needed, not
+  differentiating) and generic (buy or copy). It decides where the design
+  investment goes, and it is recorded in the engineering article's brief.
+  Ref: PRD #107.
+  - _Avoid_: "strategic design" — same reason.
+
+---
+
+## Context map
+
+The kit's three sections are its contexts, and the edges between them are
+declared here from both sides, in the shape the consumer template teaches.
+
+### Distribution
+
+- **Distribution → Enforcement** — upstream: published language. What
+  Distribution hands over — the shared layer's manifest in `VERSION` and the
+  rule ids — is the vocabulary Enforcement checks against, spelled exactly
+  as the manifest spells it.
+- **Distribution → Process** — downstream: conformist. A release is the
+  Process's bump-tag-note sequence carried out; Distribution adds no ceremony
+  of its own.
+
+### Enforcement
+
+- **Enforcement → Distribution** — downstream: conformist to the published
+  language. The gate reads the manifest and the rule ids as given; it never
+  defines a shared file.
+- **Enforcement → Process** — upstream: published language. The verdicts —
+  green, red, advisory — are the words Process moves on; a push lands only
+  on green, and an advisory never blocks one.
+
+### Process
+
+- **Process → Enforcement** — downstream: conformist to the verdicts. The
+  chain never redefines what green means.
+- **Process → Distribution** — upstream: published language. The release
+  action (bump, note, tag) is Process's word, and Distribution ships exactly
+  that.
 
 ---
 
@@ -178,3 +226,7 @@ banned word and the word to use instead.
   edit) and shared-layer mechanism. Say which.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
+- **strategic design** — ambiguous between Evans's name for context mapping
+  and Ousterhout's "strategic" (design as continuous investment), which is
+  the sense the kit's design brief reserves the word for. Use **context map**
+  and **subdomain classification**.

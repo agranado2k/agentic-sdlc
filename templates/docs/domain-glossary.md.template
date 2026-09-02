@@ -53,6 +53,52 @@ page of explanation, that page is an ADR and the entry points at it.
 
 ---
 
+## Context map
+
+<!--
+The edges between the contexts above — which context's model flows into
+which, and on what terms. One line per edge, under the context that is
+speaking, and EVERY edge is declared from both sides: the upstream says what
+it publishes, the downstream says what it takes and how. Two declarations of
+one edge that do not match are the disagreement itself, made visible before
+it becomes a bug. An edge declared from one side only is half a decision — a
+reader can tell, because the other context's list does not mention it.
+
+The relationships are Evans's set. Name one per edge:
+
+  - upstream / downstream — the upstream's model flows to the downstream;
+    changes go one way, and the downstream has no veto.
+  - conformist — the downstream adopts the upstream's model as-is, no
+    translation.
+  - anti-corruption layer — the downstream translates the upstream's model
+    into its own at the edge, and nothing upstream leaks past it.
+  - published language — a documented interchange model both sides translate
+    to and from, owned by neither.
+  - shared kernel — a small, named subset of the model owned jointly and
+    changed only by agreement of both.
+  - separate ways — no integration at all; duplication accepted on purpose.
+
+Entry shape, one block per context:
+
+  ### <Context>
+  - **<Context> → <Other>** — <this side's role>: <relationship>. <What crosses
+    the edge, in the glossary's words>.
+
+The design brief writes this section; the grilling loop keeps it current.
+-->
+
+### <Context name>
+
+- **<Context name> → <Second context name>** — upstream: published language.
+  Publishes `<Event>`, spelled exactly as the term above.
+
+### <Second context name>
+
+- **<Second context name> → <Context name>** — downstream: conformist to the
+  published language. Consumes `<Event>`; keeps no model of its own for it.
+
+---
+
 ## Words this project does not use
 
 <!--
@@ -61,4 +107,8 @@ the terms that are ambiguous here and are therefore banned. Each line names the
 banned word and the word to use instead.
 -->
 
+- **strategic design** — ambiguous here: Evans's name for the work above, and
+  Ousterhout's "strategic" (design as continuous investment) is the sense the
+  engineering article's design brief uses. Use **context map** for the edges
+  and **subdomain classification** for the core / supporting / generic split.
 - **<banned word>** — ambiguous here (<why>). Use **<term>** or **<term>**.

@@ -45,27 +45,43 @@ And the half that is usually missing:
 - **Rename in one change.** Changing a term means renaming it across the whole
   codebase and updating the glossary in the same commit. No aliases.
 
-## Multiple contexts
+## Multiple contexts, and the context map
 
-When the repo has several bounded contexts, either give each one a `##` section
-in the single glossary, or give each one its own file and make
-`docs/domain-glossary.md` the index that lists them and how they relate:
+When the repo has several bounded contexts, give each one a `##` section in the
+single glossary (or its own file, with `docs/domain-glossary.md` as the index —
+prefer the single file until it stops being readable in one session-start scan;
+two glossaries that both define the same term are the drift this whole document
+exists to prevent).
+
+The edges between contexts live in the glossary's **Context map** section, and
+the rule that makes it worth maintaining mid-grilling: **every edge is declared
+from both sides.** The upstream says what it publishes; the downstream says what
+it takes and how. Two declarations of one edge that do not match are the
+disagreement itself, surfaced before it is a bug — and an edge declared from one
+side only is half a decision, visible because the other context's block does not
+mention it. One line per edge, under the context that is speaking, naming one of
+Evans's relationships (upstream / downstream, conformist, anti-corruption layer,
+published language, shared kernel, separate ways):
 
 ```md
-## Contexts
+## Context map
 
-- [Ordering](../src/ordering/GLOSSARY.md) — receives and tracks customer orders
-- [Billing](../src/billing/GLOSSARY.md) — generates invoices and processes payments
+### Ordering
 
-## Relationships
+- **Ordering → Fulfillment** — upstream: published language. Publishes `OrderPlaced`.
 
-- **Ordering → Fulfillment**: Ordering emits `OrderPlaced`; Fulfillment consumes it to start picking
-- **Ordering ↔ Billing**: shared types for `CustomerId` and `Money`
+### Fulfillment
+
+- **Fulfillment → Ordering** — downstream: anti-corruption layer. Consumes
+  `OrderPlaced`, translated into `PickRequest` at the edge; nothing of Ordering's
+  model leaks past it.
 ```
 
-Prefer the single file until it stops being readable in one session-start scan.
-Two glossaries that both define the same term are the drift this whole document
-exists to prevent.
+When a grilling answer names a new context, adds an edge, or changes a
+relationship, update both sides in the same breath. The glossary template's
+header comment carries the one-line gloss of each relationship; the section is
+first written by the design brief and kept current here. The phrase "strategic
+design" is banned in the glossary's last section: say **context map**.
 
 ---
 
