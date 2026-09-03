@@ -397,7 +397,14 @@
 # grows with the wave's stacked tickets and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
-# **manifest** as a term. The wave's later tickets add to this list.
+# **manifest** as a term. From #126: two shared files changed content —
+# scripts/docs-conformance/context.mjs has one error mode (`read` returns
+# null for every failure to read, a directory included), a `kind` probe
+# (file, directory or null), and no recursive lister (nothing called it);
+# scripts/docs-conformance/validators/skill-bridge.mjs asks `kind` instead
+# of catching errno codes, and its unreadable-entry message carries no
+# errno. Every verdict is unchanged. The wave's later tickets add to this
+# list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

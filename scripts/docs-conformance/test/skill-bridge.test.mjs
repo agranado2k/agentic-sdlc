@@ -98,7 +98,7 @@ test("an unreadable bridge entry is reported, not silently passed", { skip: proc
     assert.ok(hasRule(out, "skill-bridge-unreadable"));
     assert.equal(out[0].severity, "warning");
     assert.equal(out[0].file, ".claude/skills/locked");
-    assert.match(out[0].message, /EACCES/);
+    assert.match(out[0].message, /could not be read/); // one error mode: the context reports no errno
   } finally {
     chmodSync(entry, 0o644);
     rmSync(root, { recursive: true, force: true });

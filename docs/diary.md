@@ -849,3 +849,18 @@ probe can fail. The implement skill's fallback-review step names the rule
 and the domain for consumers, and names no model; the implement-deliver
 suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
 its optional clarifying amendment can point here once that lands.
+
+### 2026-09-03 — The harness context got one error mode
+
+Ticket #126 of PRD #124, from the architecture review's deletion test on
+`scripts/docs-conformance/context.mjs`: four thin wrappers over the
+filesystem, one of which leaked errno codes to a caller that then wrapped it
+in two try/catch blocks of its own to tell a directory from an unreadable
+path. The context now answers the question a validator actually has:
+`read` returns the text or null, for every way a read can fail, and `kind`
+says file, directory or null. The recursive lister is gone — nothing in the
+harness, the adapters or the suites called it. The bridge validator asks
+`kind` and keeps every verdict; the one visible change is that its
+unreadable-entry message no longer quotes an errno, and its fixture asserts
+the message, not the code. `test/context.test.mjs` pins the contract, the
+dangling-symlink and unreadable cases included.
