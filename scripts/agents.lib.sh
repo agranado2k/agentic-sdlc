@@ -21,9 +21,8 @@
 # with a domain) · AGENT_TIER_<TIER>.
 #
 # Exit: 0 resolved (a value, or deliberately nothing — an unmapped tier warns
-# once per process, AGENTS_TIER_QUIET=1 silences it, and the caller spawns
-# without a model parameter) · 2 usage error, unknown tier, malformed domain,
-# or an explicit config that does not exist.
+# once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
+# model) · 2 usage error, unknown tier, bad domain, or a missing named config.
 #
 # Shared layer (see VERSION): the mechanism ships, the mapping is yours, the
 # kit names no model — the root manual's "Capability tiers" section says why;
