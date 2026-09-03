@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.15.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.16.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.15.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.16.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -542,6 +542,11 @@ skeleton (K0).
   confirm-list's verbatim-liftable line shape and 🔀→⚠️→✅ order, the
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
+
+- `sh tests/manifest.test.sh` pins the manifest grammar once — first word is
+  the name, annotation is legal, comments and blanks skipped, a list ends at
+  the first unindented line — and holds the recipe's two self-contained copies
+  equal to it, so the recipe cannot drift from the gate.
 
 - `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
   audible where the operator actually looks: an advisory the harness reports
@@ -638,6 +643,7 @@ sh tests/adopt-demo.sh                                 # the existing-repo adopt
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 ```
 

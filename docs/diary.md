@@ -629,6 +629,8 @@ ADVISORY: written as a violation it turned adopt-demo red on the leg that
 blesses exactly that shape, since it is the adopt arm's own collision
 resolution. A build must not fail for a layout the kit hands you.
 
+*Promoted to ADR-0003 (2026-09-02), which supersedes the index's diary-recorded line.*
+
 ### 2026-09-02 — The design brief got its entry points, and the Ousterhout attributions were checked
 
 PRD #107's plan cited *A Philosophy of Software Design* by chapter from
@@ -702,6 +704,23 @@ shipped fails the gate as `skill-missing`, and a skill naming the optional
 review this wave was a fresh-context read on a different model, and every one
 found at least one assertion that could not go red.
 
+### 2026-09-02 — The kit-only tier mapping got its record (ADR-0003)
+
+The index had carried, since 2026-08-27, a diary-recorded line saying the kit
+names no model anywhere, including its own tier mapping — and the same day the
+kit had mapped its own tiers in a file bootstrap strips. The housekeeping
+pass found the contradiction; ADR-0003 is the supersession the index owed,
+and the index line now says so.
+
+
+### 2026-09-02 — The root manual's size became a decision (ADR-0004)
+
+The housekeeping pass measured the root at 334 lines against a 200-line
+reference and asked whether the tier elaboration should move out. Decided the
+other way: the kit has no local article by design, so its root is also its
+local article and carries what a consumer's root and articles carry together.
+The budget is 350 lines, read from the record by a self-host probe that fails
+past it; growth is a split or a superseding record, never a silent line.
 
 ### 2026-09-02 — Craft rule §10 got its failing check
 
