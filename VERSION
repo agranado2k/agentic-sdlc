@@ -397,7 +397,11 @@
 # grows with the wave's stacked tickets and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
-# **manifest** as a term. The wave's later tickets add to this list.
+# **manifest** as a term. From #137: scripts/agents.lib.sh changed content —
+# its header is the contract alone (seam, arguments, resolution orders, exit
+# codes) and the incidents it recounted are a dated diary entry; no behaviour
+# moved, the tier suite is the oracle. The wave's later tickets add to this
+# list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
