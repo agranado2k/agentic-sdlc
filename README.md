@@ -564,6 +564,13 @@ skeleton (K0).
   command, usage errors and a non-kit tree refused with exit 2, the exit code
   propagated, a dropped executable bit handed back without touching content,
   and Stryker's backup kept after a failed run.
+- `sh tests/fixture-builders.test.sh` pins the four fixture builders in
+  `tests/lib.sh` that every demo suite makes its throwaway kits and consumers
+  with: a `.git`-free kit copy with nested worktrees stripped, a repo with a
+  fixture identity and every signing switch off, a two-tag history whose tags
+  resolve to their trees, and a consumer bootstrapped from a tree with one
+  commit. The demo suites are the builders' oracle in the large — the docs
+  demo's pinned transcripts did not move when it adopted them.
 
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
@@ -646,6 +653,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
+sh tests/fixture-builders.test.sh                      # the harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/manifest.test.sh                              # the manifest grammar, once
