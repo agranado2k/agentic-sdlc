@@ -374,6 +374,26 @@ else
 	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
 fi
 
+# --- F2a: the root manual stays under its budget ---------------------------
+# ADR-0004: the kit's root is also its local article, and its budget is the
+# number the record names — read from the record, so the two cannot drift —
+# a rule only because this check can fail. Growth past it is a decision
+# (split, or supersede the record), never a silent line.
+ROOT_BUDGET=$(sed -n 's/.*budgeted at \([0-9][0-9]*\) lines.*/\1/p' "$KIT/docs/adr/0004-the-root-manual-is-the-kits-local-article.md" | head -1)
+[ -n "$ROOT_BUDGET" ] || fail "ADR-0004 names no 'budgeted at N lines' — the probe has no number to hold the root to"
+# One function, driven by both the real subject and the bait: a mutant in the
+# comparison is caught by the bait; a wrong-SUBJECT mutant (checking some
+# other file) is the one shape no self-bait can catch.
+root_over_budget() { [ "$(wc -l <"$1" | tr -d ' ')" -gt "${ROOT_BUDGET:-0}" ]; }
+root_lines=$(wc -l <"$KIT/AGENTS.md" | tr -d ' ')
+root_over_budget "$KIT/AGENTS.md" &&
+	fail "AGENTS.md is $root_lines lines — over the $ROOT_BUDGET-line budget ADR-0004 records; split it or supersede the record" ||
+	pass "AGENTS.md is $root_lines lines, within the $ROOT_BUDGET-line budget (ADR-0004)"
+awk -v n="$((${ROOT_BUDGET:-0} + 1))" 'BEGIN { for (i = 0; i < n; i++) print "line" }' >"$SCRATCH/root.bait"
+root_over_budget "$SCRATCH/root.bait" &&
+	pass "the root-budget probe rejects a manual over the budget" ||
+	fail "the root-budget probe passed a manual over the budget — the check is vacuous"
+
 # --- F2b: the manuals' craft-rule count tracks the article -----------------
 # The manual template and the kit's own manual both say how many portable
 # craft rules the shared article carries, and the number rotted twice in a
