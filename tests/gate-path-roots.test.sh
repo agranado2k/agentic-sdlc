@@ -53,7 +53,7 @@ d=$(roots_diff scripts/check.sh scripts/docs-conformance/config.mjs)
 banner "2. The comparison can go red — one side gains an entry (RED)"
 # ---------------------------------------------------------------------------
 W="$SCRATCH/check.sh"; P="$SCRATCH/config.mjs"
-cp scripts/check.sh "$W"; cp scripts/docs-conformance/config.mjs "$P"
+cp scripts/docs-conformance/config.mjs "$P"
 sed "s/^\([^#]*path_roots='.*\)'$/\1 extra-root'/" scripts/check.sh >"$W"
 case "$(roots_diff "$W" "$P")" in
 *"wrapper only: extra-root"*) pass "a root added to the wrapper alone is reported" ;;
@@ -68,17 +68,21 @@ case "$(roots_diff "$W" "$P")" in
 esac
 
 # ---------------------------------------------------------------------------
-banner "3. Both engines judge the same reference the same way"
+banner "3. Both engines judge a reference under the roots the same way"
 # ---------------------------------------------------------------------------
-# A bootstrapped project, then three references appended to its manual: a
+# A bootstrapped project, then four references appended to its manual: a
 # missing file under a subtree both engines admit (`.agents/skills`), a
 # missing file under a subtree the wrapper ALONE used to admit (`.agents/x`),
-# and a missing file under `.claude/hooks`. The harness and the fallback must
-# return the same status for each.
+# a missing file under `.claude/hooks`, and a NEAR MISS — a token whose first
+# segment starts with a root's text but is not that root (`.agents/skillsx`),
+# which pins prefix matching as `<root>/` and not `<root>`. The harness and
+# the fallback must return the same status for each. What this section does
+# NOT claim: that the two engines share a token grammar beyond the roots —
+# trailing punctuation and a bare `<root>/` are judged differently, and that
+# is outside #127.
 PROJ="$SCRATCH/project"
-here=$(pwd)
 t_consumer_from "$ROOT" "$PROJ" "Roots Fixture" "roots@example.invalid" --no-dogfood "Roots Fixture" "A project that references paths."
-cd "$here" || exit 2
+cd "$ROOT" || exit 2
 git -C "$PROJ" config core.hooksPath .git/no-such-hooks
 HAVE_NODE=0; command -v node >/dev/null 2>&1 && HAVE_NODE=1
 judge() { # <token> <expected status> <label>
@@ -96,5 +100,6 @@ judge() { # <token> <expected status> <label>
 judge ".agents/skills/ghost/SKILL.md" 1 "a missing file under a root both engines admit"
 judge ".agents/ghost/notes.md" 0 "a missing file under a subtree only the wrapper used to admit — not a checkable reference for either"
 judge ".claude/hooks/ghost.sh" 1 "a missing file under .claude/hooks"
+judge ".agents/skillsx/ghost.md" 0 "a near miss — a first segment that only starts with a root's text is not a checkable reference for either"
 
 t_done "the gate's two engines agree on their path roots"

@@ -863,4 +863,9 @@ prefix rather than first segment, so a root may carry a `/`.
 they differ, proves that with a bait on each side, and bootstraps a project
 to show both engines judge the same three references identically. The
 duplication itself stays — the fallback exists for a machine with no node
-to read the policy with — but it can no longer drift in silence.
+to read the policy with — but it can no longer drift in silence. One
+consequence for the record: ADR-0001's honest limitation, that adding a root
+"would split the two engines apart" because the POSIX twin lives in the
+shared wrapper, is no longer true as stated — a root added to one list now
+fails this suite before it ships. The record stands as written; this line is
+its dated qualification, not an edit.
