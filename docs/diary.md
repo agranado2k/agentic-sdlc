@@ -849,3 +849,18 @@ probe can fail. The implement skill's fallback-review step names the rule
 and the domain for consumers, and names no model; the implement-deliver
 suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
 its optional clarifying amendment can point here once that lands.
+
+### 2026-09-03 — The gate's two engines agree on their path roots
+
+Ticket #127 of PRD #124, the finding the first housekeeping pass put at the
+top: the reduced POSIX form of the docs gate admitted all of `.agents` and
+`.claude` as path roots where the harness's policy admitted four subtrees,
+and nothing held the pair together. A reference under `.agents/anything`
+could fail the fallback while the harness ignored it. The harness's list is
+the truth: the wrapper carries the same eleven entries and matches by
+prefix rather than first segment, so a root may carry a `/`.
+`tests/gate-path-roots.test.sh` reads both lists with no runtime, fails when
+they differ, proves that with a bait on each side, and bootstraps a project
+to show both engines judge the same three references identically. The
+duplication itself stays — the fallback exists for a machine with no node
+to read the policy with — but it can no longer drift in silence.
