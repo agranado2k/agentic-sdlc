@@ -24,9 +24,11 @@
 # once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
 # model) · 2 usage error, unknown tier, bad domain, or a missing named config.
 #
-# Shared layer (see VERSION): the mechanism ships, the mapping is yours, the
-# kit names no model — the root manual's "Capability tiers" section says why;
-# the design's history is the kit diary's entry of 2026-09-03.
+# Shared layer (see VERSION): the mechanism ships and is copied verbatim; the
+# mapping in scripts/agents.config.sh is yours and a kit update never
+# overwrites it; the kit names no model — the root manual's "Capability
+# tiers" section says why. The design's history: the agentic-sdlc repository's
+# diary, entry of 2026-09-03.
 
 # The domain's SHAPE, written once so the usage text and the error text cannot
 # drift apart. It does NOT drive the case pattern that enforces the shape —
@@ -75,10 +77,8 @@ agents_usage() {
 # error — see the unconfigured default above), 2 when an explicitly named one
 # is missing.
 #
-# The MISS is memoized too, not only the hit. An unconfigured project is the
-# common case, and every resolve_tier call in it would otherwise re-run
-# `git rev-parse` and two stat calls to reach the same "no" — a caller that
-# resolves four tiers pays for that four times, for nothing.
+# The MISS is memoized too, not only the hit: an unconfigured project is the
+# common case, and one process resolves several tiers.
 #
 # Only the genuine "no config anywhere" miss is remembered. An explicitly named
 # AGENTS_CONFIG that does not exist keeps failing on every call, loudly: that is
@@ -112,9 +112,8 @@ agents_load_config() {
 	# when the cwd is in no repository at all.
 	#
 	# When $_agents_here is EMPTY there is nothing to anchor on, so both orders
-	# are skipped and a caller gets $AGENTS_CONFIG or nothing. That is why it no
-	# longer defaults to `.`: `.` silently meant "the process's current
-	# directory", which is the same wider rule in its order-3 clothes.
+	# are skipped and a caller gets $AGENTS_CONFIG or nothing — never the
+	# process's current directory in order-3 clothes.
 	if [ -n "$_agents_here" ]; then
 		_al_root=$(git -C "$_agents_here" rev-parse --show-toplevel 2>/dev/null) || _al_root=
 		if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
@@ -143,10 +142,10 @@ resolve_tier() {
 		return 2
 	fi
 
-	# The accept-check is a LITERAL `case`, not a loop over $AGENT_TIERS, for two
-	# independent reasons.
+	# The accept-check is a LITERAL `case`, not a loop over a variable holding
+	# the list, for two independent reasons.
 	#
-	# PORTABILITY, the one that was actually broken: `for t in $AGENT_TIERS`
+	# PORTABILITY, the one that was actually broken: `for t in $list`
 	# relies on the shell word-splitting an unquoted expansion, and zsh does not
 	# (SH_WORD_SPLIT is off by default). Under `zsh scripts/agents.lib.sh
 	# implementer` the loop saw ONE word — the whole string — so every real tier
@@ -159,7 +158,7 @@ resolve_tier() {
 	# can no longer drift via a reassigned global or a shell's splitting
 	# rules. The MESSAGES spell the same four names as literals too (no
 	# global survives for a config to reassign), so check and diagnostics
-	# cannot disagree — see the vocabulary comment at the top of the file.
+	# cannot disagree — the four names are spelled at their three literal sites (see AGENT_DOMAIN_SHAPE's comment).
 	_rt_tier=$1
 	_rt_domain=${2:-}
 	case "$_rt_tier" in

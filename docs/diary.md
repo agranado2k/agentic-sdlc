@@ -868,7 +868,7 @@ arbitrary without its cause:
 
 - **The sourcing recipe is two statements.** `AGENTS_CONFIG=… . file` looks
   right and is wrong in bash and zsh, which drop a prefix assignment before
-  the sourced code runs; the resolver then resolved UNMAPPED in silence. The
+  the sourced code runs; the resolver then resolved UNMAPPED, with nothing but its own one-line warning to show why. The
   recipe sets the variable on its own line.
 - **The directory global defaults to empty, not `.`.** It once defaulted to
   `.`, which quietly made resolution order 3 mean "a config in whatever
