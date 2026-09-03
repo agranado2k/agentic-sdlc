@@ -267,6 +267,13 @@ jobs:
       - name: Design-brief skill-text suite
         run: sh tests/design-brief-skill.test.sh
 
+  no-box-art:
+    name: No character art in the shipped prose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Craft §10 suite
+        run: sh tests/no-box-art.test.sh
   mutation-kit:
     name: The kit's mutation wrapper
     runs-on: ubuntu-latest
@@ -282,6 +289,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Housekeeping skill-text suite
         run: sh tests/housekeeping-skill.test.sh
+
+  manifest:
+    name: The manifest grammar, once
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Manifest parser suite
+        run: sh tests/manifest.test.sh
 
   adopt-demo:
     name: Existing-repo adoption arm

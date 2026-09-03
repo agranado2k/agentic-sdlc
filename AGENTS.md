@@ -20,8 +20,8 @@ replace. -->
 
 Binding for any LLM-driven agent working in this repo. This file is the **root
 layer** of a layered constitution: orientation, the hard rules, and the command
-map — small on purpose, because every token here is re-read on every request
-(shared invariant §11). The elaboration lives in the articles listed below; read
+map — small on purpose (budgeted at 350 lines, ADR-0004), because every token
+here is re-read on every request (shared invariant §11). The elaboration lives in the articles listed below; read
 the one you need, when you need it.
 
 `AGENTS.md` is the one manual, whichever agent tool reads it. `CLAUDE.md` and

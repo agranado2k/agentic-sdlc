@@ -117,14 +117,24 @@ else
 		"has no 'shared-layer: <version>' line" \
 		"The manifest must state the version it pins, or the update recipe has no anchor to diff from."
 
-	awk '
-		/^files:/           { inlist = 1; next }
-		!inlist             { next }
-		/^[ \t]*#/          { next }
-		/^[ \t]*$/          { next }
-		/^[ \t]+[^ \t]/     { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
-		                    { inlist = 0 }
-	' VERSION | while IFS= read -r shared; do
+	# One grammar for the manifest, shared with bootstrap and the suites; the
+	# module is itself manifest-listed, so a consumer's gate has it — and the
+	# gate fails CLOSED without it: a missing module is a missing shared file,
+	# and a module that defines nothing is a broken gate, never a silent pass.
+	manifest_lib="$repo_root/scripts/manifest.lib.sh"
+	if [ ! -r "$manifest_lib" ]; then
+		report "shared-layer-missing" "scripts/manifest.lib.sh" \
+			"the manifest parser is missing, so the shared-layer check cannot run" \
+			"Restore scripts/manifest.lib.sh from the kit at the pinned version; scripts/check.sh sources it."
+	else
+		# shellcheck disable=SC1090
+		. "$manifest_lib"
+		command -v manifest_section >/dev/null 2>&1 || {
+			echo "check.sh: scripts/manifest.lib.sh did not define manifest_section — the gate cannot run" >&2
+			exit 2
+		}
+	fi
+	command -v manifest_section >/dev/null 2>&1 && manifest_section files <VERSION | while IFS= read -r shared; do
 		[ -e "$shared" ] && continue
 		report "shared-layer-missing" "$shared" \
 			"is listed in VERSION as shared layer but does not exist" \
