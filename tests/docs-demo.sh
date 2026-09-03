@@ -8,7 +8,7 @@
 #      template, and a consumer README that describes the project instead of the
 #      kit — and the docs gate is green on it.
 #   B. UPDATING.md's PART 1 works — the shared layer. A fake older consumer
-#      (shared-layer 0.1.0) is diffed against a newer kit (0.15.0) and updated
+#      (shared-layer 0.1.0) is diffed against a newer kit (0.16.0) and updated
 #      with the exact commands in UPDATING.md, including the drift case, a file
 #      joining the layer, and the verbatim check.
 #   C. UPDATING.md's PART 2 works — everything else. A consumer bootstrapped at
@@ -267,8 +267,8 @@ banner "A5. The gate is green on the whole set"
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 assert_status 0 "shared layer reported" -- sh scripts/check.sh
 case "$LAST_OUT" in
-*"shared-layer 0.15.0"*) pass "gate reports shared-layer 0.15.0" ;;
-*) fail "gate did not report shared-layer 0.15.0: $LAST_OUT" ;;
+*"shared-layer 0.16.0"*) pass "gate reports shared-layer 0.16.0" ;;
+*) fail "gate did not report shared-layer 0.16.0: $LAST_OUT" ;;
 esac
 
 banner "A6. The gate is NOT vacuous over the new docs"
@@ -298,7 +298,7 @@ esac
 # Scenario, constructed in a scratch dir:
 #   kit v0.1.0 — shared layer is constitution/shared-invariants.md alone, and
 #                its §9/§10 are one heading and one paragraph shorter
-#   kit v0.15.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
+#   kit v0.16.0 — the kit as it stands here: §9/§10 tightened, and UPDATING.md
 #                JOINS the shared layer
 #   consumer   — bootstrapped from v0.1.0, and someone edited the shared file
 #                locally (the drift case — the clean case teaches nothing)
@@ -336,11 +336,17 @@ sed -e "s/^## 9\. Measure the ceiling, don't assume it$/## 9. Measure the ceilin
 	"$KIT/constitution/shared-invariants.md" >"$OLDKIT/constitution/shared-invariants.md"
 
 if cmp -s "$OLDKIT/constitution/shared-invariants.md" "$KIT/constitution/shared-invariants.md"; then
-	fail "the fake 0.1.0 rulebook is identical to 0.15.0 — the scenario has no delta"
+	fail "the fake 0.1.0 rulebook is identical to 0.16.0 — the scenario has no delta"
 else
-	pass "fake 0.1.0 rulebook differs from 0.15.0"
+	pass "fake 0.1.0 rulebook differs from 0.16.0"
 fi
 
+# A .git-free copy of the kit as it stands: the v0.16.0 release tree.
+NEWKIT="$SCRATCH/kit-0.16.0"
+mkdir -p "$NEWKIT"
+cp -R "$KIT/." "$NEWKIT/"
+strip_nested_worktrees "$KIT" "$NEWKIT"
+rm -rf "$NEWKIT/.git"
 # A .git-free copy of the kit as it stands: the v0.15.0 release tree.
 NEWKIT="$SCRATCH/kit-0.15.0"
 t_kit_tree "$KIT" "$NEWKIT"
@@ -349,6 +355,25 @@ t_kit_tree "$KIT" "$NEWKIT"
 HIST="$SCRATCH/kit-history"
 t_kit_history "$HIST" "$OLDKIT" v0.1.0 "$NEWKIT" v0.15.0
 cd "$HIST" || exit 2
+git init -q -b main
+git config user.name "Kit Release"
+git config user.email "kit@example.invalid"
+git config commit.gpgsign false
+git config tag.gpgSign false
+git config tag.forceSignAnnotated false
+git add -A >/dev/null
+git commit -q -m "release 0.1.0"
+git tag v0.1.0
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -R "$NEWKIT/." "$HIST/"
+git add -A >/dev/null
+git commit -q -m "release 0.16.0"
+git tag v0.16.0
+if git rev-parse -q --verify v0.1.0 >/dev/null && git rev-parse -q --verify v0.16.0 >/dev/null; then
+	pass "kit history built with tags v0.1.0 and v0.16.0"
+else
+	fail "kit history tags were not created"
+fi
 
 # A consumer bootstrapped at 0.1.0.
 CONSUMER="$SCRATCH/older-consumer"
@@ -374,7 +399,7 @@ recipe() {
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
-	TO_REF=v0.15.0
+	TO_REF=v0.16.0
 
 	echo "\$ kit tag --list"
 	kit tag --list
@@ -382,16 +407,7 @@ recipe() {
 	echo "$FROM_REF -> $TO_REF"
 
 	# --- Step 1: read both manifests ----------------------------------------
-	manifest() {
-		kit show "${1}:VERSION" | awk '
-			/^files:/       { inlist = 1; next }
-			!inlist         { next }
-			/^[ \t]*#/      { next }
-			/^[ \t]*$/      { next }
-			/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
-			                { inlist = 0 }
-		'
-	}
+	manifest() { kit show "${1}:VERSION" | manifest_section files; }
 	manifest "$FROM_REF" | sort >"$WORK/from.list"
 	manifest "$TO_REF" | sort >"$WORK/to.list"
 
@@ -512,7 +528,7 @@ assert_same "$KIT/constitution/shared-invariants.md" "constitution/shared-invari
 	"constitution/shared-invariants.md is byte-identical to the kit's"
 assert_same "$KIT/constitution/shared-code-craft.md" "constitution/shared-code-craft.md" \
 	"constitution/shared-code-craft.md joined the layer and is byte-identical to the kit's"
-assert_has "VERSION" "shared-layer: 0.15.0"
+assert_has "VERSION" "shared-layer: 0.16.0"
 assert_has "AGENTS.md" "Local exception to shared invariant 4"
 assert_has "AGENTS.md" "shared-code-craft"
 
@@ -536,11 +552,11 @@ banner "B4. Step 5 says out loud that it replaced the recipe being followed"
 # UPDATING.md is manifest-listed, so step 5 overwrote the very file the operator
 # opened. Silence there is how a 0.3.0 consumer reaches the end of step 6 — in
 # THEIR copy, the last step — and stops, half-updated, with a green gate.
-assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.15.0 — RE-READ IT"
+assert_has "$SCRATCH/part1.transcript" "UPDATING.md changed in v0.16.0 — RE-READ IT"
 assert_has "$SCRATCH/part1.transcript" "The update is not done: go to step 8."
 # The note is a condition, not an unconditional echo. Same predicate, same two
 # refs, aimed at a shared file this release did not touch: silent.
-if git -C "$HIST" diff --quiet v0.1.0 v0.15.0 -- scripts/check.sh; then
+if git -C "$HIST" diff --quiet v0.1.0 v0.16.0 -- scripts/check.sh; then
 	pass "the same predicate stays silent for a file the release did not change"
 else
 	fail "scripts/check.sh moved between the fixture's releases — pick another control"
@@ -555,7 +571,7 @@ rm -rf "$WORK"
 #
 # Part B proves the shared layer moves. This proves the OTHER half, and it
 # starts by proving the half-update is real: a consumer that runs Part 1 alone
-# on a 0.3.0 -> 0.15.0 update lands the capability-tier RESOLVER (shared layer)
+# on a 0.3.0 -> 0.16.0 update lands the capability-tier RESOLVER (shared layer)
 # with no config for it to read, no skill that calls it, and none of the
 # release's actual features. Then Part 2's steps are run and each of those
 # comes back.
@@ -668,9 +684,9 @@ awk '
 for f in .claude/skills/implement/SKILL.md .claude/skills/to-tickets/SKILL.md \
 	constitution/AGENTS.md.template constitution/local-workflow.md.template; do
 	if cmp -s "$OLD3/$f" "$KIT/$f"; then
-		fail "the fake 0.3.0 $f is identical to 0.15.0 — no delta to adopt"
+		fail "the fake 0.3.0 $f is identical to 0.16.0 — no delta to adopt"
 	else
-		pass "fake 0.3.0 $f differs from 0.15.0"
+		pass "fake 0.3.0 $f differs from 0.16.0"
 	fi
 done
 
@@ -686,6 +702,21 @@ find "$OLD3" \( -name '*.md' -o -name '*.md.template' \) -type f \
 HIST3="$SCRATCH/kit-history-3"
 t_kit_history "$HIST3" "$OLD3" v0.3.0 "$NEWKIT" v0.15.0
 cd "$HIST3" || exit 2
+git init -q -b main
+git config user.name "Kit Release"
+git config user.email "kit@example.invalid"
+git config commit.gpgsign false
+git config tag.gpgSign false
+git config tag.forceSignAnnotated false
+git add -A >/dev/null
+git commit -q -m "release 0.3.0"
+git tag v0.3.0
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+cp -R "$NEWKIT/." "$HIST3/"
+git add -A >/dev/null
+git commit -q -m "release 0.16.0"
+git tag v0.16.0
+pass "kit history built with tags v0.3.0 and v0.16.0"
 
 banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 
@@ -717,26 +748,17 @@ banner "C2. Part 1 ALONE leaves an inert half-update"
 WORK1=$(mktemp -d)
 git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
 kit1() { git --git-dir="$WORK1/kit.git" "$@"; }
-manifest1() {
-	kit1 show "${1}:VERSION" | awk '
-		/^files:/       { inlist = 1; next }
-		!inlist         { next }
-		/^[ \t]*#/      { next }
-		/^[ \t]*$/      { next }
-		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
-		                { inlist = 0 }
-	'
-}
+manifest1() { kit1 show "${1}:VERSION" | manifest_section files; }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
-manifest1 v0.15.0 | sort >"$WORK1/to.list"
+manifest1 v0.16.0 | sort >"$WORK1/to.list"
 # shellcheck disable=SC2046  # manifest paths, one per line, none with spaces
-kit1 archive v0.15.0 -- $(cat "$WORK1/to.list") | tar -x
-kit1 show "v0.15.0:VERSION" >VERSION
+kit1 archive v0.16.0 -- $(cat "$WORK1/to.list") | tar -x
+kit1 show "v0.16.0:VERSION" >VERSION
 git add -A >/dev/null
-git commit -q -m "chore: update shared layer 0.3.0 -> 0.15.0"
+git commit -q -m "chore: update shared layer 0.3.0 -> 0.16.0"
 
 assert_file "scripts/agents.lib.sh"
-assert_has "VERSION" "shared-layer: 0.15.0"
+assert_has "VERSION" "shared-layer: 0.16.0"
 # Part 1 landed a constitution ARTICLE, and the manual that should point at it
 # is the consumer's own — Part 2 territory. So the gate goes red here, by
 # design: article-unreferenced is what forces the two halves to land together.
@@ -775,7 +797,7 @@ else
 	fail "scripts/agents.lib.sh landed non-executable — step 5 dropped the mode bit"
 fi
 
-step6_check kit1 v0.15.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
+step6_check kit1 v0.16.0 "$WORK1/to.list" >"$SCRATCH/step6.clean"
 if grep -qv '^verbatim  ' "$SCRATCH/step6.clean"; then
 	fail "step 6 reported something other than verbatim after a clean apply"
 	sed 's/^/        | /' "$SCRATCH/step6.clean"
@@ -786,7 +808,7 @@ fi
 # …and that green is not free. Break ONLY the mode and the check must fire —
 # otherwise it is a check that reports success on the failure it exists for.
 chmod -x scripts/agents.lib.sh
-step6_check kit1 v0.15.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
+step6_check kit1 v0.16.0 "$WORK1/to.list" >"$SCRATCH/step6.mode"
 case "$(grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode")" in
 MODE*) pass "step 6 catches a mode-only difference" ;;
 *)
@@ -794,7 +816,7 @@ MODE*) pass "step 6 catches a mode-only difference" ;;
 	grep 'scripts/agents\.lib\.sh' "$SCRATCH/step6.mode" | sed 's/^/        | /'
 	;;
 esac
-if kit1 show "v0.15.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
+if kit1 show "v0.16.0:scripts/agents.lib.sh" | cmp -s - scripts/agents.lib.sh; then
 	pass "the bytes are still identical — which is why the mode leg has to exist"
 else
 	fail "the mode-only break changed the bytes too — the fixture proves nothing"
@@ -809,10 +831,10 @@ printf '\n'
 recipe2() {
 	WORK=$WORK1
 	kit() { kit1 "$@"; }
-	# NOT re-derived from VERSION: step 5 already moved it to 0.15.0. Part 2 runs
+	# NOT re-derived from VERSION: step 5 already moved it to 0.16.0. Part 2 runs
 	# in the same session as Part 1 and reuses its refs.
 	FROM_REF=v0.3.0
-	TO_REF=v0.15.0
+	TO_REF=v0.16.0
 
 	# --- Step 8: what changed outside the shared layer -----------------------
 	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
@@ -826,14 +848,7 @@ recipe2() {
 	# --- Step 9a: skills ------------------------------------------------------
 	echo ""
 	echo "\$ # 9a — the INVENTORY first: state, not delta (one is a decline, one is a gap)"
-	kit show "${TO_REF}:VERSION" | awk '
-		/^skills:/      { inlist = 1; next }
-		!inlist         { next }
-		/^[ \t]*#/      { next }
-		/^[ \t]*$/      { next }
-		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
-		                { inlist = 0 }
-	' | sort >"$WORK/skills.manifest"
+	kit show "${TO_REF}:VERSION" | manifest_section skills | sort >"$WORK/skills.manifest"
 	[ -s "$WORK/skills.manifest" ] ||
 		echo "no skills: manifest at ${TO_REF} (pre-0.11.0 kit?) — the inventory cannot answer" >&2
 	for d in .claude/skills/*/; do
@@ -1074,7 +1089,7 @@ recipe_prelude() {
 WORK=\$(mktemp -d)
 kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
 FROM_REF=v0.3.0
-TO_REF=v0.15.0
+TO_REF=v0.16.0
 EOF
 	recipe_block '^kit_take\(\)' >>"$1"
 }
@@ -1214,7 +1229,7 @@ take_before=$(wc -c <"$SCRATCH/take-fixture/mine")
 	echo "WORK=$SCRATCH/take-fixture"
 	echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 	cat "$SCRATCH/take.sh"
-	echo 'kit_take v0.15.0 no/such/path/at/this/ref "$WORK/mine" && echo "TOOK" || echo "declined to write"'
+	echo 'kit_take v0.16.0 no/such/path/at/this/ref "$WORK/mine" && echo "TOOK" || echo "declined to write"'
 } >"$SCRATCH/take-case.sh"
 sh "$SCRATCH/take-case.sh" >"$SCRATCH/take.out" 2>&1
 sed 's/^/      > /' "$SCRATCH/take.out"
@@ -1309,7 +1324,7 @@ assert_block '^keys\(\)' "$SCRATCH/keys.sh" "UPDATING.md's 9d key-set block is e
 if [ -s "$SCRATCH/keys.sh" ]; then
 	{
 		echo "WORK=$SCRATCH"
-		echo "TO_REF=v0.15.0"
+		echo "TO_REF=v0.16.0"
 		echo "C=scripts/docs-conformance/config.mjs"
 		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 		cat "$SCRATCH/take.sh"
@@ -1354,7 +1369,7 @@ assert_block '^kit show' "$SCRATCH/9a-inventory.sh" \
 if [ -s "$SCRATCH/9a-inventory.sh" ]; then
 	{
 		echo "WORK=$SCRATCH"
-		echo "TO_REF=v0.15.0"
+		echo "TO_REF=v0.16.0"
 		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 		cat "$SCRATCH/9a-inventory.sh"
 	} >"$SCRATCH/9a-inventory-case.sh"
@@ -1418,9 +1433,9 @@ assert_status 0 "green again once the row is removed" -- sh scripts/check.sh
 banner "C6. Adopting the optional /dogfood skill after bootstrap"
 # Bootstrap asked once and deleted itself. Adoption is three things, and the
 # gate proves the third is not optional.
-kit1 archive v0.15.0 .agents/skills/dogfood | tar -x
+kit1 archive v0.16.0 .agents/skills/dogfood | tar -x
 ln -s ../../.agents/skills/dogfood .claude/skills/dogfood
-kit1 show "v0.15.0:constitution/local-product.md.template" \
+kit1 show "v0.16.0:constitution/local-product.md.template" \
 	>constitution/local-product.md.template
 assert_file ".claude/skills/dogfood/SKILL.md"
 assert_file ".agents/skills/dogfood/SKILL.md"
@@ -1478,7 +1493,7 @@ else
 fi
 
 assert_block '^mkdir -p \.agents/skills' "$SCRATCH/migrate.sh" \
-	"UPDATING.md's 0.15.0 migration block is extractable"
+	"UPDATING.md's 0.16.0 migration block is extractable"
 if [ -s "$SCRATCH/migrate.sh" ]; then
 	if sh "$SCRATCH/migrate.sh" >"$SCRATCH/migrate.out" 2>&1; then
 		pass "the migration block runs clean on a pre-move consumer"

@@ -161,15 +161,7 @@ done
 # ---------------------------------------------------------------------------
 banner "7. The roster knows the skill"
 # ---------------------------------------------------------------------------
-awk '/^skills:/ { inlist = 1; next } !inlist { next } /^[ \t]+[^ \t#]/ { print $1; next } /^[^ \t]/ { inlist = 0 }' "$ROOT/VERSION" |
-	grep -qx housekeeping && pass "VERSION's skills manifest names housekeeping" ||
-	fail "VERSION's skills manifest does not name housekeeping"
-grep -q '`/housekeeping`' "$ROOT/constitution/AGENTS.md.template" &&
-	pass "the consumer manual template names /housekeeping" ||
-	fail "the consumer manual template never names /housekeeping"
-grep -q 'housekeeping' "$ROOT/.agents/skills/LICENSE-mattpocock-skills.md" &&
-	pass "the provenance file accounts for housekeeping" ||
-	fail "the provenance file does not account for housekeeping"
+t_assert_skill_in_roster "housekeeping"
 # The advisory that sends an agent here names the skill in its hint, and the
 # brief names the pass as one of its entry points, by command now that it ships.
 grep -q '/housekeeping' "$ROOT/scripts/docs-conformance/validators/housekeeping-due.mjs" &&

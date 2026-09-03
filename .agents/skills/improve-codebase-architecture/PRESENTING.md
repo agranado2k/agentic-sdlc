@@ -15,7 +15,7 @@ The rendering is yours. Pick the richest one your project can actually view:
   arrows, never ASCII art (code craft §10, `constitution/shared-code-craft.md`).
 - **A markdown file** when the review will be read in a terminal, pasted into a
   ticket, or folded into a decision record. The same cards, the same order,
-  diagrams as fenced diagram-language blocks that the forge renders — never
+  diagrams as fenced diagram-language blocks (mermaid, in this kit) that the forge renders — never
   ASCII drawings. If the argument leans on its diagrams, prefer the HTML
   rendering, where they can be real drawings.
 
