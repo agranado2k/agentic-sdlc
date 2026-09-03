@@ -113,7 +113,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
 # script, adds its entry here.
-KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md"
+KIT_ONLY="tests/kit-demo.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -285,19 +285,12 @@ if [ "$ADOPT" = 1 ]; then
 			die "adopt: $a_parent is a file, not a directory — refusing to write beneath it. Move it aside and re-run."
 	done
 	# --- 1. the shared layer: byte-verbatim or a relocation proposal --------
-	# This awk is the manifest parser scripts/check.sh, UPDATING.md step 1 and
-	# two suites also carry — four twins by prior decision (a consumer's copy
-	# must parse VERSION with no other file in reach). Move them together.
-	a_manifest() {
-		awk '
-			/^files:/       { inlist = 1; next }
-			!inlist         { next }
-			/^[ \t]*#/      { next }
-			/^[ \t]*$/      { next }
-			/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
-			                { inlist = 0 }
-		' "$a_kit/VERSION"
-	}
+	# The manifest grammar is scripts/manifest.lib.sh's, sourced from the kit
+	# clone beside this script — the same grammar the gate and the suites
+	# read; UPDATING.md keeps its own self-contained copy by contract.
+	# shellcheck disable=SC1091
+	. "$a_kit/scripts/manifest.lib.sh"
+	a_manifest() { manifest_section files <"$a_kit/VERSION"; }
 	for f in $(a_manifest) VERSION; do
 		if a_exists "$f"; then
 			cmp -s "$a_kit/$f" "$f" || a_hit shared "$f" relocate
