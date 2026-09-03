@@ -343,17 +343,11 @@ fi
 
 # A .git-free copy of the kit as it stands: the v0.16.0 release tree.
 NEWKIT="$SCRATCH/kit-0.16.0"
-mkdir -p "$NEWKIT"
-cp -R "$KIT/." "$NEWKIT/"
-strip_nested_worktrees "$KIT" "$NEWKIT"
-rm -rf "$NEWKIT/.git"
-# A .git-free copy of the kit as it stands: the v0.15.0 release tree.
-NEWKIT="$SCRATCH/kit-0.15.0"
 t_kit_tree "$KIT" "$NEWKIT"
 
 # The two ends, as real git refs in one repo.
 HIST="$SCRATCH/kit-history"
-t_kit_history "$HIST" "$OLDKIT" v0.1.0 "$NEWKIT" v0.15.0
+t_kit_history "$HIST" "$OLDKIT" v0.1.0 "$NEWKIT" v0.16.0
 cd "$HIST" || exit 2
 git init -q -b main
 git config user.name "Kit Release"
@@ -700,7 +694,7 @@ find "$OLD3" \( -name '*.md' -o -name '*.md.template' \) -type f \
 
 # Both ends as real refs in one repo, exactly as B0 does it.
 HIST3="$SCRATCH/kit-history-3"
-t_kit_history "$HIST3" "$OLD3" v0.3.0 "$NEWKIT" v0.15.0
+t_kit_history "$HIST3" "$OLD3" v0.3.0 "$NEWKIT" v0.16.0
 cd "$HIST3" || exit 2
 git init -q -b main
 git config user.name "Kit Release"
