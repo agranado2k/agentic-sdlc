@@ -559,6 +559,11 @@ skeleton (K0).
   the scan reports it, and ordinary dashes, arrows and accents left alone. The
   harness's fixture tests, which use box characters as comment rules, are
   code and out of scope.
+- `sh tests/mutation-kit.test.sh` drives the kit's own mutation wrapper,
+  `scripts/mutation.kit.sh`, through a stub Stryker: the pinned `--dry-run`
+  command, usage errors and a non-kit tree refused with exit 2, the exit code
+  propagated, a dropped executable bit handed back without touching content,
+  and Stryker's backup kept after a failed run.
 
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
@@ -645,6 +650,7 @@ sh tests/design-brief-skill.test.sh                    # the /design-brief contr
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
+sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

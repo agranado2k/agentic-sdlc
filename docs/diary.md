@@ -20,14 +20,14 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.15.0, tagged at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. |
+| **Phase** | The kit is shipping. Shared layer 0.15.0, tagged at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
+| **Active worktrees** | The 0.16.0 wave (PRD #124) is in flight in `worktree/f46`–`f52`, one ticket each. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
 ### Open questions / unresolved decisions
 
@@ -734,3 +734,40 @@ under each root to prove the scan reports it. The harness's own fixture
 tests use box characters as comment rules; they are code, not documents, and
 stay outside the scan. The suite stacks on #141: on main it is red, which is
 the point.
+### 2026-09-02 — The kit makes its own mutation decision
+
+Shared invariant §9 asks every consumer to decide how its pure, cheap layer is
+measured, and the first housekeeping pass found the kit had never decided for
+itself: the validators, 138 fixture tests, and nothing that could say
+whether those tests enforce anything. The kit has no engineering article to
+carry the decision line, so this entry is the record.
+
+**Mutation decision**: Stryker, on demand, against the validators under
+`scripts/docs-conformance/validators/`, with the fixture tests as the target
+function. `sh scripts/mutation.kit.sh` runs it (about eight minutes on a
+laptop); both the wrapper and its config are kit-only and never shipped. The
+tool arrives through `npx` each time, pinned to one release — the kit commits
+no package manifest and the harness stays dependency-free, but a baseline
+measured against whatever the registry serves that day is not a ceiling. It
+is never a gate. The decision is indexed under "Decisions recorded in the
+diary" in `docs/adr/INDEX.md`.
+
+**Baseline, 2026-09-02, at `d29673c`, Stryker 10.0.0:** mutation score **76.53 %** — 639
+mutants, 468 killed, 21 timed out, 150 survived, none uncovered. Per file:
+skill-web 85.29, housekeeping-due 83.33, skill-paths 82.61, design-brief
+75.68, claude-md-refs 75.28, skill-bridge 73.33, mutation-decision 65.52.
+Most survivors are hint strings and message text no fixture asserts on, which
+is a true statement about the suites: they hold verdicts, not wording. The
+survivors worth a ticket are the ones that change a verdict — a `sort` dropped
+from a scan without a test noticing, a default skills directory emptied — and
+`/housekeeping` item 4 reads this number next pass.
+
+Two things the run taught: Stryker's sandbox copy fails on the kit's per-skill
+symlinks, so the config runs in place; and one early run left a file without
+its executable bit — which file was not recorded, and nothing in the mutate
+scope is executable, so the wrapper's guard is a belt over a buckle: it hands
+back any dropped bit with `chmod`, touching no content, and says so. The
+review of that wrapper (PR #143) found the first guard reverted content while
+reporting a mode fix and deleted Stryker's backup after a failed run; both are
+gone, and `tests/mutation-kit.test.sh` drives the wrapper through a stub.
+
