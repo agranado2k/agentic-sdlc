@@ -6,8 +6,8 @@
 #   sh scripts/agents.lib.sh <tier> [domain]   -> prints the mapped model id,
 #                                                  or nothing if it is unmapped
 #   . scripts/agents.lib.sh; resolve_tier …    -> the same, as a shell function;
-#      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, as its
-#      own statement (a prefix assignment on `.` is dropped by bash and zsh)
+#      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
+#      own line (bash and zsh drop a prefix assignment on `.`)
 #
 # tier    CLOSED: planner | implementer | mechanical | reviewer. Unknown: exit 2.
 # domain  OPEN local policy, shape `[a-z][a-z0-9-]*`; hyphens fold to `_` in
@@ -24,11 +24,10 @@
 # once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
 # model) · 2 usage error, unknown tier, bad domain, or a missing named config.
 #
-# Shared layer (see VERSION): the mechanism ships and is copied verbatim; the
-# mapping in scripts/agents.config.sh is yours and a kit update never
-# overwrites it; the kit names no model — the root manual's "Capability
-# tiers" section says why. The design's history: the agentic-sdlc repository's
-# diary, entry of 2026-09-03.
+# Shared layer (see VERSION): this file is copied verbatim; the mapping in
+# scripts/agents.config.sh is yours, never overwritten by an update; the kit
+# names no model (the root manual's "Capability tiers" says why). History:
+# the agentic-sdlc repository's diary, 2026-09-03.
 
 # The domain's SHAPE, written once so the usage text and the error text cannot
 # drift apart. It does NOT drive the case pattern that enforces the shape —
