@@ -164,6 +164,83 @@ t_done() {
 	exit 1
 }
 
+# ---------------------------------------------------------------------------
+# Fixture builders — the throwaway repos every demo makes, built one way.
+#
+# The deliberate CONTENT SURGERY that gives a fixture its meaning (a rollback
+# of a shared article, a manifest rewritten to an older release, a wave's
+# additions removed) stays at the call site, between the copy and the history:
+# it is the fixture's whole point, and hiding it would hide the scenario.
+# These hide only what is the same every time — the copy, the identity, the
+# signing switches, the tag pair.
+# ---------------------------------------------------------------------------
+
+# t_kit_tree <kit> <dest> — a .git-free copy of the kit's working tree at
+# <dest>, nested worktrees stripped. The source is resolved to its physical
+# path first: git reports worktrees that way, and the strip matches on the
+# prefix, so a symlinked source (macOS's /var → /private/var, say) would
+# otherwise keep every nested worktree in silence.
+t_kit_tree() {
+	_kt_src=$(cd "$1" && pwd -P) || exit 2
+	mkdir -p "$2"
+	cp -R "$_kt_src/." "$2/"
+	strip_nested_worktrees "$_kt_src" "$2"
+	rm -rf "$2/.git"
+}
+
+# t_git_identity <dir> <name> <email> — init a repo on main with a fixture
+# identity, every signing switch off, and the machine's hooks out of reach,
+# so a fixture commits and tags on any machine — the same neutralisation
+# t_repo gives the small fixtures.
+t_git_identity() {
+	git -C "$1" init -q -b main
+	git -C "$1" config user.name "$2"
+	git -C "$1" config user.email "$3"
+	git -C "$1" config commit.gpgsign false
+	git -C "$1" config tag.gpgSign false
+	git -C "$1" config tag.forceSignAnnotated false
+	git -C "$1" config core.hooksPath .git/no-such-hooks
+}
+
+# t_kit_history <hist> <old tree> <old tag> <new tree> <new tag> — one repo
+# holding two releases as real tags: the old tree committed and tagged, then
+# replaced wholesale by the new tree, committed and tagged. Passes or fails on
+# both tags existing.
+t_kit_history() {
+	mkdir -p "$1"
+	cp -R "$2/." "$1/"
+	t_git_identity "$1" "Kit Release" "kit@example.invalid"
+	git -C "$1" add -A >/dev/null
+	git -C "$1" commit -q -m "release ${3#v}"
+	git -C "$1" tag "$3"
+	find "$1" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+	cp -R "$4/." "$1/"
+	git -C "$1" add -A >/dev/null
+	git -C "$1" commit -q -m "release ${5#v}"
+	git -C "$1" tag "$5"
+	if git -C "$1" rev-parse -q --verify "$3" >/dev/null && git -C "$1" rev-parse -q --verify "$5" >/dev/null; then
+		pass "kit history built with tags $3 and $5"
+	else
+		fail "kit history tags were not created ($3, $5)"
+	fi
+}
+
+# t_consumer_from <tree> <dest> <name> <email> [bootstrap args...] — a
+# consumer bootstrapped from a kit tree: copy, identity, bootstrap with the
+# given arguments, one commit. Leaves the shell in <dest>.
+t_consumer_from() {
+	_cf_tree=$1; _cf_dest=$2; _cf_name=$3; _cf_email=$4
+	shift 4
+	mkdir -p "$_cf_dest"
+	cp -R "$_cf_tree/." "$_cf_dest/"
+	rm -rf "$_cf_dest/.git"
+	t_git_identity "$_cf_dest" "$_cf_name" "$_cf_email"
+	cd "$_cf_dest" || exit 2
+	sh bootstrap.sh "$@" >/dev/null 2>&1
+	git add -A >/dev/null
+	git commit -q -m "chore: bootstrap from agentic-sdlc"
+}
+
 # strip_nested_worktrees <src_repo> <dest_tree> — drop any git worktree that
 # lives INSIDE the source repo from a tree that was just `cp -R`'d out of it.
 #
@@ -186,12 +263,39 @@ strip_nested_worktrees() {
 		done
 }
 
+# The repo root, derived once from the suite that sourced this harness; every
+# helper below anchors on it rather than on the working directory.
+T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+# The manifest grammar, shared with the gate and bootstrap. Sourced here so
+# every suite reads VERSION one way — and asserted, so a module that loads
+# and defines nothing cannot turn manifest-driven loops into no-ops.
+# shellcheck disable=SC1091
+. "$T_ROOT/scripts/manifest.lib.sh"
+command -v manifest_section >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/manifest.lib.sh did not define manifest_section" >&2; exit 2; }
+
+# t_assert_skill_in_roster <name> — the three roster surfaces every shipped
+# skill must appear on: VERSION's skills: manifest, the consumer manual
+# template's quick-reference table, and the provenance file.
+t_assert_skill_in_roster() {
+	_sr_root="$T_ROOT"
+	manifest_section skills <"$_sr_root/VERSION" | grep -qx -- "$1" &&
+		pass "VERSION's skills manifest names $1" ||
+		fail "VERSION's skills manifest does not name $1 — no consumer will ever be told it exists"
+	grep -q "\`/$1\`" "$_sr_root/constitution/AGENTS.md.template" &&
+		pass "the consumer manual template names /$1" ||
+		fail "the consumer manual template never names /$1 — a stamped project cannot find it"
+	grep -q -- "$1" "$_sr_root/.agents/skills/LICENSE-mattpocock-skills.md" &&
+		pass "the provenance file accounts for $1" ||
+		fail "the provenance file does not account for $1"
+}
+
 # t_ignored_commands — the slash commands the gate's policy file exempts from
 # skill resolution (`claudeMdRefs.ignoreCommands` in config.mjs), one per line.
 # Read from the file rather than mirrored: three hand-kept copies of that list
 # had already drifted by the time this helper existed.
 t_ignored_commands() {
-	sed -n '/ignoreCommands: \[/,/\]/p' "${ROOT:-$(pwd)}/scripts/docs-conformance/config.mjs" |
+	sed -n '/ignoreCommands: \[/,/\]/p' "$T_ROOT/scripts/docs-conformance/config.mjs" |
 		grep -o '"/[a-z][a-z0-9-]*"' | tr -d '"'
 }
 
