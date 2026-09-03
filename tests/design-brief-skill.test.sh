@@ -190,15 +190,7 @@ done
 # ---------------------------------------------------------------------------
 banner "9. The roster knows the skill"
 # ---------------------------------------------------------------------------
-awk '/^skills:/ { inlist = 1; next } !inlist { next } /^[ \t]+[^ \t#]/ { print $1; next } /^[^ \t]/ { inlist = 0 }' "$ROOT/VERSION" |
-	grep -qx design-brief && pass "VERSION's skills manifest names design-brief" ||
-	fail "VERSION's skills manifest does not name design-brief — no consumer will ever be told it exists"
-grep -q '`/design-brief`' "$ROOT/constitution/AGENTS.md.template" &&
-	pass "the consumer manual template names /design-brief" ||
-	fail "the consumer manual template never names /design-brief — a stamped project cannot find it"
-grep -q 'design-brief' "$ROOT/.agents/skills/LICENSE-mattpocock-skills.md" &&
-	pass "the provenance file accounts for design-brief" ||
-	fail "the provenance file does not account for design-brief"
+t_assert_skill_in_roster "design-brief"
 
 # ---------------------------------------------------------------------------
 banner "10. The entry points are wired, not just named"

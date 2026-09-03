@@ -205,4 +205,43 @@ assert_status 1 "an unknown option exits rather than stamping a manual named '--
 	sh -c "cd '$PROJ' && sh bootstrap.sh --with-dogfod 'Demo Typo' </dev/null"
 assert_absent "$PROJ/AGENTS.md" "nothing was stamped"
 
+# ---------------------------------------------------------------------------
+banner "7. A marked file missing one side of its pair is refused, naming the file"
+# ---------------------------------------------------------------------------
+# The decline's range delete would run to end-of-file on a lone BEGIN — a
+# truncated manual with exit 0. So the pair check runs on EVERY marked file
+# before anything is stamped or removed, the manual's template included, and
+# a refusal leaves the tree as it found it. Each marked file, in its own
+# comment syntax, one END short.
+for marked in "constitution/AGENTS.md.template" "scripts/docs-conformance/config.mjs"; do
+	mk_project "lone-$(basename "$marked")"
+	awk '/DOGFOOD:END/ && !dropped { dropped = 1; next } { print }' "$PROJ/$marked" >"$PROJ/$marked.tmp" &&
+		mv "$PROJ/$marked.tmp" "$PROJ/$marked"
+	assert_status 1 "bootstrap refuses a lone DOGFOOD marker in $marked" -- \
+		sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Lone' 'One marker short.' </dev/null"
+	assert_out_has "$marked"
+	assert_out_has "broken DOGFOOD marker pair"
+	assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal ($marked)"
+	assert_exists "$PROJ/.agents/skills/dogfood/SKILL.md" "nothing was removed before the refusal ($marked)"
+done
+# Equal counts are not enough: an END before its BEGIN still runs the range
+# delete to end-of-file. Swap the policy file's one pair.
+mk_project swapped
+awk '/DOGFOOD:BEGIN/ { sub(/BEGIN/, "END"); print; next } /DOGFOOD:END/ { sub(/END/, "BEGIN"); print; next } { print }' \
+	"$PROJ/scripts/docs-conformance/config.mjs" >"$PROJ/cfg.tmp" && mv "$PROJ/cfg.tmp" "$PROJ/scripts/docs-conformance/config.mjs"
+assert_status 1 "bootstrap refuses an END before its BEGIN" -- \
+	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Swapped' 'Out of order.' </dev/null"
+assert_out_has "scripts/docs-conformance/config.mjs"
+assert_out_has "with no BEGIN before it"
+assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal (swapped pair)"
+assert_exists "$PROJ/constitution/AGENTS.md.template" "the template was not consumed (swapped pair)"
+# A project NAME carrying a marker token would write a marker into the
+# stamped manual, past the preflight; it is refused where '{{' is.
+mk_project marked-name
+assert_status 1 "a project name carrying a marker token is refused" -- \
+	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood '<!-- DOGFOOD:END -->' 'A name with a marker in it.' </dev/null"
+assert_out_has "must not contain a DOGFOOD marker"
+assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal (marked name)"
+assert_exists "$PROJ/constitution/AGENTS.md.template" "the template was not consumed (marked name)"
+
 t_done "opt-in /dogfood skill"

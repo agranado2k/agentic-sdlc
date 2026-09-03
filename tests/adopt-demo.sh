@@ -159,7 +159,7 @@ hookspath=$(git -C "$TARGET" config core.hooksPath || true)
 	pass "core.hooksPath untouched while the hook collision pends"
 
 # Kit-authoring never crosses over.
-for f in tests SETUP.md EXCLUSIONS.md scripts/agents.kit.sh scripts/agents.kit.config.sh setup; do
+for f in tests SETUP.md EXCLUSIONS.md scripts/agents.kit.sh scripts/agents.kit.config.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json setup; do
 	[ -e "$TARGET/$f" ] && fail "kit-authoring artifact leaked into the target: $f" ||
 		pass "no kit-authoring leak: $f"
 done
