@@ -75,6 +75,17 @@ AGENT_TIER_MECHANICAL='haiku'
 #    second hat.
 # ---------------------------------------------------------------------------
 AGENT_TIER_REVIEWER='fable'
+#
+#    The case the plain lookup cannot see: the session ITSELF implemented, on
+#    the model this tier maps to — a planner-tier session writing a ticket's
+#    diff is exactly that, and this wave met it on every PR. Then the
+#    reviewer above IS the implementer, and the rule needs a second answer.
+#    It is resolved through the domain axis below, as
+#    `sh scripts/agents.kit.sh reviewer self-implemented` — a domain that
+#    names a situation rather than a medium, which the open vocabulary
+#    allows and the glossary's "Task domain" entry records — and
+#    tests/agents-tiers.test.sh holds it to differing from the reviewer.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='opus'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
@@ -100,6 +111,9 @@ AGENT_TIER_REVIEWER='fable'
 # from the strongest coding one.
 AGENT_TIER_IMPLEMENTER_CONTENT='fable'
 
+# The second domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
+# sits in the reviewer block above with its reasoning.
+#
 # THERE IS DELIBERATELY NO AGENT_TIER_IMPLEMENTER_CODE. The plain tier above
 # already resolves code work to 'opus'; naming the domain to repeat that value
 # would record a non-decision as a decision, and would then have to be kept in

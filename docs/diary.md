@@ -830,3 +830,22 @@ self-host suite's kit-own section gains that probe (E5): one function reads
 both directions, runs on the kit, and then on two baits — a record with no
 row, a row with no record — so the check is proven able to fail before it is
 trusted. Numbered records only; the template's `NNNN` is not a number.
+
+### 2026-09-02 — The reviewer-never-the-implementer rule got its wiring and its check
+
+Ticket #144 of PRD #124, filed by PR #140's review; ADR-0003 clause 4
+deferred exactly this. The root manual stated the policy and nothing held
+the kit's own mapping to it, and this wave met the case the plain lookup
+cannot see on every PR: the session itself implemented, on the model the
+reviewer tier maps to, so the reviewer ran on the implementer tier's model
+and each report said so by hand.
+
+The fallback is now data on the resolver's existing domain axis —
+`sh scripts/agents.kit.sh reviewer self-implemented` — mapped in the
+kit-only config beside the reviewer, and the tier suite holds both halves:
+the kit's reviewer differs from its implementer, and the self-implemented
+answer differs from the reviewer, with two throwaway configs proving the
+probe can fail. The implement skill's fallback-review step names the rule
+and the domain for consumers, and names no model; the implement-deliver
+suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
+its optional clarifying amendment can point here once that lands.
