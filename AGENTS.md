@@ -20,8 +20,8 @@ replace. -->
 
 Binding for any LLM-driven agent working in this repo. This file is the **root
 layer** of a layered constitution: orientation, the hard rules, and the command
-map — small on purpose, because every token here is re-read on every request
-(shared invariant §11). The elaboration lives in the articles listed below; read
+map — small on purpose (budgeted at 350 lines, ADR-0004), because every token
+here is re-read on every request (shared invariant §11). The elaboration lives in the articles listed below; read
 the one you need, when you need it.
 
 `AGENTS.md` is the one manual, whichever agent tool reads it. `CLAUDE.md` and
@@ -321,6 +321,7 @@ answers produce a clean project.
 | Ship a consumer CI workflow         | `templates/workflows/` — installed into a project's `.github/workflows/` |
 | Know which files are shared layer   | `VERSION` — and `UPDATING.md` for the recipe when one moves |
 | See what the kit does NOT ship      | `EXCLUSIONS.md` — kept honest by `tests/exclusions.test.sh` |
+| Measure the kit's own validator tests | `scripts/mutation.kit.sh` — Stryker (pinned) on demand against the validators under `scripts/docs-conformance/validators/`, never a gate; runs in place — clean tree, network required; the baseline is in the diary (kit-only, never shipped) |
 | Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` is one suite invocation, and `.github/workflows/kit-guards.yml` holds the guards' |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |

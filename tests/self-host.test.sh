@@ -148,6 +148,14 @@ grep -q "$PROJECT_NAME" "$PROJ/docs/domain-glossary.md" &&
 [ -e "$PROJ/scripts/agents.kit.sh" ] &&
 	fail "scripts/agents.kit.sh leaked into the project — the kit's own resolver wrapper reached a consumer" ||
 	pass "no scripts/agents.kit.sh in the project — the kit's own wrapper stayed kit-side"
+# The kit's mutation measurement (#132) is kit-authoring only for the same
+# reason: it measures files a consumer may have changed, with a tool the kit
+# does not ship, on a decision that is the consumer's to make.
+for f in scripts/mutation.kit.sh scripts/mutation.kit.config.json; do
+	[ -e "$PROJ/$f" ] &&
+		fail "$f leaked into the project — the kit's own mutation measurement reached a consumer" ||
+		pass "no $f in the project — the kit's own measurement stayed kit-side"
+done
 # The consumer's own mapping file still ships, still empty.
 [ -f "$PROJ/scripts/agents.config.sh" ] &&
 	pass "scripts/agents.config.sh (the consumer-shipped mapping) is still present" ||
@@ -308,6 +316,57 @@ done
 [ "$dir_entries" = 0 ] &&
 	pass "every KIT_OWN entry is a file the kit ships, not a directory"
 
+# --- E5: every record has an index row, and every row has a record ---------
+# The index is what says which decisions are binding. A record with no row is
+# invisible to the reader the index exists for; a row with no file is a
+# decision nobody can read. One probe covers both halves; it runs on the kit
+# and then on two baits, because a rule with no failing check is a claim
+# (hard rule 9). Numbered records only: the template is NNNN, not digits.
+# One notion of "row" for both directions: a table line `| [N](file) …`,
+# extracted once. A record linked only from the index's prose is NOT
+# indexed — the table is what the reader scans. A link's `#fragment` is
+# dropped before the file test.
+adr_index_gaps() {
+	_rows=$(sed -n 's/^| \[[0-9][0-9]*\](\([^)#]*\)[^)]*).*/\1/p' "$1/INDEX.md")
+	for _a in "$1"/[0-9][0-9][0-9][0-9]-*.md; do
+		[ -f "$_a" ] || continue
+		printf '%s\n' "$_rows" | grep -q -x -F "$(basename "$_a")" || echo "unindexed: $(basename "$_a")"
+	done
+	printf '%s\n' "$_rows" | while IFS= read -r _f; do
+		[ -n "$_f" ] || continue
+		[ -f "$1/$_f" ] || echo "no such record: $_f"
+	done
+}
+gaps=$(adr_index_gaps "$KIT/docs/adr")
+[ -z "$gaps" ] &&
+	pass "every record under docs/adr/ has an index row, and every row names a record" ||
+	fail "docs/adr/ and its index disagree — $(printf '%s' "$gaps" | tr '\n' ';')"
+BAIT="$SCRATCH/adr-bait"
+mkdir -p "$BAIT" && cp "$KIT"/docs/adr/*.md "$BAIT"/
+printf '# ADR-9999: Bait\n' >"$BAIT/9999-bait-without-a-row.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"unindexed: 9999-bait-without-a-row.md"*) pass "the probe catches a record with no index row" ;;
+*) fail "the probe missed an unindexed record" ;;
+esac
+# Linked from prose only, never given a row: still unindexed.
+printf '\n- See [9999](9999-bait-without-a-row.md) — mentioned, never tabled.\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"unindexed: 9999-bait-without-a-row.md"*) pass "a record linked only from the index's prose is still unindexed" ;;
+*) fail "a prose-only link passed as an index row" ;;
+esac
+rm -f "$BAIT/9999-bait-without-a-row.md"
+printf '| [9998](9998-row-without-a-record.md) | Bait | Accepted 2026-09-02 |\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"no such record: 9998-row-without-a-record.md"*) pass "the probe catches an index row with no record" ;;
+*) fail "the probe missed a row with no file" ;;
+esac
+# A row whose link carries a fragment still names its record.
+printf '| [9997](0001-the-kit-self-hosts-its-own-constitution.md#decision-outcome) | Bait | Accepted 2026-09-02 |\n' >>"$BAIT/INDEX.md"
+case "$(adr_index_gaps "$BAIT")" in
+*"#decision-outcome"*) fail "a row link with a fragment was reported as a missing record" ;;
+*) pass "a row link with a fragment resolves to its record" ;;
+esac
+
 # ---------------------------------------------------------------------------
 banner "F. The kit's public face stays current"
 # ---------------------------------------------------------------------------
@@ -373,6 +432,26 @@ else
 	fail "README quotes a shared-layer marker that is not $version_now:"
 	printf '%s\n' "$stale_readme" | sed 's/^/        | /'
 fi
+
+# --- F2a: the root manual stays under its budget ---------------------------
+# ADR-0004: the kit's root is also its local article, and its budget is the
+# number the record names — read from the record, so the two cannot drift —
+# a rule only because this check can fail. Growth past it is a decision
+# (split, or supersede the record), never a silent line.
+ROOT_BUDGET=$(sed -n 's/.*budgeted at \([0-9][0-9]*\) lines.*/\1/p' "$KIT/docs/adr/0004-the-root-manual-is-the-kits-local-article.md" | head -1)
+[ -n "$ROOT_BUDGET" ] || fail "ADR-0004 names no 'budgeted at N lines' — the probe has no number to hold the root to"
+# One function, driven by both the real subject and the bait: a mutant in the
+# comparison is caught by the bait; a wrong-SUBJECT mutant (checking some
+# other file) is the one shape no self-bait can catch.
+root_over_budget() { [ "$(wc -l <"$1" | tr -d ' ')" -gt "${ROOT_BUDGET:-0}" ]; }
+root_lines=$(wc -l <"$KIT/AGENTS.md" | tr -d ' ')
+root_over_budget "$KIT/AGENTS.md" &&
+	fail "AGENTS.md is $root_lines lines — over the $ROOT_BUDGET-line budget ADR-0004 records; split it or supersede the record" ||
+	pass "AGENTS.md is $root_lines lines, within the $ROOT_BUDGET-line budget (ADR-0004)"
+awk -v n="$((${ROOT_BUDGET:-0} + 1))" 'BEGIN { for (i = 0; i < n; i++) print "line" }' >"$SCRATCH/root.bait"
+root_over_budget "$SCRATCH/root.bait" &&
+	pass "the root-budget probe rejects a manual over the budget" ||
+	fail "the root-budget probe passed a manual over the budget — the check is vacuous"
 
 # --- F2b: the manuals' craft-rule count tracks the article -----------------
 # The manual template and the kit's own manual both say how many portable
@@ -466,18 +545,9 @@ fi
 #        unreleased change wearing a released version's number. RED always,
 #        pull requests included, because the drift is already in the diff.
 
-# The manifest parser scripts/check.sh and UPDATING.md step 1 both use — same
-# awk, so all three read one file format the same way.
-manifest_files() {
-	awk '
-		/^files:/       { inlist = 1; next }
-		!inlist         { next }
-		/^[ \t]*#/      { next }
-		/^[ \t]*$/      { next }
-		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; next }
-		                { inlist = 0 }
-	' "$KIT/VERSION"
-}
+# The manifest grammar is scripts/manifest.lib.sh's, sourced by tests/lib.sh;
+# UPDATING.md's own copies are held equal to it by tests/manifest.test.sh.
+manifest_files() { manifest_section files <"$KIT/VERSION"; }
 
 if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1; then
 	pass "the declared shared layer has its tag (v$version_now)"
@@ -527,16 +597,7 @@ fi
 # parser above — `skills:` is a sibling section, and a parser that swallowed it
 # would tell step 5 of the recipe to copy skill names as shared files.
 
-manifest_skills() {
-	awk '
-		/^skills:/      { inlist = 1; next }
-		!inlist         { next }
-		/^[ \t]*#/      { next }
-		/^[ \t]*$/      { next }
-		/^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); print $1; next }
-		                { inlist = 0 }
-	' "$KIT/VERSION"
-}
+manifest_skills() { manifest_section skills <"$KIT/VERSION"; }
 
 manifest_skills | sort >"$SCRATCH/skills.manifest"
 for d in "$KIT"/.agents/skills/*/; do
