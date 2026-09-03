@@ -397,7 +397,11 @@
 # grows with the wave's stacked tickets and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
-# **manifest** as a term. The wave's later tickets add to this list.
+# **manifest** as a term. From #129: scripts/check.sh changed content — its
+# no-node NOTICE names the claude-md-refs rules it cannot run, so every scan
+# the runner registers is named by id, and the self-host suite (kit-only)
+# holds the notice to the runner's registration list. The wave's later
+# tickets add to this list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

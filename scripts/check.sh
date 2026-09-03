@@ -231,7 +231,8 @@ if [ "$engine" = "fallback" ]; then
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), the" >&2
-	echo "        portability deny-list on the shared article, cross-skill references" >&2
+	echo "        portability deny-list on the shared article (the claude-md-refs rules" >&2
+	echo "        beyond repo paths), cross-skill references" >&2
 	echo "        (the skill-web advisory), path references inside skill bodies" >&2
 	echo "        (the skill-paths rule), the engineering article's mutation" >&2
 	echo "        decision (the mutation-decision advisory) and its design brief" >&2

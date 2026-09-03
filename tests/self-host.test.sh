@@ -98,14 +98,40 @@ assert_status 0 "check.sh passes at the kit root" -- sh "$KIT/scripts/check.sh"
 assert_status 0 "check.sh passes at the kit root without node" -- \
 	env DOCS_CHECK_NO_NODE=1 sh "$KIT/scripts/check.sh"
 
-# The reduced form must SAY what it cannot check, and the skill-web advisory is
-# harness-only by decision (a grep approximation would re-implement the command
-# grammar badly). The claim of reduced coverage is itself held here.
-if (cd "$KIT" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh 2>&1 >/dev/null) | grep -q "skill-web advisory"; then
-	pass "the no-node NOTICE names the skill-web advisory among what it cannot run"
-else
-	fail "the no-node NOTICE does not admit the skill-web advisory is skipped — reduced coverage is claiming more than it checks"
-fi
+# The reduced form must SAY what it cannot check, and every scan the harness
+# runs is one it cannot: the NOTICE has to name each validator the runner
+# registers, by id. Held to the runner itself — a validator added to the
+# registration list and not to the notice is the drift this probe exists for
+# (#129). notice_gaps <check.sh> <docs-conformance dir> prints one id per
+# registered validator the notice does not name; empty means the notice is
+# current.
+notice_gaps() {
+	_ng_reg=$(sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$2/runner.mjs" | tr ',' '\n' | tr -d ' ')
+	_ng_notice=$(sed -n '/NOTICE  docs gate running WITHOUT node/,/^fi$/p' "$1")
+	for _ng_sym in $_ng_reg; do
+		_ng_file=$(sed -n "s|^import \* as $_ng_sym from \"\./\(.*\)\";$|\1|p" "$2/runner.mjs")
+		_ng_id=$(sed -n 's/^export const id = "\(.*\)";$/\1/p' "$2/$_ng_file")
+		[ -n "$_ng_id" ] || { echo "(unreadable id for $_ng_sym)"; continue; }
+		printf '%s\n' "$_ng_notice" | grep -q -F -- "$_ng_id" || echo "$_ng_id"
+	done
+}
+n_reg=$(sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$KIT/scripts/docs-conformance/runner.mjs" | tr ',' '\n' | grep -c .)
+[ "$n_reg" -ge 5 ] && pass "the runner registers $n_reg validators — the probe has something to hold the notice to" ||
+	fail "the runner's registration list could not be read ($n_reg entries)"
+gaps=$(notice_gaps "$KIT/scripts/check.sh" "$KIT/scripts/docs-conformance")
+[ -z "$gaps" ] && pass "the no-node NOTICE names every scan the runner registers" ||
+	fail "the no-node NOTICE is stale — registered but not named: $(printf '%s' "$gaps" | tr '\n' ' ')"
+# Bait: a stub validator registered in a scratch copy of the harness, and the
+# notice untouched — the probe must name it.
+STUBH="$SCRATCH/harness"
+mkdir -p "$STUBH/validators" && cp "$KIT/scripts/docs-conformance/runner.mjs" "$STUBH/" && cp "$KIT"/scripts/docs-conformance/validators/*.mjs "$STUBH/validators/"
+printf 'export const id = "stub-scan";\nexport function run() { return []; }\n' >"$STUBH/validators/stub-scan.mjs"
+sed 's|^export const VALIDATORS = \[\(.*\)\];$|import * as stubScan from "./validators/stub-scan.mjs";\
+export const VALIDATORS = [\1, stubScan];|' "$STUBH/runner.mjs" >"$STUBH/runner.tmp" && mv "$STUBH/runner.tmp" "$STUBH/runner.mjs"
+case "$(notice_gaps "$KIT/scripts/check.sh" "$STUBH")" in
+*stub-scan*) pass "a validator registered in the runner alone is reported as missing from the notice" ;;
+*) fail "the probe missed a stub validator registered in the runner alone" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "C. Bootstrap strips the kit's own files, and stamps a clean project"
