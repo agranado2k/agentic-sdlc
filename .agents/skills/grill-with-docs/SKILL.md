@@ -20,18 +20,15 @@ If a question can be answered by exploring the codebase, explore the codebase in
 During codebase exploration, also read the project's own documentation. This kit
 puts it in two places, both of them pointed at from the root `AGENTS.md`:
 
-```
-/
-├── AGENTS.md                     ← the agent manual; points at both of these
-├── docs/
-│   ├── domain-glossary.md        ← the ubiquitous language
-│   ├── diary.md                  ← the chronology; "Current state" first
-│   └── adr/
-│       ├── INDEX.md              ← what is currently binding
-│       ├── NNNN-template.md      ← copy this to start a new record
-│       └── 0001-….md
-└── constitution/                 ← the layered rules the manual points at
-```
+The root `AGENTS.md` is the agent manual, and it points at both:
+
+- `docs/` — the project's memory
+  - `docs/domain-glossary.md` — the ubiquitous language
+  - `docs/diary.md` — the chronology; "Current state" first
+  - `docs/adr/` — the decision records: `docs/adr/INDEX.md` says what is
+    currently binding, `docs/adr/NNNN-template.md` is copied to start a new
+    one, and the numbered records sit beside them
+- `constitution/` — the layered rules the manual points at
 
 A repo with several bounded contexts may keep one glossary section (or one
 glossary file) per context and let `docs/domain-glossary.md` be the index. Infer
