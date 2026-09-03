@@ -63,14 +63,242 @@ esc_js() {
 shim_body() {
 	printf '%s\n%s\n' "<!-- Shim: the agent manual is $MANUAL. Edit that file, not this one. -->" "@$MANUAL"
 }
-# The optional-skill marker filters, one pair per comment dialect: KEEP drops
-# only the scaffolding markers, STRIP drops the whole marked block.
-DOGFOOD_MD_KEEP='/<!-- DOGFOOD:BEGIN -->/d;/<!-- DOGFOOD:END -->/d'
-DOGFOOD_MD_STRIP='/<!-- DOGFOOD:BEGIN -->/,/<!-- DOGFOOD:END -->/d'
-DOGFOOD_JS_KEEP='/\/\/ DOGFOOD:BEGIN/d;/\/\/ DOGFOOD:END/d'
-DOGFOOD_JS_STRIP='/\/\/ DOGFOOD:BEGIN/,/\/\/ DOGFOOD:END/d'
-# The one question, asked by whichever arm runs.
-DOGFOOD_PROMPT='Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
+# ============================================================================
+# The declared optional set — the ONE place an optional skill is named.
+# ----------------------------------------------------------------------------
+# An optional skill is data. Each entry says what the skill is called, which
+# files carry its marker pair and in what comment syntax, what a decline
+# removes beyond the skill's two homes, and what to tell the human either
+# way. Everything below this block — both arms' flag parsing, the question,
+# the stamp-time marker filters, the decline's removals, the closing note —
+# reads the set and never names a skill. The kit-only deletion list
+# (KIT_ONLY, further down) is a separate set on purpose: those files are the
+# kit's own and never a consumer's choice.
+#
+# The seam is in the stamper, not the gate (ADR-0001): the gate reads no
+# policy about optional skills and only checks the tree it is given, so
+# what a consumer receives for either answer is decided entirely here.
+#
+# OPTIONAL_SKILLS lists the entries; each is a group of `optional_<name>_`
+# variables:
+#   marker    the token in the skill's BEGIN/END marker pair
+#   marked    the files carrying that pair, as <path>:<dialect>. A dialect is
+#             the comment syntax the pair is written in: `md` for
+#             `<!-- TOKEN:BEGIN -->`, `js` for `// TOKEN:BEGIN`
+#   carries   paths that travel with the skill beyond .agents/skills/<name>
+#             and its .claude/skills bridge: copied on an accept by the
+#             adopt arm, removed on a decline by both
+#   exempt    the gate-policy token the skill's marked block adds, so the
+#             adopt arm can say when a kept policy file lacks it
+#   prompt    the one question, asked by whichever arm runs
+#   note_yes / note_no   what the answer meant, printed at the end
+#
+# WHY /dogfood IS OPTIONAL AND THE OTHERS ARE NOT. Every other skill works on
+# the day the repo is created — they operate on specs, tickets, diffs,
+# branches and worktrees, all of which a one-hour-old project already has.
+# `/dogfood` operates on a RUNNING PRODUCT: it walks declared personas
+# through a real user-facing surface. A project with no such surface would
+# inherit a command it cannot run and a row on the manual's map pointing at
+# it, which is the exact failure the docs gate exists to prevent one level
+# up. The product article goes with it on a decline: it exists to hold the
+# persona/surface declaration the skill reads, so on its own it would be an
+# unfilled template nothing points at.
+OPTIONAL_SKILLS="dogfood"
+optional_dogfood_marker=DOGFOOD
+optional_dogfood_marked="constitution/AGENTS.md.template:md scripts/docs-conformance/config.mjs:js"
+optional_dogfood_carries="constitution/local-product.md.template"
+optional_dogfood_exempt="docs/dogfood-reports/"
+optional_dogfood_prompt='Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
+# Plain strings, not heredocs: bash 3.2 (macOS's /bin/sh) misparses a heredoc
+# inside $( ) when its body carries an apostrophe.
+optional_dogfood_note_yes="/dogfood is installed, and it does NOT work yet. It walks your personas through
+your real user-facing surface, and both of those are yours to declare: fill in
+the DOGFOOD DECLARATION in constitution/local-product.md.template, drop the
+.template suffix, and point AGENTS.md's article layer at it — the same three
+steps as the other two local articles. Until then the skill stops and says so,
+which is the correct behaviour: a guessed persona produces a report about a
+user who does not exist."
+optional_dogfood_note_no="/dogfood was NOT installed — it needs a runnable user-facing surface, and the
+default is to skip. Nothing is lost: copy .agents/skills/dogfood/ and
+constitution/local-product.md.template out of the kit on the day you have one,
+and add a row for it to AGENTS.md's quick reference."
+
+# --- reading the set ---------------------------------------------------------
+# An entry's name is its skill directory, which may carry a hyphen; in a
+# variable name the hyphen folds to an underscore, the same fold the tier
+# resolver applies to a domain token. `dogfood` has none; a second optional
+# skill's ticket owns the fixture that exercises the fold.
+opt_var() { printf '%s' "$1" | tr '-' '_'; }
+# opt_field <name> <field> — one field of an entry; empty when unset.
+opt_field() { eval "printf '%s' \"\${optional_$(opt_var "$1")_$2:-}\""; }
+# opt_in_set <name> — 0 when <name> is an optional skill.
+opt_in_set() {
+	for _ois in $OPTIONAL_SKILLS; do [ "$_ois" = "$1" ] && return 0; done
+	return 1
+}
+# The answer per skill: ask | yes | no. Both arms resolve it the same way.
+opt_choice() { eval "printf '%s' \"\${optional_choice_$(opt_var "$1"):-ask}\""; }
+opt_set_choice() { eval "optional_choice_$(opt_var "$1")=\$2"; }
+# opt_declined <name> — 0 when <name> is optional and not accepted.
+opt_declined() { opt_in_set "$1" && [ "$(opt_choice "$1")" != yes ]; }
+# opt_flag <arg> — takes --with-<name> / --no-<name> for a skill in the set;
+# 1 for anything else, so a typo'd flag dies instead of becoming a name.
+opt_flag() {
+	case "$1" in
+	--with-*) _n=${1#--with-} _c=yes ;;
+	--no-*) _n=${1#--no-} _c=no ;;
+	*) return 1 ;;
+	esac
+	opt_in_set "$_n" || return 1
+	opt_set_choice "$_n" "$_c"
+}
+# opt_usage → "[--with-x|--no-x]"; opt_supported → "--with-x, --no-x".
+opt_usage() {
+	_u=""
+	for _o in $OPTIONAL_SKILLS; do _u="$_u${_u:+ }[--with-$_o|--no-$_o]"; done
+	printf '%s' "$_u"
+}
+opt_supported() {
+	_u=""
+	for _o in $OPTIONAL_SKILLS; do _u="$_u${_u:+, }--with-$_o, --no-$_o"; done
+	printf '%s' "$_u"
+}
+# opt_marked_files — every marked path in the set, once each.
+opt_marked_files() {
+	for _o in $OPTIONAL_SKILLS; do
+		for _m in $(opt_field "$_o" marked); do printf '%s\n' "${_m%:*}"; done
+	done | sort -u
+}
+
+# opt_decide <kit-tree> <what it is> — resolve every `ask`. ONE QUESTION, and
+# only when there is somebody to ask: with no terminal the answer is SKIP,
+# because the two mistakes are not symmetric — a project that skipped a skill
+# copies it back out of the kit in a minute, while a project that took it
+# silently carries a dead command until someone notices. A yes the tree
+# cannot honour (somebody pruned the skill before running) falls back to no
+# and says so, rather than stamping rows for a skill that is not there.
+opt_decide() {
+	for _o in $OPTIONAL_SKILLS; do
+		if [ "$(opt_choice "$_o")" = ask ]; then
+			if [ -t 0 ]; then
+				printf %s "$(opt_field "$_o" prompt)"
+				read -r _ans || _ans=""
+				case "$_ans" in
+				[Yy] | [Yy][Ee][Ss]) opt_set_choice "$_o" yes ;;
+				*) opt_set_choice "$_o" no ;;
+				esac
+			else
+				opt_set_choice "$_o" no
+			fi
+		fi
+		if [ "$(opt_choice "$_o")" = yes ] && [ ! -f "$1/.agents/skills/$_o/SKILL.md" ]; then
+			echo "  note: /$_o was requested but $2 does not carry .agents/skills/$_o/ — skipping it" >&2
+			opt_set_choice "$_o" no
+		fi
+	done
+}
+
+# --- the marker pair ---------------------------------------------------------
+# A marked file carries the skill's block between a matched pair of comment
+# markers. The marker lines themselves ALWAYS go, so a project never inherits
+# scaffolding it did not ask about; declined, the lines between them go too.
+#
+# opt_marks <dialect> <token> — the one dialect table: sets _mb and _me to
+# the BEGIN and END marker lines as plain text.
+opt_marks() {
+	case "$1" in
+	md) _mb="<!-- $2:BEGIN -->" _me="<!-- $2:END -->" ;;
+	js) _mb="// $2:BEGIN" _me="// $2:END" ;;
+	*) die "the optional set names an unknown marker dialect '$1'" ;;
+	esac
+}
+# opt_marker_expr <choice> <dialect> <token> — the sed filter for one pair,
+# the plain markers escaped for a sed address.
+opt_marker_expr() {
+	opt_marks "$2" "$3"
+	_sb=$(printf '%s' "$_mb" | sed 's|/|\\/|g')
+	_se=$(printf '%s' "$_me" | sed 's|/|\\/|g')
+	if [ "$1" = yes ]; then
+		printf '/%s/d;/%s/d' "$_sb" "$_se"
+	else
+		printf '/%s/,/%s/d' "$_sb" "$_se"
+	fi
+}
+# opt_pair_check <file> <dialect> <token> — every BEGIN is followed by its
+# END before the next BEGIN, and nothing is left open. 0 when the file
+# carries the pair(s), 1 when it carries none; anything else dies naming the
+# file and the line. A decline's RANGE delete would run to end-of-file on a
+# lone or out-of-order BEGIN — a truncated file with exit 0, the
+# silent-data-loss shape §11 exists for. A broken pair is one somebody
+# edited; refuse loudly rather than guess which half they meant.
+opt_pair_check() {
+	opt_marks "$2" "$3"
+	_verdict=$(awk -v b="$_mb" -v e="$_me" '
+		index($0, b) { if (open) { print "broken: a second BEGIN at line " NR " before the END"; exit } open = 1; nb++; next }
+		index($0, e) { if (!open) { print "broken: an END at line " NR " with no BEGIN before it"; exit } open = 0; ne++ }
+		END { if (open) print "broken: the BEGIN at line " nb " has no END"; else print nb + 0 }
+	' "$1")
+	case "$_verdict" in
+	broken:*) die "$1 carries a broken $3 marker pair (${_verdict#broken: }) — fix the pair before stamping" ;;
+	0) return 1 ;;
+	esac
+	return 0
+}
+# opt_reject_marks <text> — a stamped value carrying a marker token would
+# write a marker into the manual and break the pair the preflight just
+# passed, so it is refused where '{{' is, before anything is stamped.
+opt_reject_marks() {
+	for _o in $OPTIONAL_SKILLS; do
+		case "$1" in
+		*"$(opt_field "$_o" marker):BEGIN"* | *"$(opt_field "$_o" marker):END"*)
+			die "project name/description must not contain a $(opt_field "$_o" marker) marker." ;;
+		esac
+	done
+}
+# opt_preflight <tree> — every marked file present in <tree> carries its pairs
+# whole, checked BEFORE anything is stamped or removed, so a refusal leaves
+# the tree exactly as it found it.
+opt_preflight() {
+	for _o in $OPTIONAL_SKILLS; do
+		for _m in $(opt_field "$_o" marked); do
+			[ -f "$1/${_m%:*}" ] || continue
+			opt_pair_check "$1/${_m%:*}" "${_m##*:}" "$(opt_field "$_o" marker)" || :
+		done
+	done
+}
+# opt_stamp <marked path> [file] — apply every pair a marked path carries, by
+# the answers given, to [file] (default: the path itself) in place. The two
+# arms stamp the same bytes; only where the file sits differs.
+opt_stamp() {
+	_t=${2:-$1}
+	for _o in $OPTIONAL_SKILLS; do
+		for _m in $(opt_field "$_o" marked); do
+			[ "${_m%:*}" = "$1" ] || continue
+			opt_pair_check "$_t" "${_m##*:}" "$(opt_field "$_o" marker)" || continue
+			sed "$(opt_marker_expr "$(opt_choice "$_o")" "${_m##*:}" "$(opt_field "$_o" marker)")" "$_t" >"$_t.stamp" &&
+				mv "$_t.stamp" "$_t" || die "stamping $_t failed"
+		done
+	done
+}
+# opt_decline — remove what every declined skill leaves behind. Exactly the
+# way the kit-authoring files go: no archive, no `.disabled` suffix, no
+# commented-out row. A skill that is half-present is worse than an absent one
+# — the manual's map and the skills directory are supposed to be the same set,
+# and the gate checks it. -L as well as -e: once the canonical dir is gone,
+# the .claude/skills bridge is a dangling symlink, and a bare -e follows it
+# to "no".
+opt_decline() {
+	for _o in $OPTIONAL_SKILLS; do
+		opt_declined "$_o" || continue
+		for _f in ".agents/skills/$_o" ".claude/skills/$_o" $(opt_field "$_o" carries); do
+			if [ -e "$_f" ] || [ -L "$_f" ]; then
+				rm -rf "$_f"
+				echo "  removed $_f (/$_o not selected)"
+			fi
+		done
+	done
+}
+# ============================================================================
 
 TEMPLATE="constitution/AGENTS.md.template"
 MANUAL="AGENTS.md"
@@ -161,49 +389,34 @@ if [ "$ADOPT" = 1 ]; then
 	[ -f "$a_kit/constitution/AGENTS.md.template" ] && [ -f "$a_kit/VERSION" ] ||
 		die "--adopt needs an UNSTAMPED kit clone beside the script — constitution/AGENTS.md.template or VERSION is missing next to $0"
 	[ "$a_kit" = "$root" ] &&
-		die "--adopt runs from inside the TARGET repository, against a kit clone elsewhere: cd <your repo> && sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+		die "--adopt runs from inside the TARGET repository, against a kit clone elsewhere: cd <your repo> && sh <kit-clone>/bootstrap.sh --adopt $(opt_usage) \"My Project\" \"One line.\""
 
 	# Arguments: same vocabulary as the new-project arm, parsed self-contained
 	# so an unknown flag dies instead of becoming a project name.
-	a_name="" a_desc="" a_have=0 a_dog=ask
+	a_name="" a_desc="" a_have=0
 	for a_arg in "$@"; do
 		case "$a_arg" in
 		--adopt) ;;
-		--with-dogfood) a_dog=yes ;;
-		--no-dogfood) a_dog=no ;;
-		-*) die "unknown option '$a_arg' for --adopt. Supported: --with-dogfood, --no-dogfood." ;;
+		-*) opt_flag "$a_arg" || die "unknown option '$a_arg' for --adopt. Supported: $(opt_supported)." ;;
 		*)
 			if [ "$a_have" = 0 ]; then
 				a_name=$a_arg a_have=1
 			elif [ "$a_have" = 1 ]; then
 				a_desc=$a_arg a_have=2
 			else
-				die "too many arguments. Usage: sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+				die "too many arguments. Usage: sh <kit-clone>/bootstrap.sh --adopt $(opt_usage) \"My Project\" \"One line.\""
 			fi
 			;;
 		esac
 	done
 	[ "$a_have" = 2 ] ||
-		die "usage: sh <kit-clone>/bootstrap.sh --adopt [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+		die "usage: sh <kit-clone>/bootstrap.sh --adopt $(opt_usage) \"My Project\" \"One line.\""
 	case "$a_name$a_desc" in
 	*'{{'* | *'}}'*) die "project name/description must not contain '{{' or '}}'." ;;
 	esac
-	if [ "$a_dog" = ask ]; then
-		if [ -t 0 ]; then
-			printf %s "$DOGFOOD_PROMPT"
-			read -r a_ans || a_ans=""
-			case "$a_ans" in
-			[Yy] | [Yy][Ee][Ss]) a_dog=yes ;;
-			*) a_dog=no ;;
-			esac
-		else
-			a_dog=no
-		fi
-	fi
-	if [ "$a_dog" = yes ] && [ ! -f "$a_kit/.agents/skills/dogfood/SKILL.md" ]; then
-		echo "  note: /dogfood was requested but the kit clone does not carry it — skipping" >&2
-		a_dog=no
-	fi
+	opt_reject_marks "$a_name$a_desc"
+	opt_decide "$a_kit" "the kit clone"
+	opt_preflight "$a_kit"
 
 	a_name_esc=$(esc "$a_name")
 	a_desc_esc=$(esc "$a_desc")
@@ -306,8 +519,8 @@ if [ "$ADOPT" = 1 ]; then
 	sed \
 		-e "s|$(mark PROJECT_NAME)|$a_name_esc|g" \
 		-e "s|$(mark PROJECT_DESCRIPTION)|$a_desc_esc|g" \
-		-e "$([ "$a_dog" = yes ] && printf '%s' "$DOGFOOD_MD_KEEP" || printf '%s' "$DOGFOOD_MD_STRIP")" \
-		"$a_kit/constitution/AGENTS.md.template" >"$a_scratch/manual.expected"
+		"$a_kit/$TEMPLATE" >"$a_scratch/manual.expected"
+	opt_stamp "$TEMPLATE" "$a_scratch/manual.expected"
 	for shim in $SHIMS; do
 		shim_body >"$a_scratch/shim.$shim"
 	done
@@ -399,7 +612,7 @@ if [ "$ADOPT" = 1 ]; then
 	for d in "$a_kit"/.agents/skills/*/; do
 		[ -d "$d" ] || continue
 		s=$(basename "$d")
-		[ "$s" = "dogfood" ] && [ "$a_dog" != yes ] && continue
+		opt_declined "$s" && continue
 		if a_exists ".agents/skills/$s"; then
 			if diff -rq "$a_kit/.agents/skills/$s" ".agents/skills/$s" >/dev/null 2>&1; then
 				# Our own earlier install (or their identical copy) — repair
@@ -446,28 +659,30 @@ if [ "$ADOPT" = 1 ]; then
 
 	# --- 5. policy and local files: install only where absent ---------------
 	if ! a_exists "scripts/docs-conformance/config.mjs"; then
-		# The dogfood-marked exemption block travels with the skill, exactly
-		# as the new-project arm stamps it (both markers or neither; the kit's
-		# own copy always carries the pair).
-		sed \
-			-e "$([ "$a_dog" = yes ] && printf '%s' "$DOGFOOD_JS_KEEP" || printf '%s' "$DOGFOOD_JS_STRIP")" \
-			"$a_kit/scripts/docs-conformance/config.mjs" >"$a_scratch/config.mjs" ||
+		# An optional skill's marked exemption block travels with the skill,
+		# exactly as the new-project arm stamps it.
+		cp "$a_kit/scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs" ||
 			die "preparing the gate policy file failed"
+		opt_stamp "scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs"
 		mkdir -p scripts/docs-conformance
 		mv "$a_scratch/config.mjs" "scripts/docs-conformance/config.mjs"
 		echo "  installed scripts/docs-conformance/config.mjs"
 	else
 		a_keep "scripts/docs-conformance/config.mjs"
-		# A kept policy file plus a dogfood YES can contradict each other — the
-		# flag may have flipped between runs, or their config predates the
-		# exemption. The gate would only whisper about it later (a skill-path
-		# advisory on the skill's first report), so say it now, while the human
-		# is already approving things.
-		if [ "$a_dog" = yes ] && ! grep -q 'docs/dogfood-reports/' "scripts/docs-conformance/config.mjs"; then
-			echo "  note: config.mjs is yours and was kept, but it lacks the dogfood exemption the" >&2
-			echo "  note: skill needs — add \"docs/dogfood-reports/\" to skillPaths.exemptTokens by hand," >&2
-			echo "  note: or the gate will warn the day the first dogfood report is written." >&2
-		fi
+		# A kept policy file plus an accepted skill can contradict each other
+		# — the flag may have flipped between runs, or their config predates
+		# the exemption. The gate would only whisper about it later (a
+		# skill-path advisory on the skill's first report), so say it now,
+		# while the human is already approving things.
+		for _o in $OPTIONAL_SKILLS; do
+			_x=$(opt_field "$_o" exempt)
+			[ "$(opt_choice "$_o")" = yes ] && [ -n "$_x" ] || continue
+			if ! grep -q -F -- "$_x" "scripts/docs-conformance/config.mjs"; then
+				echo "  note: config.mjs is yours and was kept, but it lacks the exemption /$_o" >&2
+				echo "  note: needs — add \"$_x\" to skillPaths.exemptTokens by hand," >&2
+				echo "  note: or the gate will warn the day the skill writes its first report." >&2
+			fi
+		done
 	fi
 	if ! a_exists "scripts/docs-conformance/local-vocabulary.mjs"; then
 		sed -e "s|$(mark PROJECT_NAME)|$a_name_js_esc|g" \
@@ -483,10 +698,12 @@ if [ "$ADOPT" = 1 ]; then
 		constitution/local-engineering.md.template constitution/local-workflow.md.template; do
 		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
 	done
-	if [ "$a_dog" = yes ]; then
-		f=constitution/local-product.md.template
-		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
-	fi
+	for _o in $OPTIONAL_SKILLS; do
+		[ "$(opt_choice "$_o")" = yes ] || continue
+		for f in $(opt_field "$_o" carries); do
+			if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
+		done
+	done
 	for d in scripts/docs-conformance/test adapters; do
 		if a_exists "$d"; then
 			a_keep "$d/"
@@ -664,9 +881,6 @@ name=""
 description=""
 have_name=0
 have_desc=0
-# ask | yes | no — resolved once, in the F6 block below.
-dogfood_choice=ask
-
 # take_positional <value> — name first, then description, then it is an error.
 take_positional() {
 	if [ "$have_name" = 0 ]; then
@@ -676,14 +890,12 @@ take_positional() {
 		description=$1
 		have_desc=1
 	else
-		die "too many arguments. Usage: sh bootstrap.sh [--with-dogfood|--no-dogfood] \"My Project\" \"One line.\""
+		die "too many arguments. Usage: sh bootstrap.sh $(opt_usage) \"My Project\" \"One line.\""
 	fi
 }
 
 while [ $# -gt 0 ]; do
 	case "$1" in
-	--with-dogfood) dogfood_choice=yes ;;
-	--no-dogfood) dogfood_choice=no ;;
 	--) # everything after this is positional, even if it looks like a flag
 		shift
 		while [ $# -gt 0 ]; do
@@ -692,7 +904,7 @@ while [ $# -gt 0 ]; do
 		done
 		break
 		;;
-	-*) die "unknown option '$1'. Supported: --with-dogfood, --no-dogfood." ;;
+	-*) opt_flag "$1" || die "unknown option '$1'. Supported: $(opt_supported)." ;;
 	*) take_positional "$1" ;;
 	esac
 	shift
@@ -717,60 +929,20 @@ fi
 [ -n "$description" ] || description="An agent-assisted project built on the agentic-sdlc framework."
 
 # ============================================================================
-# F6 BEGIN — the optional /dogfood skill (#27)
+# F6 BEGIN — the optional skills (#27, #130)
 # ----------------------------------------------------------------------------
-# Everything F6 does lives in this block and in one extra `-e` on the stamp
-# below. Same discipline as K4/K5/K7: bootstrap.sh is touched by several kit
-# tickets, and a named block is the difference between a merge and a rewrite.
+# The set is declared at the top of the file; this block only resolves the
+# answers and checks the marked files before anything is stamped. Same
+# discipline as K4/K5/K7: bootstrap.sh is touched by several kit tickets, and
+# a named block is the difference between a merge and a rewrite.
 #
-# WHY THIS ONE IS OPTIONAL AND THE OTHERS ARE NOT. Every other skill
-# works on the day the repo is created — they operate on specs, tickets,
-# diffs, branches and worktrees, all of which a one-hour-old project already
-# has. `/dogfood` operates on a RUNNING PRODUCT: it walks declared personas
-# through a real user-facing surface. A project with no such surface would
-# inherit a command it cannot run and a row on the manual's map pointing at it,
-# which is the exact failure the docs gate exists to prevent one level up.
-#
-# ONE QUESTION, and only when there is somebody to ask. With no terminal the
-# answer is SKIP, because the two mistakes are not symmetric: a project that
-# skipped it copies the skill back out of the kit in a minute, while a project
-# that took it silently carries a dead command until someone notices.
-#
-# WHAT "SKIP" REMOVES: the skill directory (the way KIT_ONLY files go, further
-# down), the product article that exists only to feed it, and — at stamp time,
-# below — the manual's rows about it. The shims are untouched: they hold one
-# import line and no rules, so there is nothing in them to be conditional about.
-if [ "$dogfood_choice" = ask ]; then
-	if [ -t 0 ]; then
-		printf %s "$DOGFOOD_PROMPT"
-		read -r dogfood_answer || dogfood_answer=""
-		case "$dogfood_answer" in
-		[Yy] | [Yy][Ee][Ss]) dogfood_choice=yes ;;
-		*) dogfood_choice=no ;;
-		esac
-	else
-		dogfood_choice=no
-	fi
-fi
-
-# "Yes" is only answerable if the skill is actually in this tree. If somebody
-# pruned it before running bootstrap, stamping its rows anyway would hand the
-# project a manual whose own gate rejects it on the first push — so say what
-# happened and fall back to skipping.
-if [ "$dogfood_choice" = yes ] && [ ! -f .agents/skills/dogfood/SKILL.md ]; then
-	echo "  note: /dogfood was requested but .agents/skills/dogfood/ is not in this tree — skipping it" >&2
-	dogfood_choice=no
-fi
-
-# The stamp-time filter for the manual's optional rows. The template marks them
-# with a matched pair of HTML comments; the marker lines themselves ALWAYS go,
-# so a project never inherits scaffolding it did not ask about, and when the
-# skill is declined the lines between them go too.
-if [ "$dogfood_choice" = yes ]; then
-	dogfood_filter=$DOGFOOD_MD_KEEP
-else
-	dogfood_filter=$DOGFOOD_MD_STRIP
-fi
+# WHAT "SKIP" REMOVES: the skill's two homes (the way KIT_ONLY files go,
+# further down), the entry's `carries` paths, and — at stamp time, below —
+# the marked blocks in the manual and the gate policy. The shims are
+# untouched: they hold one import line and no rules, so there is nothing in
+# them to be conditional about.
+opt_decide . "this tree"
+opt_preflight .
 # F6 END
 # ============================================================================
 
@@ -779,6 +951,7 @@ fi
 case "$name$description" in
 *'{{'* | *'}}'*) die "project name/description must not contain '{{' or '}}'." ;;
 esac
+opt_reject_marks "$name$description"
 
 # --- stamp ------------------------------------------------------------------
 # esc/esc_js live at the top of the file — both arms stamp with them.
@@ -789,8 +962,8 @@ name_js_esc=$(esc "$(esc_js "$name")")
 sed \
 	-e "s|$(mark PROJECT_NAME)|$name_esc|g" \
 	-e "s|$(mark PROJECT_DESCRIPTION)|$description_esc|g" \
-	-e "$dogfood_filter" \
 	"$TEMPLATE" >"$MANUAL"
+opt_stamp "$TEMPLATE" "$MANUAL"
 rm -f "$TEMPLATE"
 echo "  stamped $MANUAL"
 
@@ -913,53 +1086,17 @@ if [ -d templates/workflows ]; then
 	rmdir templates 2>/dev/null || true
 fi
 
-# --- the declined optional skill (F6, #27) ----------------------------------
-# Removed exactly the way the kit-authoring files below are: no archive, no
-# `.disabled` suffix, no commented-out row left in the manual. A skill that is
-# half-present is worse than an absent one — the manual's map and the skills
-# directory are supposed to be the same set, and the gate checks it.
-#
-# The product article goes too: it exists to hold the persona/surface
-# declaration `/dogfood` reads, so on its own it would be an unfilled template
-# nothing points at.
-if [ "$dogfood_choice" != yes ]; then
-	# -L as well as -e: once the canonical dir is gone, the .claude/skills
-	# symlink is dangling, and a bare -e follows it to "no".
-	for f in .agents/skills/dogfood .claude/skills/dogfood constitution/local-product.md.template; do
-		if [ -e "$f" ] || [ -L "$f" ]; then
-			rm -rf "$f"
-			echo "  removed $f (/dogfood not selected)"
-		fi
-	done
-fi
+# --- the declined optional skills (F6, #27, #130) ---------------------------
+opt_decline
 
-# The gate policy's dogfood-only exemption travels with the skill: the token
-# it exempts names the report directory only that skill ever creates, and a
-# declined tree must not mention the command anywhere (the opt-in suite holds
-# it to that). Same marker-pair contract as the manual's optional rows, in
-# the comment syntax this file speaks: declined, the whole block goes;
-# accepted, only the scaffolding markers go.
-dogfood_cfg=scripts/docs-conformance/config.mjs
-if [ -f "$dogfood_cfg" ]; then
-	# Both markers or neither: the decline branch's RANGE delete would run to
-	# end-of-file on a lone BEGIN — a truncated policy file with exit 0, the
-	# silent-data-loss shape §11 exists for. A lone marker is a broken pair
-	# somebody edited; refuse loudly rather than guess which half they meant.
-	dogfood_marks=$(grep -c '// DOGFOOD:\(BEGIN\|END\)' "$dogfood_cfg" || true)
-	case "$dogfood_marks" in
-	0) ;; # nothing to stamp — already consumed, or a consumer's own config
-	2)
-		if [ "$dogfood_choice" = yes ]; then
-			sed "$DOGFOOD_JS_KEEP" "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
-				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
-		else
-			sed "$DOGFOOD_JS_STRIP" "$dogfood_cfg" >"$dogfood_cfg.stamp" &&
-				mv "$dogfood_cfg.stamp" "$dogfood_cfg"
-		fi
-		;;
-	*) die "$dogfood_cfg carries a broken DOGFOOD marker pair ($dogfood_marks marker(s)) — fix the pair before stamping" ;;
-	esac
-fi
+# Every other marked file (the manual's template was consumed above) carries
+# its optional blocks in its own comment syntax; a declined tree must not
+# mention the command anywhere (the opt-in suite holds it to that), so the
+# blocks go with the skill — and accepted, only the scaffolding markers go.
+for _p in $(opt_marked_files); do
+	[ "$_p" = "$TEMPLATE" ] && continue
+	[ -f "$_p" ] && opt_stamp "$_p"
+done
 
 # --- clean up the kit's own scaffolding -------------------------------------
 for f in $KIT_ONLY; do
@@ -1047,31 +1184,18 @@ edited here. Everything else is yours.
 EOF
 
 # ============================================================================
-# F6 BEGIN — what the dogfood answer meant (#27)
+# F6 BEGIN — what each optional answer meant (#27, #130)
 # ----------------------------------------------------------------------------
 # Say it either way. "Nothing happened" is not a report: a project that skipped
-# the skill needs to know it can still have it, and one that took it needs to
-# know the skill will not run until the declaration is filled in.
-if [ "$dogfood_choice" = yes ]; then
-	cat <<'EOF'
-
-/dogfood is installed, and it does NOT work yet. It walks your personas through
-your real user-facing surface, and both of those are yours to declare: fill in
-the DOGFOOD DECLARATION in constitution/local-product.md.template, drop the
-.template suffix, and point AGENTS.md's article layer at it — the same three
-steps as the other two local articles. Until then the skill stops and says so,
-which is the correct behaviour: a guessed persona produces a report about a
-user who does not exist.
-EOF
-else
-	cat <<'EOF'
-
-/dogfood was NOT installed — it needs a runnable user-facing surface, and the
-default is to skip. Nothing is lost: copy .agents/skills/dogfood/ and
-constitution/local-product.md.template out of the kit on the day you have one,
-and add a row for it to AGENTS.md's quick reference.
-EOF
-fi
+# a skill needs to know it can still have it, and one that took it needs to
+# know what the skill still waits on.
+for _o in $OPTIONAL_SKILLS; do
+	if [ "$(opt_choice "$_o")" = yes ]; then
+		printf '\n%s\n' "$(opt_field "$_o" note_yes)"
+	else
+		printf '\n%s\n' "$(opt_field "$_o" note_no)"
+	fi
+done
 # F6 END
 # ============================================================================
 
