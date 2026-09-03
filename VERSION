@@ -381,7 +381,24 @@
 # From #115: UPDATING.md's step 9 carries an "Arriving from 0.14.0" note per
 # category with the take for each item above. That is the whole non-manifest
 # half.
-shared-layer: 0.15.0
+# 0.16.0 — the kit keeps its own house (PRD #124, from the first
+# housekeeping pass and the architecture review it routed to). One file joins
+# the layer with the wave's first slice (#125):
+# scripts/manifest.lib.sh — the one grammar for VERSION's two sections.
+# Eleven hand-copied awk programs in three dialects read the manifest before,
+# and two disagreed on what an annotated entry means: bootstrap took the first
+# word, the gate took the whole line. The module reads the manifest on stdin,
+# prints one name per line (the first word of an entry; annotation is legal
+# in both sections), and is sourced by scripts/check.sh, bootstrap and the
+# suites. scripts/check.sh changed content: it sources the module instead of
+# carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
+# contract (the recipe runs in a consumer at an older release) and
+# tests/manifest.test.sh (kit-only) holds them equal to the module. This note
+# grows with the wave's stacked tickets and is finished at the v0.16.0 tag.
+#   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
+# harness gains a roster helper both skill suites use; the kit glossary gains
+# **manifest** as a term. The wave's later tickets add to this list.
+shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -402,6 +419,7 @@ files:
   UPDATING.md
   scripts/guards.lib.sh
   scripts/agents.lib.sh
+  scripts/manifest.lib.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh

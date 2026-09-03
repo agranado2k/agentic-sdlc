@@ -186,12 +186,39 @@ strip_nested_worktrees() {
 		done
 }
 
+# The repo root, derived once from the suite that sourced this harness; every
+# helper below anchors on it rather than on the working directory.
+T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+# The manifest grammar, shared with the gate and bootstrap. Sourced here so
+# every suite reads VERSION one way — and asserted, so a module that loads
+# and defines nothing cannot turn manifest-driven loops into no-ops.
+# shellcheck disable=SC1091
+. "$T_ROOT/scripts/manifest.lib.sh"
+command -v manifest_section >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/manifest.lib.sh did not define manifest_section" >&2; exit 2; }
+
+# t_assert_skill_in_roster <name> — the three roster surfaces every shipped
+# skill must appear on: VERSION's skills: manifest, the consumer manual
+# template's quick-reference table, and the provenance file.
+t_assert_skill_in_roster() {
+	_sr_root="$T_ROOT"
+	manifest_section skills <"$_sr_root/VERSION" | grep -qx -- "$1" &&
+		pass "VERSION's skills manifest names $1" ||
+		fail "VERSION's skills manifest does not name $1 — no consumer will ever be told it exists"
+	grep -q "\`/$1\`" "$_sr_root/constitution/AGENTS.md.template" &&
+		pass "the consumer manual template names /$1" ||
+		fail "the consumer manual template never names /$1 — a stamped project cannot find it"
+	grep -q -- "$1" "$_sr_root/.agents/skills/LICENSE-mattpocock-skills.md" &&
+		pass "the provenance file accounts for $1" ||
+		fail "the provenance file does not account for $1"
+}
+
 # t_ignored_commands — the slash commands the gate's policy file exempts from
 # skill resolution (`claudeMdRefs.ignoreCommands` in config.mjs), one per line.
 # Read from the file rather than mirrored: three hand-kept copies of that list
 # had already drifted by the time this helper existed.
 t_ignored_commands() {
-	sed -n '/ignoreCommands: \[/,/\]/p' "${ROOT:-$(pwd)}/scripts/docs-conformance/config.mjs" |
+	sed -n '/ignoreCommands: \[/,/\]/p' "$T_ROOT/scripts/docs-conformance/config.mjs" |
 		grep -o '"/[a-z][a-z0-9-]*"' | tr -d '"'
 }
 

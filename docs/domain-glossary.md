@@ -49,6 +49,14 @@ Grouped by the seam each term belongs to. Entry shape:
   contrast, is placed byte-for-byte with no substitution.
   - _Avoid_: "generate", "render" — both suggest the source stays around and can
     be re-run, and a stamp is one-shot.
+- **Manifest** — `VERSION`'s two lists, `files:` (the shared layer) and
+  `skills:` (the roster), in one format: an indented entry whose name is its
+  first word, the rest annotation. Read by one grammar,
+  `scripts/manifest.lib.sh`, which the gate, bootstrap and the suites source;
+  the update recipe keeps its own copy by contract and a suite holds the two
+  equal.
+  - _Avoid_: "the file list" — the manifest is two lists, and the parser is
+    the thing that decides what an entry is.
 - **Shared layer** — the files listed under `files:` in `VERSION`, copied
   verbatim into a consumer and not edited there. Changing one is a release
   action: minor bump, an `UPDATING.md` entry, and re-captured transcripts.
