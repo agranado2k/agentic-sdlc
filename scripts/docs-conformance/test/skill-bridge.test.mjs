@@ -108,6 +108,14 @@ test("an unreadable bridge entry is reported, not silently passed", { skip: proc
 // The wrong-pass this validator gained in 0.14.0: with a skill real at BOTH
 // addresses and the two bodies DIVERGED, every rule in the gate looked at the
 // configured home and reported nothing about the copy the other harness runs.
+test("a dangling symlink at the legacy address is silent — the gate's path rules own it", () => {
+  const root = makeFixture({ ".agents/skills/tdd/SKILL.md": "# tdd\n" });
+  mkdirSync(join(root, ".claude/skills"), { recursive: true });
+  symlinkSync("../../.agents/skills/nowhere", join(root, ".claude/skills/nowhere"));
+  const ctx = makeContext({ repoRoot: root, config: defaultConfig });
+  assert.deepEqual(run(ctx), []);
+});
+
 test("a diverged real copy at the legacy address is reported, not passed over", () => {
   const ctx = ctxFor({
     ".agents/skills/tdd/SKILL.md": "# tdd\nThe canonical one.\n",

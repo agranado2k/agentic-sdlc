@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, symlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { test } from "node:test";
 import { cleanup, ctxFor } from "./helpers.mjs";
@@ -9,9 +10,14 @@ import { cleanup, ctxFor } from "./helpers.mjs";
 // `read` in their own try/catch to make that distinction; these are the
 // cases those wrappers existed for.
 
-test("read returns the text of a file, and null for a missing path", () => {
+test("read returns the text of a file", () => {
   const ctx = ctxFor({ "a.md": "hello\n" });
   assert.equal(ctx.read("a.md"), "hello\n");
+  cleanup(ctx);
+});
+
+test("read returns null for a missing path", () => {
+  const ctx = ctxFor({});
   assert.equal(ctx.read("missing.md"), null);
   cleanup(ctx);
 });
@@ -30,7 +36,7 @@ test("kind says file, directory, or null", () => {
   cleanup(ctx);
 });
 
-test("a symlink is reported as what it resolves to; a dangling one as null, and read gives null", () => {
+test("kind follows a symlink to what it resolves to, and a dangling one is null to kind and to read", () => {
   const ctx = ctxFor({ "real/SKILL.md": "# real\n" });
   mkdirSync(join(ctx.repoRoot, "links"), { recursive: true });
   symlinkSync("../real", join(ctx.repoRoot, "links/good"));
@@ -42,14 +48,15 @@ test("a symlink is reported as what it resolves to; a dangling one as null, and 
 });
 
 test(
-  "an unreadable file is a file to kind and null to read — the one shape a validator must report, not skip",
+  "a present file that cannot be read is a file to kind, not readable, and read THROWS — the gate must not pass it in silence",
   { skip: process.getuid?.() === 0 && "chmod does not restrain root" },
   () => {
     const ctx = ctxFor({ "locked.md": "secret\n" });
     chmodSync(join(ctx.repoRoot, "locked.md"), 0o000);
     try {
       assert.equal(ctx.kind("locked.md"), "file");
-      assert.equal(ctx.read("locked.md"), null);
+      assert.equal(ctx.readable("locked.md"), false);
+      assert.throws(() => ctx.read("locked.md"), /EACCES/);
     } finally {
       chmodSync(join(ctx.repoRoot, "locked.md"), 0o644);
       cleanup(ctx);
@@ -57,8 +64,20 @@ test(
   },
 );
 
-test("the context exposes exactly read, kind, list and exists — no recursive lister", () => {
+test("a FIFO is null to kind — nothing opens it, so nothing blocks on it", () => {
   const ctx = ctxFor({});
-  assert.deepEqual(Object.keys(ctx).sort(), ["config", "exists", "kind", "list", "read", "repoRoot"]);
+  try {
+    execFileSync("mkfifo", [join(ctx.repoRoot, "pipe")]);
+  } catch {
+    cleanup(ctx);
+    return; // no mkfifo on this machine: the case cannot be built here
+  }
+  assert.equal(ctx.kind("pipe"), null);
+  cleanup(ctx);
+});
+
+test("the context exposes exactly read, kind, readable, list and exists — no recursive lister", () => {
+  const ctx = ctxFor({});
+  assert.deepEqual(Object.keys(ctx).sort(), ["config", "exists", "kind", "list", "read", "readable", "repoRoot"]);
   cleanup(ctx);
 });

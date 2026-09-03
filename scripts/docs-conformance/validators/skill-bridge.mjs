@@ -82,11 +82,11 @@ export function run(ctx) {
       continue;
     }
     if (kind !== "file") continue; // dangling symlink — the gate's path rules own that
-    const raw = ctx.read(entry);
-    if (raw == null) {
+    if (!ctx.readable(entry)) {
       // A file that is there and cannot be read — permissions, say — must
       // not be swallowed into a silent pass: report it rather than pretend
-      // the entry was fine.
+      // the entry was fine. Asked before reading, because a read of it would
+      // throw, and this rule owns the verdict on its own entries.
       out.push({
         validator: id,
         severity: "warning",
@@ -97,6 +97,8 @@ export function run(ctx) {
       });
       continue;
     }
+    const raw = ctx.read(entry);
+    if (raw == null) continue; // gone between stat and read — nothing to judge
     if (!MATERIALIZED_RE.test(raw)) continue; // ordinary file (a licence, a stray)
     // The materialized text is relative to the LINK's directory; the hint
     // below names a repo-relative path, so strip the climb. Never assert the
