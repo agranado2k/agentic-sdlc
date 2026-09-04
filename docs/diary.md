@@ -849,3 +849,43 @@ probe can fail. The implement skill's fallback-review step names the rule
 and the domain for consumers, and names no model; the implement-deliver
 suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
 its optional clarifying amendment can point here once that lands.
+
+### 2026-09-03 — The tier resolver's history moved to the diary
+
+Ticket #137 of PRD #124, filed by the first housekeeping pass. The header of
+`scripts/agents.lib.sh` had grown to 138 lines of narrative — why the kit
+names no model, why the unconfigured default is load-bearing, why the tier
+vocabulary is closed and the domain's open — and the module-global comments
+below it recounted the incidents that shaped them. The contract was buried
+in the story. The header is now the contract alone: the seam, the arguments,
+the two resolution orders and the exit codes, in under thirty lines, with a
+pointer here. The reasoning it dropped lives where it was already stated,
+the root manual's "Capability tiers" section. Behaviour is unchanged; the
+tier suite is the oracle.
+
+The incidents, for the record, because each one is a rule that looks
+arbitrary without its cause:
+
+- **The sourcing recipe is two statements.** `AGENTS_CONFIG=… . file` looks
+  right and is wrong in bash and zsh, which drop a prefix assignment before
+  the sourced code runs; the resolver then resolved UNMAPPED, with nothing but its own one-line warning to show why. The
+  recipe sets the variable on its own line.
+- **The directory global defaults to empty, not `.`.** It once defaulted to
+  `.`, which quietly made resolution order 3 mean "a config in whatever
+  directory the process is standing in" — a stranger's code, sourced. Empty
+  means a sourcing caller that has not said where it is gets `$AGENTS_CONFIG`
+  or nothing.
+- **There is no variable holding the tier list.** It was a module global
+  feeding the usage and error text, and a sourced config could reassign it,
+  leaving diagnostics that named tiers that did not exist while the literal
+  `case` check kept working. The four names are spelled at their three
+  literal sites and move together.
+- **The config miss is memoized, not only the hit.** An unconfigured project
+  is the common case, and every lookup re-ran `git rev-parse` and two stats
+  to reach the same "no". Only the genuine "no config anywhere" miss is
+  remembered; an explicitly named config that does not exist keeps failing,
+  loudly, on every call.
+- **An unmapped tier prints nothing and exits 0.** A resolver that
+  hard-failed on an unmapped tier would leave a freshly bootstrapped project
+  unable to spawn anything and would be deleted on day one. An unknown tier
+  is the opposite case and exits 2: a typo is not a policy choice.
