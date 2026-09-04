@@ -26,7 +26,7 @@ is in flight. Do not restate the README.
 | **Last commit on `main`** | `3f1a653` — merge of PR #158, the last PR before the wave's close (2026-09-04) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
-| **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. |
+| **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
 | **Active worktrees** | None. The 0.16.0 wave (PRD #124) landed in two trains (2026-09-03: #139, #140, #142, #141, #150, #143, #147, #148, #149, #151; 2026-09-04: #152, #153, #154, #155, #156, #157, #158) and closed with ticket #136's PR. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
@@ -960,7 +960,7 @@ advisory's job was to make the debt visible, and it is.
 
 PRD #124 came from the kit's first housekeeping pass and the architecture
 review it routed to, and its question was narrower than the wave before it:
-does the kit keep the rules it sells? Seventeen tickets, seventeen PRs, two
+does the kit keep the rules it sells? Seventeen tickets, eighteen PRs, two
 trains, and one follow-up for a disposition that had claimed fixes it never
 landed (#158, with its correction on #154).
 

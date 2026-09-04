@@ -550,10 +550,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1740 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1743 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1894 insertions(+), 1 deletion(-)
+ 3 files changed, 1897 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -809,8 +809,9 @@ pull-request template gains the `<!-- explain-diff-appendix -->` marker
 paragraph (that is a 9c template take). The copy without the wiring installs a
 skill nothing invokes.
 
-**Arriving from 0.15.0 or older, the inventory prints no new name — seven
-skills changed body.** All are ordinary three-way merges here: `/implement`'s
+**Arriving from 0.15.0 or older, the inventory prints no new name — six
+skills and the licence file changed body.** All are ordinary three-way merges
+here: `/implement`'s
 Deliver step names the rule that the reviewer is never the model that
 implemented, and the `reviewer self-implemented` domain to resolve when the
 session itself wrote the diff (its mapping is 9d); `/tdd`'s `deep-modules.md`
@@ -820,8 +821,10 @@ check); `/grill-with-docs`'s `GLOSSARY-FORMAT.md` quotes the banned phrase it
 mentions as a code span, so the new banned-words advisory leaves it alone;
 `/diagnose`'s human-in-the-loop script moved one level up (the paragraph on
 a removed file inside a skill, above, is about exactly this); `/explain-diff`'s
-filename example carries a date placeholder; the licence file's provenance
-rows follow the diagrams.
+filename example carries a date placeholder; `/tdd`'s own provenance line
+says which sidecar was redrawn, and `/improve-codebase-architecture`'s
+`PRESENTING.md` names mermaid as the diagram language its reports render;
+the licence file's provenance rows follow the diagrams.
 
 **Arriving from 0.14.0 or older, the inventory prints at least two names you
 have not seen before: `design-brief` and `housekeeping`.** Both are directory

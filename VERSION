@@ -425,7 +425,9 @@
 # (glossary path, exclusions), and the grill-with-docs sidecar quotes the
 # banned phrase it mentions as a code span. From #135: the tdd sidecar's two
 # diagrams are mermaid and the grilling skill's file tree is a nested list,
-# never character art; the licence's provenance rows follow. From #138: the
+# never character art; the tdd skill's provenance line and the licence's
+# rows say so, and improve-codebase-architecture's PRESENTING.md names
+# mermaid as the report diagram language. From #138: the
 # diagnose skill's human-in-the-loop script moves one level up, to
 # .agents/skills/diagnose/hitl-loop.template.sh, and the explain-diff skill's
 # filename example carries a date placeholder. From #144: the implement
