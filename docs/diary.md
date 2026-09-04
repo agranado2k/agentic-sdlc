@@ -934,3 +934,24 @@ when the notice does not name one — with a stub validator registered in a
 scratch copy of the harness as the bait. The notice names the seventh, so
 a validator added to the runner and not to the notice is red on the next
 push rather than a silent overclaim.
+### 2026-09-03 — The glossary's banned words got a reader
+
+Ticket #128 of PRD #124, from the first housekeeping pass: the glossary
+template ships a "Words this project does not use" section, and nothing
+read it — the banned sense of *install* survived in the kit's own manual
+beside legitimate dependency-sense uses the ban had no carve-out for. A new
+advisory, `banned-words`, reads the section, and warns on each banned word
+in the root manual, the local articles and every skill file, naming the
+word, the line and the replacement the entry prescribes. Fenced blocks and
+code spans are quoted material and stay silent; the two shared articles are
+excluded by default, since a consumer cannot reword them. The entry format
+gains an `Except:` clause — the permitted phrases as code spans — and the
+kit's glossary uses it for *install*'s dependency sense.
+
+The kit is the first consumer, and the gate's first run said twenty-two
+things: two `install`s in the bootstrap sense in the manual (one of them the
+finding the housekeeping report named), one in the design-brief skill, one
+in the housekeeping checklist, one in the prototype skill; `the framework`
+twice; and `config` on its own seventeen times across the manual and six
+skills. None fails the gate. Rewording them is a ticket of its own — the
+advisory's job was to make the debt visible, and it is.

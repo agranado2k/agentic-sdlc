@@ -328,4 +328,19 @@ const housekeepingDue = {
   // diary: "docs/diary.md",
 };
 
-export default { claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillPaths };
+/**
+ * Policy for the banned-words advisory: the glossary whose "Words this
+ * project does not use" section is the list, and the files the scan leaves
+ * alone. The scan covers the root manual, every article in the constitution
+ * directory, and every Markdown file of every skill; the two shared articles
+ * are excluded by default because they arrive verbatim from the kit and are
+ * not yours to reword. A use is a warning, never a violation. An entry may
+ * carve out a legitimate sense with `Except:` followed by the permitted
+ * phrases as code spans — the glossary template shows the shape.
+ */
+const bannedWords = {
+  // glossary: "docs/domain-glossary.md",
+  // exclude: ["constitution/shared-invariants.md", "constitution/shared-code-craft.md"],
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillPaths };
