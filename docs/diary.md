@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-02
+## Current state — 2026-09-03
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited

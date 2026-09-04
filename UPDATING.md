@@ -543,10 +543,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1684 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1691 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1838 insertions(+), 1 deletion(-)
+ 3 files changed, 1845 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -898,6 +898,13 @@ will ever find.
 
 **A removed skill** (`--diff-filter=D`) is the reverse: delete the directory and
 the row in the same commit, and let the gate catch the half you forgot.
+
+**A removed file inside a skill** — a sidecar that moved or left — shows up
+in the same `D` list, and it is a delete too: remove the old path, take the new
+one from the `A` list if there is one, and know that no gate flags the orphan
+you leave behind (an unreferenced file is not a violation). The 0.16.0 release
+is the first to need this: `diagnose/scripts/hitl-loop.template.sh` became
+`diagnose/hitl-loop.template.sh`.
 
 ### 9a-bis. The 0.14.0 home move — optional, and reversible by not doing it
 
