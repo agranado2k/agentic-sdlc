@@ -408,6 +408,12 @@
 # of catching errno codes, and its unreadable-entry message carries no errno.
 # Every verdict is unchanged. This note grows with the wave's stacked tickets
 # and is finished at the v0.16.0 tag.
+# From #127: scripts/check.sh changed content — its reduced form's path roots
+# are the harness's list entry for entry (four subtrees of .agents and .claude
+# instead of the two whole trees) and match by prefix, so a root may carry a
+# `/`; tests/gate-path-roots.test.sh (kit-only) holds the two lists equal.
+# This note grows with the wave's stacked tickets and is finished at the
+# v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. From #138: two shared files changed content without

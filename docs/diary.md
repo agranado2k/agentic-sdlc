@@ -904,3 +904,22 @@ harness, the adapters or the suites called it. The bridge validator asks
 unreadable-entry message no longer quotes an errno, and its fixture asserts
 the message, not the code. `test/context.test.mjs` pins the contract, the
 dangling-symlink and unreadable cases included.
+### 2026-09-03 — The gate's two engines agree on their path roots
+
+Ticket #127 of PRD #124, the finding the first housekeeping pass put at the
+top: the reduced POSIX form of the docs gate admitted all of `.agents` and
+`.claude` as path roots where the harness's policy admitted four subtrees,
+and nothing held the pair together. A reference under `.agents/anything`
+could fail the fallback while the harness ignored it. The harness's list is
+the truth: the wrapper carries the same eleven entries and matches by
+prefix rather than first segment, so a root may carry a `/`.
+`tests/gate-path-roots.test.sh` reads both lists with no runtime, fails when
+they differ, proves that with a bait on each side, and bootstraps a project
+to show both engines judge the same three references identically. The
+duplication itself stays — the fallback exists for a machine with no node
+to read the policy with — but it can no longer drift in silence. One
+consequence for the record: ADR-0001's honest limitation, that adding a root
+"would split the two engines apart" because the POSIX twin lives in the
+shared wrapper, is no longer true as stated — a root added to one list now
+fails this suite before it ships. The record stands as written; this line is
+its dated qualification, not an edit.
