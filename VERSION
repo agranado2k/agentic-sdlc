@@ -414,6 +414,12 @@
 # `/`; tests/gate-path-roots.test.sh (kit-only) holds the two lists equal.
 # This note grows with the wave's stacked tickets and is finished at the
 # v0.16.0 tag.
+# tests/manifest.test.sh (kit-only) holds them equal to the module.
+# From #129, scripts/check.sh changed content again: its no-node NOTICE
+# names the claude-md-refs rules it cannot run, so every scan the runner
+# registers is named by id, and the self-host suite (kit-only) holds the
+# notice to the runner's registration list. This note grows with the wave's
+# stacked tickets and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. From #138: two shared files changed content without

@@ -923,3 +923,14 @@ consequence for the record: ADR-0001's honest limitation, that adding a root
 shared wrapper, is no longer true as stated — a root added to one list now
 fails this suite before it ships. The record stands as written; this line is
 its dated qualification, not an edit.
+### 2026-09-03 — The fallback notice is held to the runner
+
+Ticket #129 of PRD #124. The reduced POSIX gate prints a NOTICE naming
+every scan it cannot run, and nothing checked that list against the scans
+the harness actually runs; it had named six of seven by id, and the seventh
+only by describing its rules. The self-host suite now reads the runner's
+registration list, follows each import to its validator's id, and fails
+when the notice does not name one — with a stub validator registered in a
+scratch copy of the harness as the bait. The notice names the seventh, so
+a validator added to the runner and not to the notice is red on the next
+push rather than a silent overclaim.
