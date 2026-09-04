@@ -74,7 +74,7 @@ The explanation has these sections, in this order:
   resolve the OS temp directory from `$TMPDIR`, falling back to `/tmp` (or
   `%TEMP%` on Windows), and start the filename with today's date in
   `YYYY-MM-DD-` format so the files stay time-sorted. For example:
-  `$TMPDIR/2026-01-12-explanation-<slug>.html`. Keep the `<slug>` to
+  `$TMPDIR/<YYYY-MM-DD>-explanation-<slug>.html`. Keep the `<slug>` to
   `[a-z0-9-]` — it usually derives from a branch or PR title you did not
   write. Tell the user the path when done.
 - Write with the clarity and flow of Martin Kleppmann — engaging, classic

@@ -20,14 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.15.0, tagged at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.16.0 on `main`, bumped by PR #139 and **not yet tagged** — self-host's tag leg stays red by design until the wave's closing ticket (#136) lands and v0.16.0 is cut; the last tagged release is 0.15.0, at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
+| **Last commit on `main`** | `16c8a58` — merge of PR #151, the tenth and last PR of the 0.16.0 wave's first train (2026-09-03) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | The 0.16.0 wave (PRD #124) is in flight in `worktree/f46`–`f52`, one ticket each. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
+| **Active worktrees** | The 0.16.0 wave's first train landed 2026-09-03 (#139, #140, #142, #141, #150, #143, #147, #148, #149, #151) and its worktrees are pruned; the wave's remaining tickets (#126–#129, #137, #138, then #136) each open one `worktree/<slug>` as they go. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
 ### Open questions / unresolved decisions
 
@@ -850,6 +851,59 @@ and the domain for consumers, and names no model; the implement-deliver
 suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
 its optional clarifying amendment can point here once that lands.
 
+### 2026-09-03 — The tier resolver's history moved to the diary
+
+Ticket #137 of PRD #124, filed by the first housekeeping pass. The header of
+`scripts/agents.lib.sh` had grown to 138 lines of narrative — why the kit
+names no model, why the unconfigured default is load-bearing, why the tier
+vocabulary is closed and the domain's open — and the module-global comments
+below it recounted the incidents that shaped them. The contract was buried
+in the story. The header is now the contract alone: the seam, the arguments,
+the two resolution orders and the exit codes, in under thirty lines, with a
+pointer here. The reasoning it dropped lives where it was already stated,
+the root manual's "Capability tiers" section. Behaviour is unchanged; the
+tier suite is the oracle.
+
+The incidents, for the record, because each one is a rule that looks
+arbitrary without its cause:
+
+- **The sourcing recipe is two statements.** `AGENTS_CONFIG=… . file` looks
+  right and is wrong in bash and zsh, which drop a prefix assignment before
+  the sourced code runs; the resolver then resolved UNMAPPED, with nothing but its own one-line warning to show why. The
+  recipe sets the variable on its own line.
+- **The directory global defaults to empty, not `.`.** It once defaulted to
+  `.`, which quietly made resolution order 3 mean "a config in whatever
+  directory the process is standing in" — a stranger's code, sourced. Empty
+  means a sourcing caller that has not said where it is gets `$AGENTS_CONFIG`
+  or nothing.
+- **There is no variable holding the tier list.** It was a module global
+  feeding the usage and error text, and a sourced config could reassign it,
+  leaving diagnostics that named tiers that did not exist while the literal
+  `case` check kept working. The four names are spelled at their three
+  literal sites and move together.
+- **The config miss is memoized, not only the hit.** An unconfigured project
+  is the common case, and every lookup re-ran `git rev-parse` and two stats
+  to reach the same "no". Only the genuine "no config anywhere" miss is
+  remembered; an explicitly named config that does not exist keeps failing,
+  loudly, on every call.
+- **An unmapped tier prints nothing and exits 0.** A resolver that
+  hard-failed on an unmapped tier would leave a freshly bootstrapped project
+  unable to spawn anything and would be deleted on day one. An unknown tier
+  is the opposite case and exits 2: a typo is not a policy choice.
+### 2026-09-03 — The harness context got one error mode
+
+Ticket #126 of PRD #124, from the architecture review's deletion test on
+`scripts/docs-conformance/context.mjs`: four thin wrappers over the
+filesystem, one of which leaked errno codes to a caller that then wrapped it
+in two try/catch blocks of its own to tell a directory from an unreadable
+path. The context now answers the question a validator actually has:
+`read` returns the text or null, for every way a read can fail, and `kind`
+says file, directory or null. The recursive lister is gone — nothing in the
+harness, the adapters or the suites called it. The bridge validator asks
+`kind` and keeps every verdict; the one visible change is that its
+unreadable-entry message no longer quotes an errno, and its fixture asserts
+the message, not the code. `test/context.test.mjs` pins the contract, the
+dangling-symlink and unreadable cases included.
 ### 2026-09-03 — The gate's two engines agree on their path roots
 
 Ticket #127 of PRD #124, the finding the first housekeeping pass put at the

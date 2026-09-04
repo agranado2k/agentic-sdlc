@@ -1,10 +1,8 @@
 // Aggregates every validator. A validator that throws is itself reported as a
-// violation (validator-crash) rather than taking the whole run down.
+// finding (validator-crash, a violation) rather than taking the whole run down.
 //
-// One validator ships today — `claude-md-refs`, the one that guards the layer
-// every agent session loads. K4 (#6) adds the docs-skeleton validators (ADR
-// index sync, MADR shape, glossary aliases) to this same list; the seam is here
-// so they arrive as data, not as a rewrite.
+// VALIDATORS is the registration list: a validator arrives as data here, and
+// the reduced POSIX notice in scripts/check.sh names every scan on it.
 
 import * as claudeMdRefs from "./validators/claude-md-refs.mjs";
 import * as designBrief from "./validators/design-brief.mjs";
@@ -20,12 +18,12 @@ export const VALIDATORS = [claudeMdRefs, designBrief, housekeepingDue, mutationD
  * violations and warnings alike. `index.mjs` splits them by severity; only it
  * decides the exit code. */
 export function runAll(ctx) {
-  const violations = [];
+  const findings = [];
   for (const validator of VALIDATORS) {
     try {
-      violations.push(...validator.run(ctx));
+      findings.push(...validator.run(ctx));
     } catch (err) {
-      violations.push({
+      findings.push({
         validator: validator.id,
         file: "-",
         rule: "validator-crash",
@@ -34,5 +32,5 @@ export function runAll(ctx) {
       });
     }
   }
-  return violations;
+  return findings;
 }
