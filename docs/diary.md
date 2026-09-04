@@ -849,3 +849,25 @@ probe can fail. The implement skill's fallback-review step names the rule
 and the domain for consumers, and names no model; the implement-deliver
 suite pins that text. ADR-0003 is on PR #140's branch and is not touched;
 its optional clarifying amendment can point here once that lands.
+
+### 2026-09-03 — The glossary's banned words got a reader
+
+Ticket #128 of PRD #124, from the first housekeeping pass: the glossary
+template ships a "Words this project does not use" section, and nothing
+read it — the banned sense of *install* survived in the kit's own manual
+beside legitimate dependency-sense uses the ban had no carve-out for. A new
+advisory, `banned-words`, reads the section, and warns on each banned word
+in the root manual, the local articles and every skill file, naming the
+word, the line and the replacement the entry prescribes. Fenced blocks and
+code spans are quoted material and stay silent; the two shared articles are
+excluded by default, since a consumer cannot reword them. The entry format
+gains an `Except:` clause — the permitted phrases as code spans — and the
+kit's glossary uses it for *install*'s dependency sense.
+
+The kit is the first consumer, and the gate's first run said twenty-two
+things: two `install`s in the bootstrap sense in the manual (one of them the
+finding the housekeeping report named), one in the design-brief skill, one
+in the housekeeping checklist, one in the prototype skill; `the framework`
+twice; and `config` on its own seventeen times across the manual and six
+skills. None fails the gate. Rewording them is a ticket of its own — the
+advisory's job was to make the debt visible, and it is.

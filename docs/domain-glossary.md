@@ -247,7 +247,9 @@ banned word and the word to use instead.
 
 - **install** — ambiguous here (nothing is installed; the kit is copied and
   stamped). Use **bootstrap** for the one-shot run, or **stamp** / **copy** for
-  what it does to an individual file.
+  what it does to an individual file. Except: **the dependency sense** —
+  `dependency install`, `npm install`, `unpinned installs`, `install error`,
+  `installed extension`.
 - **config** on its own — ambiguous between a **policy file** (the consumer's to
   edit) and shared-layer mechanism. Say which.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and

@@ -394,7 +394,15 @@
 # carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
 # contract (the recipe runs in a consumer at an older release) and
 # tests/manifest.test.sh (kit-only) holds them equal to the module. This note
-# grows with the wave's stacked tickets and is finished at the v0.16.0 tag.
+# A second file joins the layer with #128:
+# scripts/docs-conformance/validators/banned-words.mjs — an advisory that
+# reads the glossary's "Words this project does not use" section and warns on
+# each banned word in the manual layer and the skills, with an `Except:`
+# carve-out per entry for a legitimate sense. Three shared files changed
+# content with it: runner.mjs registers it, scripts/check.sh's no-node NOTICE
+# names it, and the glossary template documents the carve-out shape. This
+# note grows with the wave's stacked tickets and is finished at the v0.16.0
+# tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. The wave's later tickets add to this list.
@@ -434,6 +442,7 @@ files:
   scripts/docs-conformance/validators/design-brief.mjs
   scripts/docs-conformance/validators/housekeeping-due.mjs
   scripts/docs-conformance/validators/skill-bridge.mjs
+  scripts/docs-conformance/validators/banned-words.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

@@ -6,6 +6,7 @@
 // index sync, MADR shape, glossary aliases) to this same list; the seam is here
 // so they arrive as data, not as a rewrite.
 
+import * as bannedWords from "./validators/banned-words.mjs";
 import * as claudeMdRefs from "./validators/claude-md-refs.mjs";
 import * as designBrief from "./validators/design-brief.mjs";
 import * as housekeepingDue from "./validators/housekeeping-due.mjs";
@@ -14,7 +15,7 @@ import * as skillBridge from "./validators/skill-bridge.mjs";
 import * as skillPaths from "./validators/skill-paths.mjs";
 import * as skillWeb from "./validators/skill-web.mjs";
 
-export const VALIDATORS = [claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillBridge, skillPaths, skillWeb];
+export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillBridge, skillPaths, skillWeb];
 
 /** Run all validators against the context; returns a flat list of findings —
  * violations and warnings alike. `index.mjs` splits them by severity; only it
