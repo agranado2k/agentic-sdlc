@@ -99,39 +99,52 @@ assert_status 0 "check.sh passes at the kit root without node" -- \
 	env DOCS_CHECK_NO_NODE=1 sh "$KIT/scripts/check.sh"
 
 # The reduced form must SAY what it cannot check, and every scan the harness
-# runs is one it cannot: the NOTICE has to name each validator the runner
-# registers, by id. Held to the runner itself — a validator added to the
-# registration list and not to the notice is the drift this probe exists for
-# (#129). notice_gaps <check.sh> <docs-conformance dir> prints one id per
-# registered validator the notice does not name; empty means the notice is
-# current.
+# runs is one it cannot: the NOTICE's "NOT checked" list has to name each
+# validator the runner registers, by id. Held to the runner itself — a
+# validator added to the registration list and not to the notice is the
+# drift this probe exists for (#129). The notice is read from a real
+# no-node run's stderr, not from the wrapper's source, and only from
+# "NOT checked:" on: an id that moved into the "Checked:" line is the
+# over-claim the probe must refuse, not a pass.
+#
+# registered_symbols <harness dir> — the symbols on the runner's VALIDATORS line.
+registered_symbols() {
+	sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$1/runner.mjs" | tr ',' '\n' | tr -d ' ' | grep .
+}
+# notice_gaps <notice text file> <harness dir> — one id per registered
+# validator the notice's NOT-checked list does not name; empty means current.
 notice_gaps() {
-	_ng_reg=$(sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$2/runner.mjs" | tr ',' '\n' | tr -d ' ')
-	_ng_notice=$(sed -n '/NOTICE  docs gate running WITHOUT node/,/^fi$/p' "$1")
-	for _ng_sym in $_ng_reg; do
+	_ng_not=$(sed -n '/NOT checked:/,$p' "$1")
+	for _ng_sym in $(registered_symbols "$2"); do
 		_ng_file=$(sed -n "s|^import \* as $_ng_sym from \"\./\(.*\)\";$|\1|p" "$2/runner.mjs")
-		_ng_id=$(sed -n 's/^export const id = "\(.*\)";$/\1/p' "$2/$_ng_file")
+		_ng_id=$(sed -n 's/^export const id = "\(.*\)";$/\1/p' "$2/$_ng_file" 2>/dev/null)
 		[ -n "$_ng_id" ] || { echo "(unreadable id for $_ng_sym)"; continue; }
-		printf '%s\n' "$_ng_notice" | grep -q -F -- "$_ng_id" || echo "$_ng_id"
+		printf '%s\n' "$_ng_not" | grep -q -F -- "$_ng_id" || echo "$_ng_id"
 	done
 }
-n_reg=$(sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$KIT/scripts/docs-conformance/runner.mjs" | tr ',' '\n' | grep -c .)
-[ "$n_reg" -ge 5 ] && pass "the runner registers $n_reg validators — the probe has something to hold the notice to" ||
-	fail "the runner's registration list could not be read ($n_reg entries)"
-gaps=$(notice_gaps "$KIT/scripts/check.sh" "$KIT/scripts/docs-conformance")
-[ -z "$gaps" ] && pass "the no-node NOTICE names every scan the runner registers" ||
+NOTICE="$SCRATCH/notice.txt"
+(cd "$KIT" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh 2>"$NOTICE" >/dev/null) || :
+grep -q 'NOT checked:' "$NOTICE" && pass "the no-node run printed its NOTICE with a NOT-checked list" || fail "the no-node run printed no NOT-checked list"
+# The registration list must be readable, and must register every validator
+# file the harness ships — the count is the directory's, not a number.
+n_reg=$(registered_symbols "$KIT/scripts/docs-conformance" | wc -l | tr -d ' ')
+n_files=$(ls "$KIT"/scripts/docs-conformance/validators/*.mjs | wc -l | tr -d ' ')
+[ "$n_reg" -gt 0 ] && [ "$n_reg" = "$n_files" ] &&
+	pass "the runner registers every validator file the harness ships ($n_reg)" ||
+	fail "the runner registers $n_reg validators but the harness ships $n_files files"
+gaps=$(notice_gaps "$NOTICE" "$KIT/scripts/docs-conformance")
+[ -z "$gaps" ] && pass "the no-node NOTICE's NOT-checked list names every scan the runner registers" ||
 	fail "the no-node NOTICE is stale — registered but not named: $(printf '%s' "$gaps" | tr '\n' ' ')"
 # Bait: a stub validator registered in a scratch copy of the harness, and the
-# notice untouched — the probe must name it.
+# notice untouched — the probe must name exactly it.
 STUBH="$SCRATCH/harness"
 mkdir -p "$STUBH/validators" && cp "$KIT/scripts/docs-conformance/runner.mjs" "$STUBH/" && cp "$KIT"/scripts/docs-conformance/validators/*.mjs "$STUBH/validators/"
 printf 'export const id = "stub-scan";\nexport function run() { return []; }\n' >"$STUBH/validators/stub-scan.mjs"
 sed 's|^export const VALIDATORS = \[\(.*\)\];$|import * as stubScan from "./validators/stub-scan.mjs";\
 export const VALIDATORS = [\1, stubScan];|' "$STUBH/runner.mjs" >"$STUBH/runner.tmp" && mv "$STUBH/runner.tmp" "$STUBH/runner.mjs"
-case "$(notice_gaps "$KIT/scripts/check.sh" "$STUBH")" in
-*stub-scan*) pass "a validator registered in the runner alone is reported as missing from the notice" ;;
-*) fail "the probe missed a stub validator registered in the runner alone" ;;
-esac
+[ "$(notice_gaps "$NOTICE" "$STUBH")" = "stub-scan" ] &&
+	pass "a validator registered in the runner alone is the one id reported as missing from the notice" ||
+	fail "the probe did not report exactly the stub validator: '$(notice_gaps "$NOTICE" "$STUBH" | tr '\n' ' ')'"
 
 # ---------------------------------------------------------------------------
 banner "C. Bootstrap strips the kit's own files, and stamps a clean project"

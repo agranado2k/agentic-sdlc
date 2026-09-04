@@ -393,7 +393,7 @@
 # suites. scripts/check.sh changed content: it sources the module instead of
 # carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
 # contract (the recipe runs in a consumer at an older release) and
-# tests/manifest.test.sh (kit-only) holds them equal to the module. This note
+# tests/manifest.test.sh (kit-only) holds them equal to the module.
 # From #129, scripts/check.sh changed content again: its no-node NOTICE
 # names the claude-md-refs rules it cannot run, so every scan the runner
 # registers is named by id, and the self-host suite (kit-only) holds the
