@@ -59,6 +59,10 @@ HARNESS="scripts/docs-conformance/index.mjs"
 # advisory suite goes red if the two drift.
 advisory_header="WARN  docs conformance"
 
+# Findings go to a tempfile rather than a variable because every scan below
+# is a `while … done` fed by a pipe, which POSIX sh runs in a subshell: a flag
+# set inside it is lost when the loop ends. The file is the one channel that
+# survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
 trap 'rm -f "$vfile"' EXIT INT TERM HUP
 
