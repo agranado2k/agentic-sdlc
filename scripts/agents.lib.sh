@@ -1,141 +1,41 @@
 #!/bin/sh
 # agents.lib.sh — THE capability-tier resolver. One implementation, many callers.
 #
-# Answers exactly one question: "which execution model does this tier run on?"
+# Answers one question: "which execution model does this tier run on?"
 #
-#   sh scripts/agents.lib.sh implementer          -> prints the mapped model id,
-#                                                    or nothing if it is unmapped
-#   sh scripts/agents.lib.sh implementer content  -> the same, for work whose
-#                                                    MEDIUM has its own mapping
-#   . scripts/agents.lib.sh; resolve_tier …       -> either, as a shell function
+#   sh scripts/agents.lib.sh <tier> [domain]   -> prints the mapped model id,
+#                                                  or nothing if it is unmapped
+#   . scripts/agents.lib.sh; resolve_tier …    -> the same, as a shell function;
+#      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
+#      own line (bash and zsh drop a prefix assignment on `.`)
 #
-# Sourcing is side-effect-free in every shell, including zsh (see the bottom of
-# the file). A sourcing caller must say where the config lives, though, because
-# a sourced file cannot portably learn its own path:
+# tier    CLOSED: planner | implementer | mechanical | reviewer. Unknown: exit 2.
+# domain  OPEN local policy, shape `[a-z][a-z0-9-]*`; hyphens fold to `_` in
+#         the variable name. Unmapped: falls back to the tier, silently.
 #
-#   AGENTS_CONFIG=scripts/agents.config.sh; . scripts/agents.lib.sh  # explicit
-#   _agents_here=scripts; . scripts/agents.lib.sh                    # or by dir
+# Config resolution, first hit wins: 1. $AGENTS_CONFIG (set but missing is
+# exit 2) · 2. <this file's repo root>/scripts/agents.config.sh · 3. <this
+# file's dir>/agents.config.sh. Orders 2–3 anchor on THIS file, never on the
+# caller's cwd; a sourcing caller that set neither variable gets nothing.
+# Variable resolution, first NON-EMPTY wins: AGENT_TIER_<TIER>_<DOMAIN> (only
+# with a domain) · AGENT_TIER_<TIER>.
 #
-# Two statements on purpose: a prefix assignment on `.` persists only in plain
-# sh — bash and zsh drop it before the sourced code runs, and the recipe would
-# quietly resolve UNMAPPED.
+# Exit: 0 resolved (a value, or deliberately nothing — an unmapped tier warns
+# once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
+# model) · 2 usage error, unknown tier, bad domain, or a missing named config.
 #
-# With neither set, orders 2 and 3 below are both skipped and every tier reports
-# UNMAPPED — deliberately, since the only other candidate is whatever repository
-# the process happens to be standing in (see agents_load_config).
-#
-# WHY THE KIT NEVER NAMES A MODEL
-# ---------------------------------------------------------------------------
-# Model identifiers rot faster than any other constant a framework could carry:
-# they are renamed, deprecated and repriced on someone else's schedule, and they
-# differ per provider and per agent harness. A kit that shipped one would be
-# shipping a lie with a timer on it, and the lie would be re-read by every
-# session that loads the manual.
-#
-# So the kit ships the VOCABULARY and the MECHANISM, and your project supplies
-# the mapping:
-#
-#   VOCABULARY   four tier names — planner, implementer, mechanical, reviewer —
-#                defined in the manual layer (the root manual and the local
-#                workflow article), because deciding which tier a piece of work
-#                deserves is a human process rule, not a script's business.
-#                Plus an OPEN second axis, the task DOMAIN, below.
-#   MECHANISM    this file. Shared layer (see VERSION): copied verbatim, so a
-#                fix to the resolution order reaches every project.
-#   MAPPING      scripts/agents.config.sh. Yours, local, never overwritten by a
-#                kit update — the same split, and the same reasoning, as
-#                guards.lib.sh / guards.config.sh.
-#
-# THE UNCONFIGURED DEFAULT IS LOAD-BEARING
-# ---------------------------------------------------------------------------
-# An unmapped tier prints NOTHING and exits 0, after warning once. "Nothing" is
-# a real answer: the caller passes no model parameter and the spawned agent
-# inherits the session's own model, which is precisely the behaviour every
-# project has today. A resolver that hard-failed on an unmapped tier would make
-# a freshly bootstrapped project unable to spawn anything, and would be deleted
-# on day one — and a deleted resolver resolves nothing.
-#
-# An UNKNOWN tier is the opposite case and does fail (exit 2). A typo is not a
-# policy choice: silently running `implementor` on whatever the session happens
-# to be is the exact cost blindness this seam exists to remove.
-#
-# THE SECOND AXIS: TASK DOMAIN
-# ---------------------------------------------------------------------------
-# A tier says how much JUDGEMENT the work is worth. It says nothing about what
-# the work is made of — and "write the launch announcement" and "write the retry
-# logic" are the same cost/benefit shape while being different enough that a
-# project may well want different models on them. One axis cannot express that,
-# so there is an optional second one: the DOMAIN, the medium of the work.
-#
-#   AGENT_TIER_IMPLEMENTER_CONTENT   set  -> `resolve_tier implementer content`
-#   AGENT_TIER_IMPLEMENTER           set  -> everything else at that tier
-#
-# The two vocabularies are deliberately OPPOSITE, and the difference is the
-# whole design:
-#
-#   TIER   CLOSED. Four names, fixed by the manual layer, shared word between a
-#          ticket, a skill and this file. An unknown one is a caller bug.
-#   DOMAIN OPEN. Whatever tokens a project finds worth distinguishing — `code`,
-#          `content`, `sql`, `html-report`. It is pure local policy, invented in
-#          the config and the tickets, so this file cannot hold a list of them
-#          and does not try. An UNMAPPED domain is therefore a working state,
-#          not a typo: it falls back to the plain tier mapping in silence,
-#          because "no special opinion about this medium" is the ordinary case
-#          and a warning for it would train people to ignore the one that
-#          matters.
-#
-# What the domain does NOT get is a free pass on its SHAPE. It is interpolated
-# into a variable name and expanded through `eval`, and unlike the tier it was
-# never whitelisted against a fixed list — so the shape check IS its whitelist:
-# `[a-z][a-z0-9-]*` and nothing else, checked before the token is allowed
-# anywhere near the eval. Hyphens are legal in a token and illegal in a shell
-# variable name, so they fold to underscores: `html-report` reads
-# AGENT_TIER_<TIER>_HTML_REPORT.
-#
-# Omit the argument entirely and this file behaves exactly as it did before the
-# axis existed — which is the point, because every caller that predates it (the
-# skills, the adapter note, a consumer's own script) keeps working untouched.
-#
-# Config resolution order, first hit wins:
-#   1. $AGENTS_CONFIG        — explicit. If it is set and does not exist, that
-#                              is an ERROR (exit 2): the caller named a file, so
-#                              falling back silently would run a mapping nobody
-#                              asked for. Tests rely on this.
-#   2. <root of the repo THIS FILE lives in>/scripts/agents.config.sh
-#   3. <this file's directory>/agents.config.sh
-#
-# Orders 2 and 3 are anchored on this file, never on the caller's working
-# directory: a config is sourced, and sourcing one out of whatever repo an
-# operator happens to be standing in would execute a stranger's code.
-#
-# Variable resolution order, first NON-EMPTY hit wins:
-#   1. AGENT_TIER_<TIER>_<DOMAIN>   only when a domain was given
-#   2. AGENT_TIER_<TIER>
-#
-# Exit codes:  0 resolved (a value, or deliberately nothing) · 2 usage error,
-#              unknown tier, malformed domain, or an explicit config that does
-#              not exist.
+# Shared layer (see VERSION): this file is copied verbatim; the mapping in
+# scripts/agents.config.sh is yours, never overwritten by an update; the kit
+# names no model (the root manual's "Capability tiers" says why). History:
+# the agentic-sdlc repository's diary, 2026-09-03.
 
-# The closed vocabulary — planner, implementer, mechanical, reviewer — is
-# deliberately NOT configurable: the tier names are the shared word between a
-# ticket, a skill and this resolver, and a project that renamed them would
-# break every skill that says "implementer" while the docs gate stayed green.
-# Add a MAPPING in the config; do not add a tier.
-#
-# There is deliberately NO variable holding that list any more. It used to be
-# a module global feeding the usage and error text, and a sourced config could
-# reassign it — leaving diagnostics that named tiers that do not exist while
-# the literal `case` check kept working. The messages now spell the four names
-# where they are printed, under the same keep-in-sync-by-hand contract as
-# AGENT_DOMAIN_SHAPE's case pattern below: three literal sites (the check, the
-# usage text, the unknown-tier error), moved together or not at all.
-
-# The domain has no list here on purpose — see THE SECOND AXIS above. What it
-# has instead is a SHAPE, and this is it, written once so the usage text and
-# the error text below cannot drift apart. It does NOT also drive the case
-# pattern that enforces the shape — that pattern spells out the alphabet
-# instead of quoting this string, for the locale reason documented where it
-# lives. So this string and that pattern CAN drift; keep them in sync by hand.
+# The domain's SHAPE, written once so the usage text and the error text cannot
+# drift apart. It does NOT drive the case pattern that enforces the shape —
+# that pattern spells out the alphabet, for the locale reason documented where
+# it lives — so this string and that pattern are kept in sync by hand. The
+# four tier names are likewise spelled at their three literal sites (the
+# check, the usage text, the unknown-tier error) and move together: a sourced
+# config could reassign a global, so there is no list variable to reassign.
 AGENT_DOMAIN_SHAPE='[a-z][a-z0-9-]*'
 
 # MODULE GLOBALS, and why they diverge from guards.lib.sh's convention.
@@ -151,12 +51,10 @@ AGENT_DOMAIN_SHAPE='[a-z][a-z0-9-]*'
 # the direct-execution branch, and settable by a sourcing caller — which is the
 # only way such a caller gets orders 2 and 3 at all.
 #
-# It defaults to EMPTY, and that is deliberate rather than tidy: it used to
-# default to `.`, which quietly made resolution order 3 mean "a config file in
-# whatever directory the process is standing in" — a different and much wider
-# rule than the one documented above, and the same trust problem order 2 had.
-# Empty means orders 2 and 3 are both skipped, so a sourcing caller that has
-# not said where it is gets $AGENTS_CONFIG or nothing.
+# It defaults to EMPTY on purpose: empty means orders 2 and 3 are both
+# skipped, so a sourcing caller that has not said where it is gets
+# $AGENTS_CONFIG or nothing — never a config from whatever directory the
+# process happens to be standing in.
 #
 # The other two globals are per-process memos: config loading and the unmapped
 # warning both have to happen at most once no matter how many tiers a single
@@ -178,10 +76,8 @@ agents_usage() {
 # error — see the unconfigured default above), 2 when an explicitly named one
 # is missing.
 #
-# The MISS is memoized too, not only the hit. An unconfigured project is the
-# common case, and every resolve_tier call in it would otherwise re-run
-# `git rev-parse` and two stat calls to reach the same "no" — a caller that
-# resolves four tiers pays for that four times, for nothing.
+# The MISS is memoized too, not only the hit: an unconfigured project is the
+# common case, and one process resolves several tiers.
 #
 # Only the genuine "no config anywhere" miss is remembered. An explicitly named
 # AGENTS_CONFIG that does not exist keeps failing on every call, loudly: that is
@@ -215,9 +111,8 @@ agents_load_config() {
 	# when the cwd is in no repository at all.
 	#
 	# When $_agents_here is EMPTY there is nothing to anchor on, so both orders
-	# are skipped and a caller gets $AGENTS_CONFIG or nothing. That is why it no
-	# longer defaults to `.`: `.` silently meant "the process's current
-	# directory", which is the same wider rule in its order-3 clothes.
+	# are skipped and a caller gets $AGENTS_CONFIG or nothing — never the
+	# process's current directory in order-3 clothes.
 	if [ -n "$_agents_here" ]; then
 		_al_root=$(git -C "$_agents_here" rev-parse --show-toplevel 2>/dev/null) || _al_root=
 		if [ -n "$_al_root" ] && [ -f "$_al_root/scripts/agents.config.sh" ]; then
@@ -246,10 +141,10 @@ resolve_tier() {
 		return 2
 	fi
 
-	# The accept-check is a LITERAL `case`, not a loop over $AGENT_TIERS, for two
-	# independent reasons.
+	# The accept-check is a LITERAL `case`, not a loop over a variable holding
+	# the list, for two independent reasons.
 	#
-	# PORTABILITY, the one that was actually broken: `for t in $AGENT_TIERS`
+	# PORTABILITY, the one that was actually broken: `for t in $list`
 	# relies on the shell word-splitting an unquoted expansion, and zsh does not
 	# (SH_WORD_SPLIT is off by default). Under `zsh scripts/agents.lib.sh
 	# implementer` the loop saw ONE word — the whole string — so every real tier
@@ -262,7 +157,7 @@ resolve_tier() {
 	# can no longer drift via a reassigned global or a shell's splitting
 	# rules. The MESSAGES spell the same four names as literals too (no
 	# global survives for a config to reassign), so check and diagnostics
-	# cannot disagree — see the vocabulary comment at the top of the file.
+	# cannot disagree — the four names are spelled at their three literal sites (see AGENT_DOMAIN_SHAPE's comment).
 	_rt_tier=$1
 	_rt_domain=${2:-}
 	case "$_rt_tier" in

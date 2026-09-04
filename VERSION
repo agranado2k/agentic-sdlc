@@ -393,6 +393,27 @@
 # suites. scripts/check.sh changed content: it sources the module instead of
 # carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
 # contract (the recipe runs in a consumer at an older release) and
+# tests/manifest.test.sh (kit-only) holds them equal to the module. This note
+# From #137: scripts/agents.lib.sh changed content — its header is the
+# contract alone (seam, arguments, resolution orders, exit codes) and the
+# incidents it recounted are a dated diary entry; no behaviour moved, the tier
+# suite is the oracle.
+# This note grows with the wave's stacked tickets and is finished at the
+# v0.16.0 tag.
+# From #126, two more changed content: scripts/docs-conformance/context.mjs
+# answers "is there a body?" with null (missing, a directory, a dangling
+# link) and still throws on a body it cannot read, gains `kind` (file,
+# directory or null) and `readable`, and loses its recursive lister (nothing
+# called it); validators/skill-bridge.mjs asks `kind` and `readable` instead
+# of catching errno codes, and its unreadable-entry message carries no errno.
+# Every verdict is unchanged. This note grows with the wave's stacked tickets
+# and is finished at the v0.16.0 tag.
+# From #127: scripts/check.sh changed content — its reduced form's path roots
+# are the harness's list entry for entry (four subtrees of .agents and .claude
+# instead of the two whole trees) and match by prefix, so a root may carry a
+# `/`; tests/gate-path-roots.test.sh (kit-only) holds the two lists equal.
+# This note grows with the wave's stacked tickets and is finished at the
+# v0.16.0 tag.
 # tests/manifest.test.sh (kit-only) holds them equal to the module.
 # From #129, scripts/check.sh changed content again: its no-node NOTICE
 # names the claude-md-refs rules it cannot run, so every scan the runner
@@ -401,7 +422,15 @@
 # stacked tickets and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
-# **manifest** as a term. The wave's later tickets add to this list.
+# **manifest** as a term. From #138: two shared files changed content without
+# changing behaviour — scripts/docs-conformance/runner.mjs names its list
+# `findings` (it holds warnings too) and its header no longer describes a
+# one-validator past; scripts/check.sh says why its findings live in a
+# tempfile. Also from #138, one more: UPDATING.md's Part 2 transcript names
+# the diagnose skill's human-in-the-loop script at its new one-level-deep
+# path, .agents/skills/diagnose/hitl-loop.template.sh (re-captured to its
+# fixpoint; the recipe's steps are unchanged). The wave's later tickets add
+# to this list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
