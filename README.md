@@ -572,6 +572,13 @@ skeleton (K0).
   commit. The demo suites are the builders' oracle in the large — the docs
   demo's pinned transcripts did not move when it adopted them.
 
+- `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
+  set of path roots: the reduced POSIX form's list must equal the policy
+  file's `claudeMdRefs.pathRoots` entry for entry, two baits prove the
+  comparison can fail, and a bootstrapped project proves both engines judge
+  the same reference the same way — including one under a subtree only the
+  fallback used to admit.
+
 - `sh tests/design-brief-skill.test.sh` pins the `/design-brief` contract as
   text: the three anchors it writes, design-it-twice compared on complexity,
   the human stop before every write, the decision record, the two entry
@@ -658,6 +665,7 @@ sh tests/design-brief-skill.test.sh                    # the /design-brief contr
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
+sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots
 sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
 ```
 

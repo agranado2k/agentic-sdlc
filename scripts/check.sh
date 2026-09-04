@@ -59,6 +59,10 @@ HARNESS="scripts/docs-conformance/index.mjs"
 # advisory suite goes red if the two drift.
 advisory_header="WARN  docs conformance"
 
+# Findings go to a tempfile rather than a variable because every scan below
+# is a `while … done` fed by a pipe, which POSIX sh runs in a subshell: a flag
+# set inside it is lost when the loop ends. The file is the one channel that
+# survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
 trap 'rm -f "$vfile"' EXIT INT TERM HUP
 
@@ -168,13 +172,15 @@ fi
 
 if [ "$engine" = "fallback" ]; then
 	# Reduced form. Path roots: the trees a manual is allowed to point into. A
-	# backticked token whose first segment is one of these, and which contains a
-	# `/`, is a repo path and must resolve. Anything else is left alone.
+	# backticked token that starts with one of these roots followed by `/` is
+	# a repo path and must resolve; anything else is left alone. A root may
+	# itself carry a `/` (`.agents/skills`), exactly as the harness's do.
 	#
-	# Keep this list in step with `claudeMdRefs.pathRoots` in
-	# scripts/docs-conformance/config.mjs — two engines, one policy, and the
-	# duplication is the price of running without a runtime.
-	path_roots='constitution scripts docs tests adapters .githooks .github .agents .claude'
+	# This list IS `claudeMdRefs.pathRoots` in scripts/docs-conformance/
+	# config.mjs, entry for entry — two engines, one policy, and the
+	# duplication is the price of running without a runtime. The harness's
+	# list is the truth; tests/gate-path-roots.test.sh fails when they differ.
+	path_roots='constitution scripts docs tests adapters .githooks .github .agents/skills .claude/hooks .claude/skills .claude/constitution'
 
 	scan_manual() {
 		manual=$1
@@ -196,10 +202,11 @@ if [ "$engine" = "fallback" ]; then
 				case "$token" in
 				*'*'* | *'?'*) continue ;;
 				esac
-				root=${token%%/*}
 				is_root=0
 				for r in $path_roots; do
-					[ "$root" = "$r" ] && is_root=1 && break
+					case "$token" in
+					"$r"/*) is_root=1 && break ;;
+					esac
 				done
 				[ "$is_root" = 1 ] || continue
 				# Trailing punctuation from prose, and trailing slash on dirs.
@@ -230,9 +237,10 @@ if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
-	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md), the" >&2
-	echo "        portability deny-list on the shared article, cross-skill references" >&2
-	echo "        (the skill-web advisory), path references inside skill bodies" >&2
+	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
+	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2
+	echo "        beyond repo paths; cross-skill references (the skill-web advisory)," >&2
+	echo "        path references inside skill bodies" >&2
 	echo "        (the skill-paths rule), the engineering article's mutation" >&2
 	echo "        decision (the mutation-decision advisory) and its design brief" >&2
 	echo "        (the design-brief advisory), the diary's housekeeping date (the" >&2

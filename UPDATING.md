@@ -1461,7 +1461,7 @@ $ cat "$WORK/changed.yours"
 .agents/skills/design-brief/BRIEF-FORMAT.md
 .agents/skills/design-brief/SKILL.md
 .agents/skills/diagnose/SKILL.md
-.agents/skills/diagnose/scripts/hitl-loop.template.sh
+.agents/skills/diagnose/hitl-loop.template.sh
 .agents/skills/dogfood/SKILL.md
 .agents/skills/explain-diff/MICROWORLDS.md
 .agents/skills/explain-diff/SKILL.md

@@ -289,6 +289,17 @@ jobs:
       - name: Fixture-builder suite
         run: sh tests/fixture-builders.test.sh
 
+  gate-path-roots:
+    name: The gate's two engines agree on their path roots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Path-roots suite
+        run: sh tests/gate-path-roots.test.sh
+
   housekeeping:
     name: /housekeeping contract
     runs-on: ubuntu-latest

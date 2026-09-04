@@ -382,33 +382,53 @@
 # category with the take for each item above. That is the whole non-manifest
 # half.
 # 0.16.0 — the kit keeps its own house (PRD #124, from the first
-# housekeeping pass and the architecture review it routed to). One file joins
-# the layer with the wave's first slice (#125):
+# housekeeping pass and the architecture review it routed to). Two files join
+# the layer. With the wave's first slice (#125):
 # scripts/manifest.lib.sh — the one grammar for VERSION's two sections.
 # Eleven hand-copied awk programs in three dialects read the manifest before,
 # and two disagreed on what an annotated entry means: bootstrap took the first
 # word, the gate took the whole line. The module reads the manifest on stdin,
 # prints one name per line (the first word of an entry; annotation is legal
 # in both sections), and is sourced by scripts/check.sh, bootstrap and the
-# suites. scripts/check.sh changed content: it sources the module instead of
-# carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
-# contract (the recipe runs in a consumer at an older release) and
-# tests/manifest.test.sh (kit-only) holds them equal to the module.
-# A second file joins the layer with #128:
+# suites. UPDATING.md's two fenced copies stay verbatim by contract (the
+# recipe runs in a consumer at an older release) and tests/manifest.test.sh
+# (kit-only) holds them equal to the module. With #128:
 # scripts/docs-conformance/validators/banned-words.mjs — an advisory that
 # reads the glossary's "Words this project does not use" section and warns on
-# each banned word in the manual layer and the skills, with an `Except:`
-# carve-out per entry for a legitimate sense. Three shared files changed
-# content with it: runner.mjs registers it, scripts/check.sh's no-node NOTICE
-# names it, and the glossary template documents the carve-out shape. This
-# note grows with the wave's stacked tickets and is finished at the v0.16.0
-# tag.
+# each banned word in the manual layer and the skills, naming the word, the
+# line and the replacement, with an `Except:` carve-out per entry for a
+# legitimate sense; fences and code spans are silent, the shared articles are
+# excluded by default.
+# Shared files that changed content, by ticket. scripts/check.sh three times:
+# it sources the manifest module instead of carrying its own copy (#125); its
+# reduced form's path roots are the harness's list entry for entry — four
+# subtrees of .agents and .claude instead of the two whole trees — and match
+# by prefix, so a root may carry a `/` (#127); its no-node NOTICE names every
+# scan the runner registers, by id (#129, #128). scripts/docs-conformance/
+# context.mjs answers "is there a body?" with null (missing, a directory, a
+# dangling link), still throws on a body it cannot read, gains `kind` and
+# `readable`, and loses its recursive lister; validators/skill-bridge.mjs asks
+# those instead of catching errno codes, every verdict unchanged (#126).
+# runner.mjs registers the new advisory (#128) and names its list `findings`
+# (#138). scripts/agents.lib.sh's header is the contract alone — seam,
+# arguments, resolution orders, exit codes — and the incidents it recounted
+# are a dated diary entry; no behaviour moved (#137). UPDATING.md's Part 2
+# transcript is re-captured to its fixpoint for the sidecar move and the
+# joining validator, and its step 9a says a removed file inside a skill is a
+# delete (#138, #128). The kit's own suites hold each of these: manifest,
+# gate-path-roots, self-host's notice probe, the harness fixtures.
+# This note grows with the wave's stacked tickets and is finished at the
+# v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. From #128: the glossary template documents the
-# `Except:` carve-out shape, and the gate policy file gains a `bannedWords`
-# block (glossary path, exclusions). The wave's later tickets add to this
-# list.
+# `Except:` carve-out shape, the gate policy file gains a `bannedWords` block
+# (glossary path, exclusions), and the grill-with-docs sidecar quotes the
+# banned phrase it mentions as a code span. From #138: the diagnose skill's
+# human-in-the-loop script moves one level up, to
+# .agents/skills/diagnose/hitl-loop.template.sh, and the explain-diff skill's
+# filename example carries a date placeholder. The wave's later tickets add
+# to this list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
