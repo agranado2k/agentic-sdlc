@@ -322,7 +322,7 @@ answers produce a clean project.
 | Know which files are shared layer   | `VERSION` — and `UPDATING.md` for the recipe when one moves |
 | See what the kit does NOT ship      | `EXCLUSIONS.md` — kept honest by `tests/exclusions.test.sh` |
 | Measure the kit's own validator tests | `scripts/mutation.kit.sh` — Stryker (pinned) on demand against the validators under `scripts/docs-conformance/validators/`, never a gate; runs in place — clean tree, network required; the baseline is in the diary (kit-only, never shipped) |
-| Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` is one command from this table — a suite under `tests/`, the harness's fixture tests, the gate, or the portability run — and `.github/workflows/kit-guards.yml` holds the guards' |
+| Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` runs one of four things — a suite under `tests/`, the harness's fixture tests, the gate, or the portability run (`node scripts/docs-conformance/index.mjs .`); `self-host` runs the last two — and `.github/workflows/kit-guards.yml` holds the guards' |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
 
