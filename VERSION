@@ -394,6 +394,12 @@
 # carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
 # contract (the recipe runs in a consumer at an older release) and
 # tests/manifest.test.sh (kit-only) holds them equal to the module. This note
+# From #137: scripts/agents.lib.sh changed content — its header is the
+# contract alone (seam, arguments, resolution orders, exit codes) and the
+# incidents it recounted are a dated diary entry; no behaviour moved, the tier
+# suite is the oracle.
+# This note grows with the wave's stacked tickets and is finished at the
+# v0.16.0 tag.
 # From #126, two more changed content: scripts/docs-conformance/context.mjs
 # answers "is there a body?" with null (missing, a directory, a dangling
 # link) and still throws on a body it cannot read, gains `kind` (file,
