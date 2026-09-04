@@ -400,6 +400,14 @@
 # suite is the oracle.
 # This note grows with the wave's stacked tickets and is finished at the
 # v0.16.0 tag.
+# From #126, two more changed content: scripts/docs-conformance/context.mjs
+# answers "is there a body?" with null (missing, a directory, a dangling
+# link) and still throws on a body it cannot read, gains `kind` (file,
+# directory or null) and `readable`, and loses its recursive lister (nothing
+# called it); validators/skill-bridge.mjs asks `kind` and `readable` instead
+# of catching errno codes, and its unreadable-entry message carries no errno.
+# Every verdict is unchanged. This note grows with the wave's stacked tickets
+# and is finished at the v0.16.0 tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. The wave's later tickets add to this list.

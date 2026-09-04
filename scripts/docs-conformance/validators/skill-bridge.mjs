@@ -37,77 +37,68 @@ export const id = "skill-bridge";
 // Ours are relative and point into the canonical home.
 const MATERIALIZED_RE = /^(\.\.\/)+\.agents\/skills\/[A-Za-z0-9._-]+\s*$/;
 
-// ctx.read throws on a directory and on an unreadable path; here a body that
-// cannot be read simply means "no comparison to make".
-function safeRead(ctx, p) {
-  try {
-    return ctx.read(p);
-  } catch {
-    return null;
-  }
-}
-
 export function run(ctx) {
   const out = [];
   for (const name of ctx.list(LEGACY_SKILLS_DIR)) {
     const entry = `${LEGACY_SKILLS_DIR}/${name}`;
-    // ctx.read throws EISDIR on a directory (and on a symlink resolving to
-    // one) — which are exactly the healthy shapes this rule skips. A path
-    // suffix probe cannot make the distinction: path.join normalizes
-    // `entry/.` back to `entry` before the filesystem ever sees it.
-    let raw;
-    try {
-      raw = ctx.read(entry);
-    } catch (err) {
-      // EISDIR is the healthy shape (a real skill dir, or a symlink that
-      // resolves to one). Anything else — a permission error, say — must not
-      // be swallowed into a silent pass: report it rather than pretend the
-      // entry was fine.
-      if (err?.code === "EISDIR") {
-        // A real directory here is USUALLY the sanctioned staying-put
-        // layout, and silent. It is not silent when a canonical twin
-        // exists and the two bodies DIFFER: that is two different skills
-        // wearing one name, and which one runs depends on which address
-        // the reader's harness happens to know about. The gate reads the
-        // configured home and would report nothing about the other copy —
-        // the wrong-pass this rule exists to end. Identical bodies stay
-        // silent, which also covers the two shapes that are one directory
-        // under two names (an alias, or a bridge) without needing to stat.
-        const skillsDir = ctx.config?.claudeMdRefs?.skillsDir ?? DEFAULT_SKILLS_DIR;
-        if (skillsDir !== LEGACY_SKILLS_DIR) {
-          const mine = safeRead(ctx, `${entry}/SKILL.md`);
-          const theirs = safeRead(ctx, `${skillsDir}/${name}/SKILL.md`);
-          if (mine != null && theirs != null && mine !== theirs) {
-            out.push({
-              validator: id,
-              // A WARNING, not a violation, and the adopt arm is the reason:
-              // when a consumer's own skill collides with the kit's, the
-              // sanctioned resolution is precisely this shape — theirs stands
-              // in at the name, the kit's sits canonically beneath it. That
-              // is a deliberate state, so it may not fail a build; but it is
-              // still two bodies under one name, and it used to be reported
-              // by nothing at all.
-              severity: "warning",
-              file: `${entry}/SKILL.md`,
-              rule: "skill-shadowed",
-              message: `differs from ${skillsDir}/${name}/SKILL.md — the same skill name holds two different bodies, and which one runs depends on which address the agent reads`,
-              hint: `If this is deliberate (your own skill standing in at the kit's name) nothing is broken and this line is simply the record of it. Otherwise: delete the copy you do not want, rename one, or make ${entry} a symlink to ../../${skillsDir}/${name}. Identical copies are silent, so this fires only on a real divergence.`,
-            });
-          }
+    // What is at the address decides the shape. A directory (real, or a
+    // symlink resolving to one) is the healthy layout and is checked only for
+    // a diverged twin; a file is either the materialized signature or a
+    // stray; nothing usable (a dangling symlink) is the gate's path rules'
+    // business, not this rule's.
+    const kind = ctx.kind(entry);
+    if (kind === "directory") {
+      // A real directory here is USUALLY the sanctioned staying-put layout,
+      // and silent. It is not silent when a canonical twin exists and the
+      // two bodies DIFFER: that is two different skills wearing one name,
+      // and which one runs depends on which address the reader's harness
+      // happens to know about. The gate reads the configured home and would
+      // report nothing about the other copy — the wrong-pass this rule
+      // exists to end. Identical bodies stay silent, which also covers the
+      // two shapes that are one directory under two names (an alias, or a
+      // bridge) without needing to stat.
+      const skillsDir = ctx.config?.claudeMdRefs?.skillsDir ?? DEFAULT_SKILLS_DIR;
+      if (skillsDir !== LEGACY_SKILLS_DIR) {
+        const mine = ctx.read(`${entry}/SKILL.md`);
+        const theirs = ctx.read(`${skillsDir}/${name}/SKILL.md`);
+        if (mine != null && theirs != null && mine !== theirs) {
+          out.push({
+            validator: id,
+            // A WARNING, not a violation, and the adopt arm is the reason:
+            // when a consumer's own skill collides with the kit's, the
+            // sanctioned resolution is precisely this shape — theirs stands
+            // in at the name, the kit's sits canonically beneath it. That
+            // is a deliberate state, so it may not fail a build; but it is
+            // still two bodies under one name, and it used to be reported
+            // by nothing at all.
+            severity: "warning",
+            file: `${entry}/SKILL.md`,
+            rule: "skill-shadowed",
+            message: `differs from ${skillsDir}/${name}/SKILL.md — the same skill name holds two different bodies, and which one runs depends on which address the agent reads`,
+            hint: `If this is deliberate (your own skill standing in at the kit's name) nothing is broken and this line is simply the record of it. Otherwise: delete the copy you do not want, rename one, or make ${entry} a symlink to ../../${skillsDir}/${name}. Identical copies are silent, so this fires only on a real divergence.`,
+          });
         }
-        continue;
       }
+      continue;
+    }
+    if (kind !== "file") continue; // dangling symlink — the gate's path rules own that
+    if (!ctx.readable(entry)) {
+      // A file that is there and cannot be read — permissions, say — must
+      // not be swallowed into a silent pass: report it rather than pretend
+      // the entry was fine. Asked before reading, because a read of it would
+      // throw, and this rule owns the verdict on its own entries.
       out.push({
         validator: id,
         severity: "warning",
         file: entry,
         rule: "skill-bridge-unreadable",
-        message: `could not be read (${err?.code ?? "unknown error"}) — the bridge cannot be checked here`,
+        message: "could not be read — the bridge cannot be checked here",
         hint: "Fix the permissions or remove the entry; an unreadable bridge slot hides whether the harness can see this skill at all.",
       });
       continue;
     }
-    if (raw == null) continue; // dangling symlink — the gate's path rules own that
+    const raw = ctx.read(entry);
+    if (raw == null) continue; // gone between stat and read — nothing to judge
     if (!MATERIALIZED_RE.test(raw)) continue; // ordinary file (a licence, a stray)
     // The materialized text is relative to the LINK's directory; the hint
     // below names a repo-relative path, so strip the climb. Never assert the

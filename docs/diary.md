@@ -889,3 +889,17 @@ arbitrary without its cause:
   hard-failed on an unmapped tier would leave a freshly bootstrapped project
   unable to spawn anything and would be deleted on day one. An unknown tier
   is the opposite case and exits 2: a typo is not a policy choice.
+### 2026-09-03 — The harness context got one error mode
+
+Ticket #126 of PRD #124, from the architecture review's deletion test on
+`scripts/docs-conformance/context.mjs`: four thin wrappers over the
+filesystem, one of which leaked errno codes to a caller that then wrapped it
+in two try/catch blocks of its own to tell a directory from an unreadable
+path. The context now answers the question a validator actually has:
+`read` returns the text or null, for every way a read can fail, and `kind`
+says file, directory or null. The recursive lister is gone — nothing in the
+harness, the adapters or the suites called it. The bridge validator asks
+`kind` and keeps every verdict; the one visible change is that its
+unreadable-entry message no longer quotes an errno, and its fixture asserts
+the message, not the code. `test/context.test.mjs` pins the contract, the
+dangling-symlink and unreadable cases included.
