@@ -86,9 +86,11 @@ of each relationship in Evans's set.
 ```
 
 When a grilling answer names a new context, adds an edge, or changes a
-relationship, update both sides in the same breath. The phrase "strategic
-design" is on the glossary's banned-words list: say **context map** for the
-edges and **subdomain classification** for the core / supporting / generic split.
+relationship, update both sides in the same breath. The phrase
+`strategic design` is on the glossary's banned-words list (quoted here as a
+code span, which the banned-words advisory leaves alone): say **context map**
+for the edges and **subdomain classification** for the core / supporting /
+generic split.
 
 ---
 

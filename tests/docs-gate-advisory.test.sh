@@ -87,6 +87,7 @@ export DOCS_CHECK_NO_NODE
 assert_status 0 "the fallback gate exits 0" -- sh scripts/check.sh
 assert_out_has "design-brief advisory"
 assert_out_has "housekeeping-due advisory"
+assert_out_has "banned-words advisory"
 unset DOCS_CHECK_NO_NODE
 
 t_done "docs gate advisory visibility"

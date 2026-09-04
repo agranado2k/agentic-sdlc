@@ -250,8 +250,11 @@ banned word and the word to use instead.
   what it does to an individual file. Except: **the dependency sense** —
   `dependency install`, `npm install`, `unpinned installs`, `install error`,
   `installed extension`.
-- **config** on its own — ambiguous between a **policy file** (the consumer's to
-  edit) and shared-layer mechanism. Say which.
+- **config** — ambiguous on its own between a **policy file** (the consumer's
+  to edit) and shared-layer mechanism. Use **policy file** or **shared-layer
+  mechanism**, or qualify it. Except: **a qualified use** — `per-clone config`,
+  `gate config`, `tool config`, `test-runner config`, `config schema`,
+  `your config`.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping

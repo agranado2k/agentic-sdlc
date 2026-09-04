@@ -29,8 +29,9 @@ const DEFAULT_CONSTITUTION_DIR = "constitution";
 export const DEFAULT_GLOSSARY = "docs/domain-glossary.md";
 export const SECTION_HEADING = "Words this project does not use";
 // The shared articles are copied verbatim from the kit: a consumer's banned
-// list cannot be a rule about prose the consumer may not edit.
-export const DEFAULT_EXCLUDE = ["constitution/shared-invariants.md", "constitution/shared-code-craft.md"];
+// list cannot be a rule about prose the consumer may not edit. Named by
+// basename, joined to the configured constitution directory at scan time.
+export const SHARED_ARTICLES = ["shared-invariants.md", "shared-code-craft.md"];
 
 const SUFFIX = "(?:s|es|ed|ing)?";
 
@@ -78,15 +79,37 @@ export function parseEntries(sectionText) {
     const except = exceptAt >= 0 ? item.slice(exceptAt) : "";
     const useAt = body.search(/\bUse\b/);
     const replacements = useAt >= 0 ? [...body.slice(useAt).matchAll(/\*\*(.+?)\*\*/g)].map((m) => m[1]) : [];
+    // The entry's own guidance, for the message when it names no bold
+    // replacement ("Say which."): everything after the term, plain.
+    const guidance = body.replace(/^\*\*.+?\*\*\s*[—–-]?\s*/, "").replace(/\*\*/g, "").trim();
     const allowed = [...except.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-    entries.push({ term, replacements, allowed });
+    entries.push({ term, replacements, guidance, allowed });
   }
   return entries;
 }
 
-/** Prose only: fences and code spans removed, line structure kept. */
+/**
+ * Prose only, with every line still on its own line so a match's offset maps
+ * back to a line number: fenced blocks are blanked line by line (not removed,
+ * as stripFences does), and code spans are blanked in place.
+ */
 function prose(raw) {
-  return stripFences(raw).replace(/`[^`\n]*`/g, (m) => " ".repeat(m.length));
+  const out = [];
+  let fence = false;
+  for (const line of raw.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fence = !fence;
+      out.push("");
+    } else out.push(fence ? "" : line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length)));
+  }
+  return out.join("\n");
+}
+
+/** The 1-based line of a character offset in text. */
+function lineAt(text, offset) {
+  let n = 1;
+  for (let i = 0; i < offset; i++) if (text.charCodeAt(i) === 10) n++;
+  return n;
 }
 
 function scanTargets(ctx) {
@@ -95,7 +118,7 @@ function scanTargets(ctx) {
   const rootManual = refs.rootManual ?? DEFAULT_ROOT_MANUAL;
   const constitutionDir = refs.constitutionDir ?? DEFAULT_CONSTITUTION_DIR;
   const skillsDir = refs.skillsDir ?? DEFAULT_SKILLS_DIR;
-  const exclude = new Set(cfg.exclude ?? DEFAULT_EXCLUDE);
+  const exclude = new Set(cfg.exclude ?? SHARED_ARTICLES.map((f) => `${constitutionDir}/${f}`));
   const files = [rootManual];
   for (const f of ctx.list(constitutionDir, ".md")) files.push(`${constitutionDir}/${f}`);
   const seen = new Set();
@@ -125,29 +148,35 @@ export function run(ctx) {
   for (const file of scanTargets(ctx)) {
     const raw = ctx.read(file);
     if (raw == null) continue;
-    const lines = prose(raw).split("\n");
+    const body = prose(raw);
     for (const entry of entries) {
+      // Matched over the whole text with whitespace in a phrase matching any
+      // run of it, so a multi-word term split across a line break is still
+      // a use; the line reported is the one the match starts on.
       const termRe = new RegExp(`\\b${escapeRe(entry.term).replace(/\s+/g, "\\s+")}${SUFFIX}\\b`, "gi");
-      lines.forEach((line, i) => {
-        // Carved-out phrases are blanked before the word is looked for, so a
-        // use inside one cannot match.
-        let text = line;
-        for (const phrase of entry.allowed) {
-          text = text.replace(new RegExp(escapeRe(phrase).replace(/\s+/g, "\\s+"), "gi"), (m) => " ".repeat(m.length));
-        }
-        for (const m of text.matchAll(termRe)) {
-          const use = entry.replacements.length ? ` — the glossary says use ${entry.replacements.map((r) => `"${r}"`).join(" or ")}` : "";
-          out.push({
-            validator: id,
-            severity: "warning",
-            file,
-            line: i + 1,
-            rule: "banned-word",
-            message: `line ${i + 1} uses "${m[0]}", a word this project does not use${use}`,
-            hint: `See "${SECTION_HEADING}" in ${glossary}. If this is a legitimate sense, add an \`Except:\` clause to the entry naming the phrase as a code span.`,
-          });
-        }
-      });
+      // Carved-out phrases are blanked before the word is looked for, so a
+      // use inside one cannot match.
+      let text = body;
+      for (const phrase of entry.allowed) {
+        text = text.replace(new RegExp(escapeRe(phrase).replace(/\s+/g, "\\s+"), "gi"), (m) => m.replace(/[^\n]/g, " "));
+      }
+      for (const m of text.matchAll(termRe)) {
+        const line = lineAt(text, m.index);
+        const says = entry.replacements.length
+          ? ` — the glossary says use ${entry.replacements.map((r) => `"${r}"`).join(" or ")}`
+          : entry.guidance
+            ? ` — the glossary says: ${entry.guidance}`
+            : "";
+        out.push({
+          validator: id,
+          severity: "warning",
+          file,
+          line,
+          rule: "banned-word",
+          message: `line ${line} uses "${m[0].replace(/\s+/g, " ")}", a word this project does not use${says}`,
+          hint: `See "${SECTION_HEADING}" in ${glossary}. If this is a legitimate sense, add an \`Except:\` clause to the entry naming the phrase as a code span.`,
+        });
+      }
     }
   }
   return out;

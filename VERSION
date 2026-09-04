@@ -393,7 +393,7 @@
 # suites. scripts/check.sh changed content: it sources the module instead of
 # carrying its own copy. UPDATING.md's two fenced copies stay verbatim by
 # contract (the recipe runs in a consumer at an older release) and
-# tests/manifest.test.sh (kit-only) holds them equal to the module. This note
+# tests/manifest.test.sh (kit-only) holds them equal to the module.
 # A second file joins the layer with #128:
 # scripts/docs-conformance/validators/banned-words.mjs — an advisory that
 # reads the glossary's "Words this project does not use" section and warns on
@@ -405,7 +405,10 @@
 # tag.
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
-# **manifest** as a term. The wave's later tickets add to this list.
+# **manifest** as a term. From #128: the glossary template documents the
+# `Except:` carve-out shape, and the gate policy file gains a `bannedWords`
+# block (glossary path, exclusions). The wave's later tickets add to this
+# list.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
