@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-03
+## Current state — 2026-09-04
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.16.0 on `main`, bumped by PR #139 and **not yet tagged** — self-host's tag leg stays red by design until the wave's closing ticket (#136) lands and v0.16.0 is cut; the last tagged release is 0.15.0, at the merge that closed PRD #107; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.16.0, tagged at the merge of the wave's closing PR (ticket #136), which closed PRD #124; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `16c8a58` — merge of PR #151, the tenth and last PR of the 0.16.0 wave's first train (2026-09-03) |
+| **Last commit on `main`** | `3f1a653` — merge of PR #158, the last PR before the wave's close (2026-09-04) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | The 0.16.0 wave's first train landed 2026-09-03 (#139, #140, #142, #141, #150, #143, #147, #148, #149, #151) and its worktrees are pruned; the wave's remaining tickets (#126–#129, #137, #138, then #136) each open one `worktree/<slug>` as they go. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
+| **Active worktrees** | None. The 0.16.0 wave (PRD #124) landed in two trains (2026-09-03: #139, #140, #142, #141, #150, #143, #147, #148, #149, #151; 2026-09-04: #152, #153, #154, #155, #156, #157, #158) and closed with ticket #136's PR. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
 
 ### Open questions / unresolved decisions
 
@@ -955,3 +955,44 @@ in the housekeeping checklist, one in the prototype skill; `the framework`
 twice; and `config` on its own seventeen times across the manual and six
 skills. None fails the gate. Rewording them is a ticket of its own — the
 advisory's job was to make the debt visible, and it is.
+
+### 2026-09-04 — The 0.16.0 wave landed: the kit keeps its own house
+
+PRD #124 came from the kit's first housekeeping pass and the architecture
+review it routed to, and its question was narrower than the wave before it:
+does the kit keep the rules it sells? Seventeen tickets, seventeen PRs, two
+trains, and one follow-up for a disposition that had claimed fixes it never
+landed (#158, with its correction on #154).
+
+**Two files joined the shared layer.** `scripts/manifest.lib.sh` is the one
+grammar for VERSION's two sections, where eleven hand-copied awk programs had
+disagreed on what an annotated entry means (#125). The `banned-words`
+advisory reads the glossary's "Words this project does not use" section and
+warns on every use in the manual layer and the skills, with an `Except:`
+carve-out per entry; the kit is its first consumer and hears thirteen things
+about its own prose (#128).
+
+**The gate's two engines agree.** The reduced POSIX form's path roots are the
+policy file's, entry for entry, and a suite fails when they differ (#127);
+its notice names every scan the runner registers, held by a probe (#129); the
+harness context has one answer to "is there a body?" and throws on a body it
+cannot read (#126).
+
+**The kit measures and records itself.** Stryker, pinned, on demand against
+the validators, baseline 76.53 % (#132); ADR-0003 records the kit-only tier
+mapping and ADR-0004 the root manual's 350-line budget with its probe (#133,
+#134); every record has an index row (#145); the reviewer-never-the-
+implementer rule lives where reviewers are spawned, as the `self-implemented`
+domain (#144); the resolver's history is here, not in its header (#137).
+
+**Deepenings from the architecture review.** Four fixture builders in the
+test harness, the docs demo's transcripts byte-identical before and after
+(#131); the optional skill as data in bootstrap, with an ordered marker-pair
+preflight that refuses before anything is stamped (#130). Craft rule §10 got
+its failing check after two skills were redrawn (#135, #146), and six small
+drifts went in one sweep (#138).
+
+What the trains taught is in the memory of the next one: every PR conflicted
+on the same append-only files, a union merge duplicated a paragraph of the
+release note once and the duplicate-ticket probe caught it, and one
+disposition was posted from a command chain that had already stopped.
