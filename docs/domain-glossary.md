@@ -252,9 +252,11 @@ banned word and the word to use instead.
   `installed extension`.
 - **config** — ambiguous on its own between a **policy file** (the consumer's
   to edit) and shared-layer mechanism. Use **policy file** or **shared-layer
-  mechanism**, or qualify it. Except: **a qualified use** — `per-clone config`,
-  `gate config`, `tool config`, `test-runner config`, `config schema`,
-  `your config`.
+  mechanism**, or qualify it. The unabbreviated **configuration**, in its
+  general sense — a system's settings, an interface's required
+  configuration — is not this entry's concern and is not banned. Except:
+  **a qualified use** — `per-clone config`, `gate config`,
+  `test-runner config`, `config schema`, `your config`.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
