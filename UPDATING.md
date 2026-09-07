@@ -219,12 +219,19 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
-**Arriving from 0.15.0 or older.** `scripts/manifest.lib.sh` joins the shared
-layer at 0.16.0 and `scripts/check.sh` sources it, so the two land together at
-step 5 and the gate fails closed without the module. This recipe's own parser
-changed dialect with them: it used to print the whole trimmed line, and now
-prints the first word, so an annotated `files:` entry reads the same here as
-in the gate.
+**Arriving from 0.15.0 or older, two files join.** `scripts/manifest.lib.sh`
+joins the shared layer at 0.16.0 and `scripts/check.sh` sources it, so the two
+land together at step 5 and the gate fails closed without the module. This
+recipe's own parser changed dialect with them: it used to print the whole
+trimmed line, and now prints the first word, so an annotated `files:` entry
+reads the same here as in the gate. The second is
+`scripts/docs-conformance/validators/banned-words.mjs`, an advisory the
+runner registers: it reads your glossary's "Words this project does not use"
+section and warns on each banned word in your manual, your local articles and
+your skills. It arrives with the runner (step 5) and reads a section your
+glossary already has, so the first gate after the update may print warnings
+you have never seen — that is the section doing what it always said; 9c and
+9d below say how to carve out a legitimate sense.
 
 ## Step 2 — read the upstream delta
 
@@ -543,10 +550,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1691 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1743 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1845 insertions(+), 1 deletion(-)
+ 3 files changed, 1897 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -802,6 +809,23 @@ pull-request template gains the `<!-- explain-diff-appendix -->` marker
 paragraph (that is a 9c template take). The copy without the wiring installs a
 skill nothing invokes.
 
+**Arriving from 0.15.0 or older, the inventory prints no new name — six
+skills and the licence file changed body.** All are ordinary three-way merges
+here: `/implement`'s
+Deliver step names the rule that the reviewer is never the model that
+implemented, and the `reviewer self-implemented` domain to resolve when the
+session itself wrote the diff (its mapping is 9d); `/tdd`'s `deep-modules.md`
+draws its two diagrams in mermaid and `/grill-with-docs` lists its file tree
+as a nested list, both in place of character art (craft rule §10 now has a
+check); `/grill-with-docs`'s `GLOSSARY-FORMAT.md` quotes the banned phrase it
+mentions as a code span, so the new banned-words advisory leaves it alone;
+`/diagnose`'s human-in-the-loop script moved one level up (the paragraph on
+a removed file inside a skill, above, is about exactly this); `/explain-diff`'s
+filename example carries a date placeholder; `/tdd`'s own provenance line
+says which sidecar was redrawn, and `/improve-codebase-architecture`'s
+`PRESENTING.md` names mermaid as the diagram language its reports render;
+the licence file's provenance rows follow the diagrams.
+
 **Arriving from 0.14.0 or older, the inventory prints at least two names you
 have not seen before: `design-brief` and `housekeeping`.** Both are directory
 copies plus wiring, and the two takes are symmetric. `/design-brief` needs its
@@ -1049,6 +1073,13 @@ that speak four tier names and no file that says what they mean.
 Copy the new sections across by hand, adapting the wording to your repo. Never
 re-stamp a template over a manual you have been editing for six months.
 
+**Arriving from 0.15.0 or older, nothing moved in this category.** The manual
+template and the three article templates are byte-identical between the two
+releases; the only manual that changed is the kit's own, which never ships.
+The one thing to know: the banned-words advisory now reads your glossary
+against your manual and articles, so a word your glossary bans and your manual
+uses is a warning from the first push — reword it, or carve the sense out (9c).
+
 **Arriving from 0.14.0 or older, four things in this category.** The
 engineering article's Architecture section gains three anchor lines —
 `**Paradigm**:`, `**Architectural style**:`, `**Context map**:` — each a
@@ -1111,6 +1142,15 @@ to be true in *your* repo.** Drop the sentence, or re-point it at your own
 harness note, as you copy.
 
 ### 9c. Templates — take what moved, keep what you removed
+
+**Arriving from 0.15.0 or older, the glossary template's banned-words section
+learned one clause.** An entry may end with `Except:` followed by the phrases,
+as code spans, in which the banned word is legitimate — `dependency install`
+for a word banned in its bootstrap sense — and a use inside one of those
+phrases is silent to the banned-words advisory. The template's placeholder
+entry shows the shape and its header comment says what the gate now does with
+the section. Your glossary is yours: add the clause to any entry the first
+warnings show needs it.
 
 **Arriving from 0.14.0 or older, two of your docs gained a section.** The
 glossary template grew a **Context map** section — one block per context, one
@@ -1201,6 +1241,18 @@ because both facts change what you do with it:
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
+
+**Arriving from 0.15.0 or older, `config.mjs` gained one policy section, and
+the tier config may want one line.** `bannedWords` names the glossary the
+advisory reads (default `docs/domain-glossary.md`) and the files it leaves
+alone (default: the two shared articles under your constitution directory,
+because they are not yours to reword); both are read with defaults when
+absent. And `scripts/agents.config.sh` — yours, never overwritten — may map
+`AGENT_TIER_REVIEWER_SELF_IMPLEMENTED` to a model that differs from your
+reviewer's, so `sh scripts/agents.lib.sh reviewer self-implemented` has an
+answer when the session that wrote a diff is the reviewer tier's own model;
+unmapped, it falls back to the reviewer tier and `/implement` says to report
+that the review shares the author's model.
 
 **Arriving from 0.14.0 or older, `config.mjs` gained two policy sections**:
 `designBrief` (which article the design-brief advisory reads; the default is

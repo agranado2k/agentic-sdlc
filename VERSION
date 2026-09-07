@@ -417,18 +417,26 @@
 # joining validator, and its step 9a says a removed file inside a skill is a
 # delete (#138, #128). The kit's own suites hold each of these: manifest,
 # gate-path-roots, self-host's notice probe, the harness fixtures.
-# This note grows with the wave's stacked tickets and is finished at the
-# v0.16.0 tag.
+# Finished at the v0.16.0 tag (#136 closes the wave).
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
 # **manifest** as a term. From #128: the glossary template documents the
 # `Except:` carve-out shape, the gate policy file gains a `bannedWords` block
 # (glossary path, exclusions), and the grill-with-docs sidecar quotes the
-# banned phrase it mentions as a code span. From #138: the diagnose skill's
-# human-in-the-loop script moves one level up, to
+# banned phrase it mentions as a code span. From #135: the tdd sidecar's two
+# diagrams are mermaid and the grilling skill's file tree is a nested list,
+# never character art; the tdd skill's provenance line and the licence's
+# rows say so, and improve-codebase-architecture's PRESENTING.md names
+# mermaid as the report diagram language. From #138: the
+# diagnose skill's human-in-the-loop script moves one level up, to
 # .agents/skills/diagnose/hitl-loop.template.sh, and the explain-diff skill's
-# filename example carries a date placeholder. The wave's later tickets add
-# to this list.
+# filename example carries a date placeholder. From #144: the implement
+# skill's Deliver step names the rule that the reviewer is never the model
+# that implemented, and the `reviewer self-implemented` domain a consumer may
+# map in scripts/agents.config.sh for the session that wrote its own diff.
+# The wave's kit-only half — fixture builders, the mutation wrapper, the
+# path-roots and notice probes, ADR-0003 and ADR-0004, the optional set as
+# data in bootstrap — never ships and is the diary's to tell.
 shared-layer: 0.16.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
