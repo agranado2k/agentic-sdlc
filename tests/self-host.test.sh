@@ -798,6 +798,79 @@ if f5_check "$SCRATCH/version.f5bait"; then
 	fail "F5's pattern passed a note whose enumeration marker was rewritten — the check is vacuous"
 else
 	pass "F5's pattern fails when the enumeration marker is absent"
+
+# --- F6: the notes are held to the release delta ---------------------------
+# F5 checks the enumeration marker and F5b that no ticket repeats; neither
+# reads what actually changed, which is how a wave shipped a note that
+# omitted two changed files (found by the review of PR #159, ticket #160).
+# While the declared version has NO tag yet — a wave in flight — every file
+# that changed since the previous release in the categories the recipe's
+# step 9 names (skills, the manual and article templates, the docs and
+# workflow templates, the gate policy file) must be named in the current
+# note or in an "Arriving from <previous> or older" paragraph of the recipe.
+# Once the version is tagged there is nothing to hold: what changes after a
+# tag belongs to the next bump's note, which does not exist yet.
+#
+# "Named" is a text match, and deliberately loose in one direction: a file
+# counts by its repo path or its basename, and a skill's SKILL.md by the
+# skill's `/name`. A sidecar or template that changed and is nowhere in the
+# notes is caught; a SKILL.md change hidden behind a mention of the skill
+# for another reason is not. Cheap, and it would have caught #159's two.
+DELTA_CATEGORIES=".agents/skills constitution templates scripts/docs-conformance/config.mjs"
+# notes_text <repo> <prev version> — the current note plus the recipe's
+# arriving-from paragraphs for that previous release.
+notes_text() {
+	current_note "$(sed -n 's/^shared-layer: *//p' "$1/VERSION")" "$1/VERSION"
+	awk -v lead="**Arriving from $2 or older" 'index($0, lead) == 1 { on = 1 } on && /^$/ { on = 0 } on { print }' "$1/UPDATING.md"
+}
+# notes_gaps <repo> — one line per changed file the notes do not name; empty
+# when every file is named or when the version is already tagged.
+notes_gaps() {
+	_ng_v=$(sed -n 's/^shared-layer: *//p' "$1/VERSION")
+	git -C "$1" rev-parse -q --verify "v$_ng_v^{commit}" >/dev/null 2>&1 && return 0
+	_ng_prev=$(git -C "$1" tag -l 'v*' | sort -V | tail -1)
+	[ -n "$_ng_prev" ] || return 0
+	_ng_notes=$(notes_text "$1" "${_ng_prev#v}")
+	# shellcheck disable=SC2086  # the categories are a list on purpose
+	git -C "$1" diff --name-only "$_ng_prev" HEAD -- $DELTA_CATEGORIES | while IFS= read -r _ng_f; do
+		_ng_base=$(basename "$_ng_f")
+		case "$_ng_f" in
+		.agents/skills/*/SKILL.md) _ng_alt="/$(basename "$(dirname "$_ng_f")")" ;;
+		*) _ng_alt="$_ng_base" ;;
+		esac
+		printf '%s\n' "$_ng_notes" | grep -q -F -e "$_ng_f" -e "$_ng_alt" || echo "$_ng_f"
+	done
+}
+if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1; then
+	pass "v$version_now is tagged — the release delta has nothing to hold until the next bump"
+else
+	f6=$(notes_gaps "$KIT")
+	[ -z "$f6" ] && pass "every shipped file that changed since the previous tag is named in the $version_now note or the recipe" ||
+		fail "changed since the previous tag and named in no note: $(printf '%s' "$f6" | tr '\n' ' ')"
+fi
+# Baits, in a scratch repo with a real tag: an in-flight bump whose note
+# names nothing is red; naming the skill and the template makes it green;
+# a tagged version is silent whatever changed.
+F6R="$SCRATCH/f6-repo"
+mkdir -p "$F6R/.agents/skills/probe" "$F6R/templates/docs" && cd "$F6R" || exit 2
+git init -q -b main && git config user.name t && git config user.email t@example.invalid && git config commit.gpgsign false && git config tag.gpgSign false
+printf '# probe\n' >.agents/skills/probe/SKILL.md; printf 'one\n' >templates/docs/x.md.template; printf 'shared-layer: 0.1.0\n' >VERSION; printf '# recipe\n' >UPDATING.md
+git add -A >/dev/null && git commit -q -m "release 0.1.0" && git tag v0.1.0
+printf '# probe, changed\n' >.agents/skills/probe/SKILL.md; printf 'two\n' >templates/docs/x.md.template
+printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >VERSION
+git add -A >/dev/null && git commit -q -m "bump without notes"
+cd "$KIT" || exit 2
+case "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" in
+".agents/skills/probe/SKILL.md templates/docs/x.md.template ") pass "the delta probe names every changed file an in-flight note omits" ;;
+*) fail "the delta probe missed an omitted file: '$(notes_gaps "$F6R" | tr '\n' ' ')'" ;;
+esac
+printf '# 0.2.0 — bait\n# From #1: /probe changed; x.md.template changed.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
+[ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names both" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
+printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
+printf '**Arriving from 0.1.0 or older, two things.** `/probe` changed, and\n`x.md.template` changed.\n\n' >>"$F6R/UPDATING.md"
+[ -z "$(notes_gaps "$F6R")" ] && pass "an arriving-from paragraph in the recipe names a file as well as the note does" || fail "the recipe's arriving-from paragraph did not count: $(notes_gaps "$F6R" | tr '\n' ' ')"
+printf '# recipe\n' >"$F6R/UPDATING.md"; git -C "$F6R" tag v0.2.0
+[ -z "$(notes_gaps "$F6R")" ] && pass "a tagged version has nothing to hold, whatever changed" || fail "the delta probe reported a tagged version"
 fi
 
 # …and the window really is ONE note: gut only the current note's marker while
