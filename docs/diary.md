@@ -1009,8 +1009,11 @@ templates, the docs and workflow templates, the gate policy file) must be
 named in the current note or in an "Arriving from <previous> or older"
 paragraph of the recipe, by path, basename or the skill's command. Once the
 version is tagged there is nothing to hold; what changes after a tag is the
-next bump's note to tell. Three baits in a scratch repo with a real tag
-prove each arm, and three mutations of the probe go red. The match is a
+next bump's note to tell. Seven baits in a scratch repo with a real tag —
+one file per recipe category, named by command, basename or path; the
+previous release's paragraph counts and an older one does not; a tagged
+version is silent; no tag at all is a skip — prove each arm, and the
+probe's own mutations go red. The match is a
 text match and loose in one direction, said in the probe's own comment: a
 SKILL.md change hidden behind a mention of its skill for another reason
 passes. It would still have caught both of #159's omissions.

@@ -798,6 +798,7 @@ if f5_check "$SCRATCH/version.f5bait"; then
 	fail "F5's pattern passed a note whose enumeration marker was rewritten — the check is vacuous"
 else
 	pass "F5's pattern fails when the enumeration marker is absent"
+fi
 
 # --- F6: the notes are held to the release delta ---------------------------
 # F5 checks the enumeration marker and F5b that no ticket repeats; neither
@@ -805,73 +806,95 @@ else
 # omitted two changed files (found by the review of PR #159, ticket #160).
 # While the declared version has NO tag yet — a wave in flight — every file
 # that changed since the previous release in the categories the recipe's
-# step 9 names (skills, the manual and article templates, the docs and
-# workflow templates, the gate policy file) must be named in the current
-# note or in an "Arriving from <previous> or older" paragraph of the recipe.
-# Once the version is tagged there is nothing to hold: what changes after a
-# tag belongs to the next bump's note, which does not exist yet.
+# step 9 names (9a the skills, 9b the manual and article templates, 9c the
+# docs and workflow templates, 9d the four policy files, 9e the adapters)
+# must be named in the current note or in an "Arriving from <previous> or
+# older" paragraph of the recipe — that paragraph only, from its bold lead
+# at column one to the next blank line. Once the version is tagged there is
+# nothing to hold: what changes after a tag belongs to the next bump's note,
+# which does not exist yet. A repo with no release tag is a skip, not a pass.
 #
-# "Named" is a text match, and deliberately loose in one direction: a file
-# counts by its repo path or its basename, and a skill's SKILL.md by the
-# skill's `/name`. A sidecar or template that changed and is nowhere in the
-# notes is caught; a SKILL.md change hidden behind a mention of the skill
-# for another reason is not. Cheap, and it would have caught #159's two.
-DELTA_CATEGORIES=".agents/skills constitution templates scripts/docs-conformance/config.mjs"
+# "Named" is a substring match, and the comment says where that is loose: a
+# file counts by its repo path or its basename, and a skill's SKILL.md by the
+# skill's `/name`; so a basename that is a prefix of another file's, a
+# sentence that names a file to say it did NOT change, and a SKILL.md change
+# hidden behind a mention of its skill for another reason all pass. What is
+# caught is a changed file that no current note mentions at all — which is
+# what #159's two were.
+DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
 # notes_text <repo> <prev version> — the current note plus the recipe's
-# arriving-from paragraphs for that previous release.
+# arriving-from paragraph(s) for that previous release.
 notes_text() {
 	current_note "$(sed -n 's/^shared-layer: *//p' "$1/VERSION")" "$1/VERSION"
 	awk -v lead="**Arriving from $2 or older" 'index($0, lead) == 1 { on = 1 } on && /^$/ { on = 0 } on { print }' "$1/UPDATING.md"
 }
 # notes_gaps <repo> — one line per changed file the notes do not name; empty
-# when every file is named or when the version is already tagged.
+# when every file is named or when the version is already tagged; exit 3
+# when no release tag exists to diff against.
 notes_gaps() {
-	_ng_v=$(sed -n 's/^shared-layer: *//p' "$1/VERSION")
-	git -C "$1" rev-parse -q --verify "v$_ng_v^{commit}" >/dev/null 2>&1 && return 0
-	_ng_prev=$(git -C "$1" tag -l 'v*' | sort -V | tail -1)
-	[ -n "$_ng_prev" ] || return 0
-	_ng_notes=$(notes_text "$1" "${_ng_prev#v}")
+	_gap_v=$(sed -n 's/^shared-layer: *//p' "$1/VERSION")
+	git -C "$1" rev-parse -q --verify "v$_gap_v^{commit}" >/dev/null 2>&1 && return 0
+	_gap_prev=$(git -C "$1" describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null) || return 3
+	_gap_notes=$(notes_text "$1" "${_gap_prev#v}")
 	# shellcheck disable=SC2086  # the categories are a list on purpose
-	git -C "$1" diff --name-only "$_ng_prev" HEAD -- $DELTA_CATEGORIES | while IFS= read -r _ng_f; do
-		_ng_base=$(basename "$_ng_f")
-		case "$_ng_f" in
-		.agents/skills/*/SKILL.md) _ng_alt="/$(basename "$(dirname "$_ng_f")")" ;;
-		*) _ng_alt="$_ng_base" ;;
+	git -C "$1" diff --name-only "$_gap_prev" HEAD -- $DELTA_CATEGORIES | while IFS= read -r _gap_f; do
+		case "$_gap_f" in
+		.agents/skills/*/SKILL.md) _gap_alt="/$(basename "$(dirname "$_gap_f")")" ;;
+		*) _gap_alt=$(basename "$_gap_f") ;;
 		esac
-		printf '%s\n' "$_ng_notes" | grep -q -F -e "$_ng_f" -e "$_ng_alt" || echo "$_ng_f"
+		printf '%s\n' "$_gap_notes" | grep -q -F -e "$_gap_f" -e "$_gap_alt" || echo "$_gap_f"
 	done
 }
 if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1; then
 	pass "v$version_now is tagged — the release delta has nothing to hold until the next bump"
 else
-	f6=$(notes_gaps "$KIT")
-	[ -z "$f6" ] && pass "every shipped file that changed since the previous tag is named in the $version_now note or the recipe" ||
+	f6=$(notes_gaps "$KIT"); f6_rc=$?
+	if [ "$f6_rc" = 3 ]; then
+		printf '  --    no release tag reachable from HEAD — the release delta cannot be held (a shallow clone?)\n'
+	elif [ -z "$f6" ]; then
+		pass "every shipped file that changed since the previous tag is named in the $version_now note or the recipe"
+	else
 		fail "changed since the previous tag and named in no note: $(printf '%s' "$f6" | tr '\n' ' ')"
+	fi
 fi
-# Baits, in a scratch repo with a real tag: an in-flight bump whose note
-# names nothing is red; naming the skill and the template makes it green;
-# a tagged version is silent whatever changed.
+# Baits, in a scratch repo with a real tag. One file per category, all
+# changed after the tag, and the note or the recipe named or silent by turns.
 F6R="$SCRATCH/f6-repo"
-mkdir -p "$F6R/.agents/skills/probe" "$F6R/templates/docs" && cd "$F6R" || exit 2
+mkdir -p "$F6R/.agents/skills/probe" "$F6R/templates/docs" "$F6R/constitution" "$F6R/scripts/docs-conformance" "$F6R/adapters/a" && cd "$F6R" || exit 2
 git init -q -b main && git config user.name t && git config user.email t@example.invalid && git config commit.gpgsign false && git config tag.gpgSign false
-printf '# probe\n' >.agents/skills/probe/SKILL.md; printf 'one\n' >templates/docs/x.md.template; printf 'shared-layer: 0.1.0\n' >VERSION; printf '# recipe\n' >UPDATING.md
+f6_write() { # <content> — every category's file
+	printf '%s\n' "$1" >.agents/skills/probe/SKILL.md; printf '%s\n' "$1" >templates/docs/x.md.template
+	printf '%s\n' "$1" >constitution/local-x.md.template; printf '%s\n' "$1" >scripts/docs-conformance/config.mjs
+	printf '%s\n' "$1" >adapters/a/README.md
+}
+f6_write one; printf 'shared-layer: 0.1.0\n' >VERSION; printf '# recipe\n' >UPDATING.md
 git add -A >/dev/null && git commit -q -m "release 0.1.0" && git tag v0.1.0
-printf '# probe, changed\n' >.agents/skills/probe/SKILL.md; printf 'two\n' >templates/docs/x.md.template
+f6_write two
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >VERSION
 git add -A >/dev/null && git commit -q -m "bump without notes"
 cd "$KIT" || exit 2
-case "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" in
-".agents/skills/probe/SKILL.md templates/docs/x.md.template ") pass "the delta probe names every changed file an in-flight note omits" ;;
-*) fail "the delta probe missed an omitted file: '$(notes_gaps "$F6R" | tr '\n' ' ')'" ;;
-esac
-printf '# 0.2.0 — bait\n# From #1: /probe changed; x.md.template changed.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
-[ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names both" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
+F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template"
+[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "$F6_ALL " ] &&
+	pass "the delta probe names every changed file an in-flight note omits, one per category" ||
+	fail "the delta probe missed a category: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
+# Named in the note — a skill by command, two files by basename, two by path.
+printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template and adapters/a/README.md.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
+[ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names each — by command, basename or path" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
-printf '**Arriving from 0.1.0 or older, two things.** `/probe` changed, and\n`x.md.template` changed.\n\n' >>"$F6R/UPDATING.md"
-[ -z "$(notes_gaps "$F6R")" ] && pass "an arriving-from paragraph in the recipe names a file as well as the note does" || fail "the recipe's arriving-from paragraph did not count: $(notes_gaps "$F6R" | tr '\n' ' ')"
+# The recipe's paragraph for the PREVIOUS release counts; an older release's
+# does not, a paragraph not at column one does not, and the paragraph ends
+# at the first blank line.
+printf '# recipe\n\n**Arriving from 0.0.1 or older, everything.** /probe, x.md.template,\nconstitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >"$F6R/UPDATING.md"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "an older release's arriving-from paragraph does not count" || fail "an older release's paragraph satisfied the probe"
+printf '> **Arriving from 0.1.0 or older, quoted.** /probe, x.md.template,\n> constitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >>"$F6R/UPDATING.md"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "a lead that is not at column one does not count" || fail "an indented lead satisfied the probe"
+printf '**Arriving from 0.1.0 or older, one thing.** /probe changed.\n\nAlso x.md.template, constitution/local-x.md.template, config.mjs and\nadapters/a/README.md — but this line is past the blank, so it is prose.\n' >>"$F6R/UPDATING.md"
+[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template " ] &&
+	pass "the previous release's paragraph counts, and ends at the first blank line" ||
+	fail "the paragraph terminator or the lead match is wrong: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
 printf '# recipe\n' >"$F6R/UPDATING.md"; git -C "$F6R" tag v0.2.0
 [ -z "$(notes_gaps "$F6R")" ] && pass "a tagged version has nothing to hold, whatever changed" || fail "the delta probe reported a tagged version"
-fi
+git -C "$F6R" tag -d v0.1.0 v0.2.0 >/dev/null; notes_gaps "$F6R" >/dev/null; [ $? = 3 ] && pass "no release tag reachable is a skip, never a pass" || fail "the probe passed a repo with no release tag"
 
 # …and the window really is ONE note: gut only the current note's marker while
 # an OLDER note keeps its own, and the check must still fail. This is the
