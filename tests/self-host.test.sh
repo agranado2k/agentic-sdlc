@@ -815,8 +815,9 @@ fi
 # which does not exist yet. A repo with no release tag is a skip, not a pass.
 #
 # "Named" is a substring match, and the comment says where that is loose: a
-# file counts by its repo path or its basename, and a skill's SKILL.md by the
-# skill's `/name`; so a basename that is a prefix of another file's, a
+# file counts by its basename (a mention by repo path contains it, so there
+# is no separate path arm), and a skill's SKILL.md by the skill's `/name`;
+# so a basename that is a prefix of another file's, a
 # sentence that names a file to say it did NOT change, and a SKILL.md change
 # hidden behind a mention of its skill for another reason all pass. What is
 # caught is a changed file that no current note mentions at all — which is
@@ -842,7 +843,7 @@ notes_gaps() {
 		.agents/skills/*/SKILL.md) _gap_alt="/$(basename "$(dirname "$_gap_f")")" ;;
 		*) _gap_alt=$(basename "$_gap_f") ;;
 		esac
-		printf '%s\n' "$_gap_notes" | grep -q -F -e "$_gap_f" -e "$_gap_alt" || echo "$_gap_f"
+		printf '%s\n' "$_gap_notes" | grep -q -F -- "$_gap_alt" || echo "$_gap_f"
 	done
 }
 if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1; then
@@ -877,7 +878,8 @@ F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.
 [ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "$F6_ALL " ] &&
 	pass "the delta probe names every changed file an in-flight note omits, one per category" ||
 	fail "the delta probe missed a category: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
-# Named in the note — a skill by command, two files by basename, two by path.
+# Named in the note — a skill by command, two files by basename, two by
+# repo path (which the basename match covers).
 printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template and adapters/a/README.md.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
 [ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names each — by command, basename or path" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
