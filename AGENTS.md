@@ -31,7 +31,7 @@ never edit a shim.
 
 ## What this repo is, and what "code" means here
 
-The product is the framework, so almost none of it is application code:
+The product is the kit itself, so almost none of it is application code:
 
 - **POSIX sh** — `bootstrap.sh`, the gates and guards under `scripts/`, and the
   hook in `.githooks/pre-push`. `sh` and `git` only: the kit's core runs before
@@ -149,7 +149,7 @@ Every SKILL.md that spawns a subagent says, verbatim, `sh scripts/agents.lib.sh
 <tier>` — correct for a consumer, and it has to stay that way: skills ship
 unstamped, so none of them may name a kit-only file (see "The chain" below).
 Typed literally in THIS repo, that command resolves through the empty shipped
-config and prints nothing. **Hard rule 10** is the fix: run
+policy file and prints nothing. **Hard rule 10** is the fix: run
 `sh scripts/agents.kit.sh <tier> [domain]` in its place, every time a skill
 says to spawn. The wrapper sets the resolver's existing `$AGENTS_CONFIG` seam and
 delegates —
@@ -279,7 +279,7 @@ brief; it never fixes, and its findings enter the line at `/to-tickets`.
 
 One more sits *beside* the line: `/dogfood` walks a project's declared personas
 through its real user-facing surface. It is the kit's one OPTIONAL skill —
-bootstrap asks before installing it, because a project with no runnable surface
+bootstrap asks before copying it in, because a project with no runnable surface
 would inherit a command it cannot run — and the kit itself has no such surface,
 so nothing here invokes it. `tests/dogfood-optin.test.sh` is what proves both
 answers produce a clean project.
@@ -318,7 +318,7 @@ answers produce a clean project.
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
-| Ship a consumer CI workflow         | `templates/workflows/` — installed into a project's `.github/workflows/` |
+| Ship a consumer CI workflow         | `templates/workflows/` — copied into a project's `.github/workflows/` |
 | Know which files are shared layer   | `VERSION` — and `UPDATING.md` for the recipe when one moves |
 | See what the kit does NOT ship      | `EXCLUSIONS.md` — kept honest by `tests/exclusions.test.sh` |
 | Measure the kit's own validator tests | `scripts/mutation.kit.sh` — Stryker (pinned) on demand against the validators under `scripts/docs-conformance/validators/`, never a gate; runs in place — clean tree, network required; the baseline is in the diary (kit-only, never shipped) |
