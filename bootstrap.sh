@@ -12,7 +12,7 @@
 #   sh bootstrap.sh "My Project" "One line." # name + description
 #
 # Options (they may appear anywhere among the arguments):
-#   --with-dogfood   install the optional /dogfood skill
+#   --with-dogfood   take the optional /dogfood skill
 #   --no-dogfood     skip it
 # Without either flag the script asks, once, on a terminal; with no terminal to
 # ask on it skips. See the F6 block below for why skip is the safe default.
@@ -111,14 +111,14 @@ optional_dogfood_exempt="docs/dogfood-reports/"
 optional_dogfood_prompt='Include the /dogfood skill? Needs a runnable user-facing surface. [y/N] '
 # Plain strings, not heredocs: bash 3.2 (macOS's /bin/sh) misparses a heredoc
 # inside $( ) when its body carries an apostrophe.
-optional_dogfood_note_yes="/dogfood is installed, and it does NOT work yet. It walks your personas through
+optional_dogfood_note_yes="/dogfood is in place, and it does NOT work yet. It walks your personas through
 your real user-facing surface, and both of those are yours to declare: fill in
 the DOGFOOD DECLARATION in constitution/local-product.md.template, drop the
 .template suffix, and point AGENTS.md's article layer at it — the same three
 steps as the other two local articles. Until then the skill stops and says so,
 which is the correct behaviour: a guessed persona produces a report about a
 user who does not exist."
-optional_dogfood_note_no="/dogfood was NOT installed — it needs a runnable user-facing surface, and the
+optional_dogfood_note_no="/dogfood was NOT taken — it needs a runnable user-facing surface, and the
 default is to skip. Nothing is lost: copy .agents/skills/dogfood/ and
 constitution/local-product.md.template out of the kit on the day you have one,
 and add a row for it to AGENTS.md's quick reference."
@@ -318,7 +318,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # The kit's CI goes too: it runs the kit's OWN acceptance test against the kit's
 # OWN shared layer, and inheriting it would give a fresh project a workflow that
 # fails for reasons that are none of its business. Consumer CI workflow
-# templates are installed separately below (K3).
+# templates are copied separately below (K3).
 # EXCLUSIONS.md goes the same way, and it is one of two entries here that are
 # not a test: it records what the KIT deliberately does not ship, which is a
 # sentence with no referent inside a consumer project — a reader there would
@@ -336,7 +336,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 # whatever model the session happens to be running on. Naming a model is
 # exactly the kind of content with no business surviving into a stamped
 # project. scripts/agents.kit.sh sits beside it for the same reason: it exists
-# only to reach a config that does not exist in a stamped project, so keeping
+# only to reach a policy file that does not exist in a stamped project, so keeping
 # it would ship a broken command rather than a useless one.
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
@@ -346,7 +346,7 @@ KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tes
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
 # bootstrap — so it arrives intact and dormant rather than being deleted here or
-# installed automatically. Nothing in it is copied, stamped or activated; see
+# copied in automatically. Nothing in it is copied, stamped or activated; see
 # adapters/node-ts/INSTALL.md, "Why bootstrap.sh does not touch this directory".
 # tests/adapters-demo.sh asserts exactly that, byte for byte.
 
@@ -362,7 +362,7 @@ cd "$root"
 # `--adopt` runs FROM INSIDE a target repository, against the scratch kit
 # clone this script lives in. A script meeting a collision can only refuse or
 # clobber, so adopt mode does exactly and only what a script is good at:
-# CLASSIFY every kit file per the recorded per-class policy, INSTALL the
+# CLASSIFY every kit file per the recorded per-class policy, COPY IN the
 # non-colliding set in one pass, and REPORT each conflict as one stable line —
 #
 #     COLLISION <class> <path> <verb>
@@ -372,7 +372,7 @@ cd "$root"
 # arm, one approval at a time, then re-run this same command); exit 0 means
 # the tree was — or has become — clean, and the run completes exactly as the
 # new-project arm does: stamped manual, shims, hook wired, self-deletion.
-# Re-runs are idempotent: an installed file compares equal and stays silent.
+# Re-runs are idempotent: a copied file compares equal and stays silent.
 #
 # This block sits BEFORE the F12 strip and the idempotency refusals on
 # purpose: those checks read "AGENTS.md exists" as "already bootstrapped",
@@ -455,13 +455,13 @@ if [ "$ADOPT" = 1 ]; then
 	a_copy() {
 		mkdir -p "$(dirname "$2")"
 		cp -p "$a_kit/$1" "$a_scratch/copy.$$" && mv "$a_scratch/copy.$$" "$2"
-		echo "  installed $2"
+		echo "  copied $2"
 	}
 	a_copy_dir() {
 		mkdir -p "$(dirname "$2")"
 		rm -rf "$a_scratch/dir.$$"
 		cp -Rp "$a_kit/$1" "$a_scratch/dir.$$" && mv "$a_scratch/dir.$$" "$2"
-		echo "  installed $2/"
+		echo "  copied $2/"
 	}
 	# kept, and said so once per run: project memory and policy already in
 	# place is a fact, not a conflict — a verdict must be resolvable, and
@@ -545,7 +545,7 @@ if [ "$ADOPT" = 1 ]; then
 		done
 	fi
 
-	# --- 3. project memory: install where absent, keep where present --------
+	# --- 3. project memory: stamp or copy where absent, keep where present -
 	a_exists "docs/diary.md" && a_keep "docs/diary.md" || a_stamp "templates/docs/diary.md.template" "docs/diary.md"
 	a_exists "docs/domain-glossary.md" && a_keep "docs/domain-glossary.md" || a_stamp "templates/docs/domain-glossary.md.template" "docs/domain-glossary.md"
 	a_exists "docs/adr/INDEX.md" && a_keep "docs/adr/INDEX.md" || a_stamp "templates/docs/adr/INDEX.md.template" "docs/adr/INDEX.md"
@@ -558,7 +558,7 @@ if [ "$ADOPT" = 1 ]; then
 	# Canonical home is the vendor-neutral .agents/skills/; .claude/skills/<s>
 	# is a committed per-skill symlink (the shape one harness's docs support).
 	# A collision is a NON-IDENTICAL occupant at EITHER address; identical
-	# content at the old address is our own earlier install (or a consumer's
+	# content at the old address is our own earlier copy (or a consumer's
 	# deliberate real copy) and stays silent. The symlink is laid
 	# scratch-then-move like every other copy.
 	a_link_skill() {
@@ -569,7 +569,7 @@ if [ "$ADOPT" = 1 ]; then
 	# The bridge slot's states, classified: absent -> lay ours; our own link
 	# -> nothing to do; anything else (foreign or dangling link, a stray
 	# file) -> a collision at that address. Returns 0 when the canonical
-	# install may proceed. Their identical REAL directory is handled by the
+	# copy may proceed. Their identical REAL directory is handled by the
 	# caller before this runs — that one is theirs to keep, bridge and all.
 	# A bridge's identity is WHERE it points, not how it is spelled. The
 	# byte-compare in a_bridge is the fast path for our own spelling; this
@@ -615,7 +615,7 @@ if [ "$ADOPT" = 1 ]; then
 		opt_declined "$s" && continue
 		if a_exists ".agents/skills/$s"; then
 			if diff -rq "$a_kit/.agents/skills/$s" ".agents/skills/$s" >/dev/null 2>&1; then
-				# Our own earlier install (or their identical copy) — repair
+				# Our own earlier copy (or their identical copy) — repair
 				# a missing bridge so a clean exit never leaves a red gate.
 				a_bridge "$s" || :
 			else
@@ -628,7 +628,7 @@ if [ "$ADOPT" = 1 ]; then
 				a_hit skill ".claude/skills/$s" rename-or-decline
 			fi
 		else
-			# The bridge slot decides whether the install may proceed: a
+			# The bridge slot decides whether the copy may proceed: a
 			# foreign or dangling link there is a collision, and canonical
 			# holds back until it is resolved (all-or-nothing per skill).
 			if a_bridge "$s"; then
@@ -657,7 +657,7 @@ if [ "$ADOPT" = 1 ]; then
 			mv "$a_scratch/link.$$" ".claude/skills/LICENSE-mattpocock-skills.md"
 	fi
 
-	# --- 5. policy and local files: install only where absent ---------------
+	# --- 5. policy and local files: copy only where absent -----------------
 	if ! a_exists "scripts/docs-conformance/config.mjs"; then
 		# An optional skill's marked exemption block travels with the skill,
 		# exactly as the new-project arm stamps it.
@@ -666,11 +666,11 @@ if [ "$ADOPT" = 1 ]; then
 		opt_stamp "scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs"
 		mkdir -p scripts/docs-conformance
 		mv "$a_scratch/config.mjs" "scripts/docs-conformance/config.mjs"
-		echo "  installed scripts/docs-conformance/config.mjs"
+		echo "  stamped scripts/docs-conformance/config.mjs"
 	else
 		a_keep "scripts/docs-conformance/config.mjs"
 		# A kept policy file plus an accepted skill can contradict each other
-		# — the flag may have flipped between runs, or their config predates
+		# — the flag may have flipped between runs, or their policy file predates
 		# the exemption. The gate would only whisper about it later (a
 		# skill-path advisory on the skill's first report), so say it now,
 		# while the human is already approving things.
@@ -730,7 +730,7 @@ if [ "$ADOPT" = 1 ]; then
 	fi
 	a_hookspath=$(git config core.hooksPath 2>/dev/null || true)
 	if [ -n "$a_hookspath" ] && [ "$a_hookspath" != ".githooks" ]; then
-		# Their config value can carry a space; the verdict token must not. The
+		# Their configured value can carry a space; the verdict token must not. The
 		# stable key IS the finding.
 		a_hit hook "core.hooksPath" chain
 	fi
@@ -762,7 +762,7 @@ fi
 # ============================================================================
 # F12 BEGIN — the kit's own bootstrapped state (#f12)
 # ----------------------------------------------------------------------------
-# The kit repo follows the framework it ships: it has a root AGENTS.md written
+# The kit repo follows the constitution it ships: it has a root AGENTS.md written
 # for its own authoring context, the two shims beside it, and a documentation
 # set. Every one of those files is sitting in the tree you just created your
 # repo from — so they have to come OUT before the idempotency check below, which
@@ -1063,7 +1063,7 @@ else
 fi
 # K4 END
 # ============================================================================
-# --- install the CI workflow templates --------------------------------------
+# --- copy in the CI workflow templates --------------------------------------
 # The kit ships these under templates/ rather than .github/workflows/ because a
 # TEMPLATE repository must not run its consumers' CI against its own tree — the
 # docs gate expects a bootstrapped project, and the kit is deliberately not one.
@@ -1079,7 +1079,7 @@ if [ -d templates/workflows ]; then
 			echo "  kept $dest (already present — not overwritten)"
 		else
 			cp "$wf" "$dest"
-			echo "  installed $dest"
+			echo "  copied $dest"
 		fi
 	done
 	rm -rf templates/workflows
@@ -1161,7 +1161,7 @@ Next:
 
 Both gates run automatically before every push (.githooks/pre-push), each with
 its own loud bypass: PUSH_WITHOUT_DOCS=1 and PUSH_WITHOUT_TESTS=1. The matching
-CI workflows were installed into .github/workflows/, so a local bypass only
+CI workflows were copied into .github/workflows/, so a local bypass only
 defers the failure. Commit linting ships DISABLED as
 .github/workflows/commitlint.yml.example — rename it once you have a runner.
 
@@ -1206,7 +1206,7 @@ done
 # above). It arrives dormant. All this block does is TELL you it is there —
 # without a mention, a fresh project contains a directory nobody introduced,
 # which is how reference material gets mistaken for a description of the
-# project. A pointer, not an install.
+# project. A pointer, not a copy.
 if [ -d adapters ]; then
 	cat <<'EOF'
 adapters/ holds worked reference wirings — one directory per stack, copied from

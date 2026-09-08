@@ -93,7 +93,7 @@ second time rather than overwriting a manual you have since edited.
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. Two ship live (the docs gate, the TDD pairing gate); two ship as `.example` — commit linting, and the AI review below. |
 | `templates/workflows/ai-review.example.yml` | The cross-provider review workflow: two advisory reviewers from two vendors, one identical prompt, firing on PR open. This is what `/implement` requests when it delivers. **Inert on arrival** — rename it once a provider secret exists. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
-| `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not installed: it arrives in your project intact and dormant. See below. |
+| `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not copied in: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
 | `EXCLUSIONS.md` | What the kit deliberately does **not** ship, and why — one entry per considered-and-rejected skill or mechanism, plus the standing rule that keeps it current. Kit-repo meta: removed by bootstrap, not shared layer. |
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
@@ -250,12 +250,12 @@ before bumping the marker.
 
 `UPDATING.md` **Part 2** covers everything the manifest does not, because that is
 where most of a release's actual features live: skills, the manual and its local
-articles, the workflow templates, the config files, the adapters. Those are not a
+articles, the workflow templates, the policy files, the adapters. Those are not a
 copy — you were invited to edit them — so "byte-identical to the release" is the
 wrong question there, and each category gets its own: a three-way review for
 skills, missing *sections* for the manual, **never overwrite, diff the key sets**
-for config files, whole directories for adapters. Part 1 alone is an inert
-half-update: 0.4.0's tier resolver is shared layer, while the config it reads and
+for policy files, whole directories for adapters. Part 1 alone is an inert
+half-update: 0.4.0's tier resolver is shared layer, while the policy file it reads and
 the skills that call it are not. Both halves are demonstrated end to end by
 `sh tests/docs-demo.sh`, whose two transcripts are the worked examples inside
 `UPDATING.md` itself.
@@ -374,20 +374,20 @@ this framework was extracted from, with the reasoning left in.
 
 **`bootstrap.sh` does not touch this tree.** It copies nothing out of it, stamps
 nothing in it, and deletes nothing from it — so it arrives in your project
-byte-identical and inert. Neither alternative was better: installing an adapter
+byte-identical and inert. Neither alternative was better: copying an adapter in
 would be a stack guess stamped into a file the docs gate then enforces, and
 deleting one would move the only worked example out of reach at exactly the
 moment it becomes useful (the day you turn a guard on, weeks after bootstrap).
 Nothing in `adapters/` is on an execution path: no workflow lives there, no
-guard resolves its config from there, and no gate reads it. If no adapter
+guard resolves its policy file from there, and no gate reads it. If no adapter
 matches your stack, `rm -rf adapters` is the encouraged answer — a Node wiring
 sitting in a Go repo is a stale standing instruction waiting to mislead the next
 agent session.
 
 `sh tests/adapters-demo.sh` states all of that as checks rather than prose: the
-shell and module files parse, the config examples really set what the guards
+shell and module files parse, the policy-file examples really set what the guards
 read, and a bootstrapped consumer still holds the tree byte-for-byte with
-nothing installed. What it *cannot* check — no Stryker run, no promptfoo run, no
+nothing copied in. What it *cannot* check — no Stryker run, no promptfoo run, no
 workflow GitHub has ever parsed — is listed in `adapters/node-ts/INSTALL.md`.
 
 ## CI templates, and why they are not workflows here
@@ -472,7 +472,7 @@ skeleton (K0).
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
-  resolver arrives; its config, its callers and the wave's two new skills do
+  resolver arrives; its policy file, its callers and the wave's two new skills do
   not), then runs Part 2's steps and proves each of them lands — a new skill
   byte-identical, a changed skill taken, a locally-edited skill three-way merged
   rather than clobbered, `scripts/agents.config.sh` as an ADD, the review
@@ -480,9 +480,9 @@ skeleton (K0).
   non-optional by the gate, in both directions, including adopting and then
   declining the optional `/dogfood` skill after bootstrap. Both transcripts are
   the worked examples inside `UPDATING.md`.
-- `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the config
+- `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the policy-file
   examples really configure the guards, and a bootstrapped consumer keeps
-  `adapters/` byte-identical with nothing installed or activated from it.
+  `adapters/` byte-identical with nothing copied or activated from it.
 
 - `sh tests/ai-review-template.test.sh` covers the cross-provider review
   template: every workflow template really parses as YAML (on python3 or ruby —
@@ -490,7 +490,7 @@ skeleton (K0).
   invariants are in the file rather than only in its header, no merge or approve
   verb is reachable, the two provider prompts are byte-identical, the extraction
   source's own vocabulary did not come along, and a real bootstrap leaves the
-  file installed, byte-identical, and still an `.example` with no live twin.
+  file copied, byte-identical, and still an `.example` with no live twin.
 
 - `sh tests/exclusions.test.sh` keeps `EXCLUSIONS.md` honest: every command it
   says the kit does not ship really has no skill directory, every entry carries
@@ -528,7 +528,7 @@ skeleton (K0).
 - `sh tests/adopt-demo.sh` referees the existing-repo adoption arm: a fixture
   repo carrying one deliberate collision per class (their manual, their
   memory, a name-colliding skill, their hook, a file at a shared-layer path)
-  is driven through `bootstrap.sh --adopt` — the safe set installs, five
+  is driven through `bootstrap.sh --adopt` — the safe set is copied in, five
   stable `COLLISION` lines print, the run exits 3 resolving nothing, re-runs
   are idempotent, and once every collision is resolved the same command flips
   to 0, wires the hook, and leaves the adopted repo's own gate green with the
@@ -761,6 +761,6 @@ origin.
 - [MADR](https://adr.github.io/madr/) — the decision-record format
   `/grill-with-docs` writes.
 
-The framework was first built and exercised inside a working product
+The kit was first built and exercised inside a working product
 repository and extracted here afterwards; `EXCLUSIONS.md` records what
 deliberately stayed behind, and why.

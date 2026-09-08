@@ -1,7 +1,7 @@
 # `adapters/` — worked reference wirings, one per stack
 
 Everything else in this kit is deliberately stack-free. The constitution names
-no language, the guards read their patterns from a config file, and the docs
+no language, the guards read their patterns from a policy file, and the docs
 gate degrades to POSIX sh when there is no runtime. That is what makes the core
 copyable at all — and it is also what leaves a real question unanswered on day
 one: **what do those settings actually look like for my stack?**
@@ -49,7 +49,7 @@ So this directory **arrives in your project intact and inert**, exactly as it
 sits in the kit:
 
 - no file here is on any execution path — no workflow lives in `adapters/`
-  (GitHub only reads `.github/workflows/`), no guard resolves its config from
+  (GitHub only reads `.github/workflows/`), no guard resolves its policy file from
   here, no gate scans it for references;
 - the one gate that does see these files is the docs gate's
   unstamped-placeholder scan, which every file in the repo is subject to and
@@ -81,7 +81,7 @@ blog post — it is a sibling directory here, in your own repo, holding:
 
 1. a **README** that walks the kit's configuration points in order and shows the
    values *you* chose, with the reason each one is drawn where it is;
-2. the **copyable files** themselves (config, scripts, workflow), each carrying
+2. the **copyable files** themselves (policy file, scripts, workflow), each carrying
    a header saying which project shape it assumes;
 3. an **INSTALL** with the exact commands and, more importantly, the list of
    what must be edited afterwards and what happens if it is not.
