@@ -256,7 +256,7 @@ banned word and the word to use instead.
   general sense — a system's settings, an interface's required
   configuration — is not this entry's concern and is not banned. Except:
   **a qualified use** — `per-clone config`, `gate config`,
-  `test-runner config`, `config schema`, `your config`.
+  `test-runner config`, `config schema`, `your config`, `config-as-data`.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
