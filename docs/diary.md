@@ -997,6 +997,26 @@ on the same append-only files, a union merge duplicated a paragraph of the
 release note once and the duplicate-ticket probe caught it, and one
 disposition was posted from a command chain that had already stopped.
 
+### 2026-09-04 — The release notes are held to the release delta
+
+Ticket #160, filed by the review of PR #159, which had caught two changed
+files the 0.16.0 notes omitted: the suite checked that the note had its
+enumeration marker (F5) and repeated no ticket (F5b), and never read what
+had changed. The self-host suite's F6 now does. While the declared version
+has no tag — a wave in flight — every file that changed since the previous
+release in the recipe's four categories (skills, the manual and article
+templates, the docs and workflow templates, the gate policy file) must be
+named in the current note or in an "Arriving from <previous> or older"
+paragraph of the recipe, by path, basename or the skill's command. Once the
+version is tagged there is nothing to hold; what changes after a tag is the
+next bump's note to tell. Seven baits in a scratch repo with a real tag —
+one file per recipe category, named by command, basename or path; the
+previous release's paragraph counts and an older one does not; a tagged
+version is silent; no tag at all is a skip — prove each arm, and the
+probe's own mutations go red. The match is a
+text match and loose in one direction, said in the probe's own comment: a
+SKILL.md change hidden behind a mention of its skill for another reason
+passes. It would still have caught both of #159's omissions.
 ### 2026-09-04 — The kit's own prose uses no banned word
 
 Ticket #161, the first debt the banned-words advisory made visible: thirteen
