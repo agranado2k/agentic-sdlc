@@ -16,11 +16,11 @@ comparison there answers the wrong question — it flags every local edit you we
 invited to make, and following it would tell you to overwrite your own work.
 
 **Both halves are one update.** Part 1 on its own is an *inert half-update*, and
-the 0.4.0 wave is the illustration: `scripts/agents.lib.sh` (the capability-tier
-resolver) joined the shared layer, so Part 1 delivers it — while the policy file it
-reads, the skills that call it, and the manual section that defines its
-vocabulary are all Part 2. Take Part 1 only and you land a resolver with no
-mapping and no callers.
+the 0.4.0 wave is the illustration: `scripts/agents.lib.sh` (the
+capability-tier resolver) joined the shared layer, so Part 1 delivers it —
+while the policy file it reads, the skills that call it, and the manual section
+that defines its vocabulary are all Part 2. Take Part 1 only and you land a
+resolver with no mapping and no callers.
 
 It is a **manual, reviewable update**, not a dependency bump — deliberately. The
 shared layer is prose that every agent session loads; a silent upgrade of the
@@ -222,8 +222,11 @@ sections, and anything after it is annotation.
 **Arriving from 0.16.0 or older, no file joins and one changed content.** This
 recipe itself: its prose now uses the kit's own words — *policy files* where
 it said `config files` (step 9d is renamed accordingly), *copied* where it said
-`installed` — and the banned phrase it quotes in 9c is a code span, so the
-banned-words advisory leaves the recipe alone. No step changed.
+`installed` — and the banned phrase it quotes in 9c is a code span. The
+banned-words advisory has never scanned the recipe (it reads your manual,
+your local articles and your skills); this is the shared-layer half of the
+kit's own rewording, deferred to a release because this file is copied
+verbatim. No step changed.
 
 **Arriving from 0.15.0 or older, two files join.** `scripts/manifest.lib.sh`
 joins the shared layer at 0.16.0 and `scripts/check.sh` sources it, so the two
@@ -556,10 +559,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1771 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1775 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1925 insertions(+), 1 deletion(-)
+ 3 files changed, 1929 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -909,7 +912,7 @@ and drift, because the next update is run by somebody who was not there. It is
 the same rule as Part 1's step 3, moved one category over: the exception lives
 in a local article, not in the file the kit owns.
 
-**A new skill is a directory copy, and it is not in place until the manual
+**A new skill is a directory copy, and it is not live until the manual
 points at it.**
 
 ```sh
@@ -1356,10 +1359,10 @@ fi
 ```
 
 Add each missing key to your file **with your value**, and bring the kit's
-comment block for it across so the next reader knows what it is for. An unset key
-is not automatically a bug — `agents.config.sh` ships all four tiers empty and
-unset is a documented working state — but it has to be a key you decided to leave
-unset, not one you never saw.
+comment block for it across so the next reader knows what it is for. An unset
+key is not automatically a bug — `agents.config.sh` ships all four tiers empty
+and unset is a documented working state — but it has to be a key you decided to
+leave unset, not one you never saw.
 
 **The `.mjs` policy files are read, not extracted — and that is not a gap to fill
 later.** `keys()` above understands shell assignments only, so pointing it at
@@ -1379,10 +1382,11 @@ or the gate would never check the new article for vocabulary leaks. Every key in
 that file was already present at both refs. A key-set diff reports `(nothing)`
 and is telling the truth about keys while being useless about the release.
 
-So: read the diff, with the same question 9b asks of the manual — *what does the
-release now expect this file to say?* Then edit yours by hand. It is the smallest
-of the five categories and the one where being told a false "nothing to do" costs
-the most, because the thing it silently skips is a gate that stops checking.
+So: read the diff, with the same question 9b asks of the manual — *what does
+the release now expect this file to say?* Then edit yours by hand. It is the
+smallest of the five categories and the one where being told a false "nothing
+to do" costs the most, because the thing it silently skips is a gate that stops
+checking.
 
 Then re-read `scripts/agents.lib.sh` (or whatever shared code reads the policy file).
 It is shared layer, so Part 1 already replaced it: what it reads *now* is the

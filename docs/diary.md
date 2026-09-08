@@ -20,7 +20,7 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.17.0, tagged at the merge of its release PR (2026-09-08); 0.16.0 closed PRD #124 on 2026-09-04; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.17.0 on `main` by PR #169, whose merge is where its tag is cut; 0.16.0 was tagged 2026-09-07 at the merge that closed PRD #124; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Last commit on `main`** | `9e68589` — merge of PR #168, the last of the post-0.16.0 rewordings (2026-09-08) |
@@ -1080,7 +1080,8 @@ release-delta probe from #160 ran live on this bump for the first time and
 held the note to the fourteen shipped files that changed since v0.16.0.
 
 One correction to the record, made here rather than by editing history:
-the three entries above dated 2026-09-04 — the kit's thirteen rewordings,
-the surfaces the advisory does not scan, and the adapters' — were committed
-on 2026-09-07 and 2026-09-08. The session's clock had moved while they were
+the four entries above dated 2026-09-04 — the release notes held to the
+release delta, the kit's thirteen rewordings, the surfaces the advisory does
+not scan, and the adapters' — were committed on 2026-09-07 and 2026-09-08,
+and the 0.16.0 tag itself was cut on 2026-09-07. The session's clock had moved while they were
 written; the entries stand as written, and this line is their date.

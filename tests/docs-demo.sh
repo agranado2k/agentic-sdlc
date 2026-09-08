@@ -393,7 +393,7 @@ recipe() {
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
-	TO_REF=v0.17.0
+	TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 
 	echo "\$ kit tag --list"
 	kit tag --list
@@ -828,7 +828,7 @@ recipe2() {
 	# NOT re-derived from VERSION: step 5 already moved it to 0.17.0. Part 2 runs
 	# in the same session as Part 1 and reuses its refs.
 	FROM_REF=v0.3.0
-	TO_REF=v0.17.0
+	TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 
 	# --- Step 8: what changed outside the shared layer -----------------------
 	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
@@ -1083,7 +1083,7 @@ recipe_prelude() {
 WORK=\$(mktemp -d)
 kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
 FROM_REF=v0.3.0
-TO_REF=v0.17.0
+TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 EOF
 	recipe_block '^kit_take\(\)' >>"$1"
 }
@@ -1307,7 +1307,7 @@ fi
 
 banner "C4g. 9d's key-set diff refuses to answer about a file it cannot read"
 # `keys()` is a shell-assignment extractor: `sed -n 's/^\(NAME\)=.*/\1/p'`. Two
-# of the four config files 9d names are `.mjs`, and it finds nothing in either.
+# of the four policy files 9d names are `.mjs`, and it finds nothing in either.
 # `comm` on two empty sets then prints nothing — which reads exactly like "no
 # new keys" and is in fact "I could not read this file".
 #
@@ -1318,7 +1318,7 @@ assert_block '^keys\(\)' "$SCRATCH/keys.sh" "UPDATING.md's 9d key-set block is e
 if [ -s "$SCRATCH/keys.sh" ]; then
 	{
 		echo "WORK=$SCRATCH"
-		echo "TO_REF=v0.17.0"
+		echo "TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)""
 		echo "C=scripts/docs-conformance/config.mjs"
 		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 		cat "$SCRATCH/take.sh"
@@ -1363,7 +1363,7 @@ assert_block '^kit show' "$SCRATCH/9a-inventory.sh" \
 if [ -s "$SCRATCH/9a-inventory.sh" ]; then
 	{
 		echo "WORK=$SCRATCH"
-		echo "TO_REF=v0.17.0"
+		echo "TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)""
 		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 		cat "$SCRATCH/9a-inventory.sh"
 	} >"$SCRATCH/9a-inventory-case.sh"
