@@ -1031,3 +1031,20 @@ advisory block, and every suite that pins skill or manual text is green.
 These are shipped skill and template-adjacent changes made after the
 v0.16.0 tag; they are the next bump's note to tell, which the release-delta
 probe will hold it to.
+
+### 2026-09-04 — The banned words in the surfaces the advisory does not scan
+
+Ticket #164, filed by the review of PR #163: the sentences the advisory made
+the kit reword still said the old words in the README, bootstrap's comments
+and hand-back, and the two setup documents, none of which the advisory
+scans. Forty-six rewordings, by the same rules — *copy* for what bootstrap
+does to a file, *policy file* for the consumer's own configuration,
+*configuration* in the general sense, *the kit* for *the framework* — and
+bootstrap's own output says `copied` where it said `installed`, which no
+suite or transcript pinned. Two surfaces stay as they are, on purpose:
+`UPDATING.md` is shared layer, so its twenty-seven uses are the next bump's
+to reword (a release action, hard rule 3), and `VERSION`'s history notes are
+history. The scan set does not grow either: the advisory reads no list of
+extra files, and giving it one is a validator change — shared layer again —
+so the kit's README and bootstrap are held by this entry and the next
+housekeeping pass, not by the gate.
