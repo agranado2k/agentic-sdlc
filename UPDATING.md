@@ -7,17 +7,17 @@ are two different kinds of thing:
 | | What it covers | The right question at update time |
 | --- | --- | --- |
 | **Part 1** — steps 0–7 below | the files listed under `files:` in `VERSION` — the **shared layer** | *Is my copy byte-identical to the release?* |
-| **Part 2** — steps 8–10 | skills, the manual and its articles, templates, config files, adapters | *What did the kit change, and did I change the same thing?* |
+| **Part 2** — steps 8–10 | skills, the manual and its articles, templates, policy files, adapters | *What did the kit change, and did I change the same thing?* |
 
 Part 1's files are a **copy**, so a byte comparison answers the question
-completely. Part 2's files are **not** a copy: bootstrap stamped or installed
+completely. Part 2's files are **not** a copy: bootstrap stamped or copied
 them and they became yours, and editing them is the intended workflow. A byte
 comparison there answers the wrong question — it flags every local edit you were
 invited to make, and following it would tell you to overwrite your own work.
 
 **Both halves are one update.** Part 1 on its own is an *inert half-update*, and
 the 0.4.0 wave is the illustration: `scripts/agents.lib.sh` (the capability-tier
-resolver) joined the shared layer, so Part 1 delivers it — while the config it
+resolver) joined the shared layer, so Part 1 delivers it — while the policy file it
 reads, the skills that call it, and the manual section that defines its
 vocabulary are all Part 2. Take Part 1 only and you land a resolver with no
 mapping and no callers.
@@ -99,7 +99,7 @@ yours — and the obvious spelling, `kit show "$REF:$path" >"$mine"`, is unsafe:
 the shell opens and **truncates `$mine` before `kit` is even started**, so a path
 that is absent at that ref leaves you with zero bytes and a `fatal:` on stderr.
 Absent is not exotic — a skill the kit renamed, an article you never stamped, a
-config the kit ships only as a `.template`. Fetch first, write second:
+policy file the kit ships only as a `.template`. Fetch first, write second:
 
 ```sh
 kit_take() {                       # kit_take <ref> <path in the kit> <your file>
@@ -218,6 +218,12 @@ module is still the old one, and the kit's own suite holds the two equal. Two
 grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
+
+**Arriving from 0.16.0 or older, no file joins and one changed content.** This
+recipe itself: its prose now uses the kit's own words — *policy files* where
+it said `config files` (step 9d is renamed accordingly), *copied* where it said
+`installed` — and the banned phrase it quotes in 9c is a code span, so the
+banned-words advisory leaves the recipe alone. No step changed.
 
 **Arriving from 0.15.0 or older, two files join.** `scripts/manifest.lib.sh`
 joins the shared layer at 0.16.0 and `scripts/check.sh` sources it, so the two
@@ -389,7 +395,7 @@ diary entry by the update protocol ("decision reversed or vendor changed").
 
 **Do not stop here, and do not read the green gate as "done".** The gate is
 green because the shared layer is intact, which is all it checks. It cannot see
-that the config the new shared code reads, the skills that call it and the manual
+that the policy file the new shared code reads, the skills that call it and the manual
 section that names its vocabulary have not arrived — those are Part 2, steps
 8–10, and the only honest end of an update is the end of step 10. `$WORK` stays
 where it is; step 8 reuses it.
@@ -457,7 +463,7 @@ each change, which half of the wave it sits in. Then ask, in this order:
 - **Did it WIDEN?** A new optional argument, a new variable it will read if you
   set one. Nothing of yours breaks, and nothing of yours has to change — but the
   feature is inert until Part 2 brings across the skills that use it and, in
-  most cases, until you add something to a config file of your own (9d).
+  most cases, until you add something to a policy file of your own (9d).
 
 **0.7.0 is a widening, and the cleanest example of one yet.**
 `scripts/agents.lib.sh` gained an optional second argument, the task **domain**:
@@ -508,7 +514,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.16.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.17.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -521,9 +527,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.16.0
+v0.17.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.16.0
+v0.1.0 -> v0.17.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -550,10 +556,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1743 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  147 ++++
+ UPDATING.md                       | 1771 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1897 insertions(+), 1 deletion(-)
+ 3 files changed, 1925 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -609,7 +615,7 @@ $ # step 5 — apply
   updated scripts/manifest.lib.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
-  NOTE  UPDATING.md changed in v0.16.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.17.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -649,10 +655,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.16.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.17.0, engine: harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.16.0
-Part 1 complete — shared layer at v0.16.0. The update is not done: go to step 8.
+0.17.0
+Part 1 complete — shared layer at v0.17.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -679,11 +685,11 @@ edited a file that was not theirs to edit.
 
 # Part 2 — the parts that are yours
 
-Everything bootstrap stamped, installed or left behind is **yours**: the skills
+Everything bootstrap stamped, copied or left behind is **yours**: the skills
 (canonical under `.agents/skills/` since 0.14.0, with `.claude/skills/`
 symlinks; a pre-0.14.0 project has real files at `.claude/skills/` and that
 stays legal), `AGENTS.md` and the `constitution/local-*.md` articles,
-the workflows under `.github/workflows/`, the config files, `README.md`, `docs/`,
+the workflows under `.github/workflows/`, the policy files, `README.md`, `docs/`,
 and `adapters/`.
 
 "Yours" does not mean frozen. The kit keeps improving them, and a release's
@@ -754,7 +760,7 @@ One rule per category, because the categories differ in what a local edit
 | **Skills** (9a) | `.agents/skills/*/` (kit-side since 0.14.0; yours are wherever bootstrap put them) | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
 | **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
 | **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what the release changed and you have not customized; a template you deleted stays deleted |
-| **Config** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) or read the diff (`.mjs`) — the new shared code may read a key you do not set |
+| **Policy files** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) or read the diff (`.mjs`) — the new shared code may read a key you do not set |
 | **Adapters** (9e) | `adapters/` | opt-in, whole-directory. Take a tree or leave it; never half of one |
 
 ### 9a. Skills — a three-way, not a copy
@@ -806,8 +812,17 @@ above most likely prints. Adopting it is the directory copy plus **two wiring
 points**: your `/implement` skill's Deliver phase gains the appendix bullet
 (that arrives as an ordinary 9a take or merge of `/implement` below), and your
 pull-request template gains the `<!-- explain-diff-appendix -->` marker
-paragraph (that is a 9c template take). The copy without the wiring installs a
+paragraph (that is a 9c template take). The copy without the wiring puts in place a
 skill nothing invokes.
+
+**Arriving from 0.16.0 or older, the inventory prints no new name — eight
+skills changed a phrase.** `/design-brief`, `/diagnose`, `/dogfood`,
+`/housekeeping` (its checklist), `/improve-codebase-architecture`,
+`/prototype`, `/review-pr` and `/tdd` each lost a banned word to the
+glossary's term: *bootstrapping* or *copying in* for the bootstrap sense of
+`install`, *policy file* for the consumer's own configuration, *configuration*
+in the general sense, *the kit* for `the framework`. Ordinary three-way merges;
+none changes what a skill does.
 
 **Arriving from 0.15.0 or older, the inventory prints no new name — six
 skills and the licence file changed body.** All are ordinary three-way merges
@@ -894,7 +909,7 @@ and drift, because the next update is run by somebody who was not there. It is
 the same rule as Part 1's step 3, moved one category over: the exception lives
 in a local article, not in the file the kit owns.
 
-**A new skill is a directory copy, and it is not installed until the manual
+**A new skill is a directory copy, and it is not in place until the manual
 points at it.**
 
 ```sh
@@ -1073,6 +1088,8 @@ that speak four tier names and no file that says what they mean.
 Copy the new sections across by hand, adapting the wording to your repo. Never
 re-stamp a template over a manual you have been editing for six months.
 
+**Arriving from 0.16.0 or older, nothing moved in this category either.**
+
 **Arriving from 0.15.0 or older, nothing moved in this category.** The manual
 template and the three article templates are byte-identical between the two
 releases; the only manual that changed is the kit's own, which never ships.
@@ -1143,6 +1160,8 @@ harness note, as you copy.
 
 ### 9c. Templates — take what moved, keep what you removed
 
+**Arriving from 0.16.0 or older, nothing moved in this category.**
+
 **Arriving from 0.15.0 or older, the glossary template's banned-words section
 learned one clause.** An entry may end with `Except:` followed by the phrases,
 as code spans, in which the banned word is legitimate — `dependency install`
@@ -1155,7 +1174,7 @@ warnings show needs it.
 **Arriving from 0.14.0 or older, two of your docs gained a section.** The
 glossary template grew a **Context map** section — one block per context, one
 line per edge, every edge declared from both sides with the same relationship
-word and opposite roles — and its banned-words list gained "strategic design"
+word and opposite roles — and its banned-words list gained `strategic design`
 (say context map). The diary template's Current state table grew a
 `**Last housekeeping**` row holding an ISO date, which the housekeeping-due
 advisory reads and `/housekeeping` stamps. Both are under `templates/docs/`,
@@ -1163,7 +1182,7 @@ which bootstrap consumed into your `docs/` once: read the release's diff of
 the two templates and add the section and the row to your own files by hand,
 dating the row your last pass or today.
 
-`templates/workflows/` is installed into `.github/workflows/` **once**, at
+`templates/workflows/` is copied into `.github/workflows/` **once**, at
 bootstrap, and bootstrap never overwrites a file that is already there (it prints
 `kept …`). So a release's changes here reach you only by hand.
 
@@ -1198,7 +1217,7 @@ done
 
 **`DECLINED` is the outcome that matters, and it is why this loop asks two
 questions instead of one.** "The file is not there" cannot tell *you never had
-this* from *you deliberately removed it* — and bootstrap installed every template
+this* from *you deliberately removed it* — and bootstrap copied every template
 that existed at the release you bootstrapped from, so for those, absence is
 always a decision. Folding two gates into one CI workflow and deleting the kit's
 copy is a normal, supported thing to have done; a recipe that reads that as `NEW`
@@ -1221,18 +1240,18 @@ descendants — `README.md`, `docs/diary.md`, `docs/adr/`, the PR template — a
 ordinary files of yours now. A kit change there is something you may read and
 borrow from; it is never something to copy over the top.
 
-### 9d. Config files — never overwrite, and never guess which ref has them
+### 9d. Policy files — never overwrite, and never guess which ref has them
 
 **This is the category that breaks silently**, because both failure modes are
 quiet. Overwrite the file and your provider and model choices vanish with no
 error. Skip it and the release's new shared code reads a key you never set,
 resolves it to empty, and carries on.
 
-The config files are the ones `VERSION` names in its "everything NOT shared"
+The policy files are the ones `VERSION` names in its "everything NOT shared"
 comment, and the list is deliberately reproduced here with what each one *is*,
 because both facts change what you do with it:
 
-| Config | In the kit it is | Compared by |
+| Policy file | In the kit it is | Compared by |
 | --- | --- | --- |
 | `scripts/guards.config.sh` | a file at that path | key sets (`NAME=`) |
 | `scripts/agents.config.sh` | a file at that path, since 0.4.0 | key sets (`NAME=`) |
@@ -1242,8 +1261,11 @@ because both facts change what you do with it:
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
 
+**Arriving from 0.16.0 or older, nothing moved in this category.** The kit's
+own glossary carved out `config-as-data` as a qualified use; yours is yours.
+
 **Arriving from 0.15.0 or older, `config.mjs` gained one policy section, and
-the tier config may want one line.** `bannedWords` names the glossary the
+the tier policy file may want one line.** `bannedWords` names the glossary the
 advisory reads (default `docs/domain-glossary.md`) and the files it leaves
 alone (default: the two shared articles under your constitution directory,
 because they are not yours to reword); both are read with defaults when
@@ -1258,7 +1280,7 @@ that the review shares the author's model.
 `designBrief` (which article the design-brief advisory reads; the default is
 the engineering article) and `housekeepingDue` (`windowDays`, default 30, and
 an optional `diary` path). Both are read with defaults when absent, so a
-config that predates them still works; take them so the cadence and the
+policy file that predates them still works; take them so the cadence and the
 article are yours to change, and so the comment beside `windowDays` says why
 a month.
 
@@ -1278,7 +1300,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.16.0 case for this file, and `ADD` is the 0.3.0 → 0.16.0
+`MERGE` is the 0.4.0 → 0.17.0 case for this file, and `ADD` is the 0.3.0 → 0.17.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1306,13 +1328,13 @@ yours.
 Note what `kit_take` bought in the `ADD` arm even so. The obvious spelling,
 `kit show "$TO_REF:$C" >"$C"`, truncates `$C` before `kit` runs, so the moment
 the two questions above are asked in the wrong order — or a release renames the
-path — the consumer's config is zero bytes and the only copy is in git history.
+path — the consumer's policy file is zero bytes and the only copy is in git history.
 Step 0 explains the shape; this is the branch where it was first paid for.
 
 **For the MERGE case, never `kit show >` the file.** How you compare depends on
-what shape the config is, and the four above are two different shapes:
+what shape the policy file is, and the four above are two different shapes:
 
-**The `.sh` configs are `NAME=value` lines, so diff the key sets.**
+**The `.sh` policy files are `NAME=value` lines, so diff the key sets.**
 
 ```sh
 keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1" | sort -u; }
@@ -1339,7 +1361,7 @@ is not automatically a bug — `agents.config.sh` ships all four tiers empty and
 unset is a documented working state — but it has to be a key you decided to leave
 unset, not one you never saw.
 
-**The `.mjs` configs are read, not extracted — and that is not a gap to fill
+**The `.mjs` policy files are read, not extracted — and that is not a gap to fill
 later.** `keys()` above understands shell assignments only, so pointing it at
 `config.mjs` or `local-vocabulary.mjs` yields an empty set, and two empty sets
 `comm` as "nothing missing" no matter what changed. The guard line above is what
@@ -1362,11 +1384,17 @@ release now expect this file to say?* Then edit yours by hand. It is the smalles
 of the five categories and the one where being told a false "nothing to do" costs
 the most, because the thing it silently skips is a gate that stops checking.
 
-Then re-read `scripts/agents.lib.sh` (or whatever shared code reads the config).
+Then re-read `scripts/agents.lib.sh` (or whatever shared code reads the policy file).
 It is shared layer, so Part 1 already replaced it: what it reads *now* is the
-authority on what your config has to provide.
+authority on what your policy file has to provide.
 
 ### 9e. Adapters — opt-in, whole-directory
+
+**Arriving from 0.16.0 or older, six adapter documents changed a phrase**
+(`adapters/README.md`, `claude-code/README.md`, `node-ts/README.md`,
+`node-ts/INSTALL.md`, `node-ts/evals/README.md`, `ruby/README.md`): the same
+rewording as the skills, prose only. Whole-directory copy as always, if you
+kept the tree.
 
 `adapters/` is reference material. Nothing in it runs, nothing was stamped from
 it, and no gate reads it. If you deleted the tree at bootstrap — a documented,
@@ -1449,7 +1477,7 @@ Then, by hand, the part no command can do for you — **in this order**:
 
 Do it in the other order — rows first, rename second — and the gate stops you:
 the pointer names a path you have just renamed away (`path-missing`) and the
-article nobody points at is `article-unreferenced`. That is the framework
+article nobody points at is `article-unreferenced`. That is the kit
 working, and it is still two steps you can simply take in the right order.
 
 3. **Restore the skill's gate exemption.** Bootstrap stripped it when you
@@ -1493,14 +1521,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.16.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.17.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.16.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.17.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -1661,7 +1689,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.16.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.17.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1685,7 +1713,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.16.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.17.0, engine: harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -1699,7 +1727,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.16.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.17.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
