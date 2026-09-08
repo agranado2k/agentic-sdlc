@@ -437,7 +437,26 @@
 # The wave's kit-only half — fixture builders, the mutation wrapper, the
 # path-roots and notice probes, ADR-0003 and ADR-0004, the optional set as
 # data in bootstrap — never ships and is the diary's to tell.
-shared-layer: 0.16.0
+# 0.17.0 — the kit's prose uses its own words. No file joins or leaves the
+# layer; one shared file changed content: UPDATING.md's prose says *policy
+# files* where it said config files (step 9d renamed), *copied* where it
+# said installed, and quotes the banned phrase in 9c as a code span — the
+# shared-layer half of the kit's own rewording, which the advisory that
+# 0.16.0 shipped never scans (it reads a consumer's manual, articles and
+# skills). The release exists to make the same rewording reachable in the
+# skills and the adapters, which travel only at a tag.
+#   NON-MANIFEST HALF, enumerated, in ticket order. From #161: eight skills
+# lost a banned word to the glossary's term — design-brief, diagnose,
+# dogfood, housekeeping (CHECKLIST.md), improve-codebase-architecture,
+# prototype, review-pr, tdd — none changing what a skill does, and the kit's
+# glossary drops the `tool config` carve-out no prose used. From #164: the
+# adapters' README.md and node-ts/INSTALL.md and VERSION's own header prose
+# reworded the same way. From #167: claude-code/README.md, node-ts/README.md,
+# node-ts/evals/README.md and ruby/README.md reworded; the glossary carves
+# out `config-as-data` as a qualified use. Kit-only, the diary's to tell:
+# the release-delta probe (self-host F6) and the kit's own thirteen
+# rewordings.
+shared-layer: 0.17.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

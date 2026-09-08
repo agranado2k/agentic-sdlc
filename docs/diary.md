@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-04
+## Current state — 2026-09-08
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,10 +20,10 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.16.0, tagged at the merge of the wave's closing PR (ticket #136), which closed PRD #124; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.17.0 on `main` by PR #169, whose merge is where its tag is cut; 0.16.0 was tagged 2026-09-07 at the merge that closed PRD #124; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `3f1a653` — merge of PR #158, the last PR before the wave's close (2026-09-04) |
+| **Last commit on `main`** | `9e68589` — merge of PR #168, the last of the post-0.16.0 rewordings (2026-09-08) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
@@ -1064,3 +1064,24 @@ and the `INSTALL.md` document named as a file. Three forms stay, said here
 so nobody rewords them next: the dependency sense in "the version you
 install", the `INSTALL.md` filename, and "the framework-routed tree",
 which is an application framework's routing, not the kit.
+
+### 2026-09-08 — 0.17.0: the kit's prose uses its own words
+
+No file joins or leaves the shared layer; one changed content. The 0.16.0
+banned-words advisory made the kit its own first consumer, and over four
+tickets (#161, #164, #167 and the kit-only sweep) the manual, the skills,
+the README, bootstrap and the adapters were reworded to the glossary's
+terms. The recipe itself was the one surface left, because it is shared
+layer and a change there is a release: this bump carries it — *policy
+files* for what a consumer edits, *copied* for what bootstrap does to a
+file, step 9d renamed — and, more to the point, makes the skills' and
+adapters' rewordings reachable, since those travel only at a tag. The
+release-delta probe from #160 ran live on this bump for the first time and
+held the note to the fourteen shipped files that changed since v0.16.0.
+
+One correction to the record, made here rather than by editing history:
+the four entries above dated 2026-09-04 — the release notes held to the
+release delta, the kit's thirteen rewordings, the surfaces the advisory does
+not scan, and the adapters' — were committed on 2026-09-07 and 2026-09-08,
+and the 0.16.0 tag itself was cut on 2026-09-07. The session's clock had moved while they were
+written; the entries stand as written, and this line is their date.
