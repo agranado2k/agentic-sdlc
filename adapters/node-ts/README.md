@@ -9,7 +9,7 @@ Vitest as the unit runner, GitHub Actions for CI, Node 22+.
 > shape of repo produces a guard that silently measures the wrong tree. If your
 > layout differs, read this for the *shape of the decision* and write your own.
 
-Install commands and the post-copy edit list: [`INSTALL.md`](INSTALL.md).
+The commands and the post-copy edit list: [`INSTALL.md`](INSTALL.md).
 
 ---
 
@@ -26,7 +26,7 @@ adapter shows all three filled:
 
 ---
 
-## 1. The guards config
+## 1. The guards policy file
 
 Copyable file: [`guards.config.sh.example`](guards.config.sh.example). It is a
 drop-in replacement for `scripts/guards.config.sh` with every value filled in.
@@ -86,10 +86,10 @@ categories remain, and each one is a policy claim worth reviewing:
 | Exclusion | Why it is not source |
 | --- | --- |
 | `*.d.ts`, `*.min.js` | declarations and build output — no behaviour to test |
-| `index.ts` barrels | pure re-exports. A barrel that gains a line has moved no behaviour — and mutation testing agrees, which is why the Stryker config below excludes them as well |
+| `index.ts` barrels | pure re-exports. A barrel that gains a line has moved no behaviour — and mutation testing agrees, which is why the Stryker configuration file below excludes them as well |
 | `docs-conformance/config.mjs` | reviewable policy **data**, not mechanism. Editing a deny-list entry is a human decision a reviewer reads, not new behaviour a test can pin |
 
-That last one is the interesting one. Config-as-data files are the standard
+That last one is the interesting one. Configuration-as-data files are the standard
 exception: if a file is *read* rather than *executed*, its change is a decision
 and not a behaviour. Add yours here, one at a time, with the reason — an
 exclusion list that grows without reasons is how a guard is switched off in
@@ -197,7 +197,7 @@ not on push. A per-push mutation run buys a slowly-moving signal at a
 constantly-paid cost — and, worse, turns the score into a number people defend
 instead of a diagnostic they read.
 
-**It is never a gate.** `thresholds.break: null` in the Stryker config, `exit 0`
+**It is never a gate.** `thresholds.break: null` in the Stryker configuration file, `exit 0`
 whatever the score in the script, and absent from your required status checks.
 A surviving mutant is a question for a human ("is this behaviour unenforced, or
 is the mutant equivalent?"), and there are two legitimate answers: strengthen
@@ -259,7 +259,7 @@ skip this section entirely; you are not missing a gate.
 What is worth stealing:
 
 - **The two-tier split.** A keyless *smoke* tier that runs in your ordinary test
-  suite and proves the harness is well-formed (the config parses, every
+  suite and proves the harness is well-formed (the eval file parses, every
   `file://` resolves, every case carries a reference solution, the generated
   fixtures still match the live source), and a *paid* tier that measures model
   behaviour. Faking behavioural coverage in the keyless tier would be exactly

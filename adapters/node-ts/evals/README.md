@@ -39,7 +39,7 @@ fixtures/                GENERATED, never hand-written (see below). Not shipped.
 
 | Tier | What it proves | Needs a key? | Runs in |
 | --- | --- | --- | --- |
-| **Smoke** | the harness is well-formed: the config parses, every `file://` it names exists, every case carries a reference solution, the generated fixtures still match the live source, and the grader itself behaves | **No** | your ordinary `pnpm test` |
+| **Smoke** | the harness is well-formed: the eval file parses, every `file://` it names exists, every case carries a reference solution, the generated fixtures still match the live source, and the grader itself behaves | **No** | your ordinary `pnpm test` |
 | **Eval** | the shipped prompt surface produces the right agent behaviour | **Yes** | `workflows/prompt-evals.yml`, path-scoped |
 
 The smoke tier deliberately asserts **nothing** about model behaviour. Faking

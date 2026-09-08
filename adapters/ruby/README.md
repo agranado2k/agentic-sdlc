@@ -40,7 +40,7 @@ push.
    machinery looks like when the tool does not provide it.)
 
 4. Licensing: mutant is commercial software that is **free for open-source
-   projects** — the `usage: opensource` key in the config is that
+   projects** — the `usage: opensource` key in the configuration file is that
    declaration. A private repo needs a paid licence key instead; decide this
    when you fill the article's mutation-decision line, not when the first
    run refuses to start.
@@ -83,5 +83,5 @@ siblings: the files are well-formed and present (including both field notes
 above — losing them is a suite failure, because the notes are the value), and
 bootstrap delivers the tree to a consumer byte-identical and dormant. What no
 kit suite can prove: an actual mutant run, which needs a Ruby project. The
-example config is transcribed from a working consumer setup; verify the keys
+example configuration file is transcribed from a working consumer setup; verify the keys
 against the mutant documentation for the version you install.

@@ -95,7 +95,7 @@ may contain hyphens and a variable name may not, so `html-report` reads
 - **No model identifiers.** Not here either. This directory is reference prose
   about a mechanism; the moment it carried a real id it would rot on the same
   schedule the kit is avoiding, and it would rot somewhere a reader is far more
-  likely to copy from than a config comment.
+  likely to copy from than a comment in the policy file.
 - **No executable file.** Nothing under `adapters/` is on an execution path (see
   [`../README.md`](../README.md)); this note is read by a human wiring the kit
   up, and by the agent that reads the repo, not by a script.
@@ -106,7 +106,7 @@ may contain hyphens and a variable name may not, so `html-report` reads
 
 ## Verifying it once
 
-After filling the config in, from the repo root:
+After filling the policy file in, from the repo root:
 
 ```sh
 for t in planner implementer mechanical reviewer; do

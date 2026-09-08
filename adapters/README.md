@@ -83,7 +83,7 @@ blog post — it is a sibling directory here, in your own repo, holding:
    values *you* chose, with the reason each one is drawn where it is;
 2. the **copyable files** themselves (policy file, scripts, workflow), each carrying
    a header saying which project shape it assumes;
-3. an **INSTALL** with the exact commands and, more importantly, the list of
+3. an **`INSTALL.md`** with the exact commands and, more importantly, the list of
    what must be edited afterwards and what happens if it is not.
 
 Keep the reasoning in. The regexes are the cheap part — a reader can write those

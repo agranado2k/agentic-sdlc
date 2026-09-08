@@ -1051,3 +1051,16 @@ reworded here too. The scan set does not grow either: the advisory reads no list
 extra files, and giving it one is a validator change — shared layer again —
 so the kit's README and bootstrap are held by this entry and the next
 housekeeping pass, not by the gate.
+
+### 2026-09-04 — The adapters' own prose uses no banned word
+
+Ticket #167, filed by the review of PR #166. The adapter documents ship
+to every consumer as reference material and the banned-words advisory
+never scans them, so the same words survived there after the manual, the
+skills, the README and bootstrap were reworded. Twelve more, by the same
+rules: *policy file* where the consumer edits the file, *configuration
+file* for a tool's own settings, *eval file* for the promptfoo suite's,
+and the `INSTALL.md` document named as a file. Three forms stay, said here
+so nobody rewords them next: the dependency sense in "the version you
+install", the `INSTALL.md` filename, and "the framework-routed tree",
+which is an application framework's routing, not the kit.
