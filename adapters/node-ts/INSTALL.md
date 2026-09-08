@@ -7,7 +7,7 @@ per minute spent.
 | Piece | Take it if | Cost to you |
 | --- | --- | --- |
 | 1. Guards policy file | your layout is a pnpm/TS workspace with Vitest | one file, five minutes |
-| 2. Mutation delta | you have a pure package worth calibrating | three scripts, a config, a workflow, a label |
+| 2. Mutation delta | you have a pure package worth calibrating | three scripts, a policy file, a workflow, a label |
 | 3. Prompt evals | you ship an agent-facing prompt surface | a suite you must finish yourself, and a provider bill |
 
 Read [`README.md`](README.md) first. Every command below assumes you are at the
@@ -176,7 +176,7 @@ than letting a green kit CI be read as more than it is.
   here; the `--mutate` narrowing, the `--allowEmpty` behaviour, and the JSON
   report path are ported from a working setup but not re-proved. The first real
   `--list` and then a real run are step one of wiring it in.
-- **No promptfoo run, and no `promptfoo validate` either.** The eval config is
+- **No promptfoo run, and no `promptfoo validate` either.** The eval file is
   deliberately incomplete (the generated fixtures it names are absent by
   design), so it cannot even be validated from here.
 - **No workflow run.** Both YAML files are syntactically plausible and modelled
