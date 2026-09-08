@@ -1017,3 +1017,17 @@ probe's own mutations go red. The match is a
 text match and loose in one direction, said in the probe's own comment: a
 SKILL.md change hidden behind a mention of its skill for another reason
 passes. It would still have caught both of #159's omissions.
+### 2026-09-04 — The kit's own prose uses no banned word
+
+Ticket #161, the first debt the banned-words advisory made visible: thirteen
+uses across the root manual and six skills. Each is reworded to the
+glossary's term — *bootstrap* or *copy* for the bootstrap sense of
+*install*, *policy file* for the consumer's own configuration and
+*configuration* where the general sense was meant, *the kit* for *the
+framework* — and one dependency-sense use of *install* is reworded rather
+than carved out, because "add whatever dependencies it likes" says the same
+thing without a new phrase in the glossary. The gate on the kit prints no
+advisory block, and every suite that pins skill or manual text is green.
+These are shipped skill and template-adjacent changes made after the
+v0.16.0 tag; they are the next bump's note to tell, which the release-delta
+probe will hold it to.

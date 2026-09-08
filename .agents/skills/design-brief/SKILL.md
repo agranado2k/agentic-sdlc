@@ -171,7 +171,7 @@ crosses a context edge cites this brief or reopens it.
 ## Entry points
 
 - **Bootstrap hand-back.** The day-one decision beside the mutation decision:
-  the installing agent surfaces it, never fills the anchors with silence.
+  the bootstrapping agent surfaces it, never fills the anchors with silence.
 - **`/housekeeping`**, when its red-flag scan finds the style itself no
   longer fits — shallow modules everywhere are a module problem; every change
   crossing every context is a shape problem, and that reopens this brief.

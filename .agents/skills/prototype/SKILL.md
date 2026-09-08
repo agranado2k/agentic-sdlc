@@ -10,7 +10,7 @@ description: Answer a design or feasibility question with explicitly throwaway s
 ## Rules
 
 1. **State the question first**, as a falsifiable sentence ("the editor library can preserve an `id` attribute on block nodes through a serialize round-trip: true/false?"). If you can't phrase the question, you're not ready to spike.
-2. **Spike code lives outside the repo tree** — use the session scratchpad directory (or `$TMPDIR`), never a path under the project, so it cannot be committed by accident. It may install whatever dependencies it likes *there*; the repo's dependency policy (`constitution/local-engineering.md`) does not apply to throwaway dirs.
+2. **Spike code lives outside the repo tree** — use the session scratchpad directory (or `$TMPDIR`), never a path under the project, so it cannot be committed by accident. It may add whatever dependencies it likes *there*; the repo's dependency policy (`constitution/local-engineering.md`) does not apply to throwaway dirs.
 3. **Timebox it.** A spike that runs long is answering a different, bigger question — stop and say so.
 4. **No production standards apply**: no tests, no lint, hardcode everything. Speed to signal is the only metric. (This is the one place the test-first rule is suspended, and it is suspended precisely because nothing here survives.)
 5. **The code is discarded; the finding is recorded.** Write the answer (question, verdict, evidence, surprises) into `docs/diary.md` as a dated entry — or into the relevant ADR draft when the spike settles a decision under `/grill-with-docs`. Cite versions of anything probed (library, API, service) since answers rot.

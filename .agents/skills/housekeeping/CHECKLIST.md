@@ -24,7 +24,7 @@ the Agent Skills specification.*
   that touched it and any evidence of a run since the last pass (a PR body,
   a diary entry, a report path). A skill unused for two windows is a deletion
   candidate: propose removing it and running its task with the raw harness
-  to see what is lost. Installing a skill and keeping it are separate
+  to see what is lost. Copying a skill in and keeping it are separate
   decisions.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
   description under the specification's 1024 characters and leading with the
