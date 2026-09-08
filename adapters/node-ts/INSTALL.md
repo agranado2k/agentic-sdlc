@@ -1,12 +1,12 @@
-# Installing the `node-ts` adapter
+# Wiring in the `node-ts` adapter
 
-Three independent pieces. **Install only the ones you want** — nothing here
+Three independent pieces. **Take only the ones you want** — nothing here
 depends on anything else here, and the guards piece is by far the most valuable
 per minute spent.
 
-| Piece | Install if | Cost to you |
+| Piece | Take it if | Cost to you |
 | --- | --- | --- |
-| 1. Guards config | your layout is a pnpm/TS workspace with Vitest | one file, five minutes |
+| 1. Guards policy file | your layout is a pnpm/TS workspace with Vitest | one file, five minutes |
 | 2. Mutation delta | you have a pure package worth calibrating | three scripts, a config, a workflow, a label |
 | 3. Prompt evals | you ship an agent-facing prompt surface | a suite you must finish yourself, and a provider bill |
 
@@ -15,7 +15,7 @@ repo root.
 
 ---
 
-## 1. The guards config
+## 1. The guards policy file
 
 ```sh
 cp adapters/node-ts/guards.config.sh.example scripts/guards.config.sh
@@ -28,7 +28,7 @@ cp adapters/node-ts/guards.config.sh.example scripts/guards.config.sh
    `vitest.config.ts`'s `include` globs: anything the runner covers and this
    pattern misses is silently un-guarded.
 2. **`GUARD_SOURCE_EXCLUDE_RE`** — drop the `docs-conformance/config.mjs` entry
-   if you deleted that tree; add your own config-as-data files one at a time,
+   if you deleted that tree; add your own policy-as-data files one at a time,
    each with the reason.
 3. **`GUARD_TEST_RE`** — if your repo uses `__tests__/` directories or a
    different suffix, widen it. Err broad: a too-broad test pattern makes the
@@ -81,7 +81,7 @@ cp adapters/node-ts/workflows/mutation-delta.yml .github/workflows/
 
 **Then, and none of these are optional:**
 
-1. **Install the runner** in the target package, not the root:
+1. **Add the runner as a dependency** of the target package, not the root:
    `pnpm --filter <pkg> add -D @stryker-mutator/core @stryker-mutator/vitest-runner`
 2. **Edit `scripts/mutation.config.sh`** — `MUTATION_PKG_DIR`,
    `MUTATION_PKG_NAME` (the `package.json` name, which is not always the
@@ -134,7 +134,7 @@ cp adapters/node-ts/workflows/prompt-evals.yml .github/workflows/
 2. **Write the fixture generator**: a script that imports your instructions
    string and tool registrations and writes `tests/evals/fixtures/instructions.txt`
    and `tests/evals/fixtures/tools.json`. Check the output in.
-3. **Write the keyless smoke tier** in your own runner — at minimum: the config
+3. **Write the keyless smoke tier** in your own runner — at minimum: the eval file
    parses, every `file://` it names exists, every case has a reference solution,
    and **the checked-in fixtures still match what the generator produces now**.
    That last one is the load-bearing assertion; without it a prompt-surface edit
@@ -165,9 +165,9 @@ than letting a green kit CI be read as more than it is.
 | --- | --- |
 | `sh -n` — POSIX shell parses | `guards.config.sh.example`, `mutation.config.sh.example`, `mutation-delta.sh`, `mutation-delta-ci.sh` |
 | `node --check` — the module parses | `mutation-delta-report.mjs`, `evals/prompts/client.js`, `evals/asserts/tool-selection.js` |
-| the config files actually **set** the variables the guards read, with non-empty values | `guards.config.sh.example`, `mutation.config.sh.example` |
+| the policy files actually **set** the variables the guards read, with non-empty values | `guards.config.sh.example`, `mutation.config.sh.example` |
 | the regexes are valid ERE that `grep -E` accepts | `GUARD_SOURCE_RE`, `GUARD_TEST_RE`, `GUARD_SOURCE_EXCLUDE_RE`, `MUTATION_SRC_RE` |
-| `adapters/` survives `bootstrap.sh` intact, and nothing from it is installed as a workflow | the whole tree |
+| `adapters/` survives `bootstrap.sh` intact, and nothing from it is copied in as a workflow | the whole tree |
 | the docs gate stays green with `adapters/` present | the whole tree |
 
 **NOT verified — nobody has run these end to end from this repo:**
@@ -175,7 +175,7 @@ than letting a green kit CI be read as more than it is.
 - **No Stryker run.** `mutation-delta.sh` has never invoked the real binary
   here; the `--mutate` narrowing, the `--allowEmpty` behaviour, and the JSON
   report path are ported from a working setup but not re-proved. The first real
-  `--list` and then a real run are step one of installing it.
+  `--list` and then a real run are step one of wiring it in.
 - **No promptfoo run, and no `promptfoo validate` either.** The eval config is
   deliberately incomplete (the generated fixtures it names are absent by
   design), so it cannot even be validated from here.
@@ -185,7 +185,7 @@ than letting a green kit CI be read as more than it is.
   the first PR after you copy one in.
 - **No report formatter output check.** `mutation-delta-report.mjs` parses, but
   no real Stryker JSON has been fed through it here. Write a fixture test for it
-  when you install it — it is pure (file in, text out), which is exactly what
+  when you wire it in — it is pure (file in, text out), which is exactly what
   makes that cheap.
 
 ---
@@ -197,10 +197,10 @@ arrives in your project exactly as it sits in the kit. That is a decision, not
 an oversight, and the alternatives were both worse:
 
 - **Copy it into place at bootstrap** — bootstrap runs on an empty project, so
-  it cannot know your stack. Installing a Node adapter's guard config into a Go
+  it cannot know your stack. Copying a Node adapter's guards policy file into a Go
   repo would be a guess stamped into a file the docs gate then enforces forever.
   The kit's whole position on the guards is that it ships mechanism and asks you
-  for policy; an adapter installed automatically is policy nobody chose.
+  for policy; an adapter copied in automatically is policy nobody chose.
 - **Delete it at bootstrap** (like `tests/` and the kit's own CI) — those are
   kit-*authoring* artifacts that mean nothing downstream. An adapter is the
   opposite: it is reference material a project wants **later**, on the day it
@@ -210,7 +210,7 @@ an oversight, and the alternatives were both worse:
 
 So it arrives **dormant**: no file in it is on an execution path, no workflow
 lives in it (GitHub reads only `.github/workflows/`), no guard resolves its
-config from it, and no gate scans it for references. It costs nothing until you
+policy file from it, and no gate scans it for references. It costs nothing until you
 copy something out of it. And if your stack is nowhere near it, `rm -rf adapters`
 is a correct and encouraged answer — a Node wiring sitting in a Go repo is a
 stale standing instruction waiting to mislead the next agent session.

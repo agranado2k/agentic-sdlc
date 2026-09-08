@@ -1042,9 +1042,12 @@ does to a file, *policy file* for the consumer's own configuration,
 *configuration* in the general sense, *the kit* for *the framework* — and
 bootstrap's own output says `copied` where it said `installed`, which no
 suite or transcript pinned. Two surfaces stay as they are, on purpose:
-`UPDATING.md` is shared layer, so its twenty-seven uses are the next bump's
-to reword (a release action, hard rule 3), and `VERSION`'s history notes are
-history. The scan set does not grow either: the advisory reads no list of
+`UPDATING.md` is shared layer, so its remaining uses are the next bump's to
+reword (a release action, hard rule 3) — and that bump should know the README
+is already ahead of it, calling step 9d's subject *policy files* where the
+recipe's own heading still says config files. `VERSION`'s history notes are
+history; its header prose and the adapters' documents, which ship, are
+reworded here too. The scan set does not grow either: the advisory reads no list of
 extra files, and giving it one is a validator change — shared layer again —
 so the kit's README and bootstrap are held by this entry and the next
 housekeeping pass, not by the gate.

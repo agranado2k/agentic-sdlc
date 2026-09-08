@@ -545,7 +545,7 @@ if [ "$ADOPT" = 1 ]; then
 		done
 	fi
 
-	# --- 3. project memory: copy where absent, keep where present ----------
+	# --- 3. project memory: stamp or copy where absent, keep where present -
 	a_exists "docs/diary.md" && a_keep "docs/diary.md" || a_stamp "templates/docs/diary.md.template" "docs/diary.md"
 	a_exists "docs/domain-glossary.md" && a_keep "docs/domain-glossary.md" || a_stamp "templates/docs/domain-glossary.md.template" "docs/domain-glossary.md"
 	a_exists "docs/adr/INDEX.md" && a_keep "docs/adr/INDEX.md" || a_stamp "templates/docs/adr/INDEX.md.template" "docs/adr/INDEX.md"
@@ -666,7 +666,7 @@ if [ "$ADOPT" = 1 ]; then
 		opt_stamp "scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs"
 		mkdir -p scripts/docs-conformance
 		mv "$a_scratch/config.mjs" "scripts/docs-conformance/config.mjs"
-		echo "  copied scripts/docs-conformance/config.mjs"
+		echo "  stamped scripts/docs-conformance/config.mjs"
 	else
 		a_keep "scripts/docs-conformance/config.mjs"
 		# A kept policy file plus an accepted skill can contradict each other

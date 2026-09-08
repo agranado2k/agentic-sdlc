@@ -385,7 +385,7 @@ sitting in a Go repo is a stale standing instruction waiting to mislead the next
 agent session.
 
 `sh tests/adapters-demo.sh` states all of that as checks rather than prose: the
-shell and module files parse, the configuration examples really set what the guards
+shell and module files parse, the policy-file examples really set what the guards
 read, and a bootstrapped consumer still holds the tree byte-for-byte with
 nothing copied in. What it *cannot* check — no Stryker run, no promptfoo run, no
 workflow GitHub has ever parsed — is listed in `adapters/node-ts/INSTALL.md`.
@@ -480,7 +480,7 @@ skeleton (K0).
   non-optional by the gate, in both directions, including adopting and then
   declining the optional `/dogfood` skill after bootstrap. Both transcripts are
   the worked examples inside `UPDATING.md`.
-- `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the configuration
+- `sh tests/adapters-demo.sh` covers K5: the adapter files parse, the policy-file
   examples really configure the guards, and a bootstrapped consumer keeps
   `adapters/` byte-identical with nothing copied or activated from it.
 
