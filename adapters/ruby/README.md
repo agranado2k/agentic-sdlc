@@ -83,5 +83,5 @@ siblings: the files are well-formed and present (including both field notes
 above — losing them is a suite failure, because the notes are the value), and
 bootstrap delivers the tree to a consumer byte-identical and dormant. What no
 kit suite can prove: an actual mutant run, which needs a Ruby project. The
-example configuration file is transcribed from a working consumer setup; verify the keys
-against the mutant documentation for the version you install.
+example configuration file is transcribed from a working consumer setup; verify
+the keys against the mutant documentation for the version you install.

@@ -9,7 +9,7 @@ Vitest as the unit runner, GitHub Actions for CI, Node 22+.
 > shape of repo produces a guard that silently measures the wrong tree. If your
 > layout differs, read this for the *shape of the decision* and write your own.
 
-The commands and the post-copy edit list: [`INSTALL.md`](INSTALL.md).
+The wiring commands and the post-copy edit list: [`INSTALL.md`](INSTALL.md).
 
 ---
 
@@ -89,7 +89,7 @@ categories remain, and each one is a policy claim worth reviewing:
 | `index.ts` barrels | pure re-exports. A barrel that gains a line has moved no behaviour — and mutation testing agrees, which is why the Stryker configuration file below excludes them as well |
 | `docs-conformance/config.mjs` | reviewable policy **data**, not mechanism. Editing a deny-list entry is a human decision a reviewer reads, not new behaviour a test can pin |
 
-That last one is the interesting one. Configuration-as-data files are the standard
+That last one is the interesting one. Config-as-data files are the standard
 exception: if a file is *read* rather than *executed*, its change is a decision
 and not a behaviour. Add yours here, one at a time, with the reason — an
 exclusion list that grows without reasons is how a guard is switched off in
@@ -197,13 +197,13 @@ not on push. A per-push mutation run buys a slowly-moving signal at a
 constantly-paid cost — and, worse, turns the score into a number people defend
 instead of a diagnostic they read.
 
-**It is never a gate.** `thresholds.break: null` in the Stryker configuration file, `exit 0`
-whatever the score in the script, and absent from your required status checks.
-A surviving mutant is a question for a human ("is this behaviour unenforced, or
-is the mutant equivalent?"), and there are two legitimate answers: strengthen
-the test, or state why the mutant cannot be killed. A gate admits only the
-first, which is how "make the test ask for less" becomes the path of least
-resistance.
+**It is never a gate.** `thresholds.break: null` in the Stryker configuration
+file, `exit 0` whatever the score in the script, and absent from your required
+status checks. A surviving mutant is a question for a human ("is this behaviour
+unenforced, or is the mutant equivalent?"), and there are two legitimate
+answers: strengthen the test, or state why the mutant cannot be killed. A gate
+admits only the first, which is how "make the test ask for less" becomes the
+path of least resistance.
 
 ### Scope: start with one pure package
 
