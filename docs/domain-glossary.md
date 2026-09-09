@@ -97,12 +97,14 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Guard** — a rule about a *diff* rather than about the tree: the pairing
   guard, the behavior-delta guard. Guards read git history and produce a
   verdict about a range.
-- **Harness** — `scripts/docs-conformance/`, the Node implementation of the docs
-  gate's reference checks. Dependency-free ESM. When node is absent,
+- **Docs harness** — `scripts/docs-conformance/`, the Node implementation of the
+  docs gate's reference checks. Dependency-free ESM. When node is absent,
   `scripts/check.sh` runs a **reduced POSIX fallback** and prints a notice
   naming what it can no longer see.
   - _Avoid_: "the validator" for the whole tree — a *validator* is one module
-    under `scripts/docs-conformance/validators/`.
+    under `scripts/docs-conformance/validators/`. Also avoid the bare
+    **harness**, which since the agent-harness axis means two things here; see
+    "Words this project does not use".
 - **Rule id** — the kebab-case name a violation reports under:
   `placeholder-unstamped`, `root-manual-missing`, `shared-layer-missing`,
   `path-missing`, `skill-missing`, `article-unreferenced`, `shim-invalid`,
@@ -155,6 +157,19 @@ Grouped by the seam each term belongs to. Entry shape:
   variable name `AGENT_TIER_<TIER>_<DOMAIN>`.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
+- **Agent harness** — the agent CLI a tier's model runs *in*: the program that
+  holds the session, loads `AGENTS.md`, and owns the tool calls. The resolver's
+  optional *third* axis: declared in `AGENT_HARNESSES` and written as the
+  prefix of a tier's value (`<agent harness>:<model id>`), which is the design
+  ADR-0005 records and #173 builds — until that lands, the name is settled here
+  and the mechanism does not exist yet. Where the tier is how
+  big the work is and the task domain is what it is made of, the agent harness
+  is *whose* session runs it — the axis that makes a reviewer from a different
+  vendor reachable without CI. An unprefixed value means the caller's own agent
+  harness, which is what every tier meant before the axis existed.
+  - _Avoid_: the bare "harness" — see "Words this project does not use";
+    "provider" (that is the vendor behind the model, not the program running
+    it); and "runner".
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
   demoable, not a horizontal layer. In this repo a tracer bullet is typically a
   rule, the check that enforces it, and the suite that drives that check red
@@ -257,6 +272,13 @@ banned word and the word to use instead.
   configuration — is not this entry's concern and is not banned. Except:
   **a qualified use** — `per-clone config`, `gate config`,
   `test-runner config`, `config schema`, `your config`, `config-as-data`.
+- **harness** on its own — ambiguous between the **docs harness**
+  (`scripts/docs-conformance/`, the gate's Node engine) and the **agent
+  harness** (the agent CLI a tier's model runs in). Say which. Except: **a
+  qualified use** — `docs harness`, `agent harness`, `agent-harness` and
+  `test harness`. The `AGENT_HARNESS_*` variable names need no carve-out and
+  have one here only as documentation: `_` is a word character, so the check
+  never sees a bare word inside them.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
