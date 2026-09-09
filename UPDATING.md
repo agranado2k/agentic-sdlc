@@ -658,7 +658,7 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.17.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.17.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
 0.17.0
 Part 1 complete — shared layer at v0.17.0. The update is not done: go to step 8.
@@ -1717,7 +1717,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.17.0, engine: harness)
+OK  docs gate: all checks passed (shared-layer 0.17.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.

@@ -36,7 +36,7 @@ The product is the kit itself, so almost none of it is application code:
 - **POSIX sh** — `bootstrap.sh`, the gates and guards under `scripts/`, and the
   hook in `.githooks/pre-push`. `sh` and `git` only: the kit's core runs before
   a consumer project has chosen a toolchain, so it may not need one.
-- **A dependency-free Node harness** — `scripts/docs-conformance/`, plain ESM,
+- **A dependency-free Node docs harness** — `scripts/docs-conformance/`, plain ESM,
   no package manager. It is the full docs gate; `scripts/check.sh` falls back to
   a reduced POSIX form when node is absent, and says so.
 - **Markdown that is executable in practice** — the constitution articles, the
@@ -67,7 +67,7 @@ pushes straight past both gates.
 2. **Test first** for any change with observable behavior — red, green,
    refactor. Tests are the specification, not an afterthought (shared invariant
    §3), and `/tdd` is that loop. **The suite is every script in `tests/`**, run
-   with `sh` and nothing else; `tests/lib.sh` is the shared harness, not a
+   with `sh` and nothing else; `tests/lib.sh` is the shared test harness, not a
    suite. A prose-only change to a document nothing asserts on is the one
    exemption, and it is narrow.
 3. **The shared layer is not yours to edit casually.** `VERSION` names the files
@@ -322,7 +322,7 @@ answers produce a clean project.
 | Know which files are shared layer   | `VERSION` — and `UPDATING.md` for the recipe when one moves |
 | See what the kit does NOT ship      | `EXCLUSIONS.md` — kept honest by `tests/exclusions.test.sh` |
 | Measure the kit's own validator tests | `scripts/mutation.kit.sh` — Stryker (pinned) on demand against the validators under `scripts/docs-conformance/validators/`, never a gate; runs in place — clean tree, network required; the baseline is in the diary (kit-only, never shipped) |
-| Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` runs one of four things — a suite under `tests/`, the harness's fixture tests, the gate, or the portability run (`node scripts/docs-conformance/index.mjs .`); `self-host` runs the last two — and `.github/workflows/kit-guards.yml` holds the guards' |
+| Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` runs one of four things — a suite under `tests/`, the docs harness's fixture tests, the gate, or the portability run (`node scripts/docs-conformance/index.mjs .`); `self-host` runs the last two — and `.github/workflows/kit-guards.yml` holds the guards' |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
 

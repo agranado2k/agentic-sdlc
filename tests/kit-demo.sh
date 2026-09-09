@@ -273,7 +273,7 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 assert_out_has "shared-layer 0.17.0"
 if [ "$HAVE_NODE" = 1 ]; then
-	assert_out_has "engine: harness"
+	assert_out_has "engine: docs harness"
 else
 	assert_out_has "engine: fallback"
 fi

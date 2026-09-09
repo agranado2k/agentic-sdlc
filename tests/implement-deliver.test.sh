@@ -96,7 +96,12 @@ banner "3. The review request is mechanism-ORDERED: forge workflows first"
 # later edit flips these, the skill still reads fine and the cross-provider leg
 # has silently become the fallback — which is exactly what this asserts against.
 a=$(line_of "(a) Forge review workflows")
-b=$(line_of "(b) An in-harness")
+# The mechanism is found by its LABEL, `(b)`, not by the words that follow it.
+# It was matched on "(b) An in-harness" until the glossary banned the bare word
+# and that phrase became "A /review-pr subagent in the agent harness" — so a
+# rename in the skill's prose failed a test about the skill's STRUCTURE, which
+# is the coupling this line now avoids.
+b=$(line_of "(b) A")
 if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
 	pass "forge review workflows (line $a) come before the in-harness fallback (line $b)"
 else
