@@ -279,6 +279,12 @@ banned word and the word to use instead.
   `test harness`. The `AGENT_HARNESS_*` variable names need no carve-out and
   have one here only as documentation: `_` is a word character, so the check
   never sees a bare word inside them.
+  The ORDINARY SENSE — a rig you build to exercise code, as `/diagnose` builds
+  one to reproduce a bug — is not this entry's concern and is not banned. That
+  sentence is documentary: the check reads only the code spans in this clause,
+  so the phrases carrying that sense are listed with the rest —
+  `throwaway harness`, `bisection harness`, `timing harness`. A new one needs a
+  new span, which is the honest cost of banning a word the language also uses.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
