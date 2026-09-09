@@ -114,7 +114,7 @@ Grouped by the seam each term belongs to. Entry shape:
   from the root manual (`article-unreferenced`), because an article nothing
   points at binds nobody and rots unseen.
 - **Advisory** — a gate finding on the warning channel: printed to stderr by
-  the harness and relayed by `scripts/check.sh` on a green run, never failing
+  the docs harness and relayed by `scripts/check.sh` on a green run, never failing
   the push. The decision-anchor advisories name a promotion path in their
   validator's header comment. The kit has six (`skill-web`, `skill-paths`,
   `skill-bridge`, `mutation-decision`, `design-brief`, `housekeeping-due` —
@@ -183,7 +183,7 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "branch" as a synonym — the branch is the ref, the worktree is the
     directory, and this repo cares about both separately.
 - **Suite** — one executable script under `tests/`. `tests/lib.sh` is the shared
-  harness and is not a suite. "The suite" (singular, unqualified) means all of
+  test harness and is not a suite. "The suite" (singular, unqualified) means all of
   them.
 - **Diagram language** — mermaid, in a fenced block, wherever a shipped
   markdown document needs a picture; the forge renders it, and craft rule §10
@@ -273,18 +273,22 @@ banned word and the word to use instead.
   **a qualified use** — `per-clone config`, `gate config`,
   `test-runner config`, `config schema`, `your config`, `config-as-data`.
 - **harness** on its own — ambiguous between the **docs harness**
-  (`scripts/docs-conformance/`, the gate's Node engine) and the **agent
-  harness** (the agent CLI a tier's model runs in). Say which. Except: **a
-  qualified use** — `docs harness`, `agent harness`, `agent-harness` and
-  `test harness`. The `AGENT_HARNESS_*` variable names need no carve-out and
-  have one here only as documentation: `_` is a word character, so the check
-  never sees a bare word inside them.
-  The ORDINARY SENSE — a rig you build to exercise code, as `/diagnose` builds
-  one to reproduce a bug — is not this entry's concern and is not banned. That
-  sentence is documentary: the check reads only the code spans in this clause,
-  so the phrases carrying that sense are listed with the rest —
-  `throwaway harness`, `bisection harness`, `timing harness`. A new one needs a
-  new span, which is the honest cost of banning a word the language also uses.
+  (scripts/docs-conformance/, the gate's Node engine) and the **agent harness**
+  (the agent CLI a tier's model runs in). Say which.
+  The ORDINARY SENSE — a rig you build to exercise code, as the diagnose skill
+  builds one to reproduce a bug — is not this entry's concern and is not
+  banned, but the check cannot read that sentence: it carves out only the code
+  spans in the Except clause below, so the phrases carrying that sense are
+  listed there with the rest. A new phrasing needs a new span, which is the
+  honest cost of banning a word the language also uses.
+  Variable names spelled AGENT_HARNESS_SOMETHING need no carve-out: underscore
+  is a word character, so the check never finds a bare word inside one. Do not
+  add them to the clause below as documentation — every span there is a carve-out
+  phrase, and a span holding a single underscore blanks underscores everywhere,
+  which splits those very names apart and reports the fragment.
+  Except: **a qualified use** — `docs harness`, `agent harness`,
+  `agent-harness`, `test harness`, `throwaway harness`, `bisection harness`,
+  `timing harness`.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
