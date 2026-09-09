@@ -1,0 +1,6 @@
+# Feature work happens in a worktree under here — the root manual's first hard
+# rule — and the manual also says the directory stays out of version control.
+# This file is the half of that claim git can enforce: without it, `git add -A`
+# in the root checkout stages a live worktree as an embedded repository, and
+# git's own warning is the only thing that says so.
+worktree/

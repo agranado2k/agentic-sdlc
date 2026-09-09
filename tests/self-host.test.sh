@@ -83,6 +83,19 @@ for shim in CLAUDE.md GEMINI.md; do
 	fi
 done
 
+# The manual's first hard rule puts feature work in `worktree/<slug>` and says
+# that directory stays out of version control. The first half is prose a session
+# either follows or does not; the SECOND half is a claim about git's behaviour,
+# and nothing was holding it — with a live worktree present, `git add -A` in the
+# root checkout staged it as an embedded repository, git's own warning being the
+# only signal. A manual that claims something about the tool has to be checked
+# against the tool.
+if git -C "$KIT" check-ignore -q worktree/ 2>/dev/null; then
+	pass "worktree/ is out of version control, as hard rule 1 says it is"
+else
+	fail "worktree/ is NOT ignored — a live worktree would be staged as an embedded repository by git add -A"
+fi
+
 # The hooks path is per-clone config and cannot be committed, so the only thing
 # a test can hold is that the manual TELLS a fresh clone to set it.
 assert_file_has "$KIT/AGENTS.md" "git config core.hooksPath .githooks" \
