@@ -20,6 +20,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0002](0002-strategic-means-ousterhout.md) | "Strategic" means Ousterhout's strategic programming; Evans's work is the context map | Accepted 2026-09-02 |
 | [0003](0003-the-kit-maps-its-own-tiers.md) | The kit carries its own tier-to-model mapping, and never ships it | Accepted 2026-09-02 — supersedes the diary-recorded decision of 2026-08-27 below |
 | [0004](0004-the-root-manual-is-the-kits-local-article.md) | The kit's root manual is also its local article, budgeted at 350 lines | Accepted 2026-09-02 |
+| [0005](0005-the-agent-harness-axis.md) | A capability tier may name the agent harness it runs on, and the kit ships the dispatcher | Accepted 2026-09-09 — amends ADR-0003 |
 
 ## Conventions
 
