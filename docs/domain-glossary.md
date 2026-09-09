@@ -159,15 +159,17 @@ Grouped by the seam each term belongs to. Entry shape:
     on every ticket is the same non-decision as one tier on every ticket.
 - **Agent harness** — the agent CLI a tier's model runs *in*: the program that
   holds the session, loads `AGENTS.md`, and owns the tool calls. The resolver's
-  optional *third* axis, declared in `AGENT_HARNESSES` and written as the
-  prefix of a tier's value (`<agent harness>:<model id>`). Where the tier is how
+  optional *third* axis: declared in `AGENT_HARNESSES` and written as the
+  prefix of a tier's value (`<agent harness>:<model id>`), which is the design
+  ADR-0005 records and #173 builds — until that lands, the name is settled here
+  and the mechanism does not exist yet. Where the tier is how
   big the work is and the task domain is what it is made of, the agent harness
   is *whose* session runs it — the axis that makes a reviewer from a different
   vendor reachable without CI. An unprefixed value means the caller's own agent
   harness, which is what every tier meant before the axis existed.
-  - _Avoid_: the bare "harness" (it is the docs gate's engine here), "provider"
-    (that is the vendor behind the model, not the program running it), and
-    "runner".
+  - _Avoid_: the bare "harness" — see "Words this project does not use";
+    "provider" (that is the vendor behind the model, not the program running
+    it); and "runner".
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
   demoable, not a horizontal layer. In this repo a tracer bullet is typically a
   rule, the check that enforces it, and the suite that drives that check red
@@ -273,8 +275,10 @@ banned word and the word to use instead.
 - **harness** on its own — ambiguous between the **docs harness**
   (`scripts/docs-conformance/`, the gate's Node engine) and the **agent
   harness** (the agent CLI a tier's model runs in). Say which. Except: **a
-  qualified use** — `test harness` for `tests/lib.sh`, and the
-  `AGENT_HARNESS_*` variable names, which carry the qualifier in the name.
+  qualified use** — `docs harness`, `agent harness`, `agent-harness` and
+  `test harness`. The `AGENT_HARNESS_*` variable names need no carve-out and
+  have one here only as documentation: `_` is a word character, so the check
+  never sees a bare word inside them.
 - **the framework** as a file set — ambiguous between the **kit** (the repo) and
   the **shared layer** (the copied files). Say which.
 - **strategic design** — ambiguous between Evans's name for context mapping
