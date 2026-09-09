@@ -52,6 +52,13 @@ jobs:
       - name: agents.lib.sh (capability tiers)
         run: sh tests/agents-tiers.test.sh
 
+      # The same resolver, asked the question it could not answer before: which
+      # AGENT HARNESS runs the tier, not just which model. Its own suite because
+      # the load-bearing cases are the OLD ones — every consumer in the field
+      # maps bare model ids, and this axis must be invisible to them.
+      - name: agents.lib.sh (agent-harness axis)
+        run: sh tests/agent-harness.test.sh
+
       # Not a guard, but the same shape and the same risk profile: a script that
       # deletes branches and worktrees. Its fixtures build real repos with real
       # bare remotes and real linked worktrees.
