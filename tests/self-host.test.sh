@@ -90,10 +90,17 @@ done
 # root checkout staged it as an embedded repository, git's own warning being the
 # only signal. A manual that claims something about the tool has to be checked
 # against the tool.
-if git -C "$KIT" check-ignore -q worktree/ 2>/dev/null; then
-	pass "worktree/ is out of version control, as hard rule 1 says it is"
+# `-v` and the source check, not a bare `-q`: git answers "is this ignored"
+# from the TRACKED .gitignore, from .git/info/exclude, and from the developer's
+# global core.excludesFile alike, and only the first of those is the repository
+# making the manual's claim true. A bare `-q` therefore goes green on a machine
+# whose owner once excluded the path by hand, in a clone where the rule is
+# missing entirely — the suite would be reporting the reviewer's setup back to
+# them. Asking WHICH file answered is what pins it to the repo.
+if git -C "$KIT" check-ignore -v worktree/ 2>/dev/null | grep -q '^\.gitignore:'; then
+	pass "worktree/ is out of version control by the repo's own .gitignore, as hard rule 1 says it is"
 else
-	fail "worktree/ is NOT ignored — a live worktree would be staged as an embedded repository by git add -A"
+	fail "worktree/ is NOT ignored by the tracked .gitignore — a live worktree would be staged as an embedded repository by git add -A"
 fi
 
 # The hooks path is per-clone config and cannot be committed, so the only thing
