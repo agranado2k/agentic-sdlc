@@ -59,6 +59,13 @@ jobs:
       - name: agents.lib.sh (agent-harness axis)
         run: sh tests/agent-harness.test.sh
 
+      # bootstrap's agent-roster prompt. Its load-bearing assertion is that
+      # bootstrap.sh names no model identifier — the kit names none anywhere,
+      # and the prompt of the tool built to prevent that rot would be the worst
+      # place to start.
+      - name: bootstrap agent roster
+        run: sh tests/agent-roster.test.sh
+
       # Not a guard, but the same shape and the same risk profile: a script that
       # deletes branches and worktrees. Its fixtures build real repos with real
       # bare remotes and real linked worktrees.

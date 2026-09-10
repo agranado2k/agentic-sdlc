@@ -483,7 +483,11 @@
 # .agents/skills/implement/SKILL.md and .agents/skills/housekeeping/CHECKLIST.md
 # say which harness they mean at every use the gate flagged.
 # scripts/agents.config.sh — yours, and still shipped empty — documents the
-# third axis and adds AGENT_HARNESSES beside the tier mapping.
+# third axis and adds AGENT_HARNESSES beside the tier mapping. bootstrap.sh
+# offers to fill it: an agent-roster prompt that ASKS and records the
+# operator's answer, suggests no model id, and probes PATH only because which
+# CLIs are installed is a fact rather than a standing instruction.
+# --with-agents / --no-agents skip it, and so does having no terminal.
 # tests/agent-harness.test.sh is the axis's suite, named in the README's
 # runnable list and wired into the kit's own guards workflow.
 # .gitignore now excludes worktree/, making hard rule 1's claim about version
