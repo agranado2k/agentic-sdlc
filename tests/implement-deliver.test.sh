@@ -96,7 +96,11 @@ banner "3. The review request is mechanism-ORDERED: forge workflows first"
 # later edit flips these, the skill still reads fine and the cross-provider leg
 # has silently become the fallback — which is exactly what this asserts against.
 a=$(line_of "(a) Forge review workflows")
-b=$(line_of "(b) An in-harness")
+# Matched on the bold LABEL, never on the prose after it: this asserts where
+# the mechanism sits and what it is called, so an editorial change to its
+# sentence must not fail it. Bare `(b)` is not enough — it appears earlier in
+# the file.
+b=$(line_of "**(b)")
 if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
 	pass "forge review workflows (line $a) come before the in-harness fallback (line $b)"
 else

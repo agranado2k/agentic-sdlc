@@ -456,7 +456,32 @@
 # out `config-as-data` as a qualified use. Kit-only, the diary's to tell:
 # the release-delta probe (self-host F6) and the kit's own thirteen
 # rewordings.
-shared-layer: 0.17.0
+# 0.18.0 — a capability tier may name the AGENT HARNESS it runs in, and the
+# word "harness" stops meaning two things (ADR-0005). No file joins or leaves
+# the layer in this release; two shared files changed CONTENT. scripts/check.sh
+# prints `engine: docs harness` where it printed `engine: harness` — the gate's
+# own success line was using the word the glossary now bans, which is the
+# inconsistency the kit exists to prevent. UPDATING.md's two pinned transcripts
+# are re-captured to match; nothing else in the recipe moved, so a consumer
+# following it reads the same steps.
+#   THE CLAIM A CONSUMER MOST NEEDS: a project that declares no agent harness
+# cannot tell this release from the last. The resolver's third axis is opt-in
+# through a declaration that ships empty, an unprefixed tier value resolves
+# exactly as it did, and unmapped still warns once and exits 0.
+#   NON-MANIFEST HALF, enumerated. docs/domain-glossary.md gains **Docs
+# harness** and **Agent harness** as separate terms and bans the bare word,
+# with an Except clause carving out the four qualified forms and the word's
+# ordinary sense — a rig built to exercise code, which /diagnose uses and which
+# was never ambiguous here. docs/adr/0005-the-agent-harness-axis.md records the
+# axis, the dispatcher's home and the word; docs/adr/INDEX.md lists it;
+# bootstrap.sh's kit-own list keeps it out of consumer trees. AGENTS.md,
+# .agents/skills/implement/SKILL.md and .agents/skills/housekeeping/CHECKLIST.md
+# say which harness they mean at every use the gate flagged.
+# .gitignore now excludes worktree/, making hard rule 1's claim about version
+# control true, and tests/self-host.test.sh holds it against git rather than
+# against the file. tests/implement-deliver.test.sh matches the delivery
+# mechanism's bold label instead of the prose after it.
+shared-layer: 0.18.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

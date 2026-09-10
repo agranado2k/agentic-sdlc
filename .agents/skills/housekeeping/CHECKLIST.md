@@ -23,7 +23,7 @@ the Agent Skills specification.*
 - **Articles and skills nothing invokes.** For each skill, the last commit
   that touched it and any evidence of a run since the last pass (a PR body,
   a diary entry, a report path). A skill unused for two windows is a deletion
-  candidate: propose removing it and running its task with the raw harness
+  candidate: propose removing it and running its task with the raw agent harness
   to see what is lost. Copying a skill in and keeping it are separate
   decisions.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
@@ -31,7 +31,7 @@ the Agent Skills specification.*
   use case; the body under
   five hundred lines; supporting files one level deep; no hard-coded date,
   version or model name; the description still true of the body.
-- **Memory.** Whatever the harness keeps outside the repo — preferences,
+- **Memory.** Whatever the agent harness keeps outside the repo — preferences,
   auto-memory — reviewed separately from the project files, because it holds
   stale preferences longest.
 
