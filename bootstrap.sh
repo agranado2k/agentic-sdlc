@@ -311,7 +311,14 @@ agents_wizard() {
 	# Same asymmetry opt_decide reasons from: a project that skipped the
 	# question fills the file in a minute, while a project that answered it
 	# silently carries a mapping nobody chose.
-	[ -t 0 ] || return 0
+	#
+	# A --with-agents that cannot be honoured says so rather than evaporating,
+	# the way opt_decide reports a yes its tree cannot honour.
+	if [ ! -t 0 ]; then
+		[ "$agents_choice" = yes ] &&
+			echo "  note: --with-agents needs a terminal to ask on; the roster was left empty." >&2
+		return 0
+	fi
 
 	if [ "$agents_choice" = ask ]; then
 		echo ""
@@ -344,6 +351,17 @@ agents_wizard() {
 	_aw_declared=""
 	for _aw_tier in planner implementer mechanical reviewer; do
 		_aw_upper=$(printf '%s' "$_aw_tier" | tr 'a-z' 'A-Z')
+
+		# A tier the project already mapped is not asked about at all. Asking
+		# and then discarding the answer is worse than not asking: the operator
+		# types a considered choice, nothing records it, and — before this
+		# check — the agent harness they named was still added to
+		# AGENT_HARNESSES, leaving a file that declared a harness no tier used.
+		# The --adopt arm meets this on every run.
+		if ! grep -q "^AGENT_TIER_$_aw_upper=''" "$_aw_file" 2>/dev/null; then
+			echo "  $(printf '%-12s' "$_aw_tier") already mapped — left alone."
+			continue
+		fi
 
 		agents_read_token "  $(printf '%-12s' "$_aw_tier") agent harness (Enter = this session): " harness
 		_aw_h=$_ar_val
@@ -1365,9 +1383,9 @@ Next:
                                   model id on purpose — they rot. A tier may
                                   also name an AGENT HARNESS, which is how a
                                   reviewer reaches a different vendor than the
-                                  implementer; that file says how, ADR-0005
-                                  says why, and agent-dispatch.sh --dry-run
-                                  checks a wiring without spending a token.
+                                  implementer; that file says how, and
+                                  scripts/agent-dispatch.sh --dry-run checks a
+                                  wiring without spending a token.
   6. fill in docs/diary.md        the "Current state" block at the top is what
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is
