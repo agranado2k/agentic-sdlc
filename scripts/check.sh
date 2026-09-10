@@ -165,7 +165,7 @@ harness_status=0
 engine="fallback"
 
 if [ "${DOCS_CHECK_NO_NODE:-}" != "1" ] && [ -f "$HARNESS" ] && command -v node >/dev/null 2>&1; then
-	engine="harness"
+	engine="docs harness"
 	harness_out=$(node "$HARNESS" "$repo_root" 2>&1)
 	harness_status=$?
 fi

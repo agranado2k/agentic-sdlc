@@ -200,6 +200,14 @@ t_git_identity() {
 	git -C "$1" config tag.gpgSign false
 	git -C "$1" config tag.forceSignAnnotated false
 	git -C "$1" config core.hooksPath .git/no-such-hooks
+	# `tag.sort` is the same class of trap as the signing switches above, and it
+	# bites somewhere worse: a developer with `-version:refname` set globally
+	# sees `git tag --list` order the fixture's tags differently from CI, so
+	# docs-demo reports UPDATING.md's pinned transcript STALE, and the honest
+	# repair — re-paste what the run produced — pins the document to that one
+	# machine and turns CI red for everybody else. Pinned to git's default so
+	# the transcript means the same thing everywhere.
+	git -C "$1" config tag.sort refname
 }
 
 # t_kit_history <hist> <old tree> <old tag> <new tree> <new tag> — one repo
