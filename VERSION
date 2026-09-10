@@ -458,7 +458,12 @@
 # rewordings.
 # 0.18.0 — a capability tier may name the AGENT HARNESS it runs in, and the
 # word "harness" stops meaning two things (ADR-0005). No file joins or leaves
-# the layer in this release; two shared files changed CONTENT. scripts/check.sh
+# the layer in this release; three shared files changed CONTENT.
+# scripts/agents.lib.sh gains that axis: a tier value may be written
+# `<agent harness>:<model id>`, and `--model` / `--harness` read the two
+# halves. Its old contract is unchanged in every particular — one answer on
+# stdout, diagnostics on stderr, unmapped warns once and exits 0 — and a value
+# with no prefix resolves exactly as it did. scripts/check.sh
 # prints `engine: docs harness` where it printed `engine: harness` — the gate's
 # own success line was using the word the glossary now bans, which is the
 # inconsistency the kit exists to prevent. UPDATING.md's two pinned transcripts
@@ -477,6 +482,10 @@
 # bootstrap.sh's kit-own list keeps it out of consumer trees. AGENTS.md,
 # .agents/skills/implement/SKILL.md and .agents/skills/housekeeping/CHECKLIST.md
 # say which harness they mean at every use the gate flagged.
+# scripts/agents.config.sh — yours, and still shipped empty — documents the
+# third axis and adds AGENT_HARNESSES beside the tier mapping.
+# tests/agent-harness.test.sh is the axis's suite, named in the README's
+# runnable list and wired into the kit's own guards workflow.
 # .gitignore now excludes worktree/, making hard rule 1's claim about version
 # control true, and tests/self-host.test.sh holds it against git rather than
 # against the file. tests/implement-deliver.test.sh matches the delivery
