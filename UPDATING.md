@@ -529,8 +529,8 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list
-v0.18.0
 v0.1.0
+v0.18.0
 $ echo "$FROM_REF -> $TO_REF"
 v0.1.0 -> v0.18.0
 

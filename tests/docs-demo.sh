@@ -390,6 +390,13 @@ recipe() {
 	KIT_URL="$HIST"
 	WORK=$(mktemp -d)
 	git clone --bare --quiet "$KIT_URL" "$WORK/kit.git"
+	# The consumer's own clone of the kit, and the one whose `tag --list` output
+	# UPDATING.md pins byte for byte. Pinned to git's DEFAULT tag order for the
+	# reason tests/lib.sh gives at t_git_identity: a developer with
+	# `-version:refname` set globally otherwise sees a different order here than
+	# CI does, reports the transcript stale, re-pastes their machine's output,
+	# and turns CI red for everyone else. Asked and answered the hard way.
+	git --git-dir="$WORK/kit.git" config tag.sort refname
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
@@ -741,6 +748,7 @@ banner "C2. Part 1 ALONE leaves an inert half-update"
 # Steps 0-6 of UPDATING.md, run without narration: Part B already proved them.
 WORK1=$(mktemp -d)
 git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
+git --git-dir="$WORK1/kit.git" config tag.sort refname
 kit1() { git --git-dir="$WORK1/kit.git" "$@"; }
 manifest1() { kit1 show "${1}:VERSION" | manifest_section files; }
 manifest1 v0.3.0 | sort >"$WORK1/from.list"
