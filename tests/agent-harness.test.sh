@@ -255,5 +255,126 @@ resolve --harness implementer NOT-A-DOMAIN
 assert_status_is 2 "the domain's shape check still runs behind the flag"
 assert_err_has "malformed task domain"
 
+# ---------------------------------------------------------------------------
+banner "A malformed prefix is never silent"
+# ---------------------------------------------------------------------------
+# The case this section exists for used to resolve in total silence: a
+# capitalisation typo in the policy file, on a project that HAS declared agent
+# harnesses, gave no agent harness and a model id of `Alpha:some-model` — the
+# spawn landing on the caller's own agent harness with nothing said anywhere.
+# ADR-0005 clause 5 forbids exactly that, so a malformed token now falls
+# through to the same warning an undeclared one gets.
+CFG="$SCRATCH/malformed/agents.config.sh"
+write_config "$CFG" "AGENT_HARNESSES='alpha beta'
+AGENT_TIER_REVIEWER='Alpha:some-model'
+AGENT_TIER_PLANNER=':some-model'
+AGENT_TIER_MECHANICAL='alpha_x:some-model'"
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+resolve --model reviewer
+assert_resolved 'Alpha:some-model' "an upper-case prefix leaves the value whole"
+assert_err_has "not a well-formed"
+
+resolve --harness planner
+assert_resolved '' "a leading colon resolves no agent harness"
+assert_err_has "not a well-formed"
+
+resolve --model mechanical
+assert_resolved 'alpha_x:some-model' "an underscore is not in the token alphabet"
+assert_err_has "not a well-formed"
+
+# ---------------------------------------------------------------------------
+banner "The declaration, and the warnings, behave as the file claims"
+# ---------------------------------------------------------------------------
+# A declaration written across lines must mean the same set — the resolver
+# normalises it — and a prefix of a declared token must not match it.
+CFG="$SCRATCH/multiline/agents.config.sh"
+write_config "$CFG" "AGENT_HARNESSES='alpha
+	beta   gamma'
+AGENT_TIER_REVIEWER='gamma:some-model'
+AGENT_TIER_PLANNER='alph:some-model'
+AGENT_TIER_IMPLEMENTER='alphabet:some-model'"
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+resolve --harness reviewer
+assert_resolved 'gamma' "a declaration split across lines and tabs still declares its tokens"
+
+resolve --model planner
+assert_resolved 'alph:some-model' "a PREFIX of a declared token does not match it"
+resolve --model implementer
+assert_resolved 'alphabet:some-model' "…and neither does a token that merely starts with one"
+
+# The escape hatch the rest of the file honours has to cover the new warnings
+# too, or a caller that silenced the resolver still gets noise on stdout's
+# neighbour.
+R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+AGENTS_TIER_QUIET=1 sh "$LIB" --model planner 2>"$R_ERR" >/dev/null
+if [ -s "$R_ERR" ]; then
+	fail "AGENTS_TIER_QUIET=1 did not silence the malformed/undeclared warning"
+	sed 's/^/        | /' "$R_ERR"
+else
+	pass "AGENTS_TIER_QUIET=1 silences the new warnings, as it does the old one"
+fi
+rm -f "$R_ERR"
+
+# Once per process, not once per resolution: a script resolving four tiers
+# should hear about a broken declaration once.
+R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+sh -c '. "$1"; _agents_here=$(dirname "$1"); resolve_tier --model planner >/dev/null; resolve_tier --model implementer >/dev/null' _ "$LIB" 2>"$R_ERR"
+count=$(grep -c "resolves as a MODEL ID" "$R_ERR" 2>/dev/null || echo 0)
+if [ "$count" = 1 ]; then
+	pass "the warning is memoised per process — two resolutions, one warning"
+else
+	fail "expected exactly one warning across two resolutions, got $count"
+	sed 's/^/        | /' "$R_ERR"
+fi
+rm -f "$R_ERR"
+
+# ---------------------------------------------------------------------------
+banner "A colon in the MODEL half survives the split"
+# ---------------------------------------------------------------------------
+CFG="$SCRATCH/twocolon/agents.config.sh"
+write_config "$CFG" "AGENT_HARNESSES='alpha'
+AGENT_TIER_REVIEWER='alpha:runtime-thing:8b'"
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+resolve --harness reviewer
+assert_resolved 'alpha' "the FIRST colon splits"
+resolve --model reviewer
+assert_resolved 'runtime-thing:8b' "…and every later one stays in the model id"
+
+# ---------------------------------------------------------------------------
+banner "zsh — the shell the resolver documents having been bitten by"
+# ---------------------------------------------------------------------------
+# The membership test is a `case` against a padded string rather than
+# `for h in $AGENT_HARNESSES` precisely because zsh does not word-split an
+# unquoted expansion by default. That claim is worth nothing untested, and sh
+# on this machine is not zsh.
+if command -v zsh >/dev/null 2>&1; then
+	CFG="$SCRATCH/axis/agents.config.sh"
+	AGENTS_CONFIG="$CFG"
+	export AGENTS_CONFIG
+	z_out=$(zsh "$LIB" --harness implementer 2>/dev/null)
+	if [ "$z_out" = "beta" ]; then
+		pass "zsh resolves the agent harness — the declaration is not word-split away"
+	else
+		fail "zsh resolved '$z_out', expected 'beta' — the membership test word-split"
+	fi
+	z_out=$(zsh "$LIB" --model implementer 2>/dev/null)
+	[ "$z_out" = "model-for-implementing" ] &&
+		pass "zsh resolves the model half too" ||
+		fail "zsh resolved model '$z_out'"
+	# Sourcing is the case that once killed the caller outright.
+	z_out=$(zsh -c '. "$1"; echo SURVIVED' _ "$LIB" 2>/dev/null)
+	[ "$z_out" = "SURVIVED" ] &&
+		pass "sourcing the library under zsh leaves the caller alive" ||
+		fail "sourcing under zsh did not return control — got '$z_out'"
+else
+	pass "zsh is not installed — the zsh leg is skipped, and says so"
+fi
+
 unset AGENTS_CONFIG
 t_done "agent harness axis"

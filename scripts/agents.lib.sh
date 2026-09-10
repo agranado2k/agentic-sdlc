@@ -3,8 +3,10 @@
 #
 # Answers one question: "which execution model does this tier run on?"
 #
-#   sh scripts/agents.lib.sh <tier> [domain]   -> prints the mapped model id,
-#                                                  or nothing if it is unmapped
+#   sh scripts/agents.lib.sh [--model|--harness] <tier> [domain]
+#       --model (the default) -> the mapped model id, or nothing when unmapped
+#       --harness             -> the agent harness that runs it, or nothing,
+#                                which means the caller's own
 #   . scripts/agents.lib.sh; resolve_tier …    -> the same, as a shell function;
 #      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
 #      own line (bash and zsh drop a prefix assignment on `.`)
@@ -185,13 +187,22 @@ agents_split_harness() {
 
 	_ah_prefix=${1%%:*}
 
-	# The prefix's SHAPE, checked before it is compared. The alphabet is spelled
-	# out rather than written `[!a-z]` for the same locale reason the domain
-	# check spells its own: under en_US.UTF-8 a bracket RANGE collates
-	# case-insensitively, so `[!a-z]*` would accept an upper-case prefix, and a
-	# check whose meaning moves with $LANG is not a check.
+	# The prefix's SHAPE. The alphabet is spelled out rather than written
+	# `[!a-z]` for the same locale reason the domain check spells its own: under
+	# en_US.UTF-8 a bracket RANGE collates case-insensitively, so `[!a-z]*`
+	# would accept an upper-case prefix, and a check whose meaning moves with
+	# $LANG is not a check.
+	#
+	# A failure here does NOT return early, and that is the whole point. It used
+	# to: `AGENT_TIER_REVIEWER='Alpha:some-model'` with `alpha` declared then
+	# resolved to no agent harness and a model id of `Alpha:some-model`, in
+	# total silence — a capitalisation typo in the policy file spawning on the
+	# caller's own agent harness with nothing said anywhere. That is exactly the
+	# silent wrong-harness spawn ADR-0005 clause 5 forbids. A malformed prefix
+	# falls through to the same warning an undeclared one gets.
+	_ah_shape=ok
 	case $_ah_prefix in
-	'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 0 ;;
+	'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _ah_shape=bad ;;
 	esac
 
 	# Declared? The membership test is a `case` against a padded string, NOT
@@ -202,13 +213,15 @@ agents_split_harness() {
 	# shells. The declaration is normalised first so a project may write it
 	# across lines and still mean the same set.
 	_ah_list=$(printf '%s' "${AGENT_HARNESSES:-}" | tr '\t\n' '  ')
-	case " $_ah_list " in
-	*" $_ah_prefix "*)
-		_ah_harness=$_ah_prefix
-		_ah_model=${1#*:}
-		return 0
-		;;
-	esac
+	if [ "$_ah_shape" = ok ]; then
+		case " $_ah_list " in
+		*" $_ah_prefix "*)
+			_ah_harness=$_ah_prefix
+			_ah_model=${1#*:}
+			return 0
+			;;
+		esac
+	fi
 
 	# Undeclared prefix. The whole string stays the model, which is right for a
 	# `<name>:<tag>` id and is also what a TYPO'd agent-harness name resolves
@@ -219,9 +232,14 @@ agents_split_harness() {
 	# deserves silence.
 	if [ -n "$_ah_list" ] && [ "$_agents_undeclared_warned" = 0 ] && [ "${AGENTS_TIER_QUIET:-}" != "1" ]; then
 		_agents_undeclared_warned=1
-		echo "!  agents: '$_ah_prefix' is not a declared agent harness, so '$1' resolves as a MODEL ID." >&2
+		if [ "$_ah_shape" = bad ]; then
+			echo "!  agents: '$_ah_prefix' is not a well-formed agent harness token, so '$1'" >&2
+			echo "   resolves as a MODEL ID. A token is a $AGENT_HARNESS_SHAPE — lower case." >&2
+		else
+			echo "!  agents: '$_ah_prefix' is not a declared agent harness, so '$1' resolves as a MODEL ID." >&2
+		fi
 		echo "   Declared: $_ah_list" >&2
-		echo "   If that prefix was meant as an agent harness, add it to AGENT_HARNESSES." >&2
+		echo "   If that prefix was meant as an agent harness, fix it and add it to AGENT_HARNESSES." >&2
 	fi
 	return 0
 }
@@ -382,8 +400,8 @@ resolve_tier() {
 		[ "$_agents_nomodel_warned" = 0 ] && [ "${AGENTS_TIER_QUIET:-}" != "1" ]; then
 		_agents_nomodel_warned=1
 		echo "!  agents: agent harness '$_ah_harness' is named with no model, so this tier runs" >&2
-		echo "   on that harness's OWN DEFAULT. The tier is still a decision about the work;" >&2
-		echo "   it is no longer a decision about the cost." >&2
+		echo "   on that agent harness's OWN DEFAULT. The tier is still a decision about" >&2
+		echo "   the work; it is no longer a decision about the cost." >&2
 	fi
 
 	# A caller written before this axis is about to spawn this model on its OWN
@@ -395,8 +413,7 @@ resolve_tier() {
 		_agents_dropped_warned=1
 		echo "!  agents: this tier names agent harness '$_ah_harness', and the caller asked only" >&2
 		echo "   for a model, so the agent harness is being DROPPED — the spawn will run wherever" >&2
-		echo "   the caller already is. Use --harness to read it, or scripts/agent-dispatch.sh," >&2
-		echo "   which reads both." >&2
+		echo "   the caller already is. Ask for it with --harness." >&2
 	fi
 
 	[ -n "$_ah_model" ] && printf '%s\n' "$_ah_model"
