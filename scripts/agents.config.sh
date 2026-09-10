@@ -98,6 +98,57 @@
 # empty: a mapping is a model identifier, and the kit never names one.
 
 # ---------------------------------------------------------------------------
+# THIRD AXIS: THE AGENT HARNESS
+# ---------------------------------------------------------------------------
+# The two axes above answer "how much judgement is this worth?" and "what is
+# this work made OF?". Both assumed an answer to a third question without
+# asking it: WHICH AGENT HARNESS runs the model — the CLI that holds the
+# session, loads AGENTS.md and owns the tool calls. While every tier ran in the
+# caller's own session that assumption was invisible and correct.
+#
+# It stops being either the moment you want a reviewer from a different VENDOR
+# than the one that wrote the code — and you should want that, because a
+# reviewer sharing the author's model family shares the author's blind spots.
+# The kit has said so for a while; templates/workflows/ai-review.example.yml
+# runs two vendors against one prompt and says in its header that the
+# cross-provider leg "is unreachable from inside the authoring harness". This
+# axis is what makes it reachable. ADR-0005 records why.
+#
+# DECLARE YOUR AGENT HARNESSES, then prefix a tier's value with one:
+#
+#   AGENT_HARNESSES='<token> <token> ...'
+#   AGENT_TIER_REVIEWER='<token>:<model id>'
+#
+# A value with NO prefix keeps meaning exactly what it always meant: this
+# tier's model, on whatever agent harness the caller is already running. That
+# is still right for most tiers, and it is the only answer a project that
+# declares none can give — which is why nothing below is prefixed, and why an
+# unconfigured project is untouched by this whole section.
+#
+# WHY THE PREFIX IS CHECKED AGAINST THE DECLARATION rather than just split on
+# the first colon: a colon is legal INSIDE a model identifier (the
+# `<name>:<tag>` form some local runtimes use is one id, not two things). The
+# resolver splits only on a prefix you declared, so an id that merely contains
+# a colon survives intact. Declaring nothing splits nothing.
+#
+# A PREFIX WITH NO MODEL — `AGENT_TIER_REVIEWER='<token>:'` — is legal and
+# means "that agent harness, on its own default model". The resolver warns once,
+# because the tier is then still a decision about the work and no longer a
+# decision about the cost.
+#
+# Read the two halves back with:
+#   sh scripts/agents.lib.sh --harness reviewer
+#   sh scripts/agents.lib.sh --model   reviewer
+#
+# Examples of the SHAPE. No real tokens and no real model ids — the kit names
+# neither, and an agent harness token is yours because it is the name YOUR
+# invocation template will be keyed on:
+#   AGENT_HARNESSES='<the agent CLIs you actually have>'
+#   AGENT_TIER_REVIEWER='<an agent harness other than your implementer's>:<model id>'
+#
+AGENT_HARNESSES=''
+
+# ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage
 # ---------------------------------------------------------------------------
 AGENT_TIER_PLANNER=''
