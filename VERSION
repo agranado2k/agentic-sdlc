@@ -458,7 +458,12 @@
 # rewordings.
 # 0.18.0 — a capability tier may name the AGENT HARNESS it runs in, and the
 # word "harness" stops meaning two things (ADR-0005). No file joins or leaves
-# the layer in this release; three shared files changed CONTENT.
+# the layer in this release; ONE FILE JOINS IT — scripts/agent-dispatch.sh,
+# which turns a resolved (agent harness, model) pair into a running worker and
+# is the kit's first executable spawn path. It exits 3 rather than an error
+# when a tier names no agent harness, which is every tier in every project that
+# does not ask for one, so it is inert until a project declares one. Three
+# shared files changed CONTENT.
 # scripts/agents.lib.sh gains that axis: a tier value may be written
 # `<agent harness>:<model id>`, and `--model` / `--harness` read the two
 # halves. Its old contract is unchanged in every particular — one answer on
@@ -484,8 +489,10 @@
 # say which harness they mean at every use the gate flagged.
 # scripts/agents.config.sh — yours, and still shipped empty — documents the
 # third axis and adds AGENT_HARNESSES beside the tier mapping.
-# tests/agent-harness.test.sh is the axis's suite, named in the README's
-# runnable list and wired into the kit's own guards workflow.
+# tests/agent-harness.test.sh and tests/agent-dispatch.test.sh are the axis's
+# suites, named in the README's runnable list and wired into the kit's own
+# guards workflow; the dispatcher's drives a stub agent harness rather than a
+# vendor, so the suite tests the wiring instead of somebody's account.
 # .gitignore now excludes worktree/, making hard rule 1's claim about version
 # control true, and tests/self-host.test.sh holds it against git rather than
 # against the file. tests/implement-deliver.test.sh matches the delivery
@@ -511,6 +518,7 @@ files:
   UPDATING.md
   scripts/guards.lib.sh
   scripts/agents.lib.sh
+  scripts/agent-dispatch.sh
   scripts/manifest.lib.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh

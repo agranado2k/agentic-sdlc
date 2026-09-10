@@ -1,0 +1,227 @@
+#!/bin/sh
+# tests/agent-dispatch.test.sh — running a capability tier on another agent harness.
+#
+# The suite drives a STUB AGENT HARNESS: a script that prints its argv and its
+# stdin and exits. That is deliberate and it is the only honest way to test
+# this file. A real vendor would make the suite depend on an account, a
+# network, a model's mood and a bill — none of which are properties of the
+# dispatcher — and it would be testing the vendor rather than the wiring. What
+# this file is responsible for is which command got built, what reached it, and
+# what happened when something was wrong. A stub answers all three exactly.
+#
+# THE CASE THAT MATTERS MOST IS EXIT 3. An unconfigured project declares no
+# agent harness, every tier is in-session, and the dispatcher must hand the
+# caller the model id and get out of the way — the behaviour the kit had before
+# this file existed. A dispatcher that treated "no agent harness" as an error
+# would break every project that never asked for one.
+#
+# THE CASE THAT MATTERS SECOND IS THE MODEL WHITELIST. The command template is
+# eval'd, so a model id is interpolated into a string that is then executed. An
+# id carrying a semicolon is a command, and the suite plants one.
+#
+# Usage: sh tests/agent-dispatch.test.sh
+
+set -u
+
+KIT=$(cd "$(dirname "$0")/.." && pwd)
+DISPATCH="$KIT/scripts/agent-dispatch.sh"
+
+# shellcheck source=./lib.sh
+. "$KIT/tests/lib.sh"
+t_init
+
+STUB="$SCRATCH/stub-agent-harness"
+cat >"$STUB" <<'EOF'
+#!/bin/sh
+echo "ARGV: $*"
+echo "STDIN-BEGIN"
+cat
+echo "STDIN-END"
+EOF
+chmod +x "$STUB"
+
+CFG="$SCRATCH/agents.config.sh"
+cat >"$CFG" <<EOF
+AGENT_HARNESSES='stub other'
+AGENT_HARNESS_STUB_CMD='$STUB --flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_IMPLEMENTER='stub:model-for-implementing'
+AGENT_TIER_IMPLEMENTER_CONTENT='stub:model-for-prose'
+AGENT_TIER_PLANNER='model-for-planning'
+AGENT_TIER_REVIEWER='other:model-for-reviewing'
+AGENT_TIER_MECHANICAL='stub:bad;id'
+EOF
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+dispatch() {
+	D_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+	D_OUT=$(sh "$DISPATCH" "$@" 2>"$D_ERR")
+	D_STATUS=$?
+	D_ERR_TEXT=$(cat "$D_ERR")
+	rm -f "$D_ERR"
+}
+
+assert_status_is() {
+	if [ "$D_STATUS" = "$1" ]; then
+		pass "$2"
+	else
+		fail "$2 — expected status $1, got $D_STATUS"
+		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
+		printf '%s\n' "$D_ERR_TEXT" | sed 's/^/        | /'
+	fi
+}
+
+assert_out_matches() {
+	case "$D_OUT" in
+	*"$1"*) pass "$2" ;;
+	*)
+		fail "$2 — stdout lacks '$1'"
+		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
+		;;
+	esac
+}
+
+assert_out_exact() {
+	if [ "$D_OUT" = "$1" ]; then
+		pass "$2"
+	else
+		fail "$2 — expected exactly '$1', got '$D_OUT'"
+	fi
+}
+
+assert_out_lacks() {
+	case "$D_OUT" in
+	*"$1"*)
+		fail "$2 — stdout should NOT contain '$1'"
+		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
+		;;
+	*) pass "$2" ;;
+	esac
+}
+
+assert_err_has() {
+	case "$D_ERR_TEXT" in
+	*"$1"*) pass "stderr mentions '$1'" ;;
+	*)
+		fail "stderr does not mention '$1'"
+		printf '%s\n' "$D_ERR_TEXT" | sed 's/^/        | /'
+		;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+banner "The in-session case — the default, and not a failure"
+# ---------------------------------------------------------------------------
+dispatch planner --prompt 'anything'
+assert_status_is 3 "a tier naming no agent harness exits 3 — 'spawn this yourself'"
+assert_out_exact 'model-for-planning' "…and hands the caller the model id, on stdout, alone"
+assert_err_has "names no agent harness"
+
+# ---------------------------------------------------------------------------
+banner "Dispatching — what the worker actually receives"
+# ---------------------------------------------------------------------------
+dispatch implementer --prompt 'Implement ticket #7.'
+assert_status_is 0 "a mapped agent harness dispatches"
+assert_out_matches 'ARGV: --flag --model model-for-implementing' "the model lands where the flag template put it"
+assert_out_matches 'Implement ticket #7.' "the prompt reaches the worker"
+
+# Prose carries quotes, dollars, newlines and code fences, and every one of them
+# would be interpreted on the way if the prompt were an argv element. The claim
+# is byte-identical arrival, and only a diff can state it: the hazardous text is
+# IN the prompt, so every token in it legitimately appears in the worker's echo,
+# and a substring check cannot tell "quoted safely" from "executed".
+HAZARD="$SCRATCH/hazard.md"
+cat >"$HAZARD" <<'EOF'
+Line one with "double" and 'single' quotes.
+$HOME `date` $(echo hi) ; rm -rf / && echo pwned
+```sh
+echo "a fenced block"
+```
+EOF
+dispatch implementer --prompt-file "$HAZARD"
+assert_status_is 0 "a prompt full of shell metacharacters dispatches"
+printf '%s\n' "$D_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p' | sed '1d;$d' >"$SCRATCH/received.md"
+if diff -q "$HAZARD" "$SCRATCH/received.md" >/dev/null 2>&1; then
+	pass "the prompt reaches the worker byte-identical — nothing expanded, nothing eaten"
+else
+	fail "the prompt was altered in transit"
+	diff "$HAZARD" "$SCRATCH/received.md" | sed 's/^/        | /'
+fi
+
+dispatch implementer content --prompt 'x' --dry-run
+assert_out_matches 'model-for-prose' "the task domain selects its own model"
+
+# ---------------------------------------------------------------------------
+banner "An agent harness with no model omits the flag entirely"
+# ---------------------------------------------------------------------------
+# adapters/claude-code/README.md's rule: omitting a parameter and passing "" are
+# not the same request, and a harness is within its rights to reject the second.
+# `{model_flag}` is that rule made declarative.
+CFG2="$SCRATCH/nomodel.config.sh"
+cat >"$CFG2" <<EOF
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$STUB --flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='stub:'
+EOF
+AGENTS_CONFIG="$CFG2"
+export AGENTS_CONFIG
+dispatch reviewer --prompt 'x'
+assert_status_is 0 "a tier naming an agent harness with no model still dispatches"
+assert_out_matches 'ARGV: --flag' "…and the worker runs"
+assert_out_lacks '--model' "…with the model flag omitted entirely, not passed empty"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
+banner "--dry-run runs nothing and shows everything"
+# ---------------------------------------------------------------------------
+dispatch implementer --prompt 'Do not run me.' --dry-run
+assert_status_is 0 "a dry run succeeds"
+assert_out_matches 'agent harness:  stub' "it names the agent harness"
+assert_out_matches 'model:          model-for-implementing' "it names the model"
+assert_out_matches '--model model-for-implementing' "it shows the expanded command"
+assert_out_matches 'Do not run me.' "it shows the prompt"
+assert_out_lacks 'ARGV:' "and the worker never ran"
+
+# ---------------------------------------------------------------------------
+banner "Misconfiguration reports itself, and points at the fix"
+# ---------------------------------------------------------------------------
+dispatch reviewer --prompt 'x'
+assert_status_is 2 "an agent harness named without a command template is refused"
+assert_err_has "AGENT_HARNESS_OTHER_CMD"
+
+dispatch mechanical --prompt 'x'
+assert_status_is 2 "a model id carrying a shell metacharacter is REFUSED, not escaped"
+assert_err_has "will not interpolate"
+
+dispatch not-a-tier --prompt 'x'
+assert_status_is 2 "the closed tier vocabulary still closes"
+
+dispatch implementer --nonsense --prompt 'x'
+assert_status_is 2 "an unknown option is refused rather than read as a tier"
+assert_err_has "unknown option"
+
+dispatch implementer
+assert_status_is 2 "no prompt at all is a usage error"
+
+dispatch implementer --prompt-file "$SCRATCH/does-not-exist.md"
+assert_status_is 2 "a missing prompt file is refused before anything runs"
+
+CFG3="$SCRATCH/ghost.config.sh"
+cat >"$CFG3" <<'EOF'
+AGENT_HARNESSES='ghost'
+AGENT_HARNESS_GHOST_CMD='definitely-not-a-real-binary-9f3a {model_flag} < {prompt_file}'
+AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
+AGENT_TIER_IMPLEMENTER='ghost:some-id'
+EOF
+AGENTS_CONFIG="$CFG3"
+export AGENTS_CONFIG
+dispatch implementer --prompt 'x'
+assert_status_is 2 "an uninstalled agent harness is caught before it is invoked"
+assert_err_has "not on PATH"
+
+unset AGENTS_CONFIG
+t_done "agent dispatch"
