@@ -127,16 +127,23 @@ done
 [ "$HAVE_PROMPT" = 1 ] || die "no prompt — pass --prompt-file or --prompt"
 [ -n "$PROMPT_FILE" ] && [ -n "$PROMPT_TEXT" ] && die "--prompt-file and --prompt are alternatives, not a pair"
 [ -n "$PROMPT_FILE" ] && [ ! -f "$PROMPT_FILE" ] && die "prompt file does not exist: $PROMPT_FILE"
+[ -n "$PROMPT_FILE" ] && [ ! -s "$PROMPT_FILE" ] && die "prompt file is empty: $PROMPT_FILE
+   A worker given nothing to do will invent something to do."
 
 # --- resolution -------------------------------------------------------------
 # Two calls rather than one parse of a joined value: the resolver owns the
 # split, and a caller that re-implemented it here would be the second place the
 # `<name>:<tag>` rule has to be right.
+# Two calls, so two processes, so the resolver's once-per-process warning memo
+# cannot span them and an unconfigured project heard the UNMAPPED warning twice.
+# The --harness call is silenced: it asks a question whose answer for such a
+# project is "none", and the --model call that follows says everything the
+# operator needs to hear, once.
 if [ -n "$DOMAIN" ]; then
-	HARNESS=$(sh "$LIB" --harness "$TIER" "$DOMAIN") || exit $?
+	HARNESS=$(AGENTS_TIER_QUIET=1 sh "$LIB" --harness "$TIER" "$DOMAIN") || exit $?
 	MODEL=$(sh "$LIB" --model "$TIER" "$DOMAIN") || exit $?
 else
-	HARNESS=$(sh "$LIB" --harness "$TIER") || exit $?
+	HARNESS=$(AGENTS_TIER_QUIET=1 sh "$LIB" --harness "$TIER") || exit $?
 	MODEL=$(sh "$LIB" --model "$TIER") || exit $?
 fi
 
@@ -226,23 +233,62 @@ SCRATCH=""
 cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
 trap cleanup EXIT INT TERM HUP
 
-if [ -z "$PROMPT_FILE" ]; then
-	SCRATCH=$(mktemp -d) || die "cannot create a scratch directory"
-	PROMPT_FILE="$SCRATCH/prompt.md"
-	printf '%s\n' "$PROMPT_TEXT" >"$PROMPT_FILE"
+# The prompt is ALWAYS staged into a file this script created, even when the
+# caller passed one. The caller's path is data — a branch name becomes a
+# worktree slug becomes a directory, and `;` `$` `(` `&` `|` and spaces are all
+# legal in a branch name — and this path is interpolated into the eval'd
+# template. Passing it through directly executed it: a prompt file under a
+# directory named `a;$(touch PWNED)b` created PWNED.
+#
+# Staging is not by itself the fix, because $TMPDIR is also somebody else's
+# data. So the staged path is held to the same refuse-don't-escape rule as the
+# model id, and single-quoted at the substitution on top of that.
+SCRATCH=$(mktemp -d) || die "cannot create a scratch directory"
+_staged="$SCRATCH/prompt.md"
+if [ -n "$PROMPT_FILE" ]; then
+	cat -- "$PROMPT_FILE" >"$_staged" || die "cannot read the prompt file: $PROMPT_FILE"
+else
+	printf '%s\n' "$PROMPT_TEXT" >"$_staged"
 fi
+PROMPT_FILE="$_staged"
+
+case "$PROMPT_FILE" in
+*[!$_alnum._/-]*)
+	die "the scratch path '$PROMPT_FILE' contains a character this script will not
+   interpolate into a command. TMPDIR is the usual cause — point it somewhere
+   made of letters, digits and . _ - / and run again." ;;
+esac
 
 # --- expansion --------------------------------------------------------------
 # `|` is the sed delimiter because it is excluded from the model whitelist above
 # and from any path mktemp produces, so neither substitution can close the
 # expression early.
+# The path is single-quoted as well as whitelisted: the whitelist keeps the
+# sed expression and the eval intact, and the quotes keep a path with a space
+# in it one word to the redirect. Belt and braces, because this is the value
+# that got it wrong once.
 CMD=$(printf '%s' "$CMD_TEMPLATE" |
-	sed -e "s|{model_flag}|$MODEL_FLAG|g" -e "s|{prompt_file}|$PROMPT_FILE|g")
+	sed -e "s|{model_flag}|$MODEL_FLAG|g" -e "s|{prompt_file}|'$PROMPT_FILE'|g")
 
 # The command's own name, checked before anything runs, so an uninstalled agent
 # harness reports itself rather than surfacing as a shell "not found" mixed into
 # the worker's output, where a caller would read it as the worker's answer.
-CMD_BIN=${CMD%% *}
+# The command's own name, checked before anything runs. Leading `VAR=value`
+# words are skipped: a template that sets an environment variable for the
+# worker is the natural way to write one, and taking the first word blindly
+# reported `FOO=1` as a missing program.
+CMD_REST=$CMD
+while :; do
+	CMD_BIN=${CMD_REST%% *}
+	case "$CMD_BIN" in
+	[!=]*=*)
+		_next=${CMD_REST#* }
+		[ "$_next" = "$CMD_REST" ] && break
+		CMD_REST=$_next
+		;;
+	*) break ;;
+	esac
+done
 command -v "$CMD_BIN" >/dev/null 2>&1 ||
 	die "agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH."
 

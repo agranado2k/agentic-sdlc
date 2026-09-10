@@ -223,5 +223,113 @@ dispatch implementer --prompt 'x'
 assert_status_is 2 "an uninstalled agent harness is caught before it is invoked"
 assert_err_has "not on PATH"
 
+# ---------------------------------------------------------------------------
+banner "The prompt path is data, and is treated as such"
+# ---------------------------------------------------------------------------
+# The caller's path is not this script's to trust: a branch name becomes a
+# worktree slug becomes a directory, and `;` `$` `(` `&` `|` and spaces are all
+# legal in a branch name. This path is interpolated into the eval'd template,
+# and passing it through unstaged EXECUTED it.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+HOSTILE="$SCRATCH/a;\$(touch $SCRATCH/PWNED)b"
+mkdir -p "$HOSTILE"
+printf 'the prompt survives\n' >"$HOSTILE/p.md"
+dispatch implementer --prompt-file "$HOSTILE/p.md"
+assert_status_is 0 "a prompt under a hostile directory name dispatches"
+if [ -f "$SCRATCH/PWNED" ]; then
+	fail "the prompt path was EXECUTED — command substitution in a path reached the eval"
+	rm -f "$SCRATCH/PWNED"
+else
+	pass "the prompt path was not executed"
+fi
+assert_out_matches 'the prompt survives' "…and the prompt still reached the worker"
+
+SPACED="$SCRATCH/with space"
+mkdir -p "$SPACED"
+printf 'spaces are fine\n' >"$SPACED/p.md"
+dispatch implementer --prompt-file "$SPACED/p.md"
+assert_status_is 0 "a path containing a space dispatches"
+assert_out_matches 'spaces are fine' "…and arrives whole, not split at the space"
+
+# $TMPDIR is somebody else's data too, so staging alone is not the fix.
+D_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
+mkdir -p "$SCRATCH/tmp;x"
+TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi' >/dev/null 2>"$D_ERR"
+D_STATUS=$?
+D_ERR_TEXT=$(cat "$D_ERR")
+rm -f "$D_ERR"
+assert_status_is 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
+
+dispatch implementer --prompt-file /dev/null
+assert_status_is 2 "an empty prompt file is refused — a worker given nothing invents something"
+
+# ---------------------------------------------------------------------------
+banner "The worker's own status, and a template that sets the environment"
+# ---------------------------------------------------------------------------
+EXITER="$SCRATCH/exiter"
+cat >"$EXITER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "MARKER=${MARKER:-unset}"
+exit 7
+EOF
+chmod +x "$EXITER"
+CFG_EXIT="$SCRATCH/exit.config.sh"
+cat >"$CFG_EXIT" <<EOF
+AGENT_HARNESSES='ex'
+AGENT_HARNESS_EX_CMD='MARKER=set $EXITER {model_flag} < {prompt_file}'
+AGENT_HARNESS_EX_MODEL_FLAG='--model {model}'
+AGENT_TIER_IMPLEMENTER='ex:some-id'
+EOF
+AGENTS_CONFIG="$CFG_EXIT"
+export AGENTS_CONFIG
+dispatch implementer --prompt 'x'
+assert_status_is 7 "the worker's own exit status passes through untouched"
+assert_out_matches 'MARKER=set' "a template may set the environment the worker runs in"
+
+# A mapped model with nowhere to put it is a config error, not a silent drop.
+CFG_NOFLAG="$SCRATCH/noflag.config.sh"
+cat >"$CFG_NOFLAG" <<EOF
+AGENT_HARNESSES='ex'
+AGENT_HARNESS_EX_CMD='$EXITER {model_flag} < {prompt_file}'
+AGENT_TIER_IMPLEMENTER='ex:some-id'
+EOF
+AGENTS_CONFIG="$CFG_NOFLAG"
+export AGENTS_CONFIG
+dispatch implementer --prompt 'x'
+assert_status_is 2 "a mapped model with no MODEL_FLAG is refused rather than dropped"
+assert_err_has "MODEL_FLAG"
+
+# ---------------------------------------------------------------------------
+banner "Every shell an operator might run this under"
+# ---------------------------------------------------------------------------
+# The file claims three-shell portability in a comment; a comment is not a
+# check. sh on this machine may BE bash, so naming them separately is the point.
+SHELLS='sh bash zsh'
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+for shell_bin in $SHELLS; do
+	command -v "$shell_bin" >/dev/null 2>&1 || {
+		pass "$shell_bin is not installed — skipped, and says so"
+		continue
+	}
+	"$shell_bin" -n "$DISPATCH" 2>/dev/null &&
+		pass "$shell_bin parses agent-dispatch.sh" ||
+		fail "$shell_bin cannot parse agent-dispatch.sh"
+	s_out=$("$shell_bin" "$DISPATCH" implementer --prompt 'shell check' 2>/dev/null)
+	case "$s_out" in
+	*"shell check"*) pass "$shell_bin dispatches, and the prompt arrives" ;;
+	*) fail "$shell_bin dispatched wrongly: $s_out" ;;
+	esac
+	# The case every consumer in the field is in.
+	s_out=$("$shell_bin" "$DISPATCH" planner --prompt 'x' 2>/dev/null)
+	s_st=$?
+	{ [ "$s_st" = 3 ] && [ "$s_out" = "model-for-planning" ]; } &&
+		pass "$shell_bin exits 3 with the model id for an unconfigured tier" ||
+		fail "$shell_bin gave status $s_st, stdout '$s_out'"
+done
+
 unset AGENTS_CONFIG
 t_done "agent dispatch"
