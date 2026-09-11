@@ -59,6 +59,13 @@ jobs:
       - name: agents.lib.sh (agent-harness axis)
         run: sh tests/agent-harness.test.sh
 
+      # The kit's first executable spawn path (ADR-0005). Its fixture is a STUB
+      # agent harness that prints its argv and its stdin: what this file owns is
+      # which command got built and what reached it, and a real vendor would
+      # test the vendor instead, over a network, for a fee.
+      - name: agent-dispatch.sh
+        run: sh tests/agent-dispatch.test.sh
+
       # Not a guard, but the same shape and the same risk profile: a script that
       # deletes branches and worktrees. Its fixtures build real repos with real
       # bare remotes and real linked worktrees.

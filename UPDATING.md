@@ -537,6 +537,7 @@ v0.1.0 -> v0.18.0
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
 constitution/shared-code-craft.md
+scripts/agent-dispatch.sh
 scripts/agents.lib.sh
 scripts/behavior-delta.sh
 scripts/check.sh
@@ -559,10 +560,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1775 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1778 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1929 insertions(+), 1 deletion(-)
+ 3 files changed, 1932 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -600,6 +601,7 @@ $ # step 5 — apply
   updated UPDATING.md
   updated constitution/shared-code-craft.md
   updated constitution/shared-invariants.md
+  updated scripts/agent-dispatch.sh
   updated scripts/agents.lib.sh
   updated scripts/behavior-delta.sh
   updated scripts/check.sh
@@ -624,6 +626,7 @@ $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
 verbatim  constitution/shared-code-craft.md
 verbatim  constitution/shared-invariants.md
+verbatim  scripts/agent-dispatch.sh
 verbatim  scripts/agents.lib.sh
 verbatim  scripts/behavior-delta.sh
 verbatim  scripts/check.sh

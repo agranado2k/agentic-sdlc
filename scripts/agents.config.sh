@@ -148,6 +148,31 @@
 #
 AGENT_HARNESSES=''
 
+# EACH DECLARED AGENT HARNESS NEEDS AN INVOCATION before anything can be
+# dispatched to it. This is the fact adapters/claude-code/README.md says cannot
+# be written portably — where a model id goes, and how a prompt gets in:
+#
+#   AGENT_HARNESS_<TOKEN>_CMD='<command> {model_flag} < {prompt_file}'
+#   AGENT_HARNESS_<TOKEN>_MODEL_FLAG='<the flag it wants> {model}'
+#
+# `{model_flag}` expands to the second template with `{model}` filled — and to
+# NOTHING when the tier maps no model, so the flag is omitted entirely rather
+# than passed empty. That is the same adapter note's rule ("do not pass an empty
+# string as the model parameter... branch on emptiness"), made declarative.
+# `{prompt_file}` is the assembled prompt, which always arrives on stdin.
+#
+# The token folds into the variable name the way a task domain does: a hyphen
+# becomes an underscore, and the shape is the same `[a-z][a-z0-9-]*`.
+#
+# EVERYTHING ELSE IN THE COMMAND IS YOURS, and one part of it deserves saying
+# out loud: the AUTONOMY FLAGS a headless worker runs under — approval modes,
+# sandbox settings, tool allowlists — are a security posture with your blast
+# radius, and the kit writes none of them for you. Shared invariant §7 still
+# holds whatever you write: a worker does not push and does not merge.
+#
+# Check a wiring without spending a token:
+#   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
+
 # ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage
 # ---------------------------------------------------------------------------
