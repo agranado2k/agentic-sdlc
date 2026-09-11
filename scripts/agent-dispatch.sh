@@ -73,8 +73,10 @@ LIB="$_here/agents.lib.sh"
 }
 
 usage() {
-	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>) [--dry-run]" >&2
+	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
+	echo "                          [--set NAME=VALUE ...] [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
+	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
 	echo "             the prompt; run nothing." >&2
 }
@@ -84,7 +86,7 @@ die() {
 	exit 2
 }
 
-TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0
+TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -96,6 +98,33 @@ while [ $# -gt 0 ]; do
 	--prompt)
 		[ $# -ge 2 ] || die "--prompt needs a value"
 		PROMPT_TEXT=$2 HAVE_PROMPT=1
+		shift 2
+		;;
+	--set)
+		[ $# -ge 2 ] || die "--set needs NAME=VALUE"
+		case "$2" in
+		*=*) ;;
+		*) die "--set takes NAME=VALUE, got '$2'" ;;
+		esac
+		_sk=${2%%=*}
+		_sv=${2#*=}
+		# A NAME that could never appear as a marker is a caller mistake worth
+		# naming now rather than leaving as a silently inert --set.
+		case "$_sk" in
+		'' | [!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_]* | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_]*)
+			die "--set NAME must match [A-Za-z_][A-Za-z0-9_]*, got '$_sk'" ;;
+		esac
+		# Each pair goes into its OWN pair of variables, numbered, and is
+		# exported for the single awk pass below. The obvious alternative —
+		# accumulating "NAME=VALUE" lines in one string and reading them back —
+		# is what this replaced, and it was broken twice over: a value
+		# containing a newline was truncated at the first one, and any line
+		# INSIDE a value that happened to look like NAME=VALUE was promoted to
+		# a substitution of its own. Ticket bodies are untrusted content
+		# (AGENTS.md's trust boundary) and `%%BODY%%` is exactly where one goes.
+		SETS_N=$((SETS_N + 1))
+		eval "PD_K_$SETS_N=\$_sk; PD_V_$SETS_N=\$_sv"
+		eval "export PD_K_$SETS_N PD_V_$SETS_N"
 		shift 2
 		;;
 	--dry-run)
@@ -258,6 +287,105 @@ case "$PROMPT_FILE" in
    interpolate into a command. TMPDIR is the usual cause — point it somewhere
    made of letters, digits and . _ - / and run again." ;;
 esac
+
+# --- the editor's header ----------------------------------------------------
+# A prompt template opens with an HTML comment addressed to whoever EDITS it:
+# which markers exist, why the file is shaped the way it is. Every template in
+# .agents/prompts/ ends that header with "everything below is sent to the model
+# verbatim", and this step is what makes the sentence true.
+#
+# Stripping it is not cosmetic. The header documents the markers BY WRITING
+# THEM, so substituting first rewrites the documentation into nonsense and
+# sends it as the worker's opening instruction.
+#
+# Only a header at the very TOP goes, and only through the first `-->`. A
+# comment further down is content: a prompt may legitimately show markup.
+if [ "$(head -n 1 "$PROMPT_FILE" 2>/dev/null)" = "<!--" ]; then
+	# The terminator is a line that IS `-->`, not a line that CONTAINS one.
+	# Matching anywhere closed the header early on any `-->` inside it — a
+	# fenced example, or prose — and the rest of the header was then filled and
+	# sent as the worker's opening instruction, which is the exact outcome
+	# stripping before substituting exists to prevent.
+	#
+	# An UNTERMINATED header is not stripped at all. Dropping to end-of-file
+	# left a zero-byte prompt, and the emptiness check runs before this point,
+	# so the worker was exec'd with nothing to do and exited 0.
+	# awk's status is read on its OWN, not through a pipeline: the exit status
+	# of `awk … | sed …` is SED's, so the unterminated-header branch below
+	# never ran and the empty prompt went out anyway. Found by testing the
+	# branch rather than by reading it.
+	if awk 'NR==1 && $0=="<!--" { inhdr=1; next }
+	        inhdr { if ($0 == "-->") { inhdr=0; seen=1 } ; next }
+	        { print }
+	        END { exit(seen ? 0 : 1) }' "$PROMPT_FILE" >"$SCRATCH/header-stripped.md"; then
+		sed '/./,$!d' "$SCRATCH/header-stripped.md" >"$SCRATCH/stripped.md" &&
+			mv "$SCRATCH/stripped.md" "$PROMPT_FILE"
+		rm -f "$SCRATCH/header-stripped.md"
+	else
+		rm -f "$SCRATCH/header-stripped.md" "$SCRATCH/stripped.md"
+		echo "!  dispatch: the prompt opens with '<!--' and never closes it on a line of" >&2
+		echo "   its own. Leaving the header in rather than sending an empty prompt." >&2
+	fi
+	[ -s "$PROMPT_FILE" ] || die "the prompt is empty after its editor header was stripped.
+   A worker given nothing to do will invent something to do."
+fi
+
+# --- marker substitution ----------------------------------------------------
+# `%%NAME%%`, filled by --set. The syntax and the reasoning are
+# templates/workflows/ai-review-prompt.md's, which explains why the markers are
+# not any agent harness's own expression syntax: an expression inside a data
+# file is never expanded, because it is evaluated by whatever READS the file.
+# The reading step does the substitution — there, the workflow; here, this
+# script.
+#
+# The prompt was already staged into a file this script created, so filling it
+# in place cannot touch the caller's template. That matters: a template is read
+# many times with different values, and a dispatcher that consumed its own
+# input would work exactly once.
+if [ "$SETS_N" -gt 0 ]; then
+	# ONE pass over the file, scanning each line left to right and splicing the
+	# first marker that matches at the current position. Two things follow from
+	# that shape, and both were bugs in the per-pair version it replaced:
+	#
+	#   - a value is never re-scanned, so `--set 'A=[%%B%%]' --set B=bee` leaves
+	#     `[%%B%%]` whatever order the pairs arrive in. A value is data, not a
+	#     template, and reading it as one made the result order-dependent.
+	#   - values are read from the environment rather than parsed out of a
+	#     joined string, so a newline in a value is just a character.
+	PD_N=$SETS_N
+	export PD_N
+	awk '
+		BEGIN {
+			n = ENVIRON["PD_N"] + 0
+			for (i = 1; i <= n; i++) {
+				k[i] = "%%" ENVIRON["PD_K_" i] "%%"
+				v[i] = ENVIRON["PD_V_" i]
+				kl[i] = length(k[i])
+			}
+		}
+		{
+			line = $0; out = ""; pos = 1; len = length(line)
+			while (pos <= len) {
+				hit = 0
+				for (i = 1; i <= n; i++) {
+					if (substr(line, pos, kl[i]) == k[i]) {
+						out = out v[i]; pos += kl[i]; hit = 1; break
+					}
+				}
+				if (!hit) { out = out substr(line, pos, 1); pos++ }
+			}
+			print out
+		}
+	' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" && mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
+fi
+
+# An unfilled marker is a caller that forgot one, and it reaches the worker as
+# literal `%%TICKET%%` — which the worker will cheerfully reason about. Say so;
+# do not refuse, because a prompt may legitimately discuss the syntax itself.
+if grep -q '%%[A-Za-z_][A-Za-z0-9_]*%%' "$PROMPT_FILE" 2>/dev/null; then
+	echo "!  dispatch: the prompt still carries unfilled markers:" >&2
+	grep -o '%%[A-Za-z_][A-Za-z0-9_]*%%' "$PROMPT_FILE" | sort -u | sed 's/^/     /' >&2
+fi
 
 # --- expansion --------------------------------------------------------------
 # `|` is the sed delimiter because it is excluded from the model whitelist above

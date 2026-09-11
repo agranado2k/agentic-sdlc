@@ -187,6 +187,135 @@ assert_out_matches 'Do not run me.' "it shows the prompt"
 assert_out_lacks 'ARGV:' "and the worker never ran"
 
 # ---------------------------------------------------------------------------
+banner "Markers, and the header that documents them"
+# ---------------------------------------------------------------------------
+# A template's header documents its markers BY WRITING THEM, so a dispatcher
+# that substituted before stripping would rewrite the documentation into
+# nonsense and send it as the worker's opening instruction. Strip, then fill.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+TPL="$SCRATCH/template.md"
+cat >"$TPL" <<'EOF'
+<!--
+EDITOR NOTE: the markers are %%TICKET%% and %%BODY%%.
+Everything below is sent to the model verbatim.
+-->
+
+Implement %%TICKET%%.
+%%BODY%%
+Again: %%TICKET%%. And %%NEVER_SET%% stays.
+EOF
+
+dispatch implementer --prompt-file "$TPL" --set 'TICKET=#42' \
+	--set 'BODY=has "quotes", $(echo NOPE), a|pipe and a\backslash'
+assert_status_is 0 "a template with a header and markers dispatches"
+assert_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
+assert_out_matches 'Implement #42.' "a marker is filled"
+assert_out_matches 'Again: #42.' "…every occurrence of it, not just the first"
+assert_out_matches '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
+assert_out_matches 'a|pipe' "…and cannot close the substitution expression"
+assert_out_matches '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
+assert_err_has "unfilled marker"
+
+if grep -q '%%TICKET%%' "$TPL"; then
+	pass "the template file itself is untouched — it is read many times"
+else
+	fail "the template was consumed: substitution wrote back into the caller's file"
+fi
+
+dispatch implementer --prompt 'no header here' --dry-run
+assert_out_matches 'no header here' "a prompt with no header passes through whole"
+
+dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
+assert_status_is 2 "--set without NAME=VALUE is refused"
+
+# A ticket body is untrusted content, and %%BODY%% is exactly where one goes.
+# The pairs used to be joined into one string and read back line by line, so a
+# multi-line value was truncated at its first newline AND any line inside it
+# shaped NAME=VALUE was promoted to a substitution of its own.
+printf 'BODY:\n%%%%BODY%%%%\nC was: %%%%C%%%%\n' >"$SCRATCH/multi.md"
+dispatch implementer --prompt-file "$SCRATCH/multi.md" --set 'C=legit' --set 'BODY=line one
+C=INJECTED
+line three'
+assert_out_matches 'line three' "a multi-line value arrives whole, not truncated at the first newline"
+assert_out_matches 'C=INJECTED' "…including a line inside it that looks like a pair"
+assert_out_matches 'C was: legit' "…which does not hijack the marker of that name"
+
+# A value is data, not a template. Re-scanning it made the result depend on the
+# order the pairs happened to arrive in.
+printf 'X: %%%%A%%%%\n' >"$SCRATCH/rescan.md"
+dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'A=[%%B%%]' --set 'B=bee'
+assert_out_matches 'X: [%%B%%]' "a marker inside a VALUE is not substituted"
+dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'B=bee' --set 'A=[%%B%%]'
+assert_out_matches 'X: [%%B%%]' "…in either order — substitution is one pass, not one per pair"
+
+dispatch implementer --prompt 'x' --set 'a b=1'
+assert_status_is 2 "a NAME that could never be a marker is refused"
+
+# The header strip's two edges.
+printf '<!--\nan example: a-->b\nMarkers: %%%%T%%%%\n-->\n\nReal line %%%%T%%%%.\n' >"$SCRATCH/edge.md"
+dispatch implementer --prompt-file "$SCRATCH/edge.md" --set T=filled
+assert_out_matches 'Real line filled.' "a --> inside the header does not close it early"
+assert_out_lacks 'an example' "…and the whole header is still removed"
+assert_out_lacks 'Markers: filled' "…so the header's own marker documentation is never filled"
+
+printf '<!--\nnever closed\n' >"$SCRATCH/unterm.md"
+dispatch implementer --prompt-file "$SCRATCH/unterm.md" --dry-run
+assert_status_is 0 "an unterminated header does not abort"
+assert_out_matches 'never closed' "…and the prompt is kept rather than stripped to nothing"
+assert_err_has "never closes it"
+
+printf '<!--\nx\n-->\n\n\n' >"$SCRATCH/blanks.md"
+dispatch implementer --prompt-file "$SCRATCH/blanks.md"
+assert_status_is 2 "a prompt that is only a header is refused, not sent empty"
+
+# ---------------------------------------------------------------------------
+banner "The shipped worker prompts"
+# ---------------------------------------------------------------------------
+# One file per task kind, never one per provider: asking two vendors different
+# questions measures the prompts rather than the models, and two files that
+# must stay byte-identical eventually are not.
+for wp in implement-worker review-worker; do
+	f="$KIT/.agents/prompts/$wp.md"
+	[ -f "$f" ] && pass "$wp.md ships" || { fail "$wp.md is missing"; continue; }
+	head -n 1 "$f" | grep -q '^<!--' &&
+		pass "$wp.md opens with an editor header the dispatcher strips" ||
+		fail "$wp.md has no editor header"
+	grep -q '%%' "$f" &&
+		pass "$wp.md carries markers" ||
+		fail "$wp.md carries no markers"
+	# Shared invariant §7 is not the dispatcher's to enforce, so it has to be
+	# in the words the worker actually reads.
+	# The PROHIBITION, not the word. `grep -qi merge` was satisfied by the
+	# review prompt's "never merge them" — the sentence about the two axes —
+	# so deleting "or merge" from the actual prohibition left this green.
+	grep -qiE 'do not (commit, )?push' "$f" &&
+		grep -qiE 'do not[^.]*merge|never[^.]*merge a pull request' "$f" &&
+		pass "$wp.md forbids pushing and merging in so many words" ||
+		fail "$wp.md does not forbid push/merge — §7 lives in the prompt or nowhere"
+done
+
+# Every marker a shipped prompt declares must be fillable, and the dispatcher
+# reports any that are not — so a prompt naming a marker nobody documents is
+# caught here rather than by a confused worker.
+for wp in implement-worker review-worker; do
+	f="$KIT/.agents/prompts/$wp.md"
+	[ -f "$f" ] || continue
+	sets=""
+	for m in $(grep -o '%%[A-Z_][A-Z0-9_]*%%' "$f" | sort -u | tr -d '%'); do
+		sets="$sets --set $m=filled-$m"
+	done
+	# shellcheck disable=SC2086
+	dispatch implementer --prompt-file "$f" $sets --dry-run
+	assert_status_is 0 "$wp.md dispatches with every marker filled"
+	case "$D_ERR_TEXT" in
+	*"unfilled marker"*) fail "$wp.md left a marker unfilled after filling all of them" ;;
+	*) pass "$wp.md has no marker the caller cannot fill" ;;
+	esac
+done
+
+# ---------------------------------------------------------------------------
 banner "Misconfiguration reports itself, and points at the fix"
 # ---------------------------------------------------------------------------
 dispatch reviewer --prompt 'x'
