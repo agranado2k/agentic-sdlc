@@ -500,6 +500,12 @@
 # runnable list and wired into the kit's own guards workflow; the dispatcher's
 # drives a stub agent harness rather than a vendor, so the suite tests the
 # wiring instead of somebody's account.
+# .agents/prompts/ carries what a dispatched worker is actually told: one file
+# per task kind (build a ticket, review a branch), never one per provider, for
+# the reason the CI review prompt already gives — asking two vendors different
+# questions measures the prompts rather than the models. Each ends in an output
+# contract the coordinating session reads, and each forbids push and merge in
+# words, because shared invariant §7 is not the dispatcher's to enforce.
 # .gitignore now excludes worktree/, making hard rule 1's claim about version
 # control true, and tests/self-host.test.sh holds it against git rather than
 # against the file. tests/implement-deliver.test.sh matches the delivery

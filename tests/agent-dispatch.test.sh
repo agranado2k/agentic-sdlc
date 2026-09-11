@@ -187,6 +187,91 @@ assert_out_matches 'Do not run me.' "it shows the prompt"
 assert_out_lacks 'ARGV:' "and the worker never ran"
 
 # ---------------------------------------------------------------------------
+banner "Markers, and the header that documents them"
+# ---------------------------------------------------------------------------
+# A template's header documents its markers BY WRITING THEM, so a dispatcher
+# that substituted before stripping would rewrite the documentation into
+# nonsense and send it as the worker's opening instruction. Strip, then fill.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+TPL="$SCRATCH/template.md"
+cat >"$TPL" <<'EOF'
+<!--
+EDITOR NOTE: the markers are %%TICKET%% and %%BODY%%.
+Everything below is sent to the model verbatim.
+-->
+
+Implement %%TICKET%%.
+%%BODY%%
+Again: %%TICKET%%. And %%NEVER_SET%% stays.
+EOF
+
+dispatch implementer --prompt-file "$TPL" --set 'TICKET=#42' \
+	--set 'BODY=has "quotes", $(echo NOPE), a|pipe and a\backslash'
+assert_status_is 0 "a template with a header and markers dispatches"
+assert_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
+assert_out_matches 'Implement #42.' "a marker is filled"
+assert_out_matches 'Again: #42.' "…every occurrence of it, not just the first"
+assert_out_matches '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
+assert_out_matches 'a|pipe' "…and cannot close the substitution expression"
+assert_out_matches '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
+assert_err_has "unfilled marker"
+
+if grep -q '%%TICKET%%' "$TPL"; then
+	pass "the template file itself is untouched — it is read many times"
+else
+	fail "the template was consumed: substitution wrote back into the caller's file"
+fi
+
+dispatch implementer --prompt 'no header here' --dry-run
+assert_out_matches 'no header here' "a prompt with no header passes through whole"
+
+dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
+assert_status_is 2 "--set without NAME=VALUE is refused"
+
+# ---------------------------------------------------------------------------
+banner "The shipped worker prompts"
+# ---------------------------------------------------------------------------
+# One file per task kind, never one per provider: asking two vendors different
+# questions measures the prompts rather than the models, and two files that
+# must stay byte-identical eventually are not.
+for wp in implement-worker review-worker; do
+	f="$KIT/.agents/prompts/$wp.md"
+	[ -f "$f" ] && pass "$wp.md ships" || { fail "$wp.md is missing"; continue; }
+	head -n 1 "$f" | grep -q '^<!--' &&
+		pass "$wp.md opens with an editor header the dispatcher strips" ||
+		fail "$wp.md has no editor header"
+	grep -q '%%' "$f" &&
+		pass "$wp.md carries markers" ||
+		fail "$wp.md carries no markers"
+	# Shared invariant §7 is not the dispatcher's to enforce, so it has to be
+	# in the words the worker actually reads.
+	grep -qi 'do not push' "$f" && grep -qi 'merge' "$f" &&
+		pass "$wp.md forbids pushing and merging in so many words" ||
+		fail "$wp.md does not forbid push/merge — §7 lives in the prompt or nowhere"
+done
+
+# Every marker a shipped prompt declares must be fillable, and the dispatcher
+# reports any that are not — so a prompt naming a marker nobody documents is
+# caught here rather than by a confused worker.
+for wp in implement-worker review-worker; do
+	f="$KIT/.agents/prompts/$wp.md"
+	[ -f "$f" ] || continue
+	sets=""
+	for m in $(grep -o '%%[A-Z_][A-Z0-9_]*%%' "$f" | sort -u | tr -d '%'); do
+		sets="$sets --set $m=filled-$m"
+	done
+	# shellcheck disable=SC2086
+	dispatch implementer --prompt-file "$f" $sets --dry-run
+	assert_status_is 0 "$wp.md dispatches with every marker filled"
+	case "$D_ERR_TEXT" in
+	*"unfilled marker"*) fail "$wp.md left a marker unfilled after filling all of them" ;;
+	*) pass "$wp.md has no marker the caller cannot fill" ;;
+	esac
+done
+
+# ---------------------------------------------------------------------------
 banner "Misconfiguration reports itself, and points at the fix"
 # ---------------------------------------------------------------------------
 dispatch reviewer --prompt 'x'

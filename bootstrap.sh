@@ -915,7 +915,7 @@ if [ "$ADOPT" = 1 ]; then
 			if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
 		done
 	done
-	for d in scripts/docs-conformance/test adapters; do
+	for d in scripts/docs-conformance/test adapters .agents/prompts; do
 		if a_exists "$d"; then
 			a_keep "$d/"
 		else

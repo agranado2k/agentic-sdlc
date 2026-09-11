@@ -73,8 +73,10 @@ LIB="$_here/agents.lib.sh"
 }
 
 usage() {
-	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>) [--dry-run]" >&2
+	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
+	echo "                          [--set NAME=VALUE ...] [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
+	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
 	echo "             the prompt; run nothing." >&2
 }
@@ -84,7 +86,7 @@ die() {
 	exit 2
 }
 
-TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0
+TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS=""
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -96,6 +98,16 @@ while [ $# -gt 0 ]; do
 	--prompt)
 		[ $# -ge 2 ] || die "--prompt needs a value"
 		PROMPT_TEXT=$2 HAVE_PROMPT=1
+		shift 2
+		;;
+	--set)
+		[ $# -ge 2 ] || die "--set needs NAME=VALUE"
+		case "$2" in
+		*=*) ;;
+		*) die "--set takes NAME=VALUE, got '$2'" ;;
+		esac
+		SETS="$SETS$2
+"
 		shift 2
 		;;
 	--dry-run)
@@ -258,6 +270,69 @@ case "$PROMPT_FILE" in
    interpolate into a command. TMPDIR is the usual cause — point it somewhere
    made of letters, digits and . _ - / and run again." ;;
 esac
+
+# --- the editor's header ----------------------------------------------------
+# A prompt template opens with an HTML comment addressed to whoever EDITS it:
+# which markers exist, why the file is shaped the way it is. Every template in
+# .agents/prompts/ ends that header with "everything below is sent to the model
+# verbatim", and this step is what makes the sentence true.
+#
+# Stripping it is not cosmetic. The header documents the markers BY WRITING
+# THEM, so substituting first rewrites the documentation into nonsense and
+# sends it as the worker's opening instruction.
+#
+# Only a header at the very TOP goes, and only through the first `-->`. A
+# comment further down is content: a prompt may legitimately show markup.
+if [ "$(head -n 1 "$PROMPT_FILE" 2>/dev/null)" = "<!--" ]; then
+	awk 'NR==1 && $0=="<!--" { inhdr=1; next }
+	     inhdr { if ($0 ~ /-->/) { inhdr=0 } ; next }
+	     { print }' "$PROMPT_FILE" | sed '/./,$!d' >"$SCRATCH/stripped.md" &&
+		mv "$SCRATCH/stripped.md" "$PROMPT_FILE"
+fi
+
+# --- marker substitution ----------------------------------------------------
+# `%%NAME%%`, filled by --set. The syntax and the reasoning are
+# templates/workflows/ai-review-prompt.md's, which explains why the markers are
+# not any agent harness's own expression syntax: an expression inside a data
+# file is never expanded, because it is evaluated by whatever READS the file.
+# The reading step does the substitution — there, the workflow; here, this
+# script.
+#
+# The prompt was already staged into a file this script created, so filling it
+# in place cannot touch the caller's template. That matters: a template is read
+# many times with different values, and a dispatcher that consumed its own
+# input would work exactly once.
+if [ -n "$SETS" ]; then
+	printf '%s' "$SETS" | while IFS= read -r _pair; do
+		[ -n "$_pair" ] || continue
+		_k=${_pair%%=*}
+		_v=${_pair#*=}
+		# The VALUE is arbitrary text a caller assembled — a branch name, a
+		# ticket body, a diff. It is INSERTED by awk rather than interpolated
+		# into a sed expression, so a value containing the delimiter, a
+		# backslash or an ampersand cannot rewrite the expression around it.
+		# awk is POSIX; python is not assumed.
+		PD_K="$_k" PD_V="$_v" awk '
+			BEGIN { k = "%%" ENVIRON["PD_K"] "%%"; v = ENVIRON["PD_V"]; kl = length(k) }
+			{
+				line = $0; out = ""
+				while ((i = index(line, k)) > 0) {
+					out = out substr(line, 1, i - 1) v
+					line = substr(line, i + kl)
+				}
+				print out line
+			}
+		' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" && mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
+	done
+fi
+
+# An unfilled marker is a caller that forgot one, and it reaches the worker as
+# literal `%%TICKET%%` — which the worker will cheerfully reason about. Say so;
+# do not refuse, because a prompt may legitimately discuss the syntax itself.
+if grep -q '%%[A-Za-z_][A-Za-z0-9_]*%%' "$PROMPT_FILE" 2>/dev/null; then
+	echo "!  dispatch: the prompt still carries unfilled markers:" >&2
+	grep -o '%%[A-Za-z_][A-Za-z0-9_]*%%' "$PROMPT_FILE" | sort -u | sed 's/^/     /' >&2
+fi
 
 # --- expansion --------------------------------------------------------------
 # `|` is the sed delimiter because it is excluded from the model whitelist above
