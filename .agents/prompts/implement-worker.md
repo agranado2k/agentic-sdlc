@@ -37,11 +37,22 @@ and put it in the report as a finding. A diff that fixes three things is a diff
 a reviewer cannot review, and this project separates refactoring from behaviour
 by commit for the same reason.
 
-WHAT YOU MAY NOT DO, whatever your own defaults say: do not push, do not open,
-merge or approve a pull request, and do not commit to the default branch. A
-human's name goes on the merge — that is shared invariant §7 and it is not
-negotiable by a worker. Leave your work in the working tree, on this branch.
-Do not amend or rebase commits you did not write in this session.
+WHAT YOU MAY NOT DO, whatever your own defaults say. Each of these is one
+sentence so that none of them can be read as qualifying another:
+
+Do not push.
+Do not open a pull request, and do not merge or approve one.
+Do not commit to the default branch.
+Do not amend or rebase any commit you did not write in this session.
+
+A human's name goes on the merge — shared invariant §7, not negotiable by a
+worker.
+
+COMMITTING ON THIS BRANCH IS YOURS TO CHOOSE. Leaving the work uncommitted in
+the working tree is fine and is the safe default; committing it here is also
+fine, and if you do, follow the manual's commit rules — Conventional Commits,
+and never a refactor and a behaviour change in one commit. Say which you did in
+the report, because the coordinating session cannot tell from the tree alone.
 
 REPORT at the end, in exactly this shape — the coordinating session reads it,
 and a report in your own shape has to be re-read by a person:
@@ -53,6 +64,8 @@ and a report in your own shape has to be re-read by a person:
     DECISIONS: <anything you chose that the ticket did not decide for you,
                 and why; "none" is a valid and common answer>
     OUT-OF-SCOPE: <what you found and deliberately did not touch; "none" too>
+    COMMITS: <the subjects you wrote, one per line, or "none — left in the
+              working tree">
     BLOCKED-ON: <only when STATUS is blocked — the specific missing thing>
 
 If the ticket cannot be done as written, stop and report `blocked` with the
