@@ -198,6 +198,211 @@ opt_decide() {
 	done
 }
 
+# ============================================================================
+# THE AGENT ROSTER — which agent harness and which model runs each tier
+# ----------------------------------------------------------------------------
+# scripts/agents.config.sh ships EMPTY and will keep shipping empty: the kit
+# names no model, because model identifiers rot on a vendor's schedule and a
+# kit that shipped one would be shipping a standing instruction with a timer on
+# it. That principle is about what the KIT asserts, and this prompt asserts
+# nothing — it ASKS, and writes down the operator's own answer. The file still
+# arrives empty in the tarball; the person running bootstrap fills it, at the
+# one moment they are already answering questions about their project.
+#
+# WHAT THIS WILL NOT DO: suggest a model id. Not a default, not a menu, not an
+# example that could be pasted. The operator types identifiers their own
+# account can actually invoke, which is the only source that is ever right —
+# and a suggestion here would rot in the worst possible place, inside the
+# prompt of the tool that exists to prevent exactly that.
+# tests/agent-roster.test.sh holds this file to carrying no model id.
+#
+# IT DOES NOT PROBE FOR AGENT CLIs EITHER, and that was a real decision rather
+# than an oversight. A hardcoded list of vendor CLI names to look for on PATH
+# is still the kit naming vendors' tools, which ADR-0005's second driver
+# forbids in the same breath as model identifiers. The argument for it — a
+# probe can only under-report, so it goes stale by finding nothing rather than
+# by being wrong — is true and was not enough: the list would still be the kit
+# asserting which agent harnesses exist in the world, and that assertion rots
+# on somebody else's schedule.
+#
+# So the operator names their own, the same way they name their own models.
+agents_choice=ask
+
+# agents_flag <arg> — --with-agents / --no-agents. Tried BEFORE opt_flag, which
+# dies on anything it does not recognise.
+agents_flag() {
+	case "$1" in
+	--with-agents) agents_choice=yes ;;
+	--no-agents) agents_choice=no ;;
+	*) return 1 ;;
+	esac
+	return 0
+}
+
+# agents_set <file> <variable> <value> — fill ONE shipped-empty assignment.
+#
+# The pattern anchors on `^VAR=''`, so it can only ever rewrite the empty form
+# the kit ships. A project that has already mapped a tier keeps its value:
+# re-running bootstrap over a filled policy file is the operator's business to
+# sort out, not something to do behind their back.
+agents_set() {
+	_as_file=$1 _as_var=$2 _as_val=$3
+	grep -q "^$_as_var=''" "$_as_file" 2>/dev/null || return 0
+	# `|` as the delimiter: the values reaching here are an agent-harness token
+	# and a model id, both shape-checked before they are written, and neither
+	# alphabet contains a pipe.
+	sed "s|^$_as_var=''|$_as_var='$_as_val'|" "$_as_file" >"$_as_file.tmp" &&
+		mv "$_as_file.tmp" "$_as_file" || die "could not write $_as_file"
+}
+
+# agents_read_token <prompt> <alphabet-name> — one shape-checked answer.
+#
+# Sets _ar_val, empty when the operator pressed Enter. The checks are the same
+# whitelists scripts/agents.lib.sh and scripts/agent-dispatch.sh apply, so a
+# typo is refused here rather than read out of a worker three days later.
+agents_read_token() {
+	_ar_low='abcdefghijklmnopqrstuvwxyz'
+	_ar_alnum='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+	while :; do
+		printf '%s' "$1"
+		read -r _ar_val || _ar_val=""
+		[ -z "$_ar_val" ] && return 0
+		if [ "$2" = harness ]; then
+			case "$_ar_val" in
+			[!$_ar_low]* | *[!$_ar_low"0123456789"-]*)
+				echo "    an agent harness token is lower-case letters, digits and hyphens." >&2
+				continue
+				;;
+			esac
+		else
+			case "$_ar_val" in
+			[!$_ar_alnum]* | *[!$_ar_alnum._:/-]*)
+				echo "    that is not a model identifier — letters, digits and . _ - : / only." >&2
+				continue
+				;;
+			esac
+		fi
+		return 0
+	done
+}
+
+# agents_wizard <path to agents.config.sh> — ask, then write.
+#
+# NOT ASKING IS A WORKING STATE and the quiet default everywhere it matters:
+# with no terminal, with --no-agents, or with the file already filled, this
+# returns having changed nothing, and the project starts exactly where every
+# project started before this existed — every tier unmapped, the resolver
+# warning once, every spawn inheriting the session's own model.
+agents_wizard() {
+	_aw_file=$1
+	[ -f "$_aw_file" ] || return 0
+	[ "$agents_choice" = no ] && return 0
+
+	# Same asymmetry opt_decide reasons from: a project that skipped the
+	# question fills the file in a minute, while a project that answered it
+	# silently carries a mapping nobody chose.
+	#
+	# A --with-agents that cannot be honoured says so rather than evaporating,
+	# the way opt_decide reports a yes its tree cannot honour.
+	if [ ! -t 0 ]; then
+		[ "$agents_choice" = yes ] &&
+			echo "  note: --with-agents needs a terminal to ask on; the roster was left empty." >&2
+		return 0
+	fi
+
+	if [ "$agents_choice" = ask ]; then
+		echo ""
+		echo "  Capability tiers map work to models: planner (decomposition),"
+		echo "  implementer (one ticket, test-first), mechanical (checkable, cheap),"
+		echo "  reviewer (adversarial read of a finished diff — and it must NOT be"
+		echo "  the model that implemented, or the review is theatre)."
+		echo ""
+		printf 'Map the four tiers to models now? Unmapped is a working state. [y/N] '
+		read -r _aw_ans || _aw_ans=""
+		case "$_aw_ans" in
+		[Yy] | [Yy][Ee][Ss]) ;;
+		*) return 0 ;;
+		esac
+	fi
+
+	echo ""
+	echo "  An AGENT HARNESS is the CLI a tier's model runs in. Naming one runs"
+	echo "  that tier THERE — which is how a reviewer reaches a different vendor"
+	echo "  than the implementer. Enter alone keeps a tier in whatever session is"
+	echo "  already running, which is what every tier did before this existed."
+	echo "  Both answers are yours: the kit names no agent harness and no model."
+	echo ""
+
+	_aw_declared=""
+	for _aw_tier in planner implementer mechanical reviewer; do
+		_aw_upper=$(printf '%s' "$_aw_tier" | tr 'a-z' 'A-Z')
+
+		# A tier the project already mapped is not asked about at all. Asking
+		# and then discarding the answer is worse than not asking: the operator
+		# types a considered choice, nothing records it, and — before this
+		# check — the agent harness they named was still added to
+		# AGENT_HARNESSES, leaving a file that declared a harness no tier used.
+		# The --adopt arm meets this on every run.
+		if ! grep -q "^AGENT_TIER_$_aw_upper=''" "$_aw_file" 2>/dev/null; then
+			echo "  $(printf '%-12s' "$_aw_tier") already mapped — left alone."
+			continue
+		fi
+
+		agents_read_token "  $(printf '%-12s' "$_aw_tier") agent harness (Enter = this session): " harness
+		_aw_h=$_ar_val
+		agents_read_token "  $(printf '%-12s' "$_aw_tier") model id (Enter = leave unmapped): " model
+		_aw_m=$_ar_val
+
+		# An agent harness with no model is legal and means "that CLI's own
+		# default" — but only when the operator named one. Both blank is a tier
+		# deliberately left alone.
+		[ -z "$_aw_h" ] && [ -z "$_aw_m" ] && continue
+
+		if [ -n "$_aw_h" ]; then
+			case " $_aw_declared " in
+			*" $_aw_h "*) ;;
+			*) _aw_declared="$_aw_declared${_aw_declared:+ }$_aw_h" ;;
+			esac
+			agents_set "$_aw_file" "AGENT_TIER_$_aw_upper" "$_aw_h:$_aw_m"
+			eval "_aw_seen_$_aw_tier=\"\$_aw_h:\$_aw_m\""
+		else
+			agents_set "$_aw_file" "AGENT_TIER_$_aw_upper" "$_aw_m"
+			eval "_aw_seen_$_aw_tier=\"\$_aw_m\""
+		fi
+	done
+
+	[ -n "$_aw_declared" ] && agents_set "$_aw_file" "AGENT_HARNESSES" "$_aw_declared"
+
+	# The one cross-check worth making here, because it is the one the kit
+	# argues about out loud: a reviewer resolving to the same thing as the
+	# implementer is an editorial pass wearing a second hat. Say so; do not
+	# refuse it, because an operator may have exactly one model.
+	_aw_i=$(eval "printf '%s' \"\${_aw_seen_implementer:-}\"")
+	_aw_r=$(eval "printf '%s' \"\${_aw_seen_reviewer:-}\"")
+	if [ -n "$_aw_i" ] && [ "$_aw_i" = "$_aw_r" ]; then
+		echo ""
+		echo "  note: reviewer and implementer resolve to the same thing ($_aw_i)."
+		echo "        A review from the model that wrote the code shares its blind"
+		echo "        spots. Map them apart in scripts/agents.config.sh when you can."
+	fi
+
+	if [ -n "$_aw_declared" ]; then
+		echo ""
+		echo "  You named these agent harnesses: $_aw_declared"
+		echo "  Each still needs its invocation before anything can be dispatched:"
+		for _aw_h in $_aw_declared; do
+			_aw_hu=$(printf '%s' "$_aw_h" | tr 'a-z-' 'A-Z_')
+			echo "    AGENT_HARNESS_${_aw_hu}_CMD='...  {model_flag} < {prompt_file}'"
+			echo "    AGENT_HARNESS_${_aw_hu}_MODEL_FLAG='...  {model}'"
+		done
+		echo "  Those lines carry the autonomy flags a headless worker runs under, so"
+		echo "  the kit will not write them for you. scripts/agents.config.sh says how,"
+		echo "  and 'sh scripts/agent-dispatch.sh reviewer --prompt x --dry-run' checks"
+		echo "  a wiring without spending a token."
+	fi
+	echo ""
+}
+
 # --- the marker pair ---------------------------------------------------------
 # A marked file carries the skill's block between a matched pair of comment
 # markers. The marker lines themselves ALWAYS go, so a project never inherits
@@ -341,7 +546,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
 # script, adds its entry here.
-KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh"
+KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/agent-roster.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -397,7 +602,7 @@ if [ "$ADOPT" = 1 ]; then
 	for a_arg in "$@"; do
 		case "$a_arg" in
 		--adopt) ;;
-		-*) opt_flag "$a_arg" || die "unknown option '$a_arg' for --adopt. Supported: $(opt_supported)." ;;
+		-*) agents_flag "$a_arg" || opt_flag "$a_arg" || die "unknown option '$a_arg' for --adopt. Supported: $(opt_supported), --with-agents, --no-agents." ;;
 		*)
 			if [ "$a_have" = 0 ]; then
 				a_name=$a_arg a_have=1
@@ -698,6 +903,12 @@ if [ "$ADOPT" = 1 ]; then
 		constitution/local-engineering.md.template constitution/local-workflow.md.template; do
 		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
 	done
+
+	# Asked once the file it writes into is actually here. In this arm it may
+	# have been KEPT rather than copied, in which case it is the project's own
+	# and probably already filled — agents_set only ever rewrites the shipped
+	# empty form, so a filled policy file is left alone either way.
+	agents_wizard "scripts/agents.config.sh"
 	for _o in $OPTIONAL_SKILLS; do
 		[ "$(opt_choice "$_o")" = yes ] || continue
 		for f in $(opt_field "$_o" carries); do
@@ -904,7 +1115,7 @@ while [ $# -gt 0 ]; do
 		done
 		break
 		;;
-	-*) opt_flag "$1" || die "unknown option '$1'. Supported: $(opt_supported)." ;;
+	-*) agents_flag "$1" || opt_flag "$1" || die "unknown option '$1'. Supported: $(opt_supported), --with-agents, --no-agents." ;;
 	*) take_positional "$1" ;;
 	esac
 	shift
@@ -1108,6 +1319,12 @@ done
 # Only if now empty — a project that already has its own workflows keeps them.
 rmdir setup tests .github/workflows .github 2>/dev/null || true
 
+# --- the agent roster -------------------------------------------------------
+# Asked LAST, after the tree is final, for two reasons. It is a question about
+# models rather than about the kit, so it does not belong among the stamping;
+# and it is the one question whose answer changes the next-steps note below.
+agents_wizard "scripts/agents.config.sh"
+
 # --- next steps -------------------------------------------------------------
 cat <<EOF
 
@@ -1143,10 +1360,17 @@ Next:
   5. edit scripts/agents.config.sh
                                   map the four capability tiers (planner,
                                   implementer, mechanical, reviewer) onto your
-                                  provider's model ids. Unmapped is a working
-                                  state: every tier then runs on the session's
-                                  own model and the resolver warns once. The
-                                  kit ships no model id on purpose — they rot.
+                                  provider's model ids — the prompt above wrote
+                                  whatever you answered, and nothing if you
+                                  skipped. Unmapped is a working state: every
+                                  tier then runs on the session's own model and
+                                  the resolver warns once. The kit ships no
+                                  model id on purpose — they rot. A tier may
+                                  also name an AGENT HARNESS, which is how a
+                                  reviewer reaches a different vendor than the
+                                  implementer; that file says how, and
+                                  scripts/agent-dispatch.sh --dry-run checks a
+                                  wiring without spending a token.
   6. fill in docs/diary.md        the "Current state" block at the top is what
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is

@@ -488,11 +488,18 @@
 # .agents/skills/implement/SKILL.md and .agents/skills/housekeeping/CHECKLIST.md
 # say which harness they mean at every use the gate flagged.
 # scripts/agents.config.sh — yours, and still shipped empty — documents the
-# third axis and adds AGENT_HARNESSES beside the tier mapping.
-# tests/agent-harness.test.sh and tests/agent-dispatch.test.sh are the axis's
-# suites, named in the README's runnable list and wired into the kit's own
-# guards workflow; the dispatcher's drives a stub agent harness rather than a
-# vendor, so the suite tests the wiring instead of somebody's account.
+# third axis and adds AGENT_HARNESSES beside the tier mapping, and the two
+# invocation templates each declared agent harness needs. bootstrap.sh offers
+# to fill it: an agent-roster prompt that ASKS and records the operator's
+# answer and suggests neither a model id nor an agent harness — a hardcoded
+# list of vendor CLIs to probe PATH for would be the kit naming vendors' tools
+# just as a model id would. --with-agents / --no-agents skip the question, and
+# so does having no terminal.
+# tests/agent-harness.test.sh, tests/agent-dispatch.test.sh and
+# tests/agent-roster.test.sh are the axis's suites, named in the README's
+# runnable list and wired into the kit's own guards workflow; the dispatcher's
+# drives a stub agent harness rather than a vendor, so the suite tests the
+# wiring instead of somebody's account.
 # .gitignore now excludes worktree/, making hard rule 1's claim about version
 # control true, and tests/self-host.test.sh holds it against git rather than
 # against the file. tests/implement-deliver.test.sh matches the delivery

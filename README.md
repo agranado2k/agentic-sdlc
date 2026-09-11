@@ -655,6 +655,7 @@ sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not g
 sh tests/agents-tiers.test.sh                          # the capability-tier resolver
 sh tests/agent-harness.test.sh                         # the agent-harness axis of that resolver
 sh tests/agent-dispatch.test.sh                        # running a tier on another agent harness
+sh tests/agent-roster.test.sh                          # bootstrap's agent-roster prompt
 sh tests/implement-deliver.test.sh                     # /implement's Deliver phase
 sh tests/ai-review-template.test.sh                    # the cross-provider review template
 sh tests/dogfood-optin.test.sh                         # the one optional skill, both answers
