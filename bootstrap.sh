@@ -216,17 +216,16 @@ opt_decide() {
 # prompt of the tool that exists to prevent exactly that.
 # tests/agent-roster.test.sh holds this file to carrying no model id.
 #
-# WHAT IT MAY DO: look at PATH. Which agent CLIs are installed is a FACT about
-# this machine at this moment, not a standing instruction, and a fact goes
-# stale by disappearing rather than by lying.
+# IT DOES NOT PROBE FOR AGENT CLIs EITHER, and that was a real decision rather
+# than an oversight. A hardcoded list of vendor CLI names to look for on PATH
+# is still the kit naming vendors' tools, which ADR-0005's second driver
+# forbids in the same breath as model identifiers. The argument for it — a
+# probe can only under-report, so it goes stale by finding nothing rather than
+# by being wrong — is true and was not enough: the list would still be the kit
+# asserting which agent harnesses exist in the world, and that assertion rots
+# on somebody else's schedule.
 #
-# The candidate list below is therefore a PROBE, never a roster. Its only
-# failure mode is under-reporting — an agent harness the kit has never heard of
-# is typed in by hand at the prompt, and a candidate that vanishes from the
-# world is silently never found. It cannot assert anything false about the
-# machine it runs on, which is what makes hardcoding it acceptable where
-# hardcoding a model id is not.
-AGENTS_PROBE='claude codex gemini opencode'
+# So the operator names their own, the same way they name their own models.
 agents_choice=ask
 
 # agents_flag <arg> — --with-agents / --no-agents. Tried BEFORE opt_flag, which
@@ -238,15 +237,6 @@ agents_flag() {
 	*) return 1 ;;
 	esac
 	return 0
-}
-
-# agents_detect — the installed candidates, space-separated, on stdout.
-agents_detect() {
-	_ad_found=""
-	for _ad in $AGENTS_PROBE; do
-		command -v "$_ad" >/dev/null 2>&1 && _ad_found="$_ad_found${_ad_found:+ }$_ad"
-	done
-	printf '%s' "$_ad_found"
 }
 
 # agents_set <file> <variable> <value> — fill ONE shipped-empty assignment.
@@ -335,17 +325,12 @@ agents_wizard() {
 		esac
 	fi
 
-	_aw_found=$(agents_detect)
 	echo ""
-	if [ -n "$_aw_found" ]; then
-		echo "  Agent CLIs found on PATH: $_aw_found"
-		echo "  Naming one runs that tier THERE — which is how a reviewer reaches a"
-		echo "  different vendor than the implementer. Enter alone keeps a tier in"
-		echo "  whatever session is already running."
-	else
-		echo "  No agent CLI the kit probes for is on PATH. You can still name one."
-	fi
-	echo "  Model ids are yours: type what your account can actually invoke."
+	echo "  An AGENT HARNESS is the CLI a tier's model runs in. Naming one runs"
+	echo "  that tier THERE — which is how a reviewer reaches a different vendor"
+	echo "  than the implementer. Enter alone keeps a tier in whatever session is"
+	echo "  already running, which is what every tier did before this existed."
+	echo "  Both answers are yours: the kit names no agent harness and no model."
 	echo ""
 
 	_aw_declared=""

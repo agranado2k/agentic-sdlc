@@ -148,6 +148,17 @@ else
 	pass "bootstrap.sh names nothing shaped like a model identifier"
 fi
 
+# The same rule, one level up. A hardcoded list of vendor CLIs to look for on
+# PATH is still the kit asserting which agent harnesses exist in the world —
+# ADR-0005 driver 2 forbids naming a vendor's command line in the same breath
+# as a model id. The operator names their own, as they name their own models.
+if grep -nE "command -v [\"']?(claude|codex|gemini|opencode|cursor|aider)" "$KIT/bootstrap.sh" >/dev/null 2>&1; then
+	fail "bootstrap.sh probes PATH for named vendor CLIs — the kit names no agent harness either"
+	grep -nE "command -v [\"']?(claude|codex|gemini|opencode|cursor|aider)" "$KIT/bootstrap.sh" | sed 's/^/        | /'
+else
+	pass "bootstrap.sh names no vendor CLI to probe for"
+fi
+
 # ---------------------------------------------------------------------------
 banner "2. --no-agents and no-terminal both write nothing"
 # ---------------------------------------------------------------------------
