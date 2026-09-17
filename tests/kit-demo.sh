@@ -350,8 +350,14 @@ banner "4. GREEN — the gate's own tests pass inside the project"
 # (shared invariant §3). These fixture tests ship with the project precisely so
 # a local rule change can be tested the same way.
 if [ "$HAVE_NODE" = 1 ]; then
-	assert_status 0 "harness fixture tests pass" -- \
-		node --test scripts/docs-conformance/test/claude-md-refs.test.mjs
+	# The reporter is named, not defaulted. node's default test reporter is
+	# `tap` on some versions and `spec` on others (26 prints `ℹ fail 0` where
+	# 22 printed `# fail 0`), so an assertion on the default's output is an
+	# assertion on the developer's node version — the same trap as tag.sort in
+	# docs-demo, one tool over. Pinned to TAP so the line means the same thing
+	# everywhere.
+	assert_status 0 "docs harness fixture tests pass" -- \
+		node --test --test-reporter=tap scripts/docs-conformance/test/claude-md-refs.test.mjs
 	assert_out_has "# fail 0"
 else
 	skip "harness fixture tests (no node)"
