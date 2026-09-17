@@ -170,6 +170,13 @@ AGENT_HARNESSES=''
 # radius, and the kit writes none of them for you. Shared invariant §7 still
 # holds whatever you write: a worker does not push and does not merge.
 #
+# AN APPROVAL-GATED CLI NEEDS ITS POLICY WIRED before it can be dispatched to.
+# Headless, there is nobody to approve a tool call: a reviewer told to run
+# `git diff` under an approval mode waits forever. Either the invocation
+# carries the CLI's own headless policy (its policy file, its allow-list — the
+# kit names none), or the dispatch carries --timeout <seconds>, which kills
+# the worker's process tree and exits 124. Both is the honest wiring.
+#
 # Check a wiring without spending a token:
 #   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
 
