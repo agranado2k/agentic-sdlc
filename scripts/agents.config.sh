@@ -179,6 +179,10 @@ AGENT_HARNESSES=''
 #
 # Check a wiring without spending a token:
 #   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
+#
+# A prompt template's %%MARKER%% is filled with --set NAME=VALUE, or with
+# --set-file NAME=path for a value too large for a command line — a diff a
+# reviewer worker reads is the case it exists for.
 
 # ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage

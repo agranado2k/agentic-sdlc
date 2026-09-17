@@ -184,6 +184,35 @@ s_assert_out_has 'no header here' "a prompt with no header passes through whole"
 dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
 s_assert_status 2 "--set without NAME=VALUE is refused"
 
+# --set-file NAME=path — for a value too large for argv. A --set value is one
+# argv element, so a big diff hits the exec ceiling (~128 KiB single arg on
+# Linux); the ticket names "a diff" as a value, so the limit is reachable by
+# the intended use. The file's bytes become the value, whole.
+BIG="$SCRATCH/big-value"
+# A megabyte, well past the argv ceiling, with the hazards --set already handles.
+awk 'BEGIN { for (i = 0; i < 20000; i++) print "line " i " with $(echo x) and %%B%% and | pipe" }' >"$BIG"
+printf 'Diff follows:\n%%%%DIFF%%%%\nend\n' >"$SCRATCH/df.md"
+dispatch implementer --prompt-file "$SCRATCH/df.md" --set-file "DIFF=$BIG" --set 'B=bee'
+s_assert_status 0 "a value of a megabyte is delivered from a file"
+s_assert_out_has "line 19999 with" "…whole, to the last line"
+s_assert_out_has 'line 0 with $(echo x) and %%B%% and | pipe' "…unexpanded, and a marker inside it is not re-scanned"
+
+# --set and --set-file mix, and order is preserved.
+printf 'A is %%%%A%%%%\nF is %%%%F%%%%\n' >"$SCRATCH/mix.md"
+printf 'from-a-file\n' >"$SCRATCH/fval"
+dispatch implementer --prompt-file "$SCRATCH/mix.md" --set 'A=inline' --set-file "F=$SCRATCH/fval"
+s_assert_out_has "A is inline" "--set fills its marker when composed with --set-file"
+s_assert_out_has "F is from-a-file" "…and --set-file fills its own from the file"
+
+dispatch implementer --prompt 'x' --set-file 'F=/no/such/file/here'
+s_assert_status 2 "--set-file with a missing path is refused before anything runs"
+
+dispatch implementer --prompt 'x' --set-file 'NOPAIR'
+s_assert_status 2 "--set-file without NAME=path is refused"
+
+dispatch implementer --prompt 'x' --set-file "1bad=$BIG"
+s_assert_status 2 "--set-file NAME is shape-checked like --set"
+
 # A ticket body is untrusted content, and %%BODY%% is exactly where one goes.
 # The pairs used to be joined into one string and read back line by line, so a
 # multi-line value was truncated at its first newline AND any line inside it
