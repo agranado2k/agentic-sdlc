@@ -74,9 +74,10 @@ LIB="$_here/agents.lib.sh"
 
 usage() {
 	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
-	echo "                          [--set NAME=VALUE ...] [--dry-run]" >&2
+	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>] [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
+	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
 	echo "             the prompt; run nothing." >&2
 }
@@ -86,7 +87,7 @@ die() {
 	exit 2
 }
 
-TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0
+TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -125,6 +126,14 @@ while [ $# -gt 0 ]; do
 		SETS_N=$((SETS_N + 1))
 		eval "PD_K_$SETS_N=\$_sk; PD_V_$SETS_N=\$_sv"
 		eval "export PD_K_$SETS_N PD_V_$SETS_N"
+		shift 2
+		;;
+	--timeout)
+		[ $# -ge 2 ] || die "--timeout needs a number of seconds"
+		case "$2" in
+		'' | *[!0123456789]*) die "--timeout takes a whole number of seconds, got '$2'" ;;
+		esac
+		TIMEOUT=$2
 		shift 2
 		;;
 	--dry-run)
@@ -432,6 +441,7 @@ if [ "$DRY_RUN" = 1 ]; then
 	[ -n "$_shown_model" ] || _shown_model="<the default model of that agent harness>"
 	printf 'model:          %s\n' "$_shown_model"
 	printf 'command:        %s\n' "$CMD"
+	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
 	printf '\n--- end prompt ---\n'
@@ -447,4 +457,55 @@ echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<de
 # that redirects `< {prompt_file}` still gets it — a redirect inside the
 # eval'd command wins over this outer one — and a template that does not gets
 # nothing, which is what it would have got from a terminal that had moved on.
-eval "$CMD" </dev/null
+if [ -z "$TIMEOUT" ]; then
+	eval "$CMD" </dev/null
+	exit $?
+fi
+
+# --- with a timeout ---------------------------------------------------------
+# Headless agent CLIs gate tool calls on approvals, and headless there is no
+# human: a reviewer told to run `git diff` in an approval-gated mode waits
+# forever. Found live; only an external timeout ended it. The kit writes no
+# autonomy flags — that posture is the operator's — but a dispatch that can
+# never return is a different thing from one that returns a refusal.
+#
+# The worker's whole process TREE is killed, not just the shell that ran the
+# template: an agent CLI is a node or python process under that shell, and
+# killing the shell alone orphans it with the pty and the API call still
+# open. setsid would give a group to signal but is not POSIX; walking the
+# tree with `ps -o pid= -o ppid=` is, so that is what this does.
+_kill_tree() {
+	for _kt_child in $(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }'); do
+		_kill_tree "$_kt_child"
+	done
+	kill -TERM "$1" 2>/dev/null
+}
+sh -c "$CMD" </dev/null &
+_worker=$!
+(
+	sleep "$TIMEOUT"
+	# Say so BEFORE killing: the worker's shell may take the signal down with
+	# any message this subshell would print after it.
+	echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
+	_kill_tree "$_worker"
+	sleep 1
+	# TERM is the polite one; anything still standing gets KILL.
+	for _kt_pid in $(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$_worker" '$2 == p { print $1 }') "$_worker"; do
+		kill -KILL "$_kt_pid" 2>/dev/null
+	done
+) &
+_watchdog=$!
+wait "$_worker"
+_status=$?
+# The watchdog is the dispatcher's own child: a worker that finished in time
+# must not leave a sleeping process behind for the caller to wonder about.
+kill "$_watchdog" 2>/dev/null
+wait "$_watchdog" 2>/dev/null
+# A worker killed by the watchdog reports 143 (TERM) or 137 (KILL); the caller
+# is told 124 — timeout(1)'s convention, and distinct from anything a worker
+# or this script otherwise exits with — so a timeout is never mistaken for a
+# worker that chose to exit with a signal's number.
+case "$_status" in
+143 | 137) exit 124 ;;
+*) exit "$_status" ;;
+esac

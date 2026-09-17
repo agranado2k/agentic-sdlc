@@ -415,6 +415,71 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "A worker that never returns is killed, and says so distinctly"
+# ---------------------------------------------------------------------------
+# Headless agent CLIs gate tool calls on approvals, and headless there is no
+# human — a reviewer told to run git diff in an approval-gated mode waits
+# forever. Found live; only an external timeout ended it. A dispatch that can
+# never return is a different thing from one that returns a refusal.
+SLEEPER="$SCRATCH/sleeper"
+cat >"$SLEEPER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "started"
+sleep 30
+echo "finished"
+EOF
+chmod +x "$SLEEPER"
+CFG_SLOW="$SCRATCH/slow.config.sh"
+cat >"$CFG_SLOW" <<EOF
+AGENT_HARNESSES='slow'
+AGENT_HARNESS_SLOW_CMD='$SLEEPER {model_flag} < {prompt_file}'
+AGENT_HARNESS_SLOW_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='slow:'
+EOF
+AGENTS_CONFIG="$CFG_SLOW"
+export AGENTS_CONFIG
+
+start=$(date +%s)
+dispatch implementer --prompt 'x' --timeout 2
+took=$(( $(date +%s) - start ))
+s_assert_status 124 "a worker past --timeout is killed, with a status the caller can tell from the worker's own"
+s_assert_out_has "started" "…after whatever it had already written"
+s_assert_out_lacks "finished" "…and before it could finish"
+s_assert_err_has "timed out"
+[ "$took" -lt 10 ] &&
+	pass "…within the timeout, not the worker's own duration (${took}s)" ||
+	fail "the dispatch took ${took}s — the timeout did not fire"
+# Nothing left behind: the worker's process group is gone.
+sleep 1
+if pgrep -f "$SLEEPER" >/dev/null 2>&1; then
+	fail "the timed-out worker is still running — its process group was not killed"
+	pkill -f "$SLEEPER" 2>/dev/null
+else
+	pass "the timed-out worker's process group is gone"
+fi
+
+dispatch implementer --prompt 'x' --timeout 2 --dry-run
+s_assert_out_has "timeout:        2s" "--dry-run shows the timeout"
+
+dispatch implementer --prompt 'x' --timeout abc
+s_assert_status 2 "a timeout that is not a whole number of seconds is refused"
+
+# A worker that finishes in time is unaffected, and exit passthrough holds.
+cat >"$SLEEPER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "quick"
+exit 5
+EOF
+dispatch implementer --prompt 'x' --timeout 10
+s_assert_status 5 "a worker that finishes inside --timeout passes its own status through"
+s_assert_out_has "quick" "…and its output"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
 # ---------------------------------------------------------------------------
 EXITER="$SCRATCH/exiter"
