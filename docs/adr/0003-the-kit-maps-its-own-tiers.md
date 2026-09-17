@@ -4,7 +4,7 @@
 - **Date**: 2026-09-02
 - **Deciders**: Arthur Granado (operator); recorded by the first housekeeping pass, item 3
 - **Supersedes / amends**: supersedes the index's diary-recorded decision of 2026-08-27, "the kit's `scripts/agents.config.sh` stays unmapped — the kit names no model anywhere, including in its own copy of the tier mapping" (the practice dates from that day; this record is the supersession the index owed); amends ADR-0001 §4 in one respect — five records under `docs/adr/` now, not four, and bootstrap's kit-own list strips this one too
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-09-17: the arrangement is general; guards are its second instance — see the end of this record)
 
 ## Context and problem statement
 
@@ -92,3 +92,30 @@ Chosen: **a kit-only mapping, never shipped**.
   ticket #133 of PRD #124.
 - Related: ADR-0001 (the kit follows its own framework); the root manual's
   "Capability tiers" section.
+
+### Amendment, 2026-09-17 — the arrangement is general, and guards are its second instance
+
+This record was written for one policy file and reads as if the arrangement
+were peculiar to tiers. It is not. **For any policy file the kit ships empty by
+principle** — because only the consumer can know the answer, and a shipped
+answer would rot or would be wrong for everyone — the kit keeps its OWN answer
+in a never-shipped `.kit.` twin reached through the file's existing config
+seam, with a `.kit.sh` wrapper so that every caller in this repository runs one
+command rather than remembering an environment prefix. Clauses 1–3 above are
+that rule's first instance.
+
+The second is the guard policy. `scripts/guards.config.sh` ships with
+`GUARD_SOURCE_RE` empty, so the TDD pairing guard was inactive in the one
+repository whose product is the discipline it enforces (#190). Filling in the
+shipped file was tried and two demo suites refused it: bootstrap copies that
+file into every new project, and the kit's pattern would have become every
+consumer's definition of source. So `scripts/guards.kit.config.sh` carries the
+kit's pattern, `scripts/guards.kit.sh` is the wrapper, both are on bootstrap's
+kit-only list, and `.githooks/pre-push` runs the wrapper when it exists — and
+defers to an operator's own exported `GUARDS_CONFIG`.
+
+ADR-0001 §5 and §8 say no kit-only policy file exists. That was true when
+written and has not been since this record's first instance; it is corrected
+here rather than by editing ADR-0001, whose text stands as the record of what
+was decided then. The general rule replaces the per-file exception: a third
+policy file that ships empty gets the same twin and wrapper, and no new record.
