@@ -16,6 +16,23 @@ failures=0
 LAST_OUT=""
 LAST_STATUS=0
 
+# Collation is the developer's, and the suites are full of `sort`s whose output
+# is compared against strings written in one order. Under en_US.UTF-8 a
+# leading `.` is ignored, so `adapters/` sorts before `.agents/`; under C it
+# does not. self-host's delta probe failed on exactly that for the whole of a
+# release wave and was set aside as pre-existing each time.
+#
+# Pinned HERE, at source time, not in t_init: seven suites never call t_init,
+# and a pin that a suite has to opt into is the coupling this is removing.
+# Three suites source no lib at all (adapters-demo, setup-demo, kit-demo) and
+# carry the same two lines themselves. The same posture t_git_identity takes
+# for signing and hooks paths — a developer's environment does not decide what
+# a test asserts — and tests/fixture-builders.test.sh holds this one the way it
+# holds those. A suite that means to test a locale sets LC_ALL on the command
+# itself, as agents-tiers does, and a prefix still wins over an export.
+LC_ALL=C
+export LC_ALL
+
 # t_mark <NAME> — the double-brace placeholder mark, e.g. `t_mark PROJECT_OWNER`.
 #
 # Assembled from variables so no suite contains a LITERAL mark. The kit repo is
@@ -39,17 +56,6 @@ t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 t_init() {
 	SCRATCH=$(mktemp -d) || exit 2
 	trap 't_cleanup' EXIT INT TERM HUP
-	# Collation is the developer's, and twenty-nine `sort`s across ten suites
-	# compare their output against strings written in one order. Under
-	# en_US.UTF-8 a leading `.` is ignored, so `adapters/` sorts before
-	# `.agents/`; under C it does not. self-host's delta probe failed on that
-	# for the whole of a release wave and was set aside as pre-existing each
-	# time. The same neutralisation t_git_identity gives signing and hooks
-	# paths: a developer's environment does not decide what a test asserts.
-	# A suite that means to test a locale sets LC_ALL on the command itself,
-	# as agents-tiers does, and that still wins.
-	LC_ALL=C
-	export LC_ALL
 }
 
 t_cleanup() { [ -n "${SCRATCH:-}" ] && rm -rf "$SCRATCH"; }

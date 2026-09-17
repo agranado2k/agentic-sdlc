@@ -91,4 +91,22 @@ t_consumer_from "$SRCREPO" "$CONS2" "Fixture Consumer" "consumer@example.invalid
 cd "$here" || exit 2
 [ "$(git -C "$CONS2" rev-list --count HEAD)" = 1 ] && pass "a .git-bearing source leaves exactly one commit in the consumer" || fail "the source's history leaked into the consumer ($(git -C "$CONS2" rev-list --count HEAD) commits)"
 
+# ---------------------------------------------------------------------------
+banner "Sourcing the lib pins collation — the environment does not decide an order"
+# ---------------------------------------------------------------------------
+# The probe runs in a subshell whose LC_ALL is a UTF-8 locale — the one that
+# ignores a leading `.` and sorts `adapters/` before `.agents/` — then sources
+# the lib and sorts. If the lib's pin is gone, the UTF-8 order comes back and
+# this goes red. Skipped, and says so, where the locale is not installed.
+if locale -a 2>/dev/null | grep -qi '^en_US\.utf-\?8$'; then
+	# The lib path goes in as $0, not $1: tests/lib.sh derives its repo root
+	# from $0, and `sh -c` with a placeholder there would point it nowhere.
+	probe=$(LC_ALL=en_US.UTF-8 sh -c '. "$0"; printf ".agents/x\nadapters/y\n" | sort | head -n 1' "$KIT/tests/lib.sh" 2>/dev/null)
+	[ "$probe" = ".agents/x" ] &&
+		pass "after sourcing tests/lib.sh, .agents/ sorts before adapters/ even from a UTF-8 shell" ||
+		fail "the collation pin is not effective: sorted '$probe' first under en_US.UTF-8"
+else
+	skip "en_US.UTF-8 is not installed — the collation pin is NOT held on this machine"
+fi
+
 t_done "fixture builders"
