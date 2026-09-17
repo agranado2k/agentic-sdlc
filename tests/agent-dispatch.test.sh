@@ -345,6 +345,65 @@ dispatch implementer --prompt-file /dev/null
 s_assert_status 2 "an empty prompt file is refused — a worker given nothing invents something"
 
 # ---------------------------------------------------------------------------
+banner "A worker never inherits the dispatcher's stdin"
+# ---------------------------------------------------------------------------
+# Found live: a CLI that reads stdin when it is not a tty (Gemini's -p appends
+# stdin "if any") blocked forever on the dispatcher's inherited open pipe. The
+# prompt already reaches the worker by {prompt_file}, so the worker has no
+# legitimate use for the parent's stdin — it gets the prompt file when the
+# template redirects it, and nothing otherwise, never an open pipe.
+READER="$SCRATCH/stdin-reader"
+cat >"$READER" <<'EOF'
+#!/bin/sh
+n=$(cat | wc -c | tr -d ' ')
+echo "STDIN-BYTES=$n"
+EOF
+chmod +x "$READER"
+CFG_STDIN="$SCRATCH/stdin.config.sh"
+cat >"$CFG_STDIN" <<EOF
+AGENT_HARNESSES='rd'
+AGENT_HARNESS_RD_CMD='$READER {model_flag}'
+AGENT_HARNESS_RD_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='rd:'
+EOF
+AGENTS_CONFIG="$CFG_STDIN"
+export AGENTS_CONFIG
+# The dispatcher's OWN stdin is a FIFO whose write end a background process
+# holds open without writing — the shape that hung. A worker that inherits it
+# blocks until that process exits; one that does not returns at once with
+# nothing. The holder is a background job so the timing measures the
+# dispatcher, not the fixture: a `(sleep; echo) | dispatcher` pipeline would
+# have waited on its own sleep whatever the dispatcher did.
+FIFO="$SCRATCH/held-open"
+mkfifo "$FIFO"
+sleep 20 >"$FIFO" &
+holder=$!
+start=$(date +%s)
+t_run_split sh -c 'sh "$1" implementer --prompt hi <"$2"' _ "$DISPATCH" "$FIFO"
+took=$(( $(date +%s) - start ))
+kill "$holder" 2>/dev/null
+wait "$holder" 2>/dev/null
+s_assert_status 0 "a worker whose template does not redirect stdin still dispatches"
+s_assert_out_has "STDIN-BYTES=0" "…and reads NOTHING from the dispatcher's open pipe"
+[ "$took" -lt 10 ] &&
+	pass "…and returns at once rather than waiting on the pipe (${took}s)" ||
+	fail "the worker waited on the dispatcher's stdin (${took}s) — it inherited the pipe"
+
+# A template that DOES redirect from the prompt file still gets it: a redirect
+# inside the eval'd command wins over the default.
+cat >"$CFG_STDIN" <<EOF
+AGENT_HARNESSES='rd'
+AGENT_HARNESS_RD_CMD='$READER {model_flag} < {prompt_file}'
+AGENT_HARNESS_RD_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='rd:'
+EOF
+t_run_split sh "$DISPATCH" implementer --prompt "twelve bytes"
+s_assert_out_has "STDIN-BYTES=13" "a template that redirects from {prompt_file} still receives the prompt"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
 # ---------------------------------------------------------------------------
 EXITER="$SCRATCH/exiter"

@@ -439,4 +439,12 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<default>}'" >&2
-eval "$CMD"
+# The worker never inherits this script's stdin. Found live: an agent CLI that
+# reads stdin when it is not a tty blocked forever on the dispatcher's own
+# inherited pipe, and a dispatch that took fourteen seconds with </dev/null on
+# the dispatcher hung indefinitely without it. The prompt reaches the worker by
+# {prompt_file}, so it has no legitimate use for the parent's stdin: a template
+# that redirects `< {prompt_file}` still gets it — a redirect inside the
+# eval'd command wins over this outer one — and a template that does not gets
+# nothing, which is what it would have got from a terminal that had moved on.
+eval "$CMD" </dev/null
