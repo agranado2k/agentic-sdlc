@@ -337,12 +337,8 @@ s_assert_status 0 "a path containing a space dispatches"
 s_assert_out_has 'spaces are fine' "…and arrives whole, not split at the space"
 
 # $TMPDIR is somebody else's data too, so staging alone is not the fix.
-D_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
 mkdir -p "$SCRATCH/tmp;x"
-TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi' >/dev/null 2>"$D_ERR"
-S_STATUS=$?
-S_ERR=$(cat "$D_ERR")
-rm -f "$D_ERR"
+t_run_split env TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi'
 s_assert_status 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
 
 dispatch implementer --prompt-file /dev/null

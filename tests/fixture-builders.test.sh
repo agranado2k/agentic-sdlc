@@ -109,4 +109,24 @@ else
 	skip "en_US.UTF-8 is not installed — the collation pin is NOT held on this machine"
 fi
 
+# ---------------------------------------------------------------------------
+banner "The split-stream helpers can go red"
+# ---------------------------------------------------------------------------
+# Three suites lean on t_run_split and the s_assert_* family for every claim
+# they make. The suites only ever drive them green, so a helper that always
+# passed would pass every suite. Each is held to printing FAIL on a mismatch —
+# in a subshell, so the failures counted here are this section's own.
+t_run_split sh -c 'echo out; echo err >&2; exit 3'
+[ "$S_OUT" = "out" ] && [ "$S_ERR" = "err" ] && [ "$S_STATUS" = 3 ] &&
+	pass "t_run_split keeps stdout, stderr and status apart" ||
+	fail "t_run_split mixed its streams: out='$S_OUT' err='$S_ERR' status=$S_STATUS"
+red() { (failures=0; "$@" >/dev/null 2>&1; [ "$failures" = 1 ]); }
+red s_assert_resolved "not-out" x   && pass "s_assert_resolved fails on a wrong answer"      || fail "s_assert_resolved passed a wrong answer"
+red s_assert_out_is "not-out" x     && pass "s_assert_out_is fails on a wrong answer"        || fail "s_assert_out_is passed a wrong answer"
+red s_assert_status 0 x             && pass "s_assert_status fails on a wrong status"        || fail "s_assert_status passed a wrong status"
+red s_assert_out_has "absent" x     && pass "s_assert_out_has fails on a missing needle"     || fail "s_assert_out_has passed a missing needle"
+red s_assert_out_lacks "out" x      && pass "s_assert_out_lacks fails on a present needle"   || fail "s_assert_out_lacks passed a present needle"
+red s_assert_err_has "absent"       && pass "s_assert_err_has fails on a missing needle"     || fail "s_assert_err_has passed a missing needle"
+red s_assert_err_lacks "err"        && pass "s_assert_err_lacks fails on a present needle"   || fail "s_assert_err_lacks passed a present needle"
+
 t_done "fixture builders"

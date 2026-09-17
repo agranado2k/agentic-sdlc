@@ -268,28 +268,24 @@ s_assert_resolved 'alphabet:some-model' "…and neither does a token that merely
 # The escape hatch the rest of the file honours has to cover the new warnings
 # too, or a caller that silenced the resolver still gets noise on stdout's
 # neighbour.
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-AGENTS_TIER_QUIET=1 sh "$LIB" --model planner 2>"$R_ERR" >/dev/null
-if [ -s "$R_ERR" ]; then
+t_run_split env AGENTS_TIER_QUIET=1 sh "$LIB" --model planner
+if [ -n "$S_ERR" ]; then
 	fail "AGENTS_TIER_QUIET=1 did not silence the malformed/undeclared warning"
-	sed 's/^/        | /' "$R_ERR"
+	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
 else
 	pass "AGENTS_TIER_QUIET=1 silences the new warnings, as it does the old one"
 fi
-rm -f "$R_ERR"
 
 # Once per process, not once per resolution: a script resolving four tiers
 # should hear about a broken declaration once.
-R_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-sh -c '. "$1"; _agents_here=$(dirname "$1"); resolve_tier --model planner >/dev/null; resolve_tier --model implementer >/dev/null' _ "$LIB" 2>"$R_ERR"
-count=$(grep -c "resolves as a MODEL ID" "$R_ERR" 2>/dev/null || echo 0)
+t_run_split sh -c '. "$1"; _agents_here=$(dirname "$1"); resolve_tier --model planner >/dev/null; resolve_tier --model implementer >/dev/null' _ "$LIB"
+count=$(printf '%s\n' "$S_ERR" | grep -c "resolves as a MODEL ID" 2>/dev/null || echo 0)
 if [ "$count" = 1 ]; then
 	pass "the warning is memoised per process — two resolutions, one warning"
 else
 	fail "expected exactly one warning across two resolutions, got $count"
-	sed 's/^/        | /' "$R_ERR"
+	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
 fi
-rm -f "$R_ERR"
 
 # ---------------------------------------------------------------------------
 banner "A colon in the MODEL half survives the split"
