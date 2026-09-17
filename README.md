@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.17.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.18.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
