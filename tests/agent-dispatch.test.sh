@@ -415,6 +415,202 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "A worker that never returns is killed, and says so distinctly"
+# ---------------------------------------------------------------------------
+# Headless agent CLIs gate tool calls on approvals, and headless there is no
+# human — a reviewer told to run git diff in an approval-gated mode waits
+# forever. Found live; only an external timeout ended it.
+#
+# These legs write the worker's stdout to a FILE and read it back, never
+# through $(...): a command substitution returns only when every holder of
+# its stdout has exited, so a survivor would make the capture wait for it and
+# a "nothing left behind" assertion could never fail on its own. And each
+# sleeper writes its pid to a file, so survival is asserted with kill -0
+# rather than inferred from the capture returning.
+SLEEPER="$SCRATCH/sleeper"
+PIDFILE="$SCRATCH/sleeper.pid"
+OUTFILE="$SCRATCH/sleeper.out"
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "\$\$" >"$PIDFILE"
+echo "started"
+sleep 30
+echo "finished"
+EOF
+chmod +x "$SLEEPER"
+CFG_SLOW="$SCRATCH/slow.config.sh"
+cat >"$CFG_SLOW" <<EOF
+AGENT_HARNESSES='slow'
+AGENT_HARNESS_SLOW_CMD='$SLEEPER {model_flag} < {prompt_file}'
+AGENT_HARNESS_SLOW_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='slow:'
+EOF
+AGENTS_CONFIG="$CFG_SLOW"
+export AGENTS_CONFIG
+
+start=$(date +%s)
+sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>"$SCRATCH/sleeper.err"
+S_STATUS=$?
+took=$(( $(date +%s) - start ))
+S_OUT=$(cat "$OUTFILE"); S_ERR=$(cat "$SCRATCH/sleeper.err")
+s_assert_status 124 "a worker past --timeout is killed, with a status the caller can tell from the worker's own"
+s_assert_out_has "started" "…after whatever it had already written"
+s_assert_out_lacks "finished" "…and before it could finish"
+s_assert_err_has "timed out"
+[ "$took" -lt 10 ] &&
+	pass "…within the timeout, not the worker's own duration (${took}s)" ||
+	fail "the dispatch took ${took}s — the timeout did not fire"
+sleep 1
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+	fail "the timed-out worker (pid $(cat "$PIDFILE")) is still running — the tree was not killed"
+	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+else
+	pass "the timed-out worker is gone"
+fi
+
+# A worker that IGNORES TERM. This is the case the first version got wrong:
+# it signalled the tree after TERM had already reparented the survivors, so
+# the KILL pass found nothing and a TERM-ignoring worker ran to completion.
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+trap '' TERM
+cat >/dev/null
+echo "\$\$" >"$PIDFILE"
+echo "stubborn"
+sleep 30
+echo "finished"
+EOF
+start=$(date +%s)
+sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>/dev/null
+S_STATUS=$?
+took=$(( $(date +%s) - start ))
+S_OUT=$(cat "$OUTFILE")
+s_assert_status 124 "a worker that ignores TERM is still reported as timed out"
+s_assert_out_lacks "finished" "…and did not run to completion"
+[ "$took" -lt 10 ] &&
+	pass "…and the dispatch returned inside the timeout plus grace (${took}s)" ||
+	fail "the dispatch took ${took}s — KILL never followed TERM"
+sleep 1
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+	fail "the TERM-ignoring worker survived — KILL was never sent to the snapshotted tree"
+	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+else
+	pass "the TERM-ignoring worker is gone — KILL followed TERM"
+fi
+
+# A worker whose CHILD ignores TERM and would be reparented when the worker
+# dies. The snapshot must be taken before the first signal, or the child is
+# no longer under the worker's pid when the KILL pass looks.
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+sh -c 'trap "" TERM; echo \$\$ >"$PIDFILE"; sleep 30' &
+echo "parent"
+wait
+echo "finished"
+EOF
+sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>/dev/null
+S_STATUS=$?
+s_assert_status 124 "a worker whose child ignores TERM is reported as timed out"
+sleep 1
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+	fail "the reparented grandchild survived — the tree was walked after TERM, not before"
+	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+else
+	pass "the grandchild is gone — the tree was snapshotted before the first signal"
+fi
+
+# A worker that traps TERM and exits 0 must NOT read as success, and one that
+# kills itself must NOT read as a timeout: the verdict is the watchdog's flag,
+# not the worker's exit status.
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+trap 'exit 0' TERM
+cat >/dev/null
+sleep 30
+EOF
+sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >/dev/null 2>&1
+S_STATUS=$?
+s_assert_status 124 "a worker that traps TERM and exits 0 is still a timeout — the verdict is the watchdog's"
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+kill -TERM \$\$
+EOF
+sh "$DISPATCH" implementer --prompt 'x' --timeout 30 >/dev/null 2>"$SCRATCH/self.err"
+S_STATUS=$?
+S_ERR=$(cat "$SCRATCH/self.err")
+[ "$S_STATUS" = 143 ] && pass "a worker that kills itself with TERM is reported as 143, not 124" ||
+	fail "a self-killed worker was reported as $S_STATUS"
+s_assert_err_lacks "timed out"
+
+# A FAST worker under a long --timeout must not cost the timeout: killing the
+# watchdog without its sleep left `sleep N` holding the caller's stdout, and
+# every capturing caller waited the full N.
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "quick"
+exit 5
+EOF
+start=$(date +%s)
+dispatch implementer --prompt 'x' --timeout 20
+took=$(( $(date +%s) - start ))
+s_assert_status 5 "a worker that finishes inside --timeout passes its own status through"
+s_assert_out_has "quick" "…and its output"
+[ "$took" -lt 8 ] &&
+	pass "…and a capturing caller returns when the worker does, not when the timeout would (${took}s)" ||
+	fail "a fast worker cost ${took}s — the watchdog's sleep was left holding stdout"
+# And nothing of the dispatcher's is left running.
+sleep 1
+# Exact-args match, not `pgrep -f`: a loose pattern matches any process whose
+# command line mentions the number — including the suite's own — and counted
+# three ghosts here before this line was written.
+sleeps_alive() { ps -eo args= 2>/dev/null | awk -v n="$1" '$1 == "sleep" && $2 == n' | wc -l | tr -d ' '; }
+leftover=$(sleeps_alive 20)
+[ "$leftover" = 0 ] &&
+	pass "the watchdog's sleep is gone with the watchdog" ||
+	fail "$leftover 'sleep 20' still running — the watchdog was killed without its sleep"
+
+dispatch implementer --prompt 'x' --timeout 2 --dry-run
+s_assert_out_has "timeout:        2s" "--dry-run shows the timeout"
+s_assert_out_lacks "quick" "…and never started the worker"
+dispatch implementer --prompt 'x' --timeout abc
+s_assert_status 2 "a timeout that is not a whole number of seconds is refused"
+dispatch implementer --prompt 'x' --timeout 0
+s_assert_status 2 "--timeout 0 is refused — it is not a timeout"
+
+# Signalling the DISPATCHER takes the worker with it. Backgrounded children of
+# a non-interactive shell start with SIGINT ignored, so without a trap a
+# Ctrl-C on the dispatcher left the worker running with no timeout left.
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "\$\$" >"$PIDFILE"
+sleep 30
+EOF
+sh "$DISPATCH" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
+disp=$!
+sleep 2
+kill -TERM "$disp" 2>/dev/null
+wait "$disp" 2>/dev/null
+disp_status=$?
+sleep 1
+[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143" || fail "a TERM to the dispatcher exited $disp_status"
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+	fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left"
+	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+else
+	pass "a TERM to the dispatcher takes the worker down with it"
+fi
+leftover=$(sleeps_alive 50)
+[ "$leftover" = 0 ] && pass "…and the watchdog's sleep" || fail "$leftover watchdog sleep(s) outlived the dispatcher"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
 # ---------------------------------------------------------------------------
 EXITER="$SCRATCH/exiter"

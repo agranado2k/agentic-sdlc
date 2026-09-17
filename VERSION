@@ -517,8 +517,17 @@
 # blocked forever on the inherited open pipe, and returned in fourteen seconds
 # with the pipe closed. The prompt reaches a worker by {prompt_file}, so a
 # template that redirects from it still gets it and one that does not gets
-# nothing. UPDATING.md's transcripts are re-captured to the new version and
-# nothing in the recipe moved.
+# nothing. It also gains --timeout <seconds>: headless agent CLIs gate tool
+# calls on approvals, and headless there is no human, so a worker told to run
+# `git diff` in an approval-gated mode waited forever — found live. The
+# worker's whole process tree is killed and the caller sees 124, timeout(1)'s
+# convention and distinct from anything a worker exits with; the verdict is a
+# flag the watchdog writes, never an inference from the worker's own status.
+# scripts/agents.config.sh — yours — says what an approval-gated CLI needs
+# before it can be dispatched to: its own headless policy, or a timeout, or
+# both. UPDATING.md's
+# transcripts are re-captured to the new version and nothing in the recipe
+# moved.
 #   A project that has never dispatched to another agent harness cannot tell
 # this release from the last.
 #   NON-MANIFEST HALF, enumerated. tests/agent-dispatch.test.sh holds the
