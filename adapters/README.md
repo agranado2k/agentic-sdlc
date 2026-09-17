@@ -29,10 +29,13 @@ rather than inferring it from a regex example in a comment.
 
 Note that the adapters answer different *kinds* of question. `node-ts/` and
 `ruby/` are **stack** adapters: copy from one only if your stack matches it.
-`claude-code/` is a **harness** adapter: it holds the one wiring detail the
-tier resolver cannot state portably — which parameter of a spawn call takes a
-model identifier. If you drive the kit with a different harness, that is the
-question to answer, and the answer belongs in a sibling directory here.
+`claude-code/` and `gemini-cli/` are **agent-harness** adapters, one per half
+of the same feature: `claude-code/` holds where a model id goes when a session
+spawns a subagent *in* itself, and `gemini-cli/` holds the three details
+`scripts/agent-dispatch.sh` needs to run a tier *in another* agent harness —
+neither statable portably, because both are the agent harness's own. If you
+drive the kit with a different agent harness, those are the questions to
+answer, and the answers belong in a sibling directory here.
 
 ## Dormant by design — and why this directory is still in your repo
 

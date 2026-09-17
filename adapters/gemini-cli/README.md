@@ -20,7 +20,10 @@ each one, skipped, produces a hang or a refusal rather than an error.
 
 ```sh
 AGENT_HARNESSES='gemini'
-AGENT_HARNESS_GEMINI_CMD='gemini --skip-trust --policy <your policy file> {model_flag} -p "$(cat {prompt_file})"'
+# POLICY_FILE below is a placeholder — replace the whole word with a real path.
+# It is written unquoted here only so this block reads; in your own config it is
+# a literal path.
+AGENT_HARNESS_GEMINI_CMD='gemini --skip-trust --policy POLICY_FILE {model_flag} < {prompt_file}'
 AGENT_HARNESS_GEMINI_MODEL_FLAG='-m {model}'
 AGENT_TIER_REVIEWER='gemini:'
 ```
@@ -35,22 +38,26 @@ Then, before spending a token:
 sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
 ```
 
-## 1/3 — The prompt goes in as an argument, not on stdin
+## 1/3 — The prompt goes in on stdin, and that is all
 
-Gemini does not read its prompt from stdin headlessly. Its `-p` flag says the
-prompt is "appended to input on stdin (if any)" — but an *empty* `-p` falls
-back to interactive mode and waits on a terminal that is not there. A template
-written the way the dispatcher's own examples are, `< {prompt_file}`, hangs.
+Gemini reads a redirected prompt: `gemini < prompt.md` (no `-p`) sends it. The
+dispatcher's own `< {prompt_file}` is exactly right, and it is what the wiring
+above uses.
 
-The command template is eval'd, and `{prompt_file}` arrives single-quoted and
-whitelisted, so the wiring is:
+One shape does hang — `-p '' < file`, an *empty* `-p` with piped input, which
+falls back to interactive mode and waits on a terminal that is not there. The
+dispatcher never emits that shape, so do not write `-p` into the template at
+all; let `< {prompt_file}` carry the prompt.
 
-```sh
--p "$(cat {prompt_file})"
-```
+The first version of this note had it backwards, and the story is worth
+keeping because it is a trap you might hit too. A real dispatch to Gemini *did*
+hang — but the cause was the dispatcher letting the worker inherit its own open
+stdin pipe (fixed in 0.19.0), not Gemini being unable to read a redirect.
+"prompt does not arrive" and "process never returns" look identical from the
+outside, and the second was the real one.
 
-**If you skip this:** the dispatch never returns. With `--timeout` it returns
-124 after the timeout; without one, only an external kill ends it.
+**If you get this wrong** by writing `-p ""`: the dispatch never returns.
+Which is why the timeout below is not optional insurance.
 
 ## 2/3 — The directory has to be trusted
 
@@ -71,31 +78,34 @@ places you did not mean.
 **If you skip this:** an immediate refusal, exit non-zero, with the message
 above on stderr — the one failure in this note that is loud.
 
-## 3/3 — A headless tool call needs an approval policy
+## 3/3 — A headless tool call needs an approval policy, or it is silently withheld
 
 This is the one that matters, and the one the kit will not decide for you.
 
-Gemini gates tool calls on approvals. In `--approval-mode plan` (read-only)
-and `auto_edit`, a `run_shell_command` — `git diff`, say — **blocks until a
-human approves it.** Headless, there is no human. A reviewer told to read the
-diff itself waits forever. Only `--yolo` proceeds, and `--yolo` approves
-*everything*, which is not what you want a reviewer running with.
+Gemini gates tool calls on approvals, and headless there is nobody to approve.
+What happens then depends on the mode, and it is not always a hang: in
+`--approval-mode plan` a `run_shell_command` — `git diff`, say — is **withheld
+and the run finishes**, so a reviewer told to read the diff itself does not
+hang; it comes back having never read it. That is the quieter failure and the
+worse one, because the review looks complete. Other modes can block instead.
+Either way the worker did not do its job.
 
-The narrow answer is Gemini's **policy engine**: a `--policy <file>` allowing
-the specific tool calls a worker legitimately needs and nothing else. For a
+The answer is Gemini's **policy engine**: a `--policy <file>` allowing the
+specific tool calls a worker legitimately needs and nothing else. For a
 reviewer, that is read-only shell — `git diff`, `git log`, `git show` — and
-nothing that writes. What such a file contains is Gemini's own format and
-changes on Gemini's schedule; the CLI's documentation is the source, and this
-note deliberately does not paste one, for the same reason
-`scripts/agents.config.sh` names no model.
+nothing that writes. `--yolo` also proceeds, and approves *everything*, which
+is not what you want a reviewer running with. What a policy file contains is
+Gemini's own format and changes on Gemini's schedule; the CLI's documentation
+is the source, and this note deliberately does not paste one, for the same
+reason `scripts/agents.config.sh` names no model.
 
 Whatever you allow, the worker prompts in `.agents/prompts/` still forbid push
-and merge in words, because shared invariant §7 is not something a policy
-file can enforce on a model's intentions — only on its hands.
+and merge in words, because shared invariant §7 is not something a policy file
+can enforce on a model's intentions — only on its hands.
 
-**If you skip this:** the dispatch hangs on the first tool call. With
-`--timeout` on the dispatch it returns 124 after the timeout, and the worker's
-process tree is killed. Without one, forever.
+**If you skip this:** in `plan` mode a fast, empty-handed review; in a mode
+that blocks, a hang that `--timeout` turns into a 124 and a killed process
+tree. Neither is a review.
 
 ## What this adapter deliberately does NOT contain
 
@@ -119,6 +129,21 @@ process tree is killed. Without one, forever.
 sh scripts/agent-dispatch.sh reviewer --prompt 'Reply with exactly DISPATCHED.' --timeout 120
 ```
 
-`DISPATCHED` on stdout in well under the timeout means all three details are
-right. A hang until 124 means one of the first or third is wrong; a refusal
-on stderr means the second.
+`DISPATCHED` on stdout in well under the timeout means the prompt arrives and
+the directory is trusted. A hang until 124 means the prompt shape is wrong
+(check for a stray `-p`); a refusal on stderr means the trust flag is missing.
+The approval policy (3/3) only bites once a worker tries a *tool*, so a
+prompt that asks for one — "run `git log -1` and reply with the sha" — is the
+test for that.
+
+## Re-verification note
+
+The three behaviours were observed live against gemini 0.60.0 on 2026-09-17,
+and then re-checked in review, which corrected sections 1/3 and 3/3 above — an
+earlier draft of this note had the stdin behaviour backwards and called the
+plan-mode failure a hang. The rewrite could not itself be re-run end to end
+because the account's daily model quota was exhausted at the time; a `--dry-run`
+confirms the command expands correctly, and the `agent-dispatch` suite's own
+`< {prompt_file}` case confirms the prompt reaches a worker on stdin. Read your
+first real Gemini worker's output adversarially, and if a behaviour here does
+not match what your version does, trust your version and fix this note.
