@@ -25,6 +25,7 @@ rather than inferring it from a regex example in a comment.
 | [`node-ts/`](node-ts/README.md) | A pnpm/TypeScript monorepo with Vitest | the TDD pairing guard's globs, `behavior-delta.sh`'s contract surfaces, a differential Stryker mutation diagnostic, and a promptfoo eval tier for agent-facing prompt surfaces |
 | [`ruby/`](ruby/README.md) | A Ruby project with RSpec | mutant-rspec as the on-demand mutation diagnostic — the engineering article's mutation decision, worked, with the two field-note traps that make a first run read as 1.5% coverage on healthy tests |
 | [`claude-code/`](claude-code/README.md) | One agent harness, rather than one stack | where a resolved capability tier goes at spawn time, and how to fill in `scripts/agents.config.sh` |
+| [`gemini-cli/`](gemini-cli/README.md) | One agent harness, at dispatch rather than spawn | how `scripts/agent-dispatch.sh` hands Gemini a prompt, a trusted directory and an approval policy headlessly — three details, each found by watching a dispatch not return |
 
 Note that the adapters answer different *kinds* of question. `node-ts/` and
 `ruby/` are **stack** adapters: copy from one only if your stack matches it.
