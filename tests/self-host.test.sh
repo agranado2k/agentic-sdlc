@@ -220,6 +220,13 @@ done
 	pass "scripts/agents.config.sh (the consumer-shipped mapping) is still present" ||
 	fail "scripts/agents.config.sh did not reach the project"
 
+[ -e "$PROJ/scripts/guards.kit.config.sh" ] &&
+	fail "scripts/guards.kit.config.sh leaked into the project — the kit's own source pattern reached a consumer" ||
+	pass "no scripts/guards.kit.config.sh in the project — the kit's own guard policy stayed kit-side"
+[ -e "$PROJ/scripts/guards.kit.sh" ] &&
+	fail "scripts/guards.kit.sh leaked into the project" ||
+	pass "no scripts/guards.kit.sh in the project"
+
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
