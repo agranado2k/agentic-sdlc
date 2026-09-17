@@ -33,6 +33,97 @@ LAST_STATUS=0
 LC_ALL=C
 export LC_ALL
 
+# --- the split-stream runner -------------------------------------------------
+# The resolver's and the dispatcher's whole contract is "the answer on stdout,
+# diagnostics on stderr", and a runner that merged the two could not tell a
+# warning from a model id. Three suites each carried their own copy of this
+# and its assertions, and the copies had drifted; agent-dispatch's
+# `assert_out_lacks` even shadowed the LAST_OUT one above under the same name
+# with different semantics. One copy, prefixed so it shadows nothing.
+#
+# t_run_split <cmd...> — run it with stdout and stderr kept apart.
+# Sets S_OUT, S_ERR and S_STATUS. Needs SCRATCH (t_init).
+t_run_split() {
+	_rs_err=$(mktemp "$SCRATCH/err.XXXXXX") || exit 2
+	S_OUT=$("$@" 2>"$_rs_err")
+	S_STATUS=$?
+	S_ERR=$(cat "$_rs_err")
+	rm -f "$_rs_err"
+}
+
+_s_dump() {
+	printf '%s\n' "$S_OUT" | sed 's/^/        > /'
+	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+}
+
+# s_assert_resolved <expected stdout> <label> — status 0 AND exactly that answer.
+s_assert_resolved() {
+	if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$1" ]; then
+		pass "$2"
+	else
+		fail "$2 — expected '$1', got status $S_STATUS, stdout '$S_OUT'"
+		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	fi
+}
+
+# s_assert_out_is <expected> <label> — exactly that stdout, whatever the status.
+s_assert_out_is() {
+	[ "$S_OUT" = "$1" ] && pass "$2" || fail "$2 — expected exactly '$1', got '$S_OUT'"
+}
+
+# s_assert_status <n> <label>
+s_assert_status() {
+	if [ "$S_STATUS" = "$1" ]; then
+		pass "$2"
+	else
+		fail "$2 — expected status $1, got $S_STATUS"
+		_s_dump
+	fi
+}
+
+# s_assert_out_has <needle> <label>
+s_assert_out_has() {
+	case "$S_OUT" in
+	*"$1"*) pass "$2" ;;
+	*)
+		fail "$2 — stdout lacks '$1'"
+		printf '%s\n' "$S_OUT" | sed 's/^/        > /'
+		;;
+	esac
+}
+
+# s_assert_out_lacks <needle> <label>
+s_assert_out_lacks() {
+	case "$S_OUT" in
+	*"$1"*)
+		fail "$2 — stdout should NOT contain '$1'"
+		printf '%s\n' "$S_OUT" | sed 's/^/        > /'
+		;;
+	*) pass "$2" ;;
+	esac
+}
+
+# s_assert_err_has <needle> / s_assert_err_lacks <needle> — the label is the
+# needle; diagnostics are what these assert on.
+s_assert_err_has() {
+	case "$S_ERR" in
+	*"$1"*) pass "stderr mentions '$1'" ;;
+	*)
+		fail "stderr does not mention '$1'"
+		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+		;;
+	esac
+}
+s_assert_err_lacks() {
+	case "$S_ERR" in
+	*"$1"*)
+		fail "stderr should NOT mention '$1'"
+		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+		;;
+	*) pass "stderr does not mention '$1'" ;;
+	esac
+}
+
 # t_mark <NAME> — the double-brace placeholder mark, e.g. `t_mark PROJECT_OWNER`.
 #
 # Assembled from variables so no suite contains a LITERAL mark. The kit repo is
