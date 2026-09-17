@@ -39,6 +39,17 @@ t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 t_init() {
 	SCRATCH=$(mktemp -d) || exit 2
 	trap 't_cleanup' EXIT INT TERM HUP
+	# Collation is the developer's, and twenty-nine `sort`s across ten suites
+	# compare their output against strings written in one order. Under
+	# en_US.UTF-8 a leading `.` is ignored, so `adapters/` sorts before
+	# `.agents/`; under C it does not. self-host's delta probe failed on that
+	# for the whole of a release wave and was set aside as pre-existing each
+	# time. The same neutralisation t_git_identity gives signing and hooks
+	# paths: a developer's environment does not decide what a test asserts.
+	# A suite that means to test a locale sets LC_ALL on the command itself,
+	# as agents-tiers does, and that still wins.
+	LC_ALL=C
+	export LC_ALL
 }
 
 t_cleanup() { [ -n "${SCRATCH:-}" ] && rm -rf "$SCRATCH"; }
