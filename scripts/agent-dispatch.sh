@@ -31,6 +31,7 @@
 #      itself, exactly as it did before this file existed. This is the DEFAULT
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
+# 124  the worker ran past --timeout and its process tree was killed
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -74,9 +75,10 @@ LIB="$_here/agents.lib.sh"
 
 usage() {
 	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
-	echo "                          [--set NAME=VALUE ...] [--dry-run]" >&2
+	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>] [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
+	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
 	echo "             the prompt; run nothing." >&2
 }
@@ -86,7 +88,7 @@ die() {
 	exit 2
 }
 
-TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0
+TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -125,6 +127,15 @@ while [ $# -gt 0 ]; do
 		SETS_N=$((SETS_N + 1))
 		eval "PD_K_$SETS_N=\$_sk; PD_V_$SETS_N=\$_sv"
 		eval "export PD_K_$SETS_N PD_V_$SETS_N"
+		shift 2
+		;;
+	--timeout)
+		[ $# -ge 2 ] || die "--timeout needs a number of seconds"
+		case "$2" in
+		'' | *[!0123456789]*) die "--timeout takes a whole number of seconds, got '$2'" ;;
+		0 | 0*) die "--timeout 0 is not a timeout. Omit the flag to run without one." ;;
+		esac
+		TIMEOUT=$2
 		shift 2
 		;;
 	--dry-run)
@@ -432,6 +443,7 @@ if [ "$DRY_RUN" = 1 ]; then
 	[ -n "$_shown_model" ] || _shown_model="<the default model of that agent harness>"
 	printf 'model:          %s\n' "$_shown_model"
 	printf 'command:        %s\n' "$CMD"
+	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
 	printf '\n--- end prompt ---\n'
@@ -447,4 +459,99 @@ echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<de
 # that redirects `< {prompt_file}` still gets it — a redirect inside the
 # eval'd command wins over this outer one — and a template that does not gets
 # nothing, which is what it would have got from a terminal that had moved on.
-eval "$CMD" </dev/null
+if [ -z "$TIMEOUT" ]; then
+	eval "$CMD" </dev/null
+	exit $?
+fi
+
+# --- with a timeout ---------------------------------------------------------
+# Headless agent CLIs gate tool calls on approvals, and headless there is no
+# human: a reviewer told to run `git diff` in an approval-gated mode waits
+# forever. Found live; only an external timeout ended it. The kit writes no
+# autonomy flags — that posture is the operator's — but a dispatch that can
+# never return is a different thing from one that returns a refusal.
+#
+# Four things the first version of this got wrong, each found by review:
+#
+#   1. The worker's process TREE is snapshotted ONCE, before any signal, and
+#      that same list is signalled twice — TERM, a grace, then KILL. Walking
+#      the tree after TERM found nothing, because a killed parent's children
+#      are reparented to init and no longer under the worker's pid; a worker
+#      that ignored TERM therefore ran to completion while this script said
+#      "killed". An agent CLI is a node or python process under a shell, and
+#      the shell dying is not the CLI dying.
+#   2. The verdict is a FLAG the watchdog writes before it signals, not an
+#      inference from the worker's exit status. Reading 143 as "timed out"
+#      was wrong both ways: a worker that trapped TERM and exited 0 reported
+#      success with "timed out" on stderr, and a worker that killed itself
+#      reported a timeout with no message.
+#   3. The watchdog is killed WITH its sleep. Killing the subshell alone left
+#      `sleep N` holding this script's stdout, so any caller capturing output
+#      waited the whole timeout after a worker that finished in a second.
+#   4. This script traps its own INT/TERM/HUP and takes the worker and the
+#      watchdog down with it. Backgrounded children of a non-interactive
+#      shell start with SIGINT ignored, so a Ctrl-C on the dispatcher used to
+#      leave the worker running with no timeout left.
+#
+# setsid would give one process group to signal but is not POSIX; walking
+# `ps -A -o pid= -o ppid=` is.
+_tree_of() {
+	# Every descendant of $1, deepest last, then $1 itself — so TERM reaches
+	# the leaves before their parents and a parent cannot respawn a child
+	# that was already signalled.
+	_to_kids=$(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }')
+	for _to_k in $_to_kids; do _tree_of "$_to_k"; done
+	printf '%s\n' "$1"
+}
+_signal_list() {
+	# $1 signal, rest pids. Failures are expected — a pid may be gone already.
+	_sl_sig=$1
+	shift
+	for _sl_p in "$@"; do kill "-$_sl_sig" "$_sl_p" 2>/dev/null; done
+}
+_down() {
+	# Take the worker's tree and the watchdog down. Idempotent; safe to call
+	# from the trap and from the normal path both.
+	[ -n "${_worker:-}" ] && _signal_list TERM $(_tree_of "$_worker")
+	[ -n "${_watchdog:-}" ] && _signal_list TERM $(_tree_of "$_watchdog")
+}
+TIMED_OUT="$SCRATCH/timed-out"
+# The scratch cleanup trap from earlier is extended, not replaced: on a
+# signal, the worker and the watchdog go first, then the scratch, then the
+# conventional 128+n.
+trap '_down; cleanup; exit 130' INT
+trap '_down; cleanup; exit 143' TERM
+trap '_down; cleanup; exit 129' HUP
+
+sh -c "$CMD" </dev/null &
+_worker=$!
+(
+	sleep "$TIMEOUT" &
+	_wd_sleep=$!
+	# The watchdog dies with its sleep: a TERM here forwards to the sleep, so
+	# reaping the watchdog never leaves a sleeper holding the caller's stdout.
+	trap 'kill "$_wd_sleep" 2>/dev/null; exit 0' TERM
+	wait "$_wd_sleep" || exit 0
+	# Verdict first, then the snapshot, then the signals — in that order, so a
+	# worker that dies from TERM on line one of its handler still reads as a
+	# timeout, and a child reparented by its parent's death is still on the
+	# list it is about to be sent.
+	: >"$TIMED_OUT"
+	echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
+	_wd_list=$(_tree_of "$_worker")
+	_signal_list TERM $_wd_list
+	sleep 1
+	_signal_list KILL $_wd_list
+) &
+_watchdog=$!
+wait "$_worker" 2>/dev/null
+_status=$?
+if [ -f "$TIMED_OUT" ]; then
+	# The watchdog fired: let it finish its KILL pass rather than racing it.
+	wait "$_watchdog" 2>/dev/null
+	exit 124
+fi
+# The worker finished in time. The watchdog and its sleep go together.
+kill -TERM "$_watchdog" 2>/dev/null
+wait "$_watchdog" 2>/dev/null
+exit "$_status"
