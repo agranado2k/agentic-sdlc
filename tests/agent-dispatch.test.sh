@@ -375,8 +375,16 @@ export AGENTS_CONFIG
 # dispatcher, not the fixture: a `(sleep; echo) | dispatcher` pipeline would
 # have waited on its own sleep whatever the dispatcher did.
 FIFO="$SCRATCH/held-open"
-mkfifo "$FIFO"
-sleep 20 >"$FIFO" &
+# Checked, because a mkfifo that quietly does nothing — a scratch dir on a
+# filesystem without FIFO support — leaves $FIFO absent, the redirect below
+# fails, and every assertion in this leg then passes with the fix reverted.
+# The suite's scratch is mktemp's, which is tmpfs or ext4 everywhere the kit
+# runs; where that is not so, this says so rather than going green.
+mkfifo "$FIFO" || {
+	fail "mkfifo failed under $SCRATCH — this leg cannot hold the stdin rule on this filesystem"
+	FIFO=""
+}
+sleep 20 >"${FIFO:-/dev/null}" &
 holder=$!
 start=$(date +%s)
 t_run_split sh -c 'sh "$1" implementer --prompt hi <"$2"' _ "$DISPATCH" "$FIFO"
@@ -388,6 +396,9 @@ s_assert_out_has "STDIN-BYTES=0" "…and reads NOTHING from the dispatcher's ope
 [ "$took" -lt 10 ] &&
 	pass "…and returns at once rather than waiting on the pipe (${took}s)" ||
 	fail "the worker waited on the dispatcher's stdin (${took}s) — it inherited the pipe"
+
+CFG_STDIN_NORED="$SCRATCH/stdin-nored.config.sh"
+cp "$CFG_STDIN" "$CFG_STDIN_NORED"
 
 # A template that DOES redirect from the prompt file still gets it: a redirect
 # inside the eval'd command wins over the default.
@@ -460,6 +471,13 @@ for shell_bin in $SHELLS; do
 	case "$s_out" in
 	*"shell check"*) pass "$shell_bin dispatches, and the prompt arrives" ;;
 	*) fail "$shell_bin dispatched wrongly: $s_out" ;;
+	esac
+	# The stdin rule, per shell: a worker with no redirect in its template
+	# reads nothing from a pipe the dispatcher was given.
+	s_out=$(printf hello | env AGENTS_CONFIG="$CFG_STDIN_NORED" "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
+	case "$s_out" in
+	*"STDIN-BYTES=0"*) pass "$shell_bin gives the worker nothing from the dispatcher's stdin" ;;
+	*) fail "$shell_bin let the worker read the dispatcher's stdin: $s_out" ;;
 	esac
 	# The case every consumer in the field is in.
 	s_out=$("$shell_bin" "$DISPATCH" planner --prompt 'x' 2>/dev/null)
