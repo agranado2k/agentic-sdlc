@@ -50,6 +50,15 @@ fi
 
 guard="$root/scripts/tdd-pairing-guard.sh"
 [ -f "$guard" ] || exit 0
+# The kit's own policy, when this is the kit. The shipped scripts/guards.config.sh
+# stays empty by principle; the kit keeps its pattern in a kit-only file that
+# bootstrap deletes at stamp time (ADR-0003's arrangement, applied to guards),
+# reached through the guard's existing $GUARDS_CONFIG seam. Downstream the
+# file never exists and this line does nothing.
+if [ -f "$root/scripts/guards.kit.config.sh" ]; then
+	GUARDS_CONFIG="$root/scripts/guards.kit.config.sh"
+	export GUARDS_CONFIG
+fi
 
 hint="Write the failing test first, or bypass once with: PUSH_WITHOUT_TESTS=1 git push"
 

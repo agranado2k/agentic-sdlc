@@ -85,7 +85,14 @@ assert_status 0 "an unconfigured guard passes an unpaired source change" -- run_
 assert_out_has "INACTIVE"
 assert_out_has "GUARD_SOURCE_RE"
 
-assert_status 0 "no config file at all behaves the same way" -- sh -c "rm -f '$repo/scripts/guards.config.sh'; cd '$repo' && sh '$GUARD' '$BASE' '$head'"
+# An EMPTY config, named explicitly. This case used to delete the fixture's
+# config and run the guard bare, and it passed — but not for the reason it
+# claimed: discovery order 3 is the guard script's own directory, which is the
+# kit's scripts/, so the guard was reading the KIT's policy file, which
+# happened to be empty. It now names an empty policy file, which is the state
+# it was always meant to test.
+: >"$SCRATCH/empty.config.sh"
+assert_status 0 "an explicitly empty config behaves the same way" -- sh -c "rm -f '$repo/scripts/guards.config.sh'; cd '$repo' && GUARDS_CONFIG='$SCRATCH/empty.config.sh' sh '$GUARD' '$BASE' '$head'"
 assert_out_has "INACTIVE"
 
 configure "$repo" "GUARD_SOURCE_RE=''"
@@ -255,5 +262,78 @@ assert_out_has "GUARDS_CONFIG"
 assert_status 1 "an anchorless load discovers nothing, even standing in a repo carrying a config" -- \
 	sh -c "cd '$repo' && unset GUARDS_CONFIG && . '$KIT/scripts/guards.lib.sh' && guards_load_config"
 assert_out_lacks "FOREIGN-GUARDS-CONFIG-EXECUTED"
+
+# ---------------------------------------------------------------------------
+banner "The kit's own policy — the guard is ON in the repo that ships it"
+# ---------------------------------------------------------------------------
+# Every push of the 0.18.0 wave printed "TDD pairing guard is INACTIVE — no
+# source patterns configured", from the repository whose product is the
+# discipline the guard enforces. ADR-0001 says the kit obeys its own
+# constitution; this is the check that it does here.
+#
+# The fixture copies the kit's REAL policy — scripts/guards.kit.config.sh, the
+# kit-only file the hook points GUARDS_CONFIG at — rather than restating the
+# pattern, so the suite and the policy cannot drift apart. NOT the shipped
+# scripts/guards.config.sh: that one stays empty on purpose, because bootstrap
+# copies it into every consumer, and the first version of this change filled
+# it in and would have made scripts/*.sh every consumer's definition of source.
+# tests/guards-demo.sh and tests/adapters-demo.sh both caught that.
+
+# kit_policy <repo> — the kit's own guard policy, in the fixture, under the
+# name run_guard reads. The directory is made first: a bare `cp` into a fresh
+# fixture failed silently, and the case then passed anyway — because discovery
+# order 3 is the guard script's own directory. Which is the coupling this whole
+# section exists to remove.
+kit_policy() {
+	mkdir -p "$1/scripts"
+	cp "$KIT/scripts/guards.kit.config.sh" "$1/scripts/guards.config.sh" || exit 2
+}
+
+new_repo_with_base
+kit_policy "$repo"
+t_write "$repo" "scripts/thing.sh" "#!/bin/sh
+echo changed
+"
+head=$(t_commit "$repo" "feat: a kit script changes with no test")
+assert_status 1 "a change to a kit script with no test change is BLOCKED" -- run_guard "$repo" "$BASE" "$head"
+assert_out_has "scripts/thing.sh"
+assert_out_lacks "INACTIVE"
+t_write "$repo" "tests/thing.test.sh" "#!/bin/sh
+exit 0
+"
+head=$(t_commit "$repo" "test: and its test")
+assert_status 0 "the same change paired with a test under tests/ passes" -- run_guard "$repo" "$BASE" "$head"
+
+new_repo_with_base
+kit_policy "$repo"
+t_write "$repo" "scripts/docs-conformance/validators/probe.mjs" "export const id = 'probe';
+"
+head=$(t_commit "$repo" "feat: a validator changes with no test")
+assert_status 1 "a change to a docs-harness validator with no test change is BLOCKED" -- run_guard "$repo" "$BASE" "$head"
+t_write "$repo" "scripts/docs-conformance/test/probe.test.mjs" "import test from 'node:test';
+"
+head=$(t_commit "$repo" "test: and its fixture test")
+assert_status 0 "…and paired with a test under scripts/docs-conformance/test/ it passes" -- run_guard "$repo" "$BASE" "$head"
+
+# Policy is not source.
+new_repo_with_base
+kit_policy "$repo"
+t_write "$repo" "scripts/agents.config.sh" "AGENT_TIER_PLANNER='changed'
+"
+head=$(t_commit "$repo" "chore: a policy file changes alone")
+assert_status 0 "a policy file changing alone is not a source change" -- run_guard "$repo" "$BASE" "$head"
+
+new_repo_with_base
+kit_policy "$repo"
+t_write "$repo" "bootstrap.sh" "#!/bin/sh
+echo changed
+"
+head=$(t_commit "$repo" "feat: bootstrap changes with no test")
+assert_status 1 "bootstrap.sh is source" -- run_guard "$repo" "$BASE" "$head"
+
+# And the shipped file is still empty — the whole point of the kit-only one.
+grep -q "^GUARD_SOURCE_RE=''" "$KIT/scripts/guards.config.sh" &&
+	pass "the SHIPPED scripts/guards.config.sh still has no source pattern" ||
+	fail "the shipped policy file carries a pattern — it would become every consumer's"
 
 t_done "tdd-pairing-guard.sh"
