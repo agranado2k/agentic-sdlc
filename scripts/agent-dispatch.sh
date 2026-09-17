@@ -31,6 +31,7 @@
 #      itself, exactly as it did before this file existed. This is the DEFAULT
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
+# 124  the worker ran past --timeout and its process tree was killed
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -132,6 +133,7 @@ while [ $# -gt 0 ]; do
 		[ $# -ge 2 ] || die "--timeout needs a number of seconds"
 		case "$2" in
 		'' | *[!0123456789]*) die "--timeout takes a whole number of seconds, got '$2'" ;;
+		0 | 0*) die "--timeout 0 is not a timeout. Omit the flag to run without one." ;;
 		esac
 		TIMEOUT=$2
 		shift 2
@@ -469,43 +471,87 @@ fi
 # autonomy flags — that posture is the operator's — but a dispatch that can
 # never return is a different thing from one that returns a refusal.
 #
-# The worker's whole process TREE is killed, not just the shell that ran the
-# template: an agent CLI is a node or python process under that shell, and
-# killing the shell alone orphans it with the pty and the API call still
-# open. setsid would give a group to signal but is not POSIX; walking the
-# tree with `ps -o pid= -o ppid=` is, so that is what this does.
-_kill_tree() {
-	for _kt_child in $(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }'); do
-		_kill_tree "$_kt_child"
-	done
-	kill -TERM "$1" 2>/dev/null
+# Four things the first version of this got wrong, each found by review:
+#
+#   1. The worker's process TREE is snapshotted ONCE, before any signal, and
+#      that same list is signalled twice — TERM, a grace, then KILL. Walking
+#      the tree after TERM found nothing, because a killed parent's children
+#      are reparented to init and no longer under the worker's pid; a worker
+#      that ignored TERM therefore ran to completion while this script said
+#      "killed". An agent CLI is a node or python process under a shell, and
+#      the shell dying is not the CLI dying.
+#   2. The verdict is a FLAG the watchdog writes before it signals, not an
+#      inference from the worker's exit status. Reading 143 as "timed out"
+#      was wrong both ways: a worker that trapped TERM and exited 0 reported
+#      success with "timed out" on stderr, and a worker that killed itself
+#      reported a timeout with no message.
+#   3. The watchdog is killed WITH its sleep. Killing the subshell alone left
+#      `sleep N` holding this script's stdout, so any caller capturing output
+#      waited the whole timeout after a worker that finished in a second.
+#   4. This script traps its own INT/TERM/HUP and takes the worker and the
+#      watchdog down with it. Backgrounded children of a non-interactive
+#      shell start with SIGINT ignored, so a Ctrl-C on the dispatcher used to
+#      leave the worker running with no timeout left.
+#
+# setsid would give one process group to signal but is not POSIX; walking
+# `ps -A -o pid= -o ppid=` is.
+_tree_of() {
+	# Every descendant of $1, deepest last, then $1 itself — so TERM reaches
+	# the leaves before their parents and a parent cannot respawn a child
+	# that was already signalled.
+	_to_kids=$(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }')
+	for _to_k in $_to_kids; do _tree_of "$_to_k"; done
+	printf '%s\n' "$1"
 }
+_signal_list() {
+	# $1 signal, rest pids. Failures are expected — a pid may be gone already.
+	_sl_sig=$1
+	shift
+	for _sl_p in "$@"; do kill "-$_sl_sig" "$_sl_p" 2>/dev/null; done
+}
+_down() {
+	# Take the worker's tree and the watchdog down. Idempotent; safe to call
+	# from the trap and from the normal path both.
+	[ -n "${_worker:-}" ] && _signal_list TERM $(_tree_of "$_worker")
+	[ -n "${_watchdog:-}" ] && _signal_list TERM $(_tree_of "$_watchdog")
+}
+TIMED_OUT="$SCRATCH/timed-out"
+# The scratch cleanup trap from earlier is extended, not replaced: on a
+# signal, the worker and the watchdog go first, then the scratch, then the
+# conventional 128+n.
+trap '_down; cleanup; exit 130' INT
+trap '_down; cleanup; exit 143' TERM
+trap '_down; cleanup; exit 129' HUP
+
 sh -c "$CMD" </dev/null &
 _worker=$!
 (
-	sleep "$TIMEOUT"
-	# Say so BEFORE killing: the worker's shell may take the signal down with
-	# any message this subshell would print after it.
+	sleep "$TIMEOUT" &
+	_wd_sleep=$!
+	# The watchdog dies with its sleep: a TERM here forwards to the sleep, so
+	# reaping the watchdog never leaves a sleeper holding the caller's stdout.
+	trap 'kill "$_wd_sleep" 2>/dev/null; exit 0' TERM
+	wait "$_wd_sleep" || exit 0
+	# Verdict first, then the snapshot, then the signals — in that order, so a
+	# worker that dies from TERM on line one of its handler still reads as a
+	# timeout, and a child reparented by its parent's death is still on the
+	# list it is about to be sent.
+	: >"$TIMED_OUT"
 	echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
-	_kill_tree "$_worker"
+	_wd_list=$(_tree_of "$_worker")
+	_signal_list TERM $_wd_list
 	sleep 1
-	# TERM is the polite one; anything still standing gets KILL.
-	for _kt_pid in $(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$_worker" '$2 == p { print $1 }') "$_worker"; do
-		kill -KILL "$_kt_pid" 2>/dev/null
-	done
+	_signal_list KILL $_wd_list
 ) &
 _watchdog=$!
-wait "$_worker"
+wait "$_worker" 2>/dev/null
 _status=$?
-# The watchdog is the dispatcher's own child: a worker that finished in time
-# must not leave a sleeping process behind for the caller to wonder about.
-kill "$_watchdog" 2>/dev/null
+if [ -f "$TIMED_OUT" ]; then
+	# The watchdog fired: let it finish its KILL pass rather than racing it.
+	wait "$_watchdog" 2>/dev/null
+	exit 124
+fi
+# The worker finished in time. The watchdog and its sleep go together.
+kill -TERM "$_watchdog" 2>/dev/null
 wait "$_watchdog" 2>/dev/null
-# A worker killed by the watchdog reports 143 (TERM) or 137 (KILL); the caller
-# is told 124 — timeout(1)'s convention, and distinct from anything a worker
-# or this script otherwise exits with — so a timeout is never mistaken for a
-# worker that chose to exit with a signal's number.
-case "$_status" in
-143 | 137) exit 124 ;;
-*) exit "$_status" ;;
-esac
+exit "$_status"
