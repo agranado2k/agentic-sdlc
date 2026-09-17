@@ -85,14 +85,17 @@ assert_status 0 "an unconfigured guard passes an unpaired source change" -- run_
 assert_out_has "INACTIVE"
 assert_out_has "GUARD_SOURCE_RE"
 
-# An EMPTY config, named explicitly. This case used to delete the fixture's
-# config and run the guard bare, and it passed — but not for the reason it
-# claimed: discovery order 3 is the guard script's own directory, which is the
-# kit's scripts/, so the guard was reading the KIT's policy file, which
-# happened to be empty. It now names an empty policy file, which is the state
-# it was always meant to test.
-: >"$SCRATCH/empty.config.sh"
-assert_status 0 "an explicitly empty config behaves the same way" -- sh -c "rm -f '$repo/scripts/guards.config.sh'; cd '$repo' && GUARDS_CONFIG='$SCRATCH/empty.config.sh' sh '$GUARD' '$BASE' '$head'"
+# NO config reachable by ANY discovery order — which is not what running the
+# kit's guard bare from a config-less fixture tests. Order 3 is the guard
+# script's own directory, so the kit's guard always finds the kit's policy,
+# and once the kit configured its own guard (#190) that policy was no longer
+# empty. To test the truly unconfigured state the guard and its lib are copied
+# somewhere with no policy file beside them and no repository above them.
+BARE="$SCRATCH/bare-guard"
+mkdir -p "$BARE"
+cp "$GUARD" "$BARE/tdd-pairing-guard.sh"
+cp "$KIT/scripts/guards.lib.sh" "$BARE/guards.lib.sh"
+assert_status 0 "with no config reachable by any order, the guard is INACTIVE and passes" -- sh -c "rm -f '$repo/scripts/guards.config.sh'; cd '$repo' && unset GUARDS_CONFIG && sh '$BARE/tdd-pairing-guard.sh' '$BASE' '$head'"
 assert_out_has "INACTIVE"
 
 configure "$repo" "GUARD_SOURCE_RE=''"
@@ -330,6 +333,46 @@ echo changed
 "
 head=$(t_commit "$repo" "feat: bootstrap changes with no test")
 assert_status 1 "bootstrap.sh is source" -- run_guard "$repo" "$BASE" "$head"
+
+# The wrapper, and the HOOK that selects it. Both were surviving mutants in
+# the first version of this change: deleting the hook's selection left every
+# suite green. The hook is run the way git runs it — with the docs gate
+# bypassed, since a fixture has no docs to gate, and the ref line on stdin —
+# against a fixture that carries the kit-only pair.
+new_repo_with_base
+kit_policy "$repo"
+mkdir -p "$repo/.githooks"
+cp "$KIT/.githooks/pre-push" "$repo/.githooks/pre-push"
+cp "$KIT/scripts/tdd-pairing-guard.sh" "$repo/scripts/tdd-pairing-guard.sh"
+cp "$KIT/scripts/guards.lib.sh" "$repo/scripts/guards.lib.sh"
+cp "$KIT/scripts/guards.kit.sh" "$repo/scripts/guards.kit.sh"
+cp "$KIT/scripts/guards.kit.config.sh" "$repo/scripts/guards.kit.config.sh"
+# The fixture's SHIPPED policy stays empty, as the kit's does: the hook must
+# reach the kit-only one on its own.
+cp "$KIT/scripts/guards.config.sh" "$repo/scripts/guards.config.sh"
+t_write "$repo" "scripts/thing.sh" "#!/bin/sh
+echo changed
+"
+head=$(t_commit "$repo" "feat: unpaired, pushed through the hook")
+
+assert_status 1 "the wrapper, run bare, blocks the unpaired change" -- sh -c "cd '$repo' && sh scripts/guards.kit.sh '$BASE' '$head'"
+assert_out_lacks "INACTIVE"
+
+assert_status 1 "the HOOK selects the kit-only policy and blocks the push" -- sh -c "cd '$repo' && printf 'refs/heads/main %s refs/heads/main %s\n' '$head' '$BASE' | PUSH_WITHOUT_DOCS=1 sh .githooks/pre-push origin git@example.invalid:x.git"
+assert_out_has "scripts/thing.sh"
+assert_out_lacks "INACTIVE"
+
+# Downstream: no kit-only pair, and the hook behaves exactly as before.
+rm -f "$repo/scripts/guards.kit.sh" "$repo/scripts/guards.kit.config.sh"
+assert_status 0 "without the kit-only pair the hook runs the shipped policy — unconfigured, so INACTIVE and passing" -- sh -c "cd '$repo' && printf 'refs/heads/main %s refs/heads/main %s\n' '$head' '$BASE' | PUSH_WITHOUT_DOCS=1 sh .githooks/pre-push origin git@example.invalid:x.git"
+assert_out_has "INACTIVE"
+
+# An operator's own GUARDS_CONFIG wins over the kit-only selection.
+cp "$KIT/scripts/guards.kit.sh" "$repo/scripts/guards.kit.sh"
+cp "$KIT/scripts/guards.kit.config.sh" "$repo/scripts/guards.kit.config.sh"
+: >"$SCRATCH/operator.config.sh"
+assert_status 0 "an exported GUARDS_CONFIG is respected by the hook over the kit-only pair" -- sh -c "cd '$repo' && printf 'refs/heads/main %s refs/heads/main %s\n' '$head' '$BASE' | GUARDS_CONFIG='$SCRATCH/operator.config.sh' PUSH_WITHOUT_DOCS=1 sh .githooks/pre-push origin git@example.invalid:x.git"
+assert_out_has "INACTIVE"
 
 # And the shipped file is still empty — the whole point of the kit-only one.
 grep -q "^GUARD_SOURCE_RE=''" "$KIT/scripts/guards.config.sh" &&

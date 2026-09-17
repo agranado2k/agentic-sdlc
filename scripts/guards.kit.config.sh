@@ -23,16 +23,19 @@
 #
 # THE KIT'S SOURCE is its shell and the docs harness's JavaScript: every script
 # under scripts/, the engine and validators under scripts/docs-conformance/,
-# and bootstrap.sh at the root. Its tests live under tests/ and
+# bootstrap.sh at the root, and the hooks under .githooks/ — the manual names
+# those as the kit's POSIX-sh code. Its tests live under tests/ and
 # scripts/docs-conformance/test/, which the shipped GUARD_TEST_RE already
 # matches. tests/tdd-pairing-guard.test.sh copies THIS file into a fixture and
 # holds each claim to a real diff, so the pattern and the suite cannot drift.
-GUARD_SOURCE_RE='^(bootstrap\.sh|scripts/[^/]+\.sh|scripts/docs-conformance/([^/]+|validators/[^/]+)\.mjs)$'
+GUARD_SOURCE_RE='^(bootstrap\.sh|\.githooks/[^/]+|scripts/[^/]+\.sh|scripts/docs-conformance/([^/]+|validators/[^/]+)\.mjs)$'
 
 # Policy is not source: a tier mapping or a guard pattern changing alone is
 # not a behaviour change a test could pair with. The kit's own never-shipped
 # copies end in .config.sh too, so one pattern covers all of them.
-GUARD_SOURCE_EXCLUDE_RE='(\.d\.ts|\.min\.js|\.config\.sh)$'
+# scripts/docs-conformance/config.mjs is the docs gate's policy — the manual
+# calls it "policy as data" — and is excluded for the same reason.
+GUARD_SOURCE_EXCLUDE_RE='(\.d\.ts|\.min\.js|\.config\.sh|/docs-conformance/config\.mjs)$'
 
 # Unchanged from the shipped file; repeated because a config is sourced whole
 # and an unset GUARD_TEST_RE is an error, not a default.
