@@ -20,7 +20,7 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.18.0 tagged 2026-09-17 at `42d96e3`, the merge of PR #185 — the last car of the agent-harness wave (PRD #170), whose release action was folded into #181 rather than held for a release PR; 0.17.0 was tagged 2026-09-08 by PR #169. The constitution, both gates, the guards, seventeen skills, the adapters, the consumer workflow templates, and now the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.18.0 tagged 2026-09-17 at `42d96e3`, the merge of PR #185 (PRD #170); 0.17.0 was tagged 2026-09-08 by PR #169. The constitution, both gates, the guards, seventeen skills, the adapters, the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Last commit on `main`** | `42d96e3` — merge of PR #185, the worker prompts, and the commit `v0.18.0` is cut on (2026-09-17) |
@@ -28,7 +28,7 @@ is in flight. Do not restate the README.
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.18.0 wave (PRD #170) landed one car at a time between 2026-09-09 and 2026-09-17: #179, #180, #181, #182, #183, #184, #185, then the tag. Open follow-ups from its reviews: #186 (two suites depend on the developer's locale and `tag.sort`), #187 (the stdout/stderr test runner is copied across three suites), #188 (`--set-file` for a large diff), #189 (the docs gate does not scan the glossary), #190 (the pairing guard is inactive in the kit's own repo). Still open from before: #87, #97, #99. |
+| **Active worktrees** | None. The 0.18.0 wave (PRD #170) landed one car at a time between 2026-09-09 and 2026-09-17: #179, #180, #181, #182, #183, #184, #185, then the tag. Open follow-ups from its reviews: #186 (two suites depend on the developer's locale and `tag.sort`), #187 (the stdout/stderr test runner is copied across three suites), #188 (`--set-file` for a large diff), #189 (the docs gate does not scan the glossary), #190 (the pairing guard is inactive in the kit's own repo). Still open from before: #87, #99. |
 
 ### Open questions / unresolved decisions
 
@@ -1097,7 +1097,7 @@ word: the glossary now says *docs harness* and *agent harness* and bans the
 bare one, because it had meant two things since the adapters were written and
 nothing said which. The cross-vendor reviewer that
 `templates/workflows/ai-review.example.yml` could only reach from CI — its own
-header says the leg "is unreachable from inside the authoring harness" — is
+header says that leg cannot be reached from inside the authoring session — is
 reachable from a session.
 
 The wave ran the kit's own chain end to end, and the chain earned its cost
@@ -1105,7 +1105,7 @@ several times over. `/grill-with-docs` found the glossary collision before a
 line was written. Every PR's fresh-context review on a different model found
 something real, verified before it was fixed: a banned-word rule that flagged
 its own prescribed replacements (#179), a self-host assertion that tested the
-machine rather than the repo (#180), a silent wrong-harness spawn on a
+machine rather than the repo (#180), a spawn silently landing on the wrong agent harness after a
 capitalisation typo (#182), **two CRITICALs** in the dispatcher — command
 execution through the prompt-file path (#183), and a `--set` value truncated
 at its first newline with `NAME=VALUE` lines from an untrusted ticket body
