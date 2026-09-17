@@ -105,8 +105,9 @@ The design brief writes this section; the grilling loop keeps it current.
 The other half of a ubiquitous language, and the half that is usually missing:
 the terms that are ambiguous here and are therefore banned. Each line names the
 banned word and the word to use instead. The docs gate reads this section: every
-use of a banned word in the manual layer and the skills is a warning (the
-banned-words advisory). A word that is legitimate in ONE sense keeps that sense
+use of a banned word in the manual layer, the skills, and this glossary's own
+entries is a warning (the banned-words advisory); this section and every
+`_Avoid_` line are the exceptions, because writing the word is their job. A word that is legitimate in ONE sense keeps that sense
 with an `Except:` clause naming the permitted phrases as code spans — see the
 example below; a use inside one of those phrases is silent.
 -->
