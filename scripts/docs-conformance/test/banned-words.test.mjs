@@ -3,16 +3,16 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { parseEntries, run } from "../validators/banned-words.mjs";
+import { DEFAULT_GLOSSARY, parseEntries, run } from "../validators/banned-words.mjs";
 import { cleanup, configWith, ctxFor, hasRule, makeFixture } from "./helpers.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 // The glossary is scanned too now (#189), and the fixture's decoy "## Another
 // section" line is a real use of a banned word — which is the point of the
-// last four tests, and noise for every test above them that is about the
+// glossary tests at the end, and noise for every test above them about the
 // manual and the skills.
-const notGlossary = (out) => out.filter((f) => f.file !== "docs/domain-glossary.md");
+const notGlossary = (out, glossary = DEFAULT_GLOSSARY) => out.filter((f) => f.file !== glossary);
 
 const GLOSSARY = `# Glossary
 
@@ -82,11 +82,16 @@ test("the banned section may be the last section of the glossary — no heading 
 });
 
 test("a deeper heading inside the section does not end it; a same-level one does", () => {
+  // Deliberately UNFILTERED: this fixture is the one that holds the banned
+  // section's boundary when the glossary itself is scanned. Filtering the
+  // glossary out of it (as every other pre-existing test does) let a mutant
+  // that never closed the section survive — the decoy below the section is
+  // then blanked and nothing notices.
   const ctx = ctxFor({
     "docs/domain-glossary.md": "# G\n\n## Words this project does not use\n\n### Nouns\n\n- **install** — no. Use **bootstrap**.\n\n## Later\n\n- **kit** — not banned.\n",
     "AGENTS.md": "# Manual\n\ninstall the kit\n",
   });
-  const out = notGlossary(run(ctx));
+  const out = run(ctx);
   assert.equal(out.length, 1);
   assert.match(out[0].message, /"install"/);
   cleanup(ctx);
@@ -259,5 +264,39 @@ test("a carve-out phrase is honoured in the glossary too", () => {
   const ctx = ctxFor({ "docs/domain-glossary.md": glossary, "AGENTS.md": "# Manual\n" });
   const out = run(ctx);
   assert.equal(out.filter((f) => f.file === "docs/domain-glossary.md").length, 0, JSON.stringify(out));
+  cleanup(ctx);
+});
+
+test("an _Avoid_ item ends at the next sibling bullet — which is scanned", () => {
+  const glossary = GLOSSARY.replace(
+    "## Another section\n\n- **install** here is prose, not an entry.\n",
+    "## Terms\n\n- **Bootstrap** — the one-shot run.\n  - _Avoid_: \"install\".\n  - Note: you do not install anything.\n",
+  );
+  const ctx = ctxFor({ "docs/domain-glossary.md": glossary, "AGENTS.md": "# Manual\n" });
+  const out = run(ctx).filter((f) => f.file === "docs/domain-glossary.md");
+  assert.equal(out.length, 1, JSON.stringify(out));
+  assert.equal(out[0].line, 16);
+  cleanup(ctx);
+});
+
+test("an _Avoid_ item at column zero is exempt too", () => {
+  const glossary = GLOSSARY.replace(
+    "## Another section\n\n- **install** here is prose, not an entry.\n",
+    "## Terms\n\n- _Avoid_: \"install\" (nothing is installed).\n* _Avoid_: \"the install\" either.\n",
+  );
+  const ctx = ctxFor({ "docs/domain-glossary.md": glossary, "AGENTS.md": "# Manual\n" });
+  assert.deepEqual(run(ctx).filter((f) => f.file === "docs/domain-glossary.md"), []);
+  cleanup(ctx);
+});
+
+test("a configured glossary path is the one scanned", () => {
+  // configWith() layers onto claudeMdRefs; the glossary path is bannedWords'.
+  const ctx = ctxFor(
+    { "GLOSSARY.md": GLOSSARY, "AGENTS.md": "# Manual\n" },
+    { ...configWith({}), bannedWords: { glossary: "GLOSSARY.md" } },
+  );
+  const out = run(ctx);
+  assert.deepEqual(out.map((f) => `${f.file}:${f.line}`), ["GLOSSARY.md:14"]);
+  assert.deepEqual(notGlossary(out, "GLOSSARY.md"), []);
   cleanup(ctx);
 });

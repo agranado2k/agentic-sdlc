@@ -332,7 +332,9 @@ const housekeepingDue = {
  * Policy for the banned-words advisory: the glossary whose "Words this
  * project does not use" section is the list, and the files the scan leaves
  * alone. The scan covers the root manual, every article in the constitution
- * directory, and every Markdown file of every skill; the two shared articles
+ * directory, every Markdown file of every skill, and the glossary itself
+ * (minus its banned section and its _Avoid_ items, whose job is to write the
+ * word); the two shared articles
  * are excluded by default because they arrive verbatim from the kit and are
  * not yours to reword. A use is a warning, never a violation. An entry may
  * carve out a legitimate sense with `Except:` followed by the permitted

@@ -3,8 +3,9 @@
 // ones that are ambiguous in this project. The glossary template ships that
 // section ("Words this project does not use"); nothing read it. This
 // validator does: each entry's banned term is searched for in the manual
-// layer and the skills, and every use is a WARNING naming the word and the
-// replacement the entry prescribes.
+// layer, the skills, and the glossary itself — minus the banned section and
+// every _Avoid_ item, whose job is to write the word — and every use is a
+// WARNING naming the word and the replacement the entry prescribes.
 //
 // An entry may carve out a legitimate sense with an `Except:` clause whose
 // code spans are the phrases in which the word is fine — `dependency
@@ -133,7 +134,7 @@ function glossaryProse(text) {
           level = h[1].length;
         }
       }
-      const avoid = /^(\s*)-\s*_Avoid_:/.exec(line);
+      const avoid = /^(\s*)[-*]\s+_Avoid_:/.exec(line);
       if (avoid) avoidIndent = avoid[1].length;
       else if (avoidIndent >= 0) {
         const indent = /^(\s*)\S/.exec(line);

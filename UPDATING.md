@@ -236,8 +236,8 @@ trimmed line, and now prints the first word, so an annotated `files:` entry
 reads the same here as in the gate. The second is
 `scripts/docs-conformance/validators/banned-words.mjs`, an advisory the
 runner registers: it reads your glossary's "Words this project does not use"
-section and warns on each banned word in your manual, your local articles and
-your skills. It arrives with the runner (step 5) and reads a section your
+section and warns on each banned word in your manual, your local articles,
+your skills, and the glossary's own other entries. It arrives with the runner (step 5) and reads a section your
 glossary already has, so the first gate after the update may print warnings
 you have never seen — that is the section doing what it always said; 9c and
 9d below say how to carve out a legitimate sense.
