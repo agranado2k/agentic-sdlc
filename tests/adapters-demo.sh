@@ -25,6 +25,10 @@
 #
 # Usage: sh tests/adapters-demo.sh
 
+# Collation pinned as tests/lib.sh pins it; this suite sources no lib.
+LC_ALL=C
+export LC_ALL
+
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
