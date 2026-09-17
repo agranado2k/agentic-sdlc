@@ -54,77 +54,31 @@ EOF
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-dispatch() {
-	D_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
-	D_OUT=$(sh "$DISPATCH" "$@" 2>"$D_ERR")
-	D_STATUS=$?
-	D_ERR_TEXT=$(cat "$D_ERR")
-	rm -f "$D_ERR"
-}
+# dispatch <args> — the dispatcher, streams kept apart (t_run_split in
+# tests/lib.sh owns why).
+dispatch() { t_run_split sh "$DISPATCH" "$@"; }
 
-assert_status_is() {
-	if [ "$D_STATUS" = "$1" ]; then
-		pass "$2"
-	else
-		fail "$2 — expected status $1, got $D_STATUS"
-		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
-		printf '%s\n' "$D_ERR_TEXT" | sed 's/^/        | /'
-	fi
-}
 
-assert_out_matches() {
-	case "$D_OUT" in
-	*"$1"*) pass "$2" ;;
-	*)
-		fail "$2 — stdout lacks '$1'"
-		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
-		;;
-	esac
-}
 
-assert_out_exact() {
-	if [ "$D_OUT" = "$1" ]; then
-		pass "$2"
-	else
-		fail "$2 — expected exactly '$1', got '$D_OUT'"
-	fi
-}
 
-assert_out_lacks() {
-	case "$D_OUT" in
-	*"$1"*)
-		fail "$2 — stdout should NOT contain '$1'"
-		printf '%s\n' "$D_OUT" | sed 's/^/        > /'
-		;;
-	*) pass "$2" ;;
-	esac
-}
 
-assert_err_has() {
-	case "$D_ERR_TEXT" in
-	*"$1"*) pass "stderr mentions '$1'" ;;
-	*)
-		fail "stderr does not mention '$1'"
-		printf '%s\n' "$D_ERR_TEXT" | sed 's/^/        | /'
-		;;
-	esac
-}
+
 
 # ---------------------------------------------------------------------------
 banner "The in-session case — the default, and not a failure"
 # ---------------------------------------------------------------------------
 dispatch planner --prompt 'anything'
-assert_status_is 3 "a tier naming no agent harness exits 3 — 'spawn this yourself'"
-assert_out_exact 'model-for-planning' "…and hands the caller the model id, on stdout, alone"
-assert_err_has "names no agent harness"
+s_assert_status 3 "a tier naming no agent harness exits 3 — 'spawn this yourself'"
+s_assert_out_is 'model-for-planning' "…and hands the caller the model id, on stdout, alone"
+s_assert_err_has "names no agent harness"
 
 # ---------------------------------------------------------------------------
 banner "Dispatching — what the worker actually receives"
 # ---------------------------------------------------------------------------
 dispatch implementer --prompt 'Implement ticket #7.'
-assert_status_is 0 "a mapped agent harness dispatches"
-assert_out_matches 'ARGV: --flag --model model-for-implementing' "the model lands where the flag template put it"
-assert_out_matches 'Implement ticket #7.' "the prompt reaches the worker"
+s_assert_status 0 "a mapped agent harness dispatches"
+s_assert_out_has 'ARGV: --flag --model model-for-implementing' "the model lands where the flag template put it"
+s_assert_out_has 'Implement ticket #7.' "the prompt reaches the worker"
 
 # Prose carries quotes, dollars, newlines and code fences, and every one of them
 # would be interpreted on the way if the prompt were an argv element. The claim
@@ -140,8 +94,8 @@ echo "a fenced block"
 ```
 EOF
 dispatch implementer --prompt-file "$HAZARD"
-assert_status_is 0 "a prompt full of shell metacharacters dispatches"
-printf '%s\n' "$D_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p' | sed '1d;$d' >"$SCRATCH/received.md"
+s_assert_status 0 "a prompt full of shell metacharacters dispatches"
+printf '%s\n' "$S_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p' | sed '1d;$d' >"$SCRATCH/received.md"
 if diff -q "$HAZARD" "$SCRATCH/received.md" >/dev/null 2>&1; then
 	pass "the prompt reaches the worker byte-identical — nothing expanded, nothing eaten"
 else
@@ -150,7 +104,7 @@ else
 fi
 
 dispatch implementer content --prompt 'x' --dry-run
-assert_out_matches 'model-for-prose' "the task domain selects its own model"
+s_assert_out_has 'model-for-prose' "the task domain selects its own model"
 
 # ---------------------------------------------------------------------------
 banner "An agent harness with no model omits the flag entirely"
@@ -168,9 +122,9 @@ EOF
 AGENTS_CONFIG="$CFG2"
 export AGENTS_CONFIG
 dispatch reviewer --prompt 'x'
-assert_status_is 0 "a tier naming an agent harness with no model still dispatches"
-assert_out_matches 'ARGV: --flag' "…and the worker runs"
-assert_out_lacks '--model' "…with the model flag omitted entirely, not passed empty"
+s_assert_status 0 "a tier naming an agent harness with no model still dispatches"
+s_assert_out_has 'ARGV: --flag' "…and the worker runs"
+s_assert_out_lacks '--model' "…with the model flag omitted entirely, not passed empty"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -179,12 +133,12 @@ export AGENTS_CONFIG
 banner "--dry-run runs nothing and shows everything"
 # ---------------------------------------------------------------------------
 dispatch implementer --prompt 'Do not run me.' --dry-run
-assert_status_is 0 "a dry run succeeds"
-assert_out_matches 'agent harness:  stub' "it names the agent harness"
-assert_out_matches 'model:          model-for-implementing' "it names the model"
-assert_out_matches '--model model-for-implementing' "it shows the expanded command"
-assert_out_matches 'Do not run me.' "it shows the prompt"
-assert_out_lacks 'ARGV:' "and the worker never ran"
+s_assert_status 0 "a dry run succeeds"
+s_assert_out_has 'agent harness:  stub' "it names the agent harness"
+s_assert_out_has 'model:          model-for-implementing' "it names the model"
+s_assert_out_has '--model model-for-implementing' "it shows the expanded command"
+s_assert_out_has 'Do not run me.' "it shows the prompt"
+s_assert_out_lacks 'ARGV:' "and the worker never ran"
 
 # ---------------------------------------------------------------------------
 banner "Markers, and the header that documents them"
@@ -209,14 +163,14 @@ EOF
 
 dispatch implementer --prompt-file "$TPL" --set 'TICKET=#42' \
 	--set 'BODY=has "quotes", $(echo NOPE), a|pipe and a\backslash'
-assert_status_is 0 "a template with a header and markers dispatches"
-assert_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
-assert_out_matches 'Implement #42.' "a marker is filled"
-assert_out_matches 'Again: #42.' "…every occurrence of it, not just the first"
-assert_out_matches '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
-assert_out_matches 'a|pipe' "…and cannot close the substitution expression"
-assert_out_matches '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
-assert_err_has "unfilled marker"
+s_assert_status 0 "a template with a header and markers dispatches"
+s_assert_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
+s_assert_out_has 'Implement #42.' "a marker is filled"
+s_assert_out_has 'Again: #42.' "…every occurrence of it, not just the first"
+s_assert_out_has '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
+s_assert_out_has 'a|pipe' "…and cannot close the substitution expression"
+s_assert_out_has '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
+s_assert_err_has "unfilled marker"
 
 if grep -q '%%TICKET%%' "$TPL"; then
 	pass "the template file itself is untouched — it is read many times"
@@ -225,10 +179,10 @@ else
 fi
 
 dispatch implementer --prompt 'no header here' --dry-run
-assert_out_matches 'no header here' "a prompt with no header passes through whole"
+s_assert_out_has 'no header here' "a prompt with no header passes through whole"
 
 dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
-assert_status_is 2 "--set without NAME=VALUE is refused"
+s_assert_status 2 "--set without NAME=VALUE is refused"
 
 # A ticket body is untrusted content, and %%BODY%% is exactly where one goes.
 # The pairs used to be joined into one string and read back line by line, so a
@@ -238,37 +192,37 @@ printf 'BODY:\n%%%%BODY%%%%\nC was: %%%%C%%%%\n' >"$SCRATCH/multi.md"
 dispatch implementer --prompt-file "$SCRATCH/multi.md" --set 'C=legit' --set 'BODY=line one
 C=INJECTED
 line three'
-assert_out_matches 'line three' "a multi-line value arrives whole, not truncated at the first newline"
-assert_out_matches 'C=INJECTED' "…including a line inside it that looks like a pair"
-assert_out_matches 'C was: legit' "…which does not hijack the marker of that name"
+s_assert_out_has 'line three' "a multi-line value arrives whole, not truncated at the first newline"
+s_assert_out_has 'C=INJECTED' "…including a line inside it that looks like a pair"
+s_assert_out_has 'C was: legit' "…which does not hijack the marker of that name"
 
 # A value is data, not a template. Re-scanning it made the result depend on the
 # order the pairs happened to arrive in.
 printf 'X: %%%%A%%%%\n' >"$SCRATCH/rescan.md"
 dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'A=[%%B%%]' --set 'B=bee'
-assert_out_matches 'X: [%%B%%]' "a marker inside a VALUE is not substituted"
+s_assert_out_has 'X: [%%B%%]' "a marker inside a VALUE is not substituted"
 dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'B=bee' --set 'A=[%%B%%]'
-assert_out_matches 'X: [%%B%%]' "…in either order — substitution is one pass, not one per pair"
+s_assert_out_has 'X: [%%B%%]' "…in either order — substitution is one pass, not one per pair"
 
 dispatch implementer --prompt 'x' --set 'a b=1'
-assert_status_is 2 "a NAME that could never be a marker is refused"
+s_assert_status 2 "a NAME that could never be a marker is refused"
 
 # The header strip's two edges.
 printf '<!--\nan example: a-->b\nMarkers: %%%%T%%%%\n-->\n\nReal line %%%%T%%%%.\n' >"$SCRATCH/edge.md"
 dispatch implementer --prompt-file "$SCRATCH/edge.md" --set T=filled
-assert_out_matches 'Real line filled.' "a --> inside the header does not close it early"
-assert_out_lacks 'an example' "…and the whole header is still removed"
-assert_out_lacks 'Markers: filled' "…so the header's own marker documentation is never filled"
+s_assert_out_has 'Real line filled.' "a --> inside the header does not close it early"
+s_assert_out_lacks 'an example' "…and the whole header is still removed"
+s_assert_out_lacks 'Markers: filled' "…so the header's own marker documentation is never filled"
 
 printf '<!--\nnever closed\n' >"$SCRATCH/unterm.md"
 dispatch implementer --prompt-file "$SCRATCH/unterm.md" --dry-run
-assert_status_is 0 "an unterminated header does not abort"
-assert_out_matches 'never closed' "…and the prompt is kept rather than stripped to nothing"
-assert_err_has "never closes it"
+s_assert_status 0 "an unterminated header does not abort"
+s_assert_out_has 'never closed' "…and the prompt is kept rather than stripped to nothing"
+s_assert_err_has "never closes it"
 
 printf '<!--\nx\n-->\n\n\n' >"$SCRATCH/blanks.md"
 dispatch implementer --prompt-file "$SCRATCH/blanks.md"
-assert_status_is 2 "a prompt that is only a header is refused, not sent empty"
+s_assert_status 2 "a prompt that is only a header is refused, not sent empty"
 
 # ---------------------------------------------------------------------------
 banner "The shipped worker prompts"
@@ -308,8 +262,8 @@ for wp in implement-worker review-worker; do
 	done
 	# shellcheck disable=SC2086
 	dispatch implementer --prompt-file "$f" $sets --dry-run
-	assert_status_is 0 "$wp.md dispatches with every marker filled"
-	case "$D_ERR_TEXT" in
+	s_assert_status 0 "$wp.md dispatches with every marker filled"
+	case "$S_ERR" in
 	*"unfilled marker"*) fail "$wp.md left a marker unfilled after filling all of them" ;;
 	*) pass "$wp.md has no marker the caller cannot fill" ;;
 	esac
@@ -319,25 +273,25 @@ done
 banner "Misconfiguration reports itself, and points at the fix"
 # ---------------------------------------------------------------------------
 dispatch reviewer --prompt 'x'
-assert_status_is 2 "an agent harness named without a command template is refused"
-assert_err_has "AGENT_HARNESS_OTHER_CMD"
+s_assert_status 2 "an agent harness named without a command template is refused"
+s_assert_err_has "AGENT_HARNESS_OTHER_CMD"
 
 dispatch mechanical --prompt 'x'
-assert_status_is 2 "a model id carrying a shell metacharacter is REFUSED, not escaped"
-assert_err_has "will not interpolate"
+s_assert_status 2 "a model id carrying a shell metacharacter is REFUSED, not escaped"
+s_assert_err_has "will not interpolate"
 
 dispatch not-a-tier --prompt 'x'
-assert_status_is 2 "the closed tier vocabulary still closes"
+s_assert_status 2 "the closed tier vocabulary still closes"
 
 dispatch implementer --nonsense --prompt 'x'
-assert_status_is 2 "an unknown option is refused rather than read as a tier"
-assert_err_has "unknown option"
+s_assert_status 2 "an unknown option is refused rather than read as a tier"
+s_assert_err_has "unknown option"
 
 dispatch implementer
-assert_status_is 2 "no prompt at all is a usage error"
+s_assert_status 2 "no prompt at all is a usage error"
 
 dispatch implementer --prompt-file "$SCRATCH/does-not-exist.md"
-assert_status_is 2 "a missing prompt file is refused before anything runs"
+s_assert_status 2 "a missing prompt file is refused before anything runs"
 
 CFG3="$SCRATCH/ghost.config.sh"
 cat >"$CFG3" <<'EOF'
@@ -349,8 +303,8 @@ EOF
 AGENTS_CONFIG="$CFG3"
 export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
-assert_status_is 2 "an uninstalled agent harness is caught before it is invoked"
-assert_err_has "not on PATH"
+s_assert_status 2 "an uninstalled agent harness is caught before it is invoked"
+s_assert_err_has "not on PATH"
 
 # ---------------------------------------------------------------------------
 banner "The prompt path is data, and is treated as such"
@@ -366,33 +320,29 @@ HOSTILE="$SCRATCH/a;\$(touch $SCRATCH/PWNED)b"
 mkdir -p "$HOSTILE"
 printf 'the prompt survives\n' >"$HOSTILE/p.md"
 dispatch implementer --prompt-file "$HOSTILE/p.md"
-assert_status_is 0 "a prompt under a hostile directory name dispatches"
+s_assert_status 0 "a prompt under a hostile directory name dispatches"
 if [ -f "$SCRATCH/PWNED" ]; then
 	fail "the prompt path was EXECUTED — command substitution in a path reached the eval"
 	rm -f "$SCRATCH/PWNED"
 else
 	pass "the prompt path was not executed"
 fi
-assert_out_matches 'the prompt survives' "…and the prompt still reached the worker"
+s_assert_out_has 'the prompt survives' "…and the prompt still reached the worker"
 
 SPACED="$SCRATCH/with space"
 mkdir -p "$SPACED"
 printf 'spaces are fine\n' >"$SPACED/p.md"
 dispatch implementer --prompt-file "$SPACED/p.md"
-assert_status_is 0 "a path containing a space dispatches"
-assert_out_matches 'spaces are fine' "…and arrives whole, not split at the space"
+s_assert_status 0 "a path containing a space dispatches"
+s_assert_out_has 'spaces are fine' "…and arrives whole, not split at the space"
 
 # $TMPDIR is somebody else's data too, so staging alone is not the fix.
-D_ERR=$(mktemp "$SCRATCH/err.XXXXXX")
 mkdir -p "$SCRATCH/tmp;x"
-TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi' >/dev/null 2>"$D_ERR"
-D_STATUS=$?
-D_ERR_TEXT=$(cat "$D_ERR")
-rm -f "$D_ERR"
-assert_status_is 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
+t_run_split env TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi'
+s_assert_status 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
 
 dispatch implementer --prompt-file /dev/null
-assert_status_is 2 "an empty prompt file is refused — a worker given nothing invents something"
+s_assert_status 2 "an empty prompt file is refused — a worker given nothing invents something"
 
 # ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
@@ -415,8 +365,8 @@ EOF
 AGENTS_CONFIG="$CFG_EXIT"
 export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
-assert_status_is 7 "the worker's own exit status passes through untouched"
-assert_out_matches 'MARKER=set' "a template may set the environment the worker runs in"
+s_assert_status 7 "the worker's own exit status passes through untouched"
+s_assert_out_has 'MARKER=set' "a template may set the environment the worker runs in"
 
 # A mapped model with nowhere to put it is a config error, not a silent drop.
 CFG_NOFLAG="$SCRATCH/noflag.config.sh"
@@ -428,8 +378,8 @@ EOF
 AGENTS_CONFIG="$CFG_NOFLAG"
 export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
-assert_status_is 2 "a mapped model with no MODEL_FLAG is refused rather than dropped"
-assert_err_has "MODEL_FLAG"
+s_assert_status 2 "a mapped model with no MODEL_FLAG is refused rather than dropped"
+s_assert_err_has "MODEL_FLAG"
 
 # ---------------------------------------------------------------------------
 banner "Every shell an operator might run this under"
