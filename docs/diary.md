@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-08
+## Current state — 2026-09-17
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.17.0 on `main` by PR #169, whose merge is where its tag is cut; 0.16.0 was tagged 2026-09-07 at the merge that closed PRD #124; the constitution, both gates, the guards, seventeen skills, the adapters and the consumer workflow templates are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.18.0 tagged 2026-09-17 at `42d96e3`, the merge of PR #185 (PRD #170); 0.17.0 was tagged 2026-09-08 by PR #169. The constitution, both gates, the guards, seventeen skills, the adapters, the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `9e68589` — merge of PR #168, the last of the post-0.16.0 rewordings (2026-09-08) |
+| **Last commit on `main`** | `42d96e3` — merge of PR #185, the worker prompts, and the commit `v0.18.0` is cut on (2026-09-17) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.16.0 wave (PRD #124) landed in two trains (2026-09-03: #139, #140, #142, #141, #150, #143, #147, #148, #149, #151; 2026-09-04: #152, #153, #154, #155, #156, #157, #158) and closed with ticket #136's PR. The 0.15.0 wave (PRD #107) landed as PRs #116, #118, #119, #117, #120, #121, #122 and #123, and tagged v0.15.0 (2026-09-02): the design brief, its three anchors and advisory, the glossary's context map, craft rule §13, the housekeeping clock and its pass, and "strategic" pinned to Ousterhout (ADR-0002). Open: #87 (worktree vs topmost-config linters), #99 (Agent Plugins spike, parked), #97 (closable — owes its reporter a note on why `.agents/skills` won over `.llm/skills`). |
+| **Active worktrees** | None. The 0.18.0 wave (PRD #170) landed one car at a time between 2026-09-09 and 2026-09-17: #179, #180, #181, #182, #183, #184, #185, then the tag. Open follow-ups from its reviews: #186 (two suites depend on the developer's locale and `tag.sort`), #187 (the stdout/stderr test runner is copied across three suites), #188 (`--set-file` for a large diff), #189 (the docs gate does not scan the glossary), #190 (the pairing guard is inactive in the kit's own repo). Still open from before: #87, #99. |
 
 ### Open questions / unresolved decisions
 
@@ -1085,3 +1085,45 @@ release delta, the kit's thirteen rewordings, the surfaces the advisory does
 not scan, and the adapters' — were committed on 2026-09-07 and 2026-09-08,
 and the 0.16.0 tag itself was cut on 2026-09-07. The session's clock had moved while they were
 written; the entries stand as written, and this line is their date.
+
+### 2026-09-17 — 0.18.0: the agent-harness axis
+
+One file joins the shared layer and three change content. A capability tier
+may now name the **agent harness** it runs in — `<agent harness>:<model id>`,
+declared in `AGENT_HARNESSES` — and `scripts/agent-dispatch.sh`, the kit's
+first executable spawn path, runs a tier there with a prompt built from
+`.agents/prompts/`. ADR-0005 records the axis, the dispatcher's home, and the
+word: the glossary now says *docs harness* and *agent harness* and bans the
+bare one, because it had meant two things since the adapters were written and
+nothing said which. The cross-vendor reviewer that
+`templates/workflows/ai-review.example.yml` could only reach from CI — its own
+header says that leg cannot be reached from inside the authoring session — is
+reachable from a session.
+
+The wave ran the kit's own chain end to end, and the chain earned its cost
+several times over. `/grill-with-docs` found the glossary collision before a
+line was written. Every PR's fresh-context review on a different model found
+something real, verified before it was fixed: a banned-word rule that flagged
+its own prescribed replacements (#179), a self-host assertion that tested the
+machine rather than the repo (#180), a spawn silently landing on the wrong agent harness after a
+capitalisation typo (#182), **two CRITICALs** in the dispatcher — command
+execution through the prompt-file path (#183), and a `--set` value truncated
+at its first newline with `NAME=VALUE` lines from an untrusted ticket body
+promoted into the marker namespace (#185) — three test legs that could not
+fail (#184), and a pty fixture that hung CI on a short answer list (#184).
+
+Two plan defects, both caught by review against the manual rather than by the
+author. `/to-tickets` budgeted the version bump into a separate release
+ticket, which hard rule 3 forbids in as many words; the release action was
+folded into #181 and the release ticket shrank to the tag. And with the release
+folded in, "the bump's merge commit" and "the commit the tag belongs on" were
+no longer the same commit: F3 requires every manifest file to be byte-identical
+to the tag, and #185 changed shared layer after #181 landed, so the tag is on
+the merge of #185. The next wave that folds a release in will meet the same
+fork.
+
+One mystery closed by accident. `self-host`'s "delta probe missed a category"
+failed on every branch for the whole wave and was set aside as pre-existing —
+true, and incurious. A reviewer's aside on #185 identified it as a locale
+sort-order artifact; it is green under `LC_ALL=C`. Filed as #186, beside the
+`tag.sort` cousin that #181 had already fixed from inside the same trap.

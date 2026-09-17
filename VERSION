@@ -457,8 +457,8 @@
 # the release-delta probe (self-host F6) and the kit's own thirteen
 # rewordings.
 # 0.18.0 — a capability tier may name the AGENT HARNESS it runs in, and the
-# word "harness" stops meaning two things (ADR-0005). No file joins or leaves
-# the layer in this release; ONE FILE JOINS IT — scripts/agent-dispatch.sh,
+# word "harness" stops meaning two things (ADR-0005). ONE FILE JOINS the
+# layer — scripts/agent-dispatch.sh,
 # which turns a resolved (agent harness, model) pair into a running worker and
 # is the kit's first executable spawn path. It exits 3 rather than an error
 # when a tier names no agent harness, which is every tier in every project that
