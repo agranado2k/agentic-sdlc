@@ -511,14 +511,21 @@
 # against the file. tests/implement-deliver.test.sh matches the delivery
 # mechanism's bold label instead of the prose after it.
 # 0.19.0 — the dispatcher's edges, found by using it. No file joins or leaves
-# the layer; ONE shared file changed CONTENT. scripts/agent-dispatch.sh no
+# the layer; two shared files changed CONTENT. scripts/agent-dispatch.sh no
 # longer lets a worker inherit the dispatcher's stdin: found live, dispatching
 # to an agent harness whose CLI reads stdin when it is not a tty — the worker
 # blocked forever on the inherited open pipe, and returned in fourteen seconds
 # with the pipe closed. The prompt reaches a worker by {prompt_file}, so a
 # template that redirects from it still gets it and one that does not gets
-# nothing. UPDATING.md's transcripts are re-captured to the new version and
-# nothing in the recipe moved.
+# nothing. And the docs harness's banned-words validator now scans the
+# GLOSSARY too — the canonical document for the language was the one file
+# free to contradict the rule it defines, and two of its own entries did until
+# a reviewer read them by hand; the banned section and every _Avoid_ item are
+# exempt, because writing the word is their job. So TWO shared files changed
+# content: scripts/agent-dispatch.sh and
+# scripts/docs-conformance/validators/banned-words.mjs. UPDATING.md's
+# transcripts are re-captured to the new version and nothing in the recipe
+# moved.
 #   A project that has never dispatched to another agent harness cannot tell
 # this release from the last.
 #   NON-MANIFEST HALF, enumerated. tests/agent-dispatch.test.sh holds the

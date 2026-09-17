@@ -102,9 +102,9 @@ Grouped by the seam each term belongs to. Entry shape:
   `scripts/check.sh` runs a **reduced POSIX fallback** and prints a notice
   naming what it can no longer see.
   - _Avoid_: "the validator" for the whole tree — a *validator* is one module
-    under `scripts/docs-conformance/validators/`. Also avoid the bare
-    **harness**, which since the agent-harness axis means two things here; see
-    "Words this project does not use".
+    under `scripts/docs-conformance/validators/`; and the bare "harness", which
+    since the agent-harness axis means two things here — see "Words this
+    project does not use".
 - **Rule id** — the kebab-case name a violation reports under:
   `placeholder-unstamped`, `root-manual-missing`, `shared-layer-missing`,
   `path-missing`, `skill-missing`, `article-unreferenced`, `shim-invalid`,

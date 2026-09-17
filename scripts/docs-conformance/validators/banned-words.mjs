@@ -112,6 +112,39 @@ function lineAt(text, offset) {
   return n;
 }
 
+/** The glossary's scannable prose: the banned section and every `_Avoid_:`
+ *  line blanked in place. */
+function glossaryProse(text) {
+  const lines = text.split("\n");
+  let inBanned = false;
+  let level = 0;
+  // An _Avoid_ item runs until a line indented no deeper than its own bullet
+  // — the next bullet, a blank, or a heading — so a near-synonym named on its
+  // second line is as exempt as one on its first.
+  let avoidIndent = -1;
+  return lines
+    .map((line) => {
+      const h = /^(#{1,6})\s+(.*?)\s*$/.exec(line);
+      if (h) {
+        avoidIndent = -1;
+        if (inBanned && h[1].length <= level) inBanned = false;
+        if (!inBanned && h[2] === SECTION_HEADING) {
+          inBanned = true;
+          level = h[1].length;
+        }
+      }
+      const avoid = /^(\s*)-\s*_Avoid_:/.exec(line);
+      if (avoid) avoidIndent = avoid[1].length;
+      else if (avoidIndent >= 0) {
+        const indent = /^(\s*)\S/.exec(line);
+        if (!indent || indent[1].length <= avoidIndent) avoidIndent = -1;
+      }
+      if (inBanned || avoidIndent >= 0) return line.replace(/[^\n]/g, " ");
+      return line;
+    })
+    .join("\n");
+}
+
 function scanTargets(ctx) {
   const refs = ctx.config.claudeMdRefs ?? {};
   const cfg = ctx.config.bannedWords ?? {};
@@ -145,10 +178,17 @@ export function run(ctx) {
   if (entries.length === 0) return [];
 
   const out = [];
-  for (const file of scanTargets(ctx)) {
+  // The glossary is scanned too — it is the canonical document for the
+  // language and was the one file free to contradict the rule it defines:
+  // after a word was banned, two of the glossary's own entries went on using
+  // it, and nothing said so until a reviewer read them by hand. Two parts of
+  // it are exempt because writing the word is their job: the banned section
+  // itself, and any `_Avoid_:` line, which exists to name the near-synonym.
+  // Both are blanked rather than cut, so line numbers stay true.
+  for (const file of [...scanTargets(ctx), glossary]) {
     const raw = ctx.read(file);
     if (raw == null) continue;
-    const body = prose(raw);
+    const body = file === glossary ? glossaryProse(prose(raw)) : prose(raw);
     for (const entry of entries) {
       // Matched over the whole text with whitespace in a phrase matching any
       // run of it, so a multi-word term split across a line break is still
