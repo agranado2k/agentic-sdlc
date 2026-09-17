@@ -313,7 +313,7 @@ answers produce a clean project.
 | See what the gate actually checks   | `scripts/docs-conformance/` — one validator per rule |
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — policy as data. Its POSIX twin lives in `scripts/check.sh`; the two lists move together |
 | Test the gate itself                | `scripts/docs-conformance/test/` — fixture trees, one per rule |
-| Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
+| Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts. **In THIS repo** that file ships empty on purpose; the kit's own pattern is `scripts/guards.kit.config.sh`, never shipped, and `sh scripts/guards.kit.sh <base> <head>` runs the pairing guard against it — the same arrangement as `agents.kit.sh` |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
