@@ -523,7 +523,11 @@
 # a reviewer read them by hand; the banned section and every _Avoid_ item are
 # exempt, because writing the word is their job. So TWO shared files changed
 # content: scripts/agent-dispatch.sh and
-# scripts/docs-conformance/validators/banned-words.mjs. UPDATING.md's
+# scripts/docs-conformance/validators/banned-words.mjs. Two consumer-owned files
+# followed it, named here because the delta probe holds the note to what moved:
+# scripts/docs-conformance/config.mjs's scan-scope comment and
+# templates/docs/domain-glossary.md.template's, both of which described the old
+# scope. UPDATING.md's
 # transcripts are re-captured to the new version and nothing in the recipe
 # moved.
 #   A project that has never dispatched to another agent harness cannot tell
