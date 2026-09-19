@@ -572,10 +572,16 @@ skeleton (K0).
   commit. The demo suites are the builders' oracle in the large — the docs
   demo's pinned transcripts did not move when it adopted them.
 
-- `sh tests/suite-budget.test.sh` holds the seam `tests/lib.sh` takes the
-  worker budget through (ADR-0006, #209): sourcing `scripts/agent-dispatch.sh`
-  defines its derivation and runs nothing, and `_budget_derive` answers what
-  the dispatcher's own dry run shows against the same fake host.
+- `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
+  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
+  sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
+  runs nothing, a stub suite run through the harness against a fake host
+  comes back inside a budget of that host's numbers, a fork loop and a
+  greedy allocation come back as failures naming the ceiling with exit 71
+  while the calling shell still forks, the rlimit rung refuses forks inside
+  the suite's own shell, the off switch runs a stub bare and says so, the
+  marker bounds the recursion, and a scope that refuses to open falls to
+  rlimits out loud.
 
 - `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
   set of path roots: the reduced POSIX form's list must equal the policy

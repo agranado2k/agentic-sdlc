@@ -1,5 +1,7 @@
 #!/bin/sh
-# tests/lib.sh — the kit's tiny test harness. Sourced, never executed.
+# tests/lib.sh — the kit's tiny test harness. Sourced, never executed. Every
+# suite runs INSIDE THE WORKER BUDGET from the moment it sources this file —
+# "the budget" below says how, and how to turn it off.
 #
 # The kit's core is POSIX sh and git, so its tests are too: no runner, no
 # package.json, no install. `sh tests/<name>.test.sh` is the whole invocation.
@@ -24,14 +26,202 @@ LAST_STATUS=0
 #
 # Pinned HERE, at source time, not in t_init: seven suites never call t_init,
 # and a pin that a suite has to opt into is the coupling this is removing.
-# Three suites source no lib at all (adapters-demo, setup-demo, kit-demo) and
-# carry the same two lines themselves. The same posture t_git_identity takes
-# for signing and hooks paths — a developer's environment does not decide what
-# a test asserts — and tests/fixture-builders.test.sh holds this one the way it
-# holds those. A suite that means to test a locale sets LC_ALL on the command
-# itself, as agents-tiers does, and a prefix still wins over an export.
+# Three suites carry their own assertion helpers (adapters-demo, setup-demo,
+# kit-demo) and source this file for the pin and the budget below alone. The
+# same posture t_git_identity takes for signing and hooks paths — a
+# developer's environment does not decide what a test asserts — and
+# tests/fixture-builders.test.sh holds this one the way it holds those. A
+# suite that means to test a locale sets LC_ALL on the command itself, as
+# agents-tiers does, and a prefix still wins over an export.
 LC_ALL=C
 export LC_ALL
+
+# The repo root, derived once from the suite that sourced this harness; every
+# helper below anchors on it rather than on the working directory.
+T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+# --- the budget --------------------------------------------------------------
+# EVERY SUITE RUNS INSIDE THE BUDGET A DISPATCHED WORKER GETS (ADR-0006, #209):
+# a task ceiling and a memory ceiling on its whole process tree, derived from
+# this host by the dispatcher's own code — this file sources
+# scripts/agent-dispatch.sh for the derivation, the rung and the scope
+# properties, so a suite and a worker cannot disagree about a number — and
+# applied down the same ladder: a transient scope under the user service
+# manager, else rlimits in the suite's own shell (weaker, and said so on
+# stderr), else a loud no-op. Found live: a runaway suite filled the login
+# session's task ceiling and froze the host three times (#205). Inside the
+# scope a runaway fails at its ceiling instead, and after the suite exits a
+# wrapper reads the scope's pids.events / memory.events (builtins only: at the
+# task ceiling a fork of its own would be refused) and turns a hit into
+#
+#   FAIL  <suite> hit its TASK ceiling (N tasks) …   exit 71 (EX_OSERR)
+#
+# whatever the suite itself printed — a suite that hit a ceiling did not run
+# whole — while the calling shell forks on. On the rlimit rung a hit is not
+# observable (the ADR says why) and the suite's own status passes through.
+#
+# HOW A SUITE GETS THERE WITHOUT A RUNNER. The first time this file is sourced
+# it derives the budget and runs `sh "$0" "$@"` — the suite again, from its
+# first line — inside it, with AGENT_SUITE_BUDGET set to what was applied; the
+# second sourcing sees that and carries on into the suite. That marker is the
+# recursion bound (#206's lesson): a run that lost it would derive again and
+# open a second scope — a SIBLING under the user manager, never a child — so
+# nothing here leans on an outer scope as a backstop, and no suite should.
+# The lines above a suite's source line run in both runs, so keep them free
+# of side effects; the outer run's own EXIT trap still fires when it exits
+# with the inner run's status.
+#
+# AGENT_SUITE_BUDGET is the one switch:
+#   unset (or empty)   derive and apply — the default
+#   off                the suite runs bare, as before #209; said on stderr
+#   applied: …         set by this file for the inner run; never set it yourself
+# Anything else is refused, exit 2: a typo must not read as "inside". Inside a
+# dispatched worker (AGENT_DISPATCH_BUDGET_TASKS set) the suite is already
+# inside that worker's budget and opens none of its own (ADR-0006 clause 7).
+# The policy the budget is derived under is the kit's own,
+# scripts/agents.kit.config.sh, never the environment's $AGENTS_CONFIG — the
+# defaults today, and the place to tighten the suite's budget if a clamp is
+# ever reached in ordinary running. AGENT_DISPATCH_HOST_ROOT reaches the
+# derivation as it reaches the dispatcher: tests/suite-budget.test.sh hands
+# stub suites a small fake host through it.
+
+# _sb_note <line> — one stderr line; every line the harness says about the
+# budget is prefixed `tests/lib.sh:` so it reads as the harness's, not the
+# suite's.
+_sb_note() { echo "$1" >&2; }
+
+# t_suite_under_budget <suite> [args…] — run the suite inside the budget
+# _budget_derive left in BUDGET_TASKS / BUDGET_MEMORY / BUDGET_RUNG, down the
+# rung the host offers. Called in the subshell that sourced the dispatcher —
+# its set -u, its `die` and its names stay there — and exits with the suite's
+# status, or 71 on a ceiling hit.
+t_suite_under_budget() {
+	case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
+	*"below the floor"*)
+		_sb_note "!  tests/lib.sh: this host is small — a derived budget was raised to the floor (tasks $BUDGET_TASKS: $BUDGET_TASKS_FROM; memory $BUDGET_MEMORY MiB: $BUDGET_MEMORY_FROM)"
+		;;
+	esac
+	_sb_rung=$BUDGET_RUNG
+	case "$_sb_rung" in
+	scope | scope-tasks)
+		# Decided before the run, as the dispatcher decides it: an empty scope
+		# with the real properties opens and closes first, and a refusal there
+		# falls to the weaker rung out loud, with systemd-run's own message.
+		_budget_scope_props "$_sb_rung"
+		# shellcheck disable=SC2086  # the properties are a word list on purpose
+		if ! _sb_err=$(systemd-run --user --scope $SCOPE_PROPS --quiet true 2>&1 >/dev/null); then
+			_sb_note "!  tests/lib.sh: the transient scope cannot open — systemd-run refused after the probe passed: ${_sb_err:-(no message)}"
+			if [ -n "$NPROC_FLAG" ]; then _sb_rung=rlimit; else _sb_rung=none; fi
+			_sb_note "   Running the suite under the $_sb_rung rung instead."
+		fi
+		;;
+	esac
+	[ "$_sb_rung" = scope-tasks ] &&
+		_sb_note "i  tests/lib.sh: the memory controller is not delegated to the user manager on this host — the memory ceiling ($BUDGET_MEMORY MiB) is announced and not applied; the task ceiling ($BUDGET_TASKS) is"
+	AGENT_SUITE_BUDGET="applied: tasks $BUDGET_TASKS, memory $BUDGET_MEMORY MiB, rung $_sb_rung"
+	export AGENT_SUITE_BUDGET
+	case "$_sb_rung" in
+	scope | scope-tasks)
+		# The wrapper inside the scope runs the suite, then reads its own
+		# cgroup's counters and writes them to a file this side reads: the
+		# verdict is that flag, never the suite's own status. The scope is named
+		# after the suite so a stray one can be listed.
+		_sb_verdict=$(mktemp) || exit 2
+		trap 'rm -f "$_sb_verdict"' EXIT
+		_sb_unit="suite-$(printf '%s' "${1##*/}" | sed 's/\.sh$//; s/[^A-Za-z0-9-]/-/g')-$$"
+		_sb_wrap=$(
+			_budget_counters_text
+			cat <<'WRAP'
+_own=""
+while IFS= read -r _l; do case "$_l" in 0::*) _own=${_l#0::} ;; esac; done </proc/self/cgroup 2>/dev/null
+_verdict=$1
+shift
+sh "$@"
+_st=$?
+_cg_counters "$_own"
+printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$_verdict"
+exit "$_st"
+WRAP
+		)
+		# shellcheck disable=SC2086  # the properties are a word list on purpose
+		systemd-run --user --scope --unit="$_sb_unit" $SCOPE_PROPS --quiet sh -c "$_sb_wrap" suite-under-budget "$_sb_verdict" "$@"
+		_sb_st=$?
+		_sb_pm="" _sb_ok="" _sb_rest=""
+		[ -f "$_sb_verdict" ] && read -r _sb_pm _sb_ok _sb_rest <"$_sb_verdict" 2>/dev/null
+		# An unreadable verdict is its own outcome, said aloud, with the run's
+		# status passed through — never a silent zero (ADR-0006, driver 4).
+		case "$_sb_pm" in
+		'') _sb_note "!  tests/lib.sh: the scope's verdict is missing — the wrapper did not survive to write it (a pressure kill takes every process in the cgroup). The budget verdict cannot be read; the run's own status ($_sb_st) passes through."; exit "$_sb_st" ;;
+		-) _sb_note "!  tests/lib.sh: pids.events could not be read inside the scope. The budget verdict cannot be read; the run's own status ($_sb_st) passes through."; exit "$_sb_st" ;;
+		*[!0123456789]*) _sb_note "!  tests/lib.sh: the scope's verdict is malformed ('$_sb_pm $_sb_ok $_sb_rest'). The run's own status ($_sb_st) passes through."; exit "$_sb_st" ;;
+		esac
+		if [ "$_sb_pm" -gt 0 ]; then
+			printf '  FAIL  %s hit its TASK ceiling (%s tasks): a fork in its process tree was refused %s time(s) — whatever it printed above, it did not run whole. Exit 71 (EX_OSERR).\n' "$1" "$BUDGET_TASKS" "$_sb_pm"
+			exit 71
+		fi
+		if [ "$_sb_rung" = scope ]; then
+			case "$_sb_ok" in
+			'' | -) _sb_note "!  tests/lib.sh: memory.events could not be read inside the scope. The memory verdict cannot be read; the run's own status ($_sb_st) passes through."; exit "$_sb_st" ;;
+			*[!0123456789]*) _sb_note "!  tests/lib.sh: the scope's verdict is malformed ('$_sb_pm $_sb_ok $_sb_rest'). The run's own status ($_sb_st) passes through."; exit "$_sb_st" ;;
+			esac
+			if [ "$_sb_ok" -gt 0 ]; then
+				printf '  FAIL  %s hit its MEMORY ceiling (%s MiB): a process in its tree was OOM-killed inside its cgroup %s time(s) — whatever it printed above, it did not run whole. Exit 71 (EX_OSERR).\n' "$1" "$BUDGET_MEMORY" "$_sb_ok"
+				exit 71
+			fi
+		fi
+		exit "$_sb_st"
+		;;
+	rlimit)
+		# ulimit in the suite's own shell, before the suite: the process count
+		# under the flag this sh spells it with (-u; -p on dash), the data
+		# segment in KiB. Weaker, per the ADR: RLIMIT_NPROC counts the uid, and
+		# RLIMIT_DATA is per process. A refused ulimit is heard, and the suite
+		# still runs.
+		_sb_note "i  tests/lib.sh: budget tasks $BUDGET_TASKS, memory $BUDGET_MEMORY MiB — applied by rlimits (ulimit $NPROC_FLAG, ulimit -d), the weaker rung: no user service manager answered, or it has no pids controller delegated; per process, and the task count is the user's, not the tree's"
+		exec sh -c 'ulimit "$1" "$2" || echo "!  tests/lib.sh: ulimit $1 refused the task ceiling $2 — the rlimit rung applies no task bound" >&2
+ulimit -d $(($3 * 1024)) || echo "!  tests/lib.sh: ulimit -d refused the memory ceiling $3 MiB — the rlimit rung applies no memory bound" >&2
+shift 3
+exec sh "$@"' suite-under-budget "$NPROC_FLAG" "$BUDGET_TASKS" "$BUDGET_MEMORY" "$@"
+		;;
+	*)
+		_sb_note "!  tests/lib.sh: no user service manager and no rlimit on this host — the budget (tasks $BUDGET_TASKS, memory $BUDGET_MEMORY MiB) is announced and not applied. The suite runs unbounded, as before."
+		exec sh "$@"
+		;;
+	esac
+}
+
+case "${AGENT_SUITE_BUDGET:-}" in
+"applied: "*) ;;
+off)
+	_sb_note "!  tests/lib.sh: AGENT_SUITE_BUDGET=off — $0 runs with NO budget. A runaway suite then takes the session's whole task ceiling and memory with it."
+	;;
+'')
+	if [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
+		_sb_note "i  tests/lib.sh: inside a dispatched worker's budget (tasks $AGENT_DISPATCH_BUDGET_TASKS, memory ${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-?} MiB) — $0 runs there and opens none of its own"
+	else
+		(
+			_dispatch_here="$T_ROOT/scripts"
+			# The kit's policy file, for the derivation only: the dispatcher's
+			# policy reader takes the shell variable, and the suite must then see
+			# the environment it was started with — a suite that resolves tiers
+			# would otherwise resolve them through the kit's own mapping.
+			_sb_cfg_was=${AGENTS_CONFIG-}
+			_sb_cfg_set=${AGENTS_CONFIG+set}
+			AGENTS_CONFIG="$T_ROOT/scripts/agents.kit.config.sh"
+			# shellcheck disable=SC1091
+			. "$T_ROOT/scripts/agent-dispatch.sh"
+			_budget_derive
+			if [ -n "$_sb_cfg_set" ]; then AGENTS_CONFIG=$_sb_cfg_was; else unset AGENTS_CONFIG; fi
+			t_suite_under_budget "$0" "$@"
+		)
+		exit $?
+	fi
+	;;
+*)
+	_sb_note "x  tests/lib.sh: AGENT_SUITE_BUDGET takes 'off' or nothing, got '$AGENT_SUITE_BUDGET' — unset it to run under the budget, or set it to off to run bare"
+	exit 2
+	;;
+esac
 
 # --- the split-stream runner -------------------------------------------------
 # The resolver's and the dispatcher's whole contract is "the answer on stdout,
@@ -137,9 +327,9 @@ s_assert_err_lacks() {
 # There are three copies of this helper, and at least one of them must stay a
 # copy: `mark` in `bootstrap.sh` ships into a consumer tree that has no `tests/`
 # to source from, so it cannot be deduplicated into this file at any price.
-# `mark` in `tests/kit-demo.sh` is the third; that suite carries its own harness
-# and sources nothing at all. If you are here to remove duplication, remove that
-# one — never bootstrap's.
+# `mark` in `tests/kit-demo.sh` is the third; that suite carries its own
+# assertion helpers and sources this file for the pin and the budget alone. If
+# you are here to remove duplication, remove that one — never bootstrap's.
 _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
@@ -378,10 +568,6 @@ strip_nested_worktrees() {
 			esac
 		done
 }
-
-# The repo root, derived once from the suite that sourced this harness; every
-# helper below anchors on it rather than on the working directory.
-T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 # The manifest grammar, shared with the gate and bootstrap. Sourced here so
 # every suite reads VERSION one way — and asserted, so a module that loads
