@@ -93,8 +93,9 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
      smallest numeric `pids.max` on the path from the dispatcher's own cgroup
      (the `0::` line of `/proc/self/cgroup`) up to the root — on a systemd
      host, the user slice's `TasksMax`. Where no cgroup on that path sets one,
-     it is the per-user process limit (`ulimit -u`). Where that is `unlimited`
-     too, the policy ceiling stands in. The dispatch reports which.
+     it is the per-user process limit (`ulimit -u`, or `-p` under dash).
+     Where that is `unlimited` too, the policy ceiling stands in. The
+     dispatch reports which.
    - The memory ceiling is `AGENT_BUDGET_MEMORY_PERCENT` of **`MemAvailable`**
      in `/proc/meminfo`, read at dispatch time — what the host could give right
      now, not what it has installed.
@@ -143,11 +144,14 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
       incident's host offers, and the rung the suites are run under by hand
       until #209.
    2. **rlimits in the worker's shell** where there is no user manager:
-      `ulimit -u <tasks>` for tasks and `ulimit -d <KiB>` (`RLIMIT_DATA`) for
-      memory. Weaker, and the dispatch says so: `RLIMIT_NPROC` counts every
-      process of the uid, so the worker stops forking when the *uid* reaches
-      the number, not the tree; a per-process data limit bounds each process
-      and never their sum. Memory on this rung is best-effort.
+      `ulimit -u <tasks>` for tasks (`-p` under dash, which spells
+      `RLIMIT_NPROC` that way and has no `-u`; the dispatcher probes which
+      spelling its `sh` has, since neither is POSIX) and `ulimit -d <KiB>`
+      (`RLIMIT_DATA`) for memory. Weaker, and the dispatch says so:
+      `RLIMIT_NPROC` counts every process of the uid, so the worker stops
+      forking when the *uid* reaches the number, not the tree; a per-process
+      data limit bounds each process and never their sum. Memory on this rung
+      is best-effort.
    3. **A loud no-op** where the shell cannot set an rlimit either: the budget
       is derived, announced on stderr as not applied, and the worker runs as
       before. Never silent.

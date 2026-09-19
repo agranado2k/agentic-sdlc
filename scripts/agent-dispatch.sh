@@ -619,6 +619,22 @@ _budget_clamp() {
 	fi
 }
 
+# _budget_nproc_flag — the ulimit option that reads and sets the per-user
+# process limit under THIS sh: -u for bash, zsh and ksh; -p for dash, which
+# spells the same limit differently (it has no -u, and bash's -p is the pipe
+# size, which cannot be set — so the order below is safe both ways). Found by
+# CI, whose sh is dash. Probed by setting the limit to itself in a subshell;
+# a shell with neither prints nothing, and that is the ladder's third rung.
+_budget_nproc_flag() {
+	for _bnf in -u -p; do
+		if (ulimit "$_bnf" "$(ulimit "$_bnf" 2>/dev/null)") >/dev/null 2>&1; then
+			printf '%s' "$_bnf"
+			return 0
+		fi
+	done
+	return 1
+}
+
 # _budget_rung — the highest rung of ADR-0006's ladder this host offers,
 # probed rather than configured: a policy file cannot know what host it is
 # on. `scope` needs systemd-run and a user manager that answers; `rlimit`
@@ -626,7 +642,7 @@ _budget_clamp() {
 _budget_rung() {
 	if command -v systemd-run >/dev/null 2>&1 && systemctl --user show --property=Version >/dev/null 2>&1; then
 		echo scope
-	elif (ulimit -u "$(ulimit -u)") >/dev/null 2>&1; then
+	elif [ -n "$NPROC_FLAG" ]; then
 		echo rlimit
 	else
 		echo none
@@ -639,6 +655,7 @@ _budget_rung() {
 # would escape the outer's ceiling — so the outer's numbers arrive by
 # environment and are taken as given.
 BUDGET_MODE="" BUDGET_TASKS="" BUDGET_TASKS_FROM="" BUDGET_MEMORY="" BUDGET_MEMORY_FROM="" BUDGET_RUNG=""
+NPROC_FLAG=$(_budget_nproc_flag) || NPROC_FLAG=""
 # Each read is a command substitution, so a `die` inside it ends the subshell
 # and not this script: the status is checked here, where it can.
 BUDGET_TASKS_FLOOR=$(_budget_policy TASKS_FLOOR "$BUDGET_DEFAULT_TASKS_FLOOR") || exit 2
@@ -665,7 +682,8 @@ else
 		BUDGET_TASKS=$_bc_value
 		BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the pids.max of cgroup $_bt_where${_bc_note:+: $_bc_note}"
 	else
-		_bt_base=$(ulimit -u 2>/dev/null)
+		_bt_base=""
+		[ -n "$NPROC_FLAG" ] && _bt_base=$(ulimit "$NPROC_FLAG" 2>/dev/null)
 		case "$_bt_base" in
 		'' | *[!0123456789]*)
 			BUDGET_TASKS=$BUDGET_TASKS_CEILING
@@ -674,7 +692,7 @@ else
 		*)
 			_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
 			BUDGET_TASKS=$_bc_value
-			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (ulimit -u — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (ulimit $NPROC_FLAG — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
 			;;
 		esac
 	fi
@@ -724,7 +742,7 @@ if [ "$DRY_RUN" = 1 ]; then
 		printf '                memory %s MiB — %s (floor %s, ceiling %s)\n' "$BUDGET_MEMORY" "$BUDGET_MEMORY_FROM" "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
 		case "$BUDGET_RUNG" in
 		scope) printf '                rung: a transient scope under the user service manager (systemd-run --user --scope,\n                TasksMax and MemoryMax on the worker'"'"'s own cgroup, shared by its whole tree)\n' ;;
-		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit -u, ulimit -d) — weaker: no user service\n                manager answered; per process, and the task count is the user'"'"'s, not the tree'"'"'s\n' ;;
+		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit %s, ulimit -d) — weaker: no user service\n                manager answered; per process, and the task count is the user'"'"'s, not the tree'"'"'s\n' "$NPROC_FLAG" ;;
 		*) printf '                rung: NONE — no user service manager and no rlimit; the budget would be announced and not applied\n' ;;
 		esac
 		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
