@@ -943,6 +943,17 @@ s_assert_out_has 'inherited' "…and the inherited budget wins"
 s_assert_out_has 'cannot escape' "…the budget line saying that --no-budget cannot leave the outer cgroup"
 s_assert_out_lacks 'DISABLED' "…not the off switch"
 s_assert_err_has "cannot escape"
+# The inherited pair is held to the same validator as everything else, and
+# an outer dispatch exports both or neither: a lone task ceiling is refused,
+# not shown beside a '?'.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS='rm -rf x' AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 2 "an inherited task ceiling that is not a whole number is refused"
+s_assert_err_has "AGENT_DISPATCH_BUDGET_TASKS"
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 2 "an inherited task ceiling with no memory ceiling beside it is refused"
+s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
 
 # The rung is probed, not configured. A stub systemctl on PATH that answers
 # stands in for a user service manager; one that fails stands in for none.

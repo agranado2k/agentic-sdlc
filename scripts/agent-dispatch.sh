@@ -708,6 +708,12 @@ if [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
 	BUDGET_MODE=inherited
 	BUDGET_TASKS=$AGENT_DISPATCH_BUDGET_TASKS
 	BUDGET_MEMORY=${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}
+	# Taken from the outer dispatch, but not on trust: the next release hands
+	# these to the mechanism, and an outer dispatch exports both or neither.
+	_whole_number "AGENT_DISPATCH_BUDGET_TASKS, inherited from the outer dispatch," "$BUDGET_TASKS"
+	[ -n "$BUDGET_MEMORY" ] ||
+		die "AGENT_DISPATCH_BUDGET_TASKS is set and AGENT_DISPATCH_BUDGET_MEMORY_MIB is not — an outer dispatch exports both or neither"
+	_whole_number "AGENT_DISPATCH_BUDGET_MEMORY_MIB, inherited from the outer dispatch," "$BUDGET_MEMORY"
 elif [ "$NO_BUDGET" = 1 ]; then
 	BUDGET_MODE=disabled
 else
@@ -773,7 +779,7 @@ if [ "$DRY_RUN" = 1 ]; then
 		echo "   then takes the session's whole task ceiling and memory with it." >&2
 		;;
 	inherited)
-		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "${BUDGET_MEMORY:-?}"
+		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "$BUDGET_MEMORY"
 		printf '                a nested worker shares the outer ceiling\n'
 		if [ "$NO_BUDGET" = 1 ]; then
 			printf '                --no-budget cannot escape it: this dispatch is inside the outer dispatch'"'"'s cgroup\n'

@@ -193,9 +193,12 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
 7. **Nesting.** A dispatch inside a dispatched worker runs **inside the
    outer's budget and never opens a fresh one**. The outer dispatcher exports
    the budget it applied into the worker's environment as
-   `AGENT_DISPATCH_BUDGET_TASKS` and `AGENT_DISPATCH_BUDGET_MEMORY_MIB`; an
-   inner dispatcher that finds them set derives nothing, opens no scope, sets
-   no rlimit, and says on its dry-run that it inherited. A scope opened inside
+   `AGENT_DISPATCH_BUDGET_TASKS` and `AGENT_DISPATCH_BUDGET_MEMORY_MIB` —
+   both or neither; an inner dispatcher that finds them set derives nothing,
+   opens no scope, sets no rlimit, and says on its dry-run that it inherited.
+   The pair is held to the same validator as the flags and the policy file,
+   and one without the other is refused: the inner dispatch hands the numbers
+   to the mechanism, so it takes them as given but not on trust. A scope opened inside
    a scope would be a *sibling* under the user manager, outside the outer's
    cgroup — the escape this clause forbids. So a chain of nested workers
    shares one ceiling however deep #206 lets it go; the depth is #206's own
