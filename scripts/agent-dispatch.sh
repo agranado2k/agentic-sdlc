@@ -1047,6 +1047,27 @@ _budget_announce
 # an awk, a sed — would itself be rejected and the verdict lost.
 SCOPE_STARTED="$SCRATCH/scope-started"
 SCOPE_VERDICT="$SCRATCH/scope-verdict"
+# The scope is named after the scratch, so the dispatcher can reach the whole
+# cgroup after the spawn — on a timeout, the ppid walk finds only the subtree
+# still under the worker, and a child the worker double-forked has been
+# re-parented out of it before the snapshot; the cgroup still holds it. The
+# mktemp suffix is letters and digits, a valid unit name as it stands.
+SCOPE_UNIT="agent-dispatch-${SCRATCH##*.}.scope"
+# _cg_counters <cgroup path> — sets _pm (pids.events max) and _ok
+# (memory.events oom_kill), each `-` when its file could not be read. One
+# definition, sourced by the wrapper inside the scope and by the watchdog
+# outside it; builtins only, because inside the scope at the task ceiling a
+# fork of its own — an awk, a sed — would itself be rejected. "Could not read"
+# and "no ceiling hit" must not look alike (driver 4), hence `-`, never 0.
+SCOPE_COUNTERS="$SCRATCH/scope-counters.sh"
+cat >"$SCOPE_COUNTERS" <<'CNT'
+_cg_counters() {
+	_pm=- _ok=-
+	[ -n "$1" ] || return 0
+	{ while read -r _k _v _rest; do case "$_k" in max) _pm=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$1/pids.events" || _pm=-
+	{ while read -r _k _v _rest; do case "$_k" in oom_kill) _ok=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$1/memory.events" || _ok=-
+}
+CNT
 
 # _budget_scope_props <rung> — sets SCOPE_PROPS, the properties a scope carries
 # on that rung; the pre-flight and the real spawn open a scope with the same.
@@ -1077,26 +1098,20 @@ _budget_build_run_cmd() {
 		# AGENT_DISPATCH_* names the file documents). The command is
 		# single-quoted into the string; the quote itself is the one character
 		# that needs escaping inside single quotes.
-		# A counter the wrapper could not read is `-`, never 0: no `0::` line
-		# (no cgroup v2 path of its own), or an events file it cannot open.
-		# "Could not read" and "no ceiling hit" must not look alike (driver 4).
 		cat >"$SCRATCH/scope-wrapper.sh" <<'WRAP'
+. "${0%/*}/scope-counters.sh"
 _own=""
 while IFS= read -r _l; do case "$_l" in 0::*) _own=${_l#0::} ;; esac; done </proc/self/cgroup 2>/dev/null
 : >"$1"
 eval "$3"
 _st=$?
-_pm=- _ok=-
-if [ -n "$_own" ]; then
-	{ while read -r _k _v _rest; do case "$_k" in max) _pm=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$_own/pids.events" || _pm=-
-	{ while read -r _k _v _rest; do case "$_k" in oom_kill) _ok=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$_own/memory.events" || _ok=-
-fi
+_cg_counters "$_own"
 printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$2"
 exit "$_st"
 WRAP
 		_cmd_quoted=$(printf '%s\n' "$CMD" | sed "s/'/'\\\\''/g")
 		_budget_scope_props "$1"
-		RUN_CMD="systemd-run --user --scope $SCOPE_PROPS --quiet sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
+		RUN_CMD="systemd-run --user --scope --unit='${SCOPE_UNIT%.scope}' $SCOPE_PROPS --quiet sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
 		;;
 	rlimit)
 		# ulimit in the worker's shell, before the worker: -u/-p for the task
@@ -1174,11 +1189,35 @@ _signal_list() {
 	shift
 	for _sl_p in "$@"; do kill "-$_sl_sig" "$_sl_p" 2>/dev/null; done
 }
+# _scope_kill <signal> — the whole cgroup, orphans included; nothing to do off
+# the scope rungs, and nothing to say when the scope is already gone.
+_scope_kill() {
+	case "$RUN_RUNG" in
+	scope | scope-tasks) systemctl --user kill -s "$1" "$SCOPE_UNIT" >/dev/null 2>&1 ;;
+	esac
+}
+# _scope_counters_now — on a scope rung, read the scope's counters from OUTSIDE
+# it into SCOPE_VERDICT unless the wrapper already wrote them. For the watchdog,
+# before it signals: once the scope empties its cgroup and the counters are
+# gone, and a ceiling hit before the watchdog fired is the earlier event.
+_scope_counters_now() {
+	case "$RUN_RUNG" in
+	scope | scope-tasks) ;;
+	*) return 0 ;;
+	esac
+	[ -f "$SCOPE_VERDICT" ] && return 0
+	_scn_cg=$(systemctl --user show -p ControlGroup --value "$SCOPE_UNIT" 2>/dev/null)
+	[ -n "$_scn_cg" ] || return 0
+	. "$SCOPE_COUNTERS"
+	_cg_counters "$_scn_cg"
+	printf '%s %s %s\n' "$_pm" "$_ok" 124 >"$SCOPE_VERDICT"
+}
 _down() {
 	# Take the worker's tree and the watchdog down. Idempotent; safe to call
 	# from the trap and from the normal path both.
 	[ -n "${_worker:-}" ] && _signal_list TERM $(_tree_of "$_worker")
 	[ -n "${_watchdog:-}" ] && _signal_list TERM $(_tree_of "$_watchdog")
+	_scope_kill TERM
 }
 
 # _spawn_run — run RUN_CMD, untimed or under the watchdog. Sets _worker_status,
@@ -1227,10 +1266,12 @@ _spawn_run() {
 		# about to be sent.
 		: >"$TIMED_OUT"
 		echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
+		_scope_counters_now
 		_wd_list=$(_tree_of "$_worker")
 		_signal_list TERM $_wd_list
 		sleep 1
 		_signal_list KILL $_wd_list
+		_scope_kill KILL
 	) &
 	_watchdog=$!
 	wait "$_worker" 2>/dev/null
@@ -1266,41 +1307,70 @@ _budget_unread() {
 	echo "   The budget verdict cannot be read; the run's own status ($_worker_status) passes through." >&2
 	exit "$_worker_status"
 }
+# _budget_ceiling_hit — sets _hit to TASK, MEMORY or "" from a verdict file
+# that reads cleanly; returns 1 with the reason in _unread when it does not.
+_budget_ceiling_hit() {
+	_hit="" _unread=""
+	if [ ! -f "$SCOPE_STARTED" ]; then
+		_unread="the scope's started marker is missing after the spawn — the scope was torn
+   down before the worker started, or this dispatch's scratch was removed under it."
+		return 1
+	fi
+	if [ ! -f "$SCOPE_VERDICT" ]; then
+		_unread="the scope's verdict file is missing — the wrapper did not survive to write it
+   (the scope was torn down, or a pressure kill took the wrapper with the worker)."
+		return 1
+	fi
+	_v_pids="" _v_oom="" _v_rest=""
+	read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
+	case "$_v_pids" in
+	-) _unread="the pids.events counter could not be read inside the scope."; return 1 ;;
+	'' | *[!0123456789]*) _unread="the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')."; return 1 ;;
+	esac
+	case "$_v_oom" in
+	-)
+		if [ "$RUN_RUNG" = scope ]; then
+			_unread="the memory.events counter could not be read inside the scope."
+			return 1
+		fi
+		;;
+	'' | *[!0123456789]*) _unread="the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')."; return 1 ;;
+	esac
+	if [ "$_v_pids" -gt 0 ]; then
+		_hit=TASK
+	elif [ "$RUN_RUNG" = scope ] && [ "$_v_oom" -gt 0 ]; then
+		_hit=MEMORY
+	fi
+	return 0
+}
 _budget_verdict() {
 	case "$RUN_RUNG" in
-	scope | scope-tasks)
-		[ -f "$SCOPE_STARTED" ] ||
-			_budget_unread "the scope's started marker is missing after the spawn — the scope was torn
-   down before the worker started, or this dispatch's scratch was removed under it."
-		[ -f "$SCOPE_VERDICT" ] ||
-			_budget_unread "the scope's verdict file is missing — the wrapper did not survive to write it
-   (the scope was torn down, or a pressure kill took the wrapper with the worker)."
-		_v_pids="" _v_oom="" _v_rest=""
-		read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
-		case "$_v_pids" in
-		-) _budget_unread "the pids.events counter could not be read inside the scope." ;;
-		'' | *[!0123456789]*) _budget_unread "the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')." ;;
-		esac
-		case "$_v_oom" in
-		-) [ "$RUN_RUNG" = scope ] && _budget_unread "the memory.events counter could not be read inside the scope." ;;
-		'' | *[!0123456789]*) _budget_unread "the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')." ;;
-		esac
-		if [ "$_v_pids" -gt 0 ]; then
-			echo "x  dispatch: the worker hit its TASK ceiling ($BUDGET_TASKS) — its process tree could fork no further. Exit 71 (EX_OSERR)." >&2
-			exit 71
-		fi
-		if [ "$RUN_RUNG" = scope ] && [ "$_v_oom" -gt 0 ]; then
-			echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — the kernel OOM-killed it inside its cgroup. Exit 71 (EX_OSERR)." >&2
-			exit 71
-		fi
-		exit "$_worker_status"
-		;;
-	*)
-		exit "$_worker_status"
-		;;
+	scope | scope-tasks) ;;
+	*) exit "$_worker_status" ;;
 	esac
+	_budget_ceiling_hit || _budget_unread "$_unread"
+	case "$_hit" in
+	TASK) echo "x  dispatch: the worker hit its TASK ceiling ($BUDGET_TASKS) — its process tree could fork no further. Exit 71 (EX_OSERR)." >&2 ;;
+	MEMORY) echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — the kernel OOM-killed it inside its cgroup. Exit 71 (EX_OSERR)." >&2 ;;
+	*) exit "$_worker_status" ;;
+	esac
+	exit 71
 }
 
 _spawn_run
-[ "$_timed_out" = 1 ] && exit 124
+if [ "$_timed_out" = 1 ]; then
+	# Whichever fired first (ADR-0006 clause 6): the watchdog read the scope's
+	# counters before it signalled, and a ceiling hit already on them happened
+	# before the timeout did. A verdict that cannot be read here is not an
+	# outcome of its own — the timeout is what was observed.
+	case "$RUN_RUNG" in
+	scope | scope-tasks)
+		if _budget_ceiling_hit && [ -n "$_hit" ]; then
+			echo "x  dispatch: the worker hit its $_hit ceiling before it timed out — the ceiling fired first. Exit 71 (EX_OSERR)." >&2
+			exit 71
+		fi
+		;;
+	esac
+	exit 124
+fi
 _budget_verdict

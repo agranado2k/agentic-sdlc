@@ -1438,6 +1438,67 @@ EOF
 	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 40
 	s_assert_status 71 "budget and --timeout compose — the budget fired first, so 71"
 	s_assert_err_has "TASK ceiling"
+	# …and the EARLIER event wins even when the watchdog is what ends the run:
+	# a worker that hit the task ceiling and then stalled past --timeout is a
+	# ceiling hit (71) that also timed out, not a timeout (124) that hides it.
+	# The counters are read before the tree is signalled — once the scope
+	# empties, its cgroup and the counters are gone.
+	STALLER="$SCRATCH/staller"
+	cat >"$STALLER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+# The loop runs in a subshell and the stall is an exec: bash aborts a script
+# whose fork retry is interrupted, and the stall must outlive that.
+(
+	i=0
+	while [ $i -lt 80 ]; do
+		sleep 2 &
+		i=$((i + 1))
+	done
+)
+exec sleep 30
+EOF
+	chmod +x "$STALLER"
+	CFG_STALL="$SCRATCH/staller.config.sh"
+	cat >"$CFG_STALL" <<EOF
+AGENT_HARNESSES='sl'
+AGENT_HARNESS_SL_CMD='$STALLER {model_flag} < {prompt_file}'
+AGENT_HARNESS_SL_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='sl:'
+EOF
+	AGENTS_CONFIG="$CFG_STALL" dispatch implementer --prompt 'stall' --budget-tasks 64 --budget-memory 512 --timeout 5
+	s_assert_status 71 "a worker that hit its ceiling and then ran past --timeout exits 71 — the earlier event wins"
+	s_assert_err_has "TASK ceiling"
+	s_assert_err_has "timed out"
+
+	# On timeout the WHOLE scope is killed, not only the tree the ppid walk can
+	# see: a child the worker double-forked is re-parented out of the subtree
+	# before the snapshot, and only the cgroup still knows it. The scope is
+	# named after the dispatch's scratch, so the dispatcher can reach it.
+	ORPHANER="$SCRATCH/orphaner"
+	cat >"$ORPHANER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+( sleep 6161 >/dev/null 2>&1 & )
+sleep 30
+EOF
+	chmod +x "$ORPHANER"
+	CFG_ORPHAN="$SCRATCH/orphaner.config.sh"
+	cat >"$CFG_ORPHAN" <<EOF
+AGENT_HARNESSES='or'
+AGENT_HARNESS_OR_CMD='$ORPHANER {model_flag} < {prompt_file}'
+AGENT_HARNESS_OR_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='or:'
+EOF
+	AGENTS_CONFIG="$CFG_ORPHAN" dispatch implementer --prompt 'orphan' --budget-tasks 300 --budget-memory 600 --timeout 3
+	s_assert_status 124 "a worker that stalls inside its budget times out with 124"
+	sleep 1
+	if ps -A -o args= | grep -q '^sleep 6161$'; then
+		fail "the double-forked child survived the timeout — the scope was not killed whole"
+		pkill -f '^sleep 6161$' 2>/dev/null
+	else
+		pass "…and its double-forked child is gone with the scope — the tree is gone either way"
+	fi
 else
 	pass "this host offers no transient scope — the scope enforcement legs were skipped, and say so"
 fi
