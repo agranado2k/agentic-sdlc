@@ -557,16 +557,28 @@ BUDGET_DEFAULT_MEMORY_FLOOR_MIB=512
 BUDGET_DEFAULT_MEMORY_CEILING_MIB=8192
 _host=${AGENT_DISPATCH_HOST_ROOT:-}
 
-# _budget_policy <suffix> <default> — the policy file's AGENT_BUDGET_<suffix>
-# when it is a whole number, the default when it is unset or empty, and a
-# refusal for anything else — held to the same validator as the flags: a
-# percentage spelled 'lots' is a mistake to report, not a value to fall back
-# from.
-_budget_policy() {
-	_bp_v=$(_read_policy "AGENT_BUDGET_$1")
-	[ -n "$_bp_v" ] || _bp_v=$2
-	_whole_number "AGENT_BUDGET_$1 in your agents config" "$_bp_v"
-	printf '%s' "$_bp_v"
+# _read_policy_numbers NAME=default ... — several whole-number policy values
+# in ONE sourcing of the policy file: each the default when unset or empty,
+# and refused when not a whole number, held to the same validator as the
+# flags — a percentage spelled 'lots' is a mistake to report, not a value to
+# fall back from. Prints the values space-separated, in argument order. The
+# same subshell shape as _read_policy, for the same reason; a `die` inside
+# it ends the subshell and not this script, so the caller checks the status.
+_read_policy_numbers() {
+	(
+		AGENTS_CONFIG=${AGENTS_CONFIG:-}
+		export AGENTS_CONFIG
+		_agents_here="$_here"
+		. "$LIB"
+		agents_load_config >/dev/null 2>&1 || true
+		for _rpn in "$@"; do
+			_rpn_name=${_rpn%%=*} _rpn_default=${_rpn#*=}
+			eval "_rpn_v=\"\${$_rpn_name:-}\""
+			[ -n "$_rpn_v" ] || _rpn_v=$_rpn_default
+			_whole_number "$_rpn_name in your agents config" "$_rpn_v"
+			printf '%s ' "$_rpn_v"
+		done
+	)
 }
 
 # _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (ADR-0006
@@ -713,14 +725,20 @@ _budget_rung() {
 # than by nothing. Never the floor, which answers a host KNOWN to be small.
 BUDGET_MODE="" BUDGET_TASKS="" BUDGET_TASKS_FROM="" BUDGET_MEMORY="" BUDGET_MEMORY_FROM="" BUDGET_RUNG=""
 NPROC_FLAG=$(_budget_nproc_flag) || NPROC_FLAG=""
-# Each read is a command substitution, so a `die` inside it ends the subshell
-# and not this script: the status is checked here, where it can.
-BUDGET_TASKS_FLOOR=$(_budget_policy TASKS_FLOOR "$BUDGET_DEFAULT_TASKS_FLOOR") || exit 2
-BUDGET_TASKS_CEILING=$(_budget_policy TASKS_CEILING "$BUDGET_DEFAULT_TASKS_CEILING") || exit 2
-BUDGET_MEMORY_FLOOR=$(_budget_policy MEMORY_FLOOR_MIB "$BUDGET_DEFAULT_MEMORY_FLOOR_MIB") || exit 2
-BUDGET_MEMORY_CEILING=$(_budget_policy MEMORY_CEILING_MIB "$BUDGET_DEFAULT_MEMORY_CEILING_MIB") || exit 2
-BUDGET_TASKS_PERCENT=$(_budget_policy TASKS_PERCENT "$BUDGET_DEFAULT_TASKS_PERCENT") || exit 2
-BUDGET_MEMORY_PERCENT=$(_budget_policy MEMORY_PERCENT "$BUDGET_DEFAULT_MEMORY_PERCENT") || exit 2
+# One sourcing for the six; the status is checked here, where it can be.
+_bp_all=$(_read_policy_numbers \
+	"AGENT_BUDGET_TASKS_PERCENT=$BUDGET_DEFAULT_TASKS_PERCENT" \
+	"AGENT_BUDGET_TASKS_FLOOR=$BUDGET_DEFAULT_TASKS_FLOOR" \
+	"AGENT_BUDGET_TASKS_CEILING=$BUDGET_DEFAULT_TASKS_CEILING" \
+	"AGENT_BUDGET_MEMORY_PERCENT=$BUDGET_DEFAULT_MEMORY_PERCENT" \
+	"AGENT_BUDGET_MEMORY_FLOOR_MIB=$BUDGET_DEFAULT_MEMORY_FLOOR_MIB" \
+	"AGENT_BUDGET_MEMORY_CEILING_MIB=$BUDGET_DEFAULT_MEMORY_CEILING_MIB") || exit 2
+BUDGET_TASKS_PERCENT=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_TASKS_FLOOR=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_TASKS_CEILING=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_PERCENT=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_FLOOR=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_CEILING=${_bp_all%% *}
 _budget_percent_below_100 TASKS_PERCENT "$BUDGET_TASKS_PERCENT"
 _budget_percent_below_100 MEMORY_PERCENT "$BUDGET_MEMORY_PERCENT"
 _budget_floor_at_most_ceiling TASKS_FLOOR "$BUDGET_TASKS_FLOOR" TASKS_CEILING "$BUDGET_TASKS_CEILING"
