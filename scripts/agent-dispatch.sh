@@ -106,9 +106,23 @@ _record_set() {
 	'' | [!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_]* | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_]*)
 		die "a marker NAME must match [A-Za-z_][A-Za-z0-9_]*, got '$1'" ;;
 	esac
+	# A NAME twice is a caller mistake, not a last-wins convenience: which value
+	# reached the worker would depend on argument order, which is exactly the
+	# kind of quiet ambiguity a reviewer worker reading an untrusted body should
+	# not be subject to.
+	_rs_j=1
+	while [ "$_rs_j" -le "$SETS_N" ]; do
+		if [ "$(eval "printf '%s' \"\$PD_K_$_rs_j\"")" = "$1" ]; then
+			die "marker '$1' is set twice — a NAME may appear in one --set or --set-file only"
+		fi
+		_rs_j=$((_rs_j + 1))
+	done
 	SETS_N=$((SETS_N + 1))
-	eval "PD_K_$SETS_N=\$1; PD_V_$SETS_N=\$2"
-	eval "export PD_K_$SETS_N PD_V_$SETS_N"
+	# PD_F is cleared for EVERY pair, not only set on a --set-file: an inherited
+	# PD_F_n from this shell (a nested dispatch, a stale export) would otherwise
+	# make a plain --set read a file. --set-file sets it after this returns.
+	eval "PD_K_$SETS_N=\$1; PD_V_$SETS_N=\$2; PD_F_$SETS_N="
+	eval "export PD_K_$SETS_N PD_V_$SETS_N PD_F_$SETS_N"
 }
 
 while [ $# -gt 0 ]; do
@@ -144,8 +158,10 @@ while [ $# -gt 0 ]; do
 		*) die "--set-file takes NAME=path, got '$2'" ;;
 		esac
 		_sf_path=${2#*=}
-		[ -f "$_sf_path" ] || die "--set-file path does not exist: $_sf_path"
-		# The value is a FILE PATH, not the file's bytes: a megabyte in an
+		[ -e "$_sf_path" ] || die "--set-file path does not exist: $_sf_path"
+		[ -d "$_sf_path" ] && die "--set-file path is a directory: $_sf_path"
+		[ -r "$_sf_path" ] || die "--set-file path is not readable: $_sf_path"
+		# The PATH is recorded, not the file's bytes: a megabyte in an
 		# environment variable hits ARG_MAX at the worker's own exec just as it
 		# would on argv. awk reads the file itself in the pass below, so nothing
 		# large ever crosses an exec boundary.
@@ -403,9 +419,15 @@ if [ "$SETS_N" -gt 0 ]; then
 					# rejoins with a newline, so a file with no trailing newline
 					# gains one; a diff always ends with one, which is the case
 					# this exists for.
-					v[i] = ""
-					while ((getline ln < path) > 0) v[i] = v[i] ln "\n"
+					# A SCALAR accumulator, assigned to the array once at the
+					# end: appending to an array element defeats the
+					# in-place string-growth optimisation and made this
+					# quadratic in the line count — 8 MiB took eighteen
+					# seconds. A scalar does it in milliseconds.
+					s = ""
+					while ((getline ln < path) > 0) s = s ln "\n"
 					close(path)
+					v[i] = s
 				} else {
 					v[i] = ENVIRON["PD_V_" i]
 				}
@@ -424,7 +446,9 @@ if [ "$SETS_N" -gt 0 ]; then
 			}
 			print out
 		}
-	' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" && mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
+	' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" ||
+		die "substituting markers failed — a --set-file may be unreadable or too large for memory"
+	mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
 fi
 
 # An unfilled marker is a caller that forgot one, and it reaches the worker as
