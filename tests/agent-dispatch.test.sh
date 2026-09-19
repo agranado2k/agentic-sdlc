@@ -1652,9 +1652,10 @@ s_assert_out_has "best-effort via rlimits" "…and says the rung is best-effort"
 # dispatch, still forks: its cleanup trap removes the scratch, and a command
 # in the calling shell right after succeeds. The status passes through (clause
 # 6: nothing is observed on this rung), never 71 — and it is the shell's own
-# verdict on its refused forks, which differs by shell: dash carries on and
-# exits 0, bash retries, aborts and exits 254. The leg holds the status to
-# "the worker's own", not to a number.
+# verdict on its refused forks, which differs by shell: dash stops at the
+# first and exits 2, bash retries, aborts and exits 254. The leg holds the
+# status to "the worker's own" — not 71, not 124, and no refusal of the
+# dispatcher's own (those say `x dispatch:`) — rather than to a number.
 RLFORK="$SCRATCH/rl-forker"
 cat >"$RLFORK" <<'EOF'
 #!/bin/sh
@@ -1679,8 +1680,8 @@ UID_TASKS=$(ps -u "$(id -u)" -o nlwp= | awk '{ s += $1 } END { print s + 0 }')
 RL_TMP="$SCRATCH/rl-tmp"; mkdir -p "$RL_TMP"
 t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_RLFORK" TMPDIR="$RL_TMP" \
 	sh "$DISPATCH" implementer --prompt 'run away' --budget-tasks $((UID_TASKS + 40)) --budget-memory 512
-case "$S_STATUS" in
-2 | 3 | 4 | 71 | 124) fail "a task runaway on the rlimit rung should pass the worker's own status through, got $S_STATUS"; _s_dump ;;
+case "$S_STATUS/$S_ERR" in
+71/* | 124/* | *"x dispatch:"*) fail "a task runaway on the rlimit rung should pass the worker's own status through, got $S_STATUS"; _s_dump ;;
 *) pass "a task runaway on the rlimit rung passes the worker's own status through ($S_STATUS) — not 71" ;;
 esac
 s_assert_err_has "fork"
