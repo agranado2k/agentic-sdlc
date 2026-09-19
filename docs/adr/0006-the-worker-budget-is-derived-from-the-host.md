@@ -175,6 +175,17 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
       `-p MemoryMax=` is accepted and applies nothing, which is the silent
       degradation driver 4 forbids. The rung is then
       `systemd-run --user --scope -p TasksMax=<tasks> -p MemoryMax=<MiB>M`.
+      **Building #208 proved this bare command incomplete on a host with swap
+      and `systemd-oomd`, and it now carries `-p MemorySwapMax=0 -p
+      OOMPolicy=continue` besides.** Without `OOMPolicy=continue` this host
+      tore the whole scope down on the first out-of-memory event, and the
+      wrapper (clause 6) never ran to read the counter the verdict needs;
+      `continue` leaves the kernel to OOM-kill the offending task *inside* the
+      cgroup, so the wrapper survives to read `memory.events`. Without
+      `MemorySwapMax=0` the runaway filled swap for seconds first, which both
+      delayed the bound and let `systemd-oomd`'s pressure kill of the scope
+      pre-empt it; with swap denied, the ceiling bites at `MemoryMax` and is
+      observable at once. A memory budget swap can evade is not a budget.
       The budget is a cgroup shared by everything the worker spawns, and
       a fork or an allocation past it fails **inside the worker's boundary**
       while the operator's session keeps forking. With `pids` delegated and
@@ -219,9 +230,10 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    `pids.events` (`max` greater than 0) and `memory.events` (`oom_kill`
    greater than 0) after the worker exits and before the scope empties, and
    stderr names which ceiling was hit. On the rlimit rung there is no counter
-   to read; #208 decides how much can be observed there, and a hit it cannot
-   observe passes the worker's own status through — the weaker rung was
-   already announced. A worker that both runs past `--timeout` and exceeds
+   to read; #208 decided that nothing is observed there — a `RLIMIT_NPROC` hit
+   is uid-wide and an `RLIMIT_DATA` hit is a `malloc` the worker sees and this
+   script does not — so a hit passes the worker's own status through, and the
+   weaker rung was already announced. A worker that both runs past `--timeout` and exceeds
    its budget exits with whichever fired first, and its tree is gone either
    way.
 
@@ -246,15 +258,16 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    dispatch. An outer dispatch that ran with `--no-budget` exports nothing,
    and an inner one then derives its own.
 
-8. **Visible before it is enforced.** `--dry-run` prints both ceilings, the
-   host fact and percentage each came from, the clamp if one applied, the rung
-   the host would offer, and — until #208 lands — that nothing is applied.
-   What is shown is what will be enforced, computed by the same code. Until
-   #208, the two stderr notes clauses 2 and 4 attach to the dispatch — the
-   floor raised, the budget disabled — are said under `--dry-run` only: a
-   real dispatch applies nothing and says nothing about a budget it does not
-   apply, and the suite holds it to that silence. #208 lifts both to every
-   dispatch in the change that applies the budget.
+8. **Visible before it is enforced, and now enforced.** `--dry-run` prints both
+   ceilings, the host fact and percentage each came from, the clamp if one
+   applied, the rung the host would offer, and — since #208 — that the budget
+   **is** applied (the `enforced:` line, per rung). What is shown is what is
+   enforced, computed by the same code. The two stderr notes clauses 2 and 4
+   attach to the dispatch — the floor raised, the budget disabled — were said
+   under `--dry-run` only until #208; #208 lifted both, plus the
+   no-mechanism note of rung 3, to **every** dispatch, so an operator piping
+   stdout still hears them. A within-budget dispatch that trips no clamp stays
+   silent on stderr, the way the timeout is silent until it fires.
 
 9. **Explicit non-goal**: CPU time and I/O are not budgeted. Tasks were the
    incident; memory is the sibling that kills a host the same way; nothing
