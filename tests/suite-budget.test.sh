@@ -34,6 +34,16 @@ set -u
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 DISPATCH="$KIT/scripts/agent-dispatch.sh"
 
+# This suite is the test harness's oracle, so it cannot lean on the test
+# harness's own recursion bound to be one: a test harness that lost that
+# bound would re-execute this file until the host refused to fork, and no
+# assertion below would ever run. Its own count, carried above the source
+# line where both runs pass: the outer run is 1, the inner 2, a third is the
+# bound gone.
+SUITE_BUDGET_TEST_DEPTH=$((${SUITE_BUDGET_TEST_DEPTH:-0} + 1))
+export SUITE_BUDGET_TEST_DEPTH
+[ "$SUITE_BUDGET_TEST_DEPTH" -le 2 ] || { echo "  FAIL  $0 started a ${SUITE_BUDGET_TEST_DEPTH}rd time — the test harness re-executes without its marker; its recursion bound is gone" >&2; exit 99; }
+
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 t_init
@@ -95,9 +105,10 @@ banner "2. A suite that sources tests/lib.sh runs inside the budget, once"
 # The test harness seam. tests/lib.sh derives the kit root from the SUITE's $0, so
 # a stub suite lives under a scratch root whose scripts/ is the kit's own:
 # one symlink, and the stub sources the real tests/lib.sh the way every suite
-# does. Every stub is run with the marker CLEARED — this suite itself runs
+# does. Every stub is run with the marker UNSET — this suite itself runs
 # inside the budget, and a stub that inherited its marker would never
-# re-execute — and with no dispatched worker's budget in the environment.
+# re-execute — and with no dispatched worker's budget and no operator's
+# policy file in the environment.
 STUBROOT="$SCRATCH/kit"
 mkdir -p "$STUBROOT/tests"
 ln -s "$KIT/scripts" "$STUBROOT/scripts"
@@ -105,11 +116,14 @@ COUNT="$SCRATCH/starts"
 # green — a suite that passes, and reports what it runs under: the marker,
 # the process and data limits its shell has, and that it can still fork.
 # The start line is written BEFORE the test harness is sourced, so the file
-# counts every run of the file: the bare one and the one inside.
+# counts every run of the file: the bare one and the one inside — and a
+# third start ends the stub with a status of its own, so a test harness
+# that re-executes without its marker is a failed leg here, not a fork loop.
 GREEN="$STUBROOT/tests/green.sh"
 cat >"$GREEN" <<EOF
 #!/bin/sh
 echo start >>"$COUNT"
+[ "\$(wc -l <"$COUNT")" -le 2 ] || { echo "green: started a 3rd time — the test harness re-executes without its marker" >&2; exit 99; }
 . "$KIT/tests/lib.sh"
 echo "budget: \${AGENT_SUITE_BUDGET:-<unset>}"
 echo "agents config: \${AGENTS_CONFIG:-<unset>}"
@@ -118,15 +132,23 @@ echo "data: \$(ulimit -d)"
 sh -c 'exit 0' && echo "forks: yes"
 exit "\${STUB_EXIT:-0}"
 EOF
-# stub <env…> <suite> [args] — run a stub suite as a suite is run, `sh
-# <path>`, with the marker cleared and the fake host in place.
-stub() { t_run_split env AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS= AGENT_DISPATCH_BUDGET_MEMORY_MIB= AGENT_DISPATCH_HOST_ROOT="$HOST" "$@"; }
+# unsetting <cmd…> — run it with the marker, a dispatched worker's budget
+# and the operator's policy file UNSET, never exported-empty. `env NAME=`
+# leaves NAME exported, so the test harness's own `export` of the marker
+# would then carry nothing this suite could miss — an inner run would see
+# the marker whether or not the test harness exported it, and the "exactly
+# twice" legs could not fail. A subshell's `unset` is POSIX; `env -u` is not.
+unsetting() { sh -c 'unset AGENT_SUITE_BUDGET AGENT_DISPATCH_BUDGET_TASKS AGENT_DISPATCH_BUDGET_MEMORY_MIB AGENTS_CONFIG; exec "$@"' unsetting "$@"; }
+# stub_on <host root> <env…> <suite> [args] — run a stub suite as a suite is
+# run, `sh <path>`, with those unset, that fake host in place and the start
+# count fresh; stub is the same on the fake host above.
+stub_on() { rm -f "$COUNT"; _so_host=$1; shift; t_run_split unsetting env AGENT_DISPATCH_HOST_ROOT="$_so_host" "$@"; }
+stub() { stub_on "$HOST" "$@"; }
 starts() { [ -f "$COUNT" ] && wc -l <"$COUNT" | tr -d ' ' || echo 0; }
 
 # The fake host is small: 25% of 400 tasks is below the floor, so the floor
 # stands and the test harness says so; 50% of 2091 MiB is 1045 MiB.
 echo 400 >"$SLICE/pids.max"
-rm -f "$COUNT"
 stub sh "$GREEN"
 s_assert_status 0 "a green suite run through the test harness passes"
 s_assert_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and runs inside the budget derived from the (fake) host, with the marker naming it"
@@ -141,7 +163,6 @@ scope | scope-tasks | rlimit | none) pass "the marker names the rung: $RUNG" ;;
 *) fail "the marker names no rung this suite knows: '$RUNG'" ;;
 esac
 # A suite's own status passes through the test harness untouched.
-rm -f "$COUNT"
 stub STUB_EXIT=5 sh "$GREEN"
 s_assert_status 5 "a suite's own exit status passes through"
 # …and an AGENTS_CONFIG the operator exported reaches it as exported, never
@@ -150,8 +171,7 @@ stub AGENTS_CONFIG=/operator/own.sh sh "$GREEN"
 s_assert_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator exported reaches the suite as it was"
 
 # The off switch: the suite runs bare, once, and the test harness says so.
-rm -f "$COUNT"
-t_run_split env AGENT_SUITE_BUDGET=off AGENT_DISPATCH_HOST_ROOT="$HOST" STUB_EXIT=3 sh "$GREEN"
+stub AGENT_SUITE_BUDGET=off STUB_EXIT=3 sh "$GREEN"
 s_assert_status 3 "AGENT_SUITE_BUDGET=off runs the suite bare — its own status, as before"
 s_assert_out_has "budget: off" "…with no marker set"
 s_assert_err_has "AGENT_SUITE_BUDGET=off"
@@ -159,7 +179,7 @@ s_assert_err_has "AGENT_SUITE_BUDGET=off"
 
 # A value that is neither is refused before the suite runs: a typo must not
 # read as "inside".
-t_run_split env AGENT_SUITE_BUDGET=on AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$GREEN"
+stub AGENT_SUITE_BUDGET=on sh "$GREEN"
 s_assert_status 2 "an unknown AGENT_SUITE_BUDGET value is refused, exit 2"
 s_assert_err_has "AGENT_SUITE_BUDGET"
 s_assert_out_lacks "budget:" "…and the suite body never ran"
@@ -167,12 +187,27 @@ s_assert_out_lacks "budget:" "…and the suite body never ran"
 # Inside a dispatched worker the suite is already inside that worker's
 # budget (ADR-0006 clause 7): the test harness opens none of its own, says so,
 # and the suite runs once.
-rm -f "$COUNT"
-t_run_split env AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$GREEN"
+stub AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 sh "$GREEN"
 s_assert_status 0 "inside a dispatched worker's budget the suite runs"
 s_assert_out_has "budget: <unset>" "…bare — no scope of its own"
 s_assert_err_has "dispatched worker"
 [ "$(starts)" = 1 ] && pass "…and once" || fail "the file ran $(starts) time(s) inside a worker's budget"
+
+# The second recursion bound, for a run that lost the marker anyway (an
+# `env -i`, a wrapper that scrubs its environment): on the scope rung the
+# inner run's own cgroup is the suite-<name>-<pid>.scope the test harness
+# opened, and a test harness that finds itself there without the marker
+# refuses to derive — exit 2, before a second sibling scope opens — rather
+# than opening one per re-execution until the host refuses to fork. The
+# fake host's own cgroup becomes a suite scope for this leg; the stub runs once.
+printf '0::/user.slice/user-1000.slice/user@1000.service/app.slice/suite-green-4242.scope\n' >"$HOST/proc/self/cgroup"
+stub sh "$GREEN"
+s_assert_status 2 "a run that lost its marker inside a suite scope is refused, exit 2 — the second recursion bound"
+s_assert_err_has "suite-green-4242.scope"
+s_assert_err_has "AGENT_SUITE_BUDGET"
+s_assert_out_lacks "budget:" "…and the suite body never ran"
+[ "$(starts)" = 1 ] && pass "…and the file ran once — no sibling scope was opened" || fail "the file ran $(starts) time(s) from inside a suite scope without its marker"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
 # Every suite in tests/ sources the test harness, so none has to remember any of
 # this — including the three that carry their own assertion helpers.
@@ -262,8 +297,7 @@ printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable: 
 # Both controllers delegated, so that with a manager that answers this host
 # still offers the scope rung — section 5 wants a scope that then refuses.
 echo 'cpu memory pids' >"$HOST_RL/sys/fs/cgroup/cgroup.controllers"
-rlstub() { t_run_split env PATH="$NOSD:$PATH" AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS= AGENT_DISPATCH_BUDGET_MEMORY_MIB= AGENT_DISPATCH_HOST_ROOT="$HOST_RL" "$@"; }
-rm -f "$COUNT"
+rlstub() { stub_on "$HOST_RL" PATH="$NOSD:$PATH" "$@"; }
 rlstub sh "$GREEN"
 s_assert_status 0 "a green suite runs under the rlimit rung"
 s_assert_out_has "rung rlimit" "…and its marker names the rung"
@@ -304,14 +338,14 @@ banner "5. The scope that will not open, and the verdict that cannot be read"
 if [ "$RUNG" = scope ]; then
 	SDREFUSE="$SCRATCH/sd-refuse"; mkdir -p "$SDREFUSE"
 	printf '#!/bin/sh\necho "Failed to start transient scope unit: Access denied" >&2\nexit 1\n' >"$SDREFUSE/systemd-run"; chmod +x "$SDREFUSE/systemd-run"
-	t_run_split env PATH="$SDREFUSE:$PATH" AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS= AGENT_DISPATCH_BUDGET_MEMORY_MIB= AGENT_DISPATCH_HOST_ROOT="$HOST_RL" sh "$GREEN"
+	stub_on "$HOST_RL" PATH="$SDREFUSE:$PATH" sh "$GREEN"
 	s_assert_status 0 "a scope that refuses to open still runs the suite"
 	s_assert_out_has "rung rlimit" "…under the rlimit rung"
 	s_assert_err_has "Access denied"
 	s_assert_err_has "cannot open"
 	SDFAKE="$SCRATCH/sd-fake"; mkdir -p "$SDFAKE"
 	printf '#!/bin/sh\nexit 0\n' >"$SDFAKE/systemd-run"; chmod +x "$SDFAKE/systemd-run"
-	t_run_split env PATH="$SDFAKE:$PATH" AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS= AGENT_DISPATCH_BUDGET_MEMORY_MIB= AGENT_DISPATCH_HOST_ROOT="$HOST_RL" sh "$GREEN"
+	stub_on "$HOST_RL" PATH="$SDFAKE:$PATH" sh "$GREEN"
 	s_assert_status 0 "a scope whose wrapper never wrote a verdict passes the run's status through"
 	s_assert_err_has "verdict is missing"
 else

@@ -67,6 +67,10 @@ T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # recursion bound (#206's lesson): a run that lost it would derive again and
 # open a second scope — a SIBLING under the user manager, never a child — so
 # nothing here leans on an outer scope as a backstop, and no suite should.
+# A second bound survives a lost marker on the scope rung: the inner run's
+# own cgroup is the suite-<name>-<pid>.scope this file opened, and a run
+# that finds itself there without the marker is refused, exit 2, rather
+# than opening a sibling per re-execution until the host refuses to fork.
 # The lines above a suite's source line run in both runs, so keep them free
 # of side effects; the outer run's own EXIT trap still fires when it exits
 # with the inner run's status.
@@ -210,6 +214,16 @@ off)
 			AGENTS_CONFIG="$T_ROOT/scripts/agents.kit.config.sh"
 			# shellcheck disable=SC1091
 			. "$T_ROOT/scripts/agent-dispatch.sh"
+			# The second recursion bound, read through the dispatcher's host
+			# seam so a stub suite on a fake host is judged by that host's
+			# cgroup, not by the scope the suite driving it runs in.
+			_sb_own=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+			case "$_sb_own" in
+			*/suite-*.scope)
+				_sb_note "x  tests/lib.sh: $0 is already inside a suite scope (${_sb_own##*/}) and AGENT_SUITE_BUDGET is not set — the marker was lost on the way in (an env -i, a wrapper that scrubs its environment?), and deriving again would open a sibling scope per run. Refused. Run the suite from outside that scope, or with AGENT_SUITE_BUDGET=off."
+				exit 2
+				;;
+			esac
 			_budget_derive
 			if [ -n "$_sb_cfg_set" ]; then AGENTS_CONFIG=$_sb_cfg_was; else unset AGENTS_CONFIG; fi
 			t_suite_under_budget "$0" "$@"
