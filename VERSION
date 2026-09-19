@@ -560,11 +560,14 @@
 # downstream, so the hook behaves exactly as before in every consumer — a
 # consumer's update diff will list it, and this is why.
 # 0.20.0 — a dispatched worker is bounded (#205). No file joins or leaves the
-# layer; ONE shared file changed CONTENT. From #206: scripts/agent-dispatch.sh
-# refuses to nest past a policy maximum depth. A worker may run the dispatcher
-# itself, and one whose tier maps back to its own agent harness was a fork
-# bomb with a model in the loop — found live: the suite's own nested stub
-# filled a host's task ceiling in under three minutes. The depth now reaches
+# layer; TWO shared files changed CONTENT — scripts/agent-dispatch.sh, and
+# UPDATING.md by re-pin, which this manifest's 0.9.0 note counts as a content
+# change and step 5 of the recipe reports as one. From #206:
+# scripts/agent-dispatch.sh refuses to nest past a policy maximum depth. A
+# worker may run the dispatcher itself, and one whose tier maps back to its
+# own agent harness was a fork bomb with a model in the loop — found live: the
+# suite's own nested stub filled a host's task ceiling in under three
+# minutes. The depth now reaches
 # every dispatch through the worker's environment, AGENT_DISPATCH_DEPTH, the
 # way the other per-dispatch facts do — a top-level dispatch is depth 1 and a
 # worker is spawned one deeper — and a dispatch past AGENT_DISPATCH_MAX_DEPTH
@@ -575,7 +578,7 @@
 # deepest legitimate shape today — a planner dispatching implementers
 # dispatching reviewers — and the policy file overrides it. UPDATING.md's
 # transcripts are re-captured to the new version and nothing in the recipe
-# moved.
+# moved — the second content change above, and all of it.
 #   A top-level dispatch cannot tell this release from the last: its depth is
 # 1, its statuses are untouched, and the one new variable ships empty.
 #   NON-MANIFEST HALF, enumerated. scripts/agents.config.sh — yours — documents
