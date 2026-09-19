@@ -31,6 +31,11 @@
 #      itself, exactly as it did before this file existed. This is the DEFAULT
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
+#   4  NOT dispatched, because this dispatch would nest past the policy
+#      maximum depth. A worker may run this script itself; one whose tier maps
+#      back to its own agent harness is a fork bomb with a model in the loop,
+#      and this is what stops it. Refused before the tier is resolved or the
+#      prompt is read, so nothing spawns. AGENT_DISPATCH_MAX_DEPTH below.
 # 124  the worker ran past --timeout and its process tree was killed
 #  71  RESERVED: the worker exceeded its budget (ADR-0006, EX_OSERR — "can't
 #      fork"). Nothing produces it yet: this release derives the budget and
@@ -42,6 +47,16 @@
 #   AGENT_HARNESSES='<token> ...'
 #   AGENT_HARNESS_<TOKEN>_CMD='<command> {model_flag} < {prompt_file}'
 #   AGENT_HARNESS_<TOKEN>_MODEL_FLAG='<the flag> {model}'
+#   AGENT_DISPATCH_MAX_DEPTH='<how deep a dispatch may nest>'   empty: 3
+#
+# THE DEPTH travels the way the other per-dispatch facts do — through the
+# worker's environment. AGENT_DISPATCH_DEPTH is this dispatch's own depth,
+# unset meaning a top-level dispatch at depth 1; the worker is spawned with it
+# set one higher, so a dispatch the worker runs reads its own depth on entry.
+# A worker may read it too. A dispatch AT the maximum still runs; one past it
+# is exit 4. The ceiling is COOPERATIVE: a worker owns its own environment,
+# so `env -u AGENT_DISPATCH_DEPTH` restarts the count at depth 1. It stops an
+# accidental loop, not a worker that chooses to nest.
 #
 # `{model_flag}` expands to the MODEL_FLAG template with `{model}` filled when a
 # model is mapped, and to NOTHING when one is not — which is
@@ -92,7 +107,7 @@ usage() {
 	echo "  --no-budget" >&2
 	echo "             run this one worker with no budget at all. Said out loud." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command," >&2
-	echo "             the budget and the prompt; run nothing." >&2
+	echo "             the depth, the budget and the prompt; run nothing." >&2
 }
 
 die() {
@@ -100,20 +115,63 @@ die() {
 	exit 2
 }
 
-TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
-BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
+# The policy file is sourced in a SUBSHELL: this script must not inherit
+# whatever else it defines, and needs exactly two strings out of it (the
+# whole-number values have their own reader, _read_policy_numbers below). The
+# assignments sit on their own lines because bash and zsh drop a prefix
+# assignment on `.` — agents.lib.sh says so in its own header, and doing it the
+# short way sources the library with AGENTS_CONFIG unset.
+_read_policy() {
+	(
+		AGENTS_CONFIG=${AGENTS_CONFIG:-}
+		export AGENTS_CONFIG
+		_agents_here="$_here"
+		. "$LIB"
+		agents_load_config >/dev/null 2>&1 || true
+		eval "printf '%s' \"\${$1:-}\""
+	)
+}
 
-# _whole_number <what> <value> — a budget number, whether from a flag or from
-# the policy file, is a positive whole number and nothing else: 0 is not a
-# budget any more than --timeout 0 is a timeout, and a leading zero is octal
-# to $(( )) in every sh — 025 would derive 21%.
+# _whole_number <what> <value> — a number this script compares or computes
+# with, whether from a flag, the environment or the policy file, is a whole
+# number from 1 and nothing else: 0 is not a budget any more than --timeout 0
+# is a timeout or depth 0 a depth, and a leading zero is octal to $(( )) in
+# every sh — 025 would derive 21%. ONE validator for every source, so the
+# flag path and the policy path cannot disagree about what a number is.
 _whole_number() {
 	case "$2" in
 	'' | *[!0123456789]*) die "$1 takes a whole number, got '$2'" ;;
-	0) die "$1 0 is not a budget. Leave it out to derive one from this host." ;;
+	0) die "$1 takes a whole number from 1, and 0 is not one. Leave it out for the default." ;;
 	0*) die "$1 takes a whole number with no leading zero, got '$2'" ;;
 	esac
 }
+
+# _read_policy_numbers NAME=default ... — several whole-number policy values
+# in ONE sourcing of the policy file: each the default when unset or empty,
+# and refused when not a whole number, held to the same validator as the
+# flags — a percentage spelled 'lots' is a mistake to report, not a value to
+# fall back from. Prints the values space-separated, in argument order. The
+# same subshell shape as _read_policy, for the same reason; a `die` inside
+# it ends the subshell and not this script, so the caller checks the status.
+_read_policy_numbers() {
+	(
+		AGENTS_CONFIG=${AGENTS_CONFIG:-}
+		export AGENTS_CONFIG
+		_agents_here="$_here"
+		. "$LIB"
+		agents_load_config >/dev/null 2>&1 || true
+		for _rpn in "$@"; do
+			_rpn_name=${_rpn%%=*} _rpn_default=${_rpn#*=}
+			eval "_rpn_v=\"\${$_rpn_name:-}\""
+			[ -n "$_rpn_v" ] || _rpn_v=$_rpn_default
+			_whole_number "$_rpn_name in your agents config" "$_rpn_v"
+			printf '%s ' "$_rpn_v"
+		done
+	)
+}
+
+TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
+BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
 
 # _record_set <name> <value> — one marker substitution, into its own numbered
 # pair of exported variables for the single awk pass below. The obvious
@@ -243,6 +301,40 @@ done
 	usage
 	exit 2
 }
+
+# --- the depth ---------------------------------------------------------------
+# Before the tier is resolved and before the prompt is read: a dispatch that
+# may not nest has nothing else worth checking, and in the runaway case every
+# process spent past this point is one the host has lost. The default is the
+# deepest legitimate shape today: a planner that dispatches implementers that
+# dispatch reviewers, three deep. It is a ceiling on runaway nesting, not a
+# budget, and the policy file raises it.
+DEPTH_DEFAULT_MAX=3
+DEPTH=${AGENT_DISPATCH_DEPTH:-1}
+_whole_number "AGENT_DISPATCH_DEPTH (set by the dispatcher that spawned this worker; unset or empty means depth 1)" "$DEPTH"
+MAX_DEPTH=$(_read_policy_numbers "AGENT_DISPATCH_MAX_DEPTH=$DEPTH_DEFAULT_MAX") || exit 2
+MAX_DEPTH=${MAX_DEPTH%% *}
+# Both are whole numbers from 1 now; this bound is the depth's own. One
+# `[ -gt ]` must be able to compare them: past the shell's integer range `[`
+# errors instead of comparing, and an error there would fail OPEN — the
+# refusal skipped, the worker run. Nine digits is under every shell's range,
+# and no dispatcher produces a depth anywhere near it.
+DEPTH_MAX_DIGITS=9
+[ "${#DEPTH}" -le "$DEPTH_MAX_DIGITS" ] ||
+	die "AGENT_DISPATCH_DEPTH is past what a depth can be (at most $DEPTH_MAX_DIGITS digits), got '$DEPTH'"
+[ "${#MAX_DEPTH}" -le "$DEPTH_MAX_DIGITS" ] ||
+	die "AGENT_DISPATCH_MAX_DEPTH is past what a depth can be (at most $DEPTH_MAX_DIGITS digits), got '$MAX_DEPTH'"
+if [ "$DEPTH" -gt "$MAX_DEPTH" ]; then
+	# Read, more often than not, by the refused WORKER — a model with tools —
+	# so this says what a worker does with it and never how to lift the
+	# ceiling. The maximum is named by its variable, not by a path: the policy
+	# file is wherever AGENTS_CONFIG resolved it, which need not be the default.
+	echo "x dispatch: refusing to nest — this dispatch would run at depth $DEPTH and the maximum is $MAX_DEPTH." >&2
+	echo "   The maximum is AGENT_DISPATCH_MAX_DEPTH in the agents policy file, and it is the" >&2
+	echo "   operator's to change. A worker that sees this must stop and report it." >&2
+	exit 4
+fi
+
 [ "$HAVE_PROMPT" = 1 ] || die "no prompt — pass --prompt-file or --prompt"
 [ -n "$PROMPT_FILE" ] && [ -n "$PROMPT_TEXT" ] && die "--prompt-file and --prompt are alternatives, not a pair"
 [ -n "$PROMPT_FILE" ] && [ ! -f "$PROMPT_FILE" ] && die "prompt file does not exist: $PROMPT_FILE"
@@ -280,21 +372,6 @@ fi
 # into a variable name the way a task domain is.
 H_UPPER=$(printf '%s' "$HARNESS" | tr 'a-z-' 'A-Z_')
 
-# The policy file is sourced in a SUBSHELL: this script must not inherit
-# whatever else it defines, and needs exactly two values out of it. The
-# assignments sit on their own lines because bash and zsh drop a prefix
-# assignment on `.` — agents.lib.sh says so in its own header, and doing it the
-# short way sources the library with AGENTS_CONFIG unset.
-_read_policy() {
-	(
-		AGENTS_CONFIG=${AGENTS_CONFIG:-}
-		export AGENTS_CONFIG
-		_agents_here="$_here"
-		. "$LIB"
-		agents_load_config >/dev/null 2>&1 || true
-		eval "printf '%s' \"\${$1:-}\""
-	)
-}
 CMD_TEMPLATE=$(_read_policy "AGENT_HARNESS_${H_UPPER}_CMD")
 FLAG_TEMPLATE=$(_read_policy "AGENT_HARNESS_${H_UPPER}_MODEL_FLAG")
 
@@ -557,30 +634,6 @@ BUDGET_DEFAULT_MEMORY_FLOOR_MIB=512
 BUDGET_DEFAULT_MEMORY_CEILING_MIB=8192
 _host=${AGENT_DISPATCH_HOST_ROOT:-}
 
-# _read_policy_numbers NAME=default ... — several whole-number policy values
-# in ONE sourcing of the policy file: each the default when unset or empty,
-# and refused when not a whole number, held to the same validator as the
-# flags — a percentage spelled 'lots' is a mistake to report, not a value to
-# fall back from. Prints the values space-separated, in argument order. The
-# same subshell shape as _read_policy, for the same reason; a `die` inside
-# it ends the subshell and not this script, so the caller checks the status.
-_read_policy_numbers() {
-	(
-		AGENTS_CONFIG=${AGENTS_CONFIG:-}
-		export AGENTS_CONFIG
-		_agents_here="$_here"
-		. "$LIB"
-		agents_load_config >/dev/null 2>&1 || true
-		for _rpn in "$@"; do
-			_rpn_name=${_rpn%%=*} _rpn_default=${_rpn#*=}
-			eval "_rpn_v=\"\${$_rpn_name:-}\""
-			[ -n "$_rpn_v" ] || _rpn_v=$_rpn_default
-			_whole_number "$_rpn_name in your agents config" "$_rpn_v"
-			printf '%s ' "$_rpn_v"
-		done
-	)
-}
-
 # _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (ADR-0006
 # clause 3): the budget sits BELOW the ceiling the session shares, and 100 or
 # more would put it at or above, in silence.
@@ -809,6 +862,7 @@ if [ "$DRY_RUN" = 1 ]; then
 	[ -n "$_shown_model" ] || _shown_model="<the default model of that agent harness>"
 	printf 'model:          %s\n' "$_shown_model"
 	printf 'command:        %s\n' "$CMD"
+	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
 	# The budget, and the truth about it: shown, not applied, in this release.
 	# The floor note and the off switch are said on stderr as well, where an
@@ -858,6 +912,11 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<default>}'" >&2
+# The worker runs one level deeper than this dispatch, and a dispatch it runs
+# reads that on entry. Exported here, above both spawn paths, so the plain
+# eval and the timed `sh -c` cannot disagree about it.
+AGENT_DISPATCH_DEPTH=$((DEPTH + 1))
+export AGENT_DISPATCH_DEPTH
 # The worker never inherits this script's stdin. Found live: an agent CLI that
 # reads stdin when it is not a tty blocked forever on the dispatcher's own
 # inherited pipe, and a dispatch that took fourteen seconds with </dev/null on

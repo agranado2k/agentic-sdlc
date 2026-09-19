@@ -177,6 +177,17 @@ AGENT_HARNESSES=''
 # kit names none), or the dispatch carries --timeout <seconds>, which kills
 # the worker's process tree and exits 124. Both is the honest wiring.
 #
+# A DISPATCH INSIDE A DISPATCHED WORKER IS BOUNDED IN DEPTH. A worker may run
+# the dispatcher itself, and one whose tier maps back to its own agent
+# harness would nest until the host ran out of processes. This is the
+# ceiling: a dispatch past it is refused, exit 4, before anything spawns.
+# Empty means the kit default, 3 — a planner that dispatches implementers
+# that dispatch reviewers, the deepest legitimate shape today. Raise it when
+# a legitimate shape is deeper; it is a ceiling on runaway nesting, not a
+# budget, and a worker that reaches it has usually gone wrong. How the depth
+# travels and what a refusal says are agent-dispatch.sh's header.
+AGENT_DISPATCH_MAX_DEPTH=''
+
 # Check a wiring without spending a token:
 #   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
 #
