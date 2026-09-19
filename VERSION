@@ -690,6 +690,11 @@
 # taken the policy file yet. README.md's shared-layer marker and the pins in
 # tests/docs-demo.sh and tests/kit-demo.sh moved 0.19.0 -> 0.20.0 with the
 # release, as every bump moves them.
+#   From #87 (independent of the budget work, landing in the same untagged
+# interval): constitution/AGENTS.md.template's hard rule 1 gains a gotcha —
+# an in-tree worktree/<slug> and a linter that resolves config from the
+# topmost file inspect zero files inside a worktree. Consumer-facing prose,
+# not manifest content.
 shared-layer: 0.20.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
