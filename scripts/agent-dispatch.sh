@@ -103,6 +103,19 @@ die() {
 	exit 2
 }
 
+# _whole_from_one <value> — a whole number from 1, and one `[ -gt ]` can
+# compare: past the shell's integer range `[` errors instead of comparing, and
+# an error there would fail OPEN — the refusal skipped, the worker run. Nine
+# digits is under every shell's range, and no dispatcher produces a depth
+# anywhere near it.
+DEPTH_MAX_DIGITS=9
+_whole_from_one() {
+	case "$1" in
+	'' | *[!0123456789]* | 0*) return 1 ;;
+	esac
+	[ "${#1}" -le "$DEPTH_MAX_DIGITS" ]
+}
+
 # The policy file is sourced in a SUBSHELL: this script must not inherit
 # whatever else it defines, and needs exactly three values out of it. The
 # assignments sit on their own lines because bash and zsh drop a prefix
@@ -243,16 +256,12 @@ done
 # budget, and the policy file raises it.
 DEPTH_DEFAULT_MAX=3
 DEPTH=${AGENT_DISPATCH_DEPTH:-1}
-case "$DEPTH" in
-'' | *[!0123456789]* | 0*) die "AGENT_DISPATCH_DEPTH must be a whole number from 1, got '$DEPTH'.
-   It is set by the dispatcher that spawned this worker; unset means depth 1." ;;
-esac
+_whole_from_one "$DEPTH" || die "AGENT_DISPATCH_DEPTH must be a whole number from 1 (at most $DEPTH_MAX_DIGITS digits), got '$DEPTH'.
+   It is set by the dispatcher that spawned this worker; unset or empty means depth 1."
 MAX_DEPTH=$(_read_policy AGENT_DISPATCH_MAX_DEPTH)
 [ -n "$MAX_DEPTH" ] || MAX_DEPTH=$DEPTH_DEFAULT_MAX
-case "$MAX_DEPTH" in
-*[!0123456789]* | 0*) die "AGENT_DISPATCH_MAX_DEPTH must be a whole number from 1, got '$MAX_DEPTH'.
-   Empty means the kit default of $DEPTH_DEFAULT_MAX." ;;
-esac
+_whole_from_one "$MAX_DEPTH" || die "AGENT_DISPATCH_MAX_DEPTH must be a whole number from 1 (at most $DEPTH_MAX_DIGITS digits), got '$MAX_DEPTH'.
+   Empty means the kit default of $DEPTH_DEFAULT_MAX."
 if [ "$DEPTH" -gt "$MAX_DEPTH" ]; then
 	echo "x dispatch: refusing to nest — this dispatch would run at depth $DEPTH and the maximum is $MAX_DEPTH." >&2
 	echo "   Raise AGENT_DISPATCH_MAX_DEPTH in scripts/agents.config.sh if this shape is" >&2

@@ -855,11 +855,20 @@ s_assert_out_has 'depth:          1 of 2' "…and the maximum shown is the polic
 
 # A depth or a maximum that is not a whole number from 1 is a usage error,
 # not a guess: 0 would refuse every dispatch, and a top-level one is depth 1.
+# Empty is not malformed — it reads as unset, depth 1 — and a value past the
+# shell's integer range is refused rather than compared: `[ -gt ]` errors on
+# it, and an error there would skip the refusal and run the worker.
 t_run_split env AGENT_DISPATCH_DEPTH=abc sh "$DISPATCH" implementer --prompt 'x'
 s_assert_status 2 "a malformed AGENT_DISPATCH_DEPTH is refused as a usage error"
 s_assert_err_has "AGENT_DISPATCH_DEPTH"
 t_run_split env AGENT_DISPATCH_DEPTH=0 sh "$DISPATCH" implementer --prompt 'x'
 s_assert_status 2 "AGENT_DISPATCH_DEPTH=0 is refused — a top-level dispatch is depth 1"
+t_run_split env AGENT_DISPATCH_DEPTH='' sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "an EMPTY AGENT_DISPATCH_DEPTH is not malformed"
+s_assert_out_has 'depth:          1 of 3' "…it reads as unset: a top-level dispatch at depth 1"
+t_run_split env AGENT_DISPATCH_DEPTH=9999999999 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a depth past the shell's integer range is refused, not compared"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran — an overflow does not fail open"
 CFG_DEPTH0="$SCRATCH/depth0.config.sh"
 { cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='0'\n"; } >"$CFG_DEPTH0"
 t_run_split env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
@@ -873,6 +882,10 @@ CFG_DEPTHABC="$SCRATCH/depthabc.config.sh"
 t_run_split env AGENTS_CONFIG="$CFG_DEPTHABC" sh "$DISPATCH" implementer --prompt 'x'
 s_assert_status 2 "a non-numeric AGENT_DISPATCH_MAX_DEPTH is refused as a usage error"
 s_assert_out_lacks 'ARGV:' "…and the worker never ran — a malformed maximum does not disable the ceiling"
+CFG_DEPTHBIG="$SCRATCH/depthbig.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='9999999999'\n"; } >"$CFG_DEPTHBIG"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTHBIG" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a maximum past the shell's integer range is refused, the same as a depth"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
