@@ -78,8 +78,8 @@ second time rather than overwriting a manual you have since edited.
 | `constitution/local-engineering.md.template` | The stack article — style, architecture, test tiers, "what this repo is NOT". Marks and inline guidance; you fill it in and drop the suffix. |
 | `constitution/local-workflow.md.template` | The process article — commits, merges, the docs-trigger matrix, review, decision records, the log. Same deal. |
 | `constitution/local-product.md.template` | The product article — the surfaces a user actually touches, and the personas that touch them. Ships **only if you take the optional `/dogfood` skill**, which is the one thing that reads it. |
-| `.agents/skills/` | The skills — the lifecycle made runnable, at the vendor-neutral home (`.claude/skills/` holds one committed symlink per skill for the harness that reads only that address). All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
-| `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the harness when node is available (see below). |
+| `.agents/skills/` | The skills — the lifecycle made runnable, at the vendor-neutral home (`.claude/skills/` holds one committed symlink per skill for the test harness that reads only that address). All but `/dogfood` always; it is **opt-in at bootstrap**. Copied as-is, never stamped: they must read correctly in any project. **Yours** on arrival. |
+| `scripts/check.sh` | The docs gate. POSIX sh; delegates the reference checks to the test harness when node is available (see below). |
 | `scripts/docs-conformance/` | The real validator: layered manuals, slash-command resolution, article reachability, portability deny-list, and the advisories — warnings that never fail the gate, relayed by `scripts/check.sh` on a green run; `docs/domain-glossary.md` keeps the roster (a skill referencing one you lack, a dead path inside a skill body, a materialized bridge symlink, an engineering article with no mutation decision or no design brief, a diary whose housekeeping date has gone stale — version skew is a sanctioned mid-update state). Dependency-free ESM, with its own fixture tests. |
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
@@ -549,7 +549,7 @@ skeleton (K0).
   equal to it, so the recipe cannot drift from the gate.
 
 - `sh tests/docs-gate-advisory.test.sh` proves the gate's warning channel is
-  audible where the operator actually looks: an advisory the harness reports
+  audible where the operator actually looks: an advisory the test harness reports
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
@@ -575,7 +575,7 @@ skeleton (K0).
 - `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
   budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
   sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
-  runs nothing, a stub suite run through the harness against a fake host
+  runs nothing, a stub suite run through the test harness against a fake host
   comes back inside a budget of that host's numbers, a fork loop and a
   greedy allocation come back as failures naming the ceiling with exit 71
   while the calling shell still forks, the rlimit rung refuses forks inside
@@ -609,7 +609,7 @@ skeleton (K0).
   the two stamped projects must be byte-identical. A spot-check only finds the
   leaks somebody thought of.
 
-The kit's own CI runs the harness fixture tests, the portability validator
+The kit's own CI runs the test harness fixture tests, the portability validator
 against `constitution/shared-invariants.md`, the docs gate at this repo's own
 root, the guard test suites, and the demos on every PR (`kit-ci.yml` +
 `kit-guards.yml`).
@@ -674,7 +674,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
-sh tests/fixture-builders.test.sh                      # the harness's fixture builders
+sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/manifest.test.sh                              # the manifest grammar, once

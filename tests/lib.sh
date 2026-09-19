@@ -85,8 +85,8 @@ T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # derivation as it reaches the dispatcher: tests/suite-budget.test.sh hands
 # stub suites a small fake host through it.
 
-# _sb_note <line> — one stderr line; every line the harness says about the
-# budget is prefixed `tests/lib.sh:` so it reads as the harness's, not the
+# _sb_note <line> — one stderr line; every line the test harness says about the
+# budget is prefixed `tests/lib.sh:` so it reads as the test harness's, not the
 # suite's.
 _sb_note() { echo "$1" >&2; }
 

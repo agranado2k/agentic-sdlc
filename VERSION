@@ -266,7 +266,7 @@
 # the layer with the wave's gate slice:
 # scripts/docs-conformance/validators/skill-bridge.mjs — an advisory that
 # names the one failure shape the move added (a core.symlinks=false checkout
-# materializing the bridge as text files, blinding the harness that reads
+# materializing the bridge as text files, blinding the test harness that reads
 # only the old address; never a violation — a broken checkout must still run
 # the gate that diagnoses it). The skill-reading validators' baked default
 # follows the canonical home, and slash-command resolution gains a LEGACY
@@ -280,7 +280,7 @@
 # and its registration), plus UPDATING.md: the
 # recipe's kit-side skill paths follow the move below (the per-skill three-way
 # gains a yours/kit's split with a rename-aware diff, new-skill detection
-# spans both homes, the adopt fences lay the harness bridge), and the pinned
+# spans both homes, the adopt fences lay the test harness bridge), and the pinned
 # transcripts moved with it. scripts/check.sh: the reduced fallback's path
 # roots gain the new home. The skills themselves are name-manifested, not
 # byte-manifested, so the move itself is the wave's non-manifest half.
@@ -313,9 +313,9 @@
 # as mutation-decision's and skill-bridge's are. docs-conformance/runner.mjs
 # changed content (the registration). scripts/check.sh changed content twice:
 # the reduced fallback's notice names the scan it cannot run, and — the fix
-# this slice's demo forced — a GREEN gate now relays the harness's advisories
+# this slice's demo forced — a GREEN gate now relays the test harness's advisories
 # to stderr instead of swallowing them. Every advisory since 0.11.0 had been
-# audible only from the harness run directly, never through the wrapper the
+# audible only from the test harness run directly, never through the wrapper the
 # hook and CI actually run; tests/docs-gate-advisory.test.sh (kit-only) holds
 # the relay from here on. UPDATING.md moved
 # with the bump (the pinned versions advanced; the transcripts re-captured).
@@ -401,7 +401,7 @@
 # excluded by default.
 # Shared files that changed content, by ticket. scripts/check.sh three times:
 # it sources the manifest module instead of carrying its own copy (#125); its
-# reduced form's path roots are the harness's list entry for entry — four
+# reduced form's path roots are the test harness's list entry for entry — four
 # subtrees of .agents and .claude instead of the two whole trees — and match
 # by prefix, so a root may carry a `/` (#127); its no-node NOTICE names every
 # scan the runner registers, by id (#129, #128). scripts/docs-conformance/
@@ -416,7 +416,7 @@
 # transcript is re-captured to its fixpoint for the sidecar move and the
 # joining validator, and its step 9a says a removed file inside a skill is a
 # delete (#138, #128). The kit's own suites hold each of these: manifest,
-# gate-path-roots, self-host's notice probe, the harness fixtures.
+# gate-path-roots, self-host's notice probe, the test harness fixtures.
 # Finished at the v0.16.0 tag (#136 closes the wave).
 #   NON-MANIFEST HALF, enumerated, in ticket order. From #125: the test
 # harness gains a roster helper both skill suites use; the kit glossary gains
@@ -634,6 +634,20 @@
 # inherited budget wins over --no-budget. The floor note, the off switch and
 # the no-mechanism note, dry-run-only until now, are lifted to every dispatch;
 # the enforced: dry-run line now says the budget IS applied.
+#   From #209: the dispatcher's derivation became a SEAM the kit's own test
+# test harness takes the budget through, so every suite under tests/ runs inside
+# the budget a worker gets. scripts/agent-dispatch.sh now detects being
+# SOURCED (ZSH_EVAL_CONTEXT, then $0 — scripts/agents.lib.sh's own test) and
+# then defines its budget prefix and returns at a "dispatch proper" line
+# before any argument is parsed, scratch swept, tier resolved or prompt read:
+# _budget_derive (the derivation, the rung and NPROC_FLAG, from the flags,
+# the environment and the host), _budget_scope_props and
+# _budget_counters_text, with _dispatch_here=<its directory> set beforehand
+# the way _agents_here is. Executed, it is the dispatcher it was — the
+# derivation block is a function called where it stood, and the counters
+# heredoc is the same text written to the same file. One more content
+# change to scripts/agent-dispatch.sh — the file every clause above changed —
+# and the whole of #209's shared-layer half; nothing joins or leaves the layer.
 #   A top-level dispatch on a host WITHOUT a user service manager and without
 # rlimits cannot tell this release from the last: its depth is 1, its statuses
 # are untouched, the eight new variables ship empty, and the budget is a loud
@@ -642,7 +656,8 @@
 # exits 0, but a runaway is stopped at its ceiling and the dispatch exits 71,
 # and the operator's session survives it. One that has dispatched before also
 # sees a scratch directory with a name, and hears about a sweep only when
-# there was something to sweep.
+# there was something to sweep. A consumer that sources the dispatcher gets
+# the budget seam; one that only ever runs it sees no difference at all.
 #   NON-MANIFEST HALF, enumerated. docs/adr/0006-the-worker-budget-is-derived-from-the-host.md
 # records the budget decision — what a budget is, the derivation, where
 # policy lives, the ladder, nesting, the status, and the two options rejected
@@ -687,7 +702,32 @@
 # tests/housekeeping-skill.test.sh holds the checklist line. UPDATING.md's
 # Part 2 gate transcript gains the skill-paths advisory the checklist's new
 # `scripts/agents.config.sh` reference raises in a consumer that has not
-# taken the policy file yet. README.md's shared-layer marker and the pins in
+# taken the policy file yet. For #209, kit-only and never shipped:
+# tests/lib.sh — the shared test harness — sources the dispatcher's seam the
+# moment a suite sources it, derives the budget under the kit's own policy
+# file scripts/agents.kit.config.sh (which now says so, and stays at the
+# defaults), and runs the suite again inside it down the same ladder — a
+# named transient scope with a wrapper that reads the counters and turns a
+# hit into a FAIL line naming the ceiling and exit 71, else ulimit -u/-p and
+# -d in the suite's own shell, else a loud no-op — with AGENT_SUITE_BUDGET as
+# the one switch: `off` runs a suite bare and loudly, `applied: …` is the
+# marker the inner run carries and the recursion bound, anything else is
+# refused, and inside a dispatched worker's budget the suite opens none of
+# its own; its header documents all of it. tests/adapters-demo.sh,
+# tests/setup-demo.sh and tests/kit-demo.sh source the test harness for the pin
+# and the budget alone and keep their own assertion helpers.
+# tests/suite-budget.test.sh holds the seam and the test harness: sourcing
+# defines and runs nothing, the derivation answers the dry run's numbers, a
+# green stub suite runs once inside a budget from a fake host and says so, a
+# fork loop and a greedy allocation come back as failures naming the ceiling
+# with exit 71 and the calling shell still forking, the rlimit rung applies
+# and refuses forks inside the suite's own shell, the off switch, the marker,
+# a bad value, a scope that refuses to open and a verdict that cannot be
+# read; .github/workflows/kit-ci.yml gives it a job, bootstrap.sh's KIT_ONLY
+# list names it, README.md describes it. docs/adr/0006 gains a second dated
+# amendment recording what #209 settled, docs/adr/INDEX.md says so on its
+# row, and docs/domain-glossary.md's **Budget** and **Suite** entries now say
+# a suite runs inside one. README.md's shared-layer marker and the pins in
 # tests/docs-demo.sh and tests/kit-demo.sh moved 0.19.0 -> 0.20.0 with the
 # release, as every bump moves them.
 shared-layer: 0.20.0

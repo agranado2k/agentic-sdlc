@@ -6,13 +6,13 @@
 # suite under the same one, applied by tests/lib.sh the moment a suite sources
 # it — so the incident that started the wave (a runaway suite filling the
 # login session's task ceiling, #205) fails as a red suite instead of a frozen
-# host. This suite is the harness's oracle for that, through two seams:
+# host. This suite is the test harness's oracle for that, through two seams:
 #
 #   1. THE DISPATCHER'S SOURCING SEAM. tests/lib.sh takes the derivation from
 #      scripts/agent-dispatch.sh by sourcing it, so a suite and a worker cannot
 #      disagree about a number. Sourced, the dispatcher defines and runs
 #      nothing; _budget_derive then answers what --dry-run shows.
-#   2. THE HARNESS SEAM. A STUB SUITE — a script that sources tests/lib.sh the
+#   2. THE TEST HARNESS SEAM. A STUB SUITE — a script that sources tests/lib.sh the
 #      way every suite does — is run as `sh stub.sh`, against a fake host the
 #      dispatcher already knows how to read (AGENT_DISPATCH_HOST_ROOT), so the
 #      budget is small and the numbers are this suite's. A green stub runs
@@ -100,7 +100,7 @@ s_assert_err_has "AGENT_BUDGET_TASKS_PERCENT"
 # ---------------------------------------------------------------------------
 banner "2. A suite that sources tests/lib.sh runs inside the budget, once"
 # ---------------------------------------------------------------------------
-# The harness seam. tests/lib.sh derives the kit root from the SUITE's $0, so
+# The test harness seam. tests/lib.sh derives the kit root from the SUITE's $0, so
 # a stub suite lives under a scratch root whose scripts/ is the kit's own:
 # one symlink, and the stub sources the real tests/lib.sh the way every suite
 # does. Every stub is run with the marker CLEARED — this suite itself runs
@@ -112,7 +112,7 @@ ln -s "$KIT/scripts" "$STUBROOT/scripts"
 COUNT="$SCRATCH/starts"
 # green — a suite that passes, and reports what it runs under: the marker,
 # the process and data limits its shell has, and that it can still fork.
-# The start line is written BEFORE the harness is sourced, so the file
+# The start line is written BEFORE the test harness is sourced, so the file
 # counts every run of the file: the bare one and the one inside.
 GREEN="$STUBROOT/tests/green.sh"
 cat >"$GREEN" <<EOF
@@ -132,11 +132,11 @@ stub() { t_run_split env AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS= AGENT_
 starts() { [ -f "$COUNT" ] && wc -l <"$COUNT" | tr -d ' ' || echo 0; }
 
 # The fake host is small: 25% of 400 tasks is below the floor, so the floor
-# stands and the harness says so; 50% of 2091 MiB is 1045 MiB.
+# stands and the test harness says so; 50% of 2091 MiB is 1045 MiB.
 echo 400 >"$SLICE/pids.max"
 rm -f "$COUNT"
 stub sh "$GREEN"
-s_assert_status 0 "a green suite run through the harness passes"
+s_assert_status 0 "a green suite run through the test harness passes"
 s_assert_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and runs inside the budget derived from the (fake) host, with the marker naming it"
 s_assert_out_has "forks: yes" "…and can fork inside it"
 s_assert_out_has "agents config: <unset>" "…with the environment it was started with — the kit's policy file stayed with the derivation"
@@ -148,7 +148,7 @@ case "$RUNG" in
 scope | scope-tasks | rlimit | none) pass "the marker names the rung: $RUNG" ;;
 *) fail "the marker names no rung this suite knows: '$RUNG'" ;;
 esac
-# A suite's own status passes through the harness untouched.
+# A suite's own status passes through the test harness untouched.
 rm -f "$COUNT"
 stub STUB_EXIT=5 sh "$GREEN"
 s_assert_status 5 "a suite's own exit status passes through"
@@ -157,7 +157,7 @@ s_assert_status 5 "a suite's own exit status passes through"
 stub AGENTS_CONFIG=/operator/own.sh sh "$GREEN"
 s_assert_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator exported reaches the suite as it was"
 
-# The off switch: the suite runs bare, once, and the harness says so.
+# The off switch: the suite runs bare, once, and the test harness says so.
 rm -f "$COUNT"
 t_run_split env AGENT_SUITE_BUDGET=off AGENT_DISPATCH_HOST_ROOT="$HOST" STUB_EXIT=3 sh "$GREEN"
 s_assert_status 3 "AGENT_SUITE_BUDGET=off runs the suite bare — its own status, as before"
@@ -173,7 +173,7 @@ s_assert_err_has "AGENT_SUITE_BUDGET"
 s_assert_out_lacks "budget:" "…and the suite body never ran"
 
 # Inside a dispatched worker the suite is already inside that worker's
-# budget (ADR-0006 clause 7): the harness opens none of its own, says so,
+# budget (ADR-0006 clause 7): the test harness opens none of its own, says so,
 # and the suite runs once.
 rm -f "$COUNT"
 t_run_split env AGENT_SUITE_BUDGET= AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$GREEN"
@@ -182,7 +182,7 @@ s_assert_out_has "budget: <unset>" "…bare — no scope of its own"
 s_assert_err_has "dispatched worker"
 [ "$(starts)" = 1 ] && pass "…and once" || fail "the file ran $(starts) time(s) inside a worker's budget"
 
-# Every suite in tests/ sources the harness, so none has to remember any of
+# Every suite in tests/ sources the test harness, so none has to remember any of
 # this — including the three that carry their own assertion helpers.
 for suite in "$KIT"/tests/*.sh; do
 	rel="tests/${suite##*/}"
@@ -194,7 +194,7 @@ done
 # ---------------------------------------------------------------------------
 banner "3. A runaway suite stops at its ceiling and comes back as a FAILURE"
 # ---------------------------------------------------------------------------
-# The incident, as a red suite. On the scope rung the harness reads the
+# The incident, as a red suite. On the scope rung the test harness reads the
 # scope's counters after the suite exits and names the ceiling; these legs
 # need that rung, which the green stub's marker reported above, and say they
 # were skipped where it is absent. The rlimit legs after them run everywhere.
@@ -229,7 +229,7 @@ EOF
 if [ "$RUNG" = scope ]; then
 	stub sh "$FORKER"
 	s_assert_status 71 "a fork loop stops at the task ceiling and the suite exits 71"
-	s_assert_out_has "FAIL" "…the harness reports it as a FAILURE of that suite"
+	s_assert_out_has "FAIL" "…the test harness reports it as a FAILURE of that suite"
 	s_assert_out_has "hit its TASK ceiling (256 tasks)" "…naming the ceiling it hit"
 	s_assert_out_has "forker begins" "…after the suite's own output"
 	if sh -c 'exit 0'; then

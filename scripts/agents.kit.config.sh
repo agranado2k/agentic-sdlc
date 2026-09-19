@@ -20,11 +20,19 @@
 #
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 #
+# THE SUITE'S BUDGET IS DERIVED UNDER THIS FILE TOO. tests/lib.sh runs every
+# suite inside the budget a dispatched worker gets (ADR-0006, #209), and
+# reads the six AGENT_BUDGET_* variables from here — never from the
+# environment's $AGENTS_CONFIG. None is set: the dispatcher's defaults are
+# the kit's answer for its own suite, re-measured by #209 with room to spare.
+# Set one here, in the shape scripts/agents.config.sh documents, to tighten
+# the suite's ceiling for every developer at once.
+#
 # ---------------------------------------------------------------------------
 # THESE IDS ROT. Last checked 2026-08-27, against the Claude Code harness's
 # Agent/Task spawn tool (the `model` parameter — see
 # adapters/claude-code/README.md for the wiring). Re-check them whenever that
-# harness's model roster moves: a name below that the harness no longer
+# harness's model roster moves: a name below that the test harness no longer
 # accepts fails the spawn, not silently — but it fails at spawn time, which is
 # later than a reviewer reading this file would like. The four aliases as of
 # this check: `fable` (Claude Fable 5 — strongest, Mythos-class), `opus`
