@@ -354,3 +354,52 @@ stand as written; this block is what binds where they differ.
   dispatch, so an operator piping stdout still hears them; a within-budget
   dispatch that trips no clamp stays silent on stderr, the way the timeout is
   silent until it fires.
+
+### Amendment, 2026-09-19 — what building #209 settled for the suite
+
+#209 put every suite under the budget as clause 3 anticipated. Five things
+were left to it and are decided here; the clauses stand as written.
+
+- **One derivation, reached by sourcing.** The kit's test harness
+  (`tests/lib.sh`) takes the budget from `scripts/agent-dispatch.sh` itself:
+  the dispatcher detects being sourced (the resolver's own test —
+  `ZSH_EVAL_CONTEXT`, then `$0`), defines its budget prefix and returns
+  before the dispatch proper. A copy of the arithmetic in the test harness, or a
+  third shared file both would source, were the alternatives; the seam adds
+  nothing to the manifest and cannot drift from what a worker gets.
+- **A suite is inside a budget the way a nested dispatch is (clause 7).**
+  The test harness re-executes the suite inside the budget with
+  `AGENT_SUITE_BUDGET=applied: …` in its environment, and the second sourcing
+  carries on. That marker is the recursion bound. Inside a dispatched worker
+  (`AGENT_DISPATCH_BUDGET_TASKS` set) the test harness opens nothing: a scope from
+  inside a scope is a sibling, and a suite's scope is never a backstop for
+  the dispatches it runs — the dispatch suite's runaways are bounded by their
+  own dispatch, exactly as clause 7 says. The outer boundary is not only a
+  dispatch: a suite started inside a cgroup that already bounds it — an
+  operator's own `systemd-run --user --scope`, whose `pids.max` is the
+  tightest on the path or whose `pids.max` / `memory.max` the derived
+  ceilings would exceed — runs in place under that cgroup's ceilings and
+  says which, because the sibling the ladder would open escapes the
+  operator's cap with larger numbers and blames the host for being small.
+  The root cgroup is every scope's ancestor and never counts as that
+  boundary. A run that lost the marker inside a suite's own scope is
+  refused outright: the scope's name is the second recursion bound.
+- **The policy is the kit's own.** The suite derives under
+  `scripts/agents.kit.config.sh` (ADR-0003's never-shipped twin), never the
+  environment's `$AGENTS_CONFIG`: a developer's environment does not decide
+  the ceiling a test runs under. The file sets none of the six variables —
+  the defaults stand for the suite too — and is where a tighter suite budget
+  would go.
+- **The clamps were re-measured against the suite and stand.** On the
+  incident's host (2 vCPU / 3.7 GiB, `TasksMax` 10008) the derived budget is
+  2502 tasks and about 1 GiB. Each suite run once in a scope of its own,
+  `pids.peak` / `memory.peak` read before the scope emptied: the largest
+  task peak is 44 (the dispatch suite; its runaways run in sibling scopes
+  of their own, as a worker's do) and the largest memory peak 35 MiB (the
+  adoption demo) — without node, which the four docs-gate suites add on
+  CI and which was not measured: node was absent on the measuring host.
+  Nothing measured reaches the floors, let alone the ceilings; nothing in
+  clause 3 is re-decided.
+- **Off is loud, and disabling is the outermost run's.** `AGENT_SUITE_BUDGET=off`
+  runs a suite as before #209 and says so on stderr; any other value is
+  refused, so a typo cannot read as "inside".

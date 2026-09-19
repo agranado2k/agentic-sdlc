@@ -572,6 +572,17 @@ skeleton (K0).
   commit. The demo suites are the builders' oracle in the large — the docs
   demo's pinned transcripts did not move when it adopted them.
 
+- `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
+  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
+  sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
+  runs nothing, a stub suite run through the test harness against a fake host
+  comes back inside a budget of that host's numbers, a fork loop and a
+  greedy allocation come back as failures naming the ceiling with exit 71
+  while the calling shell still forks, the rlimit rung refuses forks inside
+  the suite's own shell, the off switch runs a stub bare and says so, the
+  marker bounds the recursion, and a scope that refuses to open falls to
+  rlimits out loud.
+
 - `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
   set of path roots: the reduced POSIX form's list must equal the policy
   file's `claudeMdRefs.pathRoots` entry for entry, two baits prove the
@@ -663,13 +674,14 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
-sh tests/fixture-builders.test.sh                      # the harness's fixture builders
+sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots
 sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
+sh tests/suite-budget.test.sh                          # every suite runs inside the worker budget
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

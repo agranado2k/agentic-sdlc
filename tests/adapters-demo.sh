@@ -25,9 +25,10 @@
 #
 # Usage: sh tests/adapters-demo.sh
 
-# Collation pinned as tests/lib.sh pins it; this suite sources no lib.
-LC_ALL=C
-export LC_ALL
+# tests/lib.sh pins collation and puts this suite under the worker budget (its
+# header says how, and how to turn it off); the assertion helpers are this
+# suite's own, so nothing else of the harness is used.
+. "$(dirname "$0")/lib.sh"
 
 set -u
 

@@ -288,6 +288,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fixture-builder suite
         run: sh tests/fixture-builders.test.sh
+  suite-budget:
+    name: Every suite runs inside the worker budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the stub suites are sh. Where this runner offers no user
+      # service manager the ladder falls to rlimits and the scope-rung legs
+      # say they were skipped; the rlimit legs are the ones this job is for,
+      # because its sh is dash and dash spells the process limit `ulimit -p`.
+      - name: Suite-budget suite
+        run: sh tests/suite-budget.test.sh
 
   gate-path-roots:
     name: The gate's two engines agree on their path roots

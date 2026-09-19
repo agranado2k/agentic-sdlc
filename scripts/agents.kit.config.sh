@@ -20,6 +20,14 @@
 #
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 #
+# THE SUITE'S BUDGET IS DERIVED UNDER THIS FILE TOO. tests/lib.sh runs every
+# suite inside the budget a dispatched worker gets (ADR-0006, #209), and
+# reads the six AGENT_BUDGET_* variables from here — never from the
+# environment's $AGENTS_CONFIG. None is set: the dispatcher's defaults are
+# the kit's answer for its own suite, re-measured by #209 with room to spare.
+# Set one here, in the shape scripts/agents.config.sh documents, to tighten
+# the suite's ceiling for every developer at once.
+#
 # ---------------------------------------------------------------------------
 # THESE IDS ROT. Last checked 2026-08-27, against the Claude Code harness's
 # Agent/Task spawn tool (the `model` parameter — see

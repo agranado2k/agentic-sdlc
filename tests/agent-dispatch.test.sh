@@ -1077,15 +1077,9 @@ banner "The budget — derived from the host, shown by --dry-run"
 # the same code can.
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
-HOST="$SCRATCH/host"
-SLICE="$HOST/sys/fs/cgroup/user.slice/user-1000.slice"
-mkdir -p "$HOST/proc/self" "$SLICE/session-1.scope"
-printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
-echo max >"$HOST/sys/fs/cgroup/user.slice/pids.max"
-echo 10008 >"$SLICE/pids.max"
-echo max >"$SLICE/session-1.scope/pids.max"
-# The incident's host: MemAvailable 2141820 kB is 2091 MiB.
-printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+# The incident's host: the slice's 10008 tasks; MemAvailable 2141820 kB is
+# 2091 MiB.
+t_fake_host "$SCRATCH/host" 10008 2141820
 # hostdry <args> — a dry run against the fake host.
 hostdry() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run "$@"; }
 
@@ -1270,7 +1264,6 @@ s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
 SDBIN="$SCRATCH/sd-yes"; mkdir -p "$SDBIN"
 printf '#!/bin/sh\nexit 0\n' >"$SDBIN/systemctl"; cp "$SDBIN/systemctl" "$SDBIN/systemd-run"; chmod +x "$SDBIN/systemctl" "$SDBIN/systemd-run"
 CONTROLLERS="$SLICE/session-1.scope/cgroup.controllers"
-echo 'cpu memory pids' >"$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
 s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
@@ -1291,8 +1284,7 @@ rm -f "$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
 echo 'cpu memory pids' >"$CONTROLLERS"
-NOSD="$SCRATCH/sd-no"; mkdir -p "$NOSD"
-printf '#!/bin/sh\nexit 1\n' >"$NOSD/systemctl"; chmod +x "$NOSD/systemctl"
+NOSD="$SCRATCH/sd-no"; t_no_user_manager "$NOSD"
 t_run_split env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'rlimits' "without one the rung is rlimits"
 s_assert_out_has 'weaker' "…and the dry run says that is the weaker promise"
@@ -1676,7 +1668,7 @@ AGENT_HARNESS_RF_CMD='$RLFORK {model_flag} < {prompt_file}'
 AGENT_HARNESS_RF_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='rf:'
 EOF
-UID_TASKS=$(ps -u "$(id -u)" -o nlwp= | awk '{ s += $1 } END { print s + 0 }')
+UID_TASKS=$(t_uid_tasks)
 RL_TMP="$SCRATCH/rl-tmp"; mkdir -p "$RL_TMP"
 t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_RLFORK" TMPDIR="$RL_TMP" \
 	sh "$DISPATCH" implementer --prompt 'run away' --budget-tasks $((UID_TASKS + 40)) --budget-memory 512

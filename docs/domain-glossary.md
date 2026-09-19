@@ -178,7 +178,9 @@ Grouped by the seam each term belongs to. Entry shape:
   `scripts/agents.config.sh`; derivation, the enforcement ladder and the exit
   status (71) are `scripts/agent-dispatch.sh`'s, and `--dry-run` shows the
   budget before a token is spent. A nested dispatch inherits the outer's and
-  never opens a fresh one. Ref: ADR-0006.
+  never opens a fresh one. Every suite runs inside one too, applied by the
+  shared test harness through the dispatcher's own derivation; `AGENT_SUITE_BUDGET=off`
+  is the off switch. Ref: ADR-0006, and its #209 amendment.
   - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
     here is a ceiling on one tree, derived fresh per dispatch. "Limit" and
     "cap" stay ordinary words for the host facts a budget is derived *from*
@@ -219,7 +221,7 @@ Grouped by the seam each term belongs to. Entry shape:
     directory, and this repo cares about both separately.
 - **Suite** — one executable script under `tests/`. `tests/lib.sh` is the shared
   test harness and is not a suite. "The suite" (singular, unqualified) means all of
-  them.
+  them. A suite runs inside the budget from the line that sources the test harness.
 - **Diagram language** — mermaid, in a fenced block, wherever a shipped
   markdown document needs a picture; the forge renders it, and craft rule §10
   forbids the alternative. Each block carries an accessible title and
