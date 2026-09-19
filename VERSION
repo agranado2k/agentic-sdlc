@@ -585,8 +585,10 @@
 # tests/agent-dispatch.test.sh holds each acceptance line through the
 # dispatch seam, with a KILLed dispatch as the fixture that leaves scratch
 # behind; tests/housekeeping-skill.test.sh holds the checklist line.
-# UPDATING.md's transcripts are re-captured to the new version and nothing in
-# the recipe moved.
+# UPDATING.md's transcripts are re-captured to the new version — the Part 2
+# gate transcript gains the skill-paths advisory the checklist's new
+# `scripts/agents.config.sh` reference raises in a consumer that has not
+# taken the policy file yet — and nothing in the recipe moved.
 shared-layer: 0.20.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
