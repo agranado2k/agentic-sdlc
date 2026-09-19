@@ -175,17 +175,6 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
       `-p MemoryMax=` is accepted and applies nothing, which is the silent
       degradation driver 4 forbids. The rung is then
       `systemd-run --user --scope -p TasksMax=<tasks> -p MemoryMax=<MiB>M`.
-      **Building #208 proved this bare command incomplete on a host with swap
-      and `systemd-oomd`, and it now carries `-p MemorySwapMax=0 -p
-      OOMPolicy=continue` besides.** Without `OOMPolicy=continue` this host
-      tore the whole scope down on the first out-of-memory event, and the
-      wrapper (clause 6) never ran to read the counter the verdict needs;
-      `continue` leaves the kernel to OOM-kill the offending task *inside* the
-      cgroup, so the wrapper survives to read `memory.events`. Without
-      `MemorySwapMax=0` the runaway filled swap for seconds first, which both
-      delayed the bound and let `systemd-oomd`'s pressure kill of the scope
-      pre-empt it; with swap denied, the ceiling bites at `MemoryMax` and is
-      observable at once. A memory budget swap can evade is not a budget.
       The budget is a cgroup shared by everything the worker spawns, and
       a fork or an allocation past it fails **inside the worker's boundary**
       while the operator's session keeps forking. With `pids` delegated and
@@ -230,10 +219,9 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    `pids.events` (`max` greater than 0) and `memory.events` (`oom_kill`
    greater than 0) after the worker exits and before the scope empties, and
    stderr names which ceiling was hit. On the rlimit rung there is no counter
-   to read; #208 decided that nothing is observed there — a `RLIMIT_NPROC` hit
-   is uid-wide and an `RLIMIT_DATA` hit is a `malloc` the worker sees and this
-   script does not — so a hit passes the worker's own status through, and the
-   weaker rung was already announced. A worker that both runs past `--timeout` and exceeds
+   to read; #208 decides how much can be observed there, and a hit it cannot
+   observe passes the worker's own status through — the weaker rung was
+   already announced. A worker that both runs past `--timeout` and exceeds
    its budget exits with whichever fired first, and its tree is gone either
    way.
 
@@ -258,16 +246,15 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    dispatch. An outer dispatch that ran with `--no-budget` exports nothing,
    and an inner one then derives its own.
 
-8. **Visible before it is enforced, and now enforced.** `--dry-run` prints both
-   ceilings, the host fact and percentage each came from, the clamp if one
-   applied, the rung the host would offer, and — since #208 — that the budget
-   **is** applied (the `enforced:` line, per rung). What is shown is what is
-   enforced, computed by the same code. The two stderr notes clauses 2 and 4
-   attach to the dispatch — the floor raised, the budget disabled — were said
-   under `--dry-run` only until #208; #208 lifted both, plus the
-   no-mechanism note of rung 3, to **every** dispatch, so an operator piping
-   stdout still hears them. A within-budget dispatch that trips no clamp stays
-   silent on stderr, the way the timeout is silent until it fires.
+8. **Visible before it is enforced.** `--dry-run` prints both ceilings, the
+   host fact and percentage each came from, the clamp if one applied, the rung
+   the host would offer, and — until #208 lands — that nothing is applied.
+   What is shown is what will be enforced, computed by the same code. Until
+   #208, the two stderr notes clauses 2 and 4 attach to the dispatch — the
+   floor raised, the budget disabled — are said under `--dry-run` only: a
+   real dispatch applies nothing and says nothing about a budget it does not
+   apply, and the suite holds it to that silence. #208 lifts both to every
+   dispatch in the change that applies the budget.
 
 9. **Explicit non-goal**: CPU time and I/O are not budgeted. Tasks were the
    incident; memory is the sibling that kills a host the same way; nothing
@@ -311,3 +298,59 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
   `scripts/agent-dispatch.sh`'s `--timeout` note (the 124 precedent clause 6
   copies); `sysexits.h` (`EX_OSERR` is 71); systemd's `DefaultTasksMax=`
   (33% of `kernel.threads-max`).
+
+### Amendment, 2026-09-19 — what building #208 refined in clauses 5, 6 and 8
+
+#208 implemented the ladder as recorded, and building it against a real host
+refined four things the clauses above left open or got wrong. The clauses
+stand as written; this block is what binds where they differ.
+
+- **Clause 5, rung 1 — the scope command carries two more properties.** The
+  rung is `systemd-run --user --scope --unit=agent-dispatch-<suffix> -p
+  TasksMax=<tasks> -p MemoryMax=<MiB>M -p MemorySwapMax=0 -p
+  OOMPolicy=continue`. Without `OOMPolicy=continue` the host tore the whole
+  scope down on the first out-of-memory event, and the wrapper (clause 6)
+  never ran to read the counter the verdict needs; `continue` leaves the
+  kernel to OOM-kill the offending task *inside* the cgroup, so the wrapper
+  survives to read `memory.events`. Without `MemorySwapMax=0` the runaway
+  filled swap for seconds first, which both delayed the bound and let
+  `systemd-oomd`'s pressure kill of the scope pre-empt it; with swap denied,
+  the ceiling bites at `MemoryMax` and is observable at once. A memory budget
+  swap can evade is not a budget. The `pids`-only rung carries `TasksMax` and
+  `OOMPolicy=continue`. The scope is **named** after the dispatch's scratch
+  (`agent-dispatch-<mktemp suffix>`), so the dispatcher can reach the whole
+  cgroup after the spawn: on `--timeout` it KILLs the unit after the tree
+  walk's TERM/KILL pass, which is what makes "the tree is gone either way"
+  hold for a child the worker double-forked out of the walk's reach, and a
+  stray `agent-dispatch-*` scope has a name `/housekeeping` can list.
+- **Clause 5, "when the rung refuses at execution" — decided before the
+  spawn, never by a re-run.** The dispatcher opens and closes an empty scope
+  with the real properties first, in milliseconds; a refusal there falls to
+  rung 2 loudly with `systemd-run`'s own message. After the real spawn a
+  missing started-marker is *reported* — the scope torn down before the
+  worker started, or the scratch removed under an untimed dispatch older
+  than the sweep age — and the run's own status passes through. The marker
+  is a file a worker's tree or a sweep can remove; it never runs the worker a
+  second time.
+- **Clause 6 — nothing is observed on the rlimit rung, and an unreadable
+  verdict is loud.** A `RLIMIT_NPROC` hit is uid-wide and a `RLIMIT_DATA` hit
+  is a `malloc` the worker sees and the dispatcher does not, so on rung 2 a
+  hit passes the worker's own status through; the weaker rung was already
+  announced. On the scope rungs "could not read the counters" is never the
+  same as "no ceiling hit": the wrapper writes `-` for a counter it could not
+  read, and a missing marker, a missing or malformed verdict file (the
+  wrapper killed with the worker — `systemd-oomd` takes every process in the
+  pressured cgroup, and `OOMPolicy=continue` exempts nothing) or an
+  unreadable counter is said on stderr with the run's own status passed
+  through, never a silent zero. **Whichever fired first** is decided from
+  the counters: the watchdog reads the scope's `pids.events` /
+  `memory.events` from outside before it signals — once the scope empties
+  they are gone — and a ceiling hit already on them exits 71, not 124.
+- **Clause 8 — visible, and now enforced.** `--dry-run`'s `enforced:` line
+  says, per rung, that the budget *is* applied: both ceilings exit 71 on the
+  scope rung, the task ceiling alone on the `pids`-only rung, best-effort on
+  rlimits, announced only where there is no mechanism. The floor note, the
+  off switch and the no-mechanism note of rung 3 are said on **every**
+  dispatch, so an operator piping stdout still hears them; a within-budget
+  dispatch that trips no clamp stays silent on stderr, the way the timeout is
+  silent until it fires.
