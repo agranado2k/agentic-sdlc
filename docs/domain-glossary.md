@@ -184,6 +184,25 @@ Grouped by the seam each term belongs to. Entry shape:
     "cap" stay ordinary words for the host facts a budget is derived *from*
     (the slice's `TasksMax`, the per-user process limit); only the derived
     pair is the budget.
+- **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
+  worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
+  removed by the dispatcher's own trap — and, when a dispatch dies before
+  reaching it, by a later dispatch's sweep. Recognisable by name alone, which
+  is what the sweep and `/housekeeping` item 5 act on. Ref: ADR-0005 (the
+  dispatcher's home); #210.
+  - _Avoid_: "temp dir", "the tmp directory" — the name is the point; a
+    directory that is only a temp dir cannot be told from anyone else's.
+- **Sweep age** — how old dispatch scratch must be before the next dispatch
+  removes it on entry: `AGENT_DISPATCH_SWEEP_DAYS` in the policy file, whole
+  days, kit default one. It exceeds any `--timeout` a dispatch runs under, and
+  the dispatcher refuses a `--timeout` that reaches it, so scratch past the
+  sweep age was never a dispatch still running *under `--timeout`*. An untimed
+  dispatch has no such bound: one that outlives the sweep age has its scratch
+  removed under it by the next dispatch, which is harmless — the worker took
+  its prompt at exec, the untimed path never writes to scratch again, and the
+  trap's removal of a directory already gone is a no-op. Ref: #210.
+  - _Avoid_: "TTL", "expiry" — the scratch does not expire; it is evidence of
+    a dispatch that died, kept long enough to be sure of that.
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
   demoable, not a horizontal layer. In this repo a tracer bullet is typically a
   rule, the check that enforces it, and the suite that drives that check red

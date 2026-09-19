@@ -48,6 +48,7 @@
 #   AGENT_HARNESS_<TOKEN>_CMD='<command> {model_flag} < {prompt_file}'
 #   AGENT_HARNESS_<TOKEN>_MODEL_FLAG='<the flag> {model}'
 #   AGENT_DISPATCH_MAX_DEPTH='<how deep a dispatch may nest>'   empty: 3
+#   AGENT_DISPATCH_SWEEP_DAYS='<whole days>'   the sweep age; empty is the default
 #
 # THE DEPTH travels the way the other per-dispatch facts do — through the
 # worker's environment. AGENT_DISPATCH_DEPTH is this dispatch's own depth,
@@ -312,8 +313,15 @@ done
 DEPTH_DEFAULT_MAX=3
 DEPTH=${AGENT_DISPATCH_DEPTH:-1}
 _whole_number "AGENT_DISPATCH_DEPTH (set by the dispatcher that spawned this worker; unset or empty means depth 1)" "$DEPTH"
-MAX_DEPTH=$(_read_policy_numbers "AGENT_DISPATCH_MAX_DEPTH=$DEPTH_DEFAULT_MAX") || exit 2
-MAX_DEPTH=${MAX_DEPTH%% *}
+# The SWEEP AGE rides this sourcing: it is the other whole-number policy
+# value needed before the budget's own read (the sweep below runs before the
+# scratch is made, and the budget is derived after), and one sourcing through
+# one validator is how the two cannot disagree about a leading zero. What it
+# means is explained where it is used.
+SWEEP_DAYS_DEFAULT=1
+_pn=$(_read_policy_numbers "AGENT_DISPATCH_MAX_DEPTH=$DEPTH_DEFAULT_MAX" "AGENT_DISPATCH_SWEEP_DAYS=$SWEEP_DAYS_DEFAULT") || exit 2
+MAX_DEPTH=${_pn%% *} _pn=${_pn#* }
+SWEEP_DAYS=${_pn%% *}
 # Both are whole numbers from 1 now; this bound is the depth's own. One
 # `[ -gt ]` must be able to compare them: past the shell's integer range `[`
 # errors instead of comparing, and an error there would fail OPEN — the
@@ -439,9 +447,71 @@ trap cleanup EXIT INT TERM HUP
 # directory named `a;$(touch PWNED)b` created PWNED.
 #
 # Staging is not by itself the fix, because $TMPDIR is also somebody else's
-# data. So the staged path is held to the same refuse-don't-escape rule as the
-# model id, and single-quoted at the substitution on top of that.
-SCRATCH=$(mktemp -d) || die "cannot create a scratch directory"
+# data. So the temp location is held to the same refuse-don't-escape rule as
+# the model id — before the sweep below reads it, and before the staged path
+# under it is single-quoted at the substitution on top of that. mktemp fills
+# the XXXXXX from letters and digits, so a location that passes yields a
+# staged path that passes.
+TMP_ROOT=${TMPDIR:-/tmp}
+case "$TMP_ROOT" in
+*[!$_alnum._/-]*)
+	die "the temp location '$TMP_ROOT' contains a character this script will not
+   interpolate into a command. TMPDIR is the usual cause — point it somewhere
+   made of letters, digits and . _ - / and run again." ;;
+esac
+
+# --- dispatch scratch, and the stale scratch of dispatches that died ---------
+# The scratch names itself. A bare `mktemp -d` named it tmp.XXXXXX, and a
+# dispatch that never reaches its trap — KILL, a budget exceeded, a host out
+# of tasks — leaves that behind with nothing to attribute it to: 267 on one
+# host. With the prefix a leftover is dispatch scratch by name alone, and the
+# sweep can act on the name.
+SCRATCH_PREFIX='agent-dispatch.'
+
+# The SWEEP AGE, in whole days, from the policy file beside the tier mapping
+# — read above with the depth maximum, through the same validator. A sibling
+# carrying the prefix that is at least this old is removed before this
+# dispatch makes its own; a younger one may be a dispatch still running and
+# is left alone; anything without the prefix is never touched. Days rather
+# than minutes because `find -mtime` is the age test POSIX has (`-mmin` and
+# `-maxdepth` are not POSIX), and one day already exceeds any --timeout a
+# dispatch plausibly runs under. That is the invariant the sweep rests on, so
+# it is enforced where it lives: a --timeout that reaches the sweep age is
+# refused rather than left for a later dispatch to sweep mid-run.
+#
+# The sweep sits here, after the depth refusal and the in-session exit, on
+# purpose: a dispatch refused for nesting, or one that spawns nothing, sweeps
+# nothing — in the runaway case every process spent past the refusal is one
+# the host has lost, and a find over /tmp spawns several.
+SECONDS_PER_DAY=86400
+if [ -n "$TIMEOUT" ] && [ $((TIMEOUT / SECONDS_PER_DAY)) -ge "$SWEEP_DAYS" ]; then
+	die "--timeout ${TIMEOUT}s reaches the sweep age of $SWEEP_DAYS day(s).
+   A later dispatch on this host would sweep this one's scratch while its
+   worker still runs. Raise AGENT_DISPATCH_SWEEP_DAYS in your agents config,
+   or shorten the timeout."
+fi
+
+# A dry run runs nothing, and that includes the sweep.
+if [ "$DRY_RUN" != 1 ]; then
+	# POSIX find only: `dir/.` with `! -name . -prune` is the portable spelling
+	# of depth one, and `-mtime +n` is true once the whole days elapsed exceed
+	# n, so "at least N days old" is +(N-1). find hands each path to rm whole,
+	# so a name with a space in it is never split into a second, relative
+	# path; -print follows only a removal that succeeded, so the count is of
+	# what actually went. Two defences against a shared /tmp are in the
+	# predicates rather than beside them: find is PHYSICAL here — no -L, no
+	# -H — so a planted `agent-dispatch.* -> ~` is a link, not a directory,
+	# and `-type d` never hands it to rm; and a sibling owned by someone else
+	# fails at rm on a sticky /tmp, so it goes uncounted rather than
+	# half-removed. Dropping `-type d` or adding `-L` reopens the first.
+	_swept=$(find "$TMP_ROOT/." ! -name . -prune -type d -name "${SCRATCH_PREFIX}*" \
+		-mtime "+$((SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
+	if [ "$_swept" -gt 0 ]; then
+		echo "i  dispatch: swept $_swept stale dispatch scratch under $TMP_ROOT — at least $SWEEP_DAYS day(s) old, left by dispatches that never reached their trap" >&2
+	fi
+fi
+
+SCRATCH=$(mktemp -d "$TMP_ROOT/${SCRATCH_PREFIX}XXXXXX") || die "cannot create a scratch directory under $TMP_ROOT"
 _staged="$SCRATCH/prompt.md"
 if [ -n "$PROMPT_FILE" ]; then
 	cat -- "$PROMPT_FILE" >"$_staged" || die "cannot read the prompt file: $PROMPT_FILE"
@@ -449,13 +519,6 @@ else
 	printf '%s\n' "$PROMPT_TEXT" >"$_staged"
 fi
 PROMPT_FILE="$_staged"
-
-case "$PROMPT_FILE" in
-*[!$_alnum._/-]*)
-	die "the scratch path '$PROMPT_FILE' contains a character this script will not
-   interpolate into a command. TMPDIR is the usual cause — point it somewhere
-   made of letters, digits and . _ - / and run again." ;;
-esac
 
 # --- the editor's header ----------------------------------------------------
 # A prompt template opens with an HTML comment addressed to whoever EDITS it:

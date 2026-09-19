@@ -559,16 +559,17 @@
 # run the kit's own guard wrapper when it exists, and it never exists
 # downstream, so the hook behaves exactly as before in every consumer — a
 # consumer's update diff will list it, and this is why.
-# 0.20.0 — a dispatched worker is bounded (#205): in depth now, and by a
-# BUDGET that is shown before it is enforced (ADR-0006). No file joins or
-# leaves the layer; TWO shared files changed CONTENT — scripts/agent-dispatch.sh,
-# and UPDATING.md by re-pin, which this manifest's 0.9.0 note counts as a
-# content change and step 5 of the recipe reports as one. The forcing incident
-# is #205's, found live: the suite's own nested stub — a worker whose tier
-# maps back to its own agent harness, a fork bomb with a model in the loop —
-# filled a 2 vCPU host's user-slice task ceiling (10008, systemd's 33% of
-# threads-max) in under three minutes, and from then on nothing of the
-# operator's could fork. Two answers, one per ticket, both in the dispatcher.
+# 0.20.0 — a dispatched worker is bounded (#205): in depth now, by a
+# BUDGET that is shown before it is enforced (ADR-0006), and in the scratch
+# it leaves behind. No file joins or leaves the layer; TWO shared files
+# changed CONTENT — scripts/agent-dispatch.sh, and UPDATING.md by re-pin,
+# which this manifest's 0.9.0 note counts as a content change and step 5 of
+# the recipe reports as one. The forcing incident is #205's, found live: the
+# suite's own nested stub — a worker whose tier maps back to its own agent
+# harness, a fork bomb with a model in the loop — filled a 2 vCPU host's
+# user-slice task ceiling (10008, systemd's 33% of threads-max) in under
+# three minutes, and from then on nothing of the operator's could fork.
+# Three answers, one per ticket, all in the dispatcher.
 #   From #206: a dispatch refuses to nest past a policy maximum depth. The
 # depth reaches every dispatch through the worker's environment,
 # AGENT_DISPATCH_DEPTH, the way the other per-dispatch facts do — a top-level
@@ -592,33 +593,59 @@
 # budgeted worker reads the outer budget from AGENT_DISPATCH_BUDGET_TASKS and
 # AGENT_DISPATCH_BUDGET_MEMORY_MIB and derives nothing. Exit status 71
 # (EX_OSERR, "can't fork") is reserved for a worker that exceeds its budget;
-# nothing produces it yet. The depth maximum and the six budget values are
-# read by one policy reader through one validator, so the two cannot disagree
-# about a leading zero. UPDATING.md's transcripts are re-captured to the new
-# version and nothing in the recipe moved — the second content change above,
-# and all of it.
+# nothing produces it yet. The depth maximum, the six budget values and the
+# sweep age below are read by one policy reader through one validator, so
+# the three cannot disagree about a leading zero. UPDATING.md's transcripts
+# are re-captured to the new version and nothing in the recipe moved — the
+# second content change above, and all of it.
+#   From #210: the dispatcher's scratch names itself — agent-dispatch.XXXXXX
+# under $TMPDIR, where `mktemp -d` alone named it tmp.XXXXXX — so a dispatch
+# that dies before its trap (killed, over a budget, on a host out of tasks)
+# leaves a directory that is dispatch scratch by name alone; 267 anonymous
+# ones on one host is why. On entry, after the depth refusal and before
+# making its own, a dispatch sweeps every sibling carrying the prefix that
+# is at least the SWEEP AGE old and says on stderr how many went; a younger
+# one may be a dispatch still running and is left alone, and nothing without
+# the prefix is ever touched. The age is AGENT_DISPATCH_SWEEP_DAYS in the
+# policy file, whole days, kit default one — POSIX find's `-mtime` is the
+# age test the sweep is written to, so days is the unit — and a --timeout
+# that reaches it is refused, so scratch past the sweep age was never a
+# worker still running UNDER A TIMEOUT. An untimed worker that outlives the
+# age has its scratch removed under it, harmlessly: it took its prompt at
+# exec and never writes there again. A --dry-run sweeps nothing.
 #   A top-level dispatch cannot tell this release from the last: its depth is
-# 1, its statuses are untouched, the seven new variables ship empty, and the
+# 1, its statuses are untouched, the eight new variables ship empty, and the
 # only thing it sees is --dry-run's depth line and the budget lines beneath
-# it — the worker runs exactly as it did.
+# it — the worker runs exactly as it did. One that has dispatched before
+# sees a scratch directory with a name, and hears about a sweep only when
+# there was something to sweep.
 #   NON-MANIFEST HALF, enumerated. docs/adr/0006-the-worker-budget-is-derived-from-the-host.md
 # records the budget decision — what a budget is, the derivation, where
 # policy lives, the ladder, nesting, the status, and the two options rejected
 # (a fixed cap; lowering the slice's own TasksMax); docs/adr/INDEX.md lists
 # it, and bootstrap.sh's kit-own list keeps it out of consumer trees.
 # docs/domain-glossary.md gains **Budget** under Process, citing it, and no
-# term for the depth: depth is a property of a dispatch, not a concept.
-# scripts/agents.config.sh — yours — documents AGENT_DISPATCH_MAX_DEPTH
-# beside the timeout note and gains the six AGENT_BUDGET_* variables under a
-# note in the same voice, all seven shipped empty (empty is the kit default);
-# add both blocks by hand from the kit's copy. tests/agent-dispatch.test.sh
-# holds the ceiling with a stub agent harness that re-dispatches itself and
-# counts its workers, and holds the budget's arithmetic against a fake host
-# handed to the dispatcher through the test-only AGENT_DISPATCH_HOST_ROOT,
-# the clamps, the policy read, the fallback to the per-user process limit,
-# the flags, the inherited case and the probed rung. README.md's shared-layer
-# marker and the pins in tests/docs-demo.sh and tests/kit-demo.sh moved
-# 0.19.0 -> 0.20.0 with the release, as every bump moves them.
+# term for the depth: depth is a property of a dispatch, not a concept; for
+# #210 it gains **Dispatch scratch** and **Sweep age** beside it.
+# scripts/agents.config.sh — yours — documents AGENT_DISPATCH_MAX_DEPTH and
+# AGENT_DISPATCH_SWEEP_DAYS beside the timeout note and gains the six
+# AGENT_BUDGET_* variables under a note in the same voice, all eight shipped
+# empty (empty is the kit default); add the blocks by hand from the kit's
+# copy. /housekeeping's CHECKLIST.md item 5 lists the dispatch scratch on
+# the host by name and age, and its SKILL.md's item line says so.
+# tests/agent-dispatch.test.sh holds the ceiling with a stub agent harness
+# that re-dispatches itself and counts its workers, holds the budget's
+# arithmetic against a fake host handed to the dispatcher through the
+# test-only AGENT_DISPATCH_HOST_ROOT, the clamps, the policy read, the
+# fallback to the per-user process limit, the flags, the inherited case and
+# the probed rung, and holds each sweep line through the dispatch seam, with
+# a KILLed dispatch as the fixture that leaves scratch behind;
+# tests/housekeeping-skill.test.sh holds the checklist line. UPDATING.md's
+# Part 2 gate transcript gains the skill-paths advisory the checklist's new
+# `scripts/agents.config.sh` reference raises in a consumer that has not
+# taken the policy file yet. README.md's shared-layer marker and the pins in
+# tests/docs-demo.sh and tests/kit-demo.sh moved 0.19.0 -> 0.20.0 with the
+# release, as every bump moves them.
 shared-layer: 0.20.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
