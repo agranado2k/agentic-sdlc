@@ -1437,6 +1437,40 @@ else
 	pass "this host offers no transient scope — the scope enforcement legs were skipped, and say so"
 fi
 
+# THE SCOPE RUNG IS DECIDED BEFORE THE SPAWN (ADR-0006 clause 5, "when the rung
+# refuses at execution"). A pre-flight opens and closes an empty scope with the
+# real properties; when systemd-run refuses there, the ladder falls to rlimits,
+# loudly, and the worker runs ONCE under them. SDBIN (systemctl and systemd-run
+# that both answer) with the HOST fixture's controllers stands in for a
+# manager that passes every probe; a systemd-run that refuses stands in for
+# one that will not open scopes.
+SDREFUSE="$SCRATCH/sd-refuse"; mkdir -p "$SDREFUSE"
+cp "$SDBIN/systemctl" "$SDREFUSE/systemctl"
+printf '#!/bin/sh\necho "Failed to start transient scope unit: refused by fixture" >&2\nexit 1\n' >"$SDREFUSE/systemd-run"
+chmod +x "$SDREFUSE/systemctl" "$SDREFUSE/systemd-run"
+t_run_split env PATH="$SDREFUSE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
+	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
+s_assert_status 0 "a scope refused at the pre-flight falls to rlimits and the worker runs"
+s_assert_err_has "refused by fixture"
+s_assert_err_has "rlimit"
+s_assert_out_has "NPROC=5000" "…under the rlimit rung's task ceiling"
+[ "$(printf '%s\n' "$S_OUT" | grep -c '^CG=')" = 1 ] &&
+	pass "…and the worker ran exactly once" ||
+	fail "the worker ran $(printf '%s\n' "$S_OUT" | grep -c '^CG=') times"
+
+# After the real spawn, a missing started-marker is reported, never retried: a
+# systemd-run that passes the pre-flight and then runs nothing (SDBIN, which
+# exits 0 and touches nothing) leaves the worker un-run — and the dispatch says
+# so and passes the run's status through rather than running the worker a
+# second time under a weaker rung. The marker is a file; a worker's tree or a
+# sweep can remove one, and a re-run is the one thing this must never do.
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
+	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
+s_assert_status 0 "a spawn whose marker never appears passes the run's own status through"
+s_assert_err_has "marker"
+s_assert_out_lacks "CG=" "…and the worker is NOT run again under a weaker rung"
+s_assert_err_lacks "rlimit rung instead"
+
 # The OFF switch (ADR-0006 clause 4): --no-budget runs the worker unbounded,
 # in the session's own cgroup, and says so on stderr on a REAL dispatch (not
 # only the dry run — #208 lifted the note). A small --timeout keeps the leg

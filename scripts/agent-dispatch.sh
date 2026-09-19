@@ -1036,8 +1036,9 @@ _budget_announce
 # disabled one runs bare on purpose.
 #
 # SCOPE_STARTED / SCOPE_VERDICT are how the scope rung reports back. A wrapper
-# inside the scope writes SCOPE_STARTED before it runs the worker — so a scope
-# that never opened (systemd-run refused after the probe passed, clause 5) is
+# inside the scope writes SCOPE_STARTED before it runs the worker — so a
+# wrapper that never started (the scope torn down before its first line, or
+# the scratch removed under an untimed dispatch older than the sweep age) is
 # told from a worker that merely exited non-zero — and, after the worker exits
 # and before the scope empties, writes the pids.events / memory.events counters
 # to SCOPE_VERDICT. The verdict is that flag, never the worker's own status
@@ -1047,8 +1048,8 @@ _budget_announce
 SCOPE_STARTED="$SCRATCH/scope-started"
 SCOPE_VERDICT="$SCRATCH/scope-verdict"
 
-# _budget_build_run_cmd <rung> — sets RUN_CMD, the command both spawn paths run.
-# A scope rung also writes the wrapper it runs.
+# _budget_scope_props <rung> — sets SCOPE_PROPS, the properties a scope carries
+# on that rung; the pre-flight and the real spawn open a scope with the same.
 #
 # OOMPolicy=continue and MemorySwapMax=0 REFINE clause 5's bare
 # `-p MemoryMax=<MiB>M` (ADR-0006 records why): without OOMPolicy=continue this
@@ -1057,6 +1058,16 @@ SCOPE_VERDICT="$SCRATCH/scope-verdict"
 # swap for seconds and could trip systemd-oomd's pressure kill of the scope
 # before MemoryMax bit. With both, the kernel OOM-kills the worker inside the
 # cgroup, the wrapper survives, and the memory ceiling is observable at once.
+_budget_scope_props() {
+	if [ "$1" = scope ]; then
+		SCOPE_PROPS="-p TasksMax=$BUDGET_TASKS -p MemoryMax=${BUDGET_MEMORY}M -p MemorySwapMax=0 -p OOMPolicy=continue"
+	else
+		SCOPE_PROPS="-p TasksMax=$BUDGET_TASKS -p OOMPolicy=continue"
+	fi
+}
+
+# _budget_build_run_cmd <rung> — sets RUN_CMD, the command both spawn paths run.
+# A scope rung also writes the wrapper it runs.
 _budget_build_run_cmd() {
 	case "$1" in
 	scope | scope-tasks)
@@ -1081,12 +1092,8 @@ printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$2"
 exit "$_st"
 WRAP
 		_cmd_quoted=$(printf '%s\n' "$CMD" | sed "s/'/'\\\\''/g")
-		_wrapper="sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
-		if [ "$1" = scope ]; then
-			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p MemoryMax=${BUDGET_MEMORY}M -p MemorySwapMax=0 -p OOMPolicy=continue --quiet $_wrapper"
-		else
-			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p OOMPolicy=continue --quiet $_wrapper"
-		fi
+		_budget_scope_props "$1"
+		RUN_CMD="systemd-run --user --scope $SCOPE_PROPS --quiet sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
 		;;
 	rlimit)
 		# ulimit in the worker's shell, before the worker: -u/-p for the task
@@ -1115,6 +1122,36 @@ if [ "$BUDGET_MODE" = derived ]; then
 else
 	RUN_RUNG=none
 fi
+
+# --- the scope rung is decided BEFORE the spawn -----------------------------
+# systemd-run can refuse after the probe passed — the bus gone between probe
+# and spawn, a manager that will not create scopes (ADR-0006 clause 5). So an
+# empty scope with the real properties is opened and closed first, in
+# milliseconds; a refusal there falls to the weaker rung, loudly, with
+# systemd-run's own message. After the real spawn nothing is retried: the
+# started marker is a file, and a file the worker's tree or a sweep can remove
+# must never be what runs the worker a second time — a missing marker after
+# the spawn is reported by _budget_verdict, never acted on.
+_budget_scope_preflight() {
+	_budget_scope_props "$1"
+	# eval, as the spawn paths do: zsh does not split an unquoted expansion.
+	_pf_err=$(eval "systemd-run --user --scope $SCOPE_PROPS --quiet true" 2>&1 >/dev/null) && return 0
+	echo "!  dispatch: the transient scope cannot open — systemd-run refused after the probe passed:" >&2
+	echo "   ${_pf_err:-(no message)}" >&2
+	echo "   Running the worker under the weaker rlimit rung instead." >&2
+	return 1
+}
+case "$RUN_RUNG" in
+scope | scope-tasks)
+	if ! _budget_scope_preflight "$RUN_RUNG"; then
+		if [ -n "$NPROC_FLAG" ]; then
+			RUN_RUNG=rlimit
+		else
+			RUN_RUNG=none
+		fi
+	fi
+	;;
+esac
 _budget_build_run_cmd "$RUN_RUNG"
 
 # --- the process-tree helpers (shared by the timed path) --------------------
@@ -1216,6 +1253,12 @@ _spawn_run() {
 _budget_verdict() {
 	case "$RUN_RUNG" in
 	scope | scope-tasks)
+		if [ ! -f "$SCOPE_STARTED" ]; then
+			echo "!  dispatch: the scope's started marker is missing after the spawn — the scope was torn" >&2
+			echo "   down before the worker started, or this dispatch's scratch was removed under it." >&2
+			echo "   The budget verdict cannot be read; the run's own status ($_worker_status) passes through." >&2
+			exit "$_worker_status"
+		fi
 		_v_pids=0 _v_oom=0 _v_rest=""
 		if [ -f "$SCOPE_VERDICT" ]; then
 			read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
@@ -1240,29 +1283,4 @@ _budget_verdict() {
 
 _spawn_run
 [ "$_timed_out" = 1 ] && exit 124
-
-# A scope rung whose scope never opened — systemd-run refused after the probe
-# passed (the bus gone between probe and spawn, a unit-name collision, a manager
-# that will not create scopes). The started marker, not the exit status, is how
-# that is told from a worker that ran and exited non-zero (ADR-0006 clause 5).
-# Fall to the weaker rung, say so, and run the worker there rather than refusing
-# the dispatch.
-case "$RUN_RUNG" in
-scope | scope-tasks)
-	if [ ! -f "$SCOPE_STARTED" ]; then
-		echo "!  dispatch: the transient scope did not open (systemd-run refused after the probe" >&2
-		echo "   passed) — running the worker under the weaker rlimit rung instead." >&2
-		if [ -n "$NPROC_FLAG" ]; then
-			RUN_RUNG=rlimit
-		else
-			RUN_RUNG=none
-		fi
-		_budget_build_run_cmd "$RUN_RUNG"
-		_spawn_run
-		[ "$_timed_out" = 1 ] && exit 124
-		exit "$_worker_status"
-	fi
-	;;
-esac
-
 _budget_verdict

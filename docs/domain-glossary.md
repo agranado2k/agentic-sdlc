@@ -198,9 +198,11 @@ Grouped by the seam each term belongs to. Entry shape:
   the dispatcher refuses a `--timeout` that reaches it, so scratch past the
   sweep age was never a dispatch still running *under `--timeout`*. An untimed
   dispatch has no such bound: one that outlives the sweep age has its scratch
-  removed under it by the next dispatch, which is harmless — the worker took
-  its prompt at exec, the untimed path never writes to scratch again, and the
-  trap's removal of a directory already gone is a no-op. Ref: #210.
+  removed under it by the next dispatch, which is survivable — the worker took
+  its prompt at exec, and the trap's removal of a directory already gone is a
+  no-op. On the scope rung the wrapper's verdict, written there after the
+  worker exits, is then lost: the dispatch says so and passes the worker's own
+  status through; it never runs the worker again. Ref: #210, #208.
   - _Avoid_: "TTL", "expiry" — the scratch does not expire; it is evidence of
     a dispatch that died, kept long enough to be sure of that.
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
