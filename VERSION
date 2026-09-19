@@ -572,8 +572,10 @@
 # The age is AGENT_DISPATCH_SWEEP_DAYS in the policy file, whole days, kit
 # default one — POSIX find's `-mtime` is the age test the sweep is written
 # to, so days is the unit — and a --timeout that reaches it is refused, so
-# scratch past the sweep age was never a worker still running. A --dry-run
-# sweeps nothing.
+# scratch past the sweep age was never a worker still running UNDER A
+# TIMEOUT. An untimed worker that outlives the age has its scratch removed
+# under it, harmlessly: it took its prompt at exec and never writes there
+# again. A --dry-run sweeps nothing.
 #   A project that has never dispatched to another agent harness cannot tell
 # this release from the last; one that has sees a scratch directory with a
 # name, and hears about a sweep only when there was something to sweep.
