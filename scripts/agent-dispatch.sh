@@ -682,6 +682,12 @@ _budget_rung() {
 # clause 7): a scope opened inside a scope is a sibling, not a child, and
 # would escape the outer's ceiling — so the outer's numbers arrive by
 # environment and are taken as given.
+#
+# Where a host fact is missing — the per-user limit is unlimited or unreadable,
+# /proc/meminfo has no MemAvailable — there is nothing to take a percentage
+# of, and the policy CEILING stands in on both sides (clause 2): the most the
+# policy lets one worker have, so the worker is bounded by the policy rather
+# than by nothing. Never the floor, which answers a host KNOWN to be small.
 BUDGET_MODE="" BUDGET_TASKS="" BUDGET_TASKS_FROM="" BUDGET_MEMORY="" BUDGET_MEMORY_FROM="" BUDGET_RUNG=""
 NPROC_FLAG=$(_budget_nproc_flag) || NPROC_FLAG=""
 # Each read is a command substitution, so a `die` inside it ends the subshell
@@ -736,8 +742,8 @@ else
 		BUDGET_MEMORY=$_bc_value
 		BUDGET_MEMORY_FROM="$BUDGET_MEMORY_PERCENT% of $_bm_base MiB MemAvailable${_bc_note:+: $_bc_note}"
 	else
-		BUDGET_MEMORY=$BUDGET_MEMORY_FLOOR
-		BUDGET_MEMORY_FROM="the policy floor — /proc/meminfo has no MemAvailable to derive from"
+		BUDGET_MEMORY=$BUDGET_MEMORY_CEILING
+		BUDGET_MEMORY_FROM="the policy ceiling — /proc/meminfo has no MemAvailable to derive from"
 	fi
 	BUDGET_RUNG=$(_budget_rung)
 fi

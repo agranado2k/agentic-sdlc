@@ -95,11 +95,21 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
      host, the user slice's `TasksMax`. Where no cgroup on that path sets one,
      it is the per-user process limit — `RLIMIT_NPROC`, the number `ulimit -u`
      prints, read from `/proc/self/limits` so it comes through the same seam
-     as the cgroup ceiling. Where that is `unlimited` too, the policy ceiling
-     stands in. The dispatch reports which.
+     as the cgroup ceiling. The dispatch reports which.
    - The memory ceiling is `AGENT_BUDGET_MEMORY_PERCENT` of **`MemAvailable`**
      in `/proc/meminfo`, read at dispatch time — what the host could give right
      now, not what it has installed.
+   - **No host fact.** Where the base cannot be read — no `0::` cgroup sets a
+     ceiling and `/proc/self/limits` has no `Max processes` line, or
+     `/proc/meminfo` has no `MemAvailable` — or the per-user limit is
+     `unlimited`, there is nothing to take a percentage of, and **the policy
+     ceiling stands in** for that ceiling, on both sides. The ceiling is the
+     most the policy lets one worker have, so the worker is bounded by the
+     policy rather than by nothing. The floor is not used here: it answers a
+     host *known* to be small, and an unknown host is not known to be small —
+     a worker held to 512 MiB on a workstation because `/proc/meminfo` had no
+     `MemAvailable` would be a false economy. The dry run names the fact that
+     was missing; nothing is said on stderr, since no clamp was applied.
    - **Floor.** A derived value below `AGENT_BUDGET_TASKS_FLOOR` /
      `AGENT_BUDGET_MEMORY_FLOOR_MIB` is raised to the floor and the dispatch
      says so on stderr: below it a worker cannot do useful work, and a host

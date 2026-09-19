@@ -883,7 +883,28 @@ s_assert_status 0 "a session with no cgroup pids.max still derives a budget"
 s_assert_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
 s_assert_out_has 'the per-user process limit' "…and the dry run names that source"
 s_assert_out_lacks 'pids.max' "…not a cgroup it never found"
+# No host fact at all — the limit is unlimited, or cannot be read: nothing to
+# take a percentage of, so the policy CEILING stands in (ADR-0006 clause 2),
+# never the floor, which answers a host known to be small.
+limits unlimited
+hostdry
+s_assert_out_has 'tasks 4096' "an unlimited per-user limit leaves no base — the policy ceiling stands in"
+s_assert_out_has 'the policy ceiling' "…and the dry run says so"
+s_assert_out_has 'unlimited' "…naming the fact it found"
+rm -f "$HOST/proc/self/limits"
+hostdry
+s_assert_out_has 'tasks 4096' "an unreadable per-user limit is the same case"
+s_assert_out_has 'unreadable' "…and is named as such"
+s_assert_err_lacks "below the floor"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+# The same rule on the memory side: a /proc/meminfo with no MemAvailable has
+# no fact to derive from, and the policy ceiling stands in there too.
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 8192 MiB' "no MemAvailable: the policy ceiling stands in, not the floor"
+s_assert_out_has 'no MemAvailable' "…and the dry run says what was missing"
+s_assert_err_lacks "below the floor"
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
 
 # Per-dispatch overrides, and the loud off switch (ADR-0006 clause 4).
 hostdry --budget-tasks 100 --budget-memory 300
