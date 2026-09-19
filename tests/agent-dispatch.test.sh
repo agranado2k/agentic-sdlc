@@ -734,6 +734,113 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "A dispatch refuses to nest past the policy maximum depth"
+# ---------------------------------------------------------------------------
+# A worker may run the dispatcher itself, and a worker whose tier maps back to
+# its own stub is a fork bomb with nothing to stop it: the H-3 stub above was
+# exactly that in its first version and filled a host's task ceiling in under
+# three minutes. The depth reaches each dispatch through the worker's
+# environment, a top-level dispatch is depth 1, and a dispatch past the
+# maximum dies before it resolves the tier — with a status of its own (4: 0
+# dispatched, 2 usage, 3 in-session, 124 timed out) so a caller can tell a
+# refusal from anything a worker exits with.
+#
+# The stub RECORDS each worker in a file rather than the suite counting
+# processes: the claim is that the chain is bounded by the maximum, not by
+# the host, and a line per worker is that count exactly.
+SELF="$SCRATCH/self-dispatching"
+RAN="$SCRATCH/self.ran"
+cat >"$SELF" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "worker at depth \${AGENT_DISPATCH_DEPTH:-unset}" >>"$RAN"
+exec sh "$DISPATCH" implementer --prompt 'again'
+EOF
+chmod +x "$SELF"
+CFG_SELF="$SCRATCH/self.config.sh"
+cat >"$CFG_SELF" <<EOF
+AGENT_HARNESSES='self'
+AGENT_HARNESS_SELF_CMD='$SELF {model_flag} < {prompt_file}'
+AGENT_HARNESS_SELF_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='self:'
+EOF
+AGENTS_CONFIG="$CFG_SELF"
+export AGENTS_CONFIG
+: >"$RAN"
+dispatch implementer --prompt 'x'
+s_assert_status 4 "a chain of self-dispatching workers ends in the depth refusal's own status"
+s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+s_assert_err_has "depth 4"
+s_assert_err_has "maximum is 3"
+ran=$(wc -l <"$RAN" | tr -d ' ')
+[ "$ran" = 3 ] &&
+	pass "exactly 3 workers ran — the kit default, planner → implementer → reviewer deep" ||
+	fail "$ran workers ran under the default maximum of 3"
+[ "$(sed -n 1p "$RAN")" = "worker at depth 2" ] &&
+	pass "the first worker sees depth 2 — its dispatch was the top-level one" ||
+	fail "the first worker saw '$(sed -n 1p "$RAN")'"
+[ "$(sed -n 3p "$RAN")" = "worker at depth 4" ] &&
+	pass "the last worker sees depth 4, and its own dispatch is the one refused" ||
+	fail "the last worker saw '$(sed -n 3p "$RAN")'"
+
+# The consumer's policy file overrides the default, and the chain is bounded
+# by THAT number: two here, so a maximum the host never sees.
+printf "AGENT_DISPATCH_MAX_DEPTH='2'\n" >>"$CFG_SELF"
+: >"$RAN"
+dispatch implementer --prompt 'x'
+s_assert_status 4 "a policy maximum of 2 refuses the third dispatch"
+s_assert_err_has "maximum is 2"
+ran=$(wc -l <"$RAN" | tr -d ' ')
+[ "$ran" = 2 ] &&
+	pass "exactly 2 workers ran — the policy file's number, not the kit's" ||
+	fail "$ran workers ran under a policy maximum of 2"
+
+# At the maximum a dispatch still RUNS; one past it never spawns the worker.
+# The depth is a fact in the environment, so a suite can stand at any depth
+# without building the chain. The echoing stub says whether it ran.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+t_run_split env AGENT_DISPATCH_DEPTH=3 sh "$DISPATCH" implementer --prompt 'at the maximum'
+s_assert_status 0 "a dispatch AT the maximum depth runs"
+s_assert_out_has 'at the maximum' "…and the worker gets its prompt"
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt 'past it'
+s_assert_status 4 "a dispatch one past the maximum is refused"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran"
+s_assert_err_has "refusing to nest"
+
+# Refused BEFORE the tier is resolved or the prompt is read: an in-session
+# tier (normally exit 3) and a missing prompt file (normally exit 2) both
+# report the depth first, because the invocation has nothing else to say.
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" planner --prompt 'x'
+s_assert_status 4 "an in-session tier past the maximum is refused, not handed back as exit 3"
+s_assert_out_lacks 'model-for-planning' "…and no model id is printed"
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt-file "$SCRATCH/does-not-exist.md"
+s_assert_status 4 "the depth is refused before the prompt file is looked at"
+
+# --dry-run shows the depth the dispatch would run at, against the maximum.
+dispatch implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch at depth 1 of the default 3"
+t_run_split env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
+s_assert_out_lacks 'ARGV:' "…running nothing"
+
+# A depth or a maximum that is not a whole number from 1 is a usage error,
+# not a guess: 0 would refuse every dispatch, and a top-level one is depth 1.
+t_run_split env AGENT_DISPATCH_DEPTH=abc sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a malformed AGENT_DISPATCH_DEPTH is refused as a usage error"
+s_assert_err_has "AGENT_DISPATCH_DEPTH"
+t_run_split env AGENT_DISPATCH_DEPTH=0 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "AGENT_DISPATCH_DEPTH=0 is refused — a top-level dispatch is depth 1"
+CFG_DEPTH0="$SCRATCH/depth0.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='0'\n"; } >"$CFG_DEPTH0"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "AGENT_DISPATCH_MAX_DEPTH=0 is refused — it would refuse every dispatch"
+s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
 # ---------------------------------------------------------------------------
 EXITER="$SCRATCH/exiter"
@@ -804,6 +911,12 @@ for shell_bin in $SHELLS; do
 	{ [ "$s_st" = 3 ] && [ "$s_out" = "model-for-planning" ]; } &&
 		pass "$shell_bin exits 3 with the model id for an unconfigured tier" ||
 		fail "$shell_bin gave status $s_st, stdout '$s_out'"
+	# The depth arithmetic and its refusal, per shell.
+	s_out=$(AGENT_DISPATCH_DEPTH=4 "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
+	s_st=$?
+	{ [ "$s_st" = 4 ] && [ -z "$s_out" ]; } &&
+		pass "$shell_bin refuses a dispatch past the maximum depth with exit 4 and no worker" ||
+		fail "$shell_bin gave status $s_st past the maximum depth, stdout '$s_out'"
 done
 
 unset AGENTS_CONFIG

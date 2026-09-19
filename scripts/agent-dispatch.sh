@@ -31,6 +31,11 @@
 #      itself, exactly as it did before this file existed. This is the DEFAULT
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
+#   4  NOT dispatched, because this dispatch would nest past the policy
+#      maximum depth. A worker may run this script itself; one whose tier maps
+#      back to its own agent harness is a fork bomb with a model in the loop,
+#      and this is what stops it. Refused before the tier is resolved or the
+#      prompt is read, so nothing spawns. AGENT_DISPATCH_MAX_DEPTH below.
 # 124  the worker ran past --timeout and its process tree was killed
 #   *  the worker's own exit status, passed through untouched
 #
@@ -39,6 +44,14 @@
 #   AGENT_HARNESSES='<token> ...'
 #   AGENT_HARNESS_<TOKEN>_CMD='<command> {model_flag} < {prompt_file}'
 #   AGENT_HARNESS_<TOKEN>_MODEL_FLAG='<the flag> {model}'
+#   AGENT_DISPATCH_MAX_DEPTH='<how deep a dispatch may nest>'   empty: 3
+#
+# THE DEPTH travels the way the other per-dispatch facts do — through the
+# worker's environment. AGENT_DISPATCH_DEPTH is this dispatch's own depth,
+# unset meaning a top-level dispatch at depth 1; the worker is spawned with it
+# set one higher, so a dispatch the worker runs reads its own depth on entry.
+# A worker may read it too. A dispatch AT the maximum still runs; one past it
+# is exit 4.
 #
 # `{model_flag}` expands to the MODEL_FLAG template with `{model}` filled when a
 # model is mapped, and to NOTHING when one is not — which is
@@ -88,6 +101,22 @@ usage() {
 die() {
 	echo "x dispatch: $1" >&2
 	exit 2
+}
+
+# The policy file is sourced in a SUBSHELL: this script must not inherit
+# whatever else it defines, and needs exactly three values out of it. The
+# assignments sit on their own lines because bash and zsh drop a prefix
+# assignment on `.` — agents.lib.sh says so in its own header, and doing it the
+# short way sources the library with AGENTS_CONFIG unset.
+_read_policy() {
+	(
+		AGENTS_CONFIG=${AGENTS_CONFIG:-}
+		export AGENTS_CONFIG
+		_agents_here="$_here"
+		. "$LIB"
+		agents_load_config >/dev/null 2>&1 || true
+		eval "printf '%s' \"\${$1:-}\""
+	)
 }
 
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
@@ -204,6 +233,33 @@ done
 	usage
 	exit 2
 }
+
+# --- the depth ---------------------------------------------------------------
+# Before the tier is resolved and before the prompt is read: a dispatch that
+# may not nest has nothing else worth checking, and in the runaway case every
+# process spent past this point is one the host has lost. The default is the
+# deepest legitimate shape today: a planner that dispatches implementers that
+# dispatch reviewers, three deep. It is a ceiling on runaway nesting, not a
+# budget, and the policy file raises it.
+DEPTH_DEFAULT_MAX=3
+DEPTH=${AGENT_DISPATCH_DEPTH:-1}
+case "$DEPTH" in
+'' | *[!0123456789]* | 0*) die "AGENT_DISPATCH_DEPTH must be a whole number from 1, got '$DEPTH'.
+   It is set by the dispatcher that spawned this worker; unset means depth 1." ;;
+esac
+MAX_DEPTH=$(_read_policy AGENT_DISPATCH_MAX_DEPTH)
+[ -n "$MAX_DEPTH" ] || MAX_DEPTH=$DEPTH_DEFAULT_MAX
+case "$MAX_DEPTH" in
+*[!0123456789]* | 0*) die "AGENT_DISPATCH_MAX_DEPTH must be a whole number from 1, got '$MAX_DEPTH'.
+   Empty means the kit default of $DEPTH_DEFAULT_MAX." ;;
+esac
+if [ "$DEPTH" -gt "$MAX_DEPTH" ]; then
+	echo "x dispatch: refusing to nest — this dispatch would run at depth $DEPTH and the maximum is $MAX_DEPTH." >&2
+	echo "   Raise AGENT_DISPATCH_MAX_DEPTH in scripts/agents.config.sh if this shape is" >&2
+	echo "   legitimate. A worker whose tier maps back to its own agent harness is not." >&2
+	exit 4
+fi
+
 [ "$HAVE_PROMPT" = 1 ] || die "no prompt — pass --prompt-file or --prompt"
 [ -n "$PROMPT_FILE" ] && [ -n "$PROMPT_TEXT" ] && die "--prompt-file and --prompt are alternatives, not a pair"
 [ -n "$PROMPT_FILE" ] && [ ! -f "$PROMPT_FILE" ] && die "prompt file does not exist: $PROMPT_FILE"
@@ -239,21 +295,6 @@ fi
 # into a variable name the way a task domain is.
 H_UPPER=$(printf '%s' "$HARNESS" | tr 'a-z-' 'A-Z_')
 
-# The policy file is sourced in a SUBSHELL: this script must not inherit
-# whatever else it defines, and needs exactly two values out of it. The
-# assignments sit on their own lines because bash and zsh drop a prefix
-# assignment on `.` — agents.lib.sh says so in its own header, and doing it the
-# short way sources the library with AGENTS_CONFIG unset.
-_read_policy() {
-	(
-		AGENTS_CONFIG=${AGENTS_CONFIG:-}
-		export AGENTS_CONFIG
-		_agents_here="$_here"
-		. "$LIB"
-		agents_load_config >/dev/null 2>&1 || true
-		eval "printf '%s' \"\${$1:-}\""
-	)
-}
 CMD_TEMPLATE=$(_read_policy "AGENT_HARNESS_${H_UPPER}_CMD")
 FLAG_TEMPLATE=$(_read_policy "AGENT_HARNESS_${H_UPPER}_MODEL_FLAG")
 
@@ -504,6 +545,7 @@ if [ "$DRY_RUN" = 1 ]; then
 	[ -n "$_shown_model" ] || _shown_model="<the default model of that agent harness>"
 	printf 'model:          %s\n' "$_shown_model"
 	printf 'command:        %s\n' "$CMD"
+	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
@@ -512,6 +554,11 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<default>}'" >&2
+# The worker runs one level deeper than this dispatch, and a dispatch it runs
+# reads that on entry. Exported here, above both spawn paths, so the plain
+# eval and the timed `sh -c` cannot disagree about it.
+AGENT_DISPATCH_DEPTH=$((DEPTH + 1))
+export AGENT_DISPATCH_DEPTH
 # The worker never inherits this script's stdin. Found live: an agent CLI that
 # reads stdin when it is not a tty blocked forever on the dispatcher's own
 # inherited pipe, and a dispatch that took fourteen seconds with </dev/null on
