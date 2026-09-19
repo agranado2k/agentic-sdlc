@@ -92,6 +92,32 @@ cd "$here" || exit 2
 [ "$(git -C "$CONS2" rev-list --count HEAD)" = 1 ] && pass "a .git-bearing source leaves exactly one commit in the consumer" || fail "the source's history leaked into the consumer ($(git -C "$CONS2" rev-list --count HEAD) commits)"
 
 # ---------------------------------------------------------------------------
+banner "5. The budget's host fixtures — a fake host, no user manager, the uid's tasks"
+# ---------------------------------------------------------------------------
+# The dispatch suite and the suite-budget suite derive a budget against the
+# same fake host and fall to the rlimit rung the same way; each builder is
+# held to the files the dispatcher's derivation reads.
+FH="$SCRATCH/fake-host"
+t_fake_host "$FH" 10008 2141820
+[ "$HOST" = "$FH" ] && [ "$SLICE" = "$FH/sys/fs/cgroup/user.slice/user-1000.slice" ] && pass "t_fake_host sets HOST and SLICE" || fail "t_fake_host set HOST='$HOST' SLICE='$SLICE'"
+[ "$(cat "$FH/proc/self/cgroup")" = "0::/user.slice/user-1000.slice/session-1.scope" ] && pass "the process sits in the session scope under the user slice" || fail "unexpected cgroup line: $(cat "$FH/proc/self/cgroup")"
+[ "$(cat "$SLICE/pids.max")" = 10008 ] && pass "the slice carries the task ceiling given" || fail "slice pids.max is $(cat "$SLICE/pids.max")"
+[ "$(cat "$SLICE/session-1.scope/pids.max")" = max ] && [ "$(cat "$FH/sys/fs/cgroup/user.slice/pids.max")" = max ] && pass "the scope and user.slice carry none" || fail "the scope or user.slice carries a ceiling"
+[ "$(cat "$SLICE/session-1.scope/cgroup.controllers")" = "cpu memory pids" ] && pass "both controllers are delegated to the process's own cgroup" || fail "cgroup.controllers is '$(cat "$SLICE/session-1.scope/cgroup.controllers")'"
+grep -q '^MemAvailable:    2141820 kB$' "$FH/proc/meminfo" && pass "/proc/meminfo carries the MemAvailable given" || fail "meminfo lacks the MemAvailable given"
+NUM="$SCRATCH/no-user-manager"
+t_no_user_manager "$NUM"
+if PATH="$NUM:$PATH" systemctl --user show --property=Version >/dev/null 2>&1; then
+	fail "t_no_user_manager's systemctl answered — the ladder would not fall to rlimits"
+else
+	pass "t_no_user_manager's systemctl fails, so the ladder falls to rlimits"
+fi
+case "$(t_uid_tasks)" in
+'' | *[!0123456789]*) fail "t_uid_tasks printed '$(t_uid_tasks)', not a whole number" ;;
+*) pass "t_uid_tasks prints a whole number ($(t_uid_tasks))" ;;
+esac
+
+# ---------------------------------------------------------------------------
 banner "Sourcing the lib pins collation — the environment does not decide an order"
 # ---------------------------------------------------------------------------
 # The probe runs in a subshell whose LC_ALL is a UTF-8 locale — the one that

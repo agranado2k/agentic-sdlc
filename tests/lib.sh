@@ -569,6 +569,42 @@ strip_nested_worktrees() {
 		done
 }
 
+# t_fake_host <dir> <slice pids.max> <MemAvailable kB> — the host the
+# dispatcher's derivation reads through AGENT_DISPATCH_HOST_ROOT, so a suite
+# asserts the arithmetic against numbers it chose: this process in
+# /user.slice/user-1000.slice/session-1.scope with both controllers
+# delegated, the slice carrying the task ceiling, user.slice and the scope
+# carrying none, and a /proc/meminfo with that MemAvailable. Sets HOST and
+# SLICE. A leg that wants another shape edits the files after — the shape is
+# the fixture's point and stays at the call site, as the section header says.
+t_fake_host() {
+	HOST=$1
+	SLICE="$HOST/sys/fs/cgroup/user.slice/user-1000.slice"
+	mkdir -p "$HOST/proc/self" "$SLICE/session-1.scope"
+	printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+	echo max >"$HOST/sys/fs/cgroup/user.slice/pids.max"
+	echo "$2" >"$SLICE/pids.max"
+	echo max >"$SLICE/session-1.scope/pids.max"
+	echo 'cpu memory pids' >"$SLICE/session-1.scope/cgroup.controllers"
+	printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    %s kB\n' "$3" >"$HOST/proc/meminfo"
+}
+
+# t_no_user_manager <dir> — a systemctl that fails, to put first on PATH:
+# stands in for a host with no user service manager, so the budget's ladder
+# falls to rlimits wherever the suite runs.
+t_no_user_manager() {
+	mkdir -p "$1"
+	printf '#!/bin/sh\nexit 1\n' >"$1/systemctl"
+	chmod +x "$1/systemctl"
+}
+
+# t_uid_tasks — how many tasks this uid runs now. RLIMIT_NPROC counts the
+# uid, not the tree, so a rlimit-rung leg sets its ceiling above this number
+# and lets its own forks be what cross it. `ps -o nlwp=` is procps, not
+# POSIX (the same footing as setsid): where ps has no nlwp column this
+# prints 0 and the leg's margin is its whole ceiling.
+t_uid_tasks() { ps -u "$(id -u)" -o nlwp= 2>/dev/null | awk '{ s += $1 } END { print s + 0 }'; }
+
 # The manifest grammar, shared with the gate and bootstrap. Sourced here so
 # every suite reads VERSION one way — and asserted, so a module that loads
 # and defines nothing cannot turn manifest-driven loops into no-ops.

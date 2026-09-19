@@ -65,15 +65,7 @@ s_assert_out_lacks "still here" "…and the sourcing shell does not go on"
 
 # _budget_derive answers what the dry run shows, from the same fake host the
 # dispatch suite uses: 25% of the slice's 10008 tasks, 50% of 2091 MiB.
-HOST="$SCRATCH/host"
-SLICE="$HOST/sys/fs/cgroup/user.slice/user-1000.slice"
-mkdir -p "$HOST/proc/self" "$SLICE/session-1.scope"
-printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
-echo max >"$HOST/sys/fs/cgroup/user.slice/pids.max"
-echo 10008 >"$SLICE/pids.max"
-echo max >"$SLICE/session-1.scope/pids.max"
-echo 'cpu memory pids' >"$SLICE/session-1.scope/cgroup.controllers"
-printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+t_fake_host "$SCRATCH/host" 10008 2141820
 # derive — source the seam against the fake host and print what it derived.
 derive() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" "$@" sh -c '_dispatch_here="$1"; . "$2"; _budget_derive; _budget_scope_props "$BUDGET_RUNG"; printf "mode=%s tasks=%s memory=%s rung=%s\nprops=%s\n" "$BUDGET_MODE" "$BUDGET_TASKS" "$BUDGET_MEMORY" "$BUDGET_RUNG" "$SCOPE_PROPS"' probe "$KIT/scripts" "$DISPATCH"; }
 derive
@@ -258,12 +250,11 @@ banner "4. The rlimit rung — the weaker promise, applied in the suite's own sh
 # process limit: RLIMIT_NPROC counts every task of the uid, so the ceiling is
 # the uid's task count plus a margin (at least the floor), and the loop's own
 # forks are what cross it.
-NOSD="$SCRATCH/sd-no"; mkdir -p "$NOSD"
-printf '#!/bin/sh\nexit 1\n' >"$NOSD/systemctl"; chmod +x "$NOSD/systemctl"
+NOSD="$SCRATCH/sd-no"; t_no_user_manager "$NOSD"
 HOST_RL="$SCRATCH/host-rl"
 mkdir -p "$HOST_RL/proc/self" "$HOST_RL/sys/fs/cgroup"
 printf '0::/\n' >"$HOST_RL/proc/self/cgroup"
-UID_TASKS=$(ps -u "$(id -u)" -o nlwp= | awk '{ s += $1 } END { print s + 0 }')
+UID_TASKS=$(t_uid_tasks)
 RL_TASKS=$((UID_TASKS + 80))
 [ "$RL_TASKS" -lt 300 ] && RL_TASKS=300
 printf 'Max processes             %s                   %s                   processes\n' $((RL_TASKS * 4)) $((RL_TASKS * 4)) >"$HOST_RL/proc/self/limits"
