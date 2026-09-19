@@ -1048,7 +1048,7 @@ SCOPE_STARTED="$SCRATCH/scope-started"
 SCOPE_VERDICT="$SCRATCH/scope-verdict"
 
 # _budget_build_run_cmd <rung> — sets RUN_CMD, the command both spawn paths run.
-# A scope rung also writes the wrapper and exports what it reads.
+# A scope rung also writes the wrapper it runs.
 #
 # OOMPolicy=continue and MemorySwapMax=0 REFINE clause 5's bare
 # `-p MemoryMax=<MiB>M` (ADR-0006 records why): without OOMPolicy=continue this
@@ -1060,26 +1060,32 @@ SCOPE_VERDICT="$SCRATCH/scope-verdict"
 _budget_build_run_cmd() {
 	case "$1" in
 	scope | scope-tasks)
-		AGENT_DISPATCH_SCOPE_CMD=$CMD
-		export AGENT_DISPATCH_SCOPE_CMD SCOPE_STARTED SCOPE_VERDICT
+		# The wrapper takes its two paths and the worker command as arguments
+		# — positional parameters are not inherited, so none of the three
+		# reaches the worker's environment (the worker sees only the
+		# AGENT_DISPATCH_* names the file documents). The command is
+		# single-quoted into the string; the quote itself is the one character
+		# that needs escaping inside single quotes.
 		cat >"$SCRATCH/scope-wrapper.sh" <<'WRAP'
 _own=""
 while IFS= read -r _l; do case "$_l" in 0::*) _own=${_l#0::} ;; esac; done </proc/self/cgroup 2>/dev/null
-: >"$SCOPE_STARTED"
-eval "$AGENT_DISPATCH_SCOPE_CMD"
+: >"$1"
+eval "$3"
 _st=$?
 _pm=0 _ok=0
 if [ -n "$_own" ]; then
 	while read -r _k _v _rest; do [ "$_k" = max ] && _pm=$_v; done <"/sys/fs/cgroup$_own/pids.events" 2>/dev/null
 	while read -r _k _v _rest; do [ "$_k" = oom_kill ] && _ok=$_v; done <"/sys/fs/cgroup$_own/memory.events" 2>/dev/null
 fi
-printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$SCOPE_VERDICT"
+printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$2"
 exit "$_st"
 WRAP
+		_cmd_quoted=$(printf '%s\n' "$CMD" | sed "s/'/'\\\\''/g")
+		_wrapper="sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
 		if [ "$1" = scope ]; then
-			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p MemoryMax=${BUDGET_MEMORY}M -p MemorySwapMax=0 -p OOMPolicy=continue --quiet sh '$SCRATCH/scope-wrapper.sh'"
+			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p MemoryMax=${BUDGET_MEMORY}M -p MemorySwapMax=0 -p OOMPolicy=continue --quiet $_wrapper"
 		else
-			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p OOMPolicy=continue --quiet sh '$SCRATCH/scope-wrapper.sh'"
+			RUN_CMD="systemd-run --user --scope -p TasksMax=$BUDGET_TASKS -p OOMPolicy=continue --quiet $_wrapper"
 		fi
 		;;
 	rlimit)

@@ -1307,15 +1307,45 @@ case "$S_OUT" in
 *) fail "no numeric memory ceiling on the real host" ;;
 esac
 
+# CGSTUB reports what reached the worker: its cgroup, its rlimits, the
+# dispatcher's own RLIMIT_NPROC (through /proc, walking up to the dispatch),
+# and whether any of the scope wrapper's private names leaked into its
+# environment.
+CGSTUB="$SCRATCH/cg-stub"
+cat >"$CGSTUB" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
+echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
+echo "DATA=$(ulimit -d 2>/dev/null)"
+echo "WRAPPER_ENV=[${SCOPE_STARTED:-}${SCOPE_VERDICT:-}${AGENT_DISPATCH_SCOPE_CMD:-}]"
+p=$PPID
+while [ "$p" -gt 1 ]; do
+	if tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -q 'agent-dispatch\.sh'; then
+		echo "DISPATCHER_NPROC=$(awk '/^Max processes/ { print $3 }' "/proc/$p/limits")"
+		break
+	fi
+	p=$(awk '{ print $4 }' "/proc/$p/stat")
+done
+EOF
+chmod +x "$CGSTUB"
+CFG_CG="$SCRATCH/cg.config.sh"
+cat >"$CFG_CG" <<EOF
+AGENT_HARNESSES='cg'
+AGENT_HARNESS_CG_CMD='$CGSTUB {model_flag} < {prompt_file}'
+AGENT_HARNESS_CG_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='cg:'
+EOF
 # A real dispatch now APPLIES the budget (#208): a within-budget worker runs
 # and exits 0, but it runs inside a transient scope rather than bare. The
 # derived budget under the suite's own capped scope hits the task floor, which
 # is announced — so this uses within-floor overrides to keep stderr about the
 # run, not the floor, and asserts the worker ran unharmed.
-dispatch implementer --prompt 'x' --budget-tasks 300 --budget-memory 600
+AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --budget-tasks 300 --budget-memory 600
 s_assert_status 0 "a within-budget real dispatch runs the worker and exits 0"
-s_assert_out_has 'ARGV:' "…the worker ran"
+s_assert_out_has 'CG=' "…the worker ran"
 s_assert_err_lacks "hit its" "…and hit no ceiling"
+s_assert_out_has 'WRAPPER_ENV=[]' "…and the scope wrapper's paths and command never reach the worker's environment"
 
 # ---------------------------------------------------------------------------
 banner "The budget is ENFORCED — a runaway worker stops, the session survives"
@@ -1411,30 +1441,6 @@ fi
 # in the session's own cgroup, and says so on stderr on a REAL dispatch (not
 # only the dry run — #208 lifted the note). A small --timeout keeps the leg
 # bounded whatever the worker does.
-CGSTUB="$SCRATCH/cg-stub"
-cat >"$CGSTUB" <<'EOF'
-#!/bin/sh
-cat >/dev/null
-echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
-echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
-echo "DATA=$(ulimit -d 2>/dev/null)"
-p=$PPID
-while [ "$p" -gt 1 ]; do
-	if tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -q 'agent-dispatch\.sh'; then
-		echo "DISPATCHER_NPROC=$(awk '/^Max processes/ { print $3 }' "/proc/$p/limits")"
-		break
-	fi
-	p=$(awk '{ print $4 }' "/proc/$p/stat")
-done
-EOF
-chmod +x "$CGSTUB"
-CFG_CG="$SCRATCH/cg.config.sh"
-cat >"$CFG_CG" <<EOF
-AGENT_HARNESSES='cg'
-AGENT_HARNESS_CG_CMD='$CGSTUB {model_flag} < {prompt_file}'
-AGENT_HARNESS_CG_MODEL_FLAG=''
-AGENT_TIER_IMPLEMENTER='cg:'
-EOF
 TEST_CG=$(sed -n 's/^0:://p' /proc/self/cgroup)
 AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --no-budget --timeout 10
 s_assert_status 0 "--no-budget runs the worker"
