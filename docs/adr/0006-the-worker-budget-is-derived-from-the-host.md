@@ -357,7 +357,7 @@ stand as written; this block is what binds where they differ.
 
 ### Amendment, 2026-09-19 — what building #209 settled for the suite
 
-#209 put every suite under the budget as clause 3 anticipated. Four things
+#209 put every suite under the budget as clause 3 anticipated. Five things
 were left to it and are decided here; the clauses stand as written.
 
 - **One derivation, reached by sourcing.** The kit's test harness
@@ -397,8 +397,9 @@ were left to it and are decided here; the clauses stand as written.
   task peak is 44 (the dispatch suite; its runaways run in sibling scopes
   of their own, as a worker's do) and the largest memory peak 35 MiB (the
   adoption demo) — without node, which the four docs-gate suites add on
-  CI, and which is a few hundred MiB at most. Nothing reaches the floors,
-  let alone the ceilings; nothing in clause 3 is re-decided.
+  CI and which was not measured: node was absent on the measuring host.
+  Nothing measured reaches the floors, let alone the ceilings; nothing in
+  clause 3 is re-decided.
 - **Off is loud, and disabling is the outermost run's.** `AGENT_SUITE_BUDGET=off`
   runs a suite as before #209 and says so on stderr; any other value is
   refused, so a typo cannot read as "inside".

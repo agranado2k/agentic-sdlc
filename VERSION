@@ -634,7 +634,7 @@
 # inherited budget wins over --no-budget. The floor note, the off switch and
 # the no-mechanism note, dry-run-only until now, are lifted to every dispatch;
 # the enforced: dry-run line now says the budget IS applied.
-#   From #209: the dispatcher's derivation became a SEAM the kit's own test
+#   From #209: the dispatcher's derivation became a SEAM the kit's own
 # test harness takes the budget through, so every suite under tests/ runs inside
 # the budget a worker gets. scripts/agent-dispatch.sh now detects being
 # SOURCED (ZSH_EVAL_CONTEXT, then $0 — scripts/agents.lib.sh's own test) and
