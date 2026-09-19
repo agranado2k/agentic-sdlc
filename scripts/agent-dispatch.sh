@@ -37,6 +37,9 @@
 #      and this is what stops it. Refused before the tier is resolved or the
 #      prompt is read, so nothing spawns. AGENT_DISPATCH_MAX_DEPTH below.
 # 124  the worker ran past --timeout and its process tree was killed
+#  71  RESERVED: the worker exceeded its budget (ADR-0006, EX_OSERR — "can't
+#      fork"). Nothing produces it yet: this release derives the budget and
+#      shows it under --dry-run, and enforcement is the next release's.
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -90,14 +93,21 @@ LIB="$_here/agents.lib.sh"
 
 usage() {
 	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
-	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>] [--dry-run]" >&2
+	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>]" >&2
+	echo "                          [--budget-tasks <n>] [--budget-memory <MiB>] [--no-budget]" >&2
+	echo "                          [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
 	echo "  --set-file replace %%NAME%% with the CONTENTS of a file. For a value" >&2
 	echo "             too large for a command line — a diff, say. Repeatable." >&2
 	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
-	echo "  --dry-run  print the agent harness, the model, the expanded command, the" >&2
-	echo "             depth and the prompt; run nothing." >&2
+	echo "  --budget-tasks, --budget-memory" >&2
+	echo "             replace the budget derived from this host — the task and" >&2
+	echo "             memory ceilings on the worker's whole process tree." >&2
+	echo "  --no-budget" >&2
+	echo "             run this one worker with no budget at all. Said out loud." >&2
+	echo "  --dry-run  print the agent harness, the model, the expanded command," >&2
+	echo "             the depth, the budget and the prompt; run nothing." >&2
 }
 
 die() {
@@ -105,21 +115,9 @@ die() {
 	exit 2
 }
 
-# _whole_from_one <value> — a whole number from 1, and one `[ -gt ]` can
-# compare: past the shell's integer range `[` errors instead of comparing, and
-# an error there would fail OPEN — the refusal skipped, the worker run. Nine
-# digits is under every shell's range, and no dispatcher produces a depth
-# anywhere near it.
-DEPTH_MAX_DIGITS=9
-_whole_from_one() {
-	case "$1" in
-	'' | *[!0123456789]* | 0*) return 1 ;;
-	esac
-	[ "${#1}" -le "$DEPTH_MAX_DIGITS" ]
-}
-
 # The policy file is sourced in a SUBSHELL: this script must not inherit
-# whatever else it defines, and needs exactly three values out of it. The
+# whatever else it defines, and needs exactly two strings out of it (the
+# whole-number values have their own reader, _read_policy_numbers below). The
 # assignments sit on their own lines because bash and zsh drop a prefix
 # assignment on `.` — agents.lib.sh says so in its own header, and doing it the
 # short way sources the library with AGENTS_CONFIG unset.
@@ -134,7 +132,46 @@ _read_policy() {
 	)
 }
 
+# _whole_number <what> <value> — a number this script compares or computes
+# with, whether from a flag, the environment or the policy file, is a whole
+# number from 1 and nothing else: 0 is not a budget any more than --timeout 0
+# is a timeout or depth 0 a depth, and a leading zero is octal to $(( )) in
+# every sh — 025 would derive 21%. ONE validator for every source, so the
+# flag path and the policy path cannot disagree about what a number is.
+_whole_number() {
+	case "$2" in
+	'' | *[!0123456789]*) die "$1 takes a whole number, got '$2'" ;;
+	0) die "$1 takes a whole number from 1, and 0 is not one. Leave it out for the default." ;;
+	0*) die "$1 takes a whole number with no leading zero, got '$2'" ;;
+	esac
+}
+
+# _read_policy_numbers NAME=default ... — several whole-number policy values
+# in ONE sourcing of the policy file: each the default when unset or empty,
+# and refused when not a whole number, held to the same validator as the
+# flags — a percentage spelled 'lots' is a mistake to report, not a value to
+# fall back from. Prints the values space-separated, in argument order. The
+# same subshell shape as _read_policy, for the same reason; a `die` inside
+# it ends the subshell and not this script, so the caller checks the status.
+_read_policy_numbers() {
+	(
+		AGENTS_CONFIG=${AGENTS_CONFIG:-}
+		export AGENTS_CONFIG
+		_agents_here="$_here"
+		. "$LIB"
+		agents_load_config >/dev/null 2>&1 || true
+		for _rpn in "$@"; do
+			_rpn_name=${_rpn%%=*} _rpn_default=${_rpn#*=}
+			eval "_rpn_v=\"\${$_rpn_name:-}\""
+			[ -n "$_rpn_v" ] || _rpn_v=$_rpn_default
+			_whole_number "$_rpn_name in your agents config" "$_rpn_v"
+			printf '%s ' "$_rpn_v"
+		done
+	)
+}
+
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
+BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
 
 # _record_set <name> <value> — one marker substitution, into its own numbered
 # pair of exported variables for the single awk pass below. The obvious
@@ -222,6 +259,22 @@ while [ $# -gt 0 ]; do
 		TIMEOUT=$2
 		shift 2
 		;;
+	--budget-tasks)
+		[ $# -ge 2 ] || die "--budget-tasks needs a number of tasks"
+		_whole_number --budget-tasks "$2"
+		BUDGET_TASKS_FLAG=$2
+		shift 2
+		;;
+	--budget-memory)
+		[ $# -ge 2 ] || die "--budget-memory needs a number of MiB"
+		_whole_number --budget-memory "$2"
+		BUDGET_MEMORY_FLAG=$2
+		shift 2
+		;;
+	--no-budget)
+		NO_BUDGET=1
+		shift
+		;;
 	--dry-run)
 		DRY_RUN=1
 		shift
@@ -258,12 +311,19 @@ done
 # budget, and the policy file raises it.
 DEPTH_DEFAULT_MAX=3
 DEPTH=${AGENT_DISPATCH_DEPTH:-1}
-_whole_from_one "$DEPTH" || die "AGENT_DISPATCH_DEPTH must be a whole number from 1 (at most $DEPTH_MAX_DIGITS digits), got '$DEPTH'.
-   It is set by the dispatcher that spawned this worker; unset or empty means depth 1."
-MAX_DEPTH=$(_read_policy AGENT_DISPATCH_MAX_DEPTH)
-[ -n "$MAX_DEPTH" ] || MAX_DEPTH=$DEPTH_DEFAULT_MAX
-_whole_from_one "$MAX_DEPTH" || die "AGENT_DISPATCH_MAX_DEPTH must be a whole number from 1 (at most $DEPTH_MAX_DIGITS digits), got '$MAX_DEPTH'.
-   Empty means the kit default of $DEPTH_DEFAULT_MAX."
+_whole_number "AGENT_DISPATCH_DEPTH (set by the dispatcher that spawned this worker; unset or empty means depth 1)" "$DEPTH"
+MAX_DEPTH=$(_read_policy_numbers "AGENT_DISPATCH_MAX_DEPTH=$DEPTH_DEFAULT_MAX") || exit 2
+MAX_DEPTH=${MAX_DEPTH%% *}
+# Both are whole numbers from 1 now; this bound is the depth's own. One
+# `[ -gt ]` must be able to compare them: past the shell's integer range `[`
+# errors instead of comparing, and an error there would fail OPEN — the
+# refusal skipped, the worker run. Nine digits is under every shell's range,
+# and no dispatcher produces a depth anywhere near it.
+DEPTH_MAX_DIGITS=9
+[ "${#DEPTH}" -le "$DEPTH_MAX_DIGITS" ] ||
+	die "AGENT_DISPATCH_DEPTH is past what a depth can be (at most $DEPTH_MAX_DIGITS digits), got '$DEPTH'"
+[ "${#MAX_DEPTH}" -le "$DEPTH_MAX_DIGITS" ] ||
+	die "AGENT_DISPATCH_MAX_DEPTH is past what a depth can be (at most $DEPTH_MAX_DIGITS digits), got '$MAX_DEPTH'"
 if [ "$DEPTH" -gt "$MAX_DEPTH" ]; then
 	# Read, more often than not, by the refused WORKER — a model with tools —
 	# so this says what a worker does with it and never how to lift the
@@ -280,6 +340,8 @@ fi
 [ -n "$PROMPT_FILE" ] && [ ! -f "$PROMPT_FILE" ] && die "prompt file does not exist: $PROMPT_FILE"
 [ -n "$PROMPT_FILE" ] && [ ! -s "$PROMPT_FILE" ] && die "prompt file is empty: $PROMPT_FILE
    A worker given nothing to do will invent something to do."
+[ "$NO_BUDGET" = 1 ] && [ -n "$BUDGET_TASKS_FLAG$BUDGET_MEMORY_FLAG" ] &&
+	die "--no-budget and a --budget-* override contradict each other. Pick one."
 
 # --- resolution -------------------------------------------------------------
 # Two calls rather than one parse of a joined value: the resolver owns the
@@ -548,6 +610,246 @@ done
 command -v "$CMD_BIN" >/dev/null 2>&1 ||
 	die "agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH."
 
+# --- the budget -------------------------------------------------------------
+# A task ceiling and a memory ceiling for the worker's WHOLE process tree,
+# derived from this host now: a percentage of the task ceiling this session
+# runs under and of the memory available at this moment, each clamped to a
+# policy floor and ceiling. ADR-0006 is the decision. scripts/agents.config.sh
+# carries the percentages and clamps, and empty there means the defaults
+# below — a policy file from before the budget existed still gets one.
+#
+# NOTHING BELOW IS APPLIED. This release derives the budget and shows it under
+# --dry-run so the number is inspectable before enforcement lands; the worker
+# runs exactly as it did. The dry run says so in as many words.
+#
+# AGENT_DISPATCH_HOST_ROOT is TEST-ONLY. It is prefixed to the two host paths
+# read below (/proc and /sys) so a suite can hand this script a fake host and
+# assert the arithmetic against numbers it chose. Empty is the real host, and
+# nothing else reads it.
+BUDGET_DEFAULT_TASKS_PERCENT=25
+BUDGET_DEFAULT_TASKS_FLOOR=256
+BUDGET_DEFAULT_TASKS_CEILING=4096
+BUDGET_DEFAULT_MEMORY_PERCENT=50
+BUDGET_DEFAULT_MEMORY_FLOOR_MIB=512
+BUDGET_DEFAULT_MEMORY_CEILING_MIB=8192
+_host=${AGENT_DISPATCH_HOST_ROOT:-}
+
+# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (ADR-0006
+# clause 3): the budget sits BELOW the ceiling the session shares, and 100 or
+# more would put it at or above, in silence.
+_budget_percent_below_100() {
+	[ "$2" -lt 100 ] ||
+		die "AGENT_BUDGET_$1 must be below 100 — the budget sits below the ceiling the session shares (ADR-0006), got $2"
+}
+
+# _budget_floor_at_most_ceiling <floor suffix> <floor> <ceiling suffix> <ceiling>
+# — a floor above its ceiling leaves the clamp with no answer.
+_budget_floor_at_most_ceiling() {
+	[ "$2" -le "$4" ] ||
+		die "AGENT_BUDGET_$1 $2 is above AGENT_BUDGET_$3 $4 — a floor sits at or below its ceiling"
+}
+
+# _budget_session_tasks — the task ceiling this session runs under: the
+# smallest numeric pids.max on the path from this process's own cgroup up to
+# the root. On a systemd host that is the user slice's TasksMax — 33% of
+# threads-max by default, and the ceiling the incident behind ADR-0006
+# filled. Prints "<ceiling> <cgroup>"; fails when no cgroup on the path sets
+# one, which is also what a host without cgroup v2 (no `0::` line) looks like.
+_budget_session_tasks() {
+	_bst_path=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+	[ -n "$_bst_path" ] || return 1
+	_bst_best="" _bst_where=""
+	while :; do
+		_bst_v=$(cat "$_host/sys/fs/cgroup$_bst_path/pids.max" 2>/dev/null)
+		case "$_bst_v" in
+		'' | *[!0123456789]*) ;;
+		*)
+			if [ -z "$_bst_best" ] || [ "$_bst_v" -lt "$_bst_best" ]; then
+				_bst_best=$_bst_v _bst_where=$_bst_path
+			fi
+			;;
+		esac
+		case "$_bst_path" in
+		'' | /) break ;;
+		esac
+		_bst_path=${_bst_path%/*}
+	done
+	[ -n "$_bst_best" ] || return 1
+	# The basename of the root is empty; a container with a private cgroup
+	# namespace and a pids limit on it is exactly where the line matters.
+	_bst_name=${_bst_where##*/}
+	[ -n "$_bst_name" ] || _bst_name=/
+	printf '%s %s\n' "$_bst_best" "$_bst_name"
+}
+
+# _budget_mem_available_mib — MemAvailable now, in MiB. What the host could
+# give at this moment, not what it has installed.
+_budget_mem_available_mib() {
+	_bma_kb=$(awk '/^MemAvailable:/ { print $2; exit }' "$_host/proc/meminfo" 2>/dev/null)
+	case "$_bma_kb" in
+	'' | *[!0123456789]*) return 1 ;;
+	esac
+	printf '%s\n' $((_bma_kb / 1024))
+}
+
+# _budget_clamp <derived> <floor> <ceiling> — sets _bc_value and _bc_note.
+# Below the floor is raised AND said: the operator hears that this host is
+# smaller than the percentage assumes. Above the ceiling is held in silence,
+# because more headroom buys a worker nothing.
+_budget_clamp() {
+	_bc_value=$1 _bc_note=""
+	if [ "$1" -lt "$2" ]; then
+		_bc_value=$2 _bc_note="$1 is below the floor $2 — raised to the floor"
+	elif [ "$1" -gt "$3" ]; then
+		_bc_value=$3 _bc_note="$1 is above the ceiling $3 — held to the ceiling"
+	fi
+}
+
+# _budget_nproc_limit — the per-user process limit (RLIMIT_NPROC) this
+# session runs under: the number `ulimit -u` prints, read from
+# /proc/self/limits so it comes through the same host seam as the cgroup
+# ceiling and a suite can choose it. Prints the soft limit — a number, or
+# "unlimited"; fails when the file has no such line.
+_budget_nproc_limit() {
+	_bnl=$(awk '/^Max processes/ { print $3; exit }' "$_host/proc/self/limits" 2>/dev/null)
+	[ -n "$_bnl" ] || return 1
+	printf '%s\n' "$_bnl"
+}
+
+# _budget_nproc_flag — the ulimit option that sets the per-user process limit
+# under THIS sh, for the rlimit rung: -u for bash, zsh and ksh; -p for dash, which
+# spells the same limit differently (it has no -u, and bash's -p is the pipe
+# size, which cannot be set — so the order below is safe both ways). Found by
+# CI, whose sh is dash. Probed by setting the limit to itself in a subshell;
+# a shell with neither prints nothing, and that is the ladder's third rung.
+_budget_nproc_flag() {
+	for _bnf in -u -p; do
+		if (ulimit "$_bnf" "$(ulimit "$_bnf" 2>/dev/null)") >/dev/null 2>&1; then
+			printf '%s' "$_bnf"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# _budget_rung — the highest rung of ADR-0006's ladder this host offers,
+# probed rather than configured: a policy file cannot know what host it is
+# on. `scope` needs systemd-run, a user manager that answers, AND the pids
+# and memory controllers delegated to it — read from cgroup.controllers on
+# this process's own cgroup, because a manager that answers is reachable,
+# not necessarily able to bound: without `memory`, -p MemoryMax= is accepted
+# and applies nothing. `scope-tasks` is pids delegated and memory not — the
+# scope still carries the task bound, which is the incident's. `rlimit`
+# needs a shell whose ulimit can set the process count; `none` is neither.
+_budget_rung() {
+	if command -v systemd-run >/dev/null 2>&1 && systemctl --user show --property=Version >/dev/null 2>&1; then
+		_br_own=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+		_br_ctl=" $(cat "$_host/sys/fs/cgroup$_br_own/cgroup.controllers" 2>/dev/null) "
+		# Two separate word tests: one pattern for both would need the space
+		# between them twice, and a single space cannot be consumed twice.
+		_br_pids=0 _br_memory=0
+		case "$_br_ctl" in *" pids "*) _br_pids=1 ;; esac
+		case "$_br_ctl" in *" memory "*) _br_memory=1 ;; esac
+		if [ "$_br_pids" = 1 ] && [ "$_br_memory" = 1 ]; then
+			echo scope
+			return 0
+		elif [ "$_br_pids" = 1 ]; then
+			echo scope-tasks
+			return 0
+		fi
+	fi
+	if [ -n "$NPROC_FLAG" ]; then
+		echo rlimit
+	else
+		echo none
+	fi
+}
+
+# The budget's three modes: disabled by flag, inherited from an outer
+# dispatch, or derived here. An inner dispatch derives nothing (ADR-0006
+# clause 7): a scope opened inside a scope is a sibling, not a child, and
+# would escape the outer's ceiling — so the outer's numbers arrive by
+# environment and are taken as given.
+#
+# Where a host fact is missing — the per-user limit is unlimited or unreadable,
+# /proc/meminfo has no MemAvailable — there is nothing to take a percentage
+# of, and the policy CEILING stands in on both sides (clause 2): the most the
+# policy lets one worker have, so the worker is bounded by the policy rather
+# than by nothing. Never the floor, which answers a host KNOWN to be small.
+BUDGET_MODE="" BUDGET_TASKS="" BUDGET_TASKS_FROM="" BUDGET_MEMORY="" BUDGET_MEMORY_FROM="" BUDGET_RUNG=""
+NPROC_FLAG=$(_budget_nproc_flag) || NPROC_FLAG=""
+# One sourcing for the six; the status is checked here, where it can be.
+_bp_all=$(_read_policy_numbers \
+	"AGENT_BUDGET_TASKS_PERCENT=$BUDGET_DEFAULT_TASKS_PERCENT" \
+	"AGENT_BUDGET_TASKS_FLOOR=$BUDGET_DEFAULT_TASKS_FLOOR" \
+	"AGENT_BUDGET_TASKS_CEILING=$BUDGET_DEFAULT_TASKS_CEILING" \
+	"AGENT_BUDGET_MEMORY_PERCENT=$BUDGET_DEFAULT_MEMORY_PERCENT" \
+	"AGENT_BUDGET_MEMORY_FLOOR_MIB=$BUDGET_DEFAULT_MEMORY_FLOOR_MIB" \
+	"AGENT_BUDGET_MEMORY_CEILING_MIB=$BUDGET_DEFAULT_MEMORY_CEILING_MIB") || exit 2
+BUDGET_TASKS_PERCENT=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_TASKS_FLOOR=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_TASKS_CEILING=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_PERCENT=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_FLOOR=${_bp_all%% *} _bp_all=${_bp_all#* }
+BUDGET_MEMORY_CEILING=${_bp_all%% *}
+_budget_percent_below_100 TASKS_PERCENT "$BUDGET_TASKS_PERCENT"
+_budget_percent_below_100 MEMORY_PERCENT "$BUDGET_MEMORY_PERCENT"
+_budget_floor_at_most_ceiling TASKS_FLOOR "$BUDGET_TASKS_FLOOR" TASKS_CEILING "$BUDGET_TASKS_CEILING"
+_budget_floor_at_most_ceiling MEMORY_FLOOR_MIB "$BUDGET_MEMORY_FLOOR" MEMORY_CEILING_MIB "$BUDGET_MEMORY_CEILING"
+# Inherited is checked before disabled: an inner dispatch is already inside
+# the outer scope's cgroup, and --no-budget on it cannot leave (clause 7).
+if [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
+	BUDGET_MODE=inherited
+	BUDGET_TASKS=$AGENT_DISPATCH_BUDGET_TASKS
+	BUDGET_MEMORY=${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}
+	# Taken from the outer dispatch, but not on trust: the next release hands
+	# these to the mechanism, and an outer dispatch exports both or neither.
+	_whole_number "AGENT_DISPATCH_BUDGET_TASKS, inherited from the outer dispatch," "$BUDGET_TASKS"
+	[ -n "$BUDGET_MEMORY" ] ||
+		die "AGENT_DISPATCH_BUDGET_TASKS is set and AGENT_DISPATCH_BUDGET_MEMORY_MIB is not — an outer dispatch exports both or neither"
+	_whole_number "AGENT_DISPATCH_BUDGET_MEMORY_MIB, inherited from the outer dispatch," "$BUDGET_MEMORY"
+elif [ "$NO_BUDGET" = 1 ]; then
+	BUDGET_MODE=disabled
+else
+	BUDGET_MODE=derived
+	if [ -n "$BUDGET_TASKS_FLAG" ]; then
+		BUDGET_TASKS=$BUDGET_TASKS_FLAG BUDGET_TASKS_FROM="--budget-tasks"
+		[ "$BUDGET_TASKS" -lt "$BUDGET_TASKS_FLOOR" ] &&
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_FROM; below the floor $BUDGET_TASKS_FLOOR, honoured as given"
+	elif _bt=$(_budget_session_tasks); then
+		_bt_base=${_bt%% *} _bt_where=${_bt#* }
+		_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+		BUDGET_TASKS=$_bc_value
+		BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the pids.max of cgroup $_bt_where${_bc_note:+: $_bc_note}"
+	else
+		_bt_base=$(_budget_nproc_limit) || _bt_base=""
+		case "$_bt_base" in
+		'' | *[!0123456789]*)
+			BUDGET_TASKS=$BUDGET_TASKS_CEILING
+			BUDGET_TASKS_FROM="the policy ceiling — no cgroup on this session sets a task ceiling and the per-user process limit is ${_bt_base:-unreadable}"
+			;;
+		*)
+			_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+			BUDGET_TASKS=$_bc_value
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (RLIMIT_NPROC — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
+			;;
+		esac
+	fi
+	if [ -n "$BUDGET_MEMORY_FLAG" ]; then
+		BUDGET_MEMORY=$BUDGET_MEMORY_FLAG BUDGET_MEMORY_FROM="--budget-memory"
+		[ "$BUDGET_MEMORY" -lt "$BUDGET_MEMORY_FLOOR" ] &&
+			BUDGET_MEMORY_FROM="$BUDGET_MEMORY_FROM; below the floor $BUDGET_MEMORY_FLOOR, honoured as given"
+	elif _bm_base=$(_budget_mem_available_mib); then
+		_budget_clamp $((_bm_base * BUDGET_MEMORY_PERCENT / 100)) "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
+		BUDGET_MEMORY=$_bc_value
+		BUDGET_MEMORY_FROM="$BUDGET_MEMORY_PERCENT% of $_bm_base MiB MemAvailable${_bc_note:+: $_bc_note}"
+	else
+		BUDGET_MEMORY=$BUDGET_MEMORY_CEILING
+		BUDGET_MEMORY_FROM="the policy ceiling — /proc/meminfo has no MemAvailable to derive from"
+	fi
+	BUDGET_RUNG=$(_budget_rung)
+fi
+
 if [ "$DRY_RUN" = 1 ]; then
 	printf 'tier:           %s%s\n' "$TIER" "${DOMAIN:+ (domain: $DOMAIN)}"
 	printf 'agent harness:  %s\n' "$HARNESS"
@@ -562,6 +864,47 @@ if [ "$DRY_RUN" = 1 ]; then
 	printf 'command:        %s\n' "$CMD"
 	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
+	# The budget, and the truth about it: shown, not applied, in this release.
+	# The floor note and the off switch are said on stderr as well, where an
+	# operator piping stdout still hears them. Both live inside this block on
+	# purpose until the budget is applied: a real dispatch says nothing about
+	# a budget it does not apply (the suite holds that), and the release that
+	# applies one lifts the two notes above this `if` (ADR-0006 clause 8).
+	case "$BUDGET_MODE" in
+	disabled)
+		printf 'budget:         DISABLED by --no-budget — the worker would run under the session'"'"'s own ceilings\n'
+		echo "!  dispatch: --no-budget — this worker has no budget of its own. A runaway worker" >&2
+		echo "   then takes the session's whole task ceiling and memory with it." >&2
+		;;
+	inherited)
+		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "$BUDGET_MEMORY"
+		printf '                a nested worker shares the outer ceiling\n'
+		if [ "$NO_BUDGET" = 1 ]; then
+			printf '                --no-budget cannot escape it: this dispatch is inside the outer dispatch'"'"'s cgroup\n'
+			echo "!  dispatch: --no-budget cannot escape the outer dispatch's budget — this dispatch is" >&2
+			echo "   inside its cgroup, and no flag on an inner dispatch can leave it." >&2
+		fi
+		;;
+	derived)
+		printf 'budget:         tasks %s — %s (floor %s, ceiling %s)\n' "$BUDGET_TASKS" "$BUDGET_TASKS_FROM" "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+		printf '                memory %s MiB — %s (floor %s, ceiling %s)\n' "$BUDGET_MEMORY" "$BUDGET_MEMORY_FROM" "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
+		case "$BUDGET_RUNG" in
+		scope) printf '                rung: a transient scope under the user service manager (systemd-run --user --scope,\n                TasksMax and MemoryMax on the worker'"'"'s own cgroup, shared by its whole tree)\n' ;;
+		scope-tasks) printf '                rung: a transient scope under the user service manager for the task ceiling (systemd-run\n                --user --scope, TasksMax on the worker'"'"'s own cgroup); the memory controller is not delegated\n                to the user manager on this host, so the memory ceiling would be announced and not applied\n' ;;
+		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit %s, ulimit -d) — weaker: no user service\n                manager answered, or it has no pids controller delegated; per process, and the task\n                count is the user'"'"'s, not the tree'"'"'s\n' "$NPROC_FLAG" ;;
+		*) printf '                rung: NONE — no user service manager and no rlimit; the budget would be announced and not applied\n' ;;
+		esac
+		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
+		*"below the floor"*)
+			echo "!  dispatch: a budget is below the floor — see the dry run's budget line. A worker" >&2
+			echo "   that small cannot do useful work: a derived value was raised to the floor, and" >&2
+			echo "   the host then leaves the session less margin than AGENT_BUDGET_*_PERCENT" >&2
+			echo "   intends; an explicit --budget-* value is honoured as given." >&2
+			;;
+		esac
+		;;
+	esac
+	printf '                enforced: NOT applied in this release — shown so the number can be checked; the worker runs unbounded, as before\n'
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
 	printf '\n--- end prompt ---\n'
