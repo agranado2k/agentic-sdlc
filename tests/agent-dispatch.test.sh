@@ -861,6 +861,14 @@ CFG_DEPTH0="$SCRATCH/depth0.config.sh"
 t_run_split env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
 s_assert_status 2 "AGENT_DISPATCH_MAX_DEPTH=0 is refused — it would refuse every dispatch"
 s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+# A typo in the policy file must not silently lift the ceiling: without the
+# non-digit arm, `[ -gt ]` errors on 'abc', the refusal is skipped, and the
+# worker runs.
+CFG_DEPTHABC="$SCRATCH/depthabc.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='abc'\n"; } >"$CFG_DEPTHABC"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTHABC" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a non-numeric AGENT_DISPATCH_MAX_DEPTH is refused as a usage error"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran — a malformed maximum does not disable the ceiling"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
