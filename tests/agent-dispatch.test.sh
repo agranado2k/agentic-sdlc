@@ -1275,15 +1275,18 @@ t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPAT
 s_assert_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
 s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
 s_assert_out_has 'TasksMax and MemoryMax' "…carrying both ceilings"
+s_assert_out_has 'enforced: yes — the worker runs inside the scope; a task or memory ceiling hit exits 71' "…and the enforced line says both ceilings exit 71"
 echo 'cpu pids' >"$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'transient scope' "with pids delegated and memory not, the scope is still the rung — the task bound is the incident's"
 s_assert_out_has 'memory controller is not delegated' "…and the dry run says the memory ceiling has no mechanism on this host"
 s_assert_out_lacks 'TasksMax and MemoryMax' "…so it does not claim MemoryMax"
+s_assert_out_has 'enforced: the task ceiling yes (71 on a hit); the memory ceiling is announced only' "…and the enforced line says only the task ceiling exits 71"
 echo 'cpu' >"$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'rlimits' "with pids not delegated a scope bounds nothing that matters — the rung is rlimits"
 s_assert_out_lacks 'transient scope' "…not a scope that would apply nothing"
+s_assert_out_has 'enforced: best-effort via rlimits' "…and the enforced line says best-effort"
 rm -f "$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
@@ -1319,6 +1322,7 @@ echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
 echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
 echo "DATA=$(ulimit -d 2>/dev/null)"
 echo "WRAPPER_ENV=[${SCOPE_STARTED:-}${SCOPE_VERDICT:-}${AGENT_DISPATCH_SCOPE_CMD:-}]"
+echo "BUDGET=${AGENT_DISPATCH_BUDGET_TASKS:-}/${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}"
 p=$PPID
 while [ "$p" -gt 1 ]; do
 	if tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -q 'agent-dispatch\.sh'; then
@@ -1346,6 +1350,7 @@ s_assert_status 0 "a within-budget real dispatch runs the worker and exits 0"
 s_assert_out_has 'CG=' "…the worker ran"
 s_assert_err_lacks "hit its" "…and hit no ceiling"
 s_assert_out_has 'WRAPPER_ENV=[]' "…and the scope wrapper's paths and command never reach the worker's environment"
+s_assert_out_has 'BUDGET=300/600' "…and the budget it runs under is exported to it, both names, for a dispatch of its own to inherit"
 
 # ---------------------------------------------------------------------------
 banner "The budget is ENFORCED — a runaway worker stops, the session survives"
@@ -1489,6 +1494,24 @@ exit "${FAKE_STATUS:-0}"
 EOF
 chmod +x "$SDFAKE/systemctl" "$SDFAKE/systemd-run"
 fake_dispatch() { t_run_split env PATH="$SDFAKE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" "$@" sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 300 --budget-memory 600; }
+fake_dispatch FAKE_VERDICT='3 0 0'
+s_assert_status 71 "pids.events max > 0 in the verdict is a TASK ceiling hit: 71"
+s_assert_err_has "TASK ceiling"
+fake_dispatch FAKE_VERDICT='0 5 0'
+s_assert_status 71 "memory.events oom_kill > 0 in the verdict is a MEMORY ceiling hit: 71"
+s_assert_err_has "MEMORY ceiling"
+fake_dispatch FAKE_VERDICT='0 0 0' FAKE_STATUS=7
+s_assert_status 7 "counters at zero pass the worker's own status through"
+s_assert_err_lacks "hit its"
+# The scope-tasks rung carries no memory ceiling, so an oom_kill there is not
+# a verdict — the counter is not this rung's flag.
+echo 'cpu pids' >"$CONTROLLERS"
+fake_dispatch FAKE_VERDICT='0 5 0'
+s_assert_status 0 "on the scope-tasks rung an oom_kill count is not a ceiling hit — the status passes through"
+s_assert_err_lacks "MEMORY ceiling"
+fake_dispatch FAKE_VERDICT='3 0 0'
+s_assert_status 71 "…while a task ceiling hit on that rung is still 71"
+echo 'cpu memory pids' >"$CONTROLLERS"
 # Marker present, verdict missing or malformed: the wrapper did not survive to
 # write it (a pressure kill by systemd-oomd takes the wrapper with the worker)
 # — said, and the run's own status passes through.
@@ -1513,6 +1536,7 @@ TEST_CG=$(sed -n 's/^0:://p' /proc/self/cgroup)
 AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --no-budget --timeout 10
 s_assert_status 0 "--no-budget runs the worker"
 s_assert_err_has "no budget"
+s_assert_out_has 'BUDGET=/' "…and exports no budget — an inner dispatch derives its own"
 case "$S_OUT" in
 *"CG=$TEST_CG"*) pass "--no-budget runs the worker in the session's own cgroup — no scope opened" ;;
 *) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$S_OUT" | grep CG=)" ;;
@@ -1530,6 +1554,7 @@ t_run_split env PATH="$SDREC:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	AGENT_DISPATCH_BUDGET_TASKS=500 AGENT_DISPATCH_BUDGET_MEMORY_MIB=500 \
 	sh "$DISPATCH" implementer --prompt 'x'
 s_assert_status 0 "an inherited dispatch runs the worker"
+s_assert_out_has 'BUDGET=500/500' "…and passes the inherited pair on unchanged"
 [ -f "$SCRATCH/sd-was-called" ] &&
 	fail "an inherited dispatch opened a scope — systemd-run was called" ||
 	pass "an inherited dispatch opens no scope — systemd-run was never called"
@@ -1548,6 +1573,7 @@ esac
 t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
 s_assert_status 0 "the rlimit rung runs the worker"
+s_assert_out_has 'BUDGET=5000/128' "…exporting the budget it applied"
 s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
 s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
 OWN_NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)
