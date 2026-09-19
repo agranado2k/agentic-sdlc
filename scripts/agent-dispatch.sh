@@ -610,7 +610,11 @@ _budget_session_tasks() {
 		_bst_path=${_bst_path%/*}
 	done
 	[ -n "$_bst_best" ] || return 1
-	printf '%s %s\n' "$_bst_best" "${_bst_where##*/}"
+	# The basename of the root is empty; a container with a private cgroup
+	# namespace and a pids limit on it is exactly where the line matters.
+	_bst_name=${_bst_where##*/}
+	[ -n "$_bst_name" ] || _bst_name=/
+	printf '%s %s\n' "$_bst_best" "$_bst_name"
 }
 
 # _budget_mem_available_mib — MemAvailable now, in MiB. What the host could

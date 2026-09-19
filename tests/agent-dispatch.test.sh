@@ -813,6 +813,16 @@ s_assert_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the ba
 s_assert_out_has 'session-1.scope' "…and the dry run names that cgroup, not the slice"
 echo max >"$SLICE/session-1.scope/pids.max"
 
+# A container with a private cgroup namespace: the dispatcher's own cgroup is
+# the root, 0::/, and the pids limit sits right on it. The line names it "/".
+printf '0::/\n' >"$HOST/proc/self/cgroup"
+echo 2048 >"$HOST/sys/fs/cgroup/pids.max"
+hostdry
+s_assert_out_has 'tasks 512' "a pids.max on the root cgroup is the base (25% of 2048)"
+s_assert_out_has 'pids.max of cgroup /' "…and the root cgroup is named /, not an empty string"
+rm -f "$HOST/sys/fs/cgroup/pids.max"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+
 # The floor is a clamp UP that is said out loud; the ceiling is a clamp DOWN
 # in silence (ADR-0006 clause 2).
 echo 400 >"$SLICE/pids.max"
