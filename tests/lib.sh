@@ -58,7 +58,9 @@ T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 #
 # whatever the suite itself printed — a suite that hit a ceiling did not run
 # whole — while the calling shell forks on. On the rlimit rung a hit is not
-# observable (the ADR says why) and the suite's own status passes through.
+# observable (the ADR says why): it shows as the shell's own fork or
+# allocation error and the suite's own status, never as a FAIL line, and
+# the rung's note says so before the suite runs.
 #
 # HOW A SUITE GETS THERE WITHOUT A RUNNER. The first time this file is sourced
 # it derives the budget and runs `sh "$0" "$@"` — the suite again, from its
@@ -223,7 +225,7 @@ WRAP
 		# segment in KiB. Weaker, per the ADR: RLIMIT_NPROC counts the uid, and
 		# RLIMIT_DATA is per process. A refused ulimit is heard, and the suite
 		# still runs.
-		_sb_note "i  tests/lib.sh: budget tasks $BUDGET_TASKS, memory $BUDGET_MEMORY MiB — applied by rlimits (ulimit $NPROC_FLAG, ulimit -d), the weaker rung: no user service manager answered, or it has no pids controller delegated; per process, and the task count is the user's, not the tree's"
+		_sb_note "i  tests/lib.sh: budget tasks $BUDGET_TASKS, memory $BUDGET_MEMORY MiB — applied by rlimits (ulimit $NPROC_FLAG, ulimit -d), the weaker rung: no user service manager answered, or it has no pids controller delegated; per process, and the task count is the user's, not the tree's. A ceiling hit on this rung shows as the shell's own error — a refused fork, a failed allocation — and the suite's own status, never a FAIL line naming the ceiling (ADR-0006 clause 6)."
 		exec sh -c 'ulimit "$1" "$2" || echo "!  tests/lib.sh: ulimit $1 refused the task ceiling $2 — the rlimit rung applies no task bound" >&2
 ulimit -d $(($3 * 1024)) || echo "!  tests/lib.sh: ulimit -d refused the memory ceiling $3 MiB — the rlimit rung applies no memory bound" >&2
 shift 3

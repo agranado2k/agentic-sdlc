@@ -367,11 +367,13 @@ s_assert_out_has "nproc: $RL_TASKS" "…the task ceiling is the suite shell's pr
 s_assert_out_has "data: $((1045 * 1024))" "…and the memory ceiling its data limit, in KiB"
 s_assert_out_has "forks: yes" "…and it can still fork"
 s_assert_err_has "weaker"
+s_assert_err_has "never a FAIL line naming the ceiling"
 [ "$(starts)" = 2 ] && pass "…and the file ran twice — once bare, once inside" || fail "the file ran $(starts) time(s) under the rlimit rung"
 # A fork loop under that ceiling is refused inside the suite's own shell. A
 # hit is not observable on this rung (ADR-0006 clause 6): the status is the
-# shell's own verdict on its refused forks — never 71 — and the calling shell
-# still forks.
+# shell's own verdict on its refused forks — never 71 — the shell's own
+# error is what says so, the note above has said that is how it shows, and
+# the calling shell still forks.
 rlstub sh "$FORKER"
 case "$S_STATUS" in
 71 | 124) fail "a fork loop on the rlimit rung should pass the suite's own status through, got $S_STATUS"; _s_dump ;;
