@@ -741,9 +741,11 @@ banner "A dispatch refuses to nest past the policy maximum depth"
 # exactly that in its first version and filled a host's task ceiling in under
 # three minutes. The depth reaches each dispatch through the worker's
 # environment, a top-level dispatch is depth 1, and a dispatch past the
-# maximum dies before it resolves the tier — with a status of its own (4: 0
-# dispatched, 2 usage, 3 in-session, 124 timed out) so a caller can tell a
-# refusal from anything a worker exits with.
+# maximum dies before it resolves the tier — with a status of its own, 4,
+# distinct from every status the dispatcher itself produces (0 dispatched, 2
+# usage, 3 in-session, 124 timed out). A worker's own status still passes
+# through untouched, so a worker that exits 4 is the ambiguity 124 already
+# has; the header's EXIT STATUS table is the one home for that contract.
 #
 # The stub RECORDS each worker in a file rather than the suite counting
 # processes: the claim is that the chain is bounded by the maximum, not by

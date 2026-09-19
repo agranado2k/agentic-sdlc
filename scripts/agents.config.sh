@@ -178,18 +178,14 @@ AGENT_HARNESSES=''
 # the worker's process tree and exits 124. Both is the honest wiring.
 #
 # A DISPATCH INSIDE A DISPATCHED WORKER IS BOUNDED IN DEPTH. A worker may run
-# the dispatcher itself — a planner that dispatches implementers that dispatch
-# reviewers is the deepest legitimate shape today, three deep. A worker whose
-# tier maps back to its own agent harness is a fork bomb with a model in the
-# loop; found live, it filled a host's task ceiling in under three minutes.
-# So the depth reaches every dispatch through the worker's environment
-# (AGENT_DISPATCH_DEPTH — a top-level dispatch is depth 1, and a worker is
-# spawned one deeper), a dispatch AT the maximum still runs, and one past it
-# is refused before the tier is resolved or the prompt is read: exit 4,
-# distinct from everything else the dispatcher exits with, naming the depth,
-# the maximum and this variable on stderr. Empty means the kit default, 3.
-# Raise it when a legitimate shape is deeper; it is a ceiling on runaway
-# nesting, not a budget, and a worker that reaches it has usually gone wrong.
+# the dispatcher itself, and one whose tier maps back to its own agent
+# harness would nest until the host ran out of processes. This is the
+# ceiling: a dispatch past it is refused, exit 4, before anything spawns.
+# Empty means the kit default, 3 — a planner that dispatches implementers
+# that dispatch reviewers, the deepest legitimate shape today. Raise it when
+# a legitimate shape is deeper; it is a ceiling on runaway nesting, not a
+# budget, and a worker that reaches it has usually gone wrong. How the depth
+# travels and what a refusal says are agent-dispatch.sh's header.
 AGENT_DISPATCH_MAX_DEPTH=''
 
 # Check a wiring without spending a token:

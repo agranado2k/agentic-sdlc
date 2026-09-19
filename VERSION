@@ -569,7 +569,7 @@
 # way the other per-dispatch facts do — a top-level dispatch is depth 1 and a
 # worker is spawned one deeper — and a dispatch past AGENT_DISPATCH_MAX_DEPTH
 # is refused before the tier is resolved or the prompt is read: exit 4,
-# distinct from 0, 2, 3, 124 and anything a worker exits with, with the depth,
+# distinct from every status the dispatcher itself produces, with the depth,
 # the maximum and the variable named on stderr. A dispatch AT the maximum
 # still runs, and --dry-run prints the depth. The kit default is 3, the
 # deepest legitimate shape today — a planner dispatching implementers
