@@ -78,6 +78,8 @@ usage() {
 	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>] [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
+	echo "  --set-file replace %%NAME%% with the CONTENTS of a file. For a value" >&2
+	echo "             too large for a command line — a diff, say. Repeatable." >&2
 	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
 	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
 	echo "             the prompt; run nothing." >&2
@@ -89,6 +91,39 @@ die() {
 }
 
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
+
+# _record_set <name> <value> — one marker substitution, into its own numbered
+# pair of exported variables for the single awk pass below. The obvious
+# alternative — accumulating "NAME=VALUE" lines in one string and reading them
+# back — is what this replaced, and it was broken twice over: a value with a
+# newline was truncated at the first one, and any line inside a value that
+# looked like NAME=VALUE was promoted to a substitution of its own. Ticket
+# bodies are untrusted content (AGENTS.md's trust boundary) and `%%BODY%%` is
+# exactly where one goes. --set and --set-file both come through here, so their
+# NAME shape-check cannot drift.
+_record_set() {
+	case "$1" in
+	'' | [!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_]* | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_]*)
+		die "a marker NAME must match [A-Za-z_][A-Za-z0-9_]*, got '$1'" ;;
+	esac
+	# A NAME twice is a caller mistake, not a last-wins convenience: which value
+	# reached the worker would depend on argument order, which is exactly the
+	# kind of quiet ambiguity a reviewer worker reading an untrusted body should
+	# not be subject to.
+	_rs_j=1
+	while [ "$_rs_j" -le "$SETS_N" ]; do
+		if [ "$(eval "printf '%s' \"\$PD_K_$_rs_j\"")" = "$1" ]; then
+			die "marker '$1' is set twice — a NAME may appear in one --set or --set-file only"
+		fi
+		_rs_j=$((_rs_j + 1))
+	done
+	SETS_N=$((SETS_N + 1))
+	# PD_F is cleared for EVERY pair, not only set on a --set-file: an inherited
+	# PD_F_n from this shell (a nested dispatch, a stale export) would otherwise
+	# make a plain --set read a file. --set-file sets it after this returns.
+	eval "PD_K_$SETS_N=\$1; PD_V_$SETS_N=\$2; PD_F_$SETS_N="
+	eval "export PD_K_$SETS_N PD_V_$SETS_N PD_F_$SETS_N"
+}
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -108,25 +143,30 @@ while [ $# -gt 0 ]; do
 		*=*) ;;
 		*) die "--set takes NAME=VALUE, got '$2'" ;;
 		esac
-		_sk=${2%%=*}
-		_sv=${2#*=}
-		# A NAME that could never appear as a marker is a caller mistake worth
-		# naming now rather than leaving as a silently inert --set.
-		case "$_sk" in
-		'' | [!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_]* | *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_]*)
-			die "--set NAME must match [A-Za-z_][A-Za-z0-9_]*, got '$_sk'" ;;
+		_record_set "${2%%=*}" "${2#*=}"
+		shift 2
+		;;
+	--set-file)
+		# The value too large for argv: a --set value is one argv element, so a
+		# big diff hits the exec ceiling. The file's bytes become the value,
+		# whole, read the same way the inline form's are — through the
+		# environment into the one awk pass — so a newline, a %%marker%% or a
+		# pipe inside a diff is as safe here as there.
+		[ $# -ge 2 ] || die "--set-file needs NAME=path"
+		case "$2" in
+		*=*) ;;
+		*) die "--set-file takes NAME=path, got '$2'" ;;
 		esac
-		# Each pair goes into its OWN pair of variables, numbered, and is
-		# exported for the single awk pass below. The obvious alternative —
-		# accumulating "NAME=VALUE" lines in one string and reading them back —
-		# is what this replaced, and it was broken twice over: a value
-		# containing a newline was truncated at the first one, and any line
-		# INSIDE a value that happened to look like NAME=VALUE was promoted to
-		# a substitution of its own. Ticket bodies are untrusted content
-		# (AGENTS.md's trust boundary) and `%%BODY%%` is exactly where one goes.
-		SETS_N=$((SETS_N + 1))
-		eval "PD_K_$SETS_N=\$_sk; PD_V_$SETS_N=\$_sv"
-		eval "export PD_K_$SETS_N PD_V_$SETS_N"
+		_sf_path=${2#*=}
+		[ -e "$_sf_path" ] || die "--set-file path does not exist: $_sf_path"
+		[ -d "$_sf_path" ] && die "--set-file path is a directory: $_sf_path"
+		[ -r "$_sf_path" ] || die "--set-file path is not readable: $_sf_path"
+		# The PATH is recorded, not the file's bytes: a megabyte in an
+		# environment variable hits ARG_MAX at the worker's own exec just as it
+		# would on argv. awk reads the file itself in the pass below, so nothing
+		# large ever crosses an exec boundary.
+		_record_set "${2%%=*}" ""
+		eval "PD_F_$SETS_N=\$_sf_path; export PD_F_$SETS_N"
 		shift 2
 		;;
 	--timeout)
@@ -361,8 +401,9 @@ if [ "$SETS_N" -gt 0 ]; then
 	#   - a value is never re-scanned, so `--set 'A=[%%B%%]' --set B=bee` leaves
 	#     `[%%B%%]` whatever order the pairs arrive in. A value is data, not a
 	#     template, and reading it as one made the result order-dependent.
-	#   - values are read from the environment rather than parsed out of a
-	#     joined string, so a newline in a value is just a character.
+	#   - an inline value comes from the environment and a --set-file value is
+	#     read from its file here, so a newline in either is just a character
+	#     and a value too large for argv never crosses an exec.
 	PD_N=$SETS_N
 	export PD_N
 	awk '
@@ -370,8 +411,26 @@ if [ "$SETS_N" -gt 0 ]; then
 			n = ENVIRON["PD_N"] + 0
 			for (i = 1; i <= n; i++) {
 				k[i] = "%%" ENVIRON["PD_K_" i] "%%"
-				v[i] = ENVIRON["PD_V_" i]
 				kl[i] = length(k[i])
+				path = ENVIRON["PD_F_" i]
+				if (path != "") {
+					# A --set-file value: read the file whole, here, so it never
+					# crosses an exec. getline drops each line separator and this
+					# rejoins with a newline, so a file with no trailing newline
+					# gains one; a diff always ends with one, which is the case
+					# this exists for.
+					# A SCALAR accumulator, assigned to the array once at the
+					# end: appending to an array element defeats the
+					# in-place string-growth optimisation and made this
+					# quadratic in the line count — 8 MiB took eighteen
+					# seconds. A scalar does it in milliseconds.
+					s = ""
+					while ((getline ln < path) > 0) s = s ln "\n"
+					close(path)
+					v[i] = s
+				} else {
+					v[i] = ENVIRON["PD_V_" i]
+				}
 			}
 		}
 		{
@@ -387,7 +446,9 @@ if [ "$SETS_N" -gt 0 ]; then
 			}
 			print out
 		}
-	' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" && mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
+	' "$PROMPT_FILE" >"$PROMPT_FILE.tmp" ||
+		die "substituting markers failed — a --set-file may be unreadable or too large for memory"
+	mv "$PROMPT_FILE.tmp" "$PROMPT_FILE"
 fi
 
 # An unfilled marker is a caller that forgot one, and it reaches the worker as

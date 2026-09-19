@@ -525,7 +525,10 @@
 # flag the watchdog writes, never an inference from the worker's own status.
 # scripts/agents.config.sh — yours — says what an approval-gated CLI needs
 # before it can be dispatched to: its own headless policy, or a timeout, or
-# both.
+# both. And --set-file NAME=path fills a marker from a file rather than the
+# command line: a --set value is one argv element and a diff handed to a
+# reviewer worker overruns it, so a large value comes from a file that awk
+# reads directly, never crossing an exec.
 # nothing. And the docs harness's banned-words validator now scans the
 # GLOSSARY too — the canonical document for the language was the one file
 # free to contradict the rule it defines, and two of its own entries did until

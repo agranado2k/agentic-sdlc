@@ -184,6 +184,129 @@ s_assert_out_has 'no header here' "a prompt with no header passes through whole"
 dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
 s_assert_status 2 "--set without NAME=VALUE is refused"
 
+# --set-file NAME=path — for a value too large for argv. A --set value is one
+# argv element, so a big diff hits the exec ceiling (~128 KiB single arg on
+# Linux); the ticket names "a diff" as a value, so the limit is reachable by
+# the intended use. The file's bytes become the value, whole.
+BIG="$SCRATCH/big-value"
+# A megabyte, well past the argv ceiling, with the hazards --set already handles.
+awk 'BEGIN { for (i = 0; i < 20000; i++) print "line " i " with $(echo x) and %%B%% and | pipe" }' >"$BIG"
+printf 'Diff follows:\n%%%%DIFF%%%%\nend\n' >"$SCRATCH/df.md"
+dispatch implementer --prompt-file "$SCRATCH/df.md" --set-file "DIFF=$BIG" --set 'B=bee'
+s_assert_status 0 "a value of a megabyte is delivered from a file"
+s_assert_out_has "line 19999 with" "…whole, to the last line"
+s_assert_out_has 'line 0 with $(echo x) and %%B%% and | pipe' "…unexpanded, and a marker inside it is not re-scanned"
+
+# --set and --set-file mix, and order is preserved.
+printf 'A is %%%%A%%%%\nF is %%%%F%%%%\n' >"$SCRATCH/mix.md"
+printf 'from-a-file\n' >"$SCRATCH/fval"
+dispatch implementer --prompt-file "$SCRATCH/mix.md" --set 'A=inline' --set-file "F=$SCRATCH/fval"
+s_assert_out_has "A is inline" "--set fills its marker when composed with --set-file"
+s_assert_out_has "F is from-a-file" "…and --set-file fills its own from the file"
+
+dispatch implementer --prompt 'x' --set-file 'F=/no/such/file/here'
+s_assert_status 2 "--set-file with a missing path is refused before anything runs"
+
+dispatch implementer --prompt 'x' --set-file 'NOPAIR'
+s_assert_status 2 "--set-file without NAME=path is refused"
+
+dispatch implementer --prompt 'x' --set-file "1bad=$BIG"
+s_assert_status 2 "--set-file NAME is shape-checked like --set"
+
+# An unreadable file that exists is refused before dispatch, not substituted as
+# empty (which would send the worker a prompt with a hole in it and exit 0).
+UNREAD="$SCRATCH/unreadable"
+printf 'secret\n' >"$UNREAD"
+chmod 000 "$UNREAD"
+dispatch implementer --prompt 'x' --set-file "V=$UNREAD"
+# root reads anything, so a chmod-000 file is only a real test as non-root.
+if [ "$(id -u)" = 0 ]; then
+	skip "running as root — an unreadable file cannot be simulated"
+else
+	s_assert_status 2 "an unreadable --set-file path is refused before dispatch"
+	s_assert_err_has "not readable"
+fi
+chmod 644 "$UNREAD"
+
+dispatch implementer --prompt 'x' --set-file "V=$SCRATCH"
+s_assert_status 2 "a --set-file path that is a directory is refused"
+s_assert_err_has "directory"
+
+# A --set-file value must not leak into a later --set of a different NAME, and
+# must not reach the worker's own environment for a nested dispatch to read.
+# A stale PD_F in this shell is the reproduction: set one, then run a plain
+# --set, and confirm the plain value wins.
+printf 'FROM-FILE\n' >"$SCRATCH/leak.src"
+printf 'A is %%%%A%%%%.\n' >"$SCRATCH/leak.md"
+PD_F_1="$SCRATCH/leak.src" PD_K_1=A
+export PD_F_1 PD_K_1
+dispatch implementer --prompt-file "$SCRATCH/leak.md" --set 'A=inline-value'
+s_assert_out_has "A is inline-value." "a stale PD_F in the environment does not turn a --set into a file read"
+s_assert_out_lacks "FROM-FILE" "…the leaked file is not read"
+unset PD_F_1 PD_K_1
+
+# The same NAME twice is refused, whichever forms it takes.
+dispatch implementer --prompt 'x' --set 'A=1' --set 'A=2'
+s_assert_status 2 "a NAME set twice by --set is refused"
+s_assert_err_has "set twice"
+dispatch implementer --prompt 'x' --set 'A=1' --set-file "A=$SCRATCH/leak.src"
+s_assert_status 2 "a NAME set by both --set and --set-file is refused"
+
+# H-2: an unreadable path was accepted, substituted empty, exit 0 — the ticket
+# says it is refused. (Skipped as root, where the mode is ignored.)
+if [ "$(id -u)" != 0 ]; then
+	printf 'secret\n' >"$SCRATCH/noperm"
+	chmod 000 "$SCRATCH/noperm"
+	dispatch implementer --prompt 'x' --set-file "V=$SCRATCH/noperm"
+	s_assert_status 2 "an unreadable --set-file path is refused, not substituted empty"
+	chmod 644 "$SCRATCH/noperm"
+fi
+dispatch implementer --prompt 'x' --set-file "V=$SCRATCH"
+s_assert_status 2 "a --set-file path that is a directory is refused"
+
+# H-3: a --set-file leaves no path behind for a later plain --set to inherit,
+# and nothing of the sort reaches the worker's environment. A nested dispatch
+# is the sharp case: the inner --set must not read the outer --set-file's file.
+printf 'inner sees: %%%%A%%%%\n' >"$SCRATCH/nested.md"
+printf 'OUTER-FILE-CONTENTS\n' >"$SCRATCH/outer"
+NEST="$SCRATCH/nest.sh"
+cat >"$NEST" <<EOF
+#!/bin/sh
+cat >/dev/null
+# Runs INSIDE a --set-file dispatch, so PD_F_* is in its environment. Its own
+# --set for the same slot must not pick up the outer file. It dispatches the
+# REVIEWER tier, which the nest policy maps to the echoing harness: had it
+# dispatched implementer it would resolve to this very stub again — the
+# inherited AGENTS_CONFIG makes that a fork bomb, not a test (it filled a
+# host's task ceiling in under three minutes).
+sh "$DISPATCH" reviewer --prompt-file "$SCRATCH/nested.md" --set 'A=inline-only'
+EOF
+chmod +x "$NEST"
+CFG_NEST="$SCRATCH/nest.config.sh"
+cat >"$CFG_NEST" <<EOF
+AGENT_HARNESSES='nest'
+AGENT_HARNESS_NEST_CMD='$NEST {model_flag} < {prompt_file}'
+AGENT_HARNESS_NEST_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='nest:'
+AGENT_TIER_REVIEWER='w:'
+AGENT_HARNESSES='nest w'
+AGENT_HARNESS_W_CMD='$SCRATCH/echo-stdin {model_flag} < {prompt_file}'
+AGENT_HARNESS_W_MODEL_FLAG=''
+EOF
+printf '#!/bin/sh\ncat\n' >"$SCRATCH/echo-stdin"; chmod +x "$SCRATCH/echo-stdin"
+printf 'x\n' >"$SCRATCH/anyprompt.md"
+AGENTS_CONFIG="$CFG_NEST" dispatch implementer --prompt-file "$SCRATCH/anyprompt.md" --set-file "OUTER=$SCRATCH/outer"
+s_assert_out_has "inner sees: inline-only" "a nested --set does not inherit the outer --set-file's path"
+s_assert_out_lacks "OUTER-FILE-CONTENTS" "…and the outer file's contents never reach the inner worker"
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# M-1: the same NAME twice is refused, not silently resolved by argument order.
+dispatch implementer --prompt 'x' --set 'A=one' --set 'A=two'
+s_assert_status 2 "the same marker NAME in two --set is refused"
+dispatch implementer --prompt 'x' --set 'A=one' --set-file "A=$SCRATCH/outer"
+s_assert_status 2 "…and across --set and --set-file"
+
 # A ticket body is untrusted content, and %%BODY%% is exactly where one goes.
 # The pairs used to be joined into one string and read back line by line, so a
 # multi-line value was truncated at its first newline AND any line inside it
