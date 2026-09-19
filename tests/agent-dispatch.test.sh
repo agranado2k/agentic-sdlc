@@ -967,11 +967,31 @@ s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
 
 # The rung is probed, not configured. A stub systemctl on PATH that answers
 # stands in for a user service manager; one that fails stands in for none.
+# A manager that answers is reachable, not necessarily able to bound: the
+# scope rung also needs the pids and memory controllers delegated to it,
+# read from cgroup.controllers on the dispatcher's own cgroup (ADR-0006
+# clause 5).
 SDBIN="$SCRATCH/sd-yes"; mkdir -p "$SDBIN"
 printf '#!/bin/sh\nexit 0\n' >"$SDBIN/systemctl"; cp "$SDBIN/systemctl" "$SDBIN/systemd-run"; chmod +x "$SDBIN/systemctl" "$SDBIN/systemd-run"
+CONTROLLERS="$SLICE/session-1.scope/cgroup.controllers"
+echo 'cpu memory pids' >"$CONTROLLERS"
 t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'transient scope' "with a user service manager the rung is a transient scope"
+s_assert_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
 s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
+s_assert_out_has 'TasksMax and MemoryMax' "…carrying both ceilings"
+echo 'cpu pids' >"$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'transient scope' "with pids delegated and memory not, the scope is still the rung — the task bound is the incident's"
+s_assert_out_has 'memory controller is not delegated' "…and the dry run says the memory ceiling has no mechanism on this host"
+s_assert_out_lacks 'TasksMax and MemoryMax' "…so it does not claim MemoryMax"
+echo 'cpu' >"$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "with pids not delegated a scope bounds nothing that matters — the rung is rlimits"
+s_assert_out_lacks 'transient scope' "…not a scope that would apply nothing"
+rm -f "$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
+echo 'cpu memory pids' >"$CONTROLLERS"
 NOSD="$SCRATCH/sd-no"; mkdir -p "$NOSD"
 printf '#!/bin/sh\nexit 1\n' >"$NOSD/systemctl"; chmod +x "$NOSD/systemctl"
 t_run_split env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run

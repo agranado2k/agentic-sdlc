@@ -155,13 +155,36 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    takes the highest rung its host offers, probed at dispatch time and never
    configured, because a policy file cannot know which host it is on:
    1. **A transient scope under the user's service manager**, where
-      `systemd-run` is on PATH and `systemctl --user` reaches the manager:
+      `systemd-run` is on PATH, `systemctl --user` reaches the manager, **and
+      the manager has the `pids` and `memory` controllers delegated** — read
+      from `cgroup.controllers` on the dispatcher's own cgroup, one more file
+      on the path the derivation already walks. A manager that answers is
+      reachable, not necessarily able to bound: under one without `memory`,
+      `-p MemoryMax=` is accepted and applies nothing, which is the silent
+      degradation driver 4 forbids. The rung is then
       `systemd-run --user --scope -p TasksMax=<tasks> -p MemoryMax=<MiB>M`.
-      The budget is then a cgroup shared by everything the worker spawns, and
+      The budget is a cgroup shared by everything the worker spawns, and
       a fork or an allocation past it fails **inside the worker's boundary**
-      while the operator's session keeps forking. This is the rung the
-      incident's host offers, and the rung the suites are run under by hand
-      until #209.
+      while the operator's session keeps forking. With `pids` delegated and
+      `memory` not, the scope is still the rung — the tree-wide task bound is
+      what the incident needed — carrying `TasksMax` alone, and the memory
+      ceiling on that host is announced and not applied (rung 3 for that one
+      ceiling; not `ulimit -d`, which is a different promise rather than a
+      weaker form of this one). With `pids` not delegated, or
+      `cgroup.controllers` unreadable, a scope bounds nothing that matters
+      and the ladder falls to rung 2. This is the rung the incident's host
+      offers (`cpu memory pids`), and the rung the suites are run under by
+      hand until #209.
+      **When the rung refuses at execution** — `systemd-run` exits non-zero
+      after the probe passed: the bus gone between probe and spawn, a
+      unit-name collision, a manager that will not create scopes — #208
+      falls to rung 2 and says so on stderr with `systemd-run`'s own message,
+      rather than refusing the dispatch: the worker still runs, under the
+      weaker promise, and the operator hears which. The wrapper inside the
+      scope (clause 6) writes a started-marker before it runs the worker,
+      and that marker is how #208 tells a scope that never opened from a
+      worker that exited non-zero on its own. The dry run cannot show this
+      case: it probes, and never opens a scope.
    2. **rlimits in the worker's shell** where there is no user manager:
       `ulimit -u <tasks>` for tasks (`-p` under dash, which spells
       `RLIMIT_NPROC` that way and has no `-u`; the dispatcher probes which

@@ -669,12 +669,31 @@ _budget_nproc_flag() {
 
 # _budget_rung — the highest rung of ADR-0006's ladder this host offers,
 # probed rather than configured: a policy file cannot know what host it is
-# on. `scope` needs systemd-run and a user manager that answers; `rlimit`
+# on. `scope` needs systemd-run, a user manager that answers, AND the pids
+# and memory controllers delegated to it — read from cgroup.controllers on
+# this process's own cgroup, because a manager that answers is reachable,
+# not necessarily able to bound: without `memory`, -p MemoryMax= is accepted
+# and applies nothing. `scope-tasks` is pids delegated and memory not — the
+# scope still carries the task bound, which is the incident's. `rlimit`
 # needs a shell whose ulimit can set the process count; `none` is neither.
 _budget_rung() {
 	if command -v systemd-run >/dev/null 2>&1 && systemctl --user show --property=Version >/dev/null 2>&1; then
-		echo scope
-	elif [ -n "$NPROC_FLAG" ]; then
+		_br_own=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+		_br_ctl=" $(cat "$_host/sys/fs/cgroup$_br_own/cgroup.controllers" 2>/dev/null) "
+		# Two separate word tests: one pattern for both would need the space
+		# between them twice, and a single space cannot be consumed twice.
+		_br_pids=0 _br_memory=0
+		case "$_br_ctl" in *" pids "*) _br_pids=1 ;; esac
+		case "$_br_ctl" in *" memory "*) _br_memory=1 ;; esac
+		if [ "$_br_pids" = 1 ] && [ "$_br_memory" = 1 ]; then
+			echo scope
+			return 0
+		elif [ "$_br_pids" = 1 ]; then
+			echo scope-tasks
+			return 0
+		fi
+	fi
+	if [ -n "$NPROC_FLAG" ]; then
 		echo rlimit
 	else
 		echo none
@@ -796,7 +815,8 @@ if [ "$DRY_RUN" = 1 ]; then
 		printf '                memory %s MiB — %s (floor %s, ceiling %s)\n' "$BUDGET_MEMORY" "$BUDGET_MEMORY_FROM" "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
 		case "$BUDGET_RUNG" in
 		scope) printf '                rung: a transient scope under the user service manager (systemd-run --user --scope,\n                TasksMax and MemoryMax on the worker'"'"'s own cgroup, shared by its whole tree)\n' ;;
-		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit %s, ulimit -d) — weaker: no user service\n                manager answered; per process, and the task count is the user'"'"'s, not the tree'"'"'s\n' "$NPROC_FLAG" ;;
+		scope-tasks) printf '                rung: a transient scope under the user service manager for the task ceiling (systemd-run\n                --user --scope, TasksMax on the worker'"'"'s own cgroup); the memory controller is not delegated\n                to the user manager on this host, so the memory ceiling would be announced and not applied\n' ;;
+		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit %s, ulimit -d) — weaker: no user service\n                manager answered, or it has no pids controller delegated; per process, and the task\n                count is the user'"'"'s, not the tree'"'"'s\n' "$NPROC_FLAG" ;;
 		*) printf '                rung: NONE — no user service manager and no rlimit; the budget would be announced and not applied\n' ;;
 		esac
 		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
