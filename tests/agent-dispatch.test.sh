@@ -808,6 +808,31 @@ s_assert_status 4 "a dispatch one past the maximum is refused"
 s_assert_out_lacks 'ARGV:' "…and the worker never ran"
 s_assert_err_has "refusing to nest"
 
+# The worker is spawned one deeper than its dispatch, through BOTH spawn
+# paths: the plain eval and the timed `sh -c`. The dispatcher's comment says
+# the two cannot disagree; this stub, which prints the depth it was given,
+# holds them to it — the timed path is the wiring an approval-gated CLI runs
+# under, and it was the one nothing asserted on.
+DEPTH_STUB="$SCRATCH/depth-echoing"
+cat >"$DEPTH_STUB" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "worker at depth ${AGENT_DISPATCH_DEPTH:-unset}"
+EOF
+chmod +x "$DEPTH_STUB"
+CFG_DEPTH="$SCRATCH/depth.config.sh"
+cat >"$CFG_DEPTH" <<EOF
+AGENT_HARNESSES='seen'
+AGENT_HARNESS_SEEN_CMD='$DEPTH_STUB < {prompt_file}'
+AGENT_HARNESS_SEEN_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='seen:'
+EOF
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_out_is 'worker at depth 3' "a dispatch at depth 2 spawns its worker at depth 3 — the plain path"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --timeout 5
+s_assert_status 0 "…and the timed path runs the same worker"
+s_assert_out_is 'worker at depth 3' "…which sees the same depth 3"
+
 # Refused BEFORE the tier is resolved or the prompt is read: an in-session
 # tier (normally exit 3) and a missing prompt file (normally exit 2) both
 # report the depth first, because the invocation has nothing else to say.
@@ -911,7 +936,13 @@ for shell_bin in $SHELLS; do
 	{ [ "$s_st" = 3 ] && [ "$s_out" = "model-for-planning" ]; } &&
 		pass "$shell_bin exits 3 with the model id for an unconfigured tier" ||
 		fail "$shell_bin gave status $s_st, stdout '$s_out'"
-	# The depth arithmetic and its refusal, per shell.
+	# The depth arithmetic, per shell — the one construct here with a known
+	# shell divergence — and, separately, the refusal, which fires before
+	# the arithmetic is reached.
+	s_out=$(AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
+	[ "$s_out" = "worker at depth 3" ] &&
+		pass "$shell_bin spawns the worker one deeper than its dispatch" ||
+		fail "$shell_bin spawned the worker at '$s_out'"
 	s_out=$(AGENT_DISPATCH_DEPTH=4 "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
 	s_st=$?
 	{ [ "$s_st" = 4 ] && [ -z "$s_out" ]; } &&
