@@ -198,7 +198,8 @@ AGENT_HARNESSES=''
 #   AGENT_BUDGET_TASKS_PERCENT       of the task ceiling your own session runs
 #                                    under — the nearest cgroup pids.max where
 #                                    cgroup v2 is present (the user slice's
-#                                    TasksMax on a systemd host), else ulimit -u
+#                                    TasksMax on a systemd host), else the
+#                                    per-user process limit
 #   AGENT_BUDGET_TASKS_FLOOR         raised to this, and said so, on a host too
 #   AGENT_BUDGET_TASKS_CEILING       small; held to this on a host too big
 #   AGENT_BUDGET_MEMORY_PERCENT      of MemAvailable, read at dispatch time

@@ -567,9 +567,9 @@
 # minutes, and from then on nothing of the operator's could fork. From #207:
 # the dispatcher derives a task ceiling and a memory ceiling for the worker's
 # whole process tree from THIS host at dispatch time — a percentage of the
-# nearest cgroup pids.max the session runs under (else ulimit -u) and of
-# MemAvailable now, each clamped to a floor and a ceiling, never a fixed
-# number — and --dry-run prints both with the host fact each came from, the
+# nearest cgroup pids.max the session runs under (else the per-user process
+# limit) and of MemAvailable now, each clamped to a floor and a ceiling, never
+# a fixed number — and --dry-run prints both with the host fact each came from, the
 # clamp if one applied, the rung of the enforcement ladder this host would
 # offer (a transient scope under the user service manager, else rlimits,
 # else a loud no-op), and that NOTHING IS APPLIED in this release. Three
@@ -594,7 +594,8 @@
 # --timeout note; add the block by hand from the kit's copy. tests/agent-dispatch.test.sh
 # holds the arithmetic against a fake host handed to the dispatcher through
 # the test-only AGENT_DISPATCH_HOST_ROOT, the clamps, the policy read, the
-# fallback to ulimit -u, the flags, the inherited case and the probed rung.
+# fallback to the per-user process limit, the flags, the inherited case and
+# the probed rung.
 shared-layer: 0.20.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the

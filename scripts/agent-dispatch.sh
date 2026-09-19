@@ -636,8 +636,19 @@ _budget_clamp() {
 	fi
 }
 
-# _budget_nproc_flag — the ulimit option that reads and sets the per-user
-# process limit under THIS sh: -u for bash, zsh and ksh; -p for dash, which
+# _budget_nproc_limit — the per-user process limit (RLIMIT_NPROC) this
+# session runs under: the number `ulimit -u` prints, read from
+# /proc/self/limits so it comes through the same host seam as the cgroup
+# ceiling and a suite can choose it. Prints the soft limit — a number, or
+# "unlimited"; fails when the file has no such line.
+_budget_nproc_limit() {
+	_bnl=$(awk '/^Max processes/ { print $3; exit }' "$_host/proc/self/limits" 2>/dev/null)
+	[ -n "$_bnl" ] || return 1
+	printf '%s\n' "$_bnl"
+}
+
+# _budget_nproc_flag — the ulimit option that sets the per-user process limit
+# under THIS sh, for the rlimit rung: -u for bash, zsh and ksh; -p for dash, which
 # spells the same limit differently (it has no -u, and bash's -p is the pipe
 # size, which cannot be set — so the order below is safe both ways). Found by
 # CI, whose sh is dash. Probed by setting the limit to itself in a subshell;
@@ -703,8 +714,7 @@ else
 		BUDGET_TASKS=$_bc_value
 		BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the pids.max of cgroup $_bt_where${_bc_note:+: $_bc_note}"
 	else
-		_bt_base=""
-		[ -n "$NPROC_FLAG" ] && _bt_base=$(ulimit "$NPROC_FLAG" 2>/dev/null)
+		_bt_base=$(_budget_nproc_limit) || _bt_base=""
 		case "$_bt_base" in
 		'' | *[!0123456789]*)
 			BUDGET_TASKS=$BUDGET_TASKS_CEILING
@@ -713,7 +723,7 @@ else
 		*)
 			_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
 			BUDGET_TASKS=$_bc_value
-			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (ulimit $NPROC_FLAG — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (RLIMIT_NPROC — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
 			;;
 		esac
 	fi

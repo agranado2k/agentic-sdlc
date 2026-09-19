@@ -871,15 +871,17 @@ s_assert_err_has "AGENT_BUDGET_TASKS_CEILING"
 hostdry --budget-tasks 010
 s_assert_status 2 "--budget-tasks with a leading zero is refused the same way"
 
-# No cgroup ceiling on the path: the per-user process limit is the base. The
-# limit is lowered in a subshell so the expected number is one this suite
-# chose — with bash's -u, or dash's -p, which is the same limit spelled the
-# way CI's sh spells it (found there: `ulimit: Illegal option -u`).
+# No cgroup ceiling on the path: the per-user process limit is the base —
+# RLIMIT_NPROC, read from /proc/self/limits under the same fake root, so the
+# expected number is one this suite chose rather than this shell's own limit,
+# which a container or a locked-down runner may not let a test lower.
 printf '0::/\n' >"$HOST/proc/self/cgroup"
-t_run_split sh -c '{ ulimit -u 8000 || ulimit -p 8000; } 2>/dev/null || exit 9; AGENT_DISPATCH_HOST_ROOT="$1" exec sh "$2" implementer --prompt x --dry-run' _ "$HOST" "$DISPATCH"
+limits() { printf 'Limit                     Soft Limit           Hard Limit           Units     \nMax processes             %s                 %s                processes \n' "$1" "$1" >"$HOST/proc/self/limits"; }
+limits 8000
+hostdry
 s_assert_status 0 "a session with no cgroup pids.max still derives a budget"
 s_assert_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
-s_assert_out_has 'the per-user process limit (ulimit' "…and the dry run names that source, with the ulimit spelling this sh has"
+s_assert_out_has 'the per-user process limit' "…and the dry run names that source"
 s_assert_out_lacks 'pids.max' "…not a cgroup it never found"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
