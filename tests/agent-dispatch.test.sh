@@ -790,7 +790,7 @@ s_assert_err_has "swept 1 stale dispatch scratch"
 [ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a fresh dispatch scratch — a dispatch still running — is left alone" || fail "the sweep removed a fresh dispatch scratch"
 [ -d "$SWEEP_TMP/tmp.unrelated" ] && pass "a stale directory without the prefix is never touched" || fail "the sweep removed a directory that is not dispatch scratch"
 [ -f "$SWEEP_TMP/agent-dispatch.notadir" ] && pass "a stale plain file carrying the prefix is never touched" || fail "the sweep removed a file"
-remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -vc 'agent-dispatch\.fresh$\|agent-dispatch\.notadir$')
+remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -Evc 'agent-dispatch\.(fresh|notadir)$')
 [ "$remaining" = 0 ] && pass "…and the dispatch's own scratch went with its trap" || fail "$remaining dispatch scratch director(ies) left by a dispatch that returned normally"
 
 t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
