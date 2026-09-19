@@ -567,7 +567,7 @@
 # minutes, and from then on nothing of the operator's could fork. From #207:
 # the dispatcher derives a task ceiling and a memory ceiling for the worker's
 # whole process tree from THIS host at dispatch time — a percentage of the
-# nearest cgroup pids.max the session runs under (else the per-user process
+# smallest cgroup pids.max on the session's path (else the per-user process
 # limit) and of MemAvailable now, each clamped to a floor and a ceiling, never
 # a fixed number — and --dry-run prints both with the host fact each came from, the
 # clamp if one applied, the rung of the enforcement ladder this host would

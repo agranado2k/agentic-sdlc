@@ -805,8 +805,8 @@ s_assert_out_has 'MemAvailable' "…naming the host fact"
 s_assert_out_has 'NOT applied' "the dry run says nothing is enforced in this release"
 s_assert_out_lacks 'ARGV:' "and the worker never ran"
 
-# The nearest ceiling wins: a session scope tighter than its slice is the
-# ceiling this session actually runs under.
+# The smallest ceiling on the path wins: a session scope tighter than its
+# slice is the ceiling this session actually runs under.
 echo 3000 >"$SLICE/session-1.scope/pids.max"
 hostdry
 s_assert_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the base"

@@ -196,7 +196,8 @@ AGENT_HARNESSES=''
 # container. It ships PERCENTAGES and CLAMPS, and the host supplies the base:
 #
 #   AGENT_BUDGET_TASKS_PERCENT       of the task ceiling your own session runs
-#                                    under — the nearest cgroup pids.max where
+#                                    under — the smallest cgroup pids.max on
+#                                    the path from your own cgroup up, where
 #                                    cgroup v2 is present (the user slice's
 #                                    TasksMax on a systemd host), else the
 #                                    per-user process limit
