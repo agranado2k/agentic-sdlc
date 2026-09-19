@@ -854,6 +854,8 @@ dispatch implementer --prompt 'x' --dry-run
 s_assert_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch at depth 1 of the default 3"
 t_run_split env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
+dispatch
+s_assert_err_has "depth and the prompt" # usage() lists what --dry-run prints, and the depth is one of them
 s_assert_out_lacks 'ARGV:' "…running nothing"
 # Under a policy maximum the second number is the policy's, not the default:
 # the two assertions above cannot tell them apart.

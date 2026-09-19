@@ -96,8 +96,8 @@ usage() {
 	echo "  --set-file replace %%NAME%% with the CONTENTS of a file. For a value" >&2
 	echo "             too large for a command line — a diff, say. Repeatable." >&2
 	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
-	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
-	echo "             the prompt; run nothing." >&2
+	echo "  --dry-run  print the agent harness, the model, the expanded command, the" >&2
+	echo "             depth and the prompt; run nothing." >&2
 }
 
 die() {
