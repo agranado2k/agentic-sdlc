@@ -922,8 +922,8 @@ fi
 # --- announce, once, on stderr — for a dry run and a real dispatch alike -----
 # ADR-0006 clause 8: the floor note, the off switch, the inherited-no-escape
 # note and the no-mechanism note are said on EVERY dispatch, not only the dry
-# run (before #208 they were dry-run only). stdout stays the dry run's; this is
-# the half an operator piping stdout still hears.
+# run. stdout stays the dry run's; this is the half an operator piping stdout
+# still hears.
 _budget_announce() {
 	case "$BUDGET_MODE" in
 	disabled)
@@ -967,10 +967,9 @@ if [ "$DRY_RUN" = 1 ]; then
 	printf 'command:        %s\n' "$CMD"
 	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
-	# The budget: the numbers, the rung, and — now that #208 applies it — that
-	# it IS enforced (ADR-0006 clause 8). The floor note and the off switch are
-	# said on stderr by _budget_announce below, where an operator piping stdout
-	# still hears them.
+	# The budget: the numbers, the rung, and that it IS enforced (ADR-0006
+	# clause 8). The floor note and the off switch are said on stderr by
+	# _budget_announce below, where an operator piping stdout still hears them.
 	case "$BUDGET_MODE" in
 	disabled)
 		printf 'budget:         DISABLED by --no-budget — the worker runs under the session'"'"'s own ceilings\n'
@@ -1223,11 +1222,30 @@ _down() {
 # _spawn_run — run RUN_CMD, untimed or under the watchdog. Sets _worker_status,
 # and _timed_out=1 when the watchdog fired (the caller then exits 124). The
 # budget verdict is the caller's, read from what the run left behind, so this
-# does not exit on its own except on a signal to the dispatcher itself. The
-# four things the timed path got wrong — snapshot the tree once BEFORE the first
-# signal, the verdict is a flag not an exit status, the watchdog dies WITH its
-# sleep, and the dispatcher's own INT/TERM/HUP take the worker down — are why
-# it is shaped the way it is; each was found by review and by testing the branch.
+# does not exit on its own except on a signal to the dispatcher itself.
+#
+# Four things the first version of the timed path got wrong, each found by
+# review:
+#
+#   1. The worker's process TREE is snapshotted ONCE, before any signal, and
+#      that same list is signalled twice — TERM, a grace, then KILL. Walking
+#      the tree after TERM found nothing, because a killed parent's children
+#      are reparented to init and no longer under the worker's pid; a worker
+#      that ignored TERM therefore ran to completion while this script said
+#      "killed". An agent CLI is a node or python process under a shell, and
+#      the shell dying is not the CLI dying.
+#   2. The verdict is a FLAG the watchdog writes before it signals, not an
+#      inference from the worker's exit status. Reading 143 as "timed out"
+#      was wrong both ways: a worker that trapped TERM and exited 0 reported
+#      success with "timed out" on stderr, and a worker that killed itself
+#      reported a timeout with no message.
+#   3. The watchdog is killed WITH its sleep. Killing the subshell alone left
+#      `sleep N` holding this script's stdout, so any caller capturing output
+#      waited the whole timeout after a worker that finished in a second.
+#   4. This script traps its own INT/TERM/HUP and takes the worker and the
+#      watchdog down with it. Backgrounded children of a non-interactive
+#      shell start with SIGINT ignored, so a Ctrl-C on the dispatcher used to
+#      leave the worker running with no timeout left.
 _spawn_run() {
 	_timed_out=0
 	# The worker never inherits this script's stdin. Found live: an agent CLI
