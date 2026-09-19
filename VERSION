@@ -582,8 +582,8 @@
 #   NON-MANIFEST HALF, enumerated. For #210, scripts/agents.config.sh —
 # yours — documents AGENT_DISPATCH_SWEEP_DAYS beside the --timeout note and
 # ships it empty; docs/domain-glossary.md gains **Dispatch scratch** and
-# **Sweep age**; /housekeeping's CHECKLIST.md item 5 counts the dispatch
-# scratch on the host, and its SKILL.md's item line says so;
+# **Sweep age**; /housekeeping's CHECKLIST.md item 5 lists the dispatch
+# scratch on the host by name and age, and its SKILL.md's item line says so;
 # tests/agent-dispatch.test.sh holds each acceptance line through the
 # dispatch seam, with a KILLed dispatch as the fixture that leaves scratch
 # behind; tests/housekeeping-skill.test.sh holds the checklist line.

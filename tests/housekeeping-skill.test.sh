@@ -77,9 +77,12 @@ sidecar_sources=$(grep -c '^\*Source:' "$SIDECAR_ABS")
 [ "$sidecar_sources" -ge 8 ] && pass "the sidecar states a source for each of the eight items" ||
 	fail "the sidecar states only $sidecar_sources sources"
 # Item 5 also reports the dispatch scratch a dead dispatch left on the host
-# (#210): the dispatcher sweeps what is past the sweep age, and the pass is
-# where the count is read.
+# (#210): the dispatcher sweeps what is past the sweep age, and the pass
+# LISTS what is there — each directory by name and age — not only a count,
+# because #210 says "lists what it found" and a count cannot say which.
 assert_file_has "$SIDECAR" "dispatch scratch" "item 5 reports the stale dispatch scratch the dispatcher sweeps"
+assert_file_has "$SIDECAR" "lists each \`agent-dispatch.*\` directory" "item 5 lists what it found, not only how many"
+assert_file_has "$SIDECAR" "by name and age" "…and the listing carries what a count cannot: which, and how old"
 
 # ---------------------------------------------------------------------------
 banner "3. The red flags, and the two routes"

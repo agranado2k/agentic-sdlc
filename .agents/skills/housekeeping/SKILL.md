@@ -71,7 +71,7 @@ to — is in `CHECKLIST.md`; this is the order.
    a decision line reading `none` is itself a finding once the codebase has
    grown past the reason it gives. *Source: shared invariant §9.*
 5. **The worktrees** — `/worktree-cleanup`, then compare the diary's Active
-   worktrees row with what is on disk, and count the dispatch scratch left on
+   worktrees row with what is on disk, and list the dispatch scratch left on
    the host. *Source: the root manual's first hard rule.*
 6. **The diary's Current state** — the last-commit line, the phase, the open
    questions: which are resolved without saying so, which are stale. *Source:

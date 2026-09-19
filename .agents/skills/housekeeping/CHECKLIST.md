@@ -95,10 +95,13 @@ stale `none` is a ticket to make the decision again.
   directory named `agent-dispatch.*` under the temp location (`$TMPDIR`, else
   `/tmp`). The dispatcher sweeps the ones past the sweep age
   (`AGENT_DISPATCH_SWEEP_DAYS` in `scripts/agents.config.sh`) on its next run
-  and says how many went; this pass counts what is there now, stale and fresh
-  alike, and records the count beside the last pass's. A count that grows is
-  dispatches dying before their trap — a finding about what kills them, not
-  about the scratch.
+  and says how many went; this pass lists each `agent-dispatch.*` directory
+  by name and age — `ls -ld` on the temp location shows both — stale and
+  fresh alike, and records the count beside the last pass's. The listing is
+  the evidence: a name with an age past the sweep age is a dispatch that died
+  and that no later dispatch has swept. A count that grows is dispatches
+  dying before their trap — a finding about what kills them, not about the
+  scratch.
 
 Route: the pruning is the one action this pass delegates, and it is
 `/worktree-cleanup`'s to perform on what is already merged; on a repo with no
