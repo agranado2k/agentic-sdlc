@@ -546,7 +546,7 @@
 # this release from the last.
 #   NON-MANIFEST HALF, enumerated. adapters/gemini-cli/README.md is the second
 # agent-harness adapter: the three details a dispatch to Gemini needs and the
-# dispatcher cannot state — the prompt as an argument, a trusted directory,
+# dispatcher cannot state — the prompt on stdin by redirect, a trusted directory,
 # and an approval policy for headless tool calls — each found live.
 # tests/agent-dispatch.test.sh holds the
 # stdin rule with a FIFO held open by a background writer. The kit's own house
