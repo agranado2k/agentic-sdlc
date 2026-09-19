@@ -734,6 +734,122 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "Dispatch scratch names itself, and stale scratch is swept"
+# ---------------------------------------------------------------------------
+# A dispatch that dies before its trap — KILL, a budget, a host out of tasks
+# — leaves its scratch behind, and `mktemp -d` named it tmp.XXXXXX: 267 of
+# those on one host, none attributable. Every leg here runs under its own
+# TMPDIR so the sweep sees only what this suite planted.
+SWEEP_TMP="$SCRATCH/sweep-tmp"
+mkdir -p "$SWEEP_TMP"
+AGENTS_CONFIG="$CFG_SLOW"
+export AGENTS_CONFIG
+cat >"$SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "\$\$" >"$PIDFILE"
+sleep 30
+EOF
+env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' >/dev/null 2>&1 &
+disp=$!
+sleep 2
+# KILL is uncatchable, so the cleanup trap never runs; the worker is orphaned
+# and reaped here so it cannot outlive the suite.
+kill -KILL "$disp" 2>/dev/null
+wait "$disp" 2>/dev/null
+kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+LEFTOVER=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null)
+if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
+	pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone"
+else
+	fail "the leftover scratch is not recognisable by name: $(ls "$SWEEP_TMP" | tr '\n' ' ')"
+	LEFTOVER="$SWEEP_TMP/agent-dispatch.unnamed"
+	mkdir -p "$LEFTOVER"
+fi
+
+# Age the leftover past the sweep age, and plant what the sweep must NOT
+# touch: a fresh dispatch scratch (a dispatch still running), a stale
+# directory without the prefix, and a stale plain file that carries it.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+OLD=202001010000
+touch -t "$OLD" "$LEFTOVER"
+mkdir -p "$SWEEP_TMP/agent-dispatch.fresh" "$SWEEP_TMP/tmp.unrelated"
+touch -t "$OLD" "$SWEEP_TMP/tmp.unrelated"
+printf 'x\n' >"$SWEEP_TMP/agent-dispatch.notadir"
+touch -t "$OLD" "$SWEEP_TMP/agent-dispatch.notadir"
+
+t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "a dry run with stale scratch beside it succeeds"
+[ -d "$LEFTOVER" ] && pass "…and removes nothing — a dry run runs nothing" || fail "a dry run swept the stale scratch"
+
+t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "a dispatch with stale scratch beside it dispatches"
+s_assert_err_has "swept 1 stale dispatch scratch"
+[ -d "$LEFTOVER" ] && fail "the stale dispatch scratch survived the sweep" || pass "the stale dispatch scratch is gone"
+[ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a fresh dispatch scratch — a dispatch still running — is left alone" || fail "the sweep removed a fresh dispatch scratch"
+[ -d "$SWEEP_TMP/tmp.unrelated" ] && pass "a stale directory without the prefix is never touched" || fail "the sweep removed a directory that is not dispatch scratch"
+[ -f "$SWEEP_TMP/agent-dispatch.notadir" ] && pass "a stale plain file carrying the prefix is never touched" || fail "the sweep removed a file"
+remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -vc 'agent-dispatch\.fresh$\|agent-dispatch\.notadir$')
+[ "$remaining" = 0 ] && pass "…and the dispatch's own scratch went with its trap" || fail "$remaining dispatch scratch director(ies) left by a dispatch that returned normally"
+
+t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_err_lacks "swept"
+
+# The sweep age is policy: AGENT_DISPATCH_SWEEP_DAYS beside the tier mapping.
+CFG_SWEEP="$SCRATCH/sweep.config.sh"
+{ cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=100000"; } >"$CFG_SWEEP"
+touch -t "$OLD" "$SWEEP_TMP/agent-dispatch.fresh"
+t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "a dispatch under a long sweep age dispatches"
+[ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a scratch younger than the policy's sweep age is kept" || fail "the policy's sweep age was not read — the kit default swept it"
+s_assert_err_lacks "swept"
+
+# A --timeout that reaches the sweep age would let a later dispatch sweep a
+# worker still running under it; refused before anything runs.
+t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --timeout 86400
+s_assert_status 2 "a --timeout at or past the sweep age is refused"
+s_assert_err_has "sweep age"
+s_assert_out_lacks 'ARGV:' "…before the worker runs"
+
+for bad in 0 abc; do
+	{ cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=$bad"; } >"$CFG_SWEEP"
+	t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+	s_assert_status 2 "AGENT_DISPATCH_SWEEP_DAYS='$bad' is refused — a sweep age is a whole number of days, at least one"
+done
+
+# The variable is documented where the mapping is edited, and ships EMPTY —
+# empty is the kit's default, the way an unmapped tier is a working state.
+SHIPPED_CFG="$KIT/scripts/agents.config.sh"
+grep -q "^AGENT_DISPATCH_SWEEP_DAYS=''" "$SHIPPED_CFG" &&
+	pass "the shipped agents config carries AGENT_DISPATCH_SWEEP_DAYS, empty" ||
+	fail "the shipped agents config does not carry AGENT_DISPATCH_SWEEP_DAYS='' — the sweep age is policy nobody can find"
+assert_file_has "$SHIPPED_CFG" "sweep age" "the variable is explained in the glossary's name for it, beside the --timeout it must exceed"
+
+# The boundary. "At least N days old" over POSIX find's whole-day arithmetic
+# is an off-by-one waiting to happen in either direction, and a fixture from
+# 2020 cannot see it. A scratch thirty-six hours old is past a one-day sweep
+# age and short of a two-day one. Aging a directory to a RELATIVE time needs
+# date arithmetic POSIX date lacks; GNU's -d has it, and elsewhere this leg
+# says it was skipped rather than passing on nothing.
+if AGED=$(date -d '36 hours ago' +%Y%m%d%H%M 2>/dev/null) && [ -n "$AGED" ]; then
+	mkdir -p "$SWEEP_TMP/agent-dispatch.aged"
+	touch -t "$AGED" "$SWEEP_TMP/agent-dispatch.aged"
+	{ cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=2"; } >"$CFG_SWEEP"
+	t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+	[ -d "$SWEEP_TMP/agent-dispatch.aged" ] && pass "a scratch 36 hours old is kept under a two-day sweep age" || fail "a two-day sweep age swept a scratch 36 hours old"
+	t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+	[ -d "$SWEEP_TMP/agent-dispatch.aged" ] && fail "the default one-day sweep age kept a scratch 36 hours old" || pass "…and swept under the default one-day sweep age"
+	s_assert_err_has "swept 1 stale dispatch scratch"
+else
+	pass "date -d is not available — the 36-hour boundary leg was skipped, and says so"
+fi
+rm -rf "$SWEEP_TMP"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "The worker's own status, and a template that sets the environment"
 # ---------------------------------------------------------------------------
 EXITER="$SCRATCH/exiter"

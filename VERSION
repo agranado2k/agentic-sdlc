@@ -559,7 +559,35 @@
 # run the kit's own guard wrapper when it exists, and it never exists
 # downstream, so the hook behaves exactly as before in every consumer — a
 # consumer's update diff will list it, and this is why.
-shared-layer: 0.19.0
+# 0.20.0 — a dispatched worker gets its bounds (#205). No file joins or leaves
+# the layer; ONE shared file changed CONTENT: scripts/agent-dispatch.sh.
+# From #210: the dispatcher's scratch names itself — agent-dispatch.XXXXXX
+# under $TMPDIR, where `mktemp -d` alone named it tmp.XXXXXX — so a dispatch
+# that dies before its trap (killed, over a budget, on a host out of tasks)
+# leaves a directory that is dispatch scratch by name alone; 267 anonymous
+# ones on one host is why. On entry, before making its own, a dispatch
+# sweeps every sibling carrying the prefix that is at least the SWEEP AGE
+# old and says on stderr how many went; a younger one may be a dispatch still
+# running and is left alone, and nothing without the prefix is ever touched.
+# The age is AGENT_DISPATCH_SWEEP_DAYS in the policy file, whole days, kit
+# default one — POSIX find's `-mtime` is the age test the sweep is written
+# to, so days is the unit — and a --timeout that reaches it is refused, so
+# scratch past the sweep age was never a worker still running. A --dry-run
+# sweeps nothing.
+#   A project that has never dispatched to another agent harness cannot tell
+# this release from the last; one that has sees a scratch directory with a
+# name, and hears about a sweep only when there was something to sweep.
+#   NON-MANIFEST HALF, enumerated. For #210, scripts/agents.config.sh —
+# yours — documents AGENT_DISPATCH_SWEEP_DAYS beside the --timeout note and
+# ships it empty; docs/domain-glossary.md gains **Dispatch scratch** and
+# **Sweep age**; /housekeeping's CHECKLIST.md item 5 counts the dispatch
+# scratch on the host, and its SKILL.md's item line says so;
+# tests/agent-dispatch.test.sh holds each acceptance line through the
+# dispatch seam, with a KILLed dispatch as the fixture that leaves scratch
+# behind; tests/housekeeping-skill.test.sh holds the checklist line.
+# UPDATING.md's transcripts are re-captured to the new version and nothing in
+# the recipe moved.
+shared-layer: 0.20.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

@@ -183,6 +183,23 @@ AGENT_HARNESSES=''
 # A prompt template's %%MARKER%% is filled with --set NAME=VALUE, or with
 # --set-file NAME=path for a value too large for a command line — a diff a
 # reviewer worker reads is the case it exists for.
+#
+# A DISPATCH LEAVES ITS SCRATCH BEHIND WHEN IT DIES BEFORE ITS TRAP — killed,
+# over a budget, on a host out of tasks. The scratch is a directory named
+# agent-dispatch.XXXXXX under $TMPDIR (or /tmp), so a leftover is dispatch
+# scratch by name alone, and the next dispatch on the host sweeps any that
+# is at least the SWEEP AGE old, saying on stderr how many went. Younger ones
+# may be dispatches still running and are left alone; nothing without the
+# prefix is ever touched. The age is in whole days, at least 1, and the
+# dispatcher's own default — one day — already exceeds any --timeout a
+# dispatch plausibly runs under. That relation is the whole guarantee, so
+# the dispatcher refuses a --timeout that reaches the sweep age rather than
+# let a later dispatch sweep a worker still running. Raise the age here if
+# you run longer timeouts; there is no value that disables the sweep, only
+# one large enough that it never fires.
+#
+#   AGENT_DISPATCH_SWEEP_DAYS='<whole days, at least 1; empty is the default>'
+AGENT_DISPATCH_SWEEP_DAYS=''
 
 # ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage

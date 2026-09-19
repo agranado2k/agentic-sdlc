@@ -39,6 +39,7 @@
 #   AGENT_HARNESSES='<token> ...'
 #   AGENT_HARNESS_<TOKEN>_CMD='<command> {model_flag} < {prompt_file}'
 #   AGENT_HARNESS_<TOKEN>_MODEL_FLAG='<the flag> {model}'
+#   AGENT_DISPATCH_SWEEP_DAYS='<whole days>'   the sweep age; empty is the default
 #
 # `{model_flag}` expands to the MODEL_FLAG template with `{model}` filled when a
 # model is mapped, and to NOTHING when one is not — which is
@@ -321,9 +322,69 @@ trap cleanup EXIT INT TERM HUP
 # directory named `a;$(touch PWNED)b` created PWNED.
 #
 # Staging is not by itself the fix, because $TMPDIR is also somebody else's
-# data. So the staged path is held to the same refuse-don't-escape rule as the
-# model id, and single-quoted at the substitution on top of that.
-SCRATCH=$(mktemp -d) || die "cannot create a scratch directory"
+# data. So the temp location is held to the same refuse-don't-escape rule as
+# the model id — before the sweep below reads it, and before the staged path
+# under it is single-quoted at the substitution on top of that. mktemp fills
+# the XXXXXX from letters and digits, so a location that passes yields a
+# staged path that passes.
+TMP_ROOT=${TMPDIR:-/tmp}
+case "$TMP_ROOT" in
+*[!$_alnum._/-]*)
+	die "the temp location '$TMP_ROOT' contains a character this script will not
+   interpolate into a command. TMPDIR is the usual cause — point it somewhere
+   made of letters, digits and . _ - / and run again." ;;
+esac
+
+# --- dispatch scratch, and the stale scratch of dispatches that died ---------
+# The scratch names itself. A bare `mktemp -d` named it tmp.XXXXXX, and a
+# dispatch that never reaches its trap — KILL, a budget exceeded, a host out
+# of tasks — leaves that behind with nothing to attribute it to: 267 on one
+# host. With the prefix a leftover is dispatch scratch by name alone, and the
+# sweep can act on the name.
+SCRATCH_PREFIX='agent-dispatch.'
+
+# The SWEEP AGE, in whole days, from the policy file beside the tier mapping.
+# A sibling carrying the prefix that is at least this old is removed before
+# this dispatch makes its own; a younger one may be a dispatch still running
+# and is left alone; anything without the prefix is never touched. Days
+# rather than minutes because `find -mtime` is the age test POSIX has
+# (`-mmin` and `-maxdepth` are not POSIX), and one day already exceeds any
+# --timeout a dispatch plausibly runs under. That is the invariant the sweep
+# rests on, so it is enforced where it lives: a --timeout that reaches the
+# sweep age is refused rather than left for a later dispatch to sweep
+# mid-run.
+SWEEP_DAYS_DEFAULT=1
+SECONDS_PER_DAY=86400
+SWEEP_DAYS=$(_read_policy AGENT_DISPATCH_SWEEP_DAYS)
+[ -n "$SWEEP_DAYS" ] || SWEEP_DAYS=$SWEEP_DAYS_DEFAULT
+case "$SWEEP_DAYS" in
+*[!0123456789]* | 0*)
+	die "AGENT_DISPATCH_SWEEP_DAYS is '$SWEEP_DAYS' — a sweep age is a whole number of days, at least 1.
+   Leave it empty for the kit's default of $SWEEP_DAYS_DEFAULT." ;;
+esac
+if [ -n "$TIMEOUT" ] && [ $((TIMEOUT / SECONDS_PER_DAY)) -ge "$SWEEP_DAYS" ]; then
+	die "--timeout ${TIMEOUT}s reaches the sweep age of $SWEEP_DAYS day(s).
+   A later dispatch on this host would sweep this one's scratch while its
+   worker still runs. Raise AGENT_DISPATCH_SWEEP_DAYS in your agents config,
+   or shorten the timeout."
+fi
+
+# A dry run runs nothing, and that includes the sweep.
+if [ "$DRY_RUN" != 1 ]; then
+	# POSIX find only: `dir/.` with `! -name . -prune` is the portable spelling
+	# of depth one, and `-mtime +n` is true once the whole days elapsed exceed
+	# n, so "at least N days old" is +(N-1). find hands each path to rm whole,
+	# so a name with a space in it is never split into a second, relative
+	# path; -print follows only a removal that succeeded, so the count is of
+	# what actually went.
+	_swept=$(find "$TMP_ROOT/." ! -name . -prune -type d -name "${SCRATCH_PREFIX}*" \
+		-mtime "+$((SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
+	if [ "$_swept" -gt 0 ]; then
+		echo "i  dispatch: swept $_swept stale dispatch scratch under $TMP_ROOT — at least $SWEEP_DAYS day(s) old, left by dispatches that never reached their trap" >&2
+	fi
+fi
+
+SCRATCH=$(mktemp -d "$TMP_ROOT/${SCRATCH_PREFIX}XXXXXX") || die "cannot create a scratch directory under $TMP_ROOT"
 _staged="$SCRATCH/prompt.md"
 if [ -n "$PROMPT_FILE" ]; then
 	cat -- "$PROMPT_FILE" >"$_staged" || die "cannot read the prompt file: $PROMPT_FILE"
@@ -331,13 +392,6 @@ else
 	printf '%s\n' "$PROMPT_TEXT" >"$_staged"
 fi
 PROMPT_FILE="$_staged"
-
-case "$PROMPT_FILE" in
-*[!$_alnum._/-]*)
-	die "the scratch path '$PROMPT_FILE' contains a character this script will not
-   interpolate into a command. TMPDIR is the usual cause — point it somewhere
-   made of letters, digits and . _ - / and run again." ;;
-esac
 
 # --- the editor's header ----------------------------------------------------
 # A prompt template opens with an HTML comment addressed to whoever EDITS it:
