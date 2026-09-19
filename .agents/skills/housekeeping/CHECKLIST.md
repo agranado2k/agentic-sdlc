@@ -90,6 +90,15 @@ stale `none` is a ticket to make the decision again.
   a worktree on disk with no row, or a row with no worktree, is a finding —
   recorded before anything is pruned, or the pruning erases the evidence.
 - Then run `/worktree-cleanup`.
+- **Dispatch scratch.** A dispatch that died before its trap — killed, over a
+  budget, on a host out of tasks — leaves its dispatch scratch behind: a
+  directory named `agent-dispatch.*` under the temp location (`$TMPDIR`, else
+  `/tmp`). The dispatcher sweeps the ones past the sweep age
+  (`AGENT_DISPATCH_SWEEP_DAYS` in `scripts/agents.config.sh`) on its next run
+  and says how many went; this pass counts what is there now, stale and fresh
+  alike, and records the count beside the last pass's. A count that grows is
+  dispatches dying before their trap — a finding about what kills them, not
+  about the scratch.
 
 Route: the pruning is the one action this pass delegates, and it is
 `/worktree-cleanup`'s to perform on what is already merged; on a repo with no

@@ -76,6 +76,10 @@ assert_file_has "$SKILL" "/worktree-cleanup"
 sidecar_sources=$(grep -c '^\*Source:' "$SIDECAR_ABS")
 [ "$sidecar_sources" -ge 8 ] && pass "the sidecar states a source for each of the eight items" ||
 	fail "the sidecar states only $sidecar_sources sources"
+# Item 5 also reports the dispatch scratch a dead dispatch left on the host
+# (#210): the dispatcher sweeps what is past the sweep age, and the pass is
+# where the count is read.
+assert_file_has "$SIDECAR" "dispatch scratch" "item 5 reports the stale dispatch scratch the dispatcher sweeps"
 
 # ---------------------------------------------------------------------------
 banner "3. The red flags, and the two routes"
