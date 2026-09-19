@@ -177,6 +177,17 @@ AGENT_HARNESSES=''
 # kit names none), or the dispatch carries --timeout <seconds>, which kills
 # the worker's process tree and exits 124. Both is the honest wiring.
 #
+# A DISPATCH INSIDE A DISPATCHED WORKER IS BOUNDED IN DEPTH. A worker may run
+# the dispatcher itself, and one whose tier maps back to its own agent
+# harness would nest until the host ran out of processes. This is the
+# ceiling: a dispatch past it is refused, exit 4, before anything spawns.
+# Empty means the kit default, 3 — a planner that dispatches implementers
+# that dispatch reviewers, the deepest legitimate shape today. Raise it when
+# a legitimate shape is deeper; it is a ceiling on runaway nesting, not a
+# budget, and a worker that reaches it has usually gone wrong. How the depth
+# travels and what a refusal says are agent-dispatch.sh's header.
+AGENT_DISPATCH_MAX_DEPTH=''
+
 # Check a wiring without spending a token:
 #   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
 #
@@ -203,6 +214,56 @@ AGENT_HARNESSES=''
 #
 #   AGENT_DISPATCH_SWEEP_DAYS='<whole days, at least 1; empty is the default>'
 AGENT_DISPATCH_SWEEP_DAYS=''
+
+# A DISPATCHED WORKER RUNS INSIDE A BUDGET — a task ceiling and a memory
+# ceiling on its whole process tree, derived from THIS host at dispatch time.
+# Found live: a worker that forked without bound filled the login session's
+# task ceiling in under three minutes, and from then on nothing of the
+# operator's could fork — the shell, the agent harness, the SSH session. It
+# read as the machine crashing. A budget keeps that inside the worker.
+#
+# The kit ships no number for it, for the reason it ships no model: the right
+# ceiling on a 2 vCPU VM is wrong on a workstation and wrong again in a CI
+# container. It ships PERCENTAGES and CLAMPS, and the host supplies the base:
+#
+#   AGENT_BUDGET_TASKS_PERCENT       of the task ceiling your own session runs
+#                                    under — the smallest cgroup pids.max on
+#                                    the path from your own cgroup up, where
+#                                    cgroup v2 is present (the user slice's
+#                                    TasksMax on a systemd host), else the
+#                                    per-user process limit
+#   AGENT_BUDGET_TASKS_FLOOR         raised to this, and said so, on a host too
+#   AGENT_BUDGET_TASKS_CEILING       small; held to this on a host too big
+#   AGENT_BUDGET_MEMORY_PERCENT      of MemAvailable, read at dispatch time
+#   AGENT_BUDGET_MEMORY_FLOOR_MIB    the same two clamps, in MiB
+#   AGENT_BUDGET_MEMORY_CEILING_MIB
+#
+# EMPTY MEANS THE KIT DEFAULT: 25% of the tasks, between 256 and 4096; 50% of
+# the memory, between 512 and 8192 MiB. On the host that found this, that is
+# a quarter of the slice and half the free memory — the operator keeps the
+# rest when a worker runs away. Set one to a whole number to override it, and
+# read what it came to before a token is spent:
+#   sh scripts/agent-dispatch.sh reviewer --prompt 'x' --dry-run
+#
+# One dispatch can replace the derived numbers with --budget-tasks <n> and
+# --budget-memory <MiB>, or run with none at all under --no-budget — which the
+# dispatcher says out loud every time, because a worker with no budget is the
+# incident above waiting for a second run.
+#
+# HOW IT IS APPLIED is the host's to offer, not yours to configure: a
+# transient scope under your user service manager where there is one (the
+# budget is then a cgroup the worker's whole tree shares), rlimits in the
+# worker's shell where there is not (weaker — per process, and the dry run
+# says so), and a loud no-op where neither exists. A dispatch inside a
+# dispatched worker inherits the outer budget and opens no second one.
+# Whether the release you are on applies the budget or only shows it, the
+# dry run's own budget line says.
+AGENT_BUDGET_TASKS_PERCENT=''
+AGENT_BUDGET_TASKS_FLOOR=''
+AGENT_BUDGET_TASKS_CEILING=''
+AGENT_BUDGET_MEMORY_PERCENT=''
+AGENT_BUDGET_MEMORY_FLOOR_MIB=''
+AGENT_BUDGET_MEMORY_CEILING_MIB=''
 
 # ---------------------------------------------------------------------------
 # 1. PLANNER — decomposition, design, triage

@@ -734,6 +734,174 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
+banner "A dispatch refuses to nest past the policy maximum depth"
+# ---------------------------------------------------------------------------
+# A worker may run the dispatcher itself, and a worker whose tier maps back to
+# its own stub is a fork bomb with nothing to stop it: the H-3 stub above was
+# exactly that in its first version and filled a host's task ceiling in under
+# three minutes. The depth reaches each dispatch through the worker's
+# environment, a top-level dispatch is depth 1, and a dispatch past the
+# maximum dies before it resolves the tier — with a status of its own, 4,
+# distinct from every status the dispatcher itself produces (0 dispatched, 2
+# usage, 3 in-session, 124 timed out). A worker's own status still passes
+# through untouched, so a worker that exits 4 is the ambiguity 124 already
+# has; the header's EXIT STATUS table is the one home for that contract.
+#
+# The stub RECORDS each worker in a file rather than the suite counting
+# processes: the claim is that the chain is bounded by the maximum, not by
+# the host, and a line per worker is that count exactly.
+SELF="$SCRATCH/self-dispatching"
+RAN="$SCRATCH/self.ran"
+cat >"$SELF" <<EOF
+#!/bin/sh
+cat >/dev/null
+echo "worker at depth \${AGENT_DISPATCH_DEPTH:-unset}" >>"$RAN"
+exec sh "$DISPATCH" implementer --prompt 'again'
+EOF
+chmod +x "$SELF"
+CFG_SELF="$SCRATCH/self.config.sh"
+cat >"$CFG_SELF" <<EOF
+AGENT_HARNESSES='self'
+AGENT_HARNESS_SELF_CMD='$SELF {model_flag} < {prompt_file}'
+AGENT_HARNESS_SELF_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='self:'
+EOF
+AGENTS_CONFIG="$CFG_SELF"
+export AGENTS_CONFIG
+: >"$RAN"
+dispatch implementer --prompt 'x'
+s_assert_status 4 "a chain of self-dispatching workers ends in the depth refusal's own status"
+s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+s_assert_err_has "depth 4"
+s_assert_err_has "maximum is 3"
+ran=$(wc -l <"$RAN" | tr -d ' ')
+[ "$ran" = 3 ] &&
+	pass "exactly 3 workers ran — the kit default, planner → implementer → reviewer deep" ||
+	fail "$ran workers ran under the default maximum of 3"
+[ "$(sed -n 1p "$RAN")" = "worker at depth 2" ] &&
+	pass "the first worker sees depth 2 — its dispatch was the top-level one" ||
+	fail "the first worker saw '$(sed -n 1p "$RAN")'"
+[ "$(sed -n 3p "$RAN")" = "worker at depth 4" ] &&
+	pass "the last worker sees depth 4, and its own dispatch is the one refused" ||
+	fail "the last worker saw '$(sed -n 3p "$RAN")'"
+
+# The consumer's policy file overrides the default, and the chain is bounded
+# by THAT number: two here, so a maximum the host never sees.
+printf "AGENT_DISPATCH_MAX_DEPTH='2'\n" >>"$CFG_SELF"
+: >"$RAN"
+dispatch implementer --prompt 'x'
+s_assert_status 4 "a policy maximum of 2 refuses the third dispatch"
+s_assert_err_has "maximum is 2"
+ran=$(wc -l <"$RAN" | tr -d ' ')
+[ "$ran" = 2 ] &&
+	pass "exactly 2 workers ran — the policy file's number, not the kit's" ||
+	fail "$ran workers ran under a policy maximum of 2"
+
+# At the maximum a dispatch still RUNS; one past it never spawns the worker.
+# The depth is a fact in the environment, so a suite can stand at any depth
+# without building the chain. The echoing stub says whether it ran.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+t_run_split env AGENT_DISPATCH_DEPTH=3 sh "$DISPATCH" implementer --prompt 'at the maximum'
+s_assert_status 0 "a dispatch AT the maximum depth runs"
+s_assert_out_has 'at the maximum' "…and the worker gets its prompt"
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt 'past it'
+s_assert_status 4 "a dispatch one past the maximum is refused"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran"
+s_assert_err_has "refusing to nest"
+# The reader of that stderr is usually the refused worker — a model with
+# tools — so the message tells it to stop and report, never how to lift the
+# ceiling; and the policy file is named by its variable, not by a path the
+# dispatcher may not have read (AGENTS_CONFIG resolves first).
+s_assert_err_has "stop and report"
+s_assert_err_lacks "scripts/agents.config.sh"
+s_assert_err_lacks "Raise"
+
+# The worker is spawned one deeper than its dispatch, through BOTH spawn
+# paths: the plain eval and the timed `sh -c`. The dispatcher's comment says
+# the two cannot disagree; this stub, which prints the depth it was given,
+# holds them to it — the timed path is the wiring an approval-gated CLI runs
+# under, and it was the one nothing asserted on.
+DEPTH_STUB="$SCRATCH/depth-echoing"
+cat >"$DEPTH_STUB" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "worker at depth ${AGENT_DISPATCH_DEPTH:-unset}"
+EOF
+chmod +x "$DEPTH_STUB"
+CFG_DEPTH="$SCRATCH/depth.config.sh"
+cat >"$CFG_DEPTH" <<EOF
+AGENT_HARNESSES='seen'
+AGENT_HARNESS_SEEN_CMD='$DEPTH_STUB < {prompt_file}'
+AGENT_HARNESS_SEEN_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='seen:'
+EOF
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_out_is 'worker at depth 3' "a dispatch at depth 2 spawns its worker at depth 3 — the plain path"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --timeout 5
+s_assert_status 0 "…and the timed path runs the same worker"
+s_assert_out_is 'worker at depth 3' "…which sees the same depth 3"
+
+# Refused BEFORE the tier is resolved or the prompt is read: an in-session
+# tier (normally exit 3) and a missing prompt file (normally exit 2) both
+# report the depth first, because the invocation has nothing else to say.
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" planner --prompt 'x'
+s_assert_status 4 "an in-session tier past the maximum is refused, not handed back as exit 3"
+s_assert_out_lacks 'model-for-planning' "…and no model id is printed"
+t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt-file "$SCRATCH/does-not-exist.md"
+s_assert_status 4 "the depth is refused before the prompt file is looked at"
+
+# --dry-run shows the depth the dispatch would run at, against the maximum.
+dispatch implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch at depth 1 of the default 3"
+t_run_split env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
+dispatch
+s_assert_err_has "the depth, the budget and the prompt" # usage() lists what --dry-run prints, and the depth is one of them
+s_assert_out_lacks 'ARGV:' "…running nothing"
+# Under a policy maximum the second number is the policy's, not the default:
+# the two assertions above cannot tell them apart.
+t_run_split env AGENTS_CONFIG="$CFG_SELF" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          1 of 2' "…and the maximum shown is the policy file's when it sets one"
+
+# A depth or a maximum that is not a whole number from 1 is a usage error,
+# not a guess: 0 would refuse every dispatch, and a top-level one is depth 1.
+# Empty is not malformed — it reads as unset, depth 1 — and a value past the
+# shell's integer range is refused rather than compared: `[ -gt ]` errors on
+# it, and an error there would skip the refusal and run the worker.
+t_run_split env AGENT_DISPATCH_DEPTH=abc sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a malformed AGENT_DISPATCH_DEPTH is refused as a usage error"
+s_assert_err_has "AGENT_DISPATCH_DEPTH"
+t_run_split env AGENT_DISPATCH_DEPTH=0 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "AGENT_DISPATCH_DEPTH=0 is refused — a top-level dispatch is depth 1"
+t_run_split env AGENT_DISPATCH_DEPTH='' sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "an EMPTY AGENT_DISPATCH_DEPTH is not malformed"
+s_assert_out_has 'depth:          1 of 3' "…it reads as unset: a top-level dispatch at depth 1"
+t_run_split env AGENT_DISPATCH_DEPTH=9999999999 sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a depth past the shell's integer range is refused, not compared"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran — an overflow does not fail open"
+CFG_DEPTH0="$SCRATCH/depth0.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='0'\n"; } >"$CFG_DEPTH0"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "AGENT_DISPATCH_MAX_DEPTH=0 is refused — it would refuse every dispatch"
+s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+# A typo in the policy file must not silently lift the ceiling: without the
+# non-digit arm, `[ -gt ]` errors on 'abc', the refusal is skipped, and the
+# worker runs.
+CFG_DEPTHABC="$SCRATCH/depthabc.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='abc'\n"; } >"$CFG_DEPTHABC"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTHABC" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a non-numeric AGENT_DISPATCH_MAX_DEPTH is refused as a usage error"
+s_assert_out_lacks 'ARGV:' "…and the worker never ran — a malformed maximum does not disable the ceiling"
+CFG_DEPTHBIG="$SCRATCH/depthbig.config.sh"
+{ cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='9999999999'\n"; } >"$CFG_DEPTHBIG"
+t_run_split env AGENTS_CONFIG="$CFG_DEPTHBIG" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a maximum past the shell's integer range is refused, the same as a depth"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+
+# ---------------------------------------------------------------------------
 banner "Dispatch scratch names itself, and stale scratch is swept"
 # ---------------------------------------------------------------------------
 # A dispatch that dies before its trap — KILL, a budget, a host out of tasks
@@ -898,6 +1066,253 @@ s_assert_status 2 "a mapped model with no MODEL_FLAG is refused rather than drop
 s_assert_err_has "MODEL_FLAG"
 
 # ---------------------------------------------------------------------------
+banner "The budget — derived from the host, shown by --dry-run, applied by nothing yet"
+# ---------------------------------------------------------------------------
+# ADR-0006: a task ceiling and a memory ceiling for the worker's whole tree,
+# each a percentage of a HOST fact clamped to a policy floor and ceiling.
+# The host facts are read from files under a root the dispatcher takes from
+# AGENT_DISPATCH_HOST_ROOT (test-only, documented at the read site), so the
+# arithmetic is asserted against numbers this suite chose, not against
+# whatever machine runs it. The real host is read once, at the end, to prove
+# the same code can.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+HOST="$SCRATCH/host"
+SLICE="$HOST/sys/fs/cgroup/user.slice/user-1000.slice"
+mkdir -p "$HOST/proc/self" "$SLICE/session-1.scope"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+echo max >"$HOST/sys/fs/cgroup/user.slice/pids.max"
+echo 10008 >"$SLICE/pids.max"
+echo max >"$SLICE/session-1.scope/pids.max"
+# The incident's host: MemAvailable 2141820 kB is 2091 MiB.
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+# hostdry <args> — a dry run against the fake host.
+hostdry() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run "$@"; }
+
+hostdry
+s_assert_status 0 "a dry run derives a budget"
+s_assert_out_has 'tasks 2502' "the task ceiling is 25% of the slice's 10008"
+s_assert_out_has '25% of 10008' "…and says the percentage and the base"
+s_assert_out_has 'user-1000.slice' "…and names the cgroup the base came from"
+s_assert_out_has 'memory 1045 MiB' "the memory ceiling is 50% of the 2091 MiB available"
+s_assert_out_has '50% of 2091 MiB' "…and says so"
+s_assert_out_has 'MemAvailable' "…naming the host fact"
+s_assert_out_has 'NOT applied' "the dry run says nothing is enforced in this release"
+s_assert_out_lacks 'ARGV:' "and the worker never ran"
+
+# The smallest ceiling on the path wins: a session scope tighter than its
+# slice is the ceiling this session actually runs under.
+echo 3000 >"$SLICE/session-1.scope/pids.max"
+hostdry
+s_assert_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the base"
+s_assert_out_has 'session-1.scope' "…and the dry run names that cgroup, not the slice"
+echo max >"$SLICE/session-1.scope/pids.max"
+
+# A container with a private cgroup namespace: the dispatcher's own cgroup is
+# the root, 0::/, and the pids limit sits right on it. The line names it "/".
+printf '0::/\n' >"$HOST/proc/self/cgroup"
+echo 2048 >"$HOST/sys/fs/cgroup/pids.max"
+hostdry
+s_assert_out_has 'tasks 512' "a pids.max on the root cgroup is the base (25% of 2048)"
+s_assert_out_has 'pids.max of cgroup /' "…and the root cgroup is named /, not an empty string"
+rm -f "$HOST/sys/fs/cgroup/pids.max"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+
+# The floor is a clamp UP that is said out loud; the ceiling is a clamp DOWN
+# in silence (ADR-0006 clause 2).
+echo 400 >"$SLICE/pids.max"
+hostdry
+s_assert_out_has 'tasks 256' "25% of 400 is 100, below the floor — the floor stands"
+s_assert_out_has 'below the floor 256' "…and the dry run says why"
+s_assert_err_has "below the floor"
+echo 100000 >"$SLICE/pids.max"
+hostdry
+s_assert_out_has 'tasks 4096' "25% of 100000 is 25000, above the ceiling — the ceiling stands"
+s_assert_out_has 'above the ceiling 4096' "…and the dry run says why"
+s_assert_err_lacks "above the ceiling"
+echo 10008 >"$SLICE/pids.max"
+printf 'MemAvailable:    600000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 512 MiB' "50% of 585 MiB is 292, below the floor — the floor stands"
+s_assert_out_has 'below the floor 512' "…and the dry run says why"
+printf 'MemAvailable:   40000000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 8192 MiB' "50% of 39062 MiB is above the ceiling — the ceiling stands"
+printf 'MemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+
+# The percentages and clamps are the policy file's.
+CFG_BUDGET="$SCRATCH/budget.config.sh"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=10\nAGENT_BUDGET_MEMORY_PERCENT=25\nAGENT_BUDGET_TASKS_FLOOR=8\nAGENT_BUDGET_MEMORY_FLOOR_MIB=100\nAGENT_BUDGET_MEMORY_CEILING_MIB=300\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_out_has 'tasks 1000' "a policy percentage replaces the default (10% of 10008)"
+s_assert_out_has 'memory 300 MiB' "a policy ceiling replaces the default (25% of 2091 is 522, held to 300)"
+s_assert_out_has 'floor 8' "a policy floor is the one shown"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR='lots'\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a budget variable that is not a whole number is refused, not defaulted"
+s_assert_err_has "AGENT_BUDGET_TASKS_FLOOR"
+# One validator for the flags and the policy file (ADR-0006 clause 3): 0 and a
+# leading zero are refused on both, a percentage is 1–99, a floor is at most
+# its ceiling.
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=025\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a policy value with a leading zero is refused — arithmetic would read it as octal"
+s_assert_err_has "AGENT_BUDGET_TASKS_PERCENT"
+{ cat "$CFG"; printf "AGENT_BUDGET_MEMORY_PERCENT=0\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a policy value of 0 is refused, as the flag refuses 0"
+s_assert_err_has "AGENT_BUDGET_MEMORY_PERCENT"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=100\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a percentage of 100 or more is refused — the budget sits below the session's ceiling"
+s_assert_err_has "below 100"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=99\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 0 "…and 99 is the last one accepted"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR=5000\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a floor above its ceiling is refused"
+s_assert_err_has "AGENT_BUDGET_TASKS_CEILING"
+hostdry --budget-tasks 010
+s_assert_status 2 "--budget-tasks with a leading zero is refused the same way"
+
+# No cgroup ceiling on the path: the per-user process limit is the base —
+# RLIMIT_NPROC, read from /proc/self/limits under the same fake root, so the
+# expected number is one this suite chose rather than this shell's own limit,
+# which a container or a locked-down runner may not let a test lower.
+printf '0::/\n' >"$HOST/proc/self/cgroup"
+limits() { printf 'Limit                     Soft Limit           Hard Limit           Units     \nMax processes             %s                 %s                processes \n' "$1" "$1" >"$HOST/proc/self/limits"; }
+limits 8000
+hostdry
+s_assert_status 0 "a session with no cgroup pids.max still derives a budget"
+s_assert_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
+s_assert_out_has 'the per-user process limit' "…and the dry run names that source"
+s_assert_out_lacks 'pids.max' "…not a cgroup it never found"
+# No host fact at all — the limit is unlimited, or cannot be read: nothing to
+# take a percentage of, so the policy CEILING stands in (ADR-0006 clause 2),
+# never the floor, which answers a host known to be small.
+limits unlimited
+hostdry
+s_assert_out_has 'tasks 4096' "an unlimited per-user limit leaves no base — the policy ceiling stands in"
+s_assert_out_has 'the policy ceiling' "…and the dry run says so"
+s_assert_out_has 'unlimited' "…naming the fact it found"
+rm -f "$HOST/proc/self/limits"
+hostdry
+s_assert_out_has 'tasks 4096' "an unreadable per-user limit is the same case"
+s_assert_out_has 'unreadable' "…and is named as such"
+s_assert_err_lacks "below the floor"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+# The same rule on the memory side: a /proc/meminfo with no MemAvailable has
+# no fact to derive from, and the policy ceiling stands in there too.
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 8192 MiB' "no MemAvailable: the policy ceiling stands in, not the floor"
+s_assert_out_has 'no MemAvailable' "…and the dry run says what was missing"
+s_assert_err_lacks "below the floor"
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+
+# Per-dispatch overrides, and the loud off switch (ADR-0006 clause 4).
+hostdry --budget-tasks 100 --budget-memory 300
+s_assert_out_has 'tasks 100' "--budget-tasks replaces the derived task ceiling"
+s_assert_out_has '--budget-tasks' "…and is named as its source"
+s_assert_out_has 'memory 300 MiB' "--budget-memory replaces the derived memory ceiling"
+s_assert_out_lacks '25% of' "…and nothing is derived for a value given explicitly"
+s_assert_err_has "below the floor"
+hostdry --budget-tasks 0
+s_assert_status 2 "--budget-tasks 0 is refused"
+hostdry --budget-memory abc
+s_assert_status 2 "--budget-memory that is not a whole number of MiB is refused"
+hostdry --no-budget --budget-tasks 5
+s_assert_status 2 "--no-budget with an override is a contradiction, refused"
+hostdry --no-budget
+s_assert_status 0 "--no-budget dry-runs"
+s_assert_out_has 'DISABLED' "…and the budget line says the budget is off"
+s_assert_out_lacks 'tasks 2502' "…deriving nothing"
+s_assert_err_has "no budget"
+
+# Nesting: an inner dispatch runs inside the outer's budget and never opens a
+# fresh one (ADR-0006 clause 7). The outer's numbers reach it by environment.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "a dispatch inside a budgeted worker dry-runs"
+s_assert_out_has 'inherited' "…and says it inherited the outer budget"
+s_assert_out_has 'tasks 777' "…the outer's task ceiling"
+s_assert_out_has 'memory 888 MiB' "…and the outer's memory ceiling"
+s_assert_out_lacks '25% of' "…deriving nothing of its own"
+# --no-budget on the inner dispatch does not win: it is already inside the
+# outer scope's cgroup, and no flag on it can leave.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run --no-budget
+s_assert_status 0 "--no-budget inside a budgeted worker dry-runs"
+s_assert_out_has 'inherited' "…and the inherited budget wins"
+s_assert_out_has 'cannot escape' "…the budget line saying that --no-budget cannot leave the outer cgroup"
+s_assert_out_lacks 'DISABLED' "…not the off switch"
+s_assert_err_has "cannot escape"
+# The inherited pair is held to the same validator as everything else, and
+# an outer dispatch exports both or neither: a lone task ceiling is refused,
+# not shown beside a '?'.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS='rm -rf x' AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 2 "an inherited task ceiling that is not a whole number is refused"
+s_assert_err_has "AGENT_DISPATCH_BUDGET_TASKS"
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 2 "an inherited task ceiling with no memory ceiling beside it is refused"
+s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
+
+# The rung is probed, not configured. A stub systemctl on PATH that answers
+# stands in for a user service manager; one that fails stands in for none.
+# A manager that answers is reachable, not necessarily able to bound: the
+# scope rung also needs the pids and memory controllers delegated to it,
+# read from cgroup.controllers on the dispatcher's own cgroup (ADR-0006
+# clause 5).
+SDBIN="$SCRATCH/sd-yes"; mkdir -p "$SDBIN"
+printf '#!/bin/sh\nexit 0\n' >"$SDBIN/systemctl"; cp "$SDBIN/systemctl" "$SDBIN/systemd-run"; chmod +x "$SDBIN/systemctl" "$SDBIN/systemd-run"
+CONTROLLERS="$SLICE/session-1.scope/cgroup.controllers"
+echo 'cpu memory pids' >"$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
+s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
+s_assert_out_has 'TasksMax and MemoryMax' "…carrying both ceilings"
+echo 'cpu pids' >"$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'transient scope' "with pids delegated and memory not, the scope is still the rung — the task bound is the incident's"
+s_assert_out_has 'memory controller is not delegated' "…and the dry run says the memory ceiling has no mechanism on this host"
+s_assert_out_lacks 'TasksMax and MemoryMax' "…so it does not claim MemoryMax"
+echo 'cpu' >"$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "with pids not delegated a scope bounds nothing that matters — the rung is rlimits"
+s_assert_out_lacks 'transient scope' "…not a scope that would apply nothing"
+rm -f "$CONTROLLERS"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
+echo 'cpu memory pids' >"$CONTROLLERS"
+NOSD="$SCRATCH/sd-no"; mkdir -p "$NOSD"
+printf '#!/bin/sh\nexit 1\n' >"$NOSD/systemctl"; chmod +x "$NOSD/systemctl"
+t_run_split env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "without one the rung is rlimits"
+s_assert_out_has 'weaker' "…and the dry run says that is the weaker promise"
+s_assert_out_lacks 'transient scope' "…not the scope it cannot open"
+
+# The real host, no fake root: the same code reads a real /proc and /sys.
+dispatch implementer --prompt 'x' --dry-run
+s_assert_out_has 'budget:' "the real host yields a budget line"
+case "$S_OUT" in
+*"tasks "[0-9]*) pass "…with a numeric task ceiling read from this host" ;;
+*) fail "no numeric task ceiling on the real host"; printf '%s\n' "$S_OUT" | sed 's/^/        > /' ;;
+esac
+case "$S_OUT" in
+*"memory "[0-9]*" MiB"*) pass "…and a numeric memory ceiling" ;;
+*) fail "no numeric memory ceiling on the real host" ;;
+esac
+
+# And a real dispatch is untouched: nothing is applied, nothing is said.
+dispatch implementer --prompt 'x'
+s_assert_status 0 "a real dispatch still runs the worker"
+s_assert_out_has 'ARGV:' "…as before"
+s_assert_err_lacks "budget"
+
+# ---------------------------------------------------------------------------
 banner "Every shell an operator might run this under"
 # ---------------------------------------------------------------------------
 # The file claims three-shell portability in a comment; a comment is not a
@@ -931,6 +1346,18 @@ for shell_bin in $SHELLS; do
 	{ [ "$s_st" = 3 ] && [ "$s_out" = "model-for-planning" ]; } &&
 		pass "$shell_bin exits 3 with the model id for an unconfigured tier" ||
 		fail "$shell_bin gave status $s_st, stdout '$s_out'"
+	# The depth arithmetic, per shell — the one construct here with a known
+	# shell divergence — and, separately, the refusal, which fires before
+	# the arithmetic is reached.
+	s_out=$(AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
+	[ "$s_out" = "worker at depth 3" ] &&
+		pass "$shell_bin spawns the worker one deeper than its dispatch" ||
+		fail "$shell_bin spawned the worker at '$s_out'"
+	s_out=$(AGENT_DISPATCH_DEPTH=4 "$shell_bin" "$DISPATCH" implementer --prompt 'x' 2>/dev/null)
+	s_st=$?
+	{ [ "$s_st" = 4 ] && [ -z "$s_out" ]; } &&
+		pass "$shell_bin refuses a dispatch past the maximum depth with exit 4 and no worker" ||
+		fail "$shell_bin gave status $s_st past the maximum depth, stdout '$s_out'"
 done
 
 unset AGENTS_CONFIG
