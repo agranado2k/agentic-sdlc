@@ -848,6 +848,10 @@ s_assert_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch 
 t_run_split env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
 s_assert_out_lacks 'ARGV:' "…running nothing"
+# Under a policy maximum the second number is the policy's, not the default:
+# the two assertions above cannot tell them apart.
+t_run_split env AGENTS_CONFIG="$CFG_SELF" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'depth:          1 of 2' "…and the maximum shown is the policy file's when it sets one"
 
 # A depth or a maximum that is not a whole number from 1 is a usage error,
 # not a guess: 0 would refuse every dispatch, and a top-level one is depth 1.
