@@ -23,7 +23,14 @@ never edit a shim.
 1. **Worktree, always.** Never edit the root checkout for in-progress work. From
    the project root: `git worktree add worktree/<slug> -b <type>/<slug>`, where
    `<type>` is one of `feat` `fix` `refactor` `chore` `docs`. Keep `worktree/`
-   out of version control.
+   out of version control. One gotcha it carries: a tool that resolves its
+   config from the *topmost* file walks up to the repo root from inside a
+   worktree too, so a root-level `worktree/**` exclude meant to skip the *other*
+   worktrees also makes the tool inspect **zero files** when it runs *inside*
+   one — and exits green having checked nothing. (RuboCop is the worked example:
+   it takes `AllCops/Exclude` from the root `.rubocop.yml`.) Two outs: scope the
+   exclude so it cannot match from inside a worktree, or point the tool at its
+   config per-invocation rather than resolving from the root.
 2. **Test first** for any code change — red, green, refactor. Tests are the
    specification, not an afterthought (shared invariant §3). `/tdd` is that loop.
    This stack's test tiers, conventions, and the command that runs them live in
