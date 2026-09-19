@@ -769,15 +769,23 @@ fi
 
 # Age the leftover past the sweep age, and plant what the sweep must NOT
 # touch: a fresh dispatch scratch (a dispatch still running), a stale
-# directory without the prefix, and a stale plain file that carries it.
+# directory without the prefix, a stale plain file that carries it, a stale
+# prefixed directory NESTED under the unrelated one (the sweep is depth one —
+# a scratch below the temp location is somebody else's), and a prefixed
+# symlink to a stale directory outside the temp location (find is physical:
+# a link is not a directory, so neither the link nor its target goes).
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 OLD=202001010000
 touch -t "$OLD" "$LEFTOVER"
-mkdir -p "$SWEEP_TMP/agent-dispatch.fresh" "$SWEEP_TMP/tmp.unrelated"
-touch -t "$OLD" "$SWEEP_TMP/tmp.unrelated"
+mkdir -p "$SWEEP_TMP/agent-dispatch.fresh" "$SWEEP_TMP/tmp.unrelated/agent-dispatch.nested"
+touch -t "$OLD" "$SWEEP_TMP/tmp.unrelated" "$SWEEP_TMP/tmp.unrelated/agent-dispatch.nested"
 printf 'x\n' >"$SWEEP_TMP/agent-dispatch.notadir"
 touch -t "$OLD" "$SWEEP_TMP/agent-dispatch.notadir"
+LINK_TARGET="$SCRATCH/sweep-link-target"
+mkdir -p "$LINK_TARGET"
+touch -t "$OLD" "$LINK_TARGET"
+ln -s "$LINK_TARGET" "$SWEEP_TMP/agent-dispatch.link"
 
 t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_status 0 "a dry run with stale scratch beside it succeeds"
@@ -790,7 +798,10 @@ s_assert_err_has "swept 1 stale dispatch scratch"
 [ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a fresh dispatch scratch — a dispatch still running — is left alone" || fail "the sweep removed a fresh dispatch scratch"
 [ -d "$SWEEP_TMP/tmp.unrelated" ] && pass "a stale directory without the prefix is never touched" || fail "the sweep removed a directory that is not dispatch scratch"
 [ -f "$SWEEP_TMP/agent-dispatch.notadir" ] && pass "a stale plain file carrying the prefix is never touched" || fail "the sweep removed a file"
-remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -Evc 'agent-dispatch\.(fresh|notadir)$')
+[ -d "$SWEEP_TMP/tmp.unrelated/agent-dispatch.nested" ] && pass "a stale prefixed directory below depth one is never touched — the sweep does not recurse" || fail "the sweep recursed under the temp location and removed a nested directory"
+[ -L "$SWEEP_TMP/agent-dispatch.link" ] && pass "a prefixed symlink is never touched — find is physical, and a link is not a directory" || fail "the sweep removed a symlink carrying the prefix"
+[ -d "$LINK_TARGET" ] && pass "…and what it points to survives" || fail "the sweep followed a symlink and removed its target"
+remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -Evc 'agent-dispatch\.(fresh|notadir|link)$')
 [ "$remaining" = 0 ] && pass "…and the dispatch's own scratch went with its trap" || fail "$remaining dispatch scratch director(ies) left by a dispatch that returned normally"
 
 t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
