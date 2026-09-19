@@ -1066,7 +1066,7 @@ s_assert_status 2 "a mapped model with no MODEL_FLAG is refused rather than drop
 s_assert_err_has "MODEL_FLAG"
 
 # ---------------------------------------------------------------------------
-banner "The budget — derived from the host, shown by --dry-run, applied by nothing yet"
+banner "The budget — derived from the host, shown by --dry-run"
 # ---------------------------------------------------------------------------
 # ADR-0006: a task ceiling and a memory ceiling for the worker's whole tree,
 # each a percentage of a HOST fact clamped to a policy floor and ceiling.
@@ -1097,7 +1097,8 @@ s_assert_out_has 'user-1000.slice' "…and names the cgroup the base came from"
 s_assert_out_has 'memory 1045 MiB' "the memory ceiling is 50% of the 2091 MiB available"
 s_assert_out_has '50% of 2091 MiB' "…and says so"
 s_assert_out_has 'MemAvailable' "…naming the host fact"
-s_assert_out_has 'NOT applied' "the dry run says nothing is enforced in this release"
+s_assert_out_has 'enforced:' "the dry run names whether the budget is enforced"
+s_assert_out_lacks 'NOT applied in this release' "…and no longer says enforcement is deferred (#208 applies it)"
 s_assert_out_lacks 'ARGV:' "and the worker never ran"
 
 # The smallest ceiling on the path wins: a session scope tighter than its
@@ -1306,11 +1307,186 @@ case "$S_OUT" in
 *) fail "no numeric memory ceiling on the real host" ;;
 esac
 
-# And a real dispatch is untouched: nothing is applied, nothing is said.
-dispatch implementer --prompt 'x'
-s_assert_status 0 "a real dispatch still runs the worker"
-s_assert_out_has 'ARGV:' "…as before"
-s_assert_err_lacks "budget"
+# A real dispatch now APPLIES the budget (#208): a within-budget worker runs
+# and exits 0, but it runs inside a transient scope rather than bare. The
+# derived budget under the suite's own capped scope hits the task floor, which
+# is announced — so this uses within-floor overrides to keep stderr about the
+# run, not the floor, and asserts the worker ran unharmed.
+dispatch implementer --prompt 'x' --budget-tasks 300 --budget-memory 600
+s_assert_status 0 "a within-budget real dispatch runs the worker and exits 0"
+s_assert_out_has 'ARGV:' "…the worker ran"
+s_assert_err_lacks "hit its" "…and hit no ceiling"
+
+# ---------------------------------------------------------------------------
+banner "The budget is ENFORCED — a runaway worker stops, the session survives"
+# ---------------------------------------------------------------------------
+# ADR-0006 #208: the derived budget is now APPLIED down the ladder. These legs
+# drive real runaways with SMALL budgets (--budget-tasks / --budget-memory, far
+# below the floor, honoured as given) so they end in seconds. They need the
+# scope rung, which a dry run on this host reports; where it is absent the
+# scope-specific legs say they were skipped and the rlimit leg below still runs.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+SCOPE_OK=0
+t_run_split sh "$DISPATCH" implementer --prompt 'probe' --dry-run
+case "$S_OUT" in *"transient scope"*) SCOPE_OK=1 ;; esac
+
+if [ "$SCOPE_OK" = 1 ]; then
+	# A stub that forks without bound (a bounded self-spawning sh loop whose peak
+	# concurrency exceeds the ceiling) stops at the TASK budget. The dispatch
+	# exits 71 and names the ceiling; a command in the calling shell right after
+	# still forks.
+	FORKER="$SCRATCH/forker"
+	cat >"$FORKER" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+i=0
+while [ $i -lt 400 ]; do
+	sleep 2 &
+	i=$((i + 1))
+done
+echo "forker finished its loop"
+EOF
+	chmod +x "$FORKER"
+	CFG_FORK="$SCRATCH/forker.config.sh"
+	cat >"$CFG_FORK" <<EOF
+AGENT_HARNESSES='fk'
+AGENT_HARNESS_FK_CMD='$FORKER {model_flag} < {prompt_file}'
+AGENT_HARNESS_FK_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='fk:'
+EOF
+	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512
+	s_assert_status 71 "a task runaway stops at the budget and the dispatch exits 71"
+	s_assert_err_has "TASK ceiling"
+	# The whole point: the operator's own shell is unharmed.
+	if sh -c 'exit 0'; then
+		pass "a command in the calling shell right after the runaway still forks"
+	else
+		fail "the calling shell could not fork after the runaway — the budget did not contain it"
+	fi
+
+	# A stub that allocates without bound stops at the MEMORY budget with 71.
+	GREEDY="$SCRATCH/greedy"
+	cat >"$GREEDY" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "greedy begins"
+exec awk 'BEGIN { s = "x"; while (1) s = s s }'
+echo "greedy survived allocation"
+EOF
+	chmod +x "$GREEDY"
+	CFG_GREEDY="$SCRATCH/greedy.config.sh"
+	cat >"$CFG_GREEDY" <<EOF
+AGENT_HARNESSES='gr'
+AGENT_HARNESS_GR_CMD='$GREEDY {model_flag} < {prompt_file}'
+AGENT_HARNESS_GR_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='gr:'
+EOF
+	AGENTS_CONFIG="$CFG_GREEDY" dispatch implementer --prompt 'eat all' --budget-tasks 256 --budget-memory 64
+	s_assert_status 71 "a memory runaway stops at the budget and the dispatch exits 71"
+	s_assert_err_has "MEMORY ceiling"
+	s_assert_out_lacks "greedy survived allocation" "…the worker was killed before it could go on"
+
+	# --timeout and the budget COMPOSE: a worker that is both greedy and slow
+	# exits with whichever fired first (ADR-0006 clause 6). Here the task budget
+	# fires well inside a long timeout, so the verdict is 71, not 124.
+	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 40
+	s_assert_status 71 "budget and --timeout compose — the budget fired first, so 71"
+	s_assert_err_has "TASK ceiling"
+
+	# A within-budget worker behaves exactly as before, and exits 0.
+	AGENTS_CONFIG="$CFG" dispatch implementer --prompt 'quiet' --budget-tasks 300 --budget-memory 600
+	s_assert_status 0 "a within-budget worker runs and exits 0"
+	s_assert_out_has "ARGV:" "…the worker ran"
+	s_assert_err_lacks "hit its" "…and hit no ceiling"
+else
+	pass "this host offers no transient scope — the scope enforcement legs were skipped, and say so"
+fi
+
+# The OFF switch (ADR-0006 clause 4): --no-budget runs the worker unbounded,
+# in the session's own cgroup, and says so on stderr on a REAL dispatch (not
+# only the dry run — #208 lifted the note). A small --timeout keeps the leg
+# bounded whatever the worker does.
+CGSTUB="$SCRATCH/cg-stub"
+cat >"$CGSTUB" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
+echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
+echo "DATA=$(ulimit -d 2>/dev/null)"
+EOF
+chmod +x "$CGSTUB"
+CFG_CG="$SCRATCH/cg.config.sh"
+cat >"$CFG_CG" <<EOF
+AGENT_HARNESSES='cg'
+AGENT_HARNESS_CG_CMD='$CGSTUB {model_flag} < {prompt_file}'
+AGENT_HARNESS_CG_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='cg:'
+EOF
+TEST_CG=$(sed -n 's/^0:://p' /proc/self/cgroup)
+AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --no-budget --timeout 10
+s_assert_status 0 "--no-budget runs the worker"
+s_assert_err_has "no budget"
+case "$S_OUT" in
+*"CG=$TEST_CG"*) pass "--no-budget runs the worker in the session's own cgroup — no scope opened" ;;
+*) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$S_OUT" | grep CG=)" ;;
+esac
+
+# NESTING (ADR-0006 clause 7): a dispatch that finds the budget in its
+# environment inherits it and OPENS NO SCOPE. A fake systemd-run on PATH records
+# whether it was called; an inherited dispatch must never call it, and the
+# worker runs in the caller's own cgroup.
+SDREC="$SCRATCH/sd-record"; mkdir -p "$SDREC"
+printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$SCRATCH/sd-was-called" >"$SDREC/systemd-run"
+chmod +x "$SDREC/systemd-run"
+rm -f "$SCRATCH/sd-was-called"
+t_run_split env PATH="$SDREC:$PATH" AGENTS_CONFIG="$CFG_CG" \
+	AGENT_DISPATCH_BUDGET_TASKS=500 AGENT_DISPATCH_BUDGET_MEMORY_MIB=500 \
+	sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "an inherited dispatch runs the worker"
+[ -f "$SCRATCH/sd-was-called" ] &&
+	fail "an inherited dispatch opened a scope — systemd-run was called" ||
+	pass "an inherited dispatch opens no scope — systemd-run was never called"
+case "$S_OUT" in
+*"CG=$TEST_CG"*) pass "…and the inherited worker runs in the caller's own cgroup" ;;
+*) fail "the inherited worker did not run in the caller's cgroup: $(printf '%s' "$S_OUT" | grep CG=)" ;;
+esac
+
+# The RLIMIT rung (ADR-0006 ladder rung 2): with no systemd-run on PATH the
+# ladder falls to rlimits in the worker's shell. A PATH that mirrors the real
+# one minus systemd-run is how "systemd-run absent" is simulated without
+# breaking the tools the dispatcher itself needs. The task bound is applied as
+# `ulimit -u/-p` and the memory bound as `ulimit -d` (KiB) — proven by a stub
+# that reports its own limits, a builtin that never forks, so a large safe task
+# value can be asserted without risking this uid's own fork ceiling. A ceiling
+# hit is not observable on this rung, so there is no 71 to assert.
+NOSD_PATH="$SCRATCH/nosd-path"; mkdir -p "$NOSD_PATH"
+for _f in /usr/bin/* /bin/*; do
+	_b=${_f##*/}
+	[ "$_b" = systemd-run ] && continue
+	[ -e "$NOSD_PATH/$_b" ] || ln -sf "$_f" "$NOSD_PATH/$_b" 2>/dev/null
+done
+if [ -n "$(command -v ulimit || true)" ] || (ulimit -u >/dev/null 2>&1); then
+	: # ulimit is a shell builtin; the real check is that the dispatcher applies it
+fi
+t_run_split env PATH="$NOSD_PATH" AGENTS_CONFIG="$CFG_CG" \
+	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
+if [ "$S_STATUS" = 2 ]; then
+	# A minimal PATH that lost a tool the dispatcher needs would report itself
+	# here rather than silently passing the leg.
+	fail "the rlimit-rung leg could not run under the stripped PATH: $S_ERR"
+else
+	s_assert_status 0 "the rlimit rung runs the worker"
+	s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
+	s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
+fi
+t_run_split env PATH="$NOSD_PATH" AGENTS_CONFIG="$CFG_CG" \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has "rlimits" "…and a dry run with no systemd-run names the rlimit rung"
+s_assert_out_has "best-effort via rlimits" "…and says the rung is best-effort"
+
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
 
 # ---------------------------------------------------------------------------
 banner "Every shell an operator might run this under"
