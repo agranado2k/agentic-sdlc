@@ -127,9 +127,13 @@ if [ "$_dispatch_sourced" = 0 ]; then
 fi
 if [ "$_dispatch_sourced" = 1 ]; then
 	_here=${_dispatch_here:-}
+	# `return`, so a shell that sourced this by hand stays open with the
+	# status; executed under another name there is no function to return
+	# from, and the fallback exit is the same 2 — dash returns at top level
+	# as if it had exited, bash refuses the return and takes the exit.
 	[ -n "$_here" ] || {
-		echo "x dispatch: sourced without _dispatch_here — set it to this script's directory before sourcing" >&2
-		exit 2
+		echo "x dispatch: sourced without _dispatch_here, or executed under a name other than agent-dispatch.sh — a sourcing caller sets _dispatch_here to this script's directory first; a copy runs under its own name" >&2
+		return 2 2>/dev/null || exit 2
 	}
 else
 	_here=$(dirname "$0")

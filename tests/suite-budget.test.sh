@@ -68,11 +68,20 @@ s_assert_out_lacks "usage:" "…without printing the usage"
 s_assert_err_lacks "dispatch:"
 
 # Sourced WITHOUT _dispatch_here there is nowhere to find agents.lib.sh, and
-# the dispatcher says so rather than guessing from the sourcing script's $0.
-t_run_split sh -c '. "$1"; echo "still here"' probe "$DISPATCH"
-s_assert_status 2 "sourcing without _dispatch_here is refused, exit 2"
+# the dispatcher says so rather than guessing from the sourcing script's $0
+# — with a `return`, so an interactive shell that sourced it by hand stays
+# open and reads the status. The same branch is reached by EXECUTING a copy
+# under any other name — the detection is $0's, as scripts/agents.lib.sh's
+# is — so the message names both causes.
+t_run_split sh -c '. "$1"; echo "sourcing status $?"' probe "$DISPATCH"
+s_assert_out_has "sourcing status 2" "sourcing without _dispatch_here is refused with status 2 — and the sourcing shell goes on"
 s_assert_err_has "_dispatch_here"
-s_assert_out_lacks "still here" "…and the sourcing shell does not go on"
+s_assert_err_has "a name other than agent-dispatch.sh"
+RENAMED="$SCRATCH/renamed"; mkdir -p "$RENAMED"
+cp "$DISPATCH" "$RENAMED/dispatch"; cp "$KIT/scripts/agents.lib.sh" "$RENAMED/agents.lib.sh"
+t_run_split sh "$RENAMED/dispatch" implementer --prompt 'x' --dry-run
+s_assert_status 2 "a copy executed under another name is refused, exit 2"
+s_assert_err_has "a name other than agent-dispatch.sh"
 
 # _budget_derive answers what the dry run shows, from the same fake host the
 # dispatch suite uses: 25% of the slice's 10008 tasks, 50% of 2091 MiB.
