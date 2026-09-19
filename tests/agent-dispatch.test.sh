@@ -807,6 +807,13 @@ t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt 'past
 s_assert_status 4 "a dispatch one past the maximum is refused"
 s_assert_out_lacks 'ARGV:' "…and the worker never ran"
 s_assert_err_has "refusing to nest"
+# The reader of that stderr is usually the refused worker — a model with
+# tools — so the message tells it to stop and report, never how to lift the
+# ceiling; and the policy file is named by its variable, not by a path the
+# dispatcher may not have read (AGENTS_CONFIG resolves first).
+s_assert_err_has "stop and report"
+s_assert_err_lacks "scripts/agents.config.sh"
+s_assert_err_lacks "Raise"
 
 # The worker is spawned one deeper than its dispatch, through BOTH spawn
 # paths: the plain eval and the timed `sh -c`. The dispatcher's comment says

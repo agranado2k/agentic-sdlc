@@ -51,7 +51,9 @@
 # unset meaning a top-level dispatch at depth 1; the worker is spawned with it
 # set one higher, so a dispatch the worker runs reads its own depth on entry.
 # A worker may read it too. A dispatch AT the maximum still runs; one past it
-# is exit 4.
+# is exit 4. The ceiling is COOPERATIVE: a worker owns its own environment,
+# so `env -u AGENT_DISPATCH_DEPTH` restarts the count at depth 1. It stops an
+# accidental loop, not a worker that chooses to nest.
 #
 # `{model_flag}` expands to the MODEL_FLAG template with `{model}` filled when a
 # model is mapped, and to NOTHING when one is not — which is
@@ -263,9 +265,13 @@ MAX_DEPTH=$(_read_policy AGENT_DISPATCH_MAX_DEPTH)
 _whole_from_one "$MAX_DEPTH" || die "AGENT_DISPATCH_MAX_DEPTH must be a whole number from 1 (at most $DEPTH_MAX_DIGITS digits), got '$MAX_DEPTH'.
    Empty means the kit default of $DEPTH_DEFAULT_MAX."
 if [ "$DEPTH" -gt "$MAX_DEPTH" ]; then
+	# Read, more often than not, by the refused WORKER — a model with tools —
+	# so this says what a worker does with it and never how to lift the
+	# ceiling. The maximum is named by its variable, not by a path: the policy
+	# file is wherever AGENTS_CONFIG resolved it, which need not be the default.
 	echo "x dispatch: refusing to nest — this dispatch would run at depth $DEPTH and the maximum is $MAX_DEPTH." >&2
-	echo "   Raise AGENT_DISPATCH_MAX_DEPTH in scripts/agents.config.sh if this shape is" >&2
-	echo "   legitimate. A worker whose tier maps back to its own agent harness is not." >&2
+	echo "   The maximum is AGENT_DISPATCH_MAX_DEPTH in the agents policy file, and it is the" >&2
+	echo "   operator's to change. A worker that sees this must stop and report it." >&2
 	exit 4
 fi
 
