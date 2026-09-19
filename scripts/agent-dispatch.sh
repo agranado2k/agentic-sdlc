@@ -1351,7 +1351,7 @@ _budget_verdict() {
 	_budget_ceiling_hit || _budget_unread "$_unread"
 	case "$_hit" in
 	TASK) echo "x  dispatch: the worker hit its TASK ceiling ($BUDGET_TASKS) — its process tree could fork no further. Exit 71 (EX_OSERR)." >&2 ;;
-	MEMORY) echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — the kernel OOM-killed it inside its cgroup. Exit 71 (EX_OSERR)." >&2 ;;
+	MEMORY) echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — a process in its tree was OOM-killed inside its cgroup. Exit 71 (EX_OSERR)." >&2 ;;
 	*) exit "$_worker_status" ;;
 	esac
 	exit 71
