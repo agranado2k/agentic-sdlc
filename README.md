@@ -572,6 +572,11 @@ skeleton (K0).
   commit. The demo suites are the builders' oracle in the large — the docs
   demo's pinned transcripts did not move when it adopted them.
 
+- `sh tests/suite-budget.test.sh` holds the seam `tests/lib.sh` takes the
+  worker budget through (ADR-0006, #209): sourcing `scripts/agent-dispatch.sh`
+  defines its derivation and runs nothing, and `_budget_derive` answers what
+  the dispatcher's own dry run shows against the same fake host.
+
 - `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
   set of path roots: the reduced POSIX form's list must equal the policy
   file's `claudeMdRefs.pathRoots` entry for entry, two baits prove the
@@ -670,6 +675,7 @@ sh tests/manifest.test.sh                              # the manifest grammar, o
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots
 sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
+sh tests/suite-budget.test.sh                          # every suite runs inside the worker budget
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
