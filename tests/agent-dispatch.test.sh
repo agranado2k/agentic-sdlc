@@ -837,7 +837,7 @@ printf 'MemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
 
 # The percentages and clamps are the policy file's.
 CFG_BUDGET="$SCRATCH/budget.config.sh"
-{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=10\nAGENT_BUDGET_MEMORY_PERCENT=25\nAGENT_BUDGET_TASKS_FLOOR=8\nAGENT_BUDGET_MEMORY_CEILING_MIB=300\n"; } >"$CFG_BUDGET"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=10\nAGENT_BUDGET_MEMORY_PERCENT=25\nAGENT_BUDGET_TASKS_FLOOR=8\nAGENT_BUDGET_MEMORY_FLOOR_MIB=100\nAGENT_BUDGET_MEMORY_CEILING_MIB=300\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
 s_assert_out_has 'tasks 1000' "a policy percentage replaces the default (10% of 10008)"
 s_assert_out_has 'memory 300 MiB' "a policy ceiling replaces the default (25% of 2091 is 522, held to 300)"
@@ -846,6 +846,30 @@ s_assert_out_has 'floor 8' "a policy floor is the one shown"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
 s_assert_status 2 "a budget variable that is not a whole number is refused, not defaulted"
 s_assert_err_has "AGENT_BUDGET_TASKS_FLOOR"
+# One validator for the flags and the policy file (ADR-0006 clause 3): 0 and a
+# leading zero are refused on both, a percentage is 1–99, a floor is at most
+# its ceiling.
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=025\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a policy value with a leading zero is refused — arithmetic would read it as octal"
+s_assert_err_has "AGENT_BUDGET_TASKS_PERCENT"
+{ cat "$CFG"; printf "AGENT_BUDGET_MEMORY_PERCENT=0\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a policy value of 0 is refused, as the flag refuses 0"
+s_assert_err_has "AGENT_BUDGET_MEMORY_PERCENT"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=100\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a percentage of 100 or more is refused — the budget sits below the session's ceiling"
+s_assert_err_has "below 100"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=99\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 0 "…and 99 is the last one accepted"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR=5000\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a floor above its ceiling is refused"
+s_assert_err_has "AGENT_BUDGET_TASKS_CEILING"
+hostdry --budget-tasks 010
+s_assert_status 2 "--budget-tasks with a leading zero is refused the same way"
 
 # No cgroup ceiling on the path: the per-user process limit is the base. The
 # limit is lowered in a subshell so the expected number is one this suite

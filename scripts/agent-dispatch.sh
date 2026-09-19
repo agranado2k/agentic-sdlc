@@ -103,12 +103,15 @@ die() {
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
 BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
 
-# _whole_number <flag> <value> — a budget flag takes a positive whole number
-# and nothing else; 0 is not a budget any more than --timeout 0 is a timeout.
+# _whole_number <what> <value> — a budget number, whether from a flag or from
+# the policy file, is a positive whole number and nothing else: 0 is not a
+# budget any more than --timeout 0 is a timeout, and a leading zero is octal
+# to $(( )) in every sh — 025 would derive 21%.
 _whole_number() {
 	case "$2" in
 	'' | *[!0123456789]*) die "$1 takes a whole number, got '$2'" ;;
-	0 | 0*) die "$1 0 is not a budget. Omit the flag to derive one from this host." ;;
+	0) die "$1 0 is not a budget. Leave it out to derive one from this host." ;;
+	0*) die "$1 takes a whole number with no leading zero, got '$2'" ;;
 	esac
 }
 
@@ -556,15 +559,29 @@ _host=${AGENT_DISPATCH_HOST_ROOT:-}
 
 # _budget_policy <suffix> <default> — the policy file's AGENT_BUDGET_<suffix>
 # when it is a whole number, the default when it is unset or empty, and a
-# refusal for anything else: a percentage spelled 'lots' is a mistake to
-# report, not a value to fall back from.
+# refusal for anything else — held to the same validator as the flags: a
+# percentage spelled 'lots' is a mistake to report, not a value to fall back
+# from.
 _budget_policy() {
 	_bp_v=$(_read_policy "AGENT_BUDGET_$1")
-	case "$_bp_v" in
-	'') printf '%s' "$2" ;;
-	*[!0123456789]*) die "AGENT_BUDGET_$1 in your agents config must be a whole number, got '$_bp_v'" ;;
-	*) printf '%s' "$_bp_v" ;;
-	esac
+	[ -n "$_bp_v" ] || _bp_v=$2
+	_whole_number "AGENT_BUDGET_$1 in your agents config" "$_bp_v"
+	printf '%s' "$_bp_v"
+}
+
+# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (ADR-0006
+# clause 3): the budget sits BELOW the ceiling the session shares, and 100 or
+# more would put it at or above, in silence.
+_budget_percent_below_100() {
+	[ "$2" -lt 100 ] ||
+		die "AGENT_BUDGET_$1 must be below 100 — the budget sits below the ceiling the session shares (ADR-0006), got $2"
+}
+
+# _budget_floor_at_most_ceiling <floor suffix> <floor> <ceiling suffix> <ceiling>
+# — a floor above its ceiling leaves the clamp with no answer.
+_budget_floor_at_most_ceiling() {
+	[ "$2" -le "$4" ] ||
+		die "AGENT_BUDGET_$1 $2 is above AGENT_BUDGET_$3 $4 — a floor sits at or below its ceiling"
 }
 
 # _budget_session_tasks — the task ceiling this session runs under: the
@@ -664,6 +681,10 @@ BUDGET_MEMORY_FLOOR=$(_budget_policy MEMORY_FLOOR_MIB "$BUDGET_DEFAULT_MEMORY_FL
 BUDGET_MEMORY_CEILING=$(_budget_policy MEMORY_CEILING_MIB "$BUDGET_DEFAULT_MEMORY_CEILING_MIB") || exit 2
 BUDGET_TASKS_PERCENT=$(_budget_policy TASKS_PERCENT "$BUDGET_DEFAULT_TASKS_PERCENT") || exit 2
 BUDGET_MEMORY_PERCENT=$(_budget_policy MEMORY_PERCENT "$BUDGET_DEFAULT_MEMORY_PERCENT") || exit 2
+_budget_percent_below_100 TASKS_PERCENT "$BUDGET_TASKS_PERCENT"
+_budget_percent_below_100 MEMORY_PERCENT "$BUDGET_MEMORY_PERCENT"
+_budget_floor_at_most_ceiling TASKS_FLOOR "$BUDGET_TASKS_FLOOR" TASKS_CEILING "$BUDGET_TASKS_CEILING"
+_budget_floor_at_most_ceiling MEMORY_FLOOR_MIB "$BUDGET_MEMORY_FLOOR" MEMORY_CEILING_MIB "$BUDGET_MEMORY_CEILING"
 if [ "$NO_BUDGET" = 1 ]; then
 	BUDGET_MODE=disabled
 elif [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then

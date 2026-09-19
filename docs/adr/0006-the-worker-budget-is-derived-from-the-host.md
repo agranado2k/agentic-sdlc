@@ -122,6 +122,14 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    never-shipped twin (`scripts/agents.kit.config.sh`, ADR-0003) sets none of
    them: the defaults are the kit's answer for itself, and #209 may tighten
    them for the suite.
+   **The permitted range.** Each variable is a positive whole number with no
+   leading zero (shell arithmetic reads `025` as octal). A percentage is
+   **1 to 99**: the budget sits below the ceiling the session shares (driver
+   1), and 100 or more would put it at or above in silence. A floor is at
+   most its ceiling. Anything else — `lots`, `0`, `025`, `150`, a floor above
+   its ceiling — is refused at dispatch with exit 2, never defaulted or
+   clamped: a policy value that cannot be a budget is a mistake to report.
+   The two flags are held to the same validator.
 
 4. **Where policy lives.** The six variables above, in `scripts/agents.config.sh`
    — the consumer's policy file, never overwritten by an update. Per dispatch,
