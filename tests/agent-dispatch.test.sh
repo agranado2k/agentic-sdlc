@@ -1335,7 +1335,10 @@ if [ "$SCOPE_OK" = 1 ]; then
 	# A stub that forks without bound (a bounded self-spawning sh loop whose peak
 	# concurrency exceeds the ceiling) stops at the TASK budget. The dispatch
 	# exits 71 and names the ceiling; a command in the calling shell right after
-	# still forks.
+	# still forks. Every runaway here also carries a --timeout: the suite's own
+	# capped scope is no backstop — a scope from inside a scope is a sibling —
+	# so the watchdog is the one bound that owes nothing to the mechanism under
+	# test.
 	FORKER="$SCRATCH/forker"
 	cat >"$FORKER" <<'EOF'
 #!/bin/sh
@@ -1355,7 +1358,7 @@ AGENT_HARNESS_FK_CMD='$FORKER {model_flag} < {prompt_file}'
 AGENT_HARNESS_FK_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='fk:'
 EOF
-	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512
+	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 30
 	s_assert_status 71 "a task runaway stops at the budget and the dispatch exits 71"
 	s_assert_err_has "TASK ceiling"
 	# The whole point: the operator's own shell is unharmed.
@@ -1365,14 +1368,21 @@ EOF
 		fail "the calling shell could not fork after the runaway — the budget did not contain it"
 	fi
 
-	# A stub that allocates without bound stops at the MEMORY budget with 71.
+	# A stub that allocates past the MEMORY budget stops there with 71. The
+	# allocation is self-bounding — 27 doublings, about 128 MiB, twice the 64
+	# MiB budget — so where enforcement does not bite it ends on its own and
+	# SAYS so, and the allocated-it-all line is a line the leg can fail on.
+	# Only the greedy process is killed (OOMPolicy=continue — the kernel takes
+	# the offender, not the tree), so the shell around it goes on; the verdict
+	# is the counter, not the shell's fate.
 	GREEDY="$SCRATCH/greedy"
 	cat >"$GREEDY" <<'EOF'
 #!/bin/sh
 cat >/dev/null
 echo "greedy begins"
-exec awk 'BEGIN { s = "x"; while (1) s = s s }'
-echo "greedy survived allocation"
+awk 'BEGIN { s = "x"; for (i = 0; i < 27; i++) s = s s; print "greedy allocated it all" }'
+echo "greedy went on after the allocation"
+exit 0
 EOF
 	chmod +x "$GREEDY"
 	CFG_GREEDY="$SCRATCH/greedy.config.sh"
@@ -1382,10 +1392,10 @@ AGENT_HARNESS_GR_CMD='$GREEDY {model_flag} < {prompt_file}'
 AGENT_HARNESS_GR_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='gr:'
 EOF
-	AGENTS_CONFIG="$CFG_GREEDY" dispatch implementer --prompt 'eat all' --budget-tasks 256 --budget-memory 64
+	AGENTS_CONFIG="$CFG_GREEDY" dispatch implementer --prompt 'eat all' --budget-tasks 256 --budget-memory 64 --timeout 30
 	s_assert_status 71 "a memory runaway stops at the budget and the dispatch exits 71"
 	s_assert_err_has "MEMORY ceiling"
-	s_assert_out_lacks "greedy survived allocation" "…the worker was killed before it could go on"
+	s_assert_out_lacks "greedy allocated it all" "…the greedy process was OOM-killed before it finished"
 
 	# --timeout and the budget COMPOSE: a worker that is both greedy and slow
 	# exits with whichever fired first (ADR-0006 clause 6). Here the task budget
