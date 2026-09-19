@@ -1087,7 +1087,14 @@ WRAP
 		# count, -d for the data segment (KiB). Weaker, per ADR-0006:
 		# RLIMIT_NPROC counts the uid, and RLIMIT_DATA is per process. A ceiling
 		# hit here is not observable, so the worker's own status passes through.
-		RUN_CMD="ulimit $NPROC_FLAG $BUDGET_TASKS 2>/dev/null; ulimit -d $((BUDGET_MEMORY * 1024)) 2>/dev/null; $CMD"
+		# The string always runs under its own `sh` (both spawn paths), so the
+		# limits die with the worker rather than binding this script — whose
+		# cleanup would then be the fork that fails. The flag is chosen where the
+		# ulimit runs, not where it was probed: the probe's shell is this one, the
+		# string's is `sh`, and on a dash host the two spell it differently. A
+		# refused ulimit is heard, and the worker still runs — the rung degrades
+		# to the announced no-op for that ceiling, loudly.
+		RUN_CMD="_nf=-u; ulimit -u >/dev/null 2>&1 || _nf=-p; ulimit \$_nf $BUDGET_TASKS || echo '!  dispatch: ulimit refused the task ceiling $BUDGET_TASKS — the rlimit rung applies no task bound' >&2; ulimit -d $((BUDGET_MEMORY * 1024)) || echo '!  dispatch: ulimit -d refused the memory ceiling $BUDGET_MEMORY MiB — the rlimit rung applies no memory bound' >&2; $CMD"
 		;;
 	*)
 		RUN_CMD=$CMD
@@ -1143,7 +1150,11 @@ _spawn_run() {
 	# own inherited pipe. The prompt reaches the worker by {prompt_file}; a
 	# template that redirects `< {prompt_file}` still wins over this </dev/null.
 	if [ -z "$TIMEOUT" ]; then
-		eval "$RUN_CMD" </dev/null
+		if [ "$RUN_RUNG" = rlimit ]; then
+			sh -c "$RUN_CMD" </dev/null
+		else
+			eval "$RUN_CMD" </dev/null
+		fi
 		_worker_status=$?
 		return 0
 	fi

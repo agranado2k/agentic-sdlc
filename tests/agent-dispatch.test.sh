@@ -1414,6 +1414,14 @@ cat >/dev/null
 echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
 echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
 echo "DATA=$(ulimit -d 2>/dev/null)"
+p=$PPID
+while [ "$p" -gt 1 ]; do
+	if tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -q 'agent-dispatch\.sh'; then
+		echo "DISPATCHER_NPROC=$(awk '/^Max processes/ { print $3 }' "/proc/$p/limits")"
+		break
+	fi
+	p=$(awk '{ print $4 }' "/proc/$p/stat")
+done
 EOF
 chmod +x "$CGSTUB"
 CFG_CG="$SCRATCH/cg.config.sh"
@@ -1464,10 +1472,70 @@ t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 s_assert_status 0 "the rlimit rung runs the worker"
 s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
 s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
+OWN_NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)
+s_assert_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…and the dispatcher's own shell keeps the limit it was given — the rung is the worker's, not the dispatcher's"
 t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
 s_assert_out_has "rlimits" "…and a dry run with no user service manager names the rlimit rung"
 s_assert_out_has "best-effort via rlimits" "…and says the rung is best-effort"
+# The limits land in the WORKER's shell, on both spawn paths, and die with it
+# (#208 acceptance line 4: "the task case still holds"). A fork loop under a
+# task ceiling just above what this uid already runs is refused inside the
+# worker's own shell — RLIMIT_NPROC counts every task of the uid, so the
+# ceiling is the uid's thread count plus a margin, and the loop's own forks
+# are what cross it. The dispatcher, in the shell that ran the limit-free
+# dispatch, still forks: its cleanup trap removes the scratch, and a command
+# in the calling shell right after succeeds. The status passes through (clause
+# 6: nothing is observed on this rung), never 71 — and it is the shell's own
+# verdict on its refused forks, which differs by shell: dash carries on and
+# exits 0, bash retries, aborts and exits 254. The leg holds the status to
+# "the worker's own", not to a number.
+RLFORK="$SCRATCH/rl-forker"
+cat >"$RLFORK" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "rl-forker begins"
+i=0
+while [ $i -lt 60 ]; do
+	sleep 1 &
+	i=$((i + 1))
+done
+echo "rl-forker finished its loop"
+EOF
+chmod +x "$RLFORK"
+CFG_RLFORK="$SCRATCH/rl-forker.config.sh"
+cat >"$CFG_RLFORK" <<EOF
+AGENT_HARNESSES='rf'
+AGENT_HARNESS_RF_CMD='$RLFORK {model_flag} < {prompt_file}'
+AGENT_HARNESS_RF_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='rf:'
+EOF
+UID_TASKS=$(ps -u "$(id -u)" -o nlwp= | awk '{ s += $1 } END { print s + 0 }')
+RL_TMP="$SCRATCH/rl-tmp"; mkdir -p "$RL_TMP"
+t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_RLFORK" TMPDIR="$RL_TMP" \
+	sh "$DISPATCH" implementer --prompt 'run away' --budget-tasks $((UID_TASKS + 40)) --budget-memory 512
+case "$S_STATUS" in
+2 | 3 | 4 | 71 | 124) fail "a task runaway on the rlimit rung should pass the worker's own status through, got $S_STATUS"; _s_dump ;;
+*) pass "a task runaway on the rlimit rung passes the worker's own status through ($S_STATUS) — not 71" ;;
+esac
+s_assert_err_has "fork"
+s_assert_out_has "rl-forker begins" "…the worker ran, its forks refused inside its own shell"
+if sh -c 'exit 0'; then
+	pass "a command in the calling shell right after the runaway still forks"
+else
+	fail "the calling shell could not fork after the rlimit-rung runaway"
+fi
+[ -z "$(ls "$RL_TMP")" ] &&
+	pass "…and the dispatcher's own shell still forked its cleanup — no scratch left behind" ||
+	fail "the dispatcher could not fork its cleanup — the limit landed in its own shell: $(ls "$RL_TMP")"
+# The timed path runs the string under sh, whatever shell runs the dispatcher;
+# the flag is chosen where the ulimit runs, so dash and bash both apply it.
+t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
+	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128 --timeout 10
+s_assert_status 0 "the rlimit rung under --timeout runs the worker"
+s_assert_out_has "NPROC=5000" "…and applies the task ceiling under the shell that runs the string"
+s_assert_out_has "DATA=131072" "…and the memory ceiling"
+s_assert_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…while the dispatcher's own limit is untouched"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
