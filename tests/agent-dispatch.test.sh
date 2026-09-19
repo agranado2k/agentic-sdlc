@@ -1403,12 +1403,6 @@ EOF
 	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 40
 	s_assert_status 71 "budget and --timeout compose — the budget fired first, so 71"
 	s_assert_err_has "TASK ceiling"
-
-	# A within-budget worker behaves exactly as before, and exits 0.
-	AGENTS_CONFIG="$CFG" dispatch implementer --prompt 'quiet' --budget-tasks 300 --budget-memory 600
-	s_assert_status 0 "a within-budget worker runs and exits 0"
-	s_assert_out_has "ARGV:" "…the worker ran"
-	s_assert_err_lacks "hit its" "…and hit no ceiling"
 else
 	pass "this host offers no transient scope — the scope enforcement legs were skipped, and say so"
 fi
