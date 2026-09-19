@@ -794,7 +794,10 @@ if [ "$DRY_RUN" = 1 ]; then
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
 	# The budget, and the truth about it: shown, not applied, in this release.
 	# The floor note and the off switch are said on stderr as well, where an
-	# operator piping stdout still hears them.
+	# operator piping stdout still hears them. Both live inside this block on
+	# purpose until the budget is applied: a real dispatch says nothing about
+	# a budget it does not apply (the suite holds that), and the release that
+	# applies one lifts the two notes above this `if` (ADR-0006 clause 8).
 	case "$BUDGET_MODE" in
 	disabled)
 		printf 'budget:         DISABLED by --no-budget — the worker would run under the session'"'"'s own ceilings\n'

@@ -249,7 +249,12 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
 8. **Visible before it is enforced.** `--dry-run` prints both ceilings, the
    host fact and percentage each came from, the clamp if one applied, the rung
    the host would offer, and — until #208 lands — that nothing is applied.
-   What is shown is what will be enforced, computed by the same code.
+   What is shown is what will be enforced, computed by the same code. Until
+   #208, the two stderr notes clauses 2 and 4 attach to the dispatch — the
+   floor raised, the budget disabled — are said under `--dry-run` only: a
+   real dispatch applies nothing and says nothing about a budget it does not
+   apply, and the suite holds it to that silence. #208 lifts both to every
+   dispatch in the change that applies the budget.
 
 9. **Explicit non-goal**: CPU time and I/O are not budgeted. Tasks were the
    incident; memory is the sibling that kills a host the same way; nothing
