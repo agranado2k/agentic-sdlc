@@ -57,12 +57,13 @@ banner "1. Sourcing the dispatcher defines the derivation and runs nothing"
 # resolves a tier — with the suite's own arguments untouched, and nothing on
 # either stream. A dispatcher that ran when sourced would print its usage and
 # exit 2 here.
-t_run_split sh -c '_dispatch_here="$1"; . "$2"; command -v _budget_derive >/dev/null && echo "defined: _budget_derive"; command -v _budget_scope_props >/dev/null && echo "defined: _budget_scope_props"; command -v _budget_counters_text >/dev/null && echo "defined: _budget_counters_text"; shift 2; echo "args: $*"' probe "$KIT/scripts" "$DISPATCH" a b
+t_run_split sh -c '_dispatch_here="$1"; . "$2"; command -v _budget_derive >/dev/null && echo "defined: _budget_derive"; command -v _budget_scope_props >/dev/null && echo "defined: _budget_scope_props"; command -v _budget_counters_text >/dev/null && echo "defined: _budget_counters_text"; shift 2; echo "args: $*"; case $- in *u*) echo "nounset: on" ;; *) echo "nounset: off" ;; esac' probe "$KIT/scripts" "$DISPATCH" a b
 s_assert_status 0 "sourcing the dispatcher with _dispatch_here set exits 0 — it ran no dispatch"
 s_assert_out_has "defined: _budget_derive" "…and defines _budget_derive"
 s_assert_out_has "defined: _budget_scope_props" "…and _budget_scope_props"
 s_assert_out_has "defined: _budget_counters_text" "…and _budget_counters_text"
 s_assert_out_has "args: a b" "…and leaves the sourcing shell's arguments alone"
+s_assert_out_has "nounset: off" "…and its options — the dispatcher's set -u is the dispatch's, below the seam"
 s_assert_out_lacks "usage:" "…without printing the usage"
 s_assert_err_lacks "dispatch:"
 

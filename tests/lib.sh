@@ -139,7 +139,7 @@ _sb_own_bounds() {
 # t_suite_under_budget <suite> [args…] — run the suite inside the budget
 # _budget_derive left in BUDGET_TASKS / BUDGET_MEMORY / BUDGET_RUNG, down the
 # rung the host offers. Called in the subshell that sourced the dispatcher —
-# its set -u, its `die` and its names stay there — and exits with the suite's
+# its `die` and its names stay there — and exits with the suite's
 # status, or 71 on a ceiling hit.
 t_suite_under_budget() {
 	case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in

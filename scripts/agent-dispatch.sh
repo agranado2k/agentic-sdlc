@@ -87,21 +87,34 @@
 # That is a property of the prompt and of the flags in your template, not
 # something this script can enforce — which is exactly why it is written here.
 
-set -u
-
 # SOURCED OR EXECUTED. tests/lib.sh sources this file for the budget alone —
 # every suite runs inside the budget a worker gets (ADR-0006, #209), derived
 # by THIS code so a suite and a worker cannot disagree about a number. Sourced,
-# the file defines everything up to the "dispatch proper" line below and
-# returns: the derivation (_budget_derive), the scope properties
-# (_budget_scope_props) and the counters reader the verdict is read with
-# (_budget_counters_text). A sourcing caller sets _dispatch_here=<this
-# directory> BEFORE sourcing, on its own line — the same seam, and the same
-# reason, as scripts/agents.lib.sh's _agents_here: when sourced, $0 is the
-# caller's, and the library beside this file cannot be found from it. The
-# detection is agents.lib.sh's too, ZSH_EVAL_CONTEXT first: zsh sets $0 to the
-# sourced file's own path, so the $0 test alone would run a dispatch out of a
-# `source`.
+# the file runs everything up to the "dispatch proper" line below and
+# returns. What the sourcing shell receives, all of it:
+#   - the three it came for: _budget_derive (sets BUDGET_MODE, BUDGET_TASKS,
+#     BUDGET_TASKS_FROM, BUDGET_MEMORY, BUDGET_MEMORY_FROM, BUDGET_RUNG,
+#     NPROC_FLAG and the six BUDGET_TASKS_PERCENT … BUDGET_MEMORY_CEILING
+#     it read from the policy file), _budget_scope_props (sets SCOPE_PROPS)
+#     and _budget_counters_text (prints the counters reader as text);
+#   - the readers under them: _budget_session_tasks, _budget_mem_available_mib,
+#     _budget_clamp, _budget_nproc_limit, _budget_nproc_flag, _budget_rung,
+#     _budget_percent_below_100, _budget_floor_at_most_ceiling, and the
+#     policy readers _read_policy, _read_policy_numbers, _whole_number;
+#   - usage, and die — which EXITS the shell that called it, so a caller
+#     that wants to survive a policy value it cannot budget sources this
+#     file in a subshell, as tests/lib.sh does;
+#   - the variables _dispatch_sourced, _here, LIB, _host, the six
+#     BUDGET_DEFAULT_* values, and BUDGET_TASKS_FLAG, BUDGET_MEMORY_FLAG and
+#     NO_BUDGET at their empty and 0 defaults.
+# Not `set -u`: that is the dispatch's own, switched on below the seam, so a
+# sourcing shell keeps its options. A sourcing caller sets
+# _dispatch_here=<this directory> BEFORE sourcing, on its own line — the
+# same seam, and the same reason, as scripts/agents.lib.sh's _agents_here:
+# when sourced, $0 is the caller's, and the library beside this file cannot
+# be found from it. The detection is agents.lib.sh's too, ZSH_EVAL_CONTEXT
+# first: zsh sets $0 to the sourced file's own path, so the $0 test alone
+# would run a dispatch out of a `source`.
 _dispatch_sourced=0
 case "${ZSH_EVAL_CONTEXT:-}" in
 *:file | *:file:*) _dispatch_sourced=1 ;;
@@ -501,6 +514,8 @@ _budget_scope_props() {
 # properties and the counters reader, one definition. Nothing above this line
 # parses an argument, sweeps scratch, resolves a tier or reads a prompt.
 [ "$_dispatch_sourced" = 0 ] || return 0
+
+set -u
 
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
 
