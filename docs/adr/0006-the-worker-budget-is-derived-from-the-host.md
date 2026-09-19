@@ -200,6 +200,11 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    cgroup — the escape this clause forbids. So a chain of nested workers
    shares one ceiling however deep #206 lets it go; the depth is #206's own
    variable, carried the same way, and the two are independent facts about a
+   dispatch. **An inherited budget wins over `--no-budget`**: the inner
+   dispatch is already inside the outer scope's cgroup and no flag on it can
+   leave, so the flag is not an escape — the dispatch takes the inherited
+   numbers and says on its budget line and on stderr that `--no-budget`
+   cannot escape them. Disabling, like deriving, belongs to the outermost
    dispatch. An outer dispatch that ran with `--no-budget` exports nothing,
    and an inner one then derives its own.
 

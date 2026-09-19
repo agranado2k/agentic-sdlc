@@ -934,6 +934,15 @@ s_assert_out_has 'inherited' "…and says it inherited the outer budget"
 s_assert_out_has 'tasks 777' "…the outer's task ceiling"
 s_assert_out_has 'memory 888 MiB' "…and the outer's memory ceiling"
 s_assert_out_lacks '25% of' "…deriving nothing of its own"
+# --no-budget on the inner dispatch does not win: it is already inside the
+# outer scope's cgroup, and no flag on it can leave.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run --no-budget
+s_assert_status 0 "--no-budget inside a budgeted worker dry-runs"
+s_assert_out_has 'inherited' "…and the inherited budget wins"
+s_assert_out_has 'cannot escape' "…the budget line saying that --no-budget cannot leave the outer cgroup"
+s_assert_out_lacks 'DISABLED' "…not the off switch"
+s_assert_err_has "cannot escape"
 
 # The rung is probed, not configured. A stub systemctl on PATH that answers
 # stands in for a user service manager; one that fails stands in for none.

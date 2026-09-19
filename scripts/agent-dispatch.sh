@@ -702,12 +702,14 @@ _budget_percent_below_100 TASKS_PERCENT "$BUDGET_TASKS_PERCENT"
 _budget_percent_below_100 MEMORY_PERCENT "$BUDGET_MEMORY_PERCENT"
 _budget_floor_at_most_ceiling TASKS_FLOOR "$BUDGET_TASKS_FLOOR" TASKS_CEILING "$BUDGET_TASKS_CEILING"
 _budget_floor_at_most_ceiling MEMORY_FLOOR_MIB "$BUDGET_MEMORY_FLOOR" MEMORY_CEILING_MIB "$BUDGET_MEMORY_CEILING"
-if [ "$NO_BUDGET" = 1 ]; then
-	BUDGET_MODE=disabled
-elif [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
+# Inherited is checked before disabled: an inner dispatch is already inside
+# the outer scope's cgroup, and --no-budget on it cannot leave (clause 7).
+if [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
 	BUDGET_MODE=inherited
 	BUDGET_TASKS=$AGENT_DISPATCH_BUDGET_TASKS
 	BUDGET_MEMORY=${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}
+elif [ "$NO_BUDGET" = 1 ]; then
+	BUDGET_MODE=disabled
 else
 	BUDGET_MODE=derived
 	if [ -n "$BUDGET_TASKS_FLAG" ]; then
@@ -773,6 +775,11 @@ if [ "$DRY_RUN" = 1 ]; then
 	inherited)
 		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "${BUDGET_MEMORY:-?}"
 		printf '                a nested worker shares the outer ceiling\n'
+		if [ "$NO_BUDGET" = 1 ]; then
+			printf '                --no-budget cannot escape it: this dispatch is inside the outer dispatch'"'"'s cgroup\n'
+			echo "!  dispatch: --no-budget cannot escape the outer dispatch's budget — this dispatch is" >&2
+			echo "   inside its cgroup, and no flag on an inner dispatch can leave it." >&2
+		fi
 		;;
 	derived)
 		printf 'budget:         tasks %s — %s (floor %s, ceiling %s)\n' "$BUDGET_TASKS" "$BUDGET_TASKS_FROM" "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
