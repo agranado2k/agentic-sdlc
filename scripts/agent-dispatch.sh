@@ -32,6 +32,9 @@
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
 # 124  the worker ran past --timeout and its process tree was killed
+#  71  RESERVED: the worker exceeded its budget (ADR-0006, EX_OSERR — "can't
+#      fork"). Nothing produces it yet: this release derives the budget and
+#      shows it under --dry-run, and enforcement is the next release's.
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -75,14 +78,21 @@ LIB="$_here/agents.lib.sh"
 
 usage() {
 	echo "usage: agent-dispatch.sh <tier> [domain] (--prompt-file <path> | --prompt <text>)" >&2
-	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>] [--dry-run]" >&2
+	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>]" >&2
+	echo "                          [--budget-tasks <n>] [--budget-memory <MiB>] [--no-budget]" >&2
+	echo "                          [--dry-run]" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
 	echo "  --set-file replace %%NAME%% with the CONTENTS of a file. For a value" >&2
 	echo "             too large for a command line — a diff, say. Repeatable." >&2
 	echo "  --timeout  kill the worker after that many seconds and exit 124." >&2
-	echo "  --dry-run  print the agent harness, the model, the expanded command and" >&2
-	echo "             the prompt; run nothing." >&2
+	echo "  --budget-tasks, --budget-memory" >&2
+	echo "             replace the budget derived from this host — the task and" >&2
+	echo "             memory ceilings on the worker's whole process tree." >&2
+	echo "  --no-budget" >&2
+	echo "             run this one worker with no budget at all. Said out loud." >&2
+	echo "  --dry-run  print the agent harness, the model, the expanded command," >&2
+	echo "             the budget and the prompt; run nothing." >&2
 }
 
 die() {
@@ -91,6 +101,16 @@ die() {
 }
 
 TIER="" DOMAIN="" PROMPT_FILE="" PROMPT_TEXT="" DRY_RUN=0 HAVE_PROMPT=0 SETS_N=0 TIMEOUT=""
+BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
+
+# _whole_number <flag> <value> — a budget flag takes a positive whole number
+# and nothing else; 0 is not a budget any more than --timeout 0 is a timeout.
+_whole_number() {
+	case "$2" in
+	'' | *[!0123456789]*) die "$1 takes a whole number, got '$2'" ;;
+	0 | 0*) die "$1 0 is not a budget. Omit the flag to derive one from this host." ;;
+	esac
+}
 
 # _record_set <name> <value> — one marker substitution, into its own numbered
 # pair of exported variables for the single awk pass below. The obvious
@@ -178,6 +198,22 @@ while [ $# -gt 0 ]; do
 		TIMEOUT=$2
 		shift 2
 		;;
+	--budget-tasks)
+		[ $# -ge 2 ] || die "--budget-tasks needs a number of tasks"
+		_whole_number --budget-tasks "$2"
+		BUDGET_TASKS_FLAG=$2
+		shift 2
+		;;
+	--budget-memory)
+		[ $# -ge 2 ] || die "--budget-memory needs a number of MiB"
+		_whole_number --budget-memory "$2"
+		BUDGET_MEMORY_FLAG=$2
+		shift 2
+		;;
+	--no-budget)
+		NO_BUDGET=1
+		shift
+		;;
 	--dry-run)
 		DRY_RUN=1
 		shift
@@ -209,6 +245,8 @@ done
 [ -n "$PROMPT_FILE" ] && [ ! -f "$PROMPT_FILE" ] && die "prompt file does not exist: $PROMPT_FILE"
 [ -n "$PROMPT_FILE" ] && [ ! -s "$PROMPT_FILE" ] && die "prompt file is empty: $PROMPT_FILE
    A worker given nothing to do will invent something to do."
+[ "$NO_BUDGET" = 1 ] && [ -n "$BUDGET_TASKS_FLAG$BUDGET_MEMORY_FLAG" ] &&
+	die "--no-budget and a --budget-* override contradict each other. Pick one."
 
 # --- resolution -------------------------------------------------------------
 # Two calls rather than one parse of a joined value: the resolver owns the
@@ -492,6 +530,169 @@ done
 command -v "$CMD_BIN" >/dev/null 2>&1 ||
 	die "agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH."
 
+# --- the budget -------------------------------------------------------------
+# A task ceiling and a memory ceiling for the worker's WHOLE process tree,
+# derived from this host now: a percentage of the task ceiling this session
+# runs under and of the memory available at this moment, each clamped to a
+# policy floor and ceiling. ADR-0006 is the decision. scripts/agents.config.sh
+# carries the percentages and clamps, and empty there means the defaults
+# below — a policy file from before the budget existed still gets one.
+#
+# NOTHING BELOW IS APPLIED. This release derives the budget and shows it under
+# --dry-run so the number is inspectable before enforcement lands; the worker
+# runs exactly as it did. The dry run says so in as many words.
+#
+# AGENT_DISPATCH_HOST_ROOT is TEST-ONLY. It is prefixed to the two host paths
+# read below (/proc and /sys) so a suite can hand this script a fake host and
+# assert the arithmetic against numbers it chose. Empty is the real host, and
+# nothing else reads it.
+BUDGET_DEFAULT_TASKS_PERCENT=25
+BUDGET_DEFAULT_TASKS_FLOOR=256
+BUDGET_DEFAULT_TASKS_CEILING=4096
+BUDGET_DEFAULT_MEMORY_PERCENT=50
+BUDGET_DEFAULT_MEMORY_FLOOR_MIB=512
+BUDGET_DEFAULT_MEMORY_CEILING_MIB=8192
+_host=${AGENT_DISPATCH_HOST_ROOT:-}
+
+# _budget_policy <suffix> <default> — the policy file's AGENT_BUDGET_<suffix>
+# when it is a whole number, the default when it is unset or empty, and a
+# refusal for anything else: a percentage spelled 'lots' is a mistake to
+# report, not a value to fall back from.
+_budget_policy() {
+	_bp_v=$(_read_policy "AGENT_BUDGET_$1")
+	case "$_bp_v" in
+	'') printf '%s' "$2" ;;
+	*[!0123456789]*) die "AGENT_BUDGET_$1 in your agents config must be a whole number, got '$_bp_v'" ;;
+	*) printf '%s' "$_bp_v" ;;
+	esac
+}
+
+# _budget_session_tasks — the task ceiling this session runs under: the
+# smallest numeric pids.max on the path from this process's own cgroup up to
+# the root. On a systemd host that is the user slice's TasksMax — 33% of
+# threads-max by default, and the ceiling the incident behind ADR-0006
+# filled. Prints "<ceiling> <cgroup>"; fails when no cgroup on the path sets
+# one, which is also what a host without cgroup v2 (no `0::` line) looks like.
+_budget_session_tasks() {
+	_bst_path=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+	[ -n "$_bst_path" ] || return 1
+	_bst_best="" _bst_where=""
+	while :; do
+		_bst_v=$(cat "$_host/sys/fs/cgroup$_bst_path/pids.max" 2>/dev/null)
+		case "$_bst_v" in
+		'' | *[!0123456789]*) ;;
+		*)
+			if [ -z "$_bst_best" ] || [ "$_bst_v" -lt "$_bst_best" ]; then
+				_bst_best=$_bst_v _bst_where=$_bst_path
+			fi
+			;;
+		esac
+		case "$_bst_path" in
+		'' | /) break ;;
+		esac
+		_bst_path=${_bst_path%/*}
+	done
+	[ -n "$_bst_best" ] || return 1
+	printf '%s %s\n' "$_bst_best" "${_bst_where##*/}"
+}
+
+# _budget_mem_available_mib — MemAvailable now, in MiB. What the host could
+# give at this moment, not what it has installed.
+_budget_mem_available_mib() {
+	_bma_kb=$(awk '/^MemAvailable:/ { print $2; exit }' "$_host/proc/meminfo" 2>/dev/null)
+	case "$_bma_kb" in
+	'' | *[!0123456789]*) return 1 ;;
+	esac
+	printf '%s\n' $((_bma_kb / 1024))
+}
+
+# _budget_clamp <derived> <floor> <ceiling> — sets _bc_value and _bc_note.
+# Below the floor is raised AND said: the operator hears that this host is
+# smaller than the percentage assumes. Above the ceiling is held in silence,
+# because more headroom buys a worker nothing.
+_budget_clamp() {
+	_bc_value=$1 _bc_note=""
+	if [ "$1" -lt "$2" ]; then
+		_bc_value=$2 _bc_note="$1 is below the floor $2 — raised to the floor"
+	elif [ "$1" -gt "$3" ]; then
+		_bc_value=$3 _bc_note="$1 is above the ceiling $3 — held to the ceiling"
+	fi
+}
+
+# _budget_rung — the highest rung of ADR-0006's ladder this host offers,
+# probed rather than configured: a policy file cannot know what host it is
+# on. `scope` needs systemd-run and a user manager that answers; `rlimit`
+# needs a shell whose ulimit can set the process count; `none` is neither.
+_budget_rung() {
+	if command -v systemd-run >/dev/null 2>&1 && systemctl --user show --property=Version >/dev/null 2>&1; then
+		echo scope
+	elif (ulimit -u "$(ulimit -u)") >/dev/null 2>&1; then
+		echo rlimit
+	else
+		echo none
+	fi
+}
+
+# The budget's three modes: disabled by flag, inherited from an outer
+# dispatch, or derived here. An inner dispatch derives nothing (ADR-0006
+# clause 7): a scope opened inside a scope is a sibling, not a child, and
+# would escape the outer's ceiling — so the outer's numbers arrive by
+# environment and are taken as given.
+BUDGET_MODE="" BUDGET_TASKS="" BUDGET_TASKS_FROM="" BUDGET_MEMORY="" BUDGET_MEMORY_FROM="" BUDGET_RUNG=""
+# Each read is a command substitution, so a `die` inside it ends the subshell
+# and not this script: the status is checked here, where it can.
+BUDGET_TASKS_FLOOR=$(_budget_policy TASKS_FLOOR "$BUDGET_DEFAULT_TASKS_FLOOR") || exit 2
+BUDGET_TASKS_CEILING=$(_budget_policy TASKS_CEILING "$BUDGET_DEFAULT_TASKS_CEILING") || exit 2
+BUDGET_MEMORY_FLOOR=$(_budget_policy MEMORY_FLOOR_MIB "$BUDGET_DEFAULT_MEMORY_FLOOR_MIB") || exit 2
+BUDGET_MEMORY_CEILING=$(_budget_policy MEMORY_CEILING_MIB "$BUDGET_DEFAULT_MEMORY_CEILING_MIB") || exit 2
+BUDGET_TASKS_PERCENT=$(_budget_policy TASKS_PERCENT "$BUDGET_DEFAULT_TASKS_PERCENT") || exit 2
+BUDGET_MEMORY_PERCENT=$(_budget_policy MEMORY_PERCENT "$BUDGET_DEFAULT_MEMORY_PERCENT") || exit 2
+if [ "$NO_BUDGET" = 1 ]; then
+	BUDGET_MODE=disabled
+elif [ -n "${AGENT_DISPATCH_BUDGET_TASKS:-}" ]; then
+	BUDGET_MODE=inherited
+	BUDGET_TASKS=$AGENT_DISPATCH_BUDGET_TASKS
+	BUDGET_MEMORY=${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}
+else
+	BUDGET_MODE=derived
+	if [ -n "$BUDGET_TASKS_FLAG" ]; then
+		BUDGET_TASKS=$BUDGET_TASKS_FLAG BUDGET_TASKS_FROM="--budget-tasks"
+		[ "$BUDGET_TASKS" -lt "$BUDGET_TASKS_FLOOR" ] &&
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_FROM; below the floor $BUDGET_TASKS_FLOOR, honoured as given"
+	elif _bt=$(_budget_session_tasks); then
+		_bt_base=${_bt%% *} _bt_where=${_bt#* }
+		_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+		BUDGET_TASKS=$_bc_value
+		BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the pids.max of cgroup $_bt_where${_bc_note:+: $_bc_note}"
+	else
+		_bt_base=$(ulimit -u 2>/dev/null)
+		case "$_bt_base" in
+		'' | *[!0123456789]*)
+			BUDGET_TASKS=$BUDGET_TASKS_CEILING
+			BUDGET_TASKS_FROM="the policy ceiling — no cgroup on this session sets a task ceiling and the per-user process limit is ${_bt_base:-unreadable}"
+			;;
+		*)
+			_budget_clamp $((_bt_base * BUDGET_TASKS_PERCENT / 100)) "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+			BUDGET_TASKS=$_bc_value
+			BUDGET_TASKS_FROM="$BUDGET_TASKS_PERCENT% of $_bt_base, the per-user process limit (ulimit -u — no cgroup on this session sets a task ceiling)${_bc_note:+: $_bc_note}"
+			;;
+		esac
+	fi
+	if [ -n "$BUDGET_MEMORY_FLAG" ]; then
+		BUDGET_MEMORY=$BUDGET_MEMORY_FLAG BUDGET_MEMORY_FROM="--budget-memory"
+		[ "$BUDGET_MEMORY" -lt "$BUDGET_MEMORY_FLOOR" ] &&
+			BUDGET_MEMORY_FROM="$BUDGET_MEMORY_FROM; below the floor $BUDGET_MEMORY_FLOOR, honoured as given"
+	elif _bm_base=$(_budget_mem_available_mib); then
+		_budget_clamp $((_bm_base * BUDGET_MEMORY_PERCENT / 100)) "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
+		BUDGET_MEMORY=$_bc_value
+		BUDGET_MEMORY_FROM="$BUDGET_MEMORY_PERCENT% of $_bm_base MiB MemAvailable${_bc_note:+: $_bc_note}"
+	else
+		BUDGET_MEMORY=$BUDGET_MEMORY_FLOOR
+		BUDGET_MEMORY_FROM="the policy floor — /proc/meminfo has no MemAvailable to derive from"
+	fi
+	BUDGET_RUNG=$(_budget_rung)
+fi
+
 if [ "$DRY_RUN" = 1 ]; then
 	printf 'tier:           %s%s\n' "$TIER" "${DOMAIN:+ (domain: $DOMAIN)}"
 	printf 'agent harness:  %s\n' "$HARNESS"
@@ -505,6 +706,38 @@ if [ "$DRY_RUN" = 1 ]; then
 	printf 'model:          %s\n' "$_shown_model"
 	printf 'command:        %s\n' "$CMD"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
+	# The budget, and the truth about it: shown, not applied, in this release.
+	# The floor note and the off switch are said on stderr as well, where an
+	# operator piping stdout still hears them.
+	case "$BUDGET_MODE" in
+	disabled)
+		printf 'budget:         DISABLED by --no-budget — the worker would run under the session'"'"'s own ceilings\n'
+		echo "!  dispatch: --no-budget — this worker has no budget of its own. A runaway worker" >&2
+		echo "   then takes the session's whole task ceiling and memory with it." >&2
+		;;
+	inherited)
+		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "${BUDGET_MEMORY:-?}"
+		printf '                a nested worker shares the outer ceiling\n'
+		;;
+	derived)
+		printf 'budget:         tasks %s — %s (floor %s, ceiling %s)\n' "$BUDGET_TASKS" "$BUDGET_TASKS_FROM" "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
+		printf '                memory %s MiB — %s (floor %s, ceiling %s)\n' "$BUDGET_MEMORY" "$BUDGET_MEMORY_FROM" "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
+		case "$BUDGET_RUNG" in
+		scope) printf '                rung: a transient scope under the user service manager (systemd-run --user --scope,\n                TasksMax and MemoryMax on the worker'"'"'s own cgroup, shared by its whole tree)\n' ;;
+		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit -u, ulimit -d) — weaker: no user service\n                manager answered; per process, and the task count is the user'"'"'s, not the tree'"'"'s\n' ;;
+		*) printf '                rung: NONE — no user service manager and no rlimit; the budget would be announced and not applied\n' ;;
+		esac
+		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
+		*"below the floor"*)
+			echo "!  dispatch: a budget is below the floor — see the dry run's budget line. A worker" >&2
+			echo "   that small cannot do useful work: a derived value was raised to the floor, and" >&2
+			echo "   the host then leaves the session less margin than AGENT_BUDGET_*_PERCENT" >&2
+			echo "   intends; an explicit --budget-* value is honoured as given." >&2
+			;;
+		esac
+		;;
+	esac
+	printf '                enforced: NOT applied in this release — shown so the number can be checked; the worker runs unbounded, as before\n'
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
 	printf '\n--- end prompt ---\n'

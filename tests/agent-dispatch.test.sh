@@ -771,6 +771,153 @@ s_assert_status 2 "a mapped model with no MODEL_FLAG is refused rather than drop
 s_assert_err_has "MODEL_FLAG"
 
 # ---------------------------------------------------------------------------
+banner "The budget — derived from the host, shown by --dry-run, applied by nothing yet"
+# ---------------------------------------------------------------------------
+# ADR-0006: a task ceiling and a memory ceiling for the worker's whole tree,
+# each a percentage of a HOST fact clamped to a policy floor and ceiling.
+# The host facts are read from files under a root the dispatcher takes from
+# AGENT_DISPATCH_HOST_ROOT (test-only, documented at the read site), so the
+# arithmetic is asserted against numbers this suite chose, not against
+# whatever machine runs it. The real host is read once, at the end, to prove
+# the same code can.
+AGENTS_CONFIG="$CFG"
+export AGENTS_CONFIG
+HOST="$SCRATCH/host"
+SLICE="$HOST/sys/fs/cgroup/user.slice/user-1000.slice"
+mkdir -p "$HOST/proc/self" "$SLICE/session-1.scope"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+echo max >"$HOST/sys/fs/cgroup/user.slice/pids.max"
+echo 10008 >"$SLICE/pids.max"
+echo max >"$SLICE/session-1.scope/pids.max"
+# The incident's host: MemAvailable 2141820 kB is 2091 MiB.
+printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+# hostdry <args> — a dry run against the fake host.
+hostdry() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run "$@"; }
+
+hostdry
+s_assert_status 0 "a dry run derives a budget"
+s_assert_out_has 'tasks 2502' "the task ceiling is 25% of the slice's 10008"
+s_assert_out_has '25% of 10008' "…and says the percentage and the base"
+s_assert_out_has 'user-1000.slice' "…and names the cgroup the base came from"
+s_assert_out_has 'memory 1045 MiB' "the memory ceiling is 50% of the 2091 MiB available"
+s_assert_out_has '50% of 2091 MiB' "…and says so"
+s_assert_out_has 'MemAvailable' "…naming the host fact"
+s_assert_out_has 'NOT applied' "the dry run says nothing is enforced in this release"
+s_assert_out_lacks 'ARGV:' "and the worker never ran"
+
+# The nearest ceiling wins: a session scope tighter than its slice is the
+# ceiling this session actually runs under.
+echo 3000 >"$SLICE/session-1.scope/pids.max"
+hostdry
+s_assert_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the base"
+s_assert_out_has 'session-1.scope' "…and the dry run names that cgroup, not the slice"
+echo max >"$SLICE/session-1.scope/pids.max"
+
+# The floor is a clamp UP that is said out loud; the ceiling is a clamp DOWN
+# in silence (ADR-0006 clause 2).
+echo 400 >"$SLICE/pids.max"
+hostdry
+s_assert_out_has 'tasks 256' "25% of 400 is 100, below the floor — the floor stands"
+s_assert_out_has 'below the floor 256' "…and the dry run says why"
+s_assert_err_has "below the floor"
+echo 100000 >"$SLICE/pids.max"
+hostdry
+s_assert_out_has 'tasks 4096' "25% of 100000 is 25000, above the ceiling — the ceiling stands"
+s_assert_out_has 'above the ceiling 4096' "…and the dry run says why"
+s_assert_err_lacks "above the ceiling"
+echo 10008 >"$SLICE/pids.max"
+printf 'MemAvailable:    600000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 512 MiB' "50% of 585 MiB is 292, below the floor — the floor stands"
+s_assert_out_has 'below the floor 512' "…and the dry run says why"
+printf 'MemAvailable:   40000000 kB\n' >"$HOST/proc/meminfo"
+hostdry
+s_assert_out_has 'memory 8192 MiB' "50% of 39062 MiB is above the ceiling — the ceiling stands"
+printf 'MemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
+
+# The percentages and clamps are the policy file's.
+CFG_BUDGET="$SCRATCH/budget.config.sh"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=10\nAGENT_BUDGET_MEMORY_PERCENT=25\nAGENT_BUDGET_TASKS_FLOOR=8\nAGENT_BUDGET_MEMORY_CEILING_MIB=300\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_out_has 'tasks 1000' "a policy percentage replaces the default (10% of 10008)"
+s_assert_out_has 'memory 300 MiB' "a policy ceiling replaces the default (25% of 2091 is 522, held to 300)"
+s_assert_out_has 'floor 8' "a policy floor is the one shown"
+{ cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR='lots'\n"; } >"$CFG_BUDGET"
+AGENTS_CONFIG="$CFG_BUDGET" hostdry
+s_assert_status 2 "a budget variable that is not a whole number is refused, not defaulted"
+s_assert_err_has "AGENT_BUDGET_TASKS_FLOOR"
+
+# No cgroup ceiling on the path: the per-user process limit is the base.
+printf '0::/\n' >"$HOST/proc/self/cgroup"
+t_run_split sh -c 'ulimit -u 8000 && AGENT_DISPATCH_HOST_ROOT="$1" exec sh "$2" implementer --prompt x --dry-run' _ "$HOST" "$DISPATCH"
+s_assert_status 0 "a session with no cgroup pids.max still derives a budget"
+s_assert_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
+s_assert_out_has 'ulimit -u' "…and the dry run names that source"
+s_assert_out_lacks 'pids.max' "…not a cgroup it never found"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+
+# Per-dispatch overrides, and the loud off switch (ADR-0006 clause 4).
+hostdry --budget-tasks 100 --budget-memory 300
+s_assert_out_has 'tasks 100' "--budget-tasks replaces the derived task ceiling"
+s_assert_out_has '--budget-tasks' "…and is named as its source"
+s_assert_out_has 'memory 300 MiB' "--budget-memory replaces the derived memory ceiling"
+s_assert_out_lacks '25% of' "…and nothing is derived for a value given explicitly"
+s_assert_err_has "below the floor"
+hostdry --budget-tasks 0
+s_assert_status 2 "--budget-tasks 0 is refused"
+hostdry --budget-memory abc
+s_assert_status 2 "--budget-memory that is not a whole number of MiB is refused"
+hostdry --no-budget --budget-tasks 5
+s_assert_status 2 "--no-budget with an override is a contradiction, refused"
+hostdry --no-budget
+s_assert_status 0 "--no-budget dry-runs"
+s_assert_out_has 'DISABLED' "…and the budget line says the budget is off"
+s_assert_out_lacks 'tasks 2502' "…deriving nothing"
+s_assert_err_has "no budget"
+
+# Nesting: an inner dispatch runs inside the outer's budget and never opens a
+# fresh one (ADR-0006 clause 7). The outer's numbers reach it by environment.
+t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+	sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "a dispatch inside a budgeted worker dry-runs"
+s_assert_out_has 'inherited' "…and says it inherited the outer budget"
+s_assert_out_has 'tasks 777' "…the outer's task ceiling"
+s_assert_out_has 'memory 888 MiB' "…and the outer's memory ceiling"
+s_assert_out_lacks '25% of' "…deriving nothing of its own"
+
+# The rung is probed, not configured. A stub systemctl on PATH that answers
+# stands in for a user service manager; one that fails stands in for none.
+SDBIN="$SCRATCH/sd-yes"; mkdir -p "$SDBIN"
+printf '#!/bin/sh\nexit 0\n' >"$SDBIN/systemctl"; cp "$SDBIN/systemctl" "$SDBIN/systemd-run"; chmod +x "$SDBIN/systemctl" "$SDBIN/systemd-run"
+t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'transient scope' "with a user service manager the rung is a transient scope"
+s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
+NOSD="$SCRATCH/sd-no"; mkdir -p "$NOSD"
+printf '#!/bin/sh\nexit 1\n' >"$NOSD/systemctl"; chmod +x "$NOSD/systemctl"
+t_run_split env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_out_has 'rlimits' "without one the rung is rlimits"
+s_assert_out_has 'weaker' "…and the dry run says that is the weaker promise"
+s_assert_out_lacks 'transient scope' "…not the scope it cannot open"
+
+# The real host, no fake root: the same code reads a real /proc and /sys.
+dispatch implementer --prompt 'x' --dry-run
+s_assert_out_has 'budget:' "the real host yields a budget line"
+case "$S_OUT" in
+*"tasks "[0-9]*) pass "…with a numeric task ceiling read from this host" ;;
+*) fail "no numeric task ceiling on the real host"; printf '%s\n' "$S_OUT" | sed 's/^/        > /' ;;
+esac
+case "$S_OUT" in
+*"memory "[0-9]*" MiB"*) pass "…and a numeric memory ceiling" ;;
+*) fail "no numeric memory ceiling on the real host" ;;
+esac
+
+# And a real dispatch is untouched: nothing is applied, nothing is said.
+dispatch implementer --prompt 'x'
+s_assert_status 0 "a real dispatch still runs the worker"
+s_assert_out_has 'ARGV:' "…as before"
+s_assert_err_lacks "budget"
+
+# ---------------------------------------------------------------------------
 banner "Every shell an operator might run this under"
 # ---------------------------------------------------------------------------
 # The file claims three-shell portability in a comment; a comment is not a
