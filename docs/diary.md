@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.19.0 tagged 2026-09-19 at `1ca59a9`, the merge of PR #204; 0.18.0 was tagged 2026-09-17 by PR #185. The constitution, both gates, the guards (now enforced on this repo too, through a kit-only policy), seventeen skills, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.20.0 tagged 2026-09-19 at `53459367`, the merge of PR #217 (tracking issue #205); 0.19.0 was tagged the same day at `1ca59a9` by PR #204. The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which now bounds a worker in depth, tasks and memory (ADR-0006) — and its two worker prompts are all in place and under test, and every suite under `tests/` runs inside the same budget a worker gets, through `tests/lib.sh`. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `1ca59a9` — merge of PR #204, `--set-file`, and the commit `v0.19.0` is cut on (2026-09-19) |
+| **Last commit on `main`** | `53459367` — merge of PR #217, every suite inside the worker budget, and the commit `v0.20.0` is cut on (2026-09-19) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.19.0 wave — nine follow-ups the 0.18.0 reviews and the live Gemini dispatch filed — landed 2026-09-17…19: #196 (#195 kit-demo reporter), #197 (#186 locale), #198 (#190 pairing guard on), #199 (#187 runner dedup), #200 (#192 stdin), #201 (#193 timeout), #202 (#189 glossary scan), #203 (#194 gemini adapter), #204 (#188 `--set-file`), then the tag. Still open from before: #87, #99. Not yet done: a real cross-vendor review dispatched to Gemini end to end through the shipped dispatcher — blocked last on Gemini's daily quota. |
+| **Active worktrees** | None. The 0.20.0 wave (#205) — the six PRs its `VERSION` note enumerates — landed 2026-09-19 in three merge trains: #215 (#207 ADR-0006, the budget derived from the host and shown by `--dry-run`), #213 (#206 depth ceiling, exit 4), #214 (#210 dispatch scratch names itself, and is swept), #216 (#208 the budget enforced down the ladder, exit 71), #219 (#87 the topmost-config gotcha in the manual template) and #217 (#209 every suite inside the budget), with #218 (the 0.19.0 note's Gemini detail) beside them, then the tag. Still open from before: #99. Not yet done: a real cross-vendor review dispatched to Gemini end to end through the shipped dispatcher (carried from 0.19.0); a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6), so exit 71 exists only on the scope rung; `ai-review.example.yml` is still inert, so every review this wave was an in-session sub-agent. |
 
 ### Open questions / unresolved decisions
 
@@ -1167,3 +1167,62 @@ through the shipped dispatcher with a real `--policy` file and `--timeout`. The
 fixes above exist because the first live attempt hit each edge; the
 re-verification was blocked on Gemini's daily quota, and the gemini-cli adapter
 says so in a re-verification note rather than claiming what was not re-run.
+
+### 2026-09-19 — 0.20.0: a dispatched worker is bounded
+
+No file joins or leaves the shared layer; two shared files changed content,
+one of them `scripts/agent-dispatch.sh` five times over. The forcing incident
+was not a review finding but a host: a 2 vCPU / 3.7 GiB dev VM froze three
+times in one week, and it read as "the VM crashes when Claude is running in
+the other session". The diagnosis (#205) was `cgroup: fork rejected by pids
+controller` 91 times in one boot — the user slice's `TasksMax` of 10008,
+systemd's 33 % of threads-max, filled in under three minutes by #204's own
+nested-dispatch test stub, whose implementer tier mapped back to the stub
+itself: a fork bomb with a model in the loop, and 267 anonymous scratch
+directories left where the traps never ran. The stub was fixed in `a612b1c`
+before 0.19.0 was cut; this release makes the class impossible. A dispatch
+refuses to nest past a policy maximum depth (exit 4); it derives a task and a
+memory ceiling for the worker's whole tree from this host — a percentage of
+the smallest `pids.max` on the session's path and of `MemAvailable`, clamped
+— shows both on `--dry-run`, and applies them down a ladder: a named transient
+scope under the user service manager, else rlimits in the worker's own shell,
+else a loud no-op, with exit 71 read from the scope's own `pids.events` /
+`memory.events` and composed with `--timeout` by whichever fired first. Its
+scratch names itself and stale scratch is swept. And, kit-only, `tests/lib.sh`
+sources the dispatcher's new seam so every suite runs inside the same budget,
+re-executing itself once inside the scope with a marker as the recursion
+bound.
+
+The chain ran five times — `/to-tickets` at the quiz (one planner ticket,
+four implementer), `/implement` in a fresh context each, `/review-pr` in a
+fresh context on a different model every time, `/pr-iterate`, three merge
+trains folding one 0.20.0 note per PR — and every review found what its
+author had not. #213: the depth's propagation through the `--timeout` path
+and a non-numeric policy maximum were unpinned, both found by mutants that
+survived. #215: a second whole-number validator that read a leading zero as
+octal (`025` derived 21 %), and two host-fact fallbacks nothing tested. #216:
+a marker fallback that could run a worker a second time after it had already
+run; the rlimit rung applying its `ulimit`s to the dispatcher's own shell on
+both spawn paths — reproduced: its own cleanup could not fork; and a runaway
+stub with no bound in any mode where enforcement did not bite. #217: a
+recursion-bound test that could not fail (the mutant was a live fork/exec
+loop the suite did not detect); a suite started inside an operator's own
+scope escaping into a sibling with larger ceilings; and eleven rewrites of
+the bare word to "test harness" on lines that had meant the agent harness or
+the docs harness, reverted. The dispatch suite went from 141 to 376 assertions
+on this host and `tests/suite-budget.test.sh` joined it at 115; every suite
+ran, and was reviewed, inside `systemd-run --user --scope -p TasksMax=300
+-p MemoryMax=512M`.
+
+ADR-0006 records the decision and was amended twice rather than rewritten —
+once for what building #208 refined in clauses 5, 6 and 8, once for what #209
+settled and measured: per-suite peaks of 44 tasks and 35 MiB against floors
+of 256 and 512 MiB, so no clamp was re-decided.
+
+Three things this release does NOT yet show. A Gemini dispatch end to end
+through the shipped dispatcher, carried from 0.19.0 and still unverified. A
+ceiling hit on the rlimit rung: there is no counter to read there (clause 6),
+so exit 71 exists only where a user service manager answers, and CI is that
+weaker rung's only oracle. And a review from a second vendor:
+`ai-review.example.yml` is still inert, so every review this wave was an
+in-session sub-agent on a different model, not a different vendor.
