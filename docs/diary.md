@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-17
+## Current state — 2026-09-19
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.18.0 tagged 2026-09-17 at `42d96e3`, the merge of PR #185 (PRD #170); 0.17.0 was tagged 2026-09-08 by PR #169. The constitution, both gates, the guards, seventeen skills, the adapters, the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.19.0 tagged 2026-09-19 at `1ca59a9`, the merge of PR #204; 0.18.0 was tagged 2026-09-17 by PR #185. The dispatcher (`scripts/agent-dispatch.sh`) now has the edges a live cross-vendor dispatch taught it — no inherited stdin, a `--timeout` that tree-kills, `--set-file` for a large diff — and the banned-words gate scans the glossary itself. The constitution, both gates, the guards (now on for this repo too), seventeen skills, the adapters (claude-code and gemini-cli), the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `42d96e3` — merge of PR #185, the worker prompts, and the commit `v0.18.0` is cut on (2026-09-17) |
+| **Last commit on `main`** | `1ca59a9` — merge of PR #204, `--set-file`, and the commit `v0.19.0` is cut on (2026-09-19) |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.18.0 wave (PRD #170) landed one car at a time between 2026-09-09 and 2026-09-17: #179, #180, #181, #182, #183, #184, #185, then the tag. Open follow-ups from its reviews: #186 (two suites depend on the developer's locale and `tag.sort`), #187 (the stdout/stderr test runner is copied across three suites), #188 (`--set-file` for a large diff), #189 (the docs gate does not scan the glossary), #190 (the pairing guard is inactive in the kit's own repo). Still open from before: #87, #99. |
+| **Active worktrees** | None. The 0.19.0 wave — nine follow-ups the 0.18.0 reviews and the live Gemini dispatch filed — landed 2026-09-17…19: #196 (#195 kit-demo reporter), #197 (#186 locale), #198 (#190 pairing guard on), #199 (#187 runner dedup), #200 (#192 stdin), #201 (#193 timeout), #202 (#189 glossary scan), #203 (#194 gemini adapter), #204 (#188 `--set-file`), then the tag. Still open from before: #87, #99. Not yet done: a real cross-vendor review dispatched to Gemini end to end through the shipped dispatcher — blocked last on Gemini's daily quota. |
 
 ### Open questions / unresolved decisions
 
@@ -1127,3 +1127,42 @@ failed on every branch for the whole wave and was set aside as pre-existing —
 true, and incurious. A reviewer's aside on #185 identified it as a locale
 sort-order artifact; it is green under `LC_ALL=C`. Filed as #186, beside the
 `tag.sort` cousin that #181 had already fixed from inside the same trap.
+
+### 2026-09-19 — 0.19.0: the dispatcher's edges, found by using it
+
+No file joins or leaves the shared layer; two shared files changed content.
+0.18.0 shipped `scripts/agent-dispatch.sh`, and then it was used to dispatch a
+real review to Gemini — and every edge this release files down was found that
+way, not by reading the code. The worker inherited the dispatcher's open stdin
+and blocked forever; a headless CLI gated `git diff` on an approval nobody
+could give and blocked forever; a diff handed to a reviewer overran argv. So:
+no inherited stdin (a template's own `< {prompt_file}` still wins), a
+`--timeout` that snapshots and tree-kills the worker and reports 124 by a flag
+the watchdog writes, and a `--set-file` that reads a large value from a file
+`awk` opens directly. The banned-words gate also learned to scan the glossary
+itself — the one document free to contradict the rule it defines, which two of
+its own entries had.
+
+The wave ran the chain nine times and the chain paid for itself nine times.
+Every PR's fresh-context review on a different model found something real: a
+`getline` loop quadratic in line count (8 MiB in eighteen seconds, 56 ms
+after); a timeout that killed the shell wrapping the worker while the worker,
+reparented, ran to completion, and that read 124 from the worker's own signal
+rather than from having fired; three test suites — the pairing-guard, the
+locale, the roster — whose failure paths could not be reached, each caught by a
+mutant that survived; and, on the Gemini adapter, two of my three behavioural
+claims that did not reproduce on gemini 0.60.0 — the "prompt on stdin hangs"
+one because the real hang had been the inherited-pipe bug, which I had
+attributed to the wrong cause and written a section around.
+
+ADR-0003 was amended rather than duplicated: the never-shipped-twin
+arrangement it recorded for the tier mapping is general, and the guard policy
+is its second instance. The pairing guard is now on in the repository whose
+product is that discipline, which every push of the 0.18.0 wave had announced
+it was not.
+
+One thing this release does NOT yet show: a Gemini dispatch running end to end
+through the shipped dispatcher with a real `--policy` file and `--timeout`. The
+fixes above exist because the first live attempt hit each edge; the
+re-verification was blocked on Gemini's daily quota, and the gemini-cli adapter
+says so in a re-verification note rather than claiming what was not re-run.
