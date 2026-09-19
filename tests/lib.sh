@@ -82,6 +82,12 @@ T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # Anything else is refused, exit 2: a typo must not read as "inside". Inside a
 # dispatched worker (AGENT_DISPATCH_BUDGET_TASKS set) the suite is already
 # inside that worker's budget and opens none of its own (ADR-0006 clause 7).
+# The same when the cgroup this shell already sits in bounds the suite — an
+# operator's own `systemd-run --user --scope -p TasksMax=…`, whose pids.max
+# is the tightest on the path or whose pids.max / memory.max the derived
+# ceilings would exceed: a scope opened from there is a sibling outside it,
+# so the suite runs in place under that cgroup's ceilings, marker `rung
+# inherited`, and the note names the cgroup.
 # The policy the budget is derived under is the kit's own,
 # scripts/agents.kit.config.sh, never the environment's $AGENTS_CONFIG — the
 # defaults today, and the place to tighten the suite's budget if a clamp is
@@ -93,6 +99,42 @@ T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # budget is prefixed `tests/lib.sh:` so it reads as the test harness's, not the
 # suite's.
 _sb_note() { echo "$1" >&2; }
+
+# _sb_own_bounds — does the cgroup this shell sits in already bound the
+# suite? True when its pids.max is the tightest on the path (an operator's
+# scope, not the session slice), or its pids.max or memory.max sits below
+# the derived ceiling: a transient scope opened from here would be a SIBLING
+# under the user manager, outside that cgroup and above its ceilings
+# (ADR-0006 clause 7). The root is every scope's ancestor — a container
+# with a pids.max on its root bounds a child scope too — so it never
+# counts. Sets _sb_own_name and _sb_own_limits ("tasks <n|max>, memory
+# <MiB|max>"). Called after _budget_derive, in its shell.
+_sb_own_bounds() {
+	_sb_own_name="" _sb_own_limits=""
+	_ob_own=$(sed -n 's/^0:://p' "$_host/proc/self/cgroup" 2>/dev/null)
+	case "$_ob_own" in '' | /) return 1 ;; esac
+	_ob_pids=$(cat "$_host/sys/fs/cgroup$_ob_own/pids.max" 2>/dev/null)
+	_ob_mem=$(cat "$_host/sys/fs/cgroup$_ob_own/memory.max" 2>/dev/null)
+	_ob_bounds=0
+	case "$_ob_pids" in
+	'' | *[!0123456789]*) _ob_pids=max ;;
+	*)
+		_ob_tightest=$(_budget_session_tasks) && [ "${_ob_tightest#* }" = "${_ob_own##*/}" ] && _ob_bounds=1
+		[ "$_ob_pids" -lt "$BUDGET_TASKS" ] && _ob_bounds=1
+		;;
+	esac
+	case "$_ob_mem" in
+	'' | *[!0123456789]*) _ob_mem=max ;;
+	*)
+		_ob_mem=$((_ob_mem / 1048576))
+		[ "$_ob_mem" -lt "$BUDGET_MEMORY" ] && _ob_bounds=1
+		_ob_mem="$_ob_mem MiB"
+		;;
+	esac
+	[ "$_ob_bounds" = 1 ] || return 1
+	_sb_own_name=${_ob_own##*/}
+	_sb_own_limits="tasks $_ob_pids, memory $_ob_mem"
+}
 
 # t_suite_under_budget <suite> [args…] — run the suite inside the budget
 # _budget_derive left in BUDGET_TASKS / BUDGET_MEMORY / BUDGET_RUNG, down the
@@ -226,6 +268,12 @@ off)
 			esac
 			_budget_derive
 			if [ -n "$_sb_cfg_set" ]; then AGENTS_CONFIG=$_sb_cfg_was; else unset AGENTS_CONFIG; fi
+			if _sb_own_bounds; then
+				_sb_note "i  tests/lib.sh: already inside a bounded cgroup ($_sb_own_name: $_sb_own_limits) — a transient scope opened from here would be a sibling outside it, above its ceilings (ADR-0006 clause 7). $0 runs in place, under that cgroup's ceilings; a hit there is that cgroup's refusal, not a FAIL line from this file."
+				AGENT_SUITE_BUDGET="applied: $_sb_own_limits, rung inherited"
+				export AGENT_SUITE_BUDGET
+				exec sh "$0" "$@"
+			fi
 			t_suite_under_budget "$0" "$@"
 		)
 		exit $?

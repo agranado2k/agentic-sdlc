@@ -155,6 +155,7 @@ s_assert_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and ru
 s_assert_out_has "forks: yes" "…and can fork inside it"
 s_assert_out_has "agents config: <unset>" "…with the environment it was started with — the kit's policy file stayed with the derivation"
 s_assert_err_has "below the floor"
+s_assert_err_lacks "already inside"
 [ "$(starts)" = 2 ] && pass "the suite's file ran exactly twice — once bare, once inside the budget" ||
 	fail "the suite's file ran $(starts) time(s) — expected 2 (the marker is the recursion bound)"
 RUNG=$(printf '%s\n' "$S_OUT" | sed -n 's/^budget: applied: .*, rung //p')
@@ -207,6 +208,57 @@ s_assert_err_has "suite-green-4242.scope"
 s_assert_err_has "AGENT_SUITE_BUDGET"
 s_assert_out_lacks "budget:" "…and the suite body never ran"
 [ "$(starts)" = 1 ] && pass "…and the file ran once — no sibling scope was opened" || fail "the file ran $(starts) time(s) from inside a suite scope without its marker"
+printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
+
+# A suite started inside a cgroup that already bounds it — an operator's own
+# `systemd-run --user --scope -p TasksMax=100 -p MemoryMax=64M`, the
+# containment ADR-0006 clause 5 describes for the time before #209 — must
+# not escape it: a scope opened from there is a SIBLING under the user
+# manager, with the derived ceilings (larger, usually) and not the
+# operator's. When the tightest pids.max on the path is the own cgroup's,
+# or the derived ceilings exceed the own cgroup's pids.max / memory.max, the
+# suite runs in place under that cgroup and says so — never "this host is
+# small". Three shapes, then the one that is not this: a container's root.
+OWN="$HOST/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/run-u99.scope"
+mkdir -p "$OWN"
+printf '0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-u99.scope\n' >"$HOST/proc/self/cgroup"
+echo 100 >"$OWN/pids.max"
+echo 67108864 >"$OWN/memory.max"
+stub sh "$GREEN"
+s_assert_status 0 "inside an operator's scope whose pids.max is the tightest on the path, the suite runs"
+s_assert_out_has "budget: applied: tasks 100, memory 64 MiB, rung inherited" "…in place, the marker naming that cgroup's ceilings"
+s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
+s_assert_err_lacks "this host is small"
+s_assert_out_has "forks: yes" "…and it can fork"
+[ "$(starts)" = 2 ] && pass "…and the file ran twice — once bare, once in place with the marker" || fail "the file ran $(starts) time(s) inside an operator's scope"
+# The floor above the operator's cap: the slice is the tightest at 100, so
+# the derived ceiling is the floor, 256 — above the own cgroup's 200.
+echo 200 >"$OWN/pids.max"
+rm -f "$OWN/memory.max"
+echo 100 >"$SLICE/pids.max"
+stub sh "$GREEN"
+s_assert_out_has "budget: applied: tasks 200, memory max, rung inherited" "a derived task ceiling above the own cgroup's pids.max runs in place too, under the cgroup's"
+s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
+echo 400 >"$SLICE/pids.max"
+# Memory alone: no task ceiling on the own cgroup, and a memory.max the
+# derived 1045 MiB would exceed.
+echo max >"$OWN/pids.max"
+echo 67108864 >"$OWN/memory.max"
+stub sh "$GREEN"
+s_assert_out_has "budget: applied: tasks max, memory 64 MiB, rung inherited" "a derived memory ceiling above the own cgroup's memory.max runs in place, under the cgroup's"
+s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
+rm -rf "$HOST/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"
+# A container's root is every scope's ancestor — a scope opened there is a
+# child, bounded by the root's pids.max on top of its own — so the tightest
+# ceiling being the own cgroup's is NOT the operator's-scope case there.
+printf '0::/\n' >"$HOST/proc/self/cgroup"
+echo 2048 >"$HOST/sys/fs/cgroup/pids.max"
+echo 'cpu memory pids' >"$HOST/sys/fs/cgroup/cgroup.controllers"
+stub sh "$GREEN"
+s_assert_out_has "budget: applied: tasks 512, memory 1045 MiB, rung " "at a container's root the suite takes the derived budget — 25% of the root's 2048"
+s_assert_out_lacks "rung inherited" "…in a scope of its own, which is the root's child"
+s_assert_err_lacks "already inside"
+rm -f "$HOST/sys/fs/cgroup/pids.max" "$HOST/sys/fs/cgroup/cgroup.controllers"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
 # Every suite in tests/ sources the test harness, so none has to remember any of

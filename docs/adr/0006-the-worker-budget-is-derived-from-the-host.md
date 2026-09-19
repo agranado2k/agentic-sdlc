@@ -374,7 +374,16 @@ were left to it and are decided here; the clauses stand as written.
   (`AGENT_DISPATCH_BUDGET_TASKS` set) the test harness opens nothing: a scope from
   inside a scope is a sibling, and a suite's scope is never a backstop for
   the dispatches it runs — the dispatch suite's runaways are bounded by their
-  own dispatch, exactly as clause 7 says.
+  own dispatch, exactly as clause 7 says. The outer boundary is not only a
+  dispatch: a suite started inside a cgroup that already bounds it — an
+  operator's own `systemd-run --user --scope`, whose `pids.max` is the
+  tightest on the path or whose `pids.max` / `memory.max` the derived
+  ceilings would exceed — runs in place under that cgroup's ceilings and
+  says which, because the sibling the ladder would open escapes the
+  operator's cap with larger numbers and blames the host for being small.
+  The root cgroup is every scope's ancestor and never counts as that
+  boundary. A run that lost the marker inside a suite's own scope is
+  refused outright: the scope's name is the second recursion bound.
 - **The policy is the kit's own.** The suite derives under
   `scripts/agents.kit.config.sh` (ADR-0003's never-shipped twin), never the
   environment's `$AGENTS_CONFIG`: a developer's environment does not decide
