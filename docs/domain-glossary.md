@@ -170,6 +170,20 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: the bare "harness" — see "Words this project does not use";
     "provider" (that is the vendor behind the model, not the program running
     it); and "runner".
+- **Budget** — the two ceilings a dispatched worker's whole process tree runs
+  inside: a task ceiling and a memory ceiling, decided at dispatch time as a
+  percentage of the host — the task ceiling the operator's own session runs
+  under, and the memory available right now — clamped to a policy floor and
+  ceiling. Percentages and clamps are policy-file variables in
+  `scripts/agents.config.sh`; derivation, the enforcement ladder and the exit
+  status (71) are `scripts/agent-dispatch.sh`'s, and `--dry-run` shows the
+  budget before a token is spent. A nested dispatch inherits the outer's and
+  never opens a fresh one. Ref: ADR-0006.
+  - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
+    here is a ceiling on one tree, derived fresh per dispatch. "Limit" and
+    "cap" stay ordinary words for the host facts a budget is derived *from*
+    (the slice's `TasksMax`, the per-user process limit); only the derived
+    pair is the budget.
 - **Tracer bullet** — a ticket that is a thin end-to-end slice: something
   demoable, not a horizontal layer. In this repo a tracer bullet is typically a
   rule, the check that enforces it, and the suite that drives that check red
