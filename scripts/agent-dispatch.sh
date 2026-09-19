@@ -1096,17 +1096,13 @@ WRAP
 }
 
 # The rung the worker actually runs under: a derived budget takes the probed
-# rung; an inherited or disabled one runs bare (none-bare), opening nothing.
+# rung; an inherited or disabled one runs bare, opening nothing.
 if [ "$BUDGET_MODE" = derived ]; then
 	RUN_RUNG=$BUDGET_RUNG
 else
-	RUN_RUNG=none-bare
+	RUN_RUNG=none
 fi
-if [ "$RUN_RUNG" = none-bare ]; then
-	RUN_CMD=$CMD
-else
-	_budget_build_run_cmd "$RUN_RUNG"
-fi
+_budget_build_run_cmd "$RUN_RUNG"
 
 # --- the process-tree helpers (shared by the timed path) --------------------
 # setsid would give one process group to signal but is not POSIX; walking
@@ -1241,11 +1237,10 @@ scope | scope-tasks)
 		echo "   passed) — running the worker under the weaker rlimit rung instead." >&2
 		if [ -n "$NPROC_FLAG" ]; then
 			RUN_RUNG=rlimit
-			_budget_build_run_cmd rlimit
 		else
-			RUN_RUNG=none-bare
-			RUN_CMD=$CMD
+			RUN_RUNG=none
 		fi
+		_budget_build_run_cmd "$RUN_RUNG"
 		_spawn_run
 		[ "$_timed_out" = 1 ] && exit 124
 		exit "$_worker_status"
