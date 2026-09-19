@@ -1452,37 +1452,21 @@ case "$S_OUT" in
 *) fail "the inherited worker did not run in the caller's cgroup: $(printf '%s' "$S_OUT" | grep CG=)" ;;
 esac
 
-# The RLIMIT rung (ADR-0006 ladder rung 2): with no systemd-run on PATH the
-# ladder falls to rlimits in the worker's shell. A PATH that mirrors the real
-# one minus systemd-run is how "systemd-run absent" is simulated without
-# breaking the tools the dispatcher itself needs. The task bound is applied as
-# `ulimit -u/-p` and the memory bound as `ulimit -d` (KiB) — proven by a stub
-# that reports its own limits, a builtin that never forks, so a large safe task
-# value can be asserted without risking this uid's own fork ceiling. A ceiling
-# hit is not observable on this rung, so there is no 71 to assert.
-NOSD_PATH="$SCRATCH/nosd-path"; mkdir -p "$NOSD_PATH"
-for _f in /usr/bin/* /bin/*; do
-	_b=${_f##*/}
-	[ "$_b" = systemd-run ] && continue
-	[ -e "$NOSD_PATH/$_b" ] || ln -sf "$_f" "$NOSD_PATH/$_b" 2>/dev/null
-done
-if [ -n "$(command -v ulimit || true)" ] || (ulimit -u >/dev/null 2>&1); then
-	: # ulimit is a shell builtin; the real check is that the dispatcher applies it
-fi
-t_run_split env PATH="$NOSD_PATH" AGENTS_CONFIG="$CFG_CG" \
+# The RLIMIT rung (ADR-0006 ladder rung 2): with no user service manager the
+# ladder falls to rlimits in the worker's shell. NOSD — a systemctl that
+# answers nothing — is how "no manager" is simulated. The task bound is applied
+# as `ulimit -u/-p` and the memory bound as `ulimit -d` (KiB) — proven by a
+# stub that reports its own limits, a builtin that never forks, so a large safe
+# task value can be asserted without risking this uid's own fork ceiling. A
+# ceiling hit is not observable on this rung, so there is no 71 to assert.
+t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
-if [ "$S_STATUS" = 2 ]; then
-	# A minimal PATH that lost a tool the dispatcher needs would report itself
-	# here rather than silently passing the leg.
-	fail "the rlimit-rung leg could not run under the stripped PATH: $S_ERR"
-else
-	s_assert_status 0 "the rlimit rung runs the worker"
-	s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
-	s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
-fi
-t_run_split env PATH="$NOSD_PATH" AGENTS_CONFIG="$CFG_CG" \
+s_assert_status 0 "the rlimit rung runs the worker"
+s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
+s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
+t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has "rlimits" "…and a dry run with no systemd-run names the rlimit rung"
+s_assert_out_has "rlimits" "…and a dry run with no user service manager names the rlimit rung"
 s_assert_out_has "best-effort via rlimits" "…and says the rung is best-effort"
 
 AGENTS_CONFIG="$CFG"
