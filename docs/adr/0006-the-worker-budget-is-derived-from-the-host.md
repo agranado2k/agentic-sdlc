@@ -298,3 +298,59 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
   `scripts/agent-dispatch.sh`'s `--timeout` note (the 124 precedent clause 6
   copies); `sysexits.h` (`EX_OSERR` is 71); systemd's `DefaultTasksMax=`
   (33% of `kernel.threads-max`).
+
+### Amendment, 2026-09-19 — what building #208 refined in clauses 5, 6 and 8
+
+#208 implemented the ladder as recorded, and building it against a real host
+refined four things the clauses above left open or got wrong. The clauses
+stand as written; this block is what binds where they differ.
+
+- **Clause 5, rung 1 — the scope command carries two more properties.** The
+  rung is `systemd-run --user --scope --unit=agent-dispatch-<suffix> -p
+  TasksMax=<tasks> -p MemoryMax=<MiB>M -p MemorySwapMax=0 -p
+  OOMPolicy=continue`. Without `OOMPolicy=continue` the host tore the whole
+  scope down on the first out-of-memory event, and the wrapper (clause 6)
+  never ran to read the counter the verdict needs; `continue` leaves the
+  kernel to OOM-kill the offending task *inside* the cgroup, so the wrapper
+  survives to read `memory.events`. Without `MemorySwapMax=0` the runaway
+  filled swap for seconds first, which both delayed the bound and let
+  `systemd-oomd`'s pressure kill of the scope pre-empt it; with swap denied,
+  the ceiling bites at `MemoryMax` and is observable at once. A memory budget
+  swap can evade is not a budget. The `pids`-only rung carries `TasksMax` and
+  `OOMPolicy=continue`. The scope is **named** after the dispatch's scratch
+  (`agent-dispatch-<mktemp suffix>`), so the dispatcher can reach the whole
+  cgroup after the spawn: on `--timeout` it KILLs the unit after the tree
+  walk's TERM/KILL pass, which is what makes "the tree is gone either way"
+  hold for a child the worker double-forked out of the walk's reach, and a
+  stray `agent-dispatch-*` scope has a name `/housekeeping` can list.
+- **Clause 5, "when the rung refuses at execution" — decided before the
+  spawn, never by a re-run.** The dispatcher opens and closes an empty scope
+  with the real properties first, in milliseconds; a refusal there falls to
+  rung 2 loudly with `systemd-run`'s own message. After the real spawn a
+  missing started-marker is *reported* — the scope torn down before the
+  worker started, or the scratch removed under an untimed dispatch older
+  than the sweep age — and the run's own status passes through. The marker
+  is a file a worker's tree or a sweep can remove; it never runs the worker a
+  second time.
+- **Clause 6 — nothing is observed on the rlimit rung, and an unreadable
+  verdict is loud.** A `RLIMIT_NPROC` hit is uid-wide and a `RLIMIT_DATA` hit
+  is a `malloc` the worker sees and the dispatcher does not, so on rung 2 a
+  hit passes the worker's own status through; the weaker rung was already
+  announced. On the scope rungs "could not read the counters" is never the
+  same as "no ceiling hit": the wrapper writes `-` for a counter it could not
+  read, and a missing marker, a missing or malformed verdict file (the
+  wrapper killed with the worker — `systemd-oomd` takes every process in the
+  pressured cgroup, and `OOMPolicy=continue` exempts nothing) or an
+  unreadable counter is said on stderr with the run's own status passed
+  through, never a silent zero. **Whichever fired first** is decided from
+  the counters: the watchdog reads the scope's `pids.events` /
+  `memory.events` from outside before it signals — once the scope empties
+  they are gone — and a ceiling hit already on them exits 71, not 124.
+- **Clause 8 — visible, and now enforced.** `--dry-run`'s `enforced:` line
+  says, per rung, that the budget *is* applied: both ceilings exit 71 on the
+  scope rung, the task ceiling alone on the `pids`-only rung, best-effort on
+  rlimits, announced only where there is no mechanism. The floor note, the
+  off switch and the no-mechanism note of rung 3 are said on **every**
+  dispatch, so an operator piping stdout still hears them; a within-budget
+  dispatch that trips no clamp stays silent on stderr, the way the timeout is
+  silent until it fires.

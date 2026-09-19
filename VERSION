@@ -613,20 +613,51 @@
 # worker still running UNDER A TIMEOUT. An untimed worker that outlives the
 # age has its scratch removed under it, harmlessly: it took its prompt at
 # exec and never writes there again. A --dry-run sweeps nothing.
-#   A top-level dispatch cannot tell this release from the last: its depth is
-# 1, its statuses are untouched, the eight new variables ship empty, and the
-# only thing it sees is --dry-run's depth line and the budget lines beneath
-# it — the worker runs exactly as it did. One that has dispatched before
+#   From #208: the derived budget of #207 is now APPLIED. The dispatcher runs
+# the worker inside the strongest mechanism the host offers, probed at dispatch
+# time and pre-flighted before the spawn: a named transient scope under the
+# user service manager (systemd-run --user --scope with TasksMax and MemoryMax,
+# plus MemorySwapMax=0 and OOMPolicy=continue so the memory ceiling bites at
+# once and a wrapper inside the scope survives to read the counters — ADR-0006
+# clause 5, amended where building refined its bare command); else rlimits in
+# the worker's own shell (ulimit -u/-p and -d, weaker and best-effort); else a
+# loud no-op. A worker that exceeds its budget makes the dispatcher exit 71
+# (EX_OSERR), the verdict read from the scope's pids.events / memory.events
+# counters and never from the worker's own status, with stderr naming which
+# ceiling was hit; a verdict that cannot be read is said, never a silent
+# pass-through; on the rlimit rung a hit is unobservable and the worker's
+# status passes through. --timeout and the budget compose — whichever fired
+# first, read from the counters before the tree is signalled, and the whole
+# scope is killed so the tree is gone either way. A nested dispatch reads
+# AGENT_DISPATCH_BUDGET_TASKS / _MEMORY_MIB from its environment, opens no
+# second scope (a scope inside a scope is a sibling that escapes), and an
+# inherited budget wins over --no-budget. The floor note, the off switch and
+# the no-mechanism note, dry-run-only until now, are lifted to every dispatch;
+# the enforced: dry-run line now says the budget IS applied.
+#   A top-level dispatch on a host WITHOUT a user service manager and without
+# rlimits cannot tell this release from the last: its depth is 1, its statuses
+# are untouched, the eight new variables ship empty, and the budget is a loud
+# no-op. On a host that CAN bound one — most — the worker now runs inside a
+# budget it did not before: a within-budget worker behaves as it always did and
+# exits 0, but a runaway is stopped at its ceiling and the dispatch exits 71,
+# and the operator's session survives it. One that has dispatched before also
 # sees a scratch directory with a name, and hears about a sweep only when
 # there was something to sweep.
 #   NON-MANIFEST HALF, enumerated. docs/adr/0006-the-worker-budget-is-derived-from-the-host.md
 # records the budget decision — what a budget is, the derivation, where
 # policy lives, the ladder, nesting, the status, and the two options rejected
-# (a fixed cap; lowering the slice's own TasksMax); docs/adr/INDEX.md lists
-# it, and bootstrap.sh's kit-own list keeps it out of consumer trees.
+# (a fixed cap; lowering the slice's own TasksMax); #208 amends it by a dated
+# block under More information — clause 5 (the scope command gains
+# MemorySwapMax=0 and OOMPolicy=continue and a unit name; the rung is decided
+# by a pre-flight, never by a re-run), clause 6 (nothing observed on the
+# rlimit rung; an unreadable verdict is loud; whichever fired first is read
+# from the counters) and clause 8 (the notes lifted, the enforced line now
+# positive); docs/adr/INDEX.md lists it and carries the amendment on its
+# row, and bootstrap.sh's kit-own list keeps it out of consumer trees.
 # docs/domain-glossary.md gains **Budget** under Process, citing it, and no
 # term for the depth: depth is a property of a dispatch, not a concept; for
-# #210 it gains **Dispatch scratch** and **Sweep age** beside it.
+# #210 it gains **Dispatch scratch** and **Sweep age** beside it, and for
+# #208 **Sweep age** says what a sweep does to a scope-rung verdict.
 # scripts/agents.config.sh — yours — documents AGENT_DISPATCH_MAX_DEPTH and
 # AGENT_DISPATCH_SWEEP_DAYS beside the timeout note and gains the six
 # AGENT_BUDGET_* variables under a note in the same voice, all eight shipped
@@ -639,7 +670,20 @@
 # test-only AGENT_DISPATCH_HOST_ROOT, the clamps, the policy read, the
 # fallback to the per-user process limit, the flags, the inherited case and
 # the probed rung, and holds each sweep line through the dispatch seam, with
-# a KILLed dispatch as the fixture that leaves scratch behind;
+# a KILLed dispatch as the fixture that leaves scratch behind; for #208 it
+# drives real runaways under small budgets through the dispatch seam — a
+# self-spawning fork loop stopped at the task ceiling (exit 71, the calling
+# shell still forking after), a self-bounding allocation stopped at the memory
+# ceiling (71), a fork loop under the rlimit rung refused inside the worker's
+# own shell with the dispatcher's limits and cleanup untouched, --no-budget
+# running unbounded and loud, the rlimit rung applying ulimit -u/-p and -d on
+# both spawn paths, --timeout composing with the budget both ways (the
+# ceiling first, and the ceiling before a timeout), a double-forked child
+# gone with the scope, an inherited dispatch opening no scope and passing
+# the exported pair on, a pre-flight refusal falling to rlimits with one
+# run, a missing marker reported and never re-run, and a fake systemd-run
+# driving every verdict branch — task hit, memory hit, the pids-only rung's
+# guard, and a missing, malformed or unreadable verdict said aloud;
 # tests/housekeeping-skill.test.sh holds the checklist line. UPDATING.md's
 # Part 2 gate transcript gains the skill-paths advisory the checklist's new
 # `scripts/agents.config.sh` reference raises in a consumer that has not

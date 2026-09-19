@@ -37,9 +37,13 @@
 #      and this is what stops it. Refused before the tier is resolved or the
 #      prompt is read, so nothing spawns. AGENT_DISPATCH_MAX_DEPTH below.
 # 124  the worker ran past --timeout and its process tree was killed
-#  71  RESERVED: the worker exceeded its budget (ADR-0006, EX_OSERR — "can't
-#      fork"). Nothing produces it yet: this release derives the budget and
-#      shows it under --dry-run, and enforcement is the next release's.
+#  71  the worker exceeded its budget (ADR-0006, EX_OSERR — "can't fork"): a
+#      task or memory ceiling on its whole process tree was hit. The verdict is
+#      a flag the dispatcher writes from the scope's pids.events / memory.events
+#      counters, never inferred from the worker's own status. On the weaker
+#      rlimit rung a ceiling hit is not observable, so the worker's own status
+#      passes through. A worker that both timed out and exceeded its budget
+#      exits with whichever fired first; its tree is gone either way.
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -681,9 +685,11 @@ command -v "$CMD_BIN" >/dev/null 2>&1 ||
 # carries the percentages and clamps, and empty there means the defaults
 # below — a policy file from before the budget existed still gets one.
 #
-# NOTHING BELOW IS APPLIED. This release derives the budget and shows it under
-# --dry-run so the number is inspectable before enforcement lands; the worker
-# runs exactly as it did. The dry run says so in as many words.
+# THE BUDGET IS DERIVED HERE AND APPLIED BELOW (ADR-0006, #208). The derivation
+# is unchanged; the spawn at the foot of this file wraps the worker in the
+# strongest mechanism the host offers — a transient scope, else rlimits, else a
+# loud no-op — and reads a verdict back. --dry-run still shows the numbers and
+# the rung without running anything.
 #
 # AGENT_DISPATCH_HOST_ROOT is TEST-ONLY. It is prefixed to the two host paths
 # read below (/proc and /sys) so a suite can hand this script a fake host and
@@ -913,6 +919,40 @@ else
 	BUDGET_RUNG=$(_budget_rung)
 fi
 
+# --- announce, once, on stderr — for a dry run and a real dispatch alike -----
+# ADR-0006 clause 8: the floor note, the off switch, the inherited-no-escape
+# note and the no-mechanism note are said on EVERY dispatch, not only the dry
+# run. stdout stays the dry run's; this is the half an operator piping stdout
+# still hears.
+_budget_announce() {
+	case "$BUDGET_MODE" in
+	disabled)
+		echo "!  dispatch: --no-budget — this worker has no budget of its own. A runaway worker" >&2
+		echo "   then takes the session's whole task ceiling and memory with it." >&2
+		;;
+	inherited)
+		if [ "$NO_BUDGET" = 1 ]; then
+			echo "!  dispatch: --no-budget cannot escape the outer dispatch's budget — this dispatch is" >&2
+			echo "   inside its cgroup, and no flag on an inner dispatch can leave it." >&2
+		fi
+		;;
+	derived)
+		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
+		*"below the floor"*)
+			echo "!  dispatch: a budget is below the floor — see the budget line. A worker" >&2
+			echo "   that small cannot do useful work: a derived value was raised to the floor, and" >&2
+			echo "   the host then leaves the session less margin than AGENT_BUDGET_*_PERCENT" >&2
+			echo "   intends; an explicit --budget-* value is honoured as given." >&2
+			;;
+		esac
+		if [ "$BUDGET_RUNG" = none ]; then
+			echo "!  dispatch: no user service manager and no rlimit on this host — the budget is" >&2
+			echo "   announced and not applied. The worker runs unbounded, as before." >&2
+		fi
+		;;
+	esac
+}
+
 if [ "$DRY_RUN" = 1 ]; then
 	printf 'tier:           %s%s\n' "$TIER" "${DOMAIN:+ (domain: $DOMAIN)}"
 	printf 'agent harness:  %s\n' "$HARNESS"
@@ -927,47 +967,40 @@ if [ "$DRY_RUN" = 1 ]; then
 	printf 'command:        %s\n' "$CMD"
 	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
-	# The budget, and the truth about it: shown, not applied, in this release.
-	# The floor note and the off switch are said on stderr as well, where an
-	# operator piping stdout still hears them. Both live inside this block on
-	# purpose until the budget is applied: a real dispatch says nothing about
-	# a budget it does not apply (the suite holds that), and the release that
-	# applies one lifts the two notes above this `if` (ADR-0006 clause 8).
+	# The budget: the numbers, the rung, and that it IS enforced (ADR-0006
+	# clause 8). The floor note and the off switch are said on stderr by
+	# _budget_announce below, where an operator piping stdout still hears them.
 	case "$BUDGET_MODE" in
 	disabled)
-		printf 'budget:         DISABLED by --no-budget — the worker would run under the session'"'"'s own ceilings\n'
-		echo "!  dispatch: --no-budget — this worker has no budget of its own. A runaway worker" >&2
-		echo "   then takes the session's whole task ceiling and memory with it." >&2
+		printf 'budget:         DISABLED by --no-budget — the worker runs under the session'"'"'s own ceilings\n'
+		printf '                enforced: no — --no-budget was given\n'
 		;;
 	inherited)
 		printf 'budget:         inherited from the outer dispatch — tasks %s, memory %s MiB; not opened again,\n' "$BUDGET_TASKS" "$BUDGET_MEMORY"
 		printf '                a nested worker shares the outer ceiling\n'
 		if [ "$NO_BUDGET" = 1 ]; then
 			printf '                --no-budget cannot escape it: this dispatch is inside the outer dispatch'"'"'s cgroup\n'
-			echo "!  dispatch: --no-budget cannot escape the outer dispatch's budget — this dispatch is" >&2
-			echo "   inside its cgroup, and no flag on an inner dispatch can leave it." >&2
 		fi
+		printf '                enforced: by the outer dispatch — this dispatch opens no scope of its own\n'
 		;;
 	derived)
 		printf 'budget:         tasks %s — %s (floor %s, ceiling %s)\n' "$BUDGET_TASKS" "$BUDGET_TASKS_FROM" "$BUDGET_TASKS_FLOOR" "$BUDGET_TASKS_CEILING"
 		printf '                memory %s MiB — %s (floor %s, ceiling %s)\n' "$BUDGET_MEMORY" "$BUDGET_MEMORY_FROM" "$BUDGET_MEMORY_FLOOR" "$BUDGET_MEMORY_CEILING"
 		case "$BUDGET_RUNG" in
 		scope) printf '                rung: a transient scope under the user service manager (systemd-run --user --scope,\n                TasksMax and MemoryMax on the worker'"'"'s own cgroup, shared by its whole tree)\n' ;;
-		scope-tasks) printf '                rung: a transient scope under the user service manager for the task ceiling (systemd-run\n                --user --scope, TasksMax on the worker'"'"'s own cgroup); the memory controller is not delegated\n                to the user manager on this host, so the memory ceiling would be announced and not applied\n' ;;
+		scope-tasks) printf '                rung: a transient scope under the user service manager for the task ceiling (systemd-run\n                --user --scope, TasksMax on the worker'"'"'s own cgroup); the memory controller is not delegated\n                to the user manager on this host, so the memory ceiling is announced and not applied\n' ;;
 		rlimit) printf '                rung: rlimits in the worker'"'"'s shell (ulimit %s, ulimit -d) — weaker: no user service\n                manager answered, or it has no pids controller delegated; per process, and the task\n                count is the user'"'"'s, not the tree'"'"'s\n' "$NPROC_FLAG" ;;
-		*) printf '                rung: NONE — no user service manager and no rlimit; the budget would be announced and not applied\n' ;;
+		*) printf '                rung: NONE — no user service manager and no rlimit; the budget is announced and not applied\n' ;;
 		esac
-		case "$BUDGET_TASKS_FROM$BUDGET_MEMORY_FROM" in
-		*"below the floor"*)
-			echo "!  dispatch: a budget is below the floor — see the dry run's budget line. A worker" >&2
-			echo "   that small cannot do useful work: a derived value was raised to the floor, and" >&2
-			echo "   the host then leaves the session less margin than AGENT_BUDGET_*_PERCENT" >&2
-			echo "   intends; an explicit --budget-* value is honoured as given." >&2
-			;;
+		case "$BUDGET_RUNG" in
+		scope) printf '                enforced: yes — the worker runs inside the scope; a task or memory ceiling hit exits 71\n' ;;
+		scope-tasks) printf '                enforced: the task ceiling yes (71 on a hit); the memory ceiling is announced only\n' ;;
+		rlimit) printf '                enforced: best-effort via rlimits; a ceiling hit is not observable, so the worker'"'"'s own status passes through\n' ;;
+		*) printf '                enforced: no — no mechanism on this host; the budget is announced only\n' ;;
 		esac
 		;;
 	esac
-	printf '                enforced: NOT applied in this release — shown so the number can be checked; the worker runs unbounded, as before\n'
+	_budget_announce
 	printf '\n--- prompt (%s bytes) ---\n' "$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	cat "$PROMPT_FILE"
 	printf '\n--- end prompt ---\n'
@@ -980,27 +1013,219 @@ echo "i  dispatch: tier '$TIER' -> agent harness '$HARNESS', model '${MODEL:-<de
 # eval and the timed `sh -c` cannot disagree about it.
 AGENT_DISPATCH_DEPTH=$((DEPTH + 1))
 export AGENT_DISPATCH_DEPTH
-# The worker never inherits this script's stdin. Found live: an agent CLI that
-# reads stdin when it is not a tty blocked forever on the dispatcher's own
-# inherited pipe, and a dispatch that took fourteen seconds with </dev/null on
-# the dispatcher hung indefinitely without it. The prompt reaches the worker by
-# {prompt_file}, so it has no legitimate use for the parent's stdin: a template
-# that redirects `< {prompt_file}` still gets it — a redirect inside the
-# eval'd command wins over this outer one — and a template that does not gets
-# nothing, which is what it would have got from a terminal that had moved on.
-if [ -z "$TIMEOUT" ]; then
-	eval "$CMD" </dev/null
-	exit $?
+
+# The budget travels to a nested dispatch the way the depth does — through the
+# environment (ADR-0006 clause 7). A derived or an inherited budget is exported
+# so an inner dispatch inherits it and opens NO second scope: a scope opened
+# inside a scope is a sibling that escapes this one's cgroup. Both names or
+# neither, held to the inherited validator on the way in. A disabled budget
+# exports nothing, so an inner dispatch derives its own.
+if [ "$BUDGET_MODE" = derived ] || [ "$BUDGET_MODE" = inherited ]; then
+	AGENT_DISPATCH_BUDGET_TASKS=$BUDGET_TASKS
+	AGENT_DISPATCH_BUDGET_MEMORY_MIB=$BUDGET_MEMORY
+	export AGENT_DISPATCH_BUDGET_TASKS AGENT_DISPATCH_BUDGET_MEMORY_MIB
 fi
 
-# --- with a timeout ---------------------------------------------------------
-# Headless agent CLIs gate tool calls on approvals, and headless there is no
-# human: a reviewer told to run `git diff` in an approval-gated mode waits
-# forever. Found live; only an external timeout ended it. The kit writes no
-# autonomy flags — that posture is the operator's — but a dispatch that can
-# never return is a different thing from one that returns a refusal.
+_budget_announce
+
+# --- how the worker is run, by rung -----------------------------------------
+# The budget is applied by WRAPPING the worker command, so the plain path and
+# the timed path run one string either way. Only a DERIVED budget wraps: an
+# inherited one is already inside the outer scope's cgroup and opens nothing, a
+# disabled one runs bare on purpose.
 #
-# Four things the first version of this got wrong, each found by review:
+# SCOPE_STARTED / SCOPE_VERDICT are how the scope rung reports back. A wrapper
+# inside the scope writes SCOPE_STARTED before it runs the worker — so a
+# wrapper that never started (the scope torn down before its first line, or
+# the scratch removed under an untimed dispatch older than the sweep age) is
+# told from a worker that merely exited non-zero — and, after the worker exits
+# and before the scope empties, writes the pids.events / memory.events counters
+# to SCOPE_VERDICT. The verdict is that flag, never the worker's own status
+# (clause 6). The wrapper does NO fork after the worker: it reads the cgroup
+# files with shell builtins, because at the task ceiling a fork of its own —
+# an awk, a sed — would itself be rejected and the verdict lost.
+SCOPE_STARTED="$SCRATCH/scope-started"
+SCOPE_VERDICT="$SCRATCH/scope-verdict"
+# The scope is named after the scratch, so the dispatcher can reach the whole
+# cgroup after the spawn — on a timeout, the ppid walk finds only the subtree
+# still under the worker, and a child the worker double-forked has been
+# re-parented out of it before the snapshot; the cgroup still holds it. The
+# mktemp suffix is letters and digits, a valid unit name as it stands.
+SCOPE_UNIT="agent-dispatch-${SCRATCH##*.}.scope"
+# _cg_counters <cgroup path> — sets _pm (pids.events max) and _ok
+# (memory.events oom_kill), each `-` when its file could not be read. One
+# definition, sourced by the wrapper inside the scope and by the watchdog
+# outside it; builtins only, because inside the scope at the task ceiling a
+# fork of its own — an awk, a sed — would itself be rejected. "Could not read"
+# and "no ceiling hit" must not look alike (driver 4), hence `-`, never 0.
+SCOPE_COUNTERS="$SCRATCH/scope-counters.sh"
+cat >"$SCOPE_COUNTERS" <<'CNT'
+_cg_counters() {
+	_pm=- _ok=-
+	[ -n "$1" ] || return 0
+	{ while read -r _k _v _rest; do case "$_k" in max) _pm=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$1/pids.events" || _pm=-
+	{ while read -r _k _v _rest; do case "$_k" in oom_kill) _ok=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$1/memory.events" || _ok=-
+}
+CNT
+
+# _budget_scope_props <rung> — sets SCOPE_PROPS, the properties a scope carries
+# on that rung; the pre-flight and the real spawn open a scope with the same.
+#
+# OOMPolicy=continue and MemorySwapMax=0 REFINE clause 5's bare
+# `-p MemoryMax=<MiB>M` (ADR-0006 records why): without OOMPolicy=continue this
+# host tore the whole scope down on the first OOM and the wrapper never ran to
+# read the counter clause 6 needs; without MemorySwapMax=0 the runaway filled
+# swap for seconds and could trip systemd-oomd's pressure kill of the scope
+# before MemoryMax bit. With both, the kernel OOM-kills the worker inside the
+# cgroup, the wrapper survives, and the memory ceiling is observable at once.
+_budget_scope_props() {
+	if [ "$1" = scope ]; then
+		SCOPE_PROPS="-p TasksMax=$BUDGET_TASKS -p MemoryMax=${BUDGET_MEMORY}M -p MemorySwapMax=0 -p OOMPolicy=continue"
+	else
+		SCOPE_PROPS="-p TasksMax=$BUDGET_TASKS -p OOMPolicy=continue"
+	fi
+}
+
+# _budget_build_run_cmd <rung> — sets RUN_CMD, the command both spawn paths run.
+# A scope rung also writes the wrapper it runs.
+_budget_build_run_cmd() {
+	case "$1" in
+	scope | scope-tasks)
+		# The wrapper takes its two paths and the worker command as arguments
+		# — positional parameters are not inherited, so none of the three
+		# reaches the worker's environment (the worker sees only the
+		# AGENT_DISPATCH_* names the file documents). The command is
+		# single-quoted into the string; the quote itself is the one character
+		# that needs escaping inside single quotes.
+		cat >"$SCRATCH/scope-wrapper.sh" <<'WRAP'
+. "${0%/*}/scope-counters.sh"
+_own=""
+while IFS= read -r _l; do case "$_l" in 0::*) _own=${_l#0::} ;; esac; done </proc/self/cgroup 2>/dev/null
+: >"$1"
+eval "$3"
+_st=$?
+_cg_counters "$_own"
+printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$2"
+exit "$_st"
+WRAP
+		_cmd_quoted=$(printf '%s\n' "$CMD" | sed "s/'/'\\\\''/g")
+		_budget_scope_props "$1"
+		RUN_CMD="systemd-run --user --scope --unit='${SCOPE_UNIT%.scope}' $SCOPE_PROPS --quiet sh '$SCRATCH/scope-wrapper.sh' '$SCOPE_STARTED' '$SCOPE_VERDICT' '$_cmd_quoted'"
+		;;
+	rlimit)
+		# ulimit in the worker's shell, before the worker: -u/-p for the task
+		# count, -d for the data segment (KiB). Weaker, per ADR-0006:
+		# RLIMIT_NPROC counts the uid, and RLIMIT_DATA is per process. A ceiling
+		# hit here is not observable, so the worker's own status passes through.
+		# The string always runs under its own `sh` (both spawn paths), so the
+		# limits die with the worker rather than binding this script — whose
+		# cleanup would then be the fork that fails. The flag is chosen where the
+		# ulimit runs, not where it was probed: the probe's shell is this one, the
+		# string's is `sh`, and on a dash host the two spell it differently. A
+		# refused ulimit is heard, and the worker still runs — the rung degrades
+		# to the announced no-op for that ceiling, loudly.
+		RUN_CMD="_nf=-u; ulimit -u >/dev/null 2>&1 || _nf=-p; ulimit \$_nf $BUDGET_TASKS || echo '!  dispatch: ulimit refused the task ceiling $BUDGET_TASKS — the rlimit rung applies no task bound' >&2; ulimit -d $((BUDGET_MEMORY * 1024)) || echo '!  dispatch: ulimit -d refused the memory ceiling $BUDGET_MEMORY MiB — the rlimit rung applies no memory bound' >&2; $CMD"
+		;;
+	*)
+		RUN_CMD=$CMD
+		;;
+	esac
+}
+
+# The rung the worker actually runs under: a derived budget takes the probed
+# rung; an inherited or disabled one runs bare, opening nothing.
+if [ "$BUDGET_MODE" = derived ]; then
+	RUN_RUNG=$BUDGET_RUNG
+else
+	RUN_RUNG=none
+fi
+
+# --- the scope rung is decided BEFORE the spawn -----------------------------
+# systemd-run can refuse after the probe passed — the bus gone between probe
+# and spawn, a manager that will not create scopes (ADR-0006 clause 5). So an
+# empty scope with the real properties is opened and closed first, in
+# milliseconds; a refusal there falls to the weaker rung, loudly, with
+# systemd-run's own message. After the real spawn nothing is retried: the
+# started marker is a file, and a file the worker's tree or a sweep can remove
+# must never be what runs the worker a second time — a missing marker after
+# the spawn is reported by _budget_verdict, never acted on.
+_budget_scope_preflight() {
+	_budget_scope_props "$1"
+	# eval, as the spawn paths do: zsh does not split an unquoted expansion.
+	_pf_err=$(eval "systemd-run --user --scope $SCOPE_PROPS --quiet true" 2>&1 >/dev/null) && return 0
+	echo "!  dispatch: the transient scope cannot open — systemd-run refused after the probe passed:" >&2
+	echo "   ${_pf_err:-(no message)}" >&2
+	echo "   Running the worker under the weaker rlimit rung instead." >&2
+	return 1
+}
+case "$RUN_RUNG" in
+scope | scope-tasks)
+	if ! _budget_scope_preflight "$RUN_RUNG"; then
+		if [ -n "$NPROC_FLAG" ]; then
+			RUN_RUNG=rlimit
+		else
+			RUN_RUNG=none
+		fi
+	fi
+	;;
+esac
+_budget_build_run_cmd "$RUN_RUNG"
+
+# --- the process-tree helpers (shared by the timed path) --------------------
+# setsid would give one process group to signal but is not POSIX; walking
+# `ps -A -o pid= -o ppid=` is.
+_tree_of() {
+	# Every descendant of $1, deepest last, then $1 itself — so TERM reaches
+	# the leaves before their parents and a parent cannot respawn a child that
+	# was already signalled.
+	_to_kids=$(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }')
+	for _to_k in $_to_kids; do _tree_of "$_to_k"; done
+	printf '%s\n' "$1"
+}
+_signal_list() {
+	# $1 signal, rest pids. Failures are expected — a pid may be gone already.
+	_sl_sig=$1
+	shift
+	for _sl_p in "$@"; do kill "-$_sl_sig" "$_sl_p" 2>/dev/null; done
+}
+# _scope_kill <signal> — the whole cgroup, orphans included; nothing to do off
+# the scope rungs, and nothing to say when the scope is already gone.
+_scope_kill() {
+	case "$RUN_RUNG" in
+	scope | scope-tasks) systemctl --user kill -s "$1" "$SCOPE_UNIT" >/dev/null 2>&1 ;;
+	esac
+}
+# _scope_counters_now — on a scope rung, read the scope's counters from OUTSIDE
+# it into SCOPE_VERDICT unless the wrapper already wrote them. For the watchdog,
+# before it signals: once the scope empties its cgroup and the counters are
+# gone, and a ceiling hit before the watchdog fired is the earlier event.
+_scope_counters_now() {
+	case "$RUN_RUNG" in
+	scope | scope-tasks) ;;
+	*) return 0 ;;
+	esac
+	[ -f "$SCOPE_VERDICT" ] && return 0
+	_scn_cg=$(systemctl --user show -p ControlGroup --value "$SCOPE_UNIT" 2>/dev/null)
+	[ -n "$_scn_cg" ] || return 0
+	. "$SCOPE_COUNTERS"
+	_cg_counters "$_scn_cg"
+	printf '%s %s %s\n' "$_pm" "$_ok" 124 >"$SCOPE_VERDICT"
+}
+_down() {
+	# Take the worker's tree and the watchdog down. Idempotent; safe to call
+	# from the trap and from the normal path both.
+	[ -n "${_worker:-}" ] && _signal_list TERM $(_tree_of "$_worker")
+	[ -n "${_watchdog:-}" ] && _signal_list TERM $(_tree_of "$_watchdog")
+	_scope_kill TERM
+}
+
+# _spawn_run — run RUN_CMD, untimed or under the watchdog. Sets _worker_status,
+# and _timed_out=1 when the watchdog fired (the caller then exits 124). The
+# budget verdict is the caller's, read from what the run left behind, so this
+# does not exit on its own except on a signal to the dispatcher itself.
+#
+# Four things the first version of the timed path got wrong, each found by
+# review:
 #
 #   1. The worker's process TREE is snapshotted ONCE, before any signal, and
 #      that same list is signalled twice — TERM, a grace, then KILL. Walking
@@ -1021,66 +1246,149 @@ fi
 #      watchdog down with it. Backgrounded children of a non-interactive
 #      shell start with SIGINT ignored, so a Ctrl-C on the dispatcher used to
 #      leave the worker running with no timeout left.
-#
-# setsid would give one process group to signal but is not POSIX; walking
-# `ps -A -o pid= -o ppid=` is.
-_tree_of() {
-	# Every descendant of $1, deepest last, then $1 itself — so TERM reaches
-	# the leaves before their parents and a parent cannot respawn a child
-	# that was already signalled.
-	_to_kids=$(ps -A -o pid= -o ppid= 2>/dev/null | awk -v p="$1" '$2 == p { print $1 }')
-	for _to_k in $_to_kids; do _tree_of "$_to_k"; done
-	printf '%s\n' "$1"
-}
-_signal_list() {
-	# $1 signal, rest pids. Failures are expected — a pid may be gone already.
-	_sl_sig=$1
-	shift
-	for _sl_p in "$@"; do kill "-$_sl_sig" "$_sl_p" 2>/dev/null; done
-}
-_down() {
-	# Take the worker's tree and the watchdog down. Idempotent; safe to call
-	# from the trap and from the normal path both.
-	[ -n "${_worker:-}" ] && _signal_list TERM $(_tree_of "$_worker")
-	[ -n "${_watchdog:-}" ] && _signal_list TERM $(_tree_of "$_watchdog")
-}
-TIMED_OUT="$SCRATCH/timed-out"
-# The scratch cleanup trap from earlier is extended, not replaced: on a
-# signal, the worker and the watchdog go first, then the scratch, then the
-# conventional 128+n.
-trap '_down; cleanup; exit 130' INT
-trap '_down; cleanup; exit 143' TERM
-trap '_down; cleanup; exit 129' HUP
-
-sh -c "$CMD" </dev/null &
-_worker=$!
-(
-	sleep "$TIMEOUT" &
-	_wd_sleep=$!
-	# The watchdog dies with its sleep: a TERM here forwards to the sleep, so
-	# reaping the watchdog never leaves a sleeper holding the caller's stdout.
-	trap 'kill "$_wd_sleep" 2>/dev/null; exit 0' TERM
-	wait "$_wd_sleep" || exit 0
-	# Verdict first, then the snapshot, then the signals — in that order, so a
-	# worker that dies from TERM on line one of its handler still reads as a
-	# timeout, and a child reparented by its parent's death is still on the
-	# list it is about to be sent.
-	: >"$TIMED_OUT"
-	echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
-	_wd_list=$(_tree_of "$_worker")
-	_signal_list TERM $_wd_list
-	sleep 1
-	_signal_list KILL $_wd_list
-) &
-_watchdog=$!
-wait "$_worker" 2>/dev/null
-_status=$?
-if [ -f "$TIMED_OUT" ]; then
-	# The watchdog fired: let it finish its KILL pass rather than racing it.
+_spawn_run() {
+	_timed_out=0
+	# The worker never inherits this script's stdin. Found live: an agent CLI
+	# that reads stdin when it is not a tty blocked forever on the dispatcher's
+	# own inherited pipe. The prompt reaches the worker by {prompt_file}; a
+	# template that redirects `< {prompt_file}` still wins over this </dev/null.
+	if [ -z "$TIMEOUT" ]; then
+		if [ "$RUN_RUNG" = rlimit ]; then
+			sh -c "$RUN_CMD" </dev/null
+		else
+			eval "$RUN_CMD" </dev/null
+		fi
+		_worker_status=$?
+		return 0
+	fi
+	# Headless agent CLIs gate tool calls on approvals, and headless there is no
+	# human: a reviewer told to run `git diff` in an approval-gated mode waits
+	# forever. Found live; only an external timeout ended it.
+	TIMED_OUT="$SCRATCH/timed-out"
+	rm -f "$TIMED_OUT"
+	trap '_down; cleanup; exit 130' INT
+	trap '_down; cleanup; exit 143' TERM
+	trap '_down; cleanup; exit 129' HUP
+	sh -c "$RUN_CMD" </dev/null &
+	_worker=$!
+	(
+		sleep "$TIMEOUT" &
+		_wd_sleep=$!
+		# The watchdog dies with its sleep: a TERM here forwards to the sleep, so
+		# reaping the watchdog never leaves a sleeper holding the caller's stdout.
+		trap 'kill "$_wd_sleep" 2>/dev/null; exit 0' TERM
+		wait "$_wd_sleep" || exit 0
+		# Verdict first, then the snapshot, then the signals — so a worker that
+		# dies from TERM on line one of its handler still reads as a timeout, and
+		# a child reparented by its parent's death is still on the list it is
+		# about to be sent.
+		: >"$TIMED_OUT"
+		echo "!  dispatch: worker timed out after ${TIMEOUT}s — killing its process tree" >&2
+		_scope_counters_now
+		_wd_list=$(_tree_of "$_worker")
+		_signal_list TERM $_wd_list
+		sleep 1
+		_signal_list KILL $_wd_list
+		_scope_kill KILL
+	) &
+	_watchdog=$!
+	wait "$_worker" 2>/dev/null
+	_worker_status=$?
+	if [ -f "$TIMED_OUT" ]; then
+		# The watchdog fired: let it finish its KILL pass rather than racing it.
+		wait "$_watchdog" 2>/dev/null
+		_timed_out=1
+		return 0
+	fi
+	# The worker finished in time. The watchdog and its sleep go together.
+	kill -TERM "$_watchdog" 2>/dev/null
 	wait "$_watchdog" 2>/dev/null
+	return 0
+}
+
+# _budget_verdict — exit with the verdict for the run just finished. On a scope
+# rung the flag is the cgroup counters the wrapper wrote: a task ceiling hit
+# (pids.events max > 0) or, on the full scope rung, a memory ceiling hit
+# (memory.events oom_kill > 0) exits 71 and names which was hit. On the rlimit
+# and no-op rungs there is no counter, and the worker's own status passes
+# through (ADR-0006 clause 6).
+#
+# A verdict that cannot be read is its own outcome, said on stderr, with the
+# run's own status passed through — never a silent zero (driver 4): the marker
+# missing (the wrapper never ran), the verdict file missing or malformed (the
+# wrapper did not survive to write it — systemd-oomd's pressure kill takes
+# every process in the cgroup, wrapper included; OOMPolicy=continue governs
+# the unit afterwards and exempts nothing), or a counter the wrapper marked
+# unreadable.
+_budget_unread() {
+	echo "!  dispatch: $1" >&2
+	echo "   The budget verdict cannot be read; the run's own status ($_worker_status) passes through." >&2
+	exit "$_worker_status"
+}
+# _budget_ceiling_hit — sets _hit to TASK, MEMORY or "" from a verdict file
+# that reads cleanly; returns 1 with the reason in _unread when it does not.
+_budget_ceiling_hit() {
+	_hit="" _unread=""
+	if [ ! -f "$SCOPE_STARTED" ]; then
+		_unread="the scope's started marker is missing after the spawn — the scope was torn
+   down before the worker started, or this dispatch's scratch was removed under it."
+		return 1
+	fi
+	if [ ! -f "$SCOPE_VERDICT" ]; then
+		_unread="the scope's verdict file is missing — the wrapper did not survive to write it
+   (the scope was torn down, or a pressure kill took the wrapper with the worker)."
+		return 1
+	fi
+	_v_pids="" _v_oom="" _v_rest=""
+	read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
+	case "$_v_pids" in
+	-) _unread="the pids.events counter could not be read inside the scope."; return 1 ;;
+	'' | *[!0123456789]*) _unread="the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')."; return 1 ;;
+	esac
+	case "$_v_oom" in
+	-)
+		if [ "$RUN_RUNG" = scope ]; then
+			_unread="the memory.events counter could not be read inside the scope."
+			return 1
+		fi
+		;;
+	'' | *[!0123456789]*) _unread="the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')."; return 1 ;;
+	esac
+	if [ "$_v_pids" -gt 0 ]; then
+		_hit=TASK
+	elif [ "$RUN_RUNG" = scope ] && [ "$_v_oom" -gt 0 ]; then
+		_hit=MEMORY
+	fi
+	return 0
+}
+_budget_verdict() {
+	case "$RUN_RUNG" in
+	scope | scope-tasks) ;;
+	*) exit "$_worker_status" ;;
+	esac
+	_budget_ceiling_hit || _budget_unread "$_unread"
+	case "$_hit" in
+	TASK) echo "x  dispatch: the worker hit its TASK ceiling ($BUDGET_TASKS) — its process tree could fork no further. Exit 71 (EX_OSERR)." >&2 ;;
+	MEMORY) echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — a process in its tree was OOM-killed inside its cgroup. Exit 71 (EX_OSERR)." >&2 ;;
+	*) exit "$_worker_status" ;;
+	esac
+	exit 71
+}
+
+_spawn_run
+if [ "$_timed_out" = 1 ]; then
+	# Whichever fired first (ADR-0006 clause 6): the watchdog read the scope's
+	# counters before it signalled, and a ceiling hit already on them happened
+	# before the timeout did. A verdict that cannot be read here is not an
+	# outcome of its own — the timeout is what was observed.
+	case "$RUN_RUNG" in
+	scope | scope-tasks)
+		if _budget_ceiling_hit && [ -n "$_hit" ]; then
+			echo "x  dispatch: the worker hit its $_hit ceiling before it timed out — the ceiling fired first. Exit 71 (EX_OSERR)." >&2
+			exit 71
+		fi
+		;;
+	esac
 	exit 124
 fi
-# The worker finished in time. The watchdog and its sleep go together.
-kill -TERM "$_watchdog" 2>/dev/null
-wait "$_watchdog" 2>/dev/null
-exit "$_status"
+_budget_verdict
