@@ -241,7 +241,8 @@ fi
 H_UPPER=$(printf '%s' "$HARNESS" | tr 'a-z-' 'A-Z_')
 
 # The policy file is sourced in a SUBSHELL: this script must not inherit
-# whatever else it defines, and needs exactly two values out of it. The
+# whatever else it defines, and needs three values out of it — the agent
+# harness's command template, its model flag, and the sweep age below. The
 # assignments sit on their own lines because bash and zsh drop a prefix
 # assignment on `.` — agents.lib.sh says so in its own header, and doing it the
 # short way sources the library with AGENTS_CONFIG unset.
@@ -376,7 +377,12 @@ if [ "$DRY_RUN" != 1 ]; then
 	# n, so "at least N days old" is +(N-1). find hands each path to rm whole,
 	# so a name with a space in it is never split into a second, relative
 	# path; -print follows only a removal that succeeded, so the count is of
-	# what actually went.
+	# what actually went. Two defences against a shared /tmp are in the
+	# predicates rather than beside them: find is PHYSICAL here — no -L, no
+	# -H — so a planted `agent-dispatch.* -> ~` is a link, not a directory,
+	# and `-type d` never hands it to rm; and a sibling owned by someone else
+	# fails at rm on a sticky /tmp, so it goes uncounted rather than
+	# half-removed. Dropping `-type d` or adding `-L` reopens the first.
 	_swept=$(find "$TMP_ROOT/." ! -name . -prune -type d -name "${SCRATCH_PREFIX}*" \
 		-mtime "+$((SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
 	if [ "$_swept" -gt 0 ]; then
