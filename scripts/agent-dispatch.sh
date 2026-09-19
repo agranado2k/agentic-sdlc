@@ -1077,16 +1077,19 @@ _budget_build_run_cmd() {
 		# AGENT_DISPATCH_* names the file documents). The command is
 		# single-quoted into the string; the quote itself is the one character
 		# that needs escaping inside single quotes.
+		# A counter the wrapper could not read is `-`, never 0: no `0::` line
+		# (no cgroup v2 path of its own), or an events file it cannot open.
+		# "Could not read" and "no ceiling hit" must not look alike (driver 4).
 		cat >"$SCRATCH/scope-wrapper.sh" <<'WRAP'
 _own=""
 while IFS= read -r _l; do case "$_l" in 0::*) _own=${_l#0::} ;; esac; done </proc/self/cgroup 2>/dev/null
 : >"$1"
 eval "$3"
 _st=$?
-_pm=0 _ok=0
+_pm=- _ok=-
 if [ -n "$_own" ]; then
-	while read -r _k _v _rest; do [ "$_k" = max ] && _pm=$_v; done <"/sys/fs/cgroup$_own/pids.events" 2>/dev/null
-	while read -r _k _v _rest; do [ "$_k" = oom_kill ] && _ok=$_v; done <"/sys/fs/cgroup$_own/memory.events" 2>/dev/null
+	{ while read -r _k _v _rest; do case "$_k" in max) _pm=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$_own/pids.events" || _pm=-
+	{ while read -r _k _v _rest; do case "$_k" in oom_kill) _ok=$_v ;; esac; done; } 2>/dev/null <"/sys/fs/cgroup$_own/memory.events" || _ok=-
 fi
 printf '%s %s %s\n' "$_pm" "$_ok" "$_st" >"$2"
 exit "$_st"
@@ -1250,21 +1253,38 @@ _spawn_run() {
 # (memory.events oom_kill > 0) exits 71 and names which was hit. On the rlimit
 # and no-op rungs there is no counter, and the worker's own status passes
 # through (ADR-0006 clause 6).
+#
+# A verdict that cannot be read is its own outcome, said on stderr, with the
+# run's own status passed through — never a silent zero (driver 4): the marker
+# missing (the wrapper never ran), the verdict file missing or malformed (the
+# wrapper did not survive to write it — systemd-oomd's pressure kill takes
+# every process in the cgroup, wrapper included; OOMPolicy=continue governs
+# the unit afterwards and exempts nothing), or a counter the wrapper marked
+# unreadable.
+_budget_unread() {
+	echo "!  dispatch: $1" >&2
+	echo "   The budget verdict cannot be read; the run's own status ($_worker_status) passes through." >&2
+	exit "$_worker_status"
+}
 _budget_verdict() {
 	case "$RUN_RUNG" in
 	scope | scope-tasks)
-		if [ ! -f "$SCOPE_STARTED" ]; then
-			echo "!  dispatch: the scope's started marker is missing after the spawn — the scope was torn" >&2
-			echo "   down before the worker started, or this dispatch's scratch was removed under it." >&2
-			echo "   The budget verdict cannot be read; the run's own status ($_worker_status) passes through." >&2
-			exit "$_worker_status"
-		fi
-		_v_pids=0 _v_oom=0 _v_rest=""
-		if [ -f "$SCOPE_VERDICT" ]; then
-			read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
-		fi
-		case "$_v_pids" in '' | *[!0123456789]*) _v_pids=0 ;; esac
-		case "$_v_oom" in '' | *[!0123456789]*) _v_oom=0 ;; esac
+		[ -f "$SCOPE_STARTED" ] ||
+			_budget_unread "the scope's started marker is missing after the spawn — the scope was torn
+   down before the worker started, or this dispatch's scratch was removed under it."
+		[ -f "$SCOPE_VERDICT" ] ||
+			_budget_unread "the scope's verdict file is missing — the wrapper did not survive to write it
+   (the scope was torn down, or a pressure kill took the wrapper with the worker)."
+		_v_pids="" _v_oom="" _v_rest=""
+		read _v_pids _v_oom _v_rest <"$SCOPE_VERDICT" 2>/dev/null || true
+		case "$_v_pids" in
+		-) _budget_unread "the pids.events counter could not be read inside the scope." ;;
+		'' | *[!0123456789]*) _budget_unread "the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')." ;;
+		esac
+		case "$_v_oom" in
+		-) [ "$RUN_RUNG" = scope ] && _budget_unread "the memory.events counter could not be read inside the scope." ;;
+		'' | *[!0123456789]*) _budget_unread "the scope's verdict file is malformed ('$_v_pids $_v_oom $_v_rest')." ;;
+		esac
 		if [ "$_v_pids" -gt 0 ]; then
 			echo "x  dispatch: the worker hit its TASK ceiling ($BUDGET_TASKS) — its process tree could fork no further. Exit 71 (EX_OSERR)." >&2
 			exit 71

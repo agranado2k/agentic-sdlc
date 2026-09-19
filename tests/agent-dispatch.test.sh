@@ -1471,6 +1471,40 @@ s_assert_err_has "marker"
 s_assert_out_lacks "CG=" "…and the worker is NOT run again under a weaker rung"
 s_assert_err_lacks "rlimit rung instead"
 
+# THE VERDICT IS READ FROM THE FILE THE WRAPPER LEAVES, never from the status
+# (ADR-0006 clause 6) — and a verdict that cannot be read is said, never passed
+# over in silence (driver 4). A fake systemd-run that touches the marker and
+# writes whatever FAKE_VERDICT holds into the verdict file drives every branch
+# of the reading, host-independently, under the HOST fixture's controllers.
+SDFAKE="$SCRATCH/sd-fake"; mkdir -p "$SDFAKE"
+cp "$SDBIN/systemctl" "$SDFAKE/systemctl"
+cat >"$SDFAKE/systemd-run" <<'EOF'
+#!/bin/sh
+# The wrapper's three arguments are the last three: started, verdict, command.
+for _a; do _started=$_verdict; _verdict=$_cmd; _cmd=$_a; done
+[ "$_cmd" = true ] && exit 0
+: >"$_started"
+[ -n "${FAKE_VERDICT+x}" ] && printf '%s\n' "$FAKE_VERDICT" >"$_verdict"
+exit "${FAKE_STATUS:-0}"
+EOF
+chmod +x "$SDFAKE/systemctl" "$SDFAKE/systemd-run"
+fake_dispatch() { t_run_split env PATH="$SDFAKE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" "$@" sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 300 --budget-memory 600; }
+# Marker present, verdict missing or malformed: the wrapper did not survive to
+# write it (a pressure kill by systemd-oomd takes the wrapper with the worker)
+# — said, and the run's own status passes through.
+fake_dispatch FAKE_STATUS=137
+s_assert_status 137 "a missing verdict passes the run's own status through"
+s_assert_err_has "verdict"
+fake_dispatch FAKE_VERDICT='garbage' FAKE_STATUS=137
+s_assert_status 137 "a malformed verdict passes the run's own status through"
+s_assert_err_has "verdict"
+# The wrapper writes `-` for a counter it could not read — no cgroup v2 path
+# of its own, an events file it cannot open — and that is its own loud outcome,
+# not a zero.
+fake_dispatch FAKE_VERDICT='- - 0'
+s_assert_status 0 "counters the wrapper could not read pass the run's own status through"
+s_assert_err_has "could not be read"
+
 # The OFF switch (ADR-0006 clause 4): --no-budget runs the worker unbounded,
 # in the session's own cgroup, and says so on stderr on a REAL dispatch (not
 # only the dry run — #208 lifted the note). A small --timeout keeps the leg
