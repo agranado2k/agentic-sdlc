@@ -133,6 +133,18 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
    never-shipped twin (`scripts/agents.kit.config.sh`, ADR-0003) sets none of
    them: the defaults are the kit's answer for itself, and #209 may tighten
    them for the suite.
+   **What sizes the clamps.** 256 tasks: an agent CLI is a few dozen
+   threads, the shell and the tools under it a few dozen more, and a build or
+   a test run beneath that a hundred or two in flight — below 256 a worker
+   fails forks in its own test run rather than in a runaway. 4096: sixteen
+   floors, a fan-out no single worker has a legitimate reason for; one that
+   wants more *is* the incident. 512 MiB: an agent CLI's resident set is a
+   few hundred MiB before it opens a file — below it a worker is killed on
+   start rather than on a runaway. 8192 MiB: the whole of a small host —
+   above it the worker, not the host, is what should be smaller. These are
+   first sizings from the incident's host, and #209 re-measures them against
+   the suite: a clamp the suite reaches in ordinary running is a clamp to
+   re-decide, in a record that supersedes this clause on that point.
    **The permitted range.** Each variable is a positive whole number with no
    leading zero (shell arithmetic reads `025` as octal). A percentage is
    **1 to 99**: the budget sits below the ceiling the session shares (driver
@@ -200,8 +212,8 @@ down a ladder, inherited by a nested dispatch, with its own exit status.**
 
 6. **The verdict.** A worker that exceeds its budget makes the dispatcher exit
    **71** — `EX_OSERR` in `sysexits.h`, whose gloss is "system error (e.g.,
-   can't fork)", which is what the worker saw — distinct from 0, 2, 3, 124 and
-   the signal statuses. As with 124, the verdict is a **flag the dispatcher
+   can't fork)", which is what the worker saw — distinct from 0, 2, 3, 124,
+   the status #206's depth refusal takes, and the signal statuses. As with 124, the verdict is a **flag the dispatcher
    writes from what it observed**, never an inference from the worker's own
    status: on the scope rung a wrapper inside the scope reads its cgroup's
    `pids.events` (`max` greater than 0) and `memory.events` (`oom_kill`
