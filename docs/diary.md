@@ -20,7 +20,7 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.19.0 tagged 2026-09-19 at `1ca59a9`, the merge of PR #204; 0.18.0 was tagged 2026-09-17 by PR #185. The dispatcher (`scripts/agent-dispatch.sh`) now has the edges a live cross-vendor dispatch taught it — no inherited stdin, a `--timeout` that tree-kills, `--set-file` for a large diff — and the banned-words gate scans the glossary itself. The constitution, both gates, the guards (now on for this repo too), seventeen skills, the adapters (claude-code and gemini-cli), the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.19.0 tagged 2026-09-19 at `1ca59a9`, the merge of PR #204; 0.18.0 was tagged 2026-09-17 by PR #185. The constitution, both gates, the guards (now enforced on this repo too, through a kit-only policy), seventeen skills, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
 | **Last commit on `main`** | `1ca59a9` — merge of PR #204, `--set-file`, and the commit `v0.19.0` is cut on (2026-09-19) |
@@ -1145,12 +1145,13 @@ its own entries had.
 
 The wave ran the chain nine times and the chain paid for itself nine times.
 Every PR's fresh-context review on a different model found something real: a
-`getline` loop quadratic in line count (8 MiB in eighteen seconds, 56 ms
-after); a timeout that killed the shell wrapping the worker while the worker,
+`getline` loop quadratic in line count (8 MiB in eighteen seconds,
+milliseconds after the fix); a timeout that killed the shell wrapping the worker while the worker,
 reparented, ran to completion, and that read 124 from the worker's own signal
-rather than from having fired; three test suites — the pairing-guard, the
-locale, the roster — whose failure paths could not be reached, each caught by a
-mutant that survived; and, on the Gemini adapter, two of my three behavioural
+rather than from having fired; three test suites — the pairing-guard (#198),
+the locale (#197), and the dispatch suite's own FIFO and timeout legs (#200,
+#201) — whose failure paths could not be reached, each caught by a mutant that
+survived; and, on the Gemini adapter, two of my three behavioural
 claims that did not reproduce on gemini 0.60.0 — the "prompt on stdin hangs"
 one because the real hang had been the inherited-pipe bug, which I had
 attributed to the wrong cause and written a section around.
