@@ -1265,6 +1265,16 @@ before the edits, and is the first suite either skill has had.
 
 Neither skill is manifest-listed, so this is not a shared-layer bump; the
 obligation moves to the next one. The 0.21.0 `VERSION` note's non-manifest
-half and `UPDATING.md`'s "Arriving from 0.20.0 or older" paragraph owe
-`/to-prd` and `/to-tickets` a line each, and `self-host.test.sh` F6 will
-hold the note to it once the bump is written.
+half owes `/to-prd` and `/to-tickets` a line each — `self-host.test.sh` F6
+holds the union of that note and any "Arriving from" paragraph in
+`UPDATING.md` to it once the bump is written, so the note is the enforced
+half and the recipe paragraph is convention.
+
+The review of #222 also recorded a debt this PR did not pay, on purpose:
+`tests/spec-skills.test.sh` is the fourth hand copy of the skill-suite
+scaffold (`skill_spans`, the command-resolution loop, `path_verdict` with its
+hand-kept root list) after the design-brief, housekeeping and
+implement-deliver suites, and the copies have already drifted from each other
+and from the gate's `pathRoots`. Promoting them into `tests/lib.sh` beside
+`t_assert_skill_frontmatter` is a structure-only change and so a ticket of
+its own (shared invariant §10), not a passenger on this diff.

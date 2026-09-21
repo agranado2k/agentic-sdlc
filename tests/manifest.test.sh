@@ -180,7 +180,7 @@ banner "4. The roster helper in the shared harness"
 # ---------------------------------------------------------------------------
 command -v t_assert_skill_in_roster >/dev/null 2>&1 && pass "tests/lib.sh defines t_assert_skill_in_roster" ||
 	fail "tests/lib.sh does not define t_assert_skill_in_roster — each skill suite clones the roster block instead"
-for s in tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh; do
+for s in tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/spec-skills.test.sh; do
 	grep -q 't_assert_skill_in_roster' "$ROOT/$s" && pass "$s uses the roster helper" || fail "$s does not use the roster helper"
 done
 
