@@ -36,7 +36,42 @@
 # resolving every tier correctly. tests/agents-tiers.test.sh asserts the
 # pass-through for exactly that reason.
 #
+# THE ONE THING THIS WRAPPER ADDS (#224, ADR-0007)
+# ---------------------------------------------------------------------------
+# The mapping's `self-implemented` reviewer is one model, chosen on the
+# assumption that the session runs on the planner's — so on a session that
+# runs on THAT model the answer is the implementer's own, the exact case the
+# domain exists to avoid. The policy file cannot know who is asking; the caller
+# can say. When $AGENT_SESSION_MODEL names the session's model (the same
+# word the policy file uses) and the resolver's answer for the reviewer tier
+# equals it, this wrapper warns once and falls back to the plain reviewer
+# tier; when that too equals it, it warns that the review will share the
+# author's model and prints nothing, so the spawn inherits the session and
+# the report has to say so. With the variable unset, or for any tier but the
+# reviewer, the wrapper is the exec it always was. This lives here and not in
+# the shared resolver because the resolver is shared layer: moving the rule
+# there is a release, and 0.21.0 is where it goes.
+#
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
+#   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
 set -eu
-AGENTS_CONFIG=scripts/agents.kit.config.sh exec sh scripts/agents.lib.sh "$@"
+AGENTS_CONFIG=scripts/agents.kit.config.sh
+export AGENTS_CONFIG
+if [ -z "${AGENT_SESSION_MODEL:-}" ] || [ "${1:-}" != reviewer ]; then
+	exec sh scripts/agents.lib.sh "$@"
+fi
+warn() { [ "${AGENTS_TIER_QUIET:-}" = 1 ] || printf 'agents.kit.sh: %s\n' "$1" >&2; }
+answer=$(sh scripts/agents.lib.sh "$@") || exit $?
+if [ "$answer" != "$AGENT_SESSION_MODEL" ]; then
+	printf '%s\n' "$answer"
+	exit 0
+fi
+plain=$(sh scripts/agents.lib.sh reviewer) || exit $?
+if [ -n "$plain" ] && [ "$plain" != "$AGENT_SESSION_MODEL" ]; then
+	warn "reviewer${2:+ $2} resolves to the session's own model ($AGENT_SESSION_MODEL); falling back to the reviewer tier ($plain)"
+	printf '%s\n' "$plain"
+else
+	warn "no reviewer model differs from the session's own ($AGENT_SESSION_MODEL) — the review will share the author's model"
+fi
+exit 0
