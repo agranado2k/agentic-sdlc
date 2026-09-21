@@ -28,15 +28,6 @@ SIDECAR=".agents/skills/design-brief/BRIEF-FORMAT.md"
 
 cd "$ROOT" || exit 2
 
-# Code spans outside fenced blocks, one token per line — the same reading the
-# other skill suites use.
-skill_spans() {
-	for f in "$SKILL_ABS" "$ROOT/$SIDECAR"; do
-		[ -f "$f" ] || continue
-		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$f"
-	done | grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
-}
-
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
 # ---------------------------------------------------------------------------
@@ -123,11 +114,7 @@ assert_file_has "$SKILL" "housekeeping"
 assert_file_has "$SKILL" "/improve-codebase-architecture"
 assert_file_has "$SKILL" "**The context map** in the glossary"
 # No model identifier anywhere the skill or its sidecar: the tier resolves it.
-if grep -Eiq 'claude-[a-z]+-[0-9]|gpt-[0-9]|gemini-[0-9]|\b(opus|sonnet|haiku) [0-9]' "$SKILL_ABS" "$ROOT/$SIDECAR"; then
-	fail "the skill names a model identifier — the tier resolves the model, a ticket outlives the id"
-else
-	pass "no model identifier in the skill or its sidecar"
-fi
+t_assert_no_model_id "$SKILL_ABS" "$ROOT/$SIDECAR"
 # Strategic means Ousterhout here, and the skill says so where a reader meets
 # the word first.
 assert_file_has "$SKILL" "Ousterhout"
@@ -142,50 +129,14 @@ assert_file_lacks "$SKILL" "git push" "the brief records; delivery is /implement
 # ---------------------------------------------------------------------------
 banner "7. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-# The exemptions are read from the gate's policy file (tests/lib.sh), never
-# mirrored: a mirror had already drifted once in this skill's own history.
-resolved=0
-for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	t_is_ignored_command "$cmd" && continue
-	if [ -f ".agents/skills/${cmd#/}/SKILL.md" ]; then
-		resolved=$((resolved + 1))
-	else
-		fail "$SKILL names $cmd but .agents/skills/${cmd#/}/SKILL.md does not exist"
-	fi
-done
-[ "$resolved" -ge 2 ] &&
-	pass "all $resolved slash commands in the skill resolve" ||
-	fail "only $resolved commands resolved — the skill should name at least /to-tickets and /improve-codebase-architecture"
+# The helper reads the exemptions from the gate's policy file, never mirrored:
+# a mirror had already drifted once in this skill's own history.
+t_assert_skill_commands 2 "the skill should name at least /to-tickets and /improve-codebase-architecture" "$SKILL_ABS" "$ROOT/$SIDECAR"
 
 # ---------------------------------------------------------------------------
 banner "8. Every repo path the skill names is real, templated, or installed"
 # ---------------------------------------------------------------------------
-path_verdict() {
-	p=$1
-	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
-	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	# Only a line that creates or copies the path counts. A comment or the
-	# KIT_ONLY deletion list mentioning it proves the opposite of installed.
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
-		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
-		{ echo "installed by bootstrap.sh"; return 0; }
-	return 1
-}
-checked=0
-for tok in $(skill_spans | sed 's/[),.;:]*$//' | grep -v '[<>*$]' | grep '/' | sort -u); do
-	case "$tok" in
-	constitution/* | scripts/* | docs/* | tests/* | adapters/* | templates/* | .githooks/* | .github/* | .agents/* | .claude/*) ;;
-	*) continue ;;
-	esac
-	checked=$((checked + 1))
-	if why=$(path_verdict "$tok"); then
-		pass "$tok — $why"
-	else
-		fail "$SKILL names $tok, which is a dead reference in every consumer project"
-	fi
-done
-[ "$checked" -ge 3 ] && pass "$checked repo paths checked" ||
-	fail "only $checked repo paths found — the skill should name the article, the glossary and the decision records"
+t_assert_skill_paths 3 "the skill should name the article, the glossary and the decision records" "$SKILL_ABS" "$ROOT/$SIDECAR"
 
 # ---------------------------------------------------------------------------
 banner "9. The roster knows the skill"

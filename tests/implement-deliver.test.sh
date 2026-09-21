@@ -44,13 +44,6 @@ SKILL_ABS="$ROOT/$SKILL"
 
 cd "$ROOT" || exit 2
 
-# Code spans outside fenced blocks, one token per line — the same reading
-# `tests/kit-demo.sh` uses on the manual, applied to a skill.
-skill_spans() {
-	awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$SKILL_ABS" |
-		grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
-}
-
 # assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
 # implementation, used here and by the AI review template suite.
 
@@ -157,27 +150,8 @@ assert_file_lacks "$SKILL" "comments/\$COMMENT_ID/replies" "replying to review t
 # ---------------------------------------------------------------------------
 banner "6. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-# Mirrors `claudeMdRefs.ignoreCommands` in scripts/docs-conformance/config.mjs —
-# real commands that are deliberately not repo skills.
-is_ignored() {
-	case "$1" in
-	/loop | /security-review | /review | /init) return 0 ;;
-	esac
-	return 1
-}
-
-resolved=0
-for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	is_ignored "$cmd" && continue
-	if [ -f ".claude/skills/${cmd#/}/SKILL.md" ]; then
-		resolved=$((resolved + 1))
-	else
-		fail "$SKILL names $cmd but .claude/skills/${cmd#/}/SKILL.md does not exist"
-	fi
-done
-[ "$resolved" -ge 3 ] &&
-	pass "all $resolved slash commands in the skill resolve" ||
-	fail "only $resolved commands resolved — the skill should name at least /tdd, /review-pr and /pr-iterate"
+# The helper reads the exemptions from the gate's policy file, never mirrored.
+t_assert_skill_commands 3 "the skill should name at least /tdd, /review-pr and /pr-iterate" "$SKILL_ABS"
 
 # ---------------------------------------------------------------------------
 banner "7. Every repo path the skill names is real, templated, installed, or conditional"
@@ -186,35 +160,7 @@ banner "7. Every repo path the skill names is real, templated, installed, or con
 # the kit itself does not carry — a file bootstrap stamps, or a template's
 # stamped name. Those are the exemptions, and each is checkable rather than
 # assumed. Anything outside them is a dead reference in every consumer project.
-path_verdict() {
-	p=$1
-	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
-	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	# The KIT_ONLY= line is bootstrap's DELETION list — the files it removes on
-	# the way out. A plain grep of bootstrap.sh reads a name there as proof the
-	# file is installed, which is the exact inverse of the truth, so a path that
-	# only ever appears on that line must not earn this verdict.
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -qv '^KIT_ONLY=' &&
-		{ echo "installed by bootstrap.sh"; return 0; }
-	grep -F -- "$p" "$SKILL_ABS" | grep -qi 'when .*exist' && { echo "named conditionally"; return 0; }
-	return 1
-}
-
-checked=0
-for tok in $(skill_spans | sed 's/[),.;:]*$//' | grep -v '[<>*$]' | grep '/' | sort -u); do
-	case "$tok" in
-	constitution/* | scripts/* | docs/* | tests/* | adapters/* | templates/* | .githooks/* | .github/* | .claude/*) ;;
-	*) continue ;;
-	esac
-	checked=$((checked + 1))
-	if why=$(path_verdict "$tok"); then
-		pass "$tok — $why"
-	else
-		fail "$tok is named by $SKILL but resolves to nothing, in this tree or a bootstrapped one"
-	fi
-done
-[ "$checked" -ge 4 ] && pass "$checked repo paths checked" ||
-	fail "only $checked repo paths found — the extraction is probably broken, not the skill"
+t_assert_skill_paths 4 "the extraction is probably broken, not the skill" "$SKILL_ABS"
 
 # ---------------------------------------------------------------------------
 banner "8. The docs that describe /implement's ending agree with it"

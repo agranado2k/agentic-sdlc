@@ -29,13 +29,6 @@ SIDECAR_ABS="$ROOT/$SIDECAR"
 
 cd "$ROOT" || exit 2
 
-skill_spans() {
-	for f in "$SKILL_ABS" "$SIDECAR_ABS"; do
-		[ -f "$f" ] || continue
-		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$f"
-	done | grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
-}
-
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
 # ---------------------------------------------------------------------------
@@ -120,50 +113,13 @@ assert_file_has "$SKILL" "one delegated action"
 # ---------------------------------------------------------------------------
 banner "5. Every slash command the skill names resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-# The exemptions are read from the gate's policy file (tests/lib.sh), never
-# mirrored.
-resolved=0
-for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	t_is_ignored_command "$cmd" && continue
-	if [ -f ".agents/skills/${cmd#/}/SKILL.md" ]; then
-		resolved=$((resolved + 1))
-	else
-		fail "$SKILL names $cmd but .agents/skills/${cmd#/}/SKILL.md does not exist"
-	fi
-done
-[ "$resolved" -ge 4 ] &&
-	pass "all $resolved slash commands in the skill resolve" ||
-	fail "only $resolved commands resolved — the skill should name at least /to-tickets, /worktree-cleanup, /improve-codebase-architecture and /design-brief"
+# The helper reads the exemptions from the gate's policy file, never mirrored.
+t_assert_skill_commands 4 "the skill should name at least /to-tickets, /worktree-cleanup, /improve-codebase-architecture and /design-brief" "$SKILL_ABS" "$SIDECAR_ABS"
 
 # ---------------------------------------------------------------------------
 banner "6. Every repo path the skill names is real, templated, or installed"
 # ---------------------------------------------------------------------------
-path_verdict() {
-	p=$1
-	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
-	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	# Only a line that creates or copies the path counts. A comment or the
-	# KIT_ONLY deletion list mentioning it proves the opposite of installed.
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
-		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
-		{ echo "installed by bootstrap.sh"; return 0; }
-	return 1
-}
-checked=0
-for tok in $(skill_spans | sed 's/[),.;:]*$//' | grep -v '[<>*$]' | grep '/' | sort -u); do
-	case "$tok" in
-	constitution/* | scripts/* | docs/* | tests/* | adapters/* | templates/* | .githooks/* | .github/* | .agents/* | .claude/*) ;;
-	*) continue ;;
-	esac
-	checked=$((checked + 1))
-	if why=$(path_verdict "$tok"); then
-		pass "$tok — $why"
-	else
-		fail "$SKILL names $tok, which is a dead reference in every consumer project"
-	fi
-done
-[ "$checked" -ge 4 ] && pass "$checked repo paths checked" ||
-	fail "only $checked repo paths found — the skill should name the manual, the glossary, the records, the article and the diary"
+t_assert_skill_paths 4 "the skill should name the manual, the glossary, the records, the article and the diary" "$SKILL_ABS" "$SIDECAR_ABS"
 
 # ---------------------------------------------------------------------------
 banner "7. The roster knows the skill"

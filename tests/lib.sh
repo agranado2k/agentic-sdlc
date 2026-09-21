@@ -704,6 +704,107 @@ t_ignored_commands() {
 # t_is_ignored_command <cmd> — true when the policy file exempts it.
 t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
 
+# The skill-suite scaffold (#223): four suites had each carried a hand copy of
+# the tokeniser, the command and path resolution and the model-id ban, and the
+# copies had drifted — one verdict weaker than the rest, one root list missing
+# a root, every root list a hand mirror of the gate's pathRoots. Held once,
+# here, the same way the roster block above and the ignored commands are.
+
+# t_skill_spans <file>... — code spans outside fenced blocks, one token per
+# line: the same reading tests/kit-demo.sh gives the manual, applied to a
+# skill and its sidecars. A missing file is skipped, not an error, so a suite
+# can list an optional sidecar.
+t_skill_spans() {
+	for _ss_f; do
+		[ -f "$_ss_f" ] || continue
+		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$_ss_f"
+	done | grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
+}
+
+# t_skill_path_roots — the gate's pathRoots, one per line, read from the
+# policy file rather than mirrored.
+t_skill_path_roots() {
+	sed -n '/pathRoots: \[/,/\]/p' "$T_ROOT/scripts/docs-conformance/config.mjs" |
+		grep -o '"[^"]*"' | tr -d '"'
+}
+
+# t_assert_skill_commands <min> <why> <file>... — every slash command the
+# files' code spans name resolves to a skill on disk (minus the gate's
+# exemptions), and at least <min> do; <why> completes the fail line when fewer
+# resolve ("the skill should name at least …").
+t_assert_skill_commands() {
+	_sc_min=$1; _sc_why=$2; shift 2
+	_sc_n=0
+	for _sc_cmd in $(t_skill_spans "$@" | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
+		t_is_ignored_command "$_sc_cmd" && continue
+		if [ -f "$T_ROOT/.agents/skills/${_sc_cmd#/}/SKILL.md" ]; then
+			_sc_n=$((_sc_n + 1))
+		else
+			fail "$(basename "$(dirname "$1")") names $_sc_cmd but .agents/skills/${_sc_cmd#/}/SKILL.md does not exist"
+		fi
+	done
+	[ "$_sc_n" -ge "$_sc_min" ] &&
+		pass "all $_sc_n slash commands in the skill resolve" ||
+		fail "only $_sc_n commands resolved — $_sc_why"
+}
+
+# t_skill_path_verdict <path> <file>... — why a repo path a skill names is not
+# a dead reference: it exists in this tree, ships as a template, is a
+# workflow bootstrap copies from templates/workflows/, is created by bootstrap
+# (a line that creates or copies it — the KIT_ONLY deletion list and comments
+# prove the opposite), or the skill names it conditionally
+# ("when … exist"). Prints the verdict; returns 1 with nothing when none holds.
+t_skill_path_verdict() {
+	_pv_p=$1; shift
+	[ -e "$T_ROOT/$_pv_p" ] && { echo "exists in this tree"; return 0; }
+	[ -e "$T_ROOT/$_pv_p.template" ] && { echo "shipped as $_pv_p.template"; return 0; }
+	# bootstrap copies templates/workflows/* into .github/workflows/ by a loop
+	# that never names the file, so the copy source is the verdict.
+	case "$_pv_p" in .github/workflows/*)
+		[ -e "$T_ROOT/templates/workflows/$(basename "$_pv_p")" ] &&
+			{ echo "copied from templates/workflows/ by bootstrap.sh"; return 0; } ;;
+	esac
+	grep -F -- "$_pv_p" "$T_ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
+		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
+		{ echo "installed by bootstrap.sh"; return 0; }
+	grep -F -- "$_pv_p" "$@" 2>/dev/null | grep -qi 'when .*exist' && { echo "named conditionally"; return 0; }
+	return 1
+}
+
+# t_assert_skill_paths <min> <why> <file>... — every repo path under one of
+# the gate's roots that the files' code spans name has a verdict, and at least
+# <min> were checked; <why> completes the fail line when fewer were.
+t_assert_skill_paths() {
+	_sp_min=$1; _sp_why=$2; shift 2
+	_sp_roots=$(t_skill_path_roots)
+	_sp_n=0
+	for _sp_tok in $(t_skill_spans "$@" | sed 's/[),.;:]*$//' | grep -v '[<>*$]' | grep '/' | sort -u); do
+		_sp_hit=0
+		for _sp_root in $_sp_roots; do
+			case "$_sp_tok" in "$_sp_root"/*) _sp_hit=1; break ;; esac
+		done
+		[ "$_sp_hit" = 1 ] || continue
+		_sp_n=$((_sp_n + 1))
+		if _sp_why_ok=$(t_skill_path_verdict "$_sp_tok" "$@"); then
+			pass "$_sp_tok — $_sp_why_ok"
+		else
+			fail "$_sp_tok is named by $(basename "$(dirname "$1")") but resolves to nothing, in this tree or a bootstrapped one"
+		fi
+	done
+	[ "$_sp_n" -ge "$_sp_min" ] && pass "$_sp_n repo paths checked" ||
+		fail "only $_sp_n repo paths found — $_sp_why"
+}
+
+# t_assert_no_model_id <file>... — no model identifier anywhere: the tier
+# resolves the model, and a skill or a ticket outlives the id.
+t_assert_no_model_id() {
+	if grep -Eiq 'claude-[a-z]+-[0-9]|gpt-[0-9]|gemini-[0-9]|\b(opus|sonnet|haiku) [0-9]' "$@"; then
+		fail "$(basename "$(dirname "$1")") names a model identifier — the tier resolves the model, a ticket outlives the id"
+	else
+		pass "no model identifier in $(basename "$(dirname "$1")")"
+	fi
+}
+
 # t_assert_skill_frontmatter <skill dir> — the Agent Skills specification's
 # frontmatter rules, held once for every skill suite: keys limited to the
 # fields the specification defines (any case — an unexpected key is a finding
