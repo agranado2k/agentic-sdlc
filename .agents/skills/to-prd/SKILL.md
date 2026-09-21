@@ -59,7 +59,7 @@ A numbered walkthrough of the finished system in use — actor, action, what the
 4. Bo changes a filter; Ana's saved view is unchanged when she reloads it.
 </scenario-example>
 
-Each scenario is a demo script: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
+Each scenario is a walkthrough a session can replay: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
 
 ## Implementation Decisions
 
@@ -90,7 +90,7 @@ A list of testing decisions that were made. Include:
 
 ## Alternatives Considered
 
-A few brief lines per strong alternative the conversation rejected, and why it lost. Only the ones a later session would plausibly propose again — not every idea. A decision that outlives this feature goes to `docs/adr/` and is linked from here, not repeated.
+A few brief lines per strong alternative the conversation rejected, and why it lost. Only the ones a later session would plausibly propose again — not every idea. A decision that outlives this feature is already recorded in `docs/adr/` (by `/grill-with-docs` or `/design-brief`, after a human yes) and is linked from here, not repeated; one that is not yet recorded is an Open Issue, not an alternative.
 
 ## Out of Scope
 
@@ -98,7 +98,7 @@ One line per item, each with its reason, and each marked *later* (deferred — s
 
 ## Open Issues
 
-Anything the conversation left unresolved, each as three lines: the problem, the options seen, and the immediate next step — a `/prototype` spike, a question to a named person, or a `planner` ticket. When one is resolved, move it out of here and into Implementation Decisions (or a decision record); the tracker keeps the history. An open issue whose answer would shape tickets becomes the first ticket `/to-tickets` writes, and blocks the ones it shapes — see its open-issue gate.
+Anything the conversation left unresolved, each as three lines: the problem, the options seen, and the immediate next step — a `/prototype` spike, a `planner` ticket, or a question to a named person (which, if the answer shapes tickets, `/to-tickets` writes as a ticket with no label, so a human answers it). When one is resolved, move it out of here and into Implementation Decisions (or a decision record); the tracker keeps the history. An open issue whose answer would shape tickets becomes the first ticket `/to-tickets` writes, and blocks the ones it shapes — see its open-issue gate.
 
 ## Further Notes
 
@@ -106,7 +106,7 @@ Any further notes about the feature.
 
 </prd-template>
 
-Scenarios, Alternatives Considered and Open Issues are **omitted when empty** — never written as "none" or "N/A". A section is a menu item, not a form field.
+Alternatives Considered and Open Issues are **omitted when empty** — never written as "none" or "N/A". A section is a menu item, not a form field.
 
 ## What happens next
 
