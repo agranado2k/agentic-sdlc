@@ -104,10 +104,11 @@ assert_file_has "$PRD" "omitted when empty"
 # The scenarios section is the hand-off: it must say who reads it.
 scen_line=$(line_of "$PRD_ABS" "## Scenarios")
 scen_end=$(awk -v s="${scen_line:-0}" 'NR > s && /^## / { print NR; exit }' "$PRD_ABS")
-if [ -n "$scen_line" ] && sed -n "${scen_line},${scen_end:-\$}p" "$PRD_ABS" | grep -q '/to-tickets'; then
-	pass "the Scenarios section names /to-tickets as its reader"
+if [ -n "$scen_line" ] && sed -n "${scen_line},${scen_end:-\$}p" "$PRD_ABS" | grep -q '/to-tickets' &&
+	sed -n "${scen_line},${scen_end:-\$}p" "$PRD_ABS" | grep -q 'demo script'; then
+	pass "the Scenarios section calls itself a demo script and names /to-tickets as its reader"
 else
-	fail "the Scenarios section does not say /to-tickets reads it — the hand-off is not written down"
+	fail "the Scenarios section does not say it is a demo script that /to-tickets reads — the hand-off is not written down"
 fi
 # Open issues name their two resolution routes.
 oi_line=$(line_of "$PRD_ABS" "## Open Issues")
@@ -135,7 +136,7 @@ banner "4. The ticket side: scenarios feed the demo test, open issues gate, orde
 # before in another skill's history.
 nums=$(awk '/^## Rules for every ticket/ { on = 1; next } on && /^## / { on = 0 } on && /^[0-9]+\. \*\*/ { sub(/\..*/, ""); print }' "$TIX_ABS")
 n=$(printf '%s\n' "$nums" | grep -c .)
-expect=$(seq 1 "$n" | tr '\n' ' ')
+expect=$(awk -v n="$n" 'BEGIN { for (i = 1; i <= n; i++) printf "%d ", i }')
 if [ "$n" -ge 13 ] && [ "$(printf '%s\n' "$nums" | tr '\n' ' ')" = "$expect" ]; then
 	pass "the $n ticket rules are numbered 1..$n without a gap"
 else
@@ -149,15 +150,24 @@ gate=$(grep -i 'open issue' "$TIX_ABS" | grep -F 'planner' | grep -F '/prototype
 # Feedback-first ordering.
 assert_file_has "$TIX" "**Feedback-first ordering.**"
 assert_file_has "$TIX" "stubbed"
-# Procedure step 1 starts from the PRD's scenarios; the quiz includes the order.
+# Rule 1 and procedure step 1 both start from the PRD's scenarios; the quiz
+# includes the order; a published ticket opens with the PRD's objective.
+rule1=$(awk '/^## Rules for every ticket/ { on = 1; next } on && /^1\. / { print; exit }' "$TIX_ABS")
+printf '%s\n' "$rule1" | grep -q 'Scenarios are the first list of demos' &&
+	pass "rule 1 sends the admission test to the PRD's Scenarios first" ||
+	fail "rule 1 does not say the PRD's Scenarios are the first list of demos"
 step1=$(awk '/^## Procedure/ { on = 1; next } on && /^1\. / { print; exit }' "$TIX_ABS")
 printf '%s\n' "$step1" | grep -q 'Scenarios' &&
 	pass "procedure step 1 reads the PRD's Scenarios as the candidate demos" ||
 	fail "procedure step 1 does not name the PRD's Scenarios"
 quiz=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TIX_ABS")
-printf '%s\n' "$quiz" | grep -qi 'order' &&
-	pass "the quiz asks the user to challenge the order" ||
-	fail "the quiz never mentions the order the decomposer chose"
+printf '%s\n' "$quiz" | grep -q 'the order you chose' &&
+	pass "the quiz asks the user to challenge the order the decomposer chose" ||
+	fail "the quiz never puts the decomposer's own ordering choice up for challenge"
+publish=$(awk '/^## Procedure/ { on = 1; next } on && /^4\. / { print; exit }' "$TIX_ABS")
+printf '%s\n' "$publish" | grep -q "PRD's Objective" &&
+	pass "a published ticket opens with the PRD's Objective — the line /to-prd says every ticket carries" ||
+	fail "the publish step never puts the PRD's Objective on the ticket, though /to-prd promises it"
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
 assert_file_has "$TIX" "## The tier rubric"
 # Anti-pattern for the gate.

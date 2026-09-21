@@ -26,7 +26,7 @@ Check with the user that these seams match their expectations.
 
 ## Objective
 
-The objective is one sentence, in plain language and the glossary's vocabulary, that any stakeholder understands: what this changes and for whom. It is the line every ticket quotes for context and the handle the diary uses, so it is the first line of the PRD, before the problem is explained.
+The objective is one sentence, in plain language and the glossary's vocabulary, that any stakeholder understands: what this changes and for whom. It is the line every ticket opens with for context and the name the change goes by, so it is the first line of the PRD, before the problem is explained.
 
 ## Problem Statement
 
@@ -50,13 +50,13 @@ This list of user stories should be extremely extensive and cover all aspects of
 
 ## Scenarios
 
-Where a story is abstract, a numbered walkthrough of the finished system in use — actor, action, what they see — step by step, with concrete names rather than placeholders. One per major story.
+A numbered walkthrough of the finished system in use — actor, action, what they see — step by step, with concrete names rather than placeholders. One per major story, and always where the story is abstract.
 
 <scenario-example>
-1. Bob creates a custom report in his dashboard.
-2. Bob opens the menu and clicks "Share > as URL".
-3. Bob emails the URL to his teammate, Charlie.
-4. Charlie clicks the link and sees an exact copy of Bob's report, read-only.
+1. Ana saves a filtered view of the orders table and names it "late this week".
+2. Ana copies the view's link from the toolbar and pastes it into the team channel.
+3. Bo opens the link and sees Ana's filters applied, with a banner naming the view.
+4. Bo changes a filter; Ana's saved view is unchanged when she reloads it.
 </scenario-example>
 
 Each scenario is a demo script: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
@@ -90,7 +90,7 @@ A list of testing decisions that were made. Include:
 
 ## Alternatives Considered
 
-A few brief lines per strong alternative the grilling rejected, and why it lost. Only the ones a later session would plausibly propose again — not every idea, which is overkill. A decision that outlives this feature goes to `docs/adr/` and is linked from here, not repeated.
+A few brief lines per strong alternative the conversation rejected, and why it lost. Only the ones a later session would plausibly propose again — not every idea. A decision that outlives this feature goes to `docs/adr/` and is linked from here, not repeated.
 
 ## Out of Scope
 
@@ -98,7 +98,7 @@ One line per item, each with its reason, and each marked *later* (deferred — s
 
 ## Open Issues
 
-Anything the grilling left unresolved, each as three lines: the problem, the options seen, and the immediate next step — a `/prototype` spike, a question to a named person, or a `planner` ticket. When one is resolved, move it out of here and into Implementation Decisions (or a decision record); the tracker keeps the history. An open issue whose answer would shape tickets blocks `/to-tickets` — see that skill's rule.
+Anything the conversation left unresolved, each as three lines: the problem, the options seen, and the immediate next step — a `/prototype` spike, a question to a named person, or a `planner` ticket. When one is resolved, move it out of here and into Implementation Decisions (or a decision record); the tracker keeps the history. An open issue whose answer would shape tickets becomes the first ticket `/to-tickets` writes, and blocks the ones it shapes — see its open-issue gate.
 
 ## Further Notes
 
@@ -114,4 +114,4 @@ A PRD that spans more than one context window goes through `/to-tickets` before 
 
 ---
 
-*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism. The Objective, Scenarios, Alternatives Considered and Open Issues sections, the penalty-for-being-wrong filter and the stranger reread follow Michael Lynch's [How to Write an Effective Software Design Document](https://refactoringenglish.com/excerpts/write-an-effective-design-doc).*
+*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism. The Objective, Scenarios, Alternatives Considered and Open Issues sections and the penalty-for-being-wrong filter follow Michael Lynch's [How to Write an Effective Software Design Document](https://refactoringenglish.com/excerpts/write-an-effective-design-doc); the stranger reread and the later/never split are the kit's own extension of it.*
