@@ -183,6 +183,13 @@ optional `Domain:` line when the medium would change which model you would
 pick, and `/implement` passes it through as the second argument; a
 situation domain is never stamped on a ticket.
 
+**Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
+word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The mapping's
+`self-implemented` answer is one model, so on a session running that model it
+is the implementer's own; the wrapper compares its answer to yours, falls back
+to the plain reviewer tier when they are equal, and prints nothing with a
+warning when nothing differs — which your report then says (ADR-0007).
+
 ## Agent trust boundary
 
 Your session — and any subagent you spawn — can hold all three legs of the

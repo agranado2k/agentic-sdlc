@@ -154,7 +154,12 @@ Grouped by the seam each term belongs to. Entry shape:
   Unlike the four tier names its vocabulary is **open and local**, so an
   unmapped domain falls back to the plain tier silently; what is not open is its
   **shape** (`[a-z][a-z0-9-]*`), because the token is interpolated into the
-  variable name `AGENT_TIER_<TIER>_<DOMAIN>`.
+  variable name `AGENT_TIER_<TIER>_<DOMAIN>`. A situation domain's answer is
+  also compared against the **session's own model** when the caller names it
+  (`AGENT_SESSION_MODEL`, in the policy file's own word): a reviewer answer equal
+  to it is refused, falling back to the plain tier or to nothing with a
+  warning — the reviewer is a relation between two models, and only the caller
+  holds the second. Ref: ADR-0007.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
 - **Agent harness** — the agent CLI a tier's model runs *in*: the program that

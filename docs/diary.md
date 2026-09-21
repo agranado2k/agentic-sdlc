@@ -1278,3 +1278,21 @@ implement-deliver suites, and the copies have already drifted from each other
 and from the gate's `pathRoots`. Promoting them into `tests/lib.sh` beside
 `t_assert_skill_frontmatter` is a structure-only change and so a ticket of
 its own (shared invariant §10), not a passenger on this diff.
+
+### 2026-09-21 — The reviewer is compared against the session that asks (ADR-0007)
+
+Building #222's review exposed a blind spot in the kit's own tier mapping:
+`reviewer self-implemented` answers one fixed model, chosen assuming the
+session runs on the planner's — so a session running on that model was
+handed its own model to review with. The session used the plain reviewer by
+hand; #224 filed the gap; ADR-0007 records the shape chosen at its
+`/implement` stop: the caller names what it runs on (`AGENT_SESSION_MODEL`,
+in the policy file's own word) and the resolver refuses an equal answer — falling
+back to the plain reviewer, or to nothing with a warning the report quotes.
+
+Two steps, because the resolver is shared layer and #224 budgeted no
+release: the kit-only wrapper `scripts/agents.kit.sh` carries the rule now
+(the tiers suite drives six cases RED then green), and the 0.21.0 release
+ticket moves it into `scripts/agents.lib.sh` with the note, the recipe entry
+and the transcript re-capture a shared change owes — alongside the
+`/to-prd` and `/to-tickets` line that release already owed.
