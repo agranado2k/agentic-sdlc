@@ -601,6 +601,15 @@ skeleton (K0).
   their two routes, the never-fix rule, the one permitted write, planner-tier
   work, spec-only frontmatter, and every path and command resolving.
 
+- `sh tests/spec-skills.test.sh` pins the `/to-prd` and `/to-tickets` contracts
+  as text: the PRD template's eleven sections in reading order, the phrase
+  that carries each rule (one-sentence objective, scenarios as demo scripts,
+  the penalty-for-being-wrong filter, later/never on every non-goal, open
+  issues with a next step, the stranger reread before publishing), the
+  hand-off from scenarios to the admission test, the open-issue gate and
+  feedback-first ordering on the ticket side, spec-only frontmatter, and
+  every path and command resolving.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -677,6 +686,7 @@ sh tests/docs-gate-advisory.test.sh                    # the warning channel is 
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots

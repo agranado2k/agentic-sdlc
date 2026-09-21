@@ -1226,3 +1226,55 @@ so exit 71 exists only where a user service manager answers, and CI is that
 weaker rung's only oracle. And a review from a second vendor:
 `ai-review.example.yml` is still inert, so every review this wave was an
 in-session sub-agent on a different model, not a different vendor.
+
+### 2026-09-21 — The spec skills learn from the design-doc tradition
+
+`/to-prd` and `/to-tickets` were read against Michael Lynch's "How to Write
+an Effective Software Design Document" (refactoringenglish.com). The article
+is written for human-read design docs, but its rules translate almost
+one-to-one here, because a PRD in this kit is read by fresh-context sessions
+— the purest reader with no outside context there is (shared invariant §4).
+
+What the kit already had: no file paths in the spec (the article's "don't
+write the implementation during design"), tracer bullets as milestones that
+create useful artifacts, the quiz as driving the doc through review,
+`docs/adr/` as resolved issues, glossary vocabulary, no ASCII diagrams.
+
+What it lacked, and now carries. `/to-prd`'s template opens with a
+one-sentence Objective (the line every ticket quotes); gains Scenarios —
+numbered walkthroughs of the finished system in use, which are demo scripts
+by construction; states the *penalty for being wrong* as the filter on
+Implementation Decisions, of which the file-path rule was only a symptom;
+restates every quality word as a number a test can assert; keeps a brief
+Alternatives Considered so the grilling's rejected branches stop being
+re-litigated downstream; marks every Out-of-Scope item *later* or *never*
+with its reason; and holds Open Issues as problem / options / next step. The
+process gains a reread-as-a-stranger step before publishing. `/to-tickets`
+reads the Scenarios as the candidate demos for its admission test, gains rule
+12 (an open issue that would shape tickets is resolved first, by a `planner`
+ticket or a `/prototype` spike, and blocks what it shapes) and rule 13
+(where the DAG leaves the order free, the slice most likely to expose a
+misunderstanding lands first — the surface over stubbed data before the
+pipeline). The article's own counter-lesson was applied to all of it: a
+section is a menu item, so the new ones are omitted when empty, never
+written as "N/A".
+
+Declined at the quiz: rejecting a drafted ticket that lands inside a PRD
+non-goal. `tests/spec-skills.test.sh` pins both contracts as text, RED
+before the edits, and is the first suite either skill has had.
+
+Neither skill is manifest-listed, so this is not a shared-layer bump; the
+obligation moves to the next one. The 0.21.0 `VERSION` note's non-manifest
+half owes `/to-prd` and `/to-tickets` a line each — `self-host.test.sh` F6
+holds the union of that note and any "Arriving from" paragraph in
+`UPDATING.md` to it once the bump is written, so the note is the enforced
+half and the recipe paragraph is convention.
+
+The review of #222 also recorded a debt this PR did not pay, on purpose:
+`tests/spec-skills.test.sh` is the fourth hand copy of the skill-suite
+scaffold (`skill_spans`, the command-resolution loop, `path_verdict` with its
+hand-kept root list) after the design-brief, housekeeping and
+implement-deliver suites, and the copies have already drifted from each other
+and from the gate's `pathRoots`. Promoting them into `tests/lib.sh` beside
+`t_assert_skill_frontmatter` is a structure-only change and so a ticket of
+its own (shared invariant §10), not a passenger on this diff.

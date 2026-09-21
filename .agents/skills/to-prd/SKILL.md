@@ -18,9 +18,15 @@ This skill takes the current conversation context and codebase understanding and
 
 Check with the user that these seams match their expectations.
 
-3. Write the PRD using the template below, then publish it to the project issue tracker with the `ready-for-agent` label if the work is mechanical with a checkable definition of done — no additional triage needed.
+3. Write the PRD using the template below, then **reread it as a stranger.** The PRD is read by sessions that hold none of this conversation (shared invariant §4). Whatever you would tell a teammate before they read it belongs in the Objective and the Problem Statement, not in your head; if a section only makes sense with the chat open, it is not finished.
+
+4. Publish it to the project issue tracker with the `ready-for-agent` label if the work is mechanical with a checkable definition of done — no additional triage needed.
 
 <prd-template>
+
+## Objective
+
+The objective is one sentence, in plain language and the glossary's vocabulary, that any stakeholder understands: what this changes and for whom. It is the line every ticket opens with for context and the name the change goes by, so it is the first line of the PRD, before the problem is explained.
 
 ## Problem Statement
 
@@ -42,7 +48,22 @@ A LONG, numbered list of user stories. Each user story should be in the format o
 
 This list of user stories should be extremely extensive and cover all aspects of the feature.
 
+## Scenarios
+
+A numbered walkthrough of the finished system in use — actor, action, what they see — step by step, with concrete names rather than placeholders. One per major story, and always where the story is abstract.
+
+<scenario-example>
+1. Ana saves a filtered view of the orders table and names it "late this week".
+2. Ana copies the view's link from the toolbar and pastes it into the team channel.
+3. Bo opens the link and sees Ana's filters applied, with a banner naming the view.
+4. Bo changes a filter; Ana's saved view is unchanged when she reloads it.
+</scenario-example>
+
+Each scenario is a walkthrough a session can replay: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
+
 ## Implementation Decisions
+
+Record a decision here when the **penalty for being wrong** is high — an interface, a storage shape, a seam, a module boundary: anything expensive to reverse once sessions have built on it. A decision that is cheap to change later belongs to the implementing session, not the PRD; pinning it here writes the implementation during design. The file-path rule below is one consequence of this.
 
 A list of implementation decisions that were made. This can include:
 
@@ -65,10 +86,19 @@ A list of testing decisions that were made. Include:
 - A description of what makes a good test (only test external behavior, not implementation details)
 - Which modules will be tested
 - Prior art for the tests (i.e. similar types of tests in the codebase)
+- Every quality word in this PRD — fast, small, robust, responsive — restated as a number a test can assert, or dropped
+
+## Alternatives Considered
+
+A few brief lines per strong alternative the conversation rejected, and why it lost. Only the ones a later session would plausibly propose again — not every idea. A decision that outlives this feature is already recorded in `docs/adr/` (by `/grill-with-docs` or `/design-brief`, after a human yes) and is linked from here, not repeated; one that is not yet recorded is an Open Issue, not an alternative.
 
 ## Out of Scope
 
-A description of the things that are out of scope for this PRD.
+One line per item, each with its reason, and each marked *later* (deferred — say what would reopen it) or *never* (rejected). A bare list makes a fresh session guess which is which.
+
+## Open Issues
+
+Anything the conversation left unresolved, each as three lines: the problem, the options seen, and the immediate next step — a `/prototype` spike, a `planner` ticket, or a question to a named person (which, if the answer shapes tickets, `/to-tickets` writes as a ticket with no label, so a human answers it). When one is resolved, move it out of here and into Implementation Decisions (or a decision record); the tracker keeps the history. An open issue whose answer would shape tickets becomes the first ticket `/to-tickets` writes, and blocks the ones it shapes — see its open-issue gate.
 
 ## Further Notes
 
@@ -76,10 +106,12 @@ Any further notes about the feature.
 
 </prd-template>
 
+Alternatives Considered and Open Issues are **omitted when empty** — never written as "none" or "N/A". A section is a menu item, not a form field.
+
 ## What happens next
 
 A PRD that spans more than one context window goes through `/to-tickets` before any code is written (shared invariant §1). One that fits a single window can go straight to `/implement`.
 
 ---
 
-*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism.*
+*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism. The Objective, Scenarios, Alternatives Considered and Open Issues sections and the penalty-for-being-wrong filter follow Michael Lynch's [How to Write an Effective Software Design Document](https://refactoringenglish.com/excerpts/write-an-effective-design-doc); the stranger reread and the later/never split are the kit's own extension of it.*

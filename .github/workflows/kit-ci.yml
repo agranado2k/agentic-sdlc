@@ -319,6 +319,14 @@ jobs:
       - name: Housekeeping skill-text suite
         run: sh tests/housekeeping-skill.test.sh
 
+  spec-skills:
+    name: /to-prd and /to-tickets contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Spec skills text suite
+        run: sh tests/spec-skills.test.sh
+
   manifest:
     name: The manifest grammar, once
     runs-on: ubuntu-latest

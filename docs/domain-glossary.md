@@ -228,6 +228,17 @@ Grouped by the seam each term belongs to. Entry shape:
   description. HTML reports draw inline SVG instead. Ref: the architecture
   skill's presenting contract.
   - _Avoid_: "ASCII diagram", "box drawing" — the thing §10 bans.
+- **Scenario** — in a PRD, a numbered walkthrough of the finished system in use:
+  actor, action, what they see, with concrete names. `/to-prd` writes one per
+  major story; `/to-tickets` reads them as the first list of tracer bullets.
+  - _Avoid_: the Gherkin sense — a feature file's `Scenario:` is executable
+    spec, held by the guards; say "feature file" for that.
+- **Open issue** — a PRD question the conversation left unresolved, written as
+  problem / options / next step. One whose answer would shape tickets is the
+  **open-issue gate**: `/to-tickets` writes its resolution as the first ticket
+  and every ticket it shapes is blocked by it. Resolved, it moves into the
+  PRD's decisions or a decision record.
+  - _Avoid_: "TBD", "TODO" — an open issue has a next step, a TODO has none.
 - **Demo** — a suite whose output is meant to be *read*: `tests/kit-demo.sh`,
   `tests/docs-demo.sh`. They build a throwaway project and walk it through every
   failure mode the kit claims to catch, red and green.
