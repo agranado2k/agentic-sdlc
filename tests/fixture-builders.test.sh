@@ -155,4 +155,91 @@ red s_assert_out_lacks "out" x      && pass "s_assert_out_lacks fails on a prese
 red s_assert_err_has "absent"       && pass "s_assert_err_has fails on a missing needle"     || fail "s_assert_err_has passed a missing needle"
 red s_assert_err_lacks "err"        && pass "s_assert_err_lacks fails on a present needle"   || fail "s_assert_err_lacks passed a present needle"
 
+# ---------------------------------------------------------------------------
+banner "Suite scratch names itself, and stale scratch is swept (#221)"
+# ---------------------------------------------------------------------------
+# A suite killed at its budget (#209) dies before its trap, by design, so its
+# scratch survives it — and `mktemp -d` with no template names that survivor
+# `tmp.XXXXXX`, which nobody can distinguish from anyone else's. The 0.20.0
+# wave left 83 of them on one host in a day. The dispatcher already solved
+# this one layer down (#210): a named prefix, and a sweep of what is older
+# than a run could plausibly be. This is the same answer for the harness.
+[ -n "${T_SCRATCH_PREFIX:-}" ] && pass "the harness names its scratch prefix ($T_SCRATCH_PREFIX)" ||
+	fail "tests/lib.sh defines no T_SCRATCH_PREFIX — scratch left by a killed suite is anonymous"
+case "$SCRATCH" in
+*/"$T_SCRATCH_PREFIX"*) pass "this suite's own scratch carries it: $(basename "$SCRATCH")" ;;
+*) fail "this suite's scratch is '$(basename "$SCRATCH")', which the prefix cannot find" ;;
+esac
+
+# The acceptance case, run for real: kill a suite with a signal it cannot trap
+# and look at what is left by NAME alone.
+KILLME="$SCRATCH/killme.sh"
+cat >"$KILLME" <<KILL_EOF
+#!/bin/sh
+T_ROOT="$T_ROOT"
+export T_ROOT
+. "$T_ROOT/tests/lib.sh"
+t_init
+echo "\$SCRATCH" > "$SCRATCH/victim-path"
+kill -9 \$\$
+KILL_EOF
+chmod +x "$KILLME"
+TMPDIR="$SCRATCH/tmproot" && mkdir -p "$TMPDIR"
+TMPDIR="$TMPDIR" sh "$KILLME" >/dev/null 2>&1
+VICTIM=$(cat "$SCRATCH/victim-path" 2>/dev/null)
+if [ -n "$VICTIM" ] && [ -d "$VICTIM" ]; then
+	case "$(basename "$VICTIM")" in
+	"$T_SCRATCH_PREFIX"*) pass "a suite killed with SIGKILL leaves scratch identifiable by name alone" ;;
+	*) fail "the killed suite left '$(basename "$VICTIM")' — anonymous, exactly the state #221 is about" ;;
+	esac
+else
+	fail "the killed suite left nothing to identify (victim='$VICTIM')"
+fi
+
+# The sweep: old scratch goes and says so, fresh scratch stays, and anything
+# without the prefix is never touched — the dispatcher's three rules.
+SWEEPROOT="$SCRATCH/sweeproot"
+mkdir -p "$SWEEPROOT"
+OLDDIR="$SWEEPROOT/${T_SCRATCH_PREFIX}oldone"
+FRESHDIR="$SWEEPROOT/${T_SCRATCH_PREFIX}freshone"
+STRANGER="$SWEEPROOT/tmp.somebodyelse"
+mkdir -p "$OLDDIR" "$FRESHDIR" "$STRANGER"
+touch -d '30 days ago' "$OLDDIR" 2>/dev/null || touch -t "$(date -d '30 days ago' +%Y%m%d%H%M 2>/dev/null || echo 202001010000)" "$OLDDIR"
+_sweep_err=$(mktemp "$SCRATCH/sweep-err.XXXXXX")
+( TMPDIR="$SWEEPROOT"; export TMPDIR; t_sweep_scratch 2>"$_sweep_err" )
+_sweep_msg=$(cat "$_sweep_err")
+[ -d "$OLDDIR" ] && fail "the sweep left scratch older than the sweep age" || pass "the sweep removes scratch older than the sweep age"
+[ -d "$FRESHDIR" ] && pass "…and leaves fresh scratch alone — a suite may still be running in it" ||
+	fail "the sweep removed fresh scratch, which could be a running suite's"
+[ -d "$STRANGER" ] && pass "…and never touches a directory without the prefix" ||
+	fail "the sweep removed 'tmp.somebodyelse' — it is not ours to remove"
+case "$_sweep_msg" in
+*swept*) pass "…and says on stderr what it removed" ;;
+*) fail "the sweep removed scratch silently: '$_sweep_msg'" ;;
+esac
+
+# One variable, one default, documented where a reader of the harness meets it.
+[ -n "${T_SCRATCH_SWEEP_DAYS:-}" ] && pass "the sweep age is one variable ($T_SCRATCH_SWEEP_DAYS day(s))" ||
+	fail "no T_SCRATCH_SWEEP_DAYS — the age is buried in the sweep"
+grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
+	grep -q "$T_SCRATCH_PREFIX" "$T_ROOT/tests/lib.sh" &&
+	pass "the harness header names both" || fail "the harness does not document its own scratch"
+
+# EVERY suite goes through the harness or carries the prefix: one anonymous
+# `mktemp -d` is one more directory nobody can safely remove.
+_anon=''
+for f in "$T_ROOT"/tests/*.sh; do
+	b=$(basename "$f")
+	[ "$b" = lib.sh ] && continue
+	# A bare `mktemp -d` with no template, outside a comment.
+	# `\$(mktemp` is text being WRITTEN into a script for another shell — the
+	# recipe's own working directory, quoted verbatim in UPDATING.md — not
+	# scratch this suite creates. The escape is the discriminator.
+	grep -n 'mktemp -d' "$f" | grep -v '^[0-9]*:[[:space:]]*#' | grep -v '\\\$(mktemp' |
+		grep -qE 'mktemp -d\)|mktemp -d[[:space:]]*$|mktemp -d[[:space:]]*\|\|' &&
+		_anon="$_anon $b"
+done
+[ -z "$_anon" ] && pass "no suite makes anonymous scratch" ||
+	fail "these suites still call a bare 'mktemp -d':$_anon"
+
 t_done "fixture builders"

@@ -35,10 +35,6 @@ KIT=$(cd "$(dirname "$0")/.." && pwd)
 # release had to find them all, and a release that missed one left the suite
 # asserting a version the kit no longer claimed.
 KITV=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
-SCRATCH=$(mktemp -d) || exit 2
-
-trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
-
 # The shared helper library. This suite overrides several helpers below with
 # variants of its own, but `assert_out_has` and `strip_nested_worktrees` come
 # from here — the sourcing was missing, so both were silently
@@ -47,6 +43,15 @@ trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 # class this suite exists to catch.
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
+
+# Scratch carries the harness's prefix (#221) rather than mktemp's anonymous
+# default: a suite killed at its budget ceiling dies before its trap, and what
+# it leaves must be identifiable by name alone. It is created AFTER the source
+# above, because the prefix is the harness's to name — spelling it a second
+# time here is the drift this repo keeps paying for.
+SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+
+trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
 
@@ -393,7 +398,7 @@ printf '\n'
 recipe() {
 	# --- Step 0: point at the kit -------------------------------------------
 	KIT_URL="$HIST"
-	WORK=$(mktemp -d)
+	WORK=$(mktemp -d "$SCRATCH/work.XXXXXX")
 	git clone --bare --quiet "$KIT_URL" "$WORK/kit.git"
 	# The consumer's own clone of the kit, and the one whose `tag --list` output
 	# UPDATING.md pins byte for byte. Pinned to git's DEFAULT tag order for the
@@ -751,7 +756,7 @@ assert_status 0 "the gate is green with a workflow deliberately removed" -- sh s
 banner "C2. Part 1 ALONE leaves an inert half-update"
 
 # Steps 0-6 of UPDATING.md, run without narration: Part B already proved them.
-WORK1=$(mktemp -d)
+WORK1=$(mktemp -d "$SCRATCH/work1.XXXXXX")
 git clone --bare --quiet "$HIST3" "$WORK1/kit.git"
 git --git-dir="$WORK1/kit.git" config tag.sort refname
 kit1() { git --git-dir="$WORK1/kit.git" "$@"; }

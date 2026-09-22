@@ -40,7 +40,10 @@
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
-SCRATCH=$(mktemp -d) || exit 2
+# Scratch carries the harness's prefix (#221) rather than mktemp's anonymous
+# default: a suite killed at its budget ceiling dies before its trap, and what
+# it leaves must be identifiable by name alone.
+SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
 PROJ="$SCRATCH/demo-project"
 REMOTE="$SCRATCH/demo-remote.git"
 PROJECT_NAME="Demo Project"

@@ -37,8 +37,12 @@ LC_ALL=C
 export LC_ALL
 
 # The repo root, derived once from the suite that sourced this harness; every
-# helper below anchors on it rather than on the working directory.
-T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# helper below anchors on it rather than on the working directory. Overridable
+# because a fixture that lives in scratch — a throwaway suite written to prove
+# what a KILLED suite leaves behind (#221) — sits outside tests/, so deriving
+# from its $0 would point the harness at the scratch directory instead of the
+# repo. A suite under tests/ never sets it and never notices.
+T_ROOT=${T_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 
 # --- the budget --------------------------------------------------------------
 # EVERY SUITE RUNS INSIDE THE BUDGET A DISPATCHED WORKER GETS (ADR-0006, #209):
@@ -398,8 +402,52 @@ _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 
+# SUITE SCRATCH NAMES ITSELF (#221), and stale scratch is swept.
+#
+# A suite that hits its budget ceiling (#209) is killed before its trap runs,
+# by design — so its scratch outlives it. `mktemp -d` with no template names
+# that survivor `tmp.XXXXXX`, indistinguishable from every other program's,
+# and the 0.20.0 wave left 83 of them on one host in a single day: nobody
+# could tell which were safe to remove, so none were.
+#
+# scripts/agent-dispatch.sh solved exactly this one layer down (#210) and
+# this is the same answer, in the same shape: a PREFIX, so what a killed run
+# leaves is identifiable by name alone, and a SWEEP of what is older than a
+# run could plausibly still be. The three rules of that sweep are the
+# dispatcher's, and they are what make it safe on a shared /tmp: only
+# directories carrying the prefix, only those older than the age, and nothing
+# followed through a symlink.
+#
+# T_SCRATCH_SWEEP_DAYS is the age, in whole days. The default is deliberately
+# generous — a suite is minutes, not days, so a day-old directory is certainly
+# abandoned — and an operator who runs suites that legitimately outlive it can
+# raise it in their environment.
+T_SCRATCH_PREFIX=${T_SCRATCH_PREFIX:-kit-suite.}
+T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-1}
+
+# t_sweep_scratch — remove suite scratch under $TMPDIR older than the sweep
+# age, and say how much went. Never touches a name without the prefix.
+t_sweep_scratch() {
+	_ts_root=${TMPDIR:-/tmp}
+	[ -d "$_ts_root" ] || return 0
+	# POSIX find only, and the predicates carry the safety rather than sitting
+	# beside it: `dir/.` with `! -name . -prune` is depth one; `-mtime +n` is
+	# true once the whole days elapsed exceed n, so "at least N days" is
+	# +(N-1); the walk is PHYSICAL (no -L, no -H) so a planted
+	# `kit-suite.x -> ~` is a link and `-type d` never hands it to rm; and a
+	# sibling owned by someone else fails at rm on a sticky /tmp, so -print
+	# follows only a removal that worked and the count is of what actually
+	# went.
+	_ts_swept=$(find "$_ts_root/." ! -name . -prune -type d -name "${T_SCRATCH_PREFIX}*" \
+		-mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
+	[ "${_ts_swept:-0}" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_swept stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
+	return 0
+}
+
 t_init() {
-	SCRATCH=$(mktemp -d) || exit 2
+	t_sweep_scratch
+	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
 	trap 't_cleanup' EXIT INT TERM HUP
 }
 

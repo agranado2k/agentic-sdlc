@@ -102,6 +102,17 @@ stale `none` is a ticket to make the decision again.
   and that no later dispatch has swept. A count that grows is dispatches
   dying before their trap — a finding about what kills them, not about the
   scratch.
+- **Suite scratch.** The test harness has the same shape one layer up: a
+  suite killed at its own budget ceiling dies before its trap, so its scratch
+  outlives it, named `kit-suite.*` under the same temp location. The harness
+  sweeps the ones past its sweep age (`T_SCRATCH_SWEEP_DAYS`, set wherever
+  your suites share their setup) at the start of the next suite and says how
+  many went; this
+  pass lists each `kit-suite.*` directory by name and age beside the dispatch
+  ones, and reads them the same way. A count that grows is suites hitting
+  their ceiling — a finding about the ceiling or the suite, not about the
+  scratch. A `tmp.*` directory is NOT suite scratch and is not this pass's to
+  touch: the prefix exists precisely so the two can be told apart.
 
 Route: the pruning is the one action this pass delegates, and it is
 `/worktree-cleanup`'s to perform on what is already merged; on a repo with no
