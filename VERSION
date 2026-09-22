@@ -785,9 +785,10 @@
 # is a new kit-only runner that turns a skill name into the tier its phase
 # means and dispatches there.
 
-# 0.22.0 — the reviewer refusal reaches every project. ONE shared file
-# changes content: scripts/agents.lib.sh. UPDATING.md changes by re-pin, which
-# this manifest's 0.9.0 note counts as a content change. No file joins or
+# 0.22.0 — the reviewer refusal reaches every project. TWO shared files change
+# content: scripts/agents.lib.sh carries the rule, and UPDATING.md gains the
+# migration paragraph for it — actual guidance, not only the re-pin this
+# manifest's 0.9.0 note already counts as a content change. No file joins or
 # leaves the layer.
 #   From #226: ADR-0007's rule moves out of the kit's own wrapper and into the
 # resolver every consumer runs. "The reviewer differs from the implementer" is
@@ -804,8 +805,16 @@
 # review would share the author's model, so the caller's report can say so.
 # The model half only — a harness token is not a model — and the reviewer tier
 # only: an implementer equal to the session is the ordinary case. The
-# comparison matches either spelling a policy might use, because a policy may
-# pin `vendor-model-5` while a spawn parameter takes `model`.
+# comparison is EXACT — the word the policy file uses, never a family guess.
+# Folding an id to a family would mean knowing each vendor's id ORDER, one
+# putting the family second and another the version there, and a wrong guess
+# refuses two DIFFERENT models as if they were one; the kit's own Codex
+# mapping is where that would have bitten first. A caller names its session in
+# the spelling its own policy uses, and the recipe says so with the one-liner.
+# The substitution is of the WHOLE mapping, before its harness and model
+# halves are split, so a fallback that crosses agent harnesses carries its own
+# — otherwise the dispatcher would launch the fallback's model wherever the
+# refused mapping pointed.
 #   scripts/agents.kit.sh, which carried the rule since 0.21.0, is back to
 # what its header describes: the policy choice, `--policy`, `--alias`, and a
 # delegation. Nothing of the rule is left there to drift from the resolver's.

@@ -560,10 +560,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1827 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1839 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1981 insertions(+), 1 deletion(-)
+ 3 files changed, 1993 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1397,18 +1397,30 @@ authority on what your policy file has to provide.
 
 ### 9e. Adapters — opt-in, whole-directory
 
-**Arriving from 0.21.0 or older, a reviewer can no longer be the model that
-wrote the diff**: `scripts/agents.lib.sh` gained one rule, and it is opt-in by
-construction. Set `AGENT_SESSION_MODEL` to the word your policy file uses for
-the model your session is running on, and the resolver refuses to hand that
-same model back for the `reviewer` tier — it falls back to the plain reviewer,
-or prints nothing and says the review would share the author's model. Leave the
-variable unset and nothing changes, which is why this needs no action from you:
-take the delta in step 5 and the rule sits there until a session names itself.
-Where it pays is a `reviewer self-implemented` mapping, which answers one fixed
-model chosen assuming your sessions run on a different one — the day they run
-on that one, it was handing the author its own diff. `/implement` also gains a
-line: a ticket's `Tier:` outranks a skill's `metadata.phase`.
+**Arriving from 0.21.0 or older, the resolver can refuse a reviewer that is
+the session's own model — if you wire it**: `scripts/agents.lib.sh` gained one
+rule, and it is **opt-in and inert until a caller uses it**. Taking the delta
+in step 5 changes nothing on its own. To adopt it, whatever spawns your
+reviewer must set `AGENT_SESSION_MODEL` to the model the calling session is
+running on, spelled **exactly as your `scripts/agents.config.sh` spells it**
+— the comparison is literal, because folding ids to a family word would mean
+guessing each vendor's id order and a wrong guess refuses two different models
+as if they were one:
+
+```sh
+AGENT_SESSION_MODEL="$(sh scripts/agents.lib.sh planner)" \
+  sh scripts/agents.lib.sh reviewer self-implemented
+```
+
+With that set, a `reviewer` answer equal to the session's model falls back to
+the plain reviewer tier with a warning, and when nothing differs the resolver
+prints nothing and says the review would share the author's model — the same
+"nothing means inherit" contract an unmapped tier already has. Where it pays
+is a `reviewer self-implemented` mapping, which answers one fixed model chosen
+assuming your sessions run on a different one: the day they run on that one,
+it was handing the author its own diff. Nothing in the shipped skills sets the
+variable yet, so wiring it is yours. `/implement` also gains a line: a
+ticket's `Tier:` outranks a skill's `metadata.phase`.
 
 **Arriving from 0.20.0 or older, every skill gained a phase, and two changed
 their prose**: each `SKILL.md` now carries a `metadata.phase` line — one of

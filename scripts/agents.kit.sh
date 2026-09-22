@@ -29,28 +29,20 @@
 #
 # scripts/agents.lib.sh itself is shared layer (see VERSION) and stays
 # byte-identical to every project that runs it: this wrapper sets the seam
-# already exposed for exactly this case and delegates (and, for the reviewer
-# tier, compares the answer — the section below). `"$@"` rather than a fixed one-argument form, so the
+# already exposed for exactly this case and delegates. `"$@"` rather than a fixed one-argument form, so the
 # resolver's WHOLE signature reaches it — including the optional task domain,
 # which a wrapper that took `$1` alone would silently drop while still
 # resolving every tier correctly. tests/agents-tiers.test.sh asserts the
 # pass-through for exactly that reason.
 #
-# THE ONE THING THIS WRAPPER ADDS (#224, ADR-0007)
+# WHAT THIS WRAPPER NO LONGER ADDS (#224 → #226, ADR-0007)
 # ---------------------------------------------------------------------------
-# The mapping's `self-implemented` reviewer is one model, chosen on the
-# assumption that the session runs on the planner's — so on a session that
-# runs on THAT model the answer is the implementer's own, the exact case the
-# domain exists to avoid. The policy file cannot know who is asking; the caller
-# can say. When $AGENT_SESSION_MODEL names the session's model (the same
-# word the policy file uses) and the resolver's answer for the reviewer tier
-# equals it, this wrapper warns once and falls back to the plain reviewer
-# tier; when that too equals it, it warns that the review will share the
-# author's model and prints nothing, so the spawn inherits the session and
-# the report has to say so. With the variable unset, or for any tier but the
-# reviewer, the wrapper is the exec it always was. This lives here and not in
-# the shared resolver because the resolver is shared layer: moving the rule
-# there is a release, and 0.21.0 is where it goes.
+# It used to carry the reviewer refusal: a session handed its own model to
+# review with, because a `self-implemented` mapping answers one model chosen
+# assuming the session runs on another. That lived here only because the
+# resolver is shared layer and the fix was not a release. 0.22.0 is that
+# release — the rule is in scripts/agents.lib.sh now, so every consumer gets
+# it, and nothing of it is left here to drift from it.
 #
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
