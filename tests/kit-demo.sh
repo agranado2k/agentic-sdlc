@@ -276,7 +276,9 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
 assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_out_has "shared-layer 0.20.0"
+# Read from VERSION, never pinned by hand: a literal here is one more copy to
+# re-type at every release, and this suite has caught itself on exactly that.
+assert_out_has "shared-layer $(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")"
 if [ "$HAVE_NODE" = 1 ]; then
 	assert_out_has "engine: docs harness"
 else
