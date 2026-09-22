@@ -1101,6 +1101,36 @@ t_run_split sh "$KIT_WRAPPER" --policy
 [ "$S_OUT" = "scripts/agents.kit.config.sh" ] &&
 	pass "--policy names the claude-code policy by default" ||
 	fail "--policy gave '$S_OUT' by default"
+
+# --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
+# the full id; the in-session spawn parameter takes the family word. Pinning
+# is what makes a model change a decision someone committed rather than a
+# roster moving underneath the policy, and this is what keeps it spawnable.
+t_run_split sh "$KIT_WRAPPER" --alias planner
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = fable ] &&
+	pass "--alias planner is the spawn word 'fable' for the pinned claude-fable-5-1" ||
+	fail "--alias planner gave '$S_OUT' (status $S_STATUS), expected 'fable'"
+t_run_split sh "$KIT_WRAPPER" --alias implementer
+[ "$S_OUT" = opus ] && pass "--alias implementer is 'opus'" || fail "--alias implementer gave '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" --alias mechanical
+[ "$S_OUT" = haiku ] && pass "--alias mechanical is 'haiku' — a dated id folds to its family too" ||
+	fail "--alias mechanical gave '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" --alias implementer content
+[ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
+# A value that is not an Anthropic id has no spawn word: it belongs to another
+# agent harness, and printing a guess would be worse than printing nothing.
+t_run_split sh "$KIT_WRAPPER" --alias reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "--alias prints nothing for a tier that crosses agent harnesses — it is not spawnable in session" ||
+	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS); the reviewer crosses vendors and has no in-session spawn word"
+# Every alias it does print must be one the spawn parameter actually accepts.
+for tier in planner implementer mechanical; do
+	t_run_split sh "$KIT_WRAPPER" --alias "$tier"
+	case "$S_OUT" in
+	fable | opus | sonnet | haiku) pass "--alias $tier ('$S_OUT') is a word the spawn parameter accepts" ;;
+	*) fail "--alias $tier gave '$S_OUT', which the spawn parameter does not accept" ;;
+	esac
+done
 t_run_split env AGENT_HARNESS_SELF=codex AGENTS_CONFIG="$SHIPPED" sh "$KIT_WRAPPER" planner
 [ "$S_OUT" = "$CX_VIA_WRAPPER" ] &&
 	pass "the wrapper's own choice still beats an inherited AGENTS_CONFIG" ||

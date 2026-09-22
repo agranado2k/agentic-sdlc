@@ -46,12 +46,22 @@
 # (strongest coding workhorse), `sonnet` (strong general mid-tier), `haiku`
 # (cheapest capable).
 #
-# The local values below are those ALIASES, not versioned strings: the spawn
-# parameter takes `fable`, not `fable-5.1`, and the alias is what tracks the
-# roster as it moves. The version each alias is meant to be is in the comment
-# beside it — check the comment against the roster, change the alias only if
-# the harness renames it. Values that cross to another agent harness are that
-# harness's own ids, and rot on its schedule instead.
+# The local values below are PINNED IDS, not the `fable`/`opus` aliases. An
+# alias silently follows the roster: the day Fable 6 ships, every `fable` here
+# becomes a different model with no diff and no decision, which is the opposite
+# of what a recorded policy is for. Pinning means the move is a commit someone
+# made on purpose.
+#
+# The cost of pinning is that the two consumption paths take different
+# spellings. `claude --model` (what scripts/agent-dispatch.sh runs when a tier
+# crosses agent harnesses) takes the full id. The IN-SESSION spawn parameter
+# — the Agent/Task tool, adapters/claude-code/README.md — takes only the
+# family word. `sh scripts/agents.kit.sh --alias <tier> [domain]` is the
+# bridge: it resolves the tier and prints the spawn word for it, so a session
+# spawning a subagent asks for that and a dispatch uses the id verbatim.
+#
+# Values that cross to another agent harness are that harness's own ids and
+# rot on its schedule instead.
 # ---------------------------------------------------------------------------
 # THE VOCABULARY (same shape as scripts/agents.config.sh; repeated here only as
 # the shape of the decision each variable encodes — the words are defined in
@@ -88,19 +98,19 @@ AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
 #    for by every downstream ticket, so this is the one tier where "most
 #    expensive" is the cost-saving choice.
 # ---------------------------------------------------------------------------
-AGENT_TIER_PLANNER='fable'   # Claude Fable 5.1
+AGENT_TIER_PLANNER='claude-fable-5-1'
 
 # ---------------------------------------------------------------------------
 # 2. IMPLEMENTER — best cost/capability for real coding work. This is where
 #    most of the kit's own sessions land.
 # ---------------------------------------------------------------------------
-AGENT_TIER_IMPLEMENTER='opus'   # Claude Opus 5.5 — the builder
+AGENT_TIER_IMPLEMENTER='claude-opus-5'   # the builder
 
 # ---------------------------------------------------------------------------
 # 3. MECHANICAL — cheapest capable model. The suite is the oracle; capability
 #    past "can follow the pattern" buys nothing here.
 # ---------------------------------------------------------------------------
-AGENT_TIER_MECHANICAL='haiku'
+AGENT_TIER_MECHANICAL='claude-haiku-4-5-20251001'
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — strongest reasoning, in fresh context, and DIFFERENT from
@@ -154,7 +164,7 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='codex:gpt-6-astra'
 # is `implementer` work by tier — one ticket, test-first, seams to find — but
 # it is not code, and the strongest prose model available is a different answer
 # from the strongest coding one.
-AGENT_TIER_IMPLEMENTER_CONTENT='fable'   # Claude Fable 5.1
+AGENT_TIER_IMPLEMENTER_CONTENT='claude-fable-5-1'
 
 # THE TESTS DOMAIN — the operator's fourth agent, the "tester". It is a domain
 # and not a fifth tier because the tier vocabulary is CLOSED (an unknown tier

@@ -57,6 +57,7 @@
 #   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
 #   AGENT_HARNESS_SELF=codex sh scripts/agents.kit.sh <tier> [domain]
 #   sh scripts/agents.kit.sh --policy        # which policy file this session uses
+#   sh scripts/agents.kit.sh --alias <tier> [domain]   # the in-session spawn word
 set -eu
 # WHICH POLICY. The operator drives this repo from two agent harnesses and
 # each has its own tier policy — what is a local spawn in one is a crossing in
@@ -86,6 +87,34 @@ export AGENTS_CONFIG
 # drifted before.
 if [ "${1:-}" = --policy ]; then
 	printf '%s\n' "$AGENTS_CONFIG"
+	exit 0
+fi
+
+# `--alias <tier> [domain]` prints the word the IN-SESSION spawn parameter
+# takes for this tier, where `--model` prints the id a CLI takes. Both
+# spellings name one model; they exist because the policy files pin ids
+# (`claude-opus-5`) so that a roster moving is a decision someone commits,
+# while the Agent/Task tool's parameter accepts only the family word
+# (adapters/claude-code/README.md). The fold is mechanical: strip the vendor
+# prefix, keep the family. A value that names another agent harness prints
+# NOTHING — it cannot be spawned in session at all, and a guess there would
+# send the work to the wrong vendor silently.
+if [ "${1:-}" = --alias ]; then
+	shift
+	[ $# -gt 0 ] || { echo "agents.kit.sh: --alias needs a tier" >&2; exit 2; }
+	# Ask the harness half FIRST: `--model` strips the prefix and warns, so by
+	# the time the model half is in hand a crossing looks like a local answer.
+	_alias_harness=$(sh scripts/agents.lib.sh --harness "$@" 2>/dev/null) || exit $?
+	[ -z "$_alias_harness" ] || exit 0
+	_alias_value=$(sh scripts/agents.lib.sh "$@" 2>/dev/null) || exit $?
+	case "$_alias_value" in
+	claude-*)
+		_alias_word=${_alias_value#claude-}
+		printf '%s\n' "${_alias_word%%-*}"
+		;;
+	'') ;;
+	*) printf '%s\n' "$_alias_value" ;;
+	esac
 	exit 0
 fi
 # The tier is not always $1: the resolver's signature admits a leading

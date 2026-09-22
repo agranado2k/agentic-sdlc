@@ -99,7 +99,86 @@ banner "3. A phase resolves to a tier the resolver accepts"
 # ---------------------------------------------------------------------------
 [ -f "$DISPATCH" ] && pass "scripts/skill-dispatch.kit.sh exists" || {
 	fail "scripts/skill-dispatch.kit.sh is missing — the phase is declared and nothing reads it"
-	t_done "skill phases"
+	# ---------------------------------------------------------------------------
+banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
+# ---------------------------------------------------------------------------
+# The declaration is only worth having if it ends in an executable spawn. For
+# every skill on the roster, under each agent harness's policy: the phase maps
+# to a tier, the tier resolves to a non-empty model, and that model is
+# reachable by exactly one of the two paths — an in-session spawn word when it
+# is local, a dispatch to a declared agent harness when it crosses. A tier
+# that is neither is the silent inherit the whole mechanism exists to stop.
+for cfg in scripts/agents.kit.config.sh scripts/agents.kit.codex.config.sh; do
+	_clabel=$(basename "$cfg")
+	_unreachable=0
+	_checked=0
+	for d in .agents/skills/*/; do
+		[ -f "$d/SKILL.md" ] || continue
+		_skill=$(basename "$d")
+		_tier_args=$(sh "$DISPATCH" --tier-of "$_skill") || {
+			fail "$_clabel: /$_skill has no tier"
+			continue
+		}
+		_checked=$((_checked + 1))
+		# shellcheck disable=SC2086  # one or two words, by construction
+		_model=$(AGENTS_CONFIG="$cfg" sh "$ROOT/scripts/agents.lib.sh" $_tier_args 2>/dev/null)
+		# shellcheck disable=SC2086
+		_harness=$(AGENTS_CONFIG="$cfg" sh "$ROOT/scripts/agents.lib.sh" --harness $_tier_args 2>/dev/null)
+		if [ -z "$_model" ]; then
+			fail "$_clabel: /$_skill ($_tier_args) resolves to no model — it would inherit the session silently"
+			_unreachable=$((_unreachable + 1))
+			continue
+		fi
+		if [ -n "$_harness" ]; then
+			# A crossing must name an agent harness the policy declares AND
+			# gave a command template, or the dispatch dies at run time.
+			_decl=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; printf "%s" "${AGENT_HARNESSES:-}"' "$cfg")
+			_cmdvar="AGENT_HARNESS_$(printf '%s' "$_harness" | tr 'a-z-' 'A-Z_')_CMD"
+			_cmd=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; eval printf "%s" "\$$1"' "$cfg" "$_cmdvar")
+			case " $_decl " in
+			*" $_harness "*) : ;;
+			*)
+				fail "$_clabel: /$_skill crosses to '$_harness', which AGENT_HARNESSES does not declare"
+				_unreachable=$((_unreachable + 1))
+				continue
+				;;
+			esac
+			[ -n "$_cmd" ] || {
+				fail "$_clabel: /$_skill crosses to '$_harness', which has no ${_cmdvar} — the dispatch would die at run time"
+				_unreachable=$((_unreachable + 1))
+				continue
+			}
+		elif [ "$cfg" = scripts/agents.kit.config.sh ]; then
+			# Local to Claude Code: the in-session spawn parameter takes the
+			# family word, so a pinned id must fold to one it accepts.
+			# shellcheck disable=SC2086
+			_alias=$(sh "$ROOT/scripts/agents.kit.sh" --alias $_tier_args)
+			case "$_alias" in
+			fable | opus | sonnet | haiku) : ;;
+			*)
+				fail "$_clabel: /$_skill resolves to '$_model', which folds to '$_alias' — not a word the spawn parameter accepts"
+				_unreachable=$((_unreachable + 1))
+				;;
+			esac
+		fi
+	done
+	[ "$_checked" -ge 17 ] && [ "$_unreachable" = 0 ] &&
+		pass "$_clabel: all $_checked skills resolve to a model that is actually runnable" ||
+		fail "$_clabel: $_unreachable of $_checked skills resolve to nothing runnable"
+done
+
+# And the phases are not all the same answer: a policy where every phase
+# resolved to one model would pass everything above and mean nothing.
+_distinct=$(for ph in planner implementer tester mechanical reviewer; do
+	sh "$DISPATCH" --phase-tier "$ph" | while read -r a b; do
+		AGENTS_CONFIG=scripts/agents.kit.config.sh sh "$ROOT/scripts/agents.lib.sh" $a $b 2>/dev/null
+	done
+done | sort -u | grep -c .)
+[ "$_distinct" -ge 3 ] &&
+	pass "the five phases resolve to $_distinct distinct models — the phase changes the answer" ||
+	fail "the five phases resolve to only $_distinct model(s) — the phase is not changing anything"
+
+t_done "skill phases"
 }
 for p in $PHASES; do
 	t_run_split sh "$DISPATCH" --phase-tier "$p"
@@ -143,5 +222,84 @@ else
 	fail "a dry-run dispatch of /review-pr exited $S_STATUS"
 	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
 fi
+
+# ---------------------------------------------------------------------------
+banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
+# ---------------------------------------------------------------------------
+# The declaration is only worth having if it ends in an executable spawn. For
+# every skill on the roster, under each agent harness's policy: the phase maps
+# to a tier, the tier resolves to a non-empty model, and that model is
+# reachable by exactly one of the two paths — an in-session spawn word when it
+# is local, a dispatch to a declared agent harness when it crosses. A tier
+# that is neither is the silent inherit the whole mechanism exists to stop.
+for cfg in scripts/agents.kit.config.sh scripts/agents.kit.codex.config.sh; do
+	_clabel=$(basename "$cfg")
+	_unreachable=0
+	_checked=0
+	for d in .agents/skills/*/; do
+		[ -f "$d/SKILL.md" ] || continue
+		_skill=$(basename "$d")
+		_tier_args=$(sh "$DISPATCH" --tier-of "$_skill") || {
+			fail "$_clabel: /$_skill has no tier"
+			continue
+		}
+		_checked=$((_checked + 1))
+		# shellcheck disable=SC2086  # one or two words, by construction
+		_model=$(AGENTS_CONFIG="$cfg" sh "$ROOT/scripts/agents.lib.sh" $_tier_args 2>/dev/null)
+		# shellcheck disable=SC2086
+		_harness=$(AGENTS_CONFIG="$cfg" sh "$ROOT/scripts/agents.lib.sh" --harness $_tier_args 2>/dev/null)
+		if [ -z "$_model" ]; then
+			fail "$_clabel: /$_skill ($_tier_args) resolves to no model — it would inherit the session silently"
+			_unreachable=$((_unreachable + 1))
+			continue
+		fi
+		if [ -n "$_harness" ]; then
+			# A crossing must name an agent harness the policy declares AND
+			# gave a command template, or the dispatch dies at run time.
+			_decl=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; printf "%s" "${AGENT_HARNESSES:-}"' "$cfg")
+			_cmdvar="AGENT_HARNESS_$(printf '%s' "$_harness" | tr 'a-z-' 'A-Z_')_CMD"
+			_cmd=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; eval printf "%s" "\$$1"' "$cfg" "$_cmdvar")
+			case " $_decl " in
+			*" $_harness "*) : ;;
+			*)
+				fail "$_clabel: /$_skill crosses to '$_harness', which AGENT_HARNESSES does not declare"
+				_unreachable=$((_unreachable + 1))
+				continue
+				;;
+			esac
+			[ -n "$_cmd" ] || {
+				fail "$_clabel: /$_skill crosses to '$_harness', which has no ${_cmdvar} — the dispatch would die at run time"
+				_unreachable=$((_unreachable + 1))
+				continue
+			}
+		elif [ "$cfg" = scripts/agents.kit.config.sh ]; then
+			# Local to Claude Code: the in-session spawn parameter takes the
+			# family word, so a pinned id must fold to one it accepts.
+			# shellcheck disable=SC2086
+			_alias=$(sh "$ROOT/scripts/agents.kit.sh" --alias $_tier_args)
+			case "$_alias" in
+			fable | opus | sonnet | haiku) : ;;
+			*)
+				fail "$_clabel: /$_skill resolves to '$_model', which folds to '$_alias' — not a word the spawn parameter accepts"
+				_unreachable=$((_unreachable + 1))
+				;;
+			esac
+		fi
+	done
+	[ "$_checked" -ge 17 ] && [ "$_unreachable" = 0 ] &&
+		pass "$_clabel: all $_checked skills resolve to a model that is actually runnable" ||
+		fail "$_clabel: $_unreachable of $_checked skills resolve to nothing runnable"
+done
+
+# And the phases are not all the same answer: a policy where every phase
+# resolved to one model would pass everything above and mean nothing.
+_distinct=$(for ph in planner implementer tester mechanical reviewer; do
+	sh "$DISPATCH" --phase-tier "$ph" | while read -r a b; do
+		AGENTS_CONFIG=scripts/agents.kit.config.sh sh "$ROOT/scripts/agents.lib.sh" $a $b 2>/dev/null
+	done
+done | sort -u | grep -c .)
+[ "$_distinct" -ge 3 ] &&
+	pass "the five phases resolve to $_distinct distinct models — the phase changes the answer" ||
+	fail "the five phases resolve to only $_distinct model(s) — the phase is not changing anything"
 
 t_done "skill phases"

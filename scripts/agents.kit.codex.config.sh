@@ -24,10 +24,12 @@
 #
 # ---------------------------------------------------------------------------
 # THESE IDS ROT. The OpenAI ids below are this harness's own and rot on its
-# schedule; the `claude-code:` values rot on Anthropic's. The Claude half uses
-# the harness's ALIASES (`fable`, `opus`), not versioned strings, because the
-# alias is what tracks the roster as it moves — the version each is meant to
-# be is in the comment beside it.
+# schedule; the `claude-code:` values rot on Anthropic's. Both halves are
+# PINNED — a floating alias would make a model change with no diff and no
+# decision, which is the opposite of what a recorded policy is for. Every
+# value here crosses to the other agent harness and so reaches a CLI, which
+# takes the full id; the alias question the other policy documents does not
+# arise on this side.
 # ---------------------------------------------------------------------------
 
 # The other agent harness, declared so `<harness>:<model>` is a crossing
@@ -60,12 +62,12 @@ AGENT_TIER_MECHANICAL='gpt-5.6-sol-mini'
 #    reason the other policy states in full: a reviewer that shares the
 #    author's training shares the author's blind spots.
 # ---------------------------------------------------------------------------
-AGENT_TIER_REVIEWER='claude-code:fable'   # Claude Fable 5.1
+AGENT_TIER_REVIEWER='claude-code:claude-fable-5-1'
 #    Vestigial while the reviewer is cross-vendor — a Codex session cannot be
 #    running Fable — but mapped to a SECOND model anyway, so the rule still
 #    has an answer if the reviewer is ever localised. ADR-0007's refusal in
 #    scripts/agents.kit.sh is the net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:opus'   # Claude Opus 5.5
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN — same rules as the other policy. The
@@ -76,7 +78,7 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:opus'   # Claude Opus 5.5
 # The tester. A domain rather than a fifth tier because the tier vocabulary is
 # closed. It crosses for the same reason the reviewer does: the model that
 # wrote the code is the worst reader of whether its test constrains anything.
-AGENT_TIER_IMPLEMENTER_TESTS='claude-code:opus'   # Claude Opus 5.5
+AGENT_TIER_IMPLEMENTER_TESTS='claude-code:claude-opus-5'
 
 # No AGENT_TIER_IMPLEMENTER_CONTENT here. The kit's prose is written from the
 # Claude Code session, where that domain is mapped; a Codex session that ends
