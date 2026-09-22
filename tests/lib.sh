@@ -710,6 +710,14 @@ t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
 # a root, every root list a hand mirror of the gate's pathRoots. Held once,
 # here, the same way the roster block above and the ignored commands are.
 
+# t_skill_label <file>... — the skill name(s) a message should blame: one
+# directory name per file, deduplicated, joined by "/". A pair of skills
+# tested together must not report the first one's name for the second one's
+# dead reference.
+t_skill_label() {
+	for _sl_f; do basename "$(dirname "$_sl_f")"; done | sort -u | tr '\n' '/' | sed 's|/$||'
+}
+
 # t_skill_spans <file>... — code spans outside fenced blocks, one token per
 # line: the same reading tests/kit-demo.sh gives the manual, applied to a
 # skill and its sidecars. A missing file is skipped, not an error, so a suite
@@ -740,11 +748,11 @@ t_assert_skill_commands() {
 		if [ -f "$T_ROOT/.agents/skills/${_sc_cmd#/}/SKILL.md" ]; then
 			_sc_n=$((_sc_n + 1))
 		else
-			fail "$(basename "$(dirname "$1")") names $_sc_cmd but .agents/skills/${_sc_cmd#/}/SKILL.md does not exist"
+			fail "$(t_skill_label "$@") names $_sc_cmd but .agents/skills/${_sc_cmd#/}/SKILL.md does not exist"
 		fi
 	done
 	[ "$_sc_n" -ge "$_sc_min" ] &&
-		pass "all $_sc_n slash commands in the skill resolve" ||
+		pass "all $_sc_n slash commands in $(t_skill_label "$@") resolve" ||
 		fail "only $_sc_n commands resolved — $_sc_why"
 }
 
@@ -788,7 +796,7 @@ t_assert_skill_paths() {
 		if _sp_why_ok=$(t_skill_path_verdict "$_sp_tok" "$@"); then
 			pass "$_sp_tok — $_sp_why_ok"
 		else
-			fail "$_sp_tok is named by $(basename "$(dirname "$1")") but resolves to nothing, in this tree or a bootstrapped one"
+			fail "$_sp_tok is named by $(t_skill_label "$@") but resolves to nothing, in this tree or a bootstrapped one"
 		fi
 	done
 	[ "$_sp_n" -ge "$_sp_min" ] && pass "$_sp_n repo paths checked" ||
@@ -799,9 +807,9 @@ t_assert_skill_paths() {
 # resolves the model, and a skill or a ticket outlives the id.
 t_assert_no_model_id() {
 	if grep -Eiq 'claude-[a-z]+-[0-9]|gpt-[0-9]|gemini-[0-9]|\b(opus|sonnet|haiku) [0-9]' "$@"; then
-		fail "$(basename "$(dirname "$1")") names a model identifier — the tier resolves the model, a ticket outlives the id"
+		fail "$(t_skill_label "$@") names a model identifier — the tier resolves the model, a ticket outlives the id"
 	else
-		pass "no model identifier in $(basename "$(dirname "$1")")"
+		pass "no model identifier in $(t_skill_label "$@")"
 	fi
 }
 
