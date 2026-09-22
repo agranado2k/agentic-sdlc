@@ -1068,6 +1068,78 @@ t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
 	fail "both policies map the planner to '$S_OUT' — one of them is a copy, not a policy"
 
 # ---------------------------------------------------------------------------
+banner "The SHARED resolver refuses a review by the session's own model (#226)"
+# ---------------------------------------------------------------------------
+# ADR-0007 decided the shape and the kit built it in its own wrapper, because
+# the resolver is shared layer and that fix was not a release. This is the
+# release: the rule lives in scripts/agents.lib.sh now, so every consumer's
+# `self-implemented` mapping stops having the blind spot the kit found in its
+# own. Asserted against a THROWAWAY policy, never the kit's — the kit's
+# reviewer crosses vendors, where there is nothing to refuse.
+LOCALREV="$SCRATCH/local-reviewer.config.sh"
+cat >"$LOCALREV" <<'LOCALREV_CFG'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4'
+LOCALREV_CFG
+res() { t_run_split env AGENTS_CONFIG="$LOCALREV" sh "$LIB" "$@"; }
+resolve_as() { # <session model> <args...>
+	_ra_model=$1; shift
+	t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL="$_ra_model" sh "$LIB" "$@"
+}
+# The session runs the model `reviewer self-implemented` maps to.
+resolve_as vendor-mid-4 reviewer self-implemented
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = vendor-strong-9 ] &&
+	pass "the resolver falls back to the plain reviewer when the mapped answer is the session's own" ||
+	fail "resolved '$S_OUT' (status $S_STATUS) on a session running that very model"
+case "$S_ERR" in
+*"session's own model"*) pass "…and says so on stderr, where the value is not" ;;
+*) fail "…silently — stderr was '$S_ERR'" ;;
+esac
+# The flagged spelling is the same question: the policy file documents
+# `--model <tier>` as how the model half is read back (ADR-0005 clause 4).
+resolve_as vendor-mid-4 --model reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form" ||
+	fail "the flagged spelling resolved '$S_OUT' — it walks past the refusal"
+# Nothing differs: print nothing, and say why, so the caller's report can.
+resolve_as vendor-strong-9 reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "when no reviewer differs from the session, the resolver prints nothing" ||
+	fail "printed '$S_OUT' — that is the author reviewing itself"
+case "$S_ERR" in
+*"share the author's model"*) pass "…and warns that the review would share the author's model" ;;
+*) fail "…without saying why: '$S_ERR'" ;;
+esac
+# Only the reviewer, and only when the caller named a session.
+resolve_as vendor-mid-4 implementer
+[ "$S_OUT" = vendor-mid-4 ] &&
+	pass "a non-reviewer tier equal to the session's model is never refused" ||
+	fail "the implementer resolved '$S_OUT' — the refusal leaked past the reviewer tier"
+res reviewer self-implemented
+[ "$S_OUT" = vendor-mid-4 ] &&
+	pass "with no session named there is nothing to compare, and the mapping answers" ||
+	fail "an unnamed session changed the answer to '$S_OUT'"
+# The harness half asks a different question and is never compared.
+resolve_as vendor-mid-4 --harness reviewer
+[ "$S_STATUS" = 0 ] &&
+	case "$S_ERR" in *"session's own model"*) false ;; *) true ;; esac &&
+	pass "--harness is not a model, so it is not refused" ||
+	fail "--harness reviewer was refused: '$S_ERR'"
+# The quiet switch silences this warning like every other.
+t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL=vendor-mid-4 AGENTS_TIER_QUIET=1 sh "$LIB" reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] && [ -z "$S_ERR" ] &&
+	pass "AGENTS_TIER_QUIET=1 keeps the fallback and drops the warning" ||
+	fail "quiet mode: stdout '$S_OUT', stderr '$S_ERR'"
+# The SHIPPED mapping is empty, so there is nothing to refuse and nothing changes.
+t_run_split env AGENTS_CONFIG="$SHIPPED" AGENT_SESSION_MODEL=anything sh "$LIB" reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "against the shipped empty mapping the rule is inert, as it must be" ||
+	fail "the shipped mapping resolved '$S_OUT' with a session named"
+
+# ---------------------------------------------------------------------------
 banner "The wrapper picks the policy for the session it runs in"
 # ---------------------------------------------------------------------------
 # $AGENT_HARNESS_SELF names the session's own agent harness. Unset, the
