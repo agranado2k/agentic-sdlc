@@ -35,6 +35,13 @@
 # The other agent harness, declared so `<harness>:<model>` is a crossing
 # rather than a malformed id (ADR-0005), with what scripts/agent-dispatch.sh
 # runs to reach it.
+# VERIFIED against the installed CLI on 2026-09-22, not guessed: `-p/--print`
+# is the non-interactive form, `--model <model>` takes "an alias for the
+# latest model (e.g. 'fable', 'opus', or 'sonnet') or a model's full name
+# (e.g. 'claude-fable-5')" — so the PINNED ids below are exactly what it
+# wants, and the alias the other policy documents is only needed for the
+# in-session spawn parameter, which this path never touches. Re-check with
+# `claude --help` when that CLI moves.
 AGENT_HARNESSES='claude-code'
 AGENT_HARNESS_CLAUDE_CODE_CMD='claude -p {model_flag} < {prompt_file}'
 AGENT_HARNESS_CLAUDE_CODE_MODEL_FLAG='--model {model}'

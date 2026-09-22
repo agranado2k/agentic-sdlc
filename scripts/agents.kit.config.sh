@@ -89,6 +89,11 @@
 # cross-vendor review the kit calls its highest-leverage property is reachable
 # locally here, not only in CI.
 # ---------------------------------------------------------------------------
+# VERIFIED against the installed CLI on 2026-09-22, not guessed: `codex exec`
+# is the non-interactive form, `-m, --model <MODEL>` is its model flag, and
+# its own help says the prompt "is read from stdin" when no prompt argument
+# is given — which is what `< {prompt_file}` supplies. Re-check with
+# `codex exec --help` when that CLI moves.
 AGENT_HARNESSES='codex'
 AGENT_HARNESS_CODEX_CMD='codex exec {model_flag} < {prompt_file}'
 AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
