@@ -1007,6 +1007,94 @@ wrap "$K_SELF" janitor
 [ "$W_STATUS" = 2 ] && pass "an unknown tier still exits 2 with the session model set" ||
 	fail "an unknown tier exited $W_STATUS with the session model set, expected 2"
 
+# ---------------------------------------------------------------------------
+banner "The kit's two policy files — one per agent harness the operator works in"
+# ---------------------------------------------------------------------------
+# The operator drives this repo from two agent harnesses, and each has its own
+# tier policy: a model that is local to one is a cross-harness dispatch from
+# the other. One file each, and the wrapper picks by the session it runs in,
+# so `sh scripts/agents.kit.sh <tier>` keeps meaning "this session's policy"
+# wherever it is typed. Neither file ships (KIT_ONLY), which is the only
+# reason either may name a real model id at all.
+CC_CONFIG="$KIT/scripts/agents.kit.config.sh"
+CX_CONFIG="$KIT/scripts/agents.kit.codex.config.sh"
+for f in "$CC_CONFIG" "$CX_CONFIG"; do
+	[ -f "$f" ] && pass "$(basename "$f") exists" || fail "$(basename "$f") is missing"
+done
+# Every tier resolves in BOTH policies — a half-filled one is a silent inherit
+# at spawn time, the failure the mapping exists to prevent.
+for f in "$CC_CONFIG" "$CX_CONFIG"; do
+	_label=$(basename "$f")
+	for tier in planner implementer mechanical reviewer; do
+		t_run_split env AGENTS_CONFIG="$f" sh "$LIB" "$tier"
+		[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] &&
+			pass "$_label: $tier resolves to '$S_OUT'" ||
+			fail "$_label: $tier resolved nothing (status $S_STATUS)"
+	done
+	# The tests domain is the operator's fourth agent, the tester. It is a
+	# domain and not a fifth tier because the tier vocabulary is closed.
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" implementer
+	_plain=$S_OUT
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" implementer tests
+	[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] && [ "$S_OUT" != "$_plain" ] &&
+		pass "$_label: 'implementer tests' resolves to '$S_OUT', not the plain '$_plain'" ||
+		fail "$_label: 'implementer tests' gave '$S_OUT' against plain '$_plain' — the tester is not mapped"
+	# The reviewer rule holds in both.
+	gaps=$(reviewer_rule_gaps "$f")
+	[ -z "$gaps" ] && pass "$_label: the reviewer rule holds" ||
+		fail "$_label: the reviewer rule breaks — $(printf '%s' "$gaps" | tr '\n' ';')"
+	# A tier that names an agent harness the policy does not declare cannot be
+	# dispatched: the resolver says so, and a policy file must not ship that.
+	_undeclared=0
+	for tier in planner implementer mechanical reviewer; do
+		t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness "$tier"
+		case "$S_ERR" in *undeclared* | *"not declared"*) _undeclared=$((_undeclared + 1)) ;; esac
+	done
+	[ "$_undeclared" = 0 ] && pass "$_label: every agent harness a tier names is declared in AGENT_HARNESSES" ||
+		fail "$_label: $_undeclared tier(s) name an agent harness AGENT_HARNESSES does not declare"
+	# And the reviewer crosses vendors in both — the property the kit calls its
+	# highest-leverage wiring, here asserted rather than hoped for.
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness reviewer
+	[ -n "$S_OUT" ] && pass "$_label: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
+		fail "$_label: the reviewer names no agent harness — the review shares the author's vendor"
+done
+# The two policies are different documents, not a copy with one word changed:
+# what is local in one is the crossing in the other.
+t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" planner
+CC_PLANNER=$S_OUT
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
+[ -n "$CC_PLANNER" ] && [ "$S_OUT" != "$CC_PLANNER" ] &&
+	pass "the two policies disagree about the planner ('$CC_PLANNER' vs '$S_OUT') — each is its own session's answer" ||
+	fail "both policies map the planner to '$S_OUT' — one of them is a copy, not a policy"
+
+# ---------------------------------------------------------------------------
+banner "The wrapper picks the policy for the session it runs in"
+# ---------------------------------------------------------------------------
+# $AGENT_HARNESS_SELF names the session's own agent harness. Unset, the
+# wrapper assumes the harness this repo is usually driven from, so a plain
+# invocation keeps working. The wrapper's own assignment still beats the
+# caller's $AGENTS_CONFIG — the section above asserts exactly that, and this
+# selection must not weaken it; a caller that wants another policy calls the
+# resolver directly, as this suite does.
+t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" planner
+CX_VIA_WRAPPER=$S_OUT
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
+[ -n "$CX_VIA_WRAPPER" ] && [ "$CX_VIA_WRAPPER" = "$S_OUT" ] &&
+	pass "AGENT_HARNESS_SELF=codex answers from the codex policy ('$CX_VIA_WRAPPER')" ||
+	fail "AGENT_HARNESS_SELF=codex gave '$CX_VIA_WRAPPER', the codex policy says '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CC_PLANNER" ] &&
+	pass "unset, the wrapper answers from the claude-code policy ('$S_OUT'), as it always did" ||
+	fail "unset, the wrapper gave '$S_OUT', not the claude-code policy's '$CC_PLANNER'"
+t_run_split env AGENT_HARNESS_SELF=nothing-mapped sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CC_PLANNER" ] &&
+	pass "an agent harness with no policy file falls back to the default, rather than resolving nothing" ||
+	fail "an unknown AGENT_HARNESS_SELF gave '$S_OUT' — expected the default policy's '$CC_PLANNER'"
+t_run_split env AGENT_HARNESS_SELF=codex AGENTS_CONFIG="$SHIPPED" sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CX_VIA_WRAPPER" ] &&
+	pass "the wrapper's own choice still beats an inherited AGENTS_CONFIG" ||
+	fail "an inherited AGENTS_CONFIG overrode the wrapper's policy choice — got '$S_OUT'"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi

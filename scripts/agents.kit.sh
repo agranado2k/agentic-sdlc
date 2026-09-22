@@ -55,8 +55,28 @@
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
 #   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
+#   AGENT_HARNESS_SELF=codex sh scripts/agents.kit.sh <tier> [domain]
 set -eu
+# WHICH POLICY. The operator drives this repo from two agent harnesses and
+# each has its own tier policy — what is a local spawn in one is a crossing in
+# the other, so one file could not answer both. $AGENT_HARNESS_SELF names the
+# session's own harness, and this wrapper picks the file for it — overriding
+# whatever $AGENTS_CONFIG the caller's environment carried, exactly as it
+# always did: the wrapper's whole job is to set that seam itself, and a value
+# that deferred to the environment would resolve the shipped empty file in
+# any session that happened to export one. A harness with no policy file of
+# its own falls back to the Claude Code policy, which is how this repo is
+# usually driven — a missing file must not turn every tier into a silent
+# inherit. To resolve some OTHER policy deliberately, call the resolver
+# directly with $AGENTS_CONFIG, the way the suites do.
 AGENTS_CONFIG=scripts/agents.kit.config.sh
+case "${AGENT_HARNESS_SELF:-}" in
+'' | claude-code) ;;
+*)
+	_kit_candidate="scripts/agents.kit.${AGENT_HARNESS_SELF}.config.sh"
+	[ -f "$_kit_candidate" ] && AGENTS_CONFIG=$_kit_candidate
+	;;
+esac
 export AGENTS_CONFIG
 # The tier is not always $1: the resolver's signature admits a leading
 # `--model` or `--harness` (ADR-0005 clause 4), and scripts/agents.config.sh

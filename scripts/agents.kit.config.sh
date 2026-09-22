@@ -20,6 +20,13 @@
 #
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 #
+# THIS FILE IS THE CLAUDE CODE SESSION'S POLICY. The operator drives this repo
+# from two agent harnesses, and each is its own document: a model that is
+# local here is a cross-harness dispatch there, and the reverse. The Codex
+# session's policy is scripts/agents.kit.codex.config.sh beside this file,
+# and scripts/agents.kit.sh picks between them by $AGENT_HARNESS_SELF, so one
+# command means "this session's policy" wherever it is typed.
+#
 # THE SUITE'S BUDGET IS DERIVED UNDER THIS FILE TOO. tests/lib.sh runs every
 # suite inside the budget a dispatched worker gets (ADR-0006, #209), and
 # reads the six AGENT_BUDGET_* variables from here — never from the
@@ -38,6 +45,13 @@
 # this check: `fable` (Claude Fable 5 — strongest, Mythos-class), `opus`
 # (strongest coding workhorse), `sonnet` (strong general mid-tier), `haiku`
 # (cheapest capable).
+#
+# The local values below are those ALIASES, not versioned strings: the spawn
+# parameter takes `fable`, not `fable-5.1`, and the alias is what tracks the
+# roster as it moves. The version each alias is meant to be is in the comment
+# beside it — check the comment against the roster, change the alias only if
+# the harness renames it. Values that cross to another agent harness are that
+# harness's own ids, and rot on its schedule instead.
 # ---------------------------------------------------------------------------
 # THE VOCABULARY (same shape as scripts/agents.config.sh; repeated here only as
 # the shape of the decision each variable encodes — the words are defined in
@@ -58,17 +72,29 @@
 #                model that implemented, or the "adversarial" part is theater.
 
 # ---------------------------------------------------------------------------
+# THE OTHER AGENT HARNESS. Declaring it is what makes `<harness>:<model>` a
+# crossing rather than a malformed model id (ADR-0005), and the CMD/MODEL_FLAG
+# pair is what scripts/agent-dispatch.sh runs when a tier names it. Both the
+# reviewer and the tests agent below cross over, which is the point: the
+# cross-vendor review the kit calls its highest-leverage property is reachable
+# locally here, not only in CI.
+# ---------------------------------------------------------------------------
+AGENT_HARNESSES='codex'
+AGENT_HARNESS_CODEX_CMD='codex exec {model_flag} < {prompt_file}'
+AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
+
+# ---------------------------------------------------------------------------
 # 1. PLANNER — strongest reasoning available. A wrong decomposition is paid
 #    for by every downstream ticket, so this is the one tier where "most
 #    expensive" is the cost-saving choice.
 # ---------------------------------------------------------------------------
-AGENT_TIER_PLANNER='fable'
+AGENT_TIER_PLANNER='fable'   # Claude Fable 5.1
 
 # ---------------------------------------------------------------------------
 # 2. IMPLEMENTER — best cost/capability for real coding work. This is where
 #    most of the kit's own sessions land.
 # ---------------------------------------------------------------------------
-AGENT_TIER_IMPLEMENTER='opus'
+AGENT_TIER_IMPLEMENTER='opus'   # Claude Opus 5.5 — the builder
 
 # ---------------------------------------------------------------------------
 # 3. MECHANICAL — cheapest capable model. The suite is the oracle; capability
@@ -82,7 +108,13 @@ AGENT_TIER_MECHANICAL='haiku'
 #    reviewer sharing the implementer's model is one editorial pass wearing a
 #    second hat.
 # ---------------------------------------------------------------------------
-AGENT_TIER_REVIEWER='fable'
+#    Here that is taken literally: the reviewer is a DIFFERENT VENDOR, not
+#    just a different model. A reviewer that shares the author's training
+#    shares the author's blind spots, and the kit's own docs call the
+#    cross-provider leg the highest-leverage wiring available. The dispatcher
+#    makes it reachable from a local session, so it no longer has to wait for
+#    CI to hold the secrets.
+AGENT_TIER_REVIEWER='codex:gpt-5.6-sol'
 #
 #    The case the plain lookup cannot see: the session ITSELF implemented, on
 #    the model this tier maps to — a planner-tier session writing a ticket's
@@ -93,7 +125,12 @@ AGENT_TIER_REVIEWER='fable'
 #    names a situation rather than a medium, which the open vocabulary
 #    allows and the glossary's "Task domain" entry records — and
 #    tests/agents-tiers.test.sh holds it to differing from the reviewer.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='opus'
+#    With the reviewer on another vendor this is close to vestigial — a
+#    Claude session cannot be running gpt-5.6-sol — but it stays mapped, and
+#    to a SECOND model rather than the same one: if the reviewer is ever
+#    localised again, the rule still has an answer, and ADR-0007's refusal in
+#    scripts/agents.kit.sh is the net under both.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='codex:gpt-6-astra'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
@@ -117,9 +154,19 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='opus'
 # is `implementer` work by tier — one ticket, test-first, seams to find — but
 # it is not code, and the strongest prose model available is a different answer
 # from the strongest coding one.
-AGENT_TIER_IMPLEMENTER_CONTENT='fable'
+AGENT_TIER_IMPLEMENTER_CONTENT='fable'   # Claude Fable 5.1
 
-# The second domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
+# THE TESTS DOMAIN — the operator's fourth agent, the "tester". It is a domain
+# and not a fifth tier because the tier vocabulary is CLOSED (an unknown tier
+# is exit 2, and widening it is a manual change, a resolver change and a
+# release). Writing the failing test is implementer work by tier — one
+# behaviour, test-first, through a seam — but the medium changes the answer:
+# a test is a specification, and the model that wrote the code is the worst
+# reader of whether its test actually constrains anything. So it crosses to
+# the other vendor, for the same reason the reviewer does.
+AGENT_TIER_IMPLEMENTER_TESTS='codex:gpt-5.6-sol'
+
+# The third domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
 # sits in the reviewer block above with its reasoning.
 #
 # THERE IS DELIBERATELY NO AGENT_TIER_IMPLEMENTER_CODE. The plain tier above
