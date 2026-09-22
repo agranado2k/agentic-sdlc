@@ -34,8 +34,8 @@
 #
 # KIT-ONLY FOR NOW. scripts/agent-dispatch.sh below it is shared layer, and
 # adding a second shared script is a release action (root AGENTS.md hard rule
-# 3). The 0.21.0 release ticket carries the promotion; until then the phases
-# ship with every skill and this runner does not.
+# 3). A later release carries the promotion — #226 — and until then the
+# phases ship with every skill while this runner does not.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -45,7 +45,10 @@ die() { echo "skill-dispatch: $1" >&2; exit 2; }
 # The policy this session resolves through is scripts/agents.kit.sh's choice,
 # asked for by name rather than recomputed: one definition of "which agent
 # harness am I", in the script whose job that already is.
-AGENTS_CONFIG=$(sh "$ROOT/scripts/agents.kit.sh" --policy)
+# $ROOT-anchored: --policy answers with a repo-relative path, and this script
+# is runnable from any directory, so exporting it as-is would resolve against
+# the caller's cwd and die "does not exist" one hop later.
+AGENTS_CONFIG="$ROOT/$(cd "$ROOT" && sh scripts/agents.kit.sh --policy)"
 export AGENTS_CONFIG
 
 usage() {
@@ -109,8 +112,12 @@ TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
 # the skill name is this script's input and the other session's instruction.
 # A --prompt is prefixed; a --prompt-file is left alone, since a file is the
 # caller's own document and rewriting it would be a surprise.
-set -- "$@"
-ARGS=''
+#
+# Every argument is carried through as a POSITIONAL, never accumulated into a
+# string: agent-dispatch takes `--set NAME=VALUE`, and a value with a space in
+# it would word-split at the exec and arrive as a stray positional, which that
+# script reads as the task DOMAIN. One loop, `set -- "$@" "$a"`, and the
+# quoting survives the hop.
 PROMPT_SEEN=''
 for a in "$@"; do
 	case "$a" in
@@ -121,23 +128,25 @@ done
 [ -n "$PROMPT_SEEN" ] || die "no --prompt or --prompt-file — there is nothing to send"
 
 if [ "$PROMPT_SEEN" = text ]; then
-	# Rebuild the argument list with the skill name folded into the prompt.
-	NEW_PROMPT=''
-	OUT_ARGS=''
+	_count=$#
 	take_next=0
-	for a in "$@"; do
+	while [ "$_count" -gt 0 ]; do
+		a=$1
+		shift
+		_count=$((_count - 1))
 		if [ "$take_next" = 1 ]; then
-			NEW_PROMPT="Run $SKILL. $a"
 			take_next=0
+			set -- "$@" --prompt "Run $SKILL. $a"
 			continue
 		fi
 		case "$a" in
-		--prompt) take_next=1; continue ;;
+		--prompt)
+			take_next=1
+			continue
+			;;
 		esac
-		OUT_ARGS="$OUT_ARGS $a"
+		set -- "$@" "$a"
 	done
-	# shellcheck disable=SC2086  # both lists are ours, and neither holds a glob
-	exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS --prompt "$NEW_PROMPT" $OUT_ARGS
 fi
 # shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
 exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@"

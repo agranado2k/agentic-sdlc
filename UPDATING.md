@@ -560,10 +560,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1801 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1814 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 1955 insertions(+), 1 deletion(-)
+ 3 files changed, 1968 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1401,13 +1401,26 @@ authority on what your policy file has to provide.
 their prose**: each `SKILL.md` now carries a `metadata.phase` line — one of
 `planner`, `implementer`, `tester`, `mechanical`, `reviewer` — inside the
 `metadata` block the Agent Skills specification defines. It is a claim about
-the work, not about a vendor, so it is yours to read with your own tooling:
-map the phase to a model the way you map a tier in `scripts/agents.config.sh`.
+the work, not about a vendor, so it is yours to read with your own tooling.
+That includes `/dogfood` if you took the optional skill at bootstrap — it is
+`reviewer` work, and `VERSION`'s note deliberately does not spell that one,
+because a project that declined it would inherit a dead reference. Map the
+phase to a model the way you map a tier in `scripts/agents.config.sh`.
+Four of the five phases ARE tier names, so they map directly; the fifth does
+not, because the tier vocabulary is closed:
+
+| phase | resolves as | policy variable |
+| --- | --- | --- |
+| `planner` | tier `planner` | `AGENT_TIER_PLANNER` |
+| `implementer` | tier `implementer` | `AGENT_TIER_IMPLEMENTER` |
+| `tester` | tier `implementer`, domain `tests` | `AGENT_TIER_IMPLEMENTER_TESTS` |
+| `mechanical` | tier `mechanical` | `AGENT_TIER_MECHANICAL` |
+| `reviewer` | tier `reviewer` | `AGENT_TIER_REVIEWER` |
+
+No shipped script reads `metadata.phase` yet — this release ships the
+declaration, and reading it is yours or a later release's.
 Take the delta for every skill in step 9a; a skill you have forked keeps your
-prose, and adding the two frontmatter lines by hand is the whole of it. That
-includes `/dogfood` if you took the optional skill at bootstrap — it is
-`reviewer` work — and `VERSION`'s note deliberately does not spell that one,
-because a project that declined it would inherit a dead reference.
+prose, and adding the two frontmatter lines by hand is the whole of it.
 `/to-prd` and `/to-tickets` also changed substantially this release (the
 Objective, Scenarios, Alternatives Considered and Open Issues sections; the
 open-issue gate and feedback-first ordering) — `VERSION`'s 0.21.0 note has the

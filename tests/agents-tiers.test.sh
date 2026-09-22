@@ -1102,6 +1102,55 @@ t_run_split sh "$KIT_WRAPPER" --policy
 	pass "--policy names the claude-code policy by default" ||
 	fail "--policy gave '$S_OUT' by default"
 
+# The fold and the refusal are exercised against a PROBE policy, not against
+# the kit's own data: the suite's own principle (line 39) is that it names no
+# real model, and pinning the kit's current ids here would mean editing this
+# file at every re-pin. The wrapper resolves `scripts/agents.kit.<self>.config.sh`
+# and `scripts/agents.lib.sh` relative to the directory it runs in, so a
+# scratch tree with those two names IS the seam.
+PROBE="$SCRATCH/probe"
+mkdir -p "$PROBE/scripts"
+cp "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.lib.sh" "$PROBE/scripts/"
+cat >"$PROBE/scripts/agents.kit.probe.config.sh" <<'PROBE_CFG'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4-20260101'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4-20260101'
+PROBE_CFG
+probe() { (cd "$PROBE" && env AGENT_HARNESS_SELF=probe "$@" sh scripts/agents.kit.sh "${PROBE_ARGS:-}" >/dev/null 2>&1); }
+# A pinned id folds to its family word, whatever the vendor prefix.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias implementer
+[ "$S_OUT" = mid ] && pass "a pinned 'vendor-mid-4-20260101' folds to the spawn word 'mid'" ||
+	fail "the fold gave '$S_OUT', expected 'mid'"
+# THE REFUSAL REACHES --alias TOO. A session on the reviewer's own model must
+# not be handed it by the in-session path either — the policy files call this
+# wrapper "the net under both", and a net with one side open is not one.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=vendor-mid-4-20260101 sh scripts/agents.kit.sh --alias reviewer self-implemented
+[ "$S_OUT" = strong ] &&
+	pass "--alias reviewer self-implemented falls back when the mapped answer is the session's own model" ||
+	fail "--alias gave '$S_OUT' on a session running that very model — the refusal does not reach the alias path"
+# …and the session may name itself in EITHER spelling: a session that knows
+# only its spawn word must be refused as surely as one that knows the id.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh --alias reviewer self-implemented
+[ "$S_OUT" = strong ] &&
+	pass "the session's model matches in the spawn-word spelling too" ||
+	fail "AGENT_SESSION_MODEL=mid gave '$S_OUT' — only the pinned spelling is compared"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "and the model path matches the spawn-word spelling as well" ||
+	fail "the model path gave '$S_OUT' for a spawn-word session"
+# An unknown tier still reports itself rather than exiting 2 in silence.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias janitor
+[ "$S_STATUS" = 2 ] && [ -n "$S_ERR" ] &&
+	pass "--alias on an unknown tier exits 2 and says why" ||
+	fail "--alias janitor exited $S_STATUS with stderr '$S_ERR'"
+# A local id with no vendor prefix is passed through, not swallowed.
+printf "AGENT_TIER_MECHANICAL='plainword'\n" >>"$PROBE/scripts/agents.kit.probe.config.sh"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias mechanical
+[ "$S_OUT" = plainword ] && pass "an id with no vendor prefix folds to itself" ||
+	fail "an unprefixed id gave '$S_OUT'"
+
 # --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
 # the full id; the in-session spawn parameter takes the family word. Pinning
 # is what makes a model change a decision someone committed rather than a

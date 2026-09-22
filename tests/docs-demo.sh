@@ -1236,7 +1236,12 @@ take_before=$(wc -c <"$SCRATCH/take-fixture/mine")
 	echo "WORK=$SCRATCH/take-fixture"
 	echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
 	cat "$SCRATCH/take.sh"
-	echo 'kit_take "v$KITV" no/such/path/at/this/ref "$WORK/mine" && echo "TOOK" || echo "declined to write"'
+	# Expanded HERE, not in the child: this line is written into a script the
+	# child shell runs, and $KITV is not exported — left single-quoted the ref
+	# would arrive as the literal 'v', and the case would prove "an invalid
+	# ref declines" rather than "a path not at a real ref declines", which is
+	# the weaker claim and not the one this case exists to make.
+	echo "kit_take \"v$KITV\" no/such/path/at/this/ref \"\$WORK/mine\" && echo \"TOOK\" || echo \"declined to write\""
 } >"$SCRATCH/take-case.sh"
 sh "$SCRATCH/take-case.sh" >"$SCRATCH/take.out" 2>&1
 sed 's/^/      > /' "$SCRATCH/take.out"
