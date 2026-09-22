@@ -1,6 +1,8 @@
 ---
 name: worktree-cleanup
 description: Prune merged feature worktrees, fast-forward the root checkout's base branch, run the project's post-sync command, and refresh the "Active worktrees" row in docs/diary.md. Invoke as `/worktree-cleanup` (or `/worktree-cleanup --dry-run` to preview). Conservative — never removes dirty or unmerged worktrees.
+metadata:
+  phase: mechanical
 ---
 
 # /worktree-cleanup — prune merged worktrees + sync the root checkout

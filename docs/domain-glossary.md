@@ -162,6 +162,15 @@ Grouped by the seam each term belongs to. Entry shape:
   holds the second. Ref: ADR-0007.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
+- **Phase** — the kind of work a SKILL is, declared in its own frontmatter
+  (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
+  `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
+  skill, so a session can resolve the model a command deserves without a
+  ticket in hand. `tester` is the one that is not a tier — it is implementer
+  work whose medium is a test, carried as the `tests` domain, because the
+  tier vocabulary is closed.
+  - _Avoid_: "step" (the chain's order is not the work's kind), and "tier"
+    for this — a tier is stamped on a ticket, a phase is declared by a skill.
 - **Agent harness** — the agent CLI a tier's model runs *in*: the program that
   holds the session, loads `AGENTS.md`, and owns the tool calls. The resolver's
   optional *third* axis: declared in `AGENT_HARNESSES` and written as the

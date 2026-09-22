@@ -1,6 +1,8 @@
 ---
 name: to-tickets
 description: Decompose a PRD issue into tracer-bullet tickets — demoable vertical slices sized to one fresh context window, with blocking edges and autonomy labels, published to the project issue tracker. Use after /to-prd when a build spans more than one session; skip it (use /implement directly) when the whole change fits one context window.
+metadata:
+  phase: planner
 ---
 
 # /to-tickets — PRD → tracer-bullet tickets

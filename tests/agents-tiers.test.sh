@@ -1090,6 +1090,17 @@ t_run_split env AGENT_HARNESS_SELF=nothing-mapped sh "$KIT_WRAPPER" planner
 [ "$S_OUT" = "$CC_PLANNER" ] &&
 	pass "an agent harness with no policy file falls back to the default, rather than resolving nothing" ||
 	fail "an unknown AGENT_HARNESS_SELF gave '$S_OUT' — expected the default policy's '$CC_PLANNER'"
+# --policy is that same choice, asked for by name: other kit scripts need the
+# answer before they call something that resolves, and a second copy of the
+# case block is how this repo's hand-kept lists have drifted before.
+t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" --policy
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "scripts/agents.kit.codex.config.sh" ] &&
+	pass "--policy names the codex policy for a codex session" ||
+	fail "--policy gave '$S_OUT' for a codex session"
+t_run_split sh "$KIT_WRAPPER" --policy
+[ "$S_OUT" = "scripts/agents.kit.config.sh" ] &&
+	pass "--policy names the claude-code policy by default" ||
+	fail "--policy gave '$S_OUT' by default"
 t_run_split env AGENT_HARNESS_SELF=codex AGENTS_CONFIG="$SHIPPED" sh "$KIT_WRAPPER" planner
 [ "$S_OUT" = "$CX_VIA_WRAPPER" ] &&
 	pass "the wrapper's own choice still beats an inherited AGENTS_CONFIG" ||

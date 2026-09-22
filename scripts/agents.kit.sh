@@ -56,6 +56,7 @@
 #   sh scripts/agents.kit.sh <tier> [domain]
 #   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
 #   AGENT_HARNESS_SELF=codex sh scripts/agents.kit.sh <tier> [domain]
+#   sh scripts/agents.kit.sh --policy        # which policy file this session uses
 set -eu
 # WHICH POLICY. The operator drives this repo from two agent harnesses and
 # each has its own tier policy — what is a local spawn in one is a crossing in
@@ -78,6 +79,15 @@ case "${AGENT_HARNESS_SELF:-}" in
 	;;
 esac
 export AGENTS_CONFIG
+# `--policy` prints the file this selection chose and exits. Other kit-only
+# scripts need the same answer before they call something that resolves —
+# scripts/skill-dispatch.kit.sh does — and asking for it beats a second copy
+# of the case block above, which is how hand-kept lists in this repo have
+# drifted before.
+if [ "${1:-}" = --policy ]; then
+	printf '%s\n' "$AGENTS_CONFIG"
+	exit 0
+fi
 # The tier is not always $1: the resolver's signature admits a leading
 # `--model` or `--harness` (ADR-0005 clause 4), and scripts/agents.config.sh
 # documents `--model <tier>` as how you read the mapping's model half back. A

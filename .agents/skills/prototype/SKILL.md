@@ -1,6 +1,8 @@
 ---
 name: prototype
 description: Answer a design or feasibility question with explicitly throwaway spike code — never committed, findings recorded in the diary or an ADR draft. Use when a decision is blocked on "would X even work?" (library capability, API behavior, performance shape). Not for building features — that's /tdd via /implement.
+metadata:
+  phase: implementer
 ---
 
 # /prototype — throwaway spikes for design questions

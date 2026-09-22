@@ -1,6 +1,8 @@
 ---
 name: pr-iterate
 description: One closed-loop iteration on an open PR — read CI checks + bot and human review comments, triage against this repo's decision records, apply valid suggestions, reply with reasoning on rejected ones, push fixes as Conventional Commits, and report status. Invoke as `/pr-iterate <PR#>`. Compose with `/loop /pr-iterate <PR#>` for continuous monitoring until green.
+metadata:
+  phase: implementer
 ---
 
 # /pr-iterate — closed-loop PR drive-to-green

@@ -327,6 +327,14 @@ jobs:
       - name: Spec skills text suite
         run: sh tests/spec-skills.test.sh
 
+  skill-phase:
+    name: Every skill declares its phase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skill phase suite
+        run: sh tests/skill-phase.test.sh
+
   manifest:
     name: The manifest grammar, once
     runs-on: ubuntu-latest
