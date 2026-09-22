@@ -117,7 +117,9 @@ pushes straight past both gates.
 
 Work in this repo is sized to one of **four tiers**, and the tier is a
 cost/benefit decision made when the ticket is written — not when the agent is
-spawned, and never by the agent about itself.
+spawned, and never by the agent about itself. A **skill** also declares the
+phase of work it is (`metadata.phase`), and where both exist the ticket wins:
+the phase is what sizes a command nobody wrote a ticket for.
 
 | Tier | The work | The signal |
 | --- | --- | --- |
@@ -323,7 +325,7 @@ answers produce a clean project.
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts. **In THIS repo** that file ships empty on purpose; the kit's own pattern is `scripts/guards.kit.config.sh`, never shipped, and `sh scripts/guards.kit.sh <base> <head>` runs the pairing guard against it — the same arrangement as `agents.kit.sh` |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
-| Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> --prompt <text> [--dry-run]` — reads the `metadata.phase` the skill declares, maps it to a tier, dispatches (kit-only; a later release promotes it — #226) |
+| Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]` — the skill's `metadata.phase` sizes it, a ticket's stamp overrides that, and `--dry-run` says which answered (kit-only; a later release promotes it — #226) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
 | Ship a consumer CI workflow         | `templates/workflows/` — copied into a project's `.github/workflows/` |

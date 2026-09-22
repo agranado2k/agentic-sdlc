@@ -225,6 +225,45 @@ printf '%s\n' "$S_OUT$S_ERR" | grep -q 'domain' &&
 	pass "a --set value with a space survives the hop as one argument"
 
 # ---------------------------------------------------------------------------
+banner "4b. A ticket's stamp beats the skill's phase (#229)"
+# ---------------------------------------------------------------------------
+# Two sizings now exist and they answer different questions. A skill's phase
+# says what KIND of work that skill is, and it is all you have when there is
+# no ticket — running /review-pr by hand. A ticket's `Tier:` is decided when
+# the ticket is written, by the only actor with a view of the whole wave, and
+# the root manual is explicit that the call is not the spawning agent's. So
+# the phase is the DEFAULT and the stamp OVERRIDES it; without that rule the
+# dispatcher silently replaces a decomposer's decision with a skill author's.
+stub_dispatch /review-pr --tier mechanical --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q 'model-for-mechanics' &&
+	pass "an explicit --tier beats the skill's own phase" ||
+	fail "--tier mechanical on /review-pr reached '$S_OUT'"
+stub_dispatch /review-pr --tier implementer --domain tests --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q 'model-for-testing' &&
+	pass "--tier with --domain resolves the pair, not the tier alone" ||
+	fail "--tier implementer --domain tests reached '$S_OUT'"
+stub_dispatch /review-pr --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
+	pass "with no override the phase still answers — the default is unchanged" ||
+	fail "an un-overridden dispatch reached '$S_OUT'"
+# The override is held to the same closed vocabulary as every other tier.
+stub_dispatch /review-pr --tier janitor --prompt 'x'
+[ "$S_STATUS" = 2 ] && pass "an override outside the four tiers is exit 2, like every other unknown tier" ||
+	fail "--tier janitor exited $S_STATUS"
+stub_dispatch /review-pr --tier --prompt 'x'
+[ "$S_STATUS" = 2 ] && pass "--tier with no value is a usage error" || fail "--tier with no value exited $S_STATUS"
+# A dry run says WHICH of the two answered, so an operator reading it can tell
+# a ticket's decision from a skill's default.
+stub_dispatch /review-pr --tier mechanical --prompt 'x' --dry-run
+printf '%s\n' "$S_ERR$S_OUT" | grep -qi "ticket" &&
+	pass "a dry run names the ticket as the source when it overrode the phase" ||
+	fail "the dry run does not say where the tier came from: $S_ERR"
+stub_dispatch /review-pr --prompt 'x' --dry-run
+printf '%s\n' "$S_ERR$S_OUT" | grep -qi "phase" &&
+	pass "…and names the phase when the phase answered" ||
+	fail "the dry run does not name the phase as the source: $S_ERR"
+
+# ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
 # ---------------------------------------------------------------------------
 # The declaration is only worth having if it ends in an executable spawn. For

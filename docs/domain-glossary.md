@@ -169,6 +169,9 @@ Grouped by the seam each term belongs to. Entry shape:
   ticket in hand. `tester` is the one that is not a tier — it is implementer
   work whose medium is a test, carried as the `tests` domain, because the
   tier vocabulary is closed.
+  Where a ticket and a skill both answer, the **ticket wins**: its tier was
+  decided by the actor with a view of the whole wave, and the phase is what
+  sizes a command nobody wrote a ticket for. Ref: #229.
   - _Avoid_: "step" (the chain's order is not the work's kind), and "tier"
     for this — a tier is stamped on a ticket, a phase is declared by a skill.
 - **Agent harness** — the agent CLI a tier's model runs *in*: the program that
