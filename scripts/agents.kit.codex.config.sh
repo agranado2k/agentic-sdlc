@@ -24,7 +24,16 @@
 #
 # ---------------------------------------------------------------------------
 # THESE IDS ROT. The OpenAI ids below are this harness's own and rot on its
-# schedule; the `claude-code:` values rot on Anthropic's. Both halves are
+# schedule; the `claude-code:` values rot on Anthropic's.
+#
+# The OpenAI half was checked on 2026-09-22 against the roster the CLI itself
+# fetched for this account (`~/.codex/models_cache.json`, fetched 2026-09-21)
+# — the list that `--model` will actually accept here, which is a stronger
+# claim than a docs page makes. It held seven: gpt-6-astra ("most capable,
+# for complex demanding work"), gpt-5.6-sol ("reliable agentic workhorse"),
+# gpt-5.6-terra ("balanced agentic coding"), gpt-5.6-luna and gpt-reserve
+# (both "fast and affordable agentic coding"), gpt-5.5, and codex-auto-review.
+# Re-check by reading that file, or `codex exec --help` for the flag. Both halves are
 # PINNED — a floating alias would make a model change with no diff and no
 # decision, which is the opposite of what a recorded policy is for. Every
 # value here crosses to the other agent harness and so reaches a CLI, which
@@ -61,8 +70,13 @@ AGENT_TIER_IMPLEMENTER='gpt-5.6-sol'
 # 3. MECHANICAL — cheapest capable model; the suite is the oracle, and
 #    capability past "can follow the pattern" buys nothing. Local: a codemod
 #    is not worth the latency of a crossing.
+#
+#    gpt-5.6-luna over gpt-reserve, which the roster describes identically
+#    ("fast and affordable agentic coding"): luna is the one this account has
+#    actually run, so it is the choice with evidence behind it rather than a
+#    coin toss between two descriptions.
 # ---------------------------------------------------------------------------
-AGENT_TIER_MECHANICAL='gpt-5.6-sol-mini'
+AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — a DIFFERENT VENDOR, not merely a different model, for the
