@@ -30,14 +30,6 @@ TIX_ABS="$ROOT/$TIX"
 
 cd "$ROOT" || exit 2
 
-# Code spans outside fenced blocks, one token per line — the same reading the
-# other skill suites use.
-skill_spans() {
-	for f in "$PRD_ABS" "$TIX_ABS"; do
-		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$f"
-	done | grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
-}
-
 # line_of <file> <fixed string> — first matching line number, empty if none.
 line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
 
@@ -225,52 +217,14 @@ assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate i
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
 # ---------------------------------------------------------------------------
-resolved=0
-for cmd in $(skill_spans | grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u); do
-	t_is_ignored_command "$cmd" && continue
-	if [ -f ".agents/skills/${cmd#/}/SKILL.md" ]; then
-		resolved=$((resolved + 1))
-	else
-		fail "a spec skill names $cmd but .agents/skills/${cmd#/}/SKILL.md does not exist"
-	fi
-done
-[ "$resolved" -ge 5 ] &&
-	pass "all $resolved slash commands in the two skills resolve" ||
-	fail "only $resolved commands resolved — the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief"
+t_assert_skill_commands 5 "the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief" "$PRD_ABS" "$TIX_ABS"
 
 # ---------------------------------------------------------------------------
 banner "6. Every repo path both skills name is real, templated, or installed"
 # ---------------------------------------------------------------------------
-path_verdict() {
-	p=$1
-	[ -e "$ROOT/$p" ] && { echo "exists in this tree"; return 0; }
-	[ -e "$ROOT/$p.template" ] && { echo "shipped as $p.template"; return 0; }
-	grep -F -- "$p" "$ROOT/bootstrap.sh" | grep -v '^[[:space:]]*#' | grep -v '^KIT_ONLY=' |
-		grep -Eq '(cp|mkdir|ln|stamp|printf|>|install)' &&
-		{ echo "installed by bootstrap.sh"; return 0; }
-	return 1
-}
-checked=0
-for tok in $(skill_spans | sed 's/[),.;:]*$//' | grep -v '[<>*$]' | grep '/' | sort -u); do
-	case "$tok" in
-	constitution/* | scripts/* | docs/* | tests/* | adapters/* | templates/* | .githooks/* | .github/* | .agents/* | .claude/*) ;;
-	*) continue ;;
-	esac
-	checked=$((checked + 1))
-	if why=$(path_verdict "$tok"); then
-		pass "$tok — $why"
-	else
-		fail "a spec skill names $tok, which is a dead reference in every consumer project"
-	fi
-done
-[ "$checked" -ge 3 ] && pass "$checked repo paths checked" ||
-	fail "only $checked repo paths found — the pair should name the glossary, the decision records and the tier policy file"
+t_assert_skill_paths 3 "the pair should name the glossary, the decision records and the tier policy file" "$PRD_ABS" "$TIX_ABS"
 
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
-if grep -Eiq 'claude-[a-z]+-[0-9]|gpt-[0-9]|gemini-[0-9]|\b(opus|sonnet|haiku) [0-9]' "$PRD_ABS" "$TIX_ABS"; then
-	fail "a spec skill names a model identifier — the tier resolves the model"
-else
-	pass "no model identifier in either skill"
-fi
+t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
 
 t_done "/to-prd and /to-tickets contracts"

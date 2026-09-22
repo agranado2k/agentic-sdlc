@@ -176,12 +176,59 @@ copies=$(grep -c -E '/\^(files|skills):/' "$ROOT/UPDATING.md")
 	fail "UPDATING.md has $copies parser copies, expected 2 (files: and skills:)"
 
 # ---------------------------------------------------------------------------
-banner "4. The roster helper in the shared harness"
+banner "4. The skill-suite helpers in the shared harness"
 # ---------------------------------------------------------------------------
-command -v t_assert_skill_in_roster >/dev/null 2>&1 && pass "tests/lib.sh defines t_assert_skill_in_roster" ||
-	fail "tests/lib.sh does not define t_assert_skill_in_roster — each skill suite clones the roster block instead"
+# The roster block was the first scaffold to be cloned across skill suites and
+# then drift; the tokeniser, the command and path resolution and the model-id
+# ban were the next four (#223). Each lives once in tests/lib.sh, and every
+# skill suite calls it rather than carrying a copy.
+for h in t_assert_skill_in_roster t_skill_spans t_skill_label t_skill_path_roots t_assert_skill_commands t_assert_skill_paths t_assert_no_model_id; do
+	command -v "$h" >/dev/null 2>&1 && pass "tests/lib.sh defines $h" ||
+		fail "tests/lib.sh does not define $h — each skill suite clones that block instead"
+done
 for s in tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/spec-skills.test.sh; do
 	grep -q 't_assert_skill_in_roster' "$ROOT/$s" && pass "$s uses the roster helper" || fail "$s does not use the roster helper"
 done
+for s in tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/implement-deliver.test.sh tests/spec-skills.test.sh; do
+	grep -q 't_assert_skill_commands' "$ROOT/$s" && pass "$s resolves commands through the shared helper" ||
+		fail "$s does not call t_assert_skill_commands"
+	grep -q 't_assert_skill_paths' "$ROOT/$s" && pass "$s resolves paths through the shared helper" ||
+		fail "$s does not call t_assert_skill_paths"
+	own=$(grep -c -E '^(skill_spans|path_verdict|is_ignored)\(\)' "$ROOT/$s")
+	[ "$own" = 0 ] && pass "$s defines no scaffold of its own" ||
+		fail "$s still defines $own scaffold function(s) of its own — the copy the shared helper replaced"
+done
+# The roots a path is checked under are the gate's, read from its policy file,
+# never mirrored: the hand-kept lists had already disagreed with pathRoots.
+roots=$(t_skill_path_roots 2>/dev/null)
+n_roots=$(printf '%s\n' "$roots" | grep -c .)
+cfg=$(sed -n '/pathRoots: \[/,/\]/p' "$ROOT/scripts/docs-conformance/config.mjs" | grep -c '"')
+[ "$n_roots" -gt 0 ] && [ "$n_roots" = "$cfg" ] &&
+	pass "t_skill_path_roots yields the $cfg roots config.mjs lists, no more and no fewer" ||
+	fail "t_skill_path_roots yields $n_roots roots, config.mjs lists $cfg — the list is mirrored, not derived"
+printf '%s\n' "$roots" | grep -qx '.agents/skills' && pass "the derived roots include .agents/skills" ||
+	fail "the derived roots miss .agents/skills — a skill naming a sibling skill would go unchecked"
+
+# The verdicts a path can earn are each reachable, and each is exercised
+# somewhere: "exists in this tree" and "installed by bootstrap.sh" by every
+# suite, "copied from templates/workflows/" by the /implement suite's
+# ai-review reference. "named conditionally" — a skill may name a path that
+# exists only when some condition holds, and says so — is earned by no skill
+# today, so it is driven here against a throwaway rather than left as a claim
+# (hard rule 9).
+COND="$SCRATCH/cond-skill.md"
+printf 'A skill that names `scripts/ghost.sh` when the runner exists.\n' >"$COND"
+if why=$(t_skill_path_verdict "scripts/ghost.sh" "$COND"); then
+	[ "$why" = "named conditionally" ] &&
+		pass "a path named with a 'when ... exist' condition earns the conditional verdict" ||
+		fail "a conditionally named path earned '$why', not 'named conditionally'"
+else
+	fail "a path named with a 'when ... exist' condition earned no verdict — the clause is dead"
+fi
+printf 'A skill that just names `scripts/ghost.sh`.\n' >"$COND"
+t_skill_path_verdict "scripts/ghost.sh" "$COND" >/dev/null &&
+	fail "a path named with NO condition still earned a verdict — the clause passes anything" ||
+	pass "the same path without the condition earns nothing — the clause reads the sentence, not the path"
+rm -f "$COND"
 
 t_done "manifest parser"
