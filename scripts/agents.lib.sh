@@ -380,6 +380,52 @@ resolve_tier() {
 		return 0
 	fi
 
+	# THE REVIEWER IS NEVER THE MODEL THAT WROTE THE DIFF (ADR-0007).
+	#
+	# "The reviewer differs from the implementer" is a relation between two
+	# models, and one of them — the session's own — is a fact only the CALLER
+	# holds. A mapping answers without it, so a `self-implemented` domain
+	# pointing at one fixed model is right only for a session running some
+	# other one; a session running THAT model is handed itself to review with,
+	# silently. $AGENT_SESSION_MODEL is the caller saying what it runs on, in
+	# the word this policy file uses, and it is the only new input. Unset,
+	# everything below is skipped and this file behaves exactly as it did —
+	# which is what every caller written before this release expects.
+	#
+	# The comparison is EXACT, never a family guess. Folding an id to a family
+	# word would mean knowing each vendor's ORDER — one puts the family second
+	# and the version last, another the reverse — and a wrong guess refuses two
+	# DIFFERENT models as if they were one. This file ships to every project,
+	# so it compares what the policy file says. A caller that knows its session
+	# by another spelling names it in the spelling its own policy uses.
+	#
+	# The substitution happens HERE, before the value is split, so BOTH halves
+	# move together: a fallback that crosses agent harnesses must carry its own
+	# harness, or the dispatcher would launch the fallback's model wherever the
+	# refused mapping happened to point.
+	if [ "$_rt_tier" = reviewer ] && [ -n "${AGENT_SESSION_MODEL:-}" ]; then
+		agents_split_harness "$_rt_value"
+		if [ "$_ah_model" = "$AGENT_SESSION_MODEL" ]; then
+			eval "_rt_fallback=\${AGENT_TIER_REVIEWER:-}"
+			agents_split_harness "$_rt_fallback"
+			if [ -n "$_ah_model" ] && [ "$_ah_model" != "$AGENT_SESSION_MODEL" ]; then
+				[ "${AGENTS_TIER_QUIET:-}" = 1 ] || {
+					echo "!  agents: reviewer${_rt_domain:+ $_rt_domain} resolves to the session's own model" >&2
+					echo "   ($AGENT_SESSION_MODEL); falling back to the reviewer tier. A review by the" >&2
+					echo "   model that wrote the diff is an editorial pass wearing a second hat." >&2
+				}
+				_rt_value=$_rt_fallback
+			else
+				[ "${AGENTS_TIER_QUIET:-}" = 1 ] || {
+					echo "!  agents: no reviewer model differs from the session's own" >&2
+					echo "   ($AGENT_SESSION_MODEL) — the review will share the author's model. Nothing" >&2
+					echo "   is printed, so the spawn inherits the session; say so in your report." >&2
+				}
+				return 0
+			fi
+		fi
+	fi
+
 	agents_split_harness "$_rt_value"
 
 	if [ "$_rt_mode" = harness ]; then

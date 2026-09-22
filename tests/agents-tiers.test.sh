@@ -1068,6 +1068,115 @@ t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
 	fail "both policies map the planner to '$S_OUT' — one of them is a copy, not a policy"
 
 # ---------------------------------------------------------------------------
+banner "The SHARED resolver refuses a review by the session's own model (#226)"
+# ---------------------------------------------------------------------------
+# ADR-0007 decided the shape and the kit built it in its own wrapper, because
+# the resolver is shared layer and that fix was not a release. This is the
+# release: the rule lives in scripts/agents.lib.sh now, so every consumer's
+# `self-implemented` mapping stops having the blind spot the kit found in its
+# own. Asserted against a THROWAWAY policy, never the kit's — the kit's
+# reviewer crosses vendors, where there is nothing to refuse.
+LOCALREV="$SCRATCH/local-reviewer.config.sh"
+cat >"$LOCALREV" <<'LOCALREV_CFG'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4'
+LOCALREV_CFG
+res() { t_run_split env AGENTS_CONFIG="$LOCALREV" sh "$LIB" "$@"; }
+resolve_as() { # <session model> <args...>
+	_ra_model=$1; shift
+	t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL="$_ra_model" sh "$LIB" "$@"
+}
+# The session runs the model `reviewer self-implemented` maps to.
+resolve_as vendor-mid-4 reviewer self-implemented
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = vendor-strong-9 ] &&
+	pass "the resolver falls back to the plain reviewer when the mapped answer is the session's own" ||
+	fail "resolved '$S_OUT' (status $S_STATUS) on a session running that very model"
+case "$S_ERR" in
+*"session's own model"*) pass "…and says so on stderr, where the value is not" ;;
+*) fail "…silently — stderr was '$S_ERR'" ;;
+esac
+# The flagged spelling is the same question: the policy file documents
+# `--model <tier>` as how the model half is read back (ADR-0005 clause 4).
+resolve_as vendor-mid-4 --model reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form" ||
+	fail "the flagged spelling resolved '$S_OUT' — it walks past the refusal"
+# Nothing differs: print nothing, and say why, so the caller's report can.
+resolve_as vendor-strong-9 reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "when no reviewer differs from the session, the resolver prints nothing" ||
+	fail "printed '$S_OUT' — that is the author reviewing itself"
+case "$S_ERR" in
+*"share the author's model"*) pass "…and warns that the review would share the author's model" ;;
+*) fail "…without saying why: '$S_ERR'" ;;
+esac
+# Only the reviewer, and only when the caller named a session.
+resolve_as vendor-mid-4 implementer
+[ "$S_OUT" = vendor-mid-4 ] &&
+	pass "a non-reviewer tier equal to the session's model is never refused" ||
+	fail "the implementer resolved '$S_OUT' — the refusal leaked past the reviewer tier"
+t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL= sh "$LIB" reviewer self-implemented
+[ "$S_OUT" = vendor-mid-4 ] &&
+	pass "with no session named there is nothing to compare, and the mapping answers" ||
+	fail "an unnamed session changed the answer to '$S_OUT'"
+# The harness half asks a different question and is never compared.
+resolve_as vendor-mid-4 --harness reviewer
+[ "$S_STATUS" = 0 ] &&
+	case "$S_ERR" in *"session's own model"*) false ;; *) true ;; esac &&
+	pass "--harness is not a model, so it is not refused" ||
+	fail "--harness reviewer was refused: '$S_ERR'"
+# The quiet switch silences this warning like every other.
+t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL=vendor-mid-4 AGENTS_TIER_QUIET=1 sh "$LIB" reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] && [ -z "$S_ERR" ] &&
+	pass "AGENTS_TIER_QUIET=1 keeps the fallback and drops the warning" ||
+	fail "quiet mode: stdout '$S_OUT', stderr '$S_ERR'"
+# BOTH HALVES MOVE TOGETHER. The resolver answers a model and an agent
+# harness through two calls, and the dispatcher combines them. If the refusal
+# replaced only the model, a fallback that crosses vendors would arrive with
+# the ORIGINAL mapping's harness — the remote model launched on the local
+# agent harness, or the reverse. The substitution is of the whole mapping.
+SPLITCFG="$SCRATCH/split-halves.config.sh"
+cat >"$SPLITCFG" <<'SPLIT_CFG'
+AGENT_HARNESSES='other'
+AGENT_HARNESS_OTHER_CMD='true {model_flag} < {prompt_file}'
+AGENT_HARNESS_OTHER_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='other:remote-B'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='local-A'
+SPLIT_CFG
+t_run_split env AGENTS_CONFIG="$SPLITCFG" AGENT_SESSION_MODEL=local-A sh "$LIB" reviewer self-implemented
+_sh_model=$S_OUT
+t_run_split env AGENTS_CONFIG="$SPLITCFG" AGENT_SESSION_MODEL=local-A sh "$LIB" --harness reviewer self-implemented
+[ "$_sh_model" = remote-B ] && [ "$S_OUT" = other ] &&
+	pass "a refused reviewer yields BOTH halves of its fallback ('$S_OUT:$_sh_model')" ||
+	fail "the halves disagree: model '$_sh_model' with agent harness '$S_OUT' — the spawn would run the wrong pair"
+
+# THE COMPARISON IS EXACT, never a family guess. A resolver that folded ids to
+# a family word would have to know each vendor's ORDER — `claude-opus-5` puts
+# the family second, `gpt-5.6-sol` puts the version there — and guessing wrong
+# refuses two DIFFERENT models as if they were one. This file ships to every
+# project, so it compares what the policy file actually says and nothing else;
+# a caller that knows its own session by a different spelling says so in the
+# spelling its policy uses.
+EXACTCFG="$SCRATCH/exact.config.sh"
+cat >"$EXACTCFG" <<'EXACT_CFG'
+AGENT_TIER_REVIEWER='vendor-9.9-alpha'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-9.9-beta'
+EXACT_CFG
+t_run_split env AGENTS_CONFIG="$EXACTCFG" AGENT_SESSION_MODEL=vendor-9.9-alpha sh "$LIB" reviewer self-implemented
+[ "$S_OUT" = vendor-9.9-beta ] &&
+	pass "two ids sharing everything but their last segment are DIFFERENT models, and neither is refused for the other" ||
+	fail "resolved '$S_OUT' — a family guess refused a model the session is not running"
+
+# The SHIPPED mapping is empty, so there is nothing to refuse and nothing changes.
+t_run_split env AGENTS_CONFIG="$SHIPPED" AGENT_SESSION_MODEL=anything sh "$LIB" reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "against the shipped empty mapping the rule is inert, as it must be" ||
+	fail "the shipped mapping resolved '$S_OUT' with a session named"
+
+# ---------------------------------------------------------------------------
 banner "The wrapper picks the policy for the session it runs in"
 # ---------------------------------------------------------------------------
 # $AGENT_HARNESS_SELF names the session's own agent harness. Unset, the
@@ -1130,16 +1239,21 @@ t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=vendor-
 [ "$S_OUT" = strong ] &&
 	pass "--alias reviewer self-implemented falls back when the mapped answer is the session's own model" ||
 	fail "--alias gave '$S_OUT' on a session running that very model — the refusal does not reach the alias path"
-# …and the session may name itself in EITHER spelling: a session that knows
-# only its spawn word must be refused as surely as one that knows the id.
+# …and it is the POLICY FILE'S spelling that is compared, not a family guess.
+# A session that names itself by the word a spawn parameter takes, while the
+# policy pins a full id, is NOT refused — because a resolver that folded one
+# into the other would have to know each vendor's id ORDER, and a wrong guess
+# refuses two different models as if they were one. The caller names itself in
+# the spelling its own policy uses; that is the contract, and it is what the
+# recipe's arriving-from paragraph tells a consumer.
 t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh --alias reviewer self-implemented
+[ "$S_OUT" = mid ] &&
+	pass "a spawn-word session against a pinned policy is not refused — the comparison is exact" ||
+	fail "AGENT_SESSION_MODEL=mid gave '$S_OUT' — something folded one spelling into the other"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=vendor-mid-4-20260101 sh scripts/agents.kit.sh --alias reviewer self-implemented
 [ "$S_OUT" = strong ] &&
-	pass "the session's model matches in the spawn-word spelling too" ||
-	fail "AGENT_SESSION_MODEL=mid gave '$S_OUT' — only the pinned spelling is compared"
-t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh reviewer self-implemented
-[ "$S_OUT" = vendor-strong-9 ] &&
-	pass "and the model path matches the spawn-word spelling as well" ||
-	fail "the model path gave '$S_OUT' for a spawn-word session"
+	pass "naming itself in the policy's own spelling IS refused, and the fallback folds for the spawn" ||
+	fail "the pinned spelling gave '$S_OUT'"
 # An unknown tier still reports itself rather than exiting 2 in silence.
 t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias janitor
 [ "$S_STATUS" = 2 ] && [ -n "$S_ERR" ] &&

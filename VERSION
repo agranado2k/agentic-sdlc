@@ -785,7 +785,51 @@
 # is a new kit-only runner that turns a skill name into the tier its phase
 # means and dispatches there.
 
-shared-layer: 0.21.0
+# 0.22.0 — the reviewer refusal reaches every project. TWO shared files change
+# content: scripts/agents.lib.sh carries the rule, and UPDATING.md gains the
+# migration paragraph for it — actual guidance, not only the re-pin this
+# manifest's 0.9.0 note already counts as a content change. No file joins or
+# leaves the layer.
+#   From #226: ADR-0007's rule moves out of the kit's own wrapper and into the
+# resolver every consumer runs. "The reviewer differs from the implementer" is
+# a relation between two models, and one of them — the session's own — is a
+# fact only the caller holds; a mapping answers without it, so a
+# `self-implemented` domain pointing at one fixed model is right only for a
+# session running some other one, and a session running THAT model was handed
+# itself to review with, silently. `$AGENT_SESSION_MODEL` is the caller saying
+# what it runs on, in the word its own policy file uses, and it is the only
+# new input: unset, this file behaves exactly as it did, which is what every
+# caller written before this release expects. When it IS set and the reviewer
+# tier's answer equals it, the resolver warns once and falls back to the plain
+# reviewer tier; when that too equals it, it prints nothing and says the
+# review would share the author's model, so the caller's report can say so.
+# The model half only — a harness token is not a model — and the reviewer tier
+# only: an implementer equal to the session is the ordinary case. The
+# comparison is EXACT — the word the policy file uses, never a family guess.
+# Folding an id to a family would mean knowing each vendor's id ORDER, one
+# putting the family second and another the version there, and a wrong guess
+# refuses two DIFFERENT models as if they were one; the kit's own Codex
+# mapping is where that would have bitten first. A caller names its session in
+# the spelling its own policy uses, and the recipe says so with the one-liner.
+# The substitution is of the WHOLE mapping, before its harness and model
+# halves are split, so a fallback that crosses agent harnesses carries its own
+# — otherwise the dispatcher would launch the fallback's model wherever the
+# refused mapping pointed.
+#   scripts/agents.kit.sh, which carried the rule since 0.21.0, is back to
+# what its header describes: the policy choice, `--policy`, `--alias`, and a
+# delegation. Nothing of the rule is left there to drift from the resolver's.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. `/implement` gains one line: a ticket's
+# stamp outranks a skill's phase, so a session dispatching on its ticket's
+# behalf passes the stamp rather than letting the skill's phase answer — the
+# third statement of the rule #229 settled, after the root manual's Capability
+# tiers section and the glossary's **Phase** entry, both of which landed in
+# 0.21.0's wave. tests/agents-tiers.test.sh gains a section driving the
+# refusal from the shared resolver against a throwaway policy with a LOCAL
+# reviewer (the kit's own crosses vendors, where there is nothing to refuse)
+# and against the shipped empty mapping, where the rule must be inert.
+
+shared-layer: 0.22.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

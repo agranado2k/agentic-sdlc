@@ -29,28 +29,20 @@
 #
 # scripts/agents.lib.sh itself is shared layer (see VERSION) and stays
 # byte-identical to every project that runs it: this wrapper sets the seam
-# already exposed for exactly this case and delegates (and, for the reviewer
-# tier, compares the answer — the section below). `"$@"` rather than a fixed one-argument form, so the
+# already exposed for exactly this case and delegates. `"$@"` rather than a fixed one-argument form, so the
 # resolver's WHOLE signature reaches it — including the optional task domain,
 # which a wrapper that took `$1` alone would silently drop while still
 # resolving every tier correctly. tests/agents-tiers.test.sh asserts the
 # pass-through for exactly that reason.
 #
-# THE ONE THING THIS WRAPPER ADDS (#224, ADR-0007)
+# WHAT THIS WRAPPER NO LONGER ADDS (#224 → #226, ADR-0007)
 # ---------------------------------------------------------------------------
-# The mapping's `self-implemented` reviewer is one model, chosen on the
-# assumption that the session runs on the planner's — so on a session that
-# runs on THAT model the answer is the implementer's own, the exact case the
-# domain exists to avoid. The policy file cannot know who is asking; the caller
-# can say. When $AGENT_SESSION_MODEL names the session's model (the same
-# word the policy file uses) and the resolver's answer for the reviewer tier
-# equals it, this wrapper warns once and falls back to the plain reviewer
-# tier; when that too equals it, it warns that the review will share the
-# author's model and prints nothing, so the spawn inherits the session and
-# the report has to say so. With the variable unset, or for any tier but the
-# reviewer, the wrapper is the exec it always was. This lives here and not in
-# the shared resolver because the resolver is shared layer: moving the rule
-# there is a release, and 0.21.0 is where it goes.
+# It used to carry the reviewer refusal: a session handed its own model to
+# review with, because a `self-implemented` mapping answers one model chosen
+# assuming the session runs on another. That lived here only because the
+# resolver is shared layer and the fix was not a release. 0.22.0 is that
+# release — the rule is in scripts/agents.lib.sh now, so every consumer gets
+# it, and nothing of it is left here to drift from it.
 #
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
@@ -90,98 +82,40 @@ if [ "${1:-}" = --policy ]; then
 	exit 0
 fi
 
-# THE FOLD, and the comparison that guards it.
+# `--alias <tier> [domain]` prints the word an IN-SESSION spawn parameter
+# takes, where `--model` prints the id a CLI takes. Both name one model; they
+# exist because the policy files PIN ids so a roster moving is a decision
+# someone commits, while the Agent/Task tool's parameter accepts only the
+# family word (adapters/claude-code/README.md).
 #
-# `--alias <tier> [domain]` prints the word the IN-SESSION spawn parameter
-# takes, where `--model` prints the id a CLI takes. Both spellings name one
-# model; they exist because the policy files PIN ids (`claude-opus-5`) so a
-# roster moving is a decision someone commits, while the Agent/Task tool's
-# parameter accepts only the family word (adapters/claude-code/README.md).
-# The fold strips the vendor prefix and keeps the family.
-#
-# The ADR-0007 refusal reaches BOTH paths, and compares the session's model
-# in BOTH spellings. A session that knows only its spawn word must be refused
-# as surely as one that knows its pinned id — the policy files call this
-# wrapper the net under the reviewer rule, and a net with one side open is
-# not one.
-fold_alias() {
-	case "$1" in
-	'') ;;
-	*-*-*)
-		_fa=${1#*-}
-		printf '%s\n' "${_fa%%-*}"
-		;;
-	*) printf '%s\n' "$1" ;;
-	esac
-}
-# same_as_session <value> — true when the value names the session's own model
-# in either spelling.
-same_as_session() {
-	[ -n "${AGENT_SESSION_MODEL:-}" ] || return 1
-	[ "$1" = "$AGENT_SESSION_MODEL" ] && return 0
-	[ "$(fold_alias "$1")" = "$AGENT_SESSION_MODEL" ] && return 0
-	[ "$(fold_alias "$1")" = "$(fold_alias "$AGENT_SESSION_MODEL")" ]
-}
-warn() { [ "${AGENTS_TIER_QUIET:-}" = 1 ] || printf 'agents.kit.sh: %s\n' "$1" >&2; }
-
+# The ADR-0007 refusal is NOT here any more: 0.22.0 moved it into
+# scripts/agents.lib.sh, where every consumer's mapping gets it too. This
+# path resolves through that resolver like any other caller, so the answer it
+# folds is already the refused-and-fallen-back one — one implementation, and
+# the fold is applied to whatever it decided.
 if [ "${1:-}" = --alias ]; then
 	shift
 	[ $# -gt 0 ] || { echo "agents.kit.sh: --alias needs a tier" >&2; exit 2; }
-	# The harness half FIRST: `--model` strips the prefix and warns, so by the
-	# time the model half is in hand a crossing looks like a local answer. A
-	# tier that crosses prints NOTHING — it cannot be spawned in session at
-	# all, and a guess would send the work to the wrong vendor silently.
-	# The harness probe is the one call whose stderr is dropped: it duplicates
-	# the diagnostics the model call below prints, and a caller should see
-	# each of them once. The model call keeps its stderr, so an unknown tier
-	# still says why it exited 2 rather than failing in silence.
+	# The harness half first: a tier that crosses cannot be spawned in session
+	# at all, and a guess would send the work to the wrong vendor silently.
 	_alias_harness=$(sh scripts/agents.lib.sh --harness "$@" 2>/dev/null) || {
 		sh scripts/agents.lib.sh "$@" >/dev/null
 		exit $?
 	}
 	[ -z "$_alias_harness" ] || exit 0
 	_alias_value=$(sh scripts/agents.lib.sh "$@") || exit $?
-	_alias_tier=$1
-	if [ "$_alias_tier" = reviewer ] && same_as_session "$_alias_value"; then
-		_alias_plain=$(sh scripts/agents.lib.sh reviewer 2>/dev/null) || exit $?
-		if [ -n "$_alias_plain" ] && ! same_as_session "$_alias_plain"; then
-			warn "reviewer${2:+ $2} resolves to the session's own model ($AGENT_SESSION_MODEL); falling back to the reviewer tier"
-			fold_alias "$_alias_plain"
-		else
-			warn "no reviewer model differs from the session's own ($AGENT_SESSION_MODEL) — the review will share the author's model"
-		fi
-		exit 0
-	fi
-	fold_alias "$_alias_value"
+	case "$_alias_value" in
+	'') ;;
+	*-*-*)
+		_alias_word=${_alias_value#*-}
+		printf '%s\n' "${_alias_word%%-*}"
+		;;
+	*) printf '%s\n' "$_alias_value" ;;
+	esac
 	exit 0
 fi
-# The tier is not always $1: the resolver's signature admits a leading
-# `--model` or `--harness` (ADR-0005 clause 4), and scripts/agents.config.sh
-# documents `--model <tier>` as how you read the mapping's model half back. A
-# guard that read $1 alone would let the refused answer through by the very
-# spelling the policy file teaches. `--harness` asks a different question —
-# a harness token is not a model — so only the model half is ever compared.
-asked_tier=${1:-}
-asked_domain=${2:-}
-case "$asked_tier" in
---model) asked_tier=${2:-}; asked_domain=${3:-} ;;
---harness) asked_tier='' ;;
-esac
-if [ -z "${AGENT_SESSION_MODEL:-}" ] || [ "$asked_tier" != reviewer ]; then
-	exec sh scripts/agents.lib.sh "$@"
-fi
-answer=$(sh scripts/agents.lib.sh "$@") || exit $?
-if ! same_as_session "$answer"; then
-	# An unmapped tier is zero bytes, never a bare newline: the caller's
-	# `[ -n "$(...)" ]` is the whole protocol for "nothing".
-	[ -n "$answer" ] && printf '%s\n' "$answer"
-	exit 0
-fi
-plain=$(sh scripts/agents.lib.sh reviewer) || exit $?
-if [ -n "$plain" ] && ! same_as_session "$plain"; then
-	warn "reviewer${asked_domain:+ $asked_domain} resolves to the session's own model ($AGENT_SESSION_MODEL); falling back to the reviewer tier ($plain)"
-	printf '%s\n' "$plain"
-else
-	warn "no reviewer model differs from the session's own ($AGENT_SESSION_MODEL) — the review will share the author's model"
-fi
-exit 0
+# Everything else is the resolver's, verbatim — including the reviewer rule
+# this wrapper used to carry. 0.22.0 moved that into scripts/agents.lib.sh,
+# so the wrapper is once again what its header describes: the policy choice,
+# and a delegation.
+exec sh scripts/agents.lib.sh "$@"
