@@ -138,24 +138,91 @@ t_run_split sh "$DISPATCH" --tier-of /no-such-skill
 # an uninstalled agent harness reports itself rather than surfacing as a shell
 # "not found" mixed into a worker's output. CI has neither vendor's CLI, and a
 # suite that made the kit's own tests depend on a third party being installed
-# would be asserting the host, not the kit. So: when the CLI is absent this is
-# a SKIP with the reason named, and when it is present the dry run is held to
-# naming the skill in the prompt it would send.
-_dispatch_cli=$(AGENTS_CONFIG=scripts/agents.kit.config.sh sh "$ROOT/scripts/agents.lib.sh" --harness reviewer 2>/dev/null)
-if [ -n "$_dispatch_cli" ] && ! command -v "$_dispatch_cli" >/dev/null 2>&1; then
-	printf '  --    /review-pr crosses to agent harness '"'"'%s'"'"', which is not on PATH here — the dry run is skipped, not failed\n' "$_dispatch_cli"
+# would be asserting the host, not the kit — and a check that is skipped where
+# it is meant to run is a claim (hard rule 9). So the dispatch runs against a
+# STUB agent harness, the way tests/agent-dispatch.test.sh already does: the
+# whole path executes with nothing third-party installed, and the stub echoes
+# what it was handed so the prompt can be asserted rather than inferred.
+#
+# The seam is the wrapper's own policy selection: $AGENT_HARNESS_SELF picks
+# `scripts/agents.kit.<self>.config.sh`, resolved relative to the directory it
+# runs in, so a scratch tree carrying that name IS the override. Nothing here
+# touches the repo's policy files.
+STUBTREE="$SCRATCH/stubtree"
+mkdir -p "$STUBTREE/scripts"
+cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" \
+	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" "$STUBTREE/scripts/"
+cp -R "$ROOT/.agents" "$STUBTREE/.agents"
+STUB="$SCRATCH/stub-agent-harness"
+cat >"$STUB" <<'STUB_EOF'
+#!/bin/sh
+echo "ARGV: $*"
+echo "STDIN-BEGIN"
+cat
+echo "STDIN-END"
+STUB_EOF
+chmod +x "$STUB"
+cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<STUB_CFG
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$STUB --flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_PLANNER='stub:model-for-planning'
+AGENT_TIER_IMPLEMENTER='stub:model-for-building'
+AGENT_TIER_IMPLEMENTER_TESTS='stub:model-for-testing'
+AGENT_TIER_MECHANICAL='stub:model-for-mechanics'
+AGENT_TIER_REVIEWER='stub:model-for-reviewing'
+STUB_CFG
+stub_dispatch() { t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
+
+# A reviewer-phase skill reaches the reviewer's model, and the prompt that
+# arrives says which skill to run — the one thing this wrapper adds over the
+# dispatcher it delegates to.
+stub_dispatch /review-pr --prompt 'review the branch'
+if [ "$S_STATUS" = 0 ]; then
+	pass "a dispatch of /review-pr runs end to end against a stub agent harness"
+	printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
+		pass "…on the model its reviewer phase resolves to" ||
+		fail "…but not on the reviewer's model: $S_OUT"
+	printf '%s\n' "$S_OUT" | grep -q 'Run /review-pr\.' &&
+		pass "…and the prompt it hands over says which skill to run" ||
+		fail "…but the prompt never names the skill: $S_OUT"
+	printf '%s\n' "$S_OUT" | grep -q 'review the branch' &&
+		pass "…with the caller's own prompt still in it" ||
+		fail "…and the caller's prompt was lost: $S_OUT"
 else
-	t_run_split sh "$DISPATCH" /review-pr --prompt 'review the branch' --dry-run
-	if [ "$S_STATUS" = 0 ]; then
-		pass "a dry-run dispatch of /review-pr succeeds"
-		printf '%s\n' "$S_OUT$S_ERR" | grep -q 'review-pr' &&
-			pass "…and the prompt it would send names the skill" ||
-			fail "…but the dry-run never names the skill: $S_OUT"
-	else
-		fail "a dry-run dispatch of /review-pr exited $S_STATUS"
-		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
-	fi
+	fail "a stub dispatch of /review-pr exited $S_STATUS"
+	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
 fi
+
+# The tester phase carries its domain across the hop — the one phase that is
+# not a tier, so the one whose resolution a wrapper could silently drop.
+stub_dispatch /tdd --prompt 'write the failing test'
+printf '%s\n' "$S_OUT" | grep -q 'model-for-testing' &&
+	pass "/tdd reaches the tests domain's model, not the plain implementer's" ||
+	fail "/tdd reached '$S_OUT'"
+
+# A --prompt-file is the caller's own document: passed through unrewritten,
+# because rewriting a file someone wrote is a surprise. This pair is a
+# REGRESSION guard rather than a pinned rule: the wrapper cannot rewrite a
+# file today even if its text branch ran, because the prefix is only ever
+# applied to a --prompt value it has in hand. The assertion is here for the
+# day someone teaches it to read the file.
+echo 'the file the caller wrote' >"$SCRATCH/caller-prompt.md"
+stub_dispatch /review-pr --prompt-file "$SCRATCH/caller-prompt.md"
+printf '%s\n' "$S_OUT" | grep -q 'the file the caller wrote' &&
+	pass "a --prompt-file reaches the other session verbatim" ||
+	fail "the prompt file did not arrive: $S_OUT"
+printf '%s\n' "$S_OUT" | grep -q 'Run /review-pr\.' &&
+	fail "the prompt file was rewritten — a file the caller wrote is not ours to edit" ||
+	pass "…and was not rewritten on the way"
+
+# An argument whose value carries a space survives the exec as ONE argument;
+# split, it would arrive as a stray positional the dispatcher reads as a task
+# domain, and the work would silently resolve somewhere else.
+stub_dispatch /review-pr --prompt 'x' --set 'TITLE=two words'
+printf '%s\n' "$S_OUT$S_ERR" | grep -q 'domain' &&
+	fail "a --set value with a space was split into a task domain: $S_ERR" ||
+	pass "a --set value with a space survives the hop as one argument"
 
 # ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
