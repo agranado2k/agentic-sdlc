@@ -4,6 +4,7 @@
 #
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt <text>      [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt-file <path> [--dry-run]
+#   sh scripts/skill-dispatch.kit.sh <skill> --tier <tier> [--domain <token>] ...
 #   sh scripts/skill-dispatch.kit.sh --tier-of <skill>
 #   sh scripts/skill-dispatch.kit.sh --phase-tier <phase>
 #
@@ -23,6 +24,17 @@
 # rest over. Nothing here resolves a model itself — scripts/agents.lib.sh is
 # still the only thing that does, reached through scripts/agents.kit.sh's
 # policy choice.
+#
+# WHOSE SIZING WINS (#229). Two sizings exist and they answer different
+# questions. A skill's PHASE says what kind of work that skill is, and it is
+# all there is when nobody wrote a ticket — an operator running /review-pr by
+# hand. A ticket's `Tier:` is decided when the ticket is written, by the only
+# actor with a view of the whole wave, and the root manual is explicit that
+# the call is not the spawning agent's to make. So the phase is the DEFAULT
+# and `--tier` (with optional `--domain`) OVERRIDES it. A dispatcher that
+# ignored the stamp would quietly replace a decomposer's decision with a skill
+# author's, which is the same failure in the opposite direction from an agent
+# sizing itself. `--dry-run` names which of the two answered.
 #
 # WHY `tester` IS NOT A TIER. The four tier names are a CLOSED vocabulary (an
 # unknown one is exit 2, and widening it is a resolver change, a manual change
@@ -52,7 +64,7 @@ AGENTS_CONFIG="$ROOT/$(cd "$ROOT" && sh scripts/agents.kit.sh --policy)"
 export AGENTS_CONFIG
 
 usage() {
-	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> --prompt <text> [--dry-run]" >&2
+	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
 	echo "  phases: planner implementer tester mechanical reviewer" >&2
@@ -106,7 +118,52 @@ esac
 SKILL=$1
 shift
 [ $# -gt 0 ] || usage
-TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
+
+# The ticket's stamp, if the caller carried one. Pulled out of the argument
+# list before anything else sees it: agent-dispatch takes a bare tier and an
+# optional domain positionally, so these two are this wrapper's own vocabulary
+# and must not reach it as flags.
+OVERRIDE_TIER=''
+OVERRIDE_DOMAIN=''
+_count=$#
+while [ "$_count" -gt 0 ]; do
+	a=$1
+	shift
+	_count=$((_count - 1))
+	case "$a" in
+	--tier)
+		[ "$_count" -gt 0 ] || die "--tier needs one of: planner implementer mechanical reviewer"
+		OVERRIDE_TIER=$1
+		shift
+		_count=$((_count - 1))
+		;;
+	--domain)
+		[ "$_count" -gt 0 ] || die "--domain needs a token"
+		OVERRIDE_DOMAIN=$1
+		shift
+		_count=$((_count - 1))
+		;;
+	*) set -- "$@" "$a" ;;
+	esac
+done
+
+if [ -n "$OVERRIDE_TIER" ]; then
+	case "$OVERRIDE_TIER" in
+	planner | implementer | mechanical | reviewer) ;;
+	*) die "unknown tier '$OVERRIDE_TIER'. The vocabulary is closed: planner implementer mechanical reviewer." ;;
+	esac
+	TIER_ARGS="$OVERRIDE_TIER${OVERRIDE_DOMAIN:+ $OVERRIDE_DOMAIN}"
+	TIER_SOURCE="the ticket's stamp"
+else
+	[ -z "$OVERRIDE_DOMAIN" ] || die "--domain without --tier: a domain is the second half of a ticket's stamp, not a sizing of its own"
+	TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
+	TIER_SOURCE="$SKILL's own phase"
+fi
+for a in "$@"; do
+	[ "$a" = --dry-run ] || continue
+	echo "skill-dispatch: tier '$TIER_ARGS' — from $TIER_SOURCE" >&2
+	break
+done
 
 # The prompt the dispatched session receives has to say what to run, because
 # the skill name is this script's input and the other session's instruction.
