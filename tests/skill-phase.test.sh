@@ -212,15 +212,28 @@ t_run_split sh "$DISPATCH" --tier-of /no-such-skill
 [ "$S_STATUS" = 2 ] && pass "a skill that does not exist is a usage error" ||
 	fail "an unknown skill exited $S_STATUS, expected 2"
 
-t_run_split sh "$DISPATCH" /review-pr --prompt 'review the branch' --dry-run
-if [ "$S_STATUS" = 0 ]; then
-	pass "a dry-run dispatch of /review-pr succeeds"
-	printf '%s\n' "$S_OUT$S_ERR" | grep -q 'review-pr' &&
-		pass "…and the prompt it would send names the skill" ||
-		fail "…but the dry-run never names the skill: $S_OUT"
+# The dispatch itself needs the OTHER vendor's CLI on PATH, and the dispatcher
+# checks that before it prints anything — even for a dry run, deliberately, so
+# an uninstalled agent harness reports itself rather than surfacing as a shell
+# "not found" mixed into a worker's output. CI has neither vendor's CLI, and a
+# suite that made the kit's own tests depend on a third party being installed
+# would be asserting the host, not the kit. So: when the CLI is absent this is
+# a SKIP with the reason named, and when it is present the dry run is held to
+# naming the skill in the prompt it would send.
+_dispatch_cli=$(AGENTS_CONFIG=scripts/agents.kit.config.sh sh "$ROOT/scripts/agents.lib.sh" --harness reviewer 2>/dev/null)
+if [ -n "$_dispatch_cli" ] && ! command -v "$_dispatch_cli" >/dev/null 2>&1; then
+	printf '  --    /review-pr crosses to agent harness '"'"'%s'"'"', which is not on PATH here — the dry run is skipped, not failed\n' "$_dispatch_cli"
 else
-	fail "a dry-run dispatch of /review-pr exited $S_STATUS"
-	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	t_run_split sh "$DISPATCH" /review-pr --prompt 'review the branch' --dry-run
+	if [ "$S_STATUS" = 0 ]; then
+		pass "a dry-run dispatch of /review-pr succeeds"
+		printf '%s\n' "$S_OUT$S_ERR" | grep -q 'review-pr' &&
+			pass "…and the prompt it would send names the skill" ||
+			fail "…but the dry-run never names the skill: $S_OUT"
+	else
+		fail "a dry-run dispatch of /review-pr exited $S_STATUS"
+		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	fi
 fi
 
 # ---------------------------------------------------------------------------
