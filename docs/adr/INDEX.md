@@ -22,6 +22,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0004](0004-the-root-manual-is-the-kits-local-article.md) | The kit's root manual is also its local article, budgeted at 350 lines | Accepted 2026-09-02 |
 | [0005](0005-the-agent-harness-axis.md) | A capability tier may name the agent harness it runs on, and the kit ships the dispatcher | Accepted 2026-09-09 — amends ADR-0003 |
 | [0006](0006-the-worker-budget-is-derived-from-the-host.md) | A dispatched worker runs inside a budget derived from the host at dispatch time | Accepted 2026-09-19 — amends ADR-0005; amended 2026-09-19 with what building #208 refined in clauses 5, 6 and 8, and again with what #209 settled for the suite |
+| [0007](0007-a-review-never-resolves-to-the-sessions-own-model.md) | A reviewer resolves against the session that asks, and never to its own model | Accepted 2026-09-21 — amends ADR-0003 |
 
 ## Conventions
 

@@ -894,6 +894,119 @@ case "$W_ERR_TEXT" in
 esac
 unset AGENTS_CONFIG
 
+# ---------------------------------------------------------------------------
+banner "The wrapper never hands a review to the session's own model (#224, ADR-0007)"
+# ---------------------------------------------------------------------------
+# The mapping's `self-implemented` answer is one model, chosen on the
+# assumption that the session runs on the planner's — so on a session that
+# runs on THAT model, the answer is the implementer's own, which is the case
+# the domain exists to avoid. The config cannot know who is asking; the
+# caller can say. When $AGENT_SESSION_MODEL names the session's model and the
+# reviewer answer equals it, the wrapper warns once and falls back to the
+# plain reviewer tier; when that too equals it, the wrapper warns that the
+# review will share the author's model and prints nothing. Unset, nothing
+# changes — every case above ran without it. Not the shared resolver: that
+# half is 0.21.0's (the release ticket says so).
+# t_run_split (tests/lib.sh) is the runner that keeps stdout and stderr apart —
+# the whole contract here, since a warning merged into stdout would read as a
+# model id. `env` carries the session model into the child without exporting it
+# into this suite's own environment, where it would silently change every case
+# that follows.
+wrap() { # <session model or ''> <args...> — sets W_OUT W_STATUS W_ERR_TEXT
+	_w_model=$1; shift
+	if [ -n "$_w_model" ]; then
+		t_run_split env AGENT_SESSION_MODEL="$_w_model" sh "$KIT_WRAPPER" "$@"
+	else
+		t_run_split sh "$KIT_WRAPPER" "$@"
+	fi
+	W_OUT=$S_OUT; W_STATUS=$S_STATUS; W_ERR_TEXT=$S_ERR
+}
+wrap '' reviewer; K_REV=$W_OUT
+wrap '' reviewer self-implemented; K_SELF=$W_OUT
+wrap '' implementer; K_IMP=$W_OUT
+[ -n "$K_REV" ] && [ -n "$K_SELF" ] && [ "$K_REV" != "$K_SELF" ] &&
+	pass "premise: the kit maps reviewer ('$K_REV') and reviewer self-implemented ('$K_SELF') to different models" ||
+	fail "premise broken: reviewer='$K_REV' self-implemented='$K_SELF' — the section below cannot mean anything"
+
+# (1) The session runs on the self-implemented answer: fall back to the plain reviewer, and say so.
+wrap "$K_SELF" reviewer self-implemented
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_REV" ] &&
+	pass "on a '$K_SELF' session, 'reviewer self-implemented' falls back to the plain reviewer '$K_REV'" ||
+	fail "on a '$K_SELF' session, 'reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — expected the plain reviewer '$K_REV'"
+case "$W_ERR_TEXT" in
+*"session's own model"*) pass "…and warns that the mapped answer was the session's own model" ;;
+*) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
+esac
+
+# (2) The session runs on the plain reviewer's model and asks for the plain reviewer: nothing differs — print nothing, say why.
+wrap "$K_REV" reviewer
+[ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
+	pass "on a '$K_REV' session, 'reviewer' prints nothing rather than the session's own model" ||
+	fail "on a '$K_REV' session, 'reviewer' printed '$W_OUT' (status $W_STATUS) — that is the implementer's own model"
+case "$W_ERR_TEXT" in
+*"share the author's model"*) pass "…and warns that the review will share the author's model" ;;
+*) fail "…but did not say the review shares the author's model — stderr: '$W_ERR_TEXT'" ;;
+esac
+
+# (3) The session runs on a model the reviewer answer does NOT equal: unchanged.
+# A word the config never uses, so the comparison is against the SESSION and
+# not against some other tier's value that happens to coincide.
+wrap "model-nobody-maps" reviewer self-implemented
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_SELF" ] &&
+	pass "on a session the mapping never names, 'reviewer self-implemented' is the mapped '$K_SELF', untouched" ||
+	fail "on a session the mapping never names, 'reviewer self-implemented' gave '$W_OUT' — the refusal fired when nothing was equal"
+case "$W_ERR_TEXT" in
+*"session"*) fail "…and warned about the session when nothing was equal: '$W_ERR_TEXT'" ;;
+*) pass "…with no warning" ;;
+esac
+
+# (4) A non-reviewer tier is never refused, even when it equals the session's model.
+wrap "$K_IMP" implementer
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_IMP" ] &&
+	pass "on a '$K_IMP' session, 'implementer' still resolves to '$K_IMP' — only the reviewer is held to differ" ||
+	fail "on a '$K_IMP' session, 'implementer' gave '$W_OUT' — the refusal leaked past the reviewer tier"
+
+# (5) The quiet switch silences the refusal's warning too, and changes nothing else.
+t_run_split env AGENT_SESSION_MODEL="$K_SELF" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer self-implemented
+W_OUT=$S_OUT; W_ERR_TEXT=$S_ERR
+[ "$W_OUT" = "$K_REV" ] && [ -z "$W_ERR_TEXT" ] &&
+	pass "AGENTS_TIER_QUIET=1 keeps the fallback and drops the warning" ||
+	fail "AGENTS_TIER_QUIET=1: stdout '$W_OUT', stderr '$W_ERR_TEXT'"
+
+# (6) The flagged form is the same question. `--model reviewer` is what
+# scripts/agents.config.sh tells a reader to use to read the mapping's model
+# half back (ADR-0005 clause 4), and the wrapper forwards the WHOLE signature —
+# so a guard that read $1 alone would let exactly the refused answer through,
+# silently, by the spelling the policy file itself documents.
+wrap "$K_SELF" --model reviewer self-implemented
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_REV" ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form, falling back to '$K_REV'" ||
+	fail "'--model reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — the flagged spelling walks past the refusal"
+case "$W_ERR_TEXT" in
+*"self-implemented"*) pass "…and the warning names the domain that was asked for" ;;
+*) fail "…but the warning does not name the domain — stderr: '$W_ERR_TEXT'" ;;
+esac
+# The harness half is a different question: a harness token is not a model, so
+# it is never compared and never refused. This case and the empty-answer guard
+# beside it are proved by CONSTRUCTION, not by observation: the wrapper pins its
+# own policy file, and the kit maps no agent harness and no empty tier, so
+# neither can be driven RED from here. #226 moves the rule into the shared
+# resolver, where a throwaway policy file can reach both — that is where they
+# earn a failing check.
+wrap "$K_SELF" --harness reviewer
+[ "$W_STATUS" = 0 ] &&
+	case "$W_ERR_TEXT" in *"session's own model"*) false ;; *) true ;; esac &&
+	pass "'--harness reviewer' passes through — a harness token is not a model to compare" ||
+	fail "'--harness reviewer' was refused (status $W_STATUS, stderr '$W_ERR_TEXT') — the guard compared a harness token to a model"
+
+# (7) The resolver's own exit codes survive the extra hop with the session named.
+wrap "$K_SELF" reviewer SELF-IMPLEMENTED
+[ "$W_STATUS" = 2 ] && pass "a malformed domain still exits 2 with the session model set" ||
+	fail "a malformed domain exited $W_STATUS with the session model set, expected 2"
+wrap "$K_SELF" janitor
+[ "$W_STATUS" = 2 ] && pass "an unknown tier still exits 2 with the session model set" ||
+	fail "an unknown tier exited $W_STATUS with the session model set, expected 2"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi
