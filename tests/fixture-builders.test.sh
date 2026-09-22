@@ -164,28 +164,28 @@ banner "Suite scratch names itself, and stale scratch is swept (#221)"
 # wave left 83 of them on one host in a day. The dispatcher already solved
 # this one layer down (#210): a named prefix, and a sweep of what is older
 # than a run could plausibly be. This is the same answer for the harness.
-[ -n "${T_SCRATCH_PREFIX:-}" ] && pass "the harness names its scratch prefix ($T_SCRATCH_PREFIX)" ||
-	fail "tests/lib.sh defines no T_SCRATCH_PREFIX — scratch left by a killed suite is anonymous"
+[ "$T_SCRATCH_PREFIX" = 'kit-suite.' ] &&
+	pass "the harness names its scratch prefix, and it is the literal the checklist tells an operator to look for" ||
+	fail "the prefix is '$T_SCRATCH_PREFIX', not the 'kit-suite.' every document names"
 case "$SCRATCH" in
 */"$T_SCRATCH_PREFIX"*) pass "this suite's own scratch carries it: $(basename "$SCRATCH")" ;;
 *) fail "this suite's scratch is '$(basename "$SCRATCH")', which the prefix cannot find" ;;
 esac
+# The prefix is the `-name` of a `find … -exec rm -rf` on a shared directory,
+# so it is a CONSTANT and not a seam: an override would put that removal
+# behind an environment variable, where `*` matches everything in $TMPDIR.
+grep -q "^T_SCRATCH_PREFIX='kit-suite\.'$" "$T_ROOT/tests/lib.sh" &&
+	pass "…and it is assigned as a constant, not read from the environment" ||
+	fail "T_SCRATCH_PREFIX is overridable — an environment variable now decides what rm -rf matches"
 
 # The acceptance case, run for real: kill a suite with a signal it cannot trap
-# and look at what is left by NAME alone.
-KILLME="$SCRATCH/killme.sh"
-cat >"$KILLME" <<KILL_EOF
-#!/bin/sh
-T_ROOT="$T_ROOT"
-export T_ROOT
-. "$T_ROOT/tests/lib.sh"
-t_init
-echo "\$SCRATCH" > "$SCRATCH/victim-path"
-kill -9 \$\$
-KILL_EOF
-chmod +x "$KILLME"
-TMPDIR="$SCRATCH/tmproot" && mkdir -p "$TMPDIR"
-TMPDIR="$TMPDIR" sh "$KILLME" >/dev/null 2>&1
+# and look at what is left by NAME alone. $0 is set to a path under tests/ so
+# the harness derives its own root exactly as it does for a real suite — no
+# widened seam, and nothing written into the tree.
+KILL_BODY='. "$(dirname "$0")/lib.sh"; t_init; echo "$SCRATCH" > "$VICTIM_OUT"; kill -9 $$'
+mkdir -p "$SCRATCH/tmproot"
+VICTIM_OUT="$SCRATCH/victim-path" TMPDIR="$SCRATCH/tmproot" \
+	sh -c "$KILL_BODY" "$T_ROOT/tests/killme" >/dev/null 2>&1
 VICTIM=$(cat "$SCRATCH/victim-path" 2>/dev/null)
 if [ -n "$VICTIM" ] && [ -d "$VICTIM" ]; then
 	case "$(basename "$VICTIM")" in
@@ -196,50 +196,93 @@ else
 	fail "the killed suite left nothing to identify (victim='$VICTIM')"
 fi
 
-# The sweep: old scratch goes and says so, fresh scratch stays, and anything
-# without the prefix is never touched — the dispatcher's three rules.
+# THE SWEEP, and the three predicates that make it safe on a shared /tmp. The
+# fixtures are the dispatcher's (tests/agent-dispatch.test.sh), because this is
+# its mechanism one layer up and a weaker set here would be a weaker claim.
 SWEEPROOT="$SCRATCH/sweeproot"
 mkdir -p "$SWEEPROOT"
 OLDDIR="$SWEEPROOT/${T_SCRATCH_PREFIX}oldone"
 FRESHDIR="$SWEEPROOT/${T_SCRATCH_PREFIX}freshone"
 STRANGER="$SWEEPROOT/tmp.somebodyelse"
-mkdir -p "$OLDDIR" "$FRESHDIR" "$STRANGER"
-touch -d '30 days ago' "$OLDDIR" 2>/dev/null || touch -t "$(date -d '30 days ago' +%Y%m%d%H%M 2>/dev/null || echo 202001010000)" "$OLDDIR"
-_sweep_err=$(mktemp "$SCRATCH/sweep-err.XXXXXX")
-( TMPDIR="$SWEEPROOT"; export TMPDIR; t_sweep_scratch 2>"$_sweep_err" )
+NESTED="$OLDDIR/nested/deeper"
+PLAINFILE="$SWEEPROOT/${T_SCRATCH_PREFIX}notadirectory"
+LINKTARGET="$SCRATCH/link-target"
+EVILLINK="$SWEEPROOT/${T_SCRATCH_PREFIX}evil"
+mkdir -p "$FRESHDIR" "$STRANGER" "$NESTED" "$LINKTARGET"
+: >"$LINKTARGET/precious"
+: >"$PLAINFILE"
+ln -s "$LINKTARGET" "$EVILLINK"
+# Older than the age, by an hour rather than a month: a 30-day fixture would
+# pass a sweep whose threshold had drifted to a week.
+_old_stamp=$(date -d '25 hours ago' +%Y%m%d%H%M 2>/dev/null || echo 202001010000)
+touch -t "$_old_stamp" "$OLDDIR" 2>/dev/null || touch -t 202001010000 "$OLDDIR"
+# The plain file and the symlink are aged TOO. Left fresh, the age predicate
+# would exclude them on its own and `-type d` could be deleted without any
+# assertion noticing — the mutant that proved it.
+touch -t "$_old_stamp" "$PLAINFILE" 2>/dev/null || touch -t 202001010000 "$PLAINFILE"
+touch -h -t "$_old_stamp" "$EVILLINK" 2>/dev/null || touch -h -t 202001010000 "$EVILLINK" 2>/dev/null || :
+# And the symlink's TARGET is aged as well. Left fresh, a sweep that followed
+# links (`find -L`) would resolve the link to a fresh directory and skip it on
+# age alone — the physical walk would be deletable without a failing check.
+touch -t "$_old_stamp" "$LINKTARGET" 2>/dev/null || touch -t 202001010000 "$LINKTARGET"
+# Driven through t_init, not by calling the sweep directly: acceptance line 2
+# is that a LATER SUITE removes it, and the wiring is half of that claim.
+_sweep_err="$SCRATCH/sweep-err"
+( TMPDIR="$SWEEPROOT" HOME="$HOME" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) 2>"$_sweep_err" >/dev/null
 _sweep_msg=$(cat "$_sweep_err")
-[ -d "$OLDDIR" ] && fail "the sweep left scratch older than the sweep age" || pass "the sweep removes scratch older than the sweep age"
+[ -d "$OLDDIR" ] && fail "a later suite left scratch older than the sweep age" ||
+	pass "a later suite's t_init removes scratch older than the sweep age"
 [ -d "$FRESHDIR" ] && pass "…and leaves fresh scratch alone — a suite may still be running in it" ||
 	fail "the sweep removed fresh scratch, which could be a running suite's"
 [ -d "$STRANGER" ] && pass "…and never touches a directory without the prefix" ||
 	fail "the sweep removed 'tmp.somebodyelse' — it is not ours to remove"
+[ -f "$PLAINFILE" ] && pass "…nor a plain FILE carrying the prefix — -type d is what keeps it a directory sweep" ||
+	fail "the sweep removed a plain file: -type d is missing or ineffective"
+[ -L "$EVILLINK" ] && pass "…nor a symlink carrying the prefix — the walk is physical" ||
+	fail "the sweep removed a symlink — it followed or matched one, which -type d must prevent"
+[ -f "$LINKTARGET/precious" ] && pass "…and what such a symlink POINTS AT survives, which is the whole point" ||
+	fail "the sweep followed a planted symlink and removed its target"
 case "$_sweep_msg" in
 *swept*) pass "…and says on stderr what it removed" ;;
 *) fail "the sweep removed scratch silently: '$_sweep_msg'" ;;
 esac
 
-# One variable, one default, documented where a reader of the harness meets it.
-[ -n "${T_SCRATCH_SWEEP_DAYS:-}" ] && pass "the sweep age is one variable ($T_SCRATCH_SWEEP_DAYS day(s))" ||
-	fail "no T_SCRATCH_SWEEP_DAYS — the age is buried in the sweep"
+# One variable, one default, validated before it reaches arithmetic, and
+# documented where a reader of the harness meets it.
+[ "$T_SCRATCH_SWEEP_DAYS" = 1 ] && pass "the sweep age is one variable with a kit default of 1 day" ||
+	fail "T_SCRATCH_SWEEP_DAYS is '$T_SCRATCH_SWEEP_DAYS', not the documented default"
+for _bad in 0 08 'a[$(echo INJECTED)]'; do
+	_got=$(T_SCRATCH_SWEEP_DAYS="$_bad" sh -c '. "$(dirname "$0")/lib.sh" >/dev/null 2>&1; printf "%s" "$T_SCRATCH_SWEEP_DAYS"' "$T_ROOT/tests/ageprobe" 2>/dev/null)
+	[ "$_got" = 1 ] && pass "T_SCRATCH_SWEEP_DAYS='$_bad' is refused and falls back to 1" ||
+		fail "T_SCRATCH_SWEEP_DAYS='$_bad' became '$_got' — it reaches \$(( )) unvalidated"
+done
 grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
 	grep -q "$T_SCRATCH_PREFIX" "$T_ROOT/tests/lib.sh" &&
 	pass "the harness header names both" || fail "the harness does not document its own scratch"
 
-# EVERY suite goes through the harness or carries the prefix: one anonymous
-# `mktemp -d` is one more directory nobody can safely remove.
+# EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
+# enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`
+# through, so what is required is a template rooted in a variable — anything
+# else is anonymous by some spelling.
 _anon=''
 for f in "$T_ROOT"/tests/*.sh; do
 	b=$(basename "$f")
 	[ "$b" = lib.sh ] && continue
-	# A bare `mktemp -d` with no template, outside a comment.
-	# `\$(mktemp` is text being WRITTEN into a script for another shell — the
-	# recipe's own working directory, quoted verbatim in UPDATING.md — not
-	# scratch this suite creates. The escape is the discriminator.
-	grep -n 'mktemp -d' "$f" | grep -v '^[0-9]*:[[:space:]]*#' | grep -v '\\\$(mktemp' |
-		grep -qE 'mktemp -d\)|mktemp -d[[:space:]]*$|mktemp -d[[:space:]]*\|\|' &&
-		_anon="$_anon $b"
+	# Only a CALL counts — `$(mktemp …)`. Prose that merely names the command,
+	# including this suite's own fail message, is not a call.
+	while IFS= read -r _line; do
+		case "$_line" in
+		'') continue ;;
+		*'\$(mktemp'*) continue ;;
+		*'"$'*) continue ;;
+		*) _anon="$_anon $b:${_line%%:*}" ;;
+		esac
+	done <<EOF
+$(grep -n '\$(mktemp' "$f" | grep -v '^[0-9]*:[[:space:]]*#')
+EOF
 done
-[ -z "$_anon" ] && pass "no suite makes anonymous scratch" ||
-	fail "these suites still call a bare 'mktemp -d':$_anon"
+[ -z "$_anon" ] && pass "every mktemp under tests/ carries a template rooted in a variable" ||
+	fail "these call mktemp with no variable-rooted template:$_anon"
 
 t_done "fixture builders"

@@ -37,12 +37,8 @@ LC_ALL=C
 export LC_ALL
 
 # The repo root, derived once from the suite that sourced this harness; every
-# helper below anchors on it rather than on the working directory. Overridable
-# because a fixture that lives in scratch — a throwaway suite written to prove
-# what a KILLED suite leaves behind (#221) — sits outside tests/, so deriving
-# from its $0 would point the harness at the scratch directory instead of the
-# repo. A suite under tests/ never sets it and never notices.
-T_ROOT=${T_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+# helper below anchors on it rather than on the working directory.
+T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 # --- the budget --------------------------------------------------------------
 # EVERY SUITE RUNS INSIDE THE BUDGET A DISPATCHED WORKER GETS (ADR-0006, #209):
@@ -422,8 +418,27 @@ t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 # generous — a suite is minutes, not days, so a day-old directory is certainly
 # abandoned — and an operator who runs suites that legitimately outlive it can
 # raise it in their environment.
-T_SCRATCH_PREFIX=${T_SCRATCH_PREFIX:-kit-suite.}
-T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-1}
+# The prefix is a CONSTANT, exactly as scripts/agent-dispatch.sh's is, and for
+# the same reason: it is the `-name` of a `find … -exec rm -rf` on a directory
+# every program on the host shares. An overridable one puts that removal on the
+# far side of an environment variable — `T_SCRATCH_PREFIX='*'` would match
+# every directory in $TMPDIR — and no suite has ever needed to change it.
+T_SCRATCH_PREFIX='kit-suite.'
+
+# The age IS overridable, because an operator who suspends a host mid-suite has
+# a real reason to widen it — but it is arithmetic in a `$(( ))`, so it is
+# validated the way the dispatcher validates its own (_whole_number): a whole
+# number from 1, since 0 sweeps scratch a running suite may still be using and
+# a leading zero is octal to every sh. A refusal falls back to the default
+# rather than sweeping on a number nobody meant.
+T_SCRATCH_SWEEP_DAYS_DEFAULT=1
+case "${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT}" in
+'' | *[!0-9]* | 0*)
+	echo "!  tests/lib.sh: T_SCRATCH_SWEEP_DAYS='${T_SCRATCH_SWEEP_DAYS:-}' is not a whole number of days from 1 — using $T_SCRATCH_SWEEP_DAYS_DEFAULT" >&2
+	T_SCRATCH_SWEEP_DAYS=$T_SCRATCH_SWEEP_DAYS_DEFAULT
+	;;
+*) T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT} ;;
+esac
 
 # t_sweep_scratch — remove suite scratch under $TMPDIR older than the sweep
 # age, and say how much went. Never touches a name without the prefix.
