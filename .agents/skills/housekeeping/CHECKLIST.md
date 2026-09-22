@@ -102,6 +102,20 @@ stale `none` is a ticket to make the decision again.
   and that no later dispatch has swept. A count that grows is dispatches
   dying before their trap — a finding about what kills them, not about the
   scratch.
+- **Suite scratch, if your test harness names its own.** The same shape one
+  layer up, and unlike the dispatcher above it this is not something the kit
+  ships you: a suite killed at a budget ceiling dies before its trap, so its
+  scratch outlives it. A harness that names that scratch — a prefix, and a
+  sweep of what is older than a run could plausibly be — makes the survivor
+  identifiable and removable; one that calls a bare `mktemp -d` leaves
+  `tmp.*` nobody can safely touch. If yours does name it, this
+  pass lists each such directory by name and age beside the dispatch ones and
+  reads them the same way; if it does not, that absence is itself the finding
+  — one worth a ticket, because the kit's own harness learned this the
+  expensive way. A count that grows is suites hitting their ceiling — a
+  finding about the ceiling or the suite, not about the scratch. A `tmp.*`
+  directory is nobody's to touch here: a prefix exists precisely so the two
+  can be told apart.
 
 Route: the pruning is the one action this pass delegates, and it is
 `/worktree-cleanup`'s to perform on what is already merged; on a repo with no

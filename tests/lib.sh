@@ -398,8 +398,71 @@ _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 
+# SUITE SCRATCH NAMES ITSELF (#221), and stale scratch is swept.
+#
+# A suite that hits its budget ceiling (#209) is killed before its trap runs,
+# by design — so its scratch outlives it. `mktemp -d` with no template names
+# that survivor `tmp.XXXXXX`, indistinguishable from every other program's,
+# and the 0.20.0 wave left 83 of them on one host in a single day: nobody
+# could tell which were safe to remove, so none were.
+#
+# scripts/agent-dispatch.sh solved exactly this one layer down (#210) and
+# this is the same answer, in the same shape: a PREFIX, so what a killed run
+# leaves is identifiable by name alone, and a SWEEP of what is older than a
+# run could plausibly still be. The three rules of that sweep are the
+# dispatcher's, and they are what make it safe on a shared /tmp: only
+# directories carrying the prefix, only those older than the age, and nothing
+# followed through a symlink.
+#
+# T_SCRATCH_SWEEP_DAYS is the age, in whole days. The default is deliberately
+# generous — a suite is minutes, not days, so a day-old directory is certainly
+# abandoned — and an operator who runs suites that legitimately outlive it can
+# raise it in their environment.
+# The prefix is a CONSTANT, exactly as scripts/agent-dispatch.sh's is, and for
+# the same reason: it is the `-name` of a `find … -exec rm -rf` on a directory
+# every program on the host shares. An overridable one puts that removal on the
+# far side of an environment variable — `T_SCRATCH_PREFIX='*'` would match
+# every directory in $TMPDIR — and no suite has ever needed to change it.
+T_SCRATCH_PREFIX='kit-suite.'
+
+# The age IS overridable, because an operator who suspends a host mid-suite has
+# a real reason to widen it — but it is arithmetic in a `$(( ))`, so it is
+# validated the way the dispatcher validates its own (_whole_number): a whole
+# number from 1, since 0 sweeps scratch a running suite may still be using and
+# a leading zero is octal to every sh. A refusal falls back to the default
+# rather than sweeping on a number nobody meant.
+T_SCRATCH_SWEEP_DAYS_DEFAULT=1
+case "${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT}" in
+'' | *[!0-9]* | 0*)
+	echo "!  tests/lib.sh: T_SCRATCH_SWEEP_DAYS='${T_SCRATCH_SWEEP_DAYS:-}' is not a whole number of days from 1 — using $T_SCRATCH_SWEEP_DAYS_DEFAULT" >&2
+	T_SCRATCH_SWEEP_DAYS=$T_SCRATCH_SWEEP_DAYS_DEFAULT
+	;;
+*) T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT} ;;
+esac
+
+# t_sweep_scratch — remove suite scratch under $TMPDIR older than the sweep
+# age, and say how much went. Never touches a name without the prefix.
+t_sweep_scratch() {
+	_ts_root=${TMPDIR:-/tmp}
+	[ -d "$_ts_root" ] || return 0
+	# POSIX find only, and the predicates carry the safety rather than sitting
+	# beside it: `dir/.` with `! -name . -prune` is depth one; `-mtime +n` is
+	# true once the whole days elapsed exceed n, so "at least N days" is
+	# +(N-1); the walk is PHYSICAL (no -L, no -H) so a planted
+	# `kit-suite.x -> ~` is a link and `-type d` never hands it to rm; and a
+	# sibling owned by someone else fails at rm on a sticky /tmp, so -print
+	# follows only a removal that worked and the count is of what actually
+	# went.
+	_ts_swept=$(find "$_ts_root/." ! -name . -prune -type d -name "${T_SCRATCH_PREFIX}*" \
+		-mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
+	[ "${_ts_swept:-0}" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_swept stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
+	return 0
+}
+
 t_init() {
-	SCRATCH=$(mktemp -d) || exit 2
+	t_sweep_scratch
+	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
 	trap 't_cleanup' EXIT INT TERM HUP
 }
 
