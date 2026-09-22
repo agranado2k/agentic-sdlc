@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-19
+## Current state — 2026-09-22
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -23,12 +23,12 @@ is in flight. Do not restate the README.
 | **Phase** | The kit is shipping. Shared layer 0.20.0 tagged 2026-09-19 at `53459367`, the merge of PR #217 (tracking issue #205); 0.19.0 was tagged the same day at `1ca59a9` by PR #204. The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which now bounds a worker in depth, tasks and memory (ADR-0006) — and its two worker prompts are all in place and under test, and every suite under `tests/` runs inside the same budget a worker gets, through `tests/lib.sh`. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `53459367` — merge of PR #217, every suite inside the worker budget, and the commit `v0.20.0` is cut on (2026-09-19) |
+| **Last commit on `main`** | `8f9a65c` — merge of PR #228, the 0.21.0 release: per-agent-harness tier policies, every skill declaring its phase, and the reviewer refusal in the kit's own wrapper. Tagged `v0.21.0`. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
-| **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. |
+| **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills now carry a `metadata.phase` too — a tier sizes a ticket, a phase sizes the skill — and #229 is the open question of which wins when both exist. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. The 0.20.0 wave (#205) — the six PRs its `VERSION` note enumerates — landed 2026-09-19 in three merge trains: #215 (#207 ADR-0006, the budget derived from the host and shown by `--dry-run`), #213 (#206 depth ceiling, exit 4), #214 (#210 dispatch scratch names itself, and is swept), #216 (#208 the budget enforced down the ladder, exit 71), #219 (#87 the topmost-config gotcha in the manual template) and #217 (#209 every suite inside the budget), with #218 (the 0.19.0 note's Gemini detail) beside them, then the tag. Still open from before: #99. Not yet done: a real cross-vendor review dispatched to Gemini end to end through the shipped dispatcher (carried from 0.19.0); a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6), so exit 71 exists only on the scope rung; `ai-review.example.yml` is still inert, so every review this wave was an in-session sub-agent. |
+| **Active worktrees** | None. The 0.21.0 wave landed 2026-09-22 in one merge train — #225 (the skill-suite scaffold lifted into `tests/lib.sh`), #227 (ADR-0007: a reviewer is never the model that wrote the diff) and #228 (two per-agent-harness policies, skill phases, and the release itself) — then the tag; `self-host` F3 held `main` red between the merge and the tag exactly as designed. Open from this wave: #226 (move the refusal into the shared resolver), #229 (ticket tier vs skill phase precedence), #230 (the dispatch path is tested only where a third-party CLI is installed). Still open from before: #99. Not yet done: a real cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert — though the reviewer tier now crosses vendors by policy, so a local dispatch reaches what CI could not. |
 
 ### Open questions / unresolved decisions
 
