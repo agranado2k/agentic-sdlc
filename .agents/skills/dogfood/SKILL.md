@@ -1,6 +1,8 @@
 ---
 name: dogfood
 description: Walk this project's own personas through its real user-facing surface before a human does — a browser for a web app, the binary for a CLI, a client for an API or a tool server — and report the friction and breakage as candidate tickets. Use when a branch is functionally complete and somebody is about to say "ship it", or when the user asks to dogfood a branch, run an end-to-end pass, or test the changed flows as a user.
+metadata:
+  phase: reviewer
 ---
 
 # /dogfood — be the user before a user is

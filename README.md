@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.20.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.21.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.20.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.21.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -610,6 +610,12 @@ skeleton (K0).
   feedback-first ordering on the ticket side, spec-only frontmatter, and
   every path and command resolving.
 
+- `sh tests/skill-phase.test.sh` pins the phase every skill declares in its
+  frontmatter — the closed vocabulary (planner, implementer, tester,
+  mechanical, reviewer), that every shipped skill carries one and every phase
+  is used by something, and that `scripts/skill-dispatch.kit.sh` turns a skill
+  name into the tier its phase means and dispatches there.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -687,6 +693,7 @@ sh tests/fixture-builders.test.sh                      # the test harness's fixt
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
+sh tests/skill-phase.test.sh                           # every skill declares its phase of work
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots

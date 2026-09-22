@@ -1,6 +1,8 @@
 ---
 name: housekeeping
 description: Run the recurring housekeeping pass — audit the agent files for rot, the glossary against the code, the decision index, the mutation measurement, the worktrees and the diary, then scan the codebase for Ousterhout's red flags and route each finding to the skill that owns it. It never fixes what it finds; findings leave as candidate tickets. Its one write of its own is stamping the diary's Last housekeeping row, and its one delegated action is the worktree pruning it hands to the cleanup skill. Use when the docs gate's housekeeping-due advisory fires, on the cadence the gate config names, or before cutting a release.
+metadata:
+  phase: planner
 ---
 
 # /housekeeping — the pass that keeps the standing instructions true

@@ -1,6 +1,8 @@
 ---
 name: grill-with-docs
 description: Grilling session that challenges your plan against the project's documented domain language and decision records, sharpens terminology, and updates the glossary and ADRs inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
+metadata:
+  phase: planner
 ---
 
 <what-to-do>

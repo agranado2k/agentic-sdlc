@@ -1007,6 +1007,184 @@ wrap "$K_SELF" janitor
 [ "$W_STATUS" = 2 ] && pass "an unknown tier still exits 2 with the session model set" ||
 	fail "an unknown tier exited $W_STATUS with the session model set, expected 2"
 
+# ---------------------------------------------------------------------------
+banner "The kit's two policy files — one per agent harness the operator works in"
+# ---------------------------------------------------------------------------
+# The operator drives this repo from two agent harnesses, and each has its own
+# tier policy: a model that is local to one is a cross-harness dispatch from
+# the other. One file each, and the wrapper picks by the session it runs in,
+# so `sh scripts/agents.kit.sh <tier>` keeps meaning "this session's policy"
+# wherever it is typed. Neither file ships (KIT_ONLY), which is the only
+# reason either may name a real model id at all.
+CC_CONFIG="$KIT/scripts/agents.kit.config.sh"
+CX_CONFIG="$KIT/scripts/agents.kit.codex.config.sh"
+for f in "$CC_CONFIG" "$CX_CONFIG"; do
+	[ -f "$f" ] && pass "$(basename "$f") exists" || fail "$(basename "$f") is missing"
+done
+# Every tier resolves in BOTH policies — a half-filled one is a silent inherit
+# at spawn time, the failure the mapping exists to prevent.
+for f in "$CC_CONFIG" "$CX_CONFIG"; do
+	_label=$(basename "$f")
+	for tier in planner implementer mechanical reviewer; do
+		t_run_split env AGENTS_CONFIG="$f" sh "$LIB" "$tier"
+		[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] &&
+			pass "$_label: $tier resolves to '$S_OUT'" ||
+			fail "$_label: $tier resolved nothing (status $S_STATUS)"
+	done
+	# The tests domain is the operator's fourth agent, the tester. It is a
+	# domain and not a fifth tier because the tier vocabulary is closed.
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" implementer
+	_plain=$S_OUT
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" implementer tests
+	[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] && [ "$S_OUT" != "$_plain" ] &&
+		pass "$_label: 'implementer tests' resolves to '$S_OUT', not the plain '$_plain'" ||
+		fail "$_label: 'implementer tests' gave '$S_OUT' against plain '$_plain' — the tester is not mapped"
+	# The reviewer rule holds in both.
+	gaps=$(reviewer_rule_gaps "$f")
+	[ -z "$gaps" ] && pass "$_label: the reviewer rule holds" ||
+		fail "$_label: the reviewer rule breaks — $(printf '%s' "$gaps" | tr '\n' ';')"
+	# A tier that names an agent harness the policy does not declare cannot be
+	# dispatched: the resolver says so, and a policy file must not ship that.
+	_undeclared=0
+	for tier in planner implementer mechanical reviewer; do
+		t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness "$tier"
+		case "$S_ERR" in *undeclared* | *"not declared"*) _undeclared=$((_undeclared + 1)) ;; esac
+	done
+	[ "$_undeclared" = 0 ] && pass "$_label: every agent harness a tier names is declared in AGENT_HARNESSES" ||
+		fail "$_label: $_undeclared tier(s) name an agent harness AGENT_HARNESSES does not declare"
+	# And the reviewer crosses vendors in both — the property the kit calls its
+	# highest-leverage wiring, here asserted rather than hoped for.
+	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness reviewer
+	[ -n "$S_OUT" ] && pass "$_label: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
+		fail "$_label: the reviewer names no agent harness — the review shares the author's vendor"
+done
+# The two policies are different documents, not a copy with one word changed:
+# what is local in one is the crossing in the other.
+t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" planner
+CC_PLANNER=$S_OUT
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
+[ -n "$CC_PLANNER" ] && [ "$S_OUT" != "$CC_PLANNER" ] &&
+	pass "the two policies disagree about the planner ('$CC_PLANNER' vs '$S_OUT') — each is its own session's answer" ||
+	fail "both policies map the planner to '$S_OUT' — one of them is a copy, not a policy"
+
+# ---------------------------------------------------------------------------
+banner "The wrapper picks the policy for the session it runs in"
+# ---------------------------------------------------------------------------
+# $AGENT_HARNESS_SELF names the session's own agent harness. Unset, the
+# wrapper assumes the harness this repo is usually driven from, so a plain
+# invocation keeps working. The wrapper's own assignment still beats the
+# caller's $AGENTS_CONFIG — the section above asserts exactly that, and this
+# selection must not weaken it; a caller that wants another policy calls the
+# resolver directly, as this suite does.
+t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" planner
+CX_VIA_WRAPPER=$S_OUT
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" planner
+[ -n "$CX_VIA_WRAPPER" ] && [ "$CX_VIA_WRAPPER" = "$S_OUT" ] &&
+	pass "AGENT_HARNESS_SELF=codex answers from the codex policy ('$CX_VIA_WRAPPER')" ||
+	fail "AGENT_HARNESS_SELF=codex gave '$CX_VIA_WRAPPER', the codex policy says '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CC_PLANNER" ] &&
+	pass "unset, the wrapper answers from the claude-code policy ('$S_OUT'), as it always did" ||
+	fail "unset, the wrapper gave '$S_OUT', not the claude-code policy's '$CC_PLANNER'"
+t_run_split env AGENT_HARNESS_SELF=nothing-mapped sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CC_PLANNER" ] &&
+	pass "an agent harness with no policy file falls back to the default, rather than resolving nothing" ||
+	fail "an unknown AGENT_HARNESS_SELF gave '$S_OUT' — expected the default policy's '$CC_PLANNER'"
+# --policy is that same choice, asked for by name: other kit scripts need the
+# answer before they call something that resolves, and a second copy of the
+# case block is how this repo's hand-kept lists have drifted before.
+t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" --policy
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "scripts/agents.kit.codex.config.sh" ] &&
+	pass "--policy names the codex policy for a codex session" ||
+	fail "--policy gave '$S_OUT' for a codex session"
+t_run_split sh "$KIT_WRAPPER" --policy
+[ "$S_OUT" = "scripts/agents.kit.config.sh" ] &&
+	pass "--policy names the claude-code policy by default" ||
+	fail "--policy gave '$S_OUT' by default"
+
+# The fold and the refusal are exercised against a PROBE policy, not against
+# the kit's own data: the suite's own principle (line 39) is that it names no
+# real model, and pinning the kit's current ids here would mean editing this
+# file at every re-pin. The wrapper resolves `scripts/agents.kit.<self>.config.sh`
+# and `scripts/agents.lib.sh` relative to the directory it runs in, so a
+# scratch tree with those two names IS the seam.
+PROBE="$SCRATCH/probe"
+mkdir -p "$PROBE/scripts"
+cp "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.lib.sh" "$PROBE/scripts/"
+cat >"$PROBE/scripts/agents.kit.probe.config.sh" <<'PROBE_CFG'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4-20260101'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4-20260101'
+PROBE_CFG
+probe() { (cd "$PROBE" && env AGENT_HARNESS_SELF=probe "$@" sh scripts/agents.kit.sh "${PROBE_ARGS:-}" >/dev/null 2>&1); }
+# A pinned id folds to its family word, whatever the vendor prefix.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias implementer
+[ "$S_OUT" = mid ] && pass "a pinned 'vendor-mid-4-20260101' folds to the spawn word 'mid'" ||
+	fail "the fold gave '$S_OUT', expected 'mid'"
+# THE REFUSAL REACHES --alias TOO. A session on the reviewer's own model must
+# not be handed it by the in-session path either — the policy files call this
+# wrapper "the net under both", and a net with one side open is not one.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=vendor-mid-4-20260101 sh scripts/agents.kit.sh --alias reviewer self-implemented
+[ "$S_OUT" = strong ] &&
+	pass "--alias reviewer self-implemented falls back when the mapped answer is the session's own model" ||
+	fail "--alias gave '$S_OUT' on a session running that very model — the refusal does not reach the alias path"
+# …and the session may name itself in EITHER spelling: a session that knows
+# only its spawn word must be refused as surely as one that knows the id.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh --alias reviewer self-implemented
+[ "$S_OUT" = strong ] &&
+	pass "the session's model matches in the spawn-word spelling too" ||
+	fail "AGENT_SESSION_MODEL=mid gave '$S_OUT' — only the pinned spelling is compared"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe AGENT_SESSION_MODEL=mid sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "and the model path matches the spawn-word spelling as well" ||
+	fail "the model path gave '$S_OUT' for a spawn-word session"
+# An unknown tier still reports itself rather than exiting 2 in silence.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias janitor
+[ "$S_STATUS" = 2 ] && [ -n "$S_ERR" ] &&
+	pass "--alias on an unknown tier exits 2 and says why" ||
+	fail "--alias janitor exited $S_STATUS with stderr '$S_ERR'"
+# A local id with no vendor prefix is passed through, not swallowed.
+printf "AGENT_TIER_MECHANICAL='plainword'\n" >>"$PROBE/scripts/agents.kit.probe.config.sh"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias mechanical
+[ "$S_OUT" = plainword ] && pass "an id with no vendor prefix folds to itself" ||
+	fail "an unprefixed id gave '$S_OUT'"
+
+# --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
+# the full id; the in-session spawn parameter takes the family word. Pinning
+# is what makes a model change a decision someone committed rather than a
+# roster moving underneath the policy, and this is what keeps it spawnable.
+t_run_split sh "$KIT_WRAPPER" --alias planner
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = fable ] &&
+	pass "--alias planner is the spawn word 'fable' for the pinned claude-fable-5-1" ||
+	fail "--alias planner gave '$S_OUT' (status $S_STATUS), expected 'fable'"
+t_run_split sh "$KIT_WRAPPER" --alias implementer
+[ "$S_OUT" = opus ] && pass "--alias implementer is 'opus'" || fail "--alias implementer gave '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" --alias mechanical
+[ "$S_OUT" = haiku ] && pass "--alias mechanical is 'haiku' — a dated id folds to its family too" ||
+	fail "--alias mechanical gave '$S_OUT'"
+t_run_split sh "$KIT_WRAPPER" --alias implementer content
+[ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
+# A value that is not an Anthropic id has no spawn word: it belongs to another
+# agent harness, and printing a guess would be worse than printing nothing.
+t_run_split sh "$KIT_WRAPPER" --alias reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "--alias prints nothing for a tier that crosses agent harnesses — it is not spawnable in session" ||
+	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS); the reviewer crosses vendors and has no in-session spawn word"
+# Every alias it does print must be one the spawn parameter actually accepts.
+for tier in planner implementer mechanical; do
+	t_run_split sh "$KIT_WRAPPER" --alias "$tier"
+	case "$S_OUT" in
+	fable | opus | sonnet | haiku) pass "--alias $tier ('$S_OUT') is a word the spawn parameter accepts" ;;
+	*) fail "--alias $tier gave '$S_OUT', which the spawn parameter does not accept" ;;
+	esac
+done
+t_run_split env AGENT_HARNESS_SELF=codex AGENTS_CONFIG="$SHIPPED" sh "$KIT_WRAPPER" planner
+[ "$S_OUT" = "$CX_VIA_WRAPPER" ] &&
+	pass "the wrapper's own choice still beats an inherited AGENTS_CONFIG" ||
+	fail "an inherited AGENTS_CONFIG overrode the wrapper's policy choice — got '$S_OUT'"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi

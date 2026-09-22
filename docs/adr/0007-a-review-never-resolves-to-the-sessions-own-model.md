@@ -4,7 +4,7 @@
 - **Date**: 2026-09-21
 - **Deciders**: Arthur Granado (operator), at the `/implement` stop for #224
 - **Supersedes / amends**: amends ADR-0003 in one respect — the kit's mapping is no longer the whole answer for the reviewer tier; the caller's model is the third input
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-09-22: the shared-resolver step was written as 0.21.0's; 0.21.0 shipped without it, so the step is #226's whenever that lands — the decision is unchanged, only its schedule)
 
 ## Context and problem statement
 
@@ -63,7 +63,7 @@ that held for one session model and silently failed for the other.
   implements the refusal for the reviewer tier when `AGENT_SESSION_MODEL` is
   set, and is the `exec` it always was otherwise. The tiers suite drives the
   equal, fallback-also-equal, unequal, non-reviewer, quiet and exit-code cases.
-- **In 0.21.0, in the shared resolver.** The same rule moves into
+- **In a later release, in the shared resolver.** The same rule moves into
   `scripts/agents.lib.sh`, where every consumer's `self-implemented` mapping
   has the same blind spot; the release ticket carries it, with the `VERSION`
   note, the `UPDATING.md` entry and the transcript re-capture that a

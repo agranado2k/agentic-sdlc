@@ -735,7 +735,57 @@
 # an in-tree worktree/<slug> and a linter that resolves config from the
 # topmost file inspect zero files inside a worktree. Consumer-facing prose,
 # not manifest content.
-shared-layer: 0.20.0
+# 0.21.0 — the spec skills carry the design-doc lessons, the skill-suite
+# scaffold lives once, and a REVIEW is never handed to the model that wrote
+# the diff. ONE shared file changes content: UPDATING.md, by re-pin — a
+# worked example's diffstat moved when every skill gained two frontmatter
+# lines, and this manifest's 0.9.0 note counts a re-pin as a content change.
+# No file joins or leaves the layer.
+#   From #222: `/to-prd` and `/to-tickets` were read against Michael Lynch's
+# design-doc essay. The PRD template opens with a one-sentence Objective,
+# gains Scenarios (numbered walkthroughs of the finished system in use, which
+# `/to-tickets` reads as its first list of tracer bullets), states the
+# penalty-for-being-wrong filter on Implementation Decisions, keeps a brief
+# Alternatives Considered, marks every Out-of-Scope item later or never with
+# its reason, and holds Open Issues as problem / options / next step; the
+# process rereads the PRD as a stranger before publishing. `/to-tickets`
+# gains rule 12, the open-issue gate, and rule 13, feedback-first ordering.
+#   From #223: four skill suites had each carried a hand copy of the same
+# scaffold — the code-span tokeniser, the command and path resolution, the
+# model-identifier ban — and the copies had drifted. They live once in
+# tests/lib.sh now, with the path roots READ from the docs gate's policy file
+# rather than mirrored.
+#   From #224: a reviewer is a relation between two models, and one of them —
+# the session's — is a fact only the caller holds. ADR-0007 records the
+# shape: the caller names its model, and an answer equal to it is refused,
+# falling back to the plain reviewer tier or to nothing with a warning the
+# report quotes. It ships in the kit's own wrapper this release; moving it
+# into the shared resolver is 0.22.0's, and #226 carries it.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. `/to-prd` and `/to-tickets` are the
+# two skills whose prose changed (above). EVERY skill gains a
+# `metadata.phase` line in its frontmatter — planner, implementer, tester,
+# mechanical or reviewer — a key the Agent Skills specification already
+# defines, so the declaration ships with the skill and each project maps it
+# onto their own models; a tier sizes one ticket, a phase sizes the skill,
+# and nothing sized the skill before. All seventeen, so all seventeen are
+# named: /design-brief /diagnose /explain-diff /grill-me /grill-with-docs
+# /housekeeping /implement /improve-codebase-architecture /merge-train
+# /pr-iterate /prototype /review-pr /tdd /to-prd /to-tickets
+# /worktree-cleanup — and the optional seventeenth, which this file does not
+# spell because a project that declined it would inherit a dead reference;
+# the recipe's arriving-from paragraph names it instead.
+# LICENSE-mattpocock-skills.md records what the two adapted skills now
+# diverge from upstream by. docs/domain-glossary.md gains **Phase**
+# and, from #222, **Scenario** and **Open issue**. docs/adr/0007 is new, with
+# its INDEX row. The root manual gains the say-what-you-run-on paragraph in
+# Capability tiers and a quick-reference row for the skill dispatcher.
+# tests/spec-skills.test.sh and tests/skill-phase.test.sh are new suites with
+# CI jobs, README entries and KIT_ONLY entries; scripts/skill-dispatch.kit.sh
+# is a new kit-only runner that turns a skill name into the tier its phase
+# means and dispatches there.
+
+shared-layer: 0.21.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

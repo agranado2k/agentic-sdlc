@@ -1,6 +1,8 @@
 ---
 name: review-pr
 description: Two-axis senior reviewer. Axis 1 (standards, "is it built right?") runs 6 specialized parallel sub-agents (Security, API/CRUD, Pattern enforcement, Simplicity, Reuse/DRY, Test hygiene) producing a severity-based report. Axis 2 (spec & behavior, "is it the right thing?") runs a 7th fresh-context sub-agent producing a behavior-change confirm-list for the human. Axes are never merged. Scoped to the current branch's diff against the default branch.
+metadata:
+  phase: reviewer
 ---
 
 # Skill: Senior Security-First Reviewer
