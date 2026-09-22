@@ -907,17 +907,19 @@ banner "The wrapper never hands a review to the session's own model (#224, ADR-0
 # review will share the author's model and prints nothing. Unset, nothing
 # changes — every case above ran without it. Not the shared resolver: that
 # half is 0.21.0's (the release ticket says so).
+# t_run_split (tests/lib.sh) is the runner that keeps stdout and stderr apart —
+# the whole contract here, since a warning merged into stdout would read as a
+# model id. `env` carries the session model into the child without exporting it
+# into this suite's own environment, where it would silently change every case
+# that follows.
 wrap() { # <session model or ''> <args...> — sets W_OUT W_STATUS W_ERR_TEXT
 	_w_model=$1; shift
-	W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
 	if [ -n "$_w_model" ]; then
-		W_OUT=$(AGENT_SESSION_MODEL="$_w_model" sh "$KIT_WRAPPER" "$@" 2>"$W_ERR")
+		t_run_split env AGENT_SESSION_MODEL="$_w_model" sh "$KIT_WRAPPER" "$@"
 	else
-		W_OUT=$(sh "$KIT_WRAPPER" "$@" 2>"$W_ERR")
+		t_run_split sh "$KIT_WRAPPER" "$@"
 	fi
-	W_STATUS=$?
-	W_ERR_TEXT=$(cat "$W_ERR")
-	rm -f "$W_ERR"
+	W_OUT=$S_OUT; W_STATUS=$S_STATUS; W_ERR_TEXT=$S_ERR
 }
 wrap '' reviewer; K_REV=$W_OUT
 wrap '' reviewer self-implemented; K_SELF=$W_OUT
@@ -965,14 +967,39 @@ wrap "$K_IMP" implementer
 	fail "on a '$K_IMP' session, 'implementer' gave '$W_OUT' — the refusal leaked past the reviewer tier"
 
 # (5) The quiet switch silences the refusal's warning too, and changes nothing else.
-W_ERR=$(mktemp "$SCRATCH/wrap-err.XXXXXX")
-W_OUT=$(AGENT_SESSION_MODEL="$K_SELF" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer self-implemented 2>"$W_ERR")
-W_ERR_TEXT=$(cat "$W_ERR"); rm -f "$W_ERR"
+t_run_split env AGENT_SESSION_MODEL="$K_SELF" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer self-implemented
+W_OUT=$S_OUT; W_ERR_TEXT=$S_ERR
 [ "$W_OUT" = "$K_REV" ] && [ -z "$W_ERR_TEXT" ] &&
 	pass "AGENTS_TIER_QUIET=1 keeps the fallback and drops the warning" ||
 	fail "AGENTS_TIER_QUIET=1: stdout '$W_OUT', stderr '$W_ERR_TEXT'"
 
-# (6) The resolver's own exit codes survive the extra hop with the session named.
+# (6) The flagged form is the same question. `--model reviewer` is what
+# scripts/agents.config.sh tells a reader to use to read the mapping's model
+# half back (ADR-0005 clause 4), and the wrapper forwards the WHOLE signature —
+# so a guard that read $1 alone would let exactly the refused answer through,
+# silently, by the spelling the policy file itself documents.
+wrap "$K_SELF" --model reviewer self-implemented
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_REV" ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form, falling back to '$K_REV'" ||
+	fail "'--model reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — the flagged spelling walks past the refusal"
+case "$W_ERR_TEXT" in
+*"self-implemented"*) pass "…and the warning names the domain that was asked for" ;;
+*) fail "…but the warning does not name the domain — stderr: '$W_ERR_TEXT'" ;;
+esac
+# The harness half is a different question: a harness token is not a model, so
+# it is never compared and never refused. This case and the empty-answer guard
+# beside it are proved by CONSTRUCTION, not by observation: the wrapper pins its
+# own policy file, and the kit maps no agent harness and no empty tier, so
+# neither can be driven RED from here. #226 moves the rule into the shared
+# resolver, where a throwaway policy file can reach both — that is where they
+# earn a failing check.
+wrap "$K_SELF" --harness reviewer
+[ "$W_STATUS" = 0 ] &&
+	case "$W_ERR_TEXT" in *"session's own model"*) false ;; *) true ;; esac &&
+	pass "'--harness reviewer' passes through — a harness token is not a model to compare" ||
+	fail "'--harness reviewer' was refused (status $W_STATUS, stderr '$W_ERR_TEXT') — the guard compared a harness token to a model"
+
+# (7) The resolver's own exit codes survive the extra hop with the session named.
 wrap "$K_SELF" reviewer SELF-IMPLEMENTED
 [ "$W_STATUS" = 2 ] && pass "a malformed domain still exits 2 with the session model set" ||
 	fail "a malformed domain exited $W_STATUS with the session model set, expected 2"

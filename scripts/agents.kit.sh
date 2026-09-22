@@ -28,9 +28,9 @@
 # one this repo's sessions actually make.
 #
 # scripts/agents.lib.sh itself is shared layer (see VERSION) and stays
-# byte-identical to every project that runs it — this wrapper changes nothing
-# about the resolver, it only sets the seam already exposed for exactly this
-# case and delegates. `"$@"` rather than a fixed one-argument form, so the
+# byte-identical to every project that runs it: this wrapper sets the seam
+# already exposed for exactly this case and delegates (and, for the reviewer
+# tier, compares the answer — the section below). `"$@"` rather than a fixed one-argument form, so the
 # resolver's WHOLE signature reaches it — including the optional task domain,
 # which a wrapper that took `$1` alone would silently drop while still
 # resolving every tier correctly. tests/agents-tiers.test.sh asserts the
@@ -58,18 +58,32 @@
 set -eu
 AGENTS_CONFIG=scripts/agents.kit.config.sh
 export AGENTS_CONFIG
-if [ -z "${AGENT_SESSION_MODEL:-}" ] || [ "${1:-}" != reviewer ]; then
+# The tier is not always $1: the resolver's signature admits a leading
+# `--model` or `--harness` (ADR-0005 clause 4), and scripts/agents.config.sh
+# documents `--model <tier>` as how you read the mapping's model half back. A
+# guard that read $1 alone would let the refused answer through by the very
+# spelling the policy file teaches. `--harness` asks a different question —
+# a harness token is not a model — so only the model half is ever compared.
+asked_tier=${1:-}
+asked_domain=${2:-}
+case "$asked_tier" in
+--model) asked_tier=${2:-}; asked_domain=${3:-} ;;
+--harness) asked_tier='' ;;
+esac
+if [ -z "${AGENT_SESSION_MODEL:-}" ] || [ "$asked_tier" != reviewer ]; then
 	exec sh scripts/agents.lib.sh "$@"
 fi
 warn() { [ "${AGENTS_TIER_QUIET:-}" = 1 ] || printf 'agents.kit.sh: %s\n' "$1" >&2; }
 answer=$(sh scripts/agents.lib.sh "$@") || exit $?
 if [ "$answer" != "$AGENT_SESSION_MODEL" ]; then
-	printf '%s\n' "$answer"
+	# An unmapped tier is zero bytes, never a bare newline: the caller's
+	# `[ -n "$(...)" ]` is the whole protocol for "nothing".
+	[ -n "$answer" ] && printf '%s\n' "$answer"
 	exit 0
 fi
 plain=$(sh scripts/agents.lib.sh reviewer) || exit $?
 if [ -n "$plain" ] && [ "$plain" != "$AGENT_SESSION_MODEL" ]; then
-	warn "reviewer${2:+ $2} resolves to the session's own model ($AGENT_SESSION_MODEL); falling back to the reviewer tier ($plain)"
+	warn "reviewer${asked_domain:+ $asked_domain} resolves to the session's own model ($AGENT_SESSION_MODEL); falling back to the reviewer tier ($plain)"
 	printf '%s\n' "$plain"
 else
 	warn "no reviewer model differs from the session's own ($AGENT_SESSION_MODEL) — the review will share the author's model"
