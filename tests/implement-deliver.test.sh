@@ -123,6 +123,36 @@ assert_file_has "$SKILL" "sh scripts/agents.lib.sh reviewer self-implemented"
 assert_file_has "$SKILL" "fresh context"
 
 # ---------------------------------------------------------------------------
+banner "3b. The review is INVOKED by name, and lands on the PR"
+# ---------------------------------------------------------------------------
+# Three ways a session has actually skipped this step, each closed by one
+# assertion. (1) It went from opening the PR straight to reporting done: the
+# step has to read as an imperative, not as background on two mechanisms.
+# (2) It wrote its own review prompt instead of invoking the skill, and got
+# prose back rather than the two axes /review-pr exists to separate. (3) It
+# ran a reviewer that reported to the SESSION, so the findings were acted on
+# but the PR carried no review at all — the human arrives at a diff with
+# nothing on it, which is indistinguishable from never having reviewed.
+assert_file_has "$SKILL" "invoke \`/review-pr\`"
+assert_file_has "$SKILL" "Not a review prompt of your own"
+assert_file_has "$SKILL" "A review that reported only to you is not a review"
+assert_file_has "$SKILL" "posted on the PR"
+# The report names where the review landed, so its absence is conspicuous
+# rather than something the reader has to think to check.
+assert_file_has "$SKILL" "the URL of the review it posted"
+# And the step is an ordered part of Deliver, not an aside: it must come after
+# the PR is opened and before the skill stops.
+_open=$(line_of "Open the pull request")
+_review=$(line_of "invoke \`/review-pr\`")
+_stop=$(line_of "**Stop.**")
+if [ -n "$_open" ] && [ -n "$_review" ] && [ -n "$_stop" ] &&
+	[ "$_open" -lt "$_review" ] && [ "$_review" -lt "$_stop" ]; then
+	pass "the invocation sits between opening the PR (line $_open) and stopping (line $_stop)"
+else
+	fail "the review invocation is out of order — open='$_open' invoke='$_review' stop='$_stop'"
+fi
+
+# ---------------------------------------------------------------------------
 banner "4. The tier config the skill sends the agent to actually exists"
 # ---------------------------------------------------------------------------
 # The skill tells the agent to read `scripts/agents.config.sh` to pick the
