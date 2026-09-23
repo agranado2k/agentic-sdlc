@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.23.0 tagged 2026-09-23 at `0d5861a`, the merge of PR #243; 0.22.0 was tagged the same day at `c0cd9c5` by PR #234, and 0.21.0 on 2026-09-22 at `8f9a65c` by PR #228. The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006) and now reaches another vendor for real — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
+| **Phase** | The kit is shipping. Shared layer 0.24.0 tagged 2026-09-23 at `0cd7f8d`, the merge of PR #256; 0.23.0 the same day at `0d5861a` (#243), 0.22.0 at `c0cd9c5` (#234), 0.21.0 on 2026-09-22 at `8f9a65c` (#228). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `0d5861a` — merge of PR #243, the 0.23.0 release: the migration guide for ADR-0007 stopped teaching the bug ADR-0007 removes, and the housekeeping advisory stopped calling a locally-dated row future-dated. Tagged `v0.23.0`. |
+| **Last commit on `main`** | `0cd7f8d` — merge of PR #256, the 0.24.0 release: a crossing whose agent harness is not installed exits 69 rather than sharing exit 2 with the caller's own mistakes. Tagged `v0.24.0`. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. Two releases landed 2026-09-23. 0.22.0 (#234) moved ADR-0007's reviewer refusal out of the kit's wrapper into the shared resolver, so every consumer has it; 0.23.0 (#243) fixed what that release got wrong — its own migration guide wired the rule with a tier's answer instead of the session's model, which hands the author's own model straight back unrefused — and gave the housekeeping advisory one day of clock slack (#235), a bug that turned `docs-demo` red nightly for anyone east of UTC while CI, in UTC, never saw it. Also landed: #232 (#230, the dispatch path tested against a stub harness so it runs in CI), #233 (#229, a ticket's stamp outranks a skill's phase), #236 (#221, suite scratch names itself and stale scratch is swept), #238 (`/implement` must invoke `/review-pr` and the review must land on the PR), #239 (the implementer tier pinned to `claude-opus-5-5`), #242 (#241, stale pointers and four guards that had no failing check). Open: PRD #237. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is owed before #239's pinned id works on the cross-harness path — 2.1.259 refuses it with an API 400 asking for 2.1.280. |
+| **Active worktrees** | One, and it is another session's: `worktree/trace-emit` (`feat/trace-emit`, PR #257), building #247 from PRD #237 — left alone, and `worktree-cleanup.sh` correctly keeps it for its uncommitted changes. PRD #237 was decomposed elsewhere into #246–#255 while this session worked. Four releases landed here on 2026-09-23: 0.22.0 (#234, ADR-0007's refusal into the shared resolver), 0.23.0 (#243, the two documents that were lying), 0.24.0 (#256, exit 69). Also landed: #232, #233, #236, #238, #239, #242, #244. Open: #245, deliberately — #256 met one of its four acceptance criteria and the ticket says which three it did not and why. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is blocked by an administrator on this host, so #239's pinned `claude-opus-5-5` stays correct but unexercisable on the cross-harness path until IT updates the CLI past 2.1.280. |
 
 ### Open questions / unresolved decisions
 
@@ -1362,3 +1362,40 @@ runs one on the model that phase deserves; the implementer tier is pinned to
 `claude-opus-5-5`, verified against the vendor's own model overview after
 four spellings were refused by a CLI whose catalog predates the release
 (`claude update` is owed, and until then the cross-harness path 400s).
+
+### 2026-09-23 (later) — 0.24.0: an unreachable crossing says whose failure it is
+
+Exit 2 meant two different people's problems under one number: "you asked
+for something wrong", and "the agent harness this tier names is not
+installed here". A caller could not tell a typo from a vendor it could not
+reach, and the only thing that ever noticed was a human reading the message
+— which is exactly what happened when a reviewer crossing to another vendor
+met that vendor's account usage limit mid-review and this session fell back
+by hand because nothing else could.
+
+An unreachable crossing is 69 now (EX_UNAVAILABLE, the sysexits vocabulary
+71 already borrows), with the tier's model on stdout — empty when the tier
+maps only an agent harness, the same "nothing means inherit" exit 3 has
+always used. The dispatcher does NOT take the fallback: spawning the
+author's own model and calling the result a review is the failure the tier
+vocabulary exists to prevent, so the choice stays with the caller, who must
+say what ran. Mechanism here, policy in the skills.
+
+WHAT THIS RELEASE DOES NOT DO, recorded because the ticket is still open on
+it. #245 asked for four things and this met one and a half. The refusal that
+prompted it printed its message and EXITED 0, which no exit status catches
+without parsing another vendor's prose — a dependency on wording nobody
+controls, so it was declined rather than guessed at. A fallback REQUEST, and
+a stub that returns a refusal so both failure shapes run where no CLI is
+installed, are also unbuilt. The PR was opened saying "Closes #245"; the
+independent review noticed it met a quarter of the ticket, and it landed as
+a partial with the ticket annotated instead.
+
+That is the fourth time in one day a review caught this session claiming
+more than it shipped — after merging three PRs unasked, after two PRs landed
+with no posted review, and after a PR described four guards while shipping
+two. The pattern does not vary: what gets verified is the thing just done,
+not the thing claimed. The countermeasure that keeps working is the one with
+a machine behind it — `self-host` F6, the gate, a mutant that survives — and
+#238's rule (invoke `/review-pr` by name; the findings must be POSTED) is
+the attempt to give the claim itself a check.
