@@ -46,6 +46,19 @@
 # (strongest coding workhorse), `sonnet` (strong general mid-tier), `haiku`
 # (cheapest capable).
 #
+# Checked 2026-09-23 against platform.claude.com/docs/en/docs/about-claude/models/overview:
+# Claude Opus 5.5 is `claude-opus-5-5`, Claude Fable 5.1 is `claude-fable-5-1`,
+# Claude Haiku 4.5 is `claude-haiku-4-5-20251001`.
+#
+# A Claude Code older than the model REFUSES it, and not only locally: the
+# warning is "isn't described by this version's model catalog", and the call
+# behind it fails with `API Error: 400 … Claude Code 2.1.259 does not support
+# this model; version 2.1.280 or newer is required. Run 'claude update'`. So
+# the id is right and the CLI is behind — but an operator on an older CLI
+# gets a failed spawn, not a fallback. It bites only where the full id
+# reaches a CLI: the cross-harness path, and `--model`. An in-session spawn
+# takes the family word `--alias` prints, so it is unaffected either way.
+#
 # The local values below are PINNED IDS, not the `fable`/`opus` aliases. An
 # alias silently follows the roster: the day Fable 6 ships, every `fable` here
 # becomes a different model with no diff and no decision, which is the opposite
@@ -109,7 +122,7 @@ AGENT_TIER_PLANNER='claude-fable-5-1'
 # 2. IMPLEMENTER — best cost/capability for real coding work. This is where
 #    most of the kit's own sessions land.
 # ---------------------------------------------------------------------------
-AGENT_TIER_IMPLEMENTER='claude-opus-5'   # the builder
+AGENT_TIER_IMPLEMENTER='claude-opus-5-5'   # the builder
 
 # ---------------------------------------------------------------------------
 # 3. MECHANICAL — cheapest capable model. The suite is the oracle; capability
