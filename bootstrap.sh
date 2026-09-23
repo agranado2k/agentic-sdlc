@@ -546,7 +546,7 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
 # script, adds its entry here.
-KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/agent-roster.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh tests/spec-skills.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh scripts/guards.kit.config.sh scripts/guards.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh tests/suite-budget.test.sh tests/skill-phase.test.sh scripts/skill-dispatch.kit.sh"
+KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/agent-roster.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh tests/spec-skills.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh scripts/guards.kit.config.sh scripts/guards.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh tests/suite-budget.test.sh tests/skill-phase.test.sh scripts/skill-dispatch.kit.sh tests/fixtures/claude-code/README.md tests/fixtures/claude-code/session-start.payload.json tests/fixtures/claude-code/session-end.payload.json tests/fixtures/claude-code/subagent-stop.payload.json tests/fixtures/claude-code/transcript.redacted.jsonl tests/fixtures/claude-code/subagent-transcript.redacted.jsonl"
 
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
@@ -1317,7 +1317,7 @@ for f in $KIT_ONLY; do
 	fi
 done
 # Only if now empty — a project that already has its own workflows keeps them.
-rmdir setup tests .github/workflows .github 2>/dev/null || true
+rmdir tests/fixtures/claude-code tests/fixtures setup tests .github/workflows .github 2>/dev/null || true
 
 # --- the agent roster -------------------------------------------------------
 # Asked LAST, after the tree is final, for two reasons. It is a question about

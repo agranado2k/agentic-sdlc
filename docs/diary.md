@@ -28,7 +28,7 @@ is in flight. Do not restate the README.
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | One, and it is another session's: `worktree/trace-emit` (`feat/trace-emit`, PR #257), building #247 from PRD #237 — left alone, and `worktree-cleanup.sh` correctly keeps it for its uncommitted changes. PRD #237 was decomposed elsewhere into #246–#255 while this session worked. Four releases landed here on 2026-09-23: 0.22.0 (#234, ADR-0007's refusal into the shared resolver), 0.23.0 (#243, the two documents that were lying), 0.24.0 (#256, exit 69). Also landed: #232, #233, #236, #238, #239, #242, #244. Open: #245, deliberately — #256 met one of its four acceptance criteria and the ticket says which three it did not and why. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is blocked by an administrator on this host, so #239's pinned `claude-opus-5-5` stays correct but unexercisable on the cross-harness path until IT updates the CLI past 2.1.280. |
+| **Active worktrees** | Two. `worktree/spike-hooks` (#246) is this session's `/prototype` spike for PRD #237 — throwaway code, deleted; fixtures, a diary entry and one `KIT_ONLY` line are what it lands (PR #259). The other is another session's: `worktree/trace-emit` (`feat/trace-emit`, PR #257), building #247 from PRD #237 — left alone, and `worktree-cleanup.sh` correctly keeps it for its uncommitted changes. PRD #237 was decomposed elsewhere into #246–#255 while this session worked. Four releases landed here on 2026-09-23: 0.22.0 (#234, ADR-0007's refusal into the shared resolver), 0.23.0 (#243, the two documents that were lying), 0.24.0 (#256, exit 69). Also landed: #232, #233, #236, #238, #239, #242, #244. Open: #245, deliberately — #256 met one of its four acceptance criteria and the ticket says which three it did not and why. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is blocked by an administrator on this host, so #239's pinned `claude-opus-5-5` stays correct but unexercisable on the cross-harness path until IT updates the CLI past 2.1.280. |
 
 ### Open questions / unresolved decisions
 
@@ -1399,3 +1399,80 @@ not the thing claimed. The countermeasure that keeps working is the one with
 a machine behind it — `self-host` F6, the gate, a mutant that survives — and
 #238's rule (invoke `/review-pr` by name; the findings must be POSTED) is
 the attempt to give the claim itself a check.
+
+### 2026-09-23 (later still) — A spike answered the three adapter questions PRD #237 had left open
+
+Ticket #246 was a `/prototype` spike, throwaway, run against the `claude` CLI
+at 2.1.278 and node v26.8.1 in a temp project under the scratchpad. Three
+questions, three verdicts, all three the *favourable* answer — which is itself
+the surprise, because two of the three had a documented fallback the PRD was
+ready to accept as a live weakness.
+
+**Q1 — can a `SessionStart` hook export an environment variable that later tool
+calls, subagents included, can read?** YES. The hook's environment carries
+`CLAUDE_ENV_FILE`, pointing at
+`~/.claude/session-env/<session-id>/sessionstart-hook-1.sh`; a line appended
+there is in scope for every later `Bash` tool call in the session **and** inside
+a subagent spawned by the `Agent` tool. Evidence: a hook that appended
+`export TRACE_SESSION=<session_id from its own stdin JSON>` produced
+`MARK:[80148dd0-…][hello-from-session-start]` from a main-thread `echo`, and
+`SUBMARK:[8fd7c235-…][hello-from-session-start]` from a subagent's. In both runs
+the id the hook read equalled the `session_id` in the `claude -p` JSON result,
+so the hook's stdin is a usable session identity and not a second one. The
+per-toplevel pointer file is therefore a fallback for the agent harness that has no
+such facility, not the only session path, and two sessions in one toplevel stops
+being a live weakness on this agent harness.
+
+**Q2 — does the `SubagentStop` payload name the subagent's own transcript?**
+YES, under `agent_transcript_path`, alongside `agent_id` and `agent_type`. The
+payload carries eleven more keys, and the distinction that matters is that
+`transcript_path` is the *parent session's* file while `agent_transcript_path`
+is the subagent's own, written under
+`<project>/<session-id>/subagents/agent-<agent_id>.jsonl` with a
+`.meta.json` sibling naming `agentType`, the spawning `toolUseId` and
+`spawnDepth`. In-session subagent usage is reachable per subagent, not only as
+the session rollup.
+
+**Q3 — is `message.id` alone enough to de-duplicate a streamed assistant
+message?** YES. One assistant API response with two content blocks is written as
+two JSONL lines, each repeating the same `message.id`, the same `requestId` and
+a byte-identical `message.usage`; `message.model` is present on every assistant
+line. De-duplicating by `message.id` and summing the four usage keys gave
+`34 / 287 / 10793 / 37519` for the session and `34 / 156 / 17138 / 14968` for
+the subagent — a sum of `68 / 443 / 27931 / 52487`, which is *exactly* the
+`modelUsage` block the agent harness itself writes on the transcript's final
+`cost-state` line. Summing without de-duplicating gives
+`36 / 526 / 21036 / 51157`. `requestId` was 1:1 with `message.id` in this
+capture, so it is a redundant cross-check rather than a needed second key; the
+extractor should still fail loudly if it ever sees the two disagree.
+
+THE SURPRISE. The transcript's last line is `type: "cost-state"`, and it already
+holds a per-model rollup — `inputTokens`, `outputTokens`, `thinkingTokens`,
+`cacheReadInputTokens`, `cacheCreationInputTokens`, a `costUSD` and a
+`hasUnknownModelCost` flag — and it **includes the subagents' tokens**, which
+live in files the session transcript never mentions. That is a shortcut the
+extractor could take and should not: the PRD's decision that cost is computed on
+read from a price table the operator owns still stands, and `costUSD` is the
+vendor's interpretation, not a fact. But `cost-state` is an excellent oracle to
+assert the extractor against, and the fixture's numbers are chosen so it can be.
+
+Two smaller findings. Assistant lines are the only ones carrying usage, so an
+extractor that filters `type === "assistant"` sees nothing else; and a subagent
+transcript's every line carries `isSidechain: true`, which is how a reader tells
+the two files apart without looking at the path.
+
+WHAT LANDED. No code — spike rule 6. The fixtures under
+`tests/fixtures/claude-code/` are the adapter suite's oracle: the three hook
+payloads, the session transcript and the subagent transcript, both redacted so
+that structure, ids and every number survive and every free-text body is a
+length-preserving placeholder. Their `README.md` records the CLI version, the
+capture method and what was replaced.
+
+WHAT THIS DID NOT ESTABLISH. The spike ran only non-interactive `claude -p`
+sessions on one CLI build, so it says nothing about an interactive session, a
+resumed one, or a compacted transcript — and compaction is the obvious place a
+`message.id` could recur or a usage line could be rewritten. It also did not
+probe whether `CLAUDE_ENV_FILE` survives `--resume`, nor a second subagent at
+`spawnDepth` 2. The adapter's extractor should therefore treat shape drift as
+the loud failure the PRD already specifies, rather than assume this capture is
+the whole vocabulary.
