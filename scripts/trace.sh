@@ -90,13 +90,27 @@ die() {
 # ---------------------------------------------------------------------------
 # Policy and the directory.
 
+# trace_git <args…> — git asked about THIS FILE's repository, with the
+# inherited repository-selection variables scrubbed. Git exports GIT_DIR (and
+# GIT_WORK_TREE) into hooks, and a caller that inherits a pinned pair would
+# make `git -C` answer for the pinned repository — so an anchored lookup that
+# trusted the environment could source a foreign checkout's policy file. The
+# guards loader scrubs the same two for the same reason.
+trace_git() {
+	(unset GIT_DIR GIT_WORK_TREE && git -C "$_trace_here" "$@") 2>/dev/null
+}
+
 trace_load_config() {
+	# Set-or-unset is remembered separately from the value: TRACE_DIR='' in
+	# the environment is the documented OFF, and must win over a policy file
+	# that turns tracing on.
+	_tl_env_set=${TRACE_DIR+set}
 	_tl_env_dir=${TRACE_DIR:-}
 	if [ -n "${TRACE_CONFIG:-}" ]; then
 		[ -f "$TRACE_CONFIG" ] || die "TRACE_CONFIG=$TRACE_CONFIG does not exist."
 		. "$TRACE_CONFIG"
 	else
-		_tl_root=$(git -C "$_trace_here" rev-parse --show-toplevel 2>/dev/null) || _tl_root=
+		_tl_root=$(trace_git rev-parse --show-toplevel) || _tl_root=
 		if [ -n "$_tl_root" ] && [ -f "$_tl_root/scripts/trace.config.sh" ]; then
 			. "$_tl_root/scripts/trace.config.sh"
 		elif [ -f "$_trace_here/trace.config.sh" ]; then
@@ -104,8 +118,9 @@ trace_load_config() {
 		fi
 	fi
 	# The environment wins over the file — set on its own line after the
-	# source, so a policy file that assigns TRACE_DIR cannot undo it.
-	[ -n "$_tl_env_dir" ] && TRACE_DIR=$_tl_env_dir
+	# source, so a policy file that assigns TRACE_DIR cannot undo it, even
+	# when what the environment said was "off".
+	[ -n "$_tl_env_set" ] && TRACE_DIR=$_tl_env_dir
 	return 0
 }
 
@@ -116,7 +131,7 @@ trace_dir() {
 	'') return 1 ;;
 	/*) TRACE_ROOT_DIR=$TRACE_DIR ;;
 	*)
-		_td_common=$(git -C "$_trace_here" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || _td_common=
+		_td_common=$(trace_git rev-parse --path-format=absolute --git-common-dir) || _td_common=
 		if [ -n "$_td_common" ]; then
 			_td_base=$(dirname "$_td_common")
 		else
@@ -136,9 +151,21 @@ trace_unconfigured_note() {
 # ---------------------------------------------------------------------------
 # Grammar.
 
+# trace_is_kind <value> — membership in the closed vocabulary, one entry at a
+# time: a value with a space in it ("run.start run.end") is contiguous text
+# inside the list and must not pass as a member.
 trace_is_kind() {
+	case $1 in '' | *' '*) return 1 ;; esac
 	case " $TRACE_KINDS " in *" $1 "*) return 0 ;; esac
 	return 1
+}
+
+# trace_check_token <value> — a field or data key: [a-z][a-z0-9_]*. Checked
+# BEFORE any membership test or eval, so a key with a space in it is refused
+# as a key and never reaches the list or the assignment.
+trace_check_token() {
+	case $1 in '' | [!a-z]* | *[!a-z0-9_]*) return 1 ;; esac
+	return 0
 }
 
 # trace_check_subject <value> — `<type>:<reference>`: a lowercase type, a
@@ -194,13 +221,16 @@ trace_emit() {
 			_em_key=${_em_arg%%=*}
 			_em_val=${_em_arg#*=}
 			case $_em_key in
+			data.*) trace_check_token "${_em_key#data.}" || die "data key '${_em_key#data.}' is not [a-z][a-z0-9_]*" ;;
+			*) trace_check_token "$_em_key" || die "field name '$_em_key' is not [a-z][a-z0-9_]*" ;;
+			esac
+			case $_em_key in
 			kind)
 				trace_is_kind "$_em_val" || die "unknown kind '$_em_val' — the vocabulary is closed: $TRACE_KINDS"
 				_em_kind=$_em_val
 				;;
 			data.*)
 				_em_sub=${_em_key#data.}
-				case $_em_sub in '' | [!a-z]* | *[!a-z0-9_]*) die "data key '$_em_sub' is not [a-z][a-z0-9_]*" ;; esac
 				_em_esc=$(trace_json_str "$_em_val") || die "data.$_em_sub carries a control character; a multi-line value is a blob, not a field, and --blob is a later slice."
 				_em_data="${_em_data:+$_em_data,}\"$_em_sub\":\"$_em_esc\""
 				;;
@@ -221,7 +251,7 @@ trace_emit() {
 				*)
 					case " $TRACE_TOKEN_FIELDS " in
 					*" $_em_key "*)
-						case $_em_val in '' | *[!0-9]*) die "$_em_key='$_em_val' is not a whole number" ;; esac
+						case $_em_val in '' | *[!0-9]* | 0?*) die "$_em_key='$_em_val' is not a JSON integer — digits only, no leading zero" ;; esac
 						eval "_em_v_$_em_key=\$_em_val"
 						;;
 					*) die "unknown field '$_em_key' — a free key belongs under data.<key>" ;;
@@ -291,18 +321,24 @@ trace_show() {
 	done
 	trace_dir || { trace_unconfigured_note; return 0; }
 	trace_files "$_sh_since" | while IFS= read -r _sh_f; do
-		# An exact comparison, never a pattern built from the subject: index()
-		# on the quoted subject, and token equality over the related field, so
-		# ticket:#3 never matches ticket:#34.
+		# An exact comparison over the ENVELOPE only: the data map is the last
+		# field and its keys are open, so a data key called subject, related
+		# or kind must never read as the event's own. The envelope is the line
+		# up to `,"data":{` — a sequence no string value can carry, since every
+		# quote inside a value is escaped. Then index() on the quoted subject
+		# and token equality over related, so ticket:#3 never matches ticket:#34.
 		awk -v s="$_sh_subject" -v k="$_sh_kind" '
 		{
-			hit = index($0, "\"subject\":\"" s "\"")
-			if (!hit && match($0, /"related":"[^"]*"/)) {
-				r = substr($0, RSTART + 11, RLENGTH - 12)
+			env = $0
+			d = index(env, ",\"data\":{")
+			if (d) env = substr(env, 1, d - 1)
+			hit = index(env, "\"subject\":\"" s "\"")
+			if (!hit && match(env, /"related":"[^"]*"/)) {
+				r = substr(env, RSTART + 11, RLENGTH - 12)
 				n = split(r, t, " ")
 				for (i = 1; i <= n; i++) if (t[i] == s) hit = 1
 			}
-			if (hit && (k == "" || index($0, "\"kind\":\"" k "\""))) print
+			if (hit && (k == "" || index(env, "\"kind\":\"" k "\""))) print
 		}' "$_sh_f"
 	done
 }
