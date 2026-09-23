@@ -156,8 +156,9 @@ AGENT_TIER_REVIEWER='codex:gpt-5.6-sol'
 #    With the reviewer on another vendor this is close to vestigial — a
 #    Claude session cannot be running gpt-5.6-sol — but it stays mapped, and
 #    to a SECOND model rather than the same one: if the reviewer is ever
-#    localised again, the rule still has an answer, and ADR-0007's refusal in
-#    scripts/agents.kit.sh is the net under both.
+#    localised again, the rule still has an answer, and ADR-0007's refusal —
+#    in scripts/agents.lib.sh since 0.22.0, so every project has it — is the
+#    net under both.
 AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='codex:gpt-6-astra'
 
 # ---------------------------------------------------------------------------

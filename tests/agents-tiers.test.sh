@@ -1123,11 +1123,38 @@ t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL= sh "$LIB" reviewe
 	pass "with no session named there is nothing to compare, and the mapping answers" ||
 	fail "an unnamed session changed the answer to '$S_OUT'"
 # The harness half asks a different question and is never compared.
-resolve_as vendor-mid-4 --harness reviewer
+# HARNESS MODE IS REFUSED TOO, and must be: the dispatcher asks for the two
+# halves in two calls, so a mode that skipped the refusal would answer the
+# refused mapping's agent harness beside the fallback's model. The earlier
+# wording here claimed the opposite and passed only because its fixture's
+# reviewer differed from the session anyway — a fixture, not a contract.
+resolve_as vendor-mid-4 --harness reviewer self-implemented
 [ "$S_STATUS" = 0 ] &&
-	case "$S_ERR" in *"session's own model"*) false ;; *) true ;; esac &&
-	pass "--harness is not a model, so it is not refused" ||
-	fail "--harness reviewer was refused: '$S_ERR'"
+	case "$S_ERR" in *"session's own model"*) true ;; *) false ;; esac &&
+	pass "--harness refuses on the same comparison, so both halves come from one mapping" ||
+	fail "harness mode did not refuse a reviewer equal to the session: '$S_ERR'"
+# What it is NOT is a comparison of the harness token: a tier whose model
+# differs is untouched whatever agent harness it names.
+resolve_as vendor-strong-9 --harness implementer
+case "$S_ERR" in
+*"session's own model"*) fail "a non-reviewer tier was refused in harness mode" ;;
+*) pass "…and only the reviewer tier, as in model mode" ;;
+esac
+
+# A self-implemented domain mapped with the plain tier UNSET: the fallback has
+# nothing to fall back to, so nothing is printed and the warning says which of
+# the two shapes it is. Without this the `[ -n "$_ah_model" ]` guard on the
+# fallback could be deleted with the suite still green.
+DOMAINONLY="$SCRATCH/domain-only.config.sh"
+printf "AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4'\n" >"$DOMAINONLY"
+t_run_split env AGENTS_CONFIG="$DOMAINONLY" AGENT_SESSION_MODEL=vendor-mid-4 sh "$LIB" reviewer self-implemented
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a domain-only mapping equal to the session prints nothing — there is no plain tier to fall back to" ||
+	fail "a domain-only mapping resolved '$S_OUT' (status $S_STATUS)"
+case "$S_ERR" in
+*"share the author's model"*) pass "…and says the review would share the author's model, not that it fell back" ;;
+*) fail "…with the wrong warning for that shape: '$S_ERR'" ;;
+esac
 # The quiet switch silences this warning like every other.
 t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL=vendor-mid-4 AGENTS_TIER_QUIET=1 sh "$LIB" reviewer self-implemented
 [ "$S_OUT" = vendor-strong-9 ] && [ -z "$S_ERR" ] &&

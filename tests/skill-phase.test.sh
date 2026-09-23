@@ -250,8 +250,31 @@ printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
 stub_dispatch /review-pr --tier janitor --prompt 'x'
 [ "$S_STATUS" = 2 ] && pass "an override outside the four tiers is exit 2, like every other unknown tier" ||
 	fail "--tier janitor exited $S_STATUS"
+# A trailing `--tier` has nothing after it to take, which is the shape the
+# guard exists for. `--tier --prompt x` is NOT that shape — it swallows the
+# next word and dies on the unknown tier `--prompt`, loudly but for another
+# reason, so asserting only the status let the guard be deleted.
+stub_dispatch /review-pr --prompt 'x' --tier
+[ "$S_STATUS" = 2 ] && pass "a trailing --tier with nothing after it is a usage error" ||
+	fail "a trailing --tier exited $S_STATUS"
+case "$S_ERR" in
+*"--tier needs one of"*) pass "…and says what it needed" ;;
+*) fail "…without saying what it needed: '$S_ERR'" ;;
+esac
 stub_dispatch /review-pr --tier --prompt 'x'
-[ "$S_STATUS" = 2 ] && pass "--tier with no value is a usage error" || fail "--tier with no value exited $S_STATUS"
+[ "$S_STATUS" = 2 ] && pass "--tier followed by another flag dies on the tier it read, not silently" ||
+	fail "--tier --prompt exited $S_STATUS"
+case "$S_ERR" in
+*"unknown tier '--prompt'"*) pass "…naming the word it took, so the cause is legible" ;;
+*) fail "…without naming what it read: '$S_ERR'" ;;
+esac
+# A domain is the second half of a ticket's stamp, never a sizing of its own.
+stub_dispatch /review-pr --domain tests --prompt 'x'
+[ "$S_STATUS" = 2 ] && pass "--domain without --tier is refused" || fail "--domain alone exited $S_STATUS"
+case "$S_ERR" in
+*"not a sizing of its own"*) pass "…and says why" ;;
+*) fail "…without saying why: '$S_ERR'" ;;
+esac
 # A dry run says WHICH of the two answered, so an operator reading it can tell
 # a ticket's decision from a skill's default.
 stub_dispatch /review-pr --tier mechanical --prompt 'x' --dry-run
