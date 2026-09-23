@@ -28,7 +28,7 @@ is in flight. Do not restate the README.
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None. Two releases landed 2026-09-23. 0.22.0 (#234) moved ADR-0007's reviewer refusal out of the kit's wrapper into the shared resolver, so every consumer has it; 0.23.0 (#243) fixed what that release got wrong — its own migration guide wired the rule with a tier's answer instead of the session's model, which hands the author's own model straight back unrefused — and gave the housekeeping advisory one day of clock slack (#235), a bug that turned `docs-demo` red nightly for anyone east of UTC while CI, in UTC, never saw it. Also landed: #232 (#230, the dispatch path tested against a stub harness so it runs in CI), #233 (#229, a ticket's stamp outranks a skill's phase), #236 (#221, suite scratch names itself and stale scratch is swept), #238 (`/implement` must invoke `/review-pr` and the review must land on the PR), #239 (the implementer tier pinned to `claude-opus-5-5`), #242 (#241, stale pointers and four guards that had no failing check). Open: PRD #237. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is owed before #239's pinned id works on the cross-harness path — 2.1.259 refuses it with an API 400 asking for 2.1.280. |
+| **Active worktrees** | `worktree/trace-emit` (#247, the decision trace's first slice — `scripts/trace.sh`, ADR-0008; PRD #237, tickets #246–#255). Two releases landed 2026-09-23. 0.22.0 (#234) moved ADR-0007's reviewer refusal out of the kit's wrapper into the shared resolver, so every consumer has it; 0.23.0 (#243) fixed what that release got wrong — its own migration guide wired the rule with a tier's answer instead of the session's model, which hands the author's own model straight back unrefused — and gave the housekeeping advisory one day of clock slack (#235), a bug that turned `docs-demo` red nightly for anyone east of UTC while CI, in UTC, never saw it. Also landed: #232 (#230, the dispatch path tested against a stub harness so it runs in CI), #233 (#229, a ticket's stamp outranks a skill's phase), #236 (#221, suite scratch names itself and stale scratch is swept), #238 (`/implement` must invoke `/review-pr` and the review must land on the PR), #239 (the implementer tier pinned to `claude-opus-5-5`), #242 (#241, stale pointers and four guards that had no failing check). Open: PRD #237. Not yet done: a cross-vendor Gemini review through the shipped dispatcher; a ceiling hit on the rlimit rung cannot be observed (ADR-0006 clause 6); `ai-review.example.yml` is still inert. `claude update` is owed before #239's pinned id works on the cross-harness path — 2.1.259 refuses it with an API 400 asking for 2.1.280. |
 
 ### Open questions / unresolved decisions
 
@@ -1362,3 +1362,32 @@ runs one on the model that phase deserves; the implementer tier is pinned to
 `claude-opus-5-5`, verified against the vendor's own model overview after
 four spellings were refused by a CLI whose catalog predates the release
 (`claude update` is owed, and until then the cross-harness path 400s).
+
+### 2026-09-23 — The chain starts writing down what it decides
+
+PRD #237 asked for one thing the kit had never had: a record of its own
+decisions — which tier a ticket got and which model actually ran it, what a
+review found and what `/pr-iterate` did with each finding, what a wave cost —
+as data rather than prose, local first, importable later, and readable by a
+retrospective that turns recurring failures into tickets. The planning
+session settled the four choices that shape it (a gitignored `.trace/` at the
+root checkout; decisions plus one-line reasons plus tool calls; opt-in through
+a policy file that ships empty; a new `/retro` skill as the one reader), and
+ADR-0008 records them. `/to-tickets` cut ten tracer bullets, #246–#255; the
+frontier is the spike on the agent harness's hooks (#246) and the script
+itself (#247).
+
+#247 is the slice landing now: `scripts/trace.sh` with `emit`, `show`,
+`verify` and `dir`; the policy file that ships with `TRACE_DIR` empty; the
+kit's never-shipped twin and its one-line wrapper — the third instance of
+ADR-0003's arrangement, and the reason hard rule 10 now says "the kit
+wrapper" rather than naming one; the glossary's Trace, Event, Subject, Run
+and Blob; the exclusions file's first three mechanism entries. The suite's
+load-bearing case is an emit from inside a real linked worktree landing under
+the root checkout and surviving the worktree's removal — the property that
+makes the trace compatible with hard rule 1. Its ninth banner also caught
+the suite's own bug: the helper that writes a policy file rewrote one scratch
+path, so every handle pointed at the last value written and an "unconfigured"
+case was reading a configured trace; each call now gets its own file. The script is not yet in `VERSION`'s manifest — #255
+carries the release, once the wave's shared-layer edits are all in.
+
