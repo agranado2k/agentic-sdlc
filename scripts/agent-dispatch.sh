@@ -34,8 +34,9 @@
 #  69  NOT dispatched, because the agent harness this tier names is not
 #      reachable from here — its command is not on PATH (EX_UNAVAILABLE).
 #      Distinct from 2 because it is the OTHER side's failure, not the
-#      caller's: stdout is the model id, as with 3, so a caller can spawn it
-#      itself rather than report a review that never happened. This script
+#      caller's: stdout is the model id — possibly empty, meaning "inherit",
+#      exactly as with 3 — so a caller can spawn it itself rather than report
+#      a review that never happened. This script
 #      does not take that fallback for you — spawning the author's own model
 #      and calling it a review is the failure the tier vocabulary exists to
 #      prevent, so the choice stays with the caller, who must say what ran.
@@ -1040,10 +1041,16 @@ done
 # not do is spawn the author's own model and call the result a review: this
 # script reports, and the caller decides, which is why the fallback is not
 # taken here.
+# Judged BEFORE the budget is derived, deliberately: a crossing nobody can
+# reach is not made reachable by a budget, and an operator whose policy has a
+# bad budget value should still learn that the vendor is missing rather than
+# be told about arithmetic they cannot act on yet.
 if ! command -v "$CMD_BIN" >/dev/null 2>&1; then
 	echo "x  dispatch: agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH — the crossing is unreachable." >&2
-	echo "   Exit 69 (EX_UNAVAILABLE). stdout is the model this tier maps to; spawn it yourself if that is" >&2
-	echo "   acceptable for this work, and say in your report that the crossing did not happen." >&2
+	echo "   Exit 69 (EX_UNAVAILABLE). stdout is the model this tier maps to, or EMPTY when it maps only" >&2
+	echo "   an agent harness — the same 'nothing means inherit' this file uses everywhere. Spawn it" >&2
+	echo "   yourself if that is acceptable for this work, and say in your report that the crossing did" >&2
+	echo "   not happen." >&2
 	[ -n "${MODEL:-}" ] && printf '%s\n' "$MODEL"
 	exit 69
 fi

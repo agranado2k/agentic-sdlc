@@ -1403,7 +1403,9 @@ here, where that used to be exit 2 alongside your own usage errors. If you
 branch on the dispatcher's status anywhere, a check for `2` that meant "the
 crossing is missing" needs to become `69`; `2` keeps only the caller's own
 mistakes, and `3` — no agent harness mapped at all — is unchanged. On 69,
-stdout is the model the tier maps to, so you can spawn it yourself; the
+stdout is the model the tier maps to — empty when it maps only an agent
+harness, the same "nothing means inherit" the status-3 path uses — so you can
+spawn it yourself; the
 dispatcher deliberately does not do that for you, because a review that
 quietly ran on the author's own model is the thing the tiers exist to
 prevent. Say what ran, in whatever reports the work.

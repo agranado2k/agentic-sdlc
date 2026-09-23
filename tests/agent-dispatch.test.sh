@@ -1771,18 +1771,40 @@ t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x'
 	pass "a tier whose agent harness is not on PATH exits 69, not the usage error 2" ||
 	fail "an unreachable crossing exited $S_STATUS"
 s_assert_out_is "model-for-reviewing" "…and stdout carries the model, so the caller can spawn it itself"
-case "$S_ERR" in
-*"not on PATH"*) pass "…and stderr names what it could not reach" ;;
-*) fail "…without naming the command: '$S_ERR'" ;;
-esac
-# The caller's OWN mistakes keep exit 2: the split is only worth having if
-# the two stay apart.
-t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" janitor --prompt 'x'
-[ "$S_STATUS" = 2 ] && pass "an unknown tier is still the caller's error, exit 2" ||
-	fail "an unknown tier exited $S_STATUS"
-t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer
-[ "$S_STATUS" = 2 ] && pass "a missing prompt is still the caller's error, exit 2" ||
-	fail "a missing prompt exited $S_STATUS"
+# REACHABILITY IS JUDGED BEFORE THE BUDGET, and the order is a decision: a
+# crossing nobody can reach is not made reachable by a budget, so an operator
+# with a bad budget value should still hear that the vendor is missing. Moving
+# the check below the derivation passes every other case in this file.
+t_run_split env AGENTS_CONFIG="$UNREACH" AGENT_BUDGET_TASKS_PERCENT=500 sh "$DISPATCH" reviewer --prompt 'x'
+[ "$S_STATUS" = 69 ] &&
+	pass "an unreachable crossing is reported even when the budget policy is unusable" ||
+	fail "a bad budget value hid the unreachable crossing — exited $S_STATUS"
+# A tier that maps only an agent harness has no model to print, and prints
+# NOTHING rather than a blank line — the same "empty means inherit" as exit 3.
+NOMODEL="$SCRATCH/nomodel.config.sh"
+cat >"$NOMODEL" <<'NOMODEL_CFG'
+AGENT_HARNESSES='ghost'
+AGENT_HARNESS_GHOST_CMD='definitely-not-installed-anywhere {model_flag} < {prompt_file}'
+AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='ghost:'
+NOMODEL_CFG
+t_run_split env AGENTS_CONFIG="$NOMODEL" sh "$DISPATCH" reviewer --prompt 'x'
+[ "$S_STATUS" = 69 ] && [ -z "$S_OUT" ] &&
+	pass "a crossing that maps no model exits 69 and prints nothing, not a blank line" ||
+	fail "a no-model crossing gave status $S_STATUS, stdout '$S_OUT'"
+# The DOMAIN's model, when one is asked for — not the plain tier's.
+DOMCFG="$SCRATCH/unreach-domain.config.sh"
+cat >"$DOMCFG" <<'DOM_CFG'
+AGENT_HARNESSES='ghost'
+AGENT_HARNESS_GHOST_CMD='definitely-not-installed-anywhere {model_flag} < {prompt_file}'
+AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='ghost:model-for-reviewing'
+AGENT_TIER_REVIEWER_DEEP='ghost:model-for-deep-review'
+DOM_CFG
+t_run_split env AGENTS_CONFIG="$DOMCFG" sh "$DISPATCH" reviewer deep --prompt 'x'
+[ "$S_STATUS" = 69 ] && [ "$S_OUT" = model-for-deep-review ] &&
+	pass "the model printed on 69 is the one the tier AND domain resolve to" ||
+	fail "a domain crossing gave status $S_STATUS, stdout '$S_OUT'"
 # A tier that names NO agent harness is untouched: exit 3 is a working state,
 # not a failure, and 69 must not swallow it.
 t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" planner --prompt 'x'
