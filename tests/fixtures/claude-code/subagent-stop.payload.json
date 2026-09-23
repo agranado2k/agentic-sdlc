@@ -1,0 +1,18 @@
+{
+  "session_id": "8fd7c235-bd26-4c7a-9ffd-586578d4b54b",
+  "transcript_path": "~/.claude/projects/-tmp-spike-proj/8fd7c235-bd26-4c7a-9ffd-586578d4b54b.jsonl",
+  "cwd": "/tmp/spike-proj",
+  "prompt_id": "fbfc3940-88d4-4de5-93bf-4acc79bb4f61",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "a7df5125ff7592e06",
+  "agent_type": "general-purpose",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "~/.claude/projects/-tmp-spike-proj/8fd7c235-bd26-4c7a-9ffd-586578d4b54b/subagents/agent-a7df5125ff7592e06.jsonl",
+  "last_assistant_message": "SUBMARK:[8fd7c235-bd26-4c7a-9ffd-586578d4b54b][hello-from-session-start]",
+  "background_tasks": [],
+  "session_crons": []
+}

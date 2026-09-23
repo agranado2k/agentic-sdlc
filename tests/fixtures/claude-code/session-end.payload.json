@@ -1,0 +1,8 @@
+{
+  "session_id": "8fd7c235-bd26-4c7a-9ffd-586578d4b54b",
+  "transcript_path": "~/.claude/projects/-tmp-spike-proj/8fd7c235-bd26-4c7a-9ffd-586578d4b54b.jsonl",
+  "cwd": "/tmp/spike-proj",
+  "prompt_id": "fbfc3940-88d4-4de5-93bf-4acc79bb4f61",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}
