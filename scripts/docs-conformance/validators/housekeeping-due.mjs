@@ -72,7 +72,14 @@ export function run(ctx) {
   const ageDays = Math.floor((Date.now() - Date.parse(dateText)) / DAY_MS);
   // A row dated in the future is the one shape that would silence the nudge
   // indefinitely — a mistyped year — so it is a malformed row, not a fresh one.
-  if (ageDays < 0) {
+  //
+  // But ONE day ahead is a clock, not a typo. The comment above already grants
+  // that this date is parsed as UTC midnight while the operator writes it in
+  // local time; east of UTC the two disagree for part of every day, so a row
+  // dated correctly-today reads as tomorrow. The largest offset in use is
+  // UTC+14, still inside a single day, so one day of slack covers every zone
+  // while leaving the mistyped year — which is off by hundreds — caught.
+  if (ageDays < -1) {
     return [
       {
         validator: id,
