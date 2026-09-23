@@ -79,6 +79,14 @@ jobs:
       - name: worktree-cleanup.sh
         run: sh tests/worktree-cleanup.test.sh
 
+      # The decision trace (ADR-0008): the same config-as-data shape again —
+      # mechanism in a shared script, the decision to trace in a policy file
+      # that ships empty, and the kit's own answer in a never-shipped twin. Its
+      # load-bearing case is an emit from inside a linked worktree landing at
+      # the root checkout, driven against a real worktree.
+      - name: trace.sh (decision trace)
+        run: sh tests/trace.test.sh
+
       # Bootstraps a throwaway consumer in a temp dir and pushes at a real bare
       # remote through the real hook. It sets its own committer identity and
       # hooks path per fixture, so it needs nothing from the runner's git config.

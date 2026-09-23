@@ -107,11 +107,11 @@ pushes straight past both gates.
 9. **A rule with no failing check is a claim.** Shared invariant §8. Every gate
    and guard in this repo has a suite that drives it RED before it drives it
    green; add one in the same change that adds the rule.
-10. **In THIS repo, resolve a tier with `sh scripts/agents.kit.sh <tier> [domain]`,
-    not the plain `sh scripts/agents.lib.sh <tier>` a SKILL.md literally says.**
-    The plain command is correct for a consumer; here it resolves through the
-    empty shipped `scripts/agents.config.sh` and silently does nothing. See
-    "Capability tiers" below.
+10. **In THIS repo, run the kit wrapper where a SKILL.md names the plain script:**
+    `sh scripts/agents.kit.sh <tier> [domain]` for `sh scripts/agents.lib.sh …`,
+    and `sh scripts/trace.kit.sh …` for `sh scripts/trace.sh …`. The plain command
+    is correct for a consumer; here it reads the empty shipped policy file and
+    silently does nothing. See "Capability tiers" below.
 
 ## Capability tiers
 
@@ -325,6 +325,7 @@ answers produce a clean project.
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts. **In THIS repo** that file ships empty on purpose; the kit's own pattern is `scripts/guards.kit.config.sh`, never shipped, and `sh scripts/guards.kit.sh <base> <head>` runs the pairing guard against it — the same arrangement as `agents.kit.sh` |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
+| Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `show <subject>`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped). ADR-0008 |
 | Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]` — the skill's `metadata.phase` sizes it, a ticket's stamp overrides that, and `--dry-run` says which answered (kit-only; a later release promotes it — #226) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
