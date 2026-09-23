@@ -86,8 +86,8 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 AGENT_TIER_REVIEWER='claude-code:claude-fable-5-1'
 #    Vestigial while the reviewer is cross-vendor — a Codex session cannot be
 #    running Fable — but mapped to a SECOND model anyway, so the rule still
-#    has an answer if the reviewer is ever localised. ADR-0007's refusal in
-#    scripts/agents.kit.sh is the net under both.
+#    has an answer if the reviewer is ever localised. ADR-0007's refusal —
+#    in scripts/agents.lib.sh since 0.22.0 — is the net under both.
 AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5-5'
 
 # ---------------------------------------------------------------------------

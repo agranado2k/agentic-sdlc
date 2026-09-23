@@ -4,7 +4,7 @@
 - **Date**: 2026-09-21
 - **Deciders**: Arthur Granado (operator), at the `/implement` stop for #224
 - **Supersedes / amends**: amends ADR-0003 in one respect — the kit's mapping is no longer the whole answer for the reviewer tier; the caller's model is the third input
-- **Superseded by**: — (amended 2026-09-22: the shared-resolver step was written as 0.21.0's; 0.21.0 shipped without it, so the step is #226's whenever that lands — the decision is unchanged, only its schedule)
+- **Superseded by**: — (amended 2026-09-23: what is compared is the MODEL half only, not the harness prefix as this record's More-information line first said; the substitution is of the whole mapping, so a fallback that crosses agent harnesses carries its own, which is why harness mode refuses on the same comparison rather than skipping it. Amended 2026-09-22: the shared-resolver step was written as 0.21.0's; 0.21.0 shipped without it, so the step is #226's whenever that lands — the decision is unchanged, only its schedule)
 
 ## Context and problem statement
 
@@ -96,5 +96,4 @@ fact it holds that the policy file does not.
 - Filed as #224 after PR #222's review; the workaround the session used is
   the fallback this record makes automatic.
 - ADR-0003 (the mapping), ADR-0005 (the agent-harness axis — a third axis this
-  record does not touch: the harness prefix on a value is compared as part of
-  the word).
+  record does not touch).
