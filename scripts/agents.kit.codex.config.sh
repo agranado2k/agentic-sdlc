@@ -88,7 +88,7 @@ AGENT_TIER_REVIEWER='claude-code:claude-fable-5-1'
 #    running Fable — but mapped to a SECOND model anyway, so the rule still
 #    has an answer if the reviewer is ever localised. ADR-0007's refusal in
 #    scripts/agents.kit.sh is the net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5-5'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN — same rules as the other policy. The
@@ -99,7 +99,7 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5-5'
 # The tester. A domain rather than a fifth tier because the tier vocabulary is
 # closed. It crosses for the same reason the reviewer does: the model that
 # wrote the code is the worst reader of whether its test constrains anything.
-AGENT_TIER_IMPLEMENTER_TESTS='claude-code:claude-opus-5-5'
+AGENT_TIER_IMPLEMENTER_TESTS='claude-code:claude-opus-5'
 
 # No AGENT_TIER_IMPLEMENTER_CONTENT here. The kit's prose is written from the
 # Claude Code session, where that domain is mapped; a Codex session that ends

@@ -134,12 +134,16 @@ banner "3b. The review is INVOKED by name, and lands on the PR"
 # but the PR carried no review at all — the human arrives at a diff with
 # nothing on it, which is indistinguishable from never having reviewed.
 assert_file_has "$SKILL" "invoke \`/review-pr\`"
-assert_file_has "$SKILL" "Not a review prompt of your own"
+assert_file_has "$SKILL" "**A review that reported only to you is not a review**"
 assert_file_has "$SKILL" "A review that reported only to you is not a review"
-assert_file_has "$SKILL" "posted on the PR"
+assert_file_has "$SKILL" "*posted on the PR*"
 # The report names where the review landed, so its absence is conspicuous
 # rather than something the reader has to think to check.
 assert_file_has "$SKILL" "the URL of the review it posted"
+# And WHO posts is named, because /review-pr ends by asking a human which
+# findings to post and a spawned reviewer has nobody at that prompt.
+assert_file_has "$SKILL" "Say who posts"
+assert_file_has "$SKILL" "cannot reach the forge"
 # And the step is an ordered part of Deliver, not an aside: it must come after
 # the PR is opened and before the skill stops.
 _open=$(line_of "Open the pull request")
