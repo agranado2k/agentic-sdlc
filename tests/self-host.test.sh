@@ -226,6 +226,17 @@ done
 [ -e "$PROJ/scripts/guards.kit.sh" ] &&
 	fail "scripts/guards.kit.sh leaked into the project" ||
 	pass "no scripts/guards.kit.sh in the project"
+# The trace twin and wrapper (ADR-0008): the kit turns tracing on for itself
+# and must not hand that decision to a consumer.
+[ -e "$PROJ/scripts/trace.kit.config.sh" ] &&
+	fail "scripts/trace.kit.config.sh leaked into the project — the kit's own trace policy reached a consumer" ||
+	pass "no scripts/trace.kit.config.sh in the project — the kit's own trace policy stayed kit-side"
+[ -e "$PROJ/scripts/trace.kit.sh" ] &&
+	fail "scripts/trace.kit.sh leaked into the project" ||
+	pass "no scripts/trace.kit.sh in the project"
+[ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
+	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
+	fail "the consumer's scripts/trace.config.sh is missing or not empty"
 
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"

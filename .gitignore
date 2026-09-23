@@ -4,3 +4,9 @@
 # in the root checkout stages a live worktree as an embedded repository, and
 # git's own warning is the only thing that says so.
 worktree/
+
+# The kit traces its own decisions under here (scripts/trace.kit.config.sh,
+# ADR-0008). The trace is local by design — findings, reasons and token counts
+# in plain text — and the kit never pushes it; a gitignored directory is also
+# invisible to the docs gate's placeholder scan, which is the point.
+.trace/
