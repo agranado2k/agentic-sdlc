@@ -873,7 +873,37 @@
 # the kit's wrapper after 0.22.0 moved it, and gave four guards the failing
 # checks they lacked.
 
-shared-layer: 0.23.0
+# 0.24.0 — a crossing that cannot be reached says whose failure it is. ONE
+# shared file changes content: scripts/agent-dispatch.sh. UPDATING.md changes
+# by re-pin. No file joins or leaves the layer.
+#   From #245: exit 2 meant both "you asked for something wrong" and "the
+# agent harness this tier names is not installed here" — two different
+# people's problems under one number, so a caller could not tell a typo from
+# a vendor it cannot reach, and the only thing that noticed was a human
+# reading the message. The forcing case was live: a reviewer crossing to
+# another vendor met that vendor's account usage limit mid-review, and the
+# session fell back by hand because nothing else could.
+#   An unreachable crossing is now 69 (EX_UNAVAILABLE, the sysexits
+# vocabulary 71 already borrows), and stdout carries the model the tier maps
+# to, exactly as exit 3 does — so a caller that cannot cross has the one fact
+# it needs to spawn something deliberately instead of reporting work that did
+# not happen. The caller's own mistakes keep exit 2, and a tier naming no
+# agent harness keeps exit 3, which was never a failure.
+#   The dispatcher does NOT take the fallback for you. Spawning the author's
+# own model and calling the result a review is the failure the tier
+# vocabulary exists to prevent, so the choice stays with the caller, who must
+# say what ran. This script reports; policy lives in the skills.
+#   KNOWN LIMIT, stated because it is the half this release does not solve: a
+# vendor CLI that prints its refusal and exits 0 — which is what the usage
+# limit above actually did — is indistinguishable from a successful run
+# without parsing its prose, and parsing another vendor's prose is a
+# dependency on wording nobody controls. What is caught is the crossing that
+# cannot start.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. Nothing: no skill, template or
+# workflow changed in this window.
+
+shared-layer: 0.24.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
