@@ -31,6 +31,15 @@
 #      itself, exactly as it did before this file existed. This is the DEFAULT
 #      for an unconfigured project and it is a working state.
 #   2  usage error, unknown tier, or an agent harness with no command template
+#  69  NOT dispatched, because the agent harness this tier names is not
+#      reachable from here — its command is not on PATH (EX_UNAVAILABLE).
+#      Distinct from 2 because it is the OTHER side's failure, not the
+#      caller's: stdout is the model id — possibly empty, meaning "inherit",
+#      exactly as with 3 — so a caller can spawn it itself rather than report
+#      a review that never happened. This script
+#      does not take that fallback for you — spawning the author's own model
+#      and calling it a review is the failure the tier vocabulary exists to
+#      prevent, so the choice stays with the caller, who must say what ran.
 #   4  NOT dispatched, because this dispatch would nest past the policy
 #      maximum depth. A worker may run this script itself; one whose tier maps
 #      back to its own agent harness is a fork bomb with a model in the loop,
@@ -1019,8 +1028,32 @@ while :; do
 	*) break ;;
 	esac
 done
-command -v "$CMD_BIN" >/dev/null 2>&1 ||
-	die "agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH."
+# AN UNREACHABLE CROSSING IS THE OTHER SIDE'S FAILURE (#245), and it is not
+# the caller's mistake. Exit 2 used to mean both — "you asked for something
+# wrong" and "the agent harness this tier names is not installed here" — so a
+# caller could not tell a typo from a vendor it cannot reach, and the only
+# thing that noticed was a human reading the message.
+#
+# 69 is EX_UNAVAILABLE, from the same sysexits vocabulary 71 already borrows.
+# stdout carries the MODEL the tier maps to, exactly as exit 3 does, so a
+# caller that cannot cross has the one fact it needs to spawn something
+# deliberately instead of reporting work that never happened. What it must
+# not do is spawn the author's own model and call the result a review: this
+# script reports, and the caller decides, which is why the fallback is not
+# taken here.
+# Judged BEFORE the budget is derived, deliberately: a crossing nobody can
+# reach is not made reachable by a budget, and an operator whose policy has a
+# bad budget value should still learn that the vendor is missing rather than
+# be told about arithmetic they cannot act on yet.
+if ! command -v "$CMD_BIN" >/dev/null 2>&1; then
+	echo "x  dispatch: agent harness '$HARNESS' invokes '$CMD_BIN', which is not on PATH — the crossing is unreachable." >&2
+	echo "   Exit 69 (EX_UNAVAILABLE). stdout is the model this tier maps to, or EMPTY when it maps only" >&2
+	echo "   an agent harness — the same 'nothing means inherit' this file uses everywhere. Spawn it" >&2
+	echo "   yourself if that is acceptable for this work, and say in your report that the crossing did" >&2
+	echo "   not happen." >&2
+	[ -n "${MODEL:-}" ] && printf '%s\n' "$MODEL"
+	exit 69
+fi
 
 # --- the budget: derived here, applied at the foot of this file ------------
 _budget_derive
