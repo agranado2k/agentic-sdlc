@@ -151,18 +151,12 @@ test("an ISO-shaped date that is not a date is a missing row, never 'NaN days ag
   cleanup(ctx);
 });
 
-// ONE DAY AHEAD IS A CLOCK, NOT A TYPO. The row's date is parsed as UTC
-// midnight while a human — or a fixture running `date +%Y-%m-%d` — writes it
-// in LOCAL time, so anywhere east of UTC the two disagree for part of every
-// day: at 00:30 in BST the local date is already tomorrow by UTC's reckoning.
-// Flagging that told an operator their correctly-dated row was mistyped, and
-// it turned tests/docs-demo.sh red nightly on any such host while CI, which
-// runs in UTC, never saw it. Both dates here are computed in UTC on both
-// sides of the comparison, so this pair means the same thing wherever it runs.
+// One day ahead is a clock, not a typo — the validator's own comment says
+// why. Both dates here are computed in UTC on both sides of the comparison,
+// so this pair means the same thing wherever it runs.
 test("a row one day ahead is clock skew against UTC, not a future date", () => {
   const ctx = ctxFor({ "docs/diary.md": diaryWith(iso(-1)) });
-  const out = run(ctx);
-  assert.equal(hasRule(out, "housekeeping-row-missing"), false);
+  assert.deepEqual(run(ctx), []);
   cleanup(ctx);
 });
 

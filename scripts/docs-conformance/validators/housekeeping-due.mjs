@@ -24,6 +24,9 @@ export const id = "housekeeping-due";
 export const ROW_LABEL = "Last housekeeping";
 export const DEFAULT_WINDOW_DAYS = 30;
 export const DEFAULT_DIARY = "docs/diary.md";
+// The most a correctly-dated row can lead UTC: one day, since the largest
+// offset in use is UTC+14 and that is still inside a single day.
+const CLOCK_SKEW_DAYS = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // The row as the template stamps it: a table row whose first cell is the bold
@@ -79,7 +82,7 @@ export function run(ctx) {
   // dated correctly-today reads as tomorrow. The largest offset in use is
   // UTC+14, still inside a single day, so one day of slack covers every zone
   // while leaving the mistyped year — which is off by hundreds — caught.
-  if (ageDays < -1) {
+  if (ageDays < -CLOCK_SKEW_DAYS) {
     return [
       {
         validator: id,

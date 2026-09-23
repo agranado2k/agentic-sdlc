@@ -867,8 +867,11 @@
 # none of them. `/housekeeping` (#236): its CHECKLIST.md gains a
 # suite-scratch item beside the dispatch-scratch one, worded conditionally because the test
 # harness it describes is yours and not something this kit ships you.
-# #241's kit-only half — stale pointers to the wrapper, and four guards that
-# had no failing check — touches no shipped file and needs nothing from you.
+# Two kit-only changes are in this window too, and neither needs anything
+# from you: #239 pinned the kit's own implementer tier to a newer model id,
+# and #241 fixed stale pointers that still located the reviewer refusal in
+# the kit's wrapper after 0.22.0 moved it, and gave four guards the failing
+# checks they lacked.
 
 shared-layer: 0.23.0
 
