@@ -190,8 +190,7 @@ word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The mapp
 `self-implemented` answer is one model, so on a session running that model it
 is the implementer's own; the resolver compares its answer to yours, falls back
 to the plain reviewer tier when they are equal, and prints nothing with a
-warning when nothing differs — which your report then says (ADR-0007). Since
-0.22.0 the rule is the shared resolver's, so every project has it.
+warning when nothing differs — which your report then says (ADR-0007).
 
 ## Agent trust boundary
 

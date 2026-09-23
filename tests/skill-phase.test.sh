@@ -264,6 +264,10 @@ esac
 stub_dispatch /review-pr --tier --prompt 'x'
 [ "$S_STATUS" = 2 ] && pass "--tier followed by another flag dies on the tier it read, not silently" ||
 	fail "--tier --prompt exited $S_STATUS"
+case "$S_ERR" in
+*"unknown tier '--prompt'"*) pass "…naming the word it took, so the cause is legible" ;;
+*) fail "…without naming what it read: '$S_ERR'" ;;
+esac
 # A domain is the second half of a ticket's stamp, never a sizing of its own.
 stub_dispatch /review-pr --domain tests --prompt 'x'
 [ "$S_STATUS" = 2 ] && pass "--domain without --tier is refused" || fail "--domain alone exited $S_STATUS"
