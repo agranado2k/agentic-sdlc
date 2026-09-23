@@ -151,8 +151,17 @@ test("an ISO-shaped date that is not a date is a missing row, never 'NaN days ag
   cleanup(ctx);
 });
 
-test("a future-dated row is malformed, not fresh — it would silence the nudge forever", () => {
+// One day ahead is a clock, not a typo — the validator's own comment says
+// why. Both dates here are computed in UTC on both sides of the comparison,
+// so this pair means the same thing wherever it runs.
+test("a row one day ahead is clock skew against UTC, not a future date", () => {
   const ctx = ctxFor({ "docs/diary.md": diaryWith(iso(-1)) });
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
+
+test("a row far in the future is still malformed — it would silence the nudge forever", () => {
+  const ctx = ctxFor({ "docs/diary.md": diaryWith(iso(-400)) });
   const out = run(ctx);
   assert.ok(hasRule(out, "housekeeping-row-missing"));
   assert.match(out[0].message, /future/);

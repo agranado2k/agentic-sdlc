@@ -823,13 +823,57 @@
 # stamp outranks a skill's phase, so a session dispatching on its ticket's
 # behalf passes the stamp rather than letting the skill's phase answer — the
 # third statement of the rule #229 settled, after the root manual's Capability
-# tiers section and the glossary's **Phase** entry, both of which landed in
-# 0.21.0's wave. tests/agents-tiers.test.sh gains a section driving the
+# tiers section and the glossary's **Phase** entry — which landed in THIS
+# window, in #233, not in 0.21.0's wave as this note first said; #233 also
+# gave scripts/skill-dispatch.kit.sh its --tier/--domain override, and #232
+# gave tests/skill-phase.test.sh the stub agent harness that lets its dispatch
+# case run where no third-party CLI is installed. All kit-only, so a consumer
+# sees none of it, but the enumeration is the wave's record and was wrong. tests/agents-tiers.test.sh gains a section driving the
 # refusal from the shared resolver against a throwaway policy with a LOCAL
 # reviewer (the kit's own crosses vendors, where there is nothing to refuse)
 # and against the shipped empty mapping, where the rule must be inert.
 
-shared-layer: 0.22.0
+# 0.23.0 — two documents stop lying, one of them in the migration guide for
+# the rule it documents. ONE shared file changes content by correction —
+# UPDATING.md — and one more by fix: scripts/docs-conformance/validators/
+# housekeeping-due.mjs. No file joins or leaves the layer.
+#   From #240: 0.22.0's arriving-from paragraph showed a consumer how to wire
+# the reviewer refusal, and its example set AGENT_SESSION_MODEL to a TIER's
+# answer — `"$(sh scripts/agents.lib.sh planner)"` — rather than to the model
+# the session runs on. Those coincide only when the session is a spawn of
+# that tier, which is the assumption ADR-0007 exists to remove: on any other
+# session the variable names a model nobody is running, the comparison never
+# matches, and the author's own model is handed straight back unrefused. The
+# paragraph's prose was right and its example contradicted it, which is the
+# half a consumer copies. It is a placeholder now, with the rule stated
+# beside it.
+#   From #235: the housekeeping-due advisory called a correctly-dated row
+# future-dated. It parses the row as UTC midnight while an operator — or a
+# fixture running `date +%Y-%m-%d` — writes it in local time, so anywhere
+# east of UTC the two disagree for part of every day and a row dated today
+# reads as tomorrow. The validator's own comment already granted that skew
+# for the nudge window; it now grants it for the future check too, one day
+# of slack, which covers every zone in use (UTC+14 is still inside a day)
+# while leaving the mistyped year the rule exists for — off by hundreds —
+# caught. CI runs in UTC and never saw this; the failure was local and
+# nightly, and it turned tests/docs-demo.sh red for an hour each night.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. Two skills changed in this window.
+# `/implement` (#238): its step 9 is now an imperative naming the skill to
+# invoke — `/review-pr`, not a review prompt of your own — and requiring the
+# findings to be POSTED on the PR, with step 10 reporting the review's URL so
+# a missing one is conspicuous; the forcing case was a session that reviewed
+# a shared-layer release, acted on the findings, and left the PR carrying
+# none of them. `/housekeeping` (#236): its CHECKLIST.md gains a
+# suite-scratch item beside the dispatch-scratch one, worded conditionally because the test
+# harness it describes is yours and not something this kit ships you.
+# Two kit-only changes are in this window too, and neither needs anything
+# from you: #239 pinned the kit's own implementer tier to a newer model id,
+# and #241 fixed stale pointers that still located the reviewer refusal in
+# the kit's wrapper after 0.22.0 moved it, and gave four guards the failing
+# checks they lacked.
+
+shared-layer: 0.23.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
