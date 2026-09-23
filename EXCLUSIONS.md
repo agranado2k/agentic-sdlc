@@ -129,9 +129,26 @@ of it (shared invariant §10).
 ## Mechanisms
 
 The standing rule covers non-skill mechanisms too — a guard, a gate, a workflow,
-a manifest entry. None has been considered-and-excluded since this file started,
-so the section is empty rather than absent: an empty section invites the next
-entry, while a missing one invites a README section nobody links.
+a manifest entry. The first entries arrived with the decision trace (ADR-0008,
+PRD #237), which considered and left out three things a trace usually comes
+with:
+
+- **A database.** The trace is per-day JSONL under the root checkout, and
+  that is the interface: DuckDB reads the files as one relation and a CSV
+  export feeds SQLite or anything else. A database would be a dependency the
+  kit's core — POSIX sh and git — has promised never to need, and a schema a
+  consumer would have to migrate. Excluded; an importer is the consumer's,
+  reading the same files.
+- **A dashboard.** The reader is `show`, `summary` and a retrospective skill
+  whose output is candidate tickets, because a finding that does not become a
+  ticket changes nothing. A dashboard is a surface the kit has no way to run
+  (the kit has no user-facing surface of its own — see `/dogfood` above) and
+  would name a vendor. Excluded.
+- **A vendor telemetry SDK.** The agent harness's own telemetry export exists
+  and is documented as a later, shipped-but-off route under the adapter. As
+  the trace's mechanism it was rejected: it names its vendor on every line
+  and knows nothing of tickets, tiers, findings or verdicts, which are the
+  decisions the trace is about. Excluded as mechanism; documented as export.
 
 Two decisions that *look* like exclusions but are recorded elsewhere, because
 the thing was shipped rather than left out: `adapters/` arrives dormant and

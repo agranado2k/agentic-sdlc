@@ -66,7 +66,8 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Policy file** — a file the kit ships whose whole purpose is to be edited by
   the consumer, deliberately kept OUT of the shared layer:
   `scripts/docs-conformance/config.mjs`, `scripts/guards.config.sh`,
-  `scripts/agents.config.sh`. Mechanism is shared; policy is local.
+  `scripts/agents.config.sh`, `scripts/trace.config.sh`. Mechanism is shared;
+  policy is local.
   - _Avoid_: "config" alone — it hides the load-bearing half, which is that this
     file is *not* copied verbatim and may diverge freely.
 - **Shim** — a tool-specific entry point (`CLAUDE.md`, `GEMINI.md`) holding
@@ -198,6 +199,41 @@ Grouped by the seam each term belongs to. Entry shape:
   never opens a fresh one. Every suite runs inside one too, applied by the
   shared test harness through the dispatcher's own derivation; `AGENT_SUITE_BUDGET=off`
   is the off switch. Ref: ADR-0006, and its #209 amendment.
+- **Trace** — the append-only record of the chain's decisions: one event per
+  line, per-day files under a trace directory the policy file names, written
+  by `scripts/trace.sh` and read only after the fact — by the operator, a
+  diagnosis or a retrospective, never by a chain skill (shared invariant §4).
+  Unconfigured is a working state: with no directory named, an emit is a
+  silent no-op. The kit traces itself through a never-shipped twin of the
+  policy file. Ref: ADR-0008, PRD #237.
+  - _Avoid_: "log" (a trace is structured and joinable, a log is lines);
+    "telemetry" (nothing leaves the machine); "memory" (ADR-0005's non-goal
+    stands — the chain never reads it back).
+- **Event** — one line of the trace: a schema version, a UTC timestamp, an
+  id, a **kind** from a closed vocabulary (unknown is a usage error, like an
+  unknown tier), the resolver's words where they apply, an outcome, a
+  one-line reason, raw token counts, and an open `data` map of strings.
+  Fields sit in a fixed order and absent optionals are omitted; nothing ever
+  rewrites one — a correction is a new event.
+  - _Avoid_: "entry", "record" — both are used for the decision records.
+- **Subject** — what an event is about, written `<type>:<reference>`:
+  `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
+  `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
+  PRD, a ticket, a PR and a session all join on one column, and `show`
+  matches one exactly — `ticket:#3` never finds `ticket:#34`. An event may
+  name secondary subjects under `related`.
+  - _Avoid_: "target", "ref" alone.
+- **Run** — one invocation of a skill, with an id the trace hands out at
+  `begin` and closes at `end`; every event emitted in between carries it, a
+  nested skill carries the outer as `parent`, and a dispatched worker gets
+  its own with the dispatching run as parent. Arrives with #248; the name is
+  settled here.
+  - _Avoid_: "session" for this — a session is the agent harness's, and holds
+    many runs.
+- **Blob** — a payload too large or too shaped for one event line — a prompt,
+  a tool result, spike evidence — stored once under the trace directory by
+  content hash and referenced from the event. Arrives with #248.
+  - _Avoid_: "attachment".
   - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
     here is a ceiling on one tree, derived fresh per dispatch. "Limit" and
     "cap" stay ordinary words for the host facts a budget is derived *from*

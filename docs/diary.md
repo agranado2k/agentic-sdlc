@@ -1363,6 +1363,34 @@ runs one on the model that phase deserves; the implementer tier is pinned to
 four spellings were refused by a CLI whose catalog predates the release
 (`claude update` is owed, and until then the cross-harness path 400s).
 
+### 2026-09-23 — The chain starts writing down what it decides
+
+PRD #237 asked for one thing the kit had never had: a record of its own
+decisions — which tier a ticket got and which model actually ran it, what a
+review found and what `/pr-iterate` did with each finding, what a wave cost —
+as data rather than prose, local first, importable later, and readable by a
+retrospective that turns recurring failures into tickets. The planning
+session settled the four choices that shape it (a gitignored `.trace/` at the
+root checkout; decisions plus one-line reasons plus tool calls; opt-in through
+a policy file that ships empty; a new `/retro` skill as the one reader), and
+ADR-0008 records them. `/to-tickets` cut ten tracer bullets, #246–#255; the
+frontier is the spike on the agent harness's hooks (#246) and the script
+itself (#247).
+
+#247 is the slice landing now: `scripts/trace.sh` with `emit`, `show`,
+`verify` and `dir`; the policy file that ships with `TRACE_DIR` empty; the
+kit's never-shipped twin and its one-line wrapper — the third instance of
+ADR-0003's arrangement, and the reason hard rule 10 now says "the kit
+wrapper" rather than naming one; the glossary's Trace, Event, Subject, Run
+and Blob; the exclusions file's first three mechanism entries. The suite's
+load-bearing case is an emit from inside a real linked worktree landing under
+the root checkout and surviving the worktree's removal — the property that
+makes the trace compatible with hard rule 1. Its ninth banner also caught
+the suite's own bug: the helper that writes a policy file rewrote one scratch
+path, so every handle pointed at the last value written and an "unconfigured"
+case was reading a configured trace; each call now gets its own file. The script is not yet in `VERSION`'s manifest — #255
+carries the release, once the wave's shared-layer edits are all in.
+
 ### 2026-09-23 (later) — 0.24.0: an unreachable crossing says whose failure it is
 
 Exit 2 meant two different people's problems under one number: "you asked

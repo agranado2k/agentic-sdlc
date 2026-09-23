@@ -553,6 +553,12 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/trace.test.sh` proves the decision trace's first slice (ADR-0008):
+  an unconfigured emit is a silent no-op, a configured one appends one JSON
+  line in a fixed field order, the escaper and the closed kind vocabulary
+  refuse what they should, `show` matches a subject exactly, `verify` names a
+  bad line by file and line, and an emit from inside a linked worktree lands
+  under the root checkout and survives the worktree's removal.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving
@@ -689,6 +695,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
+sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
