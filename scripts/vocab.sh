@@ -261,21 +261,21 @@ vocab_each_rule() {
 _vocab_nl=$(printf '\nx')
 _vocab_nl=${_vocab_nl%x}
 
-# vocab_conflicts — stdin carries `T <field> <tokens…>` for every closed field
-# and `R <af> <av> <cf> <op> <cv>` for the rules under test. Rules are judged
-# in GROUPS whose antecedents all hold at once: at check time the triggered
-# set is one group, at load time every rule sharing an antecedent is one (the
-# `grouped` switch). Prints one line per way a group cannot be satisfied: two
-# rules demanding different values of one field, a rule demanding a value
-# another excludes, or exclusions covering every token of a closed field.
-# Empty output is a satisfiable set.
+# vocab_conflicts <as-one|by-antecedent> — stdin carries `T <field> <tokens…>`
+# for every closed field and `R <af> <av> <cf> <op> <cv>` for the rules under
+# test. Rules are judged in GROUPS whose antecedents all hold at once: at
+# check time the triggered set is one group (`as-one`), at load time every
+# rule sharing an antecedent is one (`by-antecedent`). Prints one line per
+# way a group cannot be satisfied: two rules demanding different values of
+# one field, a rule demanding a value another excludes, or exclusions
+# covering every token of a closed field. Empty output is a satisfiable set.
 vocab_conflicts() {
-	awk -v grouped="${1:-0}" '
+	awk -v grouping="$1" '
 	function q(s) { return "\047" s "\047" }
 	function both(a, b) { print "policy contradiction: " q(a) " and " q(b) " cannot both hold" }
 	$1 == "T" { ntok[$2] = NF - 2; next }
 	$1 == "R" {
-		g = grouped ? $2 "=" $3 : ""
+		g = grouping == "by-antecedent" ? $2 "=" $3 : ""
 		cf = $4; op = $5; cv = $6
 		r = $2 "=" $3 " => " cf op cv
 		if (op == "=") {
@@ -308,11 +308,11 @@ vocab_token_lines() {
 	done
 }
 
-# vocab_report_conflicts <R lines> [grouped] — run the detector and refuse
-# each finding.
+# vocab_report_conflicts <R lines> <as-one|by-antecedent> — run the detector
+# and refuse each finding.
 vocab_report_conflicts() {
 	[ -n "$1" ] || return 0
-	_rc_out=$({ vocab_token_lines; printf '%s\n' "$1"; } | vocab_conflicts "${2:-0}")
+	_rc_out=$({ vocab_token_lines; printf '%s\n' "$1"; } | vocab_conflicts "$2")
 	[ -n "$_rc_out" ] || return 0
 	printf '%s\n' "$_rc_out" | while IFS= read -r _rc_line; do
 		echo "x vocab: $_rc_line" >&2
@@ -373,7 +373,7 @@ vocab_validate_policy() {
 	_vocab_rule_lines=
 	vocab_each_rule vocab_check_policy_rule
 	# Rules sharing an antecedent all fire together: hold each such group.
-	vocab_report_conflicts "$_vocab_rule_lines" 1
+	vocab_report_conflicts "$_vocab_rule_lines" by-antecedent
 	return 0
 }
 
@@ -468,7 +468,7 @@ vocab_check() {
 	fi
 	_vocab_fired=
 	vocab_each_rule vocab_apply_rule
-	vocab_report_conflicts "$_vocab_fired"
+	vocab_report_conflicts "$_vocab_fired" as-one
 	[ "$_vocab_bad" = 0 ] || exit 2
 	exit 0
 }
