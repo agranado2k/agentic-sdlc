@@ -598,7 +598,12 @@ function tr_prices(into,   spec, n, i, rows, t) {
 # this check is the whitelist and the fold is only the convenience.
 trace_price_var() {
 	_pv_tok=$(printf '%s' "$1" | tr 'a-z' 'A-Z' | sed 's/[^A-Z0-9]/_/g')
-	case $_pv_tok in '' | [!A-Z]* | *[!A-Z0-9_]*) return 1 ;; esac
+	# The token is a SUFFIX of TRACE_PRICE_, so it may start with a digit:
+	# TRACE_PRICE_9_BAD is a legal name. Only a character outside [A-Z0-9_]
+	# — none can survive the fold — or an empty token is refused; the first
+	# draft also refused a leading digit, a restriction the shell never had
+	# and the resolver's own domain fold does not impose (review of PR #262).
+	case $_pv_tok in '' | *[!A-Z0-9_]*) return 1 ;; esac
 	printf '%s' "$_pv_tok"
 }
 
@@ -722,6 +727,21 @@ trace_summary() {
 		trace_unconfigured_note
 		return 0
 	}
+	# A glance is not an import: summary never refuses, but a damaged trace
+	# is said in summary's OWN first line, so a total nobody mistakes for
+	# clean; verify's findings go to stderr as they do for export, which still
+	# refuses outright (operator decision, 2026-09-28).
+	_su_vst=0
+	if [ -n "$_su_since" ]; then
+		_su_bad=$(trace_verify --since "$_su_since") || _su_vst=$?
+	else
+		_su_bad=$(trace_verify) || _su_vst=$?
+	fi
+	if [ "$_su_vst" != 0 ]; then
+		[ -n "$_su_bad" ] && printf '%s\n' "$_su_bad" >&2
+		_su_n=$(printf '%s\n' "$_su_bad" | grep -c .)
+		printf 'verify: FAILED — %s bad line(s) on this selection; the totals below include them\n' "$_su_n"
+	fi
 	trace_load_prices "$_su_since"
 	trace_note_unpriced
 	# %d and not %s for the counts: awk converts a number to a string through
