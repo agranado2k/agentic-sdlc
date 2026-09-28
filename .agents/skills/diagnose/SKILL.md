@@ -78,7 +78,7 @@ If you cannot state the prediction, the hypothesis is a vibe — discard or shar
 
 **Show the ranked list to the user before testing.** They often have domain knowledge that re-ranks instantly ("we just deployed a change to #3"), or know hypotheses they've already ruled out. Cheap checkpoint, big time saver. Don't block on it — proceed with your ranking if the user is away.
 
-Record each hypothesis at the rank it finally holds: `sh scripts/trace.sh emit kind=hypothesis outcome=proposed data.rank=<1..n> data.prediction=<the falsifiable prediction, one line> reason=<the hypothesis, one line> || :`.
+Record each hypothesis at the rank it finally holds: `sh scripts/trace.sh emit kind=hypothesis outcome=proposed data.rank=<1..n> data.prediction='<the falsifiable prediction, one line>' reason='<the hypothesis, one line>' || :`.
 
 ## Phase 4 — Instrument
 
@@ -92,7 +92,7 @@ Tool preference:
 
 **Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single grep. Untagged logs survive; tagged logs die.
 
-Each probe closes the hypothesis it tested, after the probe ran: `sh scripts/trace.sh emit kind=hypothesis outcome=confirmed|refuted|inconclusive data.rank=<the rank it held> reason=<what the probe showed, one line> || :`.
+Each probe closes the hypothesis it tested, after the probe ran: `sh scripts/trace.sh emit kind=hypothesis outcome=confirmed|refuted|inconclusive data.rank='<the rank it held>' reason='<what the probe showed, one line>' || :`.
 
 **Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, high-resolution clock, profiler, query plan), then bisect. Measure first, fix second.
 
@@ -121,7 +121,7 @@ Required before declaring done:
 - [ ] All `[DEBUG-...]` instrumentation removed (`grep` the prefix)
 - [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
 - [ ] The hypothesis that turned out correct is stated in the commit / PR message — so the next debugger learns
-- [ ] The run is closed: `sh scripts/trace.sh end outcome=ok|stopped reason=<the confirmed hypothesis, or why the diagnosis stopped, one line> || :`
+- [ ] The run is closed: `sh scripts/trace.sh end outcome=ok|stopped reason='<the confirmed hypothesis, or why the diagnosis stopped, one line>' || :`
 
 **Then ask: what would have prevented this bug?** If the answer is architectural — no good test seam, tangled callers, hidden coupling — that is a decision, not a chore. Hand it to `/improve-codebase-architecture`, which turns "there was no correct seam" into a designed deepening; the specifics this diagnosis produced (which seam was missing, which callers the bug needed) are exactly the input that skill's exploration phase otherwise has to guess at. What comes out is a record under `docs/adr/` or a ticket via `/to-tickets` — never a drive-by refactor on top of the fix (shared invariant §10). Make the recommendation **after** the fix is in, not before: you have more information now than when you started.
 

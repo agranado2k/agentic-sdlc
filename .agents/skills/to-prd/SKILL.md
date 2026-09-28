@@ -22,7 +22,7 @@ Check with the user that these seams match their expectations.
 
 3. Write the PRD using the template below, then **reread it as a stranger.** The PRD is read by sessions that hold none of this conversation (shared invariant §4). Whatever you would tell a teammate before they read it belongs in the Objective and the Problem Statement, not in your head; if a section only makes sense with the chat open, it is not finished.
 
-4. Publish it to the project issue tracker with the `ready-for-agent` label if the work is mechanical with a checkable definition of done — no additional triage needed. Then record the publish, once the tracker has given it a number: `sh scripts/trace.sh emit kind=prd.write subject=prd:#<issue> outcome=published data.label=<ready-for-agent, or none> reason=<the Objective, one line> || :`. The trace is written here and never read (ADR-0008); unconfigured, the call is a silent no-op.
+4. Publish it to the project issue tracker with the `ready-for-agent` label if the work is mechanical with a checkable definition of done — no additional triage needed. Then record the publish, once the tracker has given it a number: `sh scripts/trace.sh emit kind=prd.write subject=prd:#<issue> outcome=published data.label='<ready-for-agent, or none>' reason='<the Objective, one line>' || :`. The trace is written here and never read (ADR-0008); unconfigured, the call is a silent no-op.
 
 <prd-template>
 

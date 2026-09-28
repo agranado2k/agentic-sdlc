@@ -28,6 +28,20 @@
 #      /merge-train and /pr-iterate with its three verdicts.
 #   6. /review-pr resolves the reviewer tier ONCE, before its sub-agents, and
 #      records a spawn per agent carrying that model and the agent's name.
+#   7. Every documented line RUNS: each `sh scripts/trace.sh …` span, with a
+#      literal in place of every <placeholder> and the [optionals] dropped, is
+#      executed in file order against a scratch trace and exits 0, and what it
+#      wrote verifies. A placeholder that stands for prose gets a two-word
+#      literal, so an unquoted `reason=<one line>` — exit 2 at the script,
+#      swallowed by `|| :` — is red here instead of a silent hole in every
+#      consumer's trace (review of PR #286, H-1).
+#
+# The thirteen are the chain the root manual draws (spec → tickets →
+# implementation → review → landing) plus the skills that step out of it and
+# decide something. /grill-with-docs, /explain-diff, /dogfood and
+# /improve-codebase-architecture are outside this suite on purpose: the ticket
+# (#250) sized the thirteen; a grill.decision from /grill-with-docs is a
+# candidate ticket, not an oversight this suite should hide.
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -50,7 +64,11 @@ skill_md() { printf '%s/%s/SKILL.md' "$SKILLS" "$1"; }
 
 # trace_lines <file> — the lines that run the trace script, whatever the
 # subcommand: the surface every rule below reads.
-trace_lines() { grep -E "sh $TRACE( |\`)" "$1" 2>/dev/null; }
+trace_lines() { grep -E "sh scripts/trace\\.sh( |\`)" "$1" 2>/dev/null; }
+
+# trace_spans <file> — the backticked `sh scripts/trace.sh …` spans, one per
+# line, backticks stripped: the commands an agent following the document runs.
+trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d '`'; }
 
 # ---------------------------------------------------------------------------
 banner "0. The files under test, and the vocabulary they are held to"
@@ -87,13 +105,18 @@ banner "2. An emit is never load-bearing: every emit, begin and end ends in '|| 
 # ---------------------------------------------------------------------------
 for s in $CHAIN; do
 	f=$(skill_md "$s")
-	bare=$(grep -nE "sh $TRACE +(emit|begin|end)" "$f" | grep -vF '|| :' || true)
+	bare=$(grep -nE "sh scripts/trace\\.sh +(emit|begin|end)" "$f" | grep -vF '|| :' || true)
 	if [ -z "$bare" ]; then
 		pass "/$s: every trace call tolerates failure"
 	else
 		fail "/$s has a trace call with no '|| :' — ADR-0008 clause 4: a trace error must not become an exit status a skill acts on:"
 		printf '%s\n' "$bare" | sed 's/^/        | /'
 	fi
+	# A span wrapped across two lines by a prose reflow would vanish from every
+	# line-oriented rule here in silence; hold each span to its line.
+	open=$(grep -n '`sh scripts/trace\.sh' "$f" | grep -vE '`sh scripts/trace\.sh[^`]*`' || true)
+	[ -z "$open" ] && pass "/$s: every trace span closes on the line it opens" ||
+		{ fail "/$s has a trace span that runs past its line — the rules above cannot see it:"; printf '%s\n' "$open" | sed 's/^/        | /'; }
 done
 
 # ---------------------------------------------------------------------------
@@ -105,7 +128,7 @@ for d in "$SKILLS"/*/; do
 	if [ -z "$reads" ]; then
 		pass "/$s never reads the trace"
 	else
-		fail "/$s reads the trace — ADR-0008 clause 7, shared invariant §4: the readers are the operator, a diagnosis and a retrospective:"
+		fail "/$s reads the trace — ADR-0008 clause 7, shared invariant §4: no skill calls show, summary or export; the trace is read after the fact, by the operator or the retrospective:"
 		printf '%s\n' "$reads" | sed 's/^/        | /'
 	fi
 done
@@ -150,8 +173,8 @@ expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end
 expects pr-iterate begin kind=finding.triage kind=pr.iterate kind=feedback end
-expects merge-train kind=merge.land kind=feedback end data.tag=
-expects diagnose kind=hypothesis
+expects merge-train begin kind=merge.land kind=feedback end data.tag=
+expects diagnose begin kind=hypothesis end
 expects prototype kind=spike.verdict --blob
 expects housekeeping kind=housekeeping.finding
 expects design-brief kind=brief.decide
@@ -186,5 +209,52 @@ printf '%s\n' "$spawn" | grep -qF 'model=' && pass "the per-agent spawn records 
 	fail "the per-agent spawn does not carry model= — story 19: the review's independence is a fact only when recorded"
 printf '%s\n' "$spawn" | grep -qF 'data.agent=' && pass "and names the agent" ||
 	fail "the per-agent spawn does not carry data.agent="
+
+# ---------------------------------------------------------------------------
+banner "7. Every documented line runs: placeholders filled, the span executes and verifies"
+# ---------------------------------------------------------------------------
+# runnable <span> — the span an agent would type, with the document's
+# placeholders made literal: `[optional]` groups dropped; `<one word>`
+# becomes `x` and `<several words>` becomes `x y`, so a prose placeholder that
+# the document left unquoted breaks exactly as the real value would; an
+# `a|b|c` choice becomes its first option; `$model` becomes a model id; the
+# `--blob` file becomes a real one; the trailing `|| :` goes, so the exit
+# status is the script's own.
+BLOBF="$SCRATCH/blob.x"
+printf 'evidence\n' >"$BLOBF"
+runnable() {
+	printf '%s\n' "$1" | sed \
+		-e 's/ *|| *:$//' \
+		-e 's/ \[[^][]*\]//g' \
+		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
+		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
+		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
+		-e 's/\$model/x/g' \
+		-e "s|--blob x|--blob $BLOBF|"
+}
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	dir="$SCRATCH/run.$s"
+	n=0; bad=0
+	while IFS= read -r span; do
+		[ -n "$span" ] || continue
+		n=$((n + 1))
+		cmd=$(runnable "$span")
+		err=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" 2>&1 >/dev/null ); st=$?
+		if [ "$st" != 0 ]; then
+			bad=$((bad + 1))
+			fail "/$s line does not run (exit $st): $span"
+			printf '        | as run: %s\n        | %s\n' "$cmd" "$err"
+		fi
+	done <<EOF
+$(trace_spans "$f")
+EOF
+	[ "$bad" = 0 ] && pass "/$s: all $n documented trace lines run" || true
+	if [ -d "$dir" ]; then
+		( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+			pass "/$s: and what they wrote verifies" ||
+			fail "/$s: the lines ran but the trace they wrote does not verify"
+	fi
+done
 
 t_done "trace skills contract"

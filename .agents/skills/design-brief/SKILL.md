@@ -137,7 +137,7 @@ browser is available; diagrams as real drawings, never ASCII art — shared
 code craft §10), at most two pages, and tell the human the absolute path.
 
 Record the recommendation as presented:
-`sh scripts/trace.sh emit kind=brief.decide outcome=presented data.candidate=<A, B, or hybrid> reason=<why this one, one line> || :`.
+`sh scripts/trace.sh emit kind=brief.decide outcome=presented data.candidate='<A, B, or hybrid>' reason='<why this one, one line>' || :`.
 The trace is not the tree: it is local, ignored, written here and never read
 (ADR-0008); unconfigured, the call is a silent no-op.
 
@@ -168,7 +168,7 @@ The three writes are **one local commit**, `docs(design-brief): …`, so the
 brief lands as one reviewable decision. This skill never pushes: delivery
 is `/implement`'s, and landing is the human's. Record the decision once it
 is written:
-`sh scripts/trace.sh emit kind=brief.decide outcome=recorded data.candidate=<the one chosen> data.record=<the decision record's number> reason=<the human's yes, in their words where they gave a reason> || :`.
+`sh scripts/trace.sh emit kind=brief.decide outcome=recorded data.candidate='<the one chosen>' data.record='<decision record number>' reason='<the human yes, in their words where they gave a reason>' || :`.
 
 ### 6. Hand off
 

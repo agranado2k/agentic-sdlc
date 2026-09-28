@@ -124,7 +124,7 @@ to — is in `CHECKLIST.md`; this is the order.
    this pass's one write stays the stamp. Record each finding with its route,
    one event per finding, and one `outcome=none` per item that found nothing,
    so "nothing found" is a statement in the trace too:
-   `sh scripts/trace.sh emit kind=housekeeping.finding outcome=ticket|deepening|brief|deletion|none data.item=<the checklist item, 1-8> reason=<the finding, one line> || :`.
+   `sh scripts/trace.sh emit kind=housekeeping.finding outcome=ticket|deepening|brief|deletion|none data.item='<the checklist item, 1-8>' reason='<the finding, one line>' || :`.
    The trace is not the tree and not a fix: it is local, ignored, written here
    and never read (ADR-0008); unconfigured, the call is a silent no-op.
 6. **Stamp the row**: `| **Last housekeeping** | <today, ISO, UTC> — <one line:

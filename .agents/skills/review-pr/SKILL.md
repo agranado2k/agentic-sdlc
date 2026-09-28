@@ -32,7 +32,7 @@ Steps:
 
 This ensures the review is focused, actionable, and doesn't generate noise from pre-existing code.
 
-With the scope locked, open the review's run, so every event below carries it: `sh scripts/trace.sh begin review-pr subject=<pr:#N, or branch:<name> when there is no PR yet> || :`. The trace is written here and never read (ADR-0008, shared invariant §4 — a reviewer that read its own history would be reviewing the narrative); unconfigured, every call is a silent no-op.
+With the scope locked, open the review's run, so every event below carries it: `sh scripts/trace.sh begin review-pr subject=pr:#<N> || :` — with `branch:<name>` in place of `pr:#<N>` when there is no PR yet, on this line and on every line below. The trace is written here and never read (ADR-0008, shared invariant §4 — a reviewer that read its own history would be reviewing the narrative); unconfigured, every call is a silent no-op.
 
 ### 1. Context Discovery (cheap/fast model)
 
@@ -52,7 +52,7 @@ Agents 1–6 are **Axis 1 — Standards** ("is it built right?"). Agent 7 is **A
 
 All agents MUST only analyze code within the branch scope defined in step 0.
 
-**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. Record each spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=<pr:#N or branch:<name>> tier=reviewer model=$model outcome=in-session data.agent=<the agent's number and name> reason=<what this agent audits, one line> || :`.
+**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. Record each spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=pr:#<N> tier=reviewer model=$model outcome=in-session data.agent='<agent number and name>' reason='<what this agent audits, one line>' || :`.
 
 #### Agent 1 — Security Sentinel
 
@@ -235,7 +235,7 @@ Anatomy rules:
 - Items are numbered INITIAL-N (C = Critical, H = High, M = Medium, L = Low). Numbering resets per category, and the IDs are how findings stay citable across iterations and commit messages.
 - Axis 1 owns the four circle badges. It never borrows the confirm-list's glyph set, and never lends its badges to §5b — the two axes must be tell-apart-at-a-glance.
 
-Record every finding the report carries, as it is raised, and then the axis's verdict once: `sh scripts/trace.sh emit kind=finding.raise subject=<pr:#N or branch:<name>> outcome=raised data.id=<its INITIAL-N id> data.severity=critical|high|medium|low data.agent=<the agent that raised it> data.where=<file:line> reason=<the finding's what/where line, one line> || :` per finding, then `sh scripts/trace.sh emit kind=review.verdict subject=<pr:#N or branch:<name>> outcome=pass|blocked data.axis=1 reason=<the Verdict line> || :`. A finding the filtering dropped in §4 is not raised and not recorded.
+Record every finding the report carries, as it is raised, and then the axis's verdict once: `sh scripts/trace.sh emit kind=finding.raise subject=pr:#<N> outcome=raised data.id='<its INITIAL-N id>' data.severity=critical|high|medium|low data.agent='<the agent that raised it>' data.where=<file:line> reason='<the finding what/where line>' || :` per finding, then `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1 reason='<the Verdict line>' || :`. A finding the filtering dropped in §4 is not raised and not recorded.
 
 ### 5b. Behavior Confirm-List (MANDATORY — Axis 2, never merged with §5)
 
@@ -269,7 +269,7 @@ When no mutation adapter is wired at all, the 🧬 line does not appear; say so 
 
 Rules: never assign severities to these items, never mix them into the C/H/M/L lists, never omit a ✅ (the human should see the whole behavioral footprint, not just the suspects). 🔀 items come first — they are the cheapest to act on and the reason the rest of the list is hard to read. 🧬 comes last and appears at most once: it measures the list rather than joining it, and it is the only line that is never a question for the human. If Agent 7 found no behavior deltas, say exactly that — an empty confirm-list is a meaningful result.
 
-Record this axis's verdict once, as a count of what the human must confirm — the items themselves stay on the PR, where the human reads them: `sh scripts/trace.sh emit kind=review.verdict subject=<pr:#N or branch:<name>> outcome=confirm|pass data.axis=2 data.unspecified=<count> data.mixed=<count> data.missing=<count> reason=<what the human must confirm, one line; or 'no behavior deltas'> || :`. `confirm` when any item needs the human; `pass` when none does.
+Record this axis's verdict once, as a count of what the human must confirm — the items themselves stay on the PR, where the human reads them: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=confirm|pass data.axis=2 data.unspecified=<count> data.mixed=<count> data.missing=<count> reason='<what the human must confirm, one line; or no behavior deltas>' || :`. `confirm` when any item needs the human; `pass` when none does.
 
 After presenting the summary, you MUST ask:
 
@@ -308,4 +308,4 @@ This skill never merges (shared invariant §7). It reviews, reports, and stops.
 
 ### 7. Finalization
 
-**Closing**: Restate the verdict in one line — the reader answers the question below without scrolling back up — close the run with it (`sh scripts/trace.sh end outcome=ok reason=<the verdict, one line> || :`), and then you MUST end the response with: "Review complete. Which severity categories or specific items should I post as PR comments?"
+**Closing**: Restate the verdict in one line — the reader answers the question below without scrolling back up — close the run with it (`sh scripts/trace.sh end outcome=ok reason='<the verdict, one line>' || :`), and then you MUST end the response with: "Review complete. Which severity categories or specific items should I post as PR comments?"
