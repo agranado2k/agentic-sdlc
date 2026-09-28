@@ -9,6 +9,14 @@
 # the kit's own way of working: an emit from inside a linked worktree lands
 # under the ROOT checkout, so pruning the worktree loses nothing.
 #
+# Sections 10 to 16 are the SECOND slice (ticket #248): a run has an identity
+# and a payload has a home. `begin` and `end` are a run's two ends, identity
+# has one precedence (an explicit field, the environment, then the pointer file
+# and the run stack), only those two subcommands rewrite the stack and both by
+# rename, an event over 4000 bytes is refused rather than split across two
+# writes, a payload is stored once by git's own content hash, and the trace
+# directory names the schema its lines were written under.
+#
 # Every case is driven RED first (hard rule 9): the suite was written against
 # no script at all, and each assertion names the wrong implementation it
 # would catch.
@@ -189,7 +197,144 @@ case $S_OUT in *"$TODAY.jsonl:7"*) pass "the non-JSON line is named by file:line
 t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" verify
 [ "$S_STATUS" = 0 ] && pass "verify on an unconfigured trace is exit 0 — nothing to check" || fail "verify unconfigured exited $S_STATUS — out: $S_OUT err: $S_ERR"
 
-banner "10. The kit's own wrapper resolves through the kit twin, and passes every argument through"
+banner "10. A run has an identity: begin hands one out, an emit picks it up, end closes it"
+R="$SCRATCH/runs"; RON=$(policy "$R")
+RFILE="$R/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#248'
+[ "$S_STATUS" = 0 ] && pass "begin exits 0" || fail "begin exited $S_STATUS — out: '$S_OUT' err: '$S_ERR'"
+RUN1=$S_OUT
+printf '%s\n' "$RUN1" | grep -qE '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}$' &&
+	pass "begin prints a run id of the documented shape: sortable stamp, pid, random bytes" || fail "begin printed '$RUN1'"
+case $(tail -n 1 "$RFILE") in
+*'"kind":"run.start","skill":"implement","subject":"ticket:#248","run":"'"$RUN1"'"'*) pass "and appends run.start naming the skill, the subject and the run" ;;
+*) fail "run.start wrong: $(tail -n 1 "$RFILE")" ;;
+esac
+case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "the outermost run was given a parent" ;; *) pass "the outermost run has no parent — the field is omitted, not empty" ;; esac
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=red reason='the first case'
+case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN1"'"'*) pass "an emit inside the run carries it without being told" ;; *) fail "the emit did not pick the run up: $(tail -n 1 "$RFILE")" ;; esac
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" begin tdd
+RUN2=$S_OUT
+[ -n "$RUN2" ] && [ "$RUN2" != "$RUN1" ] && pass "a nested begin hands out a different id" || fail "the nested begin printed '$RUN2'"
+case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "and records the run it nests inside as parent" ;; *) fail "the nested run.start: $(tail -n 1 "$RFILE")" ;; esac
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason='it passes'
+case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "an emit inside the nested run carries both" ;; *) fail "the nested emit: $(tail -n 1 "$RFILE")" ;; esac
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason='the cycle is done'
+[ "$S_STATUS" = 0 ] && pass "end exits 0" || fail "end exited $S_STATUS: $S_ERR"
+case $(tail -n 1 "$RFILE") in *'"kind":"run.end"'*'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*'"outcome":"ok"'*) pass "and emits run.end for the run it popped" ;; *) fail "run.end wrong: $(tail -n 1 "$RFILE")" ;; esac
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='after the pop'
+case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN1"'"'*) pass "the next emit is back on the outer run — end popped, it did not clear" ;; *) fail "after the pop: $(tail -n 1 "$RFILE")" ;; esac
+case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "the outer run acquired a parent" ;; *) pass "and has no parent again" ;; esac
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok
+[ "$S_STATUS" = 0 ] && pass "the outer run closes too" || fail "the second end exited $S_STATUS: $S_ERR"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end
+[ "$S_STATUS" = 2 ] && pass "end with no run open is exit 2 — there is nothing to close" || fail "end on an empty stack exited $S_STATUS"
+case $S_ERR in *begin*) pass "and the refusal says what opens one" ;; *) fail "the refusal did not name begin: $S_ERR" ;; esac
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='no run open'
+case $(tail -n 1 "$RFILE") in *'"run"'*) fail "an emit outside any run still carried one: $(tail -n 1 "$RFILE")" ;; *) pass "with no run open the run field is omitted" ;; esac
+assert_status 2 "begin being told its kind is exit 2 — the subcommand owns it" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement kind=note
+assert_out_has "begin sets kind itself"
+assert_status 2 "end being told which run it closes is exit 2 — the stack says which" -- env TRACE_CONFIG="$RON" sh "$TRACE" end run=made-up
+assert_out_has "end sets run itself"
+assert_status 2 "begin with no skill is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin
+
+banner "11. Identity precedence: the environment first, then the pointer file and the stack, then omitted"
+STACK=$(ls "$R"/current/*.runs 2>/dev/null | head -n 1)
+[ -n "$STACK" ] && pass "the run stack sits at current/<toplevel key>.runs under the trace directory" || fail "no run stack under $R/current"
+KEY=$(basename "$STACK" .runs)
+printf 'sess-from-pointer\n' >"$R/current/$KEY"
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason=pointer
+case $(tail -n 1 "$RFILE") in *'"session":"sess-from-pointer"'*) pass "the pointer file beside the stack, under the same key, names the session" ;; *) fail "the pointer was not read: $(tail -n 1 "$RFILE")" ;; esac
+env TRACE_CONFIG=$RON TRACE_SESSION=sess-from-env sh "$TRACE" emit kind=note reason=env-session
+case $(tail -n 1 "$RFILE") in *'"session":"sess-from-env"'*) pass "TRACE_SESSION in the environment beats the pointer file" ;; *) fail "the environment lost to the pointer: $(tail -n 1 "$RFILE")" ;; esac
+RUN3=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement)
+RUN4=$(env TRACE_CONFIG=$RON sh "$TRACE" begin review-pr)
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason=from-the-stack
+case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN4"'","parent":"'"$RUN3"'"'*) pass "two deep, the stack answers both run and parent" ;; *) fail "the stack answered: $(tail -n 1 "$RFILE")" ;; esac
+env TRACE_CONFIG=$RON TRACE_RUN=run-from-env sh "$TRACE" emit kind=note reason=env-run
+case $(tail -n 1 "$RFILE") in *'"run":"run-from-env"'*) pass "TRACE_RUN beats the stack — a dispatched worker is told its run" ;; *) fail "TRACE_RUN lost to the stack: $(tail -n 1 "$RFILE")" ;; esac
+case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "a run named by the environment borrowed a parent from a stack that is not its own: $(tail -n 1 "$RFILE")" ;; *) pass "and the local stack's parent is not borrowed for it" ;; esac
+env TRACE_CONFIG=$RON TRACE_RUN=run-from-env TRACE_PARENT=parent-from-env sh "$TRACE" emit kind=note reason=env-parent
+case $(tail -n 1 "$RFILE") in *'"run":"run-from-env","parent":"parent-from-env"'*) pass "TRACE_PARENT is how the dispatcher names the run it spawned from" ;; *) fail "TRACE_PARENT was not read: $(tail -n 1 "$RFILE")" ;; esac
+env TRACE_CONFIG=$RON TRACE_RUN=run-from-env sh "$TRACE" emit kind=note run=run-from-arg reason=arg
+case $(tail -n 1 "$RFILE") in *'"run":"run-from-arg"'*) pass "an explicit run= argument is the most specific answer of the three" ;; *) fail "the argument lost: $(tail -n 1 "$RFILE")" ;; esac
+
+banner "12. Only begin and end rewrite the run stack, and both by rename"
+STACK="$R/current/$KEY.runs"
+[ -f "$STACK" ] && pass "the stack is a file at the key the pointer shares" || fail "no stack file at $STACK"
+INODE=$(ls -i "$STACK" | awk '{ print $1 }')
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='an emit only appends'
+[ "$(ls -i "$STACK" | awk '{ print $1 }')" = "$INODE" ] && pass "an emit leaves the stack file exactly as it was — same inode" || fail "an emit rewrote the run stack"
+env TRACE_CONFIG=$RON sh "$TRACE" begin tdd >/dev/null
+PUSHED=$(ls -i "$STACK" | awk '{ print $1 }')
+[ "$PUSHED" != "$INODE" ] && pass "begin replaces the file by rename — a parallel reader sees the old stack or the new one, never half of one" || fail "begin wrote the stack in place"
+env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok
+[ "$(ls -i "$STACK" | awk '{ print $1 }')" != "$PUSHED" ] && pass "and so does end" || fail "end wrote the stack in place"
+[ -z "$(find "$R/current" -name '*.runs.*' 2>/dev/null)" ] && pass "and neither leaves its staging file behind" || fail "a staging file survives under $R/current"
+
+banner "13. Fifty emits in parallel all land, all verify, and no two share an id"
+P="$SCRATCH/parallel"; PON=$(policy "$P")
+n=0
+while [ "$n" -lt 50 ]; do
+	env TRACE_CONFIG=$PON sh "$TRACE" emit kind=note subject="ticket:#$n" reason="parallel $n" &
+	n=$((n + 1))
+done
+wait
+PFILE="$P/events/$TODAY.jsonl"
+[ "$(wc -l <"$PFILE" | tr -d ' ')" = 50 ] && pass "fifty backgrounded emits appended fifty whole lines" || fail "expected 50 lines, got $(wc -l <"$PFILE" | tr -d ' ')"
+t_run_split env TRACE_CONFIG=$PON sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "and every one of them verifies" || fail "verify failed after fifty parallel appends: $S_OUT"
+[ "$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$PFILE" | sort -u | wc -l | tr -d ' ')" = 50 ] &&
+	pass "and no two ids collide — the random bytes are what make that true within one second" || fail "ids collided across the fifty"
+
+banner "14. An event is capped at 4000 bytes, so an append stays one write"
+BEFORE=$(wc -l <"$RFILE" | tr -d ' ')
+BIG=$(awk 'BEGIN { while (i++ < 4100) printf "x" }')
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$BIG"
+[ "$S_STATUS" = 2 ] && pass "a line over the cap is exit 2" || fail "an over-cap line exited $S_STATUS"
+case $S_ERR in *4000*) pass "and the refusal names the cap" ;; *) fail "the refusal did not name the cap: $S_ERR" ;; esac
+case $S_ERR in *--blob*) pass "and points at --blob, where a payload that size belongs" ;; *) fail "the refusal did not point at --blob: $S_ERR" ;; esac
+[ "$(wc -l <"$RFILE" | tr -d ' ')" = "$BEFORE" ] && pass "and nothing was appended" || fail "the refused event was written anyway"
+NEARLY=$(awk 'BEGIN { while (i++ < 3600) printf "y" }')
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$NEARLY"
+[ "$S_STATUS" = 0 ] && pass "a long line under the cap is still written" || fail "a line under the cap was refused: $S_ERR"
+
+banner "15. --blob gives a payload a home: git's own content hash, stored once, moved into place"
+PAY="$SCRATCH/payload.txt"
+printf 'line one\nline two\na quote " and a backslash \\ and a tab\there\n' >"$PAY"
+HASH=$(git hash-object "$PAY")
+FAN=$(printf '%.2s' "$HASH")
+BYTES=$(wc -c <"$PAY" | tr -d ' ')
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob "$PAY" outcome=confirmed reason='the evidence is in the blob'
+[ "$S_STATUS" = 0 ] && pass "an emit carrying a blob exits 0" || fail "the blob emit exited $S_STATUS: $S_ERR"
+[ -f "$R/blobs/$FAN/$HASH" ] && pass "the payload is stored at blobs/<first two of the hash>/<the hash>" || fail "no blob at $R/blobs/$FAN/$HASH"
+[ "$HASH" = "$(git hash-object "$R/blobs/$FAN/$HASH")" ] && pass "and its name is git's hash of its own content — one hashing mechanism, not a second one" || fail "the stored blob does not hash to its name"
+cmp -s "$PAY" "$R/blobs/$FAN/$HASH" && pass "byte for byte what was handed in" || fail "the stored blob differs from the payload"
+case $(tail -n 1 "$RFILE") in *'"blob":"'"$HASH"'","blob_bytes":'"$BYTES"'}') pass "and the event carries the hash and the byte count, last before data" ;; *) fail "the blob fields are wrong: $(tail -n 1 "$RFILE")" ;; esac
+BLOB_INODE=$(ls -i "$R/blobs/$FAN/$HASH" | awk '{ print $1 }')
+COPY="$SCRATCH/payload-copy.txt"; cp "$PAY" "$COPY"
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note --blob "$COPY" reason='the same payload under another name'
+[ "$(find "$R/blobs" -type f | wc -l | tr -d ' ')" = 1 ] && pass "identical content under another name is stored once" || fail "the same payload was stored twice"
+[ "$(ls -i "$R/blobs/$FAN/$HASH" | awk '{ print $1 }')" = "$BLOB_INODE" ] && pass "and the one already there was not rewritten" || fail "an existing blob was rewritten"
+BLOB_OUT=$(cat "$PAY" | env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note --blob - reason='the payload arrived on stdin' 2>&1)
+case $(tail -n 1 "$RFILE") in *'"blob":"'"$HASH"'"'*) pass "--blob - hashes what it reads on stdin to the very same name" ;; *) fail "stdin hashed differently: $(tail -n 1 "$RFILE") ($BLOB_OUT)" ;; esac
+[ "$(find "$R/blobs" -type f | wc -l | tr -d ' ')" = 1 ] && pass "and that payload too was stored once" || fail "the stdin payload was stored again"
+[ -z "$(find "$R/tmp" -type f 2>/dev/null)" ] && pass "and the scratch it staged through is left with nothing in it" || fail "staging files survive under $R/tmp"
+assert_status 2 "--blob naming no file is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload"
+assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
+
+banner "16. The trace directory says which schema its lines are, and verify refuses one it does not know"
+[ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify is green on a schema it knows" || fail "verify failed a clean trace: $S_OUT $S_ERR"
+printf '2\n' >"$R/SCHEMA"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
+[ "$S_STATUS" = 1 ] && pass "a trace whose schema is not this reader's is exit 1" || fail "verify exited $S_STATUS on schema 2"
+case $S_ERR in *SCHEMA*) pass "and the refusal names the file that said so" ;; *) fail "the refusal did not name SCHEMA: $S_ERR" ;; esac
+case $S_ERR in *2*) pass "and the version it found" ;; *) fail "the refusal did not name the version: $S_ERR" ;; esac
+[ -z "$S_OUT" ] && pass "and it judges no line — a schema it cannot read is not a verdict on the lines" || fail "verify judged lines under an unknown schema: $S_OUT"
+printf '1\n' >"$R/SCHEMA"
+
+banner "17. The kit's own wrapper resolves through the kit twin, and passes every argument through"
 # The suite may itself be running from a linked worktree of the kit, so the
 # expected answer is the ROOT checkout's .trace/ — the same derivation the
 # script uses, asked of git rather than assumed.
@@ -203,13 +348,15 @@ KIT_ROOT=$(dirname "$(git -C "$KIT" rev-parse --path-format=absolute --git-commo
 grep -q "^TRACE_DIR=''" "$KIT/scripts/trace.config.sh" && pass "the shipped policy file carries TRACE_DIR empty" || fail "scripts/trace.config.sh does not ship TRACE_DIR empty"
 grep -q "^TRACE_DIR='.trace'" "$KIT/scripts/trace.kit.config.sh" && pass "the kit twin turns tracing on here" || fail "scripts/trace.kit.config.sh does not set TRACE_DIR"
 
-banner "11. The wiring around the script — what the rest of the repo must say"
+banner "18. The wiring around the script — what the rest of the repo must say"
 grep -qx '\.trace/' "$KIT/.gitignore" && pass ".gitignore keeps .trace/ out of version control" || fail ".gitignore does not list .trace/"
 for f in scripts/trace.kit.config.sh scripts/trace.kit.sh tests/trace.test.sh; do
 	grep -q "KIT_ONLY=.*$f" "$KIT/bootstrap.sh" && pass "$f is on bootstrap's KIT_ONLY list" || fail "$f is missing from KIT_ONLY"
 done
 grep -qF 'tests/trace.test.sh' "$KIT/README.md" && pass "README names this suite" || fail "README does not name tests/trace.test.sh"
 grep -q 'scripts/trace.kit.sh' "$KIT/AGENTS.md" && pass "the root manual names the kit wrapper" || fail "AGENTS.md does not name scripts/trace.kit.sh"
+grep -qF '`begin`/`end`' "$KIT/AGENTS.md" && pass "and names begin/end, the two subcommands this slice adds" || fail "AGENTS.md's row does not name begin/end"
+grep -qF 'run stack' "$KIT/docs/domain-glossary.md" && pass "the glossary names the run stack" || fail "the glossary has no run stack"
 grep -q '^- \*\*Trace\*\*' "$KIT/docs/domain-glossary.md" && pass "the glossary defines Trace" || fail "the glossary has no Trace entry"
 [ -f "$KIT"/docs/adr/0008-*.md ] && pass "ADR-0008 exists" || fail "no ADR-0008"
 

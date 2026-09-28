@@ -553,12 +553,18 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
-- `sh tests/trace.test.sh` proves the decision trace's first slice (ADR-0008):
-  an unconfigured emit is a silent no-op, a configured one appends one JSON
-  line in a fixed field order, the escaper and the closed kind vocabulary
-  refuse what they should, `show` matches a subject exactly, `verify` names a
-  bad line by file and line, and an emit from inside a linked worktree lands
-  under the root checkout and survives the worktree's removal.
+- `sh tests/trace.test.sh` proves the decision trace (ADR-0008): an
+  unconfigured emit is a silent no-op, a configured one appends one JSON line
+  in a fixed field order, the escaper and the closed kind vocabulary refuse
+  what they should, `show` matches a subject exactly, `verify` names a bad line
+  by file and line, and an emit from inside a linked worktree lands under the
+  root checkout and survives the worktree's removal. Then a run has an
+  identity: `begin` hands one out and `end` closes it, a nested `begin`
+  records its parent, the environment outranks the run stack, only `begin` and
+  `end` rewrite that stack and both by rename, fifty parallel emits all land
+  and all verify, an event over 4000 bytes is refused with the refusal
+  pointing at `--blob`, a payload is stored once under git's own content hash,
+  and `verify` refuses a schema it does not know.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving

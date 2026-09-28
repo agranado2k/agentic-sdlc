@@ -2,7 +2,10 @@
 # trace.sh — THE decision trace. One implementation, every caller.
 #
 #   sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [related='<type:ref> …']
-#                            [<field>=<value> …] [data.<key>=<value> …] [--dry-run]
+#                            [<field>=<value> …] [data.<key>=<value> …]
+#                            [--blob <file>|-] [--dry-run]
+#   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
+#   sh scripts/trace.sh end [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
 #   sh scripts/trace.sh dir
@@ -15,8 +18,9 @@
 # fact. ADR-0008 is the record; PRD #237 the design.
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
-# prints the resolved directory, `show` the matching lines, `emit --dry-run` the
-# line it would append; a successful `emit` prints nothing. Every diagnostic is
+# prints the resolved directory, `begin` the run id it just opened, `show` the
+# matching lines, `emit --dry-run` the line it would append; a successful
+# `emit` and a successful `end` print nothing. Every diagnostic is
 # on stderr, prefixed `trace:`. Exit 0 is done, INCLUDING the unconfigured
 # no-op; exit 2 is a usage error, an unknown kind, a malformed subject or value,
 # or a policy file named explicitly and missing; exit 1 comes from `verify`
@@ -56,10 +60,34 @@
 # space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
 # session and a run all join on one column. Token counts are bare integers.
 # A value may not carry a control character other than a tab: a multi-line
-# payload is a blob, not a field, and --blob arrives with #248.
+# payload is a blob, not a field.
 #
 # Craft §11: an event is one `printf` of one short line to an append-mode
-# descriptor, and nothing here ever truncates a file it did not create.
+# descriptor, and nothing here ever truncates a file it did not create. The
+# 4000-byte CAP is that single write made checkable — an event over it is
+# refused at emit, with the refusal pointing at --blob, rather than split
+# across two writes that a parallel emit could interleave.
+#
+# A RUN IS A SKILL INVOCATION, and `begin`/`end` are its two ends: `begin`
+# prints a fresh run id, appends run.start and pushes the run onto a stack
+# under the trace directory; `end` pops it and appends run.end with the
+# outcome. Every emit in between carries that run without being told, and a
+# nested `begin` carries the outer run as its `parent`. Identity's precedence
+# is an explicit field, then TRACE_SESSION / TRACE_RUN / TRACE_PARENT in the
+# environment (how a dispatched worker is told whose trail it joins), then the
+# pointer file and the run stack, then the field is omitted. The stack is
+# per-working-tree, and `begin` and `end` are its only writers — an emit never
+# touches it, so fifty parallel sub-agents only ever append.
+#
+# A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
+# spike evidence. `--blob <file>` (or `-` for standard input) stores it under
+# blobs/<first two of the hash>/<hash>, named by GIT's own content hash, and
+# the event carries the hash and the byte count. Identical content is stored
+# once and never rewritten; the write is staged and lands by rename.
+#
+# SCHEMA, a file in the trace directory, names the version of the lines under
+# it. `verify` refuses a trace whose schema it does not know rather than
+# reporting every line as malformed.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/trace.config.sh.
@@ -68,13 +96,17 @@ set -u
 
 _trace_here=$(cd "$(dirname "$0")" && pwd -P)
 
+TRACE_SCHEMA=1
+TRACE_EVENT_CAP=4000
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value> …] [data.<key>=<value> …] [--dry-run]
+usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value> …] [data.<key>=<value> …] [--blob <file>|-] [--dry-run]
+       sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
+       sh scripts/trace.sh end [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
@@ -204,18 +236,206 @@ trace_id() {
 }
 
 # ---------------------------------------------------------------------------
+# Identity: the session, the run, and the run this one nests inside.
+#
+# PRECEDENCE, most specific answer first — an explicit field on the emit, then
+# the environment, then this working tree's pointer file and run stack, then
+# the field is omitted. A missing identity is a FACT, not an error: a bare emit
+# from a hook belongs to no run, and saying so is the honest line.
+#
+# WHY PER WORKING TREE. The trace directory is the root checkout's and every
+# worktree appends to it, so one shared stack would interleave two sessions'
+# runs. The pointer file and the stack sit under a key derived from the
+# toplevel THIS SCRIPT lives in — git's hash of that path, the same hash the
+# blob store names payloads by, so there is one hashing mechanism here.
+#
+# WHY ONLY begin AND end WRITE THE STACK. Fifty parallel sub-agents all emit;
+# an emit that touched the stack would make fifty writers race over one file.
+# An emit only appends to the day's event file, and both stack writers replace
+# the file by RENAME, so a concurrent reader sees one whole stack or the other.
+# The stack's OWNER is a skill's main thread, one begin and one end at a time;
+# two concurrent begins in the same working tree would still lose a push, which
+# is why a parallel worker is handed TRACE_RUN instead of opening a run here.
+
+# trace_hash_stdin / trace_hash_file <path> — git's content hash. `--stdin` for
+# both: it applies no attribute filter, so the name a payload gets here is the
+# name `git hash-object` gives it anywhere, and a path is never parsed as an
+# option. GIT_DIR and GIT_WORK_TREE are scrubbed for trace_git's reason.
+trace_hash_stdin() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null; }
+trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1") 2>/dev/null; }
+
+# trace_key — sets TRACE_KEY, TRACE_POINTER and TRACE_STACK for this working
+# tree. Needs TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which
+# leaves identity to the environment alone rather than failing an emit.
+trace_key() {
+	_tk_top=$(trace_git rev-parse --show-toplevel) || _tk_top=
+	[ -n "$_tk_top" ] || _tk_top=$(cd "$_trace_here/.." && pwd -P)
+	TRACE_KEY=$(printf '%s' "$_tk_top" | trace_hash_stdin)
+	[ -n "$TRACE_KEY" ] || return 1
+	TRACE_POINTER="$TRACE_ROOT_DIR/current/$TRACE_KEY"
+	TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+	return 0
+}
+
+trace_first_line() {
+	[ -f "$1" ] && sed -n '1p' "$1"
+	return 0
+}
+
+# trace_stack top|below — the run at the top of this working tree's stack, or
+# the one under it, which is the top's parent. Empty when there is none.
+trace_stack() {
+	[ -f "$TRACE_STACK" ] || return 0
+	awk -v want="$1" '{ below = top; top = $0 } END {
+		if (want == "top") print top
+		else if (NR >= 2) print below
+	}' "$TRACE_STACK"
+	return 0
+}
+
+# trace_identity — sets _id_session, _id_run and _id_parent from the
+# environment, then from the pointer file and the stack, then leaves them
+# empty. An explicit field on the emit is applied by the caller, on top.
+trace_identity() {
+	_id_session=${TRACE_SESSION:-}
+	_id_run=${TRACE_RUN:-}
+	_id_parent=${TRACE_PARENT:-}
+	[ -n "${TRACE_ROOT_DIR:-}" ] || return 0
+	trace_key || return 0
+	[ -n "$_id_session" ] || _id_session=$(trace_first_line "$TRACE_POINTER")
+	# The stack answers run and parent TOGETHER or not at all: a worker whose
+	# run came from the environment belongs to another process's trail, and
+	# borrowing this working tree's stack for its parent would invent an edge.
+	if [ -z "$_id_run" ]; then
+		_id_run=$(trace_stack top)
+		[ -n "$_id_parent" ] || _id_parent=$(trace_stack below)
+	fi
+	return 0
+}
+
+# trace_push <run id> / trace_pop — the ONLY two writers of the run stack, and
+# both write by RENAME: the new stack is staged beside the old one and replaces
+# it in one step, so a parallel emit reading the stack sees one whole stack or
+# the other and never a partial file. Nothing here appends to it in place.
+trace_push() {
+	mkdir -p "$(dirname "$TRACE_STACK")" || die "cannot create $(dirname "$TRACE_STACK")"
+	_ps_stage="$TRACE_STACK.$$"
+	{
+		[ -f "$TRACE_STACK" ] && cat "$TRACE_STACK"
+		printf '%s\n' "$1"
+	} >"$_ps_stage" || die "cannot stage the run stack at $_ps_stage"
+	mv "$_ps_stage" "$TRACE_STACK" || die "cannot replace the run stack at $TRACE_STACK"
+}
+
+trace_pop() {
+	_pp_stage="$TRACE_STACK.$$"
+	sed '$d' "$TRACE_STACK" >"$_pp_stage" || die "cannot stage the run stack at $_pp_stage"
+	mv "$_pp_stage" "$TRACE_STACK" || die "cannot replace the run stack at $TRACE_STACK"
+}
+
+# ---------------------------------------------------------------------------
+# Blobs: a payload that does not fit on a line, stored once by content hash.
+
+# The scratch copy of a payload that arrived on standard input, removed however
+# this process ends — the cap can refuse the line after the payload was staged.
+_trace_blob_tmp=
+trace_cleanup() {
+	[ -n "$_trace_blob_tmp" ] && rm -f "$_trace_blob_tmp"
+	return 0
+}
+trap trace_cleanup EXIT INT TERM HUP
+
+# trace_blob_name <path|-> — NAMES the payload without storing it: sets
+# TRACE_BLOB to git's hash of its content, TRACE_BLOB_BYTES to its size and
+# TRACE_BLOB_SRC to the file to store. Naming is a read, so the line can be
+# assembled and checked against the cap before anything is written.
+trace_blob_name() {
+	_bn_src=$1
+	if [ "$_bn_src" = - ]; then
+		# Staged on the same filesystem as the blob store when there is one,
+		# so the store below is a rename rather than a second copy. Asked of
+		# TRACE_ROOT_DIR rather than of the caller: the helper then holds no
+		# opinion about who called it or what that caller called the answer.
+		if [ -n "${TRACE_ROOT_DIR:-}" ]; then
+			mkdir -p "$TRACE_ROOT_DIR/tmp" || die "cannot create $TRACE_ROOT_DIR/tmp"
+			_trace_blob_tmp="$TRACE_ROOT_DIR/tmp/stdin.$$"
+		else
+			_trace_blob_tmp=$(mktemp "${TMPDIR:-/tmp}/trace-blob.XXXXXX") || die "cannot stage standard input"
+		fi
+		cat >"$_trace_blob_tmp" || die "cannot stage standard input at $_trace_blob_tmp"
+		_bn_src=$_trace_blob_tmp
+	else
+		[ -f "$_bn_src" ] || die "--blob $_bn_src: no such file"
+	fi
+	TRACE_BLOB=$(trace_hash_file "$_bn_src")
+	[ -n "$TRACE_BLOB" ] || die "--blob: git could not hash $_bn_src, and git's hash is the blob's name"
+	TRACE_BLOB_BYTES=$(wc -c <"$_bn_src" | tr -d ' ')
+	TRACE_BLOB_SRC=$_bn_src
+}
+
+# trace_blob_store — puts the payload at blobs/<first two>/<hash>, once. The
+# store is content-addressed, so a payload already there is left EXACTLY as it
+# is: identical content is stored once and nothing rewrites a stored blob
+# (craft §11). The write is staged in the same tree and lands by rename, so a
+# reader never opens half a payload.
+trace_blob_store() {
+	_bs_dest="$TRACE_ROOT_DIR/blobs/$(printf '%.2s' "$TRACE_BLOB")/$TRACE_BLOB"
+	[ -f "$_bs_dest" ] && return 0
+	mkdir -p "$(dirname "$_bs_dest")" "$TRACE_ROOT_DIR/tmp" || die "cannot create the blob store under $TRACE_ROOT_DIR"
+	if [ "$TRACE_BLOB_SRC" = "$_trace_blob_tmp" ]; then
+		mv "$_trace_blob_tmp" "$_bs_dest" || die "cannot move the payload into $_bs_dest"
+		_trace_blob_tmp=
+	else
+		_bs_stage="$TRACE_ROOT_DIR/tmp/blob.$$"
+		cp "$TRACE_BLOB_SRC" "$_bs_stage" && mv "$_bs_stage" "$_bs_dest" ||
+			die "cannot store the payload at $_bs_dest"
+	fi
+	return 0
+}
+
+# trace_write_schema — the trace directory says which schema its lines are, so
+# a reader that does not know that schema can refuse instead of guessing. It is
+# written once, by rename, and never rewritten.
+trace_write_schema() {
+	[ -f "$TRACE_ROOT_DIR/SCHEMA" ] && return 0
+	_ws_stage="$TRACE_ROOT_DIR/SCHEMA.$$"
+	printf '%s\n' "$TRACE_SCHEMA" >"$_ws_stage" && mv "$_ws_stage" "$TRACE_ROOT_DIR/SCHEMA" ||
+		die "cannot write $TRACE_ROOT_DIR/SCHEMA"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
 # emit
 
 trace_emit() {
 	_em_dry=0
 	_em_kind=
 	_em_data=
+	_em_blob_src=
+	_em_on=0
+	TRACE_BLOB=
+	TRACE_BLOB_BYTES=
+	TRACE_BLOB_SRC=
 	for _em_f in $TRACE_STRING_FIELDS $TRACE_TOKEN_FIELDS; do eval "_em_v_$_em_f="; done
 
-	for _em_arg in "$@"; do
+	# A while loop rather than a `for`, because --blob takes the NEXT argument
+	# and a `for` cannot consume one.
+	while [ $# -gt 0 ]; do
+		_em_arg=$1
+		shift
 		case $_em_arg in
 		--dry-run) _em_dry=1 ;;
-		--blob | --blob=*) die "--blob is not in this slice yet; a multi-line payload has no home until it lands." ;;
+		--blob)
+			[ -z "$_em_blob_src" ] || die "one blob per event: a second --blob has nowhere to go"
+			[ $# -ge 1 ] || die "--blob needs a file, or - to read the payload from standard input"
+			_em_blob_src=$1
+			shift
+			;;
+		--blob=*)
+			[ -z "$_em_blob_src" ] || die "one blob per event: a second --blob has nowhere to go"
+			_em_blob_src=${_em_arg#--blob=}
+			[ -n "$_em_blob_src" ] || die "--blob needs a file, or - to read the payload from standard input"
+			;;
 		--*) usage ;;
 		*=*)
 			_em_key=${_em_arg%%=*}
@@ -254,6 +474,7 @@ trace_emit() {
 						case $_em_val in '' | *[!0-9]* | 0?*) die "$_em_key='$_em_val' is not a JSON integer — digits only, no leading zero" ;; esac
 						eval "_em_v_$_em_key=\$_em_val"
 						;;
+					blob | blob_bytes) die "$_em_key is set by --blob <file>, never as a field — a blob's name is git's hash of what was stored, not the caller's claim" ;;
 					*) die "unknown field '$_em_key' — a free key belongs under data.<key>" ;;
 					esac
 					;;
@@ -266,6 +487,25 @@ trace_emit() {
 	done
 	[ -n "$_em_kind" ] || die "emit needs kind=<kind>"
 
+	# The directory first: identity's fallbacks and the blob store both live in
+	# it, and whether it resolves at all is what makes this emit a no-op.
+	trace_dir && _em_on=1
+
+	# Identity, least specific last: a field given on the command line stands,
+	# anything it left empty is answered by the environment, then by this
+	# working tree's pointer file and run stack.
+	trace_identity
+	for _em_f in session run parent; do
+		eval "_em_cur=\${_em_v_$_em_f}"
+		[ -n "$_em_cur" ] && continue
+		eval "_em_v=\$_id_$_em_f"
+		[ -n "$_em_v" ] || continue
+		_em_esc=$(trace_json_str "$_em_v") || die "the $_em_f id carries a control character: '$_em_v'"
+		eval "_em_v_$_em_f=\$_em_esc"
+	done
+
+	[ -n "$_em_blob_src" ] && trace_blob_name "$_em_blob_src"
+
 	_em_line="{\"v\":1,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"id\":\"$(trace_id)\",\"kind\":\"$_em_kind\""
 	for _em_f in $TRACE_STRING_FIELDS; do
 		eval "_em_v=\${_em_v_$_em_f}"
@@ -275,16 +515,89 @@ trace_emit() {
 		eval "_em_v=\${_em_v_$_em_f}"
 		[ -n "$_em_v" ] && _em_line="$_em_line,\"$_em_f\":$_em_v"
 	done
+	[ -n "$TRACE_BLOB" ] && _em_line="$_em_line,\"blob\":\"$TRACE_BLOB\",\"blob_bytes\":$TRACE_BLOB_BYTES"
 	[ -n "$_em_data" ] && _em_line="$_em_line,\"data\":{$_em_data}"
 	_em_line="$_em_line}"
+
+	# The cap is craft §11's single write made checkable: a short line is one
+	# printf to an append-mode descriptor, which is what lets fifty parallel
+	# emits interleave without splitting one. Over it, the answer is a blob —
+	# never a truncated field, and never two writes.
+	_em_bytes=$(printf '%s\n' "$_em_line" | wc -c | tr -d ' ')
+	[ "$_em_bytes" -le "$TRACE_EVENT_CAP" ] ||
+		die "the event is $_em_bytes bytes and the cap is $TRACE_EVENT_CAP, so it would not be one write — move the payload into a blob: --blob <file> stores it once by content hash and the event carries the hash."
 
 	if [ "$_em_dry" = 1 ]; then
 		printf '%s\n' "$_em_line"
 		return 0
 	fi
-	trace_dir || { trace_unconfigured_note; return 0; }
+	[ "$_em_on" = 1 ] || { trace_unconfigured_note; return 0; }
+	[ -n "$TRACE_BLOB" ] && trace_blob_store
 	mkdir -p "$TRACE_ROOT_DIR/events" || die "cannot create $TRACE_ROOT_DIR/events"
+	trace_write_schema
 	printf '%s\n' "$_em_line" >>"$TRACE_ROOT_DIR/events/$(date -u +%Y-%m-%d).jsonl"
+}
+
+# ---------------------------------------------------------------------------
+# begin / end — the two ends of a run.
+
+# trace_reject_owned <subcommand> <argument…> — begin and end own kind, run and
+# parent: the subcommand decides all three, so a caller passing one is not
+# overriding a default, it is asking for an event that says something else
+# happened. Refused, rather than left to whichever assignment comes last.
+trace_reject_owned() {
+	_ro_cmd=$1
+	shift
+	for _ro_a in "$@"; do
+		case $_ro_a in
+		kind=* | run=* | parent=*) die "$_ro_cmd sets ${_ro_a%%=*} itself — drop it" ;;
+		-*) usage ;;
+		esac
+	done
+	return 0
+}
+
+# trace_begin <skill> [<field>=<value> …] — prints a fresh run id, appends
+# run.start, and pushes the run. The event is written BEFORE the push, so a
+# refused argument leaves no run open that nobody will close.
+trace_begin() {
+	[ $# -ge 1 ] || usage
+	_bg_skill=$1
+	shift
+	case $_bg_skill in '' | -* | *=*) usage ;; esac
+	trace_reject_owned begin "$@"
+	trace_dir || { trace_unconfigured_note; return 0; }
+	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
+	_bg_run=$(trace_id)
+	# The run that is current NOW is the one this one nests inside.
+	trace_identity
+	if [ -n "$_id_run" ]; then
+		trace_emit kind=run.start skill="$_bg_skill" run="$_bg_run" parent="$_id_run" "$@"
+	else
+		trace_emit kind=run.start skill="$_bg_skill" run="$_bg_run" "$@"
+	fi
+	trace_push "$_bg_run"
+	printf '%s\n' "$_bg_run"
+}
+
+# trace_end [<field>=<value> …] — pops this working tree's current run and
+# appends run.end for it. With no run open it is exit 2: a pop with nothing to
+# pop is a caller's mistake, not an outcome to record.
+trace_end() {
+	trace_reject_owned end "$@"
+	trace_dir || { trace_unconfigured_note; return 0; }
+	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
+	_en_run=$(trace_stack top)
+	[ -n "$_en_run" ] || die "no run is open for this working tree — begin opens one, end closes it"
+	_en_parent=$(trace_stack below)
+	# Popped first, so the run.end line is the last event that carries the run
+	# and the next emit is already back on the run outside it.
+	trace_pop
+	if [ -n "$_en_parent" ]; then
+		trace_emit kind=run.end run="$_en_run" parent="$_en_parent" "$@"
+	else
+		trace_emit kind=run.end run="$_en_run" "$@"
+	fi
 }
 
 # ---------------------------------------------------------------------------
@@ -352,6 +665,15 @@ trace_verify() {
 		esac
 	done
 	trace_dir || { trace_unconfigured_note; return 0; }
+	# The schema first. A trace written under a version this script does not
+	# know is not this reader's to judge — a reader that does not know the shape
+	# would report every line as malformed — so it refuses the trace, says which
+	# file said what, and judges no line.
+	_vf_schema=$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")
+	if [ -n "$_vf_schema" ] && [ "$_vf_schema" != "$TRACE_SCHEMA" ]; then
+		echo "x  trace: $TRACE_ROOT_DIR/SCHEMA says schema $_vf_schema and this script reads $TRACE_SCHEMA — a trace it does not know is not its to judge; update the shared layer before reading this one." >&2
+		return 1
+	fi
 	_vf_bad=0
 	_vf_node=0
 	command -v node >/dev/null 2>&1 && _vf_node=1
@@ -399,6 +721,8 @@ shift
 trace_load_config
 case $_trace_cmd in
 emit) trace_emit "$@" ;;
+begin) trace_begin "$@" ;;
+end) trace_end "$@" ;;
 show) trace_show "$@" ;;
 verify) trace_verify "$@"; exit $? ;;
 dir) trace_dir && printf '%s\n' "$TRACE_ROOT_DIR"; exit 0 ;;

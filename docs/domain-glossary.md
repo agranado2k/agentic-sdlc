@@ -226,13 +226,17 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
   nested skill carries the outer as `parent`, and a dispatched worker gets
-  its own with the dispatching run as parent. Arrives with #248; the name is
-  settled here.
+  its own with the dispatching run as parent. The open runs of one working
+  tree are a **run stack** under the trace directory, written only by `begin`
+  and `end`.
   - _Avoid_: "session" for this — a session is the agent harness's, and holds
     many runs.
 - **Blob** — a payload too large or too shaped for one event line — a prompt,
   a tool result, spike evidence — stored once under the trace directory by
-  content hash and referenced from the event. Arrives with #248.
+  content hash and referenced from the event: `--blob <file>` (or `-` for
+  standard input) stores it under `blobs/`, named by git's own hash of its
+  content, and the event carries that hash and the byte count. Identical
+  content is stored once.
   - _Avoid_: "attachment".
   - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
     here is a ceiling on one tree, derived fresh per dispatch. "Limit" and
