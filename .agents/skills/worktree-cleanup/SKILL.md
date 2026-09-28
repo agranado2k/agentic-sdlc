@@ -52,7 +52,11 @@ project's own memory.
    silently fixing history.
 
 4. **Report** the script's summary block plus the diary edit: base branch before
-   → after, worktrees removed, worktrees kept and why.
+   → after, worktrees removed, worktrees kept and why. Record each worktree's
+   fate from that summary, one event per worktree the script named:
+   `sh scripts/trace.sh emit kind=worktree.prune subject=worktree:<slug> outcome=removed|kept reason='<merged, and how the script knew; or why it was kept — dirty, unmerged>' || :`.
+   The trace is written here and never read (ADR-0008); unconfigured, the
+   call is a silent no-op.
 
 ## What "merged" means here
 

@@ -327,6 +327,14 @@ jobs:
       - name: Spec skills text suite
         run: sh tests/spec-skills.test.sh
 
+  trace-skills:
+    name: Every chain skill emits, and none reads the trace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trace skills text suite
+        run: sh tests/trace-skills.test.sh
+
   skill-phase:
     name: Every skill declares its phase
     runs-on: ubuntu-latest
