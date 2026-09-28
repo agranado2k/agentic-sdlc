@@ -1711,9 +1711,9 @@ improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
 $ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$S" "$K"
- .agents/skills/implement/SKILL.md | 64 +++++++++++++++++++++++++++++++++++++++
- .claude/skills/implement/SKILL.md | 44 ---------------------------
- 2 files changed, 64 insertions(+), 44 deletions(-)
+ .agents/skills/implement/SKILL.md | 63 +++++++++++++++++++++++++++++++++++++++
+ .claude/skills/implement/SKILL.md | 43 --------------------------
+ 2 files changed, 63 insertions(+), 43 deletions(-)
 $ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
