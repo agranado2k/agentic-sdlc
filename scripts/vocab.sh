@@ -431,13 +431,13 @@ vocab_check_value() {
 	return 0
 }
 
-# The values seen so far, per field, for the rules: _vocab_seen_<VAR>=1 and
-# _vocab_val_<VAR>=<value>. The last line for a field is the one the rules
-# read.
+# The values seen so far, per field, for the rules: _vocab_val_<VAR>=<value>.
+# A remembered value is never empty — vocab_check_value refused it first —
+# so an empty answer from vocab_value_of means the field was not seen. The
+# last line for a field is the one the rules read.
 vocab_remember() {
-	eval "_vocab_seen_$(vocab_var "$1")=1; _vocab_val_$(vocab_var "$1")=\$2"
+	eval "_vocab_val_$(vocab_var "$1")=\$2"
 }
-vocab_seen() { eval "[ \"\${_vocab_seen_$(vocab_var "$1"):-0}\" = 1 ]"; }
 vocab_value_of() { eval "printf '%s' \"\${_vocab_val_$(vocab_var "$1"):-}\""; }
 
 # vocab_check_line <line> — a decision line, or not one. A line with no colon,
@@ -461,10 +461,11 @@ vocab_check_line() {
 # Triggered rules are collected for the contradiction pass.
 vocab_apply_rule() {
 	vocab_rule_parts "$1" || return 0
-	vocab_seen "$_r_af" && [ "$(vocab_value_of "$_r_af")" = "$_r_av" ] || return 0
+	# $_r_av is never empty (vocab_rule_parts), so an unseen field's "" never matches.
+	[ "$(vocab_value_of "$_r_af")" = "$_r_av" ] || return 0
 	_vocab_fired="$_vocab_fired${_vocab_fired:+$_vocab_nl}R $_r_af $_r_av $_r_cf $_r_op $_r_cv"
-	vocab_seen "$_r_cf" || return 0
 	_ar_v=$(vocab_value_of "$_r_cf")
+	[ -n "$_ar_v" ] || return 0
 	case $_r_op in
 	=) [ "$_ar_v" = "$_r_cv" ] || vocab_refuse "$_r_cf: '$_ar_v' is refused by the rule $_r_text" ;;
 	'!=') [ "$_ar_v" != "$_r_cv" ] || vocab_refuse "$_r_cf: '$_ar_v' is refused by the rule $_r_text" ;;
