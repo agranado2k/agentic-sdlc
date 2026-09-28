@@ -566,6 +566,20 @@ skeleton (K0).
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
   is stored once under git's own hash of the bytes that were stored, and
   `verify` refuses a schema it does not know.
+
+- `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
+  Claude Code adapter's session hooks, against the checked-in payload and
+  redacted transcript fixtures. The session-start hook writes the pointer file
+  the shared script reads a session id back from, proved by a *later* emit
+  carrying that session rather than by looking for a file, and appends the
+  export to the env file the agent harness hands it. The session-end hook sums
+  tokens per model with a streamed response counted once, and the numbers are
+  held to the agent harness's own rollup line as an oracle: the session's usage
+  plus the subagent's equals it exactly. Then both failure shapes — a renamed
+  usage key and a PATH with no node — make the extractor exit 2 and the hook
+  record one event with `outcome=fail` naming the cause, and every hook exits 0
+  and says nothing on either stream throughout. Finally the kit-only
+  `.claude/settings.json` parses and names only hook scripts that exist.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving
@@ -703,6 +717,7 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
+sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
