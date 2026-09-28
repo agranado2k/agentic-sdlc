@@ -54,26 +54,21 @@ vocab fields
 s_assert_status 0 "'fields' prints the effective vocabularies"
 s_assert_out_has "tier: planner implementer mechanical reviewer" "the tier's four names, in the manual's order"
 s_assert_out_has "domain (open):" "the task domain is marked OPEN — membership is not enforced on it"
-FIELDS_OUT=$S_OUT
-printf '%s\n' "$FIELDS_OUT" | sed 's/ (open)//' | while IFS=: read -r field tokens; do
+# One pass, from a file rather than a pipeline so a failure reaches
+# $failures, with the `rule:` lines left out — a rule is not a field.
+printf '%s\n' "$S_OUT" | grep -v '^rule: ' | sed 's/ (open)//' >"$SCRATCH/fields"
+: >"$SCRATCH/refused"
+while IFS=: read -r field tokens; do
 	for tok in $tokens; do
-		if sh "$VOCAB" "$field: $tok" 2>"$SCRATCH/err"; then
-			pass "$field accepts '$tok'"
-		else
-			fail "$field refused its own token '$tok': $(cat "$SCRATCH/err")"
-		fi
+		sh "$VOCAB" "$field: $tok" </dev/null 2>>"$SCRATCH/refused" || echo "  $field:$tok" >>"$SCRATCH/refused"
 	done
-done
-# The inner loop ran in a pipeline's subshell, so its failures never reached
-# $failures; count them again from the outside.
-n_fields=$(printf '%s\n' "$FIELDS_OUT" | wc -l | tr -d ' ')
-[ "$n_fields" -ge 8 ] && pass "at least eight decision fields are declared ($n_fields)" ||
-	fail "expected the PRD's eight decision fields at least, got $n_fields"
-printf '%s\n' "$FIELDS_OUT" | sed 's/ (open)//' | while IFS=: read -r field tokens; do
-	for tok in $tokens; do sh "$VOCAB" "$field: $tok" 2>/dev/null || echo "$field:$tok"; done
-done >"$SCRATCH/refused"
-[ ! -s "$SCRATCH/refused" ] && pass "no shipped token is refused by its own field" ||
+done <"$SCRATCH/fields"
+[ ! -s "$SCRATCH/refused" ] && pass "every shipped token is accepted by its own field" ||
 	fail "shipped tokens refused: $(tr '\n' ' ' <"$SCRATCH/refused")"
+for field in tier label domain severity status action outcome confidence; do
+	grep -q "^$field:" "$SCRATCH/fields" && pass "the PRD's field '$field' is declared" ||
+		fail "the PRD's field '$field' is not declared"
+done
 
 # ---------------------------------------------------------------------------
 banner "An invented token, an empty value, a value outside the shape"
@@ -149,9 +144,12 @@ s_assert_status 2 "the same body with a misspelled tier is exit 2 on stdin"
 s_assert_err_has "tier: 'Implementor'"
 t_run_split sh "$VOCAB" check <"$SCRATCH/bad.body"
 s_assert_status 2 "'check' spelled out reads stdin the same way"
-printf 'Tier: reviewer' >"$SCRATCH/nonl"
+printf 'Tier: Implementor' >"$SCRATCH/nonl"
 t_run_split sh "$VOCAB" <"$SCRATCH/nonl"
-s_assert_resolved "" "a last line with no trailing newline is still read"
+s_assert_status 2 "a last line with no trailing newline is still read — refused, so the read is proved"
+s_assert_err_has "tier: 'Implementor'"
+t_run_split sh "$VOCAB" </dev/null
+s_assert_resolved "" "empty stdin — a body with no decision line in it yet — is legal"
 
 # The field name is matched without regard to case or separator; the value
 # exactly.
@@ -280,6 +278,12 @@ EOFC
 run_from "$FOREIGN" "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
 s_assert_resolved "" "the script's own repo supplies the vocabularies, not the repo the caller stands in"
 s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+# …nor the repo an inherited GIT_DIR points at: git exports it into hooks,
+# and .githooks/pre-push is a real caller. The script unsets both before it
+# asks git where it lives.
+t_run_split env GIT_DIR="$FOREIGN/.git" GIT_WORK_TREE="$FOREIGN" sh "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
+s_assert_resolved "" "an inherited GIT_DIR/GIT_WORK_TREE aimed at the foreign clone does not redirect discovery"
+s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
 LOOSE="$SCRATCH/loose"
 install_vocab "$LOOSE"
@@ -402,7 +406,13 @@ vocab fields
 s_assert_status 0 "rule by rule the set is fine — 'fields' is green"
 vocab 'Kind: spike' 'Tier: mechanical' 'Label: none'
 s_assert_status 2 "a mechanical spike has no legal label — a contradiction for these inputs"
-s_assert_err_has "policy contradiction"
+s_assert_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
+# With the label not given at all, no ordinary rule check can speak — the
+# check-time contradiction pass is the one thing that does.
+vocab 'Kind: spike' 'Tier: mechanical'
+s_assert_status 2 "…and with no label given, the contradiction is the one reason — the ordinary rule check is silent"
+s_assert_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
+s_assert_err_lacks "is refused by the rule"
 vocab 'Kind: build' 'Tier: mechanical' 'Label: ready-for-agent'
 s_assert_resolved "" "a build on the mechanical tier is fine — only one rule fires"
 
@@ -422,7 +432,7 @@ write_config "$CONTRA3" "$CONFIG_CONTRA3"
 VOCAB_CONFIG=$CONTRA3
 vocab 'Kind: spike'
 s_assert_status 2 "rules excluding every token of a field are a contradiction"
-s_assert_err_has "policy contradiction"
+s_assert_err_has "policy contradiction: the rules on label exclude every one of its tokens"
 
 # ---------------------------------------------------------------------------
 banner "The policy file is held to the same rules as a value — at load"
@@ -484,6 +494,54 @@ VOCAB_CONFIG="$SCRATCH/notok.config.sh"
 vocab 'Severity: high'
 s_assert_status 2 "a declared closed field with no tokens is a policy error"
 s_assert_err_has "policy: field 'mood' declares no tokens"
+
+# A malformed rule is a policy error, never a rule quietly ignored — `fields`
+# would print nothing for it, and nothing else would say.
+write_config "$SCRATCH/malformed.config.sh" "VOCAB_FIELDS='tier label'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_LABEL='ready-for-agent none'
+VOCAB_RULES='tier planner => label=none'"
+VOCAB_CONFIG="$SCRATCH/malformed.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "a rule with no '=' on its left is malformed — a policy error"
+s_assert_err_has "policy: rule 'tier planner => label=none' is malformed"
+write_config "$SCRATCH/malformed2.config.sh" "VOCAB_FIELDS='tier'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='tier=planner'"
+VOCAB_CONFIG="$SCRATCH/malformed2.config.sh"
+vocab fields
+s_assert_status 2 "a rule with no '=>' is malformed too, and 'fields' says so before any value arrives"
+s_assert_err_has "policy: rule 'tier=planner' is malformed"
+
+# A FIELD NAME is held to the shape as a token is.
+write_config "$SCRATCH/badfield.config.sh" "VOCAB_FIELDS='Tier'
+VOCAB_OPEN=''
+VOCAB_TIER='planner'
+VOCAB_RULES=''"
+VOCAB_CONFIG="$SCRATCH/badfield.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "a field name outside the shape is a policy error"
+s_assert_err_has "policy: field name 'Tier' is not a well-formed token"
+
+# A rule may name an OPEN field, whose values have only the shape to meet.
+write_config "$SCRATCH/openrule.config.sh" "VOCAB_FIELDS='domain tier'
+VOCAB_OPEN='domain'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='domain=Content => tier=planner'"
+VOCAB_CONFIG="$SCRATCH/openrule.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "a rule naming an out-of-shape value on an open field is a policy error"
+s_assert_err_has "policy: rule 'domain=Content => tier=planner' names 'Content', which is not a well-formed token"
+write_config "$SCRATCH/openrule2.config.sh" "VOCAB_FIELDS='domain tier'
+VOCAB_OPEN='domain'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='domain=content => tier=planner'"
+VOCAB_CONFIG="$SCRATCH/openrule2.config.sh"
+vocab 'Domain: content' 'Tier: implementer'
+s_assert_status 2 "…and a well-formed one fires like any other rule"
+s_assert_err_has "tier: 'implementer' is refused by the rule domain=content => tier=planner"
 
 # ---------------------------------------------------------------------------
 banner "The NEUTRAL-NAME rule — no token carries its answer in its spelling"
