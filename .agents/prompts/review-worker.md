@@ -49,8 +49,15 @@ names (default location `docs/adr/`): a decision recorded there outranks your
 priors, and a finding that contradicts one must cite it by number and argue
 with it rather than ignore it.
 
-Then read the diff yourself: `git diff %%BASE%%...%%BRANCH%%` — from the refs
-already in this checkout; there is nothing to fetch.
+Then pin the commit, BEFORE you read the diff: `git rev-parse %%BRANCH%%` —
+from the refs already in this checkout; there is nothing to fetch. Keep that
+40-character sha. It is what you report in REVIEWED, and it is what every
+command below names, because %%BRANCH%% is a moving ref: the session that
+started you shares this checkout and may commit to it while you read.
+
+Then read the diff yourself, against the sha you pinned:
+
+    git diff %%BASE%%...<the sha you pinned>
 
 You have the diff, the spec and the manual. You do NOT have the implementer's
 account of the work, and that is deliberate: anchoring on the author's
@@ -102,12 +109,14 @@ become table cells.
     VERDICT: <one line — blocking or not, and what to fix first.
               "no findings" is a valid verdict and a good one>
 
-    REVIEWED is the FIRST line of the report and it is required: the full
-    40-character sha of %%BRANCH%% as you diffed it, from
-    `git rev-parse %%BRANCH%%` in this checkout — no fetch. It says what you
-    reviewed, so a commit that lands after you read the diff is told apart
-    from one you missed, and the session posting your findings anchors them
-    to that commit rather than to whatever the head is by then.
+    REVIEWED is the FIRST line of the report and it is required: the sha
+    you pinned before reading the diff and diffed against, repeated
+    verbatim. Never resolve the branch a second time to produce it — the
+    ref may have moved since, and the report would then name a commit you
+    never read. It says what you reviewed, so a commit that lands after you
+    read the diff is told apart from one you missed, and the session posting
+    your findings anchors them to that commit rather than to whatever the
+    head is by then.
 
     ## Axis 1 — Standards
 

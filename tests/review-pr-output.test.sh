@@ -282,6 +282,24 @@ else
 fi
 assert_file_has "$WORKER" "git rev-parse" "the sha is produced offline, from the branch the worker diffed"
 
+# The sha is PINNED FIRST, and the diff is read against it. A worker that
+# diffs a mutable branch ref and resolves that ref separately can report a
+# commit it never reviewed: the coordinating session holds the same checkout
+# and can commit while the worker reads. The ORDER is the guarantee the
+# REVIEWED header makes, so the order is what this asserts.
+rp=$(wline 'git rev-parse %%BRANCH%%')
+gd=$(wline 'git diff %%BASE%%')
+if [ -n "$rp" ] && [ -n "$gd" ] && [ "$rp" -lt "$gd" ]; then
+	pass "the contract pins the sha (line $rp) before it reads the diff (line $gd)"
+else
+	fail "the contract must resolve and retain the sha of %%BRANCH%% BEFORE the diff — rev-parse='$rp' diff='$gd'"
+fi
+if printf '%s\n' "$unwrapped" | grep -qF 'git diff %%BASE%%...%%BRANCH%%'; then
+	fail "the diff endpoint is still the mutable branch ref — diff against the pinned sha instead"
+else
+	pass "the diff endpoint is the pinned sha, not the mutable branch ref"
+fi
+
 # The header stays honest about why the file exists: it is what a session
 # stages in place of telling the worker to run /review-pr, and the reason is
 # the sandbox. A header that still described only the CI/branch split would
