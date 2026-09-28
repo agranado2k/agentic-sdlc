@@ -192,10 +192,6 @@ banner "Where the vocabularies come from"
 # ---------------------------------------------------------------------------
 # A policy file a project wrote: a narrower severity scale, a field of its own,
 # and the domain kept open.
-write_config() {
-	mkdir -p "$(dirname "$1")"
-	printf '%s\n' "$2" >"$1"
-}
 CONFIG_OWN=$(
 	cat <<'EOFC'
 VOCAB_FIELDS='tier severity mood'
@@ -207,7 +203,7 @@ VOCAB_RULES=''
 EOFC
 )
 OWN="$SCRATCH/own.config.sh"
-write_config "$OWN" "$CONFIG_OWN"
+t_write "$SCRATCH" own.config.sh "$CONFIG_OWN"
 
 VOCAB_CONFIG=$OWN
 export VOCAB_CONFIG
@@ -227,7 +223,7 @@ mood: calm brisk" "'fields' prints the named file's vocabularies, one field per 
 # file is found, never underneath one. A file that declares no rule enforces
 # none, a field it does not declare is not a decision line, and an empty
 # file declares nothing — refused as such, not quietly held to the kit's words.
-write_config "$SCRATCH/norules.config.sh" "VOCAB_FIELDS='action command-shaped'
+t_write "$SCRATCH" norules.config.sh "VOCAB_FIELDS='action command-shaped'
 VOCAB_ACTION='apply reply escalate'
 VOCAB_COMMAND_SHAPED='yes no'"
 VOCAB_CONFIG="$SCRATCH/norules.config.sh"
@@ -262,13 +258,13 @@ run_from() { t_run_split _run_from_body "$@"; }
 t_repo
 OWN_REPO=$REPO
 install_vocab "$OWN_REPO/tools"
-write_config "$OWN_REPO/scripts/vocab.config.sh" "$CONFIG_OWN"
+t_write "$OWN_REPO" scripts/vocab.config.sh "$CONFIG_OWN"
 run_from "$OWN_REPO" "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
 s_assert_resolved "" "the script's own repo root supplies scripts/vocab.config.sh with no env var set"
 
 t_repo
 FOREIGN=$REPO
-write_config "$FOREIGN/scripts/vocab.config.sh" "$(
+t_write "$FOREIGN" scripts/vocab.config.sh "$(
 	cat <<'EOFC'
 echo "FOREIGN-CONFIG-EXECUTED" >&2
 VOCAB_FIELDS='severity'
@@ -287,7 +283,7 @@ s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
 LOOSE="$SCRATCH/loose"
 install_vocab "$LOOSE"
-write_config "$LOOSE/vocab.config.sh" "$CONFIG_OWN"
+t_write "$LOOSE" vocab.config.sh "$CONFIG_OWN"
 run_from "$FOREIGN" "$LOOSE/vocab.sh" 'Mood: calm'
 s_assert_resolved "" "a sibling vocab.config.sh is found for a script outside any repo"
 s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
@@ -344,7 +340,7 @@ tier=mechanical => label=ready-for-agent'
 EOFC
 )
 RULES="$SCRATCH/rules.config.sh"
-write_config "$RULES" "$CONFIG_RULES"
+t_write "$SCRATCH" rules.config.sh "$CONFIG_RULES"
 VOCAB_CONFIG=$RULES
 export VOCAB_CONFIG
 vocab 'Kind: spike' 'Tier: planner'
@@ -374,7 +370,7 @@ tier=planner => label!=none'
 EOFC
 )
 CONTRA="$SCRATCH/contra.config.sh"
-write_config "$CONTRA" "$CONFIG_CONTRA"
+t_write "$SCRATCH" contra.config.sh "$CONFIG_CONTRA"
 VOCAB_CONFIG=$CONTRA
 vocab 'Tier: planner' 'Label: none'
 s_assert_status 2 "two rules on one antecedent that cannot both hold are exit 2"
@@ -400,7 +396,7 @@ tier=mechanical => label=ready-for-agent'
 EOFC
 )
 CONTRA2="$SCRATCH/contra2.config.sh"
-write_config "$CONTRA2" "$CONFIG_CONTRA2"
+t_write "$SCRATCH" contra2.config.sh "$CONFIG_CONTRA2"
 VOCAB_CONFIG=$CONTRA2
 vocab fields
 s_assert_status 0 "rule by rule the set is fine — 'fields' is green"
@@ -428,7 +424,7 @@ kind=spike => label!=ready-for-agent'
 EOFC
 )
 CONTRA3="$SCRATCH/contra3.config.sh"
-write_config "$CONTRA3" "$CONFIG_CONTRA3"
+t_write "$SCRATCH" contra3.config.sh "$CONFIG_CONTRA3"
 VOCAB_CONFIG=$CONTRA3
 vocab 'Kind: spike'
 s_assert_status 2 "rules excluding every token of a field are a contradiction"
@@ -447,7 +443,7 @@ VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='tier=planner => label=none'
 EOFC
 )
-write_config "$SCRATCH/badrule.config.sh" "$CONFIG_BADRULE"
+t_write "$SCRATCH" badrule.config.sh "$CONFIG_BADRULE"
 VOCAB_CONFIG="$SCRATCH/badrule.config.sh"
 vocab 'Tier: planner'
 s_assert_status 2 "a rule naming an undeclared field is a policy error"
@@ -461,7 +457,7 @@ VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='tier=senior => tier!=planner'
 EOFC
 )
-write_config "$SCRATCH/badtok.config.sh" "$CONFIG_BADTOK"
+t_write "$SCRATCH" badtok.config.sh "$CONFIG_BADTOK"
 VOCAB_CONFIG="$SCRATCH/badtok.config.sh"
 vocab 'Tier: planner'
 s_assert_status 2 "a rule naming a token outside its field's vocabulary is a policy error"
@@ -475,7 +471,7 @@ VOCAB_SEVERITY='Critical High'
 VOCAB_RULES=''
 EOFC
 )
-write_config "$SCRATCH/badshape.config.sh" "$CONFIG_BADSHAPE"
+t_write "$SCRATCH" badshape.config.sh "$CONFIG_BADSHAPE"
 VOCAB_CONFIG="$SCRATCH/badshape.config.sh"
 vocab 'Severity: Critical'
 s_assert_status 2 "a token outside the shape IN THE POLICY FILE is a policy error"
@@ -489,7 +485,7 @@ VOCAB_SEVERITY='high low'
 VOCAB_RULES=''
 EOFC
 )
-write_config "$SCRATCH/notok.config.sh" "$CONFIG_NOTOK"
+t_write "$SCRATCH" notok.config.sh "$CONFIG_NOTOK"
 VOCAB_CONFIG="$SCRATCH/notok.config.sh"
 vocab 'Severity: high'
 s_assert_status 2 "a declared closed field with no tokens is a policy error"
@@ -497,7 +493,7 @@ s_assert_err_has "policy: field 'mood' declares no tokens"
 
 # A malformed rule is a policy error, never a rule quietly ignored — `fields`
 # would print nothing for it, and nothing else would say.
-write_config "$SCRATCH/malformed.config.sh" "VOCAB_FIELDS='tier label'
+t_write "$SCRATCH" malformed.config.sh "VOCAB_FIELDS='tier label'
 VOCAB_OPEN=''
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_LABEL='ready-for-agent none'
@@ -506,7 +502,7 @@ VOCAB_CONFIG="$SCRATCH/malformed.config.sh"
 vocab 'Tier: planner'
 s_assert_status 2 "a rule with no '=' on its left is malformed — a policy error"
 s_assert_err_has "policy: rule 'tier planner => label=none' is malformed"
-write_config "$SCRATCH/malformed2.config.sh" "VOCAB_FIELDS='tier'
+t_write "$SCRATCH" malformed2.config.sh "VOCAB_FIELDS='tier'
 VOCAB_OPEN=''
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='tier=planner'"
@@ -516,7 +512,7 @@ s_assert_status 2 "a rule with no '=>' is malformed too, and 'fields' says so be
 s_assert_err_has "policy: rule 'tier=planner' is malformed"
 
 # A FIELD NAME is held to the shape as a token is.
-write_config "$SCRATCH/badfield.config.sh" "VOCAB_FIELDS='Tier'
+t_write "$SCRATCH" badfield.config.sh "VOCAB_FIELDS='Tier'
 VOCAB_OPEN=''
 VOCAB_TIER='planner'
 VOCAB_RULES=''"
@@ -526,7 +522,7 @@ s_assert_status 2 "a field name outside the shape is a policy error"
 s_assert_err_has "policy: field name 'Tier' is not a well-formed token"
 
 # A rule may name an OPEN field, whose values have only the shape to meet.
-write_config "$SCRATCH/openrule.config.sh" "VOCAB_FIELDS='domain tier'
+t_write "$SCRATCH" openrule.config.sh "VOCAB_FIELDS='domain tier'
 VOCAB_OPEN='domain'
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='domain=Content => tier=planner'"
@@ -534,7 +530,7 @@ VOCAB_CONFIG="$SCRATCH/openrule.config.sh"
 vocab 'Tier: planner'
 s_assert_status 2 "a rule naming an out-of-shape value on an open field is a policy error"
 s_assert_err_has "policy: rule 'domain=Content => tier=planner' names 'Content', which is not a well-formed token"
-write_config "$SCRATCH/openrule2.config.sh" "VOCAB_FIELDS='domain tier'
+t_write "$SCRATCH" openrule2.config.sh "VOCAB_FIELDS='domain tier'
 VOCAB_OPEN='domain'
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='domain=content => tier=planner'"
@@ -558,7 +554,7 @@ VOCAB_ACTION='safe-to-apply risky'
 VOCAB_RULES=''
 EOFC
 )
-write_config "$SCRATCH/leading.config.sh" "$CONFIG_LEADING"
+t_write "$SCRATCH" leading.config.sh "$CONFIG_LEADING"
 VOCAB_CONFIG="$SCRATCH/leading.config.sh"
 vocab 'Action: risky'
 s_assert_status 2 "a vocabulary whose tokens carry their answer is refused"
@@ -568,7 +564,7 @@ s_assert_err_has "neutral"
 
 # The rule walks EVERY hyphen-separated word, not only the first: the answer
 # hides as readily at the end of a token.
-write_config "$SCRATCH/leading2.config.sh" "VOCAB_FIELDS='action'
+t_write "$SCRATCH" leading2.config.sh "VOCAB_FIELDS='action'
 VOCAB_OPEN=''
 VOCAB_ACTION='apply mostly-risky'
 VOCAB_RULES=''"
@@ -579,7 +575,7 @@ s_assert_err_has "policy: action token 'mostly-risky' carries its answer in its 
 
 # The deny list is the CHECKER'S, not the policy file's: a file that
 # reassigns it — or empties it — has not switched the rule off.
-write_config "$SCRATCH/off.config.sh" "VOCAB_LEADING_WORDS=''
+t_write "$SCRATCH" off.config.sh "VOCAB_LEADING_WORDS=''
 VOCAB_FIELDS='action'
 VOCAB_OPEN=''
 VOCAB_ACTION='safe-to-apply risky'
@@ -597,7 +593,7 @@ VOCAB_ACTION='apply escalate'
 VOCAB_RULES=''
 EOFC
 )
-write_config "$SCRATCH/neutral.config.sh" "$CONFIG_NEUTRAL"
+t_write "$SCRATCH" neutral.config.sh "$CONFIG_NEUTRAL"
 VOCAB_CONFIG="$SCRATCH/neutral.config.sh"
 vocab 'Action: escalate'
 s_assert_resolved "" "the neutral pair — apply, escalate — passes"
@@ -619,7 +615,7 @@ VOCAB_TIER='planner implementer mechanical reviewer senior'
 VOCAB_RULES=''
 EOFC
 )
-write_config "$SCRATCH/fifth.config.sh" "$CONFIG_FIFTH"
+t_write "$SCRATCH" fifth.config.sh "$CONFIG_FIFTH"
 VOCAB_CONFIG="$SCRATCH/fifth.config.sh"
 export VOCAB_CONFIG
 vocab 'Tier: senior'
