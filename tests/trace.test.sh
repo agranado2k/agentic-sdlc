@@ -471,4 +471,328 @@ grep -qF 'run stack' "$KIT/docs/domain-glossary.md" && pass "the glossary names 
 grep -q '^- \*\*Trace\*\*' "$KIT/docs/domain-glossary.md" && pass "the glossary defines Trace" || fail "the glossary has no Trace entry"
 [ -f "$KIT"/docs/adr/0008-*.md ] && pass "ADR-0008 exists" || fail "no ADR-0008"
 
+banner "12. summary groups the trace, counts it, sums its tokens and prices it on read"
+# A READER fixture is written as FILES, not emitted: only a file whose name is
+# an older date can exercise --since, and the emitter always writes today's.
+# Every line below is shaped exactly as the emitter writes one, so `verify`
+# passes on it — which banner 15's refusal case then relies on.
+SUM="$SCRATCH/priced"
+mkdir -p "$SUM/events"
+OLD="$SUM/events/2026-01-02.jsonl"
+NOW="$SUM/events/$TODAY.jsonl"
+printf '%s\n' \
+	'{"v":1,"ts":"2026-01-02T09:00:00Z","id":"a1","kind":"session.usage","skill":"implement","subject":"session:s1","session":"s1","model":"m1","outcome":"ok","tok_in":1000000,"tok_out":1000000,"tok_cache_w":400000,"tok_cache_r":2000000}' >"$OLD"
+printf '%s\n' \
+	'{"v":1,"ts":"'"$TODAY"'T10:00:00Z","id":"a2","kind":"session.usage","skill":"review-pr","subject":"session:s2","session":"s2","model":"m1","tok_in":1000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' \
+	'{"v":1,"ts":"'"$TODAY"'T10:01:00Z","id":"a3","kind":"session.usage","skill":"review-pr","subject":"session:s2","session":"s2","model":"m2","tok_in":5000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' \
+	'{"v":1,"ts":"'"$TODAY"'T10:02:00Z","id":"a4","kind":"note","skill":"implement","subject":"ticket:#253","reason":"say \"hi\", back\\ tab\there é","data":{"note":"1,2"}}' \
+	'{"v":1,"ts":"'"$TODAY"'T10:03:00Z","id":"a5","kind":"session.usage","skill":"review-pr","subject":"session:s2","session":"s2","model":"v:pro-1.5","tok_in":2000000,"tok_out":1000000,"tok_cache_w":0,"tok_cache_r":0}' \
+	'{"v":1,"ts":"'"$TODAY"'T10:04:00Z","id":"a6","kind":"session.usage","skill":"review-pr","subject":"session:s2","session":"s2","model":"9-bad","tok_in":1000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' >"$NOW"
+# The price table is POLICY, in the same file as TRACE_DIR. Two models are
+# priced and two are not, on purpose: the unpriced pair is what proves the cost
+# column never quietly reads zero. `v:pro-1.5` is priced through a name that
+# only survives the fold if a colon and a dot both become underscores, and
+# `9-bad` folds to `9_BAD`, a legal suffix (banner 19) that this table simply
+# does not price — so it reads unpriced like any other unknown model.
+PRICED="$SCRATCH/policy.priced.sh"
+{
+	printf "TRACE_DIR='%s'\n" "$SUM"
+	printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n"
+	printf "TRACE_PRICE_V_PRO_1_5='1,2,0,0'\n"
+} >"$PRICED"
+
+# summary_row <stdout> <key> — one group's row as space-separated fields, so
+# the assertions read the numbers and never the column widths.
+summary_row() { printf '%s\n' "$1" | awk -v k="$2" '$1 == k { print $2, $3, $4, $5, $6, $7 }'; }
+
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model
+[ "$S_STATUS" = 0 ] && pass "summary --by model exits 0" || fail "summary exited $S_STATUS: $S_ERR"
+case $(printf '%s\n' "$S_OUT" | head -1) in
+model*events*tok_in*tok_out*tok_cache_w*tok_cache_r*cost_usd*) pass "the header names the axis and the six columns" ;;
+*) fail "unexpected header: $(printf '%s\n' "$S_OUT" | head -1)" ;;
+esac
+[ "$(summary_row "$S_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
+	pass "m1: two events, the token sums, and 20.103000 — 3 and 15 per million on input and output, then 400000 cache writes at 3.75 and 2000000 cache reads at 0.30" ||
+	fail "m1 row was: $(summary_row "$S_OUT" m1)"
+[ "$(summary_row "$S_OUT" 'v:pro-1.5')" = "1 2000000 1000000 0 0 4.000000" ] &&
+	pass "v:pro-1.5: the model id folds through a colon and a dot to reach its price" ||
+	fail "v:pro-1.5 row was: $(summary_row "$S_OUT" 'v:pro-1.5')"
+[ "$(summary_row "$S_OUT" m2)" = "1 5000 0 0 0 unpriced" ] &&
+	pass "m2 carries tokens and no price, so its cost reads unpriced and never 0" ||
+	fail "m2 row was: $(summary_row "$S_OUT" m2)"
+[ "$(summary_row "$S_OUT" 9-bad)" = "1 1000 0 0 0 unpriced" ] &&
+	pass "a model whose folded name is no legal variable is unpriced, never evaluated" ||
+	fail "9-bad row was: $(summary_row "$S_OUT" 9-bad)"
+[ "$(summary_row "$S_OUT" '(none)')" = "1 0 0 0 0 0.000000" ] &&
+	pass "an event with no model and no tokens groups under (none) and costs 0 — zero tokens cost nothing at any price" ||
+	fail "(none) row was: $(summary_row "$S_OUT" '(none)')"
+[ "$(summary_row "$S_OUT" TOTAL)" = "6 3007000 2000000 400000 2000000 unpriced" ] &&
+	pass "TOTAL sums every group and refuses to name a figure while any token-bearing event is unpriced" ||
+	fail "TOTAL row was: $(summary_row "$S_OUT" TOTAL)"
+case $S_ERR in *m2*) pass "stderr names a model that carried tokens and had no price" ;; *) fail "stderr did not name m2: $S_ERR" ;; esac
+case $S_ERR in *9-bad*) pass "and the digit-initial one the table does not price" ;; *) fail "stderr did not name 9-bad: $S_ERR" ;; esac
+
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by skill
+[ "$(summary_row "$S_OUT" implement)" = "2 1000000 1000000 400000 2000000 20.100000" ] &&
+	pass "--by skill prices a group whose only token-bearing event is priced" ||
+	fail "implement row was: $(summary_row "$S_OUT" implement)"
+[ "$(summary_row "$S_OUT" review-pr)" = "4 2007000 1000000 0 0 unpriced" ] &&
+	pass "and a group that mixes a priced and an unpriced model reads unpriced, never a partial sum" ||
+	fail "review-pr row was: $(summary_row "$S_OUT" review-pr)"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by kind
+[ "$(summary_row "$S_OUT" session.usage)" = "5 3007000 2000000 400000 2000000 unpriced" ] && pass "--by kind groups on the closed vocabulary" || fail "session.usage row was: $(summary_row "$S_OUT" session.usage)"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by session
+[ "$(summary_row "$S_OUT" s1)" = "1 1000000 1000000 400000 2000000 20.100000" ] && pass "--by session groups on the session field" || fail "s1 row was: $(summary_row "$S_OUT" s1)"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model --since "$TODAY"
+[ "$(summary_row "$S_OUT" m1)" = "1 1000 0 0 0 0.003000" ] &&
+	pass "--since drops the older day's file: 1000 input tokens at 3 per million is 0.003000" ||
+	fail "m1 row since $TODAY was: $(summary_row "$S_OUT" m1)"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary
+case $(printf '%s\n' "$S_OUT" | head -1) in kind*) pass "--by defaults to kind" ;; *) fail "the default axis is not kind: $(printf '%s\n' "$S_OUT" | head -1)" ;; esac
+assert_status 2 "an unknown --by axis is exit 2 — the axis vocabulary is closed" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --by tier
+assert_out_has "kind, skill, model, session"
+assert_status 2 "a malformed --since is exit 2" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --since yesterday
+t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" summary --by model
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "summary on an unconfigured trace is exit 0 and silent on stdout" || fail "summary unconfigured printed '$S_OUT' (exit $S_STATUS)"
+
+banner "13. A price is four numbers per million tokens, and a malformed one is the operator error it is"
+BADP="$SCRATCH/policy.badprice.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15'\n" "$SUM" >"$BADP"
+assert_status 2 "a price missing two of its four fields is exit 2" -- env TRACE_CONFIG="$BADP" sh "$TRACE" summary --by model
+assert_out_has "TRACE_PRICE_M1"
+BADP2="$SCRATCH/policy.badprice2.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,free,0.30'\n" "$SUM" >"$BADP2"
+assert_status 2 "a price field that is not a number is exit 2, never silently zero" -- env TRACE_CONFIG="$BADP2" sh "$TRACE" summary --by model
+
+banner "14. export is the importable artifact: JSONL verbatim, CSV flat and priced"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 6 ] && pass "export prints the six selected events" || fail "export printed $(printf '%s\n' "$S_OUT" | grep -c .) lines (exit $S_STATUS): $S_ERR"
+# The WHOLE stream against the files, not just its first line: an export that
+# rewrote every event after the first would have passed a first-line check.
+[ "$S_OUT" = "$(cat "$OLD" "$NOW")" ] && pass "and prints them verbatim, every line of them, oldest day first — an event is a fact, so the JSONL form adds nothing" || fail "the JSONL form is not the files' own bytes"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --since "$TODAY"
+# WHICH five, not how many: --since returning any five events would have passed
+# a count.
+[ "$S_OUT" = "$(cat "$NOW")" ] && pass "--since selects by the file's date — exactly today's five events, and the older day's not at all" || fail "export --since printed something other than today's file: $S_OUT"
+
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
+[ "$S_STATUS" = 0 ] && pass "export --csv exits 0" || fail "export --csv exited $S_STATUS: $S_ERR"
+CSVH=$(printf '%s\n' "$S_OUT" | head -1)
+# Head and tail rather than the whole row: the envelope's middle is the field
+# list in scripts/trace.sh, and a later slice adding a field there should widen
+# this CSV without failing this assertion.
+# The WHOLE header, not head and tail fragments: a CSV that dropped or reordered
+# a middle envelope column would have kept both ends intact and passed. The
+# column order IS the contract a database reads, so a later slice that adds a
+# field to the event owes this line an edit.
+WANT_H='v,ts,id,kind,skill,subject,related,session,run,parent,tier,domain,harness,model,outcome,reason,tok_in,tok_out,tok_cache_w,tok_cache_r,cost_usd,priced_at,price_src,data'
+[ "$CSVH" = "$WANT_H" ] &&
+	pass "the header is the event envelope's own columns in order, then the three computed on read, then the data map" ||
+	fail "CSV header is not the documented column list:$(printf '\n    got:  %s\n    want: %s' "$CSVH" "$WANT_H")"
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 7 ] && pass "one header row and six event rows" || fail "CSV had $(printf '%s\n' "$S_OUT" | grep -c .) lines"
+ROW1=$(printf '%s\n' "$S_OUT" | grep ',a1,')
+case $ROW1 in *,1000000,1000000,400000,2000000,20.100000,*) pass "the priced row carries bare token counts and its computed cost_usd" ;; *) fail "row a1 was: $ROW1" ;; esac
+case $ROW1 in *,20.100000,2[0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z,"$PRICED",*) pass "priced_at stamps when it was priced and price_src names the table that priced it" ;; *) fail "priced_at/price_src wrong in: $ROW1" ;; esac
+ROW3=$(printf '%s\n' "$S_OUT" | grep ',a3,')
+case $ROW3 in *,unpriced,*) pass "an unpriced model exports the word, not a number" ;; *) fail "row a3 was: $ROW3" ;; esac
+# The escaper's inverse: the CSV column carries the REAL value, so a quote is
+# doubled per RFC 4180 and the JSON backslash escapes are gone.
+WANT=$(printf '"say ""hi"", back\\ tab\there é"')
+ROW4=$(printf '%s\n' "$S_OUT" | grep ',a4,')
+case $ROW4 in *"$WANT"*) pass "a reason with a quote, a comma, a backslash, a tab and non-ASCII round-trips into one CSV field" ;; *) fail "the reason cell was not CSV-escaped: $ROW4" ;; esac
+case $ROW4 in *'"{""note"":""1,2""}"'*) pass "the data map travels as one JSON string column" ;; *) fail "the data cell was not one quoted JSON column: $ROW4" ;; esac
+case $ROW4 in *,0.000000,*) pass "an event with no tokens costs 0.000000 whatever its model" ;; *) fail "row a4 cost was not 0.000000: $ROW4" ;; esac
+case $ROW4 in *ticket:#253*) pass "and a value needing no quoting is left bare, so a database reads its own types" ;; *) fail "subject missing from row a4: $ROW4" ;; esac
+if command -v node >/dev/null 2>&1; then
+	printf '%s\n' "$S_OUT" | node -e '
+		const rows = require("fs").readFileSync(0, "utf8").trim().split("\n");
+		const cols = (l) => { const o = []; let f = "", q = false; for (let i = 0; i < l.length; i++) { const c = l[i];
+			if (q) { if (c === "\"" && l[i + 1] === "\"") { f += "\""; i++; } else if (c === "\"") q = false; else f += c; }
+			else if (c === "\"") q = true; else if (c === ",") { o.push(f); f = ""; } else f += c; } o.push(f); return o; };
+		const n = cols(rows[0]).length;
+		for (const r of rows) if (cols(r).length !== n) { console.error("row has " + cols(r).length + " fields, not " + n + ": " + r); process.exit(1); }' &&
+		pass "every row parses to the header's field count under a real CSV reader" ||
+		fail "a CSV row does not have the header's field count"
+else
+	echo "  skip  node is not on PATH — the CSV field-count check not run"
+fi
+t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" export --csv
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "export on an unconfigured trace is exit 0 and silent on stdout" || fail "export unconfigured printed '$S_OUT' (exit $S_STATUS)"
+
+banner "15. export refuses while verify fails — a corrupt trace is never an import"
+printf 'hand-edited, not an event\n' >>"$NOW"
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export
+[ "$S_STATUS" = 1 ] && pass "export over a trace with a bad line is exit 1 — verify's own verdict" || fail "export exited $S_STATUS on a bad line"
+[ -z "$S_OUT" ] && pass "and prints no rows at all, so half an import is impossible" || fail "export printed rows despite the bad line"
+case $S_ERR in *"$TODAY.jsonl:6"*) pass "and names the file and line on stderr" ;; *) fail "the refusal did not name file:line: $S_ERR" ;; esac
+t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
+[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] && pass "the CSV form refuses the same way" || fail "export --csv did not refuse (exit $S_STATUS)"
+
+banner "16. The price table is policy: the shipped file documents the shape, the kit twin carries it filled and dated"
+assert_file_has "$KIT/scripts/trace.config.sh" "TRACE_PRICE_" "the shipped policy file documents the price variable"
+grep -q '^TRACE_PRICE_' "$KIT/scripts/trace.config.sh" &&
+	fail "the shipped policy file ASSIGNS a price — the kit ships none, for the reason it ships no model id" ||
+	pass "and assigns none: the kit ships no price, for the reason it ships no model id"
+# The twin owes an entry per model its own tier mapping names, each carrying
+# FOUR numbers per million tokens, and a header that says when they were read
+# off the vendors' pages. An empty value is the honest state for a table
+# nobody checked; a filled one is a claim with a date on it (operator decision,
+# 2026-09-28: the numbers come from the vendors' own pricing pages).
+TWIN_N=$(grep -c "^TRACE_PRICE_[A-Z0-9_]*='[0-9][0-9.]*,[0-9][0-9.]*,[0-9][0-9.]*,[0-9][0-9.]*'$" "$KIT/scripts/trace.kit.config.sh")
+[ "$TWIN_N" -ge 5 ] &&
+	pass "the kit twin carries the price table FILLED — $TWIN_N entries with four numbers each, one per model its tier mapping names" ||
+	fail "scripts/trace.kit.config.sh carries $TWIN_N filled TRACE_PRICE_ entries, fewer than the five models scripts/agents.kit.config.sh maps"
+grep -q "^TRACE_PRICE_[A-Z0-9_]*=''" "$KIT/scripts/trace.kit.config.sh" &&
+	fail "an entry in the kit twin's price table is still empty — every mapped model owes its four numbers" ||
+	pass "and none of them is left empty"
+grep -qE 'Last checked: *20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$KIT/scripts/trace.kit.config.sh" &&
+	pass "and the table's header carries the date the numbers were read" ||
+	fail "the kit twin's price table header does not say 'Last checked: <YYYY-MM-DD>'"
+grep -qi 'last checked: *never' "$KIT/scripts/trace.kit.config.sh" &&
+	fail "the header still says NEVER over filled values — a claim nobody made" ||
+	pass "and no longer says NEVER"
+grep -qE 'https?://' "$KIT/scripts/trace.kit.config.sh" &&
+	pass "and names the vendor pages the numbers came from" ||
+	fail "the kit twin does not name a source for its prices"
+assert_file_has "$KIT/AGENTS.md" "summary" "the root manual's trace row names the reading subcommands"
+assert_file_has "$KIT/AGENTS.md" "export" "the root manual's trace row names the reading subcommands"
+
+banner "17. The reader's price lookup is the operator's own name for the model (review of PR #262)"
+# Every case here is a finding from the independent review on PR #262, each
+# reproduced against the branch before it was fixed, each named by its finding
+# id so the next reader can follow the trail back to the thread.
+
+# H-1. The lookup folded the JSON-ESCAPED field body, so a model carrying a
+# quote, a backslash or a tab resolved to a variable name no operator would
+# ever write: `a"b` folded to A__B rather than the A_B they typed. Emitted
+# through the real emitter, so the escaping is the emitter's own.
+H1="$SCRATCH/h1"
+H1P="$SCRATCH/policy.h1.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_A_B='1,1,1,1'\nTRACE_PRICE_C_D='2,0,0,0'\n" "$H1" >"$H1P"
+TRACE_CONFIG=$H1P sh "$TRACE" emit kind=session.usage model='a"b' tok_in=1000000
+TRACE_CONFIG=$H1P sh "$TRACE" emit kind=session.usage model="c${TAB}d" tok_in=1000000
+t_run_split env TRACE_CONFIG=$H1P sh "$TRACE" summary --by model
+[ "$(summary_row "$S_OUT" 'a"b')" = "1 1000000 0 0 0 1.000000" ] &&
+	pass "H-1: a model carrying a quote is priced by the name the operator typed, not by the escaped body" ||
+	fail "H-1: the a\"b row was: $(summary_row "$S_OUT" 'a\"b') / $(summary_row "$S_OUT" 'a"b')"
+case $S_ERR in *'a\"b'*) fail "H-1: the unpriced note still names the escaped body" ;; *) pass "H-1: and the diagnostics name the real id too" ;; esac
+t_run_split env TRACE_CONFIG=$H1P sh "$TRACE" export --csv
+case $S_OUT in *',2.000000,'*) pass "H-1: a model carrying a tab prices in the CSV as well" ;; *) fail "H-1: the tab-carrying model did not price: $S_OUT" ;; esac
+
+# H-2. `for m in $models` and `set -- $(files)` field-split AND glob. A model
+# called `alpha*` was silently replaced by whatever file the CALLER's cwd
+# happened to hold, so the price of one model was looked up under another
+# model's name — and the diagnostics named the wrong one.
+H2="$SCRATCH/h2"
+H2P="$SCRATCH/policy.h2.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_ALPHA_='5,0,0,0'\n" "$H2" >"$H2P"
+TRACE_CONFIG=$H2P sh "$TRACE" emit kind=session.usage model='alpha*' tok_in=1000000
+mkdir -p "$SCRATCH/globbait" && : >"$SCRATCH/globbait/alphax"
+t_run_split env TRACE_CONFIG=$H2P sh -c "cd '$SCRATCH/globbait' && sh '$TRACE' summary --by model"
+[ "$(summary_row "$S_OUT" 'alpha*')" = "1 1000000 0 0 0 5.000000" ] &&
+	pass "H-2: a model carrying a glob character is read literally, whatever files the caller's cwd holds" ||
+	fail "H-2: the alpha* row was: $(summary_row "$S_OUT" 'alpha*')"
+case $S_ERR in *alphax*) fail "H-2: a filename from the caller's cwd leaked into the price lookup" ;; *) pass "H-2: and no filename from that directory reached the diagnostics" ;; esac
+# The same expansion selects the event FILES, so a trace directory whose own
+# path carries a glob character must still be read.
+H2G="$SCRATCH/glob[1]dir"
+H2GP="$SCRATCH/policy.h2g.sh"
+printf "TRACE_DIR='%s'\n" "$H2G" >"$H2GP"
+TRACE_CONFIG=$H2GP sh "$TRACE" emit kind=note subject='ticket:#262' reason='under a bracketed path'
+t_run_split env TRACE_CONFIG=$H2GP sh "$TRACE" export
+case $S_OUT in *'under a bracketed path'*) pass "H-2: and a trace directory whose path carries a glob character is still read" ;; *) fail "H-2: export found nothing under $H2G: '$S_OUT'" ;; esac
+
+# H-3. The two-stage pipeline rounded each group to six places and then summed
+# the rounded rows, so the SAME events totalled differently depending on which
+# axis you grouped them by. A total that moves when you change the question is
+# not a total.
+H3="$SCRATCH/h3"
+H3P="$SCRATCH/policy.h3.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_T='0.4,0,0,0'\n" "$H3" >"$H3P"
+TRACE_CONFIG=$H3P sh "$TRACE" emit kind=note skill=one model=t tok_in=1
+TRACE_CONFIG=$H3P sh "$TRACE" emit kind=note skill=two model=t tok_in=1
+BY_SKILL=$(env TRACE_CONFIG=$H3P sh "$TRACE" summary --by skill 2>/dev/null | awk '$1 == "TOTAL" { print $7 }')
+BY_KIND=$(env TRACE_CONFIG=$H3P sh "$TRACE" summary --by kind 2>/dev/null | awk '$1 == "TOTAL" { print $7 }')
+BY_MODEL=$(env TRACE_CONFIG=$H3P sh "$TRACE" summary --by model 2>/dev/null | awk '$1 == "TOTAL" { print $7 }')
+[ "$BY_SKILL" = "$BY_KIND" ] && [ "$BY_KIND" = "$BY_MODEL" ] &&
+	pass "H-3: TOTAL is the same figure on every axis over the same events ($BY_KIND) — the rounding happens at display, not between the two stages" ||
+	fail "H-3: TOTAL moved with the axis — by skill $BY_SKILL, by kind $BY_KIND, by model $BY_MODEL"
+[ "$BY_KIND" = "0.000001" ] && pass "H-3: and it is the sum of the two unrounded costs, not the sum of two rounded zeros" || fail "H-3: TOTAL was $BY_KIND, not 0.000001"
+
+# M-1. `IFS=,` word splitting drops a TRAILING empty field, so '1,2,3,4,'
+# counted as four prices and was accepted.
+BADP3="$SCRATCH/policy.badprice3.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,3.75,0.30,'\n" "$SUM" >"$BADP3"
+assert_status 2 "M-1: a price with a trailing comma is exit 2 — word splitting hid the empty fifth field" -- env TRACE_CONFIG="$BADP3" sh "$TRACE" summary --by model
+BADP4="$SCRATCH/policy.badprice4.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1=',3,15,3.75'\n" "$SUM" >"$BADP4"
+assert_status 2 "M-1: and a leading comma is too" -- env TRACE_CONFIG="$BADP4" sh "$TRACE" summary --by model
+
+# M-2. A missing field and a field whose literal value is the text `(none)`
+# were merged into one row, so both counts and both costs were wrong.
+M2="$SCRATCH/m2"
+M2P=$(policy "$M2")
+TRACE_CONFIG=$M2P sh "$TRACE" emit kind=note reason='the skill field is absent'
+TRACE_CONFIG=$M2P sh "$TRACE" emit kind=note skill='(none)' reason='the skill field literally says (none)'
+t_run_split env TRACE_CONFIG=$M2P sh "$TRACE" summary --by skill
+[ "$(printf '%s\n' "$S_OUT" | awk '$1 == "(none)"' | grep -c .)" = 2 ] &&
+	pass "M-2: an absent field and a literal (none) are two rows, never one merged count" ||
+	fail "M-2: the two groups did not stay apart: $S_OUT"
+[ "$(printf '%s\n' "$S_OUT" | awk '$1 == "TOTAL" { print $2 }')" = 2 ] && pass "M-2: and the total still counts both events once" || fail "M-2: TOTAL was wrong: $S_OUT"
+
+# M-3. The script lost its executable bit to a `mv` while it was being edited.
+# Nothing in this suite invokes it directly, which is exactly why the bit could
+# go missing without a single assertion noticing.
+[ -x "$TRACE" ] && pass "M-3: scripts/trace.sh is executable, so a direct invocation still works" || fail "M-3: scripts/trace.sh has lost its executable bit"
+
+# The reviewer's coverage audit: cache_write and cache_read were weighted by
+# equal token counts everywhere, so swapping the two rates left the whole suite
+# green. A cache-only event with unequal counts is the cheapest oracle.
+CACHE="$SCRATCH/cache"
+CACHEP="$SCRATCH/policy.cache.sh"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_K='0,0,10,1'\n" "$CACHE" >"$CACHEP"
+TRACE_CONFIG=$CACHEP sh "$TRACE" emit kind=session.usage model=k tok_cache_w=100000 tok_cache_r=3000000
+t_run_split env TRACE_CONFIG=$CACHEP sh "$TRACE" summary --by model
+[ "$(summary_row "$S_OUT" k)" = "1 0 0 100000 3000000 4.000000" ] &&
+	pass "the cache rates are weighted by their own counts — 100000 at 10 plus 3000000 at 1 is 4.000000, and swapping the two rates would read 31.000000" ||
+	fail "the cache-only row was: $(summary_row "$S_OUT" k)"
+
+banner "18. summary over a damaged trace says so in its own first line — a total nobody mistakes for clean (operator decision, 2026-09-28)"
+DAMAGED="$SCRATCH/damaged"
+mkdir -p "$DAMAGED/events"
+cp "$SUM/events/2026-01-02.jsonl" "$DAMAGED/events/"
+grep -v 'hand-edited' "$NOW" >"$DAMAGED/events/$TODAY.jsonl"
+DPOL=$(policy "$DAMAGED")
+printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n" >>"$DPOL"
+t_run_split env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
+[ "$S_STATUS" = 0 ] && pass "summary on a clean trace exits 0" || fail "summary exited $S_STATUS on a clean trace: $S_ERR"
+case $S_OUT in *"verify: FAILED"*) fail "a clean trace was marked as failed verify" ;; *) pass "and carries no verify marker when the trace is clean" ;; esac
+printf 'hand-edited, not an event\n' >>"$DAMAGED/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
+[ "$S_STATUS" = 0 ] && pass "summary on a damaged trace still exits 0 — a glance is not an import" || fail "summary exited $S_STATUS on a damaged trace"
+case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: FAILED"*) pass "and its FIRST line says verify FAILED, so the totals below are never quoted as clean" ;; *) fail "the first line of summary did not mark the failed verify: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
+case $S_OUT in *"1 bad line"*) pass "and counts the bad LINES — one, however many findings verify raised for it" ;; *) fail "the marker does not count the bad lines: $S_OUT" ;; esac
+# The trap the count fell into once: with node on PATH verify names the same
+# line twice, structurally and from the parse, and a marker that counted
+# findings said 2. Pin the double report, so the count's job stays visible.
+if command -v node >/dev/null 2>&1; then
+	[ "$(printf '%s\n' "$S_ERR" | grep -c "$TODAY.jsonl:")" -ge 2 ] &&
+		pass "verify reported that one line more than once on stderr (structural and parse), and the marker still said 1" ||
+		fail "expected verify to name the bad line at least twice with node present: $S_ERR"
+fi
+case $S_ERR in *"$TODAY.jsonl:"*) pass "and verify's own findings go to stderr, file:line" ;; *) fail "stderr did not carry verify's file:line: $S_ERR" ;; esac
+[ "$(summary_row "$S_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
+	pass "and the rows themselves are still the rows" || fail "m1 row changed: $(summary_row "$S_OUT" m1)"
+
+banner "19. A model id that starts with a digit is priceable — the fold's token only has to be a legal suffix (review of PR #262)"
+NINE="$SCRATCH/nine"
+mkdir -p "$NINE/events"
+printf '%s\n' '{"v":1,"ts":"'"$TODAY"'T10:04:00Z","id":"n1","kind":"session.usage","skill":"review-pr","subject":"session:s9","session":"s9","model":"9-bad","tok_in":1000000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' >"$NINE/events/$TODAY.jsonl"
+NPOL=$(policy "$NINE")
+printf "TRACE_PRICE_9_BAD='2,0,0,0'\n" >>"$NPOL"
+t_run_split env TRACE_CONFIG=$NPOL sh "$TRACE" summary --by model
+[ "$(summary_row "$S_OUT" 9-bad)" = "1 1000000 0 0 0 2.000000" ] &&
+	pass "TRACE_PRICE_9_BAD prices the model 9-bad — a digit-initial token is a legal variable suffix" ||
+	fail "9-bad did not price through TRACE_PRICE_9_BAD: $(summary_row "$S_OUT" 9-bad)"
+
 t_done "trace script"

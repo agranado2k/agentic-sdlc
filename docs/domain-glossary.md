@@ -243,6 +243,18 @@ Grouped by the seam each term belongs to. Entry shape:
     "cap" stay ordinary words for the host facts a budget is derived *from*
     (the slice's `TasksMax`, the per-user process limit); only the derived
     pair is the budget.
+- **Price table** — the policy variables that turn an event's raw token counts
+  into money: one `TRACE_PRICE_<MODEL>` per model, four prices in USD per
+  million tokens for input, output, cache write and cache read, with the model
+  id folded to a variable token the way a task domain is. It is read when the
+  trace is read and never when an event is written (ADR-0008 clause 6), so
+  editing it re-prices the whole past; an export stamps `priced_at` and
+  `price_src` to say which table answered. A model the table does not name
+  reads **unpriced** — never 0 — wherever a cost would go. The kit ships no
+  price, for the reason it ships no model id.
+  - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
+    vendor; "estimate" — the arithmetic is exact, it is the price that can be
+    stale.
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
   worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
   removed by the dispatcher's own trap — and, when a dispatch dies before
