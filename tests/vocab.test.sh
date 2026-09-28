@@ -244,6 +244,20 @@ s_assert_status 2 "a policy file named explicitly and missing is exit 2"
 s_assert_err_has "does not exist"
 unset VOCAB_CONFIG
 
+# A slash-less name is the cwd's file — the one the existence check saw —
+# and never a same-named file on $PATH, which is where `.` would otherwise
+# look first.
+mkdir -p "$SCRATCH/cwd" "$SCRATCH/onpath"
+t_write "$SCRATCH/cwd" decoy.config.sh "$CONFIG_OWN"
+t_write "$SCRATCH/onpath" decoy.config.sh "echo DECOY-FROM-PATH >&2
+VOCAB_FIELDS='tier'
+VOCAB_TIER='planner'"
+_run_cwd_body() { cd "$SCRATCH/cwd" && PATH="$SCRATCH/onpath:$PATH" VOCAB_CONFIG=decoy.config.sh sh "$VOCAB" fields; }
+t_run_split _run_cwd_body
+s_assert_status 0 "a slash-less VOCAB_CONFIG loads"
+s_assert_out_has "mood: calm brisk" "…the cwd's file, the one the existence check saw"
+s_assert_err_lacks "DECOY-FROM-PATH"
+
 # Orders 2 and 3 anchor on where the SCRIPT lives — never on the cwd. The
 # fixture is the resolver suite's: the operator's own copy, invoked by
 # absolute path, from inside somebody else's clone whose policy file would

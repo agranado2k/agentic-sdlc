@@ -123,7 +123,12 @@ vocab_load_config() {
 	VOCAB_RULES=
 	if [ -n "${VOCAB_CONFIG:-}" ]; then
 		[ -f "$VOCAB_CONFIG" ] || die "VOCAB_CONFIG=$VOCAB_CONFIG does not exist."
-		. "$VOCAB_CONFIG"
+		# `.` searches $PATH for a slash-less operand; the file the test
+		# above saw is the cwd's, so name it as such.
+		case $VOCAB_CONFIG in
+		*/*) . "$VOCAB_CONFIG" ;;
+		*) . "./$VOCAB_CONFIG" ;;
+		esac
 		return 0
 	fi
 	_vl_root=$(vocab_git rev-parse --show-toplevel) || _vl_root=
