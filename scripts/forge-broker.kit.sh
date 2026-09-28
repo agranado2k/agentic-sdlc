@@ -34,10 +34,14 @@
 # unless everything validated:
 #   1. Refuse to run without the forge CLI (`gh`) on PATH — exit 69.
 #   2. Parse the report against the contract: a `REVIEWED: <full sha>` first
-#      line, a `VERDICT:` line, the four severity headings in order, findings
-#      in the `**ID** \`path:line\` — text` / `↳ fix:` shape, behavior items
-#      opening with their tag. A report that fails this posts nothing — exit
-#      65 — and a `REVIEWED` that contradicts `--commit` is the same failure.
+#      line, a `VERDICT:` line, both axis headings, the four severity headings
+#      in order with an empty one STATING its absence, findings in the
+#      `**ID** \`path:line\` — text` / `↳ fix:` shape with an ID whose letter
+#      matches its section, and a confirm-list whose items open with their
+#      tag. A report that fails ANY of this posts nothing — exit 65 — and a
+#      `REVIEWED` that contradicts `--commit` is the same failure. What the
+#      worker did not say, the broker does not write: absence is published
+#      only where the report stated it.
 #   3. Ask the forge for the PR head. In this release the reviewed commit
 #      must BE the head; anything else is exit 75 with a one-line reason,
 #      and the finer staleness cases (commits added after the review, a
@@ -46,7 +50,8 @@
 #      against its right-hand side. A finding whose location is not in the
 #      diff is DROPPED from the inline comments and named on stderr — the
 #      forge refuses a review that cites a line outside the diff, and one
-#      fabricated location must not sink the rest.
+#      fabricated location must not sink the rest. Its severity section then
+#      says how many it withheld — never "none found.".
 #   5. Look for the marker an earlier run of this same report left on the PR
 #      (an HTML comment carrying the report's content hash). A review or
 #      comment already carrying it is not posted again; its URL is printed
@@ -215,7 +220,8 @@ fi
 LC_ALL=C awk -v out="$TMP" '
 BEGIN {
 	order[1] = "CRITICAL"; order[2] = "HIGH"; order[3] = "MEDIUM"; order[4] = "LOW"
-	want = 1; sev = ""; n = 0; infinding = 0; verdict = 0
+	initial["CRITICAL"] = "C"; initial["HIGH"] = "H"; initial["MEDIUM"] = "M"; initial["LOW"] = "L"
+	want = 1; sev = ""; n = 0; infinding = 0; verdict = 0; axis1 = 0; axis2 = 0; tagged = 0
 }
 function err(msg) { print msg >> (out "/error") }
 NR == 1 {
@@ -231,6 +237,10 @@ NR == 1 {
 	print $0 > (out "/verdict")
 	next
 }
+# The two axis headings are part of the contract, and the second one closes
+# Axis 1: findings stop being recognised there, tags start.
+/^##[ \t]+Axis[ \t]*1/ { axis1 = 1; infinding = 0; next }
+/^##[ \t]+Axis[ \t]*2/ { axis2 = 1; sev = "done"; infinding = 0; next }
 /^#### (CRITICAL|HIGH|MEDIUM|LOW)[ \t]*$/ {
 	h = $2
 	infinding = 0
@@ -238,11 +248,11 @@ NR == 1 {
 	if (h != order[want]) { err("severity heading out of order: found #### " h " where #### " order[want] " was expected"); next }
 	want++
 	sev = h
+	seen[h] = 1
 	next
 }
-# Any H2 after the LOW heading closes Axis 1 (the Axis 2 heading, in a report
-# that follows the contract). Findings stop being recognised; tags start.
-/^## / && sev == "LOW" { sev = "done"; infinding = 0; next }
+# An empty severity section STATES its absence; the broker never infers it.
+sev != "" && sev != "done" && !infinding && /^[^A-Za-z0-9]*[Nn]one found/ { absent[sev] = 1; next }
 sev != "" && sev != "done" && /^([-*][ \t]+)?\*\*[CHML]-[0-9]+\*\*/ {
 	n++
 	line = $0
@@ -259,22 +269,38 @@ sev != "" && sev != "done" && /^([-*][ \t]+)?\*\*[CHML]-[0-9]+\*\*/ {
 			if (lno !~ /^[0-9]+$/ || lno + 0 == 0) { path = ""; lno = "" }
 		}
 	}
+	fid[n] = id
+	cnt[sev]++
+	if (substr(id, 1, 1) != initial[sev]) err("finding " id " sits under #### " sev " — IDs are C-1, H-1, M-1, L-1 …, numbered from 1 within their own severity")
+	if (path == "") err("finding " id " carries no readable `path:line` — the shape is **<ID>** `<file>:<line>` — <text>, and a location the broker cannot read is a finding it cannot anchor")
 	printf "%s\t%s\t%s\t%s\n", id, sev, path, lno > (out "/findings/" n ".meta")
 	print line > (out "/findings/" n ".body")
 	infinding = n
 	next
 }
 infinding && /^[ \t]*$/ { infinding = 0; next }
-infinding { print $0 >> (out "/findings/" infinding ".body"); next }
+infinding {
+	if ($0 ~ /^[^A-Za-z0-9]*fix:[ \t]*[^ \t]/) hasfix[infinding] = 1
+	print $0 >> (out "/findings/" infinding ".body"); next
+}
 (sev == "LOW" || sev == "done") && /^([-*][ \t]+)?[^A-Za-z0-9#`*]*(UNSPECIFIED|MISSING|MIXED COMMIT|SPECIFIED)([ \t]|$)/ {
 	line = $0
 	sub(/^[-*][ \t]+/, "", line)
+	tagged++
 	print line >> (out "/behavior")
 	next
 }
 END {
 	if (!verdict) err("no VERDICT: line")
 	if (want <= 4) err("the severity heading #### " order[want] " is missing — all four appear, in order, always")
+	if (!axis1) err("no `## Axis 1` heading — the standards axis opens with it")
+	if (!axis2) err("no `## Axis 2` heading — the behavior confirm-list opens with it, and the broker never writes a confirm-list the worker did not")
+	for (i = 1; i <= 4; i++) {
+		s = order[i]
+		if (seen[s] && !cnt[s] && !absent[s]) err("the #### " s " section holds no finding and does not state absence — an empty heading carries the line `— none found.`, so that absence is stated and never inferred")
+	}
+	for (i = 1; i <= n; i++) if (!hasfix[i]) err("finding " fid[i] " carries no `↳ fix:` line — a finding without the concrete change is half a finding")
+	if (axis2 && !tagged) err("the `## Axis 2` section holds no item opening with its tag (⚠️ UNSPECIFIED, ❌ MISSING, 🔀 MIXED COMMIT, ✅ SPECIFIED) — a confirm-list the broker cannot read is not one it may publish as empty")
 	print n > (out "/count")
 }
 ' "$TMP/report.md"
@@ -399,18 +425,16 @@ NDROPPED=0
 for sev in CRITICAL HIGH MEDIUM LOW; do
 	printf '\n#### %s\n' "$sev" >>"$TMP/body.md"
 	any=0
+	secdrop=0
 	i=1
 	while [ "$i" -le "$COUNT" ]; do
 		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
 		if [ "$f_sev" = "$sev" ]; then
-			if [ -z "$f_path" ]; then
-				note "dropped $f_id: its location is not \`path:line\` — nothing to anchor an inline comment to"
-				DROPPED="${DROPPED:+$DROPPED, }$f_id (location not path:line)"
-				NDROPPED=$((NDROPPED + 1))
-			elif ! in_diff "$f_path" "$f_line"; then
+			if ! in_diff "$f_path" "$f_line"; then
 				note "dropped $f_id: $f_path:$f_line is not in the diff of PR #$PR — the forge would refuse the whole review for it"
 				DROPPED="${DROPPED:+$DROPPED, }$f_id ($f_path:$f_line not in diff)"
 				NDROPPED=$((NDROPPED + 1))
+				secdrop=$((secdrop + 1))
 			else
 				any=1
 				printf '**%s** `%s:%s` — inline below.\n' "$f_id" "$f_path" "$f_line" >>"$TMP/body.md"
@@ -421,7 +445,16 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 		fi
 		i=$((i + 1))
 	done
-	[ "$any" = 1 ] || printf '— none found.\n' >>"$TMP/body.md"
+	# Absence is only ever REPORTED absence. A section whose findings were all
+	# withheld says so — "none found." there would be the broker putting a
+	# claim the worker never made under its own review.
+	if [ "$any" != 1 ]; then
+		if [ "$secdrop" = 0 ]; then
+			printf -- '— none found.\n' >>"$TMP/body.md"
+		else
+			printf -- '— %s finding(s) withheld: their locations are not in this PR diff; see the broker log.\n' "$secdrop" >>"$TMP/body.md"
+		fi
+	fi
 done
 {
 	printf '%s\n' "$MARKER"
@@ -439,11 +472,7 @@ printf '{"commit_id":"%s","event":"%s","body":"%s","comments":[%s]}\n' \
 {
 	printf '%s\n' "$MARKER"
 	printf '## Axis 2 — Behavior (for a human)\n\n'
-	if [ -s "$TMP/behavior" ]; then
-		cat "$TMP/behavior"
-	else
-		printf '— none found.\n'
-	fi
+	cat "$TMP/behavior"
 	printf '\n---\n_Behavior axis of the same dispatched review; a confirm-list for a human, never resolved by an agent (shared invariant §5)._\n'
 } >"$TMP/comment.md"
 printf '{"body":"%s"}\n' "$(json_str <"$TMP/comment.md")" >"$TMP/comment.json"

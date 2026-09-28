@@ -407,6 +407,11 @@ case "$REVIEW" in
 esac
 s_assert_err_has 'M-1'
 s_assert_out_has 'dropped' "stdout summarises what was withheld"
+case "$REVIEW" in
+*'#### MEDIUM\n— none found'*) fail "the section whose only finding was withheld claims none found — absence the worker never reported" ;;
+*'#### MEDIUM\n— 1 finding(s) withheld'*) pass "…and its section says withheld, never none found" ;;
+*) fail "the MEDIUM section says neither none-found nor withheld"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
 
 sed 's|`scripts/a.sh:3`|`scripts/a.sh:99`|' "$GOOD" >"$SCRATCH/offline.md"
 broker 12 "$SCRATCH/offline.md"
@@ -592,7 +597,45 @@ broker 12 "$SCRATCH/awkward-off.md"
 s_assert_out_has 'dropped 2' "a space-bearing path outside its hunks is still dropped"
 
 # ---------------------------------------------------------------------------
-banner "15. The kit ships none of this"
+banner "15. The whole contract is validated, not just its first two lines"
+# ---------------------------------------------------------------------------
+# Section 4 drove the lines the broker cannot do without. ADR-0009 clause 5
+# claims MORE than that — "findings in the ID / location / fix shape, behavior
+# items opening with their tag" — and a claim with no failing check is not a
+# rule (#285, H-1). Each malformed report below is exit 65 with nothing
+# posted, because the alternative is the broker MANUFACTURING what the worker
+# did not say: an empty severity section published as "— none found.", or a
+# human's confirm-list published as empty when the worker's was unreadable.
+bad() { # bad <fixture> <status-label> <stderr fragment>
+	broker 12 "$1"
+	s_assert_status 65 "$2"
+	assert_mutating 0 "…and nothing is posted"
+	s_assert_err_has "$3"
+}
+
+grep -v 'fix:' "$GOOD" >"$SCRATCH/no-fix.md"
+bad "$SCRATCH/no-fix.md" "a finding with no fix line is exit 65" 'H-1'
+
+sed 's|`scripts/a.sh:3`|scripts/a.sh:3|' "$GOOD" >"$SCRATCH/bare-loc.md"
+bad "$SCRATCH/bare-loc.md" "a finding whose location is not \`path:line\` is exit 65" 'H-1'
+
+sed 's/\*\*M-1\*\*/**L-9**/' "$GOOD" >"$SCRATCH/wrong-id.md"
+bad "$SCRATCH/wrong-id.md" "a finding whose ID contradicts its section is exit 65" 'L-9'
+
+grep -v '^— none found\.$' "$GOOD" >"$SCRATCH/silent-section.md"
+bad "$SCRATCH/silent-section.md" "an empty section that does not state absence is exit 65" 'CRITICAL'
+
+grep -v '^## Axis 1' "$GOOD" >"$SCRATCH/no-axis1.md"
+bad "$SCRATCH/no-axis1.md" "a report with no Axis 1 heading is exit 65" 'Axis 1'
+
+grep -v '^## Axis 2' "$GOOD" >"$SCRATCH/no-axis2.md"
+bad "$SCRATCH/no-axis2.md" "a report with no Axis 2 heading is exit 65" 'Axis 2'
+
+grep -v 'SPECIFIED' "$GOOD" >"$SCRATCH/no-tags.md"
+bad "$SCRATCH/no-tags.md" "an Axis 2 section with no tagged item is exit 65" 'Axis 2'
+
+# ---------------------------------------------------------------------------
+banner "16. The kit ships none of this"
 # ---------------------------------------------------------------------------
 for f in scripts/forge-broker.kit.sh scripts/forge-broker.kit.config.sh tests/forge-broker.test.sh; do
 	grep -q "$f" "$KIT/bootstrap.sh" &&
