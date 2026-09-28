@@ -965,6 +965,7 @@ skills:
   merge-train
   pr-iterate
   prototype
+  retro
   review-pr
   tdd
   to-prd

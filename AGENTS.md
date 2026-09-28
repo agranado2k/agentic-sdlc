@@ -270,21 +270,21 @@ Spec → tickets → implementation → review → landing:
 ends at an open PR carrying an independent review) → `/review-pr` →
 `/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
 
-Several step out of that line: `/grill-with-docs` replaces `/grill-me` once
-there is a glossary and decision records worth challenging a plan against,
-`/prototype` answers a feasibility question the spec is blocked on, `/diagnose`
-is for a bug rather than a feature, `/explain-diff` turns a diff, branch or PR
-into an interactive explainer, and `/improve-codebase-architecture` is for an
-area that has become hard to change — it finds and designs the deepening, then
-re-enters the line at `/to-tickets`, because a behaviour-preserving refactor is
-a ticket of its own and never a passenger on a feature diff (shared invariant
-§10). `/design-brief` sits before the first feature diff and again whenever the
-shape stops fitting: it decides paradigm, style and context map twice, compares
-on complexity, and records the choice where every later session reads it.
-`/housekeeping` runs on a calendar rather than an event — the docs gate's
-housekeeping-due advisory is what sends you to it — and audits the standing
-instructions, measures the suite, and scans for the red flags that reopen the
-brief; it never fixes, and its findings enter the line at `/to-tickets`.
+Several step out of that line: `/grill-with-docs` replaces `/grill-me` once a
+glossary and decision records exist to challenge a plan against, `/prototype`
+answers a feasibility question the spec is blocked on, `/diagnose` is for a
+bug, not a feature, `/explain-diff` explains a diff or PR interactively, and
+`/improve-codebase-architecture` is for an area that has become hard to change
+— it finds and designs the deepening, then re-enters the line at `/to-tickets`:
+a behaviour-preserving refactor is its own ticket, never a passenger on a
+feature diff (shared invariant §10). `/design-brief` runs before the first
+feature diff and whenever the shape stops fitting: paradigm, style and context
+map designed twice, compared on complexity, recorded for every later session.
+`/housekeeping` runs on a calendar, not an event — the docs gate's
+housekeeping-due advisory sends you to it — and audits the standing
+instructions, measures the suite and scans for the red flags that reopen the
+brief. `/retro` runs per wave as the one skill that reads the trace: seven
+fixed questions over a window. Neither fixes; findings go to `/to-tickets`.
 
 One more sits *beside* the line: `/dogfood` walks a project's declared personas
 through its real user-facing surface. It is the kit's one OPTIONAL skill —
@@ -307,6 +307,7 @@ answers produce a clean project.
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Decide the shape of the system out loud | `/design-brief` — design it twice, compare on complexity, then record paradigm, style and context map as anchors, a glossary section and a decision record; stops for your yes before writing |
 | Run the recurring housekeeping pass | `/housekeeping` — audit the agent files, the glossary, the records, the measurement, the worktrees and the diary, then scan for Ousterhout's red flags; never fixes, files candidate tickets, stamps the diary row |
+| Turn the trace into candidate tickets | `/retro` — seven fixed questions over a window (default: since its own last run), report outside the tree, findings to `/to-tickets`; never fixes. The one skill that reads the trace |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer; teaches, never reviews |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |

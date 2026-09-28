@@ -319,6 +319,16 @@ jobs:
       - name: Housekeeping skill-text suite
         run: sh tests/housekeeping-skill.test.sh
 
+  retro:
+    name: /retro contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the skill is a document, and the suite runs its documented
+      # trace lines against a scratch trace with the POSIX script alone.
+      - name: Retro skill-text suite
+        run: sh tests/retro-skill.test.sh
+
   spec-skills:
     name: /to-prd and /to-tickets contracts
     runs-on: ubuntu-latest

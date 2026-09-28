@@ -19,7 +19,9 @@
 #   2. Every emit, begin and end ends in `|| :` — the trace changes no skill's
 #      outcome, whatever the trace does.
 #   3. Never `show`, `summary` or `export` — the chain does not read its own
-#      history. Held over EVERY skill directory, chain or not.
+#      history. Held over EVERY skill directory, chain or not, with ONE named
+#      exception: /retro, the sanctioned reader (ADR-0008 clause 7, #254),
+#      which the same rule holds to the opposite — it MUST read.
 #   4. Every kind a skill emits is one scripts/trace.sh knows: the vocabulary is
 #      closed, and a skill that emits an unknown kind emits nothing.
 #   5. The decision points themselves: the plan's table of one kind per
@@ -120,11 +122,21 @@ for s in $CHAIN; do
 done
 
 # ---------------------------------------------------------------------------
-banner "3. The chain never reads the trace: no show, summary or export in any skill"
+banner "3. The chain never reads the trace: no show, summary or export in any skill but the reader"
 # ---------------------------------------------------------------------------
+# The exclusion is explicit and named: ADR-0008 clause 7 makes the
+# retrospective the reader, so /retro is held to reading and every other
+# skill to not. A second name here would be a second reader, and that is a
+# decision record's to make, not this list's.
+READER=retro
 for d in "$SKILLS"/*/; do
 	s=$(basename "$d")
 	reads=$(grep -rnE "trace\.sh +(show|summary|export)\b" "$d" || true)
+	if [ "$s" = "$READER" ]; then
+		[ -n "$reads" ] && pass "/$s is the one sanctioned reader, and reads (show, summary, export)" ||
+			fail "/$s is the sanctioned reader and never reads the trace — the exclusion is dead"
+		continue
+	fi
 	if [ -z "$reads" ]; then
 		pass "/$s never reads the trace"
 	else

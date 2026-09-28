@@ -26,6 +26,12 @@ the Agent Skills specification.*
   candidate: propose removing it and running its task with the raw agent harness
   to see what is lost. Copying a skill in and keeping it are separate
   decisions.
+- **The retrospective.** A `/retro` ran inside this window: its report,
+  `retro-<YYYYMMDDTHHMMSSZ>.md` under the temp location, or a PR body or a
+  diary entry quoting one, dated after the last pass. This pass does not open
+  the trace to find out — the chain never reads it (ADR-0008), and the
+  retro's own record is its report. A window with landed PRs and no retro is
+  a finding: the loop has no clock.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
   description under the specification's 1024 characters and leading with the
   use case; the body under

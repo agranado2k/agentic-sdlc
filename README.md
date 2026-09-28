@@ -154,14 +154,14 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.agents/skills/` holds seventeen skills — the chain at the top of this README, made
+`.agents/skills/` holds eighteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
 `/diagnose`, `/explain-diff`, `/improve-codebase-architecture`,
-`/design-brief` and `/housekeeping` off to the side.
+`/design-brief`, `/housekeeping` and `/retro` off to the side.
 
 **All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
@@ -228,7 +228,7 @@ Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpo
 under MIT; `.agents/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
-records the eight that have **no** upstream — including `/dogfood`, checked
+records the nine that have **no** upstream — including `/dogfood`, checked
 against the upstream repository rather than assumed — and the one with a
 different upstream: `/explain-diff`, adapted from Geoffrey Litt's
 publicly shared skill.
@@ -637,6 +637,18 @@ skeleton (K0).
   their two routes, the never-fix rule, the one permitted write, planner-tier
   work, spec-only frontmatter, and every path and command resolving.
 
+- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the seven
+  fixed questions named and numbered in both files, the trace kinds each one
+  reads, the plain `sh scripts/trace.sh show|summary|export` name with
+  `verify` first, the report outside the tree, findings routed to
+  `/to-tickets` and never fixed (a recurring failure becomes a rule with a
+  failing check, never a lessons file — shared invariant §11), the run it
+  opens and closes with `data.findings`, every documented trace line run
+  against a scratch trace, the default window since its own last run end,
+  planner-tier work, and every roster surface — including `/housekeeping`'s
+  "a retro ran inside the window" line and the trace-skills suite's named
+  exclusion for the one skill allowed to read.
+
 - `sh tests/spec-skills.test.sh` pins the `/to-prd` and `/to-tickets` contracts
   as text: the PRD template's eleven sections in reading order, the phrase
   that carries each rule (one-sentence objective, scenarios as demo scripts,
@@ -731,6 +743,7 @@ sh tests/trace-skills.test.sh                          # every chain skill emits
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/retro-skill.test.sh                           # the /retro contract
 sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
 sh tests/skill-phase.test.sh                           # every skill declares its phase of work
 sh tests/manifest.test.sh                              # the manifest grammar, once
