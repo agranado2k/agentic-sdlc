@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263)
 
 ## Context and problem statement
 
@@ -100,6 +100,13 @@ Chosen: **option 1**.
 4. **Emit is never load-bearing.** Every call site tolerates failure. A trace
    error is loud on stderr, and where possible in the trace, never in an exit
    status a skill, a hook or a dispatch acts on.
+   *Amended 2026-09-28:* this clause is about a trace error — a directory
+   that cannot be written, a policy file that cannot be read. A **caller
+   error** is a different thing: `end` with no run open, or `begin` handed a
+   malformed subject, is a bug in the skill's prose, and it reports as exit 2
+   the way an unknown kind always has, so the bug is visible. Every call site
+   still ends in `|| :`, so no skill's outcome changes either way; what
+   changes is that the operator can see it.
 5. **Appends are one short write** (craft §11). An event is one `printf` to
    an append-mode descriptor; a cap on the line and a content-addressed blob
    directory for larger payloads arrive with #248. Nothing ever rewrites an
