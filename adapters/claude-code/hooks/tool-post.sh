@@ -66,20 +66,26 @@ tdir=$(hook_dir) || {
 
 hook_read
 
-# THE STAGING DIRECTORY sits INSIDE the trace directory, so landing a payload in
-# the blob store is a rename rather than a copy across filesystems — the same
-# reason scripts/trace.sh stages a blob under its own tmp/. Its own subdirectory
+# THE STAGING DIRECTORY sits INSIDE the trace directory, and only there, so
+# landing a payload in the blob store is a rename rather than a copy across
+# filesystems — the same reason scripts/trace.sh stages a blob under its own tmp/. Its own subdirectory
 # per call, so two tool calls finishing at once cannot overwrite each other's
 # three files.
 stage=
 if mkdir -p "$tdir/tmp" 2>/dev/null; then
 	stage=$(mktemp -d "$tdir/tmp/tool.XXXXXX" 2>/dev/null) || stage=
 fi
-[ -n "$stage" ] || stage=$(mktemp -d "${TMPDIR:-/tmp}/cc-tool.XXXXXX" 2>/dev/null) || stage=
 
+# AND NOWHERE ELSE. A first draft fell back to TMPDIR when that failed, which
+# reads as robustness and is the opposite: on another filesystem the landing
+# `mv` becomes copy-and-unlink, so a reader can open half a payload at the
+# address its whole content will have — the one thing a content-addressed store
+# must never allow (craft §11, and the reason trace_blob_name stages inside the
+# trace directory too; M-3, review of PR #295). A trace directory that cannot
+# stage is a recorded failure.
 if [ -z "$stage" ]; then
 	hook_trace emit kind=tool.use outcome=fail \
-		reason='no directory could be staged for the tool payload, so nothing was stored'
+		reason="no scratch could be staged inside the trace directory, and a blob landed from anywhere else could be published half-written, so nothing was stored"
 	exit 0
 fi
 
@@ -131,11 +137,25 @@ from=$(field result_from)
 # was refused. The session id is different in kind: it is IDENTITY, not the
 # record, so an unusable one is simply omitted and the trace's own fallbacks (the
 # exported TRACE_SESSION, then the pointer file) answer for it.
+# AND SHORT ENOUGH TO FIT ON A LINE. The class check says nothing about length,
+# and an event over 4000 bytes is REFUSED by the shared script — so a 5000-
+# character id that is otherwise perfectly well formed stored two blobs and
+# produced no line at all, which is the one outcome this hook promises never to
+# have (M-1, review of PR #295). The bound is generous by two orders of
+# magnitude against the ids this agent harness emits (~30 characters), and what
+# it protects is the line, so a refusal event — which carries no id — always fits.
+ID_MAX=256
+id_usable() { hook_id_ok "$1" && [ "${#1}" -le "$ID_MAX" ]; }
+
 why=
 if ! hook_id_ok "$tuid"; then
 	why='the payload named a tool_use_id that is not a plain identifier (letters, digits, dot, dash, underscore), and an id show could never match is not written'
+elif [ "${#tuid}" -gt "$ID_MAX" ]; then
+	why="the payload named a tool_use_id longer than $ID_MAX characters, which would push the event past the trace's own cap and cost the whole line"
 elif ! hook_id_ok "$tool"; then
 	why='the payload named a tool_name that is not a plain identifier, and a join column is not invented from it'
+elif [ "${#tool}" -gt "$ID_MAX" ]; then
+	why="the payload named a tool_name longer than $ID_MAX characters, which would push the event past the trace's own cap and cost the whole line"
 fi
 if [ -n "$why" ]; then
 	hook_trace emit kind=tool.use outcome=fail reason="$why"
@@ -156,8 +176,8 @@ esac
 # THE TWO BLOBS. A store that will not take the bytes is one event saying so:
 # the hashes are what makes the event worth anything, and an event naming a blob
 # nobody can open would be worse than one that says the store refused.
-ib=$(hook_blob "$stage/input") || ib=
-rb=$(hook_blob "$stage/result") || rb=
+ib=$(hook_blob "$tdir" "$stage/input") || ib=
+rb=$(hook_blob "$tdir" "$stage/result") || rb=
 if [ -z "$ib" ] || [ -z "$rb" ]; then
 	hook_trace emit kind=tool.use outcome=fail \
 		reason="the trace's blob store could not take this tool call's payloads, so the event would have named blobs nobody can open"
@@ -171,7 +191,7 @@ set -- kind=tool.use harness=claude-code outcome="$outcome"
 # for one whose payload holds the authoritative id. The SUBJECT is the session
 # rather than the call, so `show session:<id>` reads a session's tool calls in
 # order; the call's own id is a data key, which is what joins it to a transcript.
-[ -n "$sid" ] && hook_id_ok "$sid" && set -- "$@" subject="session:$sid" session="$sid"
+[ -n "$sid" ] && id_usable "$sid" && set -- "$@" subject="session:$sid" session="$sid"
 hook_trace emit "$@" \
 	data.tool="$tool" data.tool_use_id="$tuid" \
 	data.input_head="$(cat "$stage/head" 2>/dev/null)" \

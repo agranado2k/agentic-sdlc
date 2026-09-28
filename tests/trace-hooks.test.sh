@@ -408,9 +408,64 @@ if [ -f "$SETTINGS" ]; then
 	else
 		echo "  skip  node is not on PATH — the JSON parse check needs it"
 	fi
-	for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
-		grep -q "\"$ev\"" "$SETTINGS" && pass "it wires $ev" || fail "it does not wire $ev"
-	done
+	# EVERY WIRED EVENT, TIED TO ITS OWN COMMAND — and the check shown failing.
+	# An event-name grep and a command count are both satisfied by a settings
+	# file whose new commands read the SHIPPED policy, which is empty: tool
+	# capture would then write nothing while every assertion here stayed green
+	# (M-5, review of PR #295). So the JSON is parsed, each event is tied to the
+	# script it must run AND the policy it must select, and the same function is
+	# run against a sabotaged copy that must FAIL — a check nobody has seen fail
+	# is a claim.
+	#
+	# The while loop reads a FILE, not a pipe: a pipeline's loop runs in a
+	# subshell and the count it kept would die with it.
+	wiring_rows="$SCRATCH/wiring-252.txt"
+	wiring_ok() {
+		node -e 'const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+			for (const [ev, groups] of Object.entries(s.hooks || {}))
+				for (const g of groups)
+					for (const h of (g.hooks || []))
+						console.log(ev + " " + String(h.command).replace(/\s+/g, " "));' \
+			"$1" >"$wiring_rows" || return 1
+		_w_bad=0
+		while read -r _w_ev _w_cmd; do
+			case $_w_ev in
+			SessionStart) _w_want=session-start.sh ;;
+			SessionEnd) _w_want=session-end.sh ;;
+			SubagentStop) _w_want=subagent-stop.sh ;;
+			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
+			*)
+				_w_bad=1
+				continue
+				;;
+			esac
+			case $_w_cmd in *"/hooks/$_w_want"*) ;; *) _w_bad=1 ;; esac
+			case $_w_cmd in *'TRACE_CONFIG=scripts/trace.kit.config.sh'*) ;; *) _w_bad=1 ;; esac
+		done <"$wiring_rows"
+		[ "$_w_bad" = 0 ]
+	}
+	if [ "$HAVE_NODE" = 1 ]; then
+		wiring_ok "$SETTINGS" &&
+			pass "every wired event runs its own hook script through the kit's trace policy" ||
+			fail "a wired event names the wrong script or reads the shipped empty policy: $(cat "$wiring_rows")"
+		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+			grep -q "^$ev " "$wiring_rows" && pass "it wires $ev" || fail "it does not wire $ev"
+		done
+		sed '/tool-post.sh/s|TRACE_CONFIG=scripts/trace.kit.config.sh ||' "$SETTINGS" \
+			>"$SCRATCH/settings-sabotaged-252.json"
+		[ "$(grep -c 'trace.kit.config.sh' "$SCRATCH/settings-sabotaged-252.json")" -lt \
+			"$(grep -c 'trace.kit.config.sh' "$SETTINGS")" ] &&
+			pass "the sabotaged copy really does drop the policy from the post-tool commands" ||
+			fail "the sabotage changed nothing, so the probe below proves nothing"
+		wiring_ok "$SCRATCH/settings-sabotaged-252.json" &&
+			fail "the wiring check passes a file whose post-tool commands read the shipped OFF policy" ||
+			pass "and the check FAILS on that copy — it is load-bearing"
+	else
+		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+			grep -q "\"$ev\"" "$SETTINGS" && pass "it wires $ev" || fail "it does not wire $ev"
+		done
+		echo "  skip  node is not on PATH — the per-event wiring check needs a JSON parser"
+	fi
 	# Every command it names must resolve to a file in this tree, with
 	# $CLAUDE_PROJECT_DIR standing for the repo root as the agent harness
 	# substitutes it. A settings file naming a script nobody wrote is a hook
@@ -430,11 +485,11 @@ if [ -f "$SETTINGS" ]; then
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
 			fail "the settings file names $resolved, which does not exist"
 	done
-	# And it must reach the KIT's own trace policy, not the shipped empty one —
+	# Reaching the KIT's own trace policy rather than the shipped empty one —
 	# hard rule 10's arrangement, spelled in the one file that may name a
-	# kit-only path because it never ships.
+	# kit-only path because it never ships — is asserted per event above.
 	grep -q 'TRACE_CONFIG=scripts/trace.kit.config.sh' "$SETTINGS" &&
-		pass "it points the hooks at the kit's own trace policy file" ||
+		pass "and the kit-only policy path is in the file at all" ||
 		fail "it does not set TRACE_CONFIG=scripts/trace.kit.config.sh — the hooks would read the empty shipped policy and write nothing"
 else
 	fail ".claude/settings.json does not exist"
@@ -1061,6 +1116,104 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the input blob lost the DEL byte"
 else
 	echo "  skip  node is not on PATH — the drift legs need the payload reader"
+fi
+
+# ---------------------------------------------------------------------------
+banner "25. What the independent review of PR #295 found"
+# ---------------------------------------------------------------------------
+# Four probes an author does not think to run, each one now a regression. They
+# are gathered in one section because they share a cause: a second writer of the
+# blob store has to keep every promise the first one keeps, and three of these
+# are places where it did not.
+if [ "$HAVE_NODE" = 1 ]; then
+	# H-1. A BLOB IS PRIVATE DATA. The shared script stages through `mktemp`,
+	# which is 0600, and the rename preserves it; a payload written with a
+	# plain create is 0644 under the usual umask, so every local user who can
+	# traverse the trace directory reads every command and every file this
+	# session touched. The umask is pinned here rather than inherited: the
+	# claim is about the mode the writer asks for, not about the machine the
+	# suite happens to run on.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" TRACE_TOOLS=1 \
+		sh -c 'umask 022; exec sh "$1"' probe "$HOOKS/tool-post.sh" <"$PAYLOAD"
+	[ "$S_STATUS" = 0 ] && pass "the hook exits 0 under a 022 umask" || fail "the hook exited $S_STATUS"
+	P25=$(ev_of tool.use | sed -n '1p')
+	IH=$(hash_of "$TIN")
+	MODE=$(ls -l "$(blob_file "$IH")" 2>/dev/null | cut -c1-10)
+	[ "$MODE" = '-rw-------' ] &&
+		pass "a stored blob is readable by its owner alone ($MODE)" ||
+		fail "a stored blob's mode is '$MODE', so a tool result is world-readable"
+	[ -n "$P25" ] && pass "and the event is there beside it" || fail "no event: $(events)"
+
+	# M-1. AN ID CAN BE THE THING THAT BREAKS THE CAP. The class check says
+	# nothing about length, and `scripts/trace.sh` refuses an event over 4000
+	# bytes — so a 5000-character id that is otherwise perfectly well formed
+	# stored two blobs and produced NO line at all, which is the one outcome
+	# this hook promises never to have.
+	new_trace
+	LONGID=$(awk 'BEGIN { while (i++ < 5000) printf "a" }')
+	printf '{"session_id":"%s","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"tool_response":{"stdout":"hi"},"tool_use_id":"%s"}' \
+		"$TSESSION" "$LONGID" >"$SCRATCH/tool-longid-252.json"
+	PAYLOAD="$SCRATCH/tool-longid-252.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "a 5000-character tool_use_id exits 0" || fail "the hook exited $S_STATUS"
+	[ "$(ev_of tool.use | wc -l | tr -d ' ')" = 1 ] &&
+		pass "and leaves exactly one tool.use event rather than none" ||
+		fail "expected one event, got $(ev_of tool.use | wc -l) — an id over the cap lost the line"
+	L25=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$L25" outcome)" = fail ] && pass "whose outcome is fail" ||
+		fail "the event's outcome is '$(str "$L25" outcome)'"
+	[ "$(printf '%s\n' "$L25" | wc -c | tr -d ' ')" -le 4000 ] &&
+		pass "and whose own write is inside the cap" ||
+		fail "the refusal event is itself over the cap"
+	[ -z "$(find "$TDIR/blobs" -type f 2>/dev/null)" ] &&
+		pass "and no blob was stored for a call that cannot be named" ||
+		fail "blobs were stored for an over-long id: $(find "$TDIR/blobs" -type f)"
+
+	# M-2. THE NAME MUST NOT DEPEND ON WHERE THE HOOK WAS STANDING. `git
+	# hash-object` answers in the object format of the repository it runs in,
+	# and the agent harness chooses the cwd — so a hook that hashed there would
+	# name a payload sha256 while the shared script, which runs from the
+	# adapter's own repository, names it sha1. Two names for one payload in one
+	# store is the store's whole promise broken.
+	new_trace
+	S256=$(mktemp -d "$SCRATCH/sha256.XXXXXX") || exit 2
+	if git init -q --object-format=sha256 "$S256" 2>/dev/null; then
+		t_run_split env TRACE_DIR="$TDIR" TRACE_TOOLS=1 \
+			sh -c 'cd "$1" || exit 1; exec sh "$2"' probe "$S256" "$HOOKS/tool-post.sh" <"$PAYLOAD"
+		[ "$S_STATUS" = 0 ] && pass "the hook exits 0 when it is run from another repository" ||
+			fail "the hook exited $S_STATUS from a foreign cwd: $S_ERR"
+		G=$(ev_of tool.use | sed -n '1p')
+		[ "$(str "$G" input_blob)" = "$(hash_of "$TIN")" ] &&
+			pass "and names the blob what the shared script names it, not what the cwd's object format would" ||
+			fail "data.input_blob is '$(str "$G" input_blob)' from a sha256 cwd, expected $(hash_of "$TIN")"
+	else
+		echo "  skip  this git cannot create a sha256 repository — the object-format leg needs one"
+	fi
+
+	# M-3. A BLOB IS PUBLISHED BY RENAME OR NOT AT ALL. Staging outside the
+	# trace directory would make the landing a copy across filesystems, which
+	# can expose half a payload at the address its whole content will have. So
+	# when the trace's own scratch cannot be made, the answer is the recorded
+	# failure, never a staging area somewhere else. `tmp` is made a FILE here,
+	# which is the cheapest way to fail one mkdir while leaving the event file
+	# writable.
+	new_trace
+	: >"$TDIR/tmp"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	[ "$S_STATUS" = 0 ] && pass "a trace directory that cannot stage exits 0" ||
+		fail "the hook exited $S_STATUS"
+	S25=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$S25" outcome)" = fail ] &&
+		pass "and records one tool.use outcome=fail instead of staging elsewhere" ||
+		fail "the event's outcome is '$(str "$S25" outcome)': $(events)"
+	[ -z "$(find "$TDIR/blobs" -type f 2>/dev/null)" ] &&
+		pass "with no blob landed from outside the trace's own filesystem" ||
+		fail "a blob was landed from foreign scratch: $(find "$TDIR/blobs" -type f)"
+	rm -f "$TDIR/tmp"
+else
+	echo "  skip  node is not on PATH — the review's regression legs need the payload reader"
 fi
 
 t_done "trace hooks"

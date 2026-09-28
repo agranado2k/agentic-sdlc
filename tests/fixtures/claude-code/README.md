@@ -72,6 +72,19 @@ guessable from the session payloads beside them:
   handed over before the decision — says nothing about the denial. There is no
   fixture for a denied call because there is no payload to capture.
 
+**These two were redacted differently from the transcripts below, and
+deliberately so.** The section that follows describes the #246 capture, where
+every free-text body was replaced with a length-preserving placeholder. In these
+two payloads the `tool_input`, `tool_response` and `error` bodies are KEPT
+VERBATIM — they are `cat file.txt`, the word `hello`, and a "No such file or
+directory" error, written for the capture and carrying nothing private — because
+they are the bytes the suite hashes with `git hash-object` and compares against
+what the hook stored. A placeholder would make that assertion a test of the
+placeholder. Only the paths were rewritten, the same way: the capturing machine's
+home to `~`, the throwaway project to `/tmp/spike-proj` and its encoded form to
+`-tmp-spike-proj`. Session, prompt and tool-use ids are kept, because the whole
+point of a fixture is that they join.
+
 ## What was redacted
 
 Structure, key order, ids and **every number** are untouched. Replaced:

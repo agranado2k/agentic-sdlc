@@ -287,17 +287,23 @@ hook_tools_on() {
 # hook_dir — the resolved trace directory, or nothing (status 1) when tracing is
 # off. Asked of the shared script itself, which is the only thing that knows how
 # a relative policy value resolves against the root checkout.
+#
+# ASK IT ONCE. There is no cache here on purpose: a caller reads this through a
+# command substitution, so anything remembered inside would be remembered in a
+# subshell and thrown away — a cache that cannot work, paid for on every tool
+# call (M-4, review of PR #295). The one caller resolves it once and hands it
+# down.
 hook_dir() {
-	if [ -z "${_hook_dir_cached:-}" ]; then
-		_hook_dir_cached=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hook_dir_cached=
-	fi
-	[ -n "$_hook_dir_cached" ] || return 1
-	printf '%s' "$_hook_dir_cached"
+	_hd_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hd_dir=
+	[ -n "$_hd_dir" ] || return 1
+	printf '%s' "$_hd_dir"
 }
 
-# hook_blob <staged file> — put those bytes in the trace's blob store and print
-# `<hash> <bytes>`. The file is CONSUMED: it is renamed into the store, or left
-# for the caller's scratch sweep when the store already holds that content.
+# hook_blob <trace directory> <staged file> — put those bytes in the trace's blob
+# store and print `<hash> <bytes>`. The file is CONSUMED: it is renamed into the
+# store, or left for the caller's scratch sweep when the store already holds that
+# content. The directory is passed IN rather than resolved here, because a caller
+# with two payloads would otherwise ask the shared script for it twice.
 #
 # WHY THIS ADAPTER LANDS A BLOB ITSELF, rather than through `emit --blob`. One
 # emit carries one blob — `scripts/trace.sh` refuses a second, deliberately: the
@@ -321,16 +327,23 @@ hook_dir() {
 # stored once and never rewritten, and the landing is a rename, so a reader never
 # opens half a payload (craft §11).
 hook_blob() {
-	_hb_dir=$(hook_dir) || return 1
-	[ -f "$1" ] || return 1
-	_hb_hash=$( (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1") 2>/dev/null ) || _hb_hash=
+	_hb_dir=$1
+	[ -n "$_hb_dir" ] || return 1
+	[ -f "$2" ] || return 1
+	# FROM THE ADAPTER'S OWN REPOSITORY, never from the caller's cwd: `git
+	# hash-object` answers in the object format of the repository it runs in, and
+	# the agent harness chooses where a hook stands. Run in a sha256 repository
+	# it named a payload sha256 while the shared script — which runs from
+	# hook_repo — named the same bytes sha1, which is two addresses for one
+	# payload in one store (M-2, review of PR #295).
+	_hb_hash=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" hash-object --stdin <"$2") 2>/dev/null ) || _hb_hash=
 	[ -n "$_hb_hash" ] || return 1
-	_hb_bytes=$(wc -c <"$1" 2>/dev/null | tr -d ' ')
+	_hb_bytes=$(wc -c <"$2" 2>/dev/null | tr -d ' ')
 	[ -n "$_hb_bytes" ] || return 1
 	_hb_dest="$_hb_dir/blobs/$(printf '%.2s' "$_hb_hash")/$_hb_hash"
 	if [ ! -f "$_hb_dest" ]; then
 		mkdir -p "$(dirname "$_hb_dest")" 2>/dev/null || return 1
-		mv "$1" "$_hb_dest" 2>/dev/null || return 1
+		mv "$2" "$_hb_dest" 2>/dev/null || return 1
 	fi
 	printf '%s %s' "$_hb_hash" "$_hb_bytes"
 }
