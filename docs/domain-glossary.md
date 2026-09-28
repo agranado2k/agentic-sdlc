@@ -136,6 +136,13 @@ Grouped by the seam each term belongs to. Entry shape:
   verbatim into a repo that shares none of this one's vocabulary. Enforced as a
   deny-list (`portability-leak`) over product names, hostnames, vendors,
   tool invocations, slash commands and repo paths.
+- **Oracle** — the thing a self-measurement is graded against, and who wrote it:
+  the test fixtures, the version they were written for, and the comparator
+  (another measurement, a held-out set, or the thing itself). Every measurement
+  the kit reports names its oracle so the reader can tell a self-graded number
+  from a held-out one. Rule: a comparator is always named, never implied.
+  - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
+    of comparison, not a single number or an assumption.
 
 ## Process — how work moves
 
