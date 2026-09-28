@@ -931,7 +931,9 @@
 # are this wave's next tickets — so nothing a consumer runs changes in this
 # window. UPDATING.md changes content: 9d's policy-file table gains the row
 # and its arriving-from paragraph, and the transcripts re-pin. The v0.25.0
-# tag is the wave's release ticket's (#282), not this bump's.
+# tag is the wave's release ticket's (#282), not this bump's — so from this
+# merge until #282 cuts it, main's self-host job is KNOWINGLY red on F3, a
+# planned state and not a regression.
 #   NON-MANIFEST HALF, enumerated: scripts/vocab.config.sh, the policy file
 # (9d — take it whole on first arrival, it is yours after that, and the
 # checker's own defaults stand in for a consumer that never does; the
@@ -940,8 +942,17 @@
 # yours); one quick-reference row in the manual template,
 # constitution/AGENTS.md.template (9b — one line to add by hand); and two
 # kit-only suites, tests/vocab.test.sh and tests/vocab-policy.test.sh, that
-# a consumer never sees. No skill, docs template or workflow changed in this
-# window.
+# a consumer never sees. ALSO IN THIS WINDOW, landed on main from the trace
+# wave ahead of its own bump (PRs 284, 286 and 291; their release ticket is
+# #255, whose note is the one that describes them): every chain skill —
+# /design-brief, /diagnose, /grill-me, /housekeeping, /implement,
+# /merge-train, /pr-iterate, /prototype, /review-pr, /tdd, /to-prd,
+# /to-tickets, /worktree-cleanup — gained trace emits at its decision
+# points (9a), and adapters/claude-code gained the session hooks
+# hook.lib.sh, session-start.sh, session-end.sh, subagent-stop.sh and
+# transcript-usage.mjs, with adapters/README.md and
+# adapters/claude-code/README.md updated (9e). No docs template or workflow
+# changed in this window.
 
 shared-layer: 0.25.0
 
