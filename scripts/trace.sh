@@ -32,6 +32,15 @@
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
 # for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
 # trace error: an `emit` never fails a caller this way.
+#   And exit 3 is A TRACE THIS READER CANNOT JUDGE — a SCHEMA naming a version
+# this script does not read. Neither of the two above: nothing failed and the
+# call was well formed, there is simply no verdict to give. It is the docs
+# gate's "could not run" by meaning and not by number, because 2 here is the
+# caller's own error and the two ask opposite things — fix your command, versus
+# update the shared layer and change nothing about the call. `verify` exits 3
+# and judges no line; `export` refuses with 3 and prints nothing; `summary`
+# still exits 0 and says so in its first line (ADR-0008 clause 4, as amended
+# 2026-09-28 for #271).
 #
 # UNCONFIGURED IS A WORKING STATE. The policy file scripts/trace.config.sh ships
 # with TRACE_DIR empty, and an empty TRACE_DIR means every emit exits 0 having
@@ -99,7 +108,8 @@
 #
 # SCHEMA, a file in the trace directory, names the version of the lines under
 # it. `verify` refuses a trace whose schema it does not know rather than
-# reporting every line as malformed.
+# reporting every line as malformed, and that refusal is exit 3 — the code
+# above, for a trace this reader cannot judge.
 #
 # COST IS COMPUTED ON READ, NEVER ON WRITE (ADR-0008 clause 6). An event carries
 # raw token counts and the model that spent them, because that is a fact; a
@@ -138,6 +148,10 @@ set -u
 _trace_here=$(cd "$(dirname "$0")" && pwd -P)
 
 TRACE_SCHEMA=1
+# The exit status for a trace this reader cannot judge, kept as a name because
+# three readers have to agree on it: verify returns it, export refuses with it,
+# and summary recognises it to mark its own first line (ADR-0008 clause 4).
+TRACE_EX_SCHEMA=3
 TRACE_EVENT_CAP=4000
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
@@ -856,11 +870,12 @@ trace_verify() {
 	# The schema first. A trace written under a version this script does not
 	# know is not this reader's to judge — a reader that does not know the shape
 	# would report every line as malformed — so it refuses the trace, says which
-	# file said what, and judges no line.
+	# file said what, and judges no line. Its own exit code, not the verdict's:
+	# a caller told 1 goes looking for the bad line, and there is none to find.
 	_vf_schema=$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")
 	if [ -n "$_vf_schema" ] && [ "$_vf_schema" != "$TRACE_SCHEMA" ]; then
 		echo "x  trace: $TRACE_ROOT_DIR/SCHEMA says schema $_vf_schema and this script reads $TRACE_SCHEMA — a trace it does not know is not its to judge; update the shared layer before reading this one." >&2
-		return 1
+		return "$TRACE_EX_SCHEMA"
 	fi
 	_vf_bad=0
 	_vf_node=0
@@ -1185,7 +1200,13 @@ trace_summary() {
 	else
 		_su_bad=$(trace_verify) || _su_vst=$?
 	fi
-	if [ "$_su_vst" != 0 ]; then
+	if [ "$_su_vst" = "$TRACE_EX_SCHEMA" ]; then
+		# A different marker, because it is a different state: verify judged no
+		# line, so there is no count to print and a count of 0 would read as
+		# almost clean. The version is read back from the marker file rather
+		# than out of verify, which answered on stderr and in a subshell.
+		printf 'verify: UNSUPPORTED SCHEMA %s\n' "$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")"
+	elif [ "$_su_vst" != 0 ]; then
 		[ -n "$_su_bad" ] && printf '%s\n' "$_su_bad" >&2
 		# Distinct file:line pairs, not findings: with node on PATH verify names
 		# a bad line twice, once structurally and once from the parse.
@@ -1309,6 +1330,13 @@ trace_export() {
 		_ex_bad=$(trace_verify --since "$_ex_since") || _ex_vst=$?
 	else
 		_ex_bad=$(trace_verify) || _ex_vst=$?
+	fi
+	if [ "$_ex_vst" = "$TRACE_EX_SCHEMA" ]; then
+		# Not a bad line — no line was read at all. Saying "verify fails" here
+		# would send the operator hunting for damage that is not there, when the
+		# fix is a newer reader.
+		echo "x trace: export refused — the schema of this trace is not this reader's, so nothing here can honestly be exported. Nothing was printed; verify's own line above names both versions." >&2
+		return "$_ex_vst"
 	fi
 	if [ "$_ex_vst" != 0 ]; then
 		[ -n "$_ex_bad" ] && printf '%s\n' "$_ex_bad" >&2
