@@ -105,6 +105,8 @@ Rules:
 - Don't anticipate future tests
 - Keep tests focused on observable behavior
 
+Record each step as you take it — after the test ran, never before: `sh scripts/trace.sh emit kind=tdd.cycle outcome=red|green|refactor data.test=<the test's name> reason=<the behavior this test pins, one line> || :`. One event per RED, per GREEN and per refactor step (the next section's), so a cycle is readable later without the transcript. The trace is written here and never read (ADR-0008); unconfigured, the call is a silent no-op.
+
 ### 4. Refactor
 
 After all tests pass, look for [refactor candidates](refactoring.md):

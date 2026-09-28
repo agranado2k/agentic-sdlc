@@ -11,6 +11,8 @@ Ask the questions one at a time.
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
+As each branch resolves, record it — after the decision, never in place of it: `sh scripts/trace.sh emit kind=grill.decision [subject=<prd:#N, ticket:#N or branch:<name>, when the plan has one>] outcome=accepted|overridden data.recommended=<your recommended answer> data.answer=<the answer taken> reason=<why they chose it, one line> || :`. `accepted` is your recommendation taken, `overridden` is theirs instead. The trace is written here and never read (ADR-0008); unconfigured, the call is a silent no-op.
+
 ---
 
 *Adapted from `productivity/grill-me` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Use `/grill-with-docs` instead when the project has a glossary and decision records worth challenging the plan against.*

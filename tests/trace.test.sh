@@ -124,6 +124,16 @@ assert_status 2 "two adjacent kinds in one value are exit 2 — membership is pe
 assert_status 2 "a field name with a space is exit 2, never a membership hit or an eval" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note 'subject related=x'
 [ "$(wc -l <"$FILE" | tr -d ' ')" = 3 ] && pass "none of the refusals wrote a line" || fail "a refused emit still wrote: $(wc -l <"$FILE") lines"
 
+banner "5a. feedback is in the vocabulary — the human's verdict on a landed slice (PRD #237, scenario 13; ticket #250)"
+# The "adjust aim" record between tracer bullets: /merge-train emits it at
+# landing, /pr-iterate when a human comment changes the plan. Before #250 the
+# kind was unknown and exit 2, the same refusal `bogus` gets above.
+for _fb in hit adjusted missed; do
+	t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=feedback subject='ticket:#247' outcome=$_fb reason='#248 and #253 re-cut after the review'
+	[ "$S_STATUS" = 0 ] && pass "feedback outcome=$_fb is accepted" || fail "feedback outcome=$_fb exited $S_STATUS: $S_ERR"
+done
+case $(tail -n 1 "$FILE") in *'"kind":"feedback"'*'"subject":"ticket:#247"'*'"outcome":"missed","reason":"#248 and #253 re-cut after the review"}') pass "and the line carries the slice, the verdict and its reason" ;; *) fail "feedback line wrong: $(tail -n 1 "$FILE")" ;; esac
+
 banner "6. A relative TRACE_DIR resolves to the ROOT checkout — from inside a linked worktree too"
 t_repo
 mkdir -p "$REPO/scripts"

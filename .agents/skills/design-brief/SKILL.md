@@ -136,6 +136,11 @@ write `<tmpdir>/design-brief-<YYYYMMDDTHHMMSSZ>.md` (or `.html` when a
 browser is available; diagrams as real drawings, never ASCII art — shared
 code craft §10), at most two pages, and tell the human the absolute path.
 
+Record the recommendation as presented:
+`sh scripts/trace.sh emit kind=brief.decide outcome=presented data.candidate=<A, B, or hybrid> reason=<why this one, one line> || :`.
+The trace is not the tree: it is local, ignored, written here and never read
+(ADR-0008); unconfigured, the call is a silent no-op.
+
 **Stop here for a human yes before writing anything into the repo.** The
 brief is a judgment call with an irreversible consequence — every later diff
 conforms to it — so it carries no autonomy label and no agent takes it solo.
@@ -161,7 +166,9 @@ Write, in this order, in the shapes [BRIEF-FORMAT.md](./BRIEF-FORMAT.md) gives e
 
 The three writes are **one local commit**, `docs(design-brief): …`, so the
 brief lands as one reviewable decision. This skill never pushes: delivery
-is `/implement`'s, and landing is the human's.
+is `/implement`'s, and landing is the human's. Record the decision once it
+is written:
+`sh scripts/trace.sh emit kind=brief.decide outcome=recorded data.candidate=<the one chosen> data.record=<the decision record's number> reason=<the human's yes, in their words where they gave a reason> || :`.
 
 ### 6. Hand off
 
