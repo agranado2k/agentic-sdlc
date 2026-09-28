@@ -968,10 +968,10 @@ banner "G. Every self-measurement carries an oracle clause"
 # Return the lines that LACK an oracle clause (detected by the absence of
 # " — oracle:"). Empty result means every measurement is properly oracle'd.
 diary_measurement_rows() {
-	# Extract the Current state block only (from "## Current state" to "### ")
+	# Extract the Current state table only (from "## Current state" to "### ")
 	_dmr_lines=$(sed -n '/^## Current state/,/^### /p' "$1" |
-		# Find lines with both percentage and oracle pattern, or the special Phase row
-		grep -E '([0-9]+\.[0-9]+ %|baseline [0-9]+\.[0-9]+ %)' |
+		# Find lines with a percentage measurement
+		grep -E '[0-9]+\.[0-9]+ %' |
 		# Exclude lines that already have oracle clause
 		grep -v ' — oracle:')
 	printf '%s' "$_dmr_lines"
@@ -988,8 +988,8 @@ fi
 # Bait: add a measurement without an oracle and verify the probe catches it.
 ORACLE_BAIT="$SCRATCH/diary.oracle-bait"
 sed 's/ — oracle: [^)]*)/)/; s/ — oracle: [^|]*|/|/; s/ — oracle: .*//' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
-missing=$(diary_measurement_rows "$ORACLE_BAIT")
-if [ -n "$missing" ]; then
+missing_oracles_bait=$(diary_measurement_rows "$ORACLE_BAIT")
+if [ -n "$missing_oracles_bait" ]; then
 	pass "the oracle probe detects a measurement without an oracle clause"
 else
 	fail "the oracle probe failed to detect a measurement missing its oracle — the check is vacuous"
