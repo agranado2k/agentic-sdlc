@@ -836,22 +836,23 @@ done
 # describe the domain by its CONTRACT and name both shapes; the glossary's
 # task-domain entry names them; the decision record is indexed and says the
 # negative in so many words, citing the measurement behind it. Prose wraps,
-# so each text is folded to one line before a phrase is looked for.
+# so each text is folded to one line before a phrase is looked for —
+# assert_file_has is grep -F against a file and cannot see across a wrap.
+says() { # <folded text> <phrase> <what the text is, for the label>
+	case "$1" in
+	*"$2"*) pass "$3 says $2" ;;
+	*) fail "$3 does not say $2" ;;
+	esac
+}
 for manual in AGENTS.md constitution/AGENTS.md.template; do
 	tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ')
 	for phrase in '`judge`' 'decide' 'rank-or-verify' 'per-option probabilities' 'never handed a verification' 'review verdict'; do
-		case "$tiers" in
-		*"$phrase"*) pass "$manual's tiers section says $phrase" ;;
-		*) fail "$manual's tiers section does not say $phrase" ;;
-		esac
+		says "$tiers" "$phrase" "$manual's tiers section"
 	done
 done
 entry=$(awk '/^- \*\*Task domain\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$KIT/docs/domain-glossary.md" | tr '\n' ' ')
 for phrase in '`judge`' 'decide' 'rank-or-verify'; do
-	case "$entry" in
-	*"$phrase"*) pass "the glossary's task-domain entry names $phrase" ;;
-	*) fail "the glossary's task-domain entry does not name $phrase" ;;
-	esac
+	says "$entry" "$phrase" "the glossary's task-domain entry"
 done
 record=$(ls "$KIT"/docs/adr/[0-9][0-9][0-9][0-9]-*judge*.md 2>/dev/null | head -1)
 if [ -n "$record" ] && [ -f "$record" ]; then
@@ -860,10 +861,7 @@ if [ -n "$record" ] && [ -f "$record" ]; then
 		pass "…and docs/adr/INDEX.md indexes it" || fail "docs/adr/INDEX.md has no row for $(basename "$record")"
 	folded=$(tr '\n' ' ' <"$record")
 	for phrase in 'fifth tier' 'decide' 'rank-or-verify' 'never handed a verification' 'review verdict' 'view.centaurspec.com/oNa-l6LtDR'; do
-		case "$folded" in
-		*"$phrase"*) pass "…and it says $phrase" ;;
-		*) fail "the judge record does not say $phrase" ;;
-		esac
+		says "$folded" "$phrase" "the judge record"
 	done
 else
 	fail "no decision record for the judge domain under docs/adr/ — the domain is a claim"
