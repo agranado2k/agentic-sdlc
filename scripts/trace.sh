@@ -4,6 +4,8 @@
 #   sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [related='<type:ref> …']
 #                            [<field>=<value> …] [data.<key>=<value> …] [--dry-run]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
+#   sh scripts/trace.sh summary [--by kind|skill|model|session] [--since YYYY-MM-DD]
+#   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
 #   sh scripts/trace.sh dir
 #
@@ -15,12 +17,13 @@
 # fact. ADR-0008 is the record; PRD #237 the design.
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
-# prints the resolved directory, `show` the matching lines, `emit --dry-run` the
-# line it would append; a successful `emit` prints nothing. Every diagnostic is
-# on stderr, prefixed `trace:`. Exit 0 is done, INCLUDING the unconfigured
-# no-op; exit 2 is a usage error, an unknown kind, a malformed subject or value,
-# or a policy file named explicitly and missing; exit 1 comes from `verify`
-# alone and is its verdict.
+# prints the resolved directory, `show` the matching lines, `summary` its table,
+# `export` its rows, `emit --dry-run` the line it would append; a successful
+# `emit` prints nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit
+# 0 is done, INCLUDING the unconfigured no-op; exit 2 is a usage error, an
+# unknown kind, a malformed subject, value or price, or a policy file named
+# explicitly and missing; exit 1 is `verify`'s verdict, and an `export` that
+# refuses because verify fails carries that same verdict out.
 #
 # UNCONFIGURED IS A WORKING STATE. The policy file scripts/trace.config.sh ships
 # with TRACE_DIR empty, and an empty TRACE_DIR means every emit exits 0 having
@@ -61,6 +64,35 @@
 # Craft §11: an event is one `printf` of one short line to an append-mode
 # descriptor, and nothing here ever truncates a file it did not create.
 #
+# COST IS COMPUTED ON READ, NEVER ON WRITE (ADR-0008 clause 6). An event carries
+# raw token counts and the model that spent them, because that is a fact; a
+# price is an interpretation that rots on a vendor's schedule. So `summary` and
+# `export` price the tokens at the moment you ask, from the policy file:
+#
+#   TRACE_PRICE_<MODEL>='<in>,<out>,<cache_write>,<cache_read>'
+#
+# four USD-per-MILLION-token prices, in the order the four `tok_*` fields sit
+# in. <MODEL> is the model id folded to a variable token the way a task domain
+# is in scripts/agents.lib.sh, with the wider alphabet a model id needs: every
+# character that is not a letter or a digit becomes `_`, and the result is
+# upper-cased. A fold that does not come out as `[A-Z][A-Z0-9_]*` is refused
+# rather than evaluated — the fold is a convenience, that check is the
+# whitelist standing in front of the eval. A malformed price is exit 2 and
+# names the variable: a typo that silently priced a wave at zero would be worse
+# than a stopped command.
+#
+# WHAT `unpriced` MEANS. A cost cell reads `unpriced` — never 0 — when an event
+# carries tokens and its model has no price. An event with NO tokens costs
+# 0.000000 whatever its model, because zero tokens cost nothing at any price,
+# and that is most events: a decision is not a spend. A `summary` GROUP reads
+# `unpriced` as soon as one token-bearing event in it is, rather than showing a
+# partial sum a reader would take for the group's cost; the models that were
+# missing a price are named on stderr, and `--by model` is how you see which.
+# An export stamps `priced_at` (when it was read) and `price_src` (the policy
+# file that priced it) beside the figure, so a re-priced export is comparable
+# with an older one. The kit itself ships no price, for the reason it ships no
+# model id.
+#
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/trace.config.sh.
 
@@ -76,6 +108,8 @@ usage() {
 	cat >&2 <<'USAGE'
 usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value> …] [data.<key>=<value> …] [--dry-run]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
+       sh scripts/trace.sh summary [--by kind|skill|model|session] [--since YYYY-MM-DD]
+       sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
 USAGE
@@ -86,6 +120,26 @@ die() {
 	echo "x trace: $*" >&2
 	exit 2
 }
+
+# PATHNAME EXPANSION OFF, around every unquoted split below. `for x in $list`
+# and `set -- $(...)` field-split AND glob, and what they split here is a model
+# id and a directory path — either may legally carry *, ? or [. Before this
+# guard a model called `alpha*` was silently replaced by a file of that shape in
+# the CALLER's cwd, so one model's tokens were looked up under another model's
+# name and the diagnostics named the wrong one (H-2, review of PR #262). The
+# previous setting is read rather than assumed, so a caller that already runs
+# with globbing off keeps it off.
+_trace_had_f=0
+trace_glob_off() {
+	case $- in
+	*f*) _trace_had_f=1 ;;
+	*)
+		_trace_had_f=0
+		set -f
+		;;
+	esac
+}
+trace_glob_on() { [ "$_trace_had_f" = 1 ] || set +f; }
 
 # ---------------------------------------------------------------------------
 # Policy and the directory.
@@ -106,17 +160,25 @@ trace_load_config() {
 	# that turns tracing on.
 	_tl_env_set=${TRACE_DIR+set}
 	_tl_env_dir=${TRACE_DIR:-}
+	# Which file answered, remembered so an export can stamp price_src with the
+	# table that priced it. Assigned AFTER each source, for the same reason
+	# TRACE_DIR is below: a policy file must not be able to misname itself.
+	_tl_path=
 	if [ -n "${TRACE_CONFIG:-}" ]; then
 		[ -f "$TRACE_CONFIG" ] || die "TRACE_CONFIG=$TRACE_CONFIG does not exist."
 		. "$TRACE_CONFIG"
+		_tl_path=$TRACE_CONFIG
 	else
 		_tl_root=$(trace_git rev-parse --show-toplevel) || _tl_root=
 		if [ -n "$_tl_root" ] && [ -f "$_tl_root/scripts/trace.config.sh" ]; then
 			. "$_tl_root/scripts/trace.config.sh"
+			_tl_path="$_tl_root/scripts/trace.config.sh"
 		elif [ -f "$_trace_here/trace.config.sh" ]; then
 			. "$_trace_here/trace.config.sh"
+			_tl_path="$_trace_here/trace.config.sh"
 		fi
 	fi
+	TRACE_CONFIG_PATH=$_tl_path
 	# The environment wins over the file — set on its own line after the
 	# source, so a policy file that assigns TRACE_DIR cannot undo it, even
 	# when what the environment said was "off".
@@ -358,9 +420,14 @@ trace_verify() {
 	# One file per line from trace_files, split on newlines alone — a `for`
 	# rather than a `while read` pipeline, because the verdict is set inside
 	# the loop and a pipeline's loop body runs in a subshell that keeps it.
+	# The list is captured FIRST, with pathname expansion still on, because
+	# trace_files finds the day files with a glob of its own; only the SPLIT of
+	# that list runs with globbing off. Nothing in the loop body globs.
+	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
 	IFS=$_trace_nl
-	for _vf_f in $(trace_files "$_vf_since"); do
+	trace_glob_off
+	for _vf_f in $_vf_files; do
 		IFS=$_vf_ifs
 		awk -v kinds=" $TRACE_KINDS " -v f="$_vf_f" '
 		{
@@ -387,8 +454,478 @@ trace_verify() {
 		fi
 	done
 	IFS=$_vf_ifs
+	trace_glob_on
 	[ "$_vf_node" = 1 ] || echo "i  trace: node is not on PATH — lines were checked structurally, not parsed" >&2
 	return $_vf_bad
+}
+
+# ---------------------------------------------------------------------------
+# Reading a WHOLE event: the JSON reader the aggregate commands share.
+#
+# `show` filters lines and prints them untouched, so it needs no reader. The
+# two commands below take events apart, and a second hand-rolled parser would
+# be the place the two drifted — so there is one, prepended to every awk
+# program here. No jq: the kit runs before a consumer has chosen a toolchain
+# (root manual, "What this repo is"), and awk is in every POSIX box.
+#
+# WHY A HAND-ROLLED READER IS SAFE HERE, and would not be on arbitrary JSON:
+# every line was written by trace_emit, which escapes each string value so the
+# only bare `"` characters in a line are the envelope's own. So the text
+# `,"<key>":"` cannot occur inside a value, and finding it IS finding the
+# field — the same argument that lets `show` cut the envelope at `,"data":{`.
+# A line that did NOT come from the emitter is exactly what `verify` is for,
+# and `export` refuses to run while verify fails.
+#
+# Single-quoted, so the awk source reaches awk verbatim; nothing in it may
+# carry an apostrophe.
+TRACE_AWK_LIB='
+# tr_env(line) — the envelope: the line up to the open data map, or all of it.
+function tr_env(line,   d) {
+	d = index(line, ",\"data\":{")
+	if (d) return substr(line, 1, d - 1)
+	return line
+}
+# tr_data(line) — the data map as its own JSON text, or the empty string. The
+# map is the LAST field, so it runs from its brace to the character before the
+# events closing brace, whatever its own content is.
+function tr_data(line,   d) {
+	d = index(line, ",\"data\":{")
+	if (!d) return ""
+	return substr(line, d + 8, length(line) - d - 8)
+}
+# tr_str(env, key) — a string field, still JSON-escaped, or the empty string.
+# The scan stops at the first unescaped quote: a backslash consumes the byte
+# after it, so an escaped quote inside the value never ends it.
+function tr_str(env, key,   m, i, c, out) {
+	m = index(env, ",\"" key "\":\"")
+	if (m == 0) return ""
+	i = m + length(key) + 5
+	out = ""
+	while (i <= length(env)) {
+		c = substr(env, i, 1)
+		if (c == "\\") { out = out substr(env, i, 2); i = i + 2; continue }
+		if (c == "\"") break
+		out = out c
+		i = i + 1
+	}
+	return out
+}
+# tr_num(env, key) — an integer field as text, or the empty string. Also finds
+# the schema version, which opens the line with a brace instead of a comma.
+function tr_num(env, key,   m, i, c, out) {
+	m = index(env, ",\"" key "\":")
+	if (m == 0) m = index(env, "{\"" key "\":")
+	if (m == 0) return ""
+	i = m + length(key) + 4
+	out = ""
+	while (i <= length(env)) {
+		c = substr(env, i, 1)
+		if (c !~ /[0-9]/) break
+		out = out c
+		i = i + 1
+	}
+	return out
+}
+# tr_unesc(s) — the inverse of the emitters escaper: the real value behind a
+# JSON string body. Left to right, because a lone gsub of the tab escape would
+# also fire inside an escaped backslash that happens to be followed by a t.
+function tr_unesc(s,   i, n, c, out) {
+	out = ""
+	n = length(s)
+	i = 1
+	while (i <= n) {
+		c = substr(s, i, 1)
+		if (c == "\\" && i < n) {
+			c = substr(s, i + 1, 1)
+			if (c == "t") out = out "\t"
+			else if (c == "n") out = out "\n"
+			else if (c == "r") out = out "\r"
+			else out = out c
+			i = i + 2
+			continue
+		}
+		out = out c
+		i = i + 1
+	}
+	return out
+}
+# tr_csv(s) — one CSV field, RFC 4180. Quoted ONLY when it has to be, so the
+# numeric columns arrive as numbers and an absent optional arrives as an empty
+# field a database reads as null rather than as an empty string.
+function tr_csv(s,   t) {
+	t = s
+	if (index(t, "\"") || index(t, ",") || index(t, "\n") || index(t, "\r") || index(t, "\t") ||
+	    substr(t, 1, 1) == " " || substr(t, length(t), 1) == " ") {
+		gsub(/"/, "\"\"", t)
+		return "\"" t "\""
+	}
+	return t
+}
+# tr_cost(prices, in, out, cache_write, cache_read) — USD, from the four
+# prices per MILLION tokens in the order the four token fields sit in.
+function tr_cost(p, a, b, c, d,   f) {
+	split(p, f, ",")
+	return a * f[1] / 1000000 + b * f[2] / 1000000 + c * f[3] / 1000000 + d * f[4] / 1000000
+}
+# tr_prices(into) — the price table, read out of the ENVIRONMENT as one string:
+# the four PRICES, a tab, then the model id, and a newline between entries. awk
+# cannot see the shell variables a policy file set, so the shell has to hand it
+# down — and it hands it down here rather than through `-v`, because awk applies BACKSLASH
+# ESCAPE PROCESSING to a -v value, which would turn a model id carrying an
+# escape into a key that no longer matches the one read out of the event. Same
+# reason for the price table source below.
+#
+# Prices FIRST and the id after the first tab, so a model id that carries a tab
+# of its own still arrives whole: only one of the two halves can be variable
+# length, and it is the id.
+function tr_prices(into,   spec, n, i, rows, t) {
+	spec = ENVIRON["TRACE_PRICES"]
+	n = split(spec, rows, "\n")
+	for (i = 1; i <= n; i++) {
+		if (rows[i] == "") continue
+		t = index(rows[i], "\t")
+		into[substr(rows[i], t + 1)] = substr(rows[i], 1, t - 1)
+	}
+}
+'
+
+# ---------------------------------------------------------------------------
+# The price table: policy, read at query time.
+
+# trace_price_var <model id> — the model id folded to the variable token that
+# carries its price, or return 1 when the fold is not a name a shell may hold.
+# The refusal is the point: the folded token is interpolated into an eval, so
+# this check is the whitelist and the fold is only the convenience.
+trace_price_var() {
+	_pv_tok=$(printf '%s' "$1" | tr 'a-z' 'A-Z' | sed 's/[^A-Z0-9]/_/g')
+	# The token is a SUFFIX of TRACE_PRICE_, so it may start with a digit:
+	# TRACE_PRICE_9_BAD is a legal name. Only a character outside [A-Z0-9_]
+	# — none can survive the fold — or an empty token is refused; the first
+	# draft also refused a leading digit, a restriction the shell never had
+	# and the resolver's own domain fold does not impose (review of PR #262).
+	case $_pv_tok in '' | *[!A-Z0-9_]*) return 1 ;; esac
+	printf '%s' "$_pv_tok"
+}
+
+# trace_check_price <variable token> <value> — four non-negative decimal
+# numbers, comma separated. A malformed one is exit 2 and not a shrug: a price
+# the reader quietly skipped would report a wave as cheaper than it was.
+trace_check_price() {
+	# The DELIMITERS are checked on the raw string before any splitting: word
+	# splitting DROPS a trailing empty field, so '1,2,3,4,' counted as four
+	# prices and was accepted (M-1, review of PR #262).
+	case $2 in
+	,* | *, | *,,*)
+		die "TRACE_PRICE_$1='$2' has an empty price field — give four values as <in>,<out>,<cache_write>,<cache_read>, with no leading, trailing or doubled comma"
+		;;
+	esac
+	_cp_n=0
+	_cp_ifs=$IFS
+	IFS=,
+	for _cp_f in $2; do
+		_cp_n=$((_cp_n + 1))
+		case $_cp_f in
+		'' | *[!0-9.]* | *.*.* | .* | *.)
+			IFS=$_cp_ifs
+			die "TRACE_PRICE_$1='$2' is not four prices — <in>,<out>,<cache_write>,<cache_read>, each a non-negative number of USD per million tokens"
+			;;
+		esac
+	done
+	IFS=$_cp_ifs
+	[ "$_cp_n" = 4 ] ||
+		die "TRACE_PRICE_$1='$2' carries $_cp_n field(s), not four — <in>,<out>,<cache_write>,<cache_read>, USD per million tokens"
+	return 0
+}
+
+# trace_spending_models [<since>] — the distinct models on events whose token
+# counts add up to more than zero, one per line.
+trace_spending_models() {
+	trace_files "${1:-}" | while IFS= read -r _sm_f; do
+		awk "$TRACE_AWK_LIB"'
+		{
+			e = tr_env($0)
+			if (tr_num(e, "tok_in") + tr_num(e, "tok_out") + tr_num(e, "tok_cache_w") + tr_num(e, "tok_cache_r") > 0) {
+				# The DECODED id: the price variable is named after the model
+				# the operator knows, not after its JSON escaping, so folding
+				# the escaped body looked one up under a name nobody would ever
+				# write (H-1, review of PR #262). A decoded NEWLINE would break
+				# this one-per-line list; only a hand-written event can carry
+				# one, and such a model is dropped here so that it reads
+				# `unpriced` rather than being priced as something else.
+				m = tr_unesc(tr_str(e, "model"))
+				if (m != "" && index(m, "\n") == 0) print m
+			}
+		}' "$_sm_f"
+	done | LC_ALL=C sort -u
+}
+
+# trace_load_prices [<since>] — sets TRACE_PRICE_TABLE (what awk is handed) and
+# TRACE_PRICE_MISSING (the models to name on stderr) from the models that
+# actually SPENT something in the selection. Only those need a price, so only
+# those can be reported as missing one: a `note` with no tokens is not a hole
+# in the table.
+TRACE_PRICE_TABLE=
+TRACE_PRICE_MISSING=
+trace_load_prices() {
+	TRACE_PRICE_TABLE=
+	TRACE_PRICE_MISSING=
+	_lp_models=$(trace_spending_models "${1:-}")
+	[ -n "$_lp_models" ] || return 0
+	_lp_ifs=$IFS
+	IFS=$_trace_nl
+	trace_glob_off
+	for _lp_m in $_lp_models; do
+		IFS=$_lp_ifs
+		_lp_val=
+		_lp_var=$(trace_price_var "$_lp_m") || _lp_var=
+		[ -n "$_lp_var" ] && eval "_lp_val=\${TRACE_PRICE_$_lp_var:-}"
+		if [ -n "$_lp_val" ]; then
+			trace_check_price "$_lp_var" "$_lp_val"
+			TRACE_PRICE_TABLE="${TRACE_PRICE_TABLE:+$TRACE_PRICE_TABLE$_trace_nl}$_lp_val$_trace_tab$_lp_m"
+		else
+			TRACE_PRICE_MISSING="${TRACE_PRICE_MISSING:+$TRACE_PRICE_MISSING }$_lp_m"
+		fi
+		IFS=$_trace_nl
+	done
+	IFS=$_lp_ifs
+	trace_glob_on
+	return 0
+}
+
+trace_note_unpriced() {
+	[ -n "$TRACE_PRICE_MISSING" ] || return 0
+	echo "!  trace: no price for: $TRACE_PRICE_MISSING — set TRACE_PRICE_<MODEL> in the policy file; until then those tokens read 'unpriced', never 0." >&2
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# summary
+
+trace_summary() {
+	_su_since=
+	_su_by=kind
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--since)
+			[ $# -ge 2 ] || usage
+			trace_check_date "$2"
+			_su_since=$2
+			shift 2
+			;;
+		--by)
+			[ $# -ge 2 ] || usage
+			case $2 in
+			kind | skill | model | session) _su_by=$2 ;;
+			*) die "--by '$2' is not an axis — the axes are kind, skill, model, session" ;;
+			esac
+			shift 2
+			;;
+		*) usage ;;
+		esac
+	done
+	trace_dir || {
+		trace_unconfigured_note
+		return 0
+	}
+	# A glance is not an import: summary never refuses, but a damaged trace
+	# is said in summary's OWN first line, so a total nobody mistakes for
+	# clean; verify's findings go to stderr as they do for export, which still
+	# refuses outright (operator decision, 2026-09-28).
+	_su_vst=0
+	if [ -n "$_su_since" ]; then
+		_su_bad=$(trace_verify --since "$_su_since") || _su_vst=$?
+	else
+		_su_bad=$(trace_verify) || _su_vst=$?
+	fi
+	if [ "$_su_vst" != 0 ]; then
+		[ -n "$_su_bad" ] && printf '%s\n' "$_su_bad" >&2
+		# Distinct file:line pairs, not findings: with node on PATH verify names
+		# a bad line twice, once structurally and once from the parse.
+		_su_n=$(printf '%s\n' "$_su_bad" | cut -d: -f1,2 | sort -u | grep -c .)
+		printf 'verify: FAILED — %s bad line(s) on this selection; the totals below include them\n' "$_su_n"
+	fi
+	trace_load_prices "$_su_since"
+	trace_note_unpriced
+	# %d and not %s for the counts: awk converts a number to a string through
+	# CONVFMT, which is %.6g, and would print 3007000 as 3.007e+06.
+	_su_hfmt='%-30s %8s %13s %13s %13s %13s %13s\n'
+	_su_rfmt='%-30s %8d %13d %13d %13d %13d %13s\n'
+	# The event files as positional parameters, split on newlines ALONE: one awk
+	# invocation has to see them all, because a group spans days, and a path
+	# with a space in it must still arrive as one argument. This function has
+	# consumed its own arguments by here, so $@ is free.
+	_su_ifs=$IFS
+	# Captured before the split, so trace_files keeps the glob it needs; the
+	# split itself runs with pathname expansion off, so a trace directory whose
+	# own path carries *, ? or [ still names its files (H-2, PR #262).
+	_su_files=$(trace_files "$_su_since")
+	IFS=$_trace_nl
+	trace_glob_off
+	# shellcheck disable=SC2086  # deliberate: IFS is a newline, one file per word
+	set -- $_su_files
+	IFS=$_su_ifs
+	trace_glob_on
+	if [ $# -eq 0 ]; then
+		printf "$_su_hfmt" "$_su_by" events tok_in tok_out tok_cache_w tok_cache_r cost_usd
+		printf "$_su_rfmt" TOTAL 0 0 0 0 0 0.000000
+		return 0
+	fi
+	# TWO STAGES, and what crosses between them is deliberate. The COST crosses
+	# at full precision and is rounded once, for display, in the second: rounding
+	# each group to six places and then adding the rounded rows made the same
+	# events total differently depending on which axis you grouped them by, and a
+	# total that moves when you change the question is not a total (H-3, review
+	# of PR #262). The KEY crosses LAST, and the sort is told so (-k7 is field 7
+	# to the end of the line), because a decoded key may carry a tab of its own
+	# and the six numbers in front of it may not.
+	TRACE_PRICES="$TRACE_PRICE_TABLE" awk -v by="$_su_by" "$TRACE_AWK_LIB"'
+	BEGIN { tr_prices(price) }
+	{
+		e = tr_env($0)
+		# DECODED, so the row an operator reads is the value they would type —
+		# and, on --by model, the same string the price table is keyed by. The
+		# EMPTY key is the absent field and nothing else: trace_emit omits a
+		# field whose value is empty, so no PRESENT value can ever be "", and an
+		# event whose skill literally reads "(none)" therefore keeps its own row
+		# instead of being merged into the absent one (M-2, review of PR #262).
+		key = tr_unesc(tr_str(e, by))
+		n[key]++
+		a = tr_num(e, "tok_in") + 0
+		b = tr_num(e, "tok_out") + 0
+		c = tr_num(e, "tok_cache_w") + 0
+		d = tr_num(e, "tok_cache_r") + 0
+		s_in[key] += a; s_out[key] += b; s_cw[key] += c; s_cr[key] += d
+		if (a + b + c + d > 0) {
+			m = tr_unesc(tr_str(e, "model"))
+			if (m != "" && (m in price)) cost[key] += tr_cost(price[m], a, b, c, d)
+			else miss[key]++
+		}
+	}
+	END {
+		for (k in n)
+			printf "%d\t%d\t%d\t%d\t%d\t%s\t%s\n", n[k], s_in[k], s_out[k], s_cw[k], s_cr[k],
+				(miss[k] > 0 ? "unpriced" : sprintf("%.12f", cost[k] + 0)), k
+	}' "$@" | LC_ALL=C sort -t"$_trace_tab" -k7 |
+		awk -F'\t' -v hfmt="$_su_hfmt" -v rfmt="$_su_rfmt" -v by="$_su_by" '
+		BEGIN { printf hfmt, by, "events", "tok_in", "tok_out", "tok_cache_w", "tok_cache_r", "cost_usd" }
+		{
+			key = $7
+			for (i = 8; i <= NF; i++) key = key "\t" $i
+			if (key == "") key = "(none)"
+			printf rfmt, key, $1, $2, $3, $4, $5, ($6 == "unpriced" ? "unpriced" : sprintf("%.6f", $6))
+			n += $1; a += $2; b += $3; c += $4; d += $5
+			# One rule, applied to a group and to the total alike: a cost that
+			# is missing a price is not a smaller cost.
+			if ($6 == "unpriced") miss = 1; else total += $6
+		}
+		END { printf rfmt, "TOTAL", n + 0, a + 0, b + 0, c + 0, d + 0, (miss ? "unpriced" : sprintf("%.6f", total + 0)) }'
+}
+
+# ---------------------------------------------------------------------------
+# export
+#
+# The CSV columns are DERIVED from the field lists at the top of this file
+# rather than spelled a second time, so a field added to the event becomes a
+# column on the same commit. The three computed ones and the data map close the
+# row: the envelope is fact, everything after it is this read.
+
+trace_export() {
+	_ex_since=
+	_ex_csv=0
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--since)
+			[ $# -ge 2 ] || usage
+			trace_check_date "$2"
+			_ex_since=$2
+			shift 2
+			;;
+		--csv)
+			_ex_csv=1
+			shift
+			;;
+		*) usage ;;
+		esac
+	done
+	trace_dir || {
+		trace_unconfigured_note
+		return 0
+	}
+	# An export is the artifact something else imports, so it is the one place a
+	# bad line must stop the command rather than travel with the good ones: half
+	# an import is worse than none, because the row that silently vanished is
+	# the one nobody goes looking for. verify's findings are the answer to WHY
+	# there is no answer, so they leave with it, on stderr.
+	_ex_vst=0
+	if [ -n "$_ex_since" ]; then
+		_ex_bad=$(trace_verify --since "$_ex_since") || _ex_vst=$?
+	else
+		_ex_bad=$(trace_verify) || _ex_vst=$?
+	fi
+	if [ "$_ex_vst" != 0 ]; then
+		[ -n "$_ex_bad" ] && printf '%s\n' "$_ex_bad" >&2
+		echo "x trace: export refused — verify fails on this selection. Nothing was printed; a correction is a new event, never an edit to a file." >&2
+		return "$_ex_vst"
+	fi
+	if [ "$_ex_csv" = 1 ]; then
+		trace_load_prices "$_ex_since"
+		trace_note_unpriced
+	fi
+	_ex_cols="v ts id kind $TRACE_STRING_FIELDS $TRACE_TOKEN_FIELDS cost_usd priced_at price_src data"
+	_ex_ifs=$IFS
+	# Captured before the split, so trace_files keeps the glob it needs; the
+	# split itself runs with pathname expansion off, so a trace directory whose
+	# own path carries *, ? or [ still names its files (H-2, PR #262).
+	_ex_files=$(trace_files "$_ex_since")
+	IFS=$_trace_nl
+	trace_glob_off
+	# shellcheck disable=SC2086  # deliberate: see the same idiom in trace_summary
+	set -- $_ex_files
+	IFS=$_ex_ifs
+	trace_glob_on
+	if [ $# -eq 0 ]; then
+		[ "$_ex_csv" = 1 ] && printf '%s\n' "$_ex_cols" | tr ' ' ,
+		return 0
+	fi
+	TRACE_PRICES="$TRACE_PRICE_TABLE" TRACE_SRC="${TRACE_CONFIG_PATH:-none}" \
+		awk -v csv="$_ex_csv" -v cols="$_ex_cols" -v nums="v $TRACE_TOKEN_FIELDS" \
+		-v at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TRACE_AWK_LIB"'
+	BEGIN {
+		src = ENVIRON["TRACE_SRC"]
+		tr_prices(price)
+		ncol = split(cols, col, " ")
+		nnum = split(nums, num, " ")
+		for (i = 1; i <= nnum; i++) isnum[num[i]] = 1
+		if (csv) {
+			row = ""
+			for (i = 1; i <= ncol; i++) row = row (i > 1 ? "," : "") tr_csv(col[i])
+			print row
+		}
+	}
+	{
+		if (!csv) { print; next }
+		e = tr_env($0)
+		a = tr_num(e, "tok_in") + 0
+		b = tr_num(e, "tok_out") + 0
+		c = tr_num(e, "tok_cache_w") + 0
+		d = tr_num(e, "tok_cache_r") + 0
+		m = tr_unesc(tr_str(e, "model"))
+		if (a + b + c + d == 0) cost = sprintf("%.6f", 0)
+		else if (m != "" && (m in price)) cost = sprintf("%.6f", tr_cost(price[m], a, b, c, d))
+		else cost = "unpriced"
+		row = ""
+		for (i = 1; i <= ncol; i++) {
+			k = col[i]
+			if (k == "cost_usd") v = cost
+			else if (k == "priced_at") v = at
+			else if (k == "price_src") v = src
+			else if (k == "data") v = tr_data($0)
+			else if (isnum[k]) v = tr_num(e, k)
+			else v = tr_unesc(tr_str(e, k))
+			row = row (i > 1 ? "," : "") tr_csv(v)
+		}
+		print row
+	}' "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -400,6 +937,8 @@ trace_load_config
 case $_trace_cmd in
 emit) trace_emit "$@" ;;
 show) trace_show "$@" ;;
+summary) trace_summary "$@" ;;
+export) trace_export "$@"; exit $? ;;
 verify) trace_verify "$@"; exit $? ;;
 dir) trace_dir && printf '%s\n' "$TRACE_ROOT_DIR"; exit 0 ;;
 *) usage ;;
