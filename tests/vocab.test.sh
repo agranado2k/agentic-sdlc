@@ -494,6 +494,29 @@ s_assert_err_has "policy: action token 'safe-to-apply' carries its answer in its
 s_assert_err_has "policy: action token 'risky' carries its answer in its spelling ('risky')"
 s_assert_err_has "neutral"
 
+# The rule walks EVERY hyphen-separated word, not only the first: the answer
+# hides as readily at the end of a token.
+write_config "$SCRATCH/leading2.config.sh" "VOCAB_FIELDS='action'
+VOCAB_OPEN=''
+VOCAB_ACTION='apply mostly-risky'
+VOCAB_RULES=''"
+VOCAB_CONFIG="$SCRATCH/leading2.config.sh"
+vocab 'Action: apply'
+s_assert_status 2 "a token whose offending word is not its first is refused too"
+s_assert_err_has "policy: action token 'mostly-risky' carries its answer in its spelling ('risky')"
+
+# The deny list is the CHECKER'S, not the policy file's: a file that
+# reassigns it — or empties it — has not switched the rule off.
+write_config "$SCRATCH/off.config.sh" "VOCAB_LEADING_WORDS=''
+VOCAB_FIELDS='action'
+VOCAB_OPEN=''
+VOCAB_ACTION='safe-to-apply risky'
+VOCAB_RULES=''"
+VOCAB_CONFIG="$SCRATCH/off.config.sh"
+vocab 'Action: risky'
+s_assert_status 2 "a policy file cannot switch the neutral-name rule off by emptying the word list"
+s_assert_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
+
 CONFIG_NEUTRAL=$(
 	cat <<'EOFC'
 VOCAB_FIELDS='action'

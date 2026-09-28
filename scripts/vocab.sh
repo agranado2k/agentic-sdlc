@@ -68,15 +68,6 @@ _vocab_here=$(cd "$(dirname "$0")" && pwd -P)
 # en_US.UTF-8. The two spellings are kept in step by hand.
 VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 
-# THE NEUTRAL-NAME RULE, as a deny list of the words that carry an answer: a
-# token any of whose hyphen-separated words is one of these is refused at
-# load. These are words that EVALUATE the option they name (`safe-to-apply`,
-# `risky`, `best-effort`), never words that merely name a level or a category
-# (`high`, `fail`, `yes`) — a level is what the judge decides, an evaluation
-# is the judge told what to decide. Mechanism, not policy: the list is the
-# kit's, because a project that could empty it would have no rule.
-VOCAB_LEADING_WORDS='safe unsafe risky right wrong correct incorrect good bad best worst better worse ok okay recommended preferred obvious proper improper'
-
 # ---------------------------------------------------------------------------
 # THE SHIPPED VOCABULARIES. scripts/vocab.config.sh restates every line of
 # this block, and tests/vocab-policy.test.sh holds the two equal — so a
@@ -179,6 +170,32 @@ vocab_shape_ok() {
 	case $1 in
 	'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1 ;;
 	esac
+	return 0
+}
+
+# vocab_neutral_ok <token> — THE NEUTRAL-NAME RULE, as a deny list of the
+# words that carry an answer: a token any of whose hyphen-separated words is
+# one of these is refused, and the word is left in $_vocab_answer_word for
+# the refusal to quote. These are words that EVALUATE the option they name
+# (`safe-to-apply`, `risky`, `best-effort`), never words that merely name a
+# level or a category (`high`, `fail`, `yes`) — a level is what the judge
+# decides, an evaluation is the judge told what to decide. Mechanism, not
+# policy: the list is a literal here and not a VOCAB_* variable, because a
+# policy file is sourced into this shell and one that could reassign the
+# list would have no rule (the reason scripts/agents.lib.sh keeps no list
+# variable for the tiers).
+vocab_neutral_ok() {
+	_no_rest=$1
+	while [ -n "$_no_rest" ]; do
+		_vocab_answer_word=${_no_rest%%-*}
+		case " safe unsafe risky right wrong correct incorrect good bad best worst better worse ok okay recommended preferred obvious proper improper " in
+		*" $_vocab_answer_word "*) return 1 ;;
+		esac
+		case $_no_rest in
+		*-*) _no_rest=${_no_rest#*-} ;;
+		*) _no_rest= ;;
+		esac
+	done
 	return 0
 }
 
@@ -365,20 +382,8 @@ vocab_validate_policy() {
 				vocab_refuse "policy: $_vp_f token '$_vp_t' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE"
 				continue
 			}
-			_vp_rest=$_vp_t
-			while [ -n "$_vp_rest" ]; do
-				_vp_word=${_vp_rest%%-*}
-				case " $VOCAB_LEADING_WORDS " in
-				*" $_vp_word "*)
-					vocab_refuse "policy: $_vp_f token '$_vp_t' carries its answer in its spelling ('$_vp_word') — tokens are neutral names"
-					break
-					;;
-				esac
-				case $_vp_rest in
-				*-*) _vp_rest=${_vp_rest#*-} ;;
-				*) _vp_rest= ;;
-				esac
-			done
+			vocab_neutral_ok "$_vp_t" ||
+				vocab_refuse "policy: $_vp_f token '$_vp_t' carries its answer in its spelling ('$_vocab_answer_word') — tokens are neutral names"
 		done
 	done
 	_vocab_rule_lines=
