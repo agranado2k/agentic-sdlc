@@ -78,7 +78,8 @@ assert_file_has "$SIDECAR" "lists each \`agent-dispatch.*\` directory" "item 5 l
 assert_file_has "$SIDECAR" "by name and age" "…and the listing carries what a count cannot: which, and how old"
 # Item 4 asks for the oracle line on every self-measurement (#276): who wrote
 # the fixtures, when, against which version, and what comparator.
-assert_file_has "$SIDECAR" "oracle" "item 4 asks for the oracle line on every self-measurement"
+assert_file_has "$SIDECAR" "— oracle:" "item 4 asks for the oracle clause format"
+grep -q '^- \*\*Oracle\*\*' "$ROOT/docs/domain-glossary.md" && pass "the glossary defines Oracle" || fail "the glossary has no Oracle entry"
 
 # ---------------------------------------------------------------------------
 banner "3. The red flags, and the two routes"

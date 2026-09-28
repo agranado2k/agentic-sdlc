@@ -956,22 +956,22 @@ fi
 # ---------------------------------------------------------------------------
 banner "G. Every self-measurement carries an oracle clause"
 # ---------------------------------------------------------------------------
-# A measurement is a row that reports a percentage and a tool name, or is the
-# Phase row's mutation sentence. Every such row must name its oracle: who wrote
-# the fixtures, when, against which version, and what it was compared to.
+# A measurement is a row that reports a percentage. Every such row must name
+# its oracle: who wrote the fixtures, when, against which version, and what it
+# was compared to.
 #
 # The probe finds measurement rows by grepping for the oracle clause and
 # reporting any row with a percentage that lacks one.
 
 # diary_measurement_rows <path> — grep lines from the diary's Current state
-# block that match the measurement pattern (contain percentage and tool name).
-# Return the lines that LACK an oracle clause (detected by the absence of
-# " — oracle:"). Empty result means every measurement is properly oracle'd.
+# table that contain a percentage measurement. Return the lines that LACK an
+# oracle clause (detected by the absence of " — oracle:"). Empty result means
+# every measurement is properly oracle'd.
 diary_measurement_rows() {
 	# Extract the Current state table only (from "## Current state" to "### ")
 	_dmr_lines=$(sed -n '/^## Current state/,/^### /p' "$1" |
-		# Find lines with a percentage measurement
-		grep -E '[0-9]+\.[0-9]+ %' |
+		# Find lines with any percentage measurement (integer or decimal)
+		grep -E '[0-9]+(\.[0-9]+)? *%' |
 		# Exclude lines that already have oracle clause
 		grep -v ' — oracle:')
 	printf '%s' "$_dmr_lines"
@@ -987,7 +987,7 @@ fi
 
 # Bait: add a measurement without an oracle and verify the probe catches it.
 ORACLE_BAIT="$SCRATCH/diary.oracle-bait"
-sed 's/ — oracle: [^)]*)/)/; s/ — oracle: [^|]*|/|/; s/ — oracle: .*//' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
+sed 's/ — oracle:[^|)]*//g' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
 missing_oracles_bait=$(diary_measurement_rows "$ORACLE_BAIT")
 if [ -n "$missing_oracles_bait" ]; then
 	pass "the oracle probe detects a measurement without an oracle clause"
