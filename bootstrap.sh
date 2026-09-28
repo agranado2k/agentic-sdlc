@@ -1380,6 +1380,10 @@ Next:
                                   implementer; that file says how, and
                                   scripts/agent-dispatch.sh --dry-run checks a
                                   wiring without spending a token.
+                                  scripts/vocab.config.sh beside it needs no
+                                  day-one edit: it arrived FILLED with the
+                                  kit's own vocabularies, and is yours to
+                                  widen the day a field's words change.
   6. fill in docs/diary.md        the "Current state" block at the top is what
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is
