@@ -160,7 +160,12 @@ Grouped by the seam each term belongs to. Entry shape:
   (`AGENT_SESSION_MODEL`, in the policy file's own word): a reviewer answer equal
   to it is refused, falling back to the plain tier or to nothing with a
   warning — the reviewer is a relation between two models, and only the caller
-  holds the second. Ref: ADR-0007.
+  holds the second. One domain the kit names itself: `judge`, on the
+  `mechanical` tier — a typed judge specified by its contract (state and typed
+  questions in, typed answers with per-option probabilities out), in two
+  shapes, **decide** among supplied options and **rank-or-verify** over
+  supplied candidates; shipped unmapped, and declined by the kit's own mapping
+  because the kit names no model. Ref: ADR-0007; ADR-0010 for the judge.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter

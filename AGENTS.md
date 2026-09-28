@@ -136,38 +136,28 @@ Model identifiers rot on a vendor's schedule, so the tier → model mapping is
 data in `scripts/agents.config.sh` and the resolver is `scripts/agents.lib.sh`
 (`sh scripts/agents.lib.sh implementer` prints the mapped id). An unmapped tier
 is a working state: the resolver warns once, prints nothing, and the spawn
-inherits the session's own model. `adapters/claude-code/README.md` is one
-worked example of the wiring.
+inherits the session's own model (`adapters/claude-code/README.md` wires it).
 
-`scripts/agents.config.sh` — the file above — ships EMPTY to every consumer,
-by principle, and stays that way. But this repo is itself a consumer of the
-mechanism it ships: a session working here spawns subagents too, and an
-unmapped resolver would mean the kit's own agents silently inherit the session
-model regardless of what tier their ticket was stamped. So the kit carries a
-second, kit-only mapping — `scripts/agents.kit.config.sh`, never shipped (it
-is on `bootstrap.sh`'s kit-authoring deletion list, the same as `tests/`).
+`scripts/agents.config.sh` ships EMPTY to every consumer, by principle, and
+stays that way. But this repo spawns subagents too, and an unmapped resolver
+would let the kit's own agents inherit the session model whatever tier their
+ticket was stamped — so the kit carries a second, kit-only mapping,
+`scripts/agents.kit.config.sh`, never shipped (it is on `bootstrap.sh`'s
+kit-authoring deletion list, the same as `tests/`).
 
 Every SKILL.md that spawns a subagent says, verbatim, `sh scripts/agents.lib.sh
 <tier>` — correct for a consumer, and it has to stay that way: skills ship
-unstamped, so none of them may name a kit-only file (see "The chain" below).
-Typed literally in THIS repo, that command resolves through the empty shipped
-policy file and prints nothing. **Hard rule 10** is the fix: run
-`sh scripts/agents.kit.sh <tier> [domain]` in its place, every time a skill
-says to spawn. The wrapper sets the resolver's existing `$AGENTS_CONFIG` seam and
-delegates —
-
-```sh
-AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
-```
-
-— so it is one name to substitute rather than an environment prefix to type
-correctly every time.
+unstamped, so none may name a kit-only file (see "The chain" below). Typed
+literally in THIS repo, that command reads the empty shipped policy file and
+prints nothing. **Hard rule 10** is the fix: `sh scripts/agents.kit.sh <tier>
+[domain]` in its place, every time a skill says to spawn — the wrapper points
+the resolver's `$AGENTS_CONFIG` seam at the kit-only file and delegates, one
+name to substitute rather than an environment prefix to type right every time.
 
 The policy behind the mapping: plan on the strongest model available; execute
 spawned per tier, and per **domain** where the medium changes the answer; the
-reviewer is never the same model that implemented — a review from the
-implementer's own model is an editorial pass wearing a second hat, not an
-adversarial read.
+reviewer is never the model that implemented — a review from the implementer's
+own model is an editorial pass wearing a second hat, not an adversarial read.
 
 The domain is the resolver's optional second argument — `sh
 scripts/agents.kit.sh implementer content` prefers
@@ -184,6 +174,16 @@ value under a domain name would record a non-decision. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change which model you would
 pick, and `/implement` passes it through as the second argument; a
 situation domain is never stamped on a ticket.
+
+One domain the kit names itself and maps for nobody: **`judge`**, on the
+`mechanical` tier — the rung between a script and the session's model, named
+by its contract and never by a vendor: state and typed questions in, typed
+answers with per-option probabilities out. Two shapes, and a mapping answers
+one — **decide**, among supplied options (the chain's triage questions), and
+**rank-or-verify**, over supplied candidates. A decider is never handed a
+verification, and no typed judge takes the review verdict (shared invariant
+§5). Unmapped, it falls back to the tier in silence like every domain; the
+kit's own mapping declines it in so many words: the kit names no model (ADR-0010).
 
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
 word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The mapping's
