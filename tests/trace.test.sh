@@ -498,17 +498,10 @@ case $DRY_OUT in *'"blob":"'"$HASH"'"'*) pass "--dry-run still names the blob it
 assert_status 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
 assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
 
-banner "16. The trace directory says which schema its lines are, and verify refuses one it does not know"
+banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
 [ "$S_STATUS" = 0 ] && pass "verify is green on a schema it knows" || fail "verify failed a clean trace: $S_OUT $S_ERR"
-printf '2\n' >"$R/SCHEMA"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
-[ "$S_STATUS" = 3 ] && pass "a trace whose schema is not this reader's is exit 3 — its own code, and section 20 is where that contract is held" || fail "verify exited $S_STATUS on schema 2"
-case $S_ERR in *SCHEMA*) pass "and the refusal names the file that said so" ;; *) fail "the refusal did not name SCHEMA: $S_ERR" ;; esac
-case $S_ERR in *2*) pass "and the version it found" ;; *) fail "the refusal did not name the version: $S_ERR" ;; esac
-[ -z "$S_OUT" ] && pass "and it judges no line — a schema it cannot read is not a verdict on the lines" || fail "verify judged lines under an unknown schema: $S_OUT"
-printf '1\n' >"$R/SCHEMA"
 # M-6 (review, PR #263): an interrupted first write can leave a marker that
 # names nothing, and an existence-only guard declined to repair it for good.
 : >"$R/SCHEMA"
@@ -895,7 +888,11 @@ case $S_ERR in *"reads 1"*) pass "and the version it does read, so the operator 
 t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export
 [ "$S_STATUS" = 3 ] && pass "export refuses with the same 3 — a caller told 1 would hunt for a bad line there is none of" || fail "export exited $S_STATUS on an unsupported schema"
 [ -z "$S_OUT" ] && pass "and prints nothing at all" || fail "export printed rows under a schema it cannot read: $S_OUT"
-case $S_ERR in *schema*) pass "and says on stderr that the schema is why" ;; *) fail "export's refusal did not name the schema: $S_ERR" ;; esac
+# H-1 (review, PR #292): matching *schema* here matched VERIFY's own line
+# flowing through, so deleting export's whole refusal branch left the suite
+# green. Match export's OWN sentence, and pin the absence of the wrong one.
+case $S_ERR in *"export refused — the schema"*) pass "and export's OWN refusal says the schema is why" ;; *) fail "export's refusal did not name the schema: $S_ERR" ;; esac
+case $S_ERR in *"verify fails on this selection"*) fail "export blamed a failing verify, the one message this state exists to suppress: $S_ERR" ;; *) pass "and never says verify fails, which would send the operator hunting for a bad line" ;; esac
 case $S_ERR in *"$TODAY.jsonl:"*) fail "export blamed a line when no line was judged: $S_ERR" ;; *) pass "and blames no line, because none was judged" ;; esac
 t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export --csv
 [ "$S_STATUS" = 3 ] && [ -z "$S_OUT" ] && pass "the CSV form refuses the same way, header included" || fail "export --csv did not refuse with 3 (exit $S_STATUS): $S_OUT"
@@ -924,7 +921,9 @@ t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
 
 # The contract is only widened where its readers look for it.
 case $(sed -n '/^# STREAMS AND EXIT CODES/,/^#$/p' "$TRACE") in *"exit 3"*) pass "the script's own exit-code paragraph names 3" ;; *) fail "the header's exit-code paragraph does not name exit 3" ;; esac
-grep -qF 'exit 3' "$KIT/AGENTS.md" && pass "and the root manual's trace row names it" || fail "AGENTS.md's trace row does not name exit 3"
+# L-1 (review, PR #292): the label says ROW, so the check has to say row —
+# a bare file-wide grep keeps passing when some other row names the code.
+grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF 'exit 3' && pass "and the root manual's trace ROW names it" || fail "AGENTS.md's trace row does not name exit 3"
 grep -qF 'Amended 2026-09-28 (#271)' "$KIT/docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md" &&
 	pass "and ADR-0008 carries the dated amendment that chose it" || fail "ADR-0008 has no dated amendment for #271"
 
