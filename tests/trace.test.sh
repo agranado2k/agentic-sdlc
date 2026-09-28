@@ -227,10 +227,23 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --kind note
 [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "--kind still narrows a run's view" || fail "--kind note over run:r1 returned: $S_OUT"
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
 [ -z "$S_OUT" ] && [ "$S_STATUS" = 0 ] && pass "--since still narrows it, exit 0" || fail "--since over run:r1 returned '$S_OUT' (exit $S_STATUS)"
+# The ids above are hand-written so the cases stay hermetic, but the id an
+# operator actually types is the one `begin` mints — a stamp, a process id and
+# eight hex digits, uppercase letters and hyphens included. Round-trip one, so
+# the shape the demo uses is a shape the suite has read back (L-1, review of
+# PR #284).
+REAL=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#272')
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason=real-id-inside
+env TRACE_CONFIG=$RON sh "$TRACE" end outcome=green reason=real-id-done
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $S_OUT"
 # The type is what switches the run field on: a ticket subject must not start
 # matching run ids, or `show ticket:#3` in section 8 would answer for a run
-# that happens to be called 3.
-TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=3 reason=run-called-three
+# called `#3`. The decoy carries the REFERENCE the subject would be reduced to
+# — `${subject#*:}` of `ticket:#3` is `#3`, never `3` — because a decoy the
+# wrong shape leaves the assertion passing with the type switch deleted, which
+# is a check that cannot fail (H-1, review of PR #284).
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run='#3' reason=run-called-three
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'ticket:#3'
 [ -z "$S_OUT" ] && pass "and a non-run subject never reads the run field" || fail "show ticket:#3 matched on the run field: $S_OUT"
 

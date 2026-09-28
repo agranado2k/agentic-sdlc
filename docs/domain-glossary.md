@@ -229,7 +229,7 @@ Grouped by the seam each term belongs to. Entry shape:
   its own with the dispatching run as parent. The open runs of one working
   tree are a **run stack** under the trace directory, written only by `begin`
   and `end`. A run is readable by its own id: `show run:<id>` matches the `run`
-  field rather than a subject, and shows a nested or dispatched run's
+  field as well as the subject, and shows a nested or dispatched run's
   `run.start`/`run.end` pair under the id of the run that opened it.
   - _Avoid_: "session" for this — a session is the agent harness's, and holds
     many runs.
