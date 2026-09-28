@@ -249,9 +249,10 @@ done
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"
 # The vocabulary policy file (PRD #273) is the one policy file that ships
-# FILLED, and it must arrive that way: the checker's own defaults would hold a
-# consumer with NO file to the kit's words, but an EMPTY file would hold them
-# to nothing.
+# FILLED, and it must arrive that way: a file that exists is the whole policy
+# — the checker's own words stand in only for a consumer with NO file, and an
+# EMPTY one is refused at load as declaring no field — so the consumer needs
+# the words in front of them to edit.
 [ -f "$PROJ/scripts/vocab.config.sh" ] && grep -q "^VOCAB_TIER='planner implementer mechanical reviewer'" "$PROJ/scripts/vocab.config.sh" &&
 	pass "the consumer's scripts/vocab.config.sh arrived filled — the vocabularies are the kit's to name" ||
 	fail "the consumer's scripts/vocab.config.sh is missing or empty"

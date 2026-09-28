@@ -38,7 +38,8 @@
 # is a vendor's to name and rots, a vocabulary is the kit's to name and does
 # not. The same vocabularies are the defaults below, so a project with no
 # policy file at all is held to the shipped words — an absent default file is
-# a working state, a named and missing one is exit 2.
+# a working state, a named and missing one is exit 2. A file that IS found is
+# the whole policy: nothing of the defaults is sourced underneath it.
 #
 # TWO RULES EVERY TOKEN IS HELD TO, in the policy file as much as on the
 # command line. Its SHAPE is the task domain's, `[a-z][a-z0-9-]*`, because a
@@ -80,19 +81,23 @@ VOCAB_LEADING_WORDS='safe unsafe risky right wrong correct incorrect good bad be
 # THE SHIPPED VOCABULARIES. scripts/vocab.config.sh restates every line of
 # this block, and tests/vocab-policy.test.sh holds the two equal — so a
 # project that deletes the policy file is held to the same words, and one
-# that edits it is held to its own.
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped'
-VOCAB_OPEN='domain'
-VOCAB_TIER='planner implementer mechanical reviewer'
-VOCAB_LABEL='ready-for-agent none'
-VOCAB_DOMAIN='content code tests html-report self-implemented'
-VOCAB_SEVERITY='critical high medium low'
-VOCAB_STATUS='mixed-commit unspecified specified missing'
-VOCAB_ACTION='apply reply escalate'
-VOCAB_OUTCOME='pass fail paper-cut'
-VOCAB_CONFIDENCE='low medium high'
-VOCAB_COMMAND_SHAPED='yes no'
-VOCAB_RULES='command-shaped=yes => action!=apply'
+# that edits it is held to its own. They apply ONLY when discovery finds no
+# file: a file is the whole policy, never a layer over these — a rule it
+# does not carry is not enforced, a field it does not name is not a field.
+vocab_shipped_defaults() {
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped'
+	VOCAB_OPEN='domain'
+	VOCAB_TIER='planner implementer mechanical reviewer'
+	VOCAB_LABEL='ready-for-agent none'
+	VOCAB_DOMAIN='content code tests html-report self-implemented'
+	VOCAB_SEVERITY='critical high medium low'
+	VOCAB_STATUS='mixed-commit unspecified specified missing'
+	VOCAB_ACTION='apply reply escalate'
+	VOCAB_OUTCOME='pass fail paper-cut'
+	VOCAB_CONFIDENCE='low medium high'
+	VOCAB_COMMAND_SHAPED='yes no'
+	VOCAB_RULES='command-shaped=yes => action!=apply'
+}
 
 usage() {
 	cat >&2 <<'USAGE'
@@ -115,7 +120,13 @@ vocab_git() {
 	(unset GIT_DIR GIT_WORK_TREE && git -C "$_vocab_here" "$@") 2>/dev/null
 }
 
+# vocab_load_config — the policy file found is the WHOLE policy: the three
+# list variables start empty so a file that omits one is held to nothing for
+# it, and the shipped words are assigned only when no file is found.
 vocab_load_config() {
+	VOCAB_FIELDS=
+	VOCAB_OPEN=
+	VOCAB_RULES=
 	if [ -n "${VOCAB_CONFIG:-}" ]; then
 		[ -f "$VOCAB_CONFIG" ] || die "VOCAB_CONFIG=$VOCAB_CONFIG does not exist."
 		. "$VOCAB_CONFIG"
@@ -126,6 +137,8 @@ vocab_load_config() {
 		. "$_vl_root/scripts/vocab.config.sh"
 	elif [ -f "$_vocab_here/vocab.config.sh" ]; then
 		. "$_vocab_here/vocab.config.sh"
+	else
+		vocab_shipped_defaults
 	fi
 	return 0
 }

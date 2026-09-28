@@ -63,8 +63,12 @@ done
 # ---------------------------------------------------------------------------
 banner "1. The shipped file restates the checker's defaults, line for line"
 # ---------------------------------------------------------------------------
-: >"$SCRATCH/empty.config.sh"
-DEFAULTS=$(VOCAB_CONFIG="$SCRATCH/empty.config.sh" sh "$VOCAB" fields 2>/dev/null)
+# The defaults are read the one way they apply: a copy of the script with no
+# policy file anywhere near it — not an empty file, which declares nothing
+# and is refused at load.
+mkdir -p "$SCRATCH/bare" && cp "$VOCAB" "$SCRATCH/bare/vocab.sh"
+DEFAULTS=$(sh "$SCRATCH/bare/vocab.sh" fields 2>"$SCRATCH/bare.err") ||
+	fail "a bare copy of the checker does not load its own defaults: $(cat "$SCRATCH/bare.err")"
 if [ "$DEFAULTS" = "$FIELDS" ]; then
 	pass "scripts/vocab.config.sh and the checker's built-in defaults are one vocabulary"
 else

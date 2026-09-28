@@ -222,6 +222,25 @@ s_assert_out_is "tier: planner implementer mechanical reviewer
 severity: blocking advisory
 mood: calm brisk" "'fields' prints the named file's vocabularies, one field per line, canonical order"
 
+# The file is the WHOLE policy: the built-in words stand in only when no
+# file is found, never underneath one. A file that declares no rule enforces
+# none, a field it does not declare is not a decision line, and an empty
+# file declares nothing — refused as such, not quietly held to the kit's words.
+write_config "$SCRATCH/norules.config.sh" "VOCAB_FIELDS='action command-shaped'
+VOCAB_ACTION='apply reply escalate'
+VOCAB_COMMAND_SHAPED='yes no'"
+VOCAB_CONFIG="$SCRATCH/norules.config.sh"
+vocab 'Command shaped: yes' 'Action: apply'
+s_assert_resolved "" "a policy file with no VOCAB_RULES line enforces no rule — the shipped rule is not sourced beneath it"
+vocab fields
+s_assert_out_is "action: apply reply escalate
+command-shaped: yes no" "'fields' prints the file's two fields and no rule — nothing of the defaults leaks through"
+: >"$SCRATCH/empty.config.sh"
+VOCAB_CONFIG="$SCRATCH/empty.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "an EMPTY policy file declares no field, and is refused as such rather than falling back to the shipped words"
+s_assert_err_has "policy: VOCAB_FIELDS declares no field"
+
 VOCAB_CONFIG="$SCRATCH/absent.config.sh"
 vocab 'Tier: planner'
 s_assert_status 2 "a policy file named explicitly and missing is exit 2"
