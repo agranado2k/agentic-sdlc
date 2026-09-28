@@ -222,7 +222,7 @@ if command -v node >/dev/null 2>&1; then
 			pass "TRACE_PRICE_$_var now reads $_want — the source's per-token figures, times a million" ||
 			fail "TRACE_PRICE_$_var reads '$_got', not '$_want'"
 	done
-	# The fold is not a guess: the codex entries prove the harness prefix a
+	# The fold is not a guess: the codex entries prove the agent-harness prefix a
 	# dispatched model carries in an event survives into the variable name while
 	# the source is looked up without it.
 	grep -q "^TRACE_PRICE_CODEX_GPT_6_ASTRA='9.99," "$COPY" &&
@@ -313,7 +313,7 @@ for f in scripts/trace-prices.kit.sh tests/trace-prices.test.sh \
 		pass "$f is on bootstrap's KIT_ONLY list" ||
 		fail "$f is not on KIT_ONLY — a consumer would receive it (the script names a vendor URL and this repo's own model ids)"
 done
-grep -q 'rmdir tests/fixtures/prices' "$KIT/bootstrap.sh" &&
+grep '^rmdir ' "$KIT/bootstrap.sh" | grep -q 'tests/fixtures/prices' &&
 	pass "and bootstrap removes the fixture directory once its files are gone" ||
 	fail "bootstrap's rmdir line does not name tests/fixtures/prices — a stamped project keeps an empty directory"
 
