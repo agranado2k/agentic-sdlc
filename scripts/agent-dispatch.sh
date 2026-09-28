@@ -108,15 +108,20 @@
 # The pair's SUBJECT is a run id minted here FOR THE WORKER and handed to it in
 # TRACE_RUN, with this dispatch's own run in TRACE_PARENT, so a worker inside
 # another agent harness emits into a run that joins this trail without knowing
-# anything about run stacks — and `show run:<id>` is one spawn's whole story.
+# anything about run stacks. `show run:<id>` prints THE PAIR — it matches the
+# subject and related columns, so the worker's own lines, which carry that id in
+# their `run` column instead, join it in `export` and `summary` rather than
+# there.
 #
 # None of it is load-bearing (ADR-0008 clause 4): a consumer whose shared layer
 # has no trace.sh beside this file loses nothing, and a trace that fails is
 # loud on stderr and changes no exit status. Whether anything is written at all
 # is the trace policy file's business and not this one's; unconfigured, every
-# emit writes nothing. The one hole is a dispatcher KILLED mid-run: on the
-# timed path its own trap writes the end, and on the untimed path there is no
-# trap to write from, so the pair stays open — which a reader can see.
+# emit writes nothing. The one thing that leaves a pair OPEN is a dispatcher
+# that never runs its own way out — a SIGKILL. A trapped signal does not: the
+# timed path's own trap writes the end, and on the untimed path the signal is
+# deferred until the worker this shell is waiting on finishes, after which the
+# ordinary exit closes the pair with that worker's status.
 #
 # WHAT A WORKER MAY NOT DO. Shared invariant §7 puts a human's name on the
 # merge, and nothing here changes that: a dispatched worker writes to the
@@ -758,6 +763,19 @@ SWEEP_DAYS_DEFAULT=1
 _pn=$(_read_policy_numbers "AGENT_DISPATCH_MAX_DEPTH=$DEPTH_DEFAULT_MAX" "AGENT_DISPATCH_SWEEP_DAYS=$SWEEP_DAYS_DEFAULT") || exit 2
 MAX_DEPTH=${_pn%% *} _pn=${_pn#* }
 SWEEP_DAYS=${_pn%% *}
+# THE PROMPT-KEEPING SWITCH is read here with them, and for the same reason:
+# a policy value's shape is checked before this dispatch does anything, so a
+# typo is refused the same way whichever path the dispatch would have taken.
+# Read as a string rather than through the number reader — `1`, or nothing at
+# all. Any other value is refused rather than taken as off, because a switch
+# about private data whose answer is hidden is worse than no switch.
+TRACE_PROMPT=$(_read_policy AGENT_DISPATCH_TRACE_PROMPT)
+case "$TRACE_PROMPT" in
+'' | 1) ;;
+*) die "AGENT_DISPATCH_TRACE_PROMPT takes 1, or nothing at all, and '$TRACE_PROMPT' is
+   neither. It is the switch in your agents config that keeps each worker prompt in the
+   trace as a blob; leave it out to keep prompts out of the trace." ;;
+esac
 # Both are whole numbers from 1 now; this bound is the depth's own. One
 # `[ -gt ]` must be able to compare them: past the shell's integer range `[`
 # errors instead of comparing, and an error there would fail OPEN — the
@@ -1124,58 +1142,53 @@ done
 # timestamp, which is the shape the trace script's own ids take.
 WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 
-# THE PROMPT IS KEPT ONLY IF ASKED FOR. It is the largest and most private
-# payload this file touches — a ticket body, a diff, a review's findings — so
-# it is never a field (the trace's event cap is what keeps an append one write)
-# and it is not stored at all unless the policy file says so. Any value but 1
-# is refused rather than read as off: a switch about private data whose answer
-# is hidden is worse than no switch.
-TRACE_PROMPT=$(_read_policy AGENT_DISPATCH_TRACE_PROMPT)
-case "$TRACE_PROMPT" in
-'' | 1) ;;
-*) die "AGENT_DISPATCH_TRACE_PROMPT takes 1, or nothing at all, and '$TRACE_PROMPT' is
-   neither. It is the switch in your agents config that keeps each worker prompt in the
-   trace as a blob; leave it out to keep prompts out of the trace." ;;
-esac
-
-# The spawn, written BEFORE the crossing is known to be reachable: a vendor
-# nobody could reach is then a pair like every other ending, rather than a
-# silence a reader would have to guess at. `dispatched` is this dispatcher's
-# own decision to cross, taken here; what became of the crossing is always the
-# spawn.end. The prompt's SIZE is a fact worth one field either way — the
-# largest lever on what a spawn costs.
-if [ "$TRACE_PROMPT" = 1 ]; then
-	_trace kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
-		harness="$HARNESS" model="$MODEL" outcome=dispatched \
-		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')" \
-		--blob "$PROMPT_FILE"
-else
-	_trace kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
+# _trace_spawn — the spawn, ONE definition, called at each site that is about
+# to cross (or to fail at crossing). `dispatched` is this dispatcher's own
+# decision to cross; what became of the crossing is always the spawn.end that
+# pairs with it. The prompt's SIZE is a fact worth one field — the largest
+# lever on what a spawn costs — while the prompt itself is the largest and most
+# private payload this file touches, so it is never a field and is stored, as a
+# content-addressed blob, only when the policy switch above asked for it.
+#
+# WHERE IT IS CALLED FROM MATTERS, and it is why this is a function rather than
+# a line: an event cannot be taken back (ADR-0008 clause 5), so a spawn must
+# not be on disk before the last thing that can end this dispatch WITHOUT a
+# spawn.end has had its say. Deriving the budget is that thing — half an
+# inherited budget is a usage error — so the ordinary path emits after it,
+# while the unreachable crossing, judged deliberately before the budget, emits
+# its own pair at its own site (H-1, review of PR #290).
+_trace_spawn() {
+	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
 		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
-fi
+	[ "$TRACE_PROMPT" = 1 ] && set -- "$@" --blob "$PROMPT_FILE"
+	_trace "$@"
+}
 
-# _dispatch_exit <status> — the one way out from here on: the spawn.end that
-# pairs with the spawn above, then that status, untouched. The mapping is the
-# vocabulary PRD #237 fixed, and every name on it is a name because a caller
-# does something different about it — a timeout is retried, a budget verdict is
-# a ceiling to raise, an unreachable vendor sends the caller to a fallback it
-# must then declare (#263's own review was that case). Everything else is
-# `fail` WITH the status, so a fail is never a dead end.
+# _dispatch_exit <status> [<outcome>] — the one way out once a spawn has been
+# written: the spawn.end that pairs with it, then that status, untouched.
+#
+# AN OUTCOME IS WHAT THIS DISPATCHER OBSERVED, NEVER A NUMBER IT WAS HANDED.
+# The three verdicts with names of their own — the unreachable crossing, the
+# budget ceiling, the timeout — are named BY THE SITE THAT OBSERVED THEM,
+# because a caller does something different about each: a timeout is retried, a
+# ceiling is raised, an unreachable vendor sends the caller to a fallback it
+# must then declare (#263's own review was that case). A worker's own status
+# passes through with no outcome argument at all and reads `ok` or `fail`,
+# which is the same lesson this file's watchdog already records at the foot of
+# the file: reading 143 as "timed out" was wrong both ways, and reading a
+# worker's own 124 as this dispatcher's timeout is that same inference (H-2,
+# review of PR #290). `fail` always carries the status, so it is never a dead
+# end.
 #
 # The RUNG rides the end rather than the spawn: which mechanism the worker
-# actually ran under is not settled until the scope preflight has had its say,
-# and the spawn is written before that — before the crossing is even known to
-# be reachable.
+# actually ran under is not settled until the scope preflight has had its say.
 _dispatch_exit() {
 	_de_status=$1
-	case $_de_status in
-	0) _de_outcome=ok ;;
-	69) _de_outcome=unreachable ;;
-	71) _de_outcome=budget ;;
-	124) _de_outcome=timeout ;;
-	*) _de_outcome=fail ;;
-	esac
+	_de_outcome=${2:-}
+	if [ -z "$_de_outcome" ]; then
+		if [ "$_de_status" = 0 ]; then _de_outcome=ok; else _de_outcome=fail; fi
+	fi
 	set -- kind=spawn.end subject="run:$WORKER_RUN" outcome="$_de_outcome" "data.exit=$_de_status"
 	[ -n "${RUN_RUNG:-}" ] && set -- "$@" "data.rung=$RUN_RUNG"
 	_trace "$@"
@@ -1206,11 +1219,16 @@ if ! command -v "$CMD_BIN" >/dev/null 2>&1; then
 	echo "   yourself if that is acceptable for this work, and say in your report that the crossing did" >&2
 	echo "   not happen." >&2
 	[ -n "${MODEL:-}" ] && printf '%s\n' "$MODEL"
-	_dispatch_exit 69
+	_trace_spawn
+	_dispatch_exit 69 unreachable
 fi
 
 # --- the budget: derived here, applied at the foot of this file ------------
 _budget_derive
+
+# The spawn, now that nothing left can end this dispatch without an end of its
+# own. Before the dry run below, which emits nothing at all.
+_trace_spawn
 
 # --- announce, once, on stderr — for a dry run and a real dispatch alike -----
 # ADR-0006 clause 8: the floor note, the off switch, the inherited-no-escape
@@ -1316,8 +1334,24 @@ export AGENT_DISPATCH_DEPTH
 # grandparent, and the trace script reads an empty one as "no parent", which is
 # the honest answer when this dispatch belongs to no run. Every emit of this
 # file's own restores this process's identity around itself (see _trace).
+#
+# WHICH RUN IS THE PARENT. The environment is the first answer, as it is for
+# every field the trace script resolves. When it is silent the dispatching run
+# is on that script's per-working-tree run stack — which is what `begin` wrote,
+# and what this file's own emits resolve through — and the script offers no
+# reader for it: `begin` would mint a second run and push the stack, which a
+# dispatch must never do. So it is asked for the one way available without a
+# shared-layer change: a dry-run emit prints the line it WOULD append, with the
+# run it resolved, and writes nothing. That is a read of a documented stdout
+# contract, and a `current` subcommand would be the better answer — it belongs
+# to the release that carries the trace script (H-3, review of PR #290).
+_dispatch_run=$_own_run
+if [ -z "$_own_run_set" ] && [ -f "$TRACE_SH" ]; then
+	_dispatch_run=$(TRACE_QUIET=1 sh "$TRACE_SH" emit kind=note --dry-run 2>/dev/null |
+		sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
+fi
 TRACE_RUN=$WORKER_RUN
-TRACE_PARENT=$_own_run
+TRACE_PARENT=$_dispatch_run
 export TRACE_RUN TRACE_PARENT
 
 # The budget travels to a nested dispatch the way the depth does — through the
@@ -1651,7 +1685,7 @@ _budget_verdict() {
 	MEMORY) echo "x  dispatch: the worker hit its MEMORY ceiling (${BUDGET_MEMORY} MiB) — a process in its tree was OOM-killed inside its cgroup. Exit 71 (EX_OSERR)." >&2 ;;
 	*) _dispatch_exit "$_worker_status" ;;
 	esac
-	_dispatch_exit 71
+	_dispatch_exit 71 budget
 }
 
 _spawn_run
@@ -1664,10 +1698,10 @@ if [ "$_timed_out" = 1 ]; then
 	scope | scope-tasks)
 		if _budget_ceiling_hit && [ -n "$_hit" ]; then
 			echo "x  dispatch: the worker hit its $_hit ceiling before it timed out — the ceiling fired first. Exit 71 (EX_OSERR)." >&2
-			_dispatch_exit 71
+			_dispatch_exit 71 budget
 		fi
 		;;
 	esac
-	_dispatch_exit 124
+	_dispatch_exit 124 timeout
 fi
 _budget_verdict
