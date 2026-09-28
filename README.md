@@ -562,9 +562,10 @@ skeleton (K0).
   identity: `begin` hands one out and `end` closes it, a nested `begin`
   records its parent, the environment outranks the run stack, only `begin` and
   `end` rewrite that stack and both by rename, fifty parallel emits all land
-  and all verify, an event over 4000 bytes is refused with the refusal
-  pointing at `--blob`, a payload is stored once under git's own content hash,
-  and `verify` refuses a schema it does not know.
+  and all verify while the stack stays untouched, an event whose write would
+  exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
+  is stored once under git's own hash of the bytes that were stored, and
+  `verify` refuses a schema it does not know.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving
