@@ -1940,6 +1940,17 @@ t_run_split env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
 	pass "show run:<the worker's run> prints the pair — the operator's one command" ||
 	fail "show found $(printf '%s\n' "$S_OUT" | grep -c .) lines for run:$WORKER_RUN"
 
+# A STALE PARENT IS WORSE THAN NONE. This process's own TRACE_PARENT was set by
+# whoever dispatched IT, and passing it on would name the worker's grandparent
+# as its parent. So the worker's is always set explicitly — to the empty string
+# when this dispatch belongs to no run, which the trace script reads as "no
+# parent" rather than as "ask the local run stack".
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" TRACE_PARENT=run-of-the-grandparent \
+	sh "$DISPATCH" implementer --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_PARENT=$' &&
+	pass "a dispatch with no run of its own hands the worker an empty parent, not its own" ||
+	fail "the worker inherited a parent from the dispatcher's own: $S_OUT"
+
 # --- the other outcomes -----------------------------------------------------
 TR_FAIL="$SCRATCH/trace-fail"
 tr_new "$TR_FAIL"
