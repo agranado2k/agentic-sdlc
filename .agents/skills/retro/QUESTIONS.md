@@ -139,7 +139,11 @@ decomposition.
   reached and a fallback the session then chose — the trace shows the choice
   (`spawn outcome=in-session` beside it), and a window where the crossing
   never worked is a finding about the mapping, not about the session. A
-  `spawn` with no `spawn.end` is a worker nobody waited for.
+  `spawn` with no `spawn.end` is a worker nobody waited for — but a window
+  with no `spawn.end` at all, against spawns that plainly ended, is **one**
+  finding about the emitter (the dispatcher or the skill that spawned), never
+  one per spawn. The same rule holds for any kind: an absent kind is one
+  hole, not a finding per event that should have had it.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
 - **Missing emits**: a skill that ran — its PR exists, its worktree was

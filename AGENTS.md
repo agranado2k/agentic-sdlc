@@ -273,15 +273,15 @@ ends at an open PR carrying an independent review) → `/review-pr` →
 Several step out of that line: `/grill-with-docs` replaces `/grill-me` once a
 glossary and decision records exist to challenge a plan against, `/prototype`
 answers a feasibility question the spec is blocked on, `/diagnose` is for a
-bug, not a feature, `/explain-diff` explains a diff or PR interactively, and
-`/improve-codebase-architecture` is for an area that has become hard to change
-— it finds and designs the deepening, then re-enters the line at `/to-tickets`:
-a behaviour-preserving refactor is its own ticket, never a passenger on a
-feature diff (shared invariant §10). `/design-brief` runs before the first
-feature diff and whenever the shape stops fitting: paradigm, style and context
-map designed twice, compared on complexity, recorded for every later session.
-`/housekeeping` runs on a calendar, not an event — the docs gate's
-housekeeping-due advisory sends you to it — and audits the standing
+bug, not a feature, `/explain-diff` explains a diff, branch or PR
+interactively, and `/improve-codebase-architecture` is for an area that has
+become hard to change — it finds and designs the deepening, then re-enters the
+line at `/to-tickets`: a behaviour-preserving refactor is its own ticket, never
+a passenger on a feature diff (shared invariant §10). `/design-brief` runs
+before the first feature diff and whenever the shape stops fitting: paradigm,
+style and context map designed twice, compared on complexity, recorded for
+every later session. `/housekeeping` runs on a calendar, not an event — the
+docs gate's housekeeping-due advisory sends you to it — and audits the standing
 instructions, measures the suite and scans for the red flags that reopen the
 brief. `/retro` runs per wave as the one skill that reads the trace: seven
 fixed questions over a window. Neither fixes; findings go to `/to-tickets`.

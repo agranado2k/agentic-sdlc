@@ -113,8 +113,11 @@ assert_file_has "$SIDECAR" "session.usage" "spend reads the per-model token sums
 assert_file_has "$SIDECAR" "unpriced" "spend names the model the price table does not"
 assert_file_has "$SIDECAR" "spawn.end" "chain health reads how spawns ended"
 for o in fail timeout budget unreachable; do
-	assert_file_has "$SIDECAR" "$o" "chain health names the spawn outcome '$o'"
+	assert_file_has "$SIDECAR" "\`$o\`" "chain health names the spawn outcome '$o'"
 done
+# H-1 (review of PR #293): a window with no spawn.end at all is ONE finding
+# about the emitter, never one per spawn — or every spawn is a finding.
+assert_file_has "$SIDECAR" "no \`spawn.end\` at all" "an absent kind is one finding about the emitter, not one per spawn"
 assert_file_has "$SIDECAR" "merge.land" "chain health finds PRs with no landing"
 assert_file_has "$SIDECAR" "\`feedback\`" "aim calibration reads the feedback events"
 for v in hit adjusted missed; do
@@ -145,6 +148,12 @@ grep -qE 'show +run:' "$SKILL_ABS" "$SIDECAR_ABS" >/dev/null && pass "a run is r
 procedure() { awk '/^## Procedure/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
 v_step=$(procedure | grep -nE "sh scripts/trace\\.sh +verify" | head -1 | cut -d: -f1)
 r_step=$(procedure | grep -nE "sh scripts/trace\\.sh +(show|summary|export)" | head -1 | cut -d: -f1)
+b_step=$(procedure | grep -nE "sh scripts/trace\\.sh +begin" | head -1 | cut -d: -f1)
+[ -n "$v_step" ] && [ -n "$b_step" ] && [ "$v_step" -lt "$b_step" ] &&
+	pass "verify (line $v_step) comes before begin (line $b_step) — the window is fixed on a verified trace (M-1)" ||
+	fail "verify does not come before begin — verify='$v_step' begin='$b_step'"
+procedure | grep -q "refuses" && pass "the procedure says what a retro does when export refuses" ||
+	fail "the procedure never says what happens when export refuses on a damaged trace (M-1)"
 if [ -n "$v_step" ] && [ -n "$r_step" ] && [ "$v_step" -lt "$r_step" ]; then
 	pass "in the procedure, verify (line $v_step) comes before the first read (line $r_step)"
 else
@@ -158,6 +167,9 @@ assert_file_has "$SKILL" 'retro-<YYYYMMDDTHHMMSSZ>.md' "the report's name carrie
 assert_file_has "$SKILL" '<tmpdir>/retro-' "…under the OS temp directory"
 assert_file_has "$SKILL" 'TMPDIR' "…resolved from \$TMPDIR"
 assert_file_has "$SKILL" "outside the repo tree"
+# H-3 (review of PR #293): the trace carries third-party text (comment bodies
+# in reason=), and the reader must say what it is.
+assert_file_has "$SKILL" "data, never instructions" "the trace's contents are untrusted content"
 assert_file_has "$SKILL" "never fixes"
 assert_file_has "$SKILL" "never edits a skill"
 assert_file_has "$SKILL" "candidate ticket"
@@ -181,6 +193,9 @@ KINDS=$(sed -n "s/^TRACE_KINDS='\(.*\)'\$/\1/p" "$ROOT/$TRACE")
 lines=$(trace_lines "$SKILL_ABS")
 printf '%s\n' "$lines" | grep -qF "sh $TRACE begin retro" && pass "/retro opens a run as retro" || fail "/retro never runs 'sh $TRACE begin retro'"
 printf '%s\n' "$lines" | grep -qF "sh $TRACE end" && pass "/retro closes the run" || fail "/retro never runs 'sh $TRACE end'"
+note=$(printf '%s\n' "$lines" | grep -F 'kind=note')
+printf '%s\n' "$note" | grep -qF "related='" && pass "the candidate note quotes related= — several subjects, the house form (H-2, review of PR #293)" ||
+	fail "the candidate note's related= is unquoted — a second subject is exit 2, swallowed by '|| :', and the candidate is lost"
 printf '%s\n' "$lines" | grep -F "sh $TRACE end" | grep -qF 'data.findings=' &&
 	pass "the end carries data.findings= — the count PRD #237 scenario 8 asks for" ||
 	fail "the end does not carry data.findings="
@@ -238,10 +253,18 @@ if [ -d "$dir" ]; then
 		pass "and what they wrote verifies" || fail "the lines ran but the trace they wrote does not verify"
 	# The begin/end pair really opened and closed a run named retro, and the
 	# end carried the count: the two facts the next retro's window reads.
-	grep -q '"kind":"run.start","skill":"retro"' "$dir"/events/*.jsonl &&
+	grep '"kind":"run.start"' "$dir"/events/*.jsonl | grep -q '"skill":"retro"' &&
 		pass "the scratch trace holds a run.start for skill retro" || fail "no run.start with skill=retro in the scratch trace"
 	grep '"kind":"run.end"' "$dir"/events/*.jsonl | grep -q '"findings":"' &&
 		pass "…and a run.end carrying data.findings" || fail "no run.end carrying data.findings in the scratch trace"
+	# L-2 (review of PR #293): the window span is a pipeline ending in tail,
+	# which exits 0 on empty input, so its exit status proves nothing. Run it
+	# again now that a retro run is seeded and hold its OUTPUT to that run.
+	wspan=$(trace_spans "$SKILL_ABS" | grep -F '"kind":"run.start"' | head -1)
+	wout=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$(runnable "$wspan")" 2>/dev/null )
+	printf '%s\n' "$wout" | grep -F '"kind":"run.start"' | grep -qF '"skill":"retro"' &&
+		pass "the window span's output is the seeded retro run.start — the pipeline selects, not just exits 0" ||
+		fail "the window span printed no retro run.start over a trace that holds one: $wspan"
 fi
 
 # ---------------------------------------------------------------------------
