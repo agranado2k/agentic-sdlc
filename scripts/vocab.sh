@@ -262,35 +262,41 @@ _vocab_nl=$(printf '\nx')
 _vocab_nl=${_vocab_nl%x}
 
 # vocab_conflicts — stdin carries `T <field> <tokens…>` for every closed field
-# and `R <af> <av> <cf> <op> <cv>` for every rule in the set under test — a set
-# whose antecedents all hold at once. Prints one line per way the set cannot
-# be satisfied: two rules that demand different values of one field, a rule
-# demanding a value another excludes, or exclusions covering every token of a
-# closed field. Empty output is a satisfiable set.
+# and `R <af> <av> <cf> <op> <cv>` for the rules under test. Rules are judged
+# in GROUPS whose antecedents all hold at once: at check time the triggered
+# set is one group, at load time every rule sharing an antecedent is one (the
+# `grouped` switch). Prints one line per way a group cannot be satisfied: two
+# rules demanding different values of one field, a rule demanding a value
+# another excludes, or exclusions covering every token of a closed field.
+# Empty output is a satisfiable set.
 vocab_conflicts() {
-	awk '
-	function rule(af, av, cf, op, cv) { return af "=" av " => " cf op cv }
-	$1 == "T" { f = $2; ntok[f] = NF - 2; next }
+	awk -v grouped="${1:-0}" '
+	function q(s) { return "\047" s "\047" }
+	function both(a, b) { print "policy contradiction: " q(a) " and " q(b) " cannot both hold" }
+	$1 == "T" { ntok[$2] = NF - 2; next }
 	$1 == "R" {
+		g = grouped ? $2 "=" $3 : ""
 		cf = $4; op = $5; cv = $6
-		r = rule($2, $3, cf, op, cv)
+		r = $2 "=" $3 " => " cf op cv
 		if (op == "=") {
-			if ((cf in eq) && eqv[cf] != cv)
-				print "policy contradiction: " q(eq[cf]) " and " q(r) " cannot both hold"
-			else if (!(cf in eq)) { eq[cf] = r; eqv[cf] = cv }
-			if ((cf, cv) in ne)
-				print "policy contradiction: " q(ne[cf, cv]) " and " q(r) " cannot both hold"
+			if ((g, cf) in eq) { if (eqv[g, cf] != cv) both(eq[g, cf], r) }
+			else { eq[g, cf] = r; eqv[g, cf] = cv }
+			if ((g, cf, cv) in ne) both(ne[g, cf, cv], r)
 		} else {
-			if (!((cf, cv) in ne)) { ne[cf, cv] = r; nen[cf]++; nel[cf] = nel[cf] (nel[cf] ? "; " : "") r }
-			if ((cf in eq) && eqv[cf] == cv)
-				print "policy contradiction: " q(eq[cf]) " and " q(r) " cannot both hold"
+			if (!((g, cf, cv) in ne)) {
+				ne[g, cf, cv] = r; nen[g, cf]++
+				nel[g, cf] = nel[g, cf] (nel[g, cf] ? "; " : "") r
+				nef[g, cf] = cf
+			}
+			if ((g, cf) in eq && eqv[g, cf] == cv) both(eq[g, cf], r)
 		}
 	}
-	function q(s) { return "\047" s "\047" }
 	END {
-		for (f in nen)
-			if ((f in ntok) && nen[f] >= ntok[f])
-				print "policy contradiction: the rules on " f " exclude every one of its tokens: " nel[f]
+		for (k in nen) {
+			f = nef[k]
+			if ((f in ntok) && nen[k] >= ntok[f])
+				print "policy contradiction: the rules on " f " exclude every one of its tokens: " nel[k]
+		}
 	}'
 }
 
@@ -302,10 +308,11 @@ vocab_token_lines() {
 	done
 }
 
-# vocab_report_conflicts <R lines> — run the detector and refuse each finding.
+# vocab_report_conflicts <R lines> [grouped] — run the detector and refuse
+# each finding.
 vocab_report_conflicts() {
 	[ -n "$1" ] || return 0
-	_rc_out=$({ vocab_token_lines; printf '%s\n' "$1"; } | vocab_conflicts)
+	_rc_out=$({ vocab_token_lines; printf '%s\n' "$1"; } | vocab_conflicts "${2:-0}")
 	[ -n "$_rc_out" ] || return 0
 	printf '%s\n' "$_rc_out" | while IFS= read -r _rc_line; do
 		echo "x vocab: $_rc_line" >&2
@@ -366,26 +373,7 @@ vocab_validate_policy() {
 	_vocab_rule_lines=
 	vocab_each_rule vocab_check_policy_rule
 	# Rules sharing an antecedent all fire together: hold each such group.
-	[ -n "$_vocab_rule_lines" ] || return 0
-	printf '%s\n' "$_vocab_rule_lines" | awk '{ print $2 "=" $3 }' | sort -u | while IFS= read -r _vp_ant; do
-		printf '%s\n' "$_vocab_rule_lines" | awk -v a="$_vp_ant" '($2 "=" $3) == a'
-		echo "--"
-	done | {
-		_vp_group=
-		while IFS= read -r _vp_line; do
-			if [ "$_vp_line" = "--" ]; then
-				{ vocab_token_lines; printf '%s\n' "$_vp_group"; } | vocab_conflicts
-				_vp_group=
-			else
-				_vp_group="$_vp_group${_vp_group:+$_vocab_nl}$_vp_line"
-			fi
-		done
-	} >"${TMPDIR:-/tmp}/vocab.$$" 2>/dev/null
-	if [ -s "${TMPDIR:-/tmp}/vocab.$$" ]; then
-		while IFS= read -r _vp_c; do echo "x vocab: $_vp_c" >&2; done <"${TMPDIR:-/tmp}/vocab.$$"
-		_vocab_bad=1
-	fi
-	rm -f "${TMPDIR:-/tmp}/vocab.$$"
+	vocab_report_conflicts "$_vocab_rule_lines" 1
 	return 0
 }
 
