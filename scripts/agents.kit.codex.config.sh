@@ -111,6 +111,6 @@ AGENT_TIER_IMPLEMENTER_TESTS='claude-code:claude-opus-5-5'
 # domain name records a non-decision.
 #
 # No AGENT_TIER_MECHANICAL_JUDGE here either — the other file records the
-# decline in full (ADR-0010). The kit names no judge, from either session:
+# decline in full (ADR-0010). The kit names no model, from either session:
 # `mechanical judge` falls back to the mechanical tier above in silence, like
 # every unmapped domain, until a judge earns a mapping and a shape.

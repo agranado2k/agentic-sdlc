@@ -820,7 +820,12 @@ for policy in scripts/agents.kit.config.sh scripts/agents.kit.codex.config.sh; d
 		pass "$policy assigns no AGENT_TIER_MECHANICAL_JUDGE"
 	# The comment block that names the variable is the decision; it has to say
 	# the reason in the kit's own words, or it is a TODO wearing a comment.
-	if awk -v RS= '/^#.*AGENT_TIER_MECHANICAL_JUDGE/' "$KIT/$policy" | grep -q 'names no'; then
+	# ADR-0010 clause 6 asks for those words exactly — "the kit names no
+	# model" — so the probe holds the twins to them, not to a looser "names
+	# no". The block is the run of comment lines from the first one naming the
+	# variable to the next non-comment line (or EOF): a sed range, because awk's
+	# paragraph mode is not the same awk everywhere.
+	if sed -n '/^#.*AGENT_TIER_MECHANICAL_JUDGE/,/^[^#]/p' "$KIT/$policy" | grep -q 'names no model'; then
 		pass "$policy declines AGENT_TIER_MECHANICAL_JUDGE in so many words"
 	else
 		fail "$policy does not decline AGENT_TIER_MECHANICAL_JUDGE in a comment saying the kit names no model — an omission, not a decision"
