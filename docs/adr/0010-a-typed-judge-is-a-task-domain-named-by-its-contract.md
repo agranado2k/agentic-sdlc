@@ -148,10 +148,10 @@ rank-or-verify — mapped by nobody the kit ships to**.
   to `tests/agents-tiers.test.sh`, the declining comment to the kit-only
   policy files, and the paragraphs in the root manual, the manual template
   and the glossary's **Task domain** entry.
-- The research: https://view.centaurspec.com/oNa-l6LtDR — section 5 "The
-  field, eleven days in" (the contrastive ranker's verifier result; "L4's
-  contract now has two shapes"), section 6 lesson L4 (the cost ladder as a
-  domain, never a fifth tier), section 7 "A decider as a verifier".
+- The research: https://view.centaurspec.com/oNa-l6LtDR, revision 5 —
+  section 5 "The field, eleven days in" (the contrastive ranker's verifier
+  result; "L4's contract now has two shapes"), section 6 lesson L4 (the cost
+  ladder as a domain, never a fifth tier), section 7 "A decider as a verifier".
 - Related: ADR-0003 (the closed tier vocabulary and the kit-only mapping),
   ADR-0007 (the `self-implemented` domain — the other token the kit names on
   the open axis), shared invariant §5, the root manual's "Capability tiers".
