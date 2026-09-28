@@ -26,7 +26,8 @@
 # rule — while the same value repeated is one answer.
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else: `check`
-# prints nothing, `fields` prints one field per line. Every reason is on
+# prints nothing, `fields` prints one field per line, an open one marked
+# `(open)`, then one line per rule. Every reason is on
 # stderr, prefixed `x vocab:`, one line per violation naming the field, the
 # value and the vocabulary. Exit 0 is legal; exit 2 is a refused value, a
 # usage error, a policy file named explicitly and missing, or a policy file

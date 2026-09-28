@@ -38,7 +38,7 @@
 # Every other field below is owned by this file — edit its tokens freely —
 # and the skill that stamps it is named beside it.
 #
-# THREE RULES EVERY TOKEN IS HELD TO, at load, by the checker:
+# TWO RULES EVERY TOKEN IS HELD TO, at load, by the checker:
 #
 #   SHAPE     `[a-z][a-z0-9-]*`, the task domain's, because a token may be
 #             interpolated into a variable name the way a domain is.
@@ -46,10 +46,13 @@
 #             `escalate`, never `safe-to-apply` and `risky` — because a judge,
 #             model or agent, reads the label as evidence and follows it
 #             instead of the state (the research behind PRD #273).
-#   ORDER     the tokens' order is CANONICAL: it is the order a judge is shown
-#             them, fixed and recorded here so a later calibration can say
-#             whether position moved the answer. Reordering a list is a
-#             change, not a tidy-up.
+#
+# And ONE CONVENTION the checker cannot hold you to: the tokens' ORDER is
+# CANONICAL — the order a judge is shown them, fixed and recorded here so a
+# later calibration can say whether position moved the answer. Reordering a
+# list is a change, not a tidy-up. Nothing in a consumer's tree enforces it;
+# in the kit, tests/vocab-policy.test.sh holds each list's order to the skill
+# that spells it.
 #
 # ---------------------------------------------------------------------------
 # THE FIELDS. VOCAB_FIELDS names them; VOCAB_<FIELD> (upper-cased, hyphens
