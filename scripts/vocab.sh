@@ -380,6 +380,15 @@ vocab_validate_policy() {
 			vocab_refuse "policy: field name '$_vp_f' is not a well-formed token — a field is a $VOCAB_TOKEN_SHAPE"
 			continue
 		}
+		# A field's tokens live in VOCAB_<FIELD>, the namespace the checker's
+		# own variables share: a field named `fields` would make the field
+		# list its own vocabulary, silently.
+		case $_vp_f in
+		fields | open | rules | token-shape | config)
+			vocab_refuse "policy: field name '$_vp_f' is reserved — $(vocab_var "$_vp_f") is the checker's own variable"
+			continue
+			;;
+		esac
 		_vp_tokens=$(vocab_tokens "$_vp_f")
 		if [ -z "$_vp_tokens" ] && ! vocab_is_open "$_vp_f"; then
 			vocab_refuse "policy: field '$_vp_f' declares no tokens ($(vocab_var "$_vp_f") is empty)"

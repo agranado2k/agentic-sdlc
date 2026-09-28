@@ -525,6 +525,19 @@ vocab fields
 s_assert_status 2 "a rule with no '=>' is malformed too, and 'fields' says so before any value arrives"
 s_assert_err_has "policy: rule 'tier=planner' is malformed"
 
+# A field may not take one of the checker's own names: `fields` would make
+# the field list its own vocabulary, and nothing would say so.
+for reserved in fields open rules token-shape config; do
+	t_write "$SCRATCH" reserved.config.sh "VOCAB_FIELDS='tier $reserved'
+VOCAB_OPEN=''
+VOCAB_TIER='planner'
+VOCAB_RULES=''"
+	VOCAB_CONFIG="$SCRATCH/reserved.config.sh"
+	vocab fields
+	s_assert_status 2 "a field named '$reserved' is refused at load — the name is the checker's own"
+	s_assert_err_has "policy: field name '$reserved' is reserved"
+done
+
 # A FIELD NAME is held to the shape as a token is.
 t_write "$SCRATCH" badfield.config.sh "VOCAB_FIELDS='Tier'
 VOCAB_OPEN=''
