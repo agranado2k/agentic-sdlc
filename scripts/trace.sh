@@ -1198,12 +1198,26 @@ trace_days() {
 trace_note_stale_prices() {
 	_ns_win=${TRACE_PRICES_STALE_DAYS:-}
 	[ -n "$_ns_win" ] || return 0
+	# The WIDTH as well as the alphabet: a window of thirty digits is a number
+	# the shell's arithmetic cannot hold, and `[ … -gt … ]` answered it with
+	# `integer expected` on the stderr of a SHIPPED script (L-1, review of PR
+	# #294). Seven digits is 2739 years, so the cap costs nobody a window.
 	case $_ns_win in
-	*[!0-9]*) die "TRACE_PRICES_STALE_DAYS='$_ns_win' is not a number of days — give a whole number, or leave it empty for no window" ;;
+	*[!0-9]* | ????????*) die "TRACE_PRICES_STALE_DAYS='$_ns_win' is not a number of days — give a whole number of at most seven digits, or leave it empty for no window" ;;
 	esac
 	[ -n "${TRACE_CONFIG_PATH:-}" ] && [ -f "${TRACE_CONFIG_PATH:-}" ] || return 0
 	_ns_date=$(sed -n 's/.*Last checked: *\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\).*/\1/p' "$TRACE_CONFIG_PATH" | head -1)
 	[ -n "$_ns_date" ] || return 0
+	# The shape is not the calendar. `2026-00-00` matched the pattern above and
+	# came out as a real number of days ago, and `2026-99-99` came out in the
+	# FUTURE and went silent — which is what a fresh table looks like, so the
+	# wrong answer was the invisible one (M-1, review of PR #294). Refused with
+	# the same voice as a malformed window: both are the operator's own typo.
+	_ns_mon=${_ns_date#*-}
+	_ns_mon=${_ns_mon%%-*}
+	_ns_day=${_ns_date##*-}
+	case $_ns_mon in 0[1-9] | 1[0-2]) ;; *) die "the price table's 'Last checked: $_ns_date' in $TRACE_CONFIG_PATH is not a calendar date — the month must be 01 to 12" ;; esac
+	case $_ns_day in 0[1-9] | [12][0-9] | 3[01]) ;; *) die "the price table's 'Last checked: $_ns_date' in $TRACE_CONFIG_PATH is not a calendar date — the day must be 01 to 31" ;; esac
 	_ns_age=$(($(trace_days "$(date -u +%Y-%m-%d)") - $(trace_days "$_ns_date")))
 	[ "$_ns_age" -gt "$_ns_win" ] || return 0
 	[ "${TRACE_QUIET:-}" = 1 ] && return 0

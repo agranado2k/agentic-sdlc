@@ -78,9 +78,12 @@ TRACE_DIR=''
 # DATE THE TABLE, AND SAY HOW LONG A DATE IS GOOD FOR.
 #
 # Write the day you read the prices as a comment anywhere in this file, in
-# exactly this shape — the first such line is the one the script reads:
+# exactly this shape — the first such line is the one the script reads, so the
+# placeholder below is deliberately NOT a date: an example with real digits in
+# it would be the line the advisory found, and you would be told a date you
+# never wrote (review of PR #294).
 #
-#   # Last checked: 2026-01-31
+#   # Last checked: <YYYY-MM-DD>
 #
 # TRACE_PRICES_STALE_DAYS is how many days that claim stays unremarked. Past it,
 # every priced read — `summary`, and `export --csv` — prints ONE advisory on

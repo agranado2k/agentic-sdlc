@@ -97,8 +97,11 @@ case $S_ERR in
 *'last checked'*"$ANCIENT"*) pass "and names the date the table carries, on stderr" ;;
 *) fail "stderr did not carry the advisory with $ANCIENT: $S_ERR" ;;
 esac
+# The PHRASE and not the number: `*30*` also matched any 30 in the scratch path
+# the advisory prints, and mktemp names carry digits — so the leg could pass
+# without the window ever being named (L-4, review of PR #294).
 case $S_ERR in
-*30*) pass "and the window it is past, so the operator can tell which policy line spoke" ;;
+*'30-day window'*) pass "and the window it is past, so the operator can tell which policy line spoke" ;;
 *) fail "the advisory does not name the 30-day window: $S_ERR" ;;
 esac
 case $S_OUT in
@@ -149,11 +152,119 @@ BADWIN=$(policy_at badwin "$ANCIENT" thirty)
 assert_status 2 "a window that is not a number of days is exit 2 — the operator error a malformed price is" -- \
 	env TRACE_CONFIG="$BADWIN" sh "$TRACE" summary --by model
 assert_out_has "TRACE_PRICES_STALE_DAYS"
+# A window past the shell's integer width made the comparison print
+# '[: …: integer expected' out of a SHIPPED script (L-1, review of PR #294).
+# Refused with the rest of the malformed values instead.
+WIDEWIN=$(policy_at widewin "$ANCIENT" 999999999999999999999999999999)
+t_run_split env TRACE_CONFIG="$WIDEWIN" sh "$TRACE" summary --by model
+s_assert_status 2 "a window too wide for the shell's arithmetic is refused, not attempted"
+case $S_ERR in
+*'integer expected'*) fail "the shell's own arithmetic error leaked out of a shipped script: $S_ERR" ;;
+*) pass "and says so in the script's own words, never the shell's" ;;
+esac
+
+# An impossible CALENDAR date passed the shape check and produced a number: a
+# table dated 2026-00-00 advised '302 days ago' about a day that does not
+# exist, and 2026-99-99 computed a date in the FUTURE and went silent — the
+# worse of the two, because silence is what a fresh table looks like (M-1,
+# review of PR #294).
+for bad in 2026-00-00 2026-99-99 2026-13-01 2026-01-32; do
+	BADDATE=$(policy_at "baddate$(printf '%s' "$bad" | tr -d -)" "$bad" 30)
+	t_run_split env TRACE_CONFIG="$BADDATE" sh "$TRACE" summary --by model
+	s_assert_status 2 "'Last checked: $bad' is refused — the shape is not the calendar"
+done
 
 # The advisory is printed by a SHIPPED script, so it may not send a consumer to
 # a file that only exists in this repo — the rule every SKILL.md keeps.
 assert_file_lacks "$TRACE" "trace-prices.kit.sh" \
 	"scripts/trace.sh ships; a kit-only path in its advisory would point a consumer at a file bootstrap deleted"
+
+# ---------------------------------------------------------------------------
+banner "1b. The date the advisory reads is the OPERATOR'S, and the day count is right"
+# ---------------------------------------------------------------------------
+# C-1, the finding that blocked this branch: the SHIPPED policy file's own
+# EXAMPLE line carried a real date (2026-01-31), which matched the advisory's
+# regex — so a consumer who did exactly what that file tells them (set the
+# window, write today's date) was told their table was 240 days stale, naming a
+# date they never wrote. The example is the first such line in the file, and
+# first wins.
+consumer_policy() { # <label> <appended lines…> — the shipped file, plus a tail
+	_cp=$SCRATCH/consumer.$1.sh
+	shift
+	cp "$SHIPPED" "$_cp"
+	{
+		printf "TRACE_DIR='%s'\n" "$SUM"
+		printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n"
+		printf "TRACE_PRICES_STALE_DAYS='30'\n"
+		for _cl in "$@"; do printf '%s\n' "$_cl"; done
+	} >>"$_cp"
+	printf '%s\n' "$_cp"
+}
+CONS_DATED=$(consumer_policy dated "# Last checked: $ANCIENT")
+t_run_split env TRACE_CONFIG="$CONS_DATED" sh "$TRACE" summary --by model
+case $S_ERR in
+*"$ANCIENT"*) pass "a consumer's own dated line is what the advisory names" ;;
+*) fail "the advisory named something other than the consumer's date: $S_ERR" ;;
+esac
+case $S_ERR in
+*2026-01-31*) fail "the advisory read a date out of the SHIPPED file's prose, not the consumer's line: $S_ERR" ;;
+*) pass "and no date out of the shipped file's own instructions" ;;
+esac
+CONS_UNDATED=$(consumer_policy undated)
+t_run_split env TRACE_CONFIG="$CONS_UNDATED" sh "$TRACE" summary --by model
+[ -z "$S_ERR" ] &&
+	pass "and the shipped file with a window but no dated line says nothing at all — its example is not a claim" ||
+	fail "the shipped file advised about a date nobody wrote: $S_ERR"
+
+# H-2: the day count had no load-bearing test — both dates were 2465 days apart
+# or identical, so `y*365 + m*31 + d` would have passed every leg. `date` is
+# shimmed rather than the arithmetic called directly, because the seam is the
+# command and a suite that reaches inside the script tests the wrong thing.
+# POSIX: no `date -d` anywhere.
+REALDATE=$(command -v date)
+mkdir -p "$SCRATCH/bin"
+{
+	printf '#!/bin/sh\n'
+	printf 'case "$*" in\n'
+	printf '"-u +%%Y-%%m-%%d") printf %%s\\\\n "$TP_TODAY"; exit 0 ;;\n'
+	printf 'esac\n'
+	printf 'exec %s "$@"\n' "$REALDATE"
+} >"$SCRATCH/bin/date"
+chmod +x "$SCRATCH/bin/date"
+t_run_split env PATH="$SCRATCH/bin:$PATH" TP_TODAY=2024-03-01 sh -c 'date -u +%Y-%m-%d'
+s_assert_out_is 2024-03-01 "the date shim pins today for the run"
+
+# days_apart <last checked> <pinned today> <window> — the advisory's own age.
+age_of() {
+	_ap=$(policy_at "age$(printf '%s%s%s' "$1" "$2" "$3" | tr -d -)" "$1" "$3")
+	t_run_split env PATH="$SCRATCH/bin:$PATH" TP_TODAY="$2" TRACE_CONFIG="$_ap" sh "$TRACE" summary --by model
+}
+# A leap day: 2024-02-28 to 2024-03-01 is TWO days, not one and not three.
+age_of 2024-02-28 2024-03-01 1
+case $S_ERR in
+*'2 days ago'*) pass "2024-02-28 to 2024-03-01 is 2 days — 29 February is counted" ;;
+*) fail "the leap-day span was not 2 days: $S_ERR" ;;
+esac
+age_of 2024-02-28 2024-03-01 2
+[ -z "$S_ERR" ] && pass "and a window of exactly that many days is silent — 'older than' is strict" ||
+	fail "a window equal to the age still advised: $S_ERR"
+# A year boundary: the naive formula puts these 738 days apart.
+age_of 2023-12-31 2024-01-01 0
+case $S_ERR in
+*'1 days ago'*) pass "2023-12-31 to 2024-01-01 is 1 day across a year boundary" ;;
+*) fail "the year-boundary span was not 1 day: $S_ERR" ;;
+esac
+# A non-leap February, and a month with 30 days, both under one window.
+age_of 2023-02-28 2023-03-01 0
+case $S_ERR in
+*'1 days ago'*) pass "and 2023-02-28 to 2023-03-01 is 1 day — 2023 has no 29 February" ;;
+*) fail "the non-leap span was not 1 day: $S_ERR" ;;
+esac
+age_of 2026-04-30 2026-05-01 0
+case $S_ERR in
+*'1 days ago'*) pass "and 2026-04-30 to 2026-05-01 is 1 day — April has 30" ;;
+*) fail "the 30-day-month span was not 1 day: $S_ERR" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "2. --check compares the table against the sources and says which way it drifted"
@@ -198,6 +309,53 @@ if command -v node >/dev/null 2>&1; then
 	s_assert_status 2 "two sources disagreeing past the threshold is exit 2 — the refusal, in check mode too"
 	s_assert_out_has "6.66" "and prints the primary's figure"
 	s_assert_out_has "13.32" "and the cross-check's, so the operator can pick the tie-breaker"
+
+	# TWO SOURCES IS THE RULE, so the cross-check failing is a refusal too — both
+	# of its shapes, neither of which had a leg (M-3, review of PR #294): a cross
+	# source that does not know one of the five, and one that is valid JSON of
+	# the wrong shape entirely.
+	t_run_split env TRACE_CONFIG="$COPY" sh "$REFRESH" --check \
+		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-partial.json"
+	s_assert_status 2 "a cross-check source missing one of the mapped models is exit 2 — one source is a number nobody checked"
+	s_assert_out_has "openai/gpt-6-astra" "and names the id it looked for"
+	t_run_split env TRACE_CONFIG="$COPY" sh "$REFRESH" --check \
+		--source "$FIX/litellm-moved.json" --cross "$FIX/litellm-moved.json"
+	s_assert_status 2 "a cross-check source of the wrong shape is exit 2, not an empty cross-check that agrees with everything"
+	case $S_OUT$S_ERR in
+	*data*) pass "and says which shape it wanted" ;;
+	*) fail "the wrong-shape refusal does not name the shape it expected" ;;
+	esac
+
+	# THE TABLE, not just the source, can be missing an entry. `read` with a tab
+	# IFS collapsed the empty `table` column and shifted every field left, so a
+	# mapped model with no TRACE_PRICE_ line at all was reported `same`, counted
+	# as neither drift nor refusal, and a write re-dated the file with the entry
+	# still absent (H-1, review of PR #294). The refresh REWRITES lines; it does
+	# not add them, so a missing line is a refusal.
+	GAP=$SCRATCH/twin.gap.sh
+	grep -v '^TRACE_PRICE_CODEX_GPT_6_ASTRA=' "$TWIN" >"$GAP"
+	cp "$GAP" "$SCRATCH/twin.gap.before.sh"
+	t_run_split env TRACE_CONFIG="$GAP" sh "$REFRESH" --check \
+		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-moved.json"
+	s_assert_status 2 "a table with no line for a mapped model is exit 2, never 'same'"
+	s_assert_out_has "TRACE_PRICE_CODEX_GPT_6_ASTRA" "and names the variable the table is missing"
+	s_assert_out_lacks "same: every entry" "and never reports the whole table as matching"
+	t_run_split env TRACE_CONFIG="$GAP" sh "$REFRESH" --write \
+		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-moved.json"
+	s_assert_status 2 "the write refuses the same way"
+	cmp -s "$SCRATCH/twin.gap.before.sh" "$GAP" &&
+		pass "and re-dates nothing — a fresh 'Last checked' over a missing entry is the worst of both" ||
+		fail "the refused write still touched the policy file (the date, most likely)"
+
+	# The threshold is read as a number, and '.' passed the shell's shape check
+	# while being NaN in the comparison — so the refusal never fired and a
+	# disputed price would have been written (M-2, review of PR #294).
+	sed "s/^TRACE_PRICES_DISAGREE_PCT=.*/TRACE_PRICES_DISAGREE_PCT='.'/" "$COPY" >"$SCRATCH/twin.dot.sh"
+	t_run_split env TRACE_CONFIG="$SCRATCH/twin.dot.sh" sh "$REFRESH" --check \
+		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-disagrees.json"
+	s_assert_status 2 "a threshold that is not a number is exit 2 — never a comparison that is always false"
+	# On STDERR: it is a diagnostic about the policy file, not an answer.
+	s_assert_err_has "TRACE_PRICES_DISAGREE_PCT" "and names the policy line to fix"
 
 	# ---------------------------------------------------------------------------
 	banner "3. A write rewrites the five entries, the date and the source revisions — and nothing else"
@@ -293,9 +451,11 @@ if command -v node >/dev/null 2>&1; then
 	sed "s/^TRACE_PRICES_DISAGREE_PCT=.*/TRACE_PRICES_DISAGREE_PCT='150'/" "$COPY" >"$SCRATCH/twin.wide.sh"
 	t_run_split env TRACE_CONFIG="$SCRATCH/twin.wide.sh" sh "$REFRESH" --check \
 		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-disagrees.json"
-	[ "$S_STATUS" != 2 ] &&
-		pass "a threshold wide enough to cover the planted gap stops refusing — the number comes from policy" ||
-		fail "the refusal ignored TRACE_PRICES_DISAGREE_PCT: still exit 2"
+	# The VERDICT and not "anything but 2": `!= 2` passed on a crash (126, 127)
+	# as readily as on the intended answer, and the intended answer is known —
+	# that pair drifts from the twin (L-4, review of PR #294).
+	s_assert_status 0 "a threshold wide enough to cover the planted gap stops refusing — the number comes from policy"
+	s_assert_out_has "same:" "and reports the plain verdict, which by here is 'same': the write above already took these numbers"
 else
 	echo "  skip  node is not on PATH — the refresh script's source legs not run (the JSON is node's job, as it is for the adapter's extractor)"
 fi
@@ -308,7 +468,8 @@ for f in scripts/trace-prices.kit.sh tests/trace-prices.test.sh \
 	tests/fixtures/prices/litellm-moved.json \
 	tests/fixtures/prices/litellm-partial.json \
 	tests/fixtures/prices/openrouter-moved.json \
-	tests/fixtures/prices/openrouter-disagrees.json; do
+	tests/fixtures/prices/openrouter-disagrees.json \
+	tests/fixtures/prices/openrouter-partial.json; do
 	grep -q "[ \"]$f[ \"]" "$KIT/bootstrap.sh" &&
 		pass "$f is on bootstrap's KIT_ONLY list" ||
 		fail "$f is not on KIT_ONLY — a consumer would receive it (the script names a vendor URL and this repo's own model ids)"

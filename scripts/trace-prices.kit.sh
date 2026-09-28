@@ -144,18 +144,43 @@ command -v node >/dev/null 2>&1 ||
 	die "node is not on PATH, and the JSON is node's job here (see this file's header)"
 
 # The policy file is DATA and this script is the only thing that writes it, so
-# reading it is a source — the same thing scripts/trace.sh does with it.
+# reading it is a source — the same thing scripts/trace.sh does with it. And
+# sourcing is executing, so what the caller ASKED FOR is saved across it and
+# assigned again afterwards: a policy file that set SOURCE_URL, CROSS_URL, mode
+# or the mapping table would otherwise win over the command line silently.
+# scripts/trace.sh guards its own TRACE_DIR the same way, for the same reason —
+# a policy file must not be able to answer a question it was not asked (L-3,
+# review of PR #294).
+_said_source=$SOURCE_URL
+_said_cross=$CROSS_URL
+_said_mode=$mode
+_said_map=$PRICE_MAP
 # shellcheck disable=SC1090
 . "$policy"
+SOURCE_URL=$_said_source
+CROSS_URL=$_said_cross
+mode=$_said_mode
+PRICE_MAP=$_said_map
 threshold=${TRACE_PRICES_DISAGREE_PCT:-}
 [ -n "$threshold" ] ||
 	die "TRACE_PRICES_DISAGREE_PCT is not set in $policy — how far the two sources may differ before this refuses is policy, not a constant in a script"
+# A value has to carry a DIGIT: '.' passed a digits-and-one-dot check, became
+# NaN in the comparison, and `worst > NaN` is false for every pair — so the
+# refusal that is the whole reason for a cross-check never fired and a disputed
+# price would have been written (M-2, review of PR #294). node re-checks it.
 case $threshold in
-'' | *[!0-9.]* | *.*.*) die "TRACE_PRICES_DISAGREE_PCT='$threshold' is not a percentage" ;;
+*[!0-9.]* | *.*.*) die "TRACE_PRICES_DISAGREE_PCT='$threshold' is not a percentage" ;;
+*[0-9]*) ;;
+*) die "TRACE_PRICES_DISAGREE_PCT='$threshold' carries no digit — give a percentage, such as '5'" ;;
 esac
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/trace-prices.XXXXXX") || exit 2
-trap 'rm -rf "$work"' EXIT INT TERM HUP
+# The rewrite's output file lands BESIDE the policy file, not in $work: /tmp is
+# usually another filesystem, where `mv` is a copy-then-unlink rather than the
+# atomic rename craft §11 asks for (L-2, review of PR #294). Declared here so
+# the trap can name it before there is one.
+out=
+trap 'rm -rf "$work"; [ -n "$out" ] && rm -f "$out"' EXIT INT TERM HUP
 
 # --- fetch ------------------------------------------------------------------
 # A URL goes through curl; anything else is a path. One function, so --source
@@ -256,6 +281,7 @@ for (const line of readFileSync(process.env.TP_CURRENT, "utf8").split("\n")) {
 }
 
 const threshold = Number(process.env.TP_THRESHOLD);
+if (!Number.isFinite(threshold) || threshold < 0) fail("TRACE_PRICES_DISAGREE_PCT is not a usable percentage: " + JSON.stringify(process.env.TP_THRESHOLD) + " — a threshold that is NaN makes every comparison false, so nothing would ever be refused");
 const EPS = 1e-9;
 const rows = [];
 for (const line of process.env.TP_MAP.split("\n")) {
@@ -295,7 +321,13 @@ for (const line of process.env.TP_MAP.split("\n")) {
   const same = held.length === 4 && held.every((x, i) => Number.isFinite(x) && Math.abs(x - wouldWrite[i]) < EPS);
   rows.push([mid, suffix, current.get(suffix) ?? "", primaryStr, crossStr, worst.toFixed(1), same ? "same" : "drift", ""]);
 }
-process.stdout.write(rows.map((r) => r.join("\t")).join("\n") + "\n");
+// THE UNIT SEPARATOR, not a tab: tab is IFS whitespace, so the shell's `read`
+// collapses a run of them and an EMPTY column shifts every later field one to
+// the left — which turned "the table has no value for this model" into a row
+// whose status field held a number, matched no case, and was counted as
+// neither drift nor refusal (H-1, review of PR #294). \x1f is not IFS
+// whitespace, so an empty field stays an empty field.
+process.stdout.write(rows.map((r) => r.join("\x1f")).join("\n") + "\n");
 JS
 
 TP_PRIMARY="$work/primary.json" TP_CROSS="$work/cross.json" \
@@ -313,10 +345,20 @@ echo
 
 drift=0
 refuse=0
-while IFS="$(printf '\t')" read -r mid suffix cur prim crs worst status why; do
+_US=$(printf '\037')
+while IFS="$_US" read -r mid suffix cur prim crs worst status why; do
 	printf '%s  (TRACE_PRICE_%s)\n' "$mid" "$suffix"
 	printf '    table    %s\n' "${cur:-(unset)}"
 	printf '    primary  %s\n' "$prim"
+	# THE TABLE can be missing an entry too, and this script rewrites lines — it
+	# does not add them. A write over a table with no line for a mapped model
+	# would re-date the file with the entry still absent, which is the worst of
+	# both: a fresh claim over a hole (H-1, review of PR #294).
+	if ! grep -q "^TRACE_PRICE_$suffix=" "$policy"; then
+		printf '    REFUSED — %s has no TRACE_PRICE_%s line. This refresh rewrites entries, it never adds them: put the line in with any value and run again.\n\n' "$policy" "$suffix"
+		refuse=$((refuse + 1))
+		continue
+	fi
 	case $status in
 	same)
 		printf '    cross    %s   (worst field %s%% apart)\n    same\n' "$crs" "$worst"
@@ -335,6 +377,13 @@ while IFS="$(printf '\t')" read -r mid suffix cur prim crs worst status why; do
 		;;
 	no-cross)
 		printf '    REFUSED — the cross-check source does not price it: %s. Two sources is the rule; one is a number nobody checked.\n' "$why"
+		refuse=$((refuse + 1))
+		;;
+	*)
+		# A row whose status is none of the five is a BUG in this script, not a
+		# verdict about a price: counted as a refusal so it can never be
+		# mistaken for agreement (the shape H-1 arrived in).
+		printf '    REFUSED — this script produced the unknown status %s for that row; that is a bug here, not a price change.\n' "$status"
 		refuse=$((refuse + 1))
 		;;
 	esac
@@ -361,12 +410,13 @@ fi
 # and one rename (craft §11), so a policy file is never half-written — and from
 # a BACKUP that is also what the diff is taken against.
 cp "$policy" "$work/before.sh"
-awk -v vals="$work/rows.tsv" -v today="$today" \
+out=$(mktemp "$(dirname "$policy")/.trace-prices.XXXXXX") || die "could not write beside $policy"
+awk -v vals="$work/rows.tsv" -v today="$today" -v sep="$_US" \
 	-v prim="$SOURCE_URL revision $primary_rev, fetched $today" \
 	-v crs="$CROSS_URL revision $cross_rev, fetched $today" '
 BEGIN {
 	while ((getline line < vals) > 0) {
-		n = split(line, f, "\t")
+		n = split(line, f, sep)
 		if (n >= 4) newv[f[2]] = f[4]
 	}
 }
@@ -385,12 +435,17 @@ BEGIN {
 	if (index(line, "#   primary: ") == 1) line = "#   primary: " prim
 	if (index(line, "#   cross: ") == 1) line = "#   cross:   " crs
 	print line
-}' "$work/before.sh" >"$work/after.sh" || die "the rewrite failed; $policy is untouched"
+}' "$work/before.sh" >"$out" || die "the rewrite failed; $policy is untouched"
 
 # Still a policy file. A rewrite that broke the syntax would be found by the
-# next `summary`, which is far too late.
-sh -n "$work/after.sh" || die "the rewritten file is not valid POSIX sh; $policy is untouched"
-mv "$work/after.sh" "$policy" || die "could not replace $policy"
+# next `summary`, which is far too late — and it is checked BEFORE the rename,
+# so the file the operator has never stops being the file they had.
+sh -n "$out" || die "the rewritten file is not valid POSIX sh; $policy is untouched"
+# Same directory, so this is a rename and not a copy: the policy file is either
+# the old one or the new one, never half of either (craft §11).
+mv "$out" "$policy" || die "could not replace $policy"
+# Nothing is left at $out, so the trap has nothing to remove.
+out=
 
 echo "rewritten: $policy"
 echo
