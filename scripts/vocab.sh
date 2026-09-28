@@ -20,7 +20,10 @@
 # spaces and underscores read as hyphens (`Tier:`, `tier:`, `Command shaped:`
 # and `command_shaped:` all name a field), and a line whose key is not a
 # declared field is not a decision line and is ignored — so a whole ticket
-# body may be piped in. The VALUE is matched exactly.
+# body may be piped in. The VALUE is matched exactly, one token whole. A
+# field that appears twice with two different values is refused — a body
+# with two answers has none, and a line appended to it cannot withdraw a
+# rule — while the same value repeated is one answer.
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else: `check`
 # prints nothing, `fields` prints one field per line. Every reason is on
@@ -452,7 +455,16 @@ vocab_check_line() {
 	vocab_shape_ok "$_cl_key" || return 0
 	vocab_is_field "$_cl_key" || return 0
 	_cl_value=$(vocab_trim "${1#*:}")
-	vocab_check_value "$_cl_key" "$_cl_value" && vocab_remember "$_cl_key" "$_cl_value"
+	vocab_check_value "$_cl_key" "$_cl_value" || return 0
+	# A field said twice with two values has no value: refused, whichever
+	# line comes last, so one appended line cannot withdraw a firing rule's
+	# antecedent or replace its consequent in an untrusted body.
+	_cl_prev=$(vocab_value_of "$_cl_key")
+	if [ -n "$_cl_prev" ] && [ "$_cl_prev" != "$_cl_value" ]; then
+		vocab_refuse "$_cl_key: '$_cl_value' repeats the field, which already read '$_cl_prev' — one value per field"
+		return 0
+	fi
+	vocab_remember "$_cl_key" "$_cl_value"
 	return 0
 }
 

@@ -157,8 +157,11 @@ s_assert_resolved "" "a last line with no trailing newline is still read"
 # exactly.
 vocab 'TIER: mechanical'
 s_assert_resolved "" "the field name is case-insensitive"
+vocab 'Tier: planner' 'tier: planner'
+s_assert_resolved "" "a field repeated with the same value is one answer"
 vocab 'Command shaped: yes' 'command_shaped: no'
-s_assert_resolved "" "spaces and underscores in a field name read as hyphens"
+s_assert_status 2 "spaces and underscores in a field name read as hyphens — the two spellings are one field, and it now has two values"
+s_assert_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
 vocab 'Tier: MECHANICAL'
 s_assert_status 2 "the value is not case-folded — a token is spelled one way"
 
@@ -312,6 +315,17 @@ vocab 'Action: apply'
 s_assert_resolved "" "action=apply alone is accepted — the rule constrains a pair, not a field"
 vocab 'Command shaped: yes'
 s_assert_resolved "" "command-shaped=yes alone is accepted — the consequent's field is absent"
+
+# A field that appears twice with two different values has no single value:
+# refused, whichever line comes last — so appending one line to an untrusted
+# body cannot talk a firing rule out of firing.
+vocab 'Command shaped: yes' 'Action: apply' 'Command shaped: no'
+s_assert_status 2 "a later line cannot withdraw the antecedent — the repeat is refused"
+s_assert_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
+vocab 'Command shaped: yes' 'Action: apply' 'Action: reply'
+s_assert_status 2 "…nor replace the consequent's value"
+s_assert_err_has "action: 'reply' repeats the field, which already read 'apply'"
+s_assert_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
 
 # The other direction of an implication: `=>` with `=`.
 CONFIG_RULES=$(
