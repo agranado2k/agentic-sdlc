@@ -66,8 +66,10 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Policy file** — a file the kit ships whose whole purpose is to be edited by
   the consumer, deliberately kept OUT of the shared layer:
   `scripts/docs-conformance/config.mjs`, `scripts/guards.config.sh`,
-  `scripts/agents.config.sh`, `scripts/trace.config.sh`. Mechanism is shared;
-  policy is local.
+  `scripts/agents.config.sh`, `scripts/trace.config.sh`, `scripts/vocab.config.sh`.
+  Mechanism is shared; policy is local. The last one ships *filled*: a
+  vocabulary is the kit's to name where a model id is a vendor's, so the
+  consumer edits the kit's words rather than an empty form.
   - _Avoid_: "config" alone — it hides the load-bearing half, which is that this
     file is *not* copied verbatim and may diverge freely.
 - **Shim** — a tool-specific entry point (`CLAUDE.md`, `GEMINI.md`) holding
@@ -163,6 +165,19 @@ Grouped by the seam each term belongs to. Entry shape:
   holds the second. Ref: ADR-0007.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
+- **Vocabulary** — a decision field's closed token set, canonical order
+  included: the words a stamp, a finding or a triage may carry for that field
+  (`tier`, `label`, `severity`, `status`, `action`, …), declared as data in
+  `scripts/vocab.config.sh` and refused outside of by `scripts/vocab.sh` where
+  the line is read. The order is part of the vocabulary — it is the order a
+  judge is shown the tokens, fixed so position bias can be measured later —
+  and every token is a neutral name that carries no answer in its spelling
+  (`apply`, `escalate`; never `safe-to-apply`). The task domain's is the one
+  open vocabulary, held to its shape alone; the tier's is the resolver's, read
+  by the checker and never widened. Ref: PRD #273.
+  - _Avoid_: "enum", "options" — neither has a canonical order or an owner;
+    and "the vocabulary" for the docs harness's `local-vocabulary.mjs`, which
+    is your product's words for the gate, not a decision field's.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the

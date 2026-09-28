@@ -237,6 +237,13 @@ done
 [ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"
+# The vocabulary policy file (PRD #273) is the one policy file that ships
+# FILLED, and it must arrive that way: the checker's own defaults would hold a
+# consumer with NO file to the kit's words, but an EMPTY file would hold them
+# to nothing.
+[ -f "$PROJ/scripts/vocab.config.sh" ] && grep -q "^VOCAB_TIER='planner implementer mechanical reviewer'" "$PROJ/scripts/vocab.config.sh" &&
+	pass "the consumer's scripts/vocab.config.sh arrived filled — the vocabularies are the kit's to name" ||
+	fail "the consumer's scripts/vocab.config.sh is missing or empty"
 
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
@@ -845,7 +852,7 @@ fi
 # While the declared version has NO tag yet — a wave in flight — every file
 # that changed since the previous release in the categories the recipe's
 # step 9 names (9a the skills, 9b the manual and article templates, 9c the
-# docs and workflow templates, 9d the four policy files, 9e the adapters)
+# docs and workflow templates, 9d the five policy files, 9e the adapters)
 # must be named in the current note or in an "Arriving from <previous> or
 # older" paragraph of the recipe — that paragraph only, from its bold lead
 # at column one to the next blank line. Once the version is tagged there is
@@ -860,7 +867,7 @@ fi
 # hidden behind a mention of its skill for another reason all pass. What is
 # caught is a changed file that no current note mentions at all — which is
 # what #159's two were.
-DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
+DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
 # notes_text <repo> <prev version> — the current note plus the recipe's
 # arriving-from paragraph(s) for that previous release.
 notes_text() {
