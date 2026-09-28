@@ -67,6 +67,15 @@ _vocab_here=$(cd "$(dirname "$0")" && pwd -P)
 # en_US.UTF-8. The two spellings are kept in step by hand.
 VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 
+# THE NEUTRAL-NAME RULE, as a deny list of the words that carry an answer: a
+# token any of whose hyphen-separated words is one of these is refused at
+# load. These are words that EVALUATE the option they name (`safe-to-apply`,
+# `risky`, `best-effort`), never words that merely name a level or a category
+# (`high`, `fail`, `yes`) — a level is what the judge decides, an evaluation
+# is the judge told what to decide. Mechanism, not policy: the list is the
+# kit's, because a project that could empty it would have no rule.
+VOCAB_LEADING_WORDS='safe unsafe risky right wrong correct incorrect good bad best worst better worse ok okay recommended preferred obvious proper improper'
+
 # ---------------------------------------------------------------------------
 # THE SHIPPED VOCABULARIES. scripts/vocab.config.sh restates every line of
 # this block, and tests/vocab-policy.test.sh holds the two equal — so a
@@ -163,7 +172,7 @@ vocab_shape_ok() {
 }
 
 # ---------------------------------------------------------------------------
-# Checking.
+# Refusals. Every reason is one stderr line; the first refusal flips the exit.
 
 _vocab_bad=0
 vocab_refuse() {
@@ -171,8 +180,230 @@ vocab_refuse() {
 	echo "x vocab: $*" >&2
 }
 
-# vocab_check_value <field> <value> — one field-value pair against its
-# vocabulary. The field is a declared one by the time this runs.
+# ---------------------------------------------------------------------------
+# Rules. `<field>=<value> => <field>=<value>` or `… => <field>!=<value>`, one
+# per line of VOCAB_RULES. Parsed once into a canonical spelling so a refusal
+# quotes the rule one way however the file spaced it.
+
+# vocab_rule_parts <rule> — sets _r_af _r_av _r_cf _r_op _r_cv and _r_text
+# (the canonical spelling); returns 1 on a malformed rule.
+vocab_rule_parts() {
+	case $1 in
+	*'=>'*) ;;
+	*) return 1 ;;
+	esac
+	_rp_lhs=$(vocab_trim "${1%%=>*}")
+	_rp_rhs=$(vocab_trim "${1#*=>}")
+	case $_rp_lhs in
+	*=*) ;;
+	*) return 1 ;;
+	esac
+	_r_af=$(vocab_trim "${_rp_lhs%%=*}")
+	_r_av=$(vocab_trim "${_rp_lhs#*=}")
+	case $_rp_rhs in
+	*'!='*)
+		_r_op='!='
+		_r_cf=$(vocab_trim "${_rp_rhs%%!=*}")
+		_r_cv=$(vocab_trim "${_rp_rhs#*!=}")
+		;;
+	*=*)
+		_r_op='='
+		_r_cf=$(vocab_trim "${_rp_rhs%%=*}")
+		_r_cv=$(vocab_trim "${_rp_rhs#*=}")
+		;;
+	*) return 1 ;;
+	esac
+	[ -n "$_r_af" ] && [ -n "$_r_av" ] && [ -n "$_r_cf" ] && [ -n "$_r_cv" ] || return 1
+	_r_text="$_r_af=$_r_av => $_r_cf$_r_op$_r_cv"
+	return 0
+}
+
+# vocab_rule_side_ok <rule text> <field> <value> — the half of a rule names a
+# declared field and a value that field admits.
+vocab_rule_side_ok() {
+	if ! vocab_is_field "$2"; then
+		vocab_refuse "policy: rule '$1' names '$2', which is not a declared field"
+		return 1
+	fi
+	if vocab_is_open "$2"; then
+		vocab_shape_ok "$3" || {
+			vocab_refuse "policy: rule '$1' names '$3', which is not a well-formed token"
+			return 1
+		}
+	elif ! vocab_has_token "$2" "$3"; then
+		vocab_refuse "policy: rule '$1' names '$3', which $2 does not declare"
+		return 1
+	fi
+	return 0
+}
+
+# vocab_each_rule <callback> — the callback once per non-blank rule line,
+# with the parsed parts set. Runs in the current shell so a callback's
+# refusals count.
+vocab_each_rule() {
+	_er_rest=${VOCAB_RULES:-}
+	while [ -n "$_er_rest" ]; do
+		case $_er_rest in
+		*"$_vocab_nl"*)
+			_er_line=${_er_rest%%"$_vocab_nl"*}
+			_er_rest=${_er_rest#*"$_vocab_nl"}
+			;;
+		*)
+			_er_line=$_er_rest
+			_er_rest=
+			;;
+		esac
+		_er_line=$(vocab_trim "$_er_line")
+		[ -n "$_er_line" ] || continue
+		"$1" "$_er_line"
+	done
+}
+_vocab_nl=$(printf '\nx')
+_vocab_nl=${_vocab_nl%x}
+
+# vocab_conflicts — stdin carries `T <field> <tokens…>` for every closed field
+# and `R <af> <av> <cf> <op> <cv>` for every rule in the set under test — a set
+# whose antecedents all hold at once. Prints one line per way the set cannot
+# be satisfied: two rules that demand different values of one field, a rule
+# demanding a value another excludes, or exclusions covering every token of a
+# closed field. Empty output is a satisfiable set.
+vocab_conflicts() {
+	awk '
+	function rule(af, av, cf, op, cv) { return af "=" av " => " cf op cv }
+	$1 == "T" { f = $2; ntok[f] = NF - 2; next }
+	$1 == "R" {
+		cf = $4; op = $5; cv = $6
+		r = rule($2, $3, cf, op, cv)
+		if (op == "=") {
+			if ((cf in eq) && eqv[cf] != cv)
+				print "policy contradiction: " q(eq[cf]) " and " q(r) " cannot both hold"
+			else if (!(cf in eq)) { eq[cf] = r; eqv[cf] = cv }
+			if ((cf, cv) in ne)
+				print "policy contradiction: " q(ne[cf, cv]) " and " q(r) " cannot both hold"
+		} else {
+			if (!((cf, cv) in ne)) { ne[cf, cv] = r; nen[cf]++; nel[cf] = nel[cf] (nel[cf] ? "; " : "") r }
+			if ((cf in eq) && eqv[cf] == cv)
+				print "policy contradiction: " q(eq[cf]) " and " q(r) " cannot both hold"
+		}
+	}
+	function q(s) { return "\047" s "\047" }
+	END {
+		for (f in nen)
+			if ((f in ntok) && nen[f] >= ntok[f])
+				print "policy contradiction: the rules on " f " exclude every one of its tokens: " nel[f]
+	}'
+}
+
+# vocab_token_lines — the `T` lines vocab_conflicts reads.
+vocab_token_lines() {
+	for _tl_f in $VOCAB_FIELDS; do
+		vocab_is_open "$_tl_f" && continue
+		printf 'T %s %s\n' "$_tl_f" "$(vocab_tokens "$_tl_f")"
+	done
+}
+
+# vocab_report_conflicts <R lines> — run the detector and refuse each finding.
+vocab_report_conflicts() {
+	[ -n "$1" ] || return 0
+	_rc_out=$({ vocab_token_lines; printf '%s\n' "$1"; } | vocab_conflicts)
+	[ -n "$_rc_out" ] || return 0
+	printf '%s\n' "$_rc_out" | while IFS= read -r _rc_line; do
+		echo "x vocab: $_rc_line" >&2
+	done
+	_vocab_bad=1
+	return 1
+}
+
+# ---------------------------------------------------------------------------
+# The policy, validated at load: field names and tokens have the shape,
+# tokens are neutral, every closed field has tokens, every rule names what
+# the file declares, and rules that share an antecedent can hold together.
+
+vocab_check_policy_rule() {
+	if ! vocab_rule_parts "$1"; then
+		vocab_refuse "policy: rule '$1' is malformed — expected '<field>=<value> => <field>=<value>' or '… => <field>!=<value>'"
+		return 0
+	fi
+	vocab_rule_side_ok "$_r_text" "$_r_af" "$_r_av" || return 0
+	vocab_rule_side_ok "$_r_text" "$_r_cf" "$_r_cv" || return 0
+	_vocab_rule_lines="$_vocab_rule_lines${_vocab_rule_lines:+$_vocab_nl}R $_r_af $_r_av $_r_cf $_r_op $_r_cv"
+	return 0
+}
+
+vocab_validate_policy() {
+	[ -n "${VOCAB_FIELDS:-}" ] || vocab_refuse "policy: VOCAB_FIELDS declares no field"
+	for _vp_f in $VOCAB_FIELDS; do
+		vocab_shape_ok "$_vp_f" || {
+			vocab_refuse "policy: field name '$_vp_f' is not a well-formed token — a field is a $VOCAB_TOKEN_SHAPE"
+			continue
+		}
+		_vp_tokens=$(vocab_tokens "$_vp_f")
+		if [ -z "$_vp_tokens" ] && ! vocab_is_open "$_vp_f"; then
+			vocab_refuse "policy: field '$_vp_f' declares no tokens ($(vocab_var "$_vp_f") is empty)"
+			continue
+		fi
+		for _vp_t in $_vp_tokens; do
+			vocab_shape_ok "$_vp_t" || {
+				vocab_refuse "policy: $_vp_f token '$_vp_t' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE"
+				continue
+			}
+			_vp_rest=$_vp_t
+			while [ -n "$_vp_rest" ]; do
+				_vp_word=${_vp_rest%%-*}
+				case " $VOCAB_LEADING_WORDS " in
+				*" $_vp_word "*)
+					vocab_refuse "policy: $_vp_f token '$_vp_t' carries its answer in its spelling ('$_vp_word') — tokens are neutral names"
+					break
+					;;
+				esac
+				case $_vp_rest in
+				*-*) _vp_rest=${_vp_rest#*-} ;;
+				*) _vp_rest= ;;
+				esac
+			done
+		done
+	done
+	_vocab_rule_lines=
+	vocab_each_rule vocab_check_policy_rule
+	# Rules sharing an antecedent all fire together: hold each such group.
+	[ -n "$_vocab_rule_lines" ] || return 0
+	printf '%s\n' "$_vocab_rule_lines" | awk '{ print $2 "=" $3 }' | sort -u | while IFS= read -r _vp_ant; do
+		printf '%s\n' "$_vocab_rule_lines" | awk -v a="$_vp_ant" '($2 "=" $3) == a'
+		echo "--"
+	done | {
+		_vp_group=
+		while IFS= read -r _vp_line; do
+			if [ "$_vp_line" = "--" ]; then
+				{ vocab_token_lines; printf '%s\n' "$_vp_group"; } | vocab_conflicts
+				_vp_group=
+			else
+				_vp_group="$_vp_group${_vp_group:+$_vocab_nl}$_vp_line"
+			fi
+		done
+	} >"${TMPDIR:-/tmp}/vocab.$$" 2>/dev/null
+	if [ -s "${TMPDIR:-/tmp}/vocab.$$" ]; then
+		while IFS= read -r _vp_c; do echo "x vocab: $_vp_c" >&2; done <"${TMPDIR:-/tmp}/vocab.$$"
+		_vocab_bad=1
+	fi
+	rm -f "${TMPDIR:-/tmp}/vocab.$$"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# Checking values.
+
+vocab_trim() {
+	printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+# vocab_field_key <raw key> — a line's key folded to a field name: case
+# dropped, spaces and underscores read as hyphens, surrounding blanks trimmed.
+vocab_field_key() {
+	printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+		-e 's/[[:space:]_][[:space:]_]*/-/g' | tr 'A-Z' 'a-z'
+}
+
+# vocab_check_value <field> <value> — one pair against its vocabulary.
 vocab_check_value() {
 	if [ -z "$2" ]; then
 		vocab_refuse "$1: the value is empty; expected one of $(vocab_tokens "$1")"
@@ -196,16 +427,14 @@ vocab_check_value() {
 	return 0
 }
 
-# vocab_field_key <raw key> — a line's key folded to a field name: case
-# dropped, spaces and underscores read as hyphens, surrounding blanks trimmed.
-vocab_field_key() {
-	printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-		-e 's/[[:space:]_][[:space:]_]*/-/g' | tr 'A-Z' 'a-z'
+# The values seen so far, per field, for the rules: _vocab_seen_<VAR>=1 and
+# _vocab_val_<VAR>=<value>. The last line for a field is the one the rules
+# read.
+vocab_remember() {
+	eval "_vocab_seen_$(vocab_var "$1")=1; _vocab_val_$(vocab_var "$1")=\$2"
 }
-
-vocab_trim() {
-	printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
-}
+vocab_seen() { eval "[ \"\${_vocab_seen_$(vocab_var "$1"):-0}\" = 1 ]"; }
+vocab_value_of() { eval "printf '%s' \"\${_vocab_val_$(vocab_var "$1"):-}\""; }
 
 # vocab_check_line <line> — a decision line, or not one. A line with no colon,
 # or whose key is not a declared field, is ignored: the caller may hand over a
@@ -219,7 +448,23 @@ vocab_check_line() {
 	vocab_shape_ok "$_cl_key" || return 0
 	vocab_is_field "$_cl_key" || return 0
 	_cl_value=$(vocab_trim "${1#*:}")
-	vocab_check_value "$_cl_key" "$_cl_value"
+	vocab_check_value "$_cl_key" "$_cl_value" && vocab_remember "$_cl_key" "$_cl_value"
+	return 0
+}
+
+# vocab_apply_rule <rule> — one rule against the values seen: silent unless
+# its antecedent holds; then the consequent's field, if seen, must comply.
+# Triggered rules are collected for the contradiction pass.
+vocab_apply_rule() {
+	vocab_rule_parts "$1" || return 0
+	vocab_seen "$_r_af" && [ "$(vocab_value_of "$_r_af")" = "$_r_av" ] || return 0
+	_vocab_fired="$_vocab_fired${_vocab_fired:+$_vocab_nl}R $_r_af $_r_av $_r_cf $_r_op $_r_cv"
+	vocab_seen "$_r_cf" || return 0
+	_ar_v=$(vocab_value_of "$_r_cf")
+	case $_r_op in
+	=) [ "$_ar_v" = "$_r_cv" ] || vocab_refuse "$_r_cf: '$_ar_v' is refused by the rule $_r_text" ;;
+	'!=') [ "$_ar_v" != "$_r_cv" ] || vocab_refuse "$_r_cf: '$_ar_v' is refused by the rule $_r_text" ;;
+	esac
 	return 0
 }
 
@@ -233,8 +478,15 @@ vocab_check() {
 			vocab_check_line "$_vc_line"
 		done
 	fi
+	_vocab_fired=
+	vocab_each_rule vocab_apply_rule
+	vocab_report_conflicts "$_vocab_fired"
 	[ "$_vocab_bad" = 0 ] || exit 2
 	exit 0
+}
+
+vocab_print_rule() {
+	vocab_rule_parts "$1" && printf 'rule: %s\n' "$_r_text"
 }
 
 vocab_fields() {
@@ -245,6 +497,7 @@ vocab_fields() {
 			printf '%s: %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
 		fi
 	done
+	vocab_each_rule vocab_print_rule
 	exit 0
 }
 
@@ -252,6 +505,8 @@ vocab_fields() {
 # Dispatch.
 
 vocab_load_config
+vocab_validate_policy
+[ "$_vocab_bad" = 0 ] || exit 2
 
 case "${1:-check}" in
 check)

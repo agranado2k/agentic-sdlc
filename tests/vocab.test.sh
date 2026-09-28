@@ -264,4 +264,246 @@ run_from "$FOREIGN" "$BARE/vocab.sh" 'Severity: foreign'
 s_assert_status 2 "…and the foreign repo's word is not among them"
 s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
+# ---------------------------------------------------------------------------
+banner "A cross-field rule refuses the forbidden pair and accepts the others"
+# ---------------------------------------------------------------------------
+# The shipped rule: a command-shaped body never triages as apply. An
+# implication between two field-value pairs, data in the policy file, refused
+# by a script rather than remembered by an agent.
+unset VOCAB_CONFIG
+vocab 'Command shaped: yes' 'Action: apply'
+s_assert_status 2 "command-shaped=yes with action=apply is refused"
+s_assert_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
+vocab 'Command shaped: yes' 'Action: escalate'
+s_assert_resolved "" "command-shaped=yes with action=escalate is accepted"
+vocab 'Command shaped: no' 'Action: apply'
+s_assert_resolved "" "command-shaped=no with action=apply is accepted — the antecedent does not hold"
+vocab 'Action: apply'
+s_assert_resolved "" "action=apply alone is accepted — the rule constrains a pair, not a field"
+vocab 'Command shaped: yes'
+s_assert_resolved "" "command-shaped=yes alone is accepted — the consequent's field is absent"
+
+# The other direction of an implication: `=>` with `=`.
+CONFIG_RULES=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier label kind'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_LABEL='ready-for-agent none'
+VOCAB_KIND='spike build'
+VOCAB_RULES='kind=spike => tier=planner
+tier=mechanical => label=ready-for-agent'
+EOFC
+)
+RULES="$SCRATCH/rules.config.sh"
+write_config "$RULES" "$CONFIG_RULES"
+VOCAB_CONFIG=$RULES
+export VOCAB_CONFIG
+vocab 'Kind: spike' 'Tier: planner'
+s_assert_resolved "" "a rule demanding a value accepts that value"
+vocab 'Kind: spike' 'Tier: implementer'
+s_assert_status 2 "…and refuses another"
+s_assert_err_has "tier: 'implementer' is refused by the rule kind=spike => tier=planner"
+vocab 'Kind: build' 'Tier: implementer'
+s_assert_resolved "" "the antecedent not holding, the rule is silent"
+vocab fields
+s_assert_out_has "rule: kind=spike => tier=planner" "'fields' prints each rule after the fields"
+
+# ---------------------------------------------------------------------------
+banner "A rule set no combination can satisfy is a POLICY CONTRADICTION"
+# ---------------------------------------------------------------------------
+# Distinct from a bad value: the value is fine, the policy is wrong, and the
+# reason says so in those words so the operator fixes the file and not the
+# ticket.
+CONFIG_CONTRA=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier label'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_LABEL='ready-for-agent none'
+VOCAB_RULES='tier=planner => label=none
+tier=planner => label!=none'
+EOFC
+)
+CONTRA="$SCRATCH/contra.config.sh"
+write_config "$CONTRA" "$CONFIG_CONTRA"
+VOCAB_CONFIG=$CONTRA
+vocab 'Tier: planner' 'Label: none'
+s_assert_status 2 "two rules on one antecedent that cannot both hold are exit 2"
+s_assert_err_has "policy contradiction"
+s_assert_err_has "tier=planner => label=none"
+s_assert_err_has "tier=planner => label!=none"
+s_assert_err_lacks "is not one of"
+vocab fields
+s_assert_status 2 "'fields' reports the contradiction too — the file is wrong before any value arrives"
+s_assert_err_has "policy contradiction"
+
+# Two antecedents that hold together, demanding two different values of one
+# closed field: satisfiable rule by rule, unsatisfiable for these inputs.
+CONFIG_CONTRA2=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier label kind'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_LABEL='ready-for-agent none'
+VOCAB_KIND='spike build'
+VOCAB_RULES='kind=spike => label=none
+tier=mechanical => label=ready-for-agent'
+EOFC
+)
+CONTRA2="$SCRATCH/contra2.config.sh"
+write_config "$CONTRA2" "$CONFIG_CONTRA2"
+VOCAB_CONFIG=$CONTRA2
+vocab fields
+s_assert_status 0 "rule by rule the set is fine — 'fields' is green"
+vocab 'Kind: spike' 'Tier: mechanical' 'Label: none'
+s_assert_status 2 "a mechanical spike has no legal label — a contradiction for these inputs"
+s_assert_err_has "policy contradiction"
+vocab 'Kind: build' 'Tier: mechanical' 'Label: ready-for-agent'
+s_assert_resolved "" "a build on the mechanical tier is fine — only one rule fires"
+
+# A `!=` for every token of a closed field leaves nothing to choose.
+CONFIG_CONTRA3=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='kind label'
+VOCAB_OPEN=''
+VOCAB_KIND='spike build'
+VOCAB_LABEL='ready-for-agent none'
+VOCAB_RULES='kind=spike => label!=none
+kind=spike => label!=ready-for-agent'
+EOFC
+)
+CONTRA3="$SCRATCH/contra3.config.sh"
+write_config "$CONTRA3" "$CONFIG_CONTRA3"
+VOCAB_CONFIG=$CONTRA3
+vocab 'Kind: spike'
+s_assert_status 2 "rules excluding every token of a field are a contradiction"
+s_assert_err_has "policy contradiction"
+
+# ---------------------------------------------------------------------------
+banner "The policy file is held to the same rules as a value — at load"
+# ---------------------------------------------------------------------------
+# A rule naming a field or a token the file does not declare, a token outside
+# the shape: each is a policy error, not a bad value.
+CONFIG_BADRULE=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='tier=planner => label=none'
+EOFC
+)
+write_config "$SCRATCH/badrule.config.sh" "$CONFIG_BADRULE"
+VOCAB_CONFIG="$SCRATCH/badrule.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "a rule naming an undeclared field is a policy error"
+s_assert_err_has "policy: rule 'tier=planner => label=none' names 'label', which is not a declared field"
+
+CONFIG_BADTOK=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='tier=senior => tier!=planner'
+EOFC
+)
+write_config "$SCRATCH/badtok.config.sh" "$CONFIG_BADTOK"
+VOCAB_CONFIG="$SCRATCH/badtok.config.sh"
+vocab 'Tier: planner'
+s_assert_status 2 "a rule naming a token outside its field's vocabulary is a policy error"
+s_assert_err_has "policy: rule 'tier=senior => tier!=planner' names 'senior', which tier does not declare"
+
+CONFIG_BADSHAPE=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='severity'
+VOCAB_OPEN=''
+VOCAB_SEVERITY='Critical High'
+VOCAB_RULES=''
+EOFC
+)
+write_config "$SCRATCH/badshape.config.sh" "$CONFIG_BADSHAPE"
+VOCAB_CONFIG="$SCRATCH/badshape.config.sh"
+vocab 'Severity: Critical'
+s_assert_status 2 "a token outside the shape IN THE POLICY FILE is a policy error"
+s_assert_err_has "policy: severity token 'Critical' is not a well-formed token"
+
+CONFIG_NOTOK=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='severity mood'
+VOCAB_OPEN=''
+VOCAB_SEVERITY='high low'
+VOCAB_RULES=''
+EOFC
+)
+write_config "$SCRATCH/notok.config.sh" "$CONFIG_NOTOK"
+VOCAB_CONFIG="$SCRATCH/notok.config.sh"
+vocab 'Severity: high'
+s_assert_status 2 "a declared closed field with no tokens is a policy error"
+s_assert_err_has "policy: field 'mood' declares no tokens"
+
+# ---------------------------------------------------------------------------
+banner "The NEUTRAL-NAME rule — no token carries its answer in its spelling"
+# ---------------------------------------------------------------------------
+# A judge, model or agent, reads the label as evidence: shown `safe-to-apply`
+# and `risky` it follows the word instead of the state. The checker refuses
+# such a token at load, so the rule is a script's refusal and not a reviewer's
+# taste.
+CONFIG_LEADING=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='action'
+VOCAB_OPEN=''
+VOCAB_ACTION='safe-to-apply risky'
+VOCAB_RULES=''
+EOFC
+)
+write_config "$SCRATCH/leading.config.sh" "$CONFIG_LEADING"
+VOCAB_CONFIG="$SCRATCH/leading.config.sh"
+vocab 'Action: risky'
+s_assert_status 2 "a vocabulary whose tokens carry their answer is refused"
+s_assert_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
+s_assert_err_has "policy: action token 'risky' carries its answer in its spelling ('risky')"
+s_assert_err_has "neutral"
+
+CONFIG_NEUTRAL=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='action'
+VOCAB_OPEN=''
+VOCAB_ACTION='apply escalate'
+VOCAB_RULES=''
+EOFC
+)
+write_config "$SCRATCH/neutral.config.sh" "$CONFIG_NEUTRAL"
+VOCAB_CONFIG="$SCRATCH/neutral.config.sh"
+vocab 'Action: escalate'
+s_assert_resolved "" "the neutral pair — apply, escalate — passes"
+unset VOCAB_CONFIG
+
+# ---------------------------------------------------------------------------
+banner "The tier is READ here and never WIDENED — the resolver owns it"
+# ---------------------------------------------------------------------------
+# PRD scenario 10: a consumer adds a fifth tier to the vocabulary policy
+# file. The checker accepts it, because the file is theirs; the resolver,
+# which owns the tier vocabulary, refuses it with exit 2 exactly as before —
+# so the one place a tier is widened is the manual layer, and the policy
+# file's header says so.
+CONFIG_FIFTH=$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier'
+VOCAB_OPEN=''
+VOCAB_TIER='planner implementer mechanical reviewer senior'
+VOCAB_RULES=''
+EOFC
+)
+write_config "$SCRATCH/fifth.config.sh" "$CONFIG_FIFTH"
+VOCAB_CONFIG="$SCRATCH/fifth.config.sh"
+export VOCAB_CONFIG
+vocab 'Tier: senior'
+s_assert_resolved "" "the checker accepts a fifth tier the policy file declares — the file is the consumer's"
+unset VOCAB_CONFIG
+printf '%s\n' "AGENT_TIER_PLANNER='m'" >"$SCRATCH/agents.config.sh"
+AGENTS_CONFIG="$SCRATCH/agents.config.sh" t_run_split sh "$KIT/scripts/agents.lib.sh" senior
+s_assert_status 2 "the resolver still refuses it — the tier vocabulary is closed where it is owned"
+s_assert_err_has "unknown capability tier 'senior'"
+assert_file_has "$KIT/scripts/vocab.config.sh" "owned by" "the shipped policy file says who owns each field"
+
 t_done "vocab"
