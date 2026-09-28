@@ -64,13 +64,9 @@ TRACE="scripts/trace.sh"
 
 skill_md() { printf '%s/%s/SKILL.md' "$SKILLS" "$1"; }
 
-# trace_lines <file> — the lines that run the trace script, whatever the
-# subcommand: the surface every rule below reads.
-trace_lines() { grep -E "sh scripts/trace\\.sh( |\`)" "$1" 2>/dev/null; }
-
-# trace_spans <file> — the backticked `sh scripts/trace.sh …` spans, one per
-# line, backticks stripped: the commands an agent following the document runs.
-trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d '`'; }
+# The span tokeniser and the placeholder filler are tests/lib.sh's
+# (t_trace_lines, t_trace_spans, t_trace_runnable): held once, shared with
+# tests/retro-skill.test.sh.
 
 # ---------------------------------------------------------------------------
 banner "0. The files under test, and the vocabulary they are held to"
@@ -89,7 +85,7 @@ banner "1. Every chain skill emits, by the plain script name — never the kit w
 # ---------------------------------------------------------------------------
 for s in $CHAIN; do
 	f=$(skill_md "$s")
-	n=$(trace_lines "$f" | wc -l | tr -d ' ')
+	n=$(t_trace_lines "$f" | wc -l | tr -d ' ')
 	[ "$n" -gt 0 ] && pass "/$s runs sh $TRACE ($n lines)" || fail "/$s never runs sh $TRACE — a chain skill with no emit leaves a hole the retrospective reads as a fact"
 done
 # Over EVERY skill directory: a sidecar that names the wrapper ships too.
@@ -150,7 +146,7 @@ banner "4. Every kind a skill emits is one the script knows"
 # ---------------------------------------------------------------------------
 for s in $CHAIN; do
 	f=$(skill_md "$s")
-	for k in $(trace_lines "$f" | grep -oE 'kind=[a-z][a-z.]*' | sed 's/^kind=//' | sort -u); do
+	for k in $(t_trace_lines "$f" | grep -oE 'kind=[a-z][a-z.]*' | sed 's/^kind=//' | sort -u); do
 		case " $KINDS " in
 		*" $k "*) pass "/$s emits $k, which $TRACE knows" ;;
 		*) fail "/$s emits kind=$k, which $TRACE does not know — the vocabulary is closed, and this emit would be exit 2" ;;
@@ -167,7 +163,7 @@ banner "5. The decision points: one emit per decision, per skill"
 expects() {
 	_ex_s=$1; shift
 	_ex_f=$(skill_md "$_ex_s")
-	_ex_lines=$(trace_lines "$_ex_f")
+	_ex_lines=$(t_trace_lines "$_ex_f")
 	for _ex_tok; do
 		case $_ex_tok in
 		begin | end) _ex_needle="sh $TRACE $_ex_tok" ;;
@@ -216,7 +212,7 @@ if [ -n "$r_line" ] && [ -n "$a1_line" ] && [ "$r_line" -lt "$a1_line" ]; then
 else
 	fail "the resolve is not before the sub-agents — resolve='$r_line' Agent 1='$a1_line'"
 fi
-spawn=$(trace_lines "$RP" | grep -F 'kind=spawn')
+spawn=$(t_trace_lines "$RP" | grep -F 'kind=spawn')
 printf '%s\n' "$spawn" | grep -qF 'model=' && pass "the per-agent spawn records the resolved model" ||
 	fail "the per-agent spawn does not carry model= — story 19: the review's independence is a fact only when recorded"
 printf '%s\n' "$spawn" | grep -qF 'data.agent=' && pass "and names the agent" ||
@@ -234,16 +230,6 @@ banner "7. Every documented line runs: placeholders filled, the span executes an
 # status is the script's own.
 BLOBF="$SCRATCH/blob.x"
 printf 'evidence\n' >"$BLOBF"
-runnable() {
-	printf '%s\n' "$1" | sed \
-		-e 's/ *|| *:$//' \
-		-e 's/ \[[^][]*\]//g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
-		-e 's/\$model/x/g' \
-		-e "s|--blob x|--blob $BLOBF|"
-}
 for s in $CHAIN; do
 	f=$(skill_md "$s")
 	dir="$SCRATCH/run.$s"
@@ -251,7 +237,7 @@ for s in $CHAIN; do
 	while IFS= read -r span; do
 		[ -n "$span" ] || continue
 		n=$((n + 1))
-		cmd=$(runnable "$span")
+		cmd=$(t_trace_runnable "$span" "$BLOBF")
 		err=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" 2>&1 >/dev/null ); st=$?
 		if [ "$st" != 0 ]; then
 			bad=$((bad + 1))
@@ -259,7 +245,7 @@ for s in $CHAIN; do
 			printf '        | as run: %s\n        | %s\n' "$cmd" "$err"
 		fi
 	done <<EOF
-$(trace_spans "$f")
+$(t_trace_spans "$f")
 EOF
 	[ "$bad" = 0 ] && pass "/$s: all $n documented trace lines run" || true
 	if [ -d "$dir" ]; then

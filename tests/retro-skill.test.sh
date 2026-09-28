@@ -53,10 +53,9 @@ TRACE="scripts/trace.sh"
 
 cd "$ROOT" || exit 2
 
-# trace_lines <file> — the lines that run the trace script, whatever the
-# subcommand. trace_spans <file> — the backticked spans, backticks stripped.
-trace_lines() { grep -E "sh scripts/trace\\.sh( |\`)" "$1" 2>/dev/null; }
-trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d '`'; }
+# The span tokeniser and the placeholder filler are tests/lib.sh's
+# (t_trace_lines, t_trace_spans, t_trace_runnable), shared with
+# tests/trace-skills.test.sh (M-4, review of PR #293).
 
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
@@ -190,7 +189,7 @@ banner "5. It opens and closes a run; the end carries the finding count"
 # ---------------------------------------------------------------------------
 KINDS=$(sed -n "s/^TRACE_KINDS='\(.*\)'\$/\1/p" "$ROOT/$TRACE")
 [ -n "$KINDS" ] && pass "$TRACE names its closed kind vocabulary" || fail "$TRACE has no TRACE_KINDS line"
-lines=$(trace_lines "$SKILL_ABS")
+lines=$(t_trace_lines "$SKILL_ABS")
 printf '%s\n' "$lines" | grep -qF "sh $TRACE begin retro" && pass "/retro opens a run as retro" || fail "/retro never runs 'sh $TRACE begin retro'"
 printf '%s\n' "$lines" | grep -qF "sh $TRACE end" && pass "/retro closes the run" || fail "/retro never runs 'sh $TRACE end'"
 note=$(printf '%s\n' "$lines" | grep -F 'kind=note')
@@ -212,30 +211,17 @@ open=$(grep -n '`sh scripts/trace\.sh' "$SKILL_ABS" "$SIDECAR_ABS" | grep -vE '`
 [ -z "$open" ] && pass "every trace span closes on the line it opens" ||
 	{ fail "a trace span runs past its line:"; printf '%s\n' "$open" | sed 's/^/        | /'; }
 
-# Every documented span RUNS. The placeholders are made literal the way
-# tests/trace-skills.test.sh does it, with two of this skill's own first: a
-# date placeholder becomes a date, a subject placeholder a subject — a read
-# is exit 2 on `--since x`, and that would be the suite's fault, not the
-# document's. Reads run against the same scratch trace the emits write to,
-# in file order, so a read that comes first sees an empty trace and must
-# still exit 0 — which is what the first retro over a fresh trace meets.
-runnable() {
-	printf '%s\n' "$1" | sed \
-		-e 's/ *|| *:$//' \
-		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
-		-e 's/<type:ref>/pr:#1/g' \
-		-e 's/ \[[^][]*\]//g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g'
-}
+# Every documented span RUNS, placeholders made literal by t_trace_runnable.
+# Reads run against the same scratch trace the emits write to, in file
+# order, so a read that comes first sees an empty trace and must still exit
+# 0 — which is what the first retro over a fresh trace meets.
 dir="$SCRATCH/run.retro"
 n=0; bad=0
 for f in "$SKILL_ABS" "$SIDECAR_ABS"; do
 	while IFS= read -r span; do
 		[ -n "$span" ] || continue
 		n=$((n + 1))
-		cmd=$(runnable "$span")
+		cmd=$(t_trace_runnable "$span")
 		err=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" 2>&1 >/dev/null ); st=$?
 		if [ "$st" != 0 ]; then
 			bad=$((bad + 1))
@@ -243,7 +229,7 @@ for f in "$SKILL_ABS" "$SIDECAR_ABS"; do
 			printf '        | as run: %s\n        | %s\n' "$cmd" "$err"
 		fi
 	done <<EOF
-$(trace_spans "$f")
+$(t_trace_spans "$f")
 EOF
 done
 [ "$bad" = 0 ] && pass "all $n documented trace lines run" || true
@@ -260,8 +246,8 @@ if [ -d "$dir" ]; then
 	# L-2 (review of PR #293): the window span is a pipeline ending in tail,
 	# which exits 0 on empty input, so its exit status proves nothing. Run it
 	# again now that a retro run is seeded and hold its OUTPUT to that run.
-	wspan=$(trace_spans "$SKILL_ABS" | grep -F '"kind":"run.start"' | head -1)
-	wout=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$(runnable "$wspan")" 2>/dev/null )
+	wspan=$(t_trace_spans "$SKILL_ABS" | grep -F '"kind":"run.start"' | head -1)
+	wout=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$wspan")" 2>/dev/null )
 	printf '%s\n' "$wout" | grep -F '"kind":"run.start"' | grep -qF '"skill":"retro"' &&
 		pass "the window span's output is the seeded retro run.start — the pipeline selects, not just exits 0" ||
 		fail "the window span printed no retro run.start over a trace that holds one: $wspan"
