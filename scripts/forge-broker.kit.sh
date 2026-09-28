@@ -308,23 +308,63 @@ HEAD=$(printf '%s' "$HEAD" | tr -d ' \r\n' | tr 'A-F' 'a-f')
 [ "$REVIEWED" = "$HEAD" ] || die "$EX_TEMPFAIL" "reviewed commit $REVIEWED is not the head of PR #$PR (head is $HEAD); re-run the review against the current head — nothing posted"
 
 # --- 4. locations against the diff -------------------------------------------------------
-# The right-hand side of every hunk, as `path start end`; a finding's line
-# must sit inside one of its file's ranges.
 gh pr diff "$PR" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
 	sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
 	die "$EX_UNAVAILABLE" "the forge did not return the diff of PR #$PR"
 }
+# The right-hand side of every hunk, as `path<TAB>start<TAB>end`; a finding's
+# line must sit inside one of its file's ranges.
+#
+# THE PATH IS THE WHOLE REST OF THE LINE, NOT ITS SECOND FIELD. A name with
+# spaces is truncated by `$2`, and git QUOTES a name that is not plain ASCII
+# (core.quotePath) in C style, octal escapes and all. Either way a valid
+# finding on that file would be dropped as "not in the diff" and its severity
+# section published as "none found" — absence inferred from a parse bug. So:
+# take the rest of the line, unquote it when it is quoted, then strip `b/`,
+# and keep the ranges TAB-separated so a space in a path stays inside it.
 LC_ALL=C awk '
-	/^\+\+\+ / { p = $2; sub(/^b\//, "", p); if (p == "/dev/null") p = ""; next }
+	function unquote(s,   r, i, n, c, o, v, k) {
+		s = substr(s, 2, length(s) - 2)
+		r = ""; n = length(s)
+		for (i = 1; i <= n; i++) {
+			c = substr(s, i, 1)
+			if (c != "\\") { r = r c; continue }
+			i++; c = substr(s, i, 1)
+			if (c == "n") r = r "\n"
+			else if (c == "t") r = r "\t"
+			else if (c == "r") r = r "\r"
+			else if (c == "a") r = r sprintf("%c", 7)
+			else if (c == "b") r = r sprintf("%c", 8)
+			else if (c == "f") r = r sprintf("%c", 12)
+			else if (c == "v") r = r sprintf("%c", 11)
+			else if (c >= "0" && c <= "7") {
+				o = c
+				while (length(o) < 3 && substr(s, i + 1, 1) >= "0" && substr(s, i + 1, 1) <= "7") { i++; o = o substr(s, i, 1) }
+				v = 0
+				for (k = 1; k <= length(o); k++) v = v * 8 + (substr(o, k, 1) + 0)
+				r = r sprintf("%c", v)
+			}
+			else r = r c
+		}
+		return r
+	}
+	/^\+\+\+ / {
+		p = substr($0, 5)
+		sub(/\r$/, "", p)
+		if (substr(p, 1, 1) == "\"") p = unquote(p)
+		if (p == "/dev/null") { p = ""; next }
+		sub(/^b\//, "", p)
+		next
+	}
 	/^@@ / && p != "" {
 		m = $3; sub(/^\+/, "", m)
 		split(m, a, ",")
 		s = a[1] + 0
 		c = (a[2] == "" ? 1 : a[2] + 0)
-		if (c > 0) print p, s, s + c - 1
+		if (c > 0) printf "%s\t%s\t%s\n", p, s, s + c - 1
 	}
 ' "$TMP/pr.diff" >"$TMP/hunks"
-in_diff() { LC_ALL=C awk -v p="$1" -v l="$2" '$1 == p && $2 + 0 <= l + 0 && l + 0 <= $3 + 0 { f = 1 } END { exit !f }' "$TMP/hunks"; }
+in_diff() { LC_ALL=C awk -F'\t' -v p="$1" -v l="$2" '$1 == p && $2 + 0 <= l + 0 && l + 0 <= $3 + 0 { f = 1 } END { exit !f }' "$TMP/hunks"; }
 
 # --- the payloads --------------------------------------------------------------------------
 # json_str — standard input as the inside of a JSON string, on one line:

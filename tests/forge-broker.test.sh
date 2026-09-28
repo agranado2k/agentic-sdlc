@@ -111,6 +111,32 @@ index 3333333..4444444 100644
  line thirteen
 EOF
 
+# Two more files, whose names the naive `$2` of a `+++ ` line cannot read:
+# one carrying SPACES, and one git QUOTES because it is not ASCII (git's
+# C-style quoting, octal escapes and all — core.quotePath, on by default).
+# Line 2 of each is added, so a finding there is in the diff and must survive
+# to the inline comments rather than being dropped as "not in the diff".
+SPACED='docs/a file with spaces.md'
+WEIRD="docs/w$(printf '\303\251')ird.md"
+cat >>"$STUB_DIFF" <<EOF
+diff --git a/$SPACED b/$SPACED
+index 5555555..6666666 100644
+--- a/$SPACED
++++ b/$SPACED
+@@ -1,2 +1,3 @@
+ first line
++second line added
+ third line
+diff --git "a/docs/w\303\251ird.md" "b/docs/w\303\251ird.md"
+index 7777777..8888888 100644
+--- "a/docs/w\303\251ird.md"
++++ "b/docs/w\303\251ird.md"
+@@ -1,2 +1,3 @@
+ alpha
++beta added
+ gamma
+EOF
+
 # The trace goes to scratch, and is read back from there.
 TRACE_DIR="$SCRATCH/trace"
 export TRACE_DIR
@@ -509,7 +535,64 @@ assert_mutating 0 "…and nothing is posted a second time"
 unset STUB_FAIL
 
 # ---------------------------------------------------------------------------
-banner "14. The kit ships none of this"
+banner "14. A filename with spaces, and one git quoted, still anchor a finding"
+# ---------------------------------------------------------------------------
+# The diff's right-hand side is how the broker decides a finding is anchorable.
+# Read with `$2` of the `+++ ` line, a name with spaces arrives truncated and
+# a git-quoted one arrives with its octal escapes intact — so a VALID finding
+# on such a file is dropped, and its severity section is published claiming
+# "none found" (#285, M-2). Both must reach the inline comments whole.
+AWKWARD="$SCRATCH/awkward.md"
+cat >"$AWKWARD" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: two findings, both on files with awkward names
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+**H-1** \`$SPACED:2\` — the added line restates the first.
+↳ fix: delete it.
+
+#### MEDIUM
+**M-1** \`$WEIRD:2\` — the added line restates alpha.
+↳ fix: delete it too.
+
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    both files gain the line the ticket named.
+EOF
+broker 12 "$AWKWARD"
+s_assert_status 0 "a report on awkwardly named files exits 0"
+assert_mutating 2 "…and lands both operations"
+s_assert_out_lacks 'dropped' "…withholding nothing"
+REVIEW=$(payload pulls/12/reviews)
+case "$REVIEW" in
+*"\"path\":\"$SPACED\""*) pass "a filename with spaces reaches the inline comment whole" ;;
+*) fail "H-1's path was truncated at the first space"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+case "$REVIEW" in
+*"\"path\":\"$WEIRD\""*) pass "a git-quoted non-ASCII filename is decoded back to its bytes" ;;
+*) fail "M-1's path did not survive git's C-style quoting"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+case "$REVIEW" in
+*'\\303'*) fail "the octal escapes of git's quoting reached the forge as text" ;;
+*) pass "…and no octal escape reached the forge" ;;
+esac
+
+# The boundary still holds the other way: a line outside the hunk of a file
+# whose name has spaces is dropped like any other off-diff location.
+sed "s|:2\`|:40\`|" "$AWKWARD" >"$SCRATCH/awkward-off.md"
+broker 12 "$SCRATCH/awkward-off.md"
+s_assert_out_has 'dropped 2' "a space-bearing path outside its hunks is still dropped"
+
+# ---------------------------------------------------------------------------
+banner "15. The kit ships none of this"
 # ---------------------------------------------------------------------------
 for f in scripts/forge-broker.kit.sh scripts/forge-broker.kit.config.sh tests/forge-broker.test.sh; do
 	grep -q "$f" "$KIT/bootstrap.sh" &&
