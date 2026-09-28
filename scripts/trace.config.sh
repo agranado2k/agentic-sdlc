@@ -7,8 +7,9 @@
 # project wants a trace, and where — lives here, in one reviewable file.
 #
 # It is read by:
-#   scripts/trace.sh   (`emit`, `show`, `verify`, `dir`), which every chain
-#                      skill calls at its decision points.
+#   scripts/trace.sh   (`emit`, `show`, `summary`, `export`, `verify`, `dir`) —
+#                      which every chain skill calls at its decision points, and
+#                      which you call to read the trail back.
 #
 # THIS FILE IS YOURS. It is not part of the shared layer (see VERSION), it is
 # not overwritten by a kit update, and editing it is the intended workflow —
@@ -41,3 +42,34 @@
 #
 # An environment TRACE_DIR overrides this line for one process.
 TRACE_DIR=''
+
+# ---------------------------------------------------------------------------
+# THE PRICE TABLE — what a token costs, so `summary` and `export` can say what
+# a wave cost.
+#
+# Cost is computed when you READ the trace, never when an event is written
+# (ADR-0008 clause 6). An event carries the model and four raw token counts,
+# because those are facts; a price is an interpretation that rots on a vendor's
+# schedule. Writing a cost into an event would freeze one day's price into
+# history and make a price correction unable to reach it. Pricing on read means
+# you can re-price the whole past by editing this file.
+#
+# One variable per model, four prices in USD PER MILLION TOKENS, in the order
+# the four token fields sit in the event:
+#
+#   TRACE_PRICE_<MODEL>='<in>,<out>,<cache_write>,<cache_read>'
+#
+# <MODEL> is the model id as your events spell it, folded to a variable token:
+# upper-cased, with every character that is not a letter or a digit turned into
+# an underscore. So a model id `some-vendor:model-1.5` is priced by
+# TRACE_PRICE_SOME_VENDOR_MODEL_1_5. Illustrative shape, NOT a real price:
+#
+#   TRACE_PRICE_SOME_VENDOR_MODEL_1_5='1,5,1.25,0.10'
+#
+# THE KIT ASSIGNS NOTHING HERE, for the same reason scripts/agents.config.sh
+# names no model: a price the kit shipped would be a number with a timer on it,
+# wrong on some silent future day and believed anyway. A model with no price
+# reads `unpriced` in every cost column — never 0 — and the models that needed
+# a price and lacked one are named on stderr. Date the table when you fill it
+# in, and re-check it when your vendor moves: an export stamps `priced_at` and
+# `price_src` so an old export and a new one can be told apart.
