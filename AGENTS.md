@@ -134,9 +134,9 @@ override; `/implement` reads its ticket's tier when it spawns.
 **This manual names no model, and neither does any other file the kit ships.**
 Model identifiers rot on a vendor's schedule, so the tier → model mapping is
 data in `scripts/agents.config.sh` and the resolver is `scripts/agents.lib.sh`
-(`sh scripts/agents.lib.sh implementer` prints the mapped id). An unmapped tier
-is a working state: the resolver warns once, prints nothing, and the spawn
-inherits the session's own model (`adapters/claude-code/README.md` wires it).
+(`sh scripts/agents.lib.sh implementer` prints the id). An unmapped tier is a
+working state: the resolver warns once, prints nothing, and the spawn inherits
+the session's model — `adapters/claude-code/README.md` is one worked example.
 
 `scripts/agents.config.sh` ships EMPTY to every consumer, by principle, and
 stays that way. But this repo spawns subagents too, and an unmapped resolver
