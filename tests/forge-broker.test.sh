@@ -430,6 +430,40 @@ s_assert_status 78 "a policy that does not allow the review operation is exit 78
 assert_mutating 0 "…and nothing is posted, not even the allowed half"
 s_assert_err_has 'review'
 
+# The review EVENT is the one value the broker refuses to take on trust even
+# from its own policy file, so the policy file is where a forbidden one is
+# planted. Each of the three — APPROVE, REQUEST_CHANGES, and the blank event
+# that leaves a review PENDING and visible to nobody — must be exit 78 with
+# ZERO forge calls, so that deleting the broker's event check turns this suite
+# red rather than leaving it green (AGENTS.md rule 9).
+event_policy() {
+	cat >"$SCRATCH/event.config.sh" <<-EOF
+		BROKER_OPERATIONS='review comment'
+		BROKER_OP_REVIEW_ENDPOINT='pulls/{pr}/reviews'
+		BROKER_OP_COMMENT_ENDPOINT='issues/{pr}/comments'
+		BROKER_OP_REVIEW_EVENT='$1'
+	EOF
+}
+BROKER_CONFIG="$SCRATCH/event.config.sh"
+export BROKER_CONFIG
+for ev in APPROVE REQUEST_CHANGES; do
+	event_policy "$ev"
+	broker 12 "$GOOD"
+	s_assert_status 78 "a policy naming event $ev is exit 78"
+	assert_mutating 0 "…and nothing is posted under event $ev"
+	s_assert_err_has 'COMMENT'
+done
+event_policy ''
+broker 12 "$GOOD"
+s_assert_status 78 "a blank event is exit 78 — it would leave the review PENDING"
+assert_mutating 0 "…and nothing is posted with a blank event"
+s_assert_err_has 'COMMENT'
+event_policy 'comment'
+broker 12 "$GOOD"
+s_assert_status 78 "a lowercase 'comment' is exit 78 — the event is the forge's word, exactly"
+assert_mutating 0 "…and nothing is posted for a near-miss event"
+unset BROKER_CONFIG
+
 # ---------------------------------------------------------------------------
 banner "13. The kit ships none of this"
 # ---------------------------------------------------------------------------
