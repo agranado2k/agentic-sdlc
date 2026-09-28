@@ -50,7 +50,8 @@
 #   5. Look for the marker an earlier run of this same report left on the PR
 #      (an HTML comment carrying the report's content hash). A review or
 #      comment already carrying it is not posted again; its URL is printed
-#      instead. A retried session lands the review once.
+#      instead. A retried session lands the review once — and a lookup the
+#      forge REFUSES is exit 69, never a silent "not there".
 #   6. Perform the two operations: one review with `event` COMMENT and the
 #      findings as inline comments, one top-level comment with the behavior
 #      confirm-list. Print the two URLs on stdout, one per line, then one
@@ -420,12 +421,25 @@ fi
 # --- 5. already landed? -----------------------------------------------------------------------
 # `url<TAB>body` per review or comment; the marker is the first line of every
 # body this script writes, so it follows the tab directly.
+#
+# A LISTING THAT FAILED IS NOT AN EMPTY LISTING. The marker is the whole of
+# clause 8's recovery guarantee: a lookup that 502s, or that a stale token
+# refuses, must never read as "the marker is not there", or the retry posts
+# the review a second time. So the forge's own status is kept — the `grep`
+# runs on a file, never in the pipeline whose status the shell would read —
+# and a refusal on EITHER lookup is exit 69 before either write.
 existing() {
-	gh api "$1" --paginate --jq '.[] | "\(.html_url)\t\(.body)"' 2>/dev/null |
-		grep -F "	$MARKER" | head -n 1 | cut -f1
+	gh api "$1" --paginate --jq '.[] | "\(.html_url)\t\(.body)"' >"$TMP/listing" 2>"$TMP/gh.err" || return 1
+	grep -F "	$MARKER" "$TMP/listing" | head -n 1 | cut -f1
 }
-REVIEW_URL=$(existing "$REVIEW_EP")
-COMMENT_URL=$(existing "$COMMENT_EP")
+REVIEW_URL=$(existing "$REVIEW_EP") || {
+	sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+	die "$EX_UNAVAILABLE" "the forge did not list the reviews of PR #$PR, so an absent marker cannot be told from an unread one — nothing posted; re-run when the forge answers"
+}
+COMMENT_URL=$(existing "$COMMENT_EP") || {
+	sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+	die "$EX_UNAVAILABLE" "the forge did not list the comments of PR #$PR, so an absent marker cannot be told from an unread one — nothing posted; re-run when the forge answers"
+}
 
 # --- 6. the two operations ---------------------------------------------------------------------
 if [ -n "$REVIEW_URL" ]; then

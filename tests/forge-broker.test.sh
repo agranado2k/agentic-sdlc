@@ -44,6 +44,18 @@ mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
 #!/bin/sh
 printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
+# A call the forge refuses: $STUB_FAIL names a fragment of the argv, and any
+# call carrying it answers the way a 502 or an expired token does — a message
+# on stderr and a non-zero status — so a test can tell a FAILED listing from
+# an empty one.
+if [ -n "${STUB_FAIL:-}" ]; then
+	case " $* " in
+	*"$STUB_FAIL"*)
+		printf 'gh: HTTP 502 Bad Gateway\n' >&2
+		exit 1
+		;;
+	esac
+fi
 case " $* " in
 *" --input - "*)
 	printf 'STDIN-BEGIN\n' >>"$STUB_LOG"
@@ -465,7 +477,39 @@ assert_mutating 0 "…and nothing is posted for a near-miss event"
 unset BROKER_CONFIG
 
 # ---------------------------------------------------------------------------
-banner "13. The kit ships none of this"
+banner "13. A listing the forge refused is not an empty listing — exit 69"
+# ---------------------------------------------------------------------------
+# The idempotence marker is only as good as the lookup that reads it. A
+# listing call that FAILED — a 502, an expired token, a rate limit — must
+# never read as "no marker there", or the retry ADR-0009 clause 8 promises
+# posts the review a SECOND time. Both lookups happen before either write, so
+# a refusal on either one is exit 69 with nothing posted.
+STUB_FAIL='pulls/12/reviews'
+export STUB_FAIL
+broker 12 "$GOOD"
+s_assert_status 69 "a review listing the forge refused is exit 69"
+assert_mutating 0 "…and nothing is posted — not a second copy of the review"
+s_assert_err_has 'reviews'
+
+STUB_FAIL='issues/12/comments'
+broker 12 "$GOOD"
+s_assert_status 69 "a comment listing the forge refused is exit 69"
+assert_mutating 0 "…and the review is not posted either — a half-landed pair is worse"
+s_assert_err_has 'comments'
+
+# The same refusal after a PARTIALLY successful earlier run: the review
+# already carries the marker, the comment listing will not answer. The broker
+# cannot tell whether the comment is already there, so it posts nothing.
+STUB_REVIEWS="$SCRATCH/reviews.tsv"
+export STUB_REVIEWS
+broker 12 "$GOOD"
+unset STUB_REVIEWS
+s_assert_status 69 "a failed comment listing after the review already landed is exit 69"
+assert_mutating 0 "…and nothing is posted a second time"
+unset STUB_FAIL
+
+# ---------------------------------------------------------------------------
+banner "14. The kit ships none of this"
 # ---------------------------------------------------------------------------
 for f in scripts/forge-broker.kit.sh scripts/forge-broker.kit.config.sh tests/forge-broker.test.sh; do
 	grep -q "$f" "$KIT/bootstrap.sh" &&
