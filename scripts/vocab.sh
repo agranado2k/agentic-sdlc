@@ -103,11 +103,6 @@ USAGE
 	exit 2
 }
 
-die() {
-	echo "x vocab: $*" >&2
-	exit 2
-}
-
 # ---------------------------------------------------------------------------
 # Policy.
 
@@ -123,7 +118,10 @@ vocab_load_config() {
 	VOCAB_OPEN=
 	VOCAB_RULES=
 	if [ -n "${VOCAB_CONFIG:-}" ]; then
-		[ -f "$VOCAB_CONFIG" ] || die "VOCAB_CONFIG=$VOCAB_CONFIG does not exist."
+		[ -f "$VOCAB_CONFIG" ] || {
+			vocab_refuse "VOCAB_CONFIG=$VOCAB_CONFIG does not exist."
+			exit 2
+		}
 		# `.` searches $PATH for a slash-less operand; the file the test
 		# above saw is the cwd's, so name it as such.
 		case $VOCAB_CONFIG in
@@ -307,6 +305,13 @@ _vocab_nl=${_vocab_nl%x}
 # one field, a rule demanding a value another excludes, or exclusions
 # covering every token of a closed field. Empty output is a satisfiable set.
 vocab_conflicts() {
+	case $1 in
+	as-one | by-antecedent) ;;
+	*)
+		echo "x vocab: internal: unknown grouping '$1' — as-one or by-antecedent" >&2
+		return 2
+		;;
+	esac
 	awk -v grouping="$1" '
 	function q(s) { return "\047" s "\047" }
 	function both(a, b) { print "policy contradiction: " q(a) " and " q(b) " cannot both hold" }
@@ -467,7 +472,6 @@ vocab_check_line() {
 	*) return 0 ;;
 	esac
 	_cl_key=$(vocab_field_key "${1%%:*}")
-	vocab_shape_ok "$_cl_key" || return 0
 	vocab_is_field "$_cl_key" || return 0
 	_cl_value=$(vocab_trim "${1#*:}")
 	vocab_check_value "$_cl_key" "$_cl_value" || return 0
@@ -487,6 +491,8 @@ vocab_check_line() {
 # its antecedent holds; then the consequent's field, if seen, must comply.
 # Triggered rules are collected for the contradiction pass.
 vocab_apply_rule() {
+	# The call sets the _r_* parts; its failure branch is unreachable, since
+	# load-time validation refused every malformed rule before dispatch.
 	vocab_rule_parts "$1" || return 0
 	# $_r_av is never empty (vocab_rule_parts), so an unseen field's "" never matches.
 	[ "$(vocab_value_of "$_r_af")" = "$_r_av" ] || return 0
@@ -518,6 +524,7 @@ vocab_check() {
 }
 
 vocab_print_rule() {
+	# Unreachable failure branch, as in vocab_apply_rule.
 	vocab_rule_parts "$1" && printf 'rule: %s\n' "$_r_text"
 }
 
@@ -549,7 +556,7 @@ fields)
 	[ $# -eq 1 ] || usage
 	vocab_fields
 	;;
--h | --help | -*) usage ;;
+-*) usage ;;
 *)
 	# A bare line as the first argument — `sh scripts/vocab.sh 'Tier: x'` —
 	# is the check, exactly as the usage line says. A first argument with
