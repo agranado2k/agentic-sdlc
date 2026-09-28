@@ -121,6 +121,26 @@ die() {
 	exit 2
 }
 
+# PATHNAME EXPANSION OFF, around every unquoted split below. `for x in $list`
+# and `set -- $(...)` field-split AND glob, and what they split here is a model
+# id and a directory path — either may legally carry *, ? or [. Before this
+# guard a model called `alpha*` was silently replaced by a file of that shape in
+# the CALLER's cwd, so one model's tokens were looked up under another model's
+# name and the diagnostics named the wrong one (H-2, review of PR #262). The
+# previous setting is read rather than assumed, so a caller that already runs
+# with globbing off keeps it off.
+_trace_had_f=0
+trace_glob_off() {
+	case $- in
+	*f*) _trace_had_f=1 ;;
+	*)
+		_trace_had_f=0
+		set -f
+		;;
+	esac
+}
+trace_glob_on() { [ "$_trace_had_f" = 1 ] || set +f; }
+
 # ---------------------------------------------------------------------------
 # Policy and the directory.
 
@@ -400,9 +420,14 @@ trace_verify() {
 	# One file per line from trace_files, split on newlines alone — a `for`
 	# rather than a `while read` pipeline, because the verdict is set inside
 	# the loop and a pipeline's loop body runs in a subshell that keeps it.
+	# The list is captured FIRST, with pathname expansion still on, because
+	# trace_files finds the day files with a glob of its own; only the SPLIT of
+	# that list runs with globbing off. Nothing in the loop body globs.
+	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
 	IFS=$_trace_nl
-	for _vf_f in $(trace_files "$_vf_since"); do
+	trace_glob_off
+	for _vf_f in $_vf_files; do
 		IFS=$_vf_ifs
 		awk -v kinds=" $TRACE_KINDS " -v f="$_vf_f" '
 		{
@@ -429,6 +454,7 @@ trace_verify() {
 		fi
 	done
 	IFS=$_vf_ifs
+	trace_glob_on
 	[ "$_vf_node" = 1 ] || echo "i  trace: node is not on PATH — lines were checked structurally, not parsed" >&2
 	return $_vf_bad
 }
@@ -542,19 +568,23 @@ function tr_cost(p, a, b, c, d,   f) {
 	return a * f[1] / 1000000 + b * f[2] / 1000000 + c * f[3] / 1000000 + d * f[4] / 1000000
 }
 # tr_prices(into) — the price table, read out of the ENVIRONMENT as one string:
-# a tab between model and prices, a newline between entries. awk cannot see the
-# shell variables a policy file set, so the shell has to hand it down — and it
-# hands it down here rather than through `-v`, because awk applies BACKSLASH
+# the four PRICES, a tab, then the model id, and a newline between entries. awk
+# cannot see the shell variables a policy file set, so the shell has to hand it
+# down — and it hands it down here rather than through `-v`, because awk applies BACKSLASH
 # ESCAPE PROCESSING to a -v value, which would turn a model id carrying an
 # escape into a key that no longer matches the one read out of the event. Same
 # reason for the price table source below.
+#
+# Prices FIRST and the id after the first tab, so a model id that carries a tab
+# of its own still arrives whole: only one of the two halves can be variable
+# length, and it is the id.
 function tr_prices(into,   spec, n, i, rows, t) {
 	spec = ENVIRON["TRACE_PRICES"]
 	n = split(spec, rows, "\n")
 	for (i = 1; i <= n; i++) {
 		if (rows[i] == "") continue
 		t = index(rows[i], "\t")
-		into[substr(rows[i], 1, t - 1)] = substr(rows[i], t + 1)
+		into[substr(rows[i], t + 1)] = substr(rows[i], 1, t - 1)
 	}
 }
 '
@@ -576,6 +606,14 @@ trace_price_var() {
 # numbers, comma separated. A malformed one is exit 2 and not a shrug: a price
 # the reader quietly skipped would report a wave as cheaper than it was.
 trace_check_price() {
+	# The DELIMITERS are checked on the raw string before any splitting: word
+	# splitting DROPS a trailing empty field, so '1,2,3,4,' counted as four
+	# prices and was accepted (M-1, review of PR #262).
+	case $2 in
+	,* | *, | *,,*)
+		die "TRACE_PRICE_$1='$2' has an empty price field — give four values as <in>,<out>,<cache_write>,<cache_read>, with no leading, trailing or doubled comma"
+		;;
+	esac
 	_cp_n=0
 	_cp_ifs=$IFS
 	IFS=,
@@ -602,8 +640,15 @@ trace_spending_models() {
 		{
 			e = tr_env($0)
 			if (tr_num(e, "tok_in") + tr_num(e, "tok_out") + tr_num(e, "tok_cache_w") + tr_num(e, "tok_cache_r") > 0) {
-				m = tr_str(e, "model")
-				if (m != "") print m
+				# The DECODED id: the price variable is named after the model
+				# the operator knows, not after its JSON escaping, so folding
+				# the escaped body looked one up under a name nobody would ever
+				# write (H-1, review of PR #262). A decoded NEWLINE would break
+				# this one-per-line list; only a hand-written event can carry
+				# one, and such a model is dropped here so that it reads
+				# `unpriced` rather than being priced as something else.
+				m = tr_unesc(tr_str(e, "model"))
+				if (m != "" && index(m, "\n") == 0) print m
 			}
 		}' "$_sm_f"
 	done | LC_ALL=C sort -u
@@ -623,6 +668,7 @@ trace_load_prices() {
 	[ -n "$_lp_models" ] || return 0
 	_lp_ifs=$IFS
 	IFS=$_trace_nl
+	trace_glob_off
 	for _lp_m in $_lp_models; do
 		IFS=$_lp_ifs
 		_lp_val=
@@ -630,13 +676,14 @@ trace_load_prices() {
 		[ -n "$_lp_var" ] && eval "_lp_val=\${TRACE_PRICE_$_lp_var:-}"
 		if [ -n "$_lp_val" ]; then
 			trace_check_price "$_lp_var" "$_lp_val"
-			TRACE_PRICE_TABLE="${TRACE_PRICE_TABLE:+$TRACE_PRICE_TABLE$_trace_nl}$_lp_m$_trace_tab$_lp_val"
+			TRACE_PRICE_TABLE="${TRACE_PRICE_TABLE:+$TRACE_PRICE_TABLE$_trace_nl}$_lp_val$_trace_tab$_lp_m"
 		else
 			TRACE_PRICE_MISSING="${TRACE_PRICE_MISSING:+$TRACE_PRICE_MISSING }$_lp_m"
 		fi
 		IFS=$_trace_nl
 	done
 	IFS=$_lp_ifs
+	trace_glob_on
 	return 0
 }
 
@@ -686,21 +733,40 @@ trace_summary() {
 	# with a space in it must still arrive as one argument. This function has
 	# consumed its own arguments by here, so $@ is free.
 	_su_ifs=$IFS
+	# Captured before the split, so trace_files keeps the glob it needs; the
+	# split itself runs with pathname expansion off, so a trace directory whose
+	# own path carries *, ? or [ still names its files (H-2, PR #262).
+	_su_files=$(trace_files "$_su_since")
 	IFS=$_trace_nl
-	# shellcheck disable=SC2046  # deliberate: IFS is a newline, one file per word
-	set -- $(trace_files "$_su_since")
+	trace_glob_off
+	# shellcheck disable=SC2086  # deliberate: IFS is a newline, one file per word
+	set -- $_su_files
 	IFS=$_su_ifs
+	trace_glob_on
 	if [ $# -eq 0 ]; then
 		printf "$_su_hfmt" "$_su_by" events tok_in tok_out tok_cache_w tok_cache_r cost_usd
 		printf "$_su_rfmt" TOTAL 0 0 0 0 0 0.000000
 		return 0
 	fi
+	# TWO STAGES, and what crosses between them is deliberate. The COST crosses
+	# at full precision and is rounded once, for display, in the second: rounding
+	# each group to six places and then adding the rounded rows made the same
+	# events total differently depending on which axis you grouped them by, and a
+	# total that moves when you change the question is not a total (H-3, review
+	# of PR #262). The KEY crosses LAST, and the sort is told so (-k7 is field 7
+	# to the end of the line), because a decoded key may carry a tab of its own
+	# and the six numbers in front of it may not.
 	TRACE_PRICES="$TRACE_PRICE_TABLE" awk -v by="$_su_by" "$TRACE_AWK_LIB"'
 	BEGIN { tr_prices(price) }
 	{
 		e = tr_env($0)
-		key = tr_str(e, by)
-		if (key == "") key = "(none)"
+		# DECODED, so the row an operator reads is the value they would type —
+		# and, on --by model, the same string the price table is keyed by. The
+		# EMPTY key is the absent field and nothing else: trace_emit omits a
+		# field whose value is empty, so no PRESENT value can ever be "", and an
+		# event whose skill literally reads "(none)" therefore keeps its own row
+		# instead of being merged into the absent one (M-2, review of PR #262).
+		key = tr_unesc(tr_str(e, by))
 		n[key]++
 		a = tr_num(e, "tok_in") + 0
 		b = tr_num(e, "tok_out") + 0
@@ -708,24 +774,27 @@ trace_summary() {
 		d = tr_num(e, "tok_cache_r") + 0
 		s_in[key] += a; s_out[key] += b; s_cw[key] += c; s_cr[key] += d
 		if (a + b + c + d > 0) {
-			m = tr_str(e, "model")
+			m = tr_unesc(tr_str(e, "model"))
 			if (m != "" && (m in price)) cost[key] += tr_cost(price[m], a, b, c, d)
 			else miss[key]++
 		}
 	}
 	END {
 		for (k in n)
-			printf "%s\t%d\t%d\t%d\t%d\t%d\t%s\n", k, n[k], s_in[k], s_out[k], s_cw[k], s_cr[k],
-				(miss[k] > 0 ? "unpriced" : sprintf("%.6f", cost[k] + 0))
-	}' "$@" | LC_ALL=C sort |
+			printf "%d\t%d\t%d\t%d\t%d\t%s\t%s\n", n[k], s_in[k], s_out[k], s_cw[k], s_cr[k],
+				(miss[k] > 0 ? "unpriced" : sprintf("%.12f", cost[k] + 0)), k
+	}' "$@" | LC_ALL=C sort -t"$_trace_tab" -k7 |
 		awk -F'\t' -v hfmt="$_su_hfmt" -v rfmt="$_su_rfmt" -v by="$_su_by" '
 		BEGIN { printf hfmt, by, "events", "tok_in", "tok_out", "tok_cache_w", "tok_cache_r", "cost_usd" }
 		{
-			printf rfmt, $1, $2, $3, $4, $5, $6, $7
-			n += $2; a += $3; b += $4; c += $5; d += $6
+			key = $7
+			for (i = 8; i <= NF; i++) key = key "\t" $i
+			if (key == "") key = "(none)"
+			printf rfmt, key, $1, $2, $3, $4, $5, ($6 == "unpriced" ? "unpriced" : sprintf("%.6f", $6))
+			n += $1; a += $2; b += $3; c += $4; d += $5
 			# One rule, applied to a group and to the total alike: a cost that
 			# is missing a price is not a smaller cost.
-			if ($7 == "unpriced") miss = 1; else total += $7
+			if ($6 == "unpriced") miss = 1; else total += $6
 		}
 		END { printf rfmt, "TOTAL", n + 0, a + 0, b + 0, c + 0, d + 0, (miss ? "unpriced" : sprintf("%.6f", total + 0)) }'
 }
@@ -782,10 +851,16 @@ trace_export() {
 	fi
 	_ex_cols="v ts id kind $TRACE_STRING_FIELDS $TRACE_TOKEN_FIELDS cost_usd priced_at price_src data"
 	_ex_ifs=$IFS
+	# Captured before the split, so trace_files keeps the glob it needs; the
+	# split itself runs with pathname expansion off, so a trace directory whose
+	# own path carries *, ? or [ still names its files (H-2, PR #262).
+	_ex_files=$(trace_files "$_ex_since")
 	IFS=$_trace_nl
-	# shellcheck disable=SC2046  # deliberate: see the same idiom in trace_summary
-	set -- $(trace_files "$_ex_since")
+	trace_glob_off
+	# shellcheck disable=SC2086  # deliberate: see the same idiom in trace_summary
+	set -- $_ex_files
 	IFS=$_ex_ifs
+	trace_glob_on
 	if [ $# -eq 0 ]; then
 		[ "$_ex_csv" = 1 ] && printf '%s\n' "$_ex_cols" | tr ' ' ,
 		return 0
@@ -812,7 +887,7 @@ trace_export() {
 		b = tr_num(e, "tok_out") + 0
 		c = tr_num(e, "tok_cache_w") + 0
 		d = tr_num(e, "tok_cache_r") + 0
-		m = tr_str(e, "model")
+		m = tr_unesc(tr_str(e, "model"))
 		if (a + b + c + d == 0) cost = sprintf("%.6f", 0)
 		else if (m != "" && (m in price)) cost = sprintf("%.6f", tr_cost(price[m], a, b, c, d))
 		else cost = "unpriced"
