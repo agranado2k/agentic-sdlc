@@ -854,8 +854,10 @@ entry=$(awk '/^- \*\*Task domain\*\*/ { on = 1; print; next } on && /^- \*\*/ { 
 for phrase in '`judge`' 'decide' 'rank-or-verify'; do
 	says "$entry" "$phrase" "the glossary's task-domain entry"
 done
-record=$(ls "$KIT"/docs/adr/[0-9][0-9][0-9][0-9]-*judge*.md 2>/dev/null | head -1)
-if [ -n "$record" ] && [ -f "$record" ]; then
+# The shell's own glob answers this; an unmatched pattern stays literal, and
+# the -f guard is what turns that into "no record".
+for record in "$KIT"/docs/adr/[0-9][0-9][0-9][0-9]-*judge*.md; do break; done
+if [ -f "$record" ]; then
 	pass "a decision record for the judge domain exists ($(basename "$record"))"
 	grep -qF "$(basename "$record")" "$KIT/docs/adr/INDEX.md" &&
 		pass "…and docs/adr/INDEX.md indexes it" || fail "docs/adr/INDEX.md has no row for $(basename "$record")"
