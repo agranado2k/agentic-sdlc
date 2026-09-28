@@ -987,7 +987,7 @@ fi
 
 # Bait: add a measurement without an oracle and verify the probe catches it.
 ORACLE_BAIT="$SCRATCH/diary.oracle-bait"
-sed 's/ — oracle:[^)]*)/)/g' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
+sed 's/ — oracle: [^)]*)/)/; s/ — oracle: [^|]*|/|/; s/ — oracle: .*//' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
 missing=$(diary_measurement_rows "$ORACLE_BAIT")
 if [ -n "$missing" ]; then
 	pass "the oracle probe detects a measurement without an oracle clause"

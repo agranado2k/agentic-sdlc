@@ -76,6 +76,9 @@ sidecar_sources=$(grep -c '^\*Source:' "$SIDECAR_ABS")
 assert_file_has "$SIDECAR" "dispatch scratch" "item 5 reports the stale dispatch scratch the dispatcher sweeps"
 assert_file_has "$SIDECAR" "lists each \`agent-dispatch.*\` directory" "item 5 lists what it found, not only how many"
 assert_file_has "$SIDECAR" "by name and age" "…and the listing carries what a count cannot: which, and how old"
+# Item 4 asks for the oracle line on every self-measurement (#276): who wrote
+# the fixtures, when, against which version, and what comparator.
+assert_file_has "$SIDECAR" "oracle" "item 4 asks for the oracle line on every self-measurement"
 
 # ---------------------------------------------------------------------------
 banner "3. The red flags, and the two routes"
