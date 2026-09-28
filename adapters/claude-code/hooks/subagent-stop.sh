@@ -27,7 +27,8 @@
 # in it — a ticket, not a line. Until then: a session's own session.usage is
 # exact, and the sum with agent.stop is exact only when the file was ready.
 #
-# Exits 0 unconditionally; says nothing on either stream. See hook.lib.sh.
+# Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
+# is where a trace error belongs. See hook.lib.sh.
 
 set -u
 
@@ -40,9 +41,16 @@ aid=$(hook_field agent_id)
 atype=$(hook_field agent_type)
 transcript=$(hook_expand "$(hook_field agent_transcript_path)")
 
+# The ids are checked before they become a subject or a field: a payload is
+# data (see hook.lib.sh's hook_id_ok), and an id that cannot be queried is one
+# `show` could never match. `session=` is set explicitly for the reason
+# session-end.sh gives — the pointer answers for the emits no hook can see, not
+# for this one.
 set --
-[ -n "$aid" ] && set -- subject="agent:$aid"
-[ -n "$sid" ] && set -- "$@" related="session:$sid"
+[ -n "$aid" ] && hook_id_ok "$aid" && set -- subject="agent:$aid"
+if [ -n "$sid" ] && hook_id_ok "$sid"; then
+	set -- "$@" related="session:$sid" session="$sid"
+fi
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
 

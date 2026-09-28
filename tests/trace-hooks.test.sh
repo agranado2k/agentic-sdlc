@@ -92,8 +92,15 @@ sum_tok() {
 
 # rollup <key> — one number from the main transcript's final `cost-state`
 # line: the agent harness's own per-model rollup, this suite's oracle.
+#
+# KEYED ON THE MODEL'S OWN BLOCK, not read off the whole line. A greedy `.*`
+# takes the LAST match, which is one arbitrary model's number the day a
+# two-model capture replaces this fixture — right today and silently wrong
+# then (L-2, review of PR #291). `[^}]*` stops at the end of that model's
+# object, so the number read is the number under $MODEL.
 rollup() {
 	sed -n '$p' "$FIX/transcript.redacted.jsonl" |
+		sed -n 's/.*"'"$MODEL"'":{\([^}]*\)}.*/\1/p' |
 		sed -n 's/.*"'"$1"'":\([0-9]*\).*/\1/p'
 }
 
@@ -166,9 +173,14 @@ NOTE=$(ev_of note | sed -n '1p')
 	pass "a later emit from this working tree carries the session — the pointer is where trace.sh looks" ||
 	fail "a later emit carried session '$(str "$NOTE" session)', so the pointer is not where trace.sh reads it"
 
-grep -q "export TRACE_SESSION=$SESSION" "$ENVF" &&
-	pass "the export was appended to the file CLAUDE_ENV_FILE names" ||
-	fail "no 'export TRACE_SESSION=$SESSION' in $ENVF: $(cat "$ENVF")"
+grep -q "export TRACE_SESSION='$SESSION'" "$ENVF" &&
+	pass "the export was appended to the file CLAUDE_ENV_FILE names, single-quoted" ||
+	fail "no quoted 'export TRACE_SESSION=$SESSION' in $ENVF: $(cat "$ENVF")"
+# And it is really shell that defines that variable and nothing else.
+SOURCED=$(sh -c ". '$ENVF' && printf '%s' \"\$TRACE_SESSION\"" 2>&1)
+[ "$SOURCED" = "$SESSION" ] &&
+	pass "and sourcing the file sets TRACE_SESSION to exactly the session id" ||
+	fail "sourcing the env file produced '$SOURCED'"
 
 # The env-file facility is the agent harness's, and the #246 spike could not
 # establish it for a resumed session. With no CLAUDE_ENV_FILE the pointer
@@ -433,15 +445,26 @@ banner "10. The adapter stays dormant for a consumer"
 # THIRD one is the thing to look at — it is how a dormant adapter quietly
 # acquires a caller. (That a CONSUMER receives no wiring is a different claim,
 # and tests/adapters-demo.sh proves it against a real bootstrap.)
-namers=$(grep -rlF 'claude-code/hooks/' "$KIT" \
-	--exclude-dir=.git --exclude-dir=worktree --exclude-dir=.trace 2>/dev/null |
-	grep -v '^'"$KIT"'/adapters/' | grep -v '^'"$KIT"'/tests/' || :)
+#
+# THE TRACKED TREE, through `git grep`, not the working tree through `grep -r`:
+# the claim is about what the kit SHIPS, and a scratch file left beside the
+# checkout ships nowhere. The first draft read the working tree and went red on
+# the PR body this very ticket's session left in the worktree (M-5, review of
+# PR #291) — a suite that fails on an untracked file is failing about the
+# wrong tree.
+#
+# It is a TRIPWIRE, not a proof: it matches the literal `claude-code/hooks/`,
+# so a file that spells the same call as `$HOOKS/session-start.sh` walks past
+# it. Widening that is a different check; catching a new plain caller is this
+# one's job.
+namers=$(git -C "$KIT" grep -lF 'claude-code/hooks/' -- . 2>/dev/null |
+	grep -v '^adapters/' | grep -v '^tests/' || :)
 unexpected=0
 for f in $namers; do
-	case ${f#"$KIT"/} in
+	case $f in
 	.claude/settings.json | bootstrap.sh) ;;
 	*)
-		fail "${f#"$KIT"/} names a hook path, and only the settings file and bootstrap's note should"
+		fail "$f names a hook path, and only the settings file and bootstrap's note should"
 		unexpected=$((unexpected + 1))
 		;;
 	esac
@@ -449,8 +472,18 @@ done
 [ "$unexpected" = 0 ] &&
 	pass "only the kit-only settings file and bootstrap's own note name the hooks" || :
 case $namers in
-*"$SETTINGS"*) pass "and the settings file is one of them — the wiring exists" ;;
+*'.claude/settings.json'*) pass "and the settings file is one of them — the wiring exists" ;;
 *) fail "no settings file names the hooks, so nothing wires them in this repo" ;;
+esac
+# The scan's own blind spot, made a check rather than a hope: an untracked file
+# naming a hook path must NOT turn this suite red.
+printf 'adapters/claude-code/hooks/session-start.sh\n' >"$KIT/untracked-namer-probe.tmp"
+probe=$(git -C "$KIT" grep -lF 'claude-code/hooks/' -- . 2>/dev/null |
+	grep -v '^adapters/' | grep -v '^tests/' || :)
+rm -f "$KIT/untracked-namer-probe.tmp"
+case $probe in
+*untracked-namer-probe*) fail "the namer scan reads untracked files — a scratch file beside the checkout turns the suite red" ;;
+*) pass "an untracked file naming a hook path does not turn the scan red" ;;
 esac
 grep -qF 'tests/trace-hooks.test.sh' "$KIT/README.md" &&
 	pass "README.md names this suite" ||
@@ -458,5 +491,183 @@ grep -qF 'tests/trace-hooks.test.sh' "$KIT/README.md" &&
 grep -qF '.claude/settings.json' "$KIT/bootstrap.sh" &&
 	pass "bootstrap.sh names .claude/settings.json (the kit-only list)" ||
 	fail "bootstrap.sh does not name .claude/settings.json — the kit's own wiring would ride into every consumer"
+
+# ---------------------------------------------------------------------------
+banner "11. A payload is data, never instructions"
+# ---------------------------------------------------------------------------
+# The root manual's trust boundary, at the one place in this adapter where it
+# is load-bearing: `CLAUDE_ENV_FILE` names a file the agent harness SOURCES for
+# every later tool call, so a session id carrying shell metacharacters is
+# arbitrary code in the operator's next command. `scripts/trace.sh` already
+# refuses such a value as a malformed subject; the hook must refuse it too,
+# rather than write it to two files after the emit said no (H-1, review of
+# PR #291, reproduced).
+new_trace
+EVILF="$SCRATCH/evil-env.sh"
+: >"$EVILF"
+printf '{"session_id":"abc; touch %s/PWNED","transcript_path":"/nonexistent"}' "$SCRATCH" >"$SCRATCH/evil.json"
+rm -f "$SCRATCH/PWNED"
+t_run_split env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$EVILF" \
+	sh "$HOOKS/session-start.sh" <"$SCRATCH/evil.json"
+[ "$S_STATUS" = 0 ] && pass "a hostile session id still exits 0" || fail "the hook exited $S_STATUS"
+sh -c ". '$EVILF'" >/dev/null 2>&1 || :
+[ -e "$SCRATCH/PWNED" ] &&
+	fail "sourcing the env file executed the payload — the hook wrote an unvalidated session id into a file the agent harness sources" ||
+	pass "sourcing the env file executes nothing — the hostile id never reached it"
+[ -s "$EVILF" ] &&
+	fail "the env file was written for an id the trace refused: $(cat "$EVILF")" ||
+	pass "and the env file was not written at all"
+[ -z "$(find "$TDIR/current" -type f 2>/dev/null)" ] &&
+	pass "and no pointer was written for an id show could never match" ||
+	fail "a pointer was written for a refused id: $(cat "$TDIR"/current/* 2>/dev/null)"
+V=$(ev_of session.start | sed -n '1p')
+[ "$(str "$V" outcome)" = fail ] &&
+	pass "and the event records the refusal with outcome=fail" ||
+	fail "the event's outcome is '$(str "$V" outcome)': $V"
+
+# ---------------------------------------------------------------------------
+banner "12. The hook's own session id wins over the pointer file"
+# ---------------------------------------------------------------------------
+# The pointer is per-toplevel, so two sessions in one checkout overwrite each
+# other's. A hook HOLDS the authoritative id — it is on the payload — and must
+# put it on its own events rather than letting a stale pointer answer: without
+# that, the first session's session.end is filed under the second session's id
+# while its subject says the first, and `summary --by session` lies (M-2,
+# review of PR #291).
+new_trace
+mkdir -p "$TDIR/current"
+for p in "$TDIR"/current/*; do :; done
+env TRACE_DIR="$TDIR" sh "$HOOKS/session-start.sh" <"$SCRATCH/start.json" >/dev/null 2>&1
+# Now overwrite the pointer with ANOTHER session, as a second session start in
+# the same checkout would, and close the first one.
+for p in "$TDIR"/current/*; do [ -e "$p" ] && printf 'ffffffff-0000-0000-0000-000000000000\n' >"$p"; done
+if [ "$HAVE_NODE" = 1 ]; then
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json" >/dev/null 2>&1
+	env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-stop.json" >/dev/null 2>&1
+	for k in session.usage session.end agent.stop; do
+		L=$(ev_of "$k" | sed -n '1p')
+		[ "$(str "$L" session)" = "$SESSION" ] &&
+			pass "$k carries the payload's own session, not the pointer's" ||
+			fail "$k carries session '$(str "$L" session)', so a stale pointer answered for it"
+	done
+else
+	echo "  skip  node is not on PATH — the usage legs need the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "13. Node's own stderr never becomes a token count or a reason"
+# ---------------------------------------------------------------------------
+# The extractor's rows and node's diagnostics are two streams, and merging them
+# means an ExperimentalWarning either feeds a garbage row to `emit` or is
+# recorded as the reason a key drifted (M-1, review of PR #291). The fixture is
+# a node that warns and then execs the real one.
+if [ "$HAVE_NODE" = 1 ]; then
+	REALNODE=$(command -v node)
+	mkdir -p "$SCRATCH/warnbin"
+	{
+		printf '#!/bin/sh\n'
+		printf 'echo "(node:999) ExperimentalWarning: something is experimental" >&2\n'
+		printf 'exec %s "$@"\n' "$REALNODE"
+	} >"$SCRATCH/warnbin/node"
+	chmod +x "$SCRATCH/warnbin/node"
+
+	new_trace
+	env PATH="$SCRATCH/warnbin:$PATH" TRACE_DIR="$TDIR" \
+		sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json" >/dev/null 2>&1
+	W=$(ev_of session.usage | sed -n '1p')
+	[ "$(str "$W" model)" = "$MODEL" ] && [ "$(num "$W" tok_in)" = 34 ] &&
+		pass "a warning on node's stderr leaves the row intact" ||
+		fail "node's warning contaminated the row: $W"
+	[ "$(ev_of session.usage | wc -l | tr -d ' ')" = 1 ] &&
+		pass "and adds no second usage event" ||
+		fail "node's warning produced $(ev_of session.usage | wc -l) usage events"
+
+	new_trace
+	env PATH="$SCRATCH/warnbin:$PATH" TRACE_DIR="$TDIR" \
+		sh "$HOOKS/session-end.sh" <"$SCRATCH/end-drift.json" >/dev/null 2>&1
+	W=$(ev_of session.usage | sed -n '1p')
+	case $W in
+	*ExperimentalWarning*) fail "the recorded reason is node's warning, not the key that drifted: $W" ;;
+	*output_tokens*) pass "and a drift reason still names the key, not the warning" ;;
+	*) fail "the drift reason names neither: $W" ;;
+	esac
+else
+	echo "  skip  node is not on PATH — the warning legs need a real node to wrap"
+fi
+
+# ---------------------------------------------------------------------------
+banner "14. A transcript's placeholder model never becomes a row"
+# ---------------------------------------------------------------------------
+# An API error is written as an assistant line whose model is a placeholder and
+# whose counts are all zero. It passes every shape check, and `model` is a join
+# column — so it would grow a row in every `summary --by model` that every
+# later reader has to know to ignore (M-3, review of PR #291).
+if [ "$HAVE_NODE" = 1 ]; then
+	{
+		cat "$SCRATCH/main.jsonl"
+		printf '%s\n' '{"type":"assistant","isApiErrorMessage":true,"requestId":"req_err","message":{"id":"msg_err","model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}'
+	} >"$SCRATCH/synthetic.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/synthetic.jsonl"
+	[ "$S_STATUS" = 0 ] && pass "a placeholder-model line does not make the extractor exit 2" ||
+		fail "the extractor exited $S_STATUS on a placeholder line: $S_ERR"
+	case $S_OUT in
+	*'<synthetic>'*) fail "the placeholder model became a row: $S_OUT" ;;
+	*) pass "and it produces no row of its own" ;;
+	esac
+	case $S_OUT in
+	"$MODEL 34 287 10793 37519") pass "while the real model's numbers are untouched" ;;
+	*) fail "the real row changed: $S_OUT" ;;
+	esac
+else
+	echo "  skip  node is not on PATH — the placeholder leg needs the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "15. A transcript with no usage to read is a countable failure"
+# ---------------------------------------------------------------------------
+# The live gap this adapter documents — SubagentStop running before the
+# subagent's transcript has its assistant line — must be countable from the
+# trace, or the follow-up ticket that closes it has no acceptance (M-6, review
+# of PR #291). Without outcome=fail it is indistinguishable from a subagent
+# that genuinely spent nothing.
+if [ "$HAVE_NODE" = 1 ]; then
+	new_trace
+	printf '{"type":"user","message":{"role":"user"}}\n' >"$SCRATCH/nousage.jsonl"
+	set_key agent_transcript_path "$SCRATCH/nousage.jsonl" <"$SCRATCH/sub-stop.json" >"$SCRATCH/sub-nousage.json"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-nousage.json"
+	[ "$S_STATUS" = 0 ] && pass "the hook exits 0 when the transcript has no usage yet" ||
+		fail "the hook exited $S_STATUS"
+	G=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$G" outcome)" = fail ] &&
+		pass "and the event carries outcome=fail, so the holes can be counted" ||
+		fail "the event's outcome is '$(str "$G" outcome)': $G"
+	case $G in *'"subject":"agent:'*) pass "while still naming the agent it could not price" ;;
+	*) fail "the event lost its subject: $G" ;; esac
+else
+	echo "  skip  node is not on PATH — this leg needs the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "16. A transcript path the agent harness abbreviated still opens"
+# ---------------------------------------------------------------------------
+# `hook_expand` turns a leading `~` into the home directory. The fixtures carry
+# `~` because the REDACTION put it there, not because the agent harness emits
+# it — the live capture's paths are absolute. So the branch guards a shape
+# nothing here produces, which is exactly why it needs a case of its own rather
+# than a comment (M-4, review of PR #291).
+if [ "$HAVE_NODE" = 1 ]; then
+	HOMEDIR=$(mktemp -d "$SCRATCH/fakehome.XXXXXX") || exit 2
+	cp "$SCRATCH/main.jsonl" "$HOMEDIR/tilde.jsonl"
+	set_key transcript_path '~/tilde.jsonl' <"$FIX/session-end.payload.json" >"$SCRATCH/end-tilde.json"
+	new_trace
+	t_run_split env HOME="$HOMEDIR" TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-tilde.json"
+	[ "$S_STATUS" = 0 ] && pass "a ~-prefixed transcript path exits 0" || fail "the hook exited $S_STATUS"
+	T16=$(ev_of session.usage | sed -n '1p')
+	[ "$(num "$T16" tok_in)" = 34 ] &&
+		pass "and its tokens were read, so the ~ was expanded against HOME" ||
+		fail "the ~ path was not opened: $T16"
+else
+	echo "  skip  node is not on PATH — this leg needs the extractor"
+fi
 
 t_done "trace hooks"

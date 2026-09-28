@@ -21,7 +21,8 @@
 #      whether the env file survives a resumed or compacted session, so the
 #      fallback stays.
 #
-# Exits 0 unconditionally; says nothing on either stream. See hook.lib.sh.
+# Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
+# is where a trace error belongs. See hook.lib.sh.
 
 set -u
 
@@ -34,24 +35,37 @@ src=$(hook_field source)
 cwd=$(hook_field cwd)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
+# THE PAYLOAD IS DATA. An unusable id is refused BEFORE it reaches either of
+# the two files below, and the reason never quotes the value: the export goes
+# into a file the agent harness sources as shell, so a value carrying `;` would
+# be code in the operator's next command, and a value carrying a newline would
+# make the refusal event itself unwritable. Both cases are one event and exit 0.
+why=
 if [ -z "$sid" ]; then
-	# No id is a FACT worth recording: the event says the session could not be
-	# named rather than inventing a subject nothing will ever join on.
+	why='the SessionStart payload named no session_id'
+elif ! hook_id_ok "$sid"; then
+	why='the SessionStart payload named a session_id that is not a plain identifier (letters, digits, dot, dash, underscore), and it is refused rather than written into a file the agent harness sources'
+fi
+if [ -n "$why" ]; then
 	hook_trace emit kind=session.start outcome=fail \
-		reason='the SessionStart payload named no session_id, so this session has no identity in the trace'
+		reason="$why — this session has no identity in the trace"
 	exit 0
 fi
 
 # The transcript is POINTED AT, never copied: the chain of thought stays where
 # the agent harness keeps it and the trace stays one short line (PRD #237,
-# story 22).
-hook_trace emit kind=session.start subject="session:$sid" harness=claude-code \
-	data.source="$src" data.cwd="$cwd" data.transcript="$transcript"
+# story 22). `session=` as well as `subject=`, so the event names the session
+# the PAYLOAD gave it rather than whatever the pointer file happens to say —
+# see session-end.sh for the two-sessions-in-one-checkout case that matters.
+hook_trace emit kind=session.start subject="session:$sid" session="$sid" \
+	harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript"
 
 hook_point_at "$sid"
 
+# Single-quoted, though hook_id_ok has already forbidden everything that would
+# need quoting: the guard is the rule and this is the belt beside it.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-	printf 'export TRACE_SESSION=%s\n' "$sid" >>"$CLAUDE_ENV_FILE" 2>/dev/null || :
+	printf "export TRACE_SESSION='%s'\n" "$sid" >>"$CLAUDE_ENV_FILE" 2>/dev/null || :
 fi
 
 exit 0

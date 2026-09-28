@@ -13,7 +13,7 @@
 # execution path; a hook runs only once a settings file wires it (see
 # ../README.md, "Wiring the session hooks"). In THIS kit that file is
 # `.claude/settings.json`, which is kit-authoring only and never shipped. In
-# your project it is yours to write, and until you write it these four files
+# your project it is yours to write, and until you write it these five files
 # are reference material you can read.
 #
 # THE THREE RULES A HOOK HERE KEEPS, and why each one is not negotiable:
@@ -25,13 +25,16 @@
 #      and every hook ends in `exit 0`.
 #   2. SILENT ON STDOUT. What a hook prints on stdout can reach the agent
 #      harness's own parser. The trace's answers go to a file; nothing here
-#      has anything to say.
+#      has anything to say. STDERR is a different stream and is deliberately
+#      loud — ADR-0008 clause 4 wants a trace error visible, and the operator
+#      is the reader.
 #   3. TRACE_QUIET=1. An unconfigured trace prints one note per process, which
 #      is the right nudge for an operator typing a command and pure noise on
 #      every session start of a project that has decided not to trace.
 #
 # Sourced, not executed: `. "$(dirname "$0")/hook.lib.sh"` at the top of each
-# hook. It defines functions and sets two variables; it runs nothing.
+# hook. It defines functions, exports the trace's quiet variable and resolves
+# two paths; it emits nothing of its own.
 
 TRACE_QUIET=1
 export TRACE_QUIET
@@ -70,18 +73,51 @@ hook_read() { hook_json=$(cat 2>/dev/null) || hook_json=; }
 # whitespace — for one specific reason: `transcript_path` is the PARENT
 # session's file and `agent_transcript_path` is the subagent's own, and an
 # unanchored pattern for the first one matches the tail of the second and
-# silently reads the wrong transcript (the #246 spike's finding Q2). The first
-# match wins; a repeated key would be drift, and the extractor is where drift
-# is reported.
+# silently reads the wrong transcript (the #246 spike's finding Q2).
+#
+# WHICH MATCH WINS, precisely, because the loose answer was wrong: sed's `.*`
+# is greedy, so within ONE LINE the last occurrence wins, and across lines the
+# first line that matches wins. On the pretty-printed payload this agent
+# harness emits, one key per line, that is "the first occurrence". On a compact
+# payload it is the last, and a key nested inside another object reads as
+# top-level either way. Neither shape occurs here, and the anchoring above is
+# what the one case that matters depends on (L-1, review of PR #291).
 hook_field() {
 	printf '%s\n' "$hook_json" |
 		sed -n 's/.*[{,[:space:]]"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
 		sed -n '1p'
 }
 
-# hook_expand <path> — a leading `~` is the agent harness's own shorthand for
-# the home directory of whoever ran it, and a path is only useful here if it
-# can be opened.
+# hook_id_ok <value> — is this an identifier this adapter may use?
+#
+# TWO REQUIREMENTS, and the second is why the class is this narrow. It has to
+# be QUERYABLE — `scripts/trace.sh` matches a subject exactly, so a value with
+# a space or a quote is one `show` could never find. And it has to be SAFE TO
+# WRITE INTO A FILE THE AGENT HARNESS SOURCES AS SHELL: session-start.sh
+# appends an export to the file `CLAUDE_ENV_FILE` names, and that file is read
+# back into every later tool call of the session. An id carrying `;` or `$` is
+# then arbitrary code in the operator's next command — reproduced against the
+# first draft of this adapter, which wrote the value after the trace had
+# already refused it as a malformed subject (H-1, review of PR #291).
+#
+# So: letters, digits, dot, dash, underscore, and nothing else. That is what a
+# session id and an agent id are, and a payload is DATA — the root manual's
+# trust boundary applied at the one place in this adapter where it is
+# load-bearing. A value outside the class is refused, loudly, and the hook goes
+# on to exit 0 like everything else here.
+hook_id_ok() {
+	case ${1:-} in
+	'' | *[!A-Za-z0-9._-]*) return 1 ;;
+	esac
+	return 0
+}
+
+# hook_expand <path> — a leading `~` is the home directory of whoever ran the
+# agent harness. The live capture's paths are absolute, and the `~` in the
+# checked-in fixtures is the REDACTION's substitution rather than anything the
+# agent harness emitted — so this branch guards a shape nothing here has been
+# seen to produce, and `tests/trace-hooks.test.sh` section 16 is the case that
+# keeps it honest rather than untested.
 hook_expand() {
 	case $1 in
 	'~') printf '%s' "${HOME:-~}" ;;
@@ -127,15 +163,22 @@ hook_point_at() {
 
 # hook_tokens <transcript> <kind> [<field>=<value> …] — one event of <kind> per
 # model in the transcript, carrying that model's four token counts, and exactly
-# one event whatever happens. Three shapes, all of them exit 0:
+# one event whatever happens. Four shapes, all of them exit 0:
 #
 #   the numbers      one event per model, tokens on it
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave
+#   nothing to read  one event, outcome=fail, saying the transcript had no
+#                    assistant message with a usage block yet
 #
-# The fail shapes carry NO token counts, deliberately: a partial sum is the
-# failure this whole path exists to avoid, and an event that says "this is what
-# I could not read" is worth more than one that says zero.
+# EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
+# because a partial sum is the failure this whole path exists to avoid and an
+# event saying "this is what I could not read" is worth more than one saying
+# zero. The flag, because the last shape is the live gap subagent-stop.sh
+# documents — a transcript read before it was flushed — and without a field to
+# filter on it is indistinguishable from a subagent that genuinely spent
+# nothing, so the holes cannot be counted and the ticket that closes them has
+# no acceptance (M-6, review of PR #291).
 hook_tokens() {
 	_ht_file=$1
 	_ht_kind=$2
@@ -145,21 +188,38 @@ hook_tokens() {
 			reason='node is not on PATH, so the transcript could not be read for token counts' "$@"
 		return 0
 	fi
-	# Combined streams on purpose: on success the extractor writes only the
-	# rows, and on failure its first line is the reason this event carries.
-	_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file" 2>&1)
-	_ht_st=$?
+	# TWO STREAMS, KEPT APART. The first draft merged them, and a node that
+	# prints a warning of its own — an ExperimentalWarning, a version shim's
+	# notice — then fed that line to the row reader on the success path and
+	# recorded it as the drift reason on the failure path (M-1, review of
+	# PR #291). Never parse a stream the runtime shares. Without a scratch
+	# file the two cannot be told apart, so that case takes the rows and lets
+	# node's own stderr reach the operator instead of guessing.
+	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
+	if [ -n "$_ht_err" ]; then
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file" 2>"$_ht_err")
+		_ht_st=$?
+		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
+		# line: a runtime warning arrives BEFORE the refusal it precedes, so
+		# "the first line" recorded node's chatter as the reason a key drifted.
+		# One line, trimmed, either way — an event is capped at 4000 bytes
+		# (craft §11's single write, made checkable) and a reason is a sentence.
+		_ht_why=$(sed -n '/^x transcript-usage:/{p;q;}' "$_ht_err" 2>/dev/null | cut -c1-300)
+		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
+		rm -f "$_ht_err"
+	else
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file")
+		_ht_st=$?
+		_ht_why=
+	fi
 	if [ "$_ht_st" != 0 ]; then
-		# One line, trimmed: an event is capped at 4000 bytes (craft §11's
-		# single write, made checkable), and a reason is a sentence.
-		_ht_why=$(printf '%s\n' "$_ht_out" | sed -n '1p' | cut -c1-300)
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason="${_ht_why:-the transcript usage extractor failed and said nothing}" "$@"
 		return 0
 	fi
 	if [ -z "$_ht_out" ]; then
-		hook_trace emit kind="$_ht_kind" \
-			reason='the transcript carries no assistant message with a usage block' "$@"
+		hook_trace emit kind="$_ht_kind" outcome=fail \
+			reason='the transcript carries no assistant message with a usage block — nothing to read yet' "$@"
 		return 0
 	fi
 	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r; do

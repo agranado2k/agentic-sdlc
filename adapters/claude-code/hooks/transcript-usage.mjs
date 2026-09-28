@@ -50,6 +50,13 @@
 // count them in both places; that would be shape drift of a kind no key check
 // can see, and the suite's oracle assertion is what would catch it.
 
+// READ WHOLE, and the ceiling named rather than discovered: `readFileSync` plus
+// `split` holds the transcript twice, and V8 refuses a string past roughly
+// 512 MB with ERR_STRING_TOO_LONG — which arrives here as exit 2 and therefore
+// as an honest `outcome=fail`, not as a wrong number. The largest transcript
+// seen on the machine this was built on is 8 MB. A `node:readline` stream is
+// the answer the day that stops being true (L-3, review of PR #291).
+
 import { readFileSync } from "node:fs";
 
 const NAME = "transcript-usage";
@@ -106,6 +113,14 @@ for (const line of raw.split("\n")) {
   // is skipped without comment: a transcript is full of other line types and
   // the set grows on the agent harness's schedule, not this file's.
   if (entry.type !== "assistant") continue;
+  // An API ERROR is written as an assistant line too, with a placeholder model
+  // and zero counts. It passes every check below, and `model` is a join column
+  // (ADR-0008 clause 1) — so it would grow a row in every `summary --by model`
+  // that each later reader has to know to ignore. Skipped by the flag the
+  // agent harness sets, and by the angle-bracket shape of the name, because one
+  // of the two may be absent (M-3, review of PR #291).
+  if (entry.isApiErrorMessage === true) continue;
+  if (typeof entry.message?.model === "string" && entry.message.model.startsWith("<")) continue;
 
   const message = entry.message;
   if (message === null || typeof message !== "object") {

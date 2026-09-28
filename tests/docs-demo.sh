@@ -630,6 +630,12 @@ rm -rf "$OLD3/.claude/skills/dogfood"
 # `scripts/trace.sh` and `docs/adr/0008-…` are new since 0.3.0 too and appear
 # in no listing, because a fixture rolls back what a case needs and not the
 # calendar.
+#
+# WHAT THIS GIVES UP, and where it is recovered: the pinned listing was the one
+# tripwire that made ADAPTER GROWTH visible as a release-notes item. That job
+# now belongs entirely to the VERSION note's non-manifest half, which hard rule
+# 3 requires and self-host.test.sh F5 holds the current note to — so a release
+# that adds to an adapter enumerates it there (L-6, review of PR #291).
 rm -f "$OLD3/adapters/claude-code/README.md"
 rm -f "$OLD3/constitution/local-product.md.template"
 rm -f "$OLD3/scripts/agents.config.sh"
