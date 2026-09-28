@@ -90,8 +90,10 @@ VOCAB_STATUS='mixed-commit unspecified specified missing'
 # thread with a citation, or escalate to the operator.
 VOCAB_ACTION='apply reply escalate'
 
-# outcome — /dogfood's reading of one matrix row: the assertion held, it did
-# not, or it held but the thing was not decent to use.
+# outcome — the dogfooding pass's reading of one matrix row: the assertion
+# held, it did not, or it held but the thing was not decent to use. (The
+# skill is optional; the field ships either way, and names no command so a
+# tree that declined it stays clean.)
 VOCAB_OUTCOME='pass fail paper-cut'
 
 # confidence — how sure a stamp LOOKED to the session that made it, never how
