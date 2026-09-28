@@ -513,7 +513,15 @@ printf 'hand-edited, not an event\n' >>"$DAMAGED/events/$TODAY.jsonl"
 t_run_split env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
 [ "$S_STATUS" = 0 ] && pass "summary on a damaged trace still exits 0 — a glance is not an import" || fail "summary exited $S_STATUS on a damaged trace"
 case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: FAILED"*) pass "and its FIRST line says verify FAILED, so the totals below are never quoted as clean" ;; *) fail "the first line of summary did not mark the failed verify: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
-case $S_OUT in *"1 bad line"*) pass "and counts the bad lines" ;; *) fail "the marker does not count the bad lines: $S_OUT" ;; esac
+case $S_OUT in *"1 bad line"*) pass "and counts the bad LINES — one, however many findings verify raised for it" ;; *) fail "the marker does not count the bad lines: $S_OUT" ;; esac
+# The trap the count fell into once: with node on PATH verify names the same
+# line twice, structurally and from the parse, and a marker that counted
+# findings said 2. Pin the double report, so the count's job stays visible.
+if command -v node >/dev/null 2>&1; then
+	[ "$(printf '%s\n' "$S_ERR" | grep -c "$TODAY.jsonl:")" -ge 2 ] &&
+		pass "verify reported that one line more than once on stderr (structural and parse), and the marker still said 1" ||
+		fail "expected verify to name the bad line at least twice with node present: $S_ERR"
+fi
 case $S_ERR in *"$TODAY.jsonl:"*) pass "and verify's own findings go to stderr, file:line" ;; *) fail "stderr did not carry verify's file:line: $S_ERR" ;; esac
 [ "$(summary_row "$S_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
 	pass "and the rows themselves are still the rows" || fail "m1 row changed: $(summary_row "$S_OUT" m1)"

@@ -739,7 +739,9 @@ trace_summary() {
 	fi
 	if [ "$_su_vst" != 0 ]; then
 		[ -n "$_su_bad" ] && printf '%s\n' "$_su_bad" >&2
-		_su_n=$(printf '%s\n' "$_su_bad" | grep -c .)
+		# Distinct file:line pairs, not findings: with node on PATH verify names
+		# a bad line twice, once structurally and once from the parse.
+		_su_n=$(printf '%s\n' "$_su_bad" | cut -d: -f1,2 | sort -u | grep -c .)
 		printf 'verify: FAILED — %s bad line(s) on this selection; the totals below include them\n' "$_su_n"
 	fi
 	trace_load_prices "$_su_since"
