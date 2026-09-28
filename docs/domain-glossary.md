@@ -126,7 +126,7 @@ Grouped by the seam each term belongs to. Entry shape:
   rule about consumer-owned prose, where version skew is a sanctioned state.
   - _Avoid_: "soft failure" — an advisory does not fail; "lint warning" — it
     reports a missing decision, not a style slip.
-- **Anchor** — a labeled decision line in a stamped article, `**Label**:`
+- **Anchor** — a labeled decision in a stamped article, `**Label**:`
   followed by the decision, with exactly two honest forms: the decision, or an
   explicit `none — <reason>`. The template stamps the label with a mark after
   it; an advisory referees the filled article. The kit has four: the mutation
@@ -178,6 +178,14 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "enum", "options" — neither has a canonical order or an owner;
     and "the vocabulary" for the docs harness's `local-vocabulary.mjs`, which
     is your product's words for the gate, not a decision field's.
+- **Decision line** — the vocabulary checker's unit of input: one
+  `<Field>: <value>` line — `Tier: implementer`, `Severity: high` — lifted
+  out of a ticket body, a review report or a subagent's return by the skill
+  that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
+  declared field is not one, so a whole body may be handed over; a field said
+  twice with two values has no value and is refused. Not an anchor: an anchor
+  is a labeled decision in a stamped article, refereed by an advisory, and is
+  never read by the checker.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
