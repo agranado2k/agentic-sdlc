@@ -106,6 +106,17 @@ s_assert_err_has "[a-z][a-z0-9-]*"
 vocab 'Domain: html report'
 s_assert_status 2 "a domain token with a space is exit 2"
 
+# A value that is SEVERAL tokens at once is no member: `Tier: planner
+# implementer` is an agent echoing the vocabulary instead of choosing from
+# it, and `Action: apply reply` would carry `apply` past the shipped rule's
+# `!=` — a contiguous run of the list is still not one of its tokens.
+vocab 'Tier: planner implementer'
+s_assert_status 2 "a value made of two tokens is exit 2 — a closed field takes one"
+s_assert_err_has "tier: 'planner implementer' is not one of planner implementer mechanical reviewer"
+vocab 'Command shaped: yes' 'Action: apply reply'
+s_assert_status 2 "…so two tokens cannot smuggle 'apply' past the shipped rule"
+s_assert_err_has "action: 'apply reply' is not one of apply reply escalate"
+
 # Several violations, several reasons — one line each, all of them.
 vocab 'Tier: senior' 'Label: hitl' 'Severity: critical'
 s_assert_status 2 "two bad values in one call are exit 2"

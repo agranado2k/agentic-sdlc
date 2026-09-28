@@ -140,28 +140,26 @@ vocab_tokens() { eval "printf '%s' \"\${$(vocab_var "$1"):-}\""; }
 
 # vocab_is_field <name> — is it a declared field? A `case` against a padded
 # string, not a loop over an unquoted expansion, for the zsh reason the
-# resolver documents (SH_WORD_SPLIT).
-vocab_is_field() {
-	case " $VOCAB_FIELDS " in
-	*" $1 "*) return 0 ;;
+# resolver documents (SH_WORD_SPLIT). A candidate with a space in it —
+# `planner implementer` — is contiguous text INSIDE the list and must not
+# pass as a member; the guard is trace_is_kind's, for the same reason.
+vocab_in_list() {
+	case $2 in
+	'' | *' '*) return 1 ;;
 	esac
-	return 1
-}
-
-vocab_is_open() {
-	case " ${VOCAB_OPEN:-} " in
-	*" $1 "*) return 0 ;;
-	esac
-	return 1
-}
-
-# vocab_has_token <field> <value> — membership in the field's vocabulary.
-vocab_has_token() {
-	case " $(vocab_tokens "$1") " in
+	case " $1 " in
 	*" $2 "*) return 0 ;;
 	esac
 	return 1
 }
+
+vocab_is_field() { vocab_in_list "$VOCAB_FIELDS" "$1"; }
+
+vocab_is_open() { vocab_in_list "${VOCAB_OPEN:-}" "$1"; }
+
+# vocab_has_token <field> <value> — membership in the field's vocabulary: one
+# token, matched whole.
+vocab_has_token() { vocab_in_list "$(vocab_tokens "$1")" "$2"; }
 
 # vocab_shape_ok <token> — the task-domain shape, alphabet spelled out.
 vocab_shape_ok() {
