@@ -158,6 +158,15 @@ you get it wrong:
   interpretation that rots on the vendor's schedule, so the trace keeps token
   counts and prices them on read, from a table you own (ADR-0008 clause 6).
 
+One known gap, observed in a live session rather than in a fixture: **the
+subagent-stop hook can run before the subagent's transcript has its assistant
+line**, and the `agent.stop` event then records that it found no usage and
+carries the transcript path instead of tokens. A session's own `session.usage`
+is unaffected and exact; what is lost is that session's subagent tokens, so the
+"usage plus agent.stop equals the rollup" identity holds only when the file was
+ready. Waiting for it is a decision with a timing guess in it and a hook that
+sleeps delays a session, so it is deliberately not worked around here.
+
 ### Reading it back: DuckDB and SQLite
 
 `sh scripts/trace.sh summary --by model` answers the usual question without

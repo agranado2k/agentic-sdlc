@@ -14,6 +14,19 @@
 # #246 spike's Q2 finding, and the reason hook.lib.sh's field reader is
 # anchored on the character before the key.
 #
+# OBSERVED, and NOT what the #246 spike's fixtures show: in a live session this
+# hook can run BEFORE the subagent's transcript has its assistant line. The
+# fixtures were captured after the fact, so they hold the finished file; a real
+# SubagentStop found the file present, 12 lines long, and carrying no assistant
+# message yet — the line landed a moment later. The event then says exactly
+# that and carries the transcript path in its data map, so the numbers are
+# recoverable, but the subagent's tokens are missing from the trace.
+#
+# Deliberately not worked around here. A hook that sleeps or retries is a hook
+# that delays a session, and how long to wait is a decision with a timing guess
+# in it — a ticket, not a line. Until then: a session's own session.usage is
+# exact, and the sum with agent.stop is exact only when the file was ready.
+#
 # Exits 0 unconditionally; says nothing on either stream. See hook.lib.sh.
 
 set -u
