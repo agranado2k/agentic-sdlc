@@ -566,6 +566,18 @@ skeleton (K0).
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
   is stored once under git's own hash of the bytes that were stored, and
   `verify` refuses a schema it does not know.
+- `sh tests/forge-broker.test.sh` proves the broker (ADR-0009) lands a
+  dispatched reviewer's report on the PR without the worker ever holding
+  network or credentials: against a stub forge CLI that records argv and
+  stdin, a valid report makes exactly two mutating calls — one review whose
+  payload carries `event` COMMENT explicitly, one top-level behavior comment
+  — and prints both URLs; `--dry-run` prints both payloads and posts nothing;
+  a report with no `REVIEWED` or `VERDICT` line, or a heading missing, posts
+  nothing and exits 65; a reviewed commit that is not the PR head exits 75; no
+  `gh` on PATH exits 69; a policy that omits an operation exits 78; a finding
+  whose `path:line` is not in the diff is dropped and named; a retried run
+  finds its marker and skips; the word APPROVE in a finding never reaches the
+  event; and the `review.verdict` event is read back with the trace's `show`.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving
@@ -703,6 +715,7 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
+sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
