@@ -164,10 +164,16 @@ vocab 'Tier: MECHANICAL'
 s_assert_status 2 "the value is not case-folded — a token is spelled one way"
 
 # A body that carries no decision line at all is legal: nothing to refuse.
-vocab 'just prose'
+vocab check 'just prose'
 s_assert_resolved "" "a line with no colon is ignored"
 vocab 'Blocked by: #12'
 s_assert_resolved "" "a line whose key is not a declared field is ignored"
+# …but a FIRST argument with no colon is not a line at all: it is a
+# subcommand nobody declared, and a silent exit 0 on `fieldz` would be a
+# pass a caller never earned.
+vocab fieldz
+s_assert_status 2 "a first argument that is neither a subcommand nor a 'Field: value' line is a usage error"
+s_assert_err_has "usage"
 
 # One ticket body checks in under a second — it is called inside the quiz
 # loop. Five runs in four wall seconds bounds each at under one.

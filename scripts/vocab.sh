@@ -97,7 +97,8 @@ usage() {
 	cat >&2 <<'USAGE'
 usage: sh scripts/vocab.sh [check] [<line> …]   lines as arguments, or on stdin
        sh scripts/vocab.sh fields               print the effective vocabularies
-  a line is `<Field>: <value>`; a field is one the policy file declares
+  a line is `<Field>: <value>`; a field is one the policy file declares;
+  a first argument with no colon is a subcommand, and only these two exist
 USAGE
 	exit 2
 }
@@ -551,7 +552,12 @@ fields)
 -h | --help | -*) usage ;;
 *)
 	# A bare line as the first argument — `sh scripts/vocab.sh 'Tier: x'` —
-	# is the check, exactly as the usage line says.
-	vocab_check "$@"
+	# is the check, exactly as the usage line says. A first argument with
+	# no colon is not a line: it is a subcommand nobody declared, and a
+	# silent exit 0 on `fieldz` would be a pass the caller never earned.
+	case $1 in
+	*:*) vocab_check "$@" ;;
+	*) usage ;;
+	esac
 	;;
 esac
