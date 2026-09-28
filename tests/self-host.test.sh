@@ -234,6 +234,17 @@ done
 [ -e "$PROJ/scripts/trace.kit.sh" ] &&
 	fail "scripts/trace.kit.sh leaked into the project" ||
 	pass "no scripts/trace.kit.sh in the project"
+# The agent-harness wiring (ADR-0008 clause 8): the adapter's session hooks
+# SHIP, under adapters/, and arrive dormant because nothing names them. This
+# file is the only thing that does, and it names a kit-only trace policy the
+# strip has already deleted — so a consumer inheriting it would get three
+# session hooks wired to nothing.
+[ -e "$PROJ/.claude/settings.json" ] &&
+	fail ".claude/settings.json leaked into the project — the kit's own session hooks reached a consumer" ||
+	pass "no .claude/settings.json in the project — the trace hooks stayed dormant"
+[ -f "$PROJ/adapters/claude-code/hooks/session-start.sh" ] &&
+	pass "the adapter's hooks themselves did reach the project, as reference material" ||
+	fail "adapters/claude-code/hooks/session-start.sh did not reach the project — adapters/ arrives intact"
 [ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"

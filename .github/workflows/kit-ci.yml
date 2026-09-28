@@ -342,6 +342,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Vocabulary policy suite
         run: sh tests/vocab-policy.test.sh
+  trace-skills:
+    name: Every chain skill emits, and none reads the trace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trace skills text suite
+        run: sh tests/trace-skills.test.sh
 
   skill-phase:
     name: Every skill declares its phase
@@ -358,6 +365,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Manifest parser suite
         run: sh tests/manifest.test.sh
+
+  trace-hooks:
+    name: The adapter's session hooks and usage extractor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node IS the point here, unlike most of this file's suites: the token
+      # extractor in the Claude Code adapter is the one part of that
+      # adapter with a runtime, and the legs that assert exact per-model sums
+      # against the fixtures' rollup line skip loudly without it. The suite
+      # also scrubs node OFF its own PATH for one leg, which only proves
+      # anything on a runner where node was there to begin with.
+      # Not in kit-guards.yml beside tests/trace.test.sh: that workflow's jobs
+      # are deliberately node-free.
+      - name: Trace hooks suite
+        run: sh tests/trace-hooks.test.sh
 
   adopt-demo:
     name: Existing-repo adoption arm

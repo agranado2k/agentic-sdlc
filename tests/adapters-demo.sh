@@ -269,6 +269,20 @@ for wf in mutation-delta.yml prompt-evals.yml; do
 		pass ".github/workflows/$wf was NOT installed (dormant, as designed)"
 done
 
+# The Claude Code adapter's trace hooks SHIP — they are under adapters/, which
+# arrives intact — and they must arrive UNWIRED. The only thing that wires them
+# is a settings file, and the kit's own is kit-authoring only (bootstrap's
+# KIT_ONLY list, ADR-0008 clause 8). A consumer inheriting it would have three
+# session hooks pointing at a trace policy file the strip has already deleted.
+[ -e ".claude/settings.json" ] &&
+	fail ".claude/settings.json reached the project — the kit's own agent-harness wiring leaked, and the adapter is not dormant" ||
+	pass "no .claude/settings.json in the project — the trace hooks arrived unwired"
+for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh transcript-usage.mjs; do
+	[ -f "adapters/claude-code/hooks/$h" ] &&
+		pass "adapters/claude-code/hooks/$h survived bootstrap (reference material, dormant)" ||
+		fail "adapters/claude-code/hooks/$h is missing after bootstrap"
+done
+
 # The guards must still be INACTIVE: the adapter ships a filled-in config, and
 # if bootstrap ever copied it over scripts/guards.config.sh it would be
 # enforcing a layout this project does not have.

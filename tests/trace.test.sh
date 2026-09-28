@@ -124,6 +124,16 @@ assert_status 2 "two adjacent kinds in one value are exit 2 — membership is pe
 assert_status 2 "a field name with a space is exit 2, never a membership hit or an eval" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note 'subject related=x'
 [ "$(wc -l <"$FILE" | tr -d ' ')" = 3 ] && pass "none of the refusals wrote a line" || fail "a refused emit still wrote: $(wc -l <"$FILE") lines"
 
+banner "5a. feedback is in the vocabulary — the human's verdict on a landed slice (PRD #237, scenario 13; ticket #250)"
+# The "adjust aim" record between tracer bullets: /merge-train emits it at
+# landing, /pr-iterate when a human comment changes the plan. Before #250 the
+# kind was unknown and exit 2, the same refusal `bogus` gets above.
+for _fb in hit adjusted missed; do
+	t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=feedback subject='ticket:#247' outcome=$_fb reason='#248 and #253 re-cut after the review'
+	[ "$S_STATUS" = 0 ] && pass "feedback outcome=$_fb is accepted" || fail "feedback outcome=$_fb exited $S_STATUS: $S_ERR"
+done
+case $(tail -n 1 "$FILE") in *'"kind":"feedback"'*'"subject":"ticket:#247"'*'"outcome":"missed","reason":"#248 and #253 re-cut after the review"}') pass "and the line carries the slice, the verdict and its reason" ;; *) fail "feedback line wrong: $(tail -n 1 "$FILE")" ;; esac
+
 banner "6. A relative TRACE_DIR resolves to the ROOT checkout — from inside a linked worktree too"
 t_repo
 mkdir -p "$REPO/scripts"
@@ -184,6 +194,68 @@ case $S_OUT in *'"reason":"decoy"'*) fail "show matched a data.subject/data.rela
 t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --kind pr.open
 case $S_OUT in *decoy-kind*) fail "--kind matched a data.kind decoy" ;; *) pass "a data.kind is not the event's kind" ;; esac
 [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] && pass "--kind pr.open still finds the one real pr.open" || fail "--kind returned: $S_OUT"
+
+banner "8b. show run:<id> reads the envelope's run field, and a child run's pair under its parent"
+# PRD #237 story 25, found missing by #263's review: a run id lives in the `run`
+# field, never in `subject`, so a subject-only reader answered nothing for the
+# one question a run id is for. The events are emitted with explicit run= and
+# parent= fields rather than through begin/end, so this case stays hermetic and
+# independent of a working tree's run stack (sections 10 to 13 own that).
+R="$SCRATCH/runs"; RON=$(policy "$R")
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=run.start skill=implement run=r1 subject='ticket:#7' reason=outer-start
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=r1 reason=inside-one
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=r1 reason=inside-two
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=run.start skill=review-pr run=r1c parent=r1 reason=child-start
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=r1c parent=r1 reason=inside-child
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=run.end run=r1c parent=r1 reason=child-end
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=run.end run=r1 reason=outer-end
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=r12 reason=longer-run
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note data.run=r1 reason=run-decoy
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note subject='run:r1' reason=about-the-run
+
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1'
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 7 ] && pass "show run:r1 returns the seven events that belong to it" || fail "show run:r1 returned: $S_OUT"
+case $S_OUT in *outer-start*) pass "the run's own run.start is one of them" ;; *) fail "run.start was not matched: $S_OUT" ;; esac
+case $S_OUT in *inside-one*) pass "and an event emitted inside the run" ;; *) fail "an event carrying run=r1 was not matched: $S_OUT" ;; esac
+case $S_OUT in *about-the-run*) pass "and an event that names the run as its SUBJECT — the run field is added to the match, not substituted for it" ;; *) fail "subject='run:r1' stopped matching: $S_OUT" ;; esac
+# The one thing a prefix reader gets wrong, exactly as ticket:#3 must never
+# find ticket:#34: r1 is a prefix of r12, and an id is matched whole or not
+# at all.
+case $S_OUT in *longer-run*) fail "show run:r1 matched run=r12 — a prefix match, not an exact one" ;; *) pass "and never the longer run=r12" ;; esac
+case $S_OUT in *run-decoy*) fail "show run:r1 matched a data.run decoy — it read the data map, not the envelope" ;; *) pass "a data.run named r1 is not the event's run" ;; esac
+# A dispatched worker's pair shows under the run that dispatched it (PRD
+# scenario 11), which is the whole point of reading `parent` — but only for the
+# pair: an event a child emitted between them belongs to the child's own id, or
+# a nested run would flatten its whole body into its parent's view.
+case $S_OUT in *child-start*) pass "the child run's run.start appears under its parent's id" ;; *) fail "a child run.start with parent=r1 was not matched: $S_OUT" ;; esac
+case $S_OUT in *child-end*) pass "and its run.end" ;; *) fail "a child run.end with parent=r1 was not matched: $S_OUT" ;; esac
+case $S_OUT in *inside-child*) fail "an event the child emitted (parent=r1, kind note) was flattened into the parent's view" ;; *) pass "but not the events between them — those are the child run's own" ;; esac
+
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1c'
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "show run:r1c returns the child's own three events" || fail "show run:r1c returned: $S_OUT"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --kind note
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "--kind still narrows a run's view" || fail "--kind note over run:r1 returned: $S_OUT"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
+[ -z "$S_OUT" ] && [ "$S_STATUS" = 0 ] && pass "--since still narrows it, exit 0" || fail "--since over run:r1 returned '$S_OUT' (exit $S_STATUS)"
+# The ids above are hand-written so the cases stay hermetic, but the id an
+# operator actually types is the one `begin` mints — a stamp, a process id and
+# eight hex digits, uppercase letters and hyphens included. Round-trip one, so
+# the shape the demo uses is a shape the suite has read back (L-1, review of
+# PR #284).
+REAL=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#272')
+env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason=real-id-inside
+env TRACE_CONFIG=$RON sh "$TRACE" end outcome=green reason=real-id-done
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $S_OUT"
+# The type is what switches the run field on: a ticket subject must not start
+# matching run ids, or `show ticket:#3` in section 8 would answer for a run
+# called `#3`. The decoy carries the REFERENCE the subject would be reduced to
+# — `${subject#*:}` of `ticket:#3` is `#3`, never `3` — because a decoy the
+# wrong shape leaves the assertion passing with the type switch deleted, which
+# is a check that cannot fail (H-1, review of PR #284).
+TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run='#3' reason=run-called-three
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'ticket:#3'
+[ -z "$S_OUT" ] && pass "and a non-run subject never reads the run field" || fail "show ticket:#3 matched on the run field: $S_OUT"
 
 banner "9. verify names the file and line of a bad event, and exits 1"
 t_run_split env TRACE_CONFIG=$QON sh "$TRACE" verify

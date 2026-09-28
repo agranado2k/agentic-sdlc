@@ -582,6 +582,29 @@ skeleton (K0).
   tier stamp of `/to-tickets` and the resolver's literal — order included,
   and to the checker's own defaults, so a token added on one side and not the
   other goes red.
+
+- `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
+  Claude Code adapter's session hooks, against the checked-in payload and
+  redacted transcript fixtures. The session-start hook writes the pointer file
+  the shared script reads a session id back from, proved by a *later* emit
+  carrying that session rather than by looking for a file, and appends the
+  export to the env file the agent harness hands it. The session-end hook sums
+  tokens per model with a streamed response counted once, and the numbers are
+  held to the agent harness's own rollup line as an oracle: the session's usage
+  plus the subagent's equals it exactly. Then both failure shapes — a renamed
+  usage key and a PATH with no node — make the extractor exit 2 and the hook
+  record one event with `outcome=fail` naming the cause, and every hook exits 0
+  and says nothing on either stream throughout. Finally the kit-only
+  `.claude/settings.json` parses and names only hook scripts that exist.
+- `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
+  contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
+  decision points by the plain `sh scripts/trace.sh …` name, never the kit's
+  never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
+  error changes no skill's outcome; every kind a skill emits is one the script
+  knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
+  and records a spawn per agent with that model; `/merge-train` and
+  `/pr-iterate` record the human's `feedback` verdict on a landed slice; and
+  no skill, chain or not, ever calls `show`, `summary` or `export`.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
   box-drawing character anywhere in the shipped prose — the skills, the
   constitution and the templates — with a planted box under each root proving
@@ -721,6 +744,8 @@ sh tests/docs-gate-advisory.test.sh                    # the warning channel is 
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
+sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract

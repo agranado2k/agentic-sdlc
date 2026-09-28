@@ -139,7 +139,7 @@ _trace_here=$(cd "$(dirname "$0")" && pwd -P)
 
 TRACE_SCHEMA=1
 TRACE_EVENT_CAP=4000
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision note'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -786,6 +786,14 @@ trace_show() {
 	_sh_subject=$1
 	shift
 	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not <type>:<reference>"
+	# A run id never appears as a subject: `begin` writes it into the `run`
+	# field and every event inside the run carries it there, so a subject-only
+	# reader answered nothing for `run:<id>` — the one question a run id is for
+	# (PRD #237 story 25, found by the review of PR #263). The TYPE is what
+	# switches that second look on, so no other subject type starts reading a
+	# field it never meant.
+	_sh_run=
+	case ${_sh_subject%%:*} in run) _sh_run=${_sh_subject#*:} ;; esac
 	_sh_since=
 	_sh_kind=
 	while [ $# -gt 0 ]; do
@@ -803,7 +811,19 @@ trace_show() {
 		# up to `,"data":{` — a sequence no string value can carry, since every
 		# quote inside a value is escaped. Then index() on the quoted subject
 		# and token equality over related, so ticket:#3 never matches ticket:#34.
-		awk -v s="$_sh_subject" -v k="$_sh_kind" '
+		#
+		# `run` adds a third place to look, it does not replace the first two: an
+		# event that names the run as its own subject still belongs in the view.
+		# The quoted `,"run":"<id>"` is an exact comparison for the same reason
+		# the subject one is — a reference carries no quote, backslash or space
+		# (trace_check_subject), so r1 can never match r12; the leading comma is
+		# free strictness, since neither field is ever the line's first.
+		# `parent` is matched ONLY for the run.start/run.end pair, so a
+		# dispatched worker's two ends show under the run that dispatched it
+		# (PRD scenario 11) while the body of that worker's run stays its own —
+		# matching parent for every kind would flatten a nested run into its
+		# parent's view and make `show` useless for the nesting it records.
+		awk -v s="$_sh_subject" -v k="$_sh_kind" -v run="$_sh_run" '
 		{
 			env = $0
 			d = index(env, ",\"data\":{")
@@ -813,6 +833,11 @@ trace_show() {
 				r = substr(env, RSTART + 11, RLENGTH - 12)
 				n = split(r, t, " ")
 				for (i = 1; i <= n; i++) if (t[i] == s) hit = 1
+			}
+			if (!hit && run != "") {
+				if (index(env, ",\"run\":\"" run "\"")) hit = 1
+				else if (index(env, ",\"parent\":\"" run "\"") &&
+					(index(env, ",\"kind\":\"run.start\"") || index(env, ",\"kind\":\"run.end\""))) hit = 1
 			}
 			if (hit && (k == "" || index(env, "\"kind\":\"" k "\""))) print
 		}' "$_sh_f"
