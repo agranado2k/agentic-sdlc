@@ -24,7 +24,7 @@ rather than inferring it from a regex example in a comment.
 | --- | --- | --- |
 | [`node-ts/`](node-ts/README.md) | A pnpm/TypeScript monorepo with Vitest | the TDD pairing guard's globs, `behavior-delta.sh`'s contract surfaces, a differential Stryker mutation diagnostic, and a promptfoo eval tier for agent-facing prompt surfaces |
 | [`ruby/`](ruby/README.md) | A Ruby project with RSpec | mutant-rspec as the on-demand mutation diagnostic — the engineering article's mutation decision, worked, with the two field-note traps that make a first run read as 1.5% coverage on healthy tests |
-| [`claude-code/`](claude-code/README.md) | One agent harness, rather than one stack | where a resolved capability tier goes at spawn time, and how to fill in `scripts/agents.config.sh` |
+| [`claude-code/`](claude-code/README.md) | One agent harness, rather than one stack | where a resolved capability tier goes at spawn time, how to fill in `scripts/agents.config.sh`, and the session hooks that put a session's token usage into the decision trace |
 | [`gemini-cli/`](gemini-cli/README.md) | One agent harness, at dispatch rather than spawn | how `scripts/agent-dispatch.sh` hands Gemini a prompt, a trusted directory and an approval policy headlessly — three details, each found by watching a dispatch not return |
 
 Note that the adapters answer different *kinds* of question. `node-ts/` and
@@ -54,7 +54,12 @@ sits in the kit:
 
 - no file here is on any execution path — no workflow lives in `adapters/`
   (GitHub only reads `.github/workflows/`), no guard resolves its policy file from
-  here, no gate scans it for references;
+  here, no gate scans it for references. `claude-code/hooks/` holds real
+  executable files, and they are the one place that claim needs stating
+  precisely rather than loosely: a hook runs only when a settings file of your
+  agent harness's names it, nothing in a stamped project does, and the kit's own
+  settings file is deleted by `bootstrap.sh` before your tree is stamped. The
+  scripts arrive; the wiring does not;
 - the one gate that does see these files is the docs gate's
   unstamped-placeholder scan, which every file in the repo is subject to and
   which these files pass;

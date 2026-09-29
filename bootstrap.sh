@@ -546,8 +546,17 @@ VOCAB="scripts/docs-conformance/local-vocabulary.mjs"
 #
 # Space-separated; each kit ticket that adds a demo, or a kit-authoring-only
 # script, adds its entry here.
-KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/agent-roster.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh tests/spec-skills.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh scripts/guards.kit.config.sh scripts/guards.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh tests/suite-budget.test.sh tests/skill-phase.test.sh scripts/skill-dispatch.kit.sh scripts/trace.kit.config.sh scripts/trace.kit.sh tests/trace.test.sh tests/fixtures/claude-code/README.md tests/fixtures/claude-code/session-end.payload.json tests/fixtures/claude-code/session-start.payload.json tests/fixtures/claude-code/subagent-stop.payload.json tests/fixtures/claude-code/subagent-transcript.redacted.jsonl tests/fixtures/claude-code/transcript.redacted.jsonl"
+KIT_ONLY="tests/kit-demo.sh tests/gate-path-roots.test.sh tests/docs-demo.sh tests/lib.sh tests/self-host.test.sh tests/guards-demo.sh tests/adapters-demo.sh tests/tdd-pairing-guard.test.sh tests/tdd-pairing-guard-ci.test.sh tests/behavior-delta.test.sh tests/worktree-cleanup.test.sh tests/agents-tiers.test.sh tests/agent-harness.test.sh tests/agent-dispatch.test.sh tests/agent-roster.test.sh tests/implement-deliver.test.sh tests/ai-review-template.test.sh tests/exclusions.test.sh tests/dogfood-optin.test.sh tests/setup-demo.sh tests/review-pr-output.test.sh tests/adopt-demo.sh tests/docs-gate-advisory.test.sh tests/design-brief-skill.test.sh tests/housekeeping-skill.test.sh tests/manifest.test.sh tests/spec-skills.test.sh tests/vocab.test.sh tests/vocab-policy.test.sh .github/workflows/kit-ci.yml .github/workflows/kit-guards.yml EXCLUSIONS.md scripts/agents.kit.config.sh scripts/agents.kit.sh scripts/guards.kit.config.sh scripts/guards.kit.sh SETUP.md setup/agent-bootstrap.md tests/no-box-art.test.sh tests/mutation-kit.test.sh scripts/mutation.kit.sh scripts/mutation.kit.config.json tests/fixture-builders.test.sh tests/suite-budget.test.sh tests/skill-phase.test.sh scripts/skill-dispatch.kit.sh scripts/trace.kit.config.sh scripts/trace.kit.sh tests/trace.test.sh tests/trace-skills.test.sh tests/fixtures/claude-code/README.md tests/fixtures/claude-code/session-end.payload.json tests/fixtures/claude-code/session-start.payload.json tests/fixtures/claude-code/subagent-stop.payload.json tests/fixtures/claude-code/subagent-transcript.redacted.jsonl tests/fixtures/claude-code/transcript.redacted.jsonl tests/trace-hooks.test.sh .claude/settings.json"
 
+# ON the list, and the reason is the whole shape of ADR-0008 clause 8:
+# .claude/settings.json. The trace hooks under adapters/claude-code/hooks/ SHIP
+# — adapters/ is reference material and arrives intact, see below — and they
+# arrive dormant, because nothing in a stamped project names them. This file is
+# the only thing that does, it is the kit turning its own tracing on, and a
+# consumer receiving it would have session hooks wired to a policy file the
+# strip has already deleted. tests/adapters-demo.sh asserts the absence and
+# tests/self-host.test.sh asserts the non-leak.
+#
 # NOT in KIT_ONLY, and deliberately: adapters/. It is reference material a
 # project wants LATER — on the day it turns a guard on, typically weeks after
 # bootstrap — so it arrives intact and dormant rather than being deleted here or
@@ -898,7 +907,7 @@ if [ "$ADOPT" = 1 ]; then
 	else
 		a_keep "scripts/docs-conformance/local-vocabulary.mjs"
 	fi
-	for f in scripts/guards.config.sh scripts/agents.config.sh scripts/worktree-cleanup.sh \
+	for f in scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/worktree-cleanup.sh \
 		scripts/docs-conformance/README.md \
 		constitution/local-engineering.md.template constitution/local-workflow.md.template; do
 		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi
@@ -1371,6 +1380,10 @@ Next:
                                   implementer; that file says how, and
                                   scripts/agent-dispatch.sh --dry-run checks a
                                   wiring without spending a token.
+                                  scripts/vocab.config.sh beside it needs no
+                                  day-one edit: it arrived FILLED with the
+                                  kit's own vocabularies, and is yours to
+                                  widen the day a field's words change.
   6. fill in docs/diary.md        the "Current state" block at the top is what
                                   an agent reads first; README.md is stamped
                                   but thin — make it say what $name is

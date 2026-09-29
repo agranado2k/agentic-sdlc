@@ -612,7 +612,31 @@ rm -rf "$OLD3/.agents"
 # Whole additions of the 0.4.0 wave.
 rm -rf "$OLD3/.claude/skills/improve-codebase-architecture"
 rm -rf "$OLD3/.claude/skills/dogfood"
-rm -rf "$OLD3/adapters/claude-code"
+# The claude-code adapter, rolled back to ONE FILE rather than the whole
+# directory — and the difference is not cosmetic. Part D pins Part 2's
+# transcript, which is the listing of everything changed outside the shared
+# layer, and UPDATING.md is itself manifest-listed. So every file this fixture
+# makes absent at FROM_REF lands in a SHARED-LAYER document, and an adapter
+# gaining a file became a release action: re-paste the transcript, and
+# self-host F3 then demands a VERSION bump for a document that only re-recorded
+# a run. That has already re-pinned this transcript twice (#194, and the
+# session hooks of #251).
+#
+# The fixture's own purpose is narrow: step 9e needs ONE path that is new at
+# TO_REF inside a directory the recipe copies wholesale, and the README is the
+# path 9e's prose actually names. Pinning the case to that file keeps the
+# demonstration exactly as strong and stops an adapter's growth from being a
+# shared-layer event. This fixture is already selective in the same direction —
+# `scripts/trace.sh` and `docs/adr/0008-…` are new since 0.3.0 too and appear
+# in no listing, because a fixture rolls back what a case needs and not the
+# calendar.
+#
+# WHAT THIS GIVES UP, and where it is recovered: the pinned listing was the one
+# tripwire that made ADAPTER GROWTH visible as a release-notes item. That job
+# now belongs entirely to the VERSION note's non-manifest half, which hard rule
+# 3 requires and self-host.test.sh F5 holds the current note to — so a release
+# that adds to an adapter enumerates it there (L-6, review of PR #291).
+rm -f "$OLD3/adapters/claude-code/README.md"
 rm -f "$OLD3/constitution/local-product.md.template"
 rm -f "$OLD3/scripts/agents.config.sh"
 rm -f "$OLD3/scripts/agents.lib.sh"

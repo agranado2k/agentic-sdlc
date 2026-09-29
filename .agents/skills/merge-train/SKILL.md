@@ -57,6 +57,10 @@ force-pushed.
 
 ### 1 — Assemble the batch
 
+Open the train's run first, so every landing below carries it:
+`sh scripts/trace.sh begin merge-train || :`. The trace is written here and
+never read (ADR-0008); unconfigured, every call is a silent no-op.
+
 If the operator gave PR numbers, use exactly those (still verify each is green —
 refuse red ones with a one-line reason). Otherwise discover:
 
@@ -122,6 +126,19 @@ candidate, continue the train.
 **If a post-merge workflow fails (4d)**: hard rule 6 — stop the train, escalate
 with the run log.
 
+**Record each PR's fate as the train decides it**, one event per PR (`<ticket>`
+is the ticket it implemented):
+`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.merge_sha='<the merge sha, when landed>' data.waited='<how long 4d waited, in seconds>' reason='<the PR title when landed; why it was skipped; what stopped the train>' || :`.
+
+**Then ask the operator, once per landed PR — after the plan step, never
+before the merge** — whether the slice hit its target, and record the answer
+as the slice's verdict: `sh scripts/trace.sh emit kind=feedback subject=ticket:#<ticket> related=pr:#<N> outcome=hit|adjusted|missed reason='<the operator verdict in one line: what the slice taught, what gets re-cut>' || :`.
+`hit` is the slice as planned; `adjusted` is the next slices re-cut on what
+this one taught; `missed` is a slice that did not do what it was for. This is
+the tracer bullet's adjust-aim record, the one the next slice is chosen from.
+An operator who gives no verdict gets no event — a verdict the human did not
+give is not feedback.
+
 ### 5 — After the batch
 
 Run **`/worktree-cleanup`** — the merged PRs' worktrees are now prunable, and
@@ -134,6 +151,9 @@ repo whose CI enforces release integrity (the kit's own does, in its
 self-host suite's F3) stays red on main by design until the tag exists.
 Tagging is part of landing the bump, and it carries the operator's name
 exactly like the merge did.
+
+Close the train's run, with the tag when one was cut:
+`sh scripts/trace.sh end outcome=ok|stopped data.landed=<count> data.skipped=<count> [data.tag=v<version>] reason='<the Landed line, or what stopped the train>' || :`.
 
 ## Output format
 
