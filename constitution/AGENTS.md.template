@@ -271,6 +271,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Tell the guards your repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — yours; the kit names no model |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>`; unmapped warns once and inherits the session model |
+| Hold a decision line to its vocabulary | `scripts/vocab.sh` — `sh scripts/vocab.sh '<Field>: <value>' …` exits 2 naming the field, the value and the vocabulary; the words are yours in `scripts/vocab.config.sh` |
 | Know which files are shared layer   | `VERSION`                                        |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
