@@ -97,11 +97,21 @@ banner "3. label — one name and its absence"
 # ---------------------------------------------------------------------------
 assert_file_has "$TICKETS" '**`ready-for-agent` label**' "the one autonomy label"
 assert_file_has "$TICKETS" '**no label**' "and its absence"
-assert_equal "the label vocabulary is the name and the absence" "ready-for-agent none" "$(field_tokens label)"
+# EXTRACTED, not restated: the skill's own trace line spells both tokens in
+# the vocabulary's order — `data.label='<ready-for-agent, or none>'` — so a
+# token renamed in the skill's prose and not here goes red, which is the
+# direction a literal could not see.
+skill_labels=$(sed -n "s/.*data\.label='<\([a-z][a-z0-9-]*\), or \([a-z][a-z0-9-]*\)>'.*/\1 \2/p" "$TICKETS" | head -1)
+[ -n "$skill_labels" ] || fail "/to-tickets no longer spells the label pair in its ticket.write line — the extractor has nothing to read"
+assert_equal "the label vocabulary is the pair /to-tickets writes, in its order" "$skill_labels" "$(field_tokens label)"
 
 # ---------------------------------------------------------------------------
 banner "4. domain — open, and every shipped token is one the glossary names"
 # ---------------------------------------------------------------------------
+# NOT extracted, and it cannot be: the task domain's vocabulary is OPEN local
+# policy (ADR-0007), so no skill spells a closed set to compare against — an
+# unmapped token is a working state, not a drift. The glossary is the only
+# oracle available, and naming every shipped token there is the whole check.
 printf '%s\n' "$FIELDS" | grep -q '^domain (open):' && pass "the task domain is declared open" ||
 	fail "the task domain must be OPEN — its vocabulary is local policy (ADR-0007)"
 for tok in $(field_tokens domain); do
@@ -138,7 +148,15 @@ banner "8. outcome — /dogfood's two readings of a row"
 # ---------------------------------------------------------------------------
 assert_file_has "$DOGFOOD" "decides pass or fail" "the binary reading"
 assert_file_has "$DOGFOOD" "**paper cuts**" "the decency reading"
-assert_equal "the outcome vocabulary is pass, fail and the paper cut" "pass fail paper-cut" "$(field_tokens outcome)"
+# EXTRACTED, not restated. The skill writes English and the vocabulary writes
+# tokens, so the third reading is folded the way a field key is: the phrase
+# `paper cuts` is singular-and-hyphenated to `paper-cut`. The first two need
+# no fold. A reading renamed in the skill and not here now goes red.
+skill_binary=$(sed -n 's/.*decides \([a-z][a-z0-9-]*\) or \([a-z][a-z0-9-]*\)\..*/\1 \2/p' "$DOGFOOD" | head -1)
+skill_cut=$(sed -n 's/.*\*\*\([a-z][a-z0-9]*\) \([a-z][a-z0-9]*\)s\*\*.*/\1-\2/p' "$DOGFOOD" | head -1)
+[ -n "$skill_binary" ] && [ -n "$skill_cut" ] ||
+	fail "/dogfood no longer spells its readings where the extractor reads them"
+assert_equal "the outcome vocabulary is the three readings /dogfood names" "$skill_binary $skill_cut" "$(field_tokens outcome)"
 
 # ---------------------------------------------------------------------------
 banner "9. confidence — three tokens, as the PRD sizes it"
