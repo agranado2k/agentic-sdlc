@@ -115,11 +115,11 @@ pushes straight past both gates.
 
 ## Capability tiers
 
-Work in this repo is sized to one of **four tiers**, and the tier is a
-cost/benefit decision made when the ticket is written — not when the agent is
-spawned, and never by the agent about itself. A **skill** also declares the
-phase of work it is (`metadata.phase`), and where both exist the ticket wins:
-the phase is what sizes a command nobody wrote a ticket for.
+Work in this repo is sized to one of **four tiers**, a cost/benefit decision
+made when the ticket is written — not when the agent is spawned, and never by
+the agent about itself. A **skill** also declares the phase of work it is
+(`metadata.phase`), and where both exist the ticket wins: the phase is what
+sizes a command nobody wrote a ticket for.
 
 | Tier | The work | The signal |
 | --- | --- | --- |
@@ -129,7 +129,7 @@ the phase is what sizes a command nobody wrote a ticket for.
 | `reviewer` | Adversarial reading of a finished diff in fresh context | Undersize it and review becomes a rubber stamp |
 
 `/to-tickets` stamps a tier on every ticket and shows it at the quiz for
-override; `/implement` reads its ticket's tier when it spawns.
+override; `/implement` reads it when it spawns.
 
 **This manual names no model, and neither does any other file the kit ships.**
 Model identifiers rot on a vendor's schedule, so the tier → model mapping is
@@ -139,9 +139,10 @@ working state: the resolver warns once, prints nothing, and the spawn inherits
 the session's model — `adapters/claude-code/README.md` is one worked example.
 
 `scripts/agents.config.sh` ships EMPTY to every consumer, by principle, and
-stays that way. But this repo spawns subagents too, and an unmapped resolver
-would let the kit's own agents inherit the session model whatever tier their
-ticket was stamped — so the kit carries a second, kit-only mapping,
+stays that way. But this repo is itself a consumer of the mechanism it ships:
+a session working here spawns subagents too, and an unmapped resolver would
+let the kit's own agents inherit the session model whatever tier their ticket
+was stamped — so the kit carries a second, kit-only mapping,
 `scripts/agents.kit.config.sh`, never shipped (it is on `bootstrap.sh`'s
 kit-authoring deletion list, the same as `tests/`).
 
@@ -149,48 +150,47 @@ Every SKILL.md that spawns a subagent says, verbatim, `sh scripts/agents.lib.sh
 <tier>` — correct for a consumer, and it has to stay that way: skills ship
 unstamped, so none may name a kit-only file (see "The chain" below). Typed
 literally in THIS repo, that command reads the empty shipped policy file and
-prints nothing. **Hard rule 10** is the fix: `sh scripts/agents.kit.sh <tier>
-[domain]` in its place, every time a skill says to spawn — the wrapper points
-the resolver's `$AGENTS_CONFIG` seam at the kit-only file and delegates, one
-name to substitute rather than an environment prefix to type right every time.
+prints nothing. **Hard rule 10** is the fix: run `sh scripts/agents.kit.sh
+<tier> [domain]` in its place, every time a skill says to spawn. The wrapper
+sets the resolver's existing `$AGENTS_CONFIG` seam and delegates —
+
+```sh
+AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
+```
+
+— so it is one name to substitute rather than an environment prefix to type
+correctly every time.
 
 The policy behind the mapping: plan on the strongest model available; execute
 spawned per tier, and per **domain** where the medium changes the answer; the
 reviewer is never the model that implemented — a review from the implementer's
 own model is an editorial pass wearing a second hat, not an adversarial read.
 
-The domain is the resolver's optional second argument — `sh
+The domain is the resolver's optional second argument: `sh
 scripts/agents.kit.sh implementer content` prefers
-`AGENT_TIER_IMPLEMENTER_CONTENT` and falls back to `AGENT_TIER_IMPLEMENTER`
-when it is unset. The two vocabularies are deliberately opposite: the four tier
-names above are **closed** (an unknown one is exit 2), while domains are **open
-local policy**, so an unmapped one falls back to the tier in silence. This repo
-maps two — `content`, for the prose that is most of the kit's product, which
-is `implementer` work by tier and not code by medium; and `self-implemented`
-on the reviewer tier, for a diff the session itself wrote on the reviewer's
-model — a situation rather than a medium, chosen at spawn time. `code` is
-deliberately unmapped: the plain tier is already its answer, and repeating that
-value under a domain name would record a non-decision. `/to-tickets` stamps an
-optional `Domain:` line when the medium would change which model you would
-pick, and `/implement` passes it through as the second argument; a
-situation domain is never stamped on a ticket.
-
-One domain the kit names itself and maps for nobody: **`judge`**, on the
-`mechanical` tier — the rung between a script and the session's model, named
-by its contract and never by a vendor: state and typed questions in, typed
-answers with per-option probabilities out. Two shapes, and a mapping answers
-one — **decide**, among supplied options (the chain's triage questions), and
-**rank-or-verify**, over supplied candidates. A decider is never handed a
-verification, and no typed judge takes the review verdict (shared invariant
-§5). Unmapped, it falls back to the tier in silence like every domain; the
-kit's own mapping declines it in so many words: the kit names no model (ADR-0010).
+`AGENT_TIER_IMPLEMENTER_CONTENT`, falling back to `AGENT_TIER_IMPLEMENTER`.
+The two vocabularies are deliberately opposite: the four tier names above are
+**closed** (an unknown one is exit 2), while domains are **open local policy**,
+so an unmapped one falls back to the tier in silence. This repo maps `content`,
+for the prose that is most of the kit's product — `implementer` work by tier,
+not code by medium — and `self-implemented` on the reviewer tier, for a diff
+the session itself wrote on the reviewer's model, a situation rather than a
+medium, chosen at spawn time. `code` is deliberately unmapped: the plain tier
+is already its answer. `/to-tickets` stamps an optional `Domain:` line when the
+medium would change which model you would pick, and `/implement` passes it as
+the second argument; a situation domain is never stamped on a ticket. One more
+the kit names and maps for nobody — **`judge`** on `mechanical`, by contract
+not by vendor: state and typed questions in, typed answers with per-option
+probabilities out, in two shapes — **decide** and **rank-or-verify**. A decider
+is never handed a verification, nor any judge the review verdict (§5,
+ADR-0010).
 
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
-word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The mapping's
-`self-implemented` answer is one model, so on a session running that model it
-is the implementer's own; the resolver compares its answer to yours, falls back
-to the plain reviewer tier when they are equal, and prints nothing with a
-warning when nothing differs — which your report then says (ADR-0007).
+word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The
+mapping's `self-implemented` answer is one model, so on a session running that
+model it is the implementer's own; the resolver compares its answer to yours,
+falls back to the plain reviewer tier when they are equal, and prints nothing
+with a warning when nothing differs — which your report says (ADR-0007).
 
 ## Agent trust boundary
 
