@@ -66,8 +66,10 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Policy file** — a file the kit ships whose whole purpose is to be edited by
   the consumer, deliberately kept OUT of the shared layer:
   `scripts/docs-conformance/config.mjs`, `scripts/guards.config.sh`,
-  `scripts/agents.config.sh`, `scripts/trace.config.sh`. Mechanism is shared;
-  policy is local.
+  `scripts/agents.config.sh`, `scripts/trace.config.sh`, `scripts/vocab.config.sh`.
+  Mechanism is shared; policy is local. The last one ships *filled*: a
+  vocabulary is the kit's to name where a model id is a vendor's, so the
+  consumer edits the kit's words rather than an empty form.
   - _Avoid_: "config" alone — it hides the load-bearing half, which is that this
     file is *not* copied verbatim and may diverge freely.
 - **Shim** — a tool-specific entry point (`CLAUDE.md`, `GEMINI.md`) holding
@@ -124,7 +126,7 @@ Grouped by the seam each term belongs to. Entry shape:
   rule about consumer-owned prose, where version skew is a sanctioned state.
   - _Avoid_: "soft failure" — an advisory does not fail; "lint warning" — it
     reports a missing decision, not a style slip.
-- **Anchor** — a labeled decision line in a stamped article, `**Label**:`
+- **Anchor** — a labeled decision in a stamped article, `**Label**:`
   followed by the decision, with exactly two honest forms: the decision, or an
   explicit `none — <reason>`. The template stamps the label with a mark after
   it; an advisory referees the filled article. The kit has four: the mutation
@@ -172,6 +174,27 @@ Grouped by the seam each term belongs to. Entry shape:
   holds the second. Ref: ADR-0007.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
+- **Vocabulary** — a decision field's closed token set, canonical order
+  included: the words a stamp, a finding or a triage may carry for that field
+  (`tier`, `label`, `severity`, `status`, `action`, …), declared as data in
+  `scripts/vocab.config.sh` and refused outside of by `scripts/vocab.sh` where
+  the line is read. The order is part of the vocabulary — it is the order a
+  judge is shown the tokens, fixed so position bias can be measured later —
+  and every token is a neutral name that carries no answer in its spelling
+  (`apply`, `escalate`; never `safe-to-apply`). The task domain's is the one
+  open vocabulary, held to its shape alone; the tier's is the resolver's, read
+  by the checker and never widened. Ref: PRD #273.
+  - _Avoid_: "enum", "options" — neither has a canonical order or an owner;
+    and "the vocabulary" for the docs harness's `local-vocabulary.mjs`, which
+    is your product's words for the gate, not a decision field's.
+- **Decision line** — the vocabulary checker's unit of input: one
+  `<Field>: <value>` line — `Tier: implementer`, `Severity: high` — lifted
+  out of a ticket body, a review report or a subagent's return by the skill
+  that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
+  declared field is not one, so a whole body may be handed over; a field said
+  twice with two values has no value and is refused. Not an anchor: an anchor
+  is a labeled decision in a stamped article, refereed by an advisory, and is
+  never read by the checker.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
@@ -237,7 +260,9 @@ Grouped by the seam each term belongs to. Entry shape:
   nested skill carries the outer as `parent`, and a dispatched worker gets
   its own with the dispatching run as parent. The open runs of one working
   tree are a **run stack** under the trace directory, written only by `begin`
-  and `end`.
+  and `end`. A run is readable by its own id: `show run:<id>` matches the `run`
+  field as well as the subject, and shows a nested or dispatched run's
+  `run.start`/`run.end` pair under the id of the run that opened it.
   - _Avoid_: "session" for this — a session is the agent harness's, and holds
     many runs.
 - **Blob** — a payload too large or too shaped for one event line — a prompt,

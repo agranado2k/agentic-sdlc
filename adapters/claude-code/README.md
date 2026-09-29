@@ -1,4 +1,10 @@
-# `claude-code/` — wiring capability tiers into one agent harness
+# `claude-code/` — wiring one agent harness into the kit
+
+Two questions the portable core cannot answer, because both are this agent
+harness's own: **where does a resolved capability tier go at spawn time**, and
+**how does a session's token usage reach the decision trace**. The first half of
+this note is prose about a mechanism; the second half ("Wiring the session
+hooks") points at real files under `hooks/`, which ship and arrive inert.
 
 The kit resolves a **capability tier** — and optionally a **task domain** — to a
 model identifier and stops there:
@@ -90,19 +96,143 @@ two-line change rather than a matrix to maintain. Note the fold: a domain token
 may contain hyphens and a variable name may not, so `html-report` reads
 `AGENT_TIER_IMPLEMENTER_HTML_REPORT`.
 
+## Wiring the session hooks
+
+The other half of this adapter is `hooks/`, and it answers a different
+question: **what did that session cost, and which model spent it?**
+`scripts/trace.sh` records the chain's decisions but knows nothing about a
+session — sessions belong to the agent harness, which is why these four files
+live here rather than in the shared script (ADR-0008 clause 8).
+
+| File | The event it records |
+| --- | --- |
+| `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on |
+| `hooks/session-end.sh` | one `session.usage` per model with four token counts, then `session.end` |
+| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
+| `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
+| `hooks/hook.lib.sh` | not a hook either: what the three share |
+
+**They are dormant until a settings file names them.** Three properties make
+that safe to leave in your tree: every hook exits 0 whatever happens, none of
+them writes to stdout, and each sets the trace's quiet variable so a project
+that never turned tracing on hears nothing. Observability that can fail a
+session is worse than none.
+
+To turn them on, wire the three events in your own `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/session-start.sh\"" } ] } ],
+    "SessionEnd": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/session-end.sh\"" } ] } ],
+    "SubagentStop": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/subagent-stop.sh\"" } ] } ]
+  }
+}
+```
+
+Then set `TRACE_DIR` in `scripts/trace.config.sh` — without it every emit is a
+silent no-op, which is the shipped default and a working state.
+
+Four details found by watching this run, each of which costs a wrong number if
+you get it wrong:
+
+- **A streamed response is written more than once.** One assistant API response
+  with two content blocks is two lines of the transcript, repeating the same
+  `message.id` and a byte-identical usage block. Summing lines over-counts;
+  de-duplicating by `message.id` reproduces the agent harness's own per-model
+  rollup exactly.
+- **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
+  payload carries two paths: `transcript_path` is the *parent session's* and
+  `agent_transcript_path` is the subagent's. Read the first one there and every
+  subagent that stops is charged with the whole session.
+- **The session transcript's totals are not the session's totals.** Its final
+  `cost-state` line holds a per-model rollup that *includes* the subagents, and
+  the subagents' lines are not in that file. So the trace's total for a session
+  is its `session.usage` events **plus** its `agent.stop` events — which is
+  what makes them add up to that rollup, and how the suite checks them.
+- **Cost is not recorded.** That same rollup carries the vendor's own cost
+  figure and the extractor deliberately ignores it: a price is an
+  interpretation that rots on the vendor's schedule, so the trace keeps token
+  counts and prices them on read, from a table you own (ADR-0008 clause 6).
+
+One known gap, observed in a live session rather than in a fixture: **the
+subagent-stop hook can run before the subagent's transcript has its assistant
+line**, and the `agent.stop` event then records that it found no usage and
+carries the transcript path instead of tokens. A session's own `session.usage`
+is unaffected and exact; what is lost is that session's subagent tokens, so the
+"usage plus agent.stop equals the rollup" identity holds only when the file was
+ready. Waiting for it is a decision with a timing guess in it and a hook that
+sleeps delays a session, so it is deliberately not worked around here.
+
+### Reading it back: DuckDB and SQLite
+
+`sh scripts/trace.sh summary --by model` answers the usual question without
+leaving the shell. Past that, the export is flat JSONL or CSV precisely so that
+no transform stands between you and a query engine:
+
+```sh
+# CSV, priced on read from your own table, with priced_at and price_src columns
+sh scripts/trace.sh export --csv --since 2026-09-01 > wave.csv
+```
+
+DuckDB reads either form in place — the JSONL directly, so you can query the
+day files without exporting at all:
+
+```sh
+duckdb -c "SELECT model, sum(tok_in), sum(tok_out), sum(tok_cache_w), sum(tok_cache_r)
+           FROM read_json_auto('$(sh scripts/trace.sh dir)/events/*.jsonl')
+           WHERE kind IN ('session.usage', 'agent.stop') GROUP BY model ORDER BY 2 DESC"
+duckdb wave.duckdb -c "CREATE TABLE events AS SELECT * FROM read_csv_auto('wave.csv')"
+```
+
+SQLite wants the CSV, and wants the columns typed after the fact — its importer
+makes every column text:
+
+```sh
+sqlite3 wave.db <<'SQL'
+.mode csv
+.import wave.csv events_raw
+CREATE TABLE events AS
+  SELECT ts, kind, skill, subject, session, run, model, outcome, reason,
+         CAST(tok_in AS INTEGER)      AS tok_in,
+         CAST(tok_out AS INTEGER)     AS tok_out,
+         CAST(tok_cache_w AS INTEGER) AS tok_cache_w,
+         CAST(tok_cache_r AS INTEGER) AS tok_cache_r,
+         CASE cost_usd WHEN 'unpriced' THEN NULL ELSE CAST(cost_usd AS REAL) END AS cost_usd
+  FROM events_raw;
+DROP TABLE events_raw;
+SQL
+```
+
+Two things to know before you trust a row. `export` refuses to print at all
+when `verify` fails on the selection, so a half-import is not a shape you can
+reach by accident. And `cost_usd` reads the literal `unpriced` — never 0 — for
+a token-bearing event whose model has no price in your table, which is why the
+`CASE` above exists rather than a bare `CAST`.
+
 ## What this adapter deliberately does NOT contain
 
 - **No model identifiers.** Not here either. This directory is reference prose
   about a mechanism; the moment it carried a real id it would rot on the same
   schedule the kit is avoiding, and it would rot somewhere a reader is far more
   likely to copy from than a comment in the policy file.
-- **No executable file.** Nothing under `adapters/` is on an execution path (see
-  [`../README.md`](../README.md)); this note is read by a human wiring the kit
-  up, and by the agent that reads the repo, not by a script.
-- **No hook or workflow.** Tier selection is a spawn-time decision inside a
-  session. There is nothing for CI to enforce, and a check that asserted "this
-  ticket ran on the right model" would be asserting something the repo has no
-  record of.
+- **No settings file.** The hooks above are executable and they are inert:
+  nothing in a stamped project names them, and the kit's own
+  `.claude/settings.json` — the only file that does — is deleted by
+  `bootstrap.sh` before your tree is stamped. That is the precise form of
+  [`../README.md`](../README.md)'s claim that this tree arrives dormant: the
+  scripts arrive, the wiring is yours to write.
+- **No workflow, and no check on tier selection.** Tier selection is a
+  spawn-time decision inside a session. There is nothing for CI to enforce, and
+  a check that asserted "this ticket ran on the right model" would be asserting
+  something the repo has no record of — which is what the trace's `spawn`
+  events are for instead.
+- **No tool-call capture.** Every tool call with its input and result is a
+  separate switch and a separate hook, and the volume is an order of magnitude
+  larger than the decisions. It arrives in its own slice.
 
 ## Verifying it once
 
