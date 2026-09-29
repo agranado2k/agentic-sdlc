@@ -972,4 +972,46 @@ else
 	pass "F5's window is the current note alone — an older note's marker cannot stand in"
 fi
 
+# ---------------------------------------------------------------------------
+banner "G. Every self-measurement carries an oracle clause"
+# ---------------------------------------------------------------------------
+# A measurement is a row that reports a percentage. Every such row must name
+# its oracle: who wrote the fixtures, when, against which version, and what it
+# was compared to.
+#
+# The probe finds measurement rows by grepping for the oracle clause and
+# reporting any row with a percentage that lacks one.
+
+# diary_measurement_rows <path> — grep lines from the diary's Current state
+# table that contain a percentage measurement. Return the lines that LACK an
+# oracle clause (detected by the absence of " — oracle:"). Empty result means
+# every measurement is properly oracle'd.
+diary_measurement_rows() {
+	# Extract the Current state table only (from "## Current state" to "### ")
+	_dmr_lines=$(sed -n '/^## Current state/,/^### /p' "$1" |
+		# Find lines with any percentage measurement (integer or decimal)
+		grep -E '[0-9]+(\.[0-9]+)? *%' |
+		# Exclude lines that already have oracle clause
+		grep -v ' — oracle:')
+	printf '%s' "$_dmr_lines"
+}
+
+missing_oracles=$(diary_measurement_rows "$KIT/docs/diary.md")
+if [ -z "$missing_oracles" ]; then
+	pass "every measurement in the diary's Current state carries an oracle clause"
+else
+	fail "measurement rows in the diary lack oracle clauses:"
+	printf '%s\n' "$missing_oracles" | sed 's/^/        | /'
+fi
+
+# Bait: add a measurement without an oracle and verify the probe catches it.
+ORACLE_BAIT="$SCRATCH/diary.oracle-bait"
+sed 's/ — oracle:[^|)]*//g' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
+missing_oracles_bait=$(diary_measurement_rows "$ORACLE_BAIT")
+if [ -n "$missing_oracles_bait" ]; then
+	pass "the oracle probe detects a measurement without an oracle clause"
+else
+	fail "the oracle probe failed to detect a measurement missing its oracle — the check is vacuous"
+fi
+
 t_done "self-host"
