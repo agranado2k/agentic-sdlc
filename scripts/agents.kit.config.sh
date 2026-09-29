@@ -207,3 +207,22 @@ AGENT_TIER_IMPLEMENTER_TESTS='codex:gpt-5.6-sol'
 # the strongest model available for either medium, and mechanical work is
 # oracle-checked whatever it is made of. Add a domain here when — and only
 # when — the medium would change the answer.
+
+# THERE IS DELIBERATELY NO AGENT_TIER_MECHANICAL_JUDGE EITHER — and unlike
+# `code` above, that is a DECLINE, not a fallback. `judge` is the one domain
+# the kit names itself (ADR-0010): the middle rung of a judgment's cost
+# ladder, between a deterministic script and the session's model — a typed
+# judge specified by its contract, state and typed questions in, typed
+# answers with per-option probabilities out, in two shapes: decide, among
+# supplied options (the chain's triage questions), and rank-or-verify, over
+# supplied candidates. Every triage question the chain asks could run on one.
+#
+# The kit names no model for it all the same — to a consumer by rule, and to
+# itself here by decision: the field is weeks old, no price on it is proven,
+# and a typed judge is the fastest-rotting identifier there is; this file is
+# exactly where such a name would rot. Unmapped, `mechanical judge` resolves
+# to the mechanical tier above in silence, which is what a consumer who has
+# not decided gets too — and this paragraph is what turns the resolver's
+# silence into a recorded decision rather than an omission. Map it here the
+# day a judge earns it, say which SHAPE it answers, and never hand a decider
+# a verification: the record says why, with the measurement.
