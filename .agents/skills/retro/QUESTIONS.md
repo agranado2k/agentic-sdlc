@@ -115,6 +115,10 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
   That is a finding about the policy file, and until it is fixed every total
   that includes the model reads `unpriced` too — say so in the report rather
   than quoting a partial sum.
+- A priced read — `summary`, `export --csv` — that prints the stale-table
+  advisory on stderr is a finding too: every cost in the window was priced
+  from a table nobody re-checked inside its own window. Put the table's
+  `Last checked` date beside every cost figure in the report.
 - A session whose usage dwarfs its outcome — no `pr.open`, or a PR that took
   more iterations than the wave's median at more cost than its median — is a
   ticket-sizing finding: the ticket was too big for one context window, or
@@ -123,7 +127,7 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
   than the implementation it reviewed is worth naming, not necessarily worth
   changing.
 
-Route: `/to-tickets` — a price-table row, a domain mapping in
+Route: `/to-tickets` — a price-table row or re-check, a domain mapping in
 `scripts/agents.config.sh`, or a sizing finding for the wave's next
 decomposition.
 

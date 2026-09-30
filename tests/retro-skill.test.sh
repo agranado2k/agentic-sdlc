@@ -116,6 +116,10 @@ assert_file_has "$SIDECAR" "data.rank" "…at the rank each held"
 assert_file_has "$SIDECAR" "confirmed" "…against the one confirmed"
 assert_file_has "$SIDECAR" "session.usage" "spend reads the per-model token sums"
 assert_file_has "$SIDECAR" "unpriced" "spend names the model the price table does not"
+# A priced read says on stderr when the price table is past its window
+# (ADR-0008 clause 6); a retro that drops stderr quotes stale costs bare.
+assert_file_has "$SIDECAR" "Last checked" "spend reads the stale-table advisory and dates every cost figure"
+assert_file_has "$SKILL" "TRACE_QUIET" "the reads keep stderr — the switch that silences the advisory is named as never used"
 assert_file_has "$SIDECAR" "spawn.end" "chain health reads how spawns ended"
 for o in fail timeout budget unreachable; do
 	assert_file_has "$SIDECAR" "\`$o\`" "chain health names the spawn outcome '$o'"
@@ -150,6 +154,15 @@ grep -qE 'show +run:' "$SKILL_ABS" "$SIDECAR_ABS" >/dev/null && pass "a run is r
 # In the PROCEDURE, verify comes before any read: a damaged trace is finding
 # zero. (The window section above it reads too — to find the last run — and
 # that read is not the pass; the procedure is.)
+# verify has two ways to say no, and they ask opposite things (ADR-0008
+# clause 4 as amended): exit 1 is a damaged line, exit 3 a schema this reader
+# cannot judge — no line to name, and nothing to read until the script is
+# updated. A damaged line is permanent: nothing edits an event file (clause 5).
+assert_file_has "$SKILL" "Exit 3" "a trace this reader cannot judge is its own case, not a damaged line"
+assert_file_has "$SKILL" "UNSUPPORTED SCHEMA" "…recognised by the line summary prints for it"
+assert_file_has "$SKILL" "not a first retro" "…and an empty window after it is never read as a first retro"
+assert_file_has "$SKILL" "a correction is a new event" "a damaged line is not 'fixed' — the window moves past it"
+assert_file_lacks "$SKILL" "until it is fixed" "nothing rewrites an event file, so nothing waits for a fix"
 procedure() { awk '/^## Procedure/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
 v_step=$(procedure | grep -nE "sh scripts/trace\\.sh +verify" | head -1 | cut -d: -f1)
 r_step=$(procedure | grep -nE "sh scripts/trace\\.sh +(show|summary|export)" | head -1 | cut -d: -f1)
