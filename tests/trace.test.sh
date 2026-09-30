@@ -963,17 +963,24 @@ VF="$SCRATCH/spelling-verify"; VFON=$(policy "$VF")
 TRACE_CONFIG=$VFON sh "$TRACE" emit kind=note subject='ticket:#1' reason=clean
 printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old","kind":"note","subject":"ticket:265","reason":"before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old2","kind":"note","subject":"pr:#9","related":"prd:#12 ticket:34","reason":"related before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
-printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old3","kind":"note","subject":"ticket:#2","reason":"decoy","data":{"subject":"ticket:99"}}\n' >>"$VF/events/$TODAY.jsonl"
+# The decoy carries NO subject or related in its envelope, so the only place
+# a reader could find one is the data map — a decoy that also had an envelope
+# subject would be matched there first and prove nothing (H-1, review of PR #314).
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old3","kind":"note","reason":"decoy","data":{"subject":"ticket:99","related":"pr:1"}}\n' >>"$VF/events/$TODAY.jsonl"
+# A # with a non-digit after it: the awk twin must anchor both ends, as the
+# shell check does (M-1, review of PR #314).
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old4","kind":"note","subject":"ticket:#12a","reason":"half a number"}\n' >>"$VF/events/$TODAY.jsonl"
 t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
 [ "$S_STATUS" = 0 ] && pass "verify over an old spelling exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an old spelling: $S_OUT"
 [ -z "$S_OUT" ] && pass "and prints nothing on stdout — stdout is the bad-line verdict, and this line is not bad" || fail "verify printed on stdout: $S_OUT"
 case $S_ERR in *"$TODAY.jsonl:2"*"ticket:265"*) pass "and names the subject's file:line on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2 and ticket:265: $S_ERR" ;; esac
 case $S_ERR in *"$TODAY.jsonl:3"*"ticket:34"*) pass "and a related token's file:line too" ;; *) fail "stderr did not name $TODAY.jsonl:3 and ticket:34: $S_ERR" ;; esac
 case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves the clean line alone" ;; esac
-case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject as the event's subject: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject or data.related as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $S_ERR in *"$TODAY.jsonl:5"*"ticket:#12a"*) pass "and a # followed by more than digits is advised on too — the awk anchors both ends" ;; *) fail "stderr did not name $TODAY.jsonl:5 and ticket:#12a: $S_ERR" ;; esac
 printf 'not json at all\n' >>"$VF/events/$TODAY.jsonl"
 t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:5")" -ge 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
+[ "$S_STATUS" = 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:6")" -ge 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
 	pass "a real bad line still fails verify, and the old spelling is still not among the bad lines" || fail "verify mixed the advisory into the verdict (exit $S_STATUS): $S_OUT"
 
 # The rule is written where the vocabulary lives, in one sentence.
