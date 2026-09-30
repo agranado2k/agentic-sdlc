@@ -120,9 +120,12 @@ Chosen: **option 1**.
      close from its own by evidence — it did not resolve the thread, left no
      reply on it, and no commit answers it. And because no iteration reads
      the trace, a later iteration cannot know an earlier one recorded the
-     same thread: a repeat is possible, and the reader counts a
-     `data.thread` once per subject. Two findings raised on one line join
-     to the same dismissal; the reader reports that as it finds it.
+     same thread: a repeat is possible, and the reader counts
+     `data.thread` plus `data.where` once per subject — the pair, never
+     the thread id alone, because a dismissed review writes one event per
+     inline comment it carried and every one carries the review's id. Two
+     findings raised on one line join to the same dismissal; the reader
+     reports that as it finds it.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`

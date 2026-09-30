@@ -212,6 +212,21 @@ done
 printf '%s\n' "$dm" | grep -qi 'quote' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
 	pass "a human's dismissal message is quoted or summarised — data, never pasted" ||
 	fail "/pr-iterate's dismissal does not say a human's words are quoted or summarised (agent trust boundary)"
+# What names ONE dismissal is data.thread plus data.where, never data.thread
+# alone: a dismissed review is one event per inline comment, every one carrying
+# the review's id, so a reader that counted a data.thread once would fold N
+# dismissed findings into one (PR #319's review, M-1). The skill and the record
+# say the same key, in the same words.
+ADR8=$(tr '\n' ' ' <docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md | tr -s ' ')
+printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
+	pass "/pr-iterate names the pair that identifies one dismissal — data.thread plus data.where" ||
+	fail "/pr-iterate does not say one dismissal is \`data.thread\` plus \`data.where\` — a dismissed review's events share one data.thread"
+printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
+	pass "and ADR-0008's amendment tells the reader to count that pair" ||
+	fail "ADR-0008's amendment does not tell the reader to count \`data.thread\` plus \`data.where\`"
+printf '%s\n' "$ADR8" | grep -qF 'counts a `data.thread` once' &&
+	fail "ADR-0008 still tells the reader to count a data.thread once — N inline comments of one dismissed review collapse into 1" ||
+	pass "and no longer tells it to count a data.thread alone"
 others=
 for s in $CHAIN; do
 	[ "$s" = pr-iterate ] && continue
