@@ -246,16 +246,20 @@ be nobody's. An event none of the three names goes on a row named
   have to record the drafted label — never a guess: no rate is inferred
   from the tier's.
 - **The severity, per band.** Group the `finding.raise` events by
-  `data.severity`. A raise was dismissed when a `finding.dismiss` sits on its
-  subject with its `data.where`; where a pull request was reviewed more than
-  once, pair the dismissal with the latest raise at that `data.where` before
-  it, by `ts`. One dismissal is a (`data.thread`, `data.where`) pair, counted
-  once per subject: a thread resolved and its review dismissed can both
-  emit, and so can two iterations that saw the same thread. Two findings
-  raised on one line join to one dismissal — count both as dismissed, and say
-  on the row how many shared one. A dismissal that joins no raise — a third
-  party's review, a path the emitter would not type — is counted beside the
-  table, in no band.
+  `data.severity`. One pairing rule says what a dismissal dismissed: a
+  `finding.dismiss` pairs with the latest raise on its subject at its
+  `data.where` before it, by `ts`, and with every other raise at that
+  `data.where` from the same review — the same `run`. That is one raise, or
+  several where one review raised more than one finding on the line: count
+  each as dismissed, and say on the row how many shared a dismissal. An
+  earlier review's raise at that line is not paired; it stays in the
+  denominator. A raise is dismissed once, however many dismissals pair with
+  it. One dismissal is a (`data.thread`, `data.where`) pair, counted once per
+  subject — two iterations that saw the same closed thread emit the same
+  pair; a thread resolved and its review dismissed emit two pairs at one
+  `data.where`, which pair with the same raises and move no count. A
+  dismissal that pairs with no raise — a third party's review, a path the
+  emitter would not type — is counted beside the table, in no band.
 - **The dismissal rate's denominator overcounts.** It is every raise on the
   subject, and a `finding.raise` records a finding the review raised, with no
   marker that it was posted on the forge: a finding nobody posted could not

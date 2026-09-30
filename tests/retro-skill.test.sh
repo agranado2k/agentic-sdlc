@@ -280,7 +280,24 @@ stamp_has 'no marker that it was posted' "…and why: a raise carries no marker 
 # …and a dismissal is one (data.thread, data.where) pair per subject — a
 # resolved thread and its dismissed review can both emit.
 stamp_has '(`data.thread`, `data.where`) pair' "a dismissal is identified by the (data.thread, data.where) pair"
-stamp_has 'counted once' "…and counted once per subject"
+stamp_has 'pair, counted once per subject' "…and counted once per subject"
+# H-2 (review of PR #329): the join had two rules that disagreed on a PR
+# reviewed twice — "the latest raise at that data.where" picks one raise,
+# "two findings on one line both count" picks two. ONE rule now: the latest
+# raise there before the dismissal, and its same-review siblings on the line.
+stamp_has 'One pairing rule' "the severity join states one pairing rule"
+stamp_has 'pairs with the latest raise on its subject at its `data.where` before it, by `ts`' "a dismissal pairs with the latest raise at its data.where before it"
+stamp_has 'from the same review — the same `run`' "…and with that raise's same-review siblings on the line, told apart by run"
+stamp_has "An earlier review's raise at that line is not paired; it stays in the denominator" "an earlier review's raise at the line is not paired, and stays in the denominator"
+stamp_has 'say on the row how many shared' "raises that shared one dismissal are said on the row"
+# M-2: a resolved thread carries the thread's id and a dismissed review the
+# review's, so the pair does NOT fold them into one — the raise does.
+stamp_has 'A raise is dismissed once, however many dismissals pair with it' "a raise is dismissed once, however many dismissals pair with it"
+stamp_has 'counted beside the table, in no band' "a dismissal that pairs with no raise is counted beside the table"
+case "$stamp" in
+*'join to one dismissal'*) fail "question 8 still carries the second pairing rule ('… join to one dismissal') beside the first" ;;
+*) pass "no second pairing rule beside the first" ;;
+esac
 # Honesty point 2: ticket.write records no pre-quiz label, so the label's
 # override rate is a row that says so — a candidate ticket, never a guess.
 stamp_has '`data.label_confidence`' "the label's confidence is read, under its own key"
