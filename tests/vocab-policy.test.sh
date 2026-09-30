@@ -4,8 +4,9 @@
 #
 # scripts/vocab.config.sh ships FILLED, and every word in it is a word some
 # skill already prints or reads: /review-pr's severity buckets and confirm-list
-# tags, /pr-iterate's triage verbs, /to-tickets' tier stamp and autonomy label,
-# /dogfood's row readings, the resolver's four tier names. A token added to a
+# tags, /pr-iterate's triage verbs, /to-tickets' tier stamp, autonomy label and
+# confidence stamp, /dogfood's row readings, the resolver's four tier names. A
+# token added to a
 # skill's prose without this file, or to this file without the skill, is the
 # drift the checker exists to refuse — so this suite reads each vocabulary
 # OUT OF THE SKILL'S OWN TEXT and holds the policy file equal to it, order
@@ -159,13 +160,29 @@ skill_cut=$(sed -n 's/.*\*\*\([a-z][a-z0-9]*\) \([a-z][a-z0-9]*\)s\*\*.*/\1-\2/p
 assert_equal "the outcome vocabulary is the three readings /dogfood names" "$skill_binary $skill_cut" "$(field_tokens outcome)"
 
 # ---------------------------------------------------------------------------
-banner "9. confidence — three tokens, as the PRD sizes it"
+banner "9. confidence — /to-tickets' stamp, three tokens in its order"
 # ---------------------------------------------------------------------------
-# No skill stamps a confidence yet — that is the confidence ticket's slice,
-# and its text probe joins this section when it lands. What the PRD fixes
-# now is the size: three, so a quiz can sort low first.
+# EXTRACTED, not restated: /to-tickets spells the set once, in the stamp's own
+# shape — `Confidence: <low|medium|high>` — the way rule 9 spells the tier's.
+# The size is the PRD's: three, so a quiz can sort the doubtful ones first.
+# confidence_stamp <file> — the tokens of the first such stamp in a skill.
+confidence_stamp() { sed -n 's/.*`Confidence: <\([a-z|-]*\)>`.*/\1/p' "$1" | head -1 | tr '|' ' '; }
+skill_confidence=$(confidence_stamp "$TICKETS")
+[ -n "$skill_confidence" ] || fail "/to-tickets spells no \`Confidence: <…>\` stamp — the extractor has nothing to read"
+assert_equal "the confidence vocabulary is the three tokens /to-tickets stamps, in its order" "$skill_confidence" "$(field_tokens confidence)"
 n=$(field_tokens confidence | wc -w | tr -d ' ')
 [ "$n" = 3 ] && pass "the confidence vocabulary has three tokens" || fail "the confidence vocabulary has $n tokens, the PRD says three"
+# BAIT — a rule with no failing check is a claim. Rename one token in a copy
+# of the skill and nowhere else: the extractor must read the renamed set, so
+# the comparison above would have gone red on it.
+first=$(field_tokens confidence | cut -d' ' -f1)
+sed "s/\`Confidence: <$first|/\`Confidence: <renamed|/" "$TICKETS" >"$SCRATCH/to-tickets.bait.md"
+bait_confidence=$(confidence_stamp "$SCRATCH/to-tickets.bait.md")
+if [ -n "$bait_confidence" ] && [ "$bait_confidence" != "$(field_tokens confidence)" ]; then
+	pass "bait: a token renamed in the skill alone reads '$bait_confidence' — the comparison goes red on it"
+else
+	fail "bait: a token renamed in the skill alone was not seen (read '$bait_confidence') — the extractor is vacuous"
+fi
 
 # ---------------------------------------------------------------------------
 banner "10. The one shipped rule is the trust boundary's"
