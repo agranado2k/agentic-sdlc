@@ -134,6 +134,24 @@ for _fb in hit adjusted missed; do
 done
 case $(tail -n 1 "$FILE") in *'"kind":"feedback"'*'"subject":"ticket:#247"'*'"outcome":"missed","reason":"#248 and #253 re-cut after the review"}') pass "and the line carries the slice, the verdict and its reason" ;; *) fail "feedback line wrong: $(tail -n 1 "$FILE")" ;; esac
 
+banner "5b. finding.dismiss is in the vocabulary — a human closed a posted finding with no commit (ADR-0008, amended 2026-09-30; ticket #277)"
+# What a human does with a comment /review-pr posted: a thread resolved, a
+# review dismissed, no commit answering it. It sits on the subject of the
+# finding.raise it answers and carries that raise's data.where, so severity is
+# read through the join. Before #277 the kind was unknown and exit 2.
+t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.raise subject='pr:#277' outcome=raised data.id=H-1 data.severity=high data.where=scripts/trace.sh:142 reason='the vocabulary moved without its suite'
+[ "$S_STATUS" = 0 ] || fail "the raise the dismissal answers was refused: $S_ERR"
+t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.dismiss subject='pr:#277' outcome=dismissed data.via=thread data.where=scripts/trace.sh:142 data.thread=PRRT_x reason='resolved by a human, no commit since the comment, no reply'
+[ "$S_STATUS" = 0 ] && pass "finding.dismiss is accepted" || fail "finding.dismiss exited $S_STATUS: $S_ERR"
+t_run_split env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277'
+case $S_OUT in
+*'"kind":"finding.raise"'*'"severity":"high","where":"scripts/trace.sh:142"'*'"kind":"finding.dismiss"'*'"outcome":"dismissed"'*'"where":"scripts/trace.sh:142"'*) pass "show pr:#277 prints the dismissal beside the raise it answers, joined on data.where" ;;
+*) fail "show pr:#277 did not print the raise and its dismissal: $S_OUT" ;;
+esac
+t_run_split env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277' --kind finding.dismiss
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] && pass "and --kind finding.dismiss narrows to the one event" ||
+	fail "show --kind finding.dismiss exited $S_STATUS with: $S_OUT $S_ERR"
+
 banner "6. A relative TRACE_DIR resolves to the ROOT checkout — from inside a linked worktree too"
 t_repo
 mkdir -p "$REPO/scripts"
