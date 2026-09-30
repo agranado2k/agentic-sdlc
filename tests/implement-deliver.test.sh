@@ -218,6 +218,7 @@ stamp_has "on its standard input, never as arguments" "the rule, in words — an
 # The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
 # how every quoted-argument call starts, whatever field follows.
 assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
+assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
 stamp_has "back to the restatement step" "restate-on-low: the rule"
@@ -234,6 +235,11 @@ stamp_has "no autonomy decision reads it" "a confidence is not a permission"
 stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the case is named"
 stamp_has "reported, not acted on" "orphan confidence: what happens to it"
 stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
+stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
+# A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
+# checker error; a refused value does not). Inverted, this branch stops every
+# session in a project that never took the script.
+stamp_has "is not a refusal: read the stamp as before and say so in your report" "checker absent: tolerated, and said"
 # The kit wrapper is never named: skills ship unstamped.
 assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
 

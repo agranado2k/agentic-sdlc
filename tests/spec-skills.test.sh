@@ -252,6 +252,7 @@ has_in "$quiz" "'Domain: <token>'" "a stamped domain goes to the checker with th
 in_order "$quiz" "the domain is checked before the list is presented, like the other stamps" \
 	"sh scripts/vocab.sh 'Tier: <tier>'" "'Domain: <token>'" "fix what it refuses" "present the draft"
 has_in "$quiz" "fix what it refuses" "a refused stamp is repaired before the human sees the list"
+has_in "$quiz" "is not a refusal — say so at the quiz and carry on" "a checker that cannot run is tolerated and said; it never skips the quiz"
 has_in "$quiz" "low-confidence first" "the sort: the human's attention lands where the draft was unsure"
 in_order "$quiz" "the check comes before the list is presented, and the list is sorted" \
 	"sh scripts/vocab.sh" "fix what it refuses" "present the draft" "low-confidence first"
