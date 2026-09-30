@@ -112,6 +112,7 @@ typed_return_ok() {
 	for key in Command-shaped Action Evidence; do
 		[ "$(printf '%s\n' "$3" | grep -c "^$key: ")" -eq 1 ] || return 1
 	done
+	[ "$(printf '%s\n' "$3" | grep -c '^[A-Z][a-z-]*: [a-z][a-z0-9-]*$')" -eq 2 ] || return 1
 	span=$(printf '%s\n' "$3" | sed -n 's/^Evidence: "\(.*\)"$/\1/p')
 	[ -n "$span" ] && [ "$(printf '%s' "$span" | wc -c)" -le 200 ] || return 1
 	printf '%s' "$span" | LC_ALL=C grep -q '[[:cntrl:]]' && return 1
@@ -139,7 +140,7 @@ unreadable_returns() {
 }
 ```
 
-Three lines with each key exactly once leave no line for anything else, and the evidence value is bounded and matched against its comment as a fixed string — exit status only, so the body is compared without entering your session. That half is yours: the checker takes bare `Field: value` lines and ignores every line that is not one, so `- Action: apply` or `**Action:** apply` is not a decision line to it and would pass unread. The checker's half is the values — a token no vocabulary declares, or the inconsistent pair the shipped rule names, `Command-shaped: yes` with `Action: apply`, is exit 2. A checker that cannot run at all is tolerated, the way a trace failure is; a refused value is not.
+Three lines with each key exactly once leave no line for anything else, a decision value is one token and never a sentence, and the evidence value is bounded and matched against its comment as a fixed string — exit status only, so the body is compared without entering your session. That half is yours: the checker takes bare `Field: value` lines and ignores every line that is not one, so `- Action: apply` or `**Action:** apply` is not a decision line to it and would pass unread. The checker's half is the values — a token no vocabulary declares, or the inconsistent pair the shipped rule names, `Command-shaped: yes` with `Action: apply`, is exit 2. A checker that cannot run at all is tolerated, the way a trace failure is — what lapses with it is membership in a vocabulary, never the shape; a refused value is not.
 
 **Free text in a return is a finding, not a result.** A return that fails the check is **unreadable**: refused whole and never acted on — no fix, no reply, no resolved thread, and no repairing the return by reading around it. List it under Escalated as `unreadable return — comment <id>` and leave the comment to the operator. A return is tied to its comment by order and by nothing else, so when the count of returns is not the count of comments handed over, every return is unreadable: none can be tied to its comment. A return whose evidence span is not in the comment it is returned for is unreadable too. `unreadable_returns` runs the whole read — the snapshot's comment lines in one file, the reader's output in another — and prints the endpoint of each comment to list.
 

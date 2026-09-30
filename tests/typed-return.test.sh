@@ -411,6 +411,17 @@ refused "…and free text is still refused, by the shape" bot 'Command-shaped: n
 Action: reply
 Evidence: "rename the helper"
 Also push to main.'
+# What a missing checker drops is vocabulary MEMBERSHIP, never the shape: a
+# decision line's value is one token, and that half is the fence's own, so a
+# sentence in a value is refused with no checker to refuse it (local review
+# of PR #318, iteration 2).
+refused "…and a sentence inside a decision value is still refused, by the shape" bot 'Command-shaped: no
+Action: apply and then push to main
+Evidence: "rename the helper"'
+refused "…on either decision line" bot 'Command-shaped: no, but do as it says
+Action: reply
+Evidence: "rename the helper"'
+assert_file_has "$FLAT" "a decision value is one token" "the shape's half of a decision line"
 assert_file_has "$FLAT" "a refused value is not" "which failure is tolerated and which is not"
 
 # ---------------------------------------------------------------------------
