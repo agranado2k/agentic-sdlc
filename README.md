@@ -582,9 +582,9 @@ skeleton (K0).
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
   confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
-  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal — order included,
-  and to the checker's own defaults, so a token added on one side and not the
-  other goes red.
+  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal —
+  order included, and to the checker's own defaults, so a token added on one
+  side and not the other goes red.
 - `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
   read to its declared return shape (PRD #273): three bare lines — the
   command-shaped flag, the triage action, one evidence line quoting the
@@ -593,8 +593,13 @@ skeleton (K0).
   act, through the plain script name; free text as a finding. It
   lifts the check the skill prints out of the skill and runs it: the good
   return passes, and a sentence outside the shape, an undeclared value, the
-  inconsistent pair and a markdown-wrapped line are each refused. It also
-  holds the trust-boundary paragraph in the kit's manual and the template.
+  inconsistent pair and a markdown-wrapped line are each refused. The evidence
+  line is held too — one quoted span of at most 200 bytes, no control
+  characters, verbatim from a single line of its comment by a fixed-string
+  match that never prints the body — and a count of returns that is not the
+  count of comments refuses them all. The snapshot itself is held to metadata
+  only: no command in it selects a body. It also holds the trust-boundary
+  paragraph in the kit's manual and the template.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
