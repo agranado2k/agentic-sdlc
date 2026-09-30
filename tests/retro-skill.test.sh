@@ -183,6 +183,11 @@ stamp_has '`data.where`' "the dismissal joins its raise on the subject and data.
 # The rule the PRD's story 14 asks for: an easy field must not hide a hard one.
 stamp_has 'per decision field and per skill' "the question is answered per decision field and per skill"
 stamp_has 'never one number for the chain' "…never as one number for the chain"
+# The skill is the RUN's: a finding.raise carries its run and no skill of its
+# own (the kit's own trace, read for this ticket's demo), so a reader that
+# pivots on the event's skill column files every severity row under nothing.
+stamp_has '`run.start`' "the skill that stamped is read from the run's run.start where the event names none"
+stamp_has '`unattributed`' "…and an event with neither is a row that says so"
 # The oracle clause (#276) is on EVERY row this question prints, in the form
 # the housekeeping checklist gave it.
 stamp_has 'Every row carries the oracle clause' "every row carries the oracle clause"
@@ -206,6 +211,10 @@ stamp_has 'never a guess' "…as a candidate ticket, never a guess"
 # Honesty point 3: a thin row prints its counts and the words, not a rate.
 stamp_has 'too few' "a row with too few events says so"
 stamp_has 'instead of a rate' "…instead of printing a rate"
+# A window with raises and no finding.dismiss at all is not a band nobody
+# dismissed: 0 of 7 printed as a rate reads as a measurement of an emitter
+# that may never have run (the kit's own trace, the day the kind landed).
+stamp_has 'no dismissal recorded in the window' "a window with no finding.dismiss at all prints no dismissal rate"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 questions | tr '\n' ' ' | tr -s ' ' | grep -q 'per decision field and per skill, never one number for the chain' &&

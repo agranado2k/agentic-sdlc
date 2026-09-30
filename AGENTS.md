@@ -283,7 +283,7 @@ twice, compared on complexity, then recorded. `/housekeeping` runs on a
 calendar — the docs gate's housekeeping-due advisory sends you to it — and
 audits the standing instructions, measures the suite and scans for the red
 flags that reopen the brief. `/retro` runs per wave as the one skill that reads
-the trace: seven fixed questions. Neither fixes; findings go to `/to-tickets`.
+the trace: eight fixed questions. Neither fixes; findings go to `/to-tickets`.
 
 One more sits *beside* the line: `/dogfood` walks a project's declared personas
 through its real user-facing surface. It is the kit's one OPTIONAL skill —
@@ -305,7 +305,7 @@ answers produce a clean project.
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Decide the shape of the system out loud | `/design-brief` — design it twice, compare on complexity, then record paradigm, style and context map as anchors, a glossary section and a decision record; stops for your yes before writing |
 | Run the recurring housekeeping pass | `/housekeeping` — audit the agent files, the glossary, the records, the measurement, the worktrees and the diary, then scan for Ousterhout's red flags; never fixes, files candidate tickets, stamps the diary row |
-| Turn the trace into candidate tickets | `/retro` — seven fixed questions over a window (default: since its own last run), report outside the tree, findings to `/to-tickets`; never fixes. The one skill that reads the trace |
+| Turn the trace into candidate tickets | `/retro` — eight fixed questions over a window (default: since its own last run), report outside the tree, findings to `/to-tickets`; never fixes. The one skill that reads the trace |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer; teaches, never reviews |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |

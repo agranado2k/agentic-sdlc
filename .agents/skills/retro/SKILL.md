@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Run the retrospective over a window of the decision trace — answer seven fixed questions (tier calibration, review signal per sub-agent, recurring failures, diagnosis calibration, spend, chain health, aim calibration) and turn what recurs into candidate tickets. It is the one skill that reads the trace, and it reads after the fact; it never fixes what it finds and never edits a skill. Use after a wave lands, before a release, or when a wave felt more expensive or more iterative than it should have.
+description: Run the retrospective over a window of the decision trace — answer eight fixed questions (tier calibration, review signal per sub-agent, recurring failures, diagnosis calibration, spend, chain health, aim calibration, stamp calibration) and turn what recurs into candidate tickets. It is the one skill that reads the trace, and it reads after the fact; it never fixes what it finds and never edits a skill. Use after a wave lands, before a release, or when a wave felt more expensive or more iterative than it should have.
 metadata:
   phase: planner
 ---
@@ -48,7 +48,7 @@ before that `ts`. An explicit `--since YYYY-MM-DD` on the invocation
 overrides the default. A **first retro** has no last run: read the whole
 trace, and the report says so in its first line.
 
-## The seven questions
+## The eight questions
 
 Each question names the events it reads, so the pass is the same every time.
 The full form — what to read, what counts as a finding, where it goes — is in
@@ -75,15 +75,21 @@ The full form — what to read, what counts as a finding, where it goes — is i
    followed by a re-cut of what came after them, and which tier or skill
    produced the misses. The `feedback` events are the loop's own
    self-correction; no verdicts over landed slices is itself a finding.
+8. **Stamp calibration** — per decision field and per skill, never one
+   number for the chain: how often a tier stamped at each confidence was
+   overridden at the quiz, and how often a finding raised at each severity
+   was dismissed by a human. Every row carries the oracle clause; a row with
+   too few events says so instead of a rate; and the label's override rate,
+   which the trace cannot answer today, is a row that says exactly that.
 
 ## Procedure
 
 1. **Verify before you read — the whole trace, no `--since`**: `sh scripts/trace.sh verify`. The window is not known yet, and finding it is itself a read, so the verify comes first and covers everything. Its exit status says which of two things went wrong. **Exit 1 is a damaged trace**: finding zero is the file and line verify names, and `export` refuses over any window that includes the damaged day — the line is permanent, a correction is a new event and never an edit — which takes the default window with it: the window is then an explicit `--since` after that day, or the whole trace read on `show` and `summary`, which still answer, and the report's first line says so. **Exit 3 is a trace this reader cannot judge** — its schema is newer than this script: verify names no line, `export` refuses with the same status, and `summary` marks its first line `verify: UNSUPPORTED SCHEMA`. Stop there: the one finding is that the shared layer is behind the trace it is reading, routed to the operator, and an empty window pipeline after it is not a first retro.
 2. **Fix the window** as above (the `export | grep` pipeline, or the `--since` you were given), and open the run so every event below carries it: `sh scripts/trace.sh begin retro || :`. Unconfigured, every call here is a silent no-op — but a retro on an unconfigured trace has nothing to read, and stopped at the context block above.
 3. **Take the shape first**: `sh scripts/trace.sh summary --by kind --since <YYYY-MM-DD>`, then the same by `skill`, `model` and `session`. The counts are the denominators every question below divides by, and a kind that should be there and is not — no `merge.land` in a window with landed PRs — is already a chain-health finding. Keep what these reads print on stderr, and never run them with `TRACE_QUIET=1`: a price table past its window says so there, once, and question 5 reads it.
-4. **Export once, pivot seven times**: `sh scripts/trace.sh export --csv --since <YYYY-MM-DD>` — save it beside the report as `retro-<YYYYMMDDTHHMMSSZ>.csv` and answer each question from it, joining on the subject strings (`ticket:#N`, `pr:#N`, `run:<id>`) the way `QUESTIONS.md` says. Where one subject's trail matters, `sh scripts/trace.sh show pr:#<N>` or `sh scripts/trace.sh show ticket:#<N>` reads it in order.
+4. **Export once, pivot eight times**: `sh scripts/trace.sh export --csv --since <YYYY-MM-DD>` — save it beside the report as `retro-<YYYYMMDDTHHMMSSZ>.csv` and answer each question from it, joining on the subject strings (`ticket:#N`, `pr:#N`, `run:<id>`) the way `QUESTIONS.md` says. Where one subject's trail matters, `sh scripts/trace.sh show pr:#<N>` or `sh scripts/trace.sh show ticket:#<N>` reads it in order.
 5. **Write the report outside the repo tree** — resolve the OS temp directory from `$TMPDIR`, falling back to `/tmp` (or `%TEMP%` on Windows), and write `<tmpdir>/retro-<YYYYMMDDTHHMMSSZ>.md`: the window and how it was fixed, the trace directory and the event count, verify's verdict, then one section per question with the numbers it found or "nothing found" with what was checked, then the findings list — one entry per finding with the question it came from, the evidence (the subjects, the counts), and the route.
-6. **Record each finding as a candidate**, one event per finding: `sh scripts/trace.sh emit kind=note subject=retro:<YYYYMMDDTHHMMSSZ> related='pr:#<N> ticket:#<N>' outcome=candidate data.question=<1..7> data.route=to-tickets reason='<the finding, one line>' || :` — `related` names the subjects the evidence came from, quoted because there are usually several (a PR, its ticket, a session), so the next retro can see whether a finding recurred with no ticket behind it.
+6. **Record each finding as a candidate**, one event per finding: `sh scripts/trace.sh emit kind=note subject=retro:<YYYYMMDDTHHMMSSZ> related='pr:#<N> ticket:#<N>' outcome=candidate data.question=<1..8> data.route=to-tickets reason='<the finding, one line>' || :` — `related` names the subjects the evidence came from, quoted because there are usually several (a PR, its ticket, a session), so the next retro can see whether a finding recurred with no ticket behind it.
 7. **Close the run with the count**: `sh scripts/trace.sh end outcome=ok|stopped data.findings=<count> data.since=<YYYY-MM-DD> data.report='<the report path>' reason='<the finding that matters most, one line>' || :`.
 8. **Name the route and stop.** Every finding is a candidate ticket for `/to-tickets`, with the change it proposes named — a rubric line, a sub-agent's prompt, a gate rule with its fixture, a policy value. Running `/to-tickets` over the report is the human's next act; this pass writes the report and its trace events, nothing else.
 
@@ -109,6 +115,11 @@ change, and the report says which:
 - An **aim** that keeps missing → the feedback-first ordering rule in
   `/to-tickets`, and the tier that wrote the misses; landed slices with no
   verdict → `/merge-train`, which is where the verdict is asked.
+- A **stamp** whose confidence does not track its overrides → the confidence
+  rule or the rubric line in `/to-tickets` that the overridden stamps kept
+  getting wrong; a severity dismissed more often than it stood → that band's
+  definition in `/review-pr`; the label's row → the `ticket.write` emit in
+  `/to-tickets`, which records no label from before the quiz.
 - One finding routes to the operator instead: verify's exit 3 — the shared
   layer is updated before any retro can read.
 - A finding that repeats a previous retro's with no ticket behind it → say
@@ -133,6 +144,7 @@ change, and the report says which:
 
 ---
 
-*Written for this kit. The question set condenses PRD #237's retrospective;
+*Written for this kit. The question set condenses PRD #237's retrospective,
+and its eighth question is PRD #273's;
 the never-fix rule is `/housekeeping`'s and the dogfood skill's, kept for the
 same reason; the "rule, not a lessons file" rule is shared invariant §11.*

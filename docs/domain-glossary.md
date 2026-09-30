@@ -348,13 +348,15 @@ Grouped by the seam each term belongs to. Entry shape:
     stale.
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
   trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
-  window — by default since its own last run end — it answers seven fixed
+  window — by default since its own last run end — it answers eight fixed
   questions (tier calibration, review signal per sub-agent, recurring
-  failures, diagnosis calibration, spend, chain health, aim calibration),
+  failures, diagnosis calibration, spend, chain health, aim calibration,
+  stamp calibration — per decision field and per skill, every row carrying
+  its oracle clause),
   writes its report outside the tree, and routes every finding to
   `/to-tickets` as a candidate; it never fixes and never edits a skill. A
   recurring failure becomes a rule with a failing check (shared invariant
-  §11). Ref: PRD #237.
+  §11). Ref: PRD #237; the eighth question is PRD #273's.
   - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
     "lessons file" (the thing §11 forbids it from writing).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a

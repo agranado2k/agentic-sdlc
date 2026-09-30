@@ -699,9 +699,10 @@ skeleton (K0).
   their two routes, the never-fix rule, the one permitted write, planner-tier
   work, spec-only frontmatter, and every path and command resolving.
 
-- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the seven
+- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the eight
   fixed questions named and numbered in both files, the trace kinds each one
-  reads, the plain `sh scripts/trace.sh show|summary|export` name with
+  reads, the eighth's per-field and per-skill rule with its oracle clause and
+  the three limits it states, the plain `sh scripts/trace.sh show|summary|export` name with
   `verify` first, the report outside the tree, findings routed to
   `/to-tickets` and never fixed (a recurring failure becomes a rule with a
   failing check, never a lessons file — shared invariant §11), the run it
