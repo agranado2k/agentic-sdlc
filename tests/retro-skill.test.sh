@@ -444,8 +444,12 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 # as such. It follows question 8's rules for the tier and severity rows and
 # nothing else (no window, no oracle clause, no label row): what it proves is
 # that the rules are computable from what `export` prints, and that the
-# attribution, the threshold and the undeclared row give the numbers the
-# prose says they give. The pass itself is still an agent reading a trace.
+# attribution, the latest-write rule, the threshold, the undeclared row and
+# the one pairing rule give the numbers the prose says they give. It is a
+# SECOND implementation of rules the prose states — it cannot go red when the
+# prose changes, only when the script or the vocabulary does; the needles in
+# 2b hold the prose, and the example rows are held to this arithmetic below.
+# The pass itself is still an agent reading a trace.
 fx="$SCRATCH/fixture.retro"
 fx_trace() { ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
 fx_n=0
@@ -453,6 +457,9 @@ fx_ticket() { # <published tier> <proposed tier> [confidence]
 	fx_n=$((fx_n + 1))
 	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" ${3:+data.confidence="$3"} data.label=none data.label_confidence=medium
 }
+# A ticket written twice: the draft said `high` and was overridden, the
+# re-write says `low` and was not. Only the latest per subject is read.
+fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.confidence=high
 # PRD #273 scenario 3's low row: 7 stamped low, 5 overridden at the quiz.
 for _ in 1 2 3 4 5; do fx_ticket implementer mechanical low; done
 fx_ticket mechanical mechanical low
@@ -465,8 +472,8 @@ fx_ticket implementer implementer medium
 fx_ticket implementer implementer run-this-instead
 # …and a ticket written before the stamp existed.
 fx_ticket implementer implementer
-# One review's run raises six `low` findings; a human closes one thread, and
-# two iterations both see it closed — one (thread, where) pair, counted once.
+# A first review's run raises six `low` findings; a human closes one thread,
+# and two iterations both see it closed — one (thread, where) pair, once.
 fx_trace begin review-pr subject='pr:#9' >/dev/null
 for line in 1 2 3 4 5 6; do
 	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id="L-$line" data.severity=low data.agent=simplicity data.where="a.sh:$line" reason=fixture
@@ -475,6 +482,18 @@ fx_trace end outcome=ok
 for _ in 1 2; do
 	fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T1 reason=fixture
 done
+# A second review raises five `medium` findings, two of them on the line the
+# first review raised on; a human closes one thread there. The dismissal
+# pairs with the LATEST raise at that line and its same-review sibling —
+# both count, the row says two shared it — and not with the first review's.
+fx_trace begin review-pr subject='pr:#9' >/dev/null
+for where in a.sh:2 a.sh:2 b.sh:1 b.sh:2 b.sh:3; do
+	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id=M-1 data.severity=medium data.agent=simplicity data.where="$where" reason=fixture
+done
+fx_trace end outcome=ok
+fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T2 reason=fixture
+# …and a dismissal at a line nobody raised on is counted beside the table.
+fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=review data.where=z.sh:1 data.thread=R1 reason=fixture
 fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields | sed -n 's/^confidence: //p') " \
 	-v sev=" $(sh "$ROOT/scripts/vocab.sh" fields | sed -n 's/^severity: //p') " '
 	function get(key,   m) { return match($0, "\"" key "\":\"[^\"]*\"") ? substr($0, RSTART + length(key) + 4, RLENGTH - length(key) - 5) : "" }
@@ -489,27 +508,40 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 	function rate(hit, of) { return of < 5 ? "too few to rate" : sprintf("%.0f %%", 100 * hit / of) }
 	{ kind = get("kind") }
 	kind == "run.start" { runskill[get("run")] = get("skill") }
+	# One ticket.write per subject, the latest: export is in ts order, so a
+	# later line for a subject replaces the earlier one.
 	kind == "ticket.write" {
-		c = get("confidence"); p = get("tier_proposed")
+		c = get("confidence"); p = get("tier_proposed"); t = get("subject")
 		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
-		k = "tier · " who(kind) " · " c
-		seen[k] = 1
-		if (p != "") { of[k]++; if (get("tier") != p) hit[k]++ }
+		trow[t] = "tier · " who(kind) " · " c
+		tover[t] = (p == "") ? -1 : (get("tier") != p)
 	}
 	kind == "finding.raise" {
 		v = get("severity"); if (index(sev, " " v " ") == 0) v = "undeclared"
-		k = "severity · " who(kind) " · " v
-		seen[k] = 1; of[k]++; at[get("subject") " " get("where")] = k
+		n++; rrow[n] = "severity · " who(kind) " · " v; rat[n] = get("subject") " " get("where"); rrun[n] = get("run")
+		seen[rrow[n]] = 1; of[rrow[n]]++
 	}
+	# The one pairing rule: the latest raise at the line before the dismissal,
+	# and its siblings there from the same run. A pair seen again is skipped —
+	# the earliest is the one read.
 	kind == "finding.dismiss" {
 		pair = get("subject") " " get("thread") " " get("where")
 		if (pair in once) next
 		once[pair] = 1
-		w = get("subject") " " get("where")
-		if (w in at && !(w in gone)) { gone[w] = 1; hit[at[w]]++ }
+		w = get("subject") " " get("where"); last = 0
+		for (i = n; i >= 1; i--) if (rat[i] == w) { last = i; break }
+		if (!last) { beside++; next }
+		paired = 0
+		for (i = 1; i <= n; i++) if (rat[i] == w && (i == last || (rrun[i] != "" && rrun[i] == rrun[last]))) {
+			paired++
+			if (!gone[i]) { gone[i] = 1; hit[rrow[i]]++ }
+		}
+		if (paired > 1) shared[rrow[last]] += paired
 	}
 	END {
-		for (k in seen) printf "%s   %d of %d %s   %s\n", k, hit[k], of[k], (k ~ /^tier/ ? "overridden" : "dismissed"), rate(hit[k], of[k])
+		for (t in trow) { k = trow[t]; seen[k] = 1; if (tover[t] >= 0) { of[k]++; hit[k] += tover[t] } }
+		for (k in seen) printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^tier/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
+		printf "beside the table: %d dismissal(s) that pair with no raise\n", beside
 	}' | sort)
 printf '    fixture trace, not the repo'"'"'s — %s events written by `emit` under a scratch TRACE_DIR:\n' "$(fx_trace export | grep -c .)"
 printf '%s\n' "$fx_rows" | sed 's/^/      | /'
@@ -523,6 +555,36 @@ printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared c
 	pass "…and its text names no row"
 fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
 fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
+fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
+fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
+printf '%s\n' "$fx_rows" | grep -q '· high ' && fail "the fixture's table has a high row — an earlier ticket.write of a re-written subject was read" ||
+	pass "a subject written twice is read once, at its latest write"
+# The prose's own example rows are arithmetic too (second local review, M-1):
+# a rate is the rounded share of its counts, a row under five events carries
+# no rate, every row carries the clause — and the row the fixture computes
+# for scenario 3 is the row the example shows.
+ex_bad=
+while IFS= read -r row; do
+	[ -n "$row" ] || continue
+	case $row in *'— oracle: '*) ;; *) ex_bad="$ex_bad [no oracle clause: ${row%% *}]" ;; esac
+	counts=$(printf '%s\n' "$row" | sed -n 's/.* \([0-9][0-9]*\) of \([0-9][0-9]*\) [od][a-z]* .*/\1 \2/p')
+	[ -n "$counts" ] || continue
+	hit=${counts% *}
+	of=${counts#* }
+	if [ "$of" -lt 5 ]; then
+		case $row in *'too few to rate'*) ;; *) ex_bad="$ex_bad [$hit of $of carries a rate]" ;; esac
+	else
+		want=$(awk -v h="$hit" -v o="$of" 'BEGIN { printf "%.0f %%", 100 * h / o }')
+		case $row in *"   $want   "*) ;; *) ex_bad="$ex_bad [$hit of $of is $want]" ;; esac
+	fi
+done <<EOF
+$rows8
+EOF
+[ -z "$ex_bad" ] && pass "every example row's rate is the rounded share of its counts, thin rows carry none, and each carries the oracle clause" ||
+	fail "an example row in question 8 does not follow the question's own rules:$ex_bad"
+printf '%s\n' "$rows8" | grep -qF 'tier · to-tickets (by kind) · low       5 of 7 overridden   71 %' &&
+	pass "the example's scenario-3 row is the row the fixture computes" ||
+	fail "the example's low row is no longer '5 of 7 overridden   71 %' — the fixture computes that row; move both together"
 ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "and the fixture trace verifies" ||
 	fail "the fixture trace does not verify"
 
