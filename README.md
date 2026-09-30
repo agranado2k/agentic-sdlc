@@ -583,6 +583,20 @@ skeleton (K0).
   and to the checker's own defaults, so a token added on one side and not the
   other goes red.
 
+- `sh tests/trace-prices.test.sh` proves the price table says when it is stale
+  and refreshes on demand (ticket #270). Because cost is computed on read
+  (ADR-0008 clause 6), the table is a dated claim that rots quietly — so
+  `summary` and `export --csv` read its `Last checked:` line and print one
+  advisory on stderr past `TRACE_PRICES_STALE_DAYS`: never on stdout, never an
+  exit status, silent when the window is empty or no date is written, silenced
+  by `TRACE_QUIET=1`. Then the kit-only refresh script
+  (`scripts/trace-prices.kit.sh`) against fixture payloads under
+  `tests/fixtures/prices/` — no network in the suite at all: `--check` reports
+  drift as exit 1 and a source failure as exit 2, two sources disagreeing past
+  the threshold refuse the write and print both, and a write rewrites exactly
+  the five values, the date and the two source-revision lines, leaves every
+  other byte of the policy file alone, and commits nothing.
+
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
   redacted transcript fixtures. The session-start hook writes the pointer file
@@ -745,6 +759,7 @@ sh tests/trace.test.sh                                 # the decision trace: emi
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
+sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
