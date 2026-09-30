@@ -232,7 +232,8 @@ be nobody's. An event none of the three names goes on a row named
 - **The tier, per confidence.** Take one `ticket.write` per subject, the
   latest by `ts`, and group by `data.confidence` — `low`, `medium`, `high`.
   A ticket was overridden at the quiz when its `tier` differs from its
-  `data.tier_proposed`. Per group: how many were overridden, of how many
+  `data.tier_proposed` — the quiz override question 1 counts, cut here by
+  confidence instead of compared by tier. Per group: how many were overridden, of how many
   carry both keys. A `ticket.write` with no `data.confidence` was written
   before the stamp existed: it goes in a row named `unstamped`, and one with
   no `data.tier_proposed` has no override to read — count it on its row and

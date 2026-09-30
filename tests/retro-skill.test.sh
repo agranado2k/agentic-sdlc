@@ -334,6 +334,9 @@ stamp_has 'instead of a rate' "…instead of printing a rate"
 # dismissed: 0 of 7 printed as a rate reads as a measurement of an emitter
 # that may never have run (the kit's own trace, the day the kind landed).
 stamp_has 'no dismissal recorded in the window' "a window with no finding.dismiss at all prints no dismissal rate"
+# L-6: question 8's override is question 1's, re-cut — one home for the
+# definition, and the second question says whose it is.
+stamp_has 'the quiz override question 1 counts' "the tier override is question 1's, cut here by confidence — one home per rule"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&
