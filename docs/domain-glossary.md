@@ -200,6 +200,14 @@ Grouped by the seam each term belongs to. Entry shape:
   twice with two values has no value and is refused. Not an anchor: an anchor
   is a labeled decision in a stamped article, refereed by an advisory, and is
   never read by the checker.
+- **Confidence** — how sure a tier or autonomy-label stamp LOOKED to the
+  session that made it, never how likely it is right: one of three tokens
+  (`low`, `medium`, `high`), stamped by `/to-tickets` as a `Confidence:`
+  decision line beside the stamp it qualifies. It sorts the quiz low first
+  and sends `/implement` back to its restatement on a `low` tier; no autonomy
+  decision reads it, and nothing has measured it yet. Ref: PRD #273.
+  - _Avoid_: "probability", "certainty", "score" — it reports a reading, not
+    a likelihood.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the

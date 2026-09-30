@@ -579,9 +579,9 @@ skeleton (K0).
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
   confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
-  tier stamp of `/to-tickets` and the resolver's literal — order included,
-  and to the checker's own defaults, so a token added on one side and not the
-  other goes red.
+  tier and confidence stamps of `/to-tickets` and the resolver's literal —
+  order included, and to the checker's own defaults, so a token added on one
+  side and not the other goes red.
 
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and

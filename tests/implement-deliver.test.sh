@@ -172,6 +172,38 @@ assert_file_has "$SKILL" "$TIER_CFG"
 	fail "$TIER_CFG does not exist, but the skill sends the agent to read it"
 
 # ---------------------------------------------------------------------------
+banner "4b. The stamp is read through the checker: restate on low, stop on refused"
+# ---------------------------------------------------------------------------
+# PRD #273. /to-tickets stamps a `Confidence:` line under the tier; this skill
+# is its reader. Two rules, each one line of one bullet so neither can drift
+# into another section and still count: a `low` on the tier is a second
+# reading at the cheapest point — back to the restatement, BEFORE any spawn,
+# and the report says so; a tier the checker refuses is /to-tickets' to
+# re-stamp — the session neither guesses the nearest legal name nor sizes
+# itself. And the confidence is described in the PRD's own words, so a reader
+# never takes it for a probability or a permission.
+stamp=$(grep -F -- "sh scripts/vocab.sh 'Tier: " "$SKILL_ABS" | head -1)
+[ -n "$stamp" ] && pass "one bullet hands the ticket's stamp to the vocabulary checker" ||
+	fail "no line runs sh scripts/vocab.sh on the ticket's Tier: line — the stamp is read unchecked"
+# stamp_has <fixed string> <why>
+stamp_has() {
+	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
+}
+stamp_has "'Confidence: " "the confidence is checked with the tier it qualifies"
+stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
+stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
+stamp_has "back to the restatement step" "restate-on-low: the rule"
+stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
+stamp_has "say so in your report" "restate-on-low: the report names it"
+stamp_has "A tier the checker refuses" "stop-on-refused: the case"
+stamp_has "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is"
+stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
+stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
+stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# The kit wrapper is never named: skills ship unstamped.
+assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"
