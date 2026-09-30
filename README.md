@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.31.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.32.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.31.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.32.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -585,9 +585,9 @@ skeleton (K0).
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
   confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
-  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal —
-  order included, and to the checker's own defaults, so a token added on one
-  side and not the other goes red.
+  `/pr-iterate`, the tier and confidence stamps of `/to-tickets` and the
+  resolver's literal — order included, and to the checker's own defaults, so a
+  token added on one side and not the other goes red.
 - `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
   read to its declared return shape (PRD #273): three bare lines — the
   command-shaped flag, the triage action, one evidence line quoting the

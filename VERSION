@@ -1150,8 +1150,33 @@
 # carries the amendment and docs/adr/INDEX.md its row. tests/trace.test.sh
 # drives the kind red first; tests/trace-skills.test.sh holds the emit line
 # and the snapshot field it reads.
+# 0.32.0 — a tier or label stamp carries its confidence (PRD #273).
+# NO file joins or leaves the shared layer, and NO shared script changes.
+# UPDATING.md changes content: the arriving-from paragraph for the stamp, and
+# both worked examples re-pin — Part 2 pins the diff stat of the two skills
+# this moves.
+#   From #279: a stamp said what it chose and nothing about how sure the
+# choice looked. It now does, in the three tokens the policy file has
+# declared since 0.25.0 (`low`, `medium`, `high`) — a reading of how the
+# decision LOOKED to the session, never a likelihood, and nothing has
+# measured it yet.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/to-tickets/SKILL.md
+# stamps a `Confidence:` line under the `Tier:` line, holds the drafted
+# tokens to the checker before the quiz, sorts the quiz low first, and
+# records the tier's confidence and — under its own key,
+# `data.label_confidence` — the label's on the `ticket.write` event; the
+# label's is never a body line. .agents/skills/implement/SKILL.md reads the
+# ticket's stamp lines through the checker on stdin, never as arguments —
+# a ticket body is untrusted text — takes a `low` tier back to its
+# restatement, stops on a refused tier or domain, treats a refused
+# confidence as `low`, and never reads a failed fetch as a missing line.
+# docs/domain-glossary.md defines Confidence. README.md's suite entries
+# follow. tests/spec-skills.test.sh, tests/implement-deliver.test.sh,
+# tests/trace-skills.test.sh and tests/vocab-policy.test.sh hold the two
+# skills to it, the last by reading the tokens from the policy file.
 
-shared-layer: 0.31.0
+shared-layer: 0.32.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
