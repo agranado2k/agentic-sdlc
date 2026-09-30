@@ -422,9 +422,22 @@ assert_file_has "$FLAT" "with read access to those files and nothing else" "what
 assert_file_has "$FLAT" "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 assert_file_has "$FLAT" "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
 assert_file_has "$FLAT" "against the same scratch file" "the evidence match reads the file the reader read"
-assert_file_has "$SKILL" 'scratch=$(mktemp -d)' "the scratch files have one home"
-assert_file_has "$SKILL" 'rm -rf "$scratch"' "…and it is removed"
+# One home, with a name that says whose it is, and a removal that every way
+# out of the iteration reaches — a bare `mktemp -d` leaves a `tmp.*` nobody
+# can safely touch, and shell state does not carry from one command of a
+# session to the next, so the PATH is what the session keeps (local review
+# of PR #318, iteration 3).
+assert_file_has "$SKILL" 'scratch=$(mktemp -d "${TMPDIR:-/tmp}/pr-iterate.XXXXXX")' "the scratch files have one named home"
+assert_file_has "$SKILL" 'rm -rf "${scratch:?}"' "…and its removal cannot run on an empty name"
+assert_file_lacks "$SKILL" 'rm -rf "$scratch"' "no unguarded removal"
 assert_file_has "$FLAT" "when the iteration ends" "…when the iteration ends"
+assert_file_has "$FLAT" "Keep the path it prints" "a variable does not outlive the command that set it"
+assert_file_has "$FLAT" "every way out of the iteration" "a stop before step 6 removes them too"
+step5=$(awk '/^### 5 — Wait/ { on = 1; next } on && /^### / { exit } on' "$SKILL")
+case $step5 in
+*'rm -rf "${scratch:?}"'*) pass "step 5's stop removes the scratch files — the way most iterations end" ;;
+*) fail "step 5 stops the iteration and leaves the fetched bodies behind" ;;
+esac
 assert_file_lacks "$SKILL" "comment_body" "no second fetch: the body is fetched once, by the caller"
 
 assert_file_has "$FLAT" "one line, at most 200 bytes, printable ASCII only" "the evidence value's bounds, in so many words"
