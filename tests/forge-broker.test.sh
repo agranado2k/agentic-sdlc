@@ -757,7 +757,7 @@ banner "R4. Run it twice: the second run finds the first's marker and posts noth
 # with the first run's own bodies — so the marker is the one that landed.
 broker 12 "$GOOD"
 s_assert_status 0 "the first run posts"
-posted_marker() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]* -->' | head -n 1 | sed 's/^"body":"//'; }
+posted_marker() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]\{40\} -->' | head -n 1 | sed 's/^"body":"//'; }
 R_MARK=$(posted_marker pulls/12/reviews)
 C_MARK=$(posted_marker issues/12/comments)
 [ -n "$R_MARK" ] && [ "$R_MARK" = "$C_MARK" ] &&
@@ -768,11 +768,22 @@ printf 'https://forge.invalid/pull/12#issuecomment-42\t%s\n' "$C_MARK" >"$SCRATC
 STUB_REVIEWS="$SCRATCH/rerun-reviews.tsv" STUB_COMMENTS="$SCRATCH/rerun-comments.tsv"
 export STUB_REVIEWS STUB_COMMENTS
 broker 12 "$GOOD"
-unset STUB_REVIEWS STUB_COMMENTS
 s_assert_status 0 "the second run exits 0"
 assert_mutating 0 "…and makes no mutating call"
 s_assert_out_is "$(printf 'https://forge.invalid/pull/12#pullrequestreview-41\nhttps://forge.invalid/pull/12#issuecomment-42')" \
 	"…printing the URLs that already landed, and only those"
 s_assert_err_has 'already landed'
+
+# The marker is the report's content hash, not a constant of the PR: a
+# DIFFERENT report on the same PR, against the same listings still carrying
+# the first report's marker, is a new review and lands.
+broker 12 "$NONE"
+unset STUB_REVIEWS STUB_COMMENTS
+s_assert_status 0 "a different report on the same PR exits 0"
+assert_mutating 2 "…and lands both operations, not suppressed by the first report's marker"
+N_MARK=$(posted_marker pulls/12/reviews)
+[ -n "$N_MARK" ] && [ "$N_MARK" != "$R_MARK" ] &&
+	pass "…under a marker of its own, not the first report's" ||
+	fail "two different reports posted one marker: '$R_MARK' / '$N_MARK'"
 
 t_done "tests/forge-broker.test.sh"
