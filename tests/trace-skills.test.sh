@@ -274,16 +274,16 @@ banner "8. The record agrees: clause 7 names no skill reader but the retrospecti
 ADR8=$(ls docs/adr/0008-*.md 2>/dev/null | head -1)
 c7=$(awk '/^7\. \*\*The chain never reads the trace/ { on = 1 } on && /^8\. / { exit } on' "$ADR8" 2>/dev/null)
 [ -n "$c7" ] && pass "ADR-0008 has its clause 7" || fail "no clause 7 found in '$ADR8'"
-am=$(printf '%s\n' "$c7" | awk '/\*Amended [0-9-]*:\*/ { on = 1 } on')
+am=$(printf '%s\n' "$c7" | awk '/\*Amended [0-9-]*( \(#[0-9]+\))?:\*/ { on = 1 } on')
 [ -n "$am" ] && pass "clause 7 carries a dated amendment" ||
-	fail "clause 7 has no '*Amended <date>:*' block — the record still names a skill reader rule 3 forbids"
+	fail "clause 7 has no '*Amended <date> (#N):*' block — the record still names a skill reader rule 3 forbids"
 printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'operator.*retrospective skill' &&
 	pass "the amendment names the readers: the operator and the retrospective skill" ||
 	fail "the amendment does not name the operator and the retrospective skill as the readers"
 printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE "diagnosis reads the trace by the operator's hand" &&
 	pass "and says a diagnosis reads by the operator's hand" ||
 	fail "the amendment does not say a diagnosis reads the trace by the operator's hand"
-am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\):\*.*/\1/p' | tail -1)
+am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\)[^*:]*:\*.*/\1/p' | tail -1)
 row=$(grep -F '| [0008]' docs/adr/INDEX.md)
 case $row in
 *"amended $am_date"*) pass "the index row for 0008 carries the amendment's date ($am_date)" ;;
