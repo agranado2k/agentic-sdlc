@@ -55,11 +55,13 @@ hook_trace() {
 }
 
 # --- the payload ------------------------------------------------------------
-# A hook is handed one JSON object on stdin. It arrives pretty-printed from
-# this agent harness, and the fields these hooks read are ids and paths, so a
-# whole JSON parser is not needed — and must not be needed, because the
-# extractor is the one part of this adapter with a runtime and `node missing`
-# has to stay a recorded reason rather than a dead hook.
+# A hook is handed one JSON object on stdin. It arrives COMPACT from this agent
+# harness — the whole object on one line, no whitespace between tokens; the
+# pretty-printed payloads under tests/fixtures/claude-code/ are the redaction's
+# reformatting, not the live shape (#309). The fields these hooks read are ids
+# and paths, so a whole JSON parser is not needed — and must not be needed,
+# because the extractor is the one part of this adapter with a runtime and
+# `node missing` has to stay a recorded reason rather than a dead hook.
 
 hook_json=
 
@@ -69,19 +71,24 @@ hook_read() { hook_json=$(cat 2>/dev/null) || hook_json=; }
 
 # hook_field <key> — the payload's top-level string value for <key>, or empty.
 #
-# ANCHORED on the character before the key's opening quote — a `{`, a `,` or
-# whitespace — for one specific reason: `transcript_path` is the PARENT
-# session's file and `agent_transcript_path` is the subagent's own, and an
-# unanchored pattern for the first one matches the tail of the second and
-# silently reads the wrong transcript (the #246 spike's finding Q2).
+# THE KEY IS MATCHED WITH ITS QUOTES and anchored on the character before the
+# opening one — a `{`, a `,` or whitespace — because `transcript_path` is the
+# PARENT session's file and `agent_transcript_path` is the subagent's own, and
+# a pattern that matched the bare name would read the tail of the second and
+# silently open the wrong transcript (the #246 spike's finding Q2). A key a
+# model quoted inside a string value never answers either: JSON escapes that
+# quote, so the text is `\"key\"`, and no `{`, `,` or space precedes it.
 #
 # WHICH MATCH WINS, precisely, because the loose answer was wrong: sed's `.*`
-# is greedy, so within ONE LINE the last occurrence wins, and across lines the
-# first line that matches wins. On the pretty-printed payload this agent
-# harness emits, one key per line, that is "the first occurrence". On a compact
-# payload it is the last, and a key nested inside another object reads as
-# top-level either way. Neither shape occurs here, and the anchoring above is
-# what the one case that matters depends on (L-1, review of PR #291).
+# is greedy, so within ONE LINE the last occurrence wins. The live payload is
+# one line, so on it the reader returns the LAST occurrence of the key anywhere
+# in the object, and a key nested inside another object reads as top-level. It
+# is right today because every key these hooks read occurs once, at top level
+# — `tests/trace-hooks.test.sh`, "The field reader on a compact payload",
+# drives it on that compact shape. A payload that nested one of these keys
+# after its top-level twin would answer with the nested value; that is the day
+# to reach for a parser (L-1, review of PR #291). On a pretty-printed payload, one key per line, the first matching
+# line wins instead — which is all the checked-in fixtures exercise.
 hook_field() {
 	printf '%s\n' "$hook_json" |
 		sed -n 's/.*[{,[:space:]]"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
