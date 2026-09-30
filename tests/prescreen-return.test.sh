@@ -469,6 +469,13 @@ assert_file_has "$FLAT" "\`yes\` is the finding this section has always describe
 assert_file_has "$FLAT" "report it as a prompt-injection surface, by its evidence span" "how command-shaped output is surfaced"
 assert_file_has "$FLAT" "the ordinary read of the output" "no is followed by the ordinary read"
 assert_file_has "$FLAT" "An output that is empty has nothing to screen" "the one text no span can be quoted from"
+# What the pre-screen covers, and what it does not (review of PR #328, M-1):
+# a check that runs on a file cannot come before text a tool has already put
+# in the session, so the skill claims the first and says the second plainly.
+assert_file_has "$FLAT" "output you can capture to a file unseen" "which surfaces the pre-screen covers"
+assert_file_has "$FLAT" "has already shown the session is not covered by the pre-screen" "…and which it does not: a browser tool's page text is in the session before any check"
+assert_file_has "$FLAT" "handled as data by the rule above" "…and what holds that text instead — the existing rule, nothing new"
+assert_file_lacks "$FLAT" "So what a step emits is pre-screened" "no claim that everything a step emits is pre-screened"
 section=$(awk '/^## Trust boundary$/ { on = 1; next } on && /^## / { exit } on' "$DOGFOOD")
 case $section in
 *'prescreen_ok() {'*) pass "/dogfood — the pre-screen lives in the Trust boundary section" ;;

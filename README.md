@@ -612,8 +612,10 @@ skeleton (K0).
   trust-boundary paragraph in the kit's manual and the template.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
-  over a PRD issue body and `/dogfood` over product output each pre-screen
-  the text before the session reads it: the caller writes it to a scratch
+  over a PRD issue body and `/dogfood` over product output it can capture
+  to a file unseen each pre-screen the text before the session reads it
+  (text a browser tool has already shown the session is outside the
+  pre-screen, and the skill says so): the caller writes it to a scratch
   file unseen, a reader with no shell, no forge CLI and no network returns
   two bare lines — `Command-shaped:` from the policy file's tokens and one
   evidence span — and the check each skill prints is lifted out and run: the
