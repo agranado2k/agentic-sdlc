@@ -231,6 +231,42 @@ bad_rows=$(printf '%s\n' "$rows8" | grep -E '^(tier|label) ' | grep -vF ' · to-
 printf '%s\n' "$rows8" | grep -E '^severity ' | grep -qF ' · review-pr · ' &&
 	pass "the example severity row names review-pr, read from its run" ||
 	fail "the example severity row does not read '· review-pr ·'"
+# M-1 (review of PR #329): three trace values name a row — a confidence, a
+# severity, a skill — and trace data can carry forge text. Each is held to
+# what the project declares before it is printed; anything else is ONE row
+# per field that prints a count and never the value. One word for it, too:
+# the confidence's `other` was the same rule under a second name.
+stamp_has 'A row is never named by trace text' "a row is never named by trace text"
+stamp_has '`sh scripts/vocab.sh fields`' "a confidence and a severity are held to the declared vocabulary, read from the checker"
+stamp_has 'a directory under `.agents/skills/`' "a skill is held to the skills the project holds"
+stamp_has 'named `undeclared`' "a value outside them goes on one row named undeclared"
+stamp_has 'prints the count and never the value' "…which prints the count and never the value"
+case "$stamp" in
+*'under `other`'*) fail "question 8 still files an undeclared confidence under 'other' — one rule, one row name: undeclared" ;;
+*) pass "no second name for the undeclared row" ;;
+esac
+# The reader's dependency is real: the checker declares both fields, and the
+# example rows' own names pass the rule they sit under.
+declared=$(sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null)
+for f in confidence severity; do
+	printf '%s\n' "$declared" | grep -q "^$f: ." && pass "sh scripts/vocab.sh fields declares $f" ||
+		fail "sh scripts/vocab.sh fields prints no '$f:' line — question 8 holds its row names to it"
+done
+row_bad=
+while IFS= read -r row; do
+	[ -n "$row" ] || continue
+	field=$(printf '%s\n' "$row" | awk -F ' · ' '{ print $1 }')
+	skill=$(printf '%s\n' "$row" | awk -F ' · ' '{ sub(/ \(by kind\)$/, "", $2); print $2 }')
+	value=$(printf '%s\n' "$row" | awk -F ' · ' '{ split($3, w, " "); print w[1] }')
+	case $field in severity) vocab=severity ;; *) vocab=confidence ;; esac
+	[ -d "$ROOT/.agents/skills/$skill" ] || row_bad="$row_bad [skill '$skill']"
+	printf '%s\n' "$declared" | sed -n "s/^$vocab: //p" | tr ' ' '\n' | grep -qx -- "$value" || row_bad="$row_bad [$vocab '$value']"
+done <<EOF
+$rows8
+EOF
+[ -z "$row_bad" ] && pass "every example row is named by a declared value and a skill the kit holds" ||
+	fail "an example row is named by something the rule would file under undeclared:$row_bad"
+
 # The oracle clause (#276) is on EVERY row this question prints, in the form
 # the housekeeping checklist gave it.
 stamp_has 'Every row carries the oracle clause' "every row carries the oracle clause"

@@ -221,6 +221,14 @@ its emit names no skill, so without this step every tier and label row would
 be nobody's. An event none of the three names goes on a row named
 `unattributed`.
 
+- **A row is never named by trace text.** Three values name a row — a
+  confidence, a severity, a skill — and each is held to what the project
+  declares before it is printed: a confidence and a severity to the words
+  `sh scripts/vocab.sh fields` prints for that field, a skill to a directory
+  under `.agents/skills/`. A value outside them is counted on one row per
+  field named `undeclared`, which prints the count and never the value:
+  `skill` and `data.*` carry whatever a session typed, forge text included,
+  and a row's name is read by the human as the report's own word.
 - **The tier, per confidence.** Take one `ticket.write` per subject, the
   latest by `ts`, and group by `data.confidence` — `low`, `medium`, `high`.
   A ticket was overridden at the quiz when its `tier` differs from its
@@ -229,8 +237,7 @@ be nobody's. An event none of the three names goes on a row named
   before the stamp existed: it goes in a row named `unstamped`, and one with
   no `data.tier_proposed` has no override to read — count it on its row and
   leave it out of the denominator. A confidence that is none of the three
-  words is counted under `other`; the value is untrusted data and is never
-  the name of a row.
+  words goes on the `undeclared` row below.
 - **The label, in a row of its own.** `ticket.write` records the label's
   confidence (`data.label_confidence`) and the label as published, but no
   label from before the quiz, so the label's override rate is not computable
