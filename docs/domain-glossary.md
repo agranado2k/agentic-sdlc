@@ -34,6 +34,14 @@ Grouped by the seam each term belongs to. Entry shape:
 
 ## Distribution — what the kit hands over
 
+- **Runtime catalogue** — canonical skill content and the declared active roots
+  that expose it to a session. Admission checks filesystem identity, never
+  model-visible loading. See ADR-0011 and `scripts/catalogue.md`.
+- **Active root** — a repository- or caller-declared runtime skill directory,
+  mapped to canonical `.agents/skills` content by a supported representation.
+- **Catalogue admission** — the read-time check of active-root identity, exact
+  path case and explicitly classified references, owned by Distribution.
+
 - **Kit** — this repository, and the thing being built. A template repo, not a
   package: it is consumed by "Use this template" plus one run of
   `bootstrap.sh`, never by a dependency manager.

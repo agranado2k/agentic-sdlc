@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.26.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.27.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.26.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.27.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -568,6 +568,9 @@ skeleton (K0).
   `blob` too, which prints that name and byte count, writes no event and
   leaves the stored file owner-only — and `verify` refuses a schema it does
   not know.
+- `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
+  active content identities, exact case, explicit executable references, stale
+  copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
 - `sh tests/vocab.test.sh` proves the vocabulary checker (PRD #273): every
   shipped vocabulary accepts its own tokens; a misspelling, an invented token,
   an empty value and a token outside the shape are each exit 2 with the field
