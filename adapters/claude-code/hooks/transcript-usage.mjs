@@ -157,6 +157,13 @@ for (const line of raw.split("\n")) {
   if (typeof message.id !== "string" || message.id === "") {
     die(`line ${lineNo}: key 'message.id' is missing or not a string, so a streamed response cannot be de-duplicated`);
   }
+  // The id is the ANCHOR the next read of this transcript is handed, and the
+  // hook drops an anchor outside this class rather than put it on a command
+  // line — which would silently fall back to the whole-file read, the double
+  // count (M-1, review of PR #316). So it is refused here, loudly, instead.
+  if (!/^[A-Za-z0-9._-]+$/.test(message.id)) {
+    die(`line ${lineNo}: message.id '${message.id}' is not letters, digits, dot, dash and underscore, so it cannot anchor the next read of this transcript`);
+  }
   if (typeof message.model !== "string" || message.model === "") {
     die(`line ${lineNo}: key 'message.model' is missing or not a string, so these tokens belong to no model`);
   }

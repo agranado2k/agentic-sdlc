@@ -1315,7 +1315,6 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ "$(data_of "$U2" last_msg)" = "$RMSG2" ] && [ "$(data_of "$U2" msgs)" = 1 ] &&
 		pass "the second says it read one more message, up to $RMSG2" ||
 		fail "the second usage event: $U2"
-	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=note subject=session:other-307 reason=probe
 	# The other session's one token is on the same model row, so take it off.
 	GOT=$(model_row "$RMODEL" | awk '{ print $1 - 1, $2, $3, $4 }')
 	[ "$GOT" = "$R34" ] &&
@@ -1345,6 +1344,51 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "and records one usage event, outcome=fail, carrying no tokens" ||
 		fail "the lost-anchor end left: $(ev_of session.usage)"
 	case $F26 in *"$RMSG1"*) pass "whose reason names the anchor" ;; *) fail "the reason does not name the anchor: $F26" ;; esac
+
+	# M-1, review of PR #316: an id the anchor cannot carry is drift at the
+	# extractor, never a row whose anchor the next end drops in silence and so
+	# falls back to the whole-file read — the double count again.
+	sed "s/$RMSG1/msg:one/g; s/$RMSG2/msg:two/g" "$RFIX" >"$SCRATCH/resumed-colon-307.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/resumed-colon-307.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a message id outside letters, digits, dot, dash, underscore is exit 2 with no row" ||
+		fail "an id with a colon: status $S_STATUS, stdout '$S_OUT'"
+	case $S_ERR in *msg:one*) pass "and the refusal names the id" ;; *) fail "stderr does not name the id: $S_ERR" ;; esac
+	new_trace
+	set_key transcript_path "$SCRATCH/resumed-colon-307.jsonl" <"$SCRATCH/end-resumed-307.json" >"$SCRATCH/end-colon-307.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-colon-307.json" >/dev/null 2>&1
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-colon-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | grep -c '"outcome":"fail"')" = 2 ] && [ "$(sum_tok tok_in session.usage)" = 0 ] &&
+		pass "so two ends over such ids record two failures and no tokens, not a double count" ||
+		fail "two ends over unusable ids left: $(ev_of session.usage)"
+
+	# M-2, review of PR #316: a FAIL event between two good ends is passed over —
+	# the anchor is the last read that succeeded, so the third end counts the
+	# resume once and the total is still the rollup.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	sed 's/"output_tokens":/"output_tokenz":/g' "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | grep -c '"outcome":"fail"')" = 1 ] &&
+		pass "a drifted end between two good ones records its failure" ||
+		fail "the drifted end left: $(ev_of session.usage)"
+	[ "$(model_row "$RMODEL")" = "$R34" ] &&
+		pass "and the end after it still totals the rollup ($R34) — the anchor skipped the failure" ||
+		fail "ok, drift, ok totals '$(model_row "$RMODEL")', the rollup says '$R34'"
+
+	# M-2: more than one model under --after. The message count is per model;
+	# the last id is the whole read's, the same on every row. A third message on
+	# a second model is appended to the fixture for this.
+	sed -n '30,31p' "$RFIX" | sed "s/$RMSG2/msg_three307/; s/$RMODEL/claude-other-307/g" >"$SCRATCH/third-307.jsonl"
+	cat "$RFIX" "$SCRATCH/third-307.jsonl" >"$SCRATCH/two-models-307.jsonl"
+	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/two-models-307.jsonl"
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 msg_three307
+claude-other-307 10 31 88 23947 1 msg_three307" ] &&
+		pass "two models after the anchor: one row each, one message each, one last id on both" ||
+		fail "two models after the anchor printed: $S_OUT"
 
 	# A FRESH single-end session is unchanged, apart from saying how far it read.
 	new_trace
