@@ -142,7 +142,9 @@ silent no-op, which is the shipped default and a working state.
 
 Every tool call can be captured too, as one `tool.use` event carrying the tool's
 name, the call's id, the first 512 bytes of its input on the line, and the FULL
-input and FULL result in the blob store with the result's size. Two more events
+input and FULL result in the blob store with the result's size — each stored
+by `sh scripts/trace.sh blob`, which prints the name the event carries, so the
+adapter keeps no store of its own. Two more events
 wire it, both to the same script — the only difference between them is the
 outcome it records:
 
@@ -212,14 +214,22 @@ you get it wrong:
   interpretation that rots on the vendor's schedule, so the trace keeps token
   counts and prices them on read, from a table you own (ADR-0008 clause 6).
 
-One known gap, observed in a live session rather than in a fixture: **the
-subagent-stop hook can run before the subagent's transcript has its assistant
-line**, and the `agent.stop` event then records that it found no usage and
-carries the transcript path instead of tokens. A session's own `session.usage`
-is unaffected and exact; what is lost is that session's subagent tokens, so the
-"usage plus agent.stop equals the rollup" identity holds only when the file was
-ready. Waiting for it is a decision with a timing guess in it and a hook that
-sleeps delays a session, so it is deliberately not worked around here.
+One race, observed in a live session rather than in a fixture: **the
+subagent-stop hook can run before the subagent's transcript has its final
+assistant line.** Read then, the file holds no usage at all or, worse, the
+turns before the last one, which sum to an undercount that looks like success.
+Two of seven live stops lost that race by 170 and 223 ms. The hook can wait for
+it: `TRACE_AGENT_WAIT_MS` in your trace policy file is how many milliseconds
+it may poll for the transcript to end on a final message. When the final
+message lands in time, `agent.stop` carries the tokens and `data.waited_ms`.
+When the bound passes first, it records `outcome=fail` with no counts and the
+wait it gave. A malformed value is refused on stderr and as
+`data.wait_refused`, and is never waited. The policy file ships the value
+empty, which means no wait and the read-at-once behaviour, partial sum
+included. The wait does not cover a transcript that does not exist when the
+hook runs: that is recorded at once, as before. A session's own
+`session.usage` is unaffected either way, and the "usage plus agent.stop equals
+the rollup" identity holds only for the stops whose file was ready.
 
 ### Reading it back: DuckDB and SQLite
 
