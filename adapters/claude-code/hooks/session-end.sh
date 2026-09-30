@@ -39,8 +39,26 @@ transcript=$(hook_expand "$(hook_field transcript_path)")
 set --
 [ -n "$sid" ] && hook_id_ok "$sid" && set -- subject="session:$sid" session="$sid"
 
+# HOW FAR AN EARLIER END OF THIS SESSION ALREADY READ (#307). A resumed session
+# keeps its id and appends to its one transcript, and every run ends with this
+# hook — so without an anchor the second end re-counts the first run and
+# `summary` totals it twice. The anchor is the trace's OWN record: the last
+# `session.usage` event filed under this session's subject that says how far
+# it read. Only the subject is asked, so another session's events can never
+# anchor this one; a fail event says nothing about how far it read and is
+# passed over, so the next end counts from the last read that succeeded. No
+# anchor — a fresh session, or a trace that is off — means the whole file,
+# which is exactly what a first end should read. The value came out of a file,
+# so it is held to the identifier class before it goes near a command line.
+after=
+if [ $# -gt 0 ]; then
+	after=$(hook_trace show "session:$sid" --kind session.usage |
+		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
+	hook_id_ok "$after" || after=
+fi
+
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-	hook_tokens "$transcript" session.usage "$@"
+	hook_tokens "$transcript" session.usage ${after:+--after "$after"} "$@"
 else
 	hook_trace emit kind=session.usage outcome=fail \
 		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"

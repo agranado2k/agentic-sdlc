@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.26.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.27.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.26.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.27.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -564,8 +564,10 @@ skeleton (K0).
   `end` rewrite that stack and both by rename, fifty parallel emits all land
   and all verify while the stack stays untouched, an event whose write would
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
-  is stored once under git's own hash of the bytes that were stored, and
-  `verify` refuses a schema it does not know.
+  is stored once under git's own hash of the bytes that were stored — by
+  `blob` too, which prints that name and byte count, writes no event and
+  leaves the stored file owner-only — and `verify` refuses a schema it does
+  not know.
 - `sh tests/forge-broker.test.sh` proves the broker (ADR-0009) lands a
   dispatched reviewer's report on the PR without the worker ever holding
   network or credentials: against a stub forge CLI that records argv and
@@ -580,6 +582,9 @@ skeleton (K0).
   diff is dropped and named; a retried run finds its marker and skips; the
   word APPROVE in a finding never reaches the event; and the `review.verdict`
   event is read back with the trace's `show`.
+- `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
+  active content identities, exact case, explicit executable references, stale
+  copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
 - `sh tests/vocab.test.sh` proves the vocabulary checker (PRD #273): every
   shipped vocabulary accepts its own tokens; a misspelling, an invented token,
   an empty value and a token outside the shape are each exit 2 with the field
@@ -626,7 +631,8 @@ skeleton (K0).
   switch of its own: with `TRACE_TOOLS` empty in the shipped policy file the
   post-tool hook writes nothing at all, and with it set one tool call becomes
   one `tool.use` event whose two blob names are git's own hash of the payload's
-  input and result — a 20 KB input still leaves the line inside the 4000-byte
+  input and result, stored by the shared script's `blob` with no store code
+  left in the adapter — a 20 KB input still leaves the line inside the 4000-byte
   cap, a failed call reads `outcome=fail` with the agent harness's error as its
   result, a tool result that quotes another `session_id` does not re-file the
   event, and a `tool_use_id` the trace could never match is one `fail` event

@@ -34,6 +34,14 @@ Grouped by the seam each term belongs to. Entry shape:
 
 ## Distribution — what the kit hands over
 
+- **Runtime catalogue** — canonical skill content and the declared active roots
+  that expose it to a session. Admission checks filesystem identity, never
+  model-visible loading. See ADR-0011 and `scripts/catalogue.md`.
+- **Active root** — a repository- or caller-declared runtime skill directory,
+  mapped to canonical `.agents/skills` content by a supported representation.
+- **Catalogue admission** — the read-time check of active-root identity, exact
+  path case and explicitly classified references, owned by Distribution.
+
 - **Kit** — this repository, and the thing being built. A template repo, not a
   package: it is consumed by "Use this template" plus one run of
   `bootstrap.sh`, never by a dependency manager.
@@ -275,7 +283,9 @@ Grouped by the seam each term belongs to. Entry shape:
   content hash and referenced from the event: `--blob <file>` (or `-` for
   standard input) stores it under `blobs/`, named by git's own hash of its
   content, and the event carries that hash and the byte count. Identical
-  content is stored once.
+  content is stored once. `sh scripts/trace.sh blob <file>` (or `-`) stores
+  one the same way WITHOUT an event and prints `<hash> <bytes>`, for a caller
+  that names several blobs from one event's `data`.
   - _Avoid_: "attachment".
   - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
     here is a ceiling on one tree, derived fresh per dispatch. "Limit" and

@@ -66,6 +66,14 @@ permissions:
   contents: read
 
 jobs:
+  catalogue:
+    name: Runtime catalogue admission
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Catalogue admission acceptance test
+        run: sh tests/catalogue.test.sh
+
   harness:
     name: Harness fixture tests
     runs-on: ubuntu-latest
