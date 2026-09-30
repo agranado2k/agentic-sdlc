@@ -1477,12 +1477,23 @@ timed() {
 }
 
 if [ "$HAVE_NODE" = 1 ]; then
-	# THE RACE, WON. The file is there, one turn short; the last turn lands a
-	# second later, inside a ten-second bound.
+	# THE RACE, WON. The file is there, one turn short; the last turn lands once
+	# the hook has taken its first nap, inside a ten-second bound. The writer is
+	# driven by the nap log rather than by a clock, so a slow preamble cannot let
+	# the turn land before the hook first looks — which would let a hook that
+	# checks once and never polls pass this leg (review of PR #323).
 	new_trace
 	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-late-308.jsonl"
 	stop_on "$SCRATCH/sub-late-308.jsonl"
-	(sleep 1 && cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-late-308.jsonl") &
+	: >"$SCRATCH/naps-308.log"
+	(
+		_w=0
+		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
+			sleep 0.05 2>/dev/null || sleep 1
+			_w=$((_w + 1))
+		done
+		cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-late-308.jsonl"
+	) &
 	WRITER=$!
 	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=10000
 	wait "$WRITER"
@@ -1498,6 +1509,9 @@ if [ "$HAVE_NODE" = 1 ]; then
 	done
 	[ -n "$(str "$W" waited_ms)" ] && pass "and data.waited_ms says how long it waited ($(str "$W" waited_ms) ms)" ||
 		fail "no data.waited_ms on the event: $W"
+	[ "$NAPS" -ge 1 ] && [ "$(str "$W" waited_ms)" -gt 0 ] 2>/dev/null &&
+		pass "and it really polled: $NAPS nap(s) before the turn landed" ||
+		fail "the hook took $NAPS naps and reported waited_ms '$(str "$W" waited_ms)' — it did not poll"
 	[ "$(str "$W" waited_ms)" -lt 10000 ] 2>/dev/null &&
 		pass "and it stopped waiting once the turn landed, inside the 10000 ms bound" ||
 		fail "data.waited_ms is '$(str "$W" waited_ms)' — it waited out the bound instead of polling"
@@ -1511,6 +1525,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the hook exited $S_STATUS: $S_ERR"
 	[ "$ELAPSED" -ge 2 ] && pass "and only after the 2000 ms bound (${ELAPSED}s)" ||
 		fail "the hook gave up after ${ELAPSED}s, before its 2000 ms bound"
+	[ "$NAPS" -le 41 ] && pass "and it asked for no more naps than the bound holds ($NAPS of at most 41)" ||
+		fail "the hook asked for $NAPS naps against a 2000 ms bound of 50 ms naps"
 	[ "$ELAPSED" -le 30 ] && pass "and not without end (${ELAPSED}s — the slack is for a loaded machine, the catch is a hang)" ||
 		fail "the hook took ${ELAPSED}s against a 2000 ms bound — it blocks past the bound"
 	L=$(ev_of agent.stop | sed -n '1p')
@@ -1525,10 +1541,12 @@ if [ "$HAVE_NODE" = 1 ]; then
 
 	# EMPTY IS NO WAIT — from the environment, and from a policy file. Today's
 	# behaviour exactly: read what is there, now, and say nothing of a wait.
-	for how in env file; do
+	for how in env zero file; do
 		new_trace
 		if [ "$how" = env ]; then
 			timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+		elif [ "$how" = zero ]; then
+			timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=0
 		else
 			printf "TRACE_AGENT_WAIT_MS=''\n" >"$SCRATCH/policy-308.sh"
 			timed TRACE_DIR="$TDIR" TRACE_CONFIG="$SCRATCH/policy-308.sh"
@@ -1608,6 +1626,74 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "whole-second wait: exit $S_STATUS, event $H"
 	[ "$NAPS" = 3 ] && pass "in three asks: one refused fraction, then two whole seconds" ||
 		fail "the hook asked for $NAPS naps: $(tr '\n' ' ' <"$SCRATCH/naps-308.log")"
+
+	# FROM THE REVIEW OF PR #323 — each a regression now.
+	#
+	# A CLOCK THAT STEPS BACK must not stretch the wait. `date +%s%N` is the
+	# realtime clock; the stub answers once with the real time and from then on
+	# with the real time two seconds EARLIER, so read naively the wait is two
+	# seconds longer than its bound — the review reproduced 3566 ms for a 500.
+	mkdir -p "$SCRATCH/backclock-308"
+	printf '#!/bin/sh\ncase "$*" in *%%N*) if [ -f "%s/back-308.seen" ]; then echo $(($("%s" +%%s%%N) - 2000000000)); else : >"%s/back-308.seen"; exec "%s" +%%s%%N; fi ;; *) exec "%s" "$@" ;; esac\n' \
+		"$SCRATCH" "$REAL_DATE" "$SCRATCH" "$REAL_DATE" "$REAL_DATE" >"$SCRATCH/backclock-308/date"
+	chmod +x "$SCRATCH/backclock-308/date"
+	rm -f "$SCRATCH/back-308.seen"
+	new_trace
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/backclock-308:$SCRATCH/naps-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	K=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" -le 7 ] && [ "$(str "$K" waited_ms)" = 300 ] &&
+		pass "a clock stepping back still ends the wait at the bound ($NAPS naps, waited_ms 300)" ||
+		fail "a backwards clock: exit $S_STATUS, $NAPS naps, event $K"
+
+	# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP still waits at the kit's own
+	# bound: the first check leaves a hair under 1000 ms, and one whole-second
+	# nap within a poll of the bound is taken rather than none.
+	new_trace
+	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+	J=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 950 ] 2>/dev/null &&
+		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
+		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
+
+	# THE READINESS RULE, half by half (hook_final's comment calls each one
+	# load-bearing, so each has a leg that fails without it). Built from the
+	# fixture: line 11 is a user line, line 20 the final assistant line.
+	sed -n '20p' "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/final-line-308.jsonl"
+	sed -n '11p' "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/user-line-308.jsonl"
+	# final <label> <file> <expect: final|not> — run the hook with a short bound
+	# and read which way it went.
+	final() {
+		new_trace
+		stop_on "$2"
+		timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+		_f=$(ev_of agent.stop | sed -n '1p')
+		if [ "$3" = final ]; then
+			[ -n "$(num "$_f" tok_out)" ] && pass "$1 reads as final" || fail "$1 did not read as final: $_f"
+		else
+			[ "$(str "$_f" outcome)" = fail ] && [ -z "$(num "$_f" tok_out)" ] &&
+				pass "$1 is not final" || fail "$1 read as final: $_f"
+		fi
+	}
+	cat "$FIX/subagent-transcript.redacted.jsonl" "$SCRATCH/user-line-308.jsonl" >"$SCRATCH/resumed-308.jsonl"
+	final "an old end_turn followed by the user line that resumed the subagent" "$SCRATCH/resumed-308.jsonl" not
+	{ cat "$SCRATCH/sub-head-308.jsonl"; sed 's/"stop_reason":"end_turn"/"stop_reason":null/' "$SCRATCH/final-line-308.jsonl"; } >"$SCRATCH/null-308.jsonl"
+	final "a last assistant line with stop_reason null (a streamed block before its last)" "$SCRATCH/null-308.jsonl" not
+	{ cat "$SCRATCH/sub-head-308.jsonl"; sed 's/"stop_reason":"end_turn"/"stop_reason":"max_tokens"/' "$SCRATCH/final-line-308.jsonl"; } >"$SCRATCH/max-308.jsonl"
+	final "a last assistant line that stopped on max_tokens" "$SCRATCH/max-308.jsonl" final
+	sed 's/"type":"\(user\|assistant\)"/"type": "\1"/g; s/"stop_reason":"/"stop_reason": "/g' \
+		"$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/spaced-308.jsonl"
+	grep -q '"type": "assistant"' "$SCRATCH/spaced-308.jsonl" &&
+		final "a transcript serialised with a space after each colon" "$SCRATCH/spaced-308.jsonl" final ||
+		fail "the spaced fixture was not built"
+
+	# A MALFORMED BOUND WITH TRACING OFF says nothing: there is nothing to wait
+	# for and nowhere to write, so a typo must not speak on every stop.
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	timed TRACE_DIR= TRACE_AGENT_WAIT_MS=soon
+	[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ "$NAPS" = 0 ] &&
+		pass "with tracing off a malformed bound is not refused aloud" ||
+		fail "with tracing off a malformed bound: exit $S_STATUS, $NAPS naps, stderr '$S_ERR'"
 else
 	echo "  skip  node is not on PATH — the wait legs read tokens with the extractor"
 fi

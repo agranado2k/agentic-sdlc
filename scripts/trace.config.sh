@@ -99,7 +99,9 @@ TRACE_TOOLS=''
 # on stderr and on the event, and not waited — the hook still exits 0. An
 # environment TRACE_AGENT_WAIT_MS overrides this line for one process, and an
 # environment value of '' is no wait even when this file names a bound. With
-# TRACE_DIR empty nothing is waited for: there is nowhere to write.
+# TRACE_DIR empty nothing is waited for: there is nowhere to write. Keep the
+# bound well under your agent harness's own time limit for a hook: a hook that
+# is killed for running long leaves no agent.stop event at all.
 TRACE_AGENT_WAIT_MS=''
 
 # ---------------------------------------------------------------------------

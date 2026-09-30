@@ -387,9 +387,12 @@ hook_blob() {
 #
 # A MALFORMED VALUE IS REFUSED like every other policy value: anything but one
 # to five digits with no leading zero (sh arithmetic reads 0100 as octal, so it
-# would silently be 64). Refused means named on stderr and on the event, and NOT
-# waited — the hook still exits 0, because a typo in a policy file must never
-# become a stalled session. '0' is no wait, like ''.
+# would silently be 64). Refused means NOT waited, and the value lands in
+# hook_wait_bad for the caller to name — on stderr and on the event, and only
+# when tracing is on, so a project that traces nothing is not told about a typo
+# on every subagent stop (review of PR #323). The hook still exits 0, because a
+# typo in a policy file must never become a stalled session. '0' is no wait,
+# like ''.
 hook_wait_bound() {
 	hook_wait_ms=
 	hook_wait_bad=
@@ -406,8 +409,8 @@ hook_wait_bound() {
 	case $_wb in
 	'' | 0) return 0 ;;
 	*[!0-9]* | 0* | ??????*)
-		hook_wait_bad=$(printf '%s' "$_wb" | cut -c1-60)
-		echo "x trace: TRACE_AGENT_WAIT_MS='$hook_wait_bad' is not a number of milliseconds — give a whole number from 1 to 99999 with no leading zero, or leave it empty for no wait. The subagent-stop hook did not wait." >&2
+		# One line, at most 60 characters: a policy value is anything at all.
+		hook_wait_bad=$(printf '%s' "$_wb" | tr -d '\n' | cut -c1-60)
 		return 0
 		;;
 	esac
@@ -424,17 +427,22 @@ hook_wait_bound() {
 # after — so an old final message never reads as this stop's. "Not tool_use and
 # not null", because a turn that called a tool is followed by more turns, and a
 # streamed response writes one line per content block with stop_reason null on
-# the ones before its last. The two keys are matched as they appear unescaped:
-# inside a message's text a quote is escaped, so a tool result that merely
-# QUOTES a transcript cannot match.
+# the ones before its last. The keys are matched as JSON punctuation, with any
+# whitespace around the colon — a transcript written with `"type": "assistant"`
+# is the same transcript (review of PR #323).
+#
+# WHAT IT CANNOT RULE OUT, stated rather than claimed away: the match is on the
+# line, not on its top-level object. Text inside a message is an escaped string
+# and cannot match, but a tool's STRUCTURED result is written as a JSON object,
+# so a user line whose result object itself holds a `"type":"assistant"` and a
+# `stop_reason` would read as final. Nothing observed writes such a result; if
+# one ever does, the cost is one early read, which the extractor then sums.
 hook_final() {
-	_hf_last=$(grep -E '"type":"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
-	case $_hf_last in *'"type":"assistant"'*) ;; *) return 1 ;; esac
-	case $_hf_last in
-	*'"stop_reason":"tool_use"'* | *'"stop_reason":null'*) return 1 ;;
-	*'"stop_reason":"'*) return 0 ;;
-	esac
-	return 1
+	_hf_last=$(grep -E '"type"[[:space:]]*:[[:space:]]*"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
+	printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"assistant"' || return 1
+	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"' || return 1
+	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"tool_use"' && return 1
+	return 0
 }
 
 # hook_now_ms — the wall clock in milliseconds, or status 1 where `date` has no
@@ -459,13 +467,22 @@ hook_now_ms() {
 # Without one (POSIX `date` stops at seconds) the figure is the sum of the naps
 # taken — honest about what it is, and the best a portable shell can say.
 #
+# THE NAPS ARE COUNTED EVEN WITH A CLOCK, and the wait is whichever of the two
+# is larger. The clock is the realtime one, and a clock that steps BACK would
+# otherwise read as time un-passing: the review reproduced a 500 ms bound
+# holding the hook for 3566 ms (review of PR #323). The naps taken are a floor
+# no clock can lower.
+#
 # A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
 # refuses a fraction (POSIX promises only whole seconds) is answered with
-# whole-second naps while a whole second remains, and the wait ends early
-# rather than overrun — never a busy loop, never a nap past the bound.
+# whole-second naps while about a whole second remains — within one poll of
+# it, so a bound of exactly 1000 still gets its nap after the first check has
+# spent a few milliseconds — and the wait otherwise ends early rather than
+# overrun. Never a busy loop; past the bound by at most one poll.
 hook_wait_final() {
 	_hw_t0=$(hook_now_ms) || _hw_t0=
 	_hw_waited=0
+	_hw_count=0
 	_hw_step=50
 	while :; do
 		if hook_final "$1"; then
@@ -481,16 +498,18 @@ hook_wait_final() {
 				_hw_t0=
 			fi
 		fi
+		[ "$_hw_waited" -ge "$_hw_count" ] || _hw_waited=$_hw_count
 		_hw_left=$(($2 - _hw_waited))
 		[ "$_hw_left" -gt 0 ] || break
 		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
 		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
 			_hw_step=1000
-			[ "$_hw_left" -ge 1000 ] || break
+			[ "$_hw_left" -ge 950 ] || break
 			sleep 1
 			_hw_nap=1000
 		fi
-		[ -n "$_hw_t0" ] || _hw_waited=$((_hw_waited + _hw_nap))
+		_hw_count=$((_hw_count + _hw_nap))
+		[ -n "$_hw_t0" ] || _hw_waited=$_hw_count
 	done
 	printf '%s' "$_hw_waited"
 	return 1

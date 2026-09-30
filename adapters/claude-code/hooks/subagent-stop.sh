@@ -61,9 +61,16 @@ fi
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
 
 hook_wait_bound
-[ -n "$hook_wait_bad" ] && set -- "$@" data.wait_refused="$hook_wait_bad"
-# Nothing to write, nothing to wait for: with tracing off the bound is moot.
-[ -n "$hook_wait_ms" ] && { hook_dir >/dev/null || hook_wait_ms=; }
+# Nothing to write, nothing to wait for: with tracing off the bound is moot, and
+# so is a typo in it — a project that traces nothing is not told on every stop.
+if [ -n "$hook_wait_ms$hook_wait_bad" ] && ! hook_dir >/dev/null; then
+	hook_wait_ms=
+	hook_wait_bad=
+fi
+if [ -n "$hook_wait_bad" ]; then
+	printf '%s\n' "x trace: TRACE_AGENT_WAIT_MS='$hook_wait_bad' is not a number of milliseconds — give a whole number from 1 to 99999 with no leading zero, or leave it empty for no wait. The subagent-stop hook did not wait." >&2
+	set -- "$@" data.wait_refused="$hook_wait_bad"
+fi
 
 if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$hook_wait_ms" ]; then
 	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
