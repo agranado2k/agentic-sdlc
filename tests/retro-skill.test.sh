@@ -337,6 +337,10 @@ stamp_has 'no dismissal recorded in the window' "a window with no finding.dismis
 # L-6: question 8's override is question 1's, re-cut — one home for the
 # definition, and the second question says whose it is.
 stamp_has 'the quiz override question 1 counts' "the tier override is question 1's, cut here by confidence — one home per rule"
+# L-7: some raises can never be reached by a dismissal, and they are in the
+# denominator too — named, beside the two the brief already names.
+stamp_has 'a raise no dismissal can reach' "a raise no dismissal can reach is named as part of the overcount"
+stamp_has 'a subject that is not a pull request' "…a raise on a subject that is not a pull request"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&

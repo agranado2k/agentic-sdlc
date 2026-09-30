@@ -265,7 +265,9 @@ be nobody's. An event none of the three names goes on a row named
   subject, and a `finding.raise` records a finding the review raised, with no
   marker that it was posted on the forge: a finding nobody posted could not
   have been dismissed and is still in the denominator, as is a finding raised
-  again by a second review. The report says so under the severity rows,
+  again by a second review, and a raise no dismissal can reach — on a subject
+  that is not a pull request, where nothing is posted for a human to close,
+  or at a `data.where` the dismissal's emitter would not type. The report says so under the severity rows,
   every time: the rate is a lower bound on the share of posted findings a
   human dismissed, not a measurement of it.
 - **Every row carries the oracle clause** — the one `/housekeeping`'s
