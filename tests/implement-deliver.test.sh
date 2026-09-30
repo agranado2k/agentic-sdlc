@@ -202,6 +202,11 @@ stamp_has "grep -E '^(Tier|Confidence|Domain):'" "the filter lifts the decision 
 # injection one bullet over; checked, the open vocabulary's token shape is
 # what refuses a quote, a space or a semicolon before any command carries it.
 stamp_has "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it"
+# The pipe's status is the checker's alone, and the checker says 0 to empty
+# input: a fetch that failed is indistinguishable from a ticket with no stamp
+# unless the skill says which it is.
+stamp_has "a fetch that failed looks like a ticket with no stamp lines" "the pipe's silent case is named"
+stamp_has "repeat the fetch" "and a failed fetch is never read as a missing line"
 stamp_has "on its standard input, never as arguments" "the rule, in words — an example alone is a habit, not a rule"
 # The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
 # how every quoted-argument call starts, whatever field follows.
