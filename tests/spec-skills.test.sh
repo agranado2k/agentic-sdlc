@@ -220,8 +220,10 @@ has_in "$publish" "PRD's Objective" "a published ticket opens with the line /to-
 conf=$(printf '%s\n' "$rules" | grep -F '**Confidence')
 [ -n "$conf" ] && pass "the confidence rule exists under its own title" || fail "no rule titled Confidence"
 has_in "$conf" '`Confidence: <low|medium|high>`' "the stamp, spelled once with its three tokens in the vocabulary's order"
-has_in "$conf" "tier" "it is stamped beside the tier"
-has_in "$conf" "label" "and beside the autonomy label"
+# The stamping clauses themselves, not the words: the rule's own title says
+# "tier" and "label", so a bare-word probe stays green with the sentence gone.
+has_in "$conf" 'Each `Tier:` stamp (rule 9)' "it is stamped beside the tier"
+has_in "$conf" "each autonomy-label decision (rule 4" "and beside the autonomy label — the label or its absence"
 has_in "$conf" "how sure the stamp looked, never how likely it is right" "the PRD's wording — a confidence is not a probability"
 has_in "$conf" "sorts the quiz and never skips it" "the one job a confidence has"
 has_in "$conf" "No autonomy decision reads it" "rule 4 decides the label alone"
