@@ -66,8 +66,10 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Policy file** — a file the kit ships whose whole purpose is to be edited by
   the consumer, deliberately kept OUT of the shared layer:
   `scripts/docs-conformance/config.mjs`, `scripts/guards.config.sh`,
-  `scripts/agents.config.sh`, `scripts/trace.config.sh`. Mechanism is shared;
-  policy is local.
+  `scripts/agents.config.sh`, `scripts/trace.config.sh`, `scripts/vocab.config.sh`.
+  Mechanism is shared; policy is local. The last one ships *filled*: a
+  vocabulary is the kit's to name where a model id is a vendor's, so the
+  consumer edits the kit's words rather than an empty form.
   - _Avoid_: "config" alone — it hides the load-bearing half, which is that this
     file is *not* copied verbatim and may diverge freely.
 - **Shim** — a tool-specific entry point (`CLAUDE.md`, `GEMINI.md`) holding
@@ -124,7 +126,7 @@ Grouped by the seam each term belongs to. Entry shape:
   rule about consumer-owned prose, where version skew is a sanctioned state.
   - _Avoid_: "soft failure" — an advisory does not fail; "lint warning" — it
     reports a missing decision, not a style slip.
-- **Anchor** — a labeled decision line in a stamped article, `**Label**:`
+- **Anchor** — a labeled decision in a stamped article, `**Label**:`
   followed by the decision, with exactly two honest forms: the decision, or an
   explicit `none — <reason>`. The template stamps the label with a mark after
   it; an advisory referees the filled article. The kit has four: the mutation
@@ -136,6 +138,15 @@ Grouped by the seam each term belongs to. Entry shape:
   verbatim into a repo that shares none of this one's vocabulary. Enforced as a
   deny-list (`portability-leak`) over product names, hostnames, vendors,
   tool invocations, slash commands and repo paths.
+- **Oracle** — the thing a self-measurement is graded against: who wrote the test
+  fixtures, when, which version they were written for, and the comparator
+  (another measurement, a held-out set, or the thing itself). Every measurement
+  the kit reports names its oracle so the reader can tell a self-graded number
+  from a held-out one. Rule: a comparator is always named, never implied.
+  _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
+  2026-09-02).
+  - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
+    of comparison, not a single number or an assumption.
 
 ## Process — how work moves
 
@@ -160,9 +171,35 @@ Grouped by the seam each term belongs to. Entry shape:
   (`AGENT_SESSION_MODEL`, in the policy file's own word): a reviewer answer equal
   to it is refused, falling back to the plain tier or to nothing with a
   warning — the reviewer is a relation between two models, and only the caller
-  holds the second. Ref: ADR-0007.
+  holds the second. One domain the kit names itself: `judge`, on the
+  `mechanical` tier — a typed judge specified by its contract (state and typed
+  questions in, typed answers with per-option probabilities out), in two
+  shapes, **decide** among supplied options and **rank-or-verify** over
+  supplied candidates; shipped unmapped, and declined by the kit's own mapping
+  because the kit names no model. Ref: ADR-0007; ADR-0010 for the judge.
   - _Avoid_: "category", "type of work" — and never a second tier. A `Domain:`
     on every ticket is the same non-decision as one tier on every ticket.
+- **Vocabulary** — a decision field's closed token set, canonical order
+  included: the words a stamp, a finding or a triage may carry for that field
+  (`tier`, `label`, `severity`, `status`, `action`, …), declared as data in
+  `scripts/vocab.config.sh` and refused outside of by `scripts/vocab.sh` where
+  the line is read. The order is part of the vocabulary — it is the order a
+  judge is shown the tokens, fixed so position bias can be measured later —
+  and every token is a neutral name that carries no answer in its spelling
+  (`apply`, `escalate`; never `safe-to-apply`). The task domain's is the one
+  open vocabulary, held to its shape alone; the tier's is the resolver's, read
+  by the checker and never widened. Ref: PRD #273.
+  - _Avoid_: "enum", "options" — neither has a canonical order or an owner;
+    and "the vocabulary" for the docs harness's `local-vocabulary.mjs`, which
+    is your product's words for the gate, not a decision field's.
+- **Decision line** — the vocabulary checker's unit of input: one
+  `<Field>: <value>` line — `Tier: implementer`, `Severity: high` — lifted
+  out of a ticket body, a review report or a subagent's return by the skill
+  that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
+  declared field is not one, so a whole body may be handed over; a field said
+  twice with two values has no value and is refused. Not an anchor: an anchor
+  is a labeled decision in a stamped article, refereed by an advisory, and is
+  never read by the checker.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
@@ -253,7 +290,14 @@ Grouped by the seam each term belongs to. Entry shape:
   editing it re-prices the whole past; an export stamps `priced_at` and
   `price_src` to say which table answered. A model the table does not name
   reads **unpriced** — never 0 — wherever a cost would go. The kit ships no
-  price, for the reason it ships no model id.
+  price, for the reason it ships no model id. The table carries its own date —
+  a `Last checked: <YYYY-MM-DD>` line in the policy file — and its own
+  **staleness window**, `TRACE_PRICES_STALE_DAYS`, empty in the shipped file
+  and 30 in the kit's twin: past it every priced read prints one advisory on
+  stderr and nothing else changes. Refreshing it is the kit-only
+  `scripts/trace-prices.kit.sh` — two machine-readable sources, and a refusal
+  to write when they differ by more than the **disagreement threshold**
+  (`TRACE_PRICES_DISAGREE_PCT`), the vendors' own pages being the tie-breaker.
   - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
     vendor; "estimate" — the arithmetic is exact, it is the price that can be
     stale.
