@@ -228,8 +228,9 @@ Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpo
 under MIT; `.agents/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
-records the eleven that have **no** upstream — `/review-pr` counted, since its second axis has none; including `/dogfood`, checked
-against the upstream repository rather than assumed — and the one with a
+records the eleven that have **no** upstream — counting `/review-pr`, whose
+second axis has none, and `/dogfood`, checked against the upstream repository
+rather than assumed — and the one with a
 different upstream: `/explain-diff`, adapted from Geoffrey Litt's
 publicly shared skill.
 
