@@ -1,0 +1,39 @@
+{
+  "sample_spec": {
+    "comment": "LiteLLM's own placeholder row; a reader that iterated instead of looking up by key would trip over it",
+    "input_cost_per_token": 0,
+    "output_cost_per_token": 0
+  },
+  "some-other-vendor/unmapped-model": {
+    "input_cost_per_token": 0.00001,
+    "output_cost_per_token": 0.00002,
+    "cache_creation_input_token_cost": 0.0000125,
+    "cache_read_input_token_cost": 0.000001
+  },
+  "claude-fable-5-1": {
+    "max_input_tokens": 1000000,
+    "input_cost_per_token": 0.00000777,
+    "output_cost_per_token": 0.00003333,
+    "cache_creation_input_token_cost": 0.00000971,
+    "cache_read_input_token_cost": 7.7e-7
+  },
+  "claude-opus-5-5": {
+    "input_cost_per_token": 0.00000666,
+    "output_cost_per_token": 0.00002222,
+    "cache_creation_input_token_cost": 0.00000832,
+    "cache_read_input_token_cost": 6.6e-7
+  },
+  "claude-haiku-4-5-20251001": {
+    "input_cost_per_token": 0.00000111,
+    "output_cost_per_token": 0.00000444,
+    "cache_creation_input_token_cost": 0.00000138,
+    "cache_read_input_token_cost": 1.1e-7
+  },
+  "gpt-5.6-sol": {
+    "input_cost_per_token": 0.00000555,
+    "output_cost_per_token": 0.00002121,
+    "cache_creation_input_token_cost": 0.00000693,
+    "cache_read_input_token_cost": 5.5e-7
+  },
+  "__note": "partial on purpose: gpt-6-astra is absent, so a refresh has nothing to write for one of the five mapped models"
+}

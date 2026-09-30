@@ -41,6 +41,49 @@ The transcripts are the files the agent harness itself wrote under
 | `subagent-stop.payload.json` | the `SubagentStop` hook's stdin — note `agent_transcript_path`, `agent_id`, `agent_type` |
 | `transcript.redacted.jsonl` | the main session transcript, 30 lines, one assistant response split across two lines |
 | `subagent-transcript.redacted.jsonl` | the subagent's own transcript, 20 lines, every line `isSidechain` |
+| `tool-post.payload.json` | a `PostToolUse` hook's stdin — a shell call that succeeded |
+| `tool-post-failure.payload.json` | a `PostToolUseFailure` hook's stdin — the same shell, a command that exited 1 |
+
+## The second capture: the two tool payloads
+
+The two `tool-*.payload.json` files above were captured separately for ticket
+#252, on **2026-09-28**, with the same `claude` CLI (**2.1.278**) and the same
+node (**v26.8.1**), the same way: a throwaway project under the scratchpad whose
+settings file wired `PreToolUse`, `PostToolUse` and `PostToolUseFailure` to a
+one-line script that wrote its stdin to a file, and one non-interactive run —
+
+```sh
+printf 'Run the shell command: cat file.txt ; then run the shell command: cat /nonexistent/nope.' |
+  claude -p --permission-mode acceptEdits --allowedTools Bash
+```
+
+— so the pair is one session's successful call and its failed one. Three
+properties of that capture are what the suite leans on, and none of them is
+guessable from the session payloads beside them:
+
+- **A tool payload arrives COMPACT**, on one line, unlike the pretty-printed
+  session payloads in this directory. That is why `tool-post.sh` reads its
+  payload with a real parser: a key-name search on one line finds the *last*
+  occurrence, and a tool result can quote any key.
+- **`PostToolUseFailure` carries no `tool_response` at all.** The failure is in
+  `error`, beside `is_interrupt`, and that is the result the hook stores.
+- **A DENIED call fires `PreToolUse` only.** Reproduced with a `Bash(rm:*)` deny
+  rule: no `PostToolUse`, no `PostToolUseFailure`, and the `PreToolUse` payload —
+  handed over before the decision — says nothing about the denial. There is no
+  fixture for a denied call because there is no payload to capture.
+
+**These two were redacted differently from the transcripts below, and
+deliberately so.** The section that follows describes the #246 capture, where
+every free-text body was replaced with a length-preserving placeholder. In these
+two payloads the `tool_input`, `tool_response` and `error` bodies are KEPT
+VERBATIM — they are `cat file.txt`, the word `hello`, and a "No such file or
+directory" error, written for the capture and carrying nothing private — because
+they are the bytes the suite hashes with `git hash-object` and compares against
+what the hook stored. A placeholder would make that assertion a test of the
+placeholder. Only the paths were rewritten, the same way: the capturing machine's
+home to `~`, the throwaway project to `/tmp/spike-proj` and its encoded form to
+`-tmp-spike-proj`. Session, prompt and tool-use ids are kept, because the whole
+point of a fixture is that they join.
 
 ## What was redacted
 

@@ -136,6 +136,17 @@ Chosen: **option 1**.
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
    it was priced. The kit ships no price.
+   *Amended 2026-09-28 (#270):* the cost of pricing on read is a table with a
+   date on it, and a dated claim rots quietly. So the table says its own age —
+   a priced read prints one advisory on stderr when the policy file's
+   `Last checked:` line is older than `TRACE_PRICES_STALE_DAYS`, which ships
+   empty (no window, no advisory) and is never a failure — and the refresh
+   that answers it is **kit-only**, on demand and network-bound, never a
+   gate: `scripts/trace-prices.kit.sh`, two machine-readable sources with the
+   vendors' pages as the human tie-breaker, refusing to write when the two
+   disagree past a policy threshold. This is not the rejected "fetch prices at
+   query time": no reader ever touches the network, and no vendor URL enters a
+   shared-layer script.
 7. **The chain never reads the trace.** No chain skill calls `show`,
    `summary` or `export`; a text suite holds every one of them to it. The
    readers are the operator, `/diagnose`, and a retrospective skill whose
