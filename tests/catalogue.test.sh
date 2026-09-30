@@ -38,8 +38,26 @@ mkdir -p "$PROJECT/scripts"
 printf '%s\n' '#!/bin/sh' 'exit 79' >"$PROJECT/scripts/dead.sh"
 assert_status 0 'declared executable dependency resolves without being executed' -- sh "$COMMAND" check "$PROJECT" catalogue
 assert_out_has "reference|executable|scripts/dead.sh|$(git hash-object "$PROJECT/scripts/dead.sh")"
-printf '%s\n' 'reference|optional|missing.md' 'reference|example|not-a-local-file' 'reference|external|https://example.invalid/path' >>"$PROJECT/catalogue"
-assert_status 0 'examples external links and absent optional references are not required executables' -- sh "$COMMAND" check "$PROJECT" catalogue
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|optional|missing.md' >"$PROJECT/catalogue"
+assert_status 0 'absent optional reference is admitted and reported absent' -- sh "$COMMAND" check "$PROJECT" catalogue
+assert_out_has 'reference|optional|missing.md|absent'
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|optional|scripts/dead.sh' >"$PROJECT/catalogue"
+assert_status 0 'present optional reference reports its content hash' -- sh "$COMMAND" check "$PROJECT" catalogue
+assert_out_has "reference|optional|scripts/dead.sh|$(git hash-object "$PROJECT/scripts/dead.sh")"
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|optional|scripts/Dead.sh' >"$PROJECT/catalogue"
+if [ -e "$PROJECT/scripts/Dead.sh" ]; then
+	assert_status 2 'present optional reference with wrong case is refused' -- sh "$COMMAND" check "$PROJECT" catalogue
+	assert_out_has 'missing or wrong-case path: scripts/Dead.sh'
+else
+	assert_status 0 'case-distinct absent optional path is reported absent' -- sh "$COMMAND" check "$PROJECT" catalogue
+	assert_out_has 'reference|optional|scripts/Dead.sh|absent'
+fi
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|example|not-a-local-file' >"$PROJECT/catalogue"
+assert_status 0 'example reference reports that it was not checked' -- sh "$COMMAND" check "$PROJECT" catalogue
+assert_out_has 'reference|example|not-a-local-file|not-checked'
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|external|https://example.invalid/path' >"$PROJECT/catalogue"
+assert_status 0 'external reference reports that it was not checked' -- sh "$COMMAND" check "$PROJECT" catalogue
+assert_out_has 'reference|external|https://example.invalid/path|not-checked'
 printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'reference|executable|scripts/Dead.sh' >"$PROJECT/catalogue"
 assert_status 2 'executable path case is exact' -- sh "$COMMAND" check "$PROJECT" catalogue
 assert_out_has 'missing or wrong-case path: scripts/Dead.sh'
@@ -98,6 +116,11 @@ mkdir -p "$SCRATCH/empty/.agents/skills/broken" "$SCRATCH/empty/runtime/broken"
 printf '%s\n' 'orphan' >"$SCRATCH/empty/.agents/skills/broken/README.md"
 cp "$SCRATCH/empty/.agents/skills/broken/README.md" "$SCRATCH/empty/runtime/broken/README.md"
 assert_status 2 'canonical skill without SKILL.md refused' -- sh "$COMMAND" check "$SCRATCH/empty" catalogue
+
+mkdir -p "$PROJECT/.agents/skills/.hidden" "$PROJECT/runtime/.hidden"
+assert_status 2 'hidden canonical skill without SKILL.md is refused' -- sh "$COMMAND" check "$PROJECT" catalogue
+assert_out_has 'missing or wrong-case path: .agents/skills/.hidden/SKILL.md'
+rmdir "$PROJECT/.agents/skills/.hidden" "$PROJECT/runtime/.hidden"
 
 TREE="$SCRATCH/kit"
 t_kit_tree "$KIT" "$TREE"

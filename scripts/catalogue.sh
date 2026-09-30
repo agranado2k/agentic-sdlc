@@ -82,7 +82,7 @@ declaration=${3:-scripts/catalogue.config}
 exact_path "$declaration"
 [ -f "$declaration" ] || die "missing declaration: $declaration"
 skills=0
-for skill in .agents/skills/*; do
+for skill in .agents/skills/* .agents/skills/.[!.]* .agents/skills/..?*; do
 	[ -d "$skill" ] || continue
 	exact_path "$skill/SKILL.md"
 	[ -f "$skill/SKILL.md" ] || die "not a regular skill: $skill/SKILL.md"
