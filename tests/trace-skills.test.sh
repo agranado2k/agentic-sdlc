@@ -270,6 +270,16 @@ for s in $CHAIN; do
 done
 [ -z "$others" ] && pass "no other chain skill emits finding.dismiss" ||
 	fail "finding.dismiss is also emitted by$others — /pr-iterate is the one skill that fetches the threads"
+# The emit's PRECONDITION is a fact the snapshot has to fetch (review of PR
+# #319, H-1): "a thread resolved that you did not resolve" is unreadable if
+# step 1 never asks the forge for a thread's resolved state. The snapshot is
+# metadata only since #278, and this holds the one field this emit needs in
+# it — so a later edit that drops the field turns the emit into a rule nothing
+# can observe, and this goes red instead.
+snapshot=$(sed -n '/^### 1 /,/^### 2 /p' "$PI")
+printf '%s\n' "$snapshot" | grep -qF 'reviewThreads' && printf '%s\n' "$snapshot" | grep -qF 'isResolved' &&
+	pass "the snapshot fetches each review thread's resolved state — the emit has something to read" ||
+	fail "/pr-iterate's snapshot does not select a review thread's resolved state — finding.dismiss fires on a fact step 1 never fetched"
 
 # ---------------------------------------------------------------------------
 banner "6. /review-pr resolves the reviewer tier once, before the seven sub-agents"
