@@ -73,6 +73,38 @@ TRACE_DIR=''
 TRACE_TOOLS=''
 
 # ---------------------------------------------------------------------------
+# TRACE_AGENT_WAIT_MS — how long, in milliseconds, a subagent-stop hook may wait
+# for the subagent's transcript to hold its final message before reading what
+# that subagent spent. Two honest values:
+#
+#   ''       no wait (the shipped default): the transcript is read the moment
+#            the hook runs, exactly as before this line existed
+#   <1-99999>  wait up to that many milliseconds, polling, and never longer
+#
+# WHY A HOOK WOULD WAIT AT ALL. An agent harness can run its subagent-stop hook
+# a moment BEFORE the subagent's final turn reaches its transcript. Read then,
+# the transcript holds no usage at all, or the turns before the last one — a
+# sum that looks like success and is an undercount. Waiting closes that gap; a
+# wait that runs out records the absence, with the wait it gave, and never a
+# partial sum.
+#
+# WHY THE KIT SHIPS NO NUMBER. A hook is on the session's critical path, so this
+# is how long your sessions may be held at every subagent stop whose transcript
+# never completes — a trade between measured spend and latency that only you
+# can price. The kit measured its own gap and chose its own bound, in its
+# never-shipped twin of this file; read the adapter's subagent-stop hook for
+# what was measured before you pick yours.
+#
+# A value that is not one to five digits with no leading zero is REFUSED: named
+# on stderr and on the event, and not waited — the hook still exits 0. An
+# environment TRACE_AGENT_WAIT_MS overrides this line for one process, and an
+# environment value of '' is no wait even when this file names a bound. With
+# TRACE_DIR empty nothing is waited for: there is nowhere to write. Keep the
+# bound well under your agent harness's own time limit for a hook: a hook that
+# is killed for running long leaves no agent.stop event at all.
+TRACE_AGENT_WAIT_MS=''
+
+# ---------------------------------------------------------------------------
 # THE PRICE TABLE — what a token costs, so `summary` and `export` can say what
 # a wave cost.
 #
