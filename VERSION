@@ -1010,12 +1010,16 @@
 # .github/workflows/kit-ci.yml runs it.
 #   Already landed since 0.27.0, outside Part 1 and named here so the recipe
 # can find it: a resumed session's usage is counted once. The non-manifest
-# adapters/claude-code/hooks/session-end.sh, hooks/hook.lib.sh and
+# claude-code adapter's hooks/session-end.sh, hooks/hook.lib.sh and
 # hooks/transcript-usage.mjs now record how far each usage event read and
 # count only what came after that anchor, so a session resumed with its id
 # kept no longer totals its first run twice; an anchor the transcript no
 # longer holds is reported as drift, never summed. Dormant for a consumer
 # who wired no hooks.
+# Also landed since 0.27.0 and equally dormant: the adapter's
+# hooks/tool-post.sh and hooks/tool-payload.mjs store a tool call's payloads
+# through the trace script's own blob store rather than writing them
+# themselves, so one implementation decides where a payload lives.
 
 shared-layer: 0.28.0
 
