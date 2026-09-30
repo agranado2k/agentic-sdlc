@@ -964,7 +964,7 @@
 #   NON-MANIFEST HALF, enumerated — scripts/catalogue.sh, its repository-owned
 # declaration scripts/catalogue.config and scripts/catalogue.md arrive in fresh
 # bootstraps. They remain outside files: until the wave's final release defines
-# adoption. No skill or consumer manual template changes. The kit's
+# adoption. No consumer manual template changes. The kit's
 # manual and README document admission; its glossary, diary and ADR-0011 record
 # the boundary. bootstrap.sh strips the new kit ADR and tests/catalogue.test.sh;
 # .github/workflows/kit-ci.yml runs that suite. Existing consumers take no new
@@ -977,6 +977,8 @@
 # private content-addressed JSON blobs. Preserve consumer policy; enabling
 # TRACE_TOOLS and wiring PostToolUse/PostToolUseFailure are explicit choices.
 # scripts/trace-prices.kit.sh and scripts/trace.kit.config.sh are kit-only.
+# The previously landed /worktree-cleanup change is also non-manifest:
+# inspect .agents/skills/worktree-cleanup/SKILL.md through Part 2.
 
 shared-layer: 0.27.0
 
