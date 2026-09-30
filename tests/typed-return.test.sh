@@ -522,7 +522,7 @@ for field in $(printf '%s' "$view" | sed 's/.*--json *//; s/ .*//' | tr ',' ' ')
 	esac
 done
 pass "the aggregate view was read against its allowlist"
-ALLOWED_TERMS=" .id .user.type .user.login .path .line .state .isResolved .comments.nodes[0].databaseId "
+ALLOWED_TERMS=" .id .user.type .user.login .path .line .in_reply_to_id .state .isResolved .comments.nodes[0].databaseId "
 SHAPE='(\.\[\]|\.data\.repository\.pullRequest\.reviewThreads\.nodes\[\]) \| (select\(\(\.body \| length\) > 0\) \| )?"[^"]*"'
 : >"$SCRATCH/projection.bad"
 while IFS= read -r call; do
@@ -544,6 +544,14 @@ for fact in '.id' '.user.type' '.user.login' '.path' '.line' 'isResolved'; do
 	grep -q -F -- "$fact" "$SCRATCH/snapshot" && pass "the snapshot asks the forge for $fact" ||
 		fail "the snapshot never asks for $fact"
 done
+# What is handed to the reader, and checked against, is a named set of those
+# lines — so a later iteration can tell a reply from a comment without a
+# body, and the count rule is not tripped by a line that is no comment.
+grep -q -F -- '.in_reply_to_id' "$SCRATCH/snapshot" && pass "the snapshot asks the forge for .in_reply_to_id — a reply is told from a comment by metadata" ||
+	fail "the snapshot never asks for .in_reply_to_id: a reply cannot be told from a comment without reading it"
+assert_file_has "$FLAT" "the comment lines of the three listings" "which snapshot lines are the reader's list"
+assert_file_has "$FLAT" "never the thread lines" "a thread line is not a comment"
+assert_file_has "$FLAT" "one line per comment, no blank lines" "the file the returns are counted against"
 assert_file_has "$FLAT" "the snapshot never selects a body" "the rule, in so many words"
 assert_file_has "$FLAT" "metadata only" "what the snapshot is"
 assert_file_has "$FLAT" "fetches each body by id" "the one reader of a body is the restricted one"
