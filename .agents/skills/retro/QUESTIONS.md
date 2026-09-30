@@ -38,10 +38,15 @@ the model under it is what iterates.
 ## 2. Review signal
 
 *Reads: `finding.raise` (`data.id`, `data.severity`, `data.agent` — the
-sub-agent that raised it), `finding.triage` (`data.id`, `outcome`, `reason`).*
+sub-agent that raised it), `finding.triage` (`data.source`, `data.id`,
+`outcome`, `reason`).*
 
-- Join raise to triage on `data.id` within one PR. Per `data.agent`: findings
-  raised, accepted, `rejected`, escalated, answered.
+- Join raise to triage on `data.id` within one PR, and only the triages with
+  `data.source=local`: a check, a bot comment and a human comment are triaged
+  too, under ids no review raised. The ids restart with every review, so on
+  a PR reviewed more than once pair each triage with the latest raise of its
+  id before it, by `ts`. Per `data.agent`: findings raised, accepted,
+  `rejected`, escalated, answered.
 - A rejection carries a **policy citation** when its `reason` names a
   decision record, an article, or a rule of this repo — the triage said "we
   decided otherwise", not "this is wrong". Count those separately from
@@ -51,9 +56,9 @@ sub-agent that raised it), `finding.triage` (`data.id`, `outcome`, `reason`).*
   has decided against: its prompt is the finding. An agent whose findings
   are accepted every time and are all `low` is a different finding — signal
   that costs a spawn and changes little.
-- A finding raised by nobody — a `finding.triage` with no matching
-  `finding.raise` — is chain health (question 6), noted here and counted
-  there.
+- A finding raised by nobody — a `finding.triage` with `data.source=local`
+  and no `finding.raise` of its id before it on that PR — is chain health
+  (question 6), noted here and counted there.
 
 Route: `/to-tickets` — a prompt change for one agent in `/review-pr`, with
 the citation the rejections kept making.

@@ -105,6 +105,12 @@ assert_file_has "$SIDECAR" "finding.triage" "…and how each was triaged"
 assert_file_has "$SIDECAR" "data.agent" "review signal is PER SUB-AGENT"
 assert_file_has "$SIDECAR" "rejected" "review signal counts the rejections"
 assert_file_has "$SIDECAR" "policy citation" "…that cite a policy — a decision record or an article"
+# Review ids restart with every review, and only a LOCAL triage has a raise
+# at all (second review of PR #293): a join on the bare id conflates two
+# reviews of one PR, and an orphan rule over every source turns each check,
+# bot and human triage into a false chain-health finding.
+assert_file_has "$SIDECAR" "\`data.source=local\`" "review signal joins only the triages that have a raise — the local ones"
+assert_file_has "$SIDECAR" "latest raise" "…and pairs each with the latest raise of its id, since ids restart per review"
 assert_file_has "$SIDECAR" "hypothesis" "diagnosis calibration reads the hypotheses"
 assert_file_has "$SIDECAR" "data.rank" "…at the rank each held"
 assert_file_has "$SIDECAR" "confirmed" "…against the one confirmed"
