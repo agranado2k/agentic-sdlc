@@ -757,9 +757,9 @@ banner "R4. Run it twice: the second run finds the first's marker and posts noth
 # with the first run's own bodies — so the marker is the one that landed.
 broker 12 "$GOOD"
 s_assert_status 0 "the first run posts"
-first_line() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]* -->' | head -n 1 | sed 's/^"body":"//'; }
-R_MARK=$(first_line pulls/12/reviews)
-C_MARK=$(first_line issues/12/comments)
+posted_marker() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]* -->' | head -n 1 | sed 's/^"body":"//'; }
+R_MARK=$(posted_marker pulls/12/reviews)
+C_MARK=$(posted_marker issues/12/comments)
 [ -n "$R_MARK" ] && [ "$R_MARK" = "$C_MARK" ] &&
 	pass "both posted bodies open with the same marker" ||
 	fail "the posted bodies do not open with one shared marker: '$R_MARK' / '$C_MARK'"
