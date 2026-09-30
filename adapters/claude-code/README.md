@@ -107,7 +107,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | File | The event it records |
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on |
-| `hooks/session-end.sh` | one `session.usage` per model with four token counts, then `session.end` |
+| `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
@@ -180,7 +180,7 @@ Three things this hook deliberately does not do:
   `"tool_response"`. The payload goes through a real parser, which reads only
   top-level keys.
 
-Four details found by watching this run, each of which costs a wrong number if
+Five details found by watching this run, each of which costs a wrong number if
 you get it wrong:
 
 - **A streamed response is written more than once.** One assistant API response
@@ -197,6 +197,16 @@ you get it wrong:
   the subagents' lines are not in that file. So the trace's total for a session
   is its `session.usage` events **plus** its `agent.stop` events — which is
   what makes them add up to that rollup, and how the suite checks them.
+- **A resumed session ends more than once.** `claude -p --resume <id>` and
+  `--continue` keep the session id and append to the same transcript, and
+  `SessionEnd` fires at the end of every run — so an end that re-read the whole
+  file would count every earlier response again. Each `session.usage` event
+  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
+  model), and the next end of that session counts only what came after the
+  last one the trace holds. The events stay a plain sum: `summary`, the export
+  and the query below need no rule about which event supersedes which. A
+  compaction appends to the same file too, but the call that writes its summary
+  leaves no assistant line, so its tokens are in the rollup and in no event.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
