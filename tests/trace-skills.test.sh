@@ -168,7 +168,7 @@ expects() {
 }
 expects grill-me kind=grill.decision
 expects to-prd kind=prd.write
-expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label=
+expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end

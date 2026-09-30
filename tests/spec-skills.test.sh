@@ -258,6 +258,14 @@ in_order "$publish" "the body's decision lines run Tier, Confidence, Domain" \
 	'`Tier: <tier>`' '`Confidence: <token>`' '`Domain: <token>`'
 in_order "$publish" "ticket.write carries the confidence beside the pre-quiz tier, on one event" \
 	"kind=ticket.write" "data.tier_proposed=" "data.confidence="
+# The label's confidence is a second stamp and gets a second key (PR #311):
+# PRD #273 scenario 3 reports calibration per field, so a label's confidence
+# filed under the tier's key — or not recorded at all — is a row /retro cannot
+# print. It sits beside the label it qualifies, as the tier's sits beside the
+# pre-quiz tier.
+in_order "$publish" "ticket.write carries the label's confidence under its own key, beside the label" \
+	"kind=ticket.write" "data.confidence=" "data.label=" "data.label_confidence="
+has_in "$publish" "never folded into \`data.confidence\`" "the two keys are told apart in words"
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
 assert_file_has "$TIX" "## The tier rubric" "the heading the update recipe's worked example merges around"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
