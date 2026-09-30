@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.24.0 tagged 2026-09-23 at `0cd7f8d`, the merge of PR #256; 0.23.0 the same day at `0d5861a` (#243), 0.22.0 at `c0cd9c5` (#234), 0.21.0 on 2026-09-22 at `8f9a65c` (#228). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.27.0 was tagged on 2026-09-30 at `24103c7`, the merge of PR #310. ADR-0011 lifecycle work is in flight; this branch draws the next release scaffold to 0.28.0 for task entry while operational mechanisms remain non-manifest until #302. Validator mutation baseline: 76.53% at `d29673c` with Stryker 10.0.0 — oracle: `scripts/mutation.kit.sh` measures the validators against their fixture tests. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `0cd7f8d` — merge of PR #256, the 0.24.0 release: a crossing whose agent harness is not installed exits 69 rather than sharing exit 2 with the caller's own mistakes. Tagged `v0.24.0`. |
+| **Last commit on `main`** | `24103c7` — merge of PR #310, the 0.27.0 runtime-catalogue release. Signed tag `v0.27.0` points at that merge. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/lifecycle-catalogue` builds #296, the first lifecycle slice (ADR-0011): declared catalogue admission; release scaffolding is drawn forward as 0.27.0; mechanism adoption remains #302. None of PRD #273's. Its first wave landed 2026-09-29 in two trains, tagged `v0.25.0` and `v0.26.0`: #289 (#274, `scripts/vocab.sh` and its filled policy file join the shared layer — a decision value its vocabulary does not declare is refused where the value is read) and #287 (#276, every self-measurement names its oracle and its comparator), then #288 (#275, the `judge` task domain named by its contract and mapped for nobody — ADR-0010 — which reached the consumer's manual template and so carried the 0.26.0 bump). All three reviews ran on the session's own vendor: the cross-vendor reviewer the resolver names hit its account's usage limit, and each PR says so. Open from PRD #273: #277 (blocked on #250), #278, #279 (blocked on #250), #280, #281, #282 — whose bump and recipe entry the two trains already carried, leaving it the diary entry. The trace wave's second train landed 2026-09-28: #262 (#253, `summary` and `export` price the trace on read — the kit's price table is filled from the vendors' pricing pages and dated in its header) and #263 (#248, `begin`/`end` give a run an identity, blobs give a payload a home, and ADR-0008 clause 4 gained a dated amendment for caller errors), after #260 refreshed this row. #262's review was cross-vendor; #263's ran on the session's own model family because the vendor account had hit its usage limit, and the PR says so. Open from PRD #237: #249, #250, #251 (frontier, in parallel), then #252, #254, #255; plus two candidates for `/to-tickets` — `show run:<id>`, and an exit code for an unsupported schema — and a price-table refresh on demand. Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
+| **Active worktrees** | `worktree/lifecycle-entry` builds #297: scoped task start/status and the dormant Codex entry adapter, with 0.28.0 release scaffolding. The previous row still named `worktree/lifecycle-catalogue` after #296 merged; cleanup removed that clean merged worktree on 2026-09-30. Tickets #298-#302 remain later lifecycle slices. |
 
 ### Open questions / unresolved decisions
 
@@ -1516,3 +1516,43 @@ evidence and resume. The release ticket #302 owns manifest admission and the
 consumer adoption recipe. Self-hosting requires every changed shared recipe to
 have a new version, so this first slice draws forward the 0.27.0 bump and
 transcript recapture; it leaves the operational mechanisms non-manifest.
+
+### 2026-09-30 — Catalogue admission shipped and task entry followed it
+
+PR #310 landed ticket #296 at `24103c7` and the same merge carries signed tag
+`v0.27.0`. The post-merge self-host run initially checked out before the tag was
+published and reported only the expected missing-tag failure; its rerun after
+publication passed all 31 checks. The clean merged `worktree/lifecycle-catalogue`
+was then pruned. The Current state row above remained stale until this entry and
+still named that removed worktree.
+
+`worktree/lifecycle-entry` now builds ticket #297, the Process half of ADR-0011's
+first vertical slice. A task contract is admitted before production work through
+one POSIX command. It records proportional scope and endpoint, standing
+authorization, canonical catalogue provenance, and separate HEAD, staged,
+unstaged and untracked baseline identities. Prior work is preserved only when
+the contract says so; an explicit do-not-push endpoint records its exception and
+consequence without forbidding an independent review or claiming delivery.
+
+The Codex adapter is deliberately dormant. It records the ordinary-request
+entry rule and the observed 0.159.0 hook/trust boundary, while calling scope-first
+advisory until a later live evaluation demonstrates interception. The shared
+layer moves to 0.28.0 only because its manifest-listed update recipe must inventory
+this independently mergeable slice and re-pin its transcripts. Task mechanisms
+remain non-manifest until ticket #302 defines complete consumer adoption.
+
+### 2026-09-30 — A fresh Codex CLI session is available for a later live evaluation
+
+A read-only feasibility probe asked one narrow question: can this host start a
+fresh non-interactive Codex session now? Yes for the observed case. At 11:44 UTC,
+Codex CLI 0.159.0 with requested model `gpt-5.6-sol`, ephemeral state, read-only
+sandbox and skipped repository discovery returned `READY` and exit 0. The JSON
+evidence is `/tmp/lifecycle-wave/codex-preflight-20260930.json`; no probe code
+exists to promote.
+
+The result is deliberately smaller than a hook claim. An earlier `gpt-6-sol`
+attempt was credit-limited, so availability does not generalize across models or
+times. The probe changed no hook trust, configuration, or credentials and tested
+no hook behavior. It removes the known fresh-session preflight blocker for ticket
+#301; that ticket must still demonstrate enabled versus disabled interception at
+the live host boundary or report the integration blocked.

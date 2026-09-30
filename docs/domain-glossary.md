@@ -41,7 +41,6 @@ Grouped by the seam each term belongs to. Entry shape:
   mapped to canonical `.agents/skills` content by a supported representation.
 - **Catalogue admission** — the read-time check of active-root identity, exact
   path case and explicitly classified references, owned by Distribution.
-
 - **Kit** — this repository, and the thing being built. A template repo, not a
   package: it is consumed by "Use this template" plus one run of
   `bootstrap.sh`, never by a dependency manager.
@@ -158,6 +157,11 @@ Grouped by the seam each term belongs to. Entry shape:
 
 ## Process — how work moves
 
+- **Task contract** — the worktree-local Process record admitted before task
+  work: kind, scope, acceptance, phases, endpoint, authorization, source
+  provenance, baseline Git identities and runtime catalogue identity. It routes
+  proportionately and preserves explicit exceptions; it is operational state,
+  separate from the optional trace. See ADR-0011 and `scripts/task.md`.
 - **Tier** — the capability size stamped on a ticket when it is *written*:
   `planner`, `implementer`, `mechanical`, `reviewer`. Resolved to a model at
   spawn time by `scripts/agents.lib.sh` from the mapping in

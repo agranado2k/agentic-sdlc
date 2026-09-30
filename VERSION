@@ -980,7 +980,27 @@
 # The previously landed /worktree-cleanup change is also non-manifest:
 # inspect .agents/skills/worktree-cleanup/SKILL.md through Part 2.
 
-shared-layer: 0.27.0
+# 0.28.0 — task entry and proportional routing (lifecycle wave).
+# NO file joins or leaves the shared layer. UPDATING.md changes its release
+# note and re-captures both worked examples; the task mechanism remains
+# non-manifest until the wave's adoption ticket defines how existing consumers
+# take the whole lifecycle rather than another inert partial update.
+#   From #297: scripts/task.sh starts and reports a task-local contract before
+# production work. It records request kind, scope, acceptance, phases, endpoint,
+# standing authorization, source provenance, runtime catalogue identity and
+# separate HEAD/index/worktree/untracked baseline identities. Missing scope,
+# disproportionate routes and silently adopted dirty work are refused. Explicit
+# do-not-push work ends at local-worktree only with its exception and consequence
+# recorded; review may remain required, remote delivery may not be claimed.
+#   NON-MANIFEST HALF, enumerated — scripts/task.sh and scripts/task.md;
+# scripts/catalogue.config declares the new executable; adapters/codex/README.md
+# records the single ordinary-request rule, observed Codex 0.159.0 capabilities
+# and advisory opt-in hook trust boundary without installing a hook; adapters/
+# README.md indexes it. The kit manual, README and glossary name the command and
+# Task contract; bootstrap strips tests/task.test.sh and Kit CI runs it. Existing
+# consumers take no new operational mechanism through Part 1 in this slice.
+
+shared-layer: 0.28.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

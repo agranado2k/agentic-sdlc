@@ -236,6 +236,7 @@ fi
 for f in \
 	adapters/README.md \
 	adapters/claude-code/README.md \
+	adapters/codex/README.md \
 	adapters/gemini-cli/README.md \
 	adapters/node-ts/README.md \
 	adapters/node-ts/INSTALL.md \
@@ -250,6 +251,15 @@ for f in \
 	adapters/ruby/mutant.yml.example; do
 	[ -f "$f" ] && pass "$f survived bootstrap" || fail "$f is missing after bootstrap"
 done
+
+if grep -qE '^\| \[`codex/`\]' adapters/README.md 2>/dev/null &&
+	grep -q 'codex-cli 0.159.0' adapters/codex/README.md 2>/dev/null &&
+	grep -q 'advisory' adapters/codex/README.md 2>/dev/null &&
+	grep -q '/hooks' adapters/codex/README.md 2>/dev/null; then
+	pass 'the Codex adapter indexes its observed version and advisory hook boundary'
+else
+	fail 'the Codex adapter is absent from the index or overstates its runtime boundary'
+fi
 
 # The whole tree, byte for byte: an adapter that arrived STAMPED would mean
 # bootstrap had quietly claimed it as its own.
@@ -283,6 +293,12 @@ for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh tool-post.
 		pass "adapters/claude-code/hooks/$h survived bootstrap (reference material, dormant)" ||
 		fail "adapters/claude-code/hooks/$h is missing after bootstrap"
 done
+
+[ ! -e .codex ] && pass 'no .codex settings or hooks were installed' ||
+	fail '.codex reached the project — the Codex adapter is not dormant'
+[ "$(find adapters/codex -type f | wc -l | tr -d ' ')" = 1 ] &&
+	pass 'the Codex adapter ships documentation only, with no trusted hook definition' ||
+	fail 'the Codex adapter contains an active artifact beyond its README'
 
 # The guards must still be INACTIVE: the adapter ships a filled-in config, and
 # if bootstrap ever copied it over scripts/guards.config.sh it would be

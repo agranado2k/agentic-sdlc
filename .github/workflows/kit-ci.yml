@@ -66,6 +66,14 @@ permissions:
   contents: read
 
 jobs:
+  task-entry:
+    name: Task entry contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Task entry acceptance test
+        run: sh tests/task.test.sh
+
   catalogue:
     name: Runtime catalogue admission
     runs-on: ubuntu-latest
