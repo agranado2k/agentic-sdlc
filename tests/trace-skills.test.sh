@@ -19,7 +19,9 @@
 #   2. Every emit, begin and end ends in `|| :` — the trace changes no skill's
 #      outcome, whatever the trace does.
 #   3. Never `show`, `summary` or `export` — the chain does not read its own
-#      history. Held over EVERY skill directory, chain or not.
+#      history. Held over EVERY skill directory, chain or not, with ONE named
+#      exception: /retro, the sanctioned reader (ADR-0008 clause 7, #254),
+#      which the same rule holds to the opposite — it MUST read.
 #   4. Every kind a skill emits is one scripts/trace.sh knows: the vocabulary is
 #      closed, and a skill that emits an unknown kind emits nothing.
 #   5. The decision points themselves: the plan's table of one kind per
@@ -36,12 +38,18 @@
 #      swallowed by `|| :` — is red here instead of a silent hole in every
 #      consumer's trace (review of PR #286, H-1).
 #
-# The thirteen are the chain the root manual draws (spec → tickets →
+# The fourteen are the chain the root manual draws (spec → tickets →
 # implementation → review → landing) plus the skills that step out of it and
-# decide something. /grill-with-docs, /explain-diff, /dogfood and
-# /improve-codebase-architecture are outside this suite on purpose: the ticket
-# (#250) sized the thirteen; a grill.decision from /grill-with-docs is a
-# candidate ticket, not an oversight this suite should hide.
+# decide something. Ticket #250 sized the first thirteen; #309 added
+# /grill-with-docs, the variant of /grill-me a project with a glossary actually
+# runs, so a plan grilled against the records leaves its decisions too.
+# /explain-diff, /dogfood and /improve-codebase-architecture stay outside on
+# purpose — rule 3 still holds them, like every skill directory.
+#
+#   8. The record agrees with rule 3: ADR-0008 clause 7 carries its dated
+#      amendment — the readers are the operator and the retrospective skill,
+#      and a diagnosis reads by the operator's hand — and the index row for
+#      0008 carries the same date (#309).
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -56,19 +64,15 @@ t_init
 
 cd "$ROOT" || exit 2
 
-CHAIN="grill-me to-prd to-tickets implement tdd review-pr pr-iterate merge-train diagnose prototype housekeeping design-brief worktree-cleanup"
+CHAIN="grill-me grill-with-docs to-prd to-tickets implement tdd review-pr pr-iterate merge-train diagnose prototype housekeeping design-brief worktree-cleanup"
 SKILLS=".agents/skills"
 TRACE="scripts/trace.sh"
 
 skill_md() { printf '%s/%s/SKILL.md' "$SKILLS" "$1"; }
 
-# trace_lines <file> — the lines that run the trace script, whatever the
-# subcommand: the surface every rule below reads.
-trace_lines() { grep -E "sh scripts/trace\\.sh( |\`)" "$1" 2>/dev/null; }
-
-# trace_spans <file> — the backticked `sh scripts/trace.sh …` spans, one per
-# line, backticks stripped: the commands an agent following the document runs.
-trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d '`'; }
+# The span tokeniser and the placeholder filler are tests/lib.sh's
+# (t_trace_lines, t_trace_spans, t_trace_runnable): held once, shared with
+# tests/retro-skill.test.sh.
 
 # ---------------------------------------------------------------------------
 banner "0. The files under test, and the vocabulary they are held to"
@@ -80,14 +84,22 @@ n_chain=0
 for s in $CHAIN; do
 	if [ -f "$(skill_md "$s")" ]; then n_chain=$((n_chain + 1)); else fail "$(skill_md "$s") is missing"; fi
 done
-[ "$n_chain" = 13 ] && pass "all thirteen chain skills exist" || fail "only $n_chain of 13 chain skills exist"
+[ "$n_chain" = 14 ] && pass "all fourteen chain skills exist" || fail "only $n_chain of 14 chain skills exist"
+# The README describes this suite by its roster's size; a roster that grows
+# without it leaves the kit's public face stale (review of PR #315, M-1).
+case $n_chain in 13) n_word=thirteen ;; 14) n_word=fourteen ;; 15) n_word=fifteen ;; *) n_word=$n_chain ;; esac
+readme_para=$(awk '/sh tests\/trace-skills\.test\.sh/ { on = 1 } on && /^- `sh tests\// && !/trace-skills/ { exit } on' README.md | tr '\n' ' ' | tr -s ' ')
+case $readme_para in
+*"each of the $n_word emits"*) pass "README.md describes this suite's roster as the $n_word it is" ;;
+*) fail "README.md's paragraph for this suite does not say 'each of the $n_word emits' — the roster is $n_chain" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "1. Every chain skill emits, by the plain script name — never the kit wrapper"
 # ---------------------------------------------------------------------------
 for s in $CHAIN; do
 	f=$(skill_md "$s")
-	n=$(trace_lines "$f" | wc -l | tr -d ' ')
+	n=$(t_trace_lines "$f" | wc -l | tr -d ' ')
 	[ "$n" -gt 0 ] && pass "/$s runs sh $TRACE ($n lines)" || fail "/$s never runs sh $TRACE — a chain skill with no emit leaves a hole the retrospective reads as a fact"
 done
 # Over EVERY skill directory: a sidecar that names the wrapper ships too.
@@ -120,11 +132,21 @@ for s in $CHAIN; do
 done
 
 # ---------------------------------------------------------------------------
-banner "3. The chain never reads the trace: no show, summary or export in any skill"
+banner "3. The chain never reads the trace: no show, summary or export in any skill but the reader"
 # ---------------------------------------------------------------------------
+# The exclusion is explicit and named: ADR-0008 clause 7 makes the
+# retrospective the reader, so /retro is held to reading and every other
+# skill to not. A second name here would be a second reader, and that is a
+# decision record's to make, not this list's.
+READER=retro
 for d in "$SKILLS"/*/; do
 	s=$(basename "$d")
 	reads=$(grep -rnE "trace\.sh +(show|summary|export)\b" "$d" || true)
+	if [ "$s" = "$READER" ]; then
+		[ -n "$reads" ] && pass "/$s is the one sanctioned reader, and reads (show, summary, export)" ||
+			fail "/$s is the sanctioned reader and never reads the trace — the exclusion is dead"
+		continue
+	fi
 	if [ -z "$reads" ]; then
 		pass "/$s never reads the trace"
 	else
@@ -138,7 +160,7 @@ banner "4. Every kind a skill emits is one the script knows"
 # ---------------------------------------------------------------------------
 for s in $CHAIN; do
 	f=$(skill_md "$s")
-	for k in $(trace_lines "$f" | grep -oE 'kind=[a-z][a-z.]*' | sed 's/^kind=//' | sort -u); do
+	for k in $(t_trace_lines "$f" | grep -oE 'kind=[a-z][a-z.]*' | sed 's/^kind=//' | sort -u); do
 		case " $KINDS " in
 		*" $k "*) pass "/$s emits $k, which $TRACE knows" ;;
 		*) fail "/$s emits kind=$k, which $TRACE does not know — the vocabulary is closed, and this emit would be exit 2" ;;
@@ -155,7 +177,7 @@ banner "5. The decision points: one emit per decision, per skill"
 expects() {
 	_ex_s=$1; shift
 	_ex_f=$(skill_md "$_ex_s")
-	_ex_lines=$(trace_lines "$_ex_f")
+	_ex_lines=$(t_trace_lines "$_ex_f")
 	for _ex_tok; do
 		case $_ex_tok in
 		begin | end) _ex_needle="sh $TRACE $_ex_tok" ;;
@@ -167,6 +189,7 @@ expects() {
 	done
 }
 expects grill-me kind=grill.decision
+expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
 expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
@@ -204,7 +227,7 @@ if [ -n "$r_line" ] && [ -n "$a1_line" ] && [ "$r_line" -lt "$a1_line" ]; then
 else
 	fail "the resolve is not before the sub-agents — resolve='$r_line' Agent 1='$a1_line'"
 fi
-spawn=$(trace_lines "$RP" | grep -F 'kind=spawn')
+spawn=$(t_trace_lines "$RP" | grep -F 'kind=spawn')
 printf '%s\n' "$spawn" | grep -qF 'model=' && pass "the per-agent spawn records the resolved model" ||
 	fail "the per-agent spawn does not carry model= — story 19: the review's independence is a fact only when recorded"
 printf '%s\n' "$spawn" | grep -qF 'data.agent=' && pass "and names the agent" ||
@@ -213,25 +236,10 @@ printf '%s\n' "$spawn" | grep -qF 'data.agent=' && pass "and names the agent" ||
 # ---------------------------------------------------------------------------
 banner "7. Every documented line runs: placeholders filled, the span executes and verifies"
 # ---------------------------------------------------------------------------
-# runnable <span> — the span an agent would type, with the document's
-# placeholders made literal: `[optional]` groups dropped; `<one word>`
-# becomes `x` and `<several words>` becomes `x y`, so a prose placeholder that
-# the document left unquoted breaks exactly as the real value would; an
-# `a|b|c` choice becomes its first option; `$model` becomes a model id; the
-# `--blob` file becomes a real one; the trailing `|| :` goes, so the exit
-# status is the script's own.
+# The placeholders are made literal by the shared test harness's t_trace_runnable
+# (tests/lib.sh) — one definition, shared with the other skill suites.
 BLOBF="$SCRATCH/blob.x"
 printf 'evidence\n' >"$BLOBF"
-runnable() {
-	printf '%s\n' "$1" | sed \
-		-e 's/ *|| *:$//' \
-		-e 's/ \[[^][]*\]//g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
-		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
-		-e 's/\$model/x/g' \
-		-e "s|--blob x|--blob $BLOBF|"
-}
 for s in $CHAIN; do
 	f=$(skill_md "$s")
 	dir="$SCRATCH/run.$s"
@@ -239,7 +247,7 @@ for s in $CHAIN; do
 	while IFS= read -r span; do
 		[ -n "$span" ] || continue
 		n=$((n + 1))
-		cmd=$(runnable "$span")
+		cmd=$(t_trace_runnable "$span" "$BLOBF")
 		err=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" 2>&1 >/dev/null ); st=$?
 		if [ "$st" != 0 ]; then
 			bad=$((bad + 1))
@@ -247,7 +255,7 @@ for s in $CHAIN; do
 			printf '        | as run: %s\n        | %s\n' "$cmd" "$err"
 		fi
 	done <<EOF
-$(trace_spans "$f")
+$(t_trace_spans "$f")
 EOF
 	[ "$bad" = 0 ] && pass "/$s: all $n documented trace lines run" || true
 	if [ -d "$dir" ]; then
@@ -256,5 +264,35 @@ EOF
 			fail "/$s: the lines ran but the trace they wrote does not verify"
 	fi
 done
+
+# ---------------------------------------------------------------------------
+banner "8. The record agrees: clause 7 names no skill reader but the retrospective"
+# ---------------------------------------------------------------------------
+# Rule 3 above forbids every skill a read subcommand; the record once named
+# /diagnose as a reader beside the operator and the retrospective. The
+# disagreement is settled by a dated amendment to clause 7 — a record is
+# amended, never rewritten (root manual, hard rule 5) — and the index says so.
+ADR8=$(ls docs/adr/0008-*.md 2>/dev/null | head -1)
+c7=$(awk '/^7\. \*\*The chain never reads the trace/ { on = 1 } on && /^8\. / { exit } on' "$ADR8" 2>/dev/null)
+[ -n "$c7" ] && pass "ADR-0008 has its clause 7" || fail "no clause 7 found in '$ADR8'"
+am=$(printf '%s\n' "$c7" | awk '/\*Amended [0-9-]*( \(#[0-9]+\))?:\*/ { on = 1 } on')
+[ -n "$am" ] && pass "clause 7 carries a dated amendment" ||
+	fail "clause 7 has no '*Amended <date> (#N):*' block — the record still names a skill reader rule 3 forbids"
+printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'operator.*retrospective skill' &&
+	pass "the amendment names the readers: the operator and the retrospective skill" ||
+	fail "the amendment does not name the operator and the retrospective skill as the readers"
+printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE "diagnosis reads the trace by the operator's hand" &&
+	pass "and says a diagnosis reads by the operator's hand" ||
+	fail "the amendment does not say a diagnosis reads the trace by the operator's hand"
+am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\)[^*:]*:\*.*/\1/p' | tail -1)
+row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+# Held to THIS amendment, not to any note that shares its date — and an empty
+# date is a failure, never a match on an older note (review of PR #315, L-2).
+case $row in
+*"amended $am_date (#309"*"clause 7"*) [ -n "$am_date" ] &&
+	pass "the index row for 0008 carries the clause-7 amendment's dated note ($am_date, #309)" ||
+	fail "the amendment carries no date the index row could be held to" ;;
+*) fail "the index row for 0008 has no 'amended ${am_date:-<no date>} (#309 …' note naming clause 7: $row" ;;
+esac
 
 t_done "trace skills contract"

@@ -15,17 +15,23 @@
 # anchored on the character before the key.
 #
 # OBSERVED, and NOT what the #246 spike's fixtures show: in a live session this
-# hook can run BEFORE the subagent's transcript has its assistant line. The
-# fixtures were captured after the fact, so they hold the finished file; a real
-# SubagentStop found the file present, 12 lines long, and carrying no assistant
-# message yet — the line landed a moment later. The event then says exactly
-# that and carries the transcript path in its data map, so the numbers are
-# recoverable, but the subagent's tokens are missing from the trace.
+# hook can run BEFORE the subagent's transcript has its final assistant line.
+# The fixtures were captured after the fact, so they hold the finished file.
+# Ticket #308 measured it: in two of seven live stops the file was present and
+# one turn short, and the final line landed 170 and 223 ms after this hook
+# began. Read at once, such a file yields no usage at all, or — when the
+# subagent had used a tool — the sum of the turns BEFORE the last one, a
+# confident undercount that looks exactly like success.
 #
-# Deliberately not worked around here. A hook that sleeps or retries is a hook
-# that delays a session, and how long to wait is a decision with a timing guess
-# in it — a ticket, not a line. Until then: a session's own session.usage is
-# exact, and the sum with agent.stop is exact only when the file was ready.
+# So the hook WAITS for the transcript to end on a final message (see
+# hook.lib.sh's hook_final), polling, bounded by the policy value
+# TRACE_AGENT_WAIT_MS. The shipped policy file leaves it empty — no wait, the
+# read-at-once behaviour above — because how long a hook may hold a session is
+# a project's decision; the kit's twin sets its own. When the bound passes the
+# absence is recorded, outcome=fail and no partial sum, with the wait it gave
+# in data.waited_ms. A file that does not exist at all is NOT waited for: every
+# measured stop found the file already there, and in the kit's own trace every
+# stop that named a missing file named one that never appeared.
 #
 # Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
 # is where a trace error belongs. See hook.lib.sh.
@@ -54,7 +60,26 @@ fi
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
 
-if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+hook_wait_bound
+# Nothing to write, nothing to wait for: with tracing off the bound is moot, and
+# so is a typo in it — a project that traces nothing is not told on every stop.
+if [ -n "$hook_wait_ms$hook_wait_bad" ] && ! hook_dir >/dev/null; then
+	hook_wait_ms=
+	hook_wait_bad=
+fi
+if [ -n "$hook_wait_bad" ]; then
+	printf '%s\n' "x trace: TRACE_AGENT_WAIT_MS='$hook_wait_bad' is not a number of milliseconds — give a whole number from 1 to 99999 with no leading zero, or leave it empty for no wait. The subagent-stop hook did not wait." >&2
+	set -- "$@" data.wait_refused="$hook_wait_bad"
+fi
+
+if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$hook_wait_ms" ]; then
+	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
+		hook_tokens "$transcript" agent.stop "$@" data.waited_ms="$waited"
+	else
+		hook_trace emit kind=agent.stop outcome=fail data.waited_ms="$waited" \
+			reason="the subagent transcript did not end on a final message within the ${hook_wait_ms} ms bound, so no tokens were read — a partial sum would be an undercount" "$@"
+	fi
+elif [ -n "$transcript" ] && [ -f "$transcript" ]; then
 	hook_tokens "$transcript" agent.stop "$@"
 else
 	hook_trace emit kind=agent.stop \

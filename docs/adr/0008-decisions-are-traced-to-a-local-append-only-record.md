@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309)
 
 ## Context and problem statement
 
@@ -153,6 +153,13 @@ Chosen: **option 1**.
    findings enter the line at `/to-tickets` — a recurring failure becomes a
    rule with a failing check, never a preloaded lessons file (shared
    invariant §11).
+   *Amended 2026-09-30 (#309):* the readers are the operator and the
+   retrospective skill, `/retro`. `/diagnose` is not a third: a diagnosis reads the
+   trace by the operator's hand — the operator runs the read and hands over
+   what it printed, as data — and no other skill's text ever calls a read
+   subcommand. `tests/trace-skills.test.sh` holds every skill directory to
+   that, and holds this clause to its amendment — the record and the suite
+   were found to disagree, and the suite was right.
 8. **The agent harness is the adapter's business.** Session, subagent and
    tool-call capture, and the transcript usage extractor, live under the
    Claude Code adapter, dormant for consumers; only a kit-only settings file

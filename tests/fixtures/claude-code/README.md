@@ -62,10 +62,13 @@ printf 'Run the shell command: cat file.txt ; then run the shell command: cat /n
 properties of that capture are what the suite leans on, and none of them is
 guessable from the session payloads beside them:
 
-- **A tool payload arrives COMPACT**, on one line, unlike the pretty-printed
-  session payloads in this directory. That is why `tool-post.sh` reads its
-  payload with a real parser: a key-name search on one line finds the *last*
-  occurrence, and a tool result can quote any key.
+- **A tool payload arrives COMPACT**, on one line — every live payload arrives
+  compact; the session payloads in this directory are pretty-printed only
+  because the redaction reformatted them. What sets a tool payload apart is
+  that it nests arbitrary objects (`tool_input`, `tool_response`) whose keys
+  can repeat the top-level ones, and a key-name search on one line finds the
+  *last* occurrence. That is why `tool-post.sh` reads its payload with a real
+  parser.
 - **`PostToolUseFailure` carries no `tool_response` at all.** The failure is in
   `error`, beside `is_interrupt`, and that is the result the hook stores.
 - **A DENIED call fires `PreToolUse` only.** Reproduced with a `Bash(rm:*)` deny
