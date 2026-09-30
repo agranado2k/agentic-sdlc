@@ -84,6 +84,12 @@ cp "$PROJECT/.agents/skills/example/guide.md" "$PROJECT/runtime/example/guide.md
 ln -s .agents/skills "$PROJECT/linked"
 printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'active|linked|identical' >>"$PROJECT/roots"
 assert_status 0 'multiple copied and linked roots agree with source' -- sh "$COMMAND" check "$PROJECT" roots
+assert_out_has "active|linked/example/SKILL.md|$HASH"
+cp -R "$PROJECT/runtime" "$PROJECT/second"
+printf '%s\n' '# Stale second root' >"$PROJECT/second/example/SKILL.md"
+printf '%s\n' 'catalogue|1' 'active|runtime|identical' 'active|second|identical' >"$PROJECT/second-stale"
+assert_status 2 'stale second root is refused even when the first root is valid' -- sh "$COMMAND" check "$PROJECT" second-stale
+assert_out_has 'stale copy: second/example/SKILL.md'
 printf '%s\n' 'catalogue|1' "active|$PROJECT/runtime|identical" >"$PROJECT/absolute"
 assert_status 0 'caller can declare an absolute active root' -- sh "$COMMAND" check "$PROJECT" absolute
 mkdir "$PROJECT/looproot"
