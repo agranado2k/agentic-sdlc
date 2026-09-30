@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.27.0 was tagged on 2026-09-30 at `24103c7`, the merge of PR #310. ADR-0011 lifecycle work is in flight; this branch draws the next release scaffold to 0.28.0 for task entry while operational mechanisms remain non-manifest until #302. Validator mutation baseline: 76.53% at `d29673c` with Stryker 10.0.0 — oracle: `scripts/mutation.kit.sh` measures the validators against their fixture tests. |
+| **Phase** | The kit is shipping. Shared layer 0.28.0 was tagged on 2026-09-30 at `39b10e2`, the merge of PR #293. ADR-0011 lifecycle work is in flight; this branch draws the next release scaffold to 0.29.0 for task entry while operational mechanisms remain non-manifest until #302. Validator mutation baseline: 76.53% at `d29673c` with Stryker 10.0.0 — oracle: `scripts/mutation.kit.sh` measures the validators against their fixture tests. |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `24103c7` — merge of PR #310, the 0.27.0 runtime-catalogue release. Signed tag `v0.27.0` points at that merge. |
+| **Last commit on `main`** | `8d948bc` — merge of PR #323. Signed tag `v0.28.0` points at `39b10e2`, the merge of PR #293. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/lifecycle-entry` builds #297: scoped task start/status and the dormant Codex entry adapter, with 0.28.0 release scaffolding. The previous row still named `worktree/lifecycle-catalogue` after #296 merged; cleanup removed that clean merged worktree on 2026-09-30. Tickets #298-#302 remain later lifecycle slices. |
+| **Active worktrees** | `worktree/lifecycle-entry` builds #297: scoped task start/status and the dormant Codex entry adapter, with 0.29.0 release scaffolding. The previous row still named `worktree/lifecycle-catalogue` after #296 merged; cleanup removed that clean merged worktree on 2026-09-30. Tickets #298-#302 remain later lifecycle slices. |
 
 ### Open questions / unresolved decisions
 
@@ -1556,3 +1556,13 @@ times. The probe changed no hook trust, configuration, or credentials and tested
 no hook behavior. It removes the known fresh-session preflight blocker for ticket
 #301; that ticket must still demonstrate enabled versus disabled interception at
 the live host boundary or report the integration blocked.
+
+### 2026-09-30 — The task-entry scaffold advanced after a concurrent release
+
+While ticket #297 was being prepared, PR #293 published signed tag `v0.28.0` at
+`39b10e2` for `/retro`, and main advanced again to `8d948bc`. The task-entry
+release scaffold therefore moved from the provisional 0.28.0 named above to
+0.29.0. Its release inventory preserves both halves: #297's non-manifest task
+entry and dormant Codex adapter, plus the Claude Code adapter's post-tag
+sub-agent transcript wait policy already on main. No operational task mechanism
+joins the shared manifest before ticket #302.

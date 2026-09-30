@@ -107,7 +107,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | File | The event it records |
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on |
-| `hooks/session-end.sh` | one `session.usage` per model with four token counts, then `session.end` |
+| `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
@@ -142,7 +142,9 @@ silent no-op, which is the shipped default and a working state.
 
 Every tool call can be captured too, as one `tool.use` event carrying the tool's
 name, the call's id, the first 512 bytes of its input on the line, and the FULL
-input and FULL result in the blob store with the result's size. Two more events
+input and FULL result in the blob store with the result's size — each stored
+by `sh scripts/trace.sh blob`, which prints the name the event carries, so the
+adapter keeps no store of its own. Two more events
 wire it, both to the same script — the only difference between them is the
 outcome it records:
 
@@ -180,7 +182,7 @@ Three things this hook deliberately does not do:
   `"tool_response"`. The payload goes through a real parser, which reads only
   top-level keys.
 
-Four details found by watching this run, each of which costs a wrong number if
+Five details found by watching this run, each of which costs a wrong number if
 you get it wrong:
 
 - **A streamed response is written more than once.** One assistant API response
@@ -197,19 +199,37 @@ you get it wrong:
   the subagents' lines are not in that file. So the trace's total for a session
   is its `session.usage` events **plus** its `agent.stop` events — which is
   what makes them add up to that rollup, and how the suite checks them.
+- **A resumed session ends more than once.** `claude -p --resume <id>` and
+  `--continue` keep the session id and append to the same transcript, and
+  `SessionEnd` fires at the end of every run — so an end that re-read the whole
+  file would count every earlier response again. Each `session.usage` event
+  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
+  model), and the next end of that session counts only what came after the
+  last one the trace holds. The events stay a plain sum: `summary`, the export
+  and the query below need no rule about which event supersedes which. A
+  compaction appends to the same file too, but the call that writes its summary
+  leaves no assistant line, so its tokens are in the rollup and in no event.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
   counts and prices them on read, from a table you own (ADR-0008 clause 6).
 
-One known gap, observed in a live session rather than in a fixture: **the
-subagent-stop hook can run before the subagent's transcript has its assistant
-line**, and the `agent.stop` event then records that it found no usage and
-carries the transcript path instead of tokens. A session's own `session.usage`
-is unaffected and exact; what is lost is that session's subagent tokens, so the
-"usage plus agent.stop equals the rollup" identity holds only when the file was
-ready. Waiting for it is a decision with a timing guess in it and a hook that
-sleeps delays a session, so it is deliberately not worked around here.
+One race, observed in a live session rather than in a fixture: **the
+subagent-stop hook can run before the subagent's transcript has its final
+assistant line.** Read then, the file holds no usage at all or, worse, the
+turns before the last one, which sum to an undercount that looks like success.
+Two of seven live stops lost that race by 170 and 223 ms. The hook can wait for
+it: `TRACE_AGENT_WAIT_MS` in your trace policy file is how many milliseconds
+it may poll for the transcript to end on a final message. When the final
+message lands in time, `agent.stop` carries the tokens and `data.waited_ms`.
+When the bound passes first, it records `outcome=fail` with no counts and the
+wait it gave. A malformed value is refused on stderr and as
+`data.wait_refused`, and is never waited. The policy file ships the value
+empty, which means no wait and the read-at-once behaviour, partial sum
+included. The wait does not cover a transcript that does not exist when the
+hook runs: that is recorded at once, as before. A session's own
+`session.usage` is unaffected either way, and the "usage plus agent.stop equals
+the rollup" identity holds only for the stops whose file was ready.
 
 ### Reading it back: DuckDB and SQLite
 

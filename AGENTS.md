@@ -269,21 +269,20 @@ Spec → tickets → implementation → review → landing:
 ends at an open PR carrying an independent review) → `/review-pr` →
 `/pr-iterate` → `/merge-train` → `/worktree-cleanup`.
 
-Several step out of that line: `/grill-with-docs` replaces `/grill-me` once
-there is a glossary and decision records worth challenging a plan against,
-`/prototype` answers a feasibility question the spec is blocked on, `/diagnose`
-is for a bug rather than a feature, `/explain-diff` turns a diff, branch or PR
-into an interactive explainer, and `/improve-codebase-architecture` is for an
-area that has become hard to change — it finds and designs the deepening, then
-re-enters the line at `/to-tickets`, because a behaviour-preserving refactor is
-a ticket of its own and never a passenger on a feature diff (shared invariant
-§10). `/design-brief` sits before the first feature diff and again whenever the
-shape stops fitting: it decides paradigm, style and context map twice, compares
-on complexity, and records the choice where every later session reads it.
-`/housekeeping` runs on a calendar rather than an event — the docs gate's
-housekeeping-due advisory is what sends you to it — and audits the standing
-instructions, measures the suite, and scans for the red flags that reopen the
-brief; it never fixes, and its findings enter the line at `/to-tickets`.
+Several step out of that line: `/grill-with-docs` replaces `/grill-me` once a
+glossary and decision records exist, `/prototype` answers a feasibility
+question the spec is blocked on, `/diagnose` is for a bug, not a feature,
+`/explain-diff` explains a diff, branch or PR, and
+`/improve-codebase-architecture` is for an area that has become hard to change
+— it designs the deepening, then re-enters the line at `/to-tickets`: a
+behaviour-preserving refactor is its own ticket, never a passenger on a feature
+diff (shared invariant §10). `/design-brief` runs before the first feature diff
+and whenever the shape stops fitting: paradigm, style and context map designed
+twice, compared on complexity, then recorded. `/housekeeping` runs on a
+calendar — the docs gate's housekeeping-due advisory sends you to it — and
+audits the standing instructions, measures the suite and scans for the red
+flags that reopen the brief. `/retro` runs per wave as the one skill that reads
+the trace: seven fixed questions. Neither fixes; findings go to `/to-tickets`.
 
 One more sits *beside* the line: `/dogfood` walks a project's declared personas
 through its real user-facing surface. It is the kit's one OPTIONAL skill —
@@ -305,6 +304,7 @@ answers produce a clean project.
 | Debug a hard bug or a perf regression | `/diagnose` — build the feedback loop first     |
 | Decide the shape of the system out loud | `/design-brief` — design it twice, compare on complexity, then record paradigm, style and context map as anchors, a glossary section and a decision record; stops for your yes before writing |
 | Run the recurring housekeeping pass | `/housekeeping` — audit the agent files, the glossary, the records, the measurement, the worktrees and the diary, then scan for Ousterhout's red flags; never fixes, files candidate tickets, stamps the diary row |
+| Turn the trace into candidate tickets | `/retro` — seven fixed questions over a window (default: since its own last run), report outside the tree, findings to `/to-tickets`; never fixes. The one skill that reads the trace |
 | Rescue an area that has become hard to change | `/improve-codebase-architecture` — hands off to `/to-tickets` |
 | Understand a change before reviewing or merging it | `/explain-diff` — interactive HTML explainer; teaches, never reviews |
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
@@ -325,7 +325,7 @@ answers produce a clean project.
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts. **In THIS repo** that file ships empty on purpose; the kit's own pattern is `scripts/guards.kit.config.sh`, never shipped, and `sh scripts/guards.kit.sh <base> <head>` runs the pairing guard against it — the same arrangement as `agents.kit.sh` |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
-| Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `begin`/`end` around a run, `show <subject>`, `summary --by`, `export [--csv]`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Exit 1 is `verify`'s verdict, 2 a caller error, **exit 3 a trace whose `SCHEMA` this reader cannot judge** — `export` refuses with it, `summary` marks it and still exits 0. Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped) — including the price table cost is read from, dated in its header, advised on past `TRACE_PRICES_STALE_DAYS` and refreshed on demand by `sh scripts/trace-prices.kit.sh --check\|--write` (kit-only, network, two sources, commits nothing). ADR-0008 |
+| Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `begin`/`end` around a run, `blob <file>\|-` (store a payload, print `<hash> <bytes>`, no event), `show <subject>`, `summary --by`, `export [--csv]`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Exit 1 is `verify`'s verdict, 2 a caller error, **exit 3 a trace whose `SCHEMA` this reader cannot judge** — `export` refuses with it, `summary` marks it and still exits 0. Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped) — including the price table cost is read from, dated in its header, advised on past `TRACE_PRICES_STALE_DAYS` and refreshed on demand by `sh scripts/trace-prices.kit.sh --check\|--write` (kit-only, network, two sources, commits nothing). ADR-0008 |
 | Hold a decision line to its vocabulary | `scripts/vocab.sh` — `sh scripts/vocab.sh '<Field>: <value>' …` (or lines on stdin) exits 2 naming the field, the value and the vocabulary; `fields` prints the effective ones. Policy in `scripts/vocab.config.sh`, ships FILLED with the kit's own words — no kit twin, the same command here and in a consumer |
 | Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]` — the skill's `metadata.phase` sizes it, a ticket's stamp overrides that, and `--dry-run` says which answered (kit-only; a later release promotes it — #226) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
