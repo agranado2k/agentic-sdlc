@@ -116,6 +116,7 @@ typed_return_ok() {
 	[ -n "$span" ] && [ "$(printf '%s' "$span" | wc -c)" -le 200 ] || return 1
 	printf '%s' "$span" | LC_ALL=C grep -q '[[:cntrl:]]' && return 1
 	comment_body "$2" | grep -qF -- "$span" || return 1
+	[ -f scripts/vocab.sh ] || return 0
 	printf 'Author: %s\n%s\n' "$1" "$3" | sh scripts/vocab.sh
 	[ $? -ne 2 ]
 }

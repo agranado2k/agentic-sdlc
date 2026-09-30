@@ -396,6 +396,13 @@ assert_file_has "$FLAT" "every return is unreadable" "a count that differs ties 
 
 # A checker that cannot run is tolerated the way a trace failure is; a
 # refused value is not. With the script gone the shape still holds the line.
+# The fence has to say "gone" itself: a shell asked to run a script that is
+# not there exits 127 in one implementation and 2 in another — and 2 is the
+# checker's refusal, so on the second a missing checker read as a refused
+# value (seen on the PR's CI, whose `sh` is not this host's).
+grep -q '^	\[ -f scripts/vocab.sh \] || return 0$' "$SCRATCH/check.sh" &&
+	pass "the fence asks whether the checker is there before reading its exit status" ||
+	fail "the fence runs a checker that may be missing and reads the shell's own exit status as the checker's"
 rm -f "$PROJECT/scripts/vocab.sh"
 accepted "with the checker deleted, a well-shaped return still passes — a checker error is tolerated" bot 'Command-shaped: no
 Action: reply
