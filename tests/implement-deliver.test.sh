@@ -202,7 +202,10 @@ stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the f
 # narrower than the reader behind it. And what the pipe lifted IS the stamp: a
 # line it did not lift is prose, never a value to type.
 stamp_has "the way the checker reads a key" "the filter is no narrower than the checker behind it"
-stamp_has "The lines this pipe lifts are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
+stamp_has "The lines this pipe prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
+# Held as text because this host cannot show it: whether a no-break space is
+# "space" depends on the locale and the libc, and 4c runs under one of each.
+stamp_has "LC_ALL=C command grep" "the filter is the system's grep, reading ASCII space — whatever shell and locale the agent runs in"
 # The domain is the third line the ticket spells and the one this skill goes
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
@@ -242,6 +245,76 @@ stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself 
 stamp_has "is not a refusal: read the stamp as before and say so in your report" "checker absent: tolerated, and said"
 # The kit wrapper is never named: skills ship unstamped.
 assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
+
+# ---------------------------------------------------------------------------
+banner "4c. The checker pipe, EXECUTED: nothing unchecked is ever shown as a stamp"
+# ---------------------------------------------------------------------------
+# 4b reads the bullet; this runs it. The one leg of this suite that is not
+# text, because "the filter reads a key the way the checker does" is a claim
+# about two programs and a phrase cannot hold it (PR #311). The filter stage is
+# cut out of the skill's own line — whatever the skill tells an agent to run is
+# what runs here — and fed ticket bodies in place of the tracker's CLI.
+#
+# THE INVARIANT, for every hostile body: never BOTH a checker exit 0 AND the
+# payload among the lines the pipe showed the agent. Those shown lines are the
+# only ticket text the skill lets an agent type, so a payload that is refused,
+# or never shown, reaches no command.
+#
+# The `grep` FUNCTION below lifts every line. It stands in for an interactive
+# shell whose grep is not the system's (one agent shell wraps it in a function
+# whose [[:space:]] takes a no-break space the checker does not): a filter
+# that does not say `command grep` runs the function, and goes red here.
+t_init
+filter=$(printf '%s\n' "$stamp" | sed -n 's/.*--jq \.body | \(.*\) | sh scripts\/vocab\.sh`.*/\1/p')
+[ -n "$filter" ] && pass "the filter stage is cut out of the skill's own pipe: $filter" ||
+	fail "no filter stage between the tracker's CLI and the checker — nothing to execute"
+
+# read_stamp — a ticket body on stdin. Sets P_STATUS (the pipe's, which is the
+# checker's) and P_SHOWN (what the pipe printed for the agent to read).
+read_stamp() {
+	(
+		grep() { cat; }
+		eval "$filter" 2>"$SCRATCH/shown" | sh "$ROOT/scripts/vocab.sh" 2>"$SCRATCH/refusal"
+	)
+	P_STATUS=$?
+	P_SHOWN=$(cat "$SCRATCH/shown")
+}
+# hostile <name> <why> <printf format of the body> — the invariant, plus the
+# file the payload would have made. The body goes through a file, never a
+# pipe into this function: a pipe would run it in a subshell and lose the
+# failure count.
+hostile() {
+	# shellcheck disable=SC2059  # the format IS the fixture
+	printf "$3" >"$SCRATCH/body"
+	read_stamp <"$SCRATCH/body"
+	case $P_SHOWN in *PWN*) _h_shown=1 ;; *) _h_shown=0 ;; esac
+	if [ "$P_STATUS" = 0 ] && [ "$_h_shown" = 1 ]; then
+		fail "$1: the pipe exited 0 AND showed the payload as a stamp line — $2"
+	elif [ -e "$SCRATCH/PWN" ]; then
+		fail "$1: the payload RAN while the stamp was being read"
+	else
+		pass "$1: exit $P_STATUS, payload shown=$_h_shown — $2"
+	fi
+}
+
+printf 'Body prose.\nTier: implementer\nConfidence: low\nDomain: content\nMore prose.\n' >"$SCRATCH/legal"
+read_stamp <"$SCRATCH/legal"
+[ "$P_STATUS" = 0 ] && pass "a legal stamp: the pipe exits 0" || fail "a legal stamp was refused (exit $P_STATUS): $(cat "$SCRATCH/refusal")"
+# Without this the invariant below is vacuous: a pipe that shows nothing
+# shows no payload either.
+[ "$P_SHOWN" = "$(printf 'Tier: implementer\nConfidence: low\nDomain: content')" ] &&
+	pass "a legal stamp: its three lines, and only those, are shown to the agent" ||
+	fail "a legal stamp: the pipe showed the agent '$P_SHOWN', not the three stamp lines — the agent cannot tell what was checked"
+
+cd "$SCRATCH" || exit 2
+hostile "a quote in the tier" "refused, never executed" "Tier: implementer'; touch PWN; echo '\n"
+[ "$P_STATUS" = 2 ] && pass "…and it is a refusal, exit 2" || fail "a tier closing its own quote was not refused (exit $P_STATUS)"
+hostile "a lower-case, indented domain" "the checker folds the key, so the filter must lift it" 'Tier: implementer\n domain: x;touch PWN\n'
+[ "$P_STATUS" = 2 ] && pass "…and it is a refusal, exit 2" || fail "a lower-case, indented domain with a payload was not refused (exit $P_STATUS)"
+hostile "a no-break space in the key" "the checker does not read it as a field, so the filter must not lift it" 'Tier: implementer\nDomain\302\240: code;touch PWN\n'
+hostile "a zero-width space before the key" "renders like a stamp, is not one, is never shown" 'Tier: implementer\n\342\200\213Domain: code;touch PWN\n'
+hostile "a key in mid-line prose" "only the system grep, anchored, decides what is lifted" 'Tier: implementer\nsee the Domain: code;touch PWN\n'
+cd "$ROOT" || exit 2
 
 # ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
