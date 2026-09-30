@@ -128,8 +128,12 @@ One step's pre-screen, end to end:
 ```bash
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/dogfood.XXXXXX") && mkdir "$scratch/out" && echo "$scratch"
 # … the step runs, everything it emits redirected to "$scratch/output" …
-# … the reader runs: "$scratch/output" to read, "$scratch/out/return" to write, nothing else …
-checked_prescreen "$scratch/output" "$scratch/out/return"
+if [ -s "$scratch/output" ]; then
+	# … the reader runs: "$scratch/output" to read, "$scratch/out/return" to write, nothing else …
+	checked_prescreen "$scratch/output" "$scratch/out/return"
+else
+	echo "the step emitted nothing — nothing to screen, no reader"
+fi
 ```
 
 Two lines, both printable, with the decision line exactly once leave no line
