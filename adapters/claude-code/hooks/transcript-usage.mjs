@@ -1,14 +1,17 @@
 // transcript-usage.mjs — per-model token counts out of one agent-harness transcript.
 //
-//   node transcript-usage.mjs <transcript.jsonl>
+//   node transcript-usage.mjs [--after <message id>] <transcript.jsonl>
 //
-// STDOUT is one row per model, five space-separated fields, in the order the
-// four token fields sit in a trace event:
+// STDOUT is one row per model, seven space-separated fields — the four token
+// fields in the order they sit in a trace event, then how far the read went:
 //
-//   <model> <input> <output> <cache write> <cache read>
+//   <model> <input> <output> <cache write> <cache read> <messages> <last id>
 //
-// so a POSIX `while read -r model tin tout tcw tcr` consumes it without a
-// parser. A transcript with no assistant message prints nothing and exits 0.
+// so a POSIX `while read -r` consumes it without a parser. <messages> is how
+// many distinct assistant messages of THAT model the row counts; <last id> is
+// the message id counted last in the whole read, the same on every row, and it
+// is what the next read of this transcript passes as --after. A transcript with
+// no assistant message — or none after the anchor — prints nothing and exits 0.
 // EXIT 2 is shape drift, with the line number and the key on stderr; exit 0 is
 // numbers you can trust. There is no third answer, and in particular there is
 // no "best effort": the caller turns a 2 into one event that says what could
@@ -50,6 +53,19 @@
 // count them in both places; that would be shape drift of a kind no key check
 // can see, and the suite's oracle assertion is what would catch it.
 
+// --after: A RESUMED SESSION IS READ AS A DELTA (#307, PRD #237's
+// implementation decision of 2026-09-30). `claude -p --resume <id>` and
+// `--continue` keep the session id and APPEND to this one file, and SessionEnd
+// fires at the end of every run; a compaction appends too. So an end that read
+// the whole file again would count every earlier response a second time. With
+// --after, every message id FIRST SEEN at or before the anchor's first line is
+// taken as already counted — exactly the set a read that stopped at the anchor
+// counted, because the file only ever grows — and only the ids first seen after
+// it are summed. Their streamed duplicates are still checked against the first
+// line either way. An anchor the file does not hold means this is not the file
+// the anchor was read from, or it was rewritten: that is drift, exit 2, because
+// both "count everything" and "count nothing" would be a confident wrong number.
+
 // READ WHOLE, and the ceiling named rather than discovered: `readFileSync` plus
 // `split` holds the transcript twice, and V8 refuses a string past roughly
 // 512 MB with ERR_STRING_TOO_LONG — which arrives here as exit 2 and therefore
@@ -75,10 +91,16 @@ function die(message) {
   process.exit(2);
 }
 
-const path = process.argv[2];
-if (!path || process.argv.length > 3) {
-  die("usage: node transcript-usage.mjs <transcript.jsonl>");
+const USAGE = "usage: node transcript-usage.mjs [--after <message id>] <transcript.jsonl>";
+const args = process.argv.slice(2);
+let after = null;
+if (args[0] === "--after") {
+  if (args.length < 2 || args[1] === "") die(USAGE);
+  after = args[1];
+  args.splice(0, 2);
 }
+const path = args[0];
+if (!path || args.length > 1) die(USAGE);
 
 let raw;
 try {
@@ -94,6 +116,12 @@ const isCount = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const totals = new Map();
 /** message.id -> what the first line carrying it said, for the duplicate check. */
 const seen = new Map();
+/** Per-model count of the distinct messages summed, in step with `totals`. */
+const counted = new Map();
+/** Still at or before the anchor: ids first seen here were counted by an earlier read. */
+let before = after !== null;
+/** The id of the last message summed, which the next read passes as --after. */
+let last = "";
 
 let lineNo = 0;
 for (const line of raw.split("\n")) {
@@ -170,14 +198,24 @@ for (const line of raw.split("\n")) {
     continue;
   }
   seen.set(message.id, { model: message.model, requestId, counts });
+  if (before) {
+    if (message.id === after) before = false;
+    continue;
+  }
 
+  last = message.id;
+  counted.set(message.model, (counted.get(message.model) ?? 0) + 1);
   const running = totals.get(message.model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
   for (const [field] of FIELDS) running[field] += counts[field];
   totals.set(message.model, running);
 }
 
+if (before) {
+  die(`the anchor ${after} is not an assistant message in ${path} — the transcript is not the append-only file an earlier read stopped in, so what is new cannot be told apart from what was counted`);
+}
+
 let out = "";
 for (const [model, c] of totals) {
-  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r}\n`;
+  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${last}\n`;
 }
 process.stdout.write(out);

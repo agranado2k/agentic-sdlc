@@ -161,15 +161,24 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [<field>=<value> …] — one event of <kind> per
-# model in the transcript, carrying that model's four token counts, and exactly
-# one event whatever happens. Four shapes, all of them exit 0:
+# hook_tokens <transcript> <kind> [--after <message id>] [<field>=<value> …] —
+# one event of <kind> per model in the transcript, carrying that model's four
+# token counts, and at least one event whatever happens. Five shapes, all of
+# them exit 0:
 #
-#   the numbers      one event per model, tokens on it
+#   the numbers      one event per model, tokens on it, and how far the read
+#                    went: data.msgs (that model's messages) and data.last_msg
 #   node missing     one event, outcome=fail, the reason naming node
-#   shape drift      one event, outcome=fail, the reason the extractor gave
+#   shape drift      one event, outcome=fail, the reason the extractor gave —
+#                    an --after anchor the transcript no longer holds is one
 #   nothing to read  one event, outcome=fail, saying the transcript had no
 #                    assistant message with a usage block yet
+#   nothing new      with --after only: one event, no tokens and no failure,
+#                    carrying the anchor forward as data.last_msg
+#
+# --after is the previous read's data.last_msg, and with it only the messages
+# after it are counted (#307): see transcript-usage.mjs for why a resumed
+# session needs it and session-end.sh for where the anchor comes from.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -183,6 +192,11 @@ hook_tokens() {
 	_ht_file=$1
 	_ht_kind=$2
 	shift 2
+	_ht_after=
+	if [ "${1:-}" = --after ]; then
+		_ht_after=${2:-}
+		shift 2
+	fi
 	if ! command -v node >/dev/null 2>&1; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason='node is not on PATH, so the transcript could not be read for token counts' "$@"
@@ -197,7 +211,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -208,7 +222,7 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi
@@ -217,15 +231,21 @@ hook_tokens() {
 			reason="${_ht_why:-the transcript usage extractor failed and said nothing}" "$@"
 		return 0
 	fi
+	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
+		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \
+			reason="nothing new in the transcript since $_ht_after, which an earlier usage event counted" "$@"
+		return 0
+	fi
 	if [ -z "$_ht_out" ]; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason='the transcript carries no assistant message with a usage block — nothing to read yet' "$@"
 		return 0
 	fi
-	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r; do
+	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
-			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" "$@"
+			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
+			data.msgs="$_ht_n" data.last_msg="$_ht_l" "$@"
 	done
 	return 0
 }
