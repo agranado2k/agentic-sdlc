@@ -27,6 +27,17 @@ TRACE_DIR='.trace'
 # way TRACE_DIR is turned off.
 TRACE_TOOLS=1
 
+# THE SUBAGENT-STOP WAIT, measured (ticket #308). In seven live stops of a
+# throwaway session wired with a probe hook, the subagent's transcript was
+# always present when SubagentStop ran; in five it already held the final
+# message, and in two that message landed 170 and 223 ms after the hook began.
+# One second is about four times the worst of those: long enough that the race
+# the measurement saw is always won, short enough that a stop whose transcript
+# never completes (a subagent killed mid-turn) holds the session for one second
+# at most. A stop naming a transcript that does not exist is not waited for at
+# all — and the kit's own trace holds hundreds of those.
+TRACE_AGENT_WAIT_MS='1000'
+
 # ---------------------------------------------------------------------------
 # THE PRICE TABLE — the SHAPE is here; the numbers are the operator's.
 #
