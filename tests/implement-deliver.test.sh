@@ -211,6 +211,12 @@ stamp_has "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is"
 stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
 stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
 stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
+# is unchanged, and the orphan line is said in the report — never a reason to
+# restate, because there is no stamp for the doubt to be about.
+stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the case is named"
+stamp_has "reported, not acted on" "orphan confidence: what happens to it"
+stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
 # The kit wrapper is never named: skills ship unstamped.
 assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
 
