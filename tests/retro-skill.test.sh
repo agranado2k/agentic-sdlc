@@ -127,6 +127,15 @@ done
 # H-1 (review of PR #293): a window with no spawn.end at all is ONE finding
 # about the emitter, never one per spawn — or every spawn is a finding.
 assert_file_has "$SIDECAR" "no \`spawn.end\` at all" "an absent kind is one finding about the emitter, not one per spawn"
+# `outcome=in-session` is what EVERY spawn a skill runs itself carries — it
+# marks no fallback (second review of PR #293, M-3).
+assert_file_lacks "$SIDECAR" "\`spawn outcome=in-session\` beside it" "in-session is not read as the trace of a fallback"
+assert_file_has "$SIDECAR" "not a fallback marker" "…and the sidecar says so, since the word invites the misreading"
+# A stamp the implementer disputed, or found missing, is the most direct
+# tier-calibration signal the chain emits (L-2).
+for o in disputed defaulted; do
+	assert_file_has "$SIDECAR" "\`$o\`" "tier calibration counts the ticket.start outcome '$o'"
+done
 assert_file_has "$SIDECAR" "merge.land" "chain health finds PRs with no landing"
 assert_file_has "$SIDECAR" "\`feedback\`" "aim calibration reads the feedback events"
 for v in hit adjusted missed; do

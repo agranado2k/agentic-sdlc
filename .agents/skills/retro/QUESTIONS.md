@@ -14,9 +14,10 @@ prints one PR's whole trail when the pivot needs a second look.
 ## 1. Tier calibration
 
 *Reads: `ticket.write` (the `tier`, and `data.tier_proposed` — the tier
-before the quiz), `ticket.start` (the tier the implementing session read),
-`finding.raise` (`data.severity`), `pr.iterate` (`data.iteration`,
-`outcome`), and the token fields of every event inside the ticket's runs.*
+before the quiz), `ticket.start` (the tier the implementing session read,
+and its `outcome`), `finding.raise` (`data.severity`), `pr.iterate`
+(`data.iteration`, `outcome`), and the token fields of every event inside
+the ticket's runs.*
 
 - Group tickets by `tier`. Per tier: PRs opened, critical and high findings
   raised per PR, iterations to the first `pr.iterate outcome=green`, and the
@@ -25,6 +26,9 @@ before the quiz), `ticket.start` (the tier the implementing session read),
 - A tier whose PRs average more criticals or more iterations than the tier
   above it is mis-rubriced: the work needed more judgement than the stamp
   bought. `mechanical` iterating like `implementer` is the classic case.
+- A `ticket.start` with `outcome` `disputed` — the implementer demonstrated
+  the stamp wrong — or `defaulted` — the ticket carried no tier at all — is
+  counted per tier: both are findings about the rubric before any PR opens.
 - A ticket whose `tier` differs from its `data.tier_proposed` is a quiz
   override. Compare its iterations and criticals with its proposed tier's
   average: an override that paid for itself is the rubric lagging the human;
@@ -145,9 +149,10 @@ decomposition.
   not emitting, a different finding from a PR still open.
 - **Spawns that ended badly**: a `spawn.end` with `outcome` `fail`, `timeout`
   or `budget`; an `unreachable` one, which is a vendor that could not be
-  reached and a fallback the session then chose — the trace shows the choice
-  (`spawn outcome=in-session` beside it), and a window where the crossing
-  never worked is a finding about the mapping, not about the session. A
+  reached and a fallback the session then chose — a window where the
+  crossing never worked is a finding about the mapping, not about the
+  session. `outcome=in-session` on a `spawn` is not a fallback marker: every
+  spawn a skill runs itself carries it. A
   `spawn` with no `spawn.end` is a worker nobody waited for — but a window
   with no `spawn.end` at all, against spawns that plainly ended, is **one**
   finding about the emitter (the dispatcher or the skill that spawned), never
