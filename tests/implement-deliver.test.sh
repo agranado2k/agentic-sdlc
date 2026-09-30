@@ -144,6 +144,74 @@ assert_file_has "$SKILL" "the URL of the review it posted"
 # findings to post and a spawned reviewer has nobody at that prompt.
 assert_file_has "$SKILL" "Say who posts"
 assert_file_has "$SKILL" "cannot reach the forge"
+
+# ---------------------------------------------------------------------------
+banner "3c. A DISPATCHED review lands through the broker, and only through it"
+# ---------------------------------------------------------------------------
+# #269, PRD #261. A reviewer dispatched to another agent harness runs offline
+# and credential-less, so it can never post; until the broker existed the skill
+# told the session to post by hand, and three PRs landed with a review that
+# reached only the session. Each assertion below closes one way the relay was
+# improvised. The skill says these things with ROLE names — "the broker", "the
+# skill dispatcher" — because it ships unstamped and both scripts are kit-only;
+# the root manual is what names the files (asserted at the end of this block).
+assert_file_has "$SKILL" "**broker**"
+assert_file_has "$SKILL" "skill dispatcher"
+assert_file_has "$SKILL" "never posts"
+# The composition: two commands, never one pipeline, and WHY — without the
+# reason the next editor "simplifies" it back into a pipe.
+assert_file_has "$SKILL" "redirect followed by the broker"
+assert_file_has "$SKILL" "never as one pipeline"
+assert_file_has "$SKILL" "cannot see the dispatcher's exit status through a pipe"
+assert_file_lacks "$SKILL" "| <broker>" "the broker is never the right-hand side of a pipe"
+# The exit-status check comes BEFORE the broker runs, and a non-dispatch exit
+# is reported as no review rather than handed to the broker.
+assert_file_has "$SKILL" "Check the dispatcher's exit status"
+assert_file_has "$SKILL" "Only on 0"
+assert_file_has "$SKILL" "a model id"
+assert_file_has "$SKILL" "no dispatched review ran"
+_status=$(line_of 'status=$?')
+_broker=$(line_of '<broker> <PR#>')
+if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
+	sed -n "${_broker}p" "$SKILL_ABS" | grep -qF '"$status" -eq 0'; then
+	pass "the exit status is captured (line $_status) before the broker runs, and the broker line is conditional on 0 (line $_broker)"
+else
+	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
+fi
+# The recorded tip is the cross-check, taken BEFORE the dispatch.
+assert_file_has "$SKILL" "Record the branch tip"
+assert_file_has "$SKILL" '--commit "$tip"'
+_tip=$(line_of 'tip=$(git rev-parse HEAD)')
+_disp=$(line_of '<skill dispatcher> review-pr')
+if [ -n "$_tip" ] && [ -n "$_disp" ] && [ "$_tip" -lt "$_disp" ]; then
+	pass "the tip is recorded (line $_tip) before the dispatch (line $_disp)"
+else
+	fail "the tip is not recorded before the dispatch — tip='$_tip' dispatch='$_disp'"
+fi
+# Operator decision on PR #283: the dispatcher stages the offline contract;
+# a --prompt-file is the caller's own document, so the skill says not to pass one.
+assert_file_has "$SKILL" "Pass no \`--prompt-file\`"
+# The report lifts BOTH URLs the broker printed.
+assert_file_has "$SKILL" "the comment URL"
+# A broker that refuses is not an invitation to post around it.
+assert_file_has "$SKILL" "never post around a refusal"
+# Hand posting is no longer the default for a dispatched reviewer.
+assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
+# The shipped skill names no kit-only file: bootstrap deletes them, and a
+# consumer following the line would run nothing.
+assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
+# ... and the kit's own manual is what gives a kit session the two names and
+# the composition, on the broker's quick-reference row.
+_row=$(grep -F '| Land a dispatched reviewer' AGENTS.md)
+case "$_row" in
+*'/implement'*'skill-dispatch.kit.sh review-pr'*'forge-broker.kit.sh'*'--commit "$tip"'*)
+	pass "the kit manual's broker row names the skill dispatcher, the broker and the --commit cross-check for /implement" ;;
+*) fail "the kit manual's broker row does not give /implement's step 9(b) its two kit commands" ;;
+esac
+case "$_row" in
+*'never a pipe'*) pass "the kit manual's broker row refuses the pipe too" ;;
+*) fail "the kit manual's broker row does not say 'never a pipe'" ;;
+esac
 # And the step is an ordered part of Deliver, not an aside: it must come after
 # the PR is opened and before the skill stops.
 _open=$(line_of "Open the pull request")
