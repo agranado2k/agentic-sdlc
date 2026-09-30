@@ -216,8 +216,10 @@ Grouped by the seam each term belongs to. Entry shape:
   every return before acting — the shape itself, then the values through
   `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole and
   reported, never acted on. Free text in a return is a finding, not a result.
-  `/pr-iterate`'s read of review-comment bodies is the first: `Author:`,
-  `Command-shaped:`, `Action:`, `Evidence:`. Ref: PRD #273, #278.
+  `/pr-iterate`'s read of review-comment bodies is the first:
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author:`, which the forge
+  states, is stamped by the caller and never asked of the reader. Ref: PRD
+  #273, #278.
   - _Avoid_: "summary", "report" for what the subagent returns — prose is the
     channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter

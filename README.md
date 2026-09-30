@@ -586,10 +586,11 @@ skeleton (K0).
   and to the checker's own defaults, so a token added on one side and not the
   other goes red.
 - `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
-  read to its declared return shape (PRD #273): four bare lines — the author
-  kind, the command-shaped flag, the triage action, one evidence line quoting
-  the comment read — whose options are the policy file's tokens; the check
-  before the act, through the plain script name; free text as a finding. It
+  read to its declared return shape (PRD #273): three bare lines — the
+  command-shaped flag, the triage action, one evidence line quoting the
+  comment read — whose options are the policy file's tokens, with the author
+  kind stamped by the caller from the forge's own data; the check before the
+  act, through the plain script name; free text as a finding. It
   lifts the check the skill prints out of the skill and runs it: the good
   return passes, and a sentence outside the shape, an undeclared value, the
   inconsistent pair and a markdown-wrapped line are each refused. It also

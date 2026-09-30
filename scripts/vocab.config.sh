@@ -109,9 +109,11 @@ VOCAB_CONFIDENCE='low medium high'
 # below reads.
 VOCAB_COMMAND_SHAPED='yes no'
 
-# author — who wrote an untrusted body a subagent read for /pr-iterate: a
-# `*[bot]` account, or anyone who is not one. Not a stamp either: one of the
-# three decision lines that read returns, with `action` and `command-shaped`.
+# author — who wrote an untrusted body a subagent read for /pr-iterate: an
+# account the forge types as a bot, or anyone who is not one. Not a stamp, and
+# not the reader's line either: the forge states it, so the CALLER writes it
+# from the forge's author data and checks it beside the two decision lines the
+# read returns, `action` and `command-shaped`.
 VOCAB_AUTHOR='bot human'
 
 # ---------------------------------------------------------------------------
