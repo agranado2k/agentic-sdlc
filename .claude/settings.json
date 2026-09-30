@@ -35,6 +35,26 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env TRACE_CONFIG=scripts/trace.kit.config.sh sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env TRACE_CONFIG=scripts/trace.kit.config.sh sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\""
+          }
+        ]
+      }
     ]
   }
 }

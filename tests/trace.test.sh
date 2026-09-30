@@ -498,17 +498,10 @@ case $DRY_OUT in *'"blob":"'"$HASH"'"'*) pass "--dry-run still names the blob it
 assert_status 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
 assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
 
-banner "16. The trace directory says which schema its lines are, and verify refuses one it does not know"
+banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
 [ "$S_STATUS" = 0 ] && pass "verify is green on a schema it knows" || fail "verify failed a clean trace: $S_OUT $S_ERR"
-printf '2\n' >"$R/SCHEMA"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && pass "a trace whose schema is not this reader's is exit 1" || fail "verify exited $S_STATUS on schema 2"
-case $S_ERR in *SCHEMA*) pass "and the refusal names the file that said so" ;; *) fail "the refusal did not name SCHEMA: $S_ERR" ;; esac
-case $S_ERR in *2*) pass "and the version it found" ;; *) fail "the refusal did not name the version: $S_ERR" ;; esac
-[ -z "$S_OUT" ] && pass "and it judges no line — a schema it cannot read is not a verdict on the lines" || fail "verify judged lines under an unknown schema: $S_OUT"
-printf '1\n' >"$R/SCHEMA"
 # M-6 (review, PR #263): an interrupted first write can leave a marker that
 # names nothing, and an existence-only guard declined to repair it for good.
 : >"$R/SCHEMA"
@@ -866,5 +859,72 @@ t_run_split env TRACE_CONFIG=$NPOL sh "$TRACE" summary --by model
 [ "$(summary_row "$S_OUT" 9-bad)" = "1 1000000 0 0 0 2.000000" ] &&
 	pass "TRACE_PRICE_9_BAD prices the model 9-bad — a digit-initial token is a legal variable suffix" ||
 	fail "9-bad did not price through TRACE_PRICE_9_BAD: $(summary_row "$S_OUT" 9-bad)"
+
+banner "20. A schema this reader does not know is its own exit code — 3, cannot judge this trace (ADR-0008 clause 4, amended 2026-09-28 for #271)"
+# The state the amendment separates from both its neighbours: nothing failed and
+# nobody typed anything wrong, so it is neither verify's verdict (1) nor a caller
+# error (2). Driven RED against the script that returned 1 here — where `export`
+# refused with a message about a bad line there was none of, and `summary` said
+# "verify: FAILED — 0 bad line(s)", a count of nothing that reads as almost clean.
+UNS="$SCRATCH/unsupported"
+mkdir -p "$UNS/events"
+printf '%s\n' '{"v":1,"ts":"'"$TODAY"'T11:00:00Z","id":"u1","kind":"session.usage","skill":"implement","subject":"session:su","session":"su","model":"m1","tok_in":1000000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' >"$UNS/events/$TODAY.jsonl"
+UPOL=$(policy "$UNS")
+printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n" >>"$UPOL"
+# The two baselines first, because this section must move neither of them.
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "with no SCHEMA marker at all, verify is green — a trace from before the marker existed is still this reader's" || fail "verify exited $S_STATUS with no marker: $S_ERR"
+printf '1\n' >"$UNS/SCHEMA"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "and a marker naming version 1 is green too" || fail "verify exited $S_STATUS on schema 1: $S_ERR"
+
+printf '2\n' >"$UNS/SCHEMA"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 3 ] && pass "a SCHEMA of 2 makes verify exit 3 — no verdict is not a bad verdict (1), and the caller's command was well formed (2)" || fail "verify exited $S_STATUS on schema 2, and 3 is the code for a trace it cannot judge"
+case $S_ERR in *"schema 2"*) pass "and the refusal names the version it found" ;; *) fail "the refusal did not name version 2: $S_ERR" ;; esac
+case $S_ERR in *"reads 1"*) pass "and the version it does read, so the operator knows which end is behind" ;; *) fail "the refusal did not name the version it reads: $S_ERR" ;; esac
+[ -z "$S_OUT" ] && pass "and it judges no line" || fail "verify judged lines under a schema it cannot read: $S_OUT"
+
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export
+[ "$S_STATUS" = 3 ] && pass "export refuses with the same 3 — a caller told 1 would hunt for a bad line there is none of" || fail "export exited $S_STATUS on an unsupported schema"
+[ -z "$S_OUT" ] && pass "and prints nothing at all" || fail "export printed rows under a schema it cannot read: $S_OUT"
+# H-1 (review, PR #292): matching *schema* here matched VERIFY's own line
+# flowing through, so deleting export's whole refusal branch left the suite
+# green. Match export's OWN sentence, and pin the absence of the wrong one.
+case $S_ERR in *"export refused — the schema"*) pass "and export's OWN refusal says the schema is why" ;; *) fail "export's refusal did not name the schema: $S_ERR" ;; esac
+case $S_ERR in *"verify fails on this selection"*) fail "export blamed a failing verify, the one message this state exists to suppress: $S_ERR" ;; *) pass "and never says verify fails, which would send the operator hunting for a bad line" ;; esac
+case $S_ERR in *"$TODAY.jsonl:"*) fail "export blamed a line when no line was judged: $S_ERR" ;; *) pass "and blames no line, because none was judged" ;; esac
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export --csv
+[ "$S_STATUS" = 3 ] && [ -z "$S_OUT" ] && pass "the CSV form refuses the same way, header included" || fail "export --csv did not refuse with 3 (exit $S_STATUS): $S_OUT"
+
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
+[ "$S_STATUS" = 0 ] && pass "summary still exits 0 — a glance is not an import" || fail "summary exited $S_STATUS on an unsupported schema"
+case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: UNSUPPORTED SCHEMA 2") pass "and its FIRST line is that marker, naming the version" ;; *) fail "summary's first line was: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
+case $S_OUT in *"bad line"*) fail "summary counted bad lines under a schema it never judged: $S_OUT" ;; *) pass "and counts no bad lines, because it judged none" ;; esac
+[ "$(summary_row "$S_OUT" m1)" = "1 1000000 0 0 0 3.000000" ] && pass "and the rows below are still the rows, priced as ever" || fail "the m1 row changed under an unsupported schema: $(summary_row "$S_OUT" m1)"
+
+# The two states must not collapse into one another.
+printf '1\n' >"$UNS/SCHEMA"
+printf 'hand-edited, not an event\n' >>"$UNS/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 1 ] && pass "a bad line under a KNOWN schema is still exit 1 — the verdict code did not move" || fail "verify exited $S_STATUS on a bad line"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export
+[ "$S_STATUS" = 1 ] && pass "and export still carries that verdict out" || fail "export exited $S_STATUS on a bad line"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
+case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: FAILED — 1 bad line"*) pass "and summary still counts the bad line" ;; *) fail "summary's first line was: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
+printf '2\n' >"$UNS/SCHEMA"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 3 ] && pass "and a damaged trace under an UNKNOWN schema reports the schema, not the damage — a reader that cannot read the shape cannot call the line bad" || fail "verify exited $S_STATUS on a bad line under schema 2"
+: >"$UNS/SCHEMA"
+t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$S_STATUS" = 1 ] && pass "while a marker that names nothing is no version at all, and the bad line is judged as ever (M-6, PR #263)" || fail "verify exited $S_STATUS on an empty marker"
+
+# The contract is only widened where its readers look for it.
+case $(sed -n '/^# STREAMS AND EXIT CODES/,/^#$/p' "$TRACE") in *"exit 3"*) pass "the script's own exit-code paragraph names 3" ;; *) fail "the header's exit-code paragraph does not name exit 3" ;; esac
+# L-1 (review, PR #292): the label says ROW, so the check has to say row —
+# a bare file-wide grep keeps passing when some other row names the code.
+grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF 'exit 3' && pass "and the root manual's trace ROW names it" || fail "AGENTS.md's trace row does not name exit 3"
+grep -qF 'Amended 2026-09-28 (#271)' "$KIT/docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md" &&
+	pass "and ADR-0008 carries the dated amendment that chose it" || fail "ADR-0008 has no dated amendment for #271"
 
 t_done "trace script"
