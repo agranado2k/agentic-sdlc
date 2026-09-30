@@ -196,7 +196,12 @@ stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
 stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
-stamp_has "grep -E '^(Tier|Confidence):'" "the filter lifts the two decision lines; the confidence is checked with the tier it qualifies"
+stamp_has "grep -E '^(Tier|Confidence|Domain):'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
+# The domain is the third line the ticket spells and the one this skill goes
+# on to TYPE — it is the resolver's second argument. Unchecked, it is the same
+# injection one bullet over; checked, the open vocabulary's token shape is
+# what refuses a quote, a space or a semicolon before any command carries it.
+stamp_has "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it"
 stamp_has "on its standard input, never as arguments" "the rule, in words — an example alone is a habit, not a rule"
 # The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
 # how every quoted-argument call starts, whatever field follows.
