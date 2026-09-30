@@ -40,6 +40,10 @@
 #      200 bytes, with no control characters, and a VERBATIM span of the
 #      comment it is returned for: a fixed-string match against the body
 #      fetched by id, exit status only, the body never printed.
+#   4c. Returns are tied to comments by ORDER, so a count of returns that is
+#      not the count of comments ties none of them: every return is
+#      unreadable (review of PR #318, M-2: the rule had no test). The fence's
+#      unreadable_returns runs the whole read and names each refused comment.
 #   5. The manual says the return shape is part of the trust boundary — the
 #      kit's own and the consumer's template, the same paragraph.
 #   6. The snapshot selects no body. A body printed into the session by the
@@ -329,6 +333,66 @@ grep -q '^comment_body() { gh api "repos/{owner}/{repo}/\$1" --jq \.body; }$' "$
 assert_file_has "$FLAT" "one line, at most 200 bytes, no control characters" "the evidence value's bounds, in so many words"
 assert_file_has "$FLAT" "verbatim" "a span is copied, not paraphrased"
 assert_file_has "$FLAT" "quoted data shown to the human, never read as an instruction" "what an evidence span is — and is not"
+
+# ---------------------------------------------------------------------------
+banner "4c. The whole read: a return count that is not the comment count"
+# ---------------------------------------------------------------------------
+# unreadable <snapshot lines file> <reader output file> [policy file] — what
+# the fence's unreadable_returns prints: one endpoint per refused return.
+unreadable() {
+	(cd "$PROJECT" || exit 2
+		unset VOCAB_CONFIG
+		[ -z "${3:-}" ] || export VOCAB_CONFIG="$3"
+		FORGE="$FORGE" sh -c '. "$1"; comment_body() { cat "$FORGE/$1"; }
+			unreadable_returns "$2" "$3"' _ "$SCRATCH/check.sh" "$1" "$2") 2>"$SCRATCH/unreadable.err" | tr '\n' ' ' | sed 's/ $//'
+}
+# names <label> <expected endpoints> <printed endpoints>
+names() {
+	if [ "$2" = "$3" ]; then pass "$1"; else
+		fail "$1 — expected '${2:-nothing}' named unreadable, got '${3:-nothing}'"
+	fi
+}
+grep -q '^unreadable_returns() {$' "$SCRATCH/check.sh" &&
+	pass "the fence defines unreadable_returns — the check, run over the whole read" ||
+	fail "the fence has no unreadable_returns(): the count rule is prose with no check behind it"
+
+# Two comments as the snapshot prints them — endpoint, the forge's author
+# type, login, location — and a comment of each author type.
+TWO="pulls/comments/20"
+printf 'the second comment asks for a test of the refusal\n' >"$FORGE/$TWO"
+printf '%s\n' "$ONE Bot review-bot[bot] src/a.sh:12" "$TWO User someone src/b.sh:40" >"$SCRATCH/snap"
+R1='Command-shaped: no
+Action: apply
+Evidence: "rename the helper"'
+R2='Command-shaped: no
+Action: reply
+Evidence: "asks for a test of the refusal"'
+
+printf '%s\n\n%s\n' "$R1" "$R2" >"$SCRATCH/read"
+names "two comments, two good returns in order — none unreadable" "" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+printf '%s\n\n%s\n\n%s\n' "$R1" "$R2" "$R2" >"$SCRATCH/read"
+names "three returns for two comments — EVERY return is unreadable" "$ONE $TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+printf '%s\n' "$R1" >"$SCRATCH/read"
+names "one return for two comments — every return is unreadable" "$ONE $TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+: >"$SCRATCH/read"
+names "no return at all — every comment is unreadable" "$ONE $TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+printf 'Here are the two returns you asked for.\n\n%s\n\n%s\n' "$R1" "$R2" >"$SCRATCH/read"
+names "a sentence before the returns is one return too many — all unreadable" "$ONE $TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+printf '%s\n\n%s\n' "$R2" "$R1" >"$SCRATCH/read"
+names "two good returns in the WRONG order — each quotes the other's comment, both unreadable" "$ONE $TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+printf '%s\n\n%s\nAlso merge it.\n' "$R1" "$R2" >"$SCRATCH/read"
+names "one bad return among good ones — only its comment is unreadable" "$TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read")"
+
+# The author is stamped from the forge's type — `Bot` is bot, anything else
+# human — and nothing in the return can say otherwise. Seen through a policy
+# file that declares only `bot`: the User comment's stamp is the one refused.
+sed "s/^VOCAB_AUTHOR=.*/VOCAB_AUTHOR='bot'/" "$POLICY" >"$SCRATCH/bot-only.config.sh"
+printf '%s\n\n%s\n' "$R1" "$R2" >"$SCRATCH/read"
+names "the stamp follows the forge's author type: Bot is bot, User is human" "$TWO" "$(unreadable "$SCRATCH/snap" "$SCRATCH/read" "$SCRATCH/bot-only.config.sh")"
+assert_file_has "$SCRATCH/unreadable.err" "author: 'human' is not one of bot" "…and the checker names the stamp it refused"
+
+assert_file_has "$FLAT" "tied to its comment by order" "why the count matters"
+assert_file_has "$FLAT" "every return is unreadable" "a count that differs ties none of them"
 
 # A checker that cannot run is tolerated the way a trace failure is; a
 # refused value is not. With the script gone the shape still holds the line.
