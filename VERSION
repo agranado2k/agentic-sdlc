@@ -954,7 +954,23 @@
 # adapters/claude-code/README.md updated (9e). No docs template or workflow
 # changed in this window.
 
-shared-layer: 0.26.0
+# 0.27.0 — declared runtime catalogue admission (lifecycle wave).
+# NO file joins or leaves the shared layer. UPDATING.md changes its release
+# note and re-captures both worked examples; release scaffolding is drawn
+# forward from the wave's final release ticket to keep each slice reachable.
+#   From #296: canonical skill content, declared active roots and executable
+# references can be admitted with exact path case and git content identities.
+# Filesystem admission never claims to prove model-visible loading.
+#   NON-MANIFEST HALF, enumerated — scripts/catalogue.sh, its repository-owned
+# declaration scripts/catalogue.config and scripts/catalogue.md arrive in fresh
+# bootstraps. They remain outside files: until the wave's final release defines
+# adoption. No skill, consumer manual template or adapter changes. The kit's
+# manual and README document admission; its glossary, diary and ADR-0011 record
+# the boundary. bootstrap.sh strips the new kit ADR and tests/catalogue.test.sh;
+# .github/workflows/kit-ci.yml runs that suite. Existing consumers take no new
+# operational mechanism through Part 1 in this slice.
+
+shared-layer: 0.27.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
