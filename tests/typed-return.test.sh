@@ -438,6 +438,10 @@ case $step5 in
 *'rm -rf "${scratch:?}"'*) pass "step 5's stop removes the scratch files — the way most iterations end" ;;
 *) fail "step 5 stops the iteration and leaves the fetched bodies behind" ;;
 esac
+# A reply is a comment: only the session's OWN replies are left out of the
+# read — a human's follow-up inside a thread must reach the reader.
+assert_file_has "$FLAT" "your own replies" "what is left out of the reader's list"
+assert_file_has "$FLAT" "A reply by anyone else is a comment like any other" "a follow-up inside a thread is read"
 assert_file_lacks "$SKILL" "comment_body" "no second fetch: the body is fetched once, by the caller"
 
 assert_file_has "$FLAT" "one line, at most 200 bytes, printable ASCII only" "the evidence value's bounds, in so many words"
