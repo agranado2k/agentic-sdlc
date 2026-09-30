@@ -248,6 +248,9 @@ done
 [ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"
+grep -q "^TRACE_NUMBERED_TYPES=''" "$PROJ/scripts/trace.config.sh" &&
+	pass "and with TRACE_NUMBERED_TYPES empty — which of its subjects are numbered is the consumer's policy, never the kit's (#305)" ||
+	fail "the consumer's scripts/trace.config.sh does not carry TRACE_NUMBERED_TYPES=''"
 # The vocabulary policy file (PRD #273) is the one policy file that ships
 # FILLED, and it must arrive that way: a file that exists is the whole policy
 # — the checker's own words stand in only for a consumer with NO file, and an

@@ -910,12 +910,15 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # breaks exactly as the real value would; an `a|b|c` choice becomes its first
 # option; `$model` becomes a model id; `--blob x` becomes the file given, when
 # one is; and the trailing `|| :` goes.
+# A numbered reference `#<N>` becomes `#1`: a project that holds ticket, pr
+# and prd to `<type>:#<digits>` refuses anything else (ticket #305).
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \
 		-e 's/ \[[^][]*\]//g' \
+		-e 's/#<[^<>]*>/#1/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \

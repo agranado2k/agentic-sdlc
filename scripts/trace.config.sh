@@ -44,6 +44,23 @@
 TRACE_DIR=''
 
 # ---------------------------------------------------------------------------
+# TRACE_NUMBERED_TYPES — the subject types your forge numbers, held to ONE
+# spelling: `<type>:#<digits>`, no leading zero. A subject is the trace's join
+# key, and a join key with synonyms is not one — `show ticket:#12` never finds
+# an event written `ticket:12`. With a type listed here, `emit` and `show`
+# refuse any other spelling of it (exit 2, naming the accepted form), and
+# `verify` names each old spelling already in the trace as an advisory.
+#
+#   ''                 no type is held to a spelling (the shipped default) —
+#                      the grammar stays open, so a tracker that writes
+#                      `ticket:PROJ-12` is never refused
+#   'ticket pr prd'    a forge that numbers tickets, pull requests and PRDs
+#                      with digits — the kit's own answer for itself
+#
+# Lowercase type words, space-separated; anything else is exit 2. Only this
+# file sets it: an environment value is ignored.
+TRACE_NUMBERED_TYPES=''
+
 # TRACE_TOOLS — whether every TOOL CALL is captured too. Two honest values:
 #
 #   ''    tool capture is OFF (the shipped default)
