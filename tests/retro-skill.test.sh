@@ -37,6 +37,11 @@
 #      list and a kit CI job for this suite. Every surface that counts the
 #      questions counts eight.
 #
+# NOT HELD here, on purpose: question 8's "what counts as a finding"
+# criteria and the rubric version its tier oracle names. Both are on the
+# behavior confirm-list of PR #329, the human's to confirm; a pin would
+# decide them first.
+#
 # NOT simulable here: the pass itself, which reads a real trace and writes a
 # report. The ticket's demo — a retro over this repo's own trace — is run by
 # hand and quoted in the delivering PR.
@@ -97,7 +102,7 @@ banner "2. The eight fixed questions, named and numbered, in both files"
 # Only the questions section counts in SKILL.md — the procedure below it
 # numbers its steps too.
 questions() { awk '/^## The eight questions/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
-items=$(questions | grep -c '^[1-8]\. \*\*')
+items=$(questions | grep -c '^[0-9][0-9]*\. \*\*')
 [ "$items" = 8 ] && pass "the questions section has eight numbered items" || fail "the questions section has $items numbered items, not eight"
 for q in 'Tier calibration' 'Review signal' 'Recurring failures' 'Diagnosis calibration' 'Spend' 'Chain health' 'Aim calibration' 'Stamp calibration'; do
 	questions | grep -q "\*\*$q" && pass "SKILL.md names the question '$q'" || fail "SKILL.md does not name the question '$q'"
@@ -203,6 +208,17 @@ stamp_has '`data.where`' "the dismissal joins its raise on the subject and data.
 # The rule the PRD's story 14 asks for: an easy field must not hide a hard one.
 stamp_has 'per decision field and per skill' "the question is answered per decision field and per skill"
 stamp_has 'never one number for the chain' "…never as one number for the chain"
+stamp_has 'per value the stamp carried' "…one row per field, per skill, per value the stamp carried"
+# The tier's rows (H-3, review of PR #329): which event is read, what an
+# override is, and who is left out of the denominator are the arithmetic —
+# each survived a hand mutation before it was pinned here.
+stamp_has 'Take one `ticket.write` per subject, the latest by `ts`' "one ticket.write per subject, the latest by ts"
+stamp_has 'group by `data.confidence`' "…grouped by the confidence the tier was stamped with"
+stamp_has 'when its `tier` differs from its `data.tier_proposed`' "an override is a published tier that differs from the proposed one"
+stamp_has 'of how many carry both keys' "the denominator is the tickets that carry both keys"
+stamp_has 'a row named `unstamped`' "a ticket.write from before the stamp existed goes on a row named unstamped"
+stamp_has 'leave it out of the denominator' "a ticket with no proposed tier is counted on its row and left out of the denominator"
+stamp_has 'goes on the `undeclared` row' "a confidence outside the three words goes on the undeclared row"
 # The skill is the RUN's: a finding.raise carries its run and no skill of its
 # own (the kit's own trace, read for this ticket's demo), so a reader that
 # pivots on the event's skill column files every severity row under nothing.
@@ -299,6 +315,8 @@ stamp_has 'no held-out set' "…and the comparator is named as what it is — no
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
+stamp_has 'It is every raise on the subject' "the denominator is stated: every raise on the subject"
+stamp_has 'every time: the rate is a lower bound on the share of posted findings' "the report says so every time — the rate is a lower bound, not a measurement"
 stamp_has 'no marker that it was posted' "…and why: a raise carries no marker that it was posted"
 # …and a dismissal is one (data.thread, data.where) pair per subject — a
 # resolved thread and its dismissed review can both emit.
@@ -328,8 +346,10 @@ stamp_has 'not computable from the trace today' "the label's override rate is sa
 stamp_has 'a row of its own' "…in a row of its own"
 stamp_has 'never a guess' "…as a candidate ticket, never a guess"
 # Honesty point 3: a thin row prints its counts and the words, not a rate.
-stamp_has 'too few' "a row with too few events says so"
-stamp_has 'instead of a rate' "…instead of printing a rate"
+# The bullet's HEADING says "too few" too, so the needle is the rule: the
+# threshold, and what is printed in the rate's place.
+stamp_has "Fewer than five events in a row's denominator is a count, not a rate" "a row with fewer than five events in its denominator is a count, not a rate"
+stamp_has 'print the counts and `too few to rate` instead of a rate' "…it prints the counts and 'too few to rate' instead of a rate"
 # A window with raises and no finding.dismiss at all is not a band nobody
 # dismissed: 0 of 7 printed as a rate reads as a measurement of an emitter
 # that may never have run (the kit's own trace, the day the kind landed).
@@ -352,11 +372,19 @@ case "$stamp" in
 esac
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
-questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&
-	pass "SKILL.md's eighth item holds the per-field, per-skill rule" ||
-	fail "SKILL.md's eighth item does not say 'per decision field and per skill, never one number for the chain'"
-questions | flat | grep -q 'oracle clause' && pass "…and the oracle clause on every row" ||
-	fail "SKILL.md's eighth item does not name the oracle clause"
+# Held to the EIGHTH ITEM, not the section: a phrase another item carries
+# proves nothing about this one (L-3).
+item8=$(questions | awk '/^8\. \*\*/ { on = 1 } /^[0-79]\. \*\*/ { on = 0 } on' | flat)
+item8_has() { # <needle> <message>
+	case "$item8" in
+	*"$1"*) pass "$2" ;;
+	*) fail "$2 — SKILL.md's eighth item does not say: $1" ;;
+	esac
+}
+item8_has 'per decision field and per skill, never one number for the chain' "SKILL.md's eighth item holds the per-field, per-skill rule"
+item8_has 'Every row carries the oracle clause' "…and the oracle clause on every row"
+item8_has 'too few events says so instead of a rate' "…and the thin row that prints no rate"
+item8_has 'is a row that says exactly that' "…and the label's row that says its rate is not answerable"
 desc=$(sed -n 's/^description: //p' "$SKILL_ABS")
 case "$desc" in
 *'eight fixed questions'*'stamp calibration'*) pass "the frontmatter description counts eight and names stamp calibration" ;;
@@ -364,8 +392,16 @@ case "$desc" in
 esac
 assert_file_has "$SKILL" "pivot eight times" "the procedure pivots once per question"
 assert_file_has "$SKILL" "data.question=<1..8>" "a candidate note can name the eighth question"
-awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | grep -q '\*\*stamp\*\*' &&
-	pass "routing says what a stamp-calibration ticket would change" || fail "the Routing section has no entry for a stamp"
+route8=$(awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | awk '/^- / { on = 0 } /^- A \*\*stamp\*\*/ { on = 1 } on' | flat)
+[ -n "$route8" ] && pass "routing has an entry for a stamp" || fail "the Routing section has no entry for a stamp"
+# …and the entry says where each of the three findings goes — the heading
+# alone survives the deletion of all three.
+for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'records no label from before the quiz'; do
+	case "$route8" in
+	*"$needle"*) pass "the stamp's routing entry names: $needle" ;;
+	*) fail "the stamp's routing entry does not name: $needle" ;;
+	esac
+done
 for f in "$SKILL" "$SIDECAR"; do
 	assert_file_lacks "$f" "seven questions" "no file of the skill still counts seven"
 	assert_file_lacks "$f" "seven fixed" "…in either spelling"
