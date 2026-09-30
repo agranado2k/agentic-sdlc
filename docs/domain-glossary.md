@@ -210,8 +210,10 @@ Grouped by the seam each term belongs to. Entry shape:
   never read by the checker.
 - **Confidence** — how sure a tier or autonomy-label stamp LOOKED to the
   session that made it, never how likely it is right: one of three tokens
-  (`low`, `medium`, `high`), stamped by `/to-tickets` as a `Confidence:`
-  decision line beside the stamp it qualifies. It sorts the quiz low first
+  (`low`, `medium`, `high`), stamped by `/to-tickets` on both. The tier's is
+  a `Confidence:` decision line under the `Tier:` line in the ticket body;
+  the label's is shown at the quiz and recorded on the `ticket.write` event
+  under its own key, never in the body. It sorts the quiz low first
   and sends `/implement` back to its restatement on a `low` tier; no autonomy
   decision reads it, and nothing has measured it yet. Ref: PRD #273.
   - _Avoid_: "probability", "certainty", "score" — it reports a reading, not
