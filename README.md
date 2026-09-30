@@ -622,9 +622,9 @@ skeleton (K0).
   rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
   and names only hook scripts that exist.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
-  contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
-  decision points by the plain `sh scripts/trace.sh …` name, never the kit's
-  never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
+  contract as text (ADR-0008, tickets #250 and #309): each of the fourteen
+  emits at its decision points by the plain `sh scripts/trace.sh …` name,
+  never the kit's never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
   error changes no skill's outcome; every kind a skill emits is one the script
   knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
   and records a spawn per agent with that model; `/merge-train` and

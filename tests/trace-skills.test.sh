@@ -87,6 +87,14 @@ for s in $CHAIN; do
 	if [ -f "$(skill_md "$s")" ]; then n_chain=$((n_chain + 1)); else fail "$(skill_md "$s") is missing"; fi
 done
 [ "$n_chain" = 14 ] && pass "all fourteen chain skills exist" || fail "only $n_chain of 14 chain skills exist"
+# The README describes this suite by its roster's size; a roster that grows
+# without it leaves the kit's public face stale (review of PR #315, M-1).
+case $n_chain in 13) n_word=thirteen ;; 14) n_word=fourteen ;; 15) n_word=fifteen ;; *) n_word=$n_chain ;; esac
+readme_para=$(awk '/sh tests\/trace-skills\.test\.sh/ { on = 1 } on && /^- `sh tests\// && !/trace-skills/ { exit } on' README.md | tr '\n' ' ' | tr -s ' ')
+case $readme_para in
+*"each of the $n_word emits"*) pass "README.md describes this suite's roster as the $n_word it is" ;;
+*) fail "README.md's paragraph for this suite does not say 'each of the $n_word emits' — the roster is $n_chain" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "1. Every chain skill emits, by the plain script name — never the kit wrapper"
@@ -285,9 +293,13 @@ printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE "diagnosis reads the t
 	fail "the amendment does not say a diagnosis reads the trace by the operator's hand"
 am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\)[^*:]*:\*.*/\1/p' | tail -1)
 row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+# Held to THIS amendment, not to any note that shares its date — and an empty
+# date is a failure, never a match on an older note (review of PR #315, L-2).
 case $row in
-*"amended $am_date"*) pass "the index row for 0008 carries the amendment's date ($am_date)" ;;
-*) fail "the index row for 0008 does not say 'amended $am_date': $row" ;;
+*"amended $am_date (#309"*"clause 7"*) [ -n "$am_date" ] &&
+	pass "the index row for 0008 carries the clause-7 amendment's dated note ($am_date, #309)" ||
+	fail "the amendment carries no date the index row could be held to" ;;
+*) fail "the index row for 0008 has no 'amended ${am_date:-<no date>} (#309 …' note naming clause 7: $row" ;;
 esac
 
 t_done "trace skills contract"
