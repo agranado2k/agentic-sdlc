@@ -678,7 +678,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 	*) pass "and it produces no row of its own" ;;
 	esac
 	case $S_OUT in
-	"$MODEL 34 287 10793 37519") pass "while the real model's numbers are untouched" ;;
+	"$MODEL 34 287 10793 37519 2 msg_011CfLYV2YMEW5if4Ghh8U3S") pass "while the real model's numbers are untouched, and the placeholder is never the last message read" ;;
 	*) fail "the real row changed: $S_OUT" ;;
 	esac
 else
@@ -1250,6 +1250,194 @@ if [ "$HAVE_NODE" = 1 ]; then
 	rm -f "$TDIR/blobs"
 else
 	echo "  skip  node is not on PATH — the review's regression legs need the payload reader"
+fi
+
+# ---------------------------------------------------------------------------
+banner "26. A resumed session's usage is counted once, however many ends it had"
+# ---------------------------------------------------------------------------
+# Ticket #307. `claude -p --resume <id>` keeps the session id and APPENDS to the
+# one transcript, and SessionEnd fires at the end of every run — so a hook that
+# re-reads the whole file at each end records the first run's tokens twice, and
+# `summary` totals them twice (tests/fixtures/claude-code/README.md, "The third
+# capture"). The fixture is that session as the second end found it; its first
+# 25 lines are the file as the first end found it. The oracle is the rollup the
+# agent harness wrote at each end — line 25, then line 34, which is cumulative.
+RFIX="$FIX/resumed-transcript.redacted.jsonl"
+RSESSION=8b4bc828-f171-457e-9b1c-36fbc3814818
+RMODEL=claude-haiku-4-5-20251001
+RMSG1=msg_011CfZUaaukeMZhpc1dwr6cP
+RMSG2=msg_011CfZUbi2QmUtjefTNH55Qb
+
+# rrollup <line> <key> — one number from the resumed fixture's cost-state line.
+rrollup() {
+	sed -n "$1p" "$RFIX" | sed -n 's/.*"'"$RMODEL"'":{\([^}]*\)}.*/\1/p' |
+		sed -n 's/.*"'"$2"'":\([0-9]*\).*/\1/p'
+}
+
+# model_row <model> — the four token columns of that model's `summary --by
+# model` row, space-separated, or nothing.
+model_row() {
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" summary --by model 2>/dev/null |
+		awk -v m="$1" '$1 == m { print $3, $4, $5, $6 }'
+}
+
+# data_of <line> <key> — a data-map value, or empty.
+data_of() { printf '%s\n' "$1" | sed -n 's/.*,"data":{.*"'"$2"'":"\([^"]*\)".*/\1/p'; }
+
+R25="$(rrollup 25 inputTokens) $(rrollup 25 outputTokens) $(rrollup 25 cacheCreationInputTokens) $(rrollup 25 cacheReadInputTokens)"
+R34="$(rrollup 34 inputTokens) $(rrollup 34 outputTokens) $(rrollup 34 cacheCreationInputTokens) $(rrollup 34 cacheReadInputTokens)"
+[ "$R25" = "10 41 10151 13796" ] && [ "$R34" = "20 72 10239 37743" ] &&
+	pass "the fixture's two rollups are the ones its README records" ||
+	fail "the fixture's rollups moved: line 25 '$R25', line 34 '$R34'"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR, ASKED FOR WHAT IS NEW. Given the last message id a previous
+	# read counted, it counts only what came after, and says where it stopped.
+	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$RFIX"
+	[ "$S_STATUS" = 0 ] && pass "the extractor takes --after <message id>" ||
+		fail "the extractor exited $S_STATUS with --after: $S_ERR"
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 $RMSG2" ] &&
+		pass "and counts only the resume's one response: line 34's rollup less line 25's" ||
+		fail "--after $RMSG1 printed '$S_OUT'"
+	t_run_split node "$EXTRACTOR" "$RFIX"
+	[ "$S_OUT" = "$RMODEL 20 72 10239 37743 2 $RMSG2" ] &&
+		pass "without it, the whole file: two messages, the last one named" ||
+		fail "the whole-file read printed '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --after "$RMSG2" "$RFIX"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		pass "an anchor on the last message is nothing new: exit 0, no row" ||
+		fail "--after the last message: status $S_STATUS, stdout '$S_OUT'"
+	# An anchor the file does not hold means the file is not the append-only
+	# transcript the anchor was read from. Counting "everything" would be the
+	# double count again, and counting nothing would hide spend — so it is drift.
+	t_run_split node "$EXTRACTOR" --after msg_nowhere "$RFIX"
+	[ "$S_STATUS" = 2 ] && pass "an anchor the transcript does not hold is exit 2" ||
+		fail "an unknown anchor exited $S_STATUS (stdout: $S_OUT)"
+	case $S_ERR in *msg_nowhere*) pass "and names the anchor it could not find" ;;
+	*) fail "stderr does not name the anchor: $S_ERR" ;; esac
+	[ -z "$S_OUT" ] && pass "and prints no numbers" || fail "printed numbers anyway: $S_OUT"
+	sed 's/"output_tokens":/"output_tokenz":/g' "$RFIX" >"$SCRATCH/resumed-drift-307.jsonl"
+	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/resumed-drift-307.jsonl"
+	[ "$S_STATUS" = 2 ] && pass "shape drift is still exit 2 with --after, even before the anchor" ||
+		fail "drift with --after exited $S_STATUS"
+
+	# TWO ENDS OF ONE SESSION, through the hook and the shared script's summary.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	set_key transcript_path "$SCRATCH/resumed-307.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$RSESSION" >"$SCRATCH/end-resumed-307.json"
+	# Another session's usage event naming this session's last message must not
+	# anchor it: the anchor is read under this session's subject only.
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject=session:other-307 \
+		session=other-307 model="$RMODEL" tok_in=1 data.last_msg="$RMSG1" data.msgs=1
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json"
+	[ "$S_STATUS" = 0 ] && pass "the first end exits 0" || fail "the first end exited $S_STATUS: $S_ERR"
+	U1=$(ev_of session.usage | grep -F "\"subject\":\"session:$RSESSION\"" | sed -n '1p')
+	[ "$(num "$U1" tok_in) $(num "$U1" tok_out) $(num "$U1" tok_cache_w) $(num "$U1" tok_cache_r)" = "$R25" ] &&
+		pass "the first end records the first run: line 25's rollup ($R25)" ||
+		fail "the first end recorded: $U1"
+	[ "$(data_of "$U1" last_msg)" = "$RMSG1" ] && [ "$(data_of "$U1" msgs)" = 1 ] &&
+		pass "and says how far it read: data.last_msg=$RMSG1, data.msgs=1" ||
+		fail "the first usage event does not say how far it read: $U1"
+
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json"
+	[ "$S_STATUS" = 0 ] && pass "the second end, after the resume, exits 0" ||
+		fail "the second end exited $S_STATUS: $S_ERR"
+	[ "$(ev_of session.usage | grep -F "\"subject\":\"session:$RSESSION\"" | sed -n '1p')" = "$U1" ] &&
+		pass "and the first usage event is still byte for byte what it was — never rewritten" ||
+		fail "the first usage event changed"
+	U2=$(ev_of session.usage | grep -F "\"subject\":\"session:$RSESSION\"" | sed -n '2p')
+	[ "$(data_of "$U2" last_msg)" = "$RMSG2" ] && [ "$(data_of "$U2" msgs)" = 1 ] &&
+		pass "the second says it read one more message, up to $RMSG2" ||
+		fail "the second usage event: $U2"
+	# The other session's one token is on the same model row, so take it off.
+	GOT=$(model_row "$RMODEL" | awk '{ print $1 - 1, $2, $3, $4 }')
+	[ "$GOT" = "$R34" ] &&
+		pass "summary --by model totals the session at line 34's rollup ($R34), not twice the first run" ||
+		fail "summary --by model totals '$GOT' for the session, the rollup says '$R34'"
+
+	# A third end with nothing new — a resume that was ended before it answered.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json"
+	[ "$S_STATUS" = 0 ] && pass "a third end with nothing new exits 0" || fail "the third end exited $S_STATUS"
+	GOT=$(model_row "$RMODEL" | awk '{ print $1 - 1, $2, $3, $4 }')
+	[ "$GOT" = "$R34" ] && pass "and adds nothing to the total" || fail "the total moved to '$GOT'"
+	U3=$(ev_of session.usage | grep -F "\"subject\":\"session:$RSESSION\"" | sed -n '3p')
+	[ -n "$U3" ] && [ "$(str "$U3" outcome)" != fail ] && [ -z "$(num "$U3" tok_in)" ] &&
+		[ "$(data_of "$U3" last_msg)" = "$RMSG2" ] &&
+		pass "while still leaving one usage event, not a failure, that says where it stands" ||
+		fail "the nothing-new end left: $U3"
+
+	# A transcript that no longer holds the anchor is drift, recorded and exit 0.
+	grep -v "$RMSG1" "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	new_trace
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject="session:$RSESSION" \
+		session="$RSESSION" model="$RMODEL" tok_in=10 data.last_msg="$RMSG1" data.msgs=1
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json"
+	[ "$S_STATUS" = 0 ] && pass "a transcript that lost its anchor still exits 0" || fail "exited $S_STATUS"
+	F26=$(ev_of session.usage | sed -n '2p')
+	[ "$(str "$F26" outcome)" = fail ] && [ -z "$(num "$F26" tok_in)" ] &&
+		pass "and records one usage event, outcome=fail, carrying no tokens" ||
+		fail "the lost-anchor end left: $(ev_of session.usage)"
+	case $F26 in *"$RMSG1"*) pass "whose reason names the anchor" ;; *) fail "the reason does not name the anchor: $F26" ;; esac
+
+	# M-1, review of PR #316: an id the anchor cannot carry is drift at the
+	# extractor, never a row whose anchor the next end drops in silence and so
+	# falls back to the whole-file read — the double count again.
+	sed "s/$RMSG1/msg:one/g; s/$RMSG2/msg:two/g" "$RFIX" >"$SCRATCH/resumed-colon-307.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/resumed-colon-307.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a message id outside letters, digits, dot, dash, underscore is exit 2 with no row" ||
+		fail "an id with a colon: status $S_STATUS, stdout '$S_OUT'"
+	case $S_ERR in *msg:one*) pass "and the refusal names the id" ;; *) fail "stderr does not name the id: $S_ERR" ;; esac
+	new_trace
+	set_key transcript_path "$SCRATCH/resumed-colon-307.jsonl" <"$SCRATCH/end-resumed-307.json" >"$SCRATCH/end-colon-307.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-colon-307.json" >/dev/null 2>&1
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-colon-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | grep -c '"outcome":"fail"')" = 2 ] && [ "$(sum_tok tok_in session.usage)" = 0 ] &&
+		pass "so two ends over such ids record two failures and no tokens, not a double count" ||
+		fail "two ends over unusable ids left: $(ev_of session.usage)"
+
+	# M-2, review of PR #316: a FAIL event between two good ends is passed over —
+	# the anchor is the last read that succeeded, so the third end counts the
+	# resume once and the total is still the rollup.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	sed 's/"output_tokens":/"output_tokenz":/g' "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | grep -c '"outcome":"fail"')" = 1 ] &&
+		pass "a drifted end between two good ones records its failure" ||
+		fail "the drifted end left: $(ev_of session.usage)"
+	[ "$(model_row "$RMODEL")" = "$R34" ] &&
+		pass "and the end after it still totals the rollup ($R34) — the anchor skipped the failure" ||
+		fail "ok, drift, ok totals '$(model_row "$RMODEL")', the rollup says '$R34'"
+
+	# M-2: more than one model under --after. The message count is per model;
+	# the last id is the whole read's, the same on every row. A third message on
+	# a second model is appended to the fixture for this.
+	sed -n '30,31p' "$RFIX" | sed "s/$RMSG2/msg_three307/; s/$RMODEL/claude-other-307/g" >"$SCRATCH/third-307.jsonl"
+	cat "$RFIX" "$SCRATCH/third-307.jsonl" >"$SCRATCH/two-models-307.jsonl"
+	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/two-models-307.jsonl"
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 msg_three307
+claude-other-307 10 31 88 23947 1 msg_three307" ] &&
+		pass "two models after the anchor: one row each, one message each, one last id on both" ||
+		fail "two models after the anchor printed: $S_OUT"
+
+	# A FRESH single-end session is unchanged, apart from saying how far it read.
+	new_trace
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json" >/dev/null 2>&1
+	F1=$(ev_of session.usage | sed -n '1p')
+	[ "$(num "$F1" tok_in) $(num "$F1" tok_out) $(num "$F1" tok_cache_w) $(num "$F1" tok_cache_r)" = "34 287 10793 37519" ] &&
+		pass "a fresh session's one end still records 34 / 287 / 10793 / 37519" ||
+		fail "a fresh session's end recorded: $F1"
+	[ "$(data_of "$F1" msgs)" = 2 ] && [ "$(data_of "$F1" last_msg)" = msg_011CfLYV2YMEW5if4Ghh8U3S ] &&
+		pass "and says it read two messages, up to the last one" ||
+		fail "a fresh session's end does not say how far it read: $F1"
+else
+	echo "  skip  node is not on PATH — the resumed-session legs need the extractor"
 fi
 
 t_done "trace hooks"
