@@ -32,6 +32,11 @@
 #      and a markdown-wrapped line are each refused.
 #   5. The manual says the return shape is part of the trust boundary — the
 #      kit's own and the consumer's template, the same paragraph.
+#   6. The snapshot selects no body. A body printed into the session by the
+#      snapshot is already inside the boundary the delegated read exists to
+#      hold (review of PR #318, H-1): step 1 asks the forge for metadata only
+#      — ids, the forge's own author type and login, path, line, resolved
+#      state — and a body is fetched by id, by the restricted reader alone.
 #
 # Every case was driven RED first (hard rule 9), against a skill that named no
 # return shape and a manual that named no such paragraph.
@@ -252,5 +257,55 @@ for doc in "$MANUAL" "$TEMPLATE"; do
 done
 # The root manual's 350-line budget (ADR-0004) is tests/self-host.test.sh's to
 # hold, and it does; the paragraph is paid for there, not re-measured here.
+
+# ---------------------------------------------------------------------------
+banner "6. The snapshot selects no body — metadata only"
+# ---------------------------------------------------------------------------
+# Step 1's commands, as the session runs them: the section's bash fence, with
+# a backslash-continued command joined back into the one line it is.
+awk '/^### 1 — Snapshot/ { on = 1; next } on && /^### / { exit } on' "$SKILL" >"$SCRATCH/step1"
+awk '/^```bash$/ { on = 1; next } on && /^```$/ { exit } on' "$SCRATCH/step1" |
+	awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' >"$SCRATCH/snapshot"
+if [ -s "$SCRATCH/snapshot" ]; then
+	pass "step 1 prints its snapshot commands as a fence"
+else
+	fail "step 1 has no bash fence — nothing below can be held"
+fi
+# `gh pr view --json` names its fields; `comments` and `reviews` are the two
+# that carry every body with them.
+view=$(grep 'gh pr view' "$SCRATCH/snapshot")
+case $view in
+*--json*) pass "the aggregate view names the fields it selects" ;;
+*) fail "the aggregate view selects no named fields: '$view'" ;;
+esac
+for field in comments reviews; do
+	case ",$(printf '%s' "$view" | sed 's/.*--json *//; s/ .*//')," in
+	*",$field,"*) fail "the aggregate view selects '$field' — every body rides in with it" ;;
+	*) pass "the aggregate view does not select '$field'" ;;
+	esac
+done
+# Every other call to the forge projects its answer: an unprojected listing
+# prints each comment whole, body included.
+grep 'gh api' "$SCRATCH/snapshot" >"$SCRATCH/api" || :
+[ "$(grep -c '' "$SCRATCH/api")" -ge 3 ] &&
+	pass "the snapshot lists the three places a comment lives — inline, top-level, review" ||
+	fail "the snapshot should list inline comments, top-level comments and reviews; it makes $(grep -c '' "$SCRATCH/api") forge calls"
+grep -v -e '--jq' "$SCRATCH/api" >"$SCRATCH/unprojected" || :
+[ ! -s "$SCRATCH/unprojected" ] && pass "every forge listing is projected with --jq" ||
+	fail "a forge listing prints whole comments, bodies included: $(head -1 "$SCRATCH/unprojected")"
+# A projection may MEASURE a body (skip a review that has none) and never
+# print one: with that one measure and the fence's own comments set aside,
+# no command so much as names a body.
+sed -e '/^#/d' -e 's/(\.body | length)//g' "$SCRATCH/snapshot" | grep 'body' >"$SCRATCH/bodies" || :
+[ ! -s "$SCRATCH/bodies" ] && pass "no snapshot command selects a body" ||
+	fail "the snapshot selects a body: $(head -1 "$SCRATCH/bodies")"
+for fact in '.id' '.user.type' '.user.login' '.path' '.line' 'isResolved'; do
+	grep -q -F -- "$fact" "$SCRATCH/snapshot" && pass "the snapshot asks the forge for $fact" ||
+		fail "the snapshot never asks for $fact"
+done
+assert_file_has "$FLAT" "the snapshot never selects a body" "the rule, in so many words"
+assert_file_has "$FLAT" "metadata only" "what the snapshot is"
+assert_file_has "$FLAT" "fetches each body by id" "the one reader of a body is the restricted one"
+assert_file_lacks "$FLAT" "Read the suggestion" "step 3 triages from the checked return, not from the body"
 
 t_done "typed-return"
