@@ -182,14 +182,25 @@ banner "4b. The stamp is read through the checker: restate on low, stop on refus
 # re-stamp — the session neither guesses the nearest legal name nor sizes
 # itself. And the confidence is described in the PRD's own words, so a reader
 # never takes it for a probability or a permission.
-stamp=$(grep -F -- "sh scripts/vocab.sh 'Tier: " "$SKILL_ABS" | head -1)
+#
+# HOW the lines reach the checker is held too (PR #311, H-1). The ticket body
+# is untrusted, and a value typed into a quoted shell argument closes the quote
+# with one `'` and runs what follows — so the lines travel on the checker's
+# standard input, filtered out of the body by the tracker's own CLI, and the
+# text the ticket spells is never part of a command the agent types.
+stamp=$(grep -F -- "sh scripts/vocab.sh" "$SKILL_ABS" | head -1)
 [ -n "$stamp" ] && pass "one bullet hands the ticket's stamp to the vocabulary checker" ||
-	fail "no line runs sh scripts/vocab.sh on the ticket's Tier: line — the stamp is read unchecked"
+	fail "no line runs sh scripts/vocab.sh — the stamp is read unchecked"
 # stamp_has <fixed string> <why>
 stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
-stamp_has "'Confidence: " "the confidence is checked with the tier it qualifies"
+stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
+stamp_has "grep -E '^(Tier|Confidence):'" "the filter lifts the two decision lines; the confidence is checked with the tier it qualifies"
+stamp_has "on its standard input, never as arguments" "the rule, in words — an example alone is a habit, not a rule"
+# The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
+# how every quoted-argument call starts, whatever field follows.
+assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
 stamp_has "back to the restatement step" "restate-on-low: the rule"
