@@ -26,6 +26,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0008](0008-decisions-are-traced-to-a-local-append-only-record.md) | The chain's decisions are traced to a local, append-only record the chain never reads | Accepted 2026-09-22 — bound by ADR-0005's non-goal; the policy-file twin is ADR-0003's third instance — amended 2026-09-28 (#263, PR #263): a caller error in `begin` or `end` is exit 2, a trace error never is; amended 2026-09-28 (#271, PR #292): exit 3 is "cannot judge this trace", an unsupported schema |
 | [0009](0009-a-dispatched-worker-acts-on-the-forge-only-through-the-broker.md) | A dispatched worker never holds network or credentials, and acts on the forge only through the broker | Accepted 2026-09-28 — builds on ADR-0005's non-goal 12 (the dispatcher does not enforce what a worker may do); the broker is where that enforcement lives |
 | [0010](0010-a-typed-judge-is-a-task-domain-named-by-its-contract.md) | A typed judge is a task domain named by its contract, in two shapes | Accepted 2026-09-28 — stands under ADR-0003's closed tier vocabulary |
+| [0011](0011-task-local-contracts-bound-the-lifecycle.md) | Task-local contracts bound the lifecycle | Accepted 2026-09-30 |
 
 ## Conventions
 

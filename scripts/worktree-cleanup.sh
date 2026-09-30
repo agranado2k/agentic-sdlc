@@ -11,8 +11,10 @@
 # This script closes it, conservatively. For each worktree under `worktree/`,
 # the worktree and its local branch are removed ONLY when the branch is merged
 # into the base ref AND the worktree has no uncommitted changes. Everything else
-# is kept and reported with the reason. Nothing is ever force-removed: the whole
-# value of the script is that a human can run it without reading it first.
+# is kept and reported with the reason — including a FRESH branch, one with no
+# commits of its own yet, which ancestry alone would misread as merged. Nothing
+# is ever force-removed: the whole value of the script is that a human can run
+# it without reading it first.
 #
 # `/worktree-cleanup` is the skill that runs this and then updates the diary —
 # the one step a script should not be doing on a human's behalf.
@@ -99,6 +101,28 @@ is_merged() {
 	return 1
 }
 
+# is_fresh <branch> — the branch has not moved since it was created: no commits
+# of its own, so nothing can have been merged from it.
+#
+# The case the two tests above get wrong. A branch created a minute ago points
+# at a commit the base already contains, so ancestry reads it as merged — and a
+# cleanup run while a session is starting would remove that session's worktree
+# and branch. The creation point is the oldest entry of the branch's own reflog;
+# a tip still equal to it is fresh, however far the base has moved on since. A
+# branch with no reflog (logging disabled) cannot be told apart, and falls
+# through to the merged tests exactly as before.
+#
+# Every miss this test can make is a keep, never a removal: a branch created at
+# a tip that already carries commits (checked out from a pushed branch), or one
+# whose creation entry has expired from the reflog, reads as fresh and stays
+# until a human removes it.
+is_fresh() {
+	# Positional parameters rather than a variable: no global leaks out.
+	set -- "$(git reflog show --format=%H "refs/heads/$1" -- 2>/dev/null | tail -n 1)" \
+		"$(git rev-parse "refs/heads/$1")"
+	[ -n "$1" ] && [ "$1" = "$2" ]
+}
+
 say "==> git fetch --prune origin"
 git fetch --prune origin
 
@@ -166,6 +190,8 @@ while IFS= read -r wt; do
 		keep "$wt — detached HEAD, skipped"
 	elif [ -n "$(git -C "$wt" status --porcelain)" ]; then
 		keep "$wt ($branch) — uncommitted changes"
+	elif is_fresh "$branch"; then
+		keep "$wt ($branch) — fresh: no commits of its own, nothing to merge"
 	elif is_merged "$branch"; then
 		say "==> Removing merged worktree $wt ($branch)"
 		run git worktree remove "$wt"
