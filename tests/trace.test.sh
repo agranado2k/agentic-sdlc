@@ -927,4 +927,57 @@ grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF 'exit 3' && pass "and the
 grep -qF 'Amended 2026-09-28 (#271)' "$KIT/docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md" &&
 	pass "and ADR-0008 carries the dated amendment that chose it" || fail "ADR-0008 has no dated amendment for #271"
 
+banner "21. A numbered subject is spelled one way: ticket, pr and prd carry their # (ticket #305)"
+# The first retrospective over the kit's own trace found one ticket written
+# three ways, so `show` on the documented spelling missed events about it. The
+# subject is the join key; a join key with synonyms is not one. Each refusal
+# below is a spelling a plausible wrong implementation lets through: a check
+# on the type alone, a check that the # is present but not that digits follow,
+# a check on `subject` that forgets `related`.
+SP="$SCRATCH/spelling"; SPON=$(policy "$SP")
+for _sp_bad in 'ticket:265' 'ticket:#abc' 'pr:12' 'prd:#' 'ticket:#12a' 'pr:#-1'; do
+	assert_status 2 "emit subject='$_sp_bad' is refused" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_bad"
+done
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:265'
+case $S_ERR in *"ticket:#<digits>"*) pass "and the refusal names the accepted form, ticket:#<digits>" ;; *) fail "the refusal did not name the accepted form: $S_ERR" ;; esac
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:12'
+case $S_ERR in *"pr:#<digits>"*) pass "and names it per type — pr:#<digits> for a pr" ;; *) fail "the pr refusal did not name pr:#<digits>: $S_ERR" ;; esac
+assert_status 2 "related='prd:#12 ticket:34' is refused — every token is held to the rule, not only the first" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:#9' related='prd:#12 ticket:34'
+assert_status 2 "begin refuses the same spelling — it writes through emit" -- env TRACE_CONFIG="$SPON" TRACE_SESSION=spelling-305 sh "$TRACE" begin implement subject='ticket:265'
+[ ! -e "$SP/events/$TODAY.jsonl" ] && pass "none of the refusals wrote a line" || fail "a refused spelling was written: $(cat "$SP/events/$TODAY.jsonl")"
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:#265' related='prd:#12 pr:#34 branch:feat/x' reason=accepted
+[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && pass "ticket:#265 with related prd:#12 pr:#34 is accepted, silently" || fail "the accepted spelling was refused (exit $S_STATUS): $S_ERR"
+for _sp_open in 'worktree:anything' 'run:r1' 'branch:feat/265' 'issue:265' 'session:abc'; do
+	assert_status 0 "an open type is untouched — $_sp_open" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_open"
+done
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:#265'
+case $S_OUT in *'"reason":"accepted"'*) pass "show ticket:#265 finds the accepted event" ;; *) fail "show did not find the accepted event: $S_OUT" ;; esac
+assert_status 2 "show refuses ticket:265 — a reader cannot ask for a spelling that cannot exist" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:265'
+assert_status 2 "and show refuses pr:12" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'pr:12'
+
+# verify: history is never rewritten, so an old spelling ALREADY in the trace
+# is an advisory — on stderr with file and line, never a bad line on stdout,
+# never a change to the exit code. Written by hand, shaped exactly as the
+# emitter wrote it before the rule existed.
+VF="$SCRATCH/spelling-verify"; VFON=$(policy "$VF")
+TRACE_CONFIG=$VFON sh "$TRACE" emit kind=note subject='ticket:#1' reason=clean
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old","kind":"note","subject":"ticket:265","reason":"before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old2","kind":"note","subject":"pr:#9","related":"prd:#12 ticket:34","reason":"related before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old3","kind":"note","subject":"ticket:#2","reason":"decoy","data":{"subject":"ticket:99"}}\n' >>"$VF/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over an old spelling exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an old spelling: $S_OUT"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout — stdout is the bad-line verdict, and this line is not bad" || fail "verify printed on stdout: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2"*"ticket:265"*) pass "and names the subject's file:line on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2 and ticket:265: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3"*"ticket:34"*) pass "and a related token's file:line too" ;; *) fail "stderr did not name $TODAY.jsonl:3 and ticket:34: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves the clean line alone" ;; esac
+case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject as the event's subject: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+printf 'not json at all\n' >>"$VF/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$S_STATUS" = 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:5")" -ge 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
+	pass "a real bad line still fails verify, and the old spelling is still not among the bad lines" || fail "verify mixed the advisory into the verdict (exit $S_STATUS): $S_OUT"
+
+# The rule is written where the vocabulary lives, in one sentence.
+sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:#<digits>' &&
+	pass "the glossary's Subject entry states the numbered spelling" || fail "the glossary's Subject entry does not name ticket:#<digits>"
+
 t_done "trace script"

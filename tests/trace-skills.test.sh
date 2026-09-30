@@ -217,7 +217,9 @@ banner "7. Every documented line runs: placeholders filled, the span executes an
 # placeholders made literal: `[optional]` groups dropped; `<one word>`
 # becomes `x` and `<several words>` becomes `x y`, so a prose placeholder that
 # the document left unquoted breaks exactly as the real value would; an
-# `a|b|c` choice becomes its first option; `$model` becomes a model id; the
+# `a|b|c` choice becomes its first option; a numbered reference `#<N>`
+# becomes `#1`, because a ticket, pr or prd takes digits and nothing else
+# (ticket #305); `$model` becomes a model id; the
 # `--blob` file becomes a real one; the trailing `|| :` goes, so the exit
 # status is the script's own.
 BLOBF="$SCRATCH/blob.x"
@@ -226,6 +228,7 @@ runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
 		-e 's/ \[[^][]*\]//g' \
+		-e 's/#<[^<>]*>/#1/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \

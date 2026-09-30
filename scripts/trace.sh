@@ -74,7 +74,9 @@
 # tier); `data.*` keys are OPEN (like task domains), string values only. A
 # subject is `<type>:<reference>` — lowercase type, then anything without a
 # space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
-# session and a run all join on one column. Token counts are bare integers.
+# session and a run all join on one column. The types the forge numbers —
+# ticket, pr, prd — are spelled one way, `<type>:#<digits>`, because a join
+# key with synonyms is not one (#305); every other type stays open. Token counts are bare integers.
 # A value may not carry a control character other than a tab: a multi-line
 # payload is a blob, not a field.
 #
@@ -288,14 +290,29 @@ trace_check_token() {
 # trace_check_subject <value> — `<type>:<reference>`: a lowercase type, a
 # colon, then a non-empty reference with no space, quote or backslash (the
 # three characters that would make the exact-match filter in `show` a
-# question rather than a comparison).
+# question rather than a comparison). On a refusal TRACE_SUBJECT_FORM names
+# the form the value should have taken, for the caller's message.
+#   The forge-numbered types — ticket, pr, prd — take ONE spelling,
+# `<type>:#<digits>`: the first retrospective over the kit's own trace found a
+# ticket written three ways, and `show` on the documented one missed the rest
+# (#305). The type set stays open, so any other type takes any reference.
+# `verify` holds the same rule to the lines already written, as an advisory —
+# its awk twin is TRACE_AWK_NUMBERED below, and the two lists move together.
+TRACE_NUMBERED_TYPES='ticket pr prd'
 trace_check_subject() {
+	TRACE_SUBJECT_FORM='<type>:<reference>'
 	case $1 in *' '* | *'"'* | *'\'* | '') return 1 ;; esac
 	_cs_type=${1%%:*}
 	_cs_ref=${1#*:}
 	[ "$_cs_ref" = "$1" ] && return 1
 	[ -z "$_cs_ref" ] && return 1
 	case $_cs_type in '' | *[!a-z]*) return 1 ;; esac
+	case " $TRACE_NUMBERED_TYPES " in
+	*" $_cs_type "*)
+		TRACE_SUBJECT_FORM="$_cs_type:#<digits>"
+		case $_cs_ref in '#' | '#'*[!0-9]* | [!#]*) return 1 ;; esac
+		;;
+	esac
 	return 0
 }
 
@@ -614,10 +631,10 @@ trace_emit() {
 				case " $TRACE_STRING_FIELDS " in
 				*" $_em_key "*)
 					case $_em_key in
-					subject) [ -z "$_em_val" ] || trace_check_subject "$_em_val" || die "subject '$_em_val' is not <type>:<reference>" ;;
+					subject) [ -z "$_em_val" ] || trace_check_subject "$_em_val" || die "subject '$_em_val' is not $TRACE_SUBJECT_FORM" ;;
 					related)
 						for _em_tok in $_em_val; do
-							trace_check_subject "$_em_tok" || die "related token '$_em_tok' is not <type>:<reference>"
+							trace_check_subject "$_em_tok" || die "related token '$_em_tok' is not $TRACE_SUBJECT_FORM"
 						done
 						;;
 					esac
@@ -799,7 +816,7 @@ trace_show() {
 	[ $# -ge 1 ] || usage
 	_sh_subject=$1
 	shift
-	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not <type>:<reference>"
+	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not $TRACE_SUBJECT_FORM — the one spelling emit writes, so the only one worth asking for"
 	# A run id never appears as a subject: `begin` writes it into the `run`
 	# field and every event inside the run carries it there, so a subject-only
 	# reader answered nothing for `run:<id>` — the one question a run id is for
@@ -892,7 +909,20 @@ trace_verify() {
 	trace_glob_off
 	for _vf_f in $_vf_files; do
 		IFS=$_vf_ifs
-		awk -v kinds=" $TRACE_KINDS " -v f="$_vf_f" '
+		# A forge-numbered subject in any spelling but `<type>:#<digits>` is an
+		# ADVISORY, never a bad line: the rule (#305) is younger than the trace,
+		# and history is never rewritten, so a line written before it is still a
+		# good line. Only a line that is otherwise good is read for it — the
+		# envelope only, as `show` reads it — and the note goes to stderr
+		# through a pipe, which POSIX awk has where it has no /dev/stderr.
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v f="$_vf_f" '
+		function spelled(field, v,   t, r) {
+			t = v; sub(/:.*/, "", t)
+			if (index(numbered, " " t " ") == 0) return
+			r = substr(v, length(t) + 2)
+			if (r ~ /^#[0-9]+$/) return
+			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, t | "cat 1>&2"
+		}
 		{
 			bad = ""
 			if (substr($0, 1, 13) != "{\"v\":1,\"ts\":\"") bad = "does not open with the schema version and a timestamp"
@@ -904,8 +934,18 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
+			else {
+				env = $0
+				d = index(env, ",\"data\":{")
+				if (d) env = substr(env, 1, d - 1)
+				if (match(env, /,"subject":"[^"]*"/)) spelled("subject", substr(env, RSTART + 12, RLENGTH - 13))
+				if (match(env, /,"related":"[^"]*"/)) {
+					m = split(substr(env, RSTART + 12, RLENGTH - 13), tok, " ")
+					for (i = 1; i <= m; i++) spelled("related token", tok[i])
+				}
+			}
 		}
-		END { exit (n > 0) }' "$_vf_f" || _vf_bad=1
+		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then
 			node -e '
 				const fs = require("fs"); let bad = 0;
