@@ -1087,8 +1087,44 @@
 #   Kit-only, never shipped: scripts/skill-dispatch.kit.sh names
 # scripts/trace.kit.config.sh, so the kit's own dispatches are traced.
 #   The wave's tickets: #246-#255, #270-#272 and #303-#309.
+# 0.30.0 — an untrusted read comes back as a checked, typed return (PRD #273).
+# NO file joins or leaves the shared layer. ONE shared file changes content:
+# scripts/vocab.sh. UPDATING.md changes content: 9d's paragraph for the
+# policy file's new field, and both worked examples re-pin.
+#   From #278: scripts/vocab.sh now says, in its header and its usage text,
+# what it has always done — the caller hands it bare `Field: value` lines,
+# and a line wearing markdown (a list marker, emphasis) is not a decision
+# line to it; lifting a line out of a document is the caller's job. Its
+# shipped defaults gain one field, `author-kind` (bot, human): who wrote a
+# review comment is a fact the forge states, so the caller stamps it and the
+# checker holds it, and it is named `author-kind` so that an ordinary
+# `Author: <name>` line in a ticket body is never mistaken for a decision
+# line. Nothing else about the checker's verdicts changes.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. scripts/vocab.config.sh, the policy
+# file, gains the `author-kind` entry: a consumer who keeps their own copy
+# adds that one entry, or the stamped line goes unchecked there.
+# .agents/skills/pr-iterate/SKILL.md carries the typed return: the snapshot
+# fetches metadata only and never a comment's body; the caller writes each
+# body to a scratch file without printing it; a reader with no shell, no
+# forge CLI and no network returns three bare lines per comment —
+# `Command-shaped:`, `Action:` and one `Evidence:` span — to a file; and a
+# check the skill prints runs on that file BEFORE the session reads it, so
+# only a return that passed the shape check and the vocabulary checker, and
+# whose quoted span is found verbatim in its comment, is ever read. A
+# refused return is named by comment id and never printed, and a missing
+# checker refuses every return rather than passing them. The claim is that
+# and no stronger: an evidence span is quoted untrusted data by design.
+# constitution/AGENTS.md.template gains the consumer's trust-boundary
+# paragraph saying so, and the kit's own manual the same inside ADR-0004's
+# 350-line budget. docs/domain-glossary.md defines the typed return.
+# tests/typed-return.test.sh holds the skill to the contract; bootstrap.sh
+# strips it with the rest of tests/, .github/workflows/kit-ci.yml runs it,
+# README.md names it. tests/vocab.test.sh's budget for a ticket-body check
+# is now the checker's own CPU time, not wall clock, so a loaded host no
+# longer turns it red.
 
-shared-layer: 0.29.0
+shared-layer: 0.30.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

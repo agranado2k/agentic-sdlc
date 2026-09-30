@@ -205,9 +205,25 @@ Grouped by the seam each term belongs to. Entry shape:
   out of a ticket body, a review report or a subagent's return by the skill
   that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
   declared field is not one, so a whole body may be handed over; a field said
-  twice with two values has no value and is refused. Not an anchor: an anchor
-  is a labeled decision in a stamped article, refereed by an advisory, and is
-  never read by the checker.
+  twice with two values has no value and is refused. The line is **bare**: one
+  wearing a list marker or emphasis (`- Tier: …`, `**Tier:** …`) is not a
+  decision line to the checker, and lifting it out of its markup is the
+  caller's job. Not an anchor: an anchor is a labeled decision in a stamped
+  article, refereed by an advisory, and is never read by the checker.
+- **Typed return** — what a delegated untrusted read sends back: a **declared
+  shape** of bare decision lines from the vocabularies plus one **evidence**
+  line quoting a span of what was read, and nothing else. The caller checks
+  every return before reading it — the shape itself, then the values through
+  `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole,
+  never printed, never acted on, and reported by comment and position only.
+  What reaches the session is the declared fields and one verified quoted
+  span, which is untrusted data still. Free text in a return is a finding, not a result.
+  `/pr-iterate`'s read of review-comment bodies is the first:
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the
+  forge states, is stamped by the caller and never asked of the reader. Ref:
+  PRD #273, #278.
+  - _Avoid_: "summary", "report" for what the subagent returns — prose is the
+    channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the

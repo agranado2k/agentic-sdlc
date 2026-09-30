@@ -134,6 +134,12 @@ Therefore:
 - **Never auto-trust a tool server** that arrives with a repo. A project-scoped
   tool/MCP configuration requires explicit human trust before its first use.
 
+**The return shape is part of the boundary.** A delegated read returns a declared shape
+— bare `Field: value` lines `sh scripts/vocab.sh` checks and one quoted span verified
+against what was read — checked before the caller reads it: free text in a return is a
+finding, not a result, so only those fields and that span, untrusted data still, reach
+the session. Untrusted text enters a judge as state, never spliced into the question.
+
 > **Kit note —** if your project gains a written decision record for this, cite
 > it here and cut the paragraph down to the pointer.
 

@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.29.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.30.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.29.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.30.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -584,10 +584,27 @@ skeleton (K0).
   tier is read and never widened — the resolver still refuses a fifth token.
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
-  confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
-  tier stamp of `/to-tickets` and the resolver's literal — order included,
-  and to the checker's own defaults, so a token added on one side and not the
-  other goes red.
+  confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
+  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal —
+  order included, and to the checker's own defaults, so a token added on one
+  side and not the other goes red.
+- `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
+  read to its declared return shape (PRD #273): three bare lines — the
+  command-shaped flag, the triage action, one evidence line quoting the
+  comment read — whose options are the policy file's tokens, with the author
+  kind stamped by the caller from the forge's own data; the check before the
+  read, through the plain script name; free text as a finding. It lifts the
+  check the skill prints out of the skill and runs it: the good return passes,
+  and a sentence outside the shape, an undeclared value, the inconsistent pair
+  and a markdown-wrapped line are each refused — as is every return when the
+  checker is missing, since the check fails closed. The evidence line is held
+  too — one quoted span of at most 200 bytes of printable ASCII, verbatim from
+  a single line of its comment by a fixed-string match against the scratch
+  file the caller fetched unseen — and a count of returns that is not the
+  count of comments refuses them all. Only a return that passed is printed;
+  a refused one is named by comment and position. The snapshot itself is held
+  to metadata only: no command in it selects a body. It also holds the
+  trust-boundary paragraph in the kit's manual and the template.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
@@ -785,6 +802,7 @@ sh tests/docs-gate-advisory.test.sh                    # the warning channel is 
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
