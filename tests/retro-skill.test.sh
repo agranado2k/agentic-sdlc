@@ -7,10 +7,16 @@
 # — the external behavior IS the text, and this suite pins the tokens a session
 # following it must run and the rules it must keep:
 #
-#   1. The SEVEN fixed questions, named and numbered: tier calibration, review
+#   1. The EIGHT fixed questions, named and numbered: tier calibration, review
 #      signal per sub-agent, recurring failures, diagnosis calibration, spend,
 #      chain health, aim calibration (the seventh, added at the PRD
-#      re-evaluation of 2026-09-28, reads the `feedback` events).
+#      re-evaluation of 2026-09-28, reads the `feedback` events) and stamp
+#      calibration (the eighth, PRD #273, ticket #281): per decision field and
+#      per skill, never one number for the chain; the oracle clause on every
+#      row; and three limits the question states instead of papering over —
+#      the dismissal denominator overcounts, the label's override rate is not
+#      computable from the trace today, and a row with too few events prints
+#      no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
 #      name — never the kit's never-shipped wrapper — and verifies first.
 #   3. The report lands OUTSIDE the tree: <tmpdir>/retro-<YYYYMMDDTHHMMSSZ>.md.
@@ -28,7 +34,8 @@
 #   8. The roster knows it: VERSION's skills manifest, both manuals, README,
 #      the provenance file, /housekeeping's checklist (a retro ran inside the
 #      window), the trace-skills suite's named exclusion, bootstrap's KIT_ONLY
-#      list and a kit CI job for this suite.
+#      list and a kit CI job for this suite. Every surface that counts the
+#      questions counts eight.
 #
 # NOT simulable here: the pass itself, which reads a real trace and writes a
 # report. The ticket's demo — a retro over this repo's own trace — is run by
@@ -81,20 +88,21 @@ phase=$(awk 'NR == 1 && /^---/ { fm = 1; next } fm && /^---/ { exit } fm && /^me
 	fail "metadata.phase is '$phase', not planner"
 
 # ---------------------------------------------------------------------------
-banner "2. The seven fixed questions, named and numbered, in both files"
+banner "2. The eight fixed questions, named and numbered, in both files"
 # ---------------------------------------------------------------------------
 # Only the questions section counts in SKILL.md — the procedure below it
 # numbers its steps too.
-questions() { awk '/^## The seven questions/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
-items=$(questions | grep -c '^[1-7]\. \*\*')
-[ "$items" = 7 ] && pass "the questions section has seven numbered items" || fail "the questions section has $items numbered items, not seven"
-for q in 'Tier calibration' 'Review signal' 'Recurring failures' 'Diagnosis calibration' 'Spend' 'Chain health' 'Aim calibration'; do
+questions() { awk '/^## The eight questions/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
+items=$(questions | grep -c '^[1-8]\. \*\*')
+[ "$items" = 8 ] && pass "the questions section has eight numbered items" || fail "the questions section has $items numbered items, not eight"
+for q in 'Tier calibration' 'Review signal' 'Recurring failures' 'Diagnosis calibration' 'Spend' 'Chain health' 'Aim calibration' 'Stamp calibration'; do
 	questions | grep -q "\*\*$q" && pass "SKILL.md names the question '$q'" || fail "SKILL.md does not name the question '$q'"
-	grep -q "^## [1-7]\. $q" "$SIDECAR_ABS" && pass "QUESTIONS.md carries '$q' as a numbered section" ||
+	grep -q "^## [1-8]\. $q" "$SIDECAR_ABS" && pass "QUESTIONS.md carries '$q' as a numbered section" ||
 		fail "QUESTIONS.md has no numbered section for '$q'"
 done
-sidecar_sections=$(grep -c '^## [1-7]\. ' "$SIDECAR_ABS")
-[ "$sidecar_sections" = 7 ] && pass "QUESTIONS.md has exactly seven numbered sections" || fail "QUESTIONS.md has $sidecar_sections numbered sections, not seven"
+sidecar_sections=$(grep -c '^## [1-9]\. ' "$SIDECAR_ABS")
+[ "$sidecar_sections" = 8 ] && pass "QUESTIONS.md has exactly eight numbered sections" || fail "QUESTIONS.md has $sidecar_sections numbered sections, not eight"
+grep -q '^# The eight questions' "$SIDECAR_ABS" && pass "QUESTIONS.md's title counts eight" || fail "QUESTIONS.md's title does not say eight questions"
 # Each question reads named kinds and fields of the trace. The sidecar is the
 # half the pass executes, so the kinds are held there.
 assert_file_has "$SIDECAR" "ticket.write" "tier calibration reads the tier stamped at write time"
@@ -150,6 +158,74 @@ for v in hit adjusted missed; do
 	assert_file_has "$SIDECAR" "\`$v\`" "aim calibration names the verdict '$v'"
 done
 assert_file_has "$SIDECAR" "re-cut" "aim calibration asks how many landed slices were followed by a re-cut"
+
+# ---------------------------------------------------------------------------
+banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
+# ---------------------------------------------------------------------------
+# Held to the eighth SECTION of the sidecar, flattened to one line: a token
+# that question 1 or 2 happens to carry proves nothing about question 8, and
+# a rule that wraps across two lines is still the rule.
+stamp=$(awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | tr '\n' ' ' | tr -s ' ')
+stamp_has() { # <needle> <message>
+	case "$stamp" in
+	*"$1"*) pass "$2" ;;
+	*) fail "$2 — question 8 does not say: $1" ;;
+	esac
+}
+# What it reads: the tier's stamp and its outcome on ONE event, the finding's
+# severity through the join ADR-0008's amendment of 2026-09-30 fixed.
+stamp_has '`ticket.write`' "stamp calibration reads the ticket as it was published"
+stamp_has '`data.confidence`' "…the confidence the tier was stamped with"
+stamp_has '`data.tier_proposed`' "…and the tier before the quiz, against the published one"
+stamp_has '`finding.raise`' "…the finding as raised, for its severity"
+stamp_has '`finding.dismiss`' "…and the human's dismissal of it"
+stamp_has '`data.where`' "the dismissal joins its raise on the subject and data.where"
+# The rule the PRD's story 14 asks for: an easy field must not hide a hard one.
+stamp_has 'per decision field and per skill' "the question is answered per decision field and per skill"
+stamp_has 'never one number for the chain' "…never as one number for the chain"
+# The oracle clause (#276) is on EVERY row this question prints, in the form
+# the housekeeping checklist gave it.
+stamp_has 'Every row carries the oracle clause' "every row carries the oracle clause"
+stamp_has '— oracle: ' "…in the '— oracle:' form the diary's rows use"
+stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
+stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
+# Honesty point 1: finding.raise has no posted marker, so the denominator is
+# raises on the subject and it OVERCOUNTS what a human could have dismissed.
+stamp_has 'overcounts' "the dismissal denominator is said to overcount"
+stamp_has 'no marker that it was posted' "…and why: a raise carries no marker that it was posted"
+# …and a dismissal is one (data.thread, data.where) pair per subject — a
+# resolved thread and its dismissed review can both emit.
+stamp_has '(`data.thread`, `data.where`) pair' "a dismissal is identified by the (data.thread, data.where) pair"
+stamp_has 'counted once' "…and counted once per subject"
+# Honesty point 2: ticket.write records no pre-quiz label, so the label's
+# override rate is a row that says so — a candidate ticket, never a guess.
+stamp_has '`data.label_confidence`' "the label's confidence is read, under its own key"
+stamp_has 'not computable from the trace today' "the label's override rate is said to be not computable today"
+stamp_has 'a row of its own' "…in a row of its own"
+stamp_has 'never a guess' "…as a candidate ticket, never a guess"
+# Honesty point 3: a thin row prints its counts and the words, not a rate.
+stamp_has 'too few' "a row with too few events says so"
+stamp_has 'instead of a rate' "…instead of printing a rate"
+stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
+# The order file, the description and the procedure count with it.
+questions | tr '\n' ' ' | tr -s ' ' | grep -q 'per decision field and per skill, never one number for the chain' &&
+	pass "SKILL.md's eighth item holds the per-field, per-skill rule" ||
+	fail "SKILL.md's eighth item does not say 'per decision field and per skill, never one number for the chain'"
+questions | tr '\n' ' ' | tr -s ' ' | grep -q 'oracle clause' && pass "…and the oracle clause on every row" ||
+	fail "SKILL.md's eighth item does not name the oracle clause"
+desc=$(sed -n 's/^description: //p' "$SKILL_ABS")
+case "$desc" in
+*'eight fixed questions'*'stamp calibration'*) pass "the frontmatter description counts eight and names stamp calibration" ;;
+*) fail "the frontmatter description does not say 'eight fixed questions' with stamp calibration among them" ;;
+esac
+assert_file_has "$SKILL" "pivot eight times" "the procedure pivots once per question"
+assert_file_has "$SKILL" "data.question=<1..8>" "a candidate note can name the eighth question"
+awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | grep -q '\*\*stamp\*\*' &&
+	pass "routing says what a stamp-calibration ticket would change" || fail "the Routing section has no entry for a stamp"
+for f in "$SKILL" "$SIDECAR"; do
+	assert_file_lacks "$f" "seven questions" "no file of the skill still counts seven"
+	assert_file_lacks "$f" "seven fixed" "…in either spelling"
+done
 
 # ---------------------------------------------------------------------------
 banner "3. It reads by the plain script name, verifies first, and never names the kit wrapper"
@@ -315,6 +391,24 @@ t_assert_skill_in_roster "retro"
 grep -q '`/retro`' "$ROOT/AGENTS.md" && pass "the kit's own manual names /retro" || fail "AGENTS.md never names /retro — the gate would report an orphan"
 grep -q '`/retro`' "$ROOT/README.md" && pass "README names /retro" || fail "README never names /retro"
 grep -q 'tests/retro-skill.test.sh' "$ROOT/README.md" && pass "README names this suite" || fail "README does not name tests/retro-skill.test.sh"
+# Every surface that counts the questions counts eight (ticket #281): the two
+# manuals say it twice each — the chain paragraph and the quick-reference row
+# — and the glossary, README and the provenance file once.
+count_eight() { # <file> <expected> <needle>
+	n=$(tr '\n' ' ' <"$ROOT/$1" | tr -s ' ' | grep -oF "$3" | grep -c .)
+	[ "$n" -ge "$2" ] && pass "$1 says '$3' ($n of $2)" || fail "$1 says '$3' $n time(s), expected $2"
+	tr '\n' ' ' <"$ROOT/$1" | tr -s ' ' | grep -qE 'seven (fixed )?questions' &&
+		fail "$1 still counts seven questions" || pass "$1 nowhere counts seven questions"
+}
+count_eight AGENTS.md 2 'eight fixed questions'
+count_eight constitution/AGENTS.md.template 2 'eight fixed questions'
+count_eight docs/domain-glossary.md 1 'eight fixed questions'
+count_eight README.md 1 'the eight fixed questions'
+count_eight .agents/skills/LICENSE-mattpocock-skills.md 1 'eight questions'
+for f in constitution/AGENTS.md.template docs/domain-glossary.md; do
+	tr '\n' ' ' <"$ROOT/$f" | tr -s ' ' | grep -qF 'stamp calibration' && pass "$f names stamp calibration among the questions" ||
+		fail "$f lists the questions without stamp calibration"
+done
 grep -q '/retro' "$ROOT/.agents/skills/housekeeping/CHECKLIST.md" &&
 	pass "/housekeeping's checklist asks whether a retro ran inside its window (story 12)" ||
 	fail "/housekeeping's checklist never names /retro — the loop has no clock"
