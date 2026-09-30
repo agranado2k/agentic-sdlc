@@ -25,6 +25,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0007](0007-a-review-never-resolves-to-the-sessions-own-model.md) | A reviewer resolves against the session that asks, and never to its own model | Accepted 2026-09-21 — amends ADR-0003 |
 | [0008](0008-decisions-are-traced-to-a-local-append-only-record.md) | The chain's decisions are traced to a local, append-only record the chain never reads | Accepted 2026-09-22 — bound by ADR-0005's non-goal; the policy-file twin is ADR-0003's third instance — amended 2026-09-28 (#263, PR #263): a caller error in `begin` or `end` is exit 2, a trace error never is; amended 2026-09-28 (#271, PR #292): exit 3 is "cannot judge this trace", an unsupported schema; amended 2026-09-30 (#277): the closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding |
 | [0010](0010-a-typed-judge-is-a-task-domain-named-by-its-contract.md) | A typed judge is a task domain named by its contract, in two shapes | Accepted 2026-09-28 — stands under ADR-0003's closed tier vocabulary; 0009 is the open broker record's number (PR #285) |
+| [0011](0011-task-local-contracts-bound-the-lifecycle.md) | Task-local contracts bound the lifecycle | Accepted 2026-09-30 |
 
 ## Conventions
 
