@@ -751,13 +751,11 @@ LESS=$(inline_count "$(payload pulls/12/reviews)")
 	fail "expected $((WHOLE - 1)) inline comment(s) with one location dropped, got $LESS (whole report: $WHOLE)"
 s_assert_err_has 'dropped M-1'
 s_assert_err_has 'docs/untouched.md:4 is not in the diff'
-DROPLINES=$(printf '%s\n' "$S_OUT" | grep -c '^dropped ')
-[ "$DROPLINES" = 1 ] && printf '%s\n' "$S_OUT" | grep '^dropped ' | grep -q 'M-1' &&
-	pass "stdout summarises the drop in one line naming M-1" ||
-	fail "stdout carries $DROPLINES dropped line(s), expected one naming M-1: $S_OUT"
-[ "$(printf '%s\n' "$S_OUT" | wc -l | tr -d ' ')" = 3 ] &&
-	pass "…after the two URLs, and nothing else on stdout" ||
-	fail "stdout is not exactly two URLs and one summary: $S_OUT"
+s_assert_out_is "$(printf '%s\n' \
+	'https://forge.invalid/pull/12#pullrequestreview-1' \
+	'https://forge.invalid/pull/12#issuecomment-1' \
+	'dropped 1 finding(s): M-1 (docs/untouched.md:4 not in diff)')" \
+	"stdout is the two URLs, then one summary line naming M-1, and nothing else"
 
 # ---------------------------------------------------------------------------
 banner "R4. Run it twice: the second run finds the first's marker and posts nothing"
