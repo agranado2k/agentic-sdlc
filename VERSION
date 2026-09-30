@@ -979,8 +979,45 @@
 # scripts/trace-prices.kit.sh and scripts/trace.kit.config.sh are kit-only.
 # The previously landed /worktree-cleanup change is also non-manifest:
 # inspect .agents/skills/worktree-cleanup/SKILL.md through Part 2.
+# 0.28.0 — the trace gets its reader: /retro (PRD #237).
+# NO file joins or leaves the shared layer. ONE skill joins the skills: list,
+# `retro`, and UPDATING.md changes content: a release paragraph, and both
+# worked examples re-pin.
+#   From #254: /retro is the one sanctioned reader of the decision trace
+# (ADR-0008 clause 7 — no chain skill ever reads it). Over a window it answers
+# a fixed set of questions — tier calibration, review signal per sub-agent,
+# recurring failures, diagnosis calibration, spend, chain health and aim
+# calibration — and routes each finding to /to-tickets as a candidate; it
+# never edits a skill, and a recurring failure becomes a rule with a failing
+# check, never a preloaded lessons file (shared invariant §11). It verifies
+# before it reads: a trace this reader cannot judge stops the pass, and a
+# stale price table dates every cost figure it prints. Its report lands
+# outside the tree. With the trace unconfigured the skill has nothing to
+# read and says so, so a consumer who never opened the trace policy file
+# gains a command that is inert until they do.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/retro/SKILL.md and its
+# sidecar .agents/skills/retro/QUESTIONS.md are the skill, bridged at
+# .claude/skills/retro. .agents/skills/housekeeping/SKILL.md and
+# .agents/skills/housekeeping/CHECKLIST.md gain the line that gives the loop
+# its clock: a retro run exists inside the housekeeping window.
+# .agents/skills/LICENSE-mattpocock-skills.md records the skill's provenance
+# (none upstream). constitution/AGENTS.md.template gains the consumer's
+# quick-reference row and chain sentence; the kit's own manual gains the
+# same inside ADR-0004's 350-line budget. README.md names the skill and its
+# suite; docs/domain-glossary.md defines the retrospective's terms;
+# bootstrap.sh strips tests/retro-skill.test.sh with the rest of tests/;
+# .github/workflows/kit-ci.yml runs it.
+#   Already landed since 0.27.0, outside Part 1 and named here so the recipe
+# can find it: a resumed session's usage is counted once. The non-manifest
+# adapters/claude-code/hooks/session-end.sh, hooks/hook.lib.sh and
+# hooks/transcript-usage.mjs now record how far each usage event read and
+# count only what came after that anchor, so a session resumed with its id
+# kept no longer totals its first run twice; an anchor the transcript no
+# longer holds is reported as drift, never summed. Dormant for a consumer
+# who wired no hooks.
 
-shared-layer: 0.27.0
+shared-layer: 0.28.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
