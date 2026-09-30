@@ -224,6 +224,27 @@ assert_file_has "$SKILL" "the comment URL"
 assert_file_has "$SKILL" "never post around a refusal"
 # Hand posting is no longer the default for a dispatched reviewer.
 assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
+# ... and the absence of one old sentence guards nothing a rewording cannot
+# walk around, so the POSITIVE rule is asserted: the broker is the only way a
+# dispatched report lands, the header's "post them yourself" belongs to the
+# in-session subagent, no sentence anywhere offers hand posting to a dispatched
+# reviewer, and whatever the skill says about posting the captured report by
+# hand sits after the no-broker clause and nowhere else.
+assert_file_has "$SKILL" "lands through the **broker** and no other way"
+assert_file_has "$SKILL" "post them yourself only when that subagent cannot reach the forge"
+if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$SKILL_ABS"; then
+	fail "a sentence offers hand posting to a dispatched reviewer — the broker is the only way its report lands"
+else
+	pass "no sentence offers hand posting to a dispatched reviewer"
+fi
+_nobroker=$(offset_of 'No broker named by the root manual')
+_hand=$(LIT='the captured report' awk 'BEGIN { lit = ENVIRON["LIT"] }
+	{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "$SKILL_ABS")
+if [ -n "$_nobroker" ] && { [ -z "$_hand" ] || [ "$_hand" -gt "$_nobroker" ]; }; then
+	pass "the captured report is spoken of only after the no-broker clause (offset $_nobroker)"
+else
+	fail "the captured report is handled before, or without, the no-broker clause — nobroker='$_nobroker' first mention='$_hand'"
+fi
 # The shipped skill names no kit-only file: bootstrap deletes them, and a
 # consumer following the line would run nothing.
 assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
