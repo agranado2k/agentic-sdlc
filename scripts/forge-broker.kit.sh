@@ -42,11 +42,15 @@
 #      `REVIEWED` that contradicts `--commit` is the same failure. What the
 #      worker did not say, the broker does not write: absence is published
 #      only where the report stated it.
-#   3. Ask the forge for the PR head. In this release the reviewed commit
-#      must BE the head; anything else is exit 75 with a one-line reason,
-#      and the finer staleness cases (commits added after the review, a
-#      rewritten branch) are a later ticket's.
-#   4. Ask the forge for the PR diff and check every finding's `path:line`
+#   3. Ask the forge for the PR head and, when the reviewed commit is not it,
+#      the PR's commit list. Reviewed == head posts as ever. Reviewed in the
+#      list but behind the head (commits were added) posts ANCHORED to the
+#      reviewed commit — `commit_id` is it, the review body's first line
+#      names it and the current head, stdout carries a `drift:` line — and
+#      exits 0. Reviewed not in the list (the branch was rewritten) posts
+#      nothing and is exit 75: re-run the review.
+#   4. Ask the forge for the diff that was reviewed — the PR diff, or on
+#      drift the base...reviewed diff — and check every finding's `path:line`
 #      against its right-hand side. A finding whose location is not in the
 #      diff is DROPPED from the inline comments and named on stderr — the
 #      forge refuses a review that cites a line outside the diff, and one
@@ -60,20 +64,21 @@
 #   6. Perform the two operations: one review with `event` COMMENT and the
 #      findings as inline comments, one top-level comment with the behavior
 #      confirm-list. Print the two URLs on stdout, one per line, then one
-#      `dropped …` line when anything was withheld.
+#      `dropped …` line when anything was withheld, then one `drift: …` line
+#      when the review was anchored behind the head.
 #   7. Emit one `review.verdict` trace event, subject `pr:#<N>`, the verdict
 #      as outcome, the model and agent harness when the caller passed them.
 #      Never load-bearing (ADR-0008 clause 4).
 #
-# --dry-run performs the READS (head, diff) and prints both payloads exactly
+# --dry-run performs the READS (head, commits, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
 #
 # STREAMS AND EXIT STATUSES. stdout is the answer: URLs, one per line, then
-# the dropped summary; under --dry-run, the two JSON payloads. Every reason is
+# the dropped and drift lines; under --dry-run, the two JSON payloads. Every reason is
 # on stderr, prefixed `forge-broker:`. Exit 0 posted, or already posted; 2 a
 # usage error; 65 (EX_DATAERR) a report that fails the contract; 69
 # (EX_UNAVAILABLE) no forge CLI, or a forge call that failed; 75 (EX_TEMPFAIL)
-# the reviewed commit is not the head, re-run the review; 78 (EX_CONFIG) a
+# the reviewed commit is no longer in the PR, re-run the review; 78 (EX_CONFIG) a
 # policy file that is missing, or does not allow an operation this script
 # performs.
 #
@@ -103,7 +108,7 @@ usage: sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha
   --dry-run  read the PR, print both payloads as they would be sent, post nothing
   --commit   the sha the session recorded before dispatching; must equal the report's REVIEWED line
   --model, --harness   recorded on the trace event, nothing else
-exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract · 69 no forge CLI · 75 reviewed commit is not the head · 78 policy
+exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract · 69 no forge CLI · 75 reviewed commit no longer in the PR · 78 policy
 EOF
 	exit "$EX_USAGE"
 }
@@ -324,20 +329,55 @@ if [ -n "$COMMIT" ]; then
 	esac
 fi
 
-# --- 3. the head ----------------------------------------------------------------------
+# --- 3. the head, and the commit the review is anchored to -----------------------
 HEAD=$(gh pr view "$PR" --json headRefOid --jq .headRefOid 2>"$TMP/gh.err") || {
 	sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
 	die "$EX_UNAVAILABLE" "the forge did not answer for PR #$PR"
 }
 HEAD=$(printf '%s' "$HEAD" | tr -d ' \r\n' | tr 'A-F' 'a-f')
 [ -n "$HEAD" ] || die "$EX_UNAVAILABLE" "the forge returned no head sha for PR #$PR"
-[ "$REVIEWED" = "$HEAD" ] || die "$EX_TEMPFAIL" "reviewed commit $REVIEWED is not the head of PR #$PR (head is $HEAD); re-run the review against the current head — nothing posted"
+# Three cases, decided by the PR's own commit list (PRD #261, ADR-0009's
+# amendment of clause 6). The review is always anchored to the commit it
+# REVIEWED, never to whatever the head is at post time:
+#   head      — post as ever;
+#   in list   — commits were added since: post at the reviewed commit, check
+#               locations against base...reviewed, and say so first in the body;
+#   not there — the branch was rewritten: the reviewed code no longer exists
+#               on the PR, and posting would not make it current. Exit 75.
+# The forge lists at most 250 commits of a PR; a reviewed commit beyond that
+# reads as "not there", which fails safe — a re-run, never a misplaced review.
+DRIFT=
+if [ "$REVIEWED" != "$HEAD" ]; then
+	gh api "repos/{owner}/{repo}/pulls/$PR/commits" --paginate --jq '.[].sha' >"$TMP/commits" 2>"$TMP/gh.err" || {
+		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+		die "$EX_UNAVAILABLE" "the forge did not list the commits of PR #$PR"
+	}
+	tr 'A-F' 'a-f' <"$TMP/commits" | tr -d ' \r' | grep -qx "$REVIEWED" ||
+		die "$EX_TEMPFAIL" "reviewed commit $REVIEWED is not in PR #$PR (head is $HEAD) — the branch was rewritten; re-run the review. Nothing posted"
+	DRIFT=$HEAD
+fi
 
-# --- 4. locations against the diff -------------------------------------------------------
-gh pr diff "$PR" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
-	sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
-	die "$EX_UNAVAILABLE" "the forge did not return the diff of PR #$PR"
-}
+# --- 4. locations against the diff that was reviewed ----------------------------------------
+if [ -z "$DRIFT" ]; then
+	gh pr diff "$PR" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
+		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+		die "$EX_UNAVAILABLE" "the forge did not return the diff of PR #$PR"
+	}
+else
+	# The diff the worker saw: base...reviewed, three dots, as the PR's own
+	# diff is computed — so a location valid at the reviewed commit is kept,
+	# and one the later commits added is not claimed for it.
+	BASE=$(gh pr view "$PR" --json baseRefName --jq .baseRefName 2>"$TMP/gh.err") || {
+		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+		die "$EX_UNAVAILABLE" "the forge did not name the base branch of PR #$PR"
+	}
+	BASE=$(printf '%s' "$BASE" | tr -d '\r\n')
+	[ -n "$BASE" ] || die "$EX_UNAVAILABLE" "the forge returned no base branch for PR #$PR"
+	gh api -H 'Accept: application/vnd.github.diff' "repos/{owner}/{repo}/compare/$BASE...$REVIEWED" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
+		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
+		die "$EX_UNAVAILABLE" "the forge did not return the diff from $BASE to $REVIEWED"
+	}
+fi
 # The right-hand side of every hunk, as `path<TAB>start<TAB>end`; a finding's
 # line must sit inside one of its file's ranges.
 #
@@ -457,7 +497,15 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 	fi
 done
 {
-	printf '%s\n' "$MARKER"
+	# The drift line shares the marker's line: the marker must open the body
+	# (step 5 finds it there), and the drift line must be the first thing a
+	# reader sees. Plain text, because the rest of a line that opens with an
+	# HTML comment is not rendered as markdown.
+	if [ -n "$DRIFT" ]; then
+		printf '%s Reviewed at %s; the head has since moved to %s, so comments on lines changed since show as outdated.\n' "$MARKER" "$REVIEWED" "$DRIFT"
+	else
+		printf '%s\n' "$MARKER"
+	fi
 	printf '%s\n\n' "$VERDICT_LINE"
 	printf '## Axis 1 — Standards\n'
 	cat "$TMP/body.md"
@@ -483,6 +531,7 @@ if [ "$DRY" = 1 ]; then
 	printf 'POST %s\n' "$COMMENT_EP"
 	cat "$TMP/comment.json"
 	[ "$NDROPPED" = 0 ] || printf 'dropped %s finding(s): %s\n' "$NDROPPED" "$DROPPED"
+	[ -z "$DRIFT" ] || printf 'drift: reviewed %s, head %s\n' "$REVIEWED" "$DRIFT"
 	note "dry run — nothing posted, nothing traced"
 	exit 0
 fi
@@ -529,6 +578,7 @@ else
 fi
 printf '%s\n%s\n' "$REVIEW_URL" "$COMMENT_URL"
 [ "$NDROPPED" = 0 ] || printf 'dropped %s finding(s): %s\n' "$NDROPPED" "$DROPPED"
+[ -z "$DRIFT" ] || printf 'drift: reviewed %s, head %s\n' "$REVIEWED" "$DRIFT"
 
 # --- 7. the trace ------------------------------------------------------------------------------
 # Never load-bearing: the review landed whatever the trace says (ADR-0008

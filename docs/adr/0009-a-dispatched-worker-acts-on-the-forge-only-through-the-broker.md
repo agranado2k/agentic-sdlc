@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record)
 
 ## Context and problem statement
 
@@ -193,3 +193,29 @@ Chosen: **option 1**.
   "Agent trust boundary", `/review-pr`'s AST06 finding.
 - The sandbox facts above were checked against the installed codex CLI on
   2026-09-23 and should be re-checked when that CLI moves.
+
+### Amendment, 2026-09-30 — the reserved staleness cases, decided (#268)
+
+Clause 6 reserved two cases and their exit statuses; #268 fills them in
+without widening anything, so the record is amended in place. The reviewed
+commit still decides where a review lands, and the head at post time never
+does. The broker fetches the PR head and, when the reviewed commit is not
+it, the PR's own commit list:
+
+- **Reviewed is the head** — post as clause 6 always said.
+- **Reviewed is in the list, behind the head** (commits were added after the
+  review) — post with `commit_id` set to the reviewed commit, check every
+  location against the diff from the base to that commit rather than the
+  PR's current diff, and open the review body with one line naming the
+  reviewed commit and the current head, so the forge's own outdated marking
+  is explained. The line shares the first line with clause 8's marker, which
+  still opens the body. Exit 0; stdout adds one `drift: …` line after the
+  URLs (clause 9).
+- **Reviewed is not in the list** (the branch was rewritten) — post nothing,
+  name the commit and the PR on stderr, exit 75. The session re-runs the
+  review.
+
+So clause 7's "75 the reviewed commit is not the head" now reads "75 the
+reviewed commit is no longer in the PR". The forge lists at most 250 commits
+of a PR; a reviewed commit beyond that reads as "not in the list", which
+fails toward a re-run, never toward a misplaced review.
