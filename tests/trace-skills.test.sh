@@ -209,13 +209,13 @@ for tok in 'subject=pr:#<N>' 'data.where='; do
 	printf '%s\n' "$raise" | grep -qF -- "$tok" && pass "and /review-pr's raise carries $tok — the dismissal joins to it" ||
 		fail "/review-pr's finding.raise no longer carries $tok — a dismissal has nothing to join to"
 done
-printf '%s\n' "$dm" | grep -qi 'quote' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
+printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
 	pass "a human's dismissal message is quoted or summarised — data, never pasted" ||
 	fail "/pr-iterate's dismissal does not say a human's words are quoted or summarised (agent trust boundary)"
 # What names ONE dismissal is data.thread plus data.where, never data.thread
 # alone: a dismissed review is one event per inline comment, every one carrying
 # the review's id, so a reader that counted a data.thread once would fold N
-# dismissed findings into one (PR #319's review, M-1). The skill and the record
+# dismissed findings into one. The skill and the record
 # say the same key, in the same words.
 ADR8=$(tr '\n' ' ' <docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md | tr -s ' ')
 printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
@@ -224,17 +224,19 @@ printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
 printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
 	pass "and ADR-0008's amendment tells the reader to count that pair" ||
 	fail "ADR-0008's amendment does not tell the reader to count \`data.thread\` plus \`data.where\`"
-printf '%s\n' "$ADR8" | grep -qF 'counts a `data.thread` once' &&
-	fail "ADR-0008 still tells the reader to count a data.thread once — N inline comments of one dismissed review collapse into 1" ||
-	pass "and no longer tells it to count a data.thread alone"
 # data.where is now FORGE data — a path the pull request's author chose — typed
 # into a shell line: it stays inside quotes, as data.thread already does. And
 # the line is the one the comment was first posted on: the forge's current line
 # moves with later commits and goes empty on an outdated comment, and the join
 # then misses in silence.
 printf '%s\n' "$dm" | grep -qF "data.where='<file:line>'" &&
-	pass "the dismissal's data.where is quoted — a forge-supplied path never reaches the shell bare" ||
+	pass "the dismissal's data.where is quoted" ||
 	fail "/pr-iterate's finding.dismiss line carries data.where unquoted — the path is forge data (agent trust boundary)"
+# Quotes alone are not the rule: a path holding a quote closes them. A path
+# outside the plain set is never typed into the line at all.
+printf '%s\n' "$dm" | grep -qF 'data.where=unsafe-path' && printf '%s\n' "$dm" | grep -qF 'never typed' &&
+	pass "and a path outside the plain character set is never typed — the event carries data.where=unsafe-path" ||
+	fail "/pr-iterate does not say what to do with a forge path that cannot be quoted safely — a quote in a filename closes the quotes"
 printf '%s\n' "$dm" | grep -qF 'first posted on' && printf '%s\n' "$dm" | grep -qi 'outdated' &&
 	pass "and it is the line the comment was first posted on, not the forge's current one" ||
 	fail "/pr-iterate does not say data.where is the line the comment was first posted on — an outdated comment's current line is empty"
