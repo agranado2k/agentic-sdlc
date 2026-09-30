@@ -311,6 +311,17 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
     vendor; "estimate" — the arithmetic is exact, it is the price that can be
     stale.
+- **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
+  trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
+  window — by default since its own last run end — it answers seven fixed
+  questions (tier calibration, review signal per sub-agent, recurring
+  failures, diagnosis calibration, spend, chain health, aim calibration),
+  writes its report outside the tree, and routes every finding to
+  `/to-tickets` as a candidate; it never fixes and never edits a skill. A
+  recurring failure becomes a rule with a failing check (shared invariant
+  §11). Ref: PRD #237.
+  - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
+    "lessons file" (the thing §11 forbids it from writing).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
   worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
   removed by the dispatcher's own trap — and, when a dispatch dies before
