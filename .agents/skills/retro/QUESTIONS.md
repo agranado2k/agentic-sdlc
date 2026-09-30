@@ -256,7 +256,7 @@ be nobody's. An event none of the three names goes on a row named
   earlier review's raise at that line is not paired; it stays in the
   denominator. A raise is dismissed once, however many dismissals pair with
   it. One dismissal is a (`data.thread`, `data.where`) pair, counted once per
-  subject — two iterations that saw the same closed thread emit the same
+  subject and read at its earliest `ts` — two iterations that saw the same closed thread emit the same
   pair; a thread resolved and its review dismissed emit two pairs at one
   `data.where`, which pair with the same raises and move no count. A
   dismissal that pairs with no raise — a third party's review, a path the
@@ -269,7 +269,9 @@ be nobody's. An event none of the three names goes on a row named
   that is not a pull request, where nothing is posted for a human to close,
   or at a `data.where` the dismissal's emitter would not type. The report says so under the severity rows,
   every time: the rate is a lower bound on the share of posted findings a
-  human dismissed, not a measurement of it.
+  human dismissed, not a measurement of it. A row where raises shared a
+  dismissal is not even that: one closed thread may have answered one of
+  them, the numerator counts them all, and the row says so beside its count.
 - **Every row carries the oracle clause** — the one `/housekeeping`'s
   checklist asks for and the glossary defines (`docs/domain-glossary.md`,
   Oracle), naming who wrote the test fixtures, when, against which version,

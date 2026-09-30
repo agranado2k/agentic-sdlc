@@ -381,6 +381,13 @@ case "$stamp" in
 *'carries the question to the next retro'*) fail "question 8 still says a thin window 'carries the question to the next retro' — every retro asks all eight" ;;
 *) pass "no sentence restating that the next retro asks the question again" ;;
 esac
+# Second local review of PR #329, H-2 and M-5: raises that share a dismissal
+# are ALL counted dismissed though one closed thread may have answered one of
+# them, so on such a row the numerator overcounts too and "a lower bound" is
+# false; and a pair emitted twice is read at its earliest ts, or a raise
+# landing between the two emits changes what it pairs with.
+stamp_has 'A row where raises shared a dismissal is not even that' "a row where raises shared a dismissal is said not to be a lower bound"
+stamp_has 'read at its earliest `ts`' "a pair emitted more than once is read at its earliest ts"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 # Held to the EIGHTH ITEM, not the section: a phrase another item carries
