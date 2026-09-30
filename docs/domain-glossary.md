@@ -251,7 +251,12 @@ Grouped by the seam each term belongs to. Entry shape:
   unknown tier), the resolver's words where they apply, an outcome, a
   one-line reason, raw token counts, and an open `data` map of strings.
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
-  rewrites one — a correction is a new event.
+  rewrites one — a correction is a new event. A finding has three kinds:
+  `finding.raise` when a review reports it, `finding.triage` for the
+  session's own decision on it, and `finding.dismiss` when a human closes a
+  posted one with no commit answering it — on the raise's subject, joined to
+  it by the `file:line` both carry as `data.where` (ADR-0008, amended
+  2026-09-30).
   - _Avoid_: "entry", "record" — both are used for the decision records.
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
