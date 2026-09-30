@@ -886,35 +886,52 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "19. The adapter's blob store IS the shared script's"
+banner "19. The adapter keeps no blob store of its own: it asks the shared script's"
 # ---------------------------------------------------------------------------
-# THE COUPLING CHECK, and the reason it is here rather than in a comment. One
-# `emit` carries one blob (scripts/trace.sh refuses a second), and a tool call
-# has two payloads — so this hook lands them itself rather than spending an
-# extra event per payload. Two writers of one store is a coupling, so the
-# assertion is not "a file appeared" but "the shared script, handed the same
-# bytes, stores them under the same name at the same path". If trace.sh ever
-# renames or re-lays-out the store, this goes red instead of the trace quietly
-# growing a second store nobody reads.
+# A tool call has two payloads and one event, and `emit` carries one blob — so
+# the first cut of this hook landed both payloads itself, a second writer of a
+# content-addressed store with its own staging, mode and hashing, and the review
+# of PR #295 found three defects in exactly that duplication. Ticket #306 gave
+# the shared script a `blob` subcommand (store, print `<hash> <bytes>`, write no
+# event), and the hook now calls it. Two halves, both asserted: the hook's names
+# are what `blob` prints for the same bytes, and nothing under the adapter still
+# hashes a payload or names the store's layout.
 if [ "$HAVE_NODE" = 1 ]; then
 	new_trace
 	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
-	IH=$(hash_of "$TIN")
-	HOOKREL=$(blob_file "$IH")
-	HOOKREL=${HOOKREL#"$TDIR"/}
+	T19=$(ev_of tool.use | sed -n '1p')
 	OWN=$(mktemp -d "$SCRATCH/trace-own.XXXXXX") || exit 2
 	printf '%s' "$TIN" >"$SCRATCH/tool-input-252"
-	env TRACE_DIR="$OWN" TRACE_CONFIG="$KIT/scripts/trace.config.sh" \
-		sh "$TRACE" emit kind=note reason='the same payload, stored by the shared script' \
-		--blob "$SCRATCH/tool-input-252" >/dev/null 2>&1
+	OWNSAYS=$(env TRACE_DIR="$OWN" TRACE_CONFIG="$KIT/scripts/trace.config.sh" \
+		sh "$TRACE" blob "$SCRATCH/tool-input-252" 2>/dev/null)
+	[ -n "$OWNSAYS" ] && [ "${OWNSAYS%% *}" = "$(str "$T19" input_blob)" ] &&
+		pass "the hook's input_blob is the name \`trace.sh blob\` prints for the same bytes: ${OWNSAYS%% *}" ||
+		fail "the two disagree — the hook recorded '$(str "$T19" input_blob)', trace.sh blob printed '$OWNSAYS'"
 	OWNREL=$(find "$OWN/blobs" -type f 2>/dev/null | sed -n '1p')
 	OWNREL=${OWNREL#"$OWN"/}
+	HOOKREL=$(blob_file "$(str "$T19" input_blob)")
+	HOOKREL=${HOOKREL#"$TDIR"/}
 	[ -n "$OWNREL" ] && [ "$OWNREL" = "$HOOKREL" ] &&
-		pass "scripts/trace.sh stores the same payload at the same path: $OWNREL" ||
-		fail "the two stores disagree — the hook wrote '$HOOKREL', trace.sh wrote '$OWNREL'"
+		pass "and it sits at the same path under both trace directories: $OWNREL" ||
+		fail "the hook's blob is at '$HOOKREL', trace.sh stored it at '$OWNREL'"
 else
 	echo "  skip  node is not on PATH — the coupling leg needs the payload reader"
 fi
+# The store code is GONE from the adapter, not merely unused: the old helper
+# or a `blobs/` path anywhere under hooks/, or a hash in the tool hook, is a
+# second writer waiting to drift again. (hook.lib.sh still hashes one thing —
+# the toplevel path the pointer file is keyed by, which is hook_pointer's
+# coupling and not a payload.)
+# `-e` twice rather than a BRE `\|`, which is a GNU extension: a grep without
+# it would match nothing, and nothing is this check's PASS. For the same reason
+# the files it reads must exist before an empty answer means anything.
+[ -f "$HOOKS/tool-post.sh" ] && [ -f "$HOOKS/hook.lib.sh" ] && [ -f "$HOOKS/tool-payload.mjs" ] ||
+	fail "the store-code check cannot read the adapter's hooks under $HOOKS"
+STORE_CODE=$(grep -n -e 'blobs/' -e 'hook_blob' "$HOOKS"/*.sh "$HOOKS"/*.mjs
+	grep -n 'git.*hash-object' "$HOOKS/tool-post.sh")
+[ -z "$STORE_CODE" ] &&
+	pass "no file under the adapter's hooks lands a payload, names the store's layout, or hashes a tool payload" ||
+	fail "the adapter still carries blob store code: $STORE_CODE"
 
 # ---------------------------------------------------------------------------
 banner "20. A tool that failed says so, and its error is the result"
@@ -1212,6 +1229,25 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "with no blob landed from outside the trace's own filesystem" ||
 		fail "a blob was landed from foreign scratch: $(find "$TDIR/blobs" -type f)"
 	rm -f "$TDIR/tmp"
+
+	# A STORE THAT REFUSES IS ONE fail EVENT (review of PR #317). Since #306 the
+	# hook stages fine and it is the shared script's `blob` that is refused, which
+	# answers with nothing on stdout — so `blobs` is made a FILE here, the
+	# cheapest way to fail the store's own mkdir while leaving tmp/ and the
+	# event file writable.
+	new_trace
+	: >"$TDIR/blobs"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	[ "$S_STATUS" = 0 ] && pass "a blob store that refuses the bytes exits 0" ||
+		fail "the hook exited $S_STATUS"
+	[ "$(ev_of tool.use | wc -l | tr -d ' ')" = 1 ] &&
+		[ "$(str "$(ev_of tool.use | sed -n '1p')" outcome)" = fail ] &&
+		pass "and records exactly one tool.use outcome=fail rather than an event naming blobs nobody can open" ||
+		fail "expected one fail event, got: $(events)"
+	[ -z "$(find "$TDIR/tmp" -mindepth 1 2>/dev/null)" ] &&
+		pass "and sweeps its scratch and the shared script's" ||
+		fail "scratch survives under $TDIR/tmp: $(find "$TDIR/tmp" -mindepth 1)"
+	rm -f "$TDIR/blobs"
 else
 	echo "  skip  node is not on PATH — the review's regression legs need the payload reader"
 fi

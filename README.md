@@ -565,8 +565,10 @@ skeleton (K0).
   `end` rewrite that stack and both by rename, fifty parallel emits all land
   and all verify while the stack stays untouched, an event whose write would
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
-  is stored once under git's own hash of the bytes that were stored, and
-  `verify` refuses a schema it does not know.
+  is stored once under git's own hash of the bytes that were stored — by
+  `blob` too, which prints that name and byte count, writes no event and
+  leaves the stored file owner-only — and `verify` refuses a schema it does
+  not know.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -616,7 +618,8 @@ skeleton (K0).
   switch of its own: with `TRACE_TOOLS` empty in the shipped policy file the
   post-tool hook writes nothing at all, and with it set one tool call becomes
   one `tool.use` event whose two blob names are git's own hash of the payload's
-  input and result — a 20 KB input still leaves the line inside the 4000-byte
+  input and result, stored by the shared script's `blob` with no store code
+  left in the adapter — a 20 KB input still leaves the line inside the 4000-byte
   cap, a failed call reads `outcome=fail` with the agent harness's error as its
   result, a tool result that quotes another `session_id` does not re-file the
   event, and a `tool_use_id` the trace could never match is one `fail` event
