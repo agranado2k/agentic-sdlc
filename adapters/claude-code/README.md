@@ -142,7 +142,9 @@ silent no-op, which is the shipped default and a working state.
 
 Every tool call can be captured too, as one `tool.use` event carrying the tool's
 name, the call's id, the first 512 bytes of its input on the line, and the FULL
-input and FULL result in the blob store with the result's size. Two more events
+input and FULL result in the blob store with the result's size — each stored
+by `sh scripts/trace.sh blob`, which prints the name the event carries, so the
+adapter keeps no store of its own. Two more events
 wire it, both to the same script — the only difference between them is the
 outcome it records:
 
