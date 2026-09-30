@@ -557,6 +557,16 @@ t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" blob "$BPAY"
 assert_status 2 "blob naming no file is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$SCRATCH/no-such-payload"
 assert_status 2 "blob with no argument is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob
 assert_status 2 "blob with two arguments is exit 2 — one payload, one name" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$BPAY" "$BPAY"
+# A dash-led argument is refused as an OPTION, with the usage text, even when
+# a file of that name exists — without the refusal it reached `cat` as a flag
+# and died naming the wrong problem (review of PR #317). Such a file is
+# reached as ./-x.
+mkdir -p "$SCRATCH/dashdir" && printf 'x' >"$SCRATCH/dashdir/-x"
+t_run_split env TRACE_CONFIG=$BLON sh -c 'cd "$1" && exec sh "$2" blob -x' probe "$SCRATCH/dashdir" "$TRACE"
+[ "$S_STATUS" = 2 ] && case $S_ERR in *'usage:'*) true ;; *) false ;; esac &&
+	pass "blob -x is exit 2 with the usage text — an option is not a payload, and blob has none" ||
+	fail "blob -x: status $S_STATUS, stderr '$S_ERR'"
+assert_status 0 "and the same file reached as ./-x is stored" -- env TRACE_CONFIG="$BLON" sh -c 'cd "$1" && exec sh "$2" blob ./-x' probe "$SCRATCH/dashdir" "$TRACE"
 
 banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"

@@ -922,8 +922,13 @@ fi
 # second writer waiting to drift again. (hook.lib.sh still hashes one thing —
 # the toplevel path the pointer file is keyed by, which is hook_pointer's
 # coupling and not a payload.)
-STORE_CODE=$(grep -n 'blobs/\|hook_blob' "$HOOKS"/*.sh "$HOOKS"/*.mjs 2>/dev/null
-	grep -n 'git.*hash-object' "$HOOKS/tool-post.sh" 2>/dev/null)
+# `-e` twice rather than a BRE `\|`, which is a GNU extension: a grep without
+# it would match nothing, and nothing is this check's PASS. For the same reason
+# the files it reads must exist before an empty answer means anything.
+[ -f "$HOOKS/tool-post.sh" ] && [ -f "$HOOKS/hook.lib.sh" ] && [ -f "$HOOKS/tool-payload.mjs" ] ||
+	fail "the store-code check cannot read the adapter's hooks under $HOOKS"
+STORE_CODE=$(grep -n -e 'blobs/' -e 'hook_blob' "$HOOKS"/*.sh "$HOOKS"/*.mjs
+	grep -n 'git.*hash-object' "$HOOKS/tool-post.sh")
 [ -z "$STORE_CODE" ] &&
 	pass "no file under the adapter's hooks lands a payload, names the store's layout, or hashes a tool payload" ||
 	fail "the adapter still carries blob store code: $STORE_CODE"
@@ -1208,9 +1213,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 	# trace directory would make the landing a copy across filesystems, which
 	# can expose half a payload at the address its whole content will have. So
 	# when the trace's own scratch cannot be made, the answer is the recorded
-	# failure, never a staging area somewhere else — the hook's, and since
-	# ticket #306 the shared script's `blob` too, which stages under the same
-	# tmp/ and so refuses the same way. `tmp` is made a FILE here,
+	# failure, never a staging area somewhere else. `tmp` is made a FILE here,
 	# which is the cheapest way to fail one mkdir while leaving the event file
 	# writable.
 	new_trace
@@ -1226,6 +1229,25 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "with no blob landed from outside the trace's own filesystem" ||
 		fail "a blob was landed from foreign scratch: $(find "$TDIR/blobs" -type f)"
 	rm -f "$TDIR/tmp"
+
+	# A STORE THAT REFUSES IS ONE fail EVENT (review of PR #317). Since #306 the
+	# hook stages fine and it is the shared script's `blob` that is refused, which
+	# answers with nothing on stdout — so `blobs` is made a FILE here, the
+	# cheapest way to fail the store's own mkdir while leaving tmp/ and the
+	# event file writable.
+	new_trace
+	: >"$TDIR/blobs"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	[ "$S_STATUS" = 0 ] && pass "a blob store that refuses the bytes exits 0" ||
+		fail "the hook exited $S_STATUS"
+	[ "$(ev_of tool.use | wc -l | tr -d ' ')" = 1 ] &&
+		[ "$(str "$(ev_of tool.use | sed -n '1p')" outcome)" = fail ] &&
+		pass "and records exactly one tool.use outcome=fail rather than an event naming blobs nobody can open" ||
+		fail "expected one fail event, got: $(events)"
+	[ -z "$(find "$TDIR/tmp" -mindepth 1 2>/dev/null)" ] &&
+		pass "and sweeps its scratch and the shared script's" ||
+		fail "scratch survives under $TDIR/tmp: $(find "$TDIR/tmp" -mindepth 1)"
+	rm -f "$TDIR/blobs"
 else
 	echo "  skip  node is not on PATH — the review's regression legs need the payload reader"
 fi
