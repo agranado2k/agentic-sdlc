@@ -213,13 +213,15 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Typed return** — what a delegated untrusted read sends back: a **declared
   shape** of bare decision lines from the vocabularies plus one **evidence**
   line quoting a span of what was read, and nothing else. The caller checks
-  every return before acting — the shape itself, then the values through
-  `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole and
-  reported, never acted on. Free text in a return is a finding, not a result.
+  every return before reading it — the shape itself, then the values through
+  `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole,
+  never printed, never acted on, and reported by comment and position only.
+  What reaches the session is the declared fields and one verified quoted
+  span, which is untrusted data still. Free text in a return is a finding, not a result.
   `/pr-iterate`'s read of review-comment bodies is the first:
-  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the forge
-  states, is stamped by the caller and never asked of the reader. Ref: PRD
-  #273, #278.
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the
+  forge states, is stamped by the caller and never asked of the reader. Ref:
+  PRD #273, #278.
   - _Avoid_: "summary", "report" for what the subagent returns — prose is the
     channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
