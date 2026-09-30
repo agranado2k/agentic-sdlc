@@ -561,10 +561,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1911 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 1920 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2065 insertions(+), 1 deletion(-)
+ 3 files changed, 2074 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1281,6 +1281,15 @@ Existing consumers can inspect those files in the kit, but the lifecycle wave's
 final release supplies their adoption recipe. This slice introduces no scope,
 review, delivery or resume state. Its release bump keeps this revised recipe
 reachable while the operational mechanisms remain outside the manifest.
+The tag also includes already-landed trace changes outside Part 1:
+`scripts/trace.sh` reports unsupported schemas distinctly and warns on stale
+pricing when configured. `adapters/claude-code/README.md` and its
+`hooks/hook.lib.sh`, `hooks/tool-payload.mjs`, and `hooks/tool-post.sh` add opt-in
+tool-call capture with private JSON blobs. Inspect and adopt these through
+Part 2, preserving your trace policy; wiring `PostToolUse` and
+`PostToolUseFailure` and enabling `TRACE_TOOLS` are deliberate consumer choices.
+Never copy the kit's `scripts/trace.kit.config.sh` or
+`scripts/trace-prices.kit.sh` as consumer policy.
 
 **Arriving from 0.25.0 or older, nothing in the layer changes shape — one
 worked example re-pins.** The kit's own manual and the manual template you
