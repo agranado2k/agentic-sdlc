@@ -270,7 +270,30 @@ EOF
 # The oracle clause (#276) is on EVERY row this question prints, in the form
 # the housekeeping checklist gave it.
 stamp_has 'Every row carries the oracle clause' "every row carries the oracle clause"
-stamp_has '— oracle: ' "…in the '— oracle:' form the diary's rows use"
+# M-3 (review of PR #329): the clause has ONE wording, the housekeeping
+# checklist's, and the glossary's Oracle entry names the same four parts.
+# Question 8 paraphrased it ("who wrote the oracle this number was measured
+# against"), which is a second form of a rule the kit states once. The
+# needle is read out of the checklist, so the two cannot drift apart.
+oracle_form='who wrote the test fixtures, when, against which version, and what it was compared to: `— oracle: <who>, <when>, <version>, <comparator>`'
+case "$(flat <"$ROOT/.agents/skills/housekeeping/CHECKLIST.md")" in
+*"$oracle_form"*) pass "/housekeeping's checklist states the oracle clause's form" ;;
+*) fail "/housekeeping's checklist no longer states the oracle clause in the words this suite holds question 8 to — move both together" ;;
+esac
+stamp_has "$oracle_form" "…in the checklist's own words, not a paraphrase of them"
+oracle_entry=$(awk '/^- \*\*Oracle\*\*/ { on = 1 } on && /^- \*\*/ && !/^- \*\*Oracle\*\*/ { exit } on && /^## / { exit } on' "$ROOT/docs/domain-glossary.md" | flat)
+case "$oracle_entry" in
+*'who wrote the test fixtures, when'*) pass "the glossary's Oracle entry opens on the same parts" ;;
+*) fail "the glossary's Oracle entry no longer says 'who wrote the test fixtures, when'" ;;
+esac
+# A calibration row has no fixtures: a human's verdict graded the stamp. The
+# glossary carries that sense, and question 8 says who stands in the clause.
+case "$oracle_entry" in
+*"graded by a human's verdict"*) pass "…and carries the sense a calibration row uses: graded by a human's verdict" ;;
+*) fail "the glossary's Oracle entry defines only fixtures — a calibration row's oracle, a human's verdict, has no sense there" ;;
+esac
+stamp_has 'A calibration row has no fixtures' "question 8 says what stands in for the fixtures' author: the human whose verdict graded the stamp"
+stamp_has 'the severity bands in `/review-pr` as they stood when the window closed' "a severity row's version is named: the bands as they stood when the window closed"
 stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
 stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
 # Honesty point 1: finding.raise has no posted marker, so the denominator is

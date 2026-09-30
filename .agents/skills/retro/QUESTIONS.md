@@ -267,14 +267,18 @@ be nobody's. An event none of the three names goes on a row named
   again by a second review. The report says so under the severity rows,
   every time: the rate is a lower bound on the share of posted findings a
   human dismissed, not a measurement of it.
-- **Every row carries the oracle clause** — who wrote the oracle this number
-  was measured against, when, against which version, and what it was compared
-  to (`docs/domain-glossary.md`, Oracle): `— oracle: <who>, <when>,
-  <version>, <comparator>`. For a tier row the oracle is the human at the
-  quiz, over the window, against the tier rubric in `/to-tickets` as it stood
-  when the window closed — its version or its commit — the published tier
-  compared with the proposed one; for a severity row it is the human who closed the thread, the
-  dismissals compared with the raises on the same pull request. Both end
+- **Every row carries the oracle clause** — the one `/housekeeping`'s
+  checklist asks for and the glossary defines (`docs/domain-glossary.md`,
+  Oracle), naming who wrote the test fixtures, when, against which version,
+  and what it was compared to: `— oracle: <who>, <when>, <version>,
+  <comparator>`. A calibration row has no fixtures: a human's verdict graded
+  the stamp, and that human is the clause's `<who>`. For a tier row: the
+  human at the quiz, over the window, the tier rubric in `/to-tickets` as it
+  stood when the window closed — its version or its commit — and the
+  published tier compared with the proposed one. For a severity row: the
+  human who closed the thread, over the window, the severity bands in
+  `/review-pr` as they stood when the window closed, and the dismissals
+  compared with the raises on the same pull request. Both end
   `no held-out set`: the operator who confirmed the stamps is the operator
   reading the table, and the row must not read as anything else.
 - **A row with too few events says so.** Fewer than five events in a row's

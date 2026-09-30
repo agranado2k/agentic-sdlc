@@ -151,6 +151,9 @@ Grouped by the seam each term belongs to. Entry shape:
   (another measurement, a held-out set, or the thing itself). Every measurement
   the kit reports names its oracle so the reader can tell a self-graded number
   from a held-out one. Rule: a comparator is always named, never implied.
+  Where nothing was written as a fixture — a calibration row in `/retro`,
+  graded by a human's verdict at the quiz or on a review thread — that human
+  is the *who*, and the clause keeps its four parts.
   _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
