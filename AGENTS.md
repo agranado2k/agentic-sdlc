@@ -294,7 +294,6 @@ so nothing here invokes it. `tests/dogfood-optin.test.sh` is what proves both
 answers produce a clean project.
 
 ## Quick reference
-
 | If you need to…                     | Where it is                                     |
 | ----------------------------------- | ----------------------------------------------- |
 | Stress-test a plan before writing it | `/grill-me` — or `/grill-with-docs` to challenge it against the glossary and the decision records |
@@ -315,6 +314,7 @@ answers produce a clean project.
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
+| Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |
 | Run the docs gate on this repo      | `scripts/check.sh` — also runs on every push     |
 | Run the whole suite                 | every script in `tests/`, e.g. `sh tests/kit-demo.sh` — the end-to-end bootstrap acceptance test |
 | Prove the kit keeps its own rules   | `tests/self-host.test.sh` — the root gate is green, and bootstrap still strips the kit's own files |
@@ -325,7 +325,7 @@ answers produce a clean project.
 | Tell the guards this repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts. **In THIS repo** that file ships empty on purpose; the kit's own pattern is `scripts/guards.kit.config.sh`, never shipped, and `sh scripts/guards.kit.sh <base> <head>` runs the pairing guard against it — the same arrangement as `agents.kit.sh` |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — ships empty, always; this repo's own mapping lives in `scripts/agents.kit.config.sh` (never shipped) |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier> [domain]` for a consumer; in THIS repo use `sh scripts/agents.kit.sh <tier> [domain]` instead (hard rule 10) |
-| Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `begin`/`end` around a run, `show <subject>`, `summary --by`, `export [--csv]`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped) — including the price table cost is read from, dated in its header. ADR-0008 |
+| Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `begin`/`end` around a run, `show <subject>`, `summary --by`, `export [--csv]`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Exit 1 is `verify`'s verdict, 2 a caller error, **exit 3 a trace whose `SCHEMA` this reader cannot judge** — `export` refuses with it, `summary` marks it and still exits 0. Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped) — including the price table cost is read from, dated in its header, advised on past `TRACE_PRICES_STALE_DAYS` and refreshed on demand by `sh scripts/trace-prices.kit.sh --check\|--write` (kit-only, network, two sources, commits nothing). ADR-0008 |
 | Hold a decision line to its vocabulary | `scripts/vocab.sh` — `sh scripts/vocab.sh '<Field>: <value>' …` (or lines on stdin) exits 2 naming the field, the value and the vocabulary; `fields` prints the effective ones. Policy in `scripts/vocab.config.sh`, ships FILLED with the kit's own words — no kit twin, the same command here and in a consumer |
 | Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]` — the skill's `metadata.phase` sizes it, a ticket's stamp overrides that, and `--dry-run` says which answered (kit-only; a later release promotes it — #226) |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
