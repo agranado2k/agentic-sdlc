@@ -73,6 +73,14 @@ cd "$ROOT" || exit 2
 # two lines is still the rule, and a needle is matched against the sentence.
 flat() { tr '\n' ' ' | tr -s ' '; }
 
+# no_seven <file, relative to the root> — no surface still counts seven
+# questions, in either spelling, and not across a line break either: a
+# line-based grep passes "seven\nquestions" (review of PR #329, L-4).
+no_seven() {
+	flat <"$ROOT/$1" | grep -qE 'seven (fixed )?questions' &&
+		fail "$1 still counts seven questions" || pass "$1 nowhere counts seven questions"
+}
+
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
 # ---------------------------------------------------------------------------
@@ -403,8 +411,7 @@ for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/revie
 	esac
 done
 for f in "$SKILL" "$SIDECAR"; do
-	assert_file_lacks "$f" "seven questions" "no file of the skill still counts seven"
-	assert_file_lacks "$f" "seven fixed" "…in either spelling"
+	no_seven "$f"
 done
 
 # ---------------------------------------------------------------------------
@@ -574,11 +581,10 @@ grep -q 'tests/retro-skill.test.sh' "$ROOT/README.md" && pass "README names this
 # Every surface that counts the questions counts eight (ticket #281): the two
 # manuals say it twice each — the chain paragraph and the quick-reference row
 # — and the glossary, README and the provenance file once.
-count_eight() { # <file> <expected> <needle>
+count_eight() { # <file> <at least> <needle>
 	n=$(flat <"$ROOT/$1" | grep -oF "$3" | grep -c .)
-	[ "$n" -ge "$2" ] && pass "$1 says '$3' ($n of $2)" || fail "$1 says '$3' $n time(s), expected $2"
-	flat <"$ROOT/$1" | grep -qE 'seven (fixed )?questions' &&
-		fail "$1 still counts seven questions" || pass "$1 nowhere counts seven questions"
+	[ "$n" -ge "$2" ] && pass "$1 says '$3' $n time(s), at least the $2 expected" || fail "$1 says '$3' $n time(s), expected at least $2"
+	no_seven "$1"
 }
 count_eight AGENTS.md 2 'eight fixed questions'
 count_eight constitution/AGENTS.md.template 2 'eight fixed questions'
