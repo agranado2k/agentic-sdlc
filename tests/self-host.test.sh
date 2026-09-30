@@ -926,7 +926,7 @@ git init -q -b main && git config user.name t && git config user.email t@example
 f6_write() { # <content> — every category's file
 	printf '%s\n' "$1" >.agents/skills/probe/SKILL.md; printf '%s\n' "$1" >templates/docs/x.md.template
 	printf '%s\n' "$1" >constitution/local-x.md.template; printf '%s\n' "$1" >scripts/docs-conformance/config.mjs
-	printf '%s\n' "$1" >adapters/a/README.md
+	printf '%s\n' "$1" >adapters/a/README.md; printf '%s\n' "$1" >scripts/trace.config.sh
 }
 f6_write one; printf 'shared-layer: 0.1.0\n' >VERSION; printf '# recipe\n' >UPDATING.md
 git add -A >/dev/null && git commit -q -m "release 0.1.0" && git tag v0.1.0
@@ -934,24 +934,24 @@ f6_write two
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >VERSION
 git add -A >/dev/null && git commit -q -m "bump without notes"
 cd "$KIT" || exit 2
-F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template"
+F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs scripts/trace.config.sh templates/docs/x.md.template"
 [ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "$F6_ALL " ] &&
 	pass "the delta probe names every changed file an in-flight note omits, one per category" ||
 	fail "the delta probe missed a category: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
 # Named in the note — a skill by command, two files by basename, two by
 # repo path (which the basename match covers).
-printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template and adapters/a/README.md.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
+printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template, adapters/a/README.md and trace.config.sh.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
 [ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names each — by command, basename or path" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
 # The recipe's paragraph for the PREVIOUS release counts; an older release's
 # does not, a paragraph not at column one does not, and the paragraph ends
 # at the first blank line.
 printf '# recipe\n\n**Arriving from 0.0.1 or older, everything.** /probe, x.md.template,\nconstitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "an older release's arriving-from paragraph does not count" || fail "an older release's paragraph satisfied the probe"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 6 ] && pass "an older release's arriving-from paragraph does not count" || fail "an older release's paragraph satisfied the probe"
 printf '> **Arriving from 0.1.0 or older, quoted.** /probe, x.md.template,\n> constitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >>"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "a lead that is not at column one does not count" || fail "an indented lead satisfied the probe"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 6 ] && pass "a lead that is not at column one does not count" || fail "an indented lead satisfied the probe"
 printf '**Arriving from 0.1.0 or older, one thing.** /probe changed.\n\nAlso x.md.template, constitution/local-x.md.template, config.mjs and\nadapters/a/README.md — but this line is past the blank, so it is prose.\n' >>"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template " ] &&
+[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs scripts/trace.config.sh templates/docs/x.md.template " ] &&
 	pass "the previous release's paragraph counts, and ends at the first blank line" ||
 	fail "the paragraph terminator or the lead match is wrong: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
 printf '# recipe\n' >"$F6R/UPDATING.md"; git -C "$F6R" tag v0.2.0
