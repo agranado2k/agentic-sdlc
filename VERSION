@@ -17,6 +17,7 @@
 #   scripts/docs-conformance/test/                 fixture tests; extend freely
 #   scripts/guards.config.sh                       the guards' view of your layout
 #   scripts/agents.config.sh                       tier -> model, your provider's
+#   scripts/vocab.config.sh                        the words a decision line may carry — ships FILLED
 #
 # Edit those freely — the whole point of stamping a template is that the copy
 # is then yours.
@@ -903,7 +904,57 @@
 # none of it in the files: list above. Nothing: no skill, template or
 # workflow changed in this window.
 
-shared-layer: 0.24.0
+# 0.25.0 — the chain's judgments become values a script refuses (PRD #273).
+# ONE file joins the layer: scripts/vocab.sh, the vocabulary checker.
+#   From #274: it answers one question — is this value legal for this field,
+# given the other fields? — over the `Field: value` lines a skill lifts out of
+# a ticket body, a review report or an untrusted-read return (it never reads
+# the tracker or a PR itself): exit 0, or exit 2 with one reason per
+# violation on stderr naming the field, the value and the vocabulary in its
+# canonical order; a rule set no combination of values can satisfy is a
+# POLICY CONTRADICTION in those words, never mistaken for a bad value. The
+# vocabularies are data in scripts/vocab.config.sh — the first policy file
+# the kit ships FILLED, because a vocabulary is the kit's to name where a
+# model id is a vendor's and rots: one entry per decision field the chain
+# stamps (tier, label, domain, severity, status, action, outcome,
+# confidence, command-shaped), each naming its owner — the tier is the
+# resolver's, read here for consistency and never widened, so a fifth tier
+# added to the file is accepted by the checker and refused at spawn — every
+# token held at load to the task-domain shape and to the neutral-name rule
+# (no token carries its answer in its spelling: apply and escalate, never
+# safe-to-apply and risky), and one cross-field rule, that a command-shaped
+# body never triages as apply. Discovery anchors on the script's own
+# location as the resolver's and the trace's do: a policy file named
+# explicitly and missing is exit 2, no file anywhere means the shipped words
+# apply, because the script carries them as its defaults and a suite holds
+# the two equal. No skill calls it yet — the call sites at the read seams
+# are this wave's next tickets — so nothing a consumer runs changes in this
+# window. UPDATING.md changes content: 9d's policy-file table gains the row
+# and its arriving-from paragraph, and the transcripts re-pin. The v0.25.0
+# tag is the wave's release ticket's (#282), not this bump's — so from this
+# merge until #282 cuts it, main's self-host job is KNOWINGLY red on F3, a
+# planned state and not a regression.
+#   NON-MANIFEST HALF, enumerated: scripts/vocab.config.sh, the policy file
+# (9d — take it whole on first arrival, it is yours after that, and the
+# checker's own defaults stand in for a consumer that never does; the
+# adoption arm of bootstrap copies it where absent); the kit glossary's
+# **Vocabulary** term and its policy-file entry (kit-side — your glossary is
+# yours); one quick-reference row in the manual template,
+# constitution/AGENTS.md.template (9b — one line to add by hand); and two
+# kit-only suites, tests/vocab.test.sh and tests/vocab-policy.test.sh, that
+# a consumer never sees. ALSO IN THIS WINDOW, landed on main from the trace
+# wave ahead of its own bump (PRs 284, 286 and 291; their release ticket is
+# #255, whose note is the one that describes them): every chain skill —
+# /design-brief, /diagnose, /grill-me, /housekeeping, /implement,
+# /merge-train, /pr-iterate, /prototype, /review-pr, /tdd, /to-prd,
+# /to-tickets, /worktree-cleanup — gained trace emits at its decision
+# points (9a), and adapters/claude-code gained the session hooks
+# hook.lib.sh, session-start.sh, session-end.sh, subagent-stop.sh and
+# transcript-usage.mjs, with adapters/README.md and
+# adapters/claude-code/README.md updated (9e). No docs template or workflow
+# changed in this window.
+
+shared-layer: 0.26.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -918,6 +969,48 @@ shared-layer: 0.24.0
 # that shared the mapping would be shipping a standing instruction with a timer
 # on it.
 
+# 0.26.0 — the consumer's manual learns the judge task domain (PRD #273).
+# NO file joins or leaves the layer. ONE shared file changes content:
+# UPDATING.md, whose Part 2 worked example re-pins.
+#   From #275: the `judge` task domain is named by its CONTRACT and never by
+# a vendor — state and typed questions in, typed answers with per-option
+# probabilities out — in two shapes a mapping answers one of, decide (among
+# supplied options, the chain's triage questions) and rank-or-verify (over
+# supplied candidates). ADR-0010 records why it is a task domain and not a
+# fifth tier: the four tier names are a closed vocabulary (ADR-0003) and a
+# tier is how big the work is, where a judge is what the work is made of,
+# which is the open axis. It also records the negative, because the one
+# measurement anyone has published is of a decider failing at it: a decider
+# is never handed a verification, and no typed judge takes the review
+# verdict (shared invariant §5). The kit ships the domain UNMAPPED and its
+# own kit-only mapping declines it in so many words — the kit names no
+# model — so nothing a consumer runs changes in this window.
+#   Why UPDATING.md moves at all: the consumer's manual template gains the
+# same paragraph, and Part 2's worked example pins that template's diff
+# stat, so the transcript re-pins with it (58 -> 70 lines, 349 -> 361
+# insertions). That is the whole content change to the layer.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. The root manual's Capability tiers
+# section gains the judge paragraph and keeps ADR-0004's 350-line budget by
+# tightening the prose around it — the literal AGENTS_CONFIG= worked example
+# and the "this repo is itself a consumer of the mechanism it ships"
+# rationale both STAY, restored after a first pass traded them for the
+# space. constitution/AGENTS.md.template gains the consumer's paragraph.
+# docs/domain-glossary.md's Task domain entry names the judge and its two
+# shapes. docs/adr/0010-a-typed-judge-is-a-task-domain-named-by-its-
+# contract.md is the record, indexed, and on bootstrap.sh's KIT_OWN list.
+# scripts/agents.kit.config.sh and its codex twin carry the declining
+# comment. tests/agents-tiers.test.sh gains the unmapped-and-mapped case.
+#   Landing in the same window, from #276 (the oracle line): every
+# self-measurement the kit reports names its oracle — who wrote the
+# fixtures, when, against which version, and the comparator — so a
+# self-graded number cannot be read as a held-out one.
+# .agents/skills/housekeeping/CHECKLIST.md's measurement step asks for
+# the line, docs/domain-glossary.md defines **Oracle** with the rule
+# that a comparator is always named, and tests/self-host.test.sh holds
+# the kit's own diary row to it. It rode v0.25.0's merge train but
+# landed after the tag, so this note is where the recipe names it.
+
 files:
   constitution/shared-invariants.md
   constitution/shared-code-craft.md
@@ -926,6 +1019,7 @@ files:
   scripts/agents.lib.sh
   scripts/agent-dispatch.sh
   scripts/manifest.lib.sh
+  scripts/vocab.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh

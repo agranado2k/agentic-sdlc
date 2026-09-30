@@ -80,6 +80,11 @@ Route: candidate tickets.
   on the pure, cheap tier. Record the score beside the last pass's. With no
   stamped article, read the repo's own suites and record that nothing is
   measured — a finding in its own right once there is a layer to measure.
+- **Ask for the oracle line.** Every measurement row carries an oracle clause
+  naming who wrote the test fixtures, when, against which version, and what it
+  was compared to: `— oracle: <who>, <when>, <version>, <comparator>`. Any
+  measurement row without it is a finding. Route it as a candidate ticket. The
+  rule: a comparator is always named, never implied.
 - A score that fell is a finding about the tests that stopped enforcing.
 - A decision line reading `none — <reason>` is re-read against the codebase
   as it is now: a reason that was true at one file and one script may not be
