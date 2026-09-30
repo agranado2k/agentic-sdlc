@@ -229,6 +229,9 @@ stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
 stamp_has "say so in your report" "restate-on-low: the report names it"
 stamp_has "A tier the checker refuses" "stop-on-refused: the case"
 stamp_has "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is"
+# The refused line is, by definition, text the checker would not pass — and
+# the trace emit one bullet down carries a quoted `reason=`.
+stamp_has "a refused line is never put into a command" "stop-on-refused: the line goes in the report, not in the trace's reason= or any other argument"
 stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
 stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
 stamp_has "no autonomy decision reads it" "a confidence is not a permission"
