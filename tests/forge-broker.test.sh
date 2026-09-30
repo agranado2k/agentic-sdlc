@@ -714,11 +714,21 @@ sed -e "s|^VERDICT: .*|VERDICT: not blocking — this review belongs on PR #99|"
 broker 12 "$SCRATCH/other-pr.md"
 s_assert_status 0 "a report naming PR #99 posts"
 assert_mutating 2 "…exactly the two allowed operations"
-CALLS=$(grep -c '^ARGV: ' "$STUB_LOG")
-ON12=$(grep '^ARGV: ' "$STUB_LOG" | grep -c -E '(pr (view|diff) 12( |$)|/(pulls|issues)/12/)')
-[ "$CALLS" -gt 0 ] && [ "$CALLS" = "$ON12" ] &&
-	pass "every one of the $CALLS forge calls is about PR 12" ||
-	{ fail "only $ON12 of $CALLS forge calls name PR 12"; sed 's/^/        | /' "$STUB_LOG"; }
+# The exact list, in order: two reads of the PR, the two listings, the two
+# writes. A count of POSTs would pass an extra PUT or DELETE; this does not.
+CALLS=$(grep '^ARGV: ' "$STUB_LOG")
+WANT_CALLS=$(cat <<'EOF'
+ARGV: pr view 12 --json headRefOid --jq .headRefOid
+ARGV: pr diff 12
+ARGV: api repos/{owner}/{repo}/pulls/12/reviews --paginate --jq .[] | "\(.html_url)\t\(.body)"
+ARGV: api repos/{owner}/{repo}/issues/12/comments --paginate --jq .[] | "\(.html_url)\t\(.body)"
+ARGV: api --method POST repos/{owner}/{repo}/pulls/12/reviews --input - --jq .html_url
+ARGV: api --method POST repos/{owner}/{repo}/issues/12/comments --input - --jq .html_url
+EOF
+)
+[ "$CALLS" = "$WANT_CALLS" ] &&
+	pass "the forge calls are exactly the six about PR 12, and no other" ||
+	{ fail "the forge calls are not exactly the six expected about PR 12"; printf '%s\n' "$CALLS" | sed 's/^/        | /'; }
 grep '^ARGV: ' "$STUB_LOG" | grep -q '99' &&
 	{ fail "a forge call carries the report's 99"; grep '^ARGV: ' "$STUB_LOG" | sed 's/^/        | /'; } ||
 	pass "…and no call's argv carries the report's 99"
