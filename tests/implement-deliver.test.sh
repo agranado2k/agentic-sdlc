@@ -203,9 +203,6 @@ stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the f
 # line it did not lift is prose, never a value to type.
 stamp_has "the way the checker reads a key" "the filter is no narrower than the checker behind it"
 stamp_has "The lines this pipe prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
-# Held as text because this host cannot show it: whether a no-break space is
-# "space" depends on the locale and the libc, and 4c runs under one of each.
-stamp_has "LC_ALL=C command grep" "the filter is the system's grep, reading ASCII space — whatever shell and locale the agent runs in"
 # The domain is the third line the ticket spells and the one this skill goes
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
@@ -271,6 +268,14 @@ t_init
 filter=$(printf '%s\n' "$stamp" | sed -n 's/.*--jq \.body | \(.*\) | sh scripts\/vocab\.sh`.*/\1/p')
 [ -n "$filter" ] && pass "the filter stage is cut out of the skill's own pipe: $filter" ||
 	fail "no filter stage between the tracker's CLI and the checker — nothing to execute"
+# Held as text because this host cannot show it: whether a no-break space is
+# "space" depends on the locale and the libc, and the bodies below run under
+# one of each. Read from the EXECUTED stage, not the bullet — the prose names
+# the same words, and would keep a bullet-wide probe green with the pipe bare.
+case $filter in
+"LC_ALL=C command grep "*) pass "the executed filter is the system's grep in the C locale — whatever shell and locale the agent runs in" ;;
+*) fail "the executed filter does not start 'LC_ALL=C command grep' — its [[:space:]] is the agent's locale's, and its grep the agent's shell's" ;;
+esac
 
 # read_stamp — a ticket body on stdin. Sets P_STATUS (the pipe's, which is the
 # checker's) and P_SHOWN (what the pipe printed for the agent to read).
