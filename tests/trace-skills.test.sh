@@ -270,6 +270,23 @@ for s in $CHAIN; do
 done
 [ -z "$others" ] && pass "no other chain skill emits finding.dismiss" ||
 	fail "finding.dismiss is also emitted by$others — /pr-iterate is the one skill that fetches the threads"
+# /retro's eighth question attributes a `ticket.write` and a `finding.raise`
+# BY KIND when the event and its run name no skill (review of PR #329, H-1):
+# /to-tickets opens no run and names no skill on its emit. That is sound only
+# while exactly ONE skill emits each kind — a second emitter makes the reader
+# credit its stamps to the first. So the fact is held here, over every file
+# under the skills' home at any depth — not the chain roster alone — with the
+# kind quoted or bare, and so is the pair the reader's text names.
+for pair in ticket.write:to-tickets finding.raise:review-pr; do
+	k=${pair%%:*}
+	want=${pair#*:}
+	who=$(grep -rlE "kind=['\"]?$(printf '%s' "$k" | sed 's/\./\\./g')" "$SKILLS" 2>/dev/null | sed "s|^$SKILLS/||; s|/.*||" | sort -u | tr '\n' ' ')
+	[ "$who" = "$want " ] && pass "$k is emitted by exactly one skill, /$want — what /retro's attribution by kind rests on" ||
+		fail "$k is emitted by: ${who:-nobody} — /retro attributes it to /$want by kind, which holds only for a sole emitter"
+	tr '\n' ' ' <"$SKILLS/retro/QUESTIONS.md" | tr -s ' ' | grep -qF "a \`$k\` is \`/$want\`'s" &&
+		pass "…and /retro's question 8 names that pair: a $k is /$want's" ||
+		fail "/retro's question 8 does not say 'a \`$k\` is \`/$want\`'s' — the reader's pair and the emitter's have drifted"
+done
 # The emit's PRECONDITION is a fact the snapshot has to fetch (review of PR
 # #319, H-1): "a thread resolved that you did not resolve" is unreadable if
 # step 1 never asks the forge for a thread's resolved state. The snapshot is

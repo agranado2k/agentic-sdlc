@@ -151,6 +151,9 @@ Grouped by the seam each term belongs to. Entry shape:
   (another measurement, a held-out set, or the thing itself). Every measurement
   the kit reports names its oracle so the reader can tell a self-graded number
   from a held-out one. Rule: a comparator is always named, never implied.
+  Where nothing was written as a fixture — a calibration row in `/retro`,
+  graded by a human's verdict at the quiz or on a review thread — that human
+  is the *who*, and the clause keeps its four parts.
   _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
@@ -353,13 +356,15 @@ Grouped by the seam each term belongs to. Entry shape:
     stale.
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
   trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
-  window — by default since its own last run end — it answers seven fixed
+  window — by default since its own last run end — it answers eight fixed
   questions (tier calibration, review signal per sub-agent, recurring
-  failures, diagnosis calibration, spend, chain health, aim calibration),
+  failures, diagnosis calibration, spend, chain health, aim calibration,
+  stamp calibration — per decision field and per skill, every row carrying
+  its oracle clause),
   writes its report outside the tree, and routes every finding to
   `/to-tickets` as a candidate; it never fixes and never edits a skill. A
   recurring failure becomes a rule with a failing check (shared invariant
-  §11). Ref: PRD #237.
+  §11). Ref: PRD #237; the eighth question is PRD #273's.
   - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
     "lessons file" (the thing §11 forbids it from writing).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
