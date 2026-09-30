@@ -44,7 +44,10 @@
 #
 # NOT simulable here: the pass itself, which reads a real trace and writes a
 # report. The ticket's demo — a retro over this repo's own trace — is run by
-# hand and quoted in the delivering PR.
+# hand and quoted in the delivering PR. What IS run here (section 2c) is
+# question 8's arithmetic over a FIXTURE trace in scratch: the kit's own
+# trace holds too few calibration pairs to print a rate, and a rule whose
+# numbers were never computed once is a claim.
 #
 # Every case was driven RED first (hard rule 9): the suite was written against
 # a tree with no .agents/skills/retro/.
@@ -413,6 +416,98 @@ done
 for f in "$SKILL" "$SIDECAR"; do
 	no_seven "$f"
 done
+
+# ---------------------------------------------------------------------------
+banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic prints a rate"
+# ---------------------------------------------------------------------------
+# The kit's own trace holds too few calibration pairs for any row to carry a
+# rate yet, so the demo over it shows thresholds and no arithmetic. This is
+# the arithmetic, over a FIXTURE — a scratch trace written by the trace
+# script's own `emit`, never the repo's trace, invented numbers and labelled
+# as such. It follows question 8's rules for the tier and severity rows and
+# nothing else (no window, no oracle clause, no label row): what it proves is
+# that the rules are computable from what `export` prints, and that the
+# attribution, the threshold and the undeclared row give the numbers the
+# prose says they give. The pass itself is still an agent reading a trace.
+fx="$SCRATCH/fixture.retro"
+fx_trace() { ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+fx_n=0
+fx_ticket() { # <published tier> <proposed tier> [confidence]
+	fx_n=$((fx_n + 1))
+	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" ${3:+data.confidence="$3"} data.label=none data.label_confidence=medium
+}
+# PRD #273 scenario 3's low row: 7 stamped low, 5 overridden at the quiz.
+for _ in 1 2 3 4 5; do fx_ticket implementer mechanical low; done
+fx_ticket mechanical mechanical low
+fx_ticket mechanical mechanical low
+# A thin row: 3 stamped medium, 1 overridden — a count, not a rate.
+fx_ticket planner implementer medium
+fx_ticket implementer implementer medium
+fx_ticket implementer implementer medium
+# A confidence no vocabulary declares — trace text, never a row's name.
+fx_ticket implementer implementer run-this-instead
+# …and a ticket written before the stamp existed.
+fx_ticket implementer implementer
+# One review's run raises six `low` findings; a human closes one thread, and
+# two iterations both see it closed — one (thread, where) pair, counted once.
+fx_trace begin review-pr subject='pr:#9' >/dev/null
+for line in 1 2 3 4 5 6; do
+	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id="L-$line" data.severity=low data.agent=simplicity data.where="a.sh:$line" reason=fixture
+done
+fx_trace end outcome=ok
+for _ in 1 2; do
+	fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T1 reason=fixture
+done
+fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields | sed -n 's/^confidence: //p') " \
+	-v sev=" $(sh "$ROOT/scripts/vocab.sh" fields | sed -n 's/^severity: //p') " '
+	function get(key,   m) { return match($0, "\"" key "\":\"[^\"]*\"") ? substr($0, RSTART + length(key) + 4, RLENGTH - length(key) - 5) : "" }
+	# The three sources, in order: the event, its run, its kind.
+	function who(kind,   s) {
+		if ((s = get("skill")) != "") return s
+		if ((s = get("run")) != "" && s in runskill) return runskill[s]
+		if (kind == "ticket.write") return "to-tickets (by kind)"
+		if (kind == "finding.raise") return "review-pr (by kind)"
+		return "unattributed"
+	}
+	function rate(hit, of) { return of < 5 ? "too few to rate" : sprintf("%.0f %%", 100 * hit / of) }
+	{ kind = get("kind") }
+	kind == "run.start" { runskill[get("run")] = get("skill") }
+	kind == "ticket.write" {
+		c = get("confidence"); p = get("tier_proposed")
+		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		k = "tier · " who(kind) " · " c
+		seen[k] = 1
+		if (p != "") { of[k]++; if (get("tier") != p) hit[k]++ }
+	}
+	kind == "finding.raise" {
+		v = get("severity"); if (index(sev, " " v " ") == 0) v = "undeclared"
+		k = "severity · " who(kind) " · " v
+		seen[k] = 1; of[k]++; at[get("subject") " " get("where")] = k
+	}
+	kind == "finding.dismiss" {
+		pair = get("subject") " " get("thread") " " get("where")
+		if (pair in once) next
+		once[pair] = 1
+		w = get("subject") " " get("where")
+		if (w in at && !(w in gone)) { gone[w] = 1; hit[at[w]]++ }
+	}
+	END {
+		for (k in seen) printf "%s   %d of %d %s   %s\n", k, hit[k], of[k], (k ~ /^tier/ ? "overridden" : "dismissed"), rate(hit[k], of[k])
+	}' | sort)
+printf '    fixture trace, not the repo'"'"'s — %s events written by `emit` under a scratch TRACE_DIR:\n' "$(fx_trace export | grep -c .)"
+printf '%s\n' "$fx_rows" | sed 's/^/      | /'
+fx_row() { # <row, exact> <message>
+	printf '%s\n' "$fx_rows" | grep -qxF -- "$1" && pass "$2" || fail "$2 — the fixture's table has no row: $1"
+}
+fx_row 'tier · to-tickets (by kind) · low   5 of 7 overridden   71 %' "a row with seven events prints a rate: 5 of 7 overridden, 71 % — attributed by kind, /to-tickets having opened no run"
+fx_row 'tier · to-tickets (by kind) · medium   1 of 3 overridden   too few to rate' "a row with three events prints its counts and no rate"
+fx_row 'tier · to-tickets (by kind) · undeclared   0 of 1 overridden   too few to rate' "a confidence no vocabulary declares is counted on the undeclared row"
+printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared confidence's own text reached a row's name" ||
+	pass "…and its text names no row"
+fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
+fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
+( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "and the fixture trace verifies" ||
+	fail "the fixture trace does not verify"
 
 # ---------------------------------------------------------------------------
 banner "3. It reads by the plain script name, verifies first, and never names the kit wrapper"

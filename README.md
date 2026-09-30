@@ -702,7 +702,9 @@ skeleton (K0).
 - `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the eight
   fixed questions named and numbered in both files, the trace kinds each one
   reads, the eighth's per-field and per-skill rule with its oracle clause and
-  the three limits it states, the plain `sh scripts/trace.sh show|summary|export` name with
+  the three limits it states — its arithmetic run once over a fixture trace in
+  scratch, so a row that prints a rate is a computed number and not a claim —
+  the plain `sh scripts/trace.sh show|summary|export` name with
   `verify` first, the report outside the tree, findings routed to
   `/to-tickets` and never fixed (a recurring failure becomes a rule with a
   failing check, never a lessons file — shared invariant §11), the run it
