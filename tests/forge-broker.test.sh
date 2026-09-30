@@ -698,12 +698,17 @@ first_body_line() {
 	printf '%s\n' "$1" | sed -n 's/.*"body":"\([^"\\]*\(\\.[^"\\]*\)*\)".*"comments".*/\1/p' | sed 's/\\n.*//'
 }
 
-# (1) The reviewed commit IS the head of a PR with history: post as ever.
+# (1) The reviewed commit IS the head of a PR with history: post as ever,
+# and without asking for the commit list — the head alone decides this case,
+# so the list the forge would answer is never read.
 STUB_COMMITS="$OTHER_SHA $HEAD_SHA"
 export STUB_COMMITS
 broker 12 "$GOOD"
 s_assert_status 0 "reviewed == head exits 0"
 assert_mutating 2 "reviewed == head makes both mutating calls"
+grep -q '^ARGV: .*/pulls/12/commits' "$STUB_LOG" &&
+	fail "reviewed == head: the broker asked for the commit list it does not need" ||
+	pass "…without reading the PR's commit list"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
 *"\"commit_id\":\"$HEAD_SHA\""*) pass "…with commit_id equal to the head" ;;
@@ -739,8 +744,15 @@ esac
 s_assert_out_has "drift" "stdout notes the drift"
 printf '%s\n' "$S_OUT" | grep 'drift' | grep -q "$HEAD_SHA" && printf '%s\n' "$S_OUT" | grep 'drift' | grep -q "$OTHER_SHA" &&
 	pass "…naming both commits" || fail "the stdout drift note does not name both commits: $S_OUT"
-[ "$(printf '%s\n' "$S_OUT" | grep -c '^https://')" = 2 ] &&
-	pass "…after the two URLs, which stay one per line" || fail "stdout did not carry exactly two URL lines: $S_OUT"
+# ADR-0009 clause 9 as amended fixes the order: the two URLs, the dropped
+# line (M-1 is withheld here), then the drift line, last.
+printf '%s\n' "$S_OUT" | awk '
+	NR <= 2 && !/^https:\/\// { bad = 1 }
+	NR == 3 && !/^dropped / { bad = 1 }
+	{ last = $0; n = NR }
+	END { exit (bad || n != 4 || last !~ /^drift: /) }
+' && pass "…in order: the two URLs, the dropped line, then the drift line last" ||
+	fail "stdout is not URLs, dropped, drift in that order: $S_OUT"
 grep -q "^ARGV: .*compare/$(printf '%s' "$BASE_SHA" | tr 'A-F' 'a-f')\.\.\.$HEAD_SHA" "$STUB_LOG" &&
 	pass "locations are read from the diff between the base COMMIT and the reviewed commit" ||
 	fail "the broker did not ask the forge for <base oid>...reviewed"
@@ -764,6 +776,7 @@ broker 12 "$GOOD" --dry-run
 s_assert_status 0 "a drifted dry run exits 0"
 assert_mutating 0 "…and posts nothing"
 s_assert_out_has "\"commit_id\":\"$HEAD_SHA\"" "…printing a payload anchored to the reviewed commit"
+s_assert_out_has "drift: reviewed $HEAD_SHA, head $OTHER_SHA" "…and the drift line on stdout"
 FIRST=$(first_body_line "$(printf '%s\n' "$S_OUT" | grep '"commit_id"')")
 case "$FIRST" in
 *"$HEAD_SHA"*"$OTHER_SHA"*) pass "…with the drift line first" ;;
@@ -789,6 +802,18 @@ assert_mutating 0 "…and nothing is posted"
 broker 12 "$GOOD" --commit "$(printf '%s' "$HEAD_SHA" | cut -c1-12)"
 s_assert_status 0 "an abbreviated --commit that agrees with REVIEWED posts the drifted review"
 
+# Each read the drifted path adds can fail, and each failure is exit 69 with
+# nothing posted — never a review checked against an empty diff, which would
+# withhold every finding and still land.
+for read in /commits baseRefOid /compare/; do
+	STUB_FAIL=$read
+	export STUB_FAIL
+	broker 12 "$GOOD"
+	s_assert_status 69 "the forge refusing the drifted read '$read' is exit 69"
+	assert_mutating 0 "…and nothing is posted"
+	s_assert_err_has "HTTP 502"
+done
+unset STUB_FAIL
 # A base the forge names as nothing, or as something that is not a commit.
 for base in '' main; do
 	STUB_BASE=$base
