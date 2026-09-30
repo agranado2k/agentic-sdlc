@@ -178,10 +178,13 @@ assert_file_has "$SKILL" "Check the dispatcher's exit status"
 assert_file_has "$SKILL" "Only on 0"
 assert_file_has "$SKILL" "a model id"
 assert_file_has "$SKILL" "no dispatched review ran"
-_status=$(offset_of 'status=$?')
+# `rc`, never `status`: zsh holds `status` read-only, and the first real run of
+# this composition died on the assignment with the exit status lost.
+assert_file_lacks "$SKILL" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
+_status=$(offset_of '`rc=$?`')
 _broker=$(offset_of '<broker> <PR#>')
 if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
-	grep -qF '[ "$status" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
+	grep -qF '[ "$rc" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
 	pass "the exit status is captured (offset $_status) before the broker runs (offset $_broker), and the broker command is conditional on 0"
 else
 	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
