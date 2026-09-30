@@ -543,6 +543,11 @@ skeleton (K0).
   confirm-list's verbatim-liftable line shape and 🔀→⚠️→✅ order, the
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
+  The report's severity lines and Agent 7's status lines are held to the
+  policy file (ticket #280): the suite reads the `severity` and `status`
+  vocabularies through `sh scripts/vocab.sh fields`, never from a list of its
+  own, and a band or a status planted in a copy of the skill — or withdrawn
+  from a copy of the policy file — goes red.
 
 - `sh tests/manifest.test.sh` pins the manifest grammar once — first word is
   the name, annotation is legal, comments and blanks skipped, a list ends at
