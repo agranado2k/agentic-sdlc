@@ -65,7 +65,7 @@ while IFS=: read -r field tokens; do
 done <"$SCRATCH/fields"
 [ ! -s "$SCRATCH/refused" ] && pass "every shipped token is accepted by its own field" ||
 	fail "shipped tokens refused: $(tr '\n' ' ' <"$SCRATCH/refused")"
-for field in tier label domain severity status action outcome confidence; do
+for field in tier label domain severity status action outcome confidence command-shaped author; do
 	grep -q "^$field:" "$SCRATCH/fields" && pass "the PRD's field '$field' is declared" ||
 		fail "the PRD's field '$field' is not declared"
 done
@@ -192,6 +192,30 @@ s_assert_err_has "usage"
 vocab fields extra
 s_assert_status 2 "'fields' takes no argument"
 s_assert_err_has "usage"
+
+# ---------------------------------------------------------------------------
+banner "Bare lines — a markdown-wrapped line is not a decision line"
+# ---------------------------------------------------------------------------
+# Review of PR #289 (M-4): a decision line wearing markdown — a list marker,
+# emphasis — is silently unrecognized. Resolved as the contract already read
+# (PRD #273: "the calling skill hands it the lines"), and said where a caller
+# meets it: the usage text and the header, in so many words. The behavior is
+# pinned beside the words, so the day the checker learns to read through
+# markup the sentence that says it does not goes red with it.
+vocab fieldz
+s_assert_err_has "the caller hands it bare \`Field: value\` lines" "the usage text says what the caller hands over"
+s_assert_err_has "a markdown-wrapped line" "…and names the line it does not read"
+s_assert_err_has "is not a decision line to it" "…in those words"
+assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
+assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
+printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
+t_run_split sh "$VOCAB" <"$SCRATCH/listed"
+s_assert_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"
+vocab '**Tier:** Implementor'
+s_assert_resolved "" "an emphasized line is ignored, not checked"
+vocab check '- Tier: Implementor' 'Tier: Implementor'
+s_assert_status 2 "the same line handed over bare is refused — lifting it out is the caller's job"
+s_assert_err_has "tier: 'Implementor' is not one of"
 
 # ---------------------------------------------------------------------------
 banner "Where the vocabularies come from"

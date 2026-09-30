@@ -60,7 +60,7 @@
 # whose membership is NOT enforced — only the shape is — because their
 # vocabulary is open local policy, as the task domain's is.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author'
 VOCAB_OPEN='domain'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
@@ -108,6 +108,11 @@ VOCAB_CONFIDENCE='low medium high'
 # an instruction to the agent. Not a stamp; the field the one shipped rule
 # below reads.
 VOCAB_COMMAND_SHAPED='yes no'
+
+# author — who wrote an untrusted body a subagent read for /pr-iterate: a
+# `*[bot]` account, or anyone who is not one. Not a stamp either: one of the
+# three decision lines that read returns, with `action` and `command-shaped`.
+VOCAB_AUTHOR='bot human'
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

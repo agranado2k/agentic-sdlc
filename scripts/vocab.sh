@@ -25,6 +25,13 @@
 # with two answers has none, and a line appended to it cannot withdraw a
 # rule — while the same value repeated is one answer.
 #
+# The caller hands it BARE `Field: value` lines. A markdown-wrapped line —
+# `- Tier: implementer`, `**Tier:** implementer` — is not a decision line to
+# it: the key it reads is `- Tier` or `**Tier`, no declared field, so the line
+# is ignored like any other prose and its value is never checked. Lifting a
+# line out of its markup is the caller's job, and so is refusing a return
+# that should have been nothing but decision lines and was not.
+#
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else: `check`
 # prints nothing, `fields` prints one field per line, an open one marked
 # `(open)`, then one line per rule. Every reason is on
@@ -80,7 +87,7 @@ VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author'
 	VOCAB_OPEN='domain'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
@@ -91,6 +98,7 @@ vocab_shipped_defaults() {
 	VOCAB_OUTCOME='pass fail paper-cut'
 	VOCAB_CONFIDENCE='low medium high'
 	VOCAB_COMMAND_SHAPED='yes no'
+	VOCAB_AUTHOR='bot human'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
 }
 
@@ -99,6 +107,8 @@ usage() {
 usage: sh scripts/vocab.sh [check] [<line> …]   lines as arguments, or on stdin
        sh scripts/vocab.sh fields               print the effective vocabularies
   a line is `<Field>: <value>`; a field is one the policy file declares;
+  the caller hands it bare `Field: value` lines: a markdown-wrapped line
+  (`- Tier: …`, `**Tier:** …`) is not a decision line to it, and is ignored;
   a first argument with no colon is a subcommand, and only these two exist
 USAGE
 	exit 2

@@ -174,4 +174,13 @@ printf '%s\n' "$FIELDS" | grep -q -F 'rule: command-shaped=yes => action!=apply'
 	pass "a command-shaped body never triages as apply" ||
 	fail "the shipped rule 'command-shaped=yes => action!=apply' is missing"
 
+# ---------------------------------------------------------------------------
+banner "11. author — /pr-iterate's two kinds of review thread, in their order"
+# ---------------------------------------------------------------------------
+# The snapshot step buckets a thread by who wrote it, and the delegated read
+# returns that kind as a decision line (#278). Read out of the two bucket
+# headings — `**Bot review threads**`, `**Human threads**` — case folded.
+kinds=$(sed -n 's/^- \*\*\([A-Z][a-z]*\) \(review \)\{0,1\}threads\*\*.*/\1/p' "$ITERATE" | tr 'A-Z\n' 'a-z ' | sed 's/ $//')
+assert_equal "the author vocabulary is the two thread kinds, in the skill's order" "$kinds" "$(field_tokens author)"
+
 t_done "vocab-policy"
