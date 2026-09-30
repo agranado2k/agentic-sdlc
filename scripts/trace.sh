@@ -76,7 +76,8 @@
 # space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
 # session and a run all join on one column. The types the forge numbers —
 # ticket, pr, prd — are spelled one way, `<type>:#<digits>`, because a join
-# key with synonyms is not one (#305); every other type stays open. Token counts are bare integers.
+# key with synonyms is not one (#305); every other type stays open.
+# Token counts are bare integers.
 # A value may not carry a control character other than a tab: a multi-line
 # payload is a blob, not a field.
 #
@@ -296,8 +297,8 @@ trace_check_token() {
 # `<type>:#<digits>`: the first retrospective over the kit's own trace found a
 # ticket written three ways, and `show` on the documented one missed the rest
 # (#305). The type set stays open, so any other type takes any reference.
-# `verify` holds the same rule to the lines already written, as an advisory —
-# its awk twin is TRACE_AWK_NUMBERED below, and the two lists move together.
+# `verify` holds the same rule to the lines already written, as an advisory,
+# and hands its awk this same list as `numbered` — one list, never two.
 TRACE_NUMBERED_TYPES='ticket pr prd'
 trace_check_subject() {
 	TRACE_SUBJECT_FORM='<type>:<reference>'
