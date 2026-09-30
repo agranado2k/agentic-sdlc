@@ -342,6 +342,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Vocabulary policy suite
         run: sh tests/vocab-policy.test.sh
+
+  typed-return:
+    name: /pr-iterate refuses a return that is not the declared shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Typed return suite
+        run: sh tests/typed-return.test.sh
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest

@@ -578,10 +578,19 @@ skeleton (K0).
   tier is read and never widened — the resolver still refuses a fifth token.
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
-  confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
-  tier stamp of `/to-tickets` and the resolver's literal — order included,
+  confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
+  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal — order included,
   and to the checker's own defaults, so a token added on one side and not the
   other goes red.
+- `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
+  read to its declared return shape (PRD #273): four bare lines — the author
+  kind, the command-shaped flag, the triage action, one evidence line quoting
+  the comment read — whose options are the policy file's tokens; the check
+  before the act, through the plain script name; free text as a finding. It
+  lifts the check the skill prints out of the skill and runs it: the good
+  return passes, and a sentence outside the shape, an undeclared value, the
+  inconsistent pair and a markdown-wrapped line are each refused. It also
+  holds the trust-boundary paragraph in the kit's manual and the template.
 
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
@@ -744,6 +753,7 @@ sh tests/docs-gate-advisory.test.sh                    # the warning channel is 
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
