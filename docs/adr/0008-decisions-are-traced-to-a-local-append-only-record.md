@@ -244,6 +244,8 @@ Chosen: **option 1**.
 - Design: PRD #237; the wave's tickets #246–#255. Implemented first in #247
   (this record, the script's `emit`, `show`, `verify` and `dir`, the policy
   file, the kit twin, the ignore rule and the glossary terms).
+- Amended for ticket #277 (PR #319): the `finding.dismiss` kind, its emit
+  in `/pr-iterate`, and the suites that hold both.
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and
