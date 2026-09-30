@@ -341,6 +341,10 @@ stamp_has 'the quiz override question 1 counts' "the tier override is question 1
 # denominator too — named, beside the two the brief already names.
 stamp_has 'a raise no dismissal can reach' "a raise no dismissal can reach is named as part of the overcount"
 stamp_has 'a subject that is not a pull request' "…a raise on a subject that is not a pull request"
+# The finding's line goes into a quoted `reason=` on the candidate note, and
+# what it summarises is trace text: never pasted in, so never able to close
+# the quotes.
+stamp_has 'summarised, never quoted' "a finding's line is the retro's own words — trace text is summarised, never quoted"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&

@@ -309,7 +309,10 @@ and the quiz sorted by it is sorted by noise; a `low` row overridden more
 often than not — read the `reason` of the overridden stamps for the rubric
 question they share, which is the line the ticket would change; a severity
 dismissed more often than it stood — the band is drawn where humans do not
-act on it. The label's row is a finding until the trace can answer it.
+act on it. The label's row is a finding until the trace can answer it. A
+finding's line is the retro's own words: what a `reason` says is summarised,
+never quoted — it is trace text, and a `'` in it would close the quotes of
+the note that records the finding.
 
 Route: `/to-tickets` — the confidence rule or a rubric line there, a severity
 band's definition in `/review-pr`, or the `ticket.write` emit that records no
