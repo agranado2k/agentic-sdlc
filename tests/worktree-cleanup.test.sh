@@ -84,6 +84,9 @@ wt_has_branch landed && fail "the merged branch survived" ||
 wt_has_worktree wip && pass "the unmerged worktree is kept" ||
 	fail "an unmerged worktree was removed — that is data loss"
 assert_out_has "not merged into"
+# A branch with commits of its own is never fresh, however the fresh test reads
+# the reflog: its tip has moved since the branch was created.
+assert_out_lacks "(feat/wip) — fresh"
 
 # `messy` IS merged — it is kept only because of the untracked file in it, which
 # is the case worth pinning: "merged" alone must never be sufficient.
@@ -95,6 +98,83 @@ assert_out_has "uncommitted changes"
 git -C "$REPO" ls-remote --exit-code --heads origin "feat/landed" >/dev/null 2>&1 &&
 	fail "the merged remote branch survived" ||
 	pass "the merged remote branch is deleted"
+
+# ---------------------------------------------------------------------------
+banner "A fresh worktree — no commits of its own — is kept, not pruned"
+# ---------------------------------------------------------------------------
+# The regression this guards: a branch created a minute ago has no commits, so
+# it is trivially an ancestor of the base ref and read as "merged". A cleanup
+# run while a session was starting removed that session's worktree and branch.
+# Nothing can have been merged from a branch that has nothing, so it is kept —
+# whether the base still sits where it was branched from, or has moved on since.
+# Its neighbours pin that the rule narrows nothing else: a landed branch and a
+# squash-merged one (recorded as merged by a stub forge CLI) are still pruned.
+
+# wt_fresh <slug> — a linked worktree on feat/<slug>, branched from origin/main
+# and given no commits: the state a session is in the moment it opens.
+wt_fresh() { git -C "$REPO" worktree add -q "worktree/$1" -b "feat/$1" origin/main; }
+
+# A forge CLI stub that records exactly one pull request as merged: the head
+# `feat/squashed`. Every other lookup answers empty, as the real CLI does for a
+# branch with no merged pull request.
+STUB_BIN="$SCRATCH/stub-forge-bin"
+mkdir -p "$STUB_BIN"
+cat >"$STUB_BIN/gh" <<'STUB'
+#!/bin/sh
+case " $* " in
+*" --head feat/squashed "*) echo 42 ;;
+esac
+exit 0
+STUB
+chmod +x "$STUB_BIN/gh"
+
+fresh_fixture() {
+	wt_fixture
+	wt_fresh stale # branched from the base BEFORE anything below landed
+	wt_branch landed
+	wt_land landed
+	# The squash merge: the branch's change lands on main as a NEW commit, so
+	# the branch is never an ancestor of the base — only the forge knows.
+	wt_branch squashed
+	git -C "$REPO" worktree add -q "$SCRATCH/squash.$$" --detach origin/main
+	printf 'squashed\n' >"$SCRATCH/squash.$$/squashed.txt"
+	git -C "$SCRATCH/squash.$$" add -A
+	git -C "$SCRATCH/squash.$$" commit -q -m "feat: squashed (#42)"
+	git -C "$SCRATCH/squash.$$" push -q origin HEAD:main
+	git -C "$REPO" worktree remove "$SCRATCH/squash.$$"
+	git -C "$REPO" fetch -q origin
+	wt_fresh fresh # branched from the base's current tip
+}
+
+for mode in --dry-run real; do
+	fresh_fixture
+	if [ "$mode" = real ]; then
+		PATH="$STUB_BIN:$PATH" wt_run
+	else
+		PATH="$STUB_BIN:$PATH" wt_run --dry-run
+	fi
+	[ "$LAST_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
+		fail "$mode: the script exited $LAST_STATUS"
+	assert_out_has "worktree/fresh (feat/fresh) — fresh"
+	assert_out_has "worktree/stale (feat/stale) — fresh"
+	assert_out_has "no commits of its own"
+	assert_out_lacks "Removing merged worktree $REPO/worktree/fresh"
+	assert_out_lacks "Removing merged worktree $REPO/worktree/stale"
+	assert_out_has "Removing merged worktree $REPO/worktree/landed"
+	assert_out_has "Removing merged worktree $REPO/worktree/squashed"
+	assert_out_has "removed (2):"
+	assert_out_has "kept (2):"
+	wt_has_worktree fresh && wt_has_branch fresh &&
+		pass "$mode: the fresh worktree and its branch are kept" ||
+		fail "$mode: a fresh worktree was pruned — that is a starting session's worktree lost"
+	wt_has_worktree stale && wt_has_branch stale &&
+		pass "$mode: a fresh worktree on a base that moved on is kept" ||
+		fail "$mode: a fresh worktree on an older base tip was pruned"
+done
+wt_has_worktree landed && fail "the landed worktree survived the real run" ||
+	pass "the landed worktree is still pruned"
+wt_has_worktree squashed && fail "the squash-merged worktree survived the real run" ||
+	pass "the squash-merged worktree the forge records as merged is still pruned"
 
 # ---------------------------------------------------------------------------
 banner "--dry-run changes nothing"

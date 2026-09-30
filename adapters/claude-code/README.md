@@ -107,10 +107,12 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | File | The event it records |
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on |
-| `hooks/session-end.sh` | one `session.usage` per model with four token counts, then `session.end` |
+| `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
+| `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
-| `hooks/hook.lib.sh` | not a hook either: what the three share |
+| `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` splits a payload with |
+| `hooks/hook.lib.sh` | not a hook either: what the four share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
@@ -136,7 +138,49 @@ To turn them on, wire the three events in your own `.claude/settings.json`:
 Then set `TRACE_DIR` in `scripts/trace.config.sh` — without it every emit is a
 silent no-op, which is the shipped default and a working state.
 
-Four details found by watching this run, each of which costs a wrong number if
+### And the tool hook, behind its own switch
+
+Every tool call can be captured too, as one `tool.use` event carrying the tool's
+name, the call's id, the first 512 bytes of its input on the line, and the FULL
+input and FULL result in the blob store with the result's size. Two more events
+wire it, both to the same script — the only difference between them is the
+outcome it records:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\"" } ] } ],
+    "PostToolUseFailure": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\"" } ] } ]
+  }
+}
+```
+
+Wiring alone does nothing: the hook reads `TRACE_TOOLS` from your policy file and
+that ships empty, so it exits 0 having written nothing until you set it to `1`.
+That is a decision, not a formality — a tool call is the least decision-bearing
+line in the trace and there are hundreds per session, and a tool *result* is the
+contents of whatever was read. Turn it on for a wave you want to study.
+
+Three things this hook deliberately does not do:
+
+- **It records `ok` and `fail`, never `denied`.** A tool call the permission
+  system refuses fires `PreToolUse` **only** — no `PostToolUse` and no
+  `PostToolUseFailure` — and that payload is handed to the hook *before* the
+  decision, so nothing on it says the call was denied. A denied call is
+  therefore invisible here. An *interrupted* one is not: it reaches
+  `PostToolUseFailure` and reads as `fail`.
+- **There is no `PreToolUse` hook.** Both post payloads carry the whole
+  `tool_input` themselves, so a pre hook would have nothing to add to the event
+  and nothing of its own to emit — one more process per tool call for no line.
+- **It never uses `hook_field` on a tool payload.** A tool payload arrives as
+  one line of JSON whose values are arbitrary text, so a key-name search finds
+  the LAST occurrence — and a tool result can quote `"session_id"` or
+  `"tool_response"`. The payload goes through a real parser, which reads only
+  top-level keys.
+
+Five details found by watching this run, each of which costs a wrong number if
 you get it wrong:
 
 - **A streamed response is written more than once.** One assistant API response
@@ -153,6 +197,16 @@ you get it wrong:
   the subagents' lines are not in that file. So the trace's total for a session
   is its `session.usage` events **plus** its `agent.stop` events — which is
   what makes them add up to that rollup, and how the suite checks them.
+- **A resumed session ends more than once.** `claude -p --resume <id>` and
+  `--continue` keep the session id and append to the same transcript, and
+  `SessionEnd` fires at the end of every run — so an end that re-read the whole
+  file would count every earlier response again. Each `session.usage` event
+  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
+  model), and the next end of that session counts only what came after the
+  last one the trace holds. The events stay a plain sum: `summary`, the export
+  and the query below need no rule about which event supersedes which. A
+  compaction appends to the same file too, but the call that writes its summary
+  leaves no assistant line, so its tokens are in the rollup and in no event.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
@@ -230,9 +284,11 @@ a token-bearing event whose model has no price in your table, which is why the
   a check that asserted "this ticket ran on the right model" would be asserting
   something the repo has no record of — which is what the trace's `spawn`
   events are for instead.
-- **No tool-call capture.** Every tool call with its input and result is a
-  separate switch and a separate hook, and the volume is an order of magnitude
-  larger than the decisions. It arrives in its own slice.
+- **No tool-call capture unless you ask for it twice.** The hook is here, and
+  wiring it is not enough: `TRACE_TOOLS` in your policy file is the second
+  answer, and it ships empty. Two switches for one feature is the point — the
+  volume and the privacy of a tool result are a different decision from the
+  volume and privacy of a decision trail.
 
 ## Verifying it once
 

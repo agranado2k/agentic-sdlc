@@ -66,6 +66,14 @@ permissions:
   contents: read
 
 jobs:
+  catalogue:
+    name: Runtime catalogue admission
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Catalogue admission acceptance test
+        run: sh tests/catalogue.test.sh
+
   harness:
     name: Harness fixture tests
     runs-on: ubuntu-latest
@@ -384,6 +392,24 @@ jobs:
       # are deliberately node-free.
       - name: Trace hooks suite
         run: sh tests/trace-hooks.test.sh
+
+  trace-prices:
+    name: The price table's staleness advisory and its refresh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Node for the same reason the job above needs it: the refresh script's
+      # two sources are JSON, and scripts/trace-prices.kit.sh hands that to node
+      # rather than to awk. The advisory legs are pure sh and would pass without
+      # it; the source legs skip loudly, so the job would go green having tested
+      # half the ticket. NO NETWORK is needed — every source leg runs against
+      # the fixtures under tests/fixtures/prices/, which is the whole point of
+      # the --source / --cross overrides.
+      - name: Trace prices suite
+        run: sh tests/trace-prices.test.sh
 
   adopt-demo:
     name: Existing-repo adoption arm

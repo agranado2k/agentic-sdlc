@@ -137,6 +137,7 @@ echo start >>"$COUNT"
 . "$KIT/tests/lib.sh"
 echo "budget: \${AGENT_SUITE_BUDGET:-<unset>}"
 echo "agents config: \${AGENTS_CONFIG:-<unset>}"
+echo "trace: \$(env | grep '^TRACE_' | sort | tr '\n' ' ')<end>"
 echo "nproc: \$(ulimit -u 2>/dev/null || ulimit -p)"
 echo "data: \$(ulimit -d)"
 sh -c 'exit 0' && echo "forks: yes"
@@ -180,6 +181,12 @@ s_assert_status 5 "a suite's own exit status passes through"
 # replaced by the kit's.
 stub AGENTS_CONFIG=/operator/own.sh sh "$GREEN"
 s_assert_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator exported reaches the suite as it was"
+# The trace's identity and policy are the exception: a session's hooks export
+# them, and a suite must start from none whatever the calling shell said —
+# in the run inside the budget too, not only in the bare one (#303).
+stub TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 sh "$GREEN"
+s_assert_out_has "trace: <end>" "the trace variables a calling shell exported do not reach the suite inside the budget"
+[ "$(starts)" = 2 ] && pass "…and that was the re-executed run, not a bare one" || fail "the scrubbed stub ran $(starts) time(s) — expected 2"
 
 # The off switch: the suite runs bare, once, and the test harness says so.
 stub AGENT_SUITE_BUDGET=off STUB_EXIT=3 sh "$GREEN"

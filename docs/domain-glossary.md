@@ -34,6 +34,14 @@ Grouped by the seam each term belongs to. Entry shape:
 
 ## Distribution — what the kit hands over
 
+- **Runtime catalogue** — canonical skill content and the declared active roots
+  that expose it to a session. Admission checks filesystem identity, never
+  model-visible loading. See ADR-0011 and `scripts/catalogue.md`.
+- **Active root** — a repository- or caller-declared runtime skill directory,
+  mapped to canonical `.agents/skills` content by a supported representation.
+- **Catalogue admission** — the read-time check of active-root identity, exact
+  path case and explicitly classified references, owned by Distribution.
+
 - **Kit** — this repository, and the thing being built. A template repo, not a
   package: it is consumed by "Use this template" plus one run of
   `bootstrap.sh`, never by a dependency manager.
@@ -294,7 +302,14 @@ Grouped by the seam each term belongs to. Entry shape:
   editing it re-prices the whole past; an export stamps `priced_at` and
   `price_src` to say which table answered. A model the table does not name
   reads **unpriced** — never 0 — wherever a cost would go. The kit ships no
-  price, for the reason it ships no model id.
+  price, for the reason it ships no model id. The table carries its own date —
+  a `Last checked: <YYYY-MM-DD>` line in the policy file — and its own
+  **staleness window**, `TRACE_PRICES_STALE_DAYS`, empty in the shipped file
+  and 30 in the kit's twin: past it every priced read prints one advisory on
+  stderr and nothing else changes. Refreshing it is the kit-only
+  `scripts/trace-prices.kit.sh` — two machine-readable sources, and a refusal
+  to write when they differ by more than the **disagreement threshold**
+  (`TRACE_PRICES_DISAGREE_PCT`), the vendors' own pages being the tie-breaker.
   - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
     vendor; "estimate" — the arithmetic is exact, it is the price that can be
     stale.
