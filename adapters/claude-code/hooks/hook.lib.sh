@@ -347,3 +347,130 @@ hook_blob() {
 	fi
 	printf '%s %s' "$_hb_hash" "$_hb_bytes"
 }
+
+# --- waiting for a subagent's final message ---------------------------------
+# Read only by subagent-stop.sh. SubagentStop can run BEFORE the subagent's
+# transcript holds its final assistant line (ticket #308 measured the line
+# landing 170 and 223 ms after the hook began, in two of seven live stops), and
+# a transcript read then either has no usage at all or — worse — holds the turns
+# before the last one, whose sum is a confident undercount. So the hook may
+# wait, for as long as the policy says and never longer.
+
+# hook_wait_bound — set hook_wait_ms to the bound TRACE_AGENT_WAIT_MS names, in
+# milliseconds, or to nothing for no wait; set hook_wait_bad to a refused value.
+#
+# The same file and precedence hook_tools_on reads: the environment wins, an
+# environment value of '' is the documented no-wait even when the file names a
+# bound, and a policy file that is missing or unreadable is no wait — the
+# behaviour the agent harness had before this bound existed.
+#
+# A MALFORMED VALUE IS REFUSED like every other policy value: anything but one
+# to five digits with no leading zero (sh arithmetic reads 0100 as octal, so it
+# would silently be 64). Refused means named on stderr and on the event, and NOT
+# waited — the hook still exits 0, because a typo in a policy file must never
+# become a stalled session. '0' is no wait, like ''.
+hook_wait_bound() {
+	hook_wait_ms=
+	hook_wait_bad=
+	if [ -n "${TRACE_AGENT_WAIT_MS+set}" ]; then
+		_wb=$TRACE_AGENT_WAIT_MS
+	else
+		_wb_file=$(hook_policy)
+		_wb=
+		[ -f "$_wb_file" ] && _wb=$(
+			. "$_wb_file" >/dev/null 2>&1
+			printf '%s' "${TRACE_AGENT_WAIT_MS:-}"
+		)
+	fi
+	case $_wb in
+	'' | 0) return 0 ;;
+	*[!0-9]* | 0* | ??????*)
+		hook_wait_bad=$(printf '%s' "$_wb" | cut -c1-60)
+		echo "x trace: TRACE_AGENT_WAIT_MS='$hook_wait_bad' is not a number of milliseconds — give a whole number from 1 to 99999 with no leading zero, or leave it empty for no wait. The subagent-stop hook did not wait." >&2
+		return 0
+		;;
+	esac
+	hook_wait_ms=$_wb
+}
+
+# hook_final <transcript> — does the transcript end on a final message? Status
+# 0 for yes.
+#
+# FINAL means: its last user-or-assistant line is an ASSISTANT line whose
+# stop_reason is set and is not tool_use. Each half is load-bearing. "Last user
+# or assistant line", because a subagent resumed after an earlier stop already
+# holds an end_turn from that stop, and the user line that resumed it comes
+# after — so an old final message never reads as this stop's. "Not tool_use and
+# not null", because a turn that called a tool is followed by more turns, and a
+# streamed response writes one line per content block with stop_reason null on
+# the ones before its last. The two keys are matched as they appear unescaped:
+# inside a message's text a quote is escaped, so a tool result that merely
+# QUOTES a transcript cannot match.
+hook_final() {
+	_hf_last=$(grep -E '"type":"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
+	case $_hf_last in *'"type":"assistant"'*) ;; *) return 1 ;; esac
+	case $_hf_last in
+	*'"stop_reason":"tool_use"'* | *'"stop_reason":null'*) return 1 ;;
+	*'"stop_reason":"'*) return 0 ;;
+	esac
+	return 1
+}
+
+# hook_now_ms — the wall clock in milliseconds, or status 1 where `date` has no
+# sub-second field. `%N` is not POSIX: GNU date answers it, and a date that does
+# not leaves a letter behind, which the digit check turns into "no clock".
+hook_now_ms() {
+	_nm=$(date +%s%N 2>/dev/null) || return 1
+	case $_nm in '' | *[!0-9]*) return 1 ;; esac
+	[ "${#_nm}" -gt 6 ] || return 1
+	printf '%s' "${_nm%??????}"
+}
+
+# hook_wait_final <transcript> <bound ms> — poll until the transcript ends on a
+# final message or the bound passes, and print the milliseconds waited. Status
+# 0 when it became final, 1 when the bound passed first.
+#
+# WALL TIME where the clock allows it, because the bound is a promise about the
+# session and a loaded machine makes every poll slower than its nap: counting
+# only the naps, a 2000 ms bound reported 2000 on a machine at load average 29
+# while the hook ran six seconds end to end. So on a clock with milliseconds the wait is measured, the
+# check comes last before giving up, and the overshoot is at most one poll.
+# Without one (POSIX `date` stops at seconds) the figure is the sum of the naps
+# taken — honest about what it is, and the best a portable shell can say.
+#
+# A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
+# refuses a fraction (POSIX promises only whole seconds) is answered with
+# whole-second naps while a whole second remains, and the wait ends early
+# rather than overrun — never a busy loop, never a nap past the bound.
+hook_wait_final() {
+	_hw_t0=$(hook_now_ms) || _hw_t0=
+	_hw_waited=0
+	_hw_step=50
+	while :; do
+		if hook_final "$1"; then
+			printf '%s' "$_hw_waited"
+			return 0
+		fi
+		if [ -n "$_hw_t0" ]; then
+			# A clock that stops answering mid-wait hands over to counting from
+			# here, rather than reading as no time passing — which would never end.
+			if _hw_now=$(hook_now_ms); then
+				_hw_waited=$((_hw_now - _hw_t0))
+			else
+				_hw_t0=
+			fi
+		fi
+		_hw_left=$(($2 - _hw_waited))
+		[ "$_hw_left" -gt 0 ] || break
+		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
+		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
+			_hw_step=1000
+			[ "$_hw_left" -ge 1000 ] || break
+			sleep 1
+			_hw_nap=1000
+		fi
+		[ -n "$_hw_t0" ] || _hw_waited=$((_hw_waited + _hw_nap))
+	done
+	printf '%s' "$_hw_waited"
+	return 1
+}
