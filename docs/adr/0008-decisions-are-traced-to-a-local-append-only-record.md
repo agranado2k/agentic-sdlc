@@ -154,7 +154,7 @@ Chosen: **option 1**.
    rule with a failing check, never a preloaded lessons file (shared
    invariant §11).
    *Amended 2026-09-30 (#309):* the readers are the operator and the
-   retrospective skill. `/diagnose` is not a third: a diagnosis reads the
+   retrospective skill, `/retro`. `/diagnose` is not a third: a diagnosis reads the
    trace by the operator's hand — the operator runs the read and hands over
    what it printed, as data — and no other skill's text ever calls a read
    subcommand. `tests/trace-skills.test.sh` holds every skill directory to
