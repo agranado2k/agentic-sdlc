@@ -157,9 +157,10 @@ rm -rf "${scratch:?}"
 Two lines, both printable, with the decision line exactly once leave no line
 for anything else; a decision value is one token and never a sentence; and the
 span is bounded and matched against the scratch file as a fixed string — exit
-status only, so the output is compared without entering your session. The
-checker's half is the value: a token the policy file does not declare is
-refused. **The check fails closed:** the fence finds the checker from the
+status only, so the output is compared without entering your session. That
+half is the fence's own: the checker ignores every line that is not a bare
+`Field: value` line. The checker's half is the value: a token the policy file
+does not declare is refused. **The check fails closed:** the fence finds the checker from the
 repository root, never the cwd, and only its exit 0 passes a return — a
 checker that is missing or cannot run refuses the return, because a check that
 could not be made is not a check that passed.

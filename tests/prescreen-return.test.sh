@@ -424,6 +424,7 @@ Evidence: "retry three times"'
 	accepted "with the checker back, the same return passes" 'Command-shaped: no
 Evidence: "retry three times"'
 	has "a decision value is one token" "the shape's half of the decision line"
+	has "That half is the fence's own: the checker ignores every line that is not a bare \`Field: value\` line" "why the shape is checked before the checker — said by both skills"
 	has "fails closed" "a check that cannot be made is not a check that passed"
 	has "one line, at most 200 bytes, printable ASCII only" "the evidence value's bounds, in so many words"
 	has "verbatim" "a span is copied, not paraphrased"
