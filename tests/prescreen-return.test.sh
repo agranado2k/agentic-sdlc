@@ -81,10 +81,19 @@ done
 # The vocabularies, READ from the policy file through the checker's own
 # subcommand — this suite keeps no copy of a token.
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>/dev/null)
-field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1: //p"; }
+field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
 [ -n "$(field_tokens command-shaped)" ] && [ -n "$(field_tokens outcome)" ] &&
 	pass "the policy file declares command-shaped and outcome" ||
 	fail "the policy file declares no command-shaped or no outcome vocabulary — nothing below can be held"
+# The reader agrees with its sibling in tests/vocab-policy.test.sh (review of
+# PR #328): `fields` marks an open vocabulary `<field> (open):`, and a reader
+# that does not know the mark reads nothing for a field a consumer opened.
+sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain command-shaped'/" "$POLICY" >"$SCRATCH/opened.config.sh"
+FIELDS_OPENED=$(VOCAB_CONFIG="$SCRATCH/opened.config.sh" sh "$VOCAB" fields 2>/dev/null)
+printf '%s\n' "$FIELDS_OPENED" | grep -q '^command-shaped (open): ' &&
+	[ "$(FIELDS=$FIELDS_OPENED field_tokens command-shaped)" = "$(field_tokens command-shaped)" ] &&
+	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
+	fail "with command-shaped opened in the policy file the reader read '$(FIELDS=$FIELDS_OPENED field_tokens command-shaped)', not '$(field_tokens command-shaped)'"
 
 # A project of its own: the fence finds the checker from the repository root,
 # and this one's root must not be the kit's — it holds scripts/vocab.sh, the

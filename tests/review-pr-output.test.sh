@@ -245,7 +245,7 @@ BADGES='🔴|🟠|🟡|🔵|🟣|🟤|🟢|⚫|⚪'
 GLYPHS='✅|⚠️|❌|🔀|🧬'
 
 # declared <field> <policy file> — the field's tokens, through `fields`.
-declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1: //p"; }
+declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
 
 # printed_severities <skill> — every band the skill prints, folded to a token.
 printed_severities() {
@@ -294,6 +294,13 @@ sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
 [ -n "$(declared severity "$POLICY")" ] && [ -n "$(declared status "$POLICY")" ] &&
 	pass "the policy file declares severity and status, read through 'fields'" ||
 	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
+# …and the reader agrees with its sibling in tests/vocab-policy.test.sh
+# (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
+# and a reader that does not know the mark reads nothing for an opened field.
+sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
+[ -n "$(declared severity "$POLICY")" ] && [ "$(declared severity "$SCRATCH/opened.config.sh")" = "$(declared severity "$POLICY")" ] &&
+	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
+	fail "with severity opened in the policy file the reader read '$(declared severity "$SCRATCH/opened.config.sh")', not '$(declared severity "$POLICY")'"
 held "every severity band the report prints is a token the policy file declares: $sev" severity "$sev" "$POLICY"
 held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
 # …and nothing declared goes unprinted: the two lists are one vocabulary.
