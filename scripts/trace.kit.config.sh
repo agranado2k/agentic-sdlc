@@ -14,6 +14,11 @@
 # Under the root checkout, gitignored, shared by every worktree.
 TRACE_DIR='.trace'
 
+# The kit's forge numbers tickets, PRs and PRDs with digits, so its own trace
+# holds them to one spelling, `<type>:#<digits>` (#305). The shipped file
+# leaves this empty: which types a tracker numbers is each project's call.
+TRACE_NUMBERED_TYPES='ticket pr prd'
+
 # TOOL CAPTURE IS ON HERE, and this is the one file in the repository that says
 # so. The kit's product IS the chain, so what its own sessions actually did —
 # which command, against which file, with what result — is the raw material a

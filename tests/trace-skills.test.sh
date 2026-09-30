@@ -236,13 +236,8 @@ printf '%s\n' "$spawn" | grep -qF 'data.agent=' && pass "and names the agent" ||
 # ---------------------------------------------------------------------------
 banner "7. Every documented line runs: placeholders filled, the span executes and verifies"
 # ---------------------------------------------------------------------------
-# runnable <span> — the span an agent would type, with the document's
-# placeholders made literal: `[optional]` groups dropped; `<one word>`
-# becomes `x` and `<several words>` becomes `x y`, so a prose placeholder that
-# the document left unquoted breaks exactly as the real value would; an
-# `a|b|c` choice becomes its first option; `$model` becomes a model id; the
-# `--blob` file becomes a real one; the trailing `|| :` goes, so the exit
-# status is the script's own.
+# The placeholders are made literal by the shared test harness's t_trace_runnable
+# (tests/lib.sh) — one definition, shared with the other skill suites.
 BLOBF="$SCRATCH/blob.x"
 printf 'evidence\n' >"$BLOBF"
 for s in $CHAIN; do
