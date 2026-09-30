@@ -289,9 +289,7 @@ be nobody's. An event none of the three names goes on a row named
   instead of a rate. A window with raises and no `finding.dismiss` at all is
   the same case, not a band nobody dismissed: the severity rows print their
   raises and `no dismissal recorded in the window`, and whether the emitter
-  ran is question 6's to ask. A window where every row reads one of those
-  ways reports the table as it stands and carries the question to the next
-  retro.
+  ran is question 6's to ask.
 
 The rows read like this — the field, the skill, the stamp's value, the
 counts, the rate or the words that replace it, the clause:

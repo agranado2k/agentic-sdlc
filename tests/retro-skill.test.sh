@@ -345,6 +345,11 @@ stamp_has 'a subject that is not a pull request' "…a raise on a subject that i
 # what it summarises is trace text: never pasted in, so never able to close
 # the quotes.
 stamp_has 'summarised, never quoted' "a finding's line is the retro's own words — trace text is summarised, never quoted"
+# A sentence that said only what every retro does anyway is gone.
+case "$stamp" in
+*'carries the question to the next retro'*) fail "question 8 still says a thin window 'carries the question to the next retro' — every retro asks all eight" ;;
+*) pass "no sentence restating that the next retro asks the question again" ;;
+esac
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&
