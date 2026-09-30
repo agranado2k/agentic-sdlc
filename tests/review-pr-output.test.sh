@@ -223,4 +223,99 @@ case "$iter_confirm" in
 	;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "7. The dispatched worker's contract: offline, and says what it reviewed (#266)"
+# ---------------------------------------------------------------------------
+# .agents/prompts/review-worker.md is the review the kit dispatches to another
+# agent harness — the same two axes, returned on stdout instead of posted.
+# That worker runs in its harness's default sandbox, read-only and with no
+# network, and must stay that way (PRD #261): with network it would hold a
+# writable tree, the operator's forge token and an untrusted diff at once. So
+# the contract has to say two things the skill above never needed to: that
+# the worker is OFFLINE, up front, so it spends its budget on the diff rather
+# than on discovering the sandbox; and WHICH COMMIT it reviewed, so the session
+# that posts the findings can tell a head that moved from a commit it missed.
+# Same honest boundary as the rest of this suite — the contract is a document,
+# so its external behaviour is its text.
+WORKER=".agents/prompts/review-worker.md"
+WORKER_ABS="$ROOT/$WORKER"
+[ -f "$WORKER_ABS" ] && pass "$WORKER exists" || {
+	fail "$WORKER is missing — the dispatched review has no contract"
+	t_done "/review-pr output contract"
+}
+wline() { grep -nF -- "$1" "$WORKER_ABS" | head -1 | cut -d: -f1; }
+
+# The body the worker actually reads: the editor header stripped exactly the
+# way scripts/agent-dispatch.sh strips it (a `<!--` first line through the
+# first line that IS `-->`). "Opens by" means the first line of THAT, not the
+# first line of the file.
+body=$(awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
+            inhdr { if ($0 == "-->") inhdr = 0; next }
+            { print }' "$WORKER_ABS")
+first=$(printf '%s\n' "$body" | grep -m1 .)
+case "$first" in
+*"no network"*) pass "the contract's first line to the worker says it has no network" ;;
+*) fail "the contract does not OPEN by saying the worker is offline; its first line is: '$first'" ;;
+esac
+assert_file_has "$WORKER" "no credentials" "a worker that believes it holds a token will try to use it"
+# The PROHIBITION, in words a model acts on: not a fetch, not a forge call.
+# Read unwrapped — the contract is 80-column prose and a sentence may break
+# between the verb and its object; the worker reads sentences, not lines.
+unwrapped=$(printf '%s\n' "$body" | tr '\n' ' ')
+printf '%s\n' "$unwrapped" | grep -qiE 'do not (attempt|try|run)[^.]*fetch' &&
+	pass "$WORKER tells the worker not to attempt a fetch" ||
+	fail "$WORKER never forbids a fetch — the worker will try one and burn its budget on the sandbox"
+printf '%s\n' "$unwrapped" | grep -qiE 'do not (attempt|try|run)[^.]*forge' &&
+	pass "$WORKER tells the worker not to attempt a forge call" ||
+	fail "$WORKER never forbids a forge call"
+assert_file_has "$WORKER" "stdout" "stdout is the only channel out, and the contract must say so"
+
+# The machine contract: REVIEWED first, VERDICT second, and the sha comes from
+# the local branch — no fetch needed to produce it.
+assert_file_has "$WORKER" "REVIEWED: <full sha>"
+r=$(wline "REVIEWED: <full sha>")
+v=$(wline "VERDICT:")
+if [ -n "$r" ] && [ -n "$v" ] && [ "$r" -lt "$v" ]; then
+	pass "REVIEWED (line $r) is specified ahead of VERDICT (line $v) — the first line of the report names the commit"
+else
+	fail "REVIEWED must precede VERDICT in the contract — REVIEWED='$r' VERDICT='$v'"
+fi
+assert_file_has "$WORKER" "git rev-parse" "the sha is produced offline, from the branch the worker diffed"
+
+# The sha is PINNED FIRST, and the diff is read against it. A worker that
+# diffs a mutable branch ref and resolves that ref separately can report a
+# commit it never reviewed: the coordinating session holds the same checkout
+# and can commit while the worker reads. The ORDER is the guarantee the
+# REVIEWED header makes, so the order is what this asserts.
+rp=$(wline 'git rev-parse %%BRANCH%%')
+gd=$(wline 'git diff %%BASE%%')
+if [ -n "$rp" ] && [ -n "$gd" ] && [ "$rp" -lt "$gd" ]; then
+	pass "the contract pins the sha (line $rp) before it reads the diff (line $gd)"
+else
+	fail "the contract must resolve and retain the sha of %%BRANCH%% BEFORE the diff — rev-parse='$rp' diff='$gd'"
+fi
+if printf '%s\n' "$unwrapped" | grep -qF 'git diff %%BASE%%...%%BRANCH%%'; then
+	fail "the diff endpoint is still the mutable branch ref — diff against the pinned sha instead"
+else
+	pass "the diff endpoint is the pinned sha, not the mutable branch ref"
+fi
+
+# The header stays honest about why the file exists: it is what a session
+# stages in place of telling the worker to run /review-pr, and the reason is
+# the sandbox. A header that still described only the CI/branch split would
+# send the next editor to the wrong mental model.
+header=$(sed -n '1,/^-->$/p' "$WORKER_ABS")
+case "$header" in
+*"/review-pr"*) pass "the editor header names /review-pr as the skill this contract stands in for" ;;
+*) fail "the editor header never mentions /review-pr — it no longer says why this file is dispatched" ;;
+esac
+case "$header" in
+*offline* | *"no network"*) pass "…and says the worker is offline, which is the reason" ;;
+*) fail "…and does not say the worker is offline, which is the whole reason for the swap" ;;
+esac
+
+# Shared invariant §7 stays in the worker's own words (tests/agent-dispatch
+# holds the same line; repeated here because this suite owns the contract).
+assert_file_has "$WORKER" "do not push"
+
 t_done "/review-pr output contract"

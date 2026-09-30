@@ -14,9 +14,30 @@ output channel — so they are two task kinds, not one prompt copied. The rule
 they share is the one that matters: ONE file per task kind, never one per
 provider, so that comparing two vendors measures the models and not the prompts.
 
+WHY IT OPENS BY SAYING THE WORKER IS OFFLINE (#266, PRD #261). The worker runs
+under its agent harness's default sandbox — a read-only tree and no network —
+and it must stay that way: with network it would hold a writable tree, the
+operator's forge token and a diff that is untrusted content, all at once. So
+this file is what a session STAGES when it dispatches `/review-pr` to another
+agent harness, in place of an instruction to run that skill itself: the skill
+needs a `git fetch`, a forge call and a human at its last prompt, none of which
+a headless offline worker has. The report the worker prints is its only channel
+out, and the report's first line names the commit it reviewed, so the session
+that posts the findings can tell a head that has since moved from a commit the
+review never saw.
+
 The dispatcher strips this header before it substitutes. Everything below is
 sent to the model verbatim.
 -->
+
+You are OFFLINE: this worker has no network and no credentials. Do not attempt
+a `git fetch`, a `gh` call or any other call to the forge — every one of them
+fails here, and the budget it burns is the review's. Everything you need is in
+the checkout you were started in: the branch, its base, the manual and the spec
+below. Your findings go to stdout, in the shape at the end of this prompt, and
+stdout is your only channel out: the coordinating session — the one that holds
+the credentials — reads that report and is what acts on the forge. Nothing you
+print is posted as-is, so address the diff, not the forge.
 
 Review the changes on branch %%BRANCH%% against %%BASE%%.
 
@@ -28,7 +49,15 @@ names (default location `docs/adr/`): a decision recorded there outranks your
 priors, and a finding that contradicts one must cite it by number and argue
 with it rather than ignore it.
 
-Then read the diff yourself: `git diff %%BASE%%...%%BRANCH%%`.
+Then pin the commit, BEFORE you read the diff: `git rev-parse %%BRANCH%%` —
+from the refs already in this checkout; there is nothing to fetch. Keep that
+40-character sha. It is what you report in REVIEWED, and it is what every
+command below names, because %%BRANCH%% is a moving ref: the session that
+started you shares this checkout and may commit to it while you read.
+
+Then read the diff yourself, against the sha you pinned:
+
+    git diff %%BASE%%...<the sha you pinned>
 
 You have the diff, the spec and the manual. You do NOT have the implementer's
 account of the work, and that is deliberate: anchoring on the author's
@@ -76,8 +105,18 @@ verbatim, so the tags and ids must be exactly as written and must start their
 line. Presentation may improve around them, never inside them, and they never
 become table cells.
 
+    REVIEWED: <full sha>
     VERDICT: <one line — blocking or not, and what to fix first.
               "no findings" is a valid verdict and a good one>
+
+    REVIEWED is the FIRST line of the report and it is required: the sha
+    you pinned before reading the diff and diffed against, repeated
+    verbatim. Never resolve the branch a second time to produce it — the
+    ref may have moved since, and the report would then name a commit you
+    never read. It says what you reviewed, so a commit that lands after you
+    read the diff is told apart from one you missed, and the session posting
+    your findings anchors them to that commit rather than to whatever the
+    head is by then.
 
     ## Axis 1 — Standards
 
