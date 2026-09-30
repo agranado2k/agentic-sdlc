@@ -172,6 +172,10 @@ assert_file_has "$SKILL" "UNSUPPORTED SCHEMA" "…recognised by the line summary
 assert_file_has "$SKILL" "not a first retro" "…and an empty window after it is never read as a first retro"
 assert_file_has "$SKILL" "a correction is a new event" "a damaged line is not 'fixed' — the window moves past it"
 assert_file_lacks "$SKILL" "until it is fixed" "nothing rewrites an event file, so nothing waits for a fix"
+# The previous retro's candidates sit BEFORE its run end, outside the default
+# window by construction — so the recurrence check needs its own read (M-4).
+grep -qE 'show +run:<id> +--kind +note' "$SKILL_ABS" && pass "the previous retro's candidates are read by its run id — the window alone never reaches them" ||
+	fail "no 'show run:<id> --kind note' — the 'repeats a previous retro' route has nothing to compare against"
 procedure() { awk '/^## Procedure/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
 v_step=$(procedure | grep -nE "sh scripts/trace\\.sh +verify" | head -1 | cut -d: -f1)
 r_step=$(procedure | grep -nE "sh scripts/trace\\.sh +(show|summary|export)" | head -1 | cut -d: -f1)

@@ -42,7 +42,7 @@ invariant §11), and a rule the gate holds costs no context at all.
 
 The default window is **since its own last run end** — the trace is the
 skill's own clock, so nothing is read twice and nothing is skipped. Find it
-with `sh scripts/trace.sh export | grep -F '"skill":"retro"' | grep -F '"kind":"run.start"' | tail -1` — that line's `run` is the previous retro — and `sh scripts/trace.sh show run:<id> --kind run.end` gives its end; the date in that event's `ts` is the window's `--since`. A since-date selects whole
+with `sh scripts/trace.sh export | grep -F '"skill":"retro"' | grep -F '"kind":"run.start"' | tail -1` — that line's `run` is the previous retro — and `sh scripts/trace.sh show run:<id> --kind run.end` gives its end; the date in that event's `ts` is the window's `--since`. Its candidates sit before that end, outside the window: `sh scripts/trace.sh show run:<id> --kind note` reads them, and they are what a finding is compared against to say it recurred. A since-date selects whole
 per-day files, so the last run's own day is read again: skip the events
 before that `ts`. An explicit `--since YYYY-MM-DD` on the invocation
 overrides the default. A **first retro** has no last run: read the whole
