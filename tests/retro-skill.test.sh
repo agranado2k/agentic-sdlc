@@ -111,6 +111,13 @@ assert_file_has "$SIDECAR" "policy citation" "…that cite a policy — a decisi
 # bot and human triage into a false chain-health finding.
 assert_file_has "$SIDECAR" "\`data.source=local\`" "review signal joins only the triages that have a raise — the local ones"
 assert_file_has "$SIDECAR" "latest raise" "…and pairs each with the latest raise of its id, since ids restart per review"
+# …and only an Axis-1 id has a raise: /review-pr records its second axis as
+# a verdict count, so a local triage of a confirm-list item is no orphan.
+assert_file_has "$SIDECAR" "has no raise by design" "a confirm-list triage is not read as a finding raised by nobody"
+assert_file_has "$SIDECAR" "about the stamping" "a defaulted start is /to-tickets not stamping, not the rubric misjudging"
+grep -qE 'exit 3' "$SKILL_ABS" && awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | grep -q 'operator' &&
+	pass "the routing section names its one exception — exit 3 goes to the operator" ||
+	fail "step 1 routes exit 3 to the operator while Routing says everything goes to /to-tickets"
 assert_file_has "$SIDECAR" "hypothesis" "diagnosis calibration reads the hypotheses"
 assert_file_has "$SIDECAR" "data.rank" "…at the rank each held"
 assert_file_has "$SIDECAR" "confirmed" "…against the one confirmed"
@@ -119,7 +126,8 @@ assert_file_has "$SIDECAR" "unpriced" "spend names the model the price table doe
 # A priced read says on stderr when the price table is past its window
 # (ADR-0008 clause 6); a retro that drops stderr quotes stale costs bare.
 assert_file_has "$SIDECAR" "Last checked" "spend reads the stale-table advisory and dates every cost figure"
-assert_file_has "$SKILL" "TRACE_QUIET" "the reads keep stderr — the switch that silences the advisory is named as never used"
+grep -qE 'never[^.]*TRACE_QUIET=1' "$SKILL_ABS" && pass "the reads keep stderr — the switch that silences the advisory is named as NEVER used" ||
+	fail "SKILL.md does not forbid TRACE_QUIET=1 on its reads — the stale-table advisory would be silenced"
 assert_file_has "$SIDECAR" "spawn.end" "chain health reads how spawns ended"
 for o in fail timeout budget unreachable; do
 	assert_file_has "$SIDECAR" "\`$o\`" "chain health names the spawn outcome '$o'"

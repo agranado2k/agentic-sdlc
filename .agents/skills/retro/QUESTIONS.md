@@ -28,7 +28,8 @@ the ticket's runs.*
   bought. `mechanical` iterating like `implementer` is the classic case.
 - A `ticket.start` with `outcome` `disputed` — the implementer demonstrated
   the stamp wrong — or `defaulted` — the ticket carried no tier at all — is
-  counted per tier: both are findings about the rubric before any PR opens.
+  counted per tier, before any PR opens: `disputed` is a finding about the
+  rubric, `defaulted` one about the stamping in `/to-tickets`.
 - A ticket whose `tier` differs from its `data.tier_proposed` is a quiz
   override. Compare its iterations and criticals with its proposed tier's
   average: an override that paid for itself is the rubric lagging the human;
@@ -46,8 +47,10 @@ sub-agent that raised it), `finding.triage` (`data.source`, `data.id`,
 `outcome`, `reason`).*
 
 - Join raise to triage on `data.id` within one PR, and only the triages with
-  `data.source=local`: a check, a bot comment and a human comment are triaged
-  too, under ids no review raised. The ids restart with every review, so on
+  `data.source=local` and a standards id (`C-`, `H-`, `M-` or `L-N`): a
+  check, a bot comment and a human comment are triaged too, under ids no
+  review raised, and a confirm-list item has no raise by design — `/review-pr`
+  records that axis as a verdict count. The ids restart with every review, so on
   a PR reviewed more than once pair each triage with the latest raise of its
   id before it, by `ts`. Per `data.agent`: findings raised, accepted,
   `rejected`, escalated, answered.
@@ -61,8 +64,8 @@ sub-agent that raised it), `finding.triage` (`data.source`, `data.id`,
   are accepted every time and are all `low` is a different finding — signal
   that costs a spawn and changes little.
 - A finding raised by nobody — a `finding.triage` with `data.source=local`
-  and no `finding.raise` of its id before it on that PR — is chain health
-  (question 6), noted here and counted there.
+  and a standards id, and no `finding.raise` of that id before it on that
+  PR — is chain health (question 6), noted here and counted there.
 
 Route: `/to-tickets` — a prompt change for one agent in `/review-pr`, with
 the citation the rejections kept making.

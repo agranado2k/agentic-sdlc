@@ -109,6 +109,8 @@ change, and the report says which:
 - An **aim** that keeps missing → the feedback-first ordering rule in
   `/to-tickets`, and the tier that wrote the misses; landed slices with no
   verdict → `/merge-train`, which is where the verdict is asked.
+- One finding routes to the operator instead: verify's exit 3 — the shared
+  layer is updated before any retro can read.
 - A finding that repeats a previous retro's with no ticket behind it → say
   so; the finding is now about the loop, not the wave.
 
