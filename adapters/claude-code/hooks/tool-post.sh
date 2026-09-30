@@ -66,26 +66,21 @@ tdir=$(hook_dir) || {
 
 hook_read
 
-# THE STAGING DIRECTORY sits INSIDE the trace directory, and only there, so
-# landing a payload in the blob store is a rename rather than a copy across
-# filesystems — the same reason scripts/trace.sh stages a blob under its own tmp/. Its own subdirectory
-# per call, so two tool calls finishing at once cannot overwrite each other's
-# three files.
+# THE STAGING DIRECTORY sits INSIDE the trace directory: the reader below
+# writes the full input and result there before `scripts/trace.sh blob` stores
+# them, so a tool's payload never leaves the directory whose access the
+# operator chose. Its own subdirectory per call, so two tool calls finishing at
+# once cannot overwrite each other's three files. The landing is the shared
+# script's — it stages its own copy and renames that into the store — so
+# nothing here is ever moved into the store, and the whole directory is swept
+# at the end.
 stage=
 if mkdir -p "$tdir/tmp" 2>/dev/null; then
 	stage=$(mktemp -d "$tdir/tmp/tool.XXXXXX" 2>/dev/null) || stage=
 fi
-
-# AND NOWHERE ELSE. A first draft fell back to TMPDIR when that failed, which
-# reads as robustness and is the opposite: on another filesystem the landing
-# `mv` becomes copy-and-unlink, so a reader can open half a payload at the
-# address its whole content will have — the one thing a content-addressed store
-# must never allow (craft §11, and the reason trace_blob_name stages inside the
-# trace directory too; M-3, review of PR #295). A trace directory that cannot
-# stage is a recorded failure.
 if [ -z "$stage" ]; then
 	hook_trace emit kind=tool.use outcome=fail \
-		reason="no scratch could be staged inside the trace directory, and a blob landed from anywhere else could be published half-written, so nothing was stored"
+		reason="no scratch could be staged inside the trace directory, so the tool payload had nowhere private to be read into, and nothing was stored"
 	exit 0
 fi
 
@@ -173,11 +168,16 @@ PostToolUseFailure) outcome=fail ;;
 *) case $from in error) outcome=fail ;; *) outcome=ok ;; esac ;;
 esac
 
-# THE TWO BLOBS. A store that will not take the bytes is one event saying so:
-# the hashes are what makes the event worth anything, and an event naming a blob
-# nobody can open would be worse than one that says the store refused.
-ib=$(hook_blob "$tdir" "$stage/input") || ib=
-rb=$(hook_blob "$tdir" "$stage/result") || rb=
+# THE TWO BLOBS, through the shared script's own store: `blob` prints
+# `<hash> <bytes>` and writes no event, so both payloads are stored before the
+# ONE event that names them. A store that will not take the bytes prints
+# nothing, and that is one event saying so: the hashes are what makes the event
+# worth anything, and an event naming a blob nobody can open would be worse
+# than one that says the store refused. hook_trace runs the script from the
+# adapter's own repository, so the name is that repository's object format and
+# never the one of wherever the agent harness stood (M-2, review of PR #295).
+ib=$(hook_trace blob "$stage/input")
+rb=$(hook_trace blob "$stage/result")
 if [ -z "$ib" ] || [ -z "$rb" ]; then
 	hook_trace emit kind=tool.use outcome=fail \
 		reason="the trace's blob store could not take this tool call's payloads, so the event would have named blobs nobody can open"

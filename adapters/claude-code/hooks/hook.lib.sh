@@ -168,15 +168,24 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [<field>=<value> …] — one event of <kind> per
-# model in the transcript, carrying that model's four token counts, and exactly
-# one event whatever happens. Four shapes, all of them exit 0:
+# hook_tokens <transcript> <kind> [--after <message id>] [<field>=<value> …] —
+# one event of <kind> per model in the transcript, carrying that model's four
+# token counts, and at least one event whatever happens. Five shapes, all of
+# them exit 0:
 #
-#   the numbers      one event per model, tokens on it
+#   the numbers      one event per model, tokens on it, and how far the read
+#                    went: data.msgs (that model's messages) and data.last_msg
 #   node missing     one event, outcome=fail, the reason naming node
-#   shape drift      one event, outcome=fail, the reason the extractor gave
+#   shape drift      one event, outcome=fail, the reason the extractor gave —
+#                    an --after anchor the transcript no longer holds is one
 #   nothing to read  one event, outcome=fail, saying the transcript had no
 #                    assistant message with a usage block yet
+#   nothing new      with --after only: one event, no tokens and no failure,
+#                    carrying the anchor forward as data.last_msg
+#
+# --after is the previous read's data.last_msg, and with it only the messages
+# after it are counted (#307): see transcript-usage.mjs for why a resumed
+# session needs it and session-end.sh for where the anchor comes from.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -190,6 +199,12 @@ hook_tokens() {
 	_ht_file=$1
 	_ht_kind=$2
 	shift 2
+	_ht_after=
+	if [ "${1:-}" = --after ]; then
+		_ht_after=${2:-}
+		# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
+		if [ $# -ge 2 ]; then shift 2; else shift; fi
+	fi
 	if ! command -v node >/dev/null 2>&1; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason='node is not on PATH, so the transcript could not be read for token counts' "$@"
@@ -204,7 +219,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -215,7 +230,7 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi
@@ -224,23 +239,32 @@ hook_tokens() {
 			reason="${_ht_why:-the transcript usage extractor failed and said nothing}" "$@"
 		return 0
 	fi
+	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
+		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \
+			reason="nothing new in the transcript since $_ht_after, which an earlier usage event counted" "$@"
+		return 0
+	fi
 	if [ -z "$_ht_out" ]; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason='the transcript carries no assistant message with a usage block — nothing to read yet' "$@"
 		return 0
 	fi
-	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r; do
+	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
-			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" "$@"
+			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
+			data.msgs="$_ht_n" data.last_msg="$_ht_l" "$@"
 	done
 	return 0
 }
 
-# --- tool capture: the switch, and the blob store ---------------------------
+# --- tool capture: the switch, and the trace directory ----------------------
 # Everything below is read only by tool-post.sh. It sits here, beside the
 # payload reader and the pointer, because it is the same kind of thing: what
 # this adapter has to know about the shared script in order to speak to it.
+# The blob store is NOT here: the hook hands each payload to `scripts/trace.sh
+# blob`, which stores it exactly as an emit's payload is stored and prints its
+# name, so there is one writer of that store (ticket #306).
 
 # hook_policy — the trace policy file this repository's hooks read.
 #
@@ -304,53 +328,4 @@ hook_dir() {
 	_hd_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hd_dir=
 	[ -n "$_hd_dir" ] || return 1
 	printf '%s' "$_hd_dir"
-}
-
-# hook_blob <trace directory> <staged file> — put those bytes in the trace's blob
-# store and print `<hash> <bytes>`. The file is CONSUMED: it is renamed into the
-# store, or left for the caller's scratch sweep when the store already holds that
-# content. The directory is passed IN rather than resolved here, because a caller
-# with two payloads would otherwise ask the shared script for it twice.
-#
-# WHY THIS ADAPTER LANDS A BLOB ITSELF, rather than through `emit --blob`. One
-# emit carries one blob — `scripts/trace.sh` refuses a second, deliberately: the
-# line format has room for one hash. A tool call has TWO payloads, its input and
-# its result, and the acceptance for capturing one is ONE event, because a reader
-# joining two half-events per tool call is exactly the volume the switch exists
-# to contain. So the two payloads are stored here and the one event names both
-# under its data map.
-#
-# THAT MAKES TWO WRITERS OF ONE STORE, which is a coupling — the same shape as
-# hook_pointer above, and it is held the same way: not by comparing strings but
-# by `tests/trace-hooks.test.sh` section 19, which hands the SHARED SCRIPT the
-# same payload and asserts it lands at the same relative path under its own
-# directory. The day trace.sh renames or re-lays-out the store, that goes red
-# instead of the trace quietly growing a second store nobody reads. A `blob`
-# subcommand on the shared script — store these bytes, print the name, write no
-# event — would remove the coupling altogether, and is the ticket to file.
-#
-# The name is GIT's content hash, `--stdin` like trace_hash_file, so the blob is
-# named the same thing `git hash-object` names it anywhere. Identical content is
-# stored once and never rewritten, and the landing is a rename, so a reader never
-# opens half a payload (craft §11).
-hook_blob() {
-	_hb_dir=$1
-	[ -n "$_hb_dir" ] || return 1
-	[ -f "$2" ] || return 1
-	# FROM THE ADAPTER'S OWN REPOSITORY, never from the caller's cwd: `git
-	# hash-object` answers in the object format of the repository it runs in, and
-	# the agent harness chooses where a hook stands. Run in a sha256 repository
-	# it named a payload sha256 while the shared script — which runs from
-	# hook_repo — named the same bytes sha1, which is two addresses for one
-	# payload in one store (M-2, review of PR #295).
-	_hb_hash=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" hash-object --stdin <"$2") 2>/dev/null ) || _hb_hash=
-	[ -n "$_hb_hash" ] || return 1
-	_hb_bytes=$(wc -c <"$2" 2>/dev/null | tr -d ' ')
-	[ -n "$_hb_bytes" ] || return 1
-	_hb_dest="$_hb_dir/blobs/$(printf '%.2s' "$_hb_hash")/$_hb_hash"
-	if [ ! -f "$_hb_dest" ]; then
-		mkdir -p "$(dirname "$_hb_dest")" 2>/dev/null || return 1
-		mv "$2" "$_hb_dest" 2>/dev/null || return 1
-	fi
-	printf '%s %s' "$_hb_hash" "$_hb_bytes"
 }
