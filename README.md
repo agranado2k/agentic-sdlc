@@ -583,6 +583,20 @@ skeleton (K0).
   order included, and to the checker's own defaults, so a token added on one
   side and not the other goes red.
 
+- `sh tests/trace-prices.test.sh` proves the price table says when it is stale
+  and refreshes on demand (ticket #270). Because cost is computed on read
+  (ADR-0008 clause 6), the table is a dated claim that rots quietly — so
+  `summary` and `export --csv` read its `Last checked:` line and print one
+  advisory on stderr past `TRACE_PRICES_STALE_DAYS`: never on stdout, never an
+  exit status, silent when the window is empty or no date is written, silenced
+  by `TRACE_QUIET=1`. Then the kit-only refresh script
+  (`scripts/trace-prices.kit.sh`) against fixture payloads under
+  `tests/fixtures/prices/` — no network in the suite at all: `--check` reports
+  drift as exit 1 and a source failure as exit 2, two sources disagreeing past
+  the threshold refuse the write and print both, and a write rewrites exactly
+  the five values, the date and the two source-revision lines, leaves every
+  other byte of the policy file alone, and commits nothing.
+
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
   redacted transcript fixtures. The session-start hook writes the pointer file
@@ -594,8 +608,16 @@ skeleton (K0).
   plus the subagent's equals it exactly. Then both failure shapes — a renamed
   usage key and a PATH with no node — make the extractor exit 2 and the hook
   record one event with `outcome=fail` naming the cause, and every hook exits 0
-  and says nothing on either stream throughout. Finally the kit-only
-  `.claude/settings.json` parses and names only hook scripts that exist.
+  and says nothing on either stream throughout. Then tool capture, which is a
+  switch of its own: with `TRACE_TOOLS` empty in the shipped policy file the
+  post-tool hook writes nothing at all, and with it set one tool call becomes
+  one `tool.use` event whose two blob names are git's own hash of the payload's
+  input and result — a 20 KB input still leaves the line inside the 4000-byte
+  cap, a failed call reads `outcome=fail` with the agent harness's error as its
+  result, a tool result that quotes another `session_id` does not re-file the
+  event, and a `tool_use_id` the trace could never match is one `fail` event
+  rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
+  and names only hook scripts that exist.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
   contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
   decision points by the plain `sh scripts/trace.sh …` name, never the kit's
@@ -745,6 +767,7 @@ sh tests/trace.test.sh                                 # the decision trace: emi
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
+sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
