@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-23
+## Current state — 2026-09-30
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.24.0 tagged 2026-09-23 at `0cd7f8d`, the merge of PR #256; 0.23.0 the same day at `0d5861a` (#243), 0.22.0 at `c0cd9c5` (#234), 0.21.0 on 2026-09-22 at `8f9a65c` (#228). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), seventeen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.29.0 is the release in flight (ticket #255): `scripts/trace.sh` joins the layer and the dispatcher records every spawn, closing PRD #237's wave; its tag goes on the merge commit. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `0cd7f8d` — merge of PR #256, the 0.24.0 release: a crossing whose agent harness is not installed exits 69 rather than sharing exit 2 with the caller's own mistakes. Tagged `v0.24.0`. |
+| **Last commit on `main`** | `377452b` — merge of PR #315 (#309: ADR-0008 clause 7 names its readers, and `/grill-with-docs` records its decisions), untagged past `v0.28.0`. The 0.29.0 release PR merges next and carries `v0.29.0`. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 is open and undecomposed — a trace of every decision the chain makes — and is a wave, not a ticket. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | `worktree/lifecycle-catalogue` builds #296, the first lifecycle slice (ADR-0011): declared catalogue admission; release scaffolding is drawn forward as 0.27.0; mechanism adoption remains #302. None of PRD #273's. Its first wave landed 2026-09-29 in two trains, tagged `v0.25.0` and `v0.26.0`: #289 (#274, `scripts/vocab.sh` and its filled policy file join the shared layer — a decision value its vocabulary does not declare is refused where the value is read) and #287 (#276, every self-measurement names its oracle and its comparator), then #288 (#275, the `judge` task domain named by its contract and mapped for nobody — ADR-0010 — which reached the consumer's manual template and so carried the 0.26.0 bump). All three reviews ran on the session's own vendor: the cross-vendor reviewer the resolver names hit its account's usage limit, and each PR says so. Open from PRD #273: #277 (blocked on #250), #278, #279 (blocked on #250), #280, #281, #282 — whose bump and recipe entry the two trains already carried, leaving it the diary entry. The trace wave's second train landed 2026-09-28: #262 (#253, `summary` and `export` price the trace on read — the kit's price table is filled from the vendors' pricing pages and dated in its header) and #263 (#248, `begin`/`end` give a run an identity, blobs give a payload a home, and ADR-0008 clause 4 gained a dated amendment for caller errors), after #260 refreshed this row. #262's review was cross-vendor; #263's ran on the session's own model family because the vendor account had hit its usage limit, and the PR says so. Open from PRD #237: #249, #250, #251 (frontier, in parallel), then #252, #254, #255; plus two candidates for `/to-tickets` — `show run:<id>`, and an exit code for an unsupported schema — and a price-table refresh on demand. Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
+| **Active worktrees** | `worktree/release-trace` builds #255, the 0.29.0 release: it contains PR #290 (#249, the dispatcher's spawn record), which closes as merged with it. The trace wave's other tickets have landed — #246–#254, #270–#272, #303–#309 — in the trains tagged `v0.25.0` to `v0.28.0` and in PRs #314, #315 and #323 after them. Open beside it: #319 (`finding.dismiss`, a trace follow-up outside this release); the forge broker PRs #285, #320, #321, #322 (PRD #261); #283 (#266); #311 (#279) and #318 from PRD #273; #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
 
 ### Open questions / unresolved decisions
 
@@ -1516,3 +1516,37 @@ evidence and resume. The release ticket #302 owns manifest admission and the
 consumer adoption recipe. Self-hosting requires every changed shared recipe to
 have a new version, so this first slice draws forward the 0.27.0 bump and
 transcript recapture; it leaves the operational mechanisms non-manifest.
+
+### 2026-09-30 (later) — 0.29.0: the decision trace joins the shared layer
+
+PRD #237's release (#255). `scripts/trace.sh` had shipped in every tag since
+0.25.0 without being in `files:`, so no consumer's copy was ever held to a
+release; from 0.29.0 it is copied verbatim and the gate requires it. Its
+policy file, `scripts/trace.config.sh`, stays outside the layer and ships
+empty, so Part 1 alone leaves a consumer with a trace that writes nothing and
+says so once. That is why the recipe's 9d now names the one line that turns it
+on — `TRACE_DIR='.trace'` plus the ignore rule — and why 9d's table, VERSION's
+policy-file list, bootstrap's adoption arm and self-host's release-delta check
+all gained the file as a row. The adoption arm used to copy neither the
+script nor its policy file; the first now arrives with the manifest, the
+second beside the other policy files.
+
+The dispatcher's spawn record (#249, PR #290) rides in by merge: it was
+reviewed and iterated on its own branch and could not go green there, because
+a shared file that drifts past its tag is red until a bump carries it. It is
+a widening — no exit status, argument or stdout changed — with one optional
+key in the consumer's agents policy file, `AGENT_DISPATCH_TRACE_PROMPT`.
+The kit's own skill dispatches now name the kit's trace twin, so they are
+traced here as well; that line was owed since #249's review.
+
+Two small corrections rode the re-pin. A recipe block I added first began with
+`kit show`, and the docs demo extracts the 9a inventory block by that first
+line — the new block shadowed it and three C4i checks went red; it now opens
+with a comment. And the ADD commentary under Part 2's worked example still
+bold-quoted `v0.25.0` while the transcript it quotes said `v0.28.0`: D2's
+probe reads the first line of that shape, which is the transcript's own, so
+the prose one never had a check. It names 0.29.0 now; the probe's blind spot
+stays, noted here.
+
+The tag is NOT cut by this PR. It goes on the merge commit after the human's
+merge, and until then self-host F3 prints its pull-request note.
