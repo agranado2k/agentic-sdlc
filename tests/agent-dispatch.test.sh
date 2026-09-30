@@ -1387,9 +1387,25 @@ AGENT_HARNESS_FK_CMD='$FORKER {model_flag} < {prompt_file}'
 AGENT_HARNESS_FK_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='fk:'
 EOF
-	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 30
+	# The trace directory rides this leg in the environment: exit 71 is the one
+	# outcome only a real ceiling produces, so the ceiling's own leg is where
+	# the trace's `budget` outcome can be asserted rather than claimed (#249).
+	# `env`, not a prefix assignment, so the value reaches this dispatch and no
+	# later one.
+	TR_BUDGET="$SCRATCH/trace-budget"
+	rm -rf "$TR_BUDGET" && mkdir -p "$TR_BUDGET"
+	AGENTS_CONFIG="$CFG_FORK" t_run_split env TRACE_DIR="$TR_BUDGET" sh "$DISPATCH" \
+		implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 30
 	s_assert_status 71 "a task runaway stops at the budget and the dispatch exits 71"
 	s_assert_err_has "TASK ceiling"
+	if [ "$S_STATUS" = 71 ]; then
+		case $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | sed -n 2p) in
+		*'"kind":"spawn.end"'*'"outcome":"budget"'*)
+			pass "…and the spawn.end records the ceiling as the outcome budget, not a fail" ;;
+		*)
+			fail "the spawn.end for a ceiling hit reads: $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | sed -n 2p)" ;;
+		esac
+	fi
 	# The whole point: the operator's own shell is unharmed.
 	if sh -c 'exit 0'; then
 		pass "a command in the calling shell right after the runaway still forks"
@@ -1815,6 +1831,342 @@ t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" planner --prompt 'x'
 t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
 [ "$S_STATUS" = 69 ] && pass "--dry-run reports the unreachable crossing too, with the same status" ||
 	fail "--dry-run on an unreachable crossing exited $S_STATUS"
+
+# ---------------------------------------------------------------------------
+banner "Every spawn is recorded — the pair, the join, and the outcomes (#249)"
+# ---------------------------------------------------------------------------
+# The dispatcher already knows what the trace wants to know: the tier, the task
+# domain, the agent harness, the model, the depth, the prompt it assembled and
+# how the worker ended. PRD #237 and ADR-0008 make that a `spawn` event and a
+# `spawn.end` that pairs with it, and the worker is handed a run of its own so
+# a cross-harness worker's emits join this dispatch's trail without knowing
+# anything about run stacks.
+#
+# The trace directory is passed PER LEG in the environment, never from a policy
+# file: the trace script's own TRACE_DIR override is the seam for exactly this,
+# and a suite that wrote into the repo's own trace would read another session's
+# events as its own. Every leg gets an empty directory, so a count is a claim.
+TRACE="$KIT/scripts/trace.sh"
+tr_new() { rm -rf "$1" && mkdir -p "$1"; }
+tr_all() { cat "$1"/events/*.jsonl 2>/dev/null || :; }
+tr_count() { tr_all "$1" | grep -c . || :; }
+tr_nth() { tr_all "$1" | sed -n "$2p"; }
+# tr_event_has <dir> <n> <needle> <label>
+tr_event_has() {
+	case $(tr_nth "$1" "$2") in
+	*"$3"*) pass "$4" ;;
+	*)
+		fail "$4 — event $2 reads: $(tr_nth "$1" "$2")"
+		tr_all "$1" | sed 's/^/        > /'
+		;;
+	esac
+}
+# tr_assert_count <dir> <n> <label>
+tr_assert_count() {
+	if [ "$(tr_count "$1")" = "$2" ]; then
+		pass "$3"
+	else
+		fail "$3 — $(tr_count "$1") events, not $2"
+		tr_all "$1" | sed 's/^/        > /'
+	fi
+}
+
+TR_STUB="$SCRATCH/traced-worker"
+cat >"$TR_STUB" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+echo "worker TRACE_RUN=${TRACE_RUN-unset}"
+echo "worker TRACE_PARENT=${TRACE_PARENT-unset}"
+echo "worker TRACE_SESSION=${TRACE_SESSION-unset}"
+exit "${TR_WORKER_EXIT:-0}"
+EOF
+chmod +x "$TR_STUB"
+CFG_TR="$SCRATCH/traced.config.sh"
+cat >"$CFG_TR" <<EOF
+AGENT_HARNESSES='tr'
+AGENT_HARNESS_TR_CMD='$TR_STUB {model_flag} < {prompt_file}'
+AGENT_HARNESS_TR_MODEL_FLAG='--model {model}'
+AGENT_TIER_IMPLEMENTER='tr:model-for-implementing'
+AGENT_TIER_IMPLEMENTER_CONTENT='tr:model-for-prose'
+AGENT_TIER_PLANNER='model-for-planning'
+EOF
+
+# --- the pair, on a dispatch that worked ------------------------------------
+TR_OK="$SCRATCH/trace-ok"
+tr_new "$TR_OK"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" \
+	TRACE_SESSION=sess-of-the-session TRACE_RUN=run-of-the-skill \
+	sh "$DISPATCH" implementer content --prompt 'Trace this dispatch.'
+s_assert_status 0 "a traced dispatch still dispatches"
+tr_assert_count "$TR_OK" 2 "one spawn and one spawn.end, and nothing else"
+tr_event_has "$TR_OK" 1 '"kind":"spawn"' "the first event is the spawn"
+tr_event_has "$TR_OK" 2 '"kind":"spawn.end"' "the second is the spawn.end that pairs with it"
+tr_event_has "$TR_OK" 1 '"tier":"implementer"' "the spawn records the tier it was asked for"
+tr_event_has "$TR_OK" 1 '"domain":"content"' "…the task domain, when one was given"
+tr_event_has "$TR_OK" 1 '"harness":"tr"' "…the agent harness it crossed to"
+tr_event_has "$TR_OK" 1 '"model":"model-for-prose"' "…and the model the resolver actually answered with"
+tr_event_has "$TR_OK" 1 '"run":"run-of-the-skill"' "the spawn belongs to the DISPATCHING run"
+tr_event_has "$TR_OK" 1 '"session":"sess-of-the-session"' "…and to the session it was dispatched from"
+tr_event_has "$TR_OK" 1 '"outcome":"dispatched"' "the spawn says the dispatch was made"
+tr_event_has "$TR_OK" 1 '"depth":"1"' "…at the depth it ran at"
+# The size is of the prompt the dispatcher ASSEMBLED, not of what the caller
+# typed: a template's editor header is stripped and its markers are filled
+# before the worker ever sees it, and the bytes that crossed are the fact.
+TR_BYTES=$(printf 'Trace this dispatch.\n' | wc -c | tr -d ' ')
+tr_event_has "$TR_OK" 1 "\"prompt_bytes\":\"$TR_BYTES\"" "…with the size of the prompt it assembled"
+tr_event_has "$TR_OK" 2 '"outcome":"ok"' "exit 0 is the outcome ok"
+tr_event_has "$TR_OK" 2 '"exit":"0"' "…with the status recorded beside it"
+# THE PAIR MUST NOT COME APART. The worker's run is exported into this process
+# for the spawn to reach it, so an emit that did not restore the dispatcher's
+# own identity would write the END under the WORKER's run — leaving two events
+# that share a subject and belong to different runs. Both halves are asserted,
+# because a mutant with the restore removed satisfies every other assertion on
+# this event (H-4, review of PR #290).
+tr_event_has "$TR_OK" 2 '"run":"run-of-the-skill"' "…and to the dispatching run, not to the worker's own"
+case $(tr_nth "$TR_OK" 2) in
+*'"parent":"run-of-the-skill"'*) fail "the spawn.end was written under the worker's run, with the dispatching run as its parent" ;;
+*) pass "…so the dispatching run is the end's run and never its parent" ;;
+esac
+
+# THE JOIN. The worker is handed a run of its own and this dispatch's run as
+# its parent, so the lines it emits inside another agent harness sit under the
+# same run id the pair names as its subject — which is what makes
+# `show run:<id>` the whole story of one spawn.
+WORKER_RUN=$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+case $WORKER_RUN in
+'' | unset) fail "the worker was not handed a run of its own: $S_OUT" ;;
+run-of-the-skill) fail "the worker was handed the DISPATCHING run, not a fresh one" ;;
+*) pass "the worker sees a fresh TRACE_RUN of its own ($WORKER_RUN)" ;;
+esac
+printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_PARENT=run-of-the-skill$' &&
+	pass "…and TRACE_PARENT naming the dispatching run" ||
+	fail "the worker's TRACE_PARENT is not the dispatching run: $S_OUT"
+printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_SESSION=sess-of-the-session$' &&
+	pass "…and the session it was dispatched from" ||
+	fail "the worker lost the session: $S_OUT"
+tr_event_has "$TR_OK" 1 "\"subject\":\"run:$WORKER_RUN\"" "the spawn's subject is the run the worker was given"
+tr_event_has "$TR_OK" 2 "\"subject\":\"run:$WORKER_RUN\"" "…and so is the spawn.end's"
+t_run_split env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
+[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 2 ] &&
+	pass "show run:<the worker's run> prints the pair — the operator's one command" ||
+	fail "show found $(printf '%s\n' "$S_OUT" | grep -c .) lines for run:$WORKER_RUN"
+
+# A STALE PARENT IS WORSE THAN NONE. This process's own TRACE_PARENT was set by
+# whoever dispatched IT, and passing it on would name the worker's grandparent
+# as its parent. So the worker's is always set explicitly — to the empty string
+# when this dispatch belongs to no run, which the trace script reads as "no
+# parent" rather than as "ask the local run stack".
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" TRACE_PARENT=run-of-the-grandparent \
+	sh "$DISPATCH" implementer --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_PARENT=$' &&
+	pass "a dispatch with no run of its own hands the worker an empty parent, not its own" ||
+	fail "the worker inherited a parent from the dispatcher's own: $S_OUT"
+
+# --- the other outcomes -----------------------------------------------------
+TR_FAIL="$SCRATCH/trace-fail"
+tr_new "$TR_FAIL"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT=7 \
+	sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 7 "a worker's own status still passes through untouched"
+tr_event_has "$TR_FAIL" 2 '"outcome":"fail"' "…and any status but the ones with a name of their own is fail"
+tr_event_has "$TR_FAIL" 2 '"exit":"7"' "…with the status itself recorded, so fail is never a dead end"
+
+# A STATUS IS NOT A VERDICT. A worker may exit 124 or 71 of its own accord — a
+# nested dispatch passing its own timeout through is the everyday case — and
+# this dispatcher observed no timeout and no ceiling. The named outcomes belong
+# to what it OBSERVED, never to a number it was handed (H-2, review of PR #290;
+# the same lesson this file records at its own watchdog).
+for _tr_st in 124 71 69; do
+	tr_new "$TR_FAIL"
+	t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT="$_tr_st" \
+		sh "$DISPATCH" implementer --prompt 'x'
+	s_assert_status "$_tr_st" "a worker that exits $_tr_st on its own still passes it through"
+	tr_event_has "$TR_FAIL" 2 '"outcome":"fail"' "…and is recorded as fail, not as the dispatcher's own verdict"
+	tr_event_has "$TR_FAIL" 2 "\"exit\":\"$_tr_st\"" "…with $_tr_st itself recorded"
+done
+
+TR_SLOW="$SCRATCH/trace-slow"
+tr_new "$TR_SLOW"
+TR_SLEEPER="$SCRATCH/traced-sleeper"
+TR_STARTED="$SCRATCH/traced-sleeper.started"
+cat >"$TR_SLEEPER" <<EOF
+#!/bin/sh
+cat >/dev/null
+: >"$TR_STARTED"
+sleep 30
+EOF
+chmod +x "$TR_SLEEPER"
+CFG_TR_SLOW="$SCRATCH/traced-slow.config.sh"
+cat >"$CFG_TR_SLOW" <<EOF
+AGENT_HARNESSES='trs'
+AGENT_HARNESS_TRS_CMD='$TR_SLEEPER {model_flag} < {prompt_file}'
+AGENT_HARNESS_TRS_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='trs:'
+EOF
+t_run_split env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_SLOW" \
+	sh "$DISPATCH" implementer --prompt 'x' --timeout 2
+s_assert_status 124 "a worker killed past its timeout still exits 124"
+tr_event_has "$TR_SLOW" 2 '"outcome":"timeout"' "…and the timeout is an outcome of its own, not a fail"
+tr_event_has "$TR_SLOW" 2 '"exit":"124"' "…with 124 recorded"
+
+# A DISPATCHER TAKEN DOWN BY A SIGNAL is a terminal site too, and the timed
+# path's own trap is what closes the pair — without it an interrupted spawn
+# would read later as one that never ended. The worker here outlives nothing:
+# the trap takes its tree down first, which is what the leg above already
+# asserts about the watchdog's kill.
+TR_TERM="$SCRATCH/trace-signalled"
+tr_new "$TR_TERM"
+rm -f "$TR_STARTED"
+env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_TERM" \
+	sh "$DISPATCH" implementer --prompt 'x' --timeout 30 >"$SCRATCH/term.out" 2>"$SCRATCH/term.err" &
+TR_TERM_PID=$!
+# Wait for the WORKER to say it is running, rather than for a fixed two
+# seconds. The timed path installs its traps and then spawns, so the worker's
+# own marker is the one anchor that cannot precede them; on a loaded host a
+# signal that arrives earlier takes the global cleanup path, tears the scratch
+# out from under the dispatch and reports something else entirely — a flake,
+# not a finding (L-4, review of PR #290).
+TR_TERM_WAIT=0
+until [ -f "$TR_STARTED" ]; do
+	TR_TERM_WAIT=$((TR_TERM_WAIT + 1))
+	[ "$TR_TERM_WAIT" -gt 300 ] && break
+	sleep 0.1
+done
+kill -TERM "$TR_TERM_PID" 2>/dev/null
+wait "$TR_TERM_PID"
+TR_TERM_STATUS=$?
+[ "$TR_TERM_STATUS" = 143 ] &&
+	pass "a dispatcher sent TERM mid-run still exits 143" ||
+	fail "a signalled dispatcher exited $TR_TERM_STATUS"
+tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
+tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
+
+# THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
+# account has hit its usage limit, or one not installed here, is not a fail:
+# the caller's fallback — a review on its own model family — is a decision the
+# trace has to show rather than hide, so exit 69 has an outcome of its own.
+TR_69="$SCRATCH/trace-unreachable"
+tr_new "$TR_69"
+t_run_split env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_69" sh "$DISPATCH" reviewer --prompt 'x'
+s_assert_status 69 "an unreachable crossing still exits 69"
+s_assert_out_is "model-for-reviewing" "…and its stdout is still the model alone — no trace output on it"
+tr_assert_count "$TR_69" 2 "a crossing nobody could make is still a pair, not a silence"
+tr_event_has "$TR_69" 2 '"outcome":"unreachable"' "…and its outcome is unreachable, distinct from fail"
+tr_event_has "$TR_69" 2 '"exit":"69"' "…with 69 recorded"
+
+# NO HALF PAIRS. Deriving the budget can end the dispatch on its own — half an
+# inherited budget is a usage error — and the spawn must not already be on disk
+# when it does, because an append-only record has no way to close a pair
+# afterwards (ADR-0008 clause 5; H-1, review of PR #290).
+TR_HALF="$SCRATCH/trace-half"
+tr_new "$TR_HALF"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_HALF" AGENT_DISPATCH_BUDGET_TASKS=64 \
+	sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "half an inherited budget is still a usage error"
+tr_assert_count "$TR_HALF" 0 "…and a dispatch that dies deriving its budget leaves no half pair"
+
+# A DEPTH REFUSAL is a spawn that never happened, so it is one event with an
+# outcome and no pair: nothing was dispatched, so nothing can end.
+TR_DEEP="$SCRATCH/trace-depth"
+tr_new "$TR_DEEP"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DEEP" AGENT_DISPATCH_DEPTH=9 \
+	sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 4 "a dispatch past the maximum depth still refuses with 4"
+tr_assert_count "$TR_DEEP" 1 "a refusal is one event — there is no end to a spawn that never happened"
+tr_event_has "$TR_DEEP" 1 '"kind":"spawn"' "…and that event is the spawn"
+tr_event_has "$TR_DEEP" 1 '"outcome":"refused"' "…with outcome refused"
+tr_event_has "$TR_DEEP" 1 '"depth":"9"' "…naming the depth it was asked to run at"
+
+# --- what is NOT recorded ---------------------------------------------------
+TR_DRY="$SCRATCH/trace-dry"
+tr_new "$TR_DRY"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+s_assert_status 0 "a dry run still succeeds"
+tr_assert_count "$TR_DRY" 0 "a dry run emits NOTHING — it decided nothing to record"
+t_run_split env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_DRY" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
+s_assert_status 69 "a dry run on an unreachable crossing still reports 69"
+tr_assert_count "$TR_DRY" 0 "…and still emits nothing"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" planner --prompt 'x'
+s_assert_status 3 "the in-session case still exits 3"
+tr_assert_count "$TR_DRY" 0 "…and emits nothing: no spawn was made, the caller makes it"
+
+# THE DISPATCHING RUN IS USUALLY ON THE RUN STACK, not in the environment: that
+# is what `trace.sh begin` writes, and no skill exports TRACE_RUN before
+# dispatching. The worker must still be told whose trail it joins, so the run is
+# resolved the way the trace script resolves it — the environment first, then
+# this working tree's stack (H-3, review of PR #290).
+TR_STACK="$SCRATCH/trace-stacked"
+tr_new "$TR_STACK"
+TR_STACK_RUN=$(env TRACE_DIR="$TR_STACK" sh "$TRACE" begin implement subject=ticket:#249)
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_STACK" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "a dispatch inside an open run still dispatches"
+printf '%s\n' "$S_OUT" | grep -q "^worker TRACE_PARENT=$TR_STACK_RUN\$" &&
+	pass "the worker's parent is the run the stack holds, not an empty field" ||
+	fail "the worker was handed '$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_PARENT=//p')' for a stack run of $TR_STACK_RUN"
+tr_event_has "$TR_STACK" 2 "\"run\":\"$TR_STACK_RUN\"" "…and the spawn belongs to that same run"
+env TRACE_DIR="$TR_STACK" sh "$TRACE" end outcome=green >/dev/null
+
+# --- the trace is never load-bearing (ADR-0008 clause 4) --------------------
+# A trace policy file named and missing is a usage error for the trace script,
+# and a directory that cannot be written is a trace error. Both are LOUD, and
+# neither may reach the status the dispatch's caller acts on.
+TR_BROKEN="$SCRATCH/no-such-trace-policy.sh"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_CONFIG="$TR_BROKEN" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "a trace policy file named and missing leaves the dispatch's own status alone"
+s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran, with its output intact on stdout"
+s_assert_err_has "trace:"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR=/dev/null/not-a-directory sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 0 "a trace directory that cannot be written leaves the dispatch's own status alone"
+s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran"
+
+# A CONSUMER MAY HOLD THE DISPATCHER WITHOUT THE TRACE SCRIPT. The shared layer
+# is copied file by file and an update is a recipe a human follows, so the
+# emit is guarded on the script being there at all — a dispatcher beside a
+# resolver and nothing else dispatches exactly as it always did.
+LONELY="$SCRATCH/lonely"
+mkdir -p "$LONELY"
+cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$LONELY/"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" sh "$LONELY/agent-dispatch.sh" implementer --prompt 'x'
+s_assert_status 0 "a dispatcher with no trace script beside it dispatches"
+s_assert_out_has "worker TRACE_RUN=" "…and the worker ran"
+s_assert_err_lacks "trace.sh"
+
+# --- the prompt, behind a switch of its own ---------------------------------
+# A worker prompt carries a ticket body, a diff, review findings — the largest
+# and most private payload the dispatcher touches. It is never on the event
+# line (the 4000-byte cap is there so an append is one write); kept at all, it
+# is a content-addressed blob, and keeping it is the operator's decision.
+TR_BLOB="$SCRATCH/trace-blob"
+tr_new "$TR_BLOB"
+t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me?'
+tr_event_has "$TR_BLOB" 1 '"outcome":"dispatched"' "the spawn is written with the switch off"
+case $(tr_nth "$TR_BLOB" 1) in
+*'"blob"'*) fail "the prompt was stored with no switch asking for it" ;;
+*) pass "…and carries no blob: the prompt is not kept unless asked for" ;;
+esac
+CFG_BLOB="$SCRATCH/traced-blob.config.sh"
+cp "$CFG_TR" "$CFG_BLOB"
+printf "AGENT_DISPATCH_TRACE_PROMPT='1'\n" >>"$CFG_BLOB"
+tr_new "$TR_BLOB"
+t_run_split env AGENTS_CONFIG="$CFG_BLOB" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me.'
+s_assert_status 0 "the switch changes nothing about the dispatch"
+BLOB_HASH=$(printf 'Keep me.\n' | git hash-object --stdin)
+tr_event_has "$TR_BLOB" 1 "\"blob\":\"$BLOB_HASH\"" "with the switch on, the prompt is a blob named by git's hash of it"
+if [ -f "$TR_BLOB/blobs/$(printf '%s' "$BLOB_HASH" | cut -c1-2)/$BLOB_HASH" ]; then
+	pass "…and the payload is in the blob store under that name"
+else
+	fail "the blob is named in the event and missing from the store"
+fi
+printf "AGENT_DISPATCH_TRACE_PROMPT='maybe'\n" >"$SCRATCH/bad-switch.config.sh"
+cat "$CFG_TR" >>"$SCRATCH/bad-switch.config.sh"
+t_run_split env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'x'
+s_assert_status 2 "a switch value nobody can read is a usage error, not a silent off"
+s_assert_err_has "AGENT_DISPATCH_TRACE_PROMPT"
+# …on EVERY path, not only on one that crosses: a policy typo is a typo whether
+# this dispatch would have dispatched or not, and every other policy value is
+# held to its shape before the tier is even resolved (L-3, review of PR #290).
+t_run_split env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" planner --prompt 'x'
+s_assert_status 2 "…and refused on a tier that would not have crossed at all"
 
 unset AGENTS_CONFIG
 t_done "agent dispatch"
