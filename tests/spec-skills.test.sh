@@ -8,7 +8,9 @@
 # scripts, the penalty-for-being-wrong filter, later/never on every non-goal,
 # open issues with a next step, the stranger reread before publishing); the
 # hand-off from the PRD's scenarios to the tickets' admission test; the
-# open-issue gate and the feedback-first ordering on the ticket side; and, as
+# open-issue gate, the feedback-first ordering and the confidence stamp (its
+# three tokens, its wording, the pre-quiz check, the low-first sort) on the
+# ticket side; and, as
 # every skill suite holds, spec-only frontmatter, every command and path
 # resolving, and the roster knowing both skills.
 #
@@ -210,6 +212,46 @@ quiz=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TI
 has_in "$quiz" "the order you chose" "the decomposer's own ordering choice is put up for challenge"
 publish=$(awk '/^## Procedure/ { on = 1; next } on && /^4\. / { print; exit }' "$TIX_ABS")
 has_in "$publish" "PRD's Objective" "a published ticket opens with the line /to-prd says every ticket carries"
+# The confidence stamp (PRD #273): three tokens beside every tier and label
+# stamp, described in the PRD's own words; the checker runs on every stamp
+# BEFORE the human sees the list; the quiz is sorted low first; and the sort
+# is all it does — a confidence that could skip the quiz, or move a label,
+# would be an autonomy decision nobody has measured the right to make.
+conf=$(printf '%s\n' "$rules" | grep -F '**Confidence')
+[ -n "$conf" ] && pass "the confidence rule exists under its own title" || fail "no rule titled Confidence"
+has_in "$conf" '`Confidence: <low|medium|high>`' "the stamp, spelled once with its three tokens in the vocabulary's order"
+has_in "$conf" "tier" "it is stamped beside the tier"
+has_in "$conf" "label" "and beside the autonomy label"
+has_in "$conf" "how sure the stamp looked, never how likely it is right" "the PRD's wording — a confidence is not a probability"
+has_in "$conf" "sorts the quiz and never skips it" "the one job a confidence has"
+has_in "$conf" "No autonomy decision reads it" "rule 4 decides the label alone"
+
+# in_order <text> <why> <needle>… — every needle is present, each after the
+# one before it.
+in_order() {
+	_io_text=$1 _io_why=$2 _io_at=0
+	shift 2
+	for _io_n; do
+		_io_i=$(printf '%s\n' "$_io_text" | awk -v n="$_io_n" -v from="$_io_at" '{ i = index(substr($0, from + 1), n); print (i ? i + from : 0); exit }')
+		if [ "$_io_i" = 0 ]; then
+			fail "$_io_why — '$_io_n' is missing, or comes before what should precede it"
+			return
+		fi
+		_io_at=$_io_i
+	done
+	pass "$_io_why"
+}
+has_in "$quiz" "sh scripts/vocab.sh 'Tier: <tier>' 'Confidence: <token>'" "the checker is handed the tier stamp with its confidence — the plain script, skills ship unstamped"
+has_in "$quiz" "sh scripts/vocab.sh 'Label: <ready-for-agent|none>' 'Confidence: <token>'" "and the label stamp with its own"
+has_in "$quiz" "fix what it refuses" "a refused stamp is repaired before the human sees the list"
+has_in "$quiz" "low-confidence first" "the sort: the human's attention lands where the draft was unsure"
+in_order "$quiz" "the check comes before the list is presented, and the list is sorted" \
+	"sh scripts/vocab.sh" "fix what it refuses" "present the draft" "low-confidence first"
+has_in "$publish" '`Confidence: <token>`' "a published body carries the tier's confidence"
+in_order "$publish" "the body's decision lines run Tier, Confidence, Domain" \
+	'`Tier: <tier>`' '`Confidence: <token>`' '`Domain: <token>`'
+in_order "$publish" "ticket.write carries the confidence beside the pre-quiz tier, on one event" \
+	"kind=ticket.write" "data.tier_proposed=" "data.confidence="
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
 assert_file_has "$TIX" "## The tier rubric" "the heading the update recipe's worked example merges around"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
