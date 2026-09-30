@@ -257,11 +257,12 @@ Grouped by the seam each term belongs to. Entry shape:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
   PRD, a ticket, a PR and a session all join on one column, and `show`
-  matches one exactly — `ticket:#3` never finds `ticket:#34`. The types the
-  forge numbers are spelled one way, `ticket:#<digits>`, `pr:#<digits>`,
-  `prd:#<digits>` — any other spelling is refused at emit, and an old one
-  already in the trace is only an advisory. An event may name secondary
-  subjects under `related`.
+  matches one exactly — `ticket:#3` never finds `ticket:#34`. Which types
+  are numbered is the project's policy (`TRACE_NUMBERED_TYPES`, empty as
+  shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
+  way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
+  other spelling is refused at emit, and an old one already in the trace is
+  only an advisory. An event may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a

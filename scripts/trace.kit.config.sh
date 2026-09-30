@@ -14,6 +14,11 @@
 # Under the root checkout, gitignored, shared by every worktree.
 TRACE_DIR='.trace'
 
+# The kit's forge numbers tickets, PRs and PRDs with digits, so its own trace
+# holds them to one spelling, `<type>:#<digits>` (#305). The shipped file
+# leaves this empty: which types a tracker numbers is each project's call.
+TRACE_NUMBERED_TYPES='ticket pr prd'
+
 # ---------------------------------------------------------------------------
 # THE PRICE TABLE — the SHAPE is here; the numbers are the operator's.
 #

@@ -74,9 +74,10 @@
 # tier); `data.*` keys are OPEN (like task domains), string values only. A
 # subject is `<type>:<reference>` — lowercase type, then anything without a
 # space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
-# session and a run all join on one column. The types the forge numbers —
-# ticket, pr, prd — are spelled one way, `<type>:#<digits>`, because a join
-# key with synonyms is not one (#305); every other type stays open.
+# session and a run all join on one column. The types a project's policy
+# file names in TRACE_NUMBERED_TYPES are spelled one way, `<type>:#<digits>`,
+# because a join key with synonyms is not one (#305); every other type, and
+# every type when the list is empty as it ships, stays open.
 # Token counts are bare integers.
 # A value may not carry a control character other than a tab: a multi-line
 # payload is a blob, not a field.
@@ -237,6 +238,13 @@ trace_load_config() {
 		fi
 	fi
 	TRACE_CONFIG_PATH=$_tl_path
+	# Each numbered type is a type word, or the check that reads the list would
+	# silently never match it — a policy error, said as one.
+	trace_glob_off
+	for _tl_w in $TRACE_NUMBERED_TYPES; do
+		case $_tl_w in *[!a-z]*) trace_glob_on; die "TRACE_NUMBERED_TYPES word '$_tl_w' in $_tl_path is not a lowercase type" ;; esac
+	done
+	trace_glob_on
 	# The environment wins over the file — set on its own line after the
 	# source, so a policy file that assigns TRACE_DIR cannot undo it, even
 	# when what the environment said was "off".
@@ -293,13 +301,17 @@ trace_check_token() {
 # three characters that would make the exact-match filter in `show` a
 # question rather than a comparison). On a refusal TRACE_SUBJECT_FORM names
 # the form the value should have taken, for the caller's message.
-#   The forge-numbered types — ticket, pr, prd — take ONE spelling,
-# `<type>:#<digits>`: the first retrospective over the kit's own trace found a
-# ticket written three ways, and `show` on the documented one missed the rest
-# (#305). The type set stays open, so any other type takes any reference.
+#   A NUMBERED type takes ONE spelling, `<type>:#<digits>` with no leading
+# zero: the first retrospective over the kit's own trace found a ticket written
+# three ways, and `show` on the documented one missed the rest (#305). WHICH
+# types are numbered is the project's policy, not this script's: the kit names
+# no tracker, and one that writes PROJ-12 must not be refused. So the list is
+# TRACE_NUMBERED_TYPES in the policy file, empty by default — every type open,
+# as before — and only the policy file may set it: the assignment below runs
+# before the file is sourced, so an environment value never reaches the check.
 # `verify` holds the same rule to the lines already written, as an advisory,
 # and hands its awk this same list as `numbered` — one list, never two.
-TRACE_NUMBERED_TYPES='ticket pr prd'
+TRACE_NUMBERED_TYPES=''
 trace_check_subject() {
 	TRACE_SUBJECT_FORM='<type>:<reference>'
 	case $1 in *' '* | *'"'* | *'\'* | '') return 1 ;; esac
@@ -310,8 +322,8 @@ trace_check_subject() {
 	case $_cs_type in '' | *[!a-z]*) return 1 ;; esac
 	case " $TRACE_NUMBERED_TYPES " in
 	*" $_cs_type "*)
-		TRACE_SUBJECT_FORM="$_cs_type:#<digits>"
-		case $_cs_ref in '#' | '#'*[!0-9]* | [!#]*) return 1 ;; esac
+		TRACE_SUBJECT_FORM="$_cs_type:#<digits> (no leading zero)"
+		case $_cs_ref in '#' | '#'*[!0-9]* | '#0'?* | [!#]*) return 1 ;; esac
 		;;
 	esac
 	return 0
@@ -876,6 +888,60 @@ trace_show() {
 	done
 }
 
+# TRACE_AWK_SPELLED — the awk half of the numbered-subject rule, shared by
+# verify's per-line advisory and the count `summary` and `export` say once.
+# The caller defines spelled(field, value), called for every subject and
+# related token in a line's ENVELOPE — the data map is cut off first, as
+# `show` cuts it, so a data key called subject is never read as the event's.
+# spelled_ok is trace_check_subject's numbered arm, in awk; `numbered` is
+# TRACE_NUMBERED_TYPES, handed over, so the two cannot name different lists.
+# Single-quoted, so it may carry no apostrophe.
+TRACE_AWK_SPELLED='
+function spelled_type(v,   t) { t = v; sub(/:.*/, "", t); return t }
+function spelled_ok(v,   t, r) {
+	t = spelled_type(v)
+	if (index(numbered, " " t " ") == 0) return 1
+	r = substr(v, length(t) + 2)
+	return (r ~ /^#(0|[1-9][0-9]*)$/)
+}
+function spelled_scan(line,   env, d, m, i, tok) {
+	env = line
+	d = index(env, ",\"data\":{")
+	if (d) env = substr(env, 1, d - 1)
+	if (match(env, /,"subject":"[^"]*"/)) spelled("subject", substr(env, RSTART + 12, RLENGTH - 13))
+	if (match(env, /,"related":"[^"]*"/)) {
+		m = split(substr(env, RSTART + 12, RLENGTH - 13), tok, " ")
+		for (i = 1; i <= m; i++) spelled("related token", tok[i])
+	}
+}
+'
+
+# trace_spelling_note [<since>] — the one stderr line `summary` and `export`
+# say when the trace holds old spellings: the count, and where the list is.
+# Repeating verify's per-line advisories on every read would bury the
+# command's own output under history nobody may rewrite. Reads the lines that
+# open as an event does; a line that does not is verify's verdict, not this.
+trace_spelling_note() {
+	[ -n "$TRACE_NUMBERED_TYPES" ] || return 0
+	_sn_n=0
+	_sn_files=$(trace_files "${1:-}")
+	_sn_ifs=$IFS
+	IFS=$_trace_nl
+	trace_glob_off
+	for _sn_f in $_sn_files; do
+		IFS=$_sn_ifs
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " "$TRACE_AWK_SPELLED"'
+		function spelled(field, v) { if (!spelled_ok(v)) n++ }
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0) }
+		END { print n + 0 }' "$_sn_f")
+		_sn_n=$((_sn_n + ${_sn_c:-0}))
+	done
+	IFS=$_sn_ifs
+	trace_glob_on
+	[ "$_sn_n" = 0 ] || echo "!  trace: $_sn_n numbered subject(s) in the trace are spelled the old way — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	return 0
+}
+
 trace_verify() {
 	_vf_since=
 	while [ $# -gt 0 ]; do
@@ -910,19 +976,17 @@ trace_verify() {
 	trace_glob_off
 	for _vf_f in $_vf_files; do
 		IFS=$_vf_ifs
-		# A forge-numbered subject in any spelling but `<type>:#<digits>` is an
+		# A numbered subject in any spelling but `<type>:#<digits>` is an
 		# ADVISORY, never a bad line: the rule (#305) is younger than the trace,
 		# and history is never rewritten, so a line written before it is still a
-		# good line. Only a line that is otherwise good is read for it — the
-		# envelope only, as `show` reads it — and the note goes to stderr
-		# through a pipe, which POSIX awk has where it has no /dev/stderr.
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v f="$_vf_f" '
-		function spelled(field, v,   t, r) {
-			t = v; sub(/:.*/, "", t)
-			if (index(numbered, " " t " ") == 0) return
-			r = substr(v, length(t) + 2)
-			if (r ~ /^#[0-9]+$/) return
-			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, t | "cat 1>&2"
+		# good line. Only a line that is otherwise good is read for it, and the
+		# note goes to stderr through a pipe, which POSIX awk has where it has no
+		# /dev/stderr. `summary` and `export` switch the per-line notes off and
+		# say the count once instead (trace_spelling_note).
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" "$TRACE_AWK_SPELLED"'
+		function spelled(field, v) {
+			if (advise != "list" || spelled_ok(v)) return
+			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
 		}
 		{
 			bad = ""
@@ -935,16 +999,7 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
-			else {
-				env = $0
-				d = index(env, ",\"data\":{")
-				if (d) env = substr(env, 1, d - 1)
-				if (match(env, /,"subject":"[^"]*"/)) spelled("subject", substr(env, RSTART + 12, RLENGTH - 13))
-				if (match(env, /,"related":"[^"]*"/)) {
-					m = split(substr(env, RSTART + 12, RLENGTH - 13), tok, " ")
-					for (i = 1; i <= m; i++) spelled("related token", tok[i])
-				}
-			}
+			else spelled_scan($0)
 		}
 		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then
@@ -1236,11 +1291,14 @@ trace_summary() {
 	# clean; verify's findings go to stderr as they do for export, which still
 	# refuses outright (operator decision, 2026-09-28).
 	_su_vst=0
+	_trace_quiet_advice=count
 	if [ -n "$_su_since" ]; then
 		_su_bad=$(trace_verify --since "$_su_since") || _su_vst=$?
 	else
 		_su_bad=$(trace_verify) || _su_vst=$?
 	fi
+	_trace_quiet_advice=
+	[ "$_su_vst" = "$TRACE_EX_SCHEMA" ] || trace_spelling_note "$_su_since"
 	if [ "$_su_vst" = "$TRACE_EX_SCHEMA" ]; then
 		# A different marker, because it is a different state: verify judged no
 		# line, so there is no count to print and a count of 0 would read as
@@ -1367,11 +1425,14 @@ trace_export() {
 	# the one nobody goes looking for. verify's findings are the answer to WHY
 	# there is no answer, so they leave with it, on stderr.
 	_ex_vst=0
+	_trace_quiet_advice=count
 	if [ -n "$_ex_since" ]; then
 		_ex_bad=$(trace_verify --since "$_ex_since") || _ex_vst=$?
 	else
 		_ex_bad=$(trace_verify) || _ex_vst=$?
 	fi
+	_trace_quiet_advice=
+	[ "$_ex_vst" = "$TRACE_EX_SCHEMA" ] || trace_spelling_note "$_ex_since"
 	if [ "$_ex_vst" = "$TRACE_EX_SCHEMA" ]; then
 		# Not a bad line — no line was read at all. Saying "verify fails" here
 		# would send the operator hunting for damage that is not there, when the
@@ -1448,6 +1509,7 @@ trace_export() {
 # ---------------------------------------------------------------------------
 
 [ $# -ge 1 ] || usage
+_trace_quiet_advice=
 _trace_cmd=$1
 shift
 trace_load_config
