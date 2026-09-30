@@ -4,7 +4,7 @@
 - **Date**: 2026-09-02
 - **Deciders**: Arthur Granado (operator); recorded by the first housekeeping pass, item 3
 - **Supersedes / amends**: supersedes the index's diary-recorded decision of 2026-08-27, "the kit's `scripts/agents.config.sh` stays unmapped — the kit names no model anywhere, including in its own copy of the tier mapping" (the practice dates from that day; this record is the supersession the index owed); amends ADR-0001 §4 in one respect — five records under `docs/adr/` now, not four, and bootstrap's kit-own list strips this one too
-- **Superseded by**: — (amended 2026-09-17: the arrangement is general; guards are its second instance — see the end of this record)
+- **Superseded by**: — (amended 2026-09-17: the arrangement is general; guards are its second instance; amended 2026-09-28: a policy file the kit can fill ships filled and has no twin — see the end of this record)
 
 ## Context and problem statement
 
@@ -119,3 +119,20 @@ written and has not been since this record's first instance; it is corrected
 here rather than by editing ADR-0001, whose text stands as the record of what
 was decided then. The general rule replaces the per-file exception: a third
 policy file that ships empty gets the same twin and wrapper, and no new record.
+
+### Amendment, 2026-09-28 — a policy file the kit can fill ships filled, and has no twin
+
+The rule above is for a policy file the kit ships **empty by principle**,
+because only the consumer can know the answer. The vocabulary checker (PRD
+#273, ticket #274) is the first policy file the kit can honestly fill: a
+vocabulary is the kit's to name where a model id, a source pattern or a trace
+directory is not, so `scripts/vocab.config.sh` ships with the kit's own words
+in it, there is no `.kit.` twin and no wrapper, and the kit and every consumer
+run the same command against the same file — the consumer editing the copy
+that is theirs. Bootstrap copies it where absent, as it copies the others.
+
+The twin-and-wrapper arrangement stays the answer for the empty-by-principle
+case, and this record now says which case a new policy file is in before one
+is added: *fillable*, one file, no twin; *not fillable*, twin and wrapper.
+The checker also carries the shipped words as its own defaults, so a consumer
+that deletes the file is held to them — a suite holds the two spellings equal.
