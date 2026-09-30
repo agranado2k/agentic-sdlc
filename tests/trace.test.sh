@@ -498,6 +498,66 @@ case $DRY_OUT in *'"blob":"'"$HASH"'"'*) pass "--dry-run still names the blob it
 assert_status 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
 assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
 
+
+banner "15b. blob stores a payload WITHOUT an event: the same store, the same name, one line of answer (ticket #306)"
+# The tool hooks (#252) store two payloads and then write ONE event naming
+# both, and `emit` carries one blob — so until this subcommand the adapter kept
+# a second writer of the store, whose review found three defects in exactly
+# that duplication. `blob` is the store on its own: the same staging, hashing
+# and landing an emit's payload gets, answered as `<hash> <bytes>` on stdout.
+BL="$SCRATCH/blob-trace"; BLON=$(policy "$BL")
+BPAY="$SCRATCH/blob-payload.txt"
+printf 'a tool result\nwith a "quote", a \\ and a tab\there\n' >"$BPAY"
+BHASH=$(git hash-object "$BPAY")
+BBYTES=$(wc -c <"$BPAY" | tr -d ' ')
+t_run_split env TRACE_CONFIG=$BLON sh -c 'umask 022; exec sh "$1" blob "$2"' probe "$TRACE" "$BPAY"
+[ "$S_STATUS" = 0 ] && pass "blob <file> exits 0" || fail "blob <file> exited $S_STATUS: $S_ERR"
+[ "$S_OUT" = "$BHASH $BBYTES" ] && pass "and prints '<hash> <bytes>' on one line, the hash git's own for the same bytes" ||
+	fail "blob printed '$S_OUT', git says '$BHASH $BBYTES'"
+[ -z "$S_ERR" ] && pass "and says nothing on stderr" || fail "blob spoke on stderr: $S_ERR"
+BSTORED="$BL/blobs/$(printf '%.2s' "$BHASH")/$BHASH"
+cmp -s "$BPAY" "$BSTORED" && pass "the bytes are stored at blobs/<first two>/<hash>, byte for byte" ||
+	fail "no faithful copy at $BSTORED"
+BMODE=$(ls -l "$BSTORED" 2>/dev/null | cut -c1-10)
+[ "$BMODE" = '-rw-------' ] && pass "readable by its owner alone under a 022 umask ($BMODE) — a payload is private data" ||
+	fail "the stored blob's mode is '$BMODE' under a 022 umask"
+[ -z "$(find "$BL" -name '*.jsonl' 2>/dev/null)" ] && pass "and NO event file was written — storing is not a decision" ||
+	fail "blob wrote an event: $(find "$BL" -name '*.jsonl' -exec cat {} \;)"
+[ -z "$(find "$BL/tmp" -type f 2>/dev/null)" ] && pass "and its staging scratch is left empty" ||
+	fail "staging files survive under $BL/tmp"
+# The SAME store an emit writes: the name `blob` prints is the name an emit
+# records for the same bytes, and the emit that follows stores nothing new.
+BINODE=$(ls -i "$BSTORED" | awk '{ print $1 }')
+env TRACE_CONFIG=$BLON sh "$TRACE" emit kind=note reason='the same bytes, through --blob' --blob "$BPAY"
+BLINE=$(cat "$BL/events/$TODAY.jsonl" 2>/dev/null)
+case $BLINE in *'"blob":"'"$BHASH"'","blob_bytes":'"$BBYTES"'}') pass "emit --blob records the very name and size blob printed" ;;
+*) fail "emit --blob recorded something else: $BLINE" ;; esac
+[ "$(find "$BL/blobs" -type f | wc -l | tr -d ' ')" = 1 ] && [ "$(ls -i "$BSTORED" | awk '{ print $1 }')" = "$BINODE" ] &&
+	pass "and identical content is stored once, the stored file never rewritten" ||
+	fail "the store holds $(find "$BL/blobs" -type f | wc -l) files, or the first was rewritten"
+BEFORE=$(cat "$BL/events/$TODAY.jsonl")
+BSTDIN=$(env TRACE_CONFIG=$BLON sh "$TRACE" blob - <"$BPAY")
+[ "$BSTDIN" = "$BHASH $BBYTES" ] && pass "blob - reads standard input to the same answer" ||
+	fail "blob - printed '$BSTDIN'"
+[ "$(cat "$BL/events/$TODAY.jsonl")" = "$BEFORE" ] && [ "$(find "$BL/blobs" -type f | wc -l | tr -d ' ')" = 1 ] &&
+	pass "and grew no event file and stored nothing twice" ||
+	fail "blob - appended an event or stored a second copy"
+# Unconfigured is the working state every write has: nothing stored, nothing on
+# stdout, exit 0 — and the payload is not even read, so a missing file cannot
+# hand a consumer who never opened the policy file a new exit status.
+t_run_split env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$BPAY"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "unconfigured, blob is a silent no-op: exit 0, nothing on either stream" ||
+	fail "unconfigured blob: status $S_STATUS, out '$S_OUT', err '$S_ERR'"
+assert_status 0 "and a missing payload is still exit 0 when nothing would be stored" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$SCRATCH/no-such-payload"
+t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" blob "$BPAY"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "without TRACE_QUIET it still prints nothing on stdout, where a caller reads the name" ||
+	fail "unconfigured blob printed '$S_OUT' (status $S_STATUS)"
+# Configured, the grammar is the caller's to get right.
+assert_status 2 "blob naming no file is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$SCRATCH/no-such-payload"
+assert_status 2 "blob with no argument is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob
+assert_status 2 "blob with two arguments is exit 2 — one payload, one name" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$BPAY" "$BPAY"
+
 banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
