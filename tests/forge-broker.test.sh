@@ -770,6 +770,14 @@ case "$REVIEW" in
 *'"path":"docs/b.md"'*) fail "M-1 is inline though docs/b.md is not in the reviewed diff" ;;
 *) pass "M-1, not in the reviewed diff, is withheld" ;;
 esac
+# …and what is said about it names the diff it was checked against, not the
+# PR's current one.
+s_assert_err_has "not in the diff from the base to reviewed commit $HEAD_SHA"
+s_assert_err_lacks "not in the diff of PR #12"
+case "$REVIEW" in
+*'withheld: their locations are not in the diff at the reviewed commit;'*) pass "…and the MEDIUM section says the reviewed commit's diff" ;;
+*) fail "the withheld note does not name the reviewed commit's diff"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
 
 # The demo: a dry run against the drifted head.
 broker 12 "$GOOD" --dry-run

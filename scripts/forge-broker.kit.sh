@@ -358,12 +358,18 @@ if [ "$REVIEWED" != "$HEAD" ]; then
 fi
 
 # --- 4. locations against the diff that was reviewed ----------------------------------------
+# What a withheld finding is said to be missing from: on drift it is the
+# reviewed commit's diff, never the PR's current one (the log and the body).
 if [ -z "$DRIFT" ]; then
+	DIFF_LOG="the diff of PR #$PR"
+	DIFF_BODY="this PR diff"
 	gh pr diff "$PR" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
 		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
 		die "$EX_UNAVAILABLE" "the forge did not return the diff of PR #$PR"
 	}
 else
+	DIFF_LOG="the diff from the base to reviewed commit $REVIEWED"
+	DIFF_BODY="the diff at the reviewed commit"
 	# The diff the worker saw: base...reviewed, three dots, as the PR's own
 	# diff is computed — so a location valid at the reviewed commit is kept,
 	# and one the later commits added is not claimed for it. The base is
@@ -475,7 +481,7 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
 		if [ "$f_sev" = "$sev" ]; then
 			if ! in_diff "$f_path" "$f_line"; then
-				note "dropped $f_id: $f_path:$f_line is not in the diff of PR #$PR — the forge would refuse the whole review for it"
+				note "dropped $f_id: $f_path:$f_line is not in $DIFF_LOG — the forge would refuse the whole review for it"
 				DROPPED="${DROPPED:+$DROPPED, }$f_id ($f_path:$f_line not in diff)"
 				NDROPPED=$((NDROPPED + 1))
 				secdrop=$((secdrop + 1))
@@ -496,7 +502,7 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 		if [ "$secdrop" = 0 ]; then
 			printf -- '— none found.\n' >>"$TMP/body.md"
 		else
-			printf -- '— %s finding(s) withheld: their locations are not in this PR diff; see the broker log.\n' "$secdrop" >>"$TMP/body.md"
+			printf -- '— %s finding(s) withheld: their locations are not in %s; see the broker log.\n' "$secdrop" "$DIFF_BODY" >>"$TMP/body.md"
 		fi
 	fi
 done
