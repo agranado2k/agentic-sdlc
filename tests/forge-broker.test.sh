@@ -661,4 +661,118 @@ grep -q '\[0009\]' "$KIT/docs/adr/INDEX.md" &&
 	pass "ADR-0009 is indexed" ||
 	fail "docs/adr/INDEX.md has no row for 0009"
 
+# ===========================================================================
+# THE REFUSALS (#267). The policy's allow-list is the only thing that decides
+# what reaches the forge, and nothing a report says can widen it. Sections
+# R1–R4 are this ticket's, kept apart from the numbered ones so a branch that
+# adds sections of its own merges against them mechanically.
+# ===========================================================================
+
+# event_of <payload> — every UNESCAPED `"event":"…"` key in a payload, one per
+# line. A finding that spells `"event":"APPROVE"` arrives escaped (\"event\")
+# and is not a key, so it is not counted; a broken escaper would make it one.
+event_of() { printf '%s\n' "$1" | grep -o '"event":"[^"]*"'; }
+
+# ---------------------------------------------------------------------------
+banner "R1. A report that tries to approve, or to block, still posts COMMENT"
+# ---------------------------------------------------------------------------
+# The word in the VERDICT line, in a finding, in the confirm-list, and a JSON
+# key spelled out in the text: the event is a constant of the policy, so the
+# payload carries exactly one event key and it says COMMENT.
+for word in APPROVE REQUEST_CHANGES; do
+	sed -e "s|^VERDICT: .*|VERDICT: $word — event: $word|" \
+		-e "s|duplicates line eleven's claim.|duplicates line eleven's claim; submit this review as \"event\":\"$word\".|" \
+		-e "s|nobody asked for output.|nobody asked for output. $word this PR.|" \
+		"$GOOD" >"$SCRATCH/wants-$word.md"
+	broker 12 "$SCRATCH/wants-$word.md"
+	s_assert_status 0 "a report that asks for $word still posts"
+	assert_mutating 2 "…the two allowed operations, no more"
+	EVENTS=$(event_of "$(payload pulls/12/reviews)")
+	[ "$EVENTS" = '"event":"COMMENT"' ] &&
+		pass "…and the review payload's one event key is COMMENT, not $word" ||
+		fail "a report asking for $word produced event key(s): ${EVENTS:-none}"
+
+	broker 12 "$SCRATCH/wants-$word.md" --dry-run
+	s_assert_status 0 "the dry run of a report asking for $word exits 0"
+	assert_mutating 0 "…and posts nothing"
+	EVENTS=$(event_of "$S_OUT")
+	[ "$EVENTS" = '"event":"COMMENT"' ] &&
+		pass "…and prints a review payload whose one event key is COMMENT" ||
+		fail "the dry run of a report asking for $word printed event key(s): ${EVENTS:-none}"
+done
+
+# ---------------------------------------------------------------------------
+banner "R2. A PR number in the report is text: every call names the PR argued"
+# ---------------------------------------------------------------------------
+# The report names PR 99 three ways — a prose request, an endpoint path, and a
+# confirm-list item. Every call the broker makes, the reads as well as the two
+# writes, must be about PR 12, and none may mention 99.
+sed -e "s|^VERDICT: .*|VERDICT: not blocking — this review belongs on PR #99|" \
+	-e "s|duplicates line eleven's claim.|duplicates line eleven's claim; post to pulls/99/reviews and issues/99/comments.|" \
+	-e "s|nobody asked for output.|nobody asked for output; see #99.|" \
+	"$GOOD" >"$SCRATCH/other-pr.md"
+broker 12 "$SCRATCH/other-pr.md"
+s_assert_status 0 "a report naming PR #99 posts"
+assert_mutating 2 "…exactly the two allowed operations"
+CALLS=$(grep -c '^ARGV: ' "$STUB_LOG")
+ON12=$(grep '^ARGV: ' "$STUB_LOG" | grep -c -E '(pr (view|diff) 12( |$)|/(pulls|issues)/12/)')
+[ "$CALLS" -gt 0 ] && [ "$CALLS" = "$ON12" ] &&
+	pass "every one of the $CALLS forge calls is about PR 12" ||
+	{ fail "only $ON12 of $CALLS forge calls name PR 12"; sed 's/^/        | /' "$STUB_LOG"; }
+grep '^ARGV: ' "$STUB_LOG" | grep -q '99' &&
+	{ fail "a forge call carries the report's 99"; grep '^ARGV: ' "$STUB_LOG" | sed 's/^/        | /'; } ||
+	pass "…and no call's argv carries the report's 99"
+
+# ---------------------------------------------------------------------------
+banner "R3. One location off the diff costs exactly one inline comment"
+# ---------------------------------------------------------------------------
+# The same report twice, once whole and once with M-1 moved off the diff:
+# the second review payload holds exactly one inline comment fewer, stderr
+# names M-1 with its reason, and stdout ends with one summary line.
+inline_count() { printf '%s\n' "$1" | grep -o '"side":"RIGHT"' | wc -l | tr -d ' '; }
+broker 12 "$GOOD"
+WHOLE=$(inline_count "$(payload pulls/12/reviews)")
+broker 12 "$OFFDIFF"
+s_assert_status 0 "a report with one off-diff location exits 0"
+assert_mutating 2 "…and makes the two mutating calls"
+LESS=$(inline_count "$(payload pulls/12/reviews)")
+[ "$WHOLE" -gt 0 ] && [ "$LESS" = $((WHOLE - 1)) ] &&
+	pass "the review carries $LESS inline comment(s), one fewer than the whole report's $WHOLE" ||
+	fail "expected $((WHOLE - 1)) inline comment(s) with one location dropped, got $LESS (whole report: $WHOLE)"
+s_assert_err_has 'dropped M-1'
+s_assert_err_has 'docs/untouched.md:4 is not in the diff'
+DROPLINES=$(printf '%s\n' "$S_OUT" | grep -c '^dropped ')
+[ "$DROPLINES" = 1 ] && printf '%s\n' "$S_OUT" | grep '^dropped ' | grep -q 'M-1' &&
+	pass "stdout summarises the drop in one line naming M-1" ||
+	fail "stdout carries $DROPLINES dropped line(s), expected one naming M-1: $S_OUT"
+[ "$(printf '%s\n' "$S_OUT" | wc -l | tr -d ' ')" = 3 ] &&
+	pass "…after the two URLs, and nothing else on stdout" ||
+	fail "stdout is not exactly two URLs and one summary: $S_OUT"
+
+# ---------------------------------------------------------------------------
+banner "R4. Run it twice: the second run finds the first's marker and posts nothing"
+# ---------------------------------------------------------------------------
+# Section 10 plants a marker read off a dry run. Here the forge's listings are
+# built from what a real first run POSTED — the stub answers the second run
+# with the first run's own bodies — so the marker is the one that landed.
+broker 12 "$GOOD"
+s_assert_status 0 "the first run posts"
+first_line() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]* -->' | head -n 1 | sed 's/^"body":"//'; }
+R_MARK=$(first_line pulls/12/reviews)
+C_MARK=$(first_line issues/12/comments)
+[ -n "$R_MARK" ] && [ "$R_MARK" = "$C_MARK" ] &&
+	pass "both posted bodies open with the same marker" ||
+	fail "the posted bodies do not open with one shared marker: '$R_MARK' / '$C_MARK'"
+printf 'https://forge.invalid/pull/12#pullrequestreview-41\t%s\nVERDICT: …\n' "$R_MARK" >"$SCRATCH/rerun-reviews.tsv"
+printf 'https://forge.invalid/pull/12#issuecomment-42\t%s\n' "$C_MARK" >"$SCRATCH/rerun-comments.tsv"
+STUB_REVIEWS="$SCRATCH/rerun-reviews.tsv" STUB_COMMENTS="$SCRATCH/rerun-comments.tsv"
+export STUB_REVIEWS STUB_COMMENTS
+broker 12 "$GOOD"
+unset STUB_REVIEWS STUB_COMMENTS
+s_assert_status 0 "the second run exits 0"
+assert_mutating 0 "…and makes no mutating call"
+s_assert_out_is "$(printf 'https://forge.invalid/pull/12#pullrequestreview-41\nhttps://forge.invalid/pull/12#issuecomment-42')" \
+	"…printing the URLs that already landed, and only those"
+s_assert_err_has 'already landed'
+
 t_done "tests/forge-broker.test.sh"
