@@ -759,6 +759,116 @@ else
 fi
 s_assert_err_lacks "UNMAPPED"
 
+# ---------------------------------------------------------------------------
+banner "The judge domain — named by its contract, mapped by nobody (#275)"
+# ---------------------------------------------------------------------------
+# A judgment's cost ladder has a middle rung between a deterministic script
+# and the session's model: a typed judge — state and typed questions in, typed
+# answers with per-option probabilities out. The kit names that rung as a TASK
+# DOMAIN, `judge` on the `mechanical` tier, and not as a fifth tier: the tier
+# vocabulary is closed (ADR-0003) and a judge is a medium, not a size of work.
+# ADR-0010 is the record, and it states two shapes — decide, among supplied
+# options; rank-or-verify, over supplied candidates — and the negative: a
+# decider is never handed a verification, and no typed judge takes the review
+# verdict.
+#
+# The resolver needs no change for any of that — an unmapped domain already
+# falls back to its tier in silence — so the first two cases PIN the seam: a
+# consumer who maps AGENT_TIER_MECHANICAL_JUDGE gets their mapping, and one
+# who has not decided is exactly where they were, the plain tier, with not a
+# word on stderr beyond the fallback's own, which is nothing.
+JUDGE="$SCRATCH/judge.config.sh"
+write_config "$JUDGE" "$CONFIG_DOMAINS
+AGENT_TIER_MECHANICAL_JUDGE='model-for-typed-judging'"
+
+AGENTS_CONFIG="$DOMAINS"
+export AGENTS_CONFIG
+resolve mechanical judge
+s_assert_resolved "model-for-mechanical" "unmapped, 'mechanical judge' resolves to the plain tier's answer"
+[ -z "$S_ERR" ] && pass "…and says nothing on stderr — the domain fallback's own silence, and no more" ||
+	fail "unmapped 'mechanical judge' wrote to stderr: $S_ERR"
+
+AGENTS_CONFIG="$JUDGE"
+export AGENTS_CONFIG
+resolve mechanical judge
+s_assert_resolved "model-for-typed-judging" "mapped in a throwaway policy file, 'mechanical judge' resolves to the mapping"
+s_assert_err_lacks "UNMAPPED"
+resolve mechanical
+s_assert_resolved "model-for-mechanical" "…and the plain tier is untouched by the judge mapping"
+
+# The kit's own mapping DECLINES the domain, and says so. The kit names no
+# model to a consumer by rule, and a typed judge weeks old on a price nobody
+# has proven is the fastest-rotting identifier there is. Declining is a
+# decision the resolver's silence would not record, so each kit policy file
+# carries it as a comment that names the variable — and never assigns it.
+AGENTS_CONFIG="$KIT_CONFIG"
+export AGENTS_CONFIG
+resolve mechanical
+KIT_MECHANICAL=$S_OUT
+resolve mechanical judge
+if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$KIT_MECHANICAL" ]; then
+	pass "kit config leaves 'mechanical judge' on the plain tier ('$S_OUT') — declined, not mapped"
+else
+	fail "kit config resolved 'mechanical judge' to '$S_OUT' (status $S_STATUS), expected the plain tier's '$KIT_MECHANICAL'"
+	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+fi
+[ -z "$S_ERR" ] && pass "…silently" || fail "'mechanical judge' on the kit config wrote to stderr: $S_ERR"
+
+for policy in scripts/agents.kit.config.sh scripts/agents.kit.codex.config.sh; do
+	grep -q '^[[:space:]]*AGENT_TIER_MECHANICAL_JUDGE=' "$KIT/$policy" &&
+		fail "$policy assigns AGENT_TIER_MECHANICAL_JUDGE — the kit named a judge" ||
+		pass "$policy assigns no AGENT_TIER_MECHANICAL_JUDGE"
+	# The comment block that names the variable is the decision; it has to say
+	# the reason in the kit's own words, or it is a TODO wearing a comment.
+	# ADR-0010 clause 6 asks for those words exactly — "the kit names no
+	# model" — so the probe holds the twins to them, not to a looser "names
+	# no". The block is the run of comment lines from the first one naming the
+	# variable to the next non-comment line (or EOF): a sed range, because awk's
+	# paragraph mode is not the same awk everywhere.
+	if sed -n '/^#.*AGENT_TIER_MECHANICAL_JUDGE/,/^[^#]/p' "$KIT/$policy" | grep -q 'names no model'; then
+		pass "$policy declines AGENT_TIER_MECHANICAL_JUDGE in so many words"
+	else
+		fail "$policy does not decline AGENT_TIER_MECHANICAL_JUDGE in a comment saying the kit names no model — an omission, not a decision"
+	fi
+done
+
+# The prose is the other half of the slice: the manual and the template
+# describe the domain by its CONTRACT and name both shapes; the glossary's
+# task-domain entry names them; the decision record is indexed and says the
+# negative in so many words, citing the measurement behind it. Prose wraps,
+# so each text is folded to one line before a phrase is looked for —
+# assert_file_has is grep -F against a file and cannot see across a wrap.
+says() { # <folded text> <phrase> <what the text is, for the label>
+	case "$1" in
+	*"$2"*) pass "$3 says $2" ;;
+	*) fail "$3 does not say $2" ;;
+	esac
+}
+for manual in AGENTS.md constitution/AGENTS.md.template; do
+	tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ')
+	for phrase in '`judge`' 'decide' 'rank-or-verify' 'per-option probabilities' 'never handed a verification' 'review verdict'; do
+		says "$tiers" "$phrase" "$manual's tiers section"
+	done
+done
+entry=$(awk '/^- \*\*Task domain\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$KIT/docs/domain-glossary.md" | tr '\n' ' ')
+for phrase in '`judge`' 'decide' 'rank-or-verify'; do
+	says "$entry" "$phrase" "the glossary's task-domain entry"
+done
+# The shell's own glob answers this; an unmatched pattern stays literal, and
+# the -f guard is what turns that into "no record".
+for record in "$KIT"/docs/adr/[0-9][0-9][0-9][0-9]-*judge*.md; do break; done
+if [ -f "$record" ]; then
+	pass "a decision record for the judge domain exists ($(basename "$record"))"
+	grep -qF "$(basename "$record")" "$KIT/docs/adr/INDEX.md" &&
+		pass "…and docs/adr/INDEX.md indexes it" || fail "docs/adr/INDEX.md has no row for $(basename "$record")"
+	folded=$(tr '\n' ' ' <"$record")
+	for phrase in 'fifth tier' 'decide' 'rank-or-verify' 'never handed a verification' 'review verdict' 'view.centaurspec.com/oNa-l6LtDR'; do
+		says "$folded" "$phrase" "the judge record"
+	done
+else
+	fail "no decision record for the judge domain under docs/adr/ — the domain is a claim"
+fi
+
 # The consumer-shipped file is untouched by this: it still resolves every tier
 # to EMPTY. The kit names no model to consumers, even while naming one to
 # itself.

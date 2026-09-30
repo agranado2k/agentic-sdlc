@@ -241,7 +241,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.24.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.26.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +468,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.24.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.26.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -566,6 +566,22 @@ skeleton (K0).
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
   is stored once under git's own hash of the bytes that were stored, and
   `verify` refuses a schema it does not know.
+- `sh tests/vocab.test.sh` proves the vocabulary checker (PRD #273): every
+  shipped vocabulary accepts its own tokens; a misspelling, an invented token,
+  an empty value and a token outside the shape are each exit 2 with the field
+  named; a whole ticket body on stdin checks clean when its prose is not a
+  decision; a cross-field rule refuses the forbidden pair and accepts the
+  others; a rule set no combination can satisfy is reported as a policy
+  contradiction, distinct from a bad value; the policy file is held at load
+  to the shape and to the neutral-name rule; a named and missing policy file
+  is exit 2, and discovery never reads the repo the caller stands in; the
+  tier is read and never widened — the resolver still refuses a fifth token.
+- `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
+  to the skills that spell the same words — the severity buckets and
+  confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
+  tier stamp of `/to-tickets` and the resolver's literal — order included,
+  and to the checker's own defaults, so a token added on one side and not the
+  other goes red.
 
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
@@ -726,6 +742,8 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
+sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
+sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
