@@ -171,7 +171,14 @@ assert_file_has "$SKILL" "never posts"
 assert_file_has "$SKILL" "redirect followed by the broker"
 assert_file_has "$SKILL" "never as one pipeline"
 assert_file_has "$SKILL" "cannot see the dispatcher's exit status through a pipe"
-assert_file_lacks "$SKILL" "| <broker>" "the broker is never the right-hand side of a pipe"
+# Not a keyword match on one spelling of the pipe: NO `|` anywhere between the
+# dispatcher and the broker inside the composition's code span, so `|<broker>`,
+# `| sh <broker>` and a `| tee … | <broker>` are all refused.
+if grep -qE '<skill dispatcher>[^`]*\|[^`]*<broker>' "$SKILL_ABS"; then
+	fail "a pipe stands between the skill dispatcher and the broker in the composition"
+else
+	pass "no pipe stands between the skill dispatcher and the broker, however it is spelled"
+fi
 # The exit-status check comes BEFORE the broker runs, and a non-dispatch exit
 # is reported as no review rather than handed to the broker.
 assert_file_has "$SKILL" "Check the dispatcher's exit status"
@@ -181,7 +188,7 @@ assert_file_has "$SKILL" "no dispatched review ran"
 # `rc`, never `status`: zsh holds `status` read-only, and the first real run of
 # this composition died on the assignment with the exit status lost.
 assert_file_lacks "$SKILL" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
-_status=$(offset_of '`rc=$?`')
+_status=$(offset_of '; rc=$?;')
 _broker=$(offset_of '<broker> <PR#>')
 if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
 	grep -qF '[ "$rc" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
@@ -189,6 +196,15 @@ if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
 else
 	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
 fi
+# ONE shell invocation. The tip and the exit status are shell state, and an
+# agent harness that starts a fresh shell per command loses both: `$?` is then
+# a new shell's 0 and the gate passes vacuously, which is the failure the gate
+# exists to prevent. So the skill says it, says why, and gives the four steps
+# as one literal command line rather than as four commands to type in turn.
+assert_file_has "$SKILL" "one shell invocation"
+assert_file_has "$SKILL" "a fresh shell per command"
+_one='`tip=$(git rev-parse HEAD); <skill dispatcher> review-pr … > <report file>; rc=$?; [ "$rc" -eq 0 ] && <broker> <PR#> <report file> --commit "$tip"`'
+assert_file_has "$SKILL" "$_one" "the composition is one literal command line: tip, dispatch, status, gated broker"
 # The recorded tip is the cross-check, taken BEFORE the dispatch.
 assert_file_has "$SKILL" "Record the branch tip"
 assert_file_has "$SKILL" '--commit "$tip"'
