@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263; amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes)
 
 ## Context and problem statement
 
@@ -146,6 +146,27 @@ Chosen: **option 1**.
    the way an unknown kind always has, so the bug is visible. Every call site
    still ends in `|| :`, so no skill's outcome changes either way; what
    changes is that the operator can see it.
+   *Amended 2026-09-28 (#271):* a **third** state joins those two, and it is a
+   reader's rather than an emitter's — a trace whose `SCHEMA` marker names a
+   version this script does not read. It is neither: the command was well
+   formed and the directory was readable, so nothing failed; the reader simply
+   **cannot judge these lines**. By meaning it joins the family the docs gate
+   spells as its own 2 — "could not run" (`scripts/check.sh`: 0 clean, 1
+   violations, 2 could not run) — because the answer is *no verdict*, not *a
+   bad verdict*. It may not borrow that family's NUMBER here, because 2 in
+   this script is the caller's own error, and the two ask opposite things of
+   whoever reads them: a caller told 2 fixes its command, where a caller told
+   this must update the shared layer and touch nothing about the call. So the
+   contract widens by one code rather than overloading one, and it is **exit
+   3, "cannot judge this trace"**: `verify` exits 3, names the version it
+   found and the version it reads, and judges no line; `export` refuses with
+   3, prints nothing, and says on stderr that the schema — not a bad line — is
+   why; `summary` still exits 0, because a glance is not an import, and says
+   `verify: UNSUPPORTED SCHEMA <n>` as its own first line where a damaged
+   trace gets a bad-line count. Numbering above 2 for "did not happen, and not
+   because of you" is a practice `scripts/agent-dispatch.sh` already keeps (3,
+   4, 69 beside its 2); the number's meaning there is its own. Escalated by
+   #263's review (M-3), decided for #271.
 5. **Appends are one short write** (craft §11). An event is one `printf` to
    an append-mode descriptor; a cap on the line and a content-addressed blob
    directory for larger payloads arrive with #248. Nothing ever rewrites an
@@ -154,6 +175,17 @@ Chosen: **option 1**.
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
    it was priced. The kit ships no price.
+   *Amended 2026-09-28 (#270):* the cost of pricing on read is a table with a
+   date on it, and a dated claim rots quietly. So the table says its own age —
+   a priced read prints one advisory on stderr when the policy file's
+   `Last checked:` line is older than `TRACE_PRICES_STALE_DAYS`, which ships
+   empty (no window, no advisory) and is never a failure — and the refresh
+   that answers it is **kit-only**, on demand and network-bound, never a
+   gate: `scripts/trace-prices.kit.sh`, two machine-readable sources with the
+   vendors' pages as the human tie-breaker, refusing to write when the two
+   disagree past a policy threshold. This is not the rejected "fetch prices at
+   query time": no reader ever touches the network, and no vendor URL enters a
+   shared-layer script.
 7. **The chain never reads the trace.** No chain skill calls `show`,
    `summary` or `export`; a text suite holds every one of them to it. The
    readers are the operator, `/diagnose`, and a retrospective skill whose

@@ -32,6 +32,15 @@
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
 # for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
 # trace error: an `emit` never fails a caller this way.
+#   And exit 3 is A TRACE THIS READER CANNOT JUDGE — a SCHEMA naming a version
+# this script does not read. Neither of the two above: nothing failed and the
+# call was well formed, there is simply no verdict to give. It is the docs
+# gate's "could not run" by meaning and not by number, because 2 here is the
+# caller's own error and the two ask opposite things — fix your command, versus
+# update the shared layer and change nothing about the call. `verify` exits 3
+# and judges no line; `export` refuses with 3 and prints nothing; `summary`
+# still exits 0 and says so in its first line (ADR-0008 clause 4, as amended
+# 2026-09-28 for #271).
 #
 # UNCONFIGURED IS A WORKING STATE. The policy file scripts/trace.config.sh ships
 # with TRACE_DIR empty, and an empty TRACE_DIR means every emit exits 0 having
@@ -99,7 +108,8 @@
 #
 # SCHEMA, a file in the trace directory, names the version of the lines under
 # it. `verify` refuses a trace whose schema it does not know rather than
-# reporting every line as malformed.
+# reporting every line as malformed, and that refusal is exit 3 — the code
+# above, for a trace this reader cannot judge.
 #
 # COST IS COMPUTED ON READ, NEVER ON WRITE (ADR-0008 clause 6). An event carries
 # raw token counts and the model that spent them, because that is a fact; a
@@ -130,6 +140,15 @@
 # with an older one. The kit itself ships no price, for the reason it ships no
 # model id.
 #
+# AND A DATED TABLE ROTS. Pricing on read is what lets a correction reach the
+# whole past; the price of it is a table nobody re-checks. So a priced read —
+# `summary`, and `export --csv` — reads the `Last checked: <YYYY-MM-DD>` line
+# the table's header carries and prints ONE advisory on stderr when it is older
+# than TRACE_PRICES_STALE_DAYS days. Never a failure, never on stdout, silenced
+# by TRACE_QUIET=1; and silent when the window is empty (no window, no
+# advisory, the way an empty TRACE_DIR is no trace) or when no dated line
+# exists. The JSONL `export` prices nothing, so it says nothing.
+#
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/trace.config.sh.
 
@@ -138,6 +157,10 @@ set -u
 _trace_here=$(cd "$(dirname "$0")" && pwd -P)
 
 TRACE_SCHEMA=1
+# The exit status for a trace this reader cannot judge, kept as a name because
+# three readers have to agree on it: verify returns it, export refuses with it,
+# and summary recognises it to mark its own first line (ADR-0008 clause 4).
+TRACE_EX_SCHEMA=3
 TRACE_EVENT_CAP=4000
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
@@ -856,11 +879,12 @@ trace_verify() {
 	# The schema first. A trace written under a version this script does not
 	# know is not this reader's to judge — a reader that does not know the shape
 	# would report every line as malformed — so it refuses the trace, says which
-	# file said what, and judges no line.
+	# file said what, and judges no line. Its own exit code, not the verdict's:
+	# a caller told 1 goes looking for the bad line, and there is none to find.
 	_vf_schema=$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")
 	if [ -n "$_vf_schema" ] && [ "$_vf_schema" != "$TRACE_SCHEMA" ]; then
 		echo "x  trace: $TRACE_ROOT_DIR/SCHEMA says schema $_vf_schema and this script reads $TRACE_SCHEMA — a trace it does not know is not its to judge; update the shared layer before reading this one." >&2
-		return 1
+		return "$TRACE_EX_SCHEMA"
 	fi
 	_vf_bad=0
 	_vf_node=0
@@ -1146,6 +1170,76 @@ trace_note_unpriced() {
 	return 0
 }
 
+# --- the table's age --------------------------------------------------------
+# A price is an interpretation with a date on it (ADR-0008 clause 6): pricing on
+# read is what lets a correction reach the whole past, and the cost of that
+# choice is a table that rots QUIETLY. A cost column nobody re-derives is
+# exactly the number an operator believes, and unlike a wrong model id a stale
+# price never fails loudly. So the table says its own age, on the read where it
+# is applied, and says nothing else: never on stdout (it would land inside the
+# table a spreadsheet parses), never in an exit status (the answer was correct),
+# and silenced by TRACE_QUIET=1 with every other note.
+
+# trace_days <YYYY-MM-DD> — the date as a day count, so two of them subtract.
+# Arithmetic and not `date -d`: that switch is GNU's, and a staleness window
+# that works on one vendor's coreutils is a rule half the hosts do not keep.
+# The formula is the standard Julian day number; the leading zeros are stripped
+# because POSIX arithmetic reads 09 as octal and refuses it.
+trace_days() {
+	_dd_y=${1%%-*}
+	_dd_rest=${1#*-}
+	_dd_m=${_dd_rest%%-*}
+	_dd_d=${_dd_rest#*-}
+	_dd_y=${_dd_y#0}
+	_dd_m=${_dd_m#0}
+	_dd_d=${_dd_d#0}
+	_dd_a=$(((14 - _dd_m) / 12))
+	_dd_yy=$((_dd_y + 4800 - _dd_a))
+	_dd_mm=$((_dd_m + 12 * _dd_a - 3))
+	printf '%s' "$((_dd_d + (153 * _dd_mm + 2) / 5 + 365 * _dd_yy + _dd_yy / 4 - _dd_yy / 100 + _dd_yy / 400 - 32045))"
+}
+
+# trace_note_stale_prices — one advisory when the price table in the policy file
+# THAT IS IN EFFECT was last checked longer ago than TRACE_PRICES_STALE_DAYS.
+#
+# The date is read from a COMMENT — the `Last checked: <YYYY-MM-DD>` line the
+# table's header carries — and not from a variable, because it is the
+# operator's claim about the table rather than a value the script assigns; the
+# first such line in the file answers. Two silences are deliberate: an EMPTY
+# window is no window, exactly as an empty TRACE_DIR is no trace, because a
+# default of thirty days would be the kit deciding a consumer's freshness for
+# them; and a window with no dated line has nothing to compare, so it says
+# nothing rather than guessing that undated means old.
+trace_note_stale_prices() {
+	_ns_win=${TRACE_PRICES_STALE_DAYS:-}
+	[ -n "$_ns_win" ] || return 0
+	# The WIDTH as well as the alphabet: a window of thirty digits is a number
+	# the shell's arithmetic cannot hold, and `[ … -gt … ]` answered it with
+	# `integer expected` on the stderr of a SHIPPED script (L-1, review of PR
+	# #294). Seven digits is 2739 years, so the cap costs nobody a window.
+	case $_ns_win in
+	*[!0-9]* | ????????*) die "TRACE_PRICES_STALE_DAYS='$_ns_win' is not a number of days — give a whole number of at most seven digits, or leave it empty for no window" ;;
+	esac
+	[ -n "${TRACE_CONFIG_PATH:-}" ] && [ -f "${TRACE_CONFIG_PATH:-}" ] || return 0
+	_ns_date=$(sed -n 's/.*Last checked: *\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\).*/\1/p' "$TRACE_CONFIG_PATH" | head -1)
+	[ -n "$_ns_date" ] || return 0
+	# The shape is not the calendar. `2026-00-00` matched the pattern above and
+	# came out as a real number of days ago, and `2026-99-99` came out in the
+	# FUTURE and went silent — which is what a fresh table looks like, so the
+	# wrong answer was the invisible one (M-1, review of PR #294). Refused with
+	# the same voice as a malformed window: both are the operator's own typo.
+	_ns_mon=${_ns_date#*-}
+	_ns_mon=${_ns_mon%%-*}
+	_ns_day=${_ns_date##*-}
+	case $_ns_mon in 0[1-9] | 1[0-2]) ;; *) die "the price table's 'Last checked: $_ns_date' in $TRACE_CONFIG_PATH is not a calendar date — the month must be 01 to 12" ;; esac
+	case $_ns_day in 0[1-9] | [12][0-9] | 3[01]) ;; *) die "the price table's 'Last checked: $_ns_date' in $TRACE_CONFIG_PATH is not a calendar date — the day must be 01 to 31" ;; esac
+	_ns_age=$(($(trace_days "$(date -u +%Y-%m-%d)") - $(trace_days "$_ns_date")))
+	[ "$_ns_age" -gt "$_ns_win" ] || return 0
+	[ "${TRACE_QUIET:-}" = 1 ] && return 0
+	echo "!  trace: the price table was last checked $_ns_date, $_ns_age days ago — past the ${_ns_win}-day window TRACE_PRICES_STALE_DAYS sets in $TRACE_CONFIG_PATH. The costs below were priced from it anyway; re-check the table and replace the date. Nothing failed." >&2
+	return 0
+}
+
 # ---------------------------------------------------------------------------
 # summary
 
@@ -1185,7 +1279,13 @@ trace_summary() {
 	else
 		_su_bad=$(trace_verify) || _su_vst=$?
 	fi
-	if [ "$_su_vst" != 0 ]; then
+	if [ "$_su_vst" = "$TRACE_EX_SCHEMA" ]; then
+		# A different marker, because it is a different state: verify judged no
+		# line, so there is no count to print and a count of 0 would read as
+		# almost clean. The version is read back from the marker file rather
+		# than out of verify, which answered on stderr and in a subshell.
+		printf 'verify: UNSUPPORTED SCHEMA %s\n' "$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")"
+	elif [ "$_su_vst" != 0 ]; then
 		[ -n "$_su_bad" ] && printf '%s\n' "$_su_bad" >&2
 		# Distinct file:line pairs, not findings: with node on PATH verify names
 		# a bad line twice, once structurally and once from the parse.
@@ -1194,6 +1294,7 @@ trace_summary() {
 	fi
 	trace_load_prices "$_su_since"
 	trace_note_unpriced
+	trace_note_stale_prices
 	# %d and not %s for the counts: awk converts a number to a string through
 	# CONVFMT, which is %.6g, and would print 3007000 as 3.007e+06.
 	_su_hfmt='%-30s %8s %13s %13s %13s %13s %13s\n'
@@ -1310,6 +1411,13 @@ trace_export() {
 	else
 		_ex_bad=$(trace_verify) || _ex_vst=$?
 	fi
+	if [ "$_ex_vst" = "$TRACE_EX_SCHEMA" ]; then
+		# Not a bad line — no line was read at all. Saying "verify fails" here
+		# would send the operator hunting for damage that is not there, when the
+		# fix is a newer reader.
+		echo "x trace: export refused — the schema of this trace is not this reader's, so nothing here can honestly be exported. Nothing was printed; verify's own line above names both versions." >&2
+		return "$_ex_vst"
+	fi
 	if [ "$_ex_vst" != 0 ]; then
 		[ -n "$_ex_bad" ] && printf '%s\n' "$_ex_bad" >&2
 		echo "x trace: export refused — verify fails on this selection. Nothing was printed; a correction is a new event, never an edit to a file." >&2
@@ -1318,6 +1426,9 @@ trace_export() {
 	if [ "$_ex_csv" = 1 ]; then
 		trace_load_prices "$_ex_since"
 		trace_note_unpriced
+		# The advisory travels with the PRICED read: the JSONL form prints events
+		# verbatim and applies no price, so the table's age is not its business.
+		trace_note_stale_prices
 	fi
 	_ex_cols="v ts id kind $TRACE_STRING_FIELDS $TRACE_TOKEN_FIELDS cost_usd priced_at price_src data"
 	_ex_ifs=$IFS
