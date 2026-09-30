@@ -18,6 +18,7 @@
 #   scripts/guards.config.sh                       the guards' view of your layout
 #   scripts/agents.config.sh                       tier -> model, your provider's
 #   scripts/vocab.config.sh                        the words a decision line may carry — ships FILLED
+#   scripts/trace.config.sh                        whether and where decisions are traced — ships EMPTY
 #
 # Edit those freely — the whole point of stamping a template is that the copy
 # is then yours.
@@ -1021,7 +1022,73 @@
 # through the trace script's own blob store rather than writing them
 # themselves, so one implementation decides where a payload lives.
 
-shared-layer: 0.28.0
+# 0.29.0 — the decision trace joins the shared layer (PRD #237 closes).
+# ONE file joins the layer: scripts/trace.sh. ONE shared file changes
+# behaviour: scripts/agent-dispatch.sh, which now records every spawn.
+# UPDATING.md changes content: the joining and behaviour entries, 9d's
+# policy-file row and the one line that turns tracing on, and both worked
+# examples re-pin. No skill joins or leaves skills:.
+#   From #255, the release: scripts/trace.sh has been on main and in every
+# tag since 0.25.0 OUTSIDE files:, so a consumer's copy was never held to a
+# release; from this one it is copied verbatim and the gate requires it. What
+# it is: one JSON line per decision, appended to a per-day file under the
+# trace directory — `emit`, `begin`/`end` around a run, `blob` for a payload
+# stored once by git's hash of it, `show <type:ref>` (including `run:<id>`),
+# `summary --by kind|skill|model|session`, `export [--csv]`, `verify`, `dir`.
+# Exit 0 is done, the unconfigured no-op included; 2 a caller error; 1
+# `verify`'s verdict; 3 a schema this reader cannot judge. Its policy file,
+# scripts/trace.config.sh, stays OUT of files: and ships EMPTY — TRACE_DIR,
+# TRACE_NUMBERED_TYPES, TRACE_TOOLS, TRACE_AGENT_WAIT_MS,
+# TRACE_PRICES_STALE_DAYS, the shape of TRACE_PRICE_<MODEL> with no price
+# assigned, and the `# Last checked:` date line — so a consumer who takes Part
+# 1 and nothing else gains a script that writes nothing and says so on stderr.
+# VERSION's policy-file list and 9d's table gain its row, bootstrap's adoption
+# arm copies it where absent, and self-host's release-delta check (F6) holds
+# it like the other policy files.
+#   From #249: the dispatcher appends a `spawn` when it crosses — tier,
+# domain, agent harness, model, depth, prompt size — and a `spawn.end` at
+# every way out past that point, outcome ok, timeout, budget, unreachable or
+# fail with the exit status beside it; a depth refusal is a `spawn` with
+# outcome refused and no end, and a dry run or the in-session exit 3 records
+# nothing. The pair's subject is a run id minted for the worker and handed to
+# it in TRACE_RUN, with the dispatch's own run in TRACE_PARENT. A WIDENING: no
+# exit status, argument or stdout changes, every emit ends `|| :`, and
+# unconfigured nothing is written. One new optional key in YOUR agents policy
+# file, AGENT_DISPATCH_TRACE_PROMPT='1', keeps each worker prompt as a blob;
+# any other non-empty value is exit 2, refused rather than read as off.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. Most of it landed before this bump
+# and is named in the 0.25.0, 0.27.0 and 0.28.0 notes; it is listed whole
+# here because this is the release that adopts the mechanism it serves.
+# The emit lines at the decision points of fourteen chain skills (9a):
+# /design-brief, /diagnose, /grill-me, /grill-with-docs, /housekeeping,
+# /implement, /merge-train, /pr-iterate, /prototype, /review-pr, /tdd,
+# /to-prd, /to-tickets and /worktree-cleanup, each `|| :`, including the
+# `feedback` verdict — hit, adjusted or missed — that /merge-train and
+# /pr-iterate record on a slice. /retro, the trace's one reader, joined
+# skills: at 0.28.0 and is not new here. The Claude Code adapter's hooks
+# directory — `hooks`, under adapters/claude-code (9e): session-start.sh,
+# session-end.sh, subagent-stop.sh, tool-post.sh and their library
+# hook.lib.sh, the usage extractor transcript-usage.mjs and tool-payload.mjs,
+# with adapters/README.md and adapters/claude-code/README.md — opt-in and
+# dormant until you wire them. scripts/worktree-cleanup.sh and
+# /worktree-cleanup's prose keep a fresh worktree whose branch has no commits
+# of its own (#304, since 0.27.0). The kit's glossary and ADR-0008 with its
+# dated amendments are kit-side records; yours are yours.
+#   Changed in THIS window, since v0.28.0: /grill-with-docs records each
+# resolved branch as a `grill.decision` (#309, which also amends ADR-0008
+# clause 7 to name the readers — the operator and /retro); subagent-stop.sh
+# and hook.lib.sh wait, up to TRACE_AGENT_WAIT_MS, for a subagent's
+# transcript to hold its final message before reading its usage (#308), and
+# adapters/claude-code/README.md says a live payload is compact; the
+# policy file gains TRACE_NUMBERED_TYPES, which holds the types your forge
+# numbers to one spelling, `<type>:#<digits>` (#305), and
+# TRACE_AGENT_WAIT_MS, both shipped empty.
+#   Kit-only, never shipped: scripts/skill-dispatch.kit.sh names
+# scripts/trace.kit.config.sh, so the kit's own dispatches are traced.
+#   The wave's tickets: #246-#255, #270-#272 and #303-#309.
+
+shared-layer: 0.29.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -1087,6 +1154,7 @@ files:
   scripts/agent-dispatch.sh
   scripts/manifest.lib.sh
   scripts/vocab.sh
+  scripts/trace.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh
