@@ -205,9 +205,25 @@ Grouped by the seam each term belongs to. Entry shape:
   out of a ticket body, a review report or a subagent's return by the skill
   that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
   declared field is not one, so a whole body may be handed over; a field said
-  twice with two values has no value and is refused. Not an anchor: an anchor
-  is a labeled decision in a stamped article, refereed by an advisory, and is
-  never read by the checker.
+  twice with two values has no value and is refused. The line is **bare**: one
+  wearing a list marker or emphasis (`- Tier: …`, `**Tier:** …`) is not a
+  decision line to the checker, and lifting it out of its markup is the
+  caller's job. Not an anchor: an anchor is a labeled decision in a stamped
+  article, refereed by an advisory, and is never read by the checker.
+- **Typed return** — what a delegated untrusted read sends back: a **declared
+  shape** of bare decision lines from the vocabularies plus one **evidence**
+  line quoting a span of what was read, and nothing else. The caller checks
+  every return before reading it — the shape itself, then the values through
+  `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole,
+  never printed, never acted on, and reported by comment and position only.
+  What reaches the session is the declared fields and one verified quoted
+  span, which is untrusted data still. Free text in a return is a finding, not a result.
+  `/pr-iterate`'s read of review-comment bodies is the first:
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the
+  forge states, is stamped by the caller and never asked of the reader. Ref:
+  PRD #273, #278.
+  - _Avoid_: "summary", "report" for what the subagent returns — prose is the
+    channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
@@ -270,8 +286,12 @@ Grouped by the seam each term belongs to. Entry shape:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
   PRD, a ticket, a PR and a session all join on one column, and `show`
-  matches one exactly — `ticket:#3` never finds `ticket:#34`. An event may
-  name secondary subjects under `related`.
+  matches one exactly — `ticket:#3` never finds `ticket:#34`. Which types
+  are numbered is the project's policy (`TRACE_NUMBERED_TYPES`, empty as
+  shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
+  way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
+  other spelling is refused at emit, and an old one already in the trace is
+  only an advisory. An event may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
@@ -288,7 +308,9 @@ Grouped by the seam each term belongs to. Entry shape:
   content hash and referenced from the event: `--blob <file>` (or `-` for
   standard input) stores it under `blobs/`, named by git's own hash of its
   content, and the event carries that hash and the byte count. Identical
-  content is stored once.
+  content is stored once. `sh scripts/trace.sh blob <file>` (or `-`) stores
+  one the same way WITHOUT an event and prints `<hash> <bytes>`, for a caller
+  that names several blobs from one event's `data`.
   - _Avoid_: "attachment".
   - _Avoid_: "quota" — a quota is a share allotted for a period; a budget
     here is a ceiling on one tree, derived fresh per dispatch. "Limit" and
@@ -314,6 +336,17 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
     vendor; "estimate" — the arithmetic is exact, it is the price that can be
     stale.
+- **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
+  trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
+  window — by default since its own last run end — it answers seven fixed
+  questions (tier calibration, review signal per sub-agent, recurring
+  failures, diagnosis calibration, spend, chain health, aim calibration),
+  writes its report outside the tree, and routes every finding to
+  `/to-tickets` as a candidate; it never fixes and never edits a skill. A
+  recurring failure becomes a rule with a failing check (shared invariant
+  §11). Ref: PRD #237.
+  - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
+    "lessons file" (the thing §11 forbids it from writing).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
   worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
   removed by the dispatcher's own trap — and, when a dispatch dies before

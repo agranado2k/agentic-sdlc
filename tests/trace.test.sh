@@ -516,6 +516,76 @@ case $DRY_OUT in *'"blob":"'"$HASH"'"'*) pass "--dry-run still names the blob it
 assert_status 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
 assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
 
+
+banner "15b. blob stores a payload WITHOUT an event: the same store, the same name, one line of answer (ticket #306)"
+# The tool hooks (#252) store two payloads and then write ONE event naming
+# both, and `emit` carries one blob — so until this subcommand the adapter kept
+# a second writer of the store, whose review found three defects in exactly
+# that duplication. `blob` is the store on its own: the same staging, hashing
+# and landing an emit's payload gets, answered as `<hash> <bytes>` on stdout.
+BL="$SCRATCH/blob-trace"; BLON=$(policy "$BL")
+BPAY="$SCRATCH/blob-payload.txt"
+printf 'a tool result\nwith a "quote", a \\ and a tab\there\n' >"$BPAY"
+BHASH=$(git hash-object "$BPAY")
+BBYTES=$(wc -c <"$BPAY" | tr -d ' ')
+t_run_split env TRACE_CONFIG=$BLON sh -c 'umask 022; exec sh "$1" blob "$2"' probe "$TRACE" "$BPAY"
+[ "$S_STATUS" = 0 ] && pass "blob <file> exits 0" || fail "blob <file> exited $S_STATUS: $S_ERR"
+[ "$S_OUT" = "$BHASH $BBYTES" ] && pass "and prints '<hash> <bytes>' on one line, the hash git's own for the same bytes" ||
+	fail "blob printed '$S_OUT', git says '$BHASH $BBYTES'"
+[ -z "$S_ERR" ] && pass "and says nothing on stderr" || fail "blob spoke on stderr: $S_ERR"
+BSTORED="$BL/blobs/$(printf '%.2s' "$BHASH")/$BHASH"
+cmp -s "$BPAY" "$BSTORED" && pass "the bytes are stored at blobs/<first two>/<hash>, byte for byte" ||
+	fail "no faithful copy at $BSTORED"
+BMODE=$(ls -l "$BSTORED" 2>/dev/null | cut -c1-10)
+[ "$BMODE" = '-rw-------' ] && pass "readable by its owner alone under a 022 umask ($BMODE) — a payload is private data" ||
+	fail "the stored blob's mode is '$BMODE' under a 022 umask"
+[ -z "$(find "$BL" -name '*.jsonl' 2>/dev/null)" ] && pass "and NO event file was written — storing is not a decision" ||
+	fail "blob wrote an event: $(find "$BL" -name '*.jsonl' -exec cat {} \;)"
+[ -z "$(find "$BL/tmp" -type f 2>/dev/null)" ] && pass "and its staging scratch is left empty" ||
+	fail "staging files survive under $BL/tmp"
+# The SAME store an emit writes: the name `blob` prints is the name an emit
+# records for the same bytes, and the emit that follows stores nothing new.
+BINODE=$(ls -i "$BSTORED" | awk '{ print $1 }')
+env TRACE_CONFIG=$BLON sh "$TRACE" emit kind=note reason='the same bytes, through --blob' --blob "$BPAY"
+BLINE=$(cat "$BL/events/$TODAY.jsonl" 2>/dev/null)
+case $BLINE in *'"blob":"'"$BHASH"'","blob_bytes":'"$BBYTES"'}') pass "emit --blob records the very name and size blob printed" ;;
+*) fail "emit --blob recorded something else: $BLINE" ;; esac
+[ "$(find "$BL/blobs" -type f | wc -l | tr -d ' ')" = 1 ] && [ "$(ls -i "$BSTORED" | awk '{ print $1 }')" = "$BINODE" ] &&
+	pass "and identical content is stored once, the stored file never rewritten" ||
+	fail "the store holds $(find "$BL/blobs" -type f | wc -l) files, or the first was rewritten"
+BEFORE=$(cat "$BL/events/$TODAY.jsonl")
+BSTDIN=$(env TRACE_CONFIG=$BLON sh "$TRACE" blob - <"$BPAY")
+[ "$BSTDIN" = "$BHASH $BBYTES" ] && pass "blob - reads standard input to the same answer" ||
+	fail "blob - printed '$BSTDIN'"
+[ "$(cat "$BL/events/$TODAY.jsonl")" = "$BEFORE" ] && [ "$(find "$BL/blobs" -type f | wc -l | tr -d ' ')" = 1 ] &&
+	pass "and grew no event file and stored nothing twice" ||
+	fail "blob - appended an event or stored a second copy"
+# Unconfigured is the working state every write has: nothing stored, nothing on
+# stdout, exit 0 — and the payload is not even read, so a missing file cannot
+# hand a consumer who never opened the policy file a new exit status.
+t_run_split env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$BPAY"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "unconfigured, blob is a silent no-op: exit 0, nothing on either stream" ||
+	fail "unconfigured blob: status $S_STATUS, out '$S_OUT', err '$S_ERR'"
+assert_status 0 "and a missing payload is still exit 0 when nothing would be stored" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$SCRATCH/no-such-payload"
+t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" blob "$BPAY"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "without TRACE_QUIET it still prints nothing on stdout, where a caller reads the name" ||
+	fail "unconfigured blob printed '$S_OUT' (status $S_STATUS)"
+# Configured, the grammar is the caller's to get right.
+assert_status 2 "blob naming no file is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$SCRATCH/no-such-payload"
+assert_status 2 "blob with no argument is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob
+assert_status 2 "blob with two arguments is exit 2 — one payload, one name" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$BPAY" "$BPAY"
+# A dash-led argument is refused as an OPTION, with the usage text, even when
+# a file of that name exists — without the refusal it reached `cat` as a flag
+# and died naming the wrong problem (review of PR #317). Such a file is
+# reached as ./-x.
+mkdir -p "$SCRATCH/dashdir" && printf 'x' >"$SCRATCH/dashdir/-x"
+t_run_split env TRACE_CONFIG=$BLON sh -c 'cd "$1" && exec sh "$2" blob -x' probe "$SCRATCH/dashdir" "$TRACE"
+[ "$S_STATUS" = 2 ] && case $S_ERR in *'usage:'*) true ;; *) false ;; esac &&
+	pass "blob -x is exit 2 with the usage text — an option is not a payload, and blob has none" ||
+	fail "blob -x: status $S_STATUS, stderr '$S_ERR'"
+assert_status 0 "and the same file reached as ./-x is stored" -- env TRACE_CONFIG="$BLON" sh -c 'cd "$1" && exec sh "$2" blob ./-x' probe "$SCRATCH/dashdir" "$TRACE"
+
 banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
@@ -944,5 +1014,99 @@ case $(sed -n '/^# STREAMS AND EXIT CODES/,/^#$/p' "$TRACE") in *"exit 3"*) pass
 grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF 'exit 3' && pass "and the root manual's trace ROW names it" || fail "AGENTS.md's trace row does not name exit 3"
 grep -qF 'Amended 2026-09-28 (#271)' "$KIT/docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md" &&
 	pass "and ADR-0008 carries the dated amendment that chose it" || fail "ADR-0008 has no dated amendment for #271"
+
+banner "21. A numbered subject is spelled one way: ticket, pr and prd carry their # (ticket #305)"
+# The first retrospective over the kit's own trace found one ticket written
+# three ways, so `show` on the documented spelling missed events about it. The
+# subject is the join key; a join key with synonyms is not one. Each refusal
+# below is a spelling a plausible wrong implementation lets through: a check
+# on the type alone, a check that the # is present but not that digits follow,
+# a check on `subject` that forgets `related`.
+# WHICH types are numbered is the project's POLICY, not the kit's mechanism: the
+# kit names no tracker, and a consumer whose tracker writes PROJ-12 must not be
+# refused. So the shipped policy file sets TRACE_NUMBERED_TYPES empty — today's
+# open grammar — and only the kit's twin holds its own trace to the rule.
+SP="$SCRATCH/spelling"
+SPON="$SCRATCH/policy.spelling.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\n" "$SP" >"$SPON"
+OPEN="$SCRATCH/spelling-open"; OPENON=$(policy "$OPEN")
+for _sp_any in 'ticket:265' 'ticket:PROJ-12' 'pr:12' 'prd:#012'; do
+	assert_status 0 "with no TRACE_NUMBERED_TYPES, $_sp_any is accepted — the grammar stays open" -- env TRACE_CONFIG="$OPENON" sh "$TRACE" emit kind=note subject="$_sp_any"
+done
+assert_status 0 "and the SHIPPED policy file keeps it open — ticket:PROJ-12 is a consumer's legitimate spelling" -- env TRACE_CONFIG="$KIT/scripts/trace.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:PROJ-12'
+assert_status 2 "while the kit's own twin holds this repo to the rule" -- env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:265'
+grep -q "^TRACE_NUMBERED_TYPES=''" "$KIT/scripts/trace.config.sh" && pass "the shipped policy file documents TRACE_NUMBERED_TYPES and carries it empty" || fail "scripts/trace.config.sh does not carry TRACE_NUMBERED_TYPES=''"
+grep -q "^TRACE_NUMBERED_TYPES='ticket pr prd'" "$KIT/scripts/trace.kit.config.sh" && pass "the kit twin sets it to ticket pr prd" || fail "scripts/trace.kit.config.sh does not set TRACE_NUMBERED_TYPES='ticket pr prd'"
+TRACE_NUMBERED_TYPES='ticket pr prd' TRACE_CONFIG=$OPENON sh "$TRACE" emit kind=note subject='ticket:265' 2>/dev/null &&
+	pass "the environment cannot switch the rule on — it is the policy file's to say" || fail "an environment TRACE_NUMBERED_TYPES was honoured"
+BADPOL="$SCRATCH/policy.badnumbered.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket PR'\n" "$OPEN" >"$BADPOL"
+assert_status 2 "a TRACE_NUMBERED_TYPES word that is not a lowercase type is the policy error it is" -- env TRACE_CONFIG="$BADPOL" sh "$TRACE" emit kind=note subject='pr:#1'
+assert_out_has "TRACE_NUMBERED_TYPES"
+for _sp_bad in 'ticket:265' 'ticket:#abc' 'pr:12' 'prd:#' 'ticket:#12a' 'pr:#-1' 'ticket:#012' 'pr:#00'; do
+	assert_status 2 "emit subject='$_sp_bad' is refused" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_bad"
+done
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:265'
+case $S_ERR in *"ticket:#<digits>"*) pass "and the refusal names the accepted form, ticket:#<digits>" ;; *) fail "the refusal did not name the accepted form: $S_ERR" ;; esac
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:12'
+case $S_ERR in *"pr:#<digits>"*) pass "and names it per type — pr:#<digits> for a pr" ;; *) fail "the pr refusal did not name pr:#<digits>: $S_ERR" ;; esac
+assert_status 2 "related='prd:#12 ticket:34' is refused — every token is held to the rule, not only the first" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:#9' related='prd:#12 ticket:34'
+assert_status 2 "begin refuses the same spelling — it writes through emit" -- env TRACE_CONFIG="$SPON" TRACE_SESSION=spelling-305 sh "$TRACE" begin implement subject='ticket:265'
+[ ! -e "$SP/events/$TODAY.jsonl" ] && pass "none of the refusals wrote a line" || fail "a refused spelling was written: $(cat "$SP/events/$TODAY.jsonl")"
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:#265' related='prd:#12 pr:#34 branch:feat/x' reason=accepted
+[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && pass "ticket:#265 with related prd:#12 pr:#34 is accepted, silently" || fail "the accepted spelling was refused (exit $S_STATUS): $S_ERR"
+for _sp_open in 'worktree:anything' 'run:r1' 'branch:feat/265' 'issue:265' 'session:abc'; do
+	assert_status 0 "an open type is untouched — $_sp_open" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_open"
+done
+t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:#265'
+case $S_OUT in *'"reason":"accepted"'*) pass "show ticket:#265 finds the accepted event" ;; *) fail "show did not find the accepted event: $S_OUT" ;; esac
+assert_status 2 "show refuses ticket:265 — a reader cannot ask for a spelling that cannot exist" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:265'
+assert_status 2 "and show refuses pr:12" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'pr:12'
+
+# verify: history is never rewritten, so an old spelling ALREADY in the trace
+# is an advisory — on stderr with file and line, never a bad line on stdout,
+# never a change to the exit code. Written by hand, shaped exactly as the
+# emitter wrote it before the rule existed.
+VF="$SCRATCH/spelling-verify"
+VFON="$SCRATCH/policy.spelling-verify.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\n" "$VF" >"$VFON"
+TRACE_CONFIG=$VFON sh "$TRACE" emit kind=note subject='ticket:#1' reason=clean
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old","kind":"note","subject":"ticket:265","reason":"before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old2","kind":"note","subject":"pr:#9","related":"prd:#12 ticket:34","reason":"related before the rule"}\n' >>"$VF/events/$TODAY.jsonl"
+# The decoy carries NO subject or related in its envelope, so the only place
+# a reader could find one is the data map — a decoy that also had an envelope
+# subject would be matched there first and prove nothing (H-1, review of PR #314).
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old3","kind":"note","reason":"decoy","data":{"subject":"ticket:99","related":"pr:1"}}\n' >>"$VF/events/$TODAY.jsonl"
+# A # with a non-digit after it: the awk twin must anchor both ends, as the
+# shell check does (M-1, review of PR #314).
+printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old4","kind":"note","subject":"ticket:#12a","reason":"half a number"}\n' >>"$VF/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over an old spelling exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an old spelling: $S_OUT"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout — stdout is the bad-line verdict, and this line is not bad" || fail "verify printed on stdout: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2"*"ticket:265"*) pass "and names the subject's file:line on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2 and ticket:265: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3"*"ticket:34"*) pass "and a related token's file:line too" ;; *) fail "stderr did not name $TODAY.jsonl:3 and ticket:34: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves the clean line alone" ;; esac
+case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject or data.related as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $S_ERR in *"$TODAY.jsonl:5"*"ticket:#12a"*) pass "and a # followed by more than digits is advised on too — the awk anchors both ends" ;; *) fail "stderr did not name $TODAY.jsonl:5 and ticket:#12a: $S_ERR" ;; esac
+# summary and export read through verify, but repeating every advisory on
+# every call would bury their own output under history nobody can rewrite:
+# ONE line with the count, and a pointer to verify, which lists each.
+for _sp_cmd in summary export; do
+	t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" $_sp_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_sp_cmd over old spellings still exits 0" || fail "$_sp_cmd exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'numbered')" = 1 ] && pass "and $_sp_cmd says so in exactly one stderr line" || fail "$_sp_cmd did not print exactly one advisory line: $S_ERR"
+	case $S_ERR in *"3 "*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_sp_cmd's advisory line lacks the count or the pointer: $S_ERR" ;; esac
+	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_sp_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+done
+t_run_split env TRACE_CONFIG="$QON" sh "$TRACE" summary
+case $S_ERR in *numbered*) fail "summary advised over a trace with no old spelling: $S_ERR" ;; *) pass "and summary says nothing when there is nothing to say" ;; esac
+printf 'not json at all\n' >>"$VF/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$S_STATUS" = 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:6")" -ge 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
+	pass "a real bad line still fails verify, and the old spelling is still not among the bad lines" || fail "verify mixed the advisory into the verdict (exit $S_STATUS): $S_OUT"
+
+# The rule is written where the vocabulary lives, in one sentence.
+sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:#<digits>' &&
+	pass "the glossary's Subject entry states the numbered spelling" || fail "the glossary's Subject entry does not name ticket:#<digits>"
 
 t_done "trace script"

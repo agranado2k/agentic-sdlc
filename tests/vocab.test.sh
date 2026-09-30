@@ -65,7 +65,7 @@ while IFS=: read -r field tokens; do
 done <"$SCRATCH/fields"
 [ ! -s "$SCRATCH/refused" ] && pass "every shipped token is accepted by its own field" ||
 	fail "shipped tokens refused: $(tr '\n' ' ' <"$SCRATCH/refused")"
-for field in tier label domain severity status action outcome confidence; do
+for field in tier label domain severity status action outcome confidence command-shaped author-kind; do
 	grep -q "^$field:" "$SCRATCH/fields" && pass "the PRD's field '$field' is declared" ||
 		fail "the PRD's field '$field' is not declared"
 done
@@ -176,12 +176,29 @@ s_assert_status 2 "a first argument that is neither a subcommand nor a 'Field: v
 s_assert_err_has "usage"
 
 # One ticket body checks in under a second — it is called inside the quiz
-# loop. Five runs in four wall seconds bounds each at under one.
-t0=$(date +%s)
-for _ in 1 2 3 4 5; do sh "$VOCAB" <"$BODY"; done
-t1=$(date +%s)
-[ $((t1 - t0)) -le 4 ] && pass "five body checks took $((t1 - t0))s — under one second each" ||
-	fail "five body checks took $((t1 - t0))s — over the one-second budget per body"
+# loop. The claim is about the CHECKER's work, so it is the checker's own CPU
+# time that is measured — user plus system, of the five child runs, as the
+# shell's `times` reports it — and not the wall clock: this assertion used to
+# read `date +%s` around the loop, and on a loaded host the same five checks
+# took 7 and 22 wall seconds while doing the same work, a red that said
+# nothing about the checker. CPU time is what a slower checker moves and what
+# a busy host leaves alone. The bound is what is claimed and no more: THIS
+# body, a ticket's dozen lines. It is not a claim about scale — the checker
+# does per-line work on every line that carries a colon, and a body with
+# thousands of those costs in proportion (measured: 2000 such lines, about
+# seven CPU-seconds a check).
+cpu_ms=$( (
+	for _ in 1 2 3 4 5; do sh "$VOCAB" <"$BODY"; done >/dev/null 2>&1
+	times
+) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }')
+case $cpu_ms in
+*[!0-9]* | "") fail "five body checks — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+*)
+	[ "$cpu_ms" -le 5000 ] && pass "five body checks cost ${cpu_ms}ms of CPU — under one CPU-second each" ||
+		fail "five body checks cost ${cpu_ms}ms of CPU — over the one-second budget per body"
+	;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
@@ -192,6 +209,42 @@ s_assert_err_has "usage"
 vocab fields extra
 s_assert_status 2 "'fields' takes no argument"
 s_assert_err_has "usage"
+
+# ---------------------------------------------------------------------------
+banner "Bare lines — a markdown-wrapped line is not a decision line"
+# ---------------------------------------------------------------------------
+# Review of PR #289 (M-4): a decision line wearing markdown — a list marker,
+# emphasis — is silently unrecognized. Resolved as the contract already read
+# (PRD #273: "the calling skill hands it the lines"), and said where a caller
+# meets it: the usage text and the header, in so many words. The behavior is
+# pinned beside the words, so the day the checker learns to read through
+# markup the sentence that says it does not goes red with it.
+vocab fieldz
+s_assert_err_has "the caller hands it bare \`Field: value\` lines" "the usage text says what the caller hands over"
+s_assert_err_has "a markdown-wrapped line" "…and names the line it does not read"
+s_assert_err_has "is not a decision line to it" "…in those words"
+assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
+assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
+printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
+t_run_split sh "$VOCAB" <"$SCRATCH/listed"
+s_assert_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"
+vocab '**Tier:** Implementor'
+s_assert_resolved "" "an emphasized line is ignored, not checked"
+vocab check '- Tier: Implementor' 'Tier: Implementor'
+s_assert_status 2 "the same line handed over bare is refused — lifting it out is the caller's job"
+s_assert_err_has "tier: 'Implementor' is not one of"
+
+# A declared field is a word every body handed over is now read for, so it
+# must be a word no ordinary body uses as a key. `Author:` is one a ticket, a
+# commit trailer or a forge's own issue header carries — declared as a field,
+# a whole body piped in went from exit 0 to exit 2 on its author's name
+# (review of PR #318). The field is `author-kind`, and `Author:` is prose.
+printf 'Author: Arthur\n' >"$SCRATCH/authored"
+t_run_split sh "$VOCAB" <"$SCRATCH/authored"
+s_assert_resolved "" "a plain 'Author: <name>' line in a body is not a decision line"
+vocab 'Author-kind: maintainer'
+s_assert_status 2 "'Author-kind: maintainer' — a kind nobody declared — is refused"
+s_assert_err_has "author-kind: 'maintainer' is not one of bot human"
 
 # ---------------------------------------------------------------------------
 banner "Where the vocabularies come from"

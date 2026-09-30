@@ -154,14 +154,14 @@ copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
-`.agents/skills/` holds seventeen skills — the chain at the top of this README, made
+`.agents/skills/` holds eighteen skills — the chain at the top of this README, made
 runnable:
 
 `/grill-me` → `/to-prd` → `/to-tickets` → `/implement` (driving `/tdd`, ending at
 an open PR that carries a review) → `/review-pr` → `/pr-iterate` →
 `/merge-train` → `/worktree-cleanup`, plus `/grill-with-docs`, `/prototype`,
 `/diagnose`, `/explain-diff`, `/improve-codebase-architecture`,
-`/design-brief` and `/housekeeping` off to the side.
+`/design-brief`, `/housekeeping` and `/retro` off to the side.
 
 **All but `/dogfood` are unconditional; it alone is opt-in.** Every other
 skill works on the day the repo is created, because it operates on specs,
@@ -228,8 +228,9 @@ Six of the skills are adapted from [mattpocock/skills](https://github.com/mattpo
 under MIT; `.agents/skills/LICENSE-mattpocock-skills.md` records which, what
 changed, and reproduces the licence, and each adapted skill carries the same note
 at its own foot so provenance survives being read out of context. That file also
-records the eight that have **no** upstream — including `/dogfood`, checked
-against the upstream repository rather than assumed — and the one with a
+records the eleven that have **no** upstream — counting `/review-pr`, whose
+second axis has none, and `/dogfood`, checked against the upstream repository
+rather than assumed — and the one with a
 different upstream: `/explain-diff`, adapted from Geoffrey Litt's
 publicly shared skill.
 
@@ -241,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.27.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.30.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -468,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.27.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.30.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -564,8 +565,10 @@ skeleton (K0).
   `end` rewrite that stack and both by rename, fifty parallel emits all land
   and all verify while the stack stays untouched, an event whose write would
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload
-  is stored once under git's own hash of the bytes that were stored, and
-  `verify` refuses a schema it does not know.
+  is stored once under git's own hash of the bytes that were stored — by
+  `blob` too, which prints that name and byte count, writes no event and
+  leaves the stored file owner-only — and `verify` refuses a schema it does
+  not know.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -581,10 +584,27 @@ skeleton (K0).
   tier is read and never widened — the resolver still refuses a fifth token.
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
-  confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
-  tier stamp of `/to-tickets` and the resolver's literal — order included,
-  and to the checker's own defaults, so a token added on one side and not the
-  other goes red.
+  confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
+  `/pr-iterate`, the tier stamp of `/to-tickets` and the resolver's literal —
+  order included, and to the checker's own defaults, so a token added on one
+  side and not the other goes red.
+- `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
+  read to its declared return shape (PRD #273): three bare lines — the
+  command-shaped flag, the triage action, one evidence line quoting the
+  comment read — whose options are the policy file's tokens, with the author
+  kind stamped by the caller from the forge's own data; the check before the
+  read, through the plain script name; free text as a finding. It lifts the
+  check the skill prints out of the skill and runs it: the good return passes,
+  and a sentence outside the shape, an undeclared value, the inconsistent pair
+  and a markdown-wrapped line are each refused — as is every return when the
+  checker is missing, since the check fails closed. The evidence line is held
+  too — one quoted span of at most 200 bytes of printable ASCII, verbatim from
+  a single line of its comment by a fixed-string match against the scratch
+  file the caller fetched unseen — and a count of returns that is not the
+  count of comments refuses them all. Only a return that passed is printed;
+  a refused one is named by comment and position. The snapshot itself is held
+  to metadata only: no command in it selects a body. It also holds the
+  trust-boundary paragraph in the kit's manual and the template.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
@@ -615,16 +635,17 @@ skeleton (K0).
   switch of its own: with `TRACE_TOOLS` empty in the shipped policy file the
   post-tool hook writes nothing at all, and with it set one tool call becomes
   one `tool.use` event whose two blob names are git's own hash of the payload's
-  input and result — a 20 KB input still leaves the line inside the 4000-byte
+  input and result, stored by the shared script's `blob` with no store code
+  left in the adapter — a 20 KB input still leaves the line inside the 4000-byte
   cap, a failed call reads `outcome=fail` with the agent harness's error as its
   result, a tool result that quotes another `session_id` does not re-file the
   event, and a `tool_use_id` the trace could never match is one `fail` event
   rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
   and names only hook scripts that exist.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
-  contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
-  decision points by the plain `sh scripts/trace.sh …` name, never the kit's
-  never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
+  contract as text (ADR-0008, tickets #250 and #309): each of the fourteen
+  emits at its decision points by the plain `sh scripts/trace.sh …` name,
+  never the kit's never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
   error changes no skill's outcome; every kind a skill emits is one the script
   knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
   and records a spawn per agent with that model; `/merge-train` and
@@ -677,6 +698,18 @@ skeleton (K0).
   text: eight checklist items each with a named source, the red flags and
   their two routes, the never-fix rule, the one permitted write, planner-tier
   work, spec-only frontmatter, and every path and command resolving.
+
+- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the seven
+  fixed questions named and numbered in both files, the trace kinds each one
+  reads, the plain `sh scripts/trace.sh show|summary|export` name with
+  `verify` first, the report outside the tree, findings routed to
+  `/to-tickets` and never fixed (a recurring failure becomes a rule with a
+  failing check, never a lessons file — shared invariant §11), the run it
+  opens and closes with `data.findings`, every documented trace line run
+  against a scratch trace, the default window since its own last run end,
+  planner-tier work, and every roster surface — including `/housekeeping`'s
+  "a retro ran inside the window" line and the trace-skills suite's named
+  exclusion for the one skill allowed to read.
 
 - `sh tests/spec-skills.test.sh` pins the `/to-prd` and `/to-tickets` contracts
   as text: the PRD template's eleven sections in reading order, the phrase
@@ -769,12 +802,14 @@ sh tests/docs-gate-advisory.test.sh                    # the warning channel is 
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
+sh tests/retro-skill.test.sh                           # the /retro contract
 sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
 sh tests/skill-phase.test.sh                           # every skill declares its phase of work
 sh tests/manifest.test.sh                              # the manifest grammar, once

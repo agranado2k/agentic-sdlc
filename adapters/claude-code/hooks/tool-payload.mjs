@@ -119,12 +119,12 @@ let head = new TextDecoder("utf-8").decode(slice).replace(/�+$/u, "");
 head = head.replace(/[\u0000-\u001f\u007f]/gu, " ");
 
 // OWNER-ONLY, and asked for at CREATE time rather than fixed afterwards: these
-// three files are moved into the blob store as they are, so their mode is the
-// mode a tool result is stored with — the commands this session ran and the
-// contents of what it read. Under the usual `umask 022` a plain create is 0644,
-// which is every local user who can traverse the trace directory (H-1, review of
-// PR #295). The shared script gets this for free from `mktemp`; here it is said
-// out loud. A mode is masked, never added to, so 0600 cannot widen anything.
+// three files hold a tool call's payload — the commands this session ran and the
+// contents of what it read — for as long as the hook takes to hand them to
+// `scripts/trace.sh blob`, whose stored copy is owner-only through `mktemp`.
+// Under the usual `umask 022` a plain create is 0644, which is every local user
+// who can traverse the trace directory for that window (H-1, review of PR #295).
+// A mode is masked, never added to, so 0600 cannot widen anything.
 const PRIVATE = 0o600;
 try {
   writeFileSync(`${dir}/input`, input, { mode: PRIVATE });
