@@ -234,9 +234,28 @@ done
 [ -e "$PROJ/scripts/trace.kit.sh" ] &&
 	fail "scripts/trace.kit.sh leaked into the project" ||
 	pass "no scripts/trace.kit.sh in the project"
+# The agent-harness wiring (ADR-0008 clause 8): the adapter's session hooks
+# SHIP, under adapters/, and arrive dormant because nothing names them. This
+# file is the only thing that does, and it names a kit-only trace policy the
+# strip has already deleted — so a consumer inheriting it would get three
+# session hooks wired to nothing.
+[ -e "$PROJ/.claude/settings.json" ] &&
+	fail ".claude/settings.json leaked into the project — the kit's own session hooks reached a consumer" ||
+	pass "no .claude/settings.json in the project — the trace hooks stayed dormant"
+[ -f "$PROJ/adapters/claude-code/hooks/session-start.sh" ] &&
+	pass "the adapter's hooks themselves did reach the project, as reference material" ||
+	fail "adapters/claude-code/hooks/session-start.sh did not reach the project — adapters/ arrives intact"
 [ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"
+# The vocabulary policy file (PRD #273) is the one policy file that ships
+# FILLED, and it must arrive that way: a file that exists is the whole policy
+# — the checker's own words stand in only for a consumer with NO file, and an
+# EMPTY one is refused at load as declaring no field — so the consumer needs
+# the words in front of them to edit.
+[ -f "$PROJ/scripts/vocab.config.sh" ] && grep -q "^VOCAB_TIER='planner implementer mechanical reviewer'" "$PROJ/scripts/vocab.config.sh" &&
+	pass "the consumer's scripts/vocab.config.sh arrived filled — the vocabularies are the kit's to name" ||
+	fail "the consumer's scripts/vocab.config.sh is missing or empty"
 
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
@@ -845,7 +864,7 @@ fi
 # While the declared version has NO tag yet — a wave in flight — every file
 # that changed since the previous release in the categories the recipe's
 # step 9 names (9a the skills, 9b the manual and article templates, 9c the
-# docs and workflow templates, 9d the four policy files, 9e the adapters)
+# docs and workflow templates, 9d the five policy files, 9e the adapters)
 # must be named in the current note or in an "Arriving from <previous> or
 # older" paragraph of the recipe — that paragraph only, from its bold lead
 # at column one to the next blank line. Once the version is tagged there is
@@ -860,7 +879,7 @@ fi
 # hidden behind a mention of its skill for another reason all pass. What is
 # caught is a changed file that no current note mentions at all — which is
 # what #159's two were.
-DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
+DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
 # notes_text <repo> <prev version> — the current note plus the recipe's
 # arriving-from paragraph(s) for that previous release.
 notes_text() {
@@ -951,6 +970,48 @@ if f5_check "$SCRATCH/version.f5bait2"; then
 	fail "F5 passed when only an OLDER note carries the marker — the window spans more than the current note"
 else
 	pass "F5's window is the current note alone — an older note's marker cannot stand in"
+fi
+
+# ---------------------------------------------------------------------------
+banner "G. Every self-measurement carries an oracle clause"
+# ---------------------------------------------------------------------------
+# A measurement is a row that reports a percentage. Every such row must name
+# its oracle: who wrote the fixtures, when, against which version, and what it
+# was compared to.
+#
+# The probe finds measurement rows by grepping for the oracle clause and
+# reporting any row with a percentage that lacks one.
+
+# diary_measurement_rows <path> — grep lines from the diary's Current state
+# table that contain a percentage measurement. Return the lines that LACK an
+# oracle clause (detected by the absence of " — oracle:"). Empty result means
+# every measurement is properly oracle'd.
+diary_measurement_rows() {
+	# Extract the Current state table only (from "## Current state" to "### ")
+	_dmr_lines=$(sed -n '/^## Current state/,/^### /p' "$1" |
+		# Find lines with any percentage measurement (integer or decimal)
+		grep -E '[0-9]+(\.[0-9]+)? *%' |
+		# Exclude lines that already have oracle clause
+		grep -v ' — oracle:')
+	printf '%s' "$_dmr_lines"
+}
+
+missing_oracles=$(diary_measurement_rows "$KIT/docs/diary.md")
+if [ -z "$missing_oracles" ]; then
+	pass "every measurement in the diary's Current state carries an oracle clause"
+else
+	fail "measurement rows in the diary lack oracle clauses:"
+	printf '%s\n' "$missing_oracles" | sed 's/^/        | /'
+fi
+
+# Bait: add a measurement without an oracle and verify the probe catches it.
+ORACLE_BAIT="$SCRATCH/diary.oracle-bait"
+sed 's/ — oracle:[^|)]*//g' "$KIT/docs/diary.md" >"$ORACLE_BAIT"
+missing_oracles_bait=$(diary_measurement_rows "$ORACLE_BAIT")
+if [ -n "$missing_oracles_bait" ]; then
+	pass "the oracle probe detects a measurement without an oracle clause"
+else
+	fail "the oracle probe failed to detect a measurement missing its oracle — the check is vacuous"
 fi
 
 t_done "self-host"

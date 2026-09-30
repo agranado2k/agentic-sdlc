@@ -23,4 +23,4 @@ metadata:
 1. Phrase the question (rule 1). Confirm a spike is cheaper than reading the docs — check primary documentation first; many spikes are answerable by reading.
 2. Build the smallest program that produces the signal, in the scratch dir.
 3. Run it; capture the evidence (output, timing, error).
-4. Record the finding (rule 5), delete the spike dir, and report: question → verdict → what it unblocks.
+4. Record the finding (rule 5) — and the verdict in the trace, with the captured evidence as a blob rather than a line: `sh scripts/trace.sh emit kind=spike.verdict [subject=<prd:#N or ticket:#N, when the question came from one>] outcome=true|false|inconclusive --blob <file> data.question='<the question, one line>' reason='<the verdict, with the versions probed, one line>' || :`. The trace is written here and never read (ADR-0008); unconfigured, the call is a silent no-op. Then delete the spike dir, and report: question → verdict → what it unblocks.

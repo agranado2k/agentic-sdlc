@@ -88,6 +88,18 @@ you have not mapped is not an error — it resolves to the tier, silently, which
 the right answer for every medium you have no opinion about. A ticket with no
 `Domain:` line is the ordinary case.
 
+One domain the kit names for you, and maps for nobody: **`judge`**, on the
+`mechanical` tier — the rung between a deterministic script and the session's
+model, specified by its contract and never by a vendor: state and typed
+questions in, typed answers with per-option probabilities out. It has two
+shapes, and a mapping answers one: **decide**, among supplied options (the
+chain's triage questions), and **rank-or-verify**, over supplied candidates. A
+decider is never handed a verification, and no typed judge takes the review
+verdict (shared invariant §5) — the verdict needs the whole diff and a reason.
+Map `AGENT_TIER_MECHANICAL_JUDGE` to whatever answers that contract on your
+machine, and say which shape it answers; or leave it, and `mechanical judge`
+falls back to the tier in silence like every domain you have no opinion about.
+
 **This manual names no model, and neither does any other file the kit ships.**
 Model identifiers rot on a vendor's schedule, so the tier → model mapping is
 data in `scripts/agents.config.sh` and the resolver is
@@ -271,6 +283,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Tell the guards your repo's shape   | `scripts/guards.config.sh` — source globs, test globs, contract artifacts |
 | Map a capability tier to a model    | `scripts/agents.config.sh` — yours; the kit names no model |
 | Resolve a tier at spawn time        | `scripts/agents.lib.sh` — `sh scripts/agents.lib.sh <tier>`; unmapped warns once and inherits the session model |
+| Hold a decision line to its vocabulary | `scripts/vocab.sh` — `sh scripts/vocab.sh '<Field>: <value>' …` exits 2 naming the field, the value and the vocabulary; the words are yours in `scripts/vocab.config.sh` |
 | Know which files are shared layer   | `VERSION`                                        |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
