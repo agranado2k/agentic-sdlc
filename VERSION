@@ -1041,7 +1041,7 @@
 # TRACE_NUMBERED_TYPES, TRACE_TOOLS, TRACE_AGENT_WAIT_MS,
 # TRACE_PRICES_STALE_DAYS, the shape of TRACE_PRICE_<MODEL> with no price
 # assigned, and the `# Last checked:` date line — so a consumer who takes Part
-# 1 and nothing else gains a script that writes nothing and says so once.
+# 1 and nothing else gains a script that writes nothing and says so on stderr.
 # VERSION's policy-file list and 9d's table gain its row, bootstrap's adoption
 # arm copies it where absent, and self-host's release-delta check (F6) holds
 # it like the other policy files.

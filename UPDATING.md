@@ -221,8 +221,9 @@ sections, and anything after it is annotation.
 
 **Arriving from 0.28.0 or older, one file joins and one changes behaviour.**
 `scripts/trace.sh`, the decision trace, joins the shared layer — see "When a
-file joins the shared layer" below, because a consumer bootstrapped at 0.25.0
-or later already has it. `scripts/agent-dispatch.sh` now records every spawn
+file joins the shared layer" below, because a consumer bootstrapped as a new
+project at 0.25.0 or later already has it, and one that adopted the kit into
+an existing repo does not. `scripts/agent-dispatch.sh` now records every spawn
 in that trace — a widening, see "When a shared file's BEHAVIOUR changes". The
 policy file beside the trace stays yours, and it is 9d's to add.
 
@@ -456,8 +457,8 @@ Step 5 writes it for you. Three things to check afterwards:
   engine only — the reduced fallback cannot check reachability, and says so.)
 
 **0.29.0 is the joining file you may already have.** `scripts/trace.sh` has
-shipped with every bootstrap since 0.25.0, outside `files:`, so a consumer
-bootstrapped since then holds a copy that step 3 never measured — it was not in
+shipped with every NEW-PROJECT bootstrap since 0.25.0, outside `files:`, so a
+consumer bootstrapped that way since then holds a copy that step 3 never measured — it was not in
 `from.list`, so no drift report names it. Before step 5 overwrites it, compare
 it with the release it came from, and move any local change out as step 3 says:
 
@@ -466,7 +467,10 @@ it with the release it came from, and move any local change out as step 3 says:
 kit show "${FROM_REF}:scripts/trace.sh" | diff - scripts/trace.sh
 ```
 
-A consumer from before 0.25.0 has no file there and step 5 simply writes it.
+A consumer from before 0.25.0 has no file there, and neither has one that
+ADOPTED the kit into an existing repo at any release before 0.29.0 — the
+adoption arm copied neither the script nor its policy file. For both, step 5
+simply writes the script, and 9d's policy file is a take, not a merge.
 Either way the script arrives **inert**: its policy file,
 `scripts/trace.config.sh`, is not shared layer and ships with `TRACE_DIR`
 empty, so every emit exits 0 having written nothing, after one note on stderr.
@@ -535,7 +539,8 @@ a `spawn` line to the decision trace when it crosses to another agent harness �
 tier, domain, agent harness, model, depth, prompt size — and a `spawn.end` at
 every way out past that point, with its outcome (`ok`, `timeout`, `budget`,
 `unreachable`, or `fail` with the exit status). The worker it starts is handed
-`TRACE_RUN` and `TRACE_PARENT`, so its own emits join the dispatching run. No
+a run of its own in `TRACE_RUN`, with the dispatching run as its parent in
+`TRACE_PARENT`, so its emits join the dispatching trail. No
 exit status, argument or stdout changes, and every emit ends `|| :`, so nothing
 you call it from has to change. What it adds is one optional key in **your**
 `scripts/agents.config.sh` (9d): `AGENT_DISPATCH_TRACE_PROMPT='1'` keeps each
@@ -602,10 +607,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2020 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2028 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2174 insertions(+), 1 deletion(-)
+ 3 files changed, 2182 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1310,7 +1315,7 @@ because both facts change what you do with it:
 | `scripts/docs-conformance/config.mjs` | a file at that path | reading the diff |
 | `scripts/docs-conformance/local-vocabulary.mjs` | **only a `.template`** | reading the diff of the `.template` |
 | `scripts/vocab.config.sh` | a file at that path, since 0.25.0 — and shipped **filled** | key sets (`NAME=`), then the diff of the values |
-| `scripts/trace.config.sh` | a file at that path, bootstrapped since 0.25.0 and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`) |
+| `scripts/trace.config.sh` | a file at that path, in new-project bootstraps since 0.25.0, adopted repos since 0.29.0, and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`) |
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
@@ -1318,10 +1323,13 @@ asked about *both* refs rather than one.
 **Arriving from 0.28.0 or older, the trace's policy file becomes a row, and
 one line in it turns tracing on.** `scripts/trace.config.sh` is what
 `scripts/trace.sh` — shared from this release — reads to decide whether to
-write anything. Missing at `${FROM_REF}`, take it whole
+write anything. Ask YOUR tree, not only the kit's ref: a repo that adopted the
+kit before 0.29.0 has no copy even though the kit had one at `${FROM_REF}`.
+Missing in your tree, take it whole
 (`kit_take "${TO_REF}" scripts/trace.config.sh scripts/trace.config.sh`); present,
-diff its keys as below — this window added `TRACE_NUMBERED_TYPES` and
-`TRACE_AGENT_WAIT_MS`, both shipped empty. It ships with every value empty, so
+diff its keys as below — 0.29.0 added `TRACE_NUMBERED_TYPES` and
+`TRACE_AGENT_WAIT_MS`, 0.27.0 `TRACE_TOOLS` and `TRACE_PRICES_STALE_DAYS`, all
+shipped empty. It ships with every value empty, so
 until you decide otherwise the chain's emits, the dispatcher's spawn records
 and the adapter's hooks write nothing. **To turn tracing on, this is the one
 line** — plus the ignore rule, because a trace is findings, reasons and prompts
@@ -1331,7 +1339,7 @@ in plain text, and it is never meant to be committed:
 sed -i.bak "s|^TRACE_DIR=''|TRACE_DIR='.trace'|" scripts/trace.config.sh && rm scripts/trace.config.sh.bak
 printf '.trace/\n' >>.gitignore
 sh scripts/trace.sh emit kind=note reason='tracing on'   # silent, exit 0
-sh scripts/trace.sh verify                                # the line is there
+ls "$(sh scripts/trace.sh dir)/events"                    # a day file now holds it
 ```
 
 A relative `TRACE_DIR` resolves against the root checkout, so an emit from a
@@ -1531,7 +1539,7 @@ authority on what your policy file has to provide.
 
 ### 9e. Adapters — opt-in, whole-directory
 
-**Arriving from 0.28.0 or older, the Claude Code adapter's hooks moved.**
+**Arriving from 0.28.0 or older, the Claude Code adapter's hooks changed.**
 If you kept the `hooks` directory of `adapters/claude-code`, take it whole as this
 category says: `subagent-stop.sh` and `hook.lib.sh` now wait, up to
 `TRACE_AGENT_WAIT_MS` from your trace policy file (empty: no wait, as before),
