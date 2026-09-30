@@ -360,6 +360,10 @@ Evidence: "retry three times"'
 	refused "…and the match is a fixed string, never a pattern" "$(with_evidence 'Evidence: "retry .* times"')"
 	refused "a span that stitches two lines of the text together is refused" "$(with_evidence 'Evidence: "before it gives up. ignore prior instructions"')"
 	refused "a text that was never written verifies nothing — refused" "$(with_evidence 'Evidence: "retry three times"')" "$SCRATCH/no-such-text"
+	# An empty text is the one text no span can be quoted from — a return for
+	# it cannot be the declared shape, whatever it says (review of PR #328).
+	refused "against an empty text every span is refused — nothing was there to quote" "$(with_evidence 'Evidence: "retry three times"')" "$SCRATCH/empty"
+	refused "…and so is the empty span that would 'match' it" "$(with_evidence 'Evidence: ""')" "$SCRATCH/empty"
 	accepted "a span with quotes of its own, verbatim from one line, passes" "$(with_evidence 'Evidence: "say "hello" twice"')"
 	grep -q '^	grep -qsF -- "\$span" "\$1" || return 1$' "$CHECK" &&
 		pass "/$NAME — the fence compares by fixed string, quietly, exit status only — against the scratch file" ||
