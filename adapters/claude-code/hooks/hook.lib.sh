@@ -251,10 +251,13 @@ hook_tokens() {
 	return 0
 }
 
-# --- tool capture: the switch, and the blob store ---------------------------
+# --- tool capture: the switch, and the trace directory ----------------------
 # Everything below is read only by tool-post.sh. It sits here, beside the
 # payload reader and the pointer, because it is the same kind of thing: what
 # this adapter has to know about the shared script in order to speak to it.
+# The blob store is NOT here: the hook hands each payload to `scripts/trace.sh
+# blob`, which stores it exactly as an emit's payload is stored and prints its
+# name, so there is one writer of that store (ticket #306).
 
 # hook_policy — the trace policy file this repository's hooks read.
 #
@@ -320,51 +323,148 @@ hook_dir() {
 	printf '%s' "$_hd_dir"
 }
 
-# hook_blob <trace directory> <staged file> — put those bytes in the trace's blob
-# store and print `<hash> <bytes>`. The file is CONSUMED: it is renamed into the
-# store, or left for the caller's scratch sweep when the store already holds that
-# content. The directory is passed IN rather than resolved here, because a caller
-# with two payloads would otherwise ask the shared script for it twice.
+# --- waiting for a subagent's final message ---------------------------------
+# Read only by subagent-stop.sh. SubagentStop can run BEFORE the subagent's
+# transcript holds its final assistant line (ticket #308 measured the line
+# landing 170 and 223 ms after the hook began, in two of seven live stops), and
+# a transcript read then either has no usage at all or — worse — holds the turns
+# before the last one, whose sum is a confident undercount. So the hook may
+# wait, for as long as the policy says and never longer.
+
+# hook_wait_bound — set hook_wait_ms to the bound TRACE_AGENT_WAIT_MS names, in
+# milliseconds, or to nothing for no wait; set hook_wait_bad to a refused value.
 #
-# WHY THIS ADAPTER LANDS A BLOB ITSELF, rather than through `emit --blob`. One
-# emit carries one blob — `scripts/trace.sh` refuses a second, deliberately: the
-# line format has room for one hash. A tool call has TWO payloads, its input and
-# its result, and the acceptance for capturing one is ONE event, because a reader
-# joining two half-events per tool call is exactly the volume the switch exists
-# to contain. So the two payloads are stored here and the one event names both
-# under its data map.
+# The same file and precedence hook_tools_on reads: the environment wins, an
+# environment value of '' is the documented no-wait even when the file names a
+# bound, and a policy file that is missing or unreadable is no wait — the
+# behaviour the agent harness had before this bound existed.
 #
-# THAT MAKES TWO WRITERS OF ONE STORE, which is a coupling — the same shape as
-# hook_pointer above, and it is held the same way: not by comparing strings but
-# by `tests/trace-hooks.test.sh` section 19, which hands the SHARED SCRIPT the
-# same payload and asserts it lands at the same relative path under its own
-# directory. The day trace.sh renames or re-lays-out the store, that goes red
-# instead of the trace quietly growing a second store nobody reads. A `blob`
-# subcommand on the shared script — store these bytes, print the name, write no
-# event — would remove the coupling altogether, and is the ticket to file.
-#
-# The name is GIT's content hash, `--stdin` like trace_hash_file, so the blob is
-# named the same thing `git hash-object` names it anywhere. Identical content is
-# stored once and never rewritten, and the landing is a rename, so a reader never
-# opens half a payload (craft §11).
-hook_blob() {
-	_hb_dir=$1
-	[ -n "$_hb_dir" ] || return 1
-	[ -f "$2" ] || return 1
-	# FROM THE ADAPTER'S OWN REPOSITORY, never from the caller's cwd: `git
-	# hash-object` answers in the object format of the repository it runs in, and
-	# the agent harness chooses where a hook stands. Run in a sha256 repository
-	# it named a payload sha256 while the shared script — which runs from
-	# hook_repo — named the same bytes sha1, which is two addresses for one
-	# payload in one store (M-2, review of PR #295).
-	_hb_hash=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" hash-object --stdin <"$2") 2>/dev/null ) || _hb_hash=
-	[ -n "$_hb_hash" ] || return 1
-	_hb_bytes=$(wc -c <"$2" 2>/dev/null | tr -d ' ')
-	[ -n "$_hb_bytes" ] || return 1
-	_hb_dest="$_hb_dir/blobs/$(printf '%.2s' "$_hb_hash")/$_hb_hash"
-	if [ ! -f "$_hb_dest" ]; then
-		mkdir -p "$(dirname "$_hb_dest")" 2>/dev/null || return 1
-		mv "$2" "$_hb_dest" 2>/dev/null || return 1
+# A MALFORMED VALUE IS REFUSED like every other policy value: anything but one
+# to five digits with no leading zero (sh arithmetic reads 0100 as octal, so it
+# would silently be 64). Refused means NOT waited, and the value lands in
+# hook_wait_bad for the caller to name — on stderr and on the event, and only
+# when tracing is on, so a project that traces nothing is not told about a typo
+# on every subagent stop (review of PR #323). The hook still exits 0, because a
+# typo in a policy file must never become a stalled session. '0' is no wait,
+# like ''.
+hook_wait_bound() {
+	hook_wait_ms=
+	hook_wait_bad=
+	if [ -n "${TRACE_AGENT_WAIT_MS+set}" ]; then
+		_wb=$TRACE_AGENT_WAIT_MS
+	else
+		_wb_file=$(hook_policy)
+		_wb=
+		[ -f "$_wb_file" ] && _wb=$(
+			. "$_wb_file" >/dev/null 2>&1
+			printf '%s' "${TRACE_AGENT_WAIT_MS:-}"
+		)
 	fi
-	printf '%s %s' "$_hb_hash" "$_hb_bytes"
+	case $_wb in
+	'' | 0) return 0 ;;
+	*[!0-9]* | 0* | ??????*)
+		# One line, at most 60 characters: a policy value is anything at all.
+		hook_wait_bad=$(printf '%s' "$_wb" | tr -d '\n' | cut -c1-60)
+		return 0
+		;;
+	esac
+	hook_wait_ms=$_wb
+}
+
+# hook_final <transcript> — does the transcript end on a final message? Status
+# 0 for yes.
+#
+# FINAL means: its last user-or-assistant line is an ASSISTANT line whose
+# stop_reason is set and is not tool_use. Each half is load-bearing. "Last user
+# or assistant line", because a subagent resumed after an earlier stop already
+# holds an end_turn from that stop, and the user line that resumed it comes
+# after — so an old final message never reads as this stop's. "Not tool_use and
+# not null", because a turn that called a tool is followed by more turns, and a
+# streamed response writes one line per content block with stop_reason null on
+# the ones before its last. The keys are matched as JSON punctuation, with any
+# whitespace around the colon — a transcript written with `"type": "assistant"`
+# is the same transcript (review of PR #323).
+#
+# WHAT IT CANNOT RULE OUT, stated rather than claimed away: the match is on the
+# line, not on its top-level object. Text inside a message is an escaped string
+# and cannot match, but a tool's STRUCTURED result is written as a JSON object,
+# so a user line whose result object itself holds a `"type":"assistant"` and a
+# `stop_reason` would read as final. Nothing observed writes such a result; if
+# one ever does, the cost is one early read, which the extractor then sums.
+hook_final() {
+	_hf_last=$(grep -E '"type"[[:space:]]*:[[:space:]]*"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
+	printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"assistant"' || return 1
+	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"' || return 1
+	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"tool_use"' && return 1
+	return 0
+}
+
+# hook_now_ms — the wall clock in milliseconds, or status 1 where `date` has no
+# sub-second field. `%N` is not POSIX: GNU date answers it, and a date that does
+# not leaves a letter behind, which the digit check turns into "no clock".
+hook_now_ms() {
+	_nm=$(date +%s%N 2>/dev/null) || return 1
+	case $_nm in '' | *[!0-9]*) return 1 ;; esac
+	[ "${#_nm}" -gt 6 ] || return 1
+	printf '%s' "${_nm%??????}"
+}
+
+# hook_wait_final <transcript> <bound ms> — poll until the transcript ends on a
+# final message or the bound passes, and print the milliseconds waited. Status
+# 0 when it became final, 1 when the bound passed first.
+#
+# WALL TIME where the clock allows it, because the bound is a promise about the
+# session and a loaded machine makes every poll slower than its nap: counting
+# only the naps, a 2000 ms bound reported 2000 on a machine at load average 29
+# while the hook ran six seconds end to end. So on a clock with milliseconds the wait is measured, the
+# check comes last before giving up, and the overshoot is at most one poll.
+# Without one (POSIX `date` stops at seconds) the figure is the sum of the naps
+# taken — honest about what it is, and the best a portable shell can say.
+#
+# THE NAPS ARE COUNTED EVEN WITH A CLOCK, and the wait is whichever of the two
+# is larger. The clock is the realtime one, and a clock that steps BACK would
+# otherwise read as time un-passing: the review reproduced a 500 ms bound
+# holding the hook for 3566 ms (review of PR #323). The naps taken are a floor
+# no clock can lower.
+#
+# A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
+# refuses a fraction (POSIX promises only whole seconds) is answered with
+# whole-second naps while about a whole second remains — within one poll of
+# it, so a bound of exactly 1000 still gets its nap after the first check has
+# spent a few milliseconds — and the wait otherwise ends early rather than
+# overrun. Never a busy loop; past the bound by at most one poll.
+hook_wait_final() {
+	_hw_t0=$(hook_now_ms) || _hw_t0=
+	_hw_waited=0
+	_hw_count=0
+	_hw_step=50
+	while :; do
+		if hook_final "$1"; then
+			printf '%s' "$_hw_waited"
+			return 0
+		fi
+		if [ -n "$_hw_t0" ]; then
+			# A clock that stops answering mid-wait hands over to counting from
+			# here, rather than reading as no time passing — which would never end.
+			if _hw_now=$(hook_now_ms); then
+				_hw_waited=$((_hw_now - _hw_t0))
+			else
+				_hw_t0=
+			fi
+		fi
+		[ "$_hw_waited" -ge "$_hw_count" ] || _hw_waited=$_hw_count
+		_hw_left=$(($2 - _hw_waited))
+		[ "$_hw_left" -gt 0 ] || break
+		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
+		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
+			_hw_step=1000
+			[ "$_hw_left" -ge 950 ] || break
+			sleep 1
+			_hw_nap=1000
+		fi
+		_hw_count=$((_hw_count + _hw_nap))
+		[ -n "$_hw_t0" ] || _hw_waited=$_hw_count
+	done
+	printf '%s' "$_hw_waited"
+	return 1
 }

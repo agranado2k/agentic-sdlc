@@ -4,6 +4,7 @@
 #   sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [related='<type:ref> …']
 #                            [<field>=<value> …] [data.<key>=<value> …]
 #                            [--blob <file>|--blob=<file>|-] [--dry-run]
+#   sh scripts/trace.sh blob <file>|-
 #   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh end [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
@@ -173,6 +174,7 @@ TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 usage() {
 	cat >&2 <<'USAGE'
 usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value> …] [data.<key>=<value> …] [--blob <file>|-] [--dry-run]
+       sh scripts/trace.sh blob <file>|-
        sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh end [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
@@ -584,6 +586,19 @@ trace_blob_store() {
 	mv "$_trace_blob_tmp" "$_bs_dest" || die "cannot move the payload into $_bs_dest"
 	_trace_blob_tmp=
 	return 0
+}
+
+# trace_blob <path|-> — the blob subcommand: the store with no event. The same
+# two functions an emit's payload goes through, so there is one writer of the
+# store and one name for a payload however it arrived. Unconfigured, the
+# payload is not even read — the reason trace_emit gives for its own --blob.
+trace_blob() {
+	[ $# -eq 1 ] || usage
+	case $1 in -?*) usage ;; esac
+	trace_dir || { trace_unconfigured_note; return 0; }
+	trace_blob_name "$1" 1
+	trace_blob_store
+	printf '%s %s\n' "$TRACE_BLOB" "$TRACE_BLOB_BYTES"
 }
 
 # trace_write_schema — the trace directory says which schema its lines are, so
@@ -1598,6 +1613,7 @@ shift
 trace_load_config
 case $_trace_cmd in
 emit) trace_emit "$@" ;;
+blob) trace_blob "$@" ;;
 begin) trace_begin "$@" ;;
 end) trace_end "$@" ;;
 show) trace_show "$@" ;;
