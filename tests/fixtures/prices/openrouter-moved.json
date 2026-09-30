@@ -1,0 +1,61 @@
+{
+  "data": [
+    {
+      "id": "some-other-vendor/unmapped-model",
+      "name": "Unmapped, and the reader must not care",
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00002",
+        "input_cache_write": "0.0000125",
+        "input_cache_read": "0.000001",
+        "request": "0",
+        "image": "0"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "pricing": {
+        "prompt": "0.00000777",
+        "completion": "0.00003333",
+        "input_cache_write": "0.00000971",
+        "input_cache_read": "0.00000077"
+      }
+    },
+    {
+      "id": "anthropic/claude-opus-5.5",
+      "pricing": {
+        "prompt": "0.00000666",
+        "completion": "0.00002222",
+        "input_cache_write": "0.00000832",
+        "input_cache_read": "0.00000066"
+      }
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5",
+      "pricing": {
+        "prompt": "0.00000111",
+        "completion": "0.00000444",
+        "input_cache_write": "0.00000138",
+        "input_cache_read": "0.00000011"
+      }
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "pricing": {
+        "prompt": "0.00000555",
+        "completion": "0.00002121",
+        "input_cache_write": "0.00000693",
+        "input_cache_read": "0.00000055"
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "pricing": {
+        "prompt": "0.00000999",
+        "completion": "0.00004444",
+        "input_cache_write": "0.00001248",
+        "input_cache_read": "0.00000099"
+      }
+    }
+  ]
+}
