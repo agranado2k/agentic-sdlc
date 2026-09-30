@@ -63,6 +63,13 @@ die() { echo "skill-dispatch: $1" >&2; exit 2; }
 AGENTS_CONFIG="$ROOT/$(cd "$ROOT" && sh scripts/agents.kit.sh --policy)"
 export AGENTS_CONFIG
 
+# The dispatcher records every spawn through scripts/trace.sh, which reads the
+# SHIPPED trace policy file unless told otherwise — empty by principle, so the
+# kit's own dispatches would be traced nowhere. Name the kit's twin, the choice
+# scripts/trace.kit.sh makes for a session, $ROOT-anchored for the reason above.
+TRACE_CONFIG="$ROOT/scripts/trace.kit.config.sh"
+export TRACE_CONFIG
+
 usage() {
 	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
