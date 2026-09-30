@@ -251,10 +251,13 @@ hook_tokens() {
 	return 0
 }
 
-# --- tool capture: the switch, and the blob store ---------------------------
+# --- tool capture: the switch, and the trace directory ----------------------
 # Everything below is read only by tool-post.sh. It sits here, beside the
 # payload reader and the pointer, because it is the same kind of thing: what
 # this adapter has to know about the shared script in order to speak to it.
+# The blob store is NOT here: the hook hands each payload to `scripts/trace.sh
+# blob`, which stores it exactly as an emit's payload is stored and prints its
+# name, so there is one writer of that store (ticket #306).
 
 # hook_policy — the trace policy file this repository's hooks read.
 #
@@ -318,55 +321,6 @@ hook_dir() {
 	_hd_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hd_dir=
 	[ -n "$_hd_dir" ] || return 1
 	printf '%s' "$_hd_dir"
-}
-
-# hook_blob <trace directory> <staged file> — put those bytes in the trace's blob
-# store and print `<hash> <bytes>`. The file is CONSUMED: it is renamed into the
-# store, or left for the caller's scratch sweep when the store already holds that
-# content. The directory is passed IN rather than resolved here, because a caller
-# with two payloads would otherwise ask the shared script for it twice.
-#
-# WHY THIS ADAPTER LANDS A BLOB ITSELF, rather than through `emit --blob`. One
-# emit carries one blob — `scripts/trace.sh` refuses a second, deliberately: the
-# line format has room for one hash. A tool call has TWO payloads, its input and
-# its result, and the acceptance for capturing one is ONE event, because a reader
-# joining two half-events per tool call is exactly the volume the switch exists
-# to contain. So the two payloads are stored here and the one event names both
-# under its data map.
-#
-# THAT MAKES TWO WRITERS OF ONE STORE, which is a coupling — the same shape as
-# hook_pointer above, and it is held the same way: not by comparing strings but
-# by `tests/trace-hooks.test.sh` section 19, which hands the SHARED SCRIPT the
-# same payload and asserts it lands at the same relative path under its own
-# directory. The day trace.sh renames or re-lays-out the store, that goes red
-# instead of the trace quietly growing a second store nobody reads. A `blob`
-# subcommand on the shared script — store these bytes, print the name, write no
-# event — would remove the coupling altogether, and is the ticket to file.
-#
-# The name is GIT's content hash, `--stdin` like trace_hash_file, so the blob is
-# named the same thing `git hash-object` names it anywhere. Identical content is
-# stored once and never rewritten, and the landing is a rename, so a reader never
-# opens half a payload (craft §11).
-hook_blob() {
-	_hb_dir=$1
-	[ -n "$_hb_dir" ] || return 1
-	[ -f "$2" ] || return 1
-	# FROM THE ADAPTER'S OWN REPOSITORY, never from the caller's cwd: `git
-	# hash-object` answers in the object format of the repository it runs in, and
-	# the agent harness chooses where a hook stands. Run in a sha256 repository
-	# it named a payload sha256 while the shared script — which runs from
-	# hook_repo — named the same bytes sha1, which is two addresses for one
-	# payload in one store (M-2, review of PR #295).
-	_hb_hash=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" hash-object --stdin <"$2") 2>/dev/null ) || _hb_hash=
-	[ -n "$_hb_hash" ] || return 1
-	_hb_bytes=$(wc -c <"$2" 2>/dev/null | tr -d ' ')
-	[ -n "$_hb_bytes" ] || return 1
-	_hb_dest="$_hb_dir/blobs/$(printf '%.2s' "$_hb_hash")/$_hb_hash"
-	if [ ! -f "$_hb_dest" ]; then
-		mkdir -p "$(dirname "$_hb_dest")" 2>/dev/null || return 1
-		mv "$2" "$_hb_dest" 2>/dev/null || return 1
-	fi
-	printf '%s %s' "$_hb_hash" "$_hb_bytes"
 }
 
 # --- waiting for a subagent's final message ---------------------------------
