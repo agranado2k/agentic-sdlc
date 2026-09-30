@@ -86,7 +86,10 @@ the material it judges, never spliced into the wording of the question you ask
 about it. Its return lands in a file, `$scratch/out/return`, in a directory
 that holds nothing else — the reader's one permitted write, or captured there
 by the adapter — so the reader cannot write the output its evidence is
-verified against. The return is not a message you read: the check below runs
+verified against. That directory is made new for each step: a return an
+earlier step left is never the one a later step's check reads, so a reader
+that wrote nothing is an unreadable pre-screen and not the last step's
+answer. The return is not a message you read: the check below runs
 on the file before you read a line of it. It is two bare lines — no list
 markers, no emphasis — and nothing else:
 
@@ -133,10 +136,13 @@ checked_prescreen() {
 }
 ```
 
-One step's pre-screen, end to end:
+A run's pre-screens, end to end:
 
 ```bash
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/dogfood.XXXXXX") && mkdir "$scratch/out" && echo "$scratch"
+# once, when the run starts
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/dogfood.XXXXXX") && echo "$scratch"
+# for each step — the return's directory made new, so no earlier return is in it
+rm -rf "${scratch:?}/out" && mkdir "$scratch/out"
 # … the step runs, everything it emits redirected to "$scratch/output" …
 if [ -s "$scratch/output" ]; then
 	# … the reader runs: "$scratch/output" to read, "$scratch/out/return" to write, nothing else …
@@ -144,6 +150,8 @@ if [ -s "$scratch/output" ]; then
 else
 	echo "the step emitted nothing — nothing to screen, no reader"
 fi
+# once, when the run ends
+rm -rf "${scratch:?}"
 ```
 
 Two lines, both printable, with the decision line exactly once leave no line
