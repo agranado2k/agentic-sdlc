@@ -135,6 +135,18 @@ else
 	skip "en_US.UTF-8 is not installed — the collation pin is NOT held on this machine"
 fi
 
+# The trace's identity and policy variables are scrubbed the same way, and for
+# the same reason: a kit session's hooks export TRACE_SESSION to every tool
+# call, so a suite run inside one inherited it and the trace suite's emits
+# carried a session its assertions did not expect — red for the operator,
+# green in CI (#303). The probe exports every one of them, sources the lib,
+# and lists what survived.
+probe=$(TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 \
+	sh -c '. "$0"; env | grep "^TRACE_" | sort | tr "\n" " "' "$KIT/tests/lib.sh" 2>/dev/null)
+[ -z "$probe" ] &&
+	pass "after sourcing tests/lib.sh, no TRACE_ identity or policy variable the caller exported survives" ||
+	fail "the trace scrub is not effective: the sourced suite still sees $probe"
+
 # ---------------------------------------------------------------------------
 banner "The split-stream helpers can go red"
 # ---------------------------------------------------------------------------
