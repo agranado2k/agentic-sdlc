@@ -174,11 +174,12 @@ Three things this hook deliberately does not do:
 - **There is no `PreToolUse` hook.** Both post payloads carry the whole
   `tool_input` themselves, so a pre hook would have nothing to add to the event
   and nothing of its own to emit — one more process per tool call for no line.
-- **It never uses `hook_field` on a tool payload.** A tool payload arrives as
-  one line of JSON whose values are arbitrary text, so a key-name search finds
-  the LAST occurrence — and a tool result can quote `"session_id"` or
-  `"tool_response"`. The payload goes through a real parser, which reads only
-  top-level keys.
+- **It never uses `hook_field` on a tool payload.** Every live payload arrives
+  compact, as one line of JSON, so a key-name search finds the LAST occurrence
+  — harmless for the session payloads, whose keys occur once, but a tool
+  payload nests arbitrary objects, and a tool result can carry `"session_id"`
+  or `"tool_response"` as keys of its own. The payload goes through a real
+  parser, which reads only top-level keys.
 
 Four details found by watching this run, each of which costs a wrong number if
 you get it wrong:

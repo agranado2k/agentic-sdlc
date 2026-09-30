@@ -59,9 +59,9 @@ hook_trace() {
 # harness — the whole object on one line, no whitespace between tokens; the
 # pretty-printed payloads under tests/fixtures/claude-code/ are the redaction's
 # reformatting, not the live shape (#309). The fields these hooks read are ids
-# and paths, so a whole JSON parser is not needed — and must not be needed, because the
-# extractor is the one part of this adapter with a runtime and `node missing`
-# has to stay a recorded reason rather than a dead hook.
+# and paths, so a whole JSON parser is not needed — and must not be needed,
+# because the extractor is the one part of this adapter with a runtime and
+# `node missing` has to stay a recorded reason rather than a dead hook.
 
 hook_json=
 
@@ -84,10 +84,10 @@ hook_read() { hook_json=$(cat 2>/dev/null) || hook_json=; }
 # one line, so on it the reader returns the LAST occurrence of the key anywhere
 # in the object, and a key nested inside another object reads as top-level. It
 # is right today because every key these hooks read occurs once, at top level
-# — `tests/trace-hooks.test.sh` section 26 drives it on that compact shape. A
-# payload that nested one of these keys after its top-level twin would answer
-# with the nested value; that is the day to reach for a parser (L-1, review of
-# PR #291). On a pretty-printed payload, one key per line, the first matching
+# — `tests/trace-hooks.test.sh`, "The field reader on a compact payload",
+# drives it on that compact shape. A payload that nested one of these keys
+# after its top-level twin would answer with the nested value; that is the day
+# to reach for a parser (L-1, review of PR #291). On a pretty-printed payload, one key per line, the first matching
 # line wins instead — which is all the checked-in fixtures exercise.
 hook_field() {
 	printf '%s\n' "$hook_json" |

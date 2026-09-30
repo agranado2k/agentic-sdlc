@@ -1244,5 +1244,17 @@ done
 [ "$(field level)" = high ] &&
 	pass "a nested key reads as if top-level — the limit the comment names, harmless while no hook reads one" ||
 	fail "hook_field level read '$(field level)' — the comment's account of a nested key is wrong"
+# The two READMEs beside the hooks tell the same story as the comment: every
+# live payload is compact, and the session fixtures are pretty only because
+# the redaction reformatted them (review of PR #315, M-2).
+for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
+	d=$(tr '\n' ' ' <"$doc" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+	case $d in
+	*"unlike the pretty-printed session payloads"*)
+		fail "${doc#"$KIT"/} still says the session payloads arrive pretty-printed — every live payload is compact" ;;
+	*"every live payload arrives compact"*) pass "${doc#"$KIT"/} says every live payload arrives compact" ;;
+	*) fail "${doc#"$KIT"/} does not say every live payload arrives compact" ;;
+	esac
+done
 
 t_done "trace hooks"
