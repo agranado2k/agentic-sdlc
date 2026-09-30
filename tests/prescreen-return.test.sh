@@ -44,6 +44,8 @@
 #      described, `no` is followed by the ordinary read, as data.
 #   6. The no-overclaim rule: the prose claims what the check does, never
 #      "no channel" — the evidence span is quoted untrusted data by design.
+#   6b. The two skills' checks are ONE check: each prints its own copy, and
+#      the copies are compared line for line, so neither drifts alone.
 # And for /dogfood alone:
 #   7. A row's outcome is a decision line, held to the policy file's `outcome`
 #      vocabulary by the checker before it is reported.
@@ -490,6 +492,27 @@ Evidence: "retry three times"' "$SCRATCH/empty"
 	fail "/dogfood — the reader ran on an empty output: there was nothing to screen"
 assert_file_has "$SCRATCH/e2e.out" "nothing to screen" "…and the run says so"
 assert_file_lacks "$SCRATCH/e2e.out" "Command-shaped:" "…and reads no return"
+
+# ---------------------------------------------------------------------------
+banner "6b. The two skills print ONE check — a copy that drifts goes red"
+# ---------------------------------------------------------------------------
+# Each skill spells its own check, because skills ship as whole documents and
+# neither may lean on the other. Two copies with nothing holding them are two
+# checks waiting to differ (review of PR #328, M-3): so the functions are
+# compared, comment lines set aside — those name what each skill screens.
+check_code() { grep -v '^#' "$SCRATCH/$1.check.sh" | grep -v '^$'; }
+check_code to-tickets >"$SCRATCH/to-tickets.code"
+check_code dogfood >"$SCRATCH/dogfood.code"
+[ -s "$SCRATCH/to-tickets.code" ] && cmp -s "$SCRATCH/to-tickets.code" "$SCRATCH/dogfood.code" &&
+	pass "/to-tickets and /dogfood print the same prescreen_ok and checked_prescreen, line for line" ||
+	fail "the check /to-tickets prints and the one /dogfood prints have drifted: $(diff "$SCRATCH/to-tickets.code" "$SCRATCH/dogfood.code" | sed -n '2,3p' | tr '\n' '|')"
+# …and the comparison is of the code: a copy one comparison apart — the same
+# cap spelled another way, which every executed case above lets through — is
+# told from the original.
+sed 's/ -le 200 \]/ -lt 201 ]/' "$SCRATCH/dogfood.code" >"$SCRATCH/drifted.code"
+cmp -s "$SCRATCH/to-tickets.code" "$SCRATCH/drifted.code" &&
+	fail "a drifted copy of the check compared equal — the comparison is not reading the functions" ||
+	pass "…and a copy that spells one comparison differently does not compare equal"
 
 # ---------------------------------------------------------------------------
 banner "7. /dogfood — a row's outcome is a decision line, checked before it is reported"
