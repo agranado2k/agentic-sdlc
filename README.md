@@ -593,16 +593,18 @@ skeleton (K0).
   command-shaped flag, the triage action, one evidence line quoting the
   comment read — whose options are the policy file's tokens, with the author
   kind stamped by the caller from the forge's own data; the check before the
-  act, through the plain script name; free text as a finding. It
-  lifts the check the skill prints out of the skill and runs it: the good
-  return passes, and a sentence outside the shape, an undeclared value, the
-  inconsistent pair and a markdown-wrapped line are each refused. The evidence
-  line is held too — one quoted span of at most 200 bytes of printable ASCII,
-  verbatim from a single line of its comment by a fixed-string match that
-  never prints the body — and a count of returns that is not the count of
-  comments refuses them all. The snapshot itself is held to metadata
-  only: no command in it selects a body. It also holds the trust-boundary
-  paragraph in the kit's manual and the template.
+  read, through the plain script name; free text as a finding. It lifts the
+  check the skill prints out of the skill and runs it: the good return passes,
+  and a sentence outside the shape, an undeclared value, the inconsistent pair
+  and a markdown-wrapped line are each refused — as is every return when the
+  checker is missing, since the check fails closed. The evidence line is held
+  too — one quoted span of at most 200 bytes of printable ASCII, verbatim from
+  a single line of its comment by a fixed-string match against the scratch
+  file the caller fetched unseen — and a count of returns that is not the
+  count of comments refuses them all. Only a return that passed is printed;
+  a refused one is named by comment and position. The snapshot itself is held
+  to metadata only: no command in it selects a body. It also holds the
+  trust-boundary paragraph in the kit's manual and the template.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
