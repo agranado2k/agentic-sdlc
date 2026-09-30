@@ -50,6 +50,14 @@ cd "$ROOT" || exit 2
 # line_of <literal> — first matching line number, or empty.
 line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
 
+# offset_of <literal> — where the literal first starts, counted in characters
+# from the top of the file, or empty. Order WITHIN a line: the skill's steps
+# are single long lines, so two phrases of one step share a line number.
+offset_of() {
+	LIT=$1 awk 'BEGIN { lit = ENVIRON["LIT"] }
+		{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "$SKILL_ABS"
+}
+
 # ---------------------------------------------------------------------------
 banner "0. The file under test"
 # ---------------------------------------------------------------------------
@@ -170,21 +178,21 @@ assert_file_has "$SKILL" "Check the dispatcher's exit status"
 assert_file_has "$SKILL" "Only on 0"
 assert_file_has "$SKILL" "a model id"
 assert_file_has "$SKILL" "no dispatched review ran"
-_status=$(line_of 'status=$?')
-_broker=$(line_of '<broker> <PR#>')
+_status=$(offset_of 'status=$?')
+_broker=$(offset_of '<broker> <PR#>')
 if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
-	sed -n "${_broker}p" "$SKILL_ABS" | grep -qF '"$status" -eq 0'; then
-	pass "the exit status is captured (line $_status) before the broker runs, and the broker line is conditional on 0 (line $_broker)"
+	grep -qF '[ "$status" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
+	pass "the exit status is captured (offset $_status) before the broker runs (offset $_broker), and the broker command is conditional on 0"
 else
 	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
 fi
 # The recorded tip is the cross-check, taken BEFORE the dispatch.
 assert_file_has "$SKILL" "Record the branch tip"
 assert_file_has "$SKILL" '--commit "$tip"'
-_tip=$(line_of 'tip=$(git rev-parse HEAD)')
-_disp=$(line_of '<skill dispatcher> review-pr')
-if [ -n "$_tip" ] && [ -n "$_disp" ] && [ "$_tip" -lt "$_disp" ]; then
-	pass "the tip is recorded (line $_tip) before the dispatch (line $_disp)"
+_tip=$(offset_of 'tip=$(git rev-parse HEAD)')
+_disp=$(offset_of '<skill dispatcher> review-pr')
+if [ -n "$_tip" ] && [ -n "$_disp" ] && [ "$_tip" -lt "$_disp" ] && [ "$_disp" -lt "${_status:-0}" ]; then
+	pass "the tip is recorded (offset $_tip) before the dispatch (offset $_disp), and the dispatch before the status is read"
 else
 	fail "the tip is not recorded before the dispatch — tip='$_tip' dispatch='$_disp'"
 fi
