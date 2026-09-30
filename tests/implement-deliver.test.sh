@@ -256,6 +256,20 @@ case "$_row" in
 	pass "the kit manual's broker row names the skill dispatcher, the broker and the --commit cross-check for /implement" ;;
 *) fail "the kit manual's broker row does not give /implement's step 9(b) its two kit commands" ;;
 esac
+# The row is what hard rule 10 steers a kit session to, so it carries the same
+# one-invocation composition the skill gives, status capture included ...
+case "$_row" in
+*'`tip=$(git rev-parse HEAD); sh scripts/skill-dispatch.kit.sh review-pr '*'; rc=$?; [ "$rc" -eq 0 ] && sh scripts/forge-broker.kit.sh <PR> <file> --commit "$tip"`'*'one shell invocation'*)
+	pass "the kit manual's broker row gives the composition as one command line, with the rc capture" ;;
+*) fail "the kit manual's broker row does not give the one-invocation composition with its rc capture" ;;
+esac
+# ... the domain is the stamp the session resolved, not a constant, and SPEC
+# takes a path — the dispatcher reads a file there.
+case "$_row" in
+*'--tier reviewer [--domain self-implemented]'*'--set-file SPEC=<path to the ticket body>'*)
+	pass "the kit manual's broker row leaves the domain optional and hands SPEC a path" ;;
+*) fail "the kit manual's broker row hard-codes the domain, or hands SPEC something other than a path" ;;
+esac
 case "$_row" in
 *'never a pipe'*) pass "the kit manual's broker row refuses the pipe too" ;;
 *) fail "the kit manual's broker row does not say 'never a pipe'" ;;
