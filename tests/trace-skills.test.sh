@@ -274,13 +274,13 @@ done
 # BY KIND when the event and its run name no skill (review of PR #329, H-1):
 # /to-tickets opens no run and names no skill on its emit. That is sound only
 # while exactly ONE skill emits each kind — a second emitter makes the reader
-# credit its stamps to the first. So the fact is held here, over every skill
-# document the kit ships and not the chain roster alone, and so is the pair
-# the reader's text names.
+# credit its stamps to the first. So the fact is held here, over every file
+# under the skills' home at any depth — not the chain roster alone — with the
+# kind quoted or bare, and so is the pair the reader's text names.
 for pair in ticket.write:to-tickets finding.raise:review-pr; do
 	k=${pair%%:*}
 	want=${pair#*:}
-	who=$(grep -lF "kind=$k" "$SKILLS"/*/*.md 2>/dev/null | sed "s|^$SKILLS/||; s|/.*||" | sort -u | tr '\n' ' ')
+	who=$(grep -rlE "kind=['\"]?$(printf '%s' "$k" | sed 's/\./\\./g')" "$SKILLS" 2>/dev/null | sed "s|^$SKILLS/||; s|/.*||" | sort -u | tr '\n' ' ')
 	[ "$who" = "$want " ] && pass "$k is emitted by exactly one skill, /$want — what /retro's attribution by kind rests on" ||
 		fail "$k is emitted by: ${who:-nobody} — /retro attributes it to /$want by kind, which holds only for a sole emitter"
 	tr '\n' ' ' <"$SKILLS/retro/QUESTIONS.md" | tr -s ' ' | grep -qF "a \`$k\` is \`/$want\`'s" &&
