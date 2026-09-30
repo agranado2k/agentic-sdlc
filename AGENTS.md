@@ -182,8 +182,7 @@ the second argument; a situation domain is never stamped on a ticket. One more
 the kit names and maps for nobody — **`judge`** on `mechanical`, by contract
 not by vendor: state and typed questions in, typed answers with per-option
 probabilities out, in two shapes — **decide** and **rank-or-verify**. A decider
-is never handed a verification, nor any judge the review verdict (§5,
-ADR-0010).
+is never handed a verification, nor any judge the review verdict (§5, ADR-0010).
 
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
 word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The
