@@ -867,7 +867,7 @@ fi
 # While the declared version has NO tag yet — a wave in flight — every file
 # that changed since the previous release in the categories the recipe's
 # step 9 names (9a the skills, 9b the manual and article templates, 9c the
-# docs and workflow templates, 9d the five policy files, 9e the adapters)
+# docs and workflow templates, 9d the six policy files, 9e the adapters)
 # must be named in the current note or in an "Arriving from <previous> or
 # older" paragraph of the recipe — that paragraph only, from its bold lead
 # at column one to the next blank line. Once the version is tagged there is
@@ -882,7 +882,7 @@ fi
 # hidden behind a mention of its skill for another reason all pass. What is
 # caught is a changed file that no current note mentions at all — which is
 # what #159's two were.
-DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
+DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/trace.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
 # notes_text <repo> <prev version> — the current note plus the recipe's
 # arriving-from paragraph(s) for that previous release.
 notes_text() {
