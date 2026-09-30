@@ -195,7 +195,8 @@ hook_tokens() {
 	_ht_after=
 	if [ "${1:-}" = --after ]; then
 		_ht_after=${2:-}
-		shift 2
+		# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
+		if [ $# -ge 2 ]; then shift 2; else shift; fi
 	fi
 	if ! command -v node >/dev/null 2>&1; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \

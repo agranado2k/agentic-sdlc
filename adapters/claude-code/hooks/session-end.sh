@@ -52,7 +52,7 @@ set --
 # so it is held to the identifier class before it goes near a command line.
 after=
 if [ $# -gt 0 ]; then
-	after=$(hook_trace show "session:$sid" --kind session.usage 2>/dev/null |
+	after=$(hook_trace show "session:$sid" --kind session.usage |
 		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
 	hook_id_ok "$after" || after=
 fi
