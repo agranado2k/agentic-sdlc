@@ -508,6 +508,38 @@ grep -v -e '--jq' "$SCRATCH/api" >"$SCRATCH/unprojected" || :
 sed -e '/^#/d' -e 's/(\.body | length)//g' "$SCRATCH/snapshot" | grep 'body' >"$SCRATCH/bodies" || :
 [ ! -s "$SCRATCH/bodies" ] && pass "no snapshot command selects a body" ||
 	fail "the snapshot selects a body: $(head -1 "$SCRATCH/bodies")"
+# Naming what must NOT be there is a denylist, and a denylist stays green on
+# the leak nobody named: `--jq '.[]'` is a projection and prints every body;
+# `latestReviews` is not `reviews` and carries them all the same (local
+# review of PR #318, iteration 2 — both mutants were green). So the snapshot
+# is also held to what it MAY ask: a fixed set of aggregate fields, and
+# projections that build one line of text from a fixed set of forge facts.
+ALLOWED_JSON=" title statusCheckRollup headRefName headRefOid baseRefName reviewDecision mergeable mergeStateStatus "
+for field in $(printf '%s' "$view" | sed 's/.*--json *//; s/ .*//' | tr ',' ' '); do
+	case $ALLOWED_JSON in
+	*" $field "*) ;;
+	*) fail "the aggregate view selects '$field' — not a field the snapshot may ask for" ;;
+	esac
+done
+pass "the aggregate view was read against its allowlist"
+ALLOWED_TERMS=" .id .user.type .user.login .path .line .state .isResolved .comments.nodes[0].databaseId "
+SHAPE='(\.\[\]|\.data\.repository\.pullRequest\.reviewThreads\.nodes\[\]) \| (select\(\(\.body \| length\) > 0\) \| )?"[^"]*"'
+: >"$SCRATCH/projection.bad"
+while IFS= read -r call; do
+	# The one shell splice a projection carries is the PR number.
+	prog=$(printf '%s\n' "$call" | sed "s/'\"\$PR\"'/N/g" | sed -n "s/.*--jq '\(.*\)'\$/\1/p")
+	printf '%s\n' "$prog" | grep -E -x -q -- "$SHAPE" ||
+		printf 'not one line of text built from forge facts: %s\n' "$prog" >>"$SCRATCH/projection.bad"
+	for term in $(printf '%s' "$prog" | tr '\\' '\n' | sed -n 's/^(\([^)]*\)).*/\1/p'); do
+		case $ALLOWED_TERMS in
+		*" $term "*) ;;
+		*) printf 'prints %s, not a forge fact the snapshot may ask for: %s\n' "$term" "$prog" >>"$SCRATCH/projection.bad" ;;
+		esac
+	done
+done <"$SCRATCH/api"
+[ ! -s "$SCRATCH/projection.bad" ] && pass "every projection builds one line from the allowed forge facts, and nothing else" ||
+	fail "a snapshot projection $(head -1 "$SCRATCH/projection.bad")"
+
 for fact in '.id' '.user.type' '.user.login' '.path' '.line' 'isResolved'; do
 	grep -q -F -- "$fact" "$SCRATCH/snapshot" && pass "the snapshot asks the forge for $fact" ||
 		fail "the snapshot never asks for $fact"
