@@ -36,12 +36,18 @@
 #      swallowed by `|| :` — is red here instead of a silent hole in every
 #      consumer's trace (review of PR #286, H-1).
 #
-# The thirteen are the chain the root manual draws (spec → tickets →
+# The fourteen are the chain the root manual draws (spec → tickets →
 # implementation → review → landing) plus the skills that step out of it and
-# decide something. /grill-with-docs, /explain-diff, /dogfood and
-# /improve-codebase-architecture are outside this suite on purpose: the ticket
-# (#250) sized the thirteen; a grill.decision from /grill-with-docs is a
-# candidate ticket, not an oversight this suite should hide.
+# decide something. Ticket #250 sized the first thirteen; #309 added
+# /grill-with-docs, the variant of /grill-me a project with a glossary actually
+# runs, so a plan grilled against the records leaves its decisions too.
+# /explain-diff, /dogfood and /improve-codebase-architecture stay outside on
+# purpose — rule 3 still holds them, like every skill directory.
+#
+#   8. The record agrees with rule 3: ADR-0008 clause 7 carries its dated
+#      amendment — the readers are the operator and the retrospective skill,
+#      and a diagnosis reads by the operator's hand — and the index row for
+#      0008 carries the same date (#309).
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -56,7 +62,7 @@ t_init
 
 cd "$ROOT" || exit 2
 
-CHAIN="grill-me to-prd to-tickets implement tdd review-pr pr-iterate merge-train diagnose prototype housekeeping design-brief worktree-cleanup"
+CHAIN="grill-me grill-with-docs to-prd to-tickets implement tdd review-pr pr-iterate merge-train diagnose prototype housekeeping design-brief worktree-cleanup"
 SKILLS=".agents/skills"
 TRACE="scripts/trace.sh"
 
@@ -80,7 +86,7 @@ n_chain=0
 for s in $CHAIN; do
 	if [ -f "$(skill_md "$s")" ]; then n_chain=$((n_chain + 1)); else fail "$(skill_md "$s") is missing"; fi
 done
-[ "$n_chain" = 13 ] && pass "all thirteen chain skills exist" || fail "only $n_chain of 13 chain skills exist"
+[ "$n_chain" = 14 ] && pass "all fourteen chain skills exist" || fail "only $n_chain of 14 chain skills exist"
 
 # ---------------------------------------------------------------------------
 banner "1. Every chain skill emits, by the plain script name — never the kit wrapper"
@@ -167,6 +173,7 @@ expects() {
 	done
 }
 expects grill-me kind=grill.decision
+expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
 expects to-tickets kind=ticket.write tier= data.tier_proposed= data.blocked_by= data.label=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
@@ -256,5 +263,31 @@ EOF
 			fail "/$s: the lines ran but the trace they wrote does not verify"
 	fi
 done
+
+# ---------------------------------------------------------------------------
+banner "8. The record agrees: clause 7 names no skill reader but the retrospective"
+# ---------------------------------------------------------------------------
+# Rule 3 above forbids every skill a read subcommand; the record once named
+# /diagnose as a reader beside the operator and the retrospective. The
+# disagreement is settled by a dated amendment to clause 7 — a record is
+# amended, never rewritten (root manual, hard rule 5) — and the index says so.
+ADR8=$(ls docs/adr/0008-*.md 2>/dev/null | head -1)
+c7=$(awk '/^7\. \*\*The chain never reads the trace/ { on = 1 } on && /^8\. / { exit } on' "$ADR8" 2>/dev/null)
+[ -n "$c7" ] && pass "ADR-0008 has its clause 7" || fail "no clause 7 found in '$ADR8'"
+am=$(printf '%s\n' "$c7" | awk '/\*Amended [0-9-]*:\*/ { on = 1 } on')
+[ -n "$am" ] && pass "clause 7 carries a dated amendment" ||
+	fail "clause 7 has no '*Amended <date>:*' block — the record still names a skill reader rule 3 forbids"
+printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'operator.*retrospective skill' &&
+	pass "the amendment names the readers: the operator and the retrospective skill" ||
+	fail "the amendment does not name the operator and the retrospective skill as the readers"
+printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE "diagnosis reads the trace by the operator's hand" &&
+	pass "and says a diagnosis reads by the operator's hand" ||
+	fail "the amendment does not say a diagnosis reads the trace by the operator's hand"
+am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\):\*.*/\1/p' | tail -1)
+row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+case $row in
+*"amended $am_date"*) pass "the index row for 0008 carries the amendment's date ($am_date)" ;;
+*) fail "the index row for 0008 does not say 'amended $am_date': $row" ;;
+esac
 
 t_done "trace skills contract"
