@@ -116,14 +116,16 @@ Chosen: **option 1**.
    failure. Each finding's `path:line` must sit in the diff's right-hand
    side; a finding that does not is dropped from the inline comments and
    named on stderr, and stdout says how many were withheld.
-6. **The reviewed commit is part of the contract.** In this release it must
+6. **The reviewed commit is part of the contract.** *(Amended 2026-09-30 —
+   see the amendment at the end of this record.)* In this release it must
    equal the PR head; anything else is exit 75 (EX_TEMPFAIL) with a one-line
    reason and nothing posted. The two finer cases — commits added after the
    review (post anchored to the reviewed commit, with a drift note) and a
    rewritten branch (refuse) — are a later ticket's, and their exit statuses
    are already reserved here: 0 with a note, and 75.
 7. **Exit statuses are distinct and from the sysexits vocabulary the
-   dispatcher already uses**: 0 posted or already posted; 2 usage; 65 the
+   dispatcher already uses** *(amended 2026-09-30 — see the end of this
+   record)*: 0 posted or already posted; 2 usage; 65 the
    report fails the contract; 69 (EX_UNAVAILABLE) no forge CLI on PATH, or a
    forge call that failed; 75 the reviewed commit is not the head; 78
    (EX_CONFIG) the policy is missing or does not allow an operation the broker
@@ -133,7 +135,8 @@ Chosen: **option 1**.
    lists the PR's reviews and comments and skips whichever already carries the
    marker, printing the existing URL — so a retried session lands the review
    once, and a crash between the two operations is recovered by re-running.
-9. **The output contract**: stdout carries the review URL and the comment URL,
+9. **The output contract** *(amended 2026-09-30 — see the end of this
+   record)*: stdout carries the review URL and the comment URL,
    one per line, then one `dropped …` line when anything was withheld; under
    `--dry-run` it carries both payloads exactly as they would be sent, after
    the reads and before any write. stderr carries every reason, prefixed
@@ -205,8 +208,8 @@ it, the PR's own commit list:
 - **Reviewed is the head** — post as clause 6 always said.
 - **Reviewed is in the list, behind the head** (commits were added after the
   review) — post with `commit_id` set to the reviewed commit, check every
-  location against the diff from the base to that commit rather than the
-  PR's current diff, and open the review body with one line naming the
+  location against the diff from the base (named by its commit) to that
+  commit rather than the PR's current diff, and open the review body with one line naming the
   reviewed commit and the current head, so the forge's own outdated marking
   is explained. The line shares the first line with clause 8's marker, which
   still opens the body. Exit 0; stdout adds one `drift: …` line after the
