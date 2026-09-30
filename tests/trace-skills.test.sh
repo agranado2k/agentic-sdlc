@@ -28,6 +28,8 @@
 #      decision, per skill (PRD #237, "Skills: one emit line per decision
 #      point"), plus the `feedback` kind the PRD's re-evaluation added to
 #      /merge-train and /pr-iterate with its three verdicts.
+#      And the `finding.dismiss` kind ADR-0008's amendment of 2026-09-30 gave
+#      /pr-iterate alone (#277): on the raise's subject, joined on data.where.
 #   6. /review-pr resolves the reviewer tier ONCE, before its sub-agents, and
 #      records a spawn per agent carrying that model and the agent's name.
 #   7. Every documented line RUNS: each `sh scripts/trace.sh …` span, with a
@@ -191,11 +193,11 @@ expects() {
 expects grill-me kind=grill.decision
 expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
-expects to-tickets kind=ticket.write tier= data.tier_proposed= data.blocked_by= data.label=
+expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end
-expects pr-iterate begin kind=finding.triage kind=pr.iterate kind=feedback end
+expects pr-iterate begin kind=finding.triage kind=finding.dismiss kind=pr.iterate kind=feedback end
 expects merge-train begin kind=merge.land kind=feedback end data.tag=
 expects diagnose begin kind=hypothesis end
 expects prototype kind=spike.verdict --blob
@@ -212,6 +214,72 @@ for s in merge-train pr-iterate; do
 			fail "/$s's feedback line does not name the verdict '$v' — the vocabulary is hit|adjusted|missed"
 	done
 done
+
+# A human's dismissal of a posted finding (ADR-0008, amended 2026-09-30; #277)
+# is one event on the subject of the finding.raise it answers. A posted comment
+# shows no finding id, so the join is the `file:line` both lines carry as
+# data.where; data.thread is what a reader counts once when two iterations saw
+# the same closed thread. /pr-iterate is its only emitter: it is the skill that
+# fetches the threads, and it learns of the dismissal from the forge.
+PI=$(skill_md pr-iterate)
+dm=$(grep -F 'kind=finding.dismiss' "$PI")
+for tok in 'subject=pr:#<N>' 'outcome=dismissed' 'data.via=thread|review' 'data.where=' 'data.thread='; do
+	printf '%s\n' "$dm" | grep -qF -- "$tok" && pass "/pr-iterate's dismissal carries $tok" ||
+		fail "/pr-iterate's finding.dismiss line does not carry $tok"
+done
+raise=$(grep -F 'kind=finding.raise' "$(skill_md review-pr)")
+for tok in 'subject=pr:#<N>' 'data.where='; do
+	printf '%s\n' "$raise" | grep -qF -- "$tok" && pass "and /review-pr's raise carries $tok — the dismissal joins to it" ||
+		fail "/review-pr's finding.raise no longer carries $tok — a dismissal has nothing to join to"
+done
+printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
+	pass "a human's dismissal message is quoted or summarised — data, never pasted" ||
+	fail "/pr-iterate's dismissal does not say a human's words are quoted or summarised (agent trust boundary)"
+# What names ONE dismissal is data.thread plus data.where, never data.thread
+# alone: a dismissed review is one event per inline comment, every one carrying
+# the review's id, so a reader that counted a data.thread once would fold N
+# dismissed findings into one. The skill and the record
+# say the same key, in the same words.
+ADR8=$(tr '\n' ' ' <docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md | tr -s ' ')
+printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
+	pass "/pr-iterate names the pair that identifies one dismissal — data.thread plus data.where" ||
+	fail "/pr-iterate does not say one dismissal is \`data.thread\` plus \`data.where\` — a dismissed review's events share one data.thread"
+printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
+	pass "and ADR-0008's amendment tells the reader to count that pair" ||
+	fail "ADR-0008's amendment does not tell the reader to count \`data.thread\` plus \`data.where\`"
+# data.where is now FORGE data — a path the pull request's author chose — typed
+# into a shell line: it stays inside quotes, as data.thread already does. And
+# the line is the one the comment was first posted on: the forge's current line
+# moves with later commits and goes empty on an outdated comment, and the join
+# then misses in silence.
+printf '%s\n' "$dm" | grep -qF "data.where='<file:line>'" &&
+	pass "the dismissal's data.where is quoted" ||
+	fail "/pr-iterate's finding.dismiss line carries data.where unquoted — the path is forge data (agent trust boundary)"
+# Quotes alone are not the rule: a path holding a quote closes them. A path
+# outside the plain set is never typed into the line at all.
+printf '%s\n' "$dm" | grep -qF 'data.where=unsafe-path' && printf '%s\n' "$dm" | grep -qF 'never typed' &&
+	pass "and a path outside the plain character set is never typed — the event carries data.where=unsafe-path" ||
+	fail "/pr-iterate does not say what to do with a forge path that cannot be quoted safely — a quote in a filename closes the quotes"
+printf '%s\n' "$dm" | grep -qF 'first posted on' && printf '%s\n' "$dm" | grep -qi 'outdated' &&
+	pass "and it is the line the comment was first posted on, not the forge's current one" ||
+	fail "/pr-iterate does not say data.where is the line the comment was first posted on — an outdated comment's current line is empty"
+others=
+for s in $CHAIN; do
+	[ "$s" = pr-iterate ] && continue
+	if grep -qF 'kind=finding.dismiss' "$(skill_md "$s")"; then others="$others /$s"; fi
+done
+[ -z "$others" ] && pass "no other chain skill emits finding.dismiss" ||
+	fail "finding.dismiss is also emitted by$others — /pr-iterate is the one skill that fetches the threads"
+# The emit's PRECONDITION is a fact the snapshot has to fetch (review of PR
+# #319, H-1): "a thread resolved that you did not resolve" is unreadable if
+# step 1 never asks the forge for a thread's resolved state. The snapshot is
+# metadata only since #278, and this holds the one field this emit needs in
+# it — so a later edit that drops the field turns the emit into a rule nothing
+# can observe, and this goes red instead.
+snapshot=$(sed -n '/^### 1 /,/^### 2 /p' "$PI")
+printf '%s\n' "$snapshot" | grep -qF 'reviewThreads' && printf '%s\n' "$snapshot" | grep -qF 'isResolved' &&
+	pass "the snapshot fetches each review thread's resolved state — the emit has something to read" ||
+	fail "/pr-iterate's snapshot does not select a review thread's resolved state — finding.dismiss fires on a fact step 1 never fetched"
 
 # ---------------------------------------------------------------------------
 banner "6. /review-pr resolves the reviewer tier once, before the seven sub-agents"

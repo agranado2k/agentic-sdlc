@@ -210,6 +210,16 @@ Grouped by the seam each term belongs to. Entry shape:
   decision line to the checker, and lifting it out of its markup is the
   caller's job. Not an anchor: an anchor is a labeled decision in a stamped
   article, refereed by an advisory, and is never read by the checker.
+- **Confidence** — how sure a tier or autonomy-label stamp LOOKED to the
+  session that made it, never how likely it is right: one of three tokens
+  (`low`, `medium`, `high`), stamped by `/to-tickets` on both. The tier's is
+  a `Confidence:` decision line under the `Tier:` line in the ticket body;
+  the label's is shown at the quiz and recorded on the `ticket.write` event
+  under its own key, never in the body. It sorts the quiz low first
+  and sends `/implement` back to its restatement on a `low` tier; no autonomy
+  decision reads it, and nothing has measured it yet. Ref: PRD #273.
+  - _Avoid_: "probability", "certainty", "score" — it reports a reading, not
+    a likelihood.
 - **Typed return** — what a delegated untrusted read sends back: a **declared
   shape** of bare decision lines from the vocabularies plus one **evidence**
   line quoting a span of what was read, and nothing else. The caller checks
@@ -280,7 +290,12 @@ Grouped by the seam each term belongs to. Entry shape:
   unknown tier), the resolver's words where they apply, an outcome, a
   one-line reason, raw token counts, and an open `data` map of strings.
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
-  rewrites one — a correction is a new event.
+  rewrites one — a correction is a new event. A finding has three kinds:
+  `finding.raise` when a review reports it, `finding.triage` for the
+  session's own decision on it, and `finding.dismiss` when a human closes a
+  posted one with no commit answering it — on the raise's subject, joined to
+  it by the `file:line` both carry as `data.where` (ADR-0008, amended
+  2026-09-30).
   - _Avoid_: "entry", "record" — both are used for the decision records.
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,

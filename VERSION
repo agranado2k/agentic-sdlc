@@ -1123,8 +1123,60 @@
 # README.md names it. tests/vocab.test.sh's budget for a ticket-body check
 # is now the checker's own CPU time, not wall clock, so a loaded host no
 # longer turns it red.
+# 0.31.0 — a human's dismissal of a posted finding is traced (PRD #273).
+# NO file joins or leaves the shared layer. ONE shared file changes content:
+# scripts/trace.sh, whose closed kind vocabulary gains `finding.dismiss`.
+# UPDATING.md changes content: the behaviour entry for it, and both worked
+# examples re-pin.
+#   From #277: the trace recorded the session's own triage of a finding and
+# nothing of what a HUMAN did with the comments a review posted. It now has
+# a kind for it, decided as a dated amendment to ADR-0008 rather than carried
+# on `feedback`: a dismissal is a verdict on a finding and sits on the subject
+# of the raise it answers (`pr:#<N>`), where `feedback` is a verdict on a
+# slice and sits on a ticket. The event is `outcome=dismissed` with
+# `data.via` (thread or review), `data.where` (the file and line the comment
+# was first posted on — the key it joins its `finding.raise` by, since a
+# posted comment shows no finding id) and `data.thread`; a reader counts a
+# (`data.thread`, `data.where`) pair once per subject. An existing trace
+# needs nothing: the vocabulary only widened, and an older reader meeting
+# the kind reports it as unknown rather than misreading it.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/pr-iterate/SKILL.md
+# gains the one emit line, at the point its snapshot shows a bot or review
+# thread resolved that the skill did not resolve and no commit answers — a
+# forge path that cannot be quoted safely is never typed into it.
+# docs/domain-glossary.md's Event entry names the kind.
+# docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
+# carries the amendment and docs/adr/INDEX.md its row. tests/trace.test.sh
+# drives the kind red first; tests/trace-skills.test.sh holds the emit line
+# and the snapshot field it reads.
+# 0.32.0 — a tier or label stamp carries its confidence (PRD #273).
+# NO file joins or leaves the shared layer, and NO shared script changes.
+# UPDATING.md changes content: the arriving-from paragraph for the stamp, and
+# both worked examples re-pin — Part 2 pins the diff stat of the two skills
+# this moves.
+#   From #279: a stamp said what it chose and nothing about how sure the
+# choice looked. It now does, in the three tokens the policy file has
+# declared since 0.25.0 (`low`, `medium`, `high`) — a reading of how the
+# decision LOOKED to the session, never a likelihood, and nothing has
+# measured it yet.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/to-tickets/SKILL.md
+# stamps a `Confidence:` line under the `Tier:` line, holds the drafted
+# tokens to the checker before the quiz, sorts the quiz low first, and
+# records the tier's confidence and — under its own key,
+# `data.label_confidence` — the label's on the `ticket.write` event; the
+# label's is never a body line. .agents/skills/implement/SKILL.md reads the
+# ticket's stamp lines through the checker on stdin, never as arguments —
+# a ticket body is untrusted text — takes a `low` tier back to its
+# restatement, stops on a refused tier or domain, treats a refused
+# confidence as `low`, and never reads a failed fetch as a missing line.
+# docs/domain-glossary.md defines Confidence. README.md's suite entries
+# follow. tests/spec-skills.test.sh, tests/implement-deliver.test.sh,
+# tests/trace-skills.test.sh and tests/vocab-policy.test.sh hold the two
+# skills to it, the last by reading the tokens from the policy file.
 
-shared-layer: 0.30.0
+shared-layer: 0.32.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
