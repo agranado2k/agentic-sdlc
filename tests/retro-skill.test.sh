@@ -168,8 +168,24 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # ---------------------------------------------------------------------------
 # Held to the eighth SECTION of the sidecar, flattened to one line: a token
 # that question 1 or 2 happens to carry proves nothing about question 8, and
-# a rule that wraps across two lines is still the rule.
-stamp=$(awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | flat)
+# a rule that wraps across two lines is still the rule. And held to its PROSE:
+# the fenced example rows and the `Reads:` line repeat the rules' own words
+# (`— oracle: `, `no held-out set`, `too few`, `run.start`), so a needle they
+# satisfy survives the rule's deletion (review of PR #329, H-5). The rows are
+# read apart, as rows.
+sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
+reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
+rows8=$(sec8 | awk '/^```/ { fence = !fence; next } fence')
+[ -n "$stamp" ] && [ -n "$reads8" ] && [ "$(printf '%s\n' "$rows8" | grep -c .)" -ge 3 ] &&
+	pass "question 8 has rule prose, a Reads line and example rows — each read apart" ||
+	fail "question 8 could not be split into its prose, its Reads line and its example rows"
+reads_has() { # <needle> <message>
+	case "$reads8" in
+	*"$1"*) pass "$2" ;;
+	*) fail "$2 — question 8's Reads line does not name: $1" ;;
+	esac
+}
 stamp_has() { # <needle> <message>
 	case "$stamp" in
 	*"$1"*) pass "$2" ;;
@@ -178,11 +194,11 @@ stamp_has() { # <needle> <message>
 }
 # What it reads: the tier's stamp and its outcome on ONE event, the finding's
 # severity through the join ADR-0008's amendment of 2026-09-30 fixed.
-stamp_has '`ticket.write`' "stamp calibration reads the ticket as it was published"
-stamp_has '`data.confidence`' "…the confidence the tier was stamped with"
-stamp_has '`data.tier_proposed`' "…and the tier before the quiz, against the published one"
-stamp_has '`finding.raise`' "…the finding as raised, for its severity"
-stamp_has '`finding.dismiss`' "…and the human's dismissal of it"
+reads_has '`ticket.write`' "stamp calibration reads the ticket as it was published"
+reads_has '`data.confidence`' "…the confidence the tier was stamped with"
+reads_has '`data.tier_proposed`' "…and the tier before the quiz, against the published one"
+reads_has '`finding.raise`' "…the finding as raised, for its severity"
+reads_has '`finding.dismiss`' "…and the human's dismissal of it"
 stamp_has '`data.where`' "the dismissal joins its raise on the subject and data.where"
 # The rule the PRD's story 14 asks for: an easy field must not hide a hard one.
 stamp_has 'per decision field and per skill' "the question is answered per decision field and per skill"
