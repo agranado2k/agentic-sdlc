@@ -70,7 +70,7 @@
 #      as outcome, the model and agent harness when the caller passed them.
 #      Never load-bearing (ADR-0008 clause 4).
 #
-# --dry-run performs the READS (head, commits, diff) and prints both payloads exactly
+# --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
 #
 # STREAMS AND EXIT STATUSES. stdout is the answer: URLs, one per line, then
@@ -366,13 +366,17 @@ if [ -z "$DRIFT" ]; then
 else
 	# The diff the worker saw: base...reviewed, three dots, as the PR's own
 	# diff is computed — so a location valid at the reviewed commit is kept,
-	# and one the later commits added is not claimed for it.
-	BASE=$(gh pr view "$PR" --json baseRefName --jq .baseRefName 2>"$TMP/gh.err") || {
+	# and one the later commits added is not claimed for it. The base is
+	# named by its commit, never its branch: a ref name may carry characters
+	# a URL path does not survive, and an oid is only ever hex.
+	BASE=$(gh pr view "$PR" --json baseRefOid --jq .baseRefOid 2>"$TMP/gh.err") || {
 		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
-		die "$EX_UNAVAILABLE" "the forge did not name the base branch of PR #$PR"
+		die "$EX_UNAVAILABLE" "the forge did not name the base commit of PR #$PR"
 	}
-	BASE=$(printf '%s' "$BASE" | tr -d '\r\n')
-	[ -n "$BASE" ] || die "$EX_UNAVAILABLE" "the forge returned no base branch for PR #$PR"
+	BASE=$(printf '%s' "$BASE" | tr -d ' \r\n' | tr 'A-F' 'a-f')
+	case "$BASE" in
+	'' | *[!0-9a-f]*) die "$EX_UNAVAILABLE" "the forge returned no usable base commit for PR #$PR" ;;
+	esac
 	gh api -H 'Accept: application/vnd.github.diff' "repos/{owner}/{repo}/compare/$BASE...$REVIEWED" >"$TMP/pr.diff" 2>"$TMP/gh.err" || {
 		sed 's/^/forge-broker:   /' "$TMP/gh.err" >&2
 		die "$EX_UNAVAILABLE" "the forge did not return the diff from $BASE to $REVIEWED"

@@ -64,10 +64,11 @@ case " $* " in
 	;;
 esac
 case " $* " in
-# Section 17's reads: the PR's base branch, its commit list (default: the head
-# alone, so every earlier section is a PR of one commit), and the diff from
-# base to a named commit, which the forge's compare endpoint answers.
-*" pr view "*"baseRefName"*) printf '%s\n' "${STUB_BASE:-main}" ;;
+# Section 17's reads: the PR's base commit (set but empty is a forge that
+# names none), its commit list (default: the head alone, so every earlier
+# section is a PR of one commit), and the diff from base to a named commit,
+# which the forge's compare endpoint answers.
+*" pr view "*"baseRefOid"*) printf '%s\n' "${STUB_BASE-89abcdef0123456789abcdef0123456789abcdef}" ;;
 *"/pulls/"*"/commits "*) printf '%s\n' ${STUB_COMMITS:-$STUB_HEAD} ;;
 *"/compare/"*) cat "${STUB_COMPARE_DIFF:-$STUB_DIFF}" ;;
 *" pr view "*) printf '%s\n' "$STUB_HEAD" ;;
@@ -715,7 +716,8 @@ s_assert_out_lacks 'drift' "…and no drift note on stdout"
 STUB_HEAD=$OTHER_SHA
 STUB_COMMITS="$HEAD_SHA $OTHER_SHA"
 STUB_COMPARE_DIFF="$SCRATCH/reviewed.diff"
-STUB_BASE=feat/some-base
+BASE_SHA=89ABCDEF0123456789ABCDEF0123456789ABCDEF
+STUB_BASE=$BASE_SHA
 export STUB_HEAD STUB_COMMITS STUB_COMPARE_DIFF STUB_BASE
 broker 12 "$GOOD"
 s_assert_status 0 "a reviewed commit behind the head exits 0"
@@ -739,9 +741,12 @@ printf '%s\n' "$S_OUT" | grep 'drift' | grep -q "$HEAD_SHA" && printf '%s\n' "$S
 	pass "…naming both commits" || fail "the stdout drift note does not name both commits: $S_OUT"
 [ "$(printf '%s\n' "$S_OUT" | grep -c '^https://')" = 2 ] &&
 	pass "…after the two URLs, which stay one per line" || fail "stdout did not carry exactly two URL lines: $S_OUT"
-grep -q "^ARGV: .*compare/feat/some-base\.\.\.$HEAD_SHA" "$STUB_LOG" &&
-	pass "locations are read from the diff between the base and the reviewed commit" ||
-	fail "the broker did not ask the forge for base...reviewed"
+grep -q "^ARGV: .*compare/$(printf '%s' "$BASE_SHA" | tr 'A-F' 'a-f')\.\.\.$HEAD_SHA" "$STUB_LOG" &&
+	pass "locations are read from the diff between the base COMMIT and the reviewed commit" ||
+	fail "the broker did not ask the forge for <base oid>...reviewed"
+grep -q '^ARGV: .*baseRefName' "$STUB_LOG" &&
+	fail "the broker resolved the base by branch name, which goes into a URL unencoded" ||
+	pass "…the base named by its oid, never by its branch name"
 grep -q '^ARGV: pr diff' "$STUB_LOG" &&
 	fail "the broker read the PR's CURRENT diff for a drifted review" ||
 	pass "…not from the PR's current diff"
@@ -783,6 +788,21 @@ s_assert_status 65 "a REVIEWED line that differs from --commit is exit 65"
 assert_mutating 0 "…and nothing is posted"
 broker 12 "$GOOD" --commit "$(printf '%s' "$HEAD_SHA" | cut -c1-12)"
 s_assert_status 0 "an abbreviated --commit that agrees with REVIEWED posts the drifted review"
+
+# A base the forge names as nothing, or as something that is not a commit.
+for base in '' main; do
+	STUB_BASE=$base
+	export STUB_BASE
+	broker 12 "$GOOD"
+	s_assert_status 69 "a base commit of '$base' is exit 69"
+	assert_mutating 0 "…and nothing is posted"
+	s_assert_err_has "no usable base commit"
+	grep -q '^ARGV: .*/compare/' "$STUB_LOG" &&
+		fail "the broker asked for a compare against a base it could not use" ||
+		pass "…and never asks for a compare against it"
+done
+STUB_BASE=$BASE_SHA
+export STUB_BASE
 
 STUB_HEAD=$HEAD_SHA
 export STUB_HEAD
