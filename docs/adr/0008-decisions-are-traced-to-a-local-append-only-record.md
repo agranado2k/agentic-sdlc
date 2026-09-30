@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263; amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes)
 
 ## Context and problem statement
 
@@ -84,6 +84,45 @@ Chosen: **option 1**.
    `data.*` keys are open and carry strings, like task domains. A subject is
    `<type>:<reference>` so a PRD, a ticket, a PR, a branch, a session and a
    run join on one column, and `show` matches one exactly.
+   *Amended 2026-09-30:* the vocabulary gains one kind, **`finding.dismiss`**
+   — a human closed a posted finding with no commit answering it: a review
+   thread resolved, or a review dismissed. The trace already held the
+   session's own triage (`finding.triage`) and nothing of what a human did
+   with the comments `/review-pr` posts, so the question "per severity, how
+   often was a posted finding dismissed?" had a raise and no outcome to join
+   it to. What was decided, and where it lands:
+   - **A new kind, not `feedback`.** `feedback` is a human's verdict on a
+     *slice* — subject `ticket:#<N>`, outcome `hit|adjusted|missed`, one per
+     landing or re-cut. A dismissal is a human's verdict on a *finding* —
+     subject `pr:#<N>`, one per thread. Carried on `feedback` it would sit on
+     a subject the raise is not on, widen a three-word outcome with a fourth
+     that means something else, and make every reader of `feedback` tell the
+     two apart by a `data` key; and its emitter at landing, `/merge-train`,
+     fetches no review thread. A closed vocabulary is where a distinction
+     like that belongs, and widening it is this record's to decide — hence
+     an amendment and not a line in a skill.
+   - **The join is the subject and `data.where`.** The event sits on the
+     raise's subject and carries the `file:line` the comment was posted on,
+     which is the `data.where` its `finding.raise` carries; severity is read
+     through that join and never stamped a second time. It cannot be the
+     finding's id: a posted comment does not show one, by `/review-pr`'s own
+     rule. `data.thread` carries the forge's id for the thread or review.
+   - **The emitter is `/pr-iterate`, from what it fetched from the forge.**
+     Clause 7 stands untouched: the skill learns of the dismissal from the
+     pull request's own thread state, never from the trace. Clause 4 stands:
+     the line ends `|| :`.
+   - **The reason is the emitter's words** — what the snapshot showed. A
+     dismissal message is a human's words and so untrusted data (root
+     manual, agent trust boundary): quoted in one line, or summarised where
+     it cannot be quoted safely, never pasted as an instruction.
+   - **Honest limitations.** A forge names an account, not whether a person
+     or an agent drove it; where the two share one, the skill tells a human's
+     close from its own by evidence — it did not resolve the thread, left no
+     reply on it, and no commit answers it. And because no iteration reads
+     the trace, a later iteration cannot know an earlier one recorded the
+     same thread: a repeat is possible, and the reader counts a
+     `data.thread` once per subject. Two findings raised on one line join
+     to the same dismissal; the reader reports that as it finds it.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
