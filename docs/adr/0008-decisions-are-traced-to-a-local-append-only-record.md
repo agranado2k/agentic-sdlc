@@ -125,7 +125,10 @@ Chosen: **option 1**.
      the thread id alone, because a dismissed review writes one event per
      inline comment it carried and every one carries the review's id. Two
      findings raised on one line join to the same dismissal; the reader
-     reports that as it finds it.
+     reports that as it finds it. And `data.via=review` can only ever
+     answer a third party's review: this chain posts its own as comment
+     reviews, which the forge lets nobody dismiss, so an event on that path
+     has no `/review-pr` raise to join.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
