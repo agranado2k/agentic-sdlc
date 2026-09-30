@@ -196,7 +196,13 @@ stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
 stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
-stamp_has "grep -E '^(Tier|Confidence|Domain):'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
+stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
+# The filter reads a key the way the checker does — any case, indented or not
+# — so `domain: x;id` or an indented ` Domain: $(id)` cannot walk past a filter
+# narrower than the reader behind it. And what the pipe lifted IS the stamp: a
+# line it did not lift is prose, never a value to type.
+stamp_has "the way the checker reads a key" "the filter is no narrower than the checker behind it"
+stamp_has "The lines this pipe lifts are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
 # The domain is the third line the ticket spells and the one this skill goes
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
