@@ -293,7 +293,6 @@ so nothing here invokes it. `tests/dogfood-optin.test.sh` is what proves both
 answers produce a clean project.
 
 ## Quick reference
-
 | If you need to…                     | Where it is                                     |
 | ----------------------------------- | ----------------------------------------------- |
 | Stress-test a plan before writing it | `/grill-me` — or `/grill-with-docs` to challenge it against the glossary and the decision records |
@@ -315,6 +314,7 @@ answers produce a clean project.
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
+| Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |
 | Run the docs gate on this repo      | `scripts/check.sh` — also runs on every push     |
 | Run the whole suite                 | every script in `tests/`, e.g. `sh tests/kit-demo.sh` — the end-to-end bootstrap acceptance test |
 | Prove the kit keeps its own rules   | `tests/self-host.test.sh` — the root gate is green, and bootstrap still strips the kit's own files |

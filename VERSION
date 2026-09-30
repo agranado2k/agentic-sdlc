@@ -954,7 +954,33 @@
 # adapters/claude-code/README.md updated (9e). No docs template or workflow
 # changed in this window.
 
-shared-layer: 0.26.0
+# 0.27.0 — declared runtime catalogue admission (lifecycle wave).
+# NO file joins or leaves the shared layer. UPDATING.md changes its release
+# note and re-captures both worked examples; release scaffolding is drawn
+# forward from the wave's final release ticket to keep each slice reachable.
+#   From #296: canonical skill content, declared active roots and executable
+# references can be admitted with exact path case and git content identities.
+# Filesystem admission never claims to prove model-visible loading.
+#   NON-MANIFEST HALF, enumerated — scripts/catalogue.sh, its repository-owned
+# declaration scripts/catalogue.config and scripts/catalogue.md arrive in fresh
+# bootstraps. They remain outside files: until the wave's final release defines
+# adoption. No consumer manual template changes. The kit's
+# manual and README document admission; its glossary, diary and ADR-0011 record
+# the boundary. bootstrap.sh strips the new kit ADR and tests/catalogue.test.sh;
+# .github/workflows/kit-ci.yml runs that suite. Existing consumers take no new
+# operational mechanism through Part 1 in this slice.
+#   Already landed since 0.26.0: scripts/trace.sh distinguishes unsupported
+# schemas with exit 3 and reports stale dated price tables when configured.
+# It remains non-manifest; Part 1 does not adopt it. The non-manifest
+# adapters/claude-code/README.md, hooks/hook.lib.sh, hooks/tool-payload.mjs and
+# hooks/tool-post.sh document and implement opt-in tool-call capture, with
+# private content-addressed JSON blobs. Preserve consumer policy; enabling
+# TRACE_TOOLS and wiring PostToolUse/PostToolUseFailure are explicit choices.
+# scripts/trace-prices.kit.sh and scripts/trace.kit.config.sh are kit-only.
+# The previously landed /worktree-cleanup change is also non-manifest:
+# inspect .agents/skills/worktree-cleanup/SKILL.md through Part 2.
+
+shared-layer: 0.27.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

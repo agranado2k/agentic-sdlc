@@ -36,6 +36,18 @@ LAST_STATUS=0
 LC_ALL=C
 export LC_ALL
 
+# The trace's identity and policy are scrubbed at the same moment, for the
+# same reason. A kit session's hooks export TRACE_SESSION to every tool call,
+# so a suite run inside one inherited it: the trace suite's emits carried a
+# session its assertions did not expect, red for the operator and green in CI
+# — a suite whose verdict depends on who ran it is no longer an oracle (#303).
+# Session, run and parent are the identity; TRACE_DIR and TRACE_CONFIG the
+# policy overrides scripts/trace.sh reads before its policy file; TRACE_QUIET
+# its unconfigured-note switch. Unset here, above the budget, so the run
+# re-executed inside it starts without them too. A suite that needs one sets
+# it on the command itself, as tests/trace.test.sh does with TRACE_CONFIG.
+unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET
+
 # The repo root, derived once from the suite that sourced this harness; every
 # helper below anchors on it rather than on the working directory.
 T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
