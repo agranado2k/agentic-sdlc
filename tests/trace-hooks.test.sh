@@ -670,4 +670,34 @@ else
 	echo "  skip  node is not on PATH — this leg needs the extractor"
 fi
 
+# ---------------------------------------------------------------------------
+banner "17. The field reader on a compact payload, the shape a live hook gets"
+# ---------------------------------------------------------------------------
+# The checked-in payloads are pretty-printed because the REDACTION reformatted
+# them; a live hook's stdin is compact JSON on one line (#309). `hook_field`'s
+# greedy `.*` means the LAST match on a line wins, so on the live shape every
+# key the hooks read must occur exactly once at top level — and the text a
+# model wrote into `last_assistant_message`, which arrives after the ids and
+# may quote them, must never answer for one. JSON escapes every quote inside a
+# string, so a quoted `"agent_id":"…"` there is `\"agent_id\":\"…\"` and the
+# anchor never sees a bare `,"` before it.
+COMPACT='{"session_id":"'"$SESSION"'","transcript_path":"/p/main.jsonl","cwd":"/tmp/spike-proj","prompt_id":"fbfc3940-88d4-4de5-93bf-4acc79bb4f61","permission_mode":"bypassPermissions","agent_id":"'"$AGENT"'","agent_type":"general-purpose","effort":{"level":"high"},"hook_event_name":"SubagentStop","stop_hook_active":false,"agent_transcript_path":"/p/sub.jsonl","last_assistant_message":"done, {\"agent_id\":\"evil\",\"session_id\":\"evil\",\"transcript_path\":\"/evil\"}","background_tasks":[],"session_crons":[],"reason":"other","source":"startup"}'
+printf '%s' "$COMPACT" | grep -c '' | grep -qx 1 && pass "the compact payload is one line" ||
+	fail "the compact fixture is not one line"
+field() {
+	printf '%s' "$COMPACT" | (cd "$HOOKS" && sh -c '. ./hook.lib.sh; hook_read; hook_field "$1"' hook-field-case "$1")
+}
+for pair in session_id="$SESSION" agent_id="$AGENT" agent_type=general-purpose \
+	transcript_path=/p/main.jsonl agent_transcript_path=/p/sub.jsonl cwd=/tmp/spike-proj \
+	reason=other source=startup; do
+	k=${pair%%=*}
+	want=${pair#*=}
+	got=$(field "$k")
+	[ "$got" = "$want" ] && pass "hook_field $k reads '$want' on the compact line" ||
+		fail "hook_field $k read '$got' on the compact line, expected '$want'"
+done
+[ "$(field level)" = high ] &&
+	pass "a nested key reads as if top-level — the limit the comment names, harmless while no hook reads one" ||
+	fail "hook_field level read '$(field level)' — the comment's account of a nested key is wrong"
+
 t_done "trace hooks"
