@@ -84,6 +84,9 @@ wt_has_branch landed && fail "the merged branch survived" ||
 wt_has_worktree wip && pass "the unmerged worktree is kept" ||
 	fail "an unmerged worktree was removed — that is data loss"
 assert_out_has "not merged into"
+# A branch with commits of its own is never fresh, however the fresh test reads
+# the reflog: its tip has moved since the branch was created.
+assert_out_lacks "(feat/wip) — fresh"
 
 # `messy` IS merged — it is kept only because of the untracked file in it, which
 # is the case worth pinning: "merged" alone must never be sufficient.

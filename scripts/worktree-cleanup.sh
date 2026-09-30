@@ -12,8 +12,9 @@
 # the worktree and its local branch are removed ONLY when the branch is merged
 # into the base ref AND the worktree has no uncommitted changes. Everything else
 # is kept and reported with the reason — including a FRESH branch, one with no
-# commits of its own yet, which ancestry alone would misread as merged. Nothing is ever force-removed: the whole
-# value of the script is that a human can run it without reading it first.
+# commits of its own yet, which ancestry alone would misread as merged. Nothing
+# is ever force-removed: the whole value of the script is that a human can run
+# it without reading it first.
 #
 # `/worktree-cleanup` is the skill that runs this and then updates the diary —
 # the one step a script should not be doing on a human's behalf.
@@ -110,9 +111,16 @@ is_merged() {
 # a tip still equal to it is fresh, however far the base has moved on since. A
 # branch with no reflog (logging disabled) cannot be told apart, and falls
 # through to the merged tests exactly as before.
+#
+# Every miss this test can make is a keep, never a removal: a branch created at
+# a tip that already carries commits (checked out from a pushed branch), or one
+# whose creation entry has expired from the reflog, reads as fresh and stays
+# until a human removes it.
 is_fresh() {
-	created=$(git reflog show --format=%H "refs/heads/$1" -- 2>/dev/null | tail -n 1)
-	[ -n "$created" ] && [ "$created" = "$(git rev-parse "refs/heads/$1")" ]
+	# Positional parameters rather than a variable: no global leaks out.
+	set -- "$(git reflog show --format=%H "refs/heads/$1" -- 2>/dev/null | tail -n 1)" \
+		"$(git rev-parse "refs/heads/$1")"
+	[ -n "$1" ] && [ "$1" = "$2" ]
 }
 
 say "==> git fetch --prune origin"
