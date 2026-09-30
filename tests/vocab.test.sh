@@ -176,12 +176,29 @@ s_assert_status 2 "a first argument that is neither a subcommand nor a 'Field: v
 s_assert_err_has "usage"
 
 # One ticket body checks in under a second — it is called inside the quiz
-# loop. Five runs in four wall seconds bounds each at under one.
-t0=$(date +%s)
-for _ in 1 2 3 4 5; do sh "$VOCAB" <"$BODY"; done
-t1=$(date +%s)
-[ $((t1 - t0)) -le 4 ] && pass "five body checks took $((t1 - t0))s — under one second each" ||
-	fail "five body checks took $((t1 - t0))s — over the one-second budget per body"
+# loop. The claim is about the CHECKER's work, so it is the checker's own CPU
+# time that is measured — user plus system, of the five child runs, as the
+# shell's `times` reports it — and not the wall clock: this assertion used to
+# read `date +%s` around the loop, and on a loaded host the same five checks
+# took 7 and 22 wall seconds while doing the same work, a red that said
+# nothing about the checker. CPU time is what a slower checker moves and what
+# a busy host leaves alone. The bound is what is claimed and no more: THIS
+# body, a ticket's dozen lines. It is not a claim about scale — the checker
+# does per-line work on every line that carries a colon, and a body with
+# thousands of those costs in proportion (measured: 2000 such lines, about
+# seven CPU-seconds a check).
+cpu_ms=$( (
+	for _ in 1 2 3 4 5; do sh "$VOCAB" <"$BODY"; done >/dev/null 2>&1
+	times
+) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }')
+case $cpu_ms in
+*[!0-9]* | "") fail "five body checks — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+*)
+	[ "$cpu_ms" -le 5000 ] && pass "five body checks cost ${cpu_ms}ms of CPU — under one CPU-second each" ||
+		fail "five body checks cost ${cpu_ms}ms of CPU — over the one-second budget per body"
+	;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
