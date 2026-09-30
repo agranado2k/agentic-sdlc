@@ -227,6 +227,17 @@ printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
 printf '%s\n' "$ADR8" | grep -qF 'counts a `data.thread` once' &&
 	fail "ADR-0008 still tells the reader to count a data.thread once — N inline comments of one dismissed review collapse into 1" ||
 	pass "and no longer tells it to count a data.thread alone"
+# data.where is now FORGE data — a path the pull request's author chose — typed
+# into a shell line: it stays inside quotes, as data.thread already does. And
+# the line is the one the comment was first posted on: the forge's current line
+# moves with later commits and goes empty on an outdated comment, and the join
+# then misses in silence.
+printf '%s\n' "$dm" | grep -qF "data.where='<file:line>'" &&
+	pass "the dismissal's data.where is quoted — a forge-supplied path never reaches the shell bare" ||
+	fail "/pr-iterate's finding.dismiss line carries data.where unquoted — the path is forge data (agent trust boundary)"
+printf '%s\n' "$dm" | grep -qF 'first posted on' && printf '%s\n' "$dm" | grep -qi 'outdated' &&
+	pass "and it is the line the comment was first posted on, not the forge's current one" ||
+	fail "/pr-iterate does not say data.where is the line the comment was first posted on — an outdated comment's current line is empty"
 others=
 for s in $CHAIN; do
 	[ "$s" = pr-iterate ] && continue
