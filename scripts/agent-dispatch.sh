@@ -1578,7 +1578,8 @@ _spawn_run() {
 	# A dispatcher taken down by a signal is a terminal site like any other, and
 	# the pair is closed from the trap so an interrupted spawn does not read
 	# later as one that never ended. Only the timed path has a trap to write
-	# from; the untimed one leaves the pair open, as the header says.
+	# from; on the untimed one the signal waits for the worker, and the
+	# ordinary exit closes the pair, as the header says.
 	trap '_down; cleanup; _dispatch_exit 130' INT
 	trap '_down; cleanup; _dispatch_exit 143' TERM
 	trap '_down; cleanup; _dispatch_exit 129' HUP
