@@ -14,6 +14,19 @@
 # Under the root checkout, gitignored, shared by every worktree.
 TRACE_DIR='.trace'
 
+# TOOL CAPTURE IS ON HERE, and this is the one file in the repository that says
+# so. The kit's product IS the chain, so what its own sessions actually did —
+# which command, against which file, with what result — is the raw material a
+# retrospective reads, and the volume the shipped default protects a consumer
+# from is the volume this repo wants. Nothing outside `.trace/` grows: the
+# directory is gitignored and no event ever leaves the machine.
+#
+# Read by the Claude Code adapter's tool hooks, which .claude/settings.json — the
+# only file in this repository that names them — points at this file through the
+# TRACE_CONFIG seam. Turn capture off for one command with `TRACE_TOOLS= …`, the
+# way TRACE_DIR is turned off.
+TRACE_TOOLS=1
+
 # ---------------------------------------------------------------------------
 # THE PRICE TABLE — the SHAPE is here; the numbers are the operator's.
 #

@@ -44,6 +44,35 @@
 TRACE_DIR=''
 
 # ---------------------------------------------------------------------------
+# TRACE_TOOLS — whether every TOOL CALL is captured too. Two honest values:
+#
+#   ''    tool capture is OFF (the shipped default)
+#   1     every tool call your agent harness's tool hooks see becomes one
+#         `tool.use` event, with the head of the input on the line and the full
+#         input and full result in the blob store
+#
+# A SWITCH OF ITS OWN, beside TRACE_DIR rather than folded into it, because the
+# two answers are genuinely different. A decision is one line a day; a tool call
+# is hundreds of lines a session, and the least decision-bearing of them
+# (ADR-0008 clause 8). So "trace my decisions" must not silently mean "keep
+# every file I read and every command I ran, with its output".
+#
+# WHAT IT COSTS WHEN IT IS ON: disk, in your trace directory, proportional to
+# what your tools returned — and a second look at privacy, because a tool result
+# is the contents of whatever was read. Turn it on for a wave you want to study,
+# and turn it off again; nothing rewrites what was already recorded.
+#
+# WHO READS IT: the tool hooks of an agent-harness adapter, which is the only
+# place a tool call is visible at all. `scripts/trace.sh` never reads this line
+# — an event is an event, whoever asked for it. With TRACE_DIR empty this switch
+# changes nothing, for the same reason: there is nowhere to write.
+#
+# An environment TRACE_TOOLS overrides this line for one process, and an
+# environment value of '' is the documented OFF even when this file says 1 —
+# the precedence TRACE_DIR has.
+TRACE_TOOLS=''
+
+# ---------------------------------------------------------------------------
 # THE PRICE TABLE — what a token costs, so `summary` and `export` can say what
 # a wave cost.
 #

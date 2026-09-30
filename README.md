@@ -608,8 +608,16 @@ skeleton (K0).
   plus the subagent's equals it exactly. Then both failure shapes — a renamed
   usage key and a PATH with no node — make the extractor exit 2 and the hook
   record one event with `outcome=fail` naming the cause, and every hook exits 0
-  and says nothing on either stream throughout. Finally the kit-only
-  `.claude/settings.json` parses and names only hook scripts that exist.
+  and says nothing on either stream throughout. Then tool capture, which is a
+  switch of its own: with `TRACE_TOOLS` empty in the shipped policy file the
+  post-tool hook writes nothing at all, and with it set one tool call becomes
+  one `tool.use` event whose two blob names are git's own hash of the payload's
+  input and result — a 20 KB input still leaves the line inside the 4000-byte
+  cap, a failed call reads `outcome=fail` with the agent harness's error as its
+  result, a tool result that quotes another `session_id` does not re-file the
+  event, and a `tool_use_id` the trace could never match is one `fail` event
+  rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
+  and names only hook scripts that exist.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
   contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
   decision points by the plain `sh scripts/trace.sh …` name, never the kit's
