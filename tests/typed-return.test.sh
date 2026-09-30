@@ -39,8 +39,11 @@
 #      instruction could still ride back on. It is one quoted span, capped at
 #      200 bytes of printable ASCII — no control characters, nothing
 #      invisible — and a VERBATIM span of the
-#      comment it is returned for: a fixed-string match against the body
-#      fetched by id, exit status only, the body never printed.
+#      comment it is returned for: a fixed-string match against the body's
+#      scratch file, exit status only, the body never printed.
+#   4e. The caller fetches each body by id into its own scratch file, unseen,
+#      and the reader is given those files and nothing else — no shell, no
+#      forge CLI, no network. The scratch files go when the iteration ends.
 #   4c. Returns are tied to comments by ORDER, so a count of returns that is
 #      not the count of comments ties none of them: every return is
 #      unreadable (review of PR #318, M-2: the rule had no test). The fence's
@@ -183,11 +186,14 @@ cp "$VOCAB" "$POLICY" "$PROJECT/scripts/"
 # root, and this one's root must not be the kit's.
 git init -q "$PROJECT"
 
-# The forge, as a directory: the fence fetches a body through ONE function,
-# comment_body <endpoint>, and here that function reads a file of the same
-# name. The markers are how section 4b tells a body that was compared from a
-# body that was printed: one on a line no span matches, one on the line the
-# passing span does.
+# The forge, as a directory. The fence's fetch_bodies calls the forge CLI; a
+# shell function of that name stands in for it here and reads a file named
+# for the endpoint — so the documented fetch itself is what runs. A check of
+# one return reads the body file directly, as the fence does after a fetch.
+# The markers are how a body that was compared is told from a body that was
+# printed: one on a line no span matches, one on the line the passing span
+# does.
+STUB='gh() { cat "$FORGE/$(printf "%s" "$2" | sed "s|^repos/{owner}/{repo}/||")"; }'
 FORGE="$SCRATCH/forge"
 ONE="pulls/comments/1"
 mkdir -p "$FORGE/pulls/comments"
@@ -202,8 +208,7 @@ BODYEOF
 # return: its exit status. The author is the caller's, stamped from the forge.
 verdict() {
 	(cd "$PROJECT/${WHERE:-}" && unset VOCAB_CONFIG &&
-		FORGE="$FORGE" sh -c '. "$1"; comment_body() { cat "$FORGE/$1"; }
-			typed_return_ok "$2" "$4" "$3"' _ "$SCRATCH/check.sh" "$1" "$2" "${3:-$ONE}") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"
+		sh -c '. "$1"; typed_return_ok "$2" "$4" "$3"' _ "$SCRATCH/check.sh" "$1" "$2" "$FORGE/${3:-$ONE}") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"
 }
 # accepted / refused <label> <author> <return text> [endpoint]
 accepted() {
@@ -343,15 +348,49 @@ assert_file_lacks "$SCRATCH/verdict.all" "LINE-MARKER-9c1d" "…not even the lin
 verdict bot "$(with_evidence 'Evidence: "not in the comment at all"')"
 cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" >"$SCRATCH/verdict.all"
 assert_file_lacks "$SCRATCH/verdict.all" "BODY-MARKER-7f3a" "a refusing check prints no line of the body"
-grep -q 'comment_body "\$2" | grep -qF -- ' "$SCRATCH/check.sh" &&
-	pass "the fence compares by fixed string, quietly, exit status only" ||
-	fail "the fence should pipe comment_body into 'grep -qF --': a fixed-string match with its output discarded"
-grep -q '^comment_body() { gh api "repos/{owner}/{repo}/\$1" --jq \.body; }$' "$SCRATCH/check.sh" &&
-	pass "the fence fetches a body by id, through one function" ||
-	fail "the fence should define comment_body() as the one fetch of a body, by endpoint"
-[ "$(sed -e '/^#/d' "$SCRATCH/check.sh" | grep -c 'comment_body')" -eq 2 ] &&
-	pass "…defined once and used once: piped, never captured" ||
-	fail "comment_body should appear twice in the fence — its definition and the one pipe"
+grep -q '^	grep -qsF -- "\$span" "\$2" || return 1$' "$SCRATCH/check.sh" &&
+	pass "the fence compares by fixed string, quietly, exit status only — against the scratch file" ||
+	fail "the fence should run 'grep -qsF -- \"\$span\" \"\$2\"': a fixed-string match on the body file with its output discarded"
+
+# ---------------------------------------------------------------------------
+banner "4e. The caller fetches the bodies unseen; the reader has no shell and no network"
+# ---------------------------------------------------------------------------
+# A reader that fetches by id holds a shell and the operator's forge token
+# beside untrusted text — the whole trifecta in one agent (decided on PR
+# #318). So the CALLER fetches: each body by id into its own scratch file,
+# output discarded, exit status only. The reader is given the files and
+# nothing else.
+printf '%s\n' "$ONE Bot review-bot[bot] src/a.sh:12 reply-to:null" "pulls/comments/3 User someone src/b.sh:40 reply-to:null" >"$SCRATCH/fetch.list"
+mkdir -p "$SCRATCH/fetched"
+(cd "$PROJECT" && FORGE="$FORGE" sh -c "$STUB"'; . "$1"; fetch_bodies "$2" "$3"' _ "$SCRATCH/check.sh" "$SCRATCH/fetch.list" "$SCRATCH/fetched") >"$SCRATCH/fetch.out" 2>&1
+st=$?
+[ "$st" -eq 0 ] && pass "fetch_bodies fetches every body on the list" || fail "fetch_bodies exited $st on a list it could fetch"
+[ ! -s "$SCRATCH/fetch.out" ] && pass "…and prints nothing: no line of a body enters the session" ||
+	fail "fetch_bodies printed into the session: $(head -1 "$SCRATCH/fetch.out")"
+cmp -s "$SCRATCH/fetched/1" "$FORGE/$ONE" && cmp -s "$SCRATCH/fetched/2" "$FORGE/pulls/comments/3" &&
+	pass "body i of the list is scratch file i, byte for byte" ||
+	fail "the scratch files are not the bodies, in the list's order"
+printf '%s\n' "$ONE Bot review-bot[bot] src/a.sh:12 reply-to:null" "pulls/comments/404 User someone src/b.sh:40 reply-to:null" >"$SCRATCH/fetch.bad"
+(cd "$PROJECT" && FORGE="$FORGE" sh -c "$STUB"'; . "$1"; fetch_bodies "$2" "$3"' _ "$SCRATCH/check.sh" "$SCRATCH/fetch.bad" "$SCRATCH/fetched") >"$SCRATCH/fetch.out" 2>&1
+st=$?
+[ "$st" -ne 0 ] && pass "a body that cannot be fetched fails the fetch — by exit status" || fail "fetch_bodies exited 0 though a body could not be fetched"
+[ ! -s "$SCRATCH/fetch.out" ] && pass "…and still prints nothing" || fail "a failing fetch printed into the session: $(head -1 "$SCRATCH/fetch.out")"
+grep -q '^		gh api "repos/{owner}/{repo}/\$endpoint" --jq \.body >"\$2/\$i" 2>/dev/null </dev/null || return 1$' "$SCRATCH/check.sh" &&
+	pass "the fence fetches by id, straight into the scratch file, output discarded" ||
+	fail "the fence should fetch each body by id into its scratch file with stdout and stderr both off the session"
+[ "$(sed -e '/^#/d' "$SCRATCH/check.sh" | grep -c 'gh ')" -eq 1 ] &&
+	pass "…and that is the fence's one call to the forge" ||
+	fail "the fence should call the forge exactly once — the fetch into a scratch file"
+assert_file_has "$FLAT" "You fetch each body by id into its own scratch file" "the caller fetches"
+assert_file_has "$FLAT" "nothing printed to the session, exit status only" "…unseen"
+assert_file_has "$FLAT" "with read access to those files and nothing else" "what the reader is given"
+assert_file_has "$FLAT" "no shell, no forge CLI, no network" "what the reader is not given, in those words"
+assert_file_has "$FLAT" "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
+assert_file_has "$FLAT" "against the same scratch file" "the evidence match reads the file the reader read"
+assert_file_has "$SKILL" 'scratch=$(mktemp -d)' "the scratch files have one home"
+assert_file_has "$SKILL" 'rm -rf "$scratch"' "…and it is removed"
+assert_file_has "$FLAT" "when the iteration ends" "…when the iteration ends"
+assert_file_lacks "$SKILL" "comment_body" "no second fetch: the body is fetched once, by the caller"
 
 assert_file_has "$FLAT" "one line, at most 200 bytes, printable ASCII only" "the evidence value's bounds, in so many words"
 assert_file_has "$FLAT" "no control characters, nothing invisible" "why ASCII: what the human is shown is all there is"
@@ -367,8 +406,9 @@ unreadable() {
 	(cd "$PROJECT" || exit 2
 		unset VOCAB_CONFIG
 		[ -z "${3:-}" ] || export VOCAB_CONFIG="$3"
-		FORGE="$FORGE" sh -c '. "$1"; comment_body() { cat "$FORGE/$1"; }
-			unreadable_returns "$2" "$3"' _ "$SCRATCH/check.sh" "$1" "$2") 2>"$SCRATCH/unreadable.err" | tr '\n' ' ' | sed 's/ $//'
+		rm -rf "$SCRATCH/fetched.read" && mkdir "$SCRATCH/fetched.read"
+		FORGE="$FORGE" sh -c "$STUB"'; . "$1"; fetch_bodies "$2" "$4" && unreadable_returns "$2" "$4" "$3"' \
+			_ "$SCRATCH/check.sh" "$1" "$2" "$SCRATCH/fetched.read") 2>"$SCRATCH/unreadable.err" | tr '\n' ' ' | sed 's/ $//'
 }
 # names <label> <expected endpoints> <printed endpoints>
 names() {
@@ -576,7 +616,7 @@ assert_file_has "$FLAT" "never the thread lines" "a thread line is not a comment
 assert_file_has "$FLAT" "one line per comment, no blank lines" "the file the returns are counted against"
 assert_file_has "$FLAT" "the snapshot never selects a body" "the rule, in so many words"
 assert_file_has "$FLAT" "metadata only" "what the snapshot is"
-assert_file_has "$FLAT" "fetches each body by id" "the one reader of a body is the restricted one"
+assert_file_has "$FLAT" "never look at it" "a body is fetched unseen, and read only by the restricted reader"
 assert_file_lacks "$FLAT" "Read the suggestion" "step 3 triages from the checked return, not from the body"
 
 t_done "typed-return"
