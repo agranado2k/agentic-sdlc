@@ -243,6 +243,12 @@ in_order() {
 }
 has_in "$quiz" "sh scripts/vocab.sh 'Tier: <tier>' 'Confidence: <token>'" "the checker is handed the tier stamp with its confidence — the plain script, skills ship unstamped"
 has_in "$quiz" "sh scripts/vocab.sh 'Label: <ready-for-agent|none>' 'Confidence: <token>'" "and the label stamp with its own"
+# "Every stamp" includes the task domain where one was stamped (PR #311): an
+# open vocabulary, so the checker holds it to the token shape — which is what
+# refuses a model name with a dot in it, or a capitalised word.
+has_in "$quiz" "'Domain: <token>'" "a stamped domain goes to the checker with the tier it rides on"
+in_order "$quiz" "the domain is checked before the list is presented, like the other stamps" \
+	"sh scripts/vocab.sh 'Tier: <tier>'" "'Domain: <token>'" "fix what it refuses" "present the draft"
 has_in "$quiz" "fix what it refuses" "a refused stamp is repaired before the human sees the list"
 has_in "$quiz" "low-confidence first" "the sort: the human's attention lands where the draft was unsure"
 in_order "$quiz" "the check comes before the list is presented, and the list is sorted" \
