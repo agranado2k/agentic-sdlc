@@ -621,7 +621,12 @@ skeleton (K0).
   evidence span — and the check each skill prints is lifted out and run: the
   shape, then the checker under its plain name, found from the repository
   root and refusing when it is missing; the span capped, printable and
-  verbatim in the scratch file; a refused return named and never printed. A
+  verbatim in the scratch file; a refused return named and never printed.
+  The fence that shows the pre-screen end to end is run as well, against a
+  stub forge command, a stub step and a stub reader — a failed fetch is a
+  stop, an empty output reaches no reader, a return an earlier step left is
+  never read for a later one, the scratch home is gone afterwards — and the
+  two skills' copies of the check are compared line for line. A
   typed return is a classification, so the pre-screen replaces neither read —
   `yes` is the stop each skill already described, `no` is followed by the
   ordinary read, as data — and neither skill may claim more than the check
