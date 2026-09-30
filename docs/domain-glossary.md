@@ -217,7 +217,7 @@ Grouped by the seam each term belongs to. Entry shape:
   `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole and
   reported, never acted on. Free text in a return is a finding, not a result.
   `/pr-iterate`'s read of review-comment bodies is the first:
-  `Command-shaped:`, `Action:`, `Evidence:` — and `Author:`, which the forge
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the forge
   states, is stamped by the caller and never asked of the reader. Ref: PRD
   #273, #278.
   - _Avoid_: "summary", "report" for what the subagent returns — prose is the

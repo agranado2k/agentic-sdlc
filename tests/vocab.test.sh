@@ -65,7 +65,7 @@ while IFS=: read -r field tokens; do
 done <"$SCRATCH/fields"
 [ ! -s "$SCRATCH/refused" ] && pass "every shipped token is accepted by its own field" ||
 	fail "shipped tokens refused: $(tr '\n' ' ' <"$SCRATCH/refused")"
-for field in tier label domain severity status action outcome confidence command-shaped author; do
+for field in tier label domain severity status action outcome confidence command-shaped author-kind; do
 	grep -q "^$field:" "$SCRATCH/fields" && pass "the PRD's field '$field' is declared" ||
 		fail "the PRD's field '$field' is not declared"
 done
@@ -233,6 +233,18 @@ s_assert_resolved "" "an emphasized line is ignored, not checked"
 vocab check '- Tier: Implementor' 'Tier: Implementor'
 s_assert_status 2 "the same line handed over bare is refused — lifting it out is the caller's job"
 s_assert_err_has "tier: 'Implementor' is not one of"
+
+# A declared field is a word every body handed over is now read for, so it
+# must be a word no ordinary body uses as a key. `Author:` is one a ticket, a
+# commit trailer or a forge's own issue header carries — declared as a field,
+# a whole body piped in went from exit 0 to exit 2 on its author's name
+# (review of PR #318). The field is `author-kind`, and `Author:` is prose.
+printf 'Author: Arthur\n' >"$SCRATCH/authored"
+t_run_split sh "$VOCAB" <"$SCRATCH/authored"
+s_assert_resolved "" "a plain 'Author: <name>' line in a body is not a decision line"
+vocab 'Author-kind: maintainer'
+s_assert_status 2 "'Author-kind: maintainer' — a kind nobody declared — is refused"
+s_assert_err_has "author-kind: 'maintainer' is not one of bot human"
 
 # ---------------------------------------------------------------------------
 banner "Where the vocabularies come from"

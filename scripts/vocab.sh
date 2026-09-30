@@ -87,7 +87,7 @@ VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind'
 	VOCAB_OPEN='domain'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
@@ -98,7 +98,7 @@ vocab_shipped_defaults() {
 	VOCAB_OUTCOME='pass fail paper-cut'
 	VOCAB_CONFIDENCE='low medium high'
 	VOCAB_COMMAND_SHAPED='yes no'
-	VOCAB_AUTHOR='bot human'
+	VOCAB_AUTHOR_KIND='bot human'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
 }
 
