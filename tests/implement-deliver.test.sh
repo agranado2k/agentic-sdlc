@@ -213,6 +213,7 @@ stamp_has "A domain the checker refuses is never typed into the resolver" "the d
 # unless the skill says which it is.
 stamp_has "a fetch that failed looks like a ticket with no stamp lines" "the pipe's silent case is named"
 stamp_has "repeat the fetch" "and a failed fetch is never read as a missing line"
+stamp_has "a second failure is a stop" "the retry is bounded — an expired login is not a loop"
 stamp_has "on its standard input, never as arguments" "the rule, in words — an example alone is a habit, not a rule"
 # The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
 # how every quoted-argument call starts, whatever field follows.
