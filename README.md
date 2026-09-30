@@ -605,6 +605,22 @@ skeleton (K0).
   a refused one is named by comment and position. The snapshot itself is held
   to metadata only: no command in it selects a body. It also holds the
   trust-boundary paragraph in the kit's manual and the template.
+- `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
+  the same form (ticket #280), where the return is smaller. `/to-tickets`
+  over a PRD issue body and `/dogfood` over product output each pre-screen
+  the text before the session reads it: the caller writes it to a scratch
+  file unseen, a reader with no shell, no forge CLI and no network returns
+  two bare lines — `Command-shaped:` from the policy file's tokens and one
+  evidence span — and the check each skill prints is lifted out and run: the
+  shape, then the checker under its plain name, found from the repository
+  root and refusing when it is missing; the span capped, printable and
+  verbatim in the scratch file; a refused return named and never printed. A
+  typed return is a classification, so the pre-screen replaces neither read —
+  `yes` is the stop each skill already described, `no` is followed by the
+  ordinary read, as data — and neither skill may claim more than the check
+  does. `/dogfood`'s row outcome is held as a decision line too: the command
+  the skill prints is run, and an outcome the policy file does not declare is
+  exit 2.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
@@ -803,6 +819,7 @@ sh tests/trace.test.sh                                 # the decision trace: emi
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
+sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace

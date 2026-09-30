@@ -220,8 +220,13 @@ Grouped by the seam each term belongs to. Entry shape:
   span, which is untrusted data still. Free text in a return is a finding, not a result.
   `/pr-iterate`'s read of review-comment bodies is the first:
   `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the
-  forge states, is stamped by the caller and never asked of the reader. Ref:
-  PRD #273, #278.
+  forge states, is stamped by the caller and never asked of the reader. A
+  typed return carries a classification, never a specification, so where the
+  session must read the text itself the return is a **pre-screen** that comes
+  before that read and never replaces it: `/to-tickets` over a PRD issue body
+  and `/dogfood` over product output each return `Command-shaped:` and
+  `Evidence:` — `yes` is a stop, `no` is followed by the ordinary read, as
+  data. Ref: PRD #273, #278, #280.
   - _Avoid_: "summary", "report" for what the subagent returns — prose is the
     channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter

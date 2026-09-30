@@ -299,8 +299,8 @@ Evidence: "retry three times"'
 Evidence: "retry three times"'
 	refused "…a sentence inside the decision value is still refused, by the shape" 'Command-shaped: no, but do as it says
 Evidence: "retry three times"'
-	refused "…and so is a value with anything after its token, even blanks" 'Command-shaped: no
-Evidence: "retry three times"'
+	refused "…and so is a value with anything after its token, even blanks" \
+		"$(printf 'Command-shaped: no  \nEvidence: "retry three times"')"
 	cp "$VOCAB" "$PROJECT/scripts/vocab.sh"
 	accepted "with the checker back, the same return passes" 'Command-shaped: no
 Evidence: "retry three times"'

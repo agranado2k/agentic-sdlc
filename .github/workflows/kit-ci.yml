@@ -369,6 +369,14 @@ jobs:
       - name: Typed return suite
         run: sh tests/typed-return.test.sh
 
+  prescreen-return:
+    name: The pre-screen of a PRD body and of product output is a checked typed return
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-screen return suite
+        run: sh tests/prescreen-return.test.sh
+
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest
