@@ -64,6 +64,10 @@ cd "$ROOT" || exit 2
 # (t_trace_lines, t_trace_spans, t_trace_runnable), shared with
 # tests/trace-skills.test.sh (M-4, review of PR #293).
 
+# flat — stdin as one line, runs of spaces squeezed: a rule that wraps across
+# two lines is still the rule, and a needle is matched against the sentence.
+flat() { tr '\n' ' ' | tr -s ' '; }
+
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
 # ---------------------------------------------------------------------------
@@ -165,7 +169,7 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # Held to the eighth SECTION of the sidecar, flattened to one line: a token
 # that question 1 or 2 happens to carry proves nothing about question 8, and
 # a rule that wraps across two lines is still the rule.
-stamp=$(awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | tr '\n' ' ' | tr -s ' ')
+stamp=$(awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | flat)
 stamp_has() { # <needle> <message>
 	case "$stamp" in
 	*"$1"*) pass "$2" ;;
@@ -217,10 +221,10 @@ stamp_has 'instead of a rate' "…instead of printing a rate"
 stamp_has 'no dismissal recorded in the window' "a window with no finding.dismiss at all prints no dismissal rate"
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
-questions | tr '\n' ' ' | tr -s ' ' | grep -q 'per decision field and per skill, never one number for the chain' &&
+questions | flat | grep -q 'per decision field and per skill, never one number for the chain' &&
 	pass "SKILL.md's eighth item holds the per-field, per-skill rule" ||
 	fail "SKILL.md's eighth item does not say 'per decision field and per skill, never one number for the chain'"
-questions | tr '\n' ' ' | tr -s ' ' | grep -q 'oracle clause' && pass "…and the oracle clause on every row" ||
+questions | flat | grep -q 'oracle clause' && pass "…and the oracle clause on every row" ||
 	fail "SKILL.md's eighth item does not name the oracle clause"
 desc=$(sed -n 's/^description: //p' "$SKILL_ABS")
 case "$desc" in
@@ -404,9 +408,9 @@ grep -q 'tests/retro-skill.test.sh' "$ROOT/README.md" && pass "README names this
 # manuals say it twice each — the chain paragraph and the quick-reference row
 # — and the glossary, README and the provenance file once.
 count_eight() { # <file> <expected> <needle>
-	n=$(tr '\n' ' ' <"$ROOT/$1" | tr -s ' ' | grep -oF "$3" | grep -c .)
+	n=$(flat <"$ROOT/$1" | grep -oF "$3" | grep -c .)
 	[ "$n" -ge "$2" ] && pass "$1 says '$3' ($n of $2)" || fail "$1 says '$3' $n time(s), expected $2"
-	tr '\n' ' ' <"$ROOT/$1" | tr -s ' ' | grep -qE 'seven (fixed )?questions' &&
+	flat <"$ROOT/$1" | grep -qE 'seven (fixed )?questions' &&
 		fail "$1 still counts seven questions" || pass "$1 nowhere counts seven questions"
 }
 count_eight AGENTS.md 2 'eight fixed questions'
@@ -415,7 +419,7 @@ count_eight docs/domain-glossary.md 1 'eight fixed questions'
 count_eight README.md 1 'the eight fixed questions'
 count_eight .agents/skills/LICENSE-mattpocock-skills.md 1 'eight questions'
 for f in constitution/AGENTS.md.template docs/domain-glossary.md; do
-	tr '\n' ' ' <"$ROOT/$f" | tr -s ' ' | grep -qF 'stamp calibration' && pass "$f names stamp calibration among the questions" ||
+	flat <"$ROOT/$f" | grep -qF 'stamp calibration' && pass "$f names stamp calibration among the questions" ||
 		fail "$f lists the questions without stamp calibration"
 done
 grep -q '/retro' "$ROOT/.agents/skills/housekeeping/CHECKLIST.md" &&
