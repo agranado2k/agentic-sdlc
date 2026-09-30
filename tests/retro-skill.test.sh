@@ -266,7 +266,6 @@ printf '%s\n' "$rows8" | grep -E '^severity ' | grep -qF ' · review-pr · ' &&
 stamp_has 'A row is never named by trace text' "a row is never named by trace text"
 stamp_has '`sh scripts/vocab.sh fields`' "a confidence and a severity are held to the declared vocabulary, read from the checker"
 stamp_has 'a directory under `.agents/skills/`' "a skill is held to the skills the project holds"
-stamp_has 'named `undeclared`' "a value outside them goes on one row named undeclared"
 stamp_has 'prints the count and never the value' "…which prints the count and never the value"
 case "$stamp" in
 *'under `other`'*) fail "question 8 still files an undeclared confidence under 'other' — one rule, one row name: undeclared" ;;
@@ -388,6 +387,17 @@ esac
 # landing between the two emits changes what it pairs with.
 stamp_has 'A row where raises shared a dismissal is not even that' "a row where raises shared a dismissal is said not to be a lower bound"
 stamp_has 'read at its earliest `ts`' "a pair emitted more than once is read at its earliest ts"
+# Second local review, M-3, M-4, L-2: the undeclared row's SHAPE is stated
+# (the word stands in the value's place — the grain stays field, skill,
+# value), the confidence groups are the declared words and not a hard-coded
+# three, and "per value" says which value each field's stamp carries.
+stamp_has 'its confidence for a tier or a label, its band for a severity' "per value: the confidence for a tier or a label, the band for a severity"
+stamp_has "carries \`undeclared\` in that value's place" "an undeclared value's row carries the word in that value's place"
+stamp_has 'none of the declared words' "the confidence groups are the declared words, not a hard-coded three"
+case "$stamp" in
+*'`undeclared` row below'*) fail "the tier bullet points at the undeclared row 'below' — the rule is the bullet above it" ;;
+*) pass "the tier bullet points at the undeclared rule where it is" ;;
+esac
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
 # The order file, the description and the procedure count with it.
 # Held to the EIGHTH ITEM, not the section: a phrase another item carries

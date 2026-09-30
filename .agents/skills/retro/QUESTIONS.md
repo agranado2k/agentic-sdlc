@@ -209,7 +209,8 @@ it; and `run.start`, for the `skill` of the run each of them was emitted in.*
 A stamp is a judgement; this question asks what happened to it. It is
 answered per decision field and per skill, never one number for the chain:
 one row per field (`tier`, `label`, `severity`), per skill that stamped it,
-per value the stamp carried — so an easy field's score cannot hide a hard
+per value the stamp carried — its confidence for a tier or a label, its band
+for a severity — so an easy field's score cannot hide a hard
 field's, and a row says whose stamp it was. The skill is read from three
 places in order, and the first that answers names the row: the event's own
 `skill`; else the `skill` of the `run.start` its `run` points at — a finding
@@ -225,20 +226,23 @@ be nobody's. An event none of the three names goes on a row named
   confidence, a severity, a skill — and each is held to what the project
   declares before it is printed: a confidence and a severity to the words
   `sh scripts/vocab.sh fields` prints for that field, a skill to a directory
-  under `.agents/skills/`. A value outside them is counted on one row per
-  field named `undeclared`, which prints the count and never the value:
+  under `.agents/skills/`. A value outside them names no row: its row carries
+  `undeclared` in that value's place — `tier · undeclared · low` for a skill,
+  `severity · review-pr · undeclared` for a band — and prints the count and
+  never the value:
   `skill` and `data.*` carry whatever a session typed, forge text included,
   and a row's name is read by the human as the report's own word.
 - **The tier, per confidence.** Take one `ticket.write` per subject, the
-  latest by `ts`, and group by `data.confidence` — `low`, `medium`, `high`.
+  latest by `ts`, and group by `data.confidence` — one group per declared word: `low`,
+  `medium` and `high` as shipped.
   A ticket was overridden at the quiz when its `tier` differs from its
   `data.tier_proposed` — the quiz override question 1 counts, cut here by
   confidence instead of compared by tier. Per group: how many were overridden, of how many
   carry both keys. A `ticket.write` with no `data.confidence` was written
   before the stamp existed: it goes in a row named `unstamped`, and one with
   no `data.tier_proposed` has no override to read — count it on its row and
-  leave it out of the denominator. A confidence that is none of the three
-  words goes on the `undeclared` row below.
+  leave it out of the denominator. A confidence that is none of the declared
+  words goes on the `undeclared` row above.
 - **The label, in a row of its own.** `ticket.write` records the label's
   confidence (`data.label_confidence`) and the label as published, but no
   label from before the quiz, so the label's override rate is not computable
