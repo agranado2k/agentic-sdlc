@@ -210,10 +210,16 @@ A stamp is a judgement; this question asks what happened to it. It is
 answered per decision field and per skill, never one number for the chain:
 one row per field (`tier`, `label`, `severity`), per skill that stamped it,
 per value the stamp carried — so an easy field's score cannot hide a hard
-field's, and a row says whose stamp it was. The skill is the event's own
-`skill`, or, where the event names none, the `skill` of the `run.start` its
-`run` points at — a finding is raised inside a review's run and carries no
-skill of its own. An event with neither goes on a row named `unattributed`.
+field's, and a row says whose stamp it was. The skill is read from three
+places in order, and the first that answers names the row: the event's own
+`skill`; else the `skill` of the `run.start` its `run` points at — a finding
+is raised inside a review's run and carries no skill of its own; else, for a
+kind exactly one chain skill emits, that skill — a `ticket.write` is
+`/to-tickets`'s and a `finding.raise` is `/review-pr`'s — and the row says so,
+`(by kind)` after the skill's name: the ticket-writing skill opens no run and
+its emit names no skill, so without this step every tier and label row would
+be nobody's. An event none of the three names goes on a row named
+`unattributed`.
 
 - **The tier, per confidence.** Take one `ticket.write` per subject, the
   latest by `ts`, and group by `data.confidence` — `low`, `medium`, `high`.
@@ -273,10 +279,10 @@ The rows read like this — the field, the skill, the stamp's value, the
 counts, the rate or the words that replace it, the clause:
 
 ```
-tier · to-tickets · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
-tier · to-tickets · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
-label · to-tickets · medium   9 stamped           override rate not computable from the trace today   — oracle: none — the trace holds no label from before the quiz
-severity · review-pr · low    2 of 11 dismissed   18 %   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
+tier · to-tickets (by kind) · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
+tier · to-tickets (by kind) · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
+label · to-tickets (by kind) · medium   9 stamped           override rate not computable from the trace today   — oracle: none — the trace holds no label from before the quiz
+severity · review-pr · low              2 of 11 dismissed   18 %   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
 ```
 
 What counts as a finding, among rows that carry a rate: `high` stamps

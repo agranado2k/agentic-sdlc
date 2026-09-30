@@ -207,7 +207,30 @@ stamp_has 'never one number for the chain' "…never as one number for the chain
 # own (the kit's own trace, read for this ticket's demo), so a reader that
 # pivots on the event's skill column files every severity row under nothing.
 stamp_has '`run.start`' "the skill that stamped is read from the run's run.start where the event names none"
-stamp_has '`unattributed`' "…and an event with neither is a row that says so"
+stamp_has '`unattributed`' "…and an event nothing attributes is a row that says so"
+# H-1 (review of PR #329): /to-tickets opens no run and its ticket.write names
+# no skill, so the two sources above file EVERY tier and label row under
+# `unattributed`. The reader's third source is the kind itself, for a kind
+# exactly one chain skill emits — a fact tests/trace-skills.test.sh holds, not
+# this prose — and a row attributed that way says so.
+stamp_has 'for a kind exactly one chain skill emits, that skill' "a kind one skill emits names that skill where the event and its run name none"
+stamp_has 'a `ticket.write` is `/to-tickets`'"'"'s' "…a ticket.write is the ticket-writing skill's"
+stamp_has 'a `finding.raise` is `/review-pr`'"'"'s' "…a finding.raise the reviewing skill's"
+stamp_has '`(by kind)`' "…and the row says it was attributed by kind"
+case "$stamp" in
+*"event's own \`skill\`"*'`run.start`'*'exactly one chain skill emits'*'`unattributed`'*)
+	pass "the four sources are read in one order: the event, its run, its kind, then unattributed" ;;
+*) fail "question 8 does not give the attribution order: the event's own skill, its run's run.start, its kind, then unattributed" ;;
+esac
+# The example rows agree with the rule: a tier or label row is /to-tickets'
+# by kind, a severity row /review-pr's through its run.
+bad_rows=$(printf '%s\n' "$rows8" | grep -E '^(tier|label) ' | grep -vF ' · to-tickets (by kind) · ' || true)
+[ -z "$bad_rows" ] && printf '%s\n' "$rows8" | grep -qE '^tier ' && printf '%s\n' "$rows8" | grep -qE '^label ' &&
+	pass "every example tier and label row names to-tickets, attributed by kind" ||
+	fail "an example tier or label row does not read '· to-tickets (by kind) ·' — the example contradicts the attribution rule"
+printf '%s\n' "$rows8" | grep -E '^severity ' | grep -qF ' · review-pr · ' &&
+	pass "the example severity row names review-pr, read from its run" ||
+	fail "the example severity row does not read '· review-pr ·'"
 # The oracle clause (#276) is on EVERY row this question prints, in the form
 # the housekeeping checklist gave it.
 stamp_has 'Every row carries the oracle clause' "every row carries the oracle clause"
