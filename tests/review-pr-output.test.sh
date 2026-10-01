@@ -459,10 +459,16 @@ if [ -n "$a5" ] && [ -n "$a6" ] && [ "$a5" -lt "$a6" ]; then
 else
 	fail "Agent 5's section is not extractable — a5='$a5' a6='$a6'"
 fi
-# The body between the two headings — the headings themselves are §3's, not Agent 5's.
-agent5=$(sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$SKILL_ABS")
-# Read unwrapped: the prompt is 80-column prose and a sentence may break
-# between the case and its ruling; the reviewer reads sentences, not lines.
+# agent5_of <a copy of the skill> — the body between the two headings; the
+# headings themselves are §3's, not Agent 5's. sentences_of <a copy> — that
+# body unwrapped and split one sentence per line: the prompt is 80-column
+# prose and a sentence may break between the case and its ruling, and the
+# reviewer reads sentences, not lines. The one pair of readers for the skill
+# and for the baits below, so a bait runs the assertion and never a retyped
+# copy of it.
+agent5_of() { sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1"; }
+sentences_of() { agent5_of "$1" | tr '\n' ' ' | tr '.' '\n'; }
+agent5=$(agent5_of "$SKILL_ABS")
 agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
 a5_has() {
 	if printf '%s\n' "$agent5_flat" | grep -qF -- "$1"; then
@@ -476,15 +482,13 @@ a5_has "the diff ADDS" "the first case: a new copy is the author's, and a findin
 a5_has "pre-date the branch" "the second case: copies the diff inherited are not the author's to consolidate"
 # ruling_of <a copy of the skill> — the ONE sentence of Agent 5's section that
 # names the candidate ticket, puts it at LOW and cites §10; empty when no
-# sentence carries all three. The one reader for the skill and for the baits
-# below, so a bait runs the assertion and never a retyped copy of it.
-ruling_of() {
-	sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1" | tr '\n' ' ' | tr '.' '\n' |
-		grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10"
-}
+# sentence carries all three.
+ruling_of() { sentences_of "$1" | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10"; }
 # The fix line a candidate ticket carries, as the prompt spells it: the PR is
 # asked for nothing, and the line says so in words the broker accepts.
+# spells_fix <a ruling sentence> — exit 0 when the sentence spells that line.
 CT_FIX='none on this PR — candidate ticket (shared invariant §10)'
+spells_fix() { printf '%s\n' "$1" | grep -qF -- "\`↳ fix:\` line reads \`$CT_FIX\`"; }
 # The ruling on the second case: named, LOW, §10 cited, the fix line spelled —
 # all in ONE sentence, so the four cannot be met by a word each, scattered
 # across the section. (A later sentence that re-asks for the move is a
@@ -493,7 +497,7 @@ ruling=$(ruling_of "$SKILL_ABS")
 [ -n "$ruling" ] &&
 	pass "one sentence rules the inherited case: a candidate ticket, LOW, citing invariant §10" ||
 	fail "no single sentence of Agent 5's prompt names the inherited duplication a candidate ticket AND puts it at LOW AND cites invariant §10"
-printf '%s\n' "$ruling" | grep -qF -- "\`↳ fix:\` line reads \`$CT_FIX\`" &&
+spells_fix "$ruling" &&
 	pass "…and that sentence spells the fix line — \`$CT_FIX\` — which asks this PR for nothing" ||
 	fail "…and that sentence does not spell the candidate ticket's fix line \`↳ fix: $CT_FIX\` — the reviewer will still ask for the move, or omit the line and the broker will refuse the report"
 # The citation reaches the report: a candidate ticket cites §10 on its
@@ -502,7 +506,7 @@ a5_has "↳ cites:" "the citation is on the finding's own line, not only in the 
 # The one exception stays, and is held in one sentence with its verdict: a
 # divergent-behavior copy is a latent bug whichever branch introduced it, so
 # the candidate-ticket ruling never defers it.
-exception=$(printf '%s\n' "$agent5_flat" | tr '.' '\n' | grep -F "divergent-behavior" | grep -F "stays a finding")
+exception=$(sentences_of "$SKILL_ABS" | grep -F "divergent-behavior" | grep -F "stays a finding")
 [ -n "$exception" ] &&
 	pass "the exception is pinned: a divergent-behavior copy stays a finding whichever branch introduced it" ||
 	fail "no sentence of Agent 5's prompt keeps the divergent-behavior copy a finding — the candidate-ticket ruling would defer a latent bug"
@@ -531,7 +535,7 @@ b5=$(ruling_of "$SCRATCH/bait5.md")
 # still asks for the consolidation.
 sed "$((a5 + 1)),$((a6 - 1))s/none on this PR[^\`]*/extract the copies into one helper and call it from both sites/" "$SKILL_ABS" >"$SCRATCH/bait5-fix.md"
 b5f=$(ruling_of "$SCRATCH/bait5-fix.md")
-if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! printf '%s\n' "$b5f" | grep -qF -- "$CT_FIX"; then
+if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! spells_fix "$b5f"; then
 	pass "bait: the fix line swapped for a request to move the copies goes red at the fix assertion"
 else
 	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"

@@ -1185,7 +1185,7 @@ awk -v fix="$CT_FIX" '
 	skip && /^— none found\.$/ { skip = 0; next }
 	{ print }
 ' "$GOOD" >"$SCRATCH/candidate.md"
-grep -q '^↳ fix: none on this PR' "$SCRATCH/candidate.md" &&
+grep -qF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" &&
 	pass "the fixture's L-1 carries the fix line the prompt spells, asking this PR for nothing" ||
 	fail "the fixture's L-1 lost its fix line — \$GOOD's LOW section moved under the awk"
 broker 12 "$SCRATCH/candidate.md" --dry-run
@@ -1195,7 +1195,7 @@ s_assert_out_has 'candidate ticket:' "…and the candidate ticket is among the i
 s_assert_out_has '"line":11' "…anchored on its own line of the diff"
 # The fix line is what carries it: the same report with that one line
 # withdrawn is the half-finding section 15 names, and costs the report.
-grep -v '^↳ fix: none on this PR' "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
+grep -vF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
 bad "$SCRATCH/candidate-no-fix.md" "…and the same candidate ticket with its fix line withdrawn is exit 65" 'L-1'
 
 t_done "tests/forge-broker.test.sh"
