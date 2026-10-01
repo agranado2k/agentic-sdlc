@@ -114,15 +114,20 @@ reader's file, and only a return that passed is read into the session:
 
 ```sh
 # vocab_checker — print the checker of the repository that holds the skills
-# being run: the nearest directory at or above the cwd with .agents/skills/.
-# Fails, printing nothing, when no such directory is found or it holds no
-# scripts/vocab.sh — never borrowed from a repository further up.
+# being run: the nearest directory at or above the cwd with .agents/skills/,
+# never above the outermost git work tree around the cwd. Fails, printing
+# nothing, when no such directory is found or it holds no scripts/vocab.sh —
+# never borrowed from a repository further up.
 vocab_checker() {
-	skills_root=$(pwd -P) || return 1
-	until [ -d "$skills_root/.agents/skills" ]; do
-		[ "$skills_root" = / ] && return 1
-		skills_root=$(dirname "$skills_root")
+	walk=$(pwd -P) || return 1
+	skills_root='' git_root=''
+	while :; do
+		[ -z "$skills_root" ] && [ -d "$walk/.agents/skills" ] && skills_root=$walk
+		[ -e "$walk/.git" ] && git_root=$walk
+		[ "$walk" = / ] && break
+		walk=$(dirname "$walk")
 	done
+	[ -n "$skills_root" ] && [ -n "$git_root" ] && [ "${#skills_root}" -ge "${#git_root}" ] || return 1
 	[ -f "$skills_root/scripts/vocab.sh" ] && printf '%s\n' "$skills_root/scripts/vocab.sh"
 }
 
