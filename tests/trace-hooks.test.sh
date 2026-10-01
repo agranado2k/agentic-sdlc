@@ -434,6 +434,7 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
+			PreToolUse) _w_want=tool-pre-guard.sh ;;
 			*)
 				_w_bad=1
 				continue
@@ -448,7 +449,7 @@ if [ -f "$SETTINGS" ]; then
 		wiring_ok "$SETTINGS" &&
 			pass "every wired event runs its own hook script through the kit's trace policy" ||
 			fail "a wired event names the wrong script or reads the shipped empty policy: $(cat "$wiring_rows")"
-		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+		for ev in SessionStart SessionEnd SubagentStop PreToolUse PostToolUse PostToolUseFailure; do
 			grep -q "^$ev " "$wiring_rows" && pass "it wires $ev" || fail "it does not wire $ev"
 		done
 		sed '/tool-post.sh/s|TRACE_CONFIG=scripts/trace.kit.config.sh ||' "$SETTINGS" \
@@ -461,7 +462,7 @@ if [ -f "$SETTINGS" ]; then
 			fail "the wiring check passes a file whose post-tool commands read the shipped OFF policy" ||
 			pass "and the check FAILS on that copy — it is load-bearing"
 	else
-		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+		for ev in SessionStart SessionEnd SubagentStop PreToolUse PostToolUse PostToolUseFailure; do
 			grep -q "\"$ev\"" "$SETTINGS" && pass "it wires $ev" || fail "it does not wire $ev"
 		done
 		echo "  skip  node is not on PATH — the per-event wiring check needs a JSON parser"
@@ -475,11 +476,12 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Five events, four scripts: one script serves both post-tool events,
-	# because the only difference between them is the outcome it records.
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 5 ] &&
-		pass "it names a hook script per wired event, five in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 5"
+	# Six events, five scripts: one script serves both post-tool events,
+	# because the only difference between them is the outcome it records; the
+	# sixth is the PreToolUse kill guard (#414).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 6 ] &&
+		pass "it names a hook script per wired event, six in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 6"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
@@ -2516,6 +2518,123 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the reason after an empty first line decodes to '$(reason_of "$EBF")'"
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
+fi
+
+# ---------------------------------------------------------------------------
+banner "35. PreToolUse: a spawned sub-agent cannot signal processes by name"
+# ---------------------------------------------------------------------------
+# Ticket #414 (retro 20261001T150216Z, the reviewer that killed suites). During
+# PR #393's review a sub-agent ran `pkill -f` on two suite names and may have
+# killed sibling sessions' runs. tool-pre-guard.sh refuses a Bash command that
+# signals by NAME — pkill, killall, kill fed by pgrep, kill given a name — when
+# the payload carries `agent_type`, which the agent harness sets on a spawned
+# sub-agent's calls only. It exits 2, the agent harness's block status, with
+# the rule named on stderr, and records one `note` (outcome=denied) on the
+# session. The operator's own session (no agent_type) and a signal to a job or
+# a pid pass through, exit 0 and silent.
+GUARD="$HOOKS/tool-pre-guard.sh"
+# guard_payload <agent_type or empty> <command> — a compact PreToolUse payload
+# for a Bash call, the command JSON-escaped (backslash, then double quote).
+guard_payload() {
+	_gp_cmd=$(printf '%s' "$2" | sed 's/\\/\\\\/g; s/"/\\"/g')
+	_gp_at=
+	[ -n "$1" ] && _gp_at=",\"agent_id\":\"a1b2c3d4e5f60718\",\"agent_type\":\"$1\""
+	printf '{"session_id":"%s","cwd":"/tmp/x","permission_mode":"default","hook_event_name":"PreToolUse"%s,"tool_name":"Bash","tool_input":{"command":"%s","description":"d"},"tool_use_id":"%s"}' \
+		"$TSESSION" "$_gp_at" "$_gp_cmd" "$TUSE"
+}
+# guard <agent_type or empty> <command> [env…] — run the hook on that payload.
+guard() {
+	_g_at=$1
+	_g_cmd=$2
+	shift 2
+	guard_payload "$_g_at" "$_g_cmd" >"$SCRATCH/guard-414.json"
+	t_run_split env TRACE_DIR="$TDIR" "$@" sh "$GUARD" <"$SCRATCH/guard-414.json"
+}
+if [ -f "$GUARD" ]; then
+	assert_status 0 "adapters/claude-code/hooks/tool-pre-guard.sh parses under sh -n" -- sh -n "$GUARD"
+else
+	fail "adapters/claude-code/hooks/tool-pre-guard.sh does not exist"
+fi
+
+new_trace
+guard general-purpose 'pkill -f tests/x'
+[ "$S_STATUS" = 2 ] && pass "a spawned sub-agent's 'pkill -f tests/x' is blocked with exit 2" ||
+	fail "a spawned sub-agent's pkill exited $S_STATUS, not 2: $S_ERR"
+# Anchored at the start: this very worktree's path holds the rule's name, and
+# a "No such file" error quoting it must not read as the rule named.
+case $S_ERR in kill-guard:*) pass "and stderr names the rule, kill-guard" ;;
+*) fail "stderr does not name the rule: $S_ERR" ;; esac
+[ -z "$S_OUT" ] && pass "and says nothing on stdout" || fail "the guard printed on stdout: $S_OUT"
+[ "$(events | grep -c '')" = 1 ] && [ "$(ev_of note | grep -c '')" = 1 ] &&
+	pass "the refusal is recorded as exactly one note" ||
+	fail "the refusal wrote $(events | grep -c '') line(s): $(events)"
+GN=$(ev_of note | sed -n '1p')
+[ "$(str "$GN" outcome)" = denied ] && [ "$(str "$GN" subject)" = "session:$TSESSION" ] &&
+	[ "$(str "$GN" rule)" = kill-guard ] && [ "$(str "$GN" tool_use_id)" = "$TUSE" ] &&
+	pass "the note is outcome=denied on the session, naming the rule and the call" ||
+	fail "the note is not denied/session/rule/call: $GN"
+
+# The operator's own session carries no agent_type and is never refused.
+new_trace
+guard '' 'pkill -f tests/x'
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$(events)" ] &&
+	pass "the operator's own 'pkill -f tests/x' passes through, exit 0, nothing recorded" ||
+	fail "the operator's own pkill exited $S_STATUS or wrote: $S_OUT $(events)"
+
+# Signalling a job or a pid the sub-agent holds passes through.
+for c in 'kill %1' 'kill 12345' 'kill -9 12345' 'kill -s TERM 12345' 'sleep 30 & kill $!' \
+	'grep -n pkill adapters/claude-code/hooks/tool-pre-guard.sh' "rg 'pkill|killall' ." \
+	'git log --grep=killall'; do
+	new_trace
+	guard general-purpose "$c"
+	[ "$S_STATUS" = 0 ] && [ -z "$(events)" ] &&
+		pass "a spawned sub-agent's '$c' passes through" ||
+		fail "a spawned sub-agent's '$c' exited $S_STATUS: $S_ERR"
+done
+
+# Signalling by name, in each shape, is blocked.
+for c in 'killall node' '/usr/bin/pkill -f vitest' 'cd tests && pkill -f x' 'sudo pkill x' \
+	'kill -9 $(pgrep -f tests/x)' 'pgrep -f tests/x | xargs kill' 'kill -TERM vitest' \
+	'timeout 5 killall sh' 'true; pkill x'; do
+	new_trace
+	guard general-purpose "$c"
+	[ "$S_STATUS" = 2 ] && pass "a spawned sub-agent's '$c' is blocked" ||
+		fail "a spawned sub-agent's '$c' exited $S_STATUS, not 2: $S_ERR"
+done
+
+# A tool that is not Bash is not the guard's business, whatever its input says.
+new_trace
+guard_payload general-purpose 'pkill x' | sed 's/"tool_name":"Bash"/"tool_name":"Grep"/' >"$SCRATCH/guard-grep-414.json"
+t_run_split env TRACE_DIR="$TDIR" sh "$GUARD" <"$SCRATCH/guard-grep-414.json"
+[ "$S_STATUS" = 0 ] && pass "a Grep call whose input names pkill passes through" ||
+	fail "a non-Bash call exited $S_STATUS"
+
+# Tracing off still blocks: the refusal is the guard, the note is a record.
+new_trace
+guard_payload general-purpose 'pkill -f tests/x' >"$SCRATCH/guard-414.json"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$GUARD" <"$SCRATCH/guard-414.json"
+[ "$S_STATUS" = 2 ] && [ -z "$(events)" ] && pass "with tracing off the pkill is still blocked, and nothing is written" ||
+	fail "with tracing off the guard exited $S_STATUS"
+
+# WITHOUT NODE it fails CLOSED for a sub-agent: a payload naming a kill-by-name
+# word is blocked rather than waved through unread.
+new_trace
+guard general-purpose 'pkill -f tests/x' PATH="$(no_node_path)"
+[ "$S_STATUS" = 2 ] && pass "with node off PATH a sub-agent's pkill is still blocked" ||
+	fail "with node off PATH the guard exited $S_STATUS: $S_ERR"
+new_trace
+guard general-purpose 'kill %1' PATH="$(no_node_path)"
+[ "$S_STATUS" = 0 ] && pass "and its 'kill %1' still passes" ||
+	fail "with node off PATH 'kill %1' exited $S_STATUS: $S_ERR"
+
+# THE WIRING: the kit's settings file runs the guard on PreToolUse for Bash.
+if [ "$HAVE_NODE" = 1 ]; then
+	PRE=$(node -e 'const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+		for (const g of (s.hooks.PreToolUse || [])) for (const h of g.hooks || []) console.log(g.matcher + " " + h.command);' "$SETTINGS")
+	case $PRE in Bash\ *tool-pre-guard.sh*) pass "the settings file wires tool-pre-guard.sh on PreToolUse, matcher Bash" ;;
+	*) fail "the settings file does not wire the guard on PreToolUse for Bash: $PRE" ;; esac
+else
+	echo "  skip  node is not on PATH — the PreToolUse wiring check needs a JSON parser"
 fi
 
 t_done "trace hooks"
