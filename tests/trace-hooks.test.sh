@@ -1776,4 +1776,82 @@ for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
 	esac
 done
 
+# ---------------------------------------------------------------------------
+banner "No node: the reason names the fix, and the README says where it goes (#350)"
+# ---------------------------------------------------------------------------
+# Section 7 holds that a hook without node records a reason naming node. The
+# retro of 2026-10-01 (finding F5a) found 4 of 4 session.usage and 41 agent.stop
+# events in one window failing exactly that way, in a repository whose node is
+# managed per user and lives nowhere the hooks' PATH reaches. The reason said
+# what was missing and nothing about what to do; the fix is a personal,
+# uncommitted settings entry in the agent harness — never a committed machine
+# path — and the event is where an operator first meets the gap. So the reason
+# names that file, and points at the adapter README section that gives the
+# entry's shape. Driven RED first against the section-7 reason and a README
+# with no such section.
+if env PATH="$NONODE" sh -c 'command -v node >/dev/null 2>&1'; then
+	echo "  skip  the scrubbed PATH still finds node — the leg would prove nothing"
+else
+	for h in session-end subagent-stop; do
+		case $h in
+		session-end) P="$SCRATCH/end.json" K=session.usage ;;
+		*) P="$SCRATCH/sub-stop.json" K=agent.stop ;;
+		esac
+		new_trace
+		t_run_split env PATH="$NONODE" TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS= sh "$HOOKS/$h.sh" <"$P"
+		[ "$S_STATUS" = 0 ] && pass "$h.sh still exits 0 with no node on PATH" ||
+			fail "$h.sh exited $S_STATUS with no node: $S_ERR"
+		F=$(ev_of "$K" | sed -n '1p')
+		R=$(str "$F" reason)
+		case $R in
+		*node*) pass "$K's reason still names node" ;;
+		*) fail "$K's reason no longer names node: $F" ;;
+		esac
+		case $R in
+		*settings.local.json*) pass "and names the personal settings file the path goes in" ;;
+		*) fail "$K's reason does not say where the path goes (no settings.local.json): $F" ;;
+		esac
+		case $R in
+		*adapters/claude-code/README.md*) pass "and points at the adapter README for the entry's shape" ;;
+		*) fail "$K's reason does not point at adapters/claude-code/README.md: $F" ;;
+		esac
+		case $R in
+		*/home/* | */Users/* | */root/*) fail "$K's reason carries a machine path: $F" ;;
+		*) pass "and carries no machine path of its own" ;;
+		esac
+	done
+fi
+
+# The README section the reason points at. Its heading names the case (node
+# managed per user); its body gives the settings file, the env block and the
+# PATH key; and it holds no absolute machine path — a path that is right on
+# one machine is wrong on every other, and a reader copies the nearest
+# example. The section is the heading through to the next heading.
+ADAPTER_README="$KIT/adapters/claude-code/README.md"
+SECTION=$(awk '
+	/^#+ / && found { exit }
+	/^#+ / && tolower($0) ~ /node/ && tolower($0) ~ /per user/ { found = 1 }
+	found { print }
+' "$ADAPTER_README")
+if [ -n "$SECTION" ]; then
+	pass "adapters/claude-code/README.md has a section on node managed per user"
+	for want in settings.local.json '"env"' PATH; do
+		case $SECTION in
+		*"$want"*) pass "and the section names $want" ;;
+		*) fail "the section never names $want" ;;
+		esac
+	done
+	case $SECTION in
+	*uncommitted* | *"not committed"* | *"never committed"*) pass "and says the entry is uncommitted" ;;
+	*) fail "the section does not say the entry stays uncommitted" ;;
+	esac
+	if printf '%s\n' "$SECTION" | grep -Eq '(^|[^A-Za-z0-9_])/(home|Users|root|opt|usr|nix|var)/'; then
+		fail "the section names an absolute machine path: $(printf '%s\n' "$SECTION" | grep -E '/(home|Users|root|opt|usr|nix|var)/' | sed -n '1p')"
+	else
+		pass "and names no absolute machine path"
+	fi
+else
+	fail "adapters/claude-code/README.md has no heading naming node managed per user"
+fi
+
 t_done "trace hooks"
