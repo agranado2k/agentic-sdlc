@@ -626,6 +626,17 @@ skeleton (K0).
   a refused one is named by comment and position. The snapshot itself is held
   to metadata only: no command in it selects a body. It also holds the
   trust-boundary paragraph in the kit's manual and the template.
+- `sh tests/stamp.test.sh` holds `scripts/stamp.sh`, the one way `/implement`
+  reads its ticket's `Tier:`, `Confidence:` and `Domain:` lines (#331): the
+  issue number in, the body fetched through a stub tracker CLI, the bare
+  lines lifted and checked. Four statuses, each driven red first — 0 with the
+  checked lines and nothing else on stdout; 2 for a refused value, nothing on
+  stdout and the field named, never the text; 3 for a ticket with no stamp
+  lines or a project with no checker, never a refusal and never an unchecked
+  line; 4 for a fetch that failed on its one retry. The bodies are hostile: a
+  quote that closes its own argument, a no-break space in a value or a key, a
+  zero-width space, markdown-wrapped lines, a caller's UTF-8 locale and a
+  foreign clone's checker under the caller's cwd.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
   over a PRD issue body and `/dogfood` over product output it can capture
@@ -851,6 +862,7 @@ sh tests/forge-broker.test.sh                          # the broker lands a disp
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
+sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
