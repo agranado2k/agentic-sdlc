@@ -195,10 +195,6 @@ stamp=$(grep -F -- "sh scripts/vocab.sh" "$SKILL_ABS" | head -1)
 stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
-# stamp_lacks <fixed string> <why> — the sentence a ruling removed stays gone.
-stamp_lacks() {
-	printf '%s\n' "$stamp" | grep -qF -- "$1" && fail "the stamp bullet still says '$1' — $2" || pass "no '$1' — $2"
-}
 stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
 stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
 # The filter reads a key the way the checker does — any case, indented or not
@@ -275,7 +271,7 @@ weakened() {
 weakened "the tier left standing" 's/does not stand on its own/stands on its own/'
 weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
 weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
-stamp_lacks "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
+assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
 stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
 # is unchanged, and the orphan line is said in the report — never a reason to
