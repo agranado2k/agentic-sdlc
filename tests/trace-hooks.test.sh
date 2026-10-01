@@ -2107,6 +2107,58 @@ if [ "$HAVE_NODE" = 1 ]; then
 	SR=$(str "$ES" reason)
 	[ "$SR" = "Something went wrong" ] && pass "a single-line error's first line is: '$SR'" ||
 		fail "a single-line error's reason is '$SR', expected 'Something went wrong'"
+
+	# An error with double quotes (shell metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Error opening \\\"config.json\\\""}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dquote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dquote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with double quotes exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDQ=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDQ" outcome)" = fail ] && pass "the event records the double-quote error" ||
+		fail "the outcome is not fail: $EDQ"
+
+	# An error with dollar sign (shell variable expansion metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Invalid value: \\$VAR"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dollar-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dollar-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with dollar sign exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDL=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDL" outcome)" = fail ] && pass "the event records the dollar-sign error" ||
+		fail "the outcome is not fail: $EDL"
+
+	# An error with backtick (shell command substitution metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Failed: `whoami`"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backtick-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backtick-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backtick exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBK=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBK" outcome)" = fail ] && pass "the event records the backtick error" ||
+		fail "the outcome is not fail: $EBK"
+
+	# An error with backslash (shell escape character)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Path: C:\\\\Users\\\\file"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backslash-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backslash-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backslash exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBS=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBS" outcome)" = fail ] && pass "the event records the backslash error" ||
+		fail "the outcome is not fail: $EBS"
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi

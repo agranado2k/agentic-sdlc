@@ -136,16 +136,22 @@ try {
 
 // THE FIRST LINE OF AN ERROR, when the result is from a failed tool call.
 // This becomes the `reason` field on the event: the hook can parse it without
-// a second pass. Bounded to one line, with control characters removed: a shell
-// value that carries a newline would forge a second row.
+// a second pass. Bounded to one line, with control characters removed and shell
+// metacharacters escaped: a shell value that carries a newline would forge a
+// second row, and unescaped quotes or dollar signs would break shell syntax.
 let errorFirstLine = "";
 if (from === "error" && typeof payload.error === "string" && payload.error.length > 0) {
   // Extract the first line: split on \n or \r\n, take the first part
   const lines = payload.error.split(/\r?\n/);
   if (lines.length > 0 && lines[0].length > 0) {
     errorFirstLine = lines[0];
-    // Trim to 300 characters for reasonable line length, and remove control characters
-    errorFirstLine = errorFirstLine.substring(0, 300).replace(/[\u0000-\u001f\u007f]/gu, " ");
+    // Trim to 300 characters for reasonable line length
+    errorFirstLine = errorFirstLine.substring(0, 300);
+    // Remove control characters (DEL and \x00–\x1f)
+    errorFirstLine = errorFirstLine.replace(/[\u0000-\u001f\u007f]/gu, " ");
+    // Escape shell metacharacters for safe use in double-quoted strings:
+    // backslash, double quote, dollar sign, backtick
+    errorFirstLine = errorFirstLine.replace(/[\\\"$`]/g, "\\$&");
   }
 }
 
