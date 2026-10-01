@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8)
 
 ## Context and problem statement
 
@@ -148,6 +148,74 @@ Chosen: **option 1**.
    in the one place it looks. `/pr-iterate`'s `feedback` keeps three
    words: it emits on a human comment that changed the plan, so it never
    has a question nobody answered.
+   *Amended 2026-10-01 (#348):* **every kind holds `outcome` to a
+   vocabulary of its own.** The kind set was closed from the start and the
+   outcome was left open per kind, so the retrospective of 2026-10-01
+   (finding F8) found three `review.verdict` events carrying a whole
+   sentence where a verdict belonged, and every reader counting verdicts
+   missed them. `scripts/trace.sh` now refuses an outcome its kind does not
+   declare — exit 2, naming the kind, the value and the vocabulary, the
+   vocabulary checker's shape — and `verify` names every line already
+   written with one as an advisory on stderr, file and line, the verdict
+   unchanged, the way it treats an old subject spelling; `summary` and
+   `export` say the count once. History is never rewritten. The table,
+   which the script carries beside its kind list and the trace suite
+   holds row for row to it:
+   - `session.start` `fail` · `session.end` none · `session.usage` `ok`
+     `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail`
+   - `run.start` none · `run.end` `ok` `stopped`
+   - `spawn` `dispatched` `in-session` `refused` · `spawn.end` `ok` `fail`
+     `timeout` `budget` `unreachable`
+   - `prd.write` `published` · `ticket.write` `stamped` · `ticket.start`
+     `read` `defaulted` `disputed` · `tdd.cycle` `red` `green` `refactor`
+   - `review.verdict` `pass` `blocked` `confirm` · `finding.raise` `raised`
+     · `finding.triage` `accepted` `rejected` `escalated` `answered` ·
+     `finding.dismiss` `dismissed`
+   - `pr.open` `opened` · `pr.iterate` `green` `red` `stopped` ·
+     `merge.land` `landed` `skipped` `stopped` · `feedback` `hit`
+     `adjusted` `missed` `unasked`
+   - `hypothesis` `proposed` `confirmed` `refuted` `inconclusive` ·
+     `spike.verdict` `true` `false` `inconclusive` · `brief.decide`
+     `presented` `recorded` · `housekeeping.finding` `ticket` `deepening`
+     `brief` `deletion` `none` · `worktree.prune` `removed` `kept` ·
+     `grill.decision` `accepted` `overridden`
+   - `note` open — any one word, `[a-z][a-z0-9-]*`, never a sentence
+   What was decided beside the table:
+   - **No outcome is legal on every kind.** The field is optional, as
+     every field but the kind is; the agent-harness adapter writes a
+     successful `agent.stop` and `session.usage` with none, and a refusal
+     there would turn the commonest event into a failure.
+   - **An alternation is not a word.** The skills print every vocabulary
+     as `pass|blocked`; a value carrying `|` is refused even though each
+     word in it is declared, because the line copied whole is the likeliest
+     typo there is (H-1, review of PR #380).
+   - **A kind marked none carries no outcome at all** — `run.start` and
+     `session.end` — and refuses one: an outcome on the opening of a run is
+     a caller's mistake, not a fact. **`note` is the one open kind**,
+     because it is the free remark, and it is held to one word so it
+     cannot carry the sentence this amendment closes everywhere else.
+   - **The words are the emitters'.** Every word a skill, an adapter hook
+     or the shared dispatcher writes today is declared, and the trace suite
+     reads them out of those files and holds each to the table, so a skill
+     cannot gain an outcome this record never decided. `ok` on
+     `agent.stop` and `session.usage` is declared for symmetry with
+     `tool.use`, though the adapter writes none. `denied` on `tool.use` is
+     not declared: the adapter says why a denied call is invisible to it,
+     and a word nobody writes is not one this record decides.
+   - **Words the kit's own trace holds and the table does not** — `run.end`
+     `delivered`, `pr.iterate` `ok` `passed` `pushed`, `spawn` `unreachable`,
+     `spawn.end` `failed`, `ticket.write` `published`, `spike.verdict`
+     `confirmed`, `grill.decision` `decided`, five verdict sentences from
+     the broker below, and six `finding.triage` lines whose quoting folded
+     the rest of the emit into the outcome — were written by sessions
+     improvising, never by a skill's text. The record wins: they stay as
+     history and `verify` advises on each, thirty lines on the day this
+     was decided.
+   - **The kit-only review broker** carried the worker's whole `VERDICT:`
+     line as its outcome. It now writes `pass` for a line opening "not
+     blocking" or the worker contract's own "no findings", `blocked` for
+     one opening "blocking", no outcome when the
+     line opens with neither, and the line itself as the reason.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -274,6 +342,8 @@ Chosen: **option 1**.
   in `/pr-iterate`, and the suites that hold both.
 - Amended for ticket #345: `unasked` on `feedback`, the train's exit
   condition per landing, and the suite section that holds it.
+- Amended for ticket #348: the per-kind outcome vocabulary, the refusal at
+  emit, the advisory in `verify`, and the trace suite's section 22.
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

@@ -208,7 +208,7 @@ Before triaging external bot comments, run **`/review-pr`** locally to get your 
 
 The confirm-list is a **distinct output**: ✅ and ❌ items triage normally below; ⚠️ UNSPECIFIED items bypass the triage table entirely — hard rule 4 makes them human-only.
 
-`/review-pr` normally ends interactively ("Which items would you like me to post?"). **In the `/pr-iterate` context, bypass the question** and consume the Axis-1 findings directly:
+`/review-pr` normally ends interactively ("Which items would you like me to post?"). **In the `/pr-iterate` context, bypass the question**: say in the reviewer's spawn prompt, in those words, do NOT post — its §6 path (a), so it never asks, records each raise as not posted and closes its run — and consume the Axis-1 findings directly:
 
 | Axis-1 finding | What `/pr-iterate` does with it |
 |---|---|

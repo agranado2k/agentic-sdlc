@@ -662,7 +662,18 @@ if [ -s "$TMP/posted" ]; then
 			"data.where=$f_where" data.via=broker "reason=$f_note"
 	done <"$TMP/posted"
 fi
-trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+# The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
+# and the worker's VERDICT line is a sentence: its opening is the contract's
+# "blocking or not", so that is read and nothing else — "not blocking" and
+# the contract's own clean "no findings" are pass, "blocking" is blocked,
+# any other opening carries no outcome — and the sentence goes whole into
+# the reason.
+case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
+'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
+blocking*) VERDICT_WORD=blocked ;;
+*) VERDICT_WORD= ;;
+esac
+trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
 # Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
 # needs the human, `pass` when none does.
 tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
