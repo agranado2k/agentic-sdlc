@@ -2049,4 +2049,168 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"a phantom stop writes no event"*) pass "the adapter README records that a phantom stop writes no event" ;;
 *) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "32. SessionStart records how far its checkout is behind origin/main (#384)"
+# ---------------------------------------------------------------------------
+# Retro 20261001T150216Z, finding G1. The kit's hooks execute the checkout they
+# live in, and that checkout sat ~140 commits behind main for four hours with
+# nothing saying so: every adapter fix of the wave was inert for the kit's own
+# trace. The session-start hook now records the lag as data.behind — read with
+# plain git from the LAST FETCHED origin/main, never a fetch of its own — and,
+# past the policy threshold TRACE_BEHIND_WARN, says so once on stderr. With no
+# origin/main it records nothing and still exits 0.
+#
+# A hook measures the checkout it LIVES in, so each leg copies the hooks and
+# the shared script into a scratch repository with a real remote, and runs the
+# copy. None of these legs needs node.
+
+# behind_kit <dir> — a scratch checkout holding the hooks and trace.sh, one
+# commit, no remote yet.
+behind_kit() {
+	mkdir -p "$1/adapters/claude-code/hooks" "$1/scripts"
+	cp "$HOOKS"/*.sh "$HOOKS"/*.mjs "$1/adapters/claude-code/hooks/"
+	cp "$KIT/scripts/trace.sh" "$KIT/scripts/trace.config.sh" "$1/scripts/"
+	t_git_identity "$1" "Behind Fixture" "behind@example.invalid"
+	git -C "$1" add -A >/dev/null
+	git -C "$1" commit -q -m "chore: the checkout the hooks run from"
+}
+
+# behind_remote <dir> <commits ahead> — give <dir> an origin whose main is
+# <commits ahead> past its HEAD, FETCHED, so the lag is in the last fetched ref.
+behind_remote() {
+	git init -q --bare -b main "$1.remote.git"
+	git -C "$1" remote add origin "$1.remote.git"
+	git -C "$1" push -q origin main 2>/dev/null
+	git clone -q "$1.remote.git" "$1.other" 2>/dev/null
+	t_git_identity "$1.other" "Behind Fixture" "behind@example.invalid" >/dev/null 2>&1
+	_br_i=0
+	while [ "$_br_i" -lt "$2" ]; do
+		_br_i=$((_br_i + 1))
+		git -C "$1.other" commit -q --allow-empty -m "feat: main moves on $_br_i"
+	done
+	git -C "$1.other" push -q origin main 2>/dev/null
+	git -C "$1" fetch -q origin 2>/dev/null
+}
+
+# start_in <dir> [env assignments…] — run <dir>'s copy of the session-start hook
+# on the fixture payload, into a fresh trace. Sets S_* and START.
+start_in() {
+	_si_dir=$1
+	shift
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" "$@" \
+		sh "$_si_dir/adapters/claude-code/hooks/session-start.sh" <"$SCRATCH/start.json"
+	START=$(ev_of session.start | sed -n '1p')
+}
+
+# behind_notes — how many stderr lines of the last run say the checkout is behind.
+behind_notes() { printf '%s\n' "$S_ERR" | grep -c 'behind origin/main' || :; }
+
+# BEHIND BY TWO: the field says 2; past a threshold of 1 the note prints ONCE.
+B2="$SCRATCH/behind-two-384"
+behind_kit "$B2"
+behind_remote "$B2" 2
+start_in "$B2"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a checkout two behind: the hook exits 0, silent on stdout" ||
+	fail "a checkout two behind: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "and its session.start carries data.behind=2" ||
+	fail "a checkout two behind recorded: $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "with no threshold set, nothing is said on stderr — the shipped default is silence" ||
+	fail "with no threshold the hook still said: $S_ERR"
+start_in "$B2" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "past a threshold of 1: still exit 0, silent on stdout, still data.behind=2" ||
+	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT', event $START"
+[ "$(behind_notes)" = 1 ] &&
+	pass "and stderr says so exactly once" ||
+	fail "past the threshold stderr said it $(behind_notes) times: $S_ERR"
+case $S_ERR in *2*'TRACE_BEHIND_WARN'*) pass "the note names the count and the threshold's variable" ;;
+*) fail "the note does not name the count and TRACE_BEHIND_WARN: $S_ERR" ;; esac
+start_in "$B2" TRACE_BEHIND_WARN=2
+[ "$(behind_notes)" = 0 ] &&
+	pass "AT the threshold (2 behind, threshold 2) nothing is said — the note is for MORE than it" ||
+	fail "at the threshold the hook still said: $S_ERR"
+
+# THE POLICY FILE, not only the environment: the kit's twin is how this repo
+# sets it, so the file has to be read the way TRACE_AGENT_WAIT_MS is.
+printf "TRACE_BEHIND_WARN='1'\n" >"$SCRATCH/behind-policy-384.sh"
+start_in "$B2" TRACE_CONFIG="$SCRATCH/behind-policy-384.sh"
+[ "$(behind_notes)" = 1 ] &&
+	pass "a threshold the policy file names is read too" ||
+	fail "the policy file's TRACE_BEHIND_WARN=1 produced: '$S_ERR'"
+start_in "$B2" TRACE_CONFIG="$SCRATCH/behind-policy-384.sh" TRACE_BEHIND_WARN=
+[ "$(behind_notes)" = 0 ] &&
+	pass "and an environment value of '' turns it off even when the file names one" ||
+	fail "an empty environment threshold still printed: $S_ERR"
+
+# A MALFORMED THRESHOLD is refused, named, and never a failure.
+start_in "$B2" TRACE_BEHIND_WARN='ten'
+[ "$S_STATUS" = 0 ] && [ "$(behind_notes)" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "a malformed threshold: exit 0, no behind note, the field still recorded" ||
+	fail "a malformed threshold: exit $S_STATUS, event $START, stderr '$S_ERR'"
+case $S_ERR in *TRACE_BEHIND_WARN*ten*) pass "and the refused value is named on stderr" ;;
+*) fail "the malformed threshold was not named: $S_ERR" ;; esac
+
+# NEVER A FETCH: main moves again on the remote, unfetched; the hook still
+# reads the last fetched ref, so the count does not move.
+git -C "$B2.other" commit -q --allow-empty -m "feat: main moves, unfetched"
+git -C "$B2.other" push -q origin main 2>/dev/null
+start_in "$B2"
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "a commit pushed but not fetched does not count — the hook never fetches" ||
+	fail "after an unfetched push the hook recorded: $START"
+
+# LEVEL: the field says 0, and no threshold makes a note of it.
+L0="$SCRATCH/level-384"
+behind_kit "$L0"
+behind_remote "$L0" 0
+start_in "$L0" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 0 ] &&
+	pass "a checkout level with origin/main records data.behind=0" ||
+	fail "a level checkout: exit $S_STATUS, event $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "and says nothing, even at threshold 0" ||
+	fail "a level checkout still said: $S_ERR"
+
+# NO REMOTE: no field, exit 0, nothing on either stream about it.
+N0="$SCRATCH/no-remote-384"
+behind_kit "$N0"
+start_in "$N0" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -n "$START" ] &&
+	pass "a checkout with no origin/main: exit 0, silent, the session.start still written" ||
+	fail "no remote: exit $S_STATUS, stdout '$S_OUT', event '$START', stderr '$S_ERR'"
+case $START in *'"behind"'*) fail "a checkout with no origin/main recorded a behind field: $START" ;;
+*) pass "and it carries no behind field" ;; esac
+[ "$(behind_notes)" = 0 ] &&
+	pass "and nothing is said about a lag it cannot read" ||
+	fail "with no remote the hook still said: $S_ERR"
+
+# NOT A REPOSITORY AT ALL: the hooks copied somewhere git does not answer.
+NG="$SCRATCH/no-git-384"
+mkdir -p "$NG/adapters/claude-code/hooks" "$NG/scripts"
+cp "$HOOKS"/*.sh "$HOOKS"/*.mjs "$NG/adapters/claude-code/hooks/"
+cp "$KIT/scripts/trace.sh" "$KIT/scripts/trace.config.sh" "$NG/scripts/"
+start_in "$NG" GIT_CEILING_DIRECTORIES="$SCRATCH" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	case $START in *'"behind"'*) false ;; *) true ;; esac &&
+	pass "outside any repository: exit 0, silent, no behind field" ||
+	fail "outside a repository: exit $S_STATUS, stdout '$S_OUT', event '$START'"
+
+# THE POLICY. The shipped file documents the variable and leaves it empty; the
+# kit's twin sets it.
+grep -q "^TRACE_BEHIND_WARN=''$" "$KIT/scripts/trace.config.sh" &&
+	pass "scripts/trace.config.sh documents TRACE_BEHIND_WARN and ships it empty" ||
+	fail "scripts/trace.config.sh has no empty TRACE_BEHIND_WARN line"
+grep -qE "^TRACE_BEHIND_WARN='[1-9][0-9]*'$" "$KIT/scripts/trace.kit.config.sh" &&
+	pass "the kit's own policy file sets a threshold" ||
+	fail "scripts/trace.kit.config.sh sets no TRACE_BEHIND_WARN"
+
+# THE READER. /housekeeping's checklist names the value and where it comes from.
+d=$(tr '\n' ' ' <"$KIT/.agents/skills/housekeeping/CHECKLIST.md" | tr -s ' ')
+case $d in *'session.start'*'data.behind'*) pass "the housekeeping checklist names the last session.start's data.behind" ;;
+*) fail "the housekeeping checklist does not name session.start's data.behind" ;; esac
+
 t_done "trace hooks"

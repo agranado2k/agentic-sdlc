@@ -43,6 +43,13 @@ TRACE_TOOLS=1
 # all — and the kit's own trace holds hundreds of those.
 TRACE_AGENT_WAIT_MS='1000'
 
+# THE ROOT CHECKOUT'S LAG (ticket #384). The kit's hooks run from the root
+# checkout, which sat ~140 commits behind main for four hours on 2026-10-01
+# while every adapter fix of the wave stayed inert for this trace (retro
+# 20261001T150216Z, G1). Twenty: a busy day lands that many PRs here, so a root
+# past it has missed a day's merges — the point where a fix is likely inert.
+TRACE_BEHIND_WARN='20'
+
 # ---------------------------------------------------------------------------
 # THE PRICE TABLE — the SHAPE is here; the numbers are the operator's.
 #
