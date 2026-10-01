@@ -1776,4 +1776,123 @@ for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
 	esac
 done
 
+# ---------------------------------------------------------------------------
+banner "29. One message id, two usage blocks: the last one is the message's usage"
+# ---------------------------------------------------------------------------
+# Ticket #343, retro 20261001T093317Z finding F5c. A response that opens with a
+# thinking block is written as a line carrying a PARTIAL usage snapshot, then
+# as the tool-use or text line carrying the final one — same message.id, same
+# requestId, a different output_tokens. The byte-identical-usage decision did
+# not hold, and the drift refusal turned 60 real subagent stops into `fail`.
+# The fixture pair is one real captured session (2.1.285) with one subagent;
+# its cost-state line is the oracle, exactly as section 5's is: the session's
+# usage plus the subagent's must equal it, and that holds only if the LAST
+# block per id is the one counted (the first gives tok_out 307, not 419).
+TFIX="$FIX/thinking-transcript.redacted.jsonl"
+TSUB="$FIX/thinking-subagent-transcript.redacted.jsonl"
+TMODEL=claude-haiku-4-5-20251001
+TSESSION343=bb589627-2e22-472c-a3fc-92fa18e27ce4
+TAGENT343=acfe6f1fbadd45fac
+# The premise, checked rather than assumed: one id, two different tok_out.
+tdup=$(grep -o '"id":"msg_011CfZXyUJMx7CpnvxyFG4X1"' "$TSUB" | wc -l | tr -d ' ')
+[ "$tdup" = 2 ] && grep -q '"output_tokens":1,' "$TSUB" && grep -q '"output_tokens":113,' "$TSUB" &&
+	pass "premise: the subagent fixture carries one id twice, output_tokens 1 then 113" ||
+	fail "premise: the fixture no longer carries the two-block id"
+# trollup <key> — one number from the thinking fixture's cost-state line.
+trollup() {
+	sed -n '$p' "$TFIX" | sed -n 's/.*"'"$TMODEL"'":{\([^}]*\)}.*/\1/p' |
+		sed -n 's/.*"'"$1"'":\([0-9]*\).*/\1/p'
+}
+if [ "$HAVE_NODE" = 1 ]; then
+	t_run_split node "$EXTRACTOR" "$TSUB"
+	[ "$S_STATUS" = 0 ] && pass "the extractor reads the two-block transcript (exit 0)" ||
+		fail "the extractor exited $S_STATUS on the two-block transcript: $S_ERR"
+	[ "$S_OUT" = "$TMODEL 18 158 15600 13892 2 msg_011CfZXycwXfJKUZUXVPyGsv" ] &&
+		pass "one row: the last block per id, two messages, nothing from the superseded block" ||
+		fail "the row is '$S_OUT'"
+
+	# The demo: the subagent-stop hook over the fixture.
+	new_trace
+	set_key transcript_path "$SCRATCH/thinking-main-343.jsonl" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$SCRATCH/thinking-sub-343.jsonl" |
+		set_key session_id "$TSESSION343" | set_key agent_id "$TAGENT343" >"$SCRATCH/thinking-stop-343.json"
+	cp "$TFIX" "$SCRATCH/thinking-main-343.jsonl"
+	cp "$TSUB" "$SCRATCH/thinking-sub-343.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/thinking-stop-343.json"
+	[ "$S_STATUS" = 0 ] && pass "the subagent-stop hook exits 0" || fail "the hook exited $S_STATUS: $S_ERR"
+	[ "$(ev_of agent.stop | wc -l | tr -d ' ')" = 1 ] && pass "exactly one agent.stop event" ||
+		fail "expected one agent.stop, got: $(ev_of agent.stop)"
+	A=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$A" outcome)" != fail ] && [ -n "$(num "$A" tok_out)" ] &&
+		pass "it carries tokens, not a fail" || fail "the agent.stop is: $A"
+	[ "$(str "$A" model)" = "$TMODEL" ] && pass "and names $TMODEL" || fail "model is '$(str "$A" model)'"
+
+	# The oracle: session.usage + agent.stop = the rollup, all four counts.
+	set_key transcript_path "$SCRATCH/thinking-main-343.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$TSESSION343" >"$SCRATCH/thinking-end-343.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/thinking-end-343.json" >/dev/null 2>&1
+	for pair in tok_in:inputTokens tok_out:outputTokens \
+		tok_cache_w:cacheCreationInputTokens tok_cache_r:cacheReadInputTokens; do
+		f=${pair%:*}
+		key=${pair#*:}
+		want=$(trollup "$key")
+		got=$(($(sum_tok "$f" session.usage) + $(sum_tok "$f" agent.stop)))
+		[ -n "$want" ] && [ "$got" = "$want" ] &&
+			pass "$f: session.usage + agent.stop = $want, the rollup's $key" ||
+			fail "$f: the trace totals $got, the rollup says '$want'"
+	done
+
+	# The superseded block is still READ: shape drift on it is still drift.
+	sed '12s/"output_tokens":/"output_tokenz":/' "$TSUB" >"$SCRATCH/thinking-drift-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-drift-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *output_tokens*) true ;; *) false ;; esac &&
+		pass "a renamed usage key on the superseded line still exits 2, naming the key" ||
+		fail "a renamed key on the superseded line: exit $S_STATUS, '$S_ERR'"
+	sed '13s/"model":"[^"]*"/"model":"claude-other-1"/' "$TSUB" >"$SCRATCH/thinking-model-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-model-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"different model"*) true ;; *) false ;; esac &&
+		pass "the same id under a different model is still drift, and says so" ||
+		fail "a changed model under one id: exit $S_STATUS, '$S_ERR'"
+	sed '13s/"requestId":"[^"]*"/"requestId":"req_other"/' "$TSUB" >"$SCRATCH/thinking-req-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-req-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"different requestId"*) true ;; *) false ;; esac &&
+		pass "the same id under a different requestId is still drift, and says so" ||
+		fail "a changed requestId under one id: exit $S_STATUS, '$S_ERR'"
+	sed '13s/"model":"[^"]*",//' "$TSUB" >"$SCRATCH/thinking-nomodel-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-nomodel-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"message.model"*) true ;; *) false ;; esac &&
+		pass "a missing model on the final block is still drift, naming the key" ||
+		fail "a missing model: exit $S_STATUS, '$S_ERR'"
+
+	# THE SUPERSEDING RULE IS NARROW (review of PR #363, M-1). Only a later
+	# block that GROWS output_tokens with the other three counts equal is the
+	# final snapshot. The same pair written final-first would sum 46 where the
+	# truth is 158 — so a shrinking output, or any change in the input or cache
+	# counts, is still drift: exit 2, naming the id and the field.
+	sed -n '13p' "$TSUB" >"$SCRATCH/thinking-l13-343.jsonl"
+	{ sed -n '1,11p' "$TSUB"; cat "$SCRATCH/thinking-l13-343.jsonl"; sed -n '12p;14,$p' "$TSUB"; } >"$SCRATCH/thinking-swap-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-swap-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *msg_011CfZXyUJMx7CpnvxyFG4X1*tok_out*) true ;; *) false ;; esac &&
+		pass "the pair written final-first (output 113 then 1) is drift, naming the id and tok_out" ||
+		fail "the final-first pair: exit $S_STATUS, row '$S_OUT', '$S_ERR'"
+	for pair in tok_in:input_tokens tok_cache_w:cache_creation_input_tokens tok_cache_r:cache_read_input_tokens; do
+		f=${pair%:*}
+		key=${pair#*:}
+		sed '13s/"'"$key"'":\([0-9]*\)/"'"$key"'":9\1/' "$TSUB" >"$SCRATCH/thinking-$f-343.jsonl"
+		t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-$f-343.jsonl"
+		[ "$S_STATUS" = 2 ] && case $S_ERR in *msg_011CfZXyUJMx7CpnvxyFG4X1*"$f"*) true ;; *) false ;; esac &&
+			pass "a later block whose $f differs is drift, naming the id and $f" ||
+			fail "a later block with a different $f: exit $S_STATUS, row '$S_OUT', '$S_ERR'"
+	done
+
+	# A delta read anchored on the two-block id counts it once, in the earlier
+	# read, and the anchor's later block is not a new message.
+	t_run_split node "$EXTRACTOR" --after msg_011CfZXyUJMx7CpnvxyFG4X1 "$TSUB"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$TMODEL 8 45 1708 13892 1 msg_011CfZXycwXfJKUZUXVPyGsv" ] &&
+		pass "--after the two-block id counts only the message after it" ||
+		fail "--after the two-block id: exit $S_STATUS, '$S_OUT'"
+else
+	echo "  skip  node is not on PATH — the two-block legs need the extractor"
+fi
+
 t_done "trace hooks"
