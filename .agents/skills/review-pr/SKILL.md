@@ -52,7 +52,7 @@ Agents 1–6 are **Axis 1 — Standards** ("is it built right?"). Agent 7 is **A
 
 All agents MUST only analyze code within the branch scope defined in step 0.
 
-**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. Record each spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=pr:#<N> tier=reviewer model=$model outcome=in-session data.agent='<agent number and name>' reason='<what this agent audits, one line>' || :`.
+**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. Record each spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=pr:#<N> tier=reviewer model=$model outcome=in-session data.agent='<agent number and name>' reason='<what this agent audits, one line>' || :`. When each agent completes or fails, record its end: `sh scripts/trace.sh emit kind=spawn.end subject=pr:#<N> outcome=ok|fail reason='<the agent result or the reason for the failure>' || :`.
 
 #### Agent 1 — Security Sentinel
 

@@ -417,4 +417,33 @@ EOF
 	[ "$bad" = 0 ] || true
 done
 
+# ---------------------------------------------------------------------------
+banner "10. Every in-session spawn has a corresponding spawn.end in the same step"
+# ---------------------------------------------------------------------------
+# When /implement or /review-pr spawn a reviewer in-session (outcome=in-session),
+# they must record the completion with a spawn.end event carrying outcome=ok|fail.
+# This ensures the trace captures both the start and end of the reviewer execution,
+# with the outcome (ok if the review completed, fail if it did not).
+for s in implement review-pr; do
+	f=$(skill_md "$s")
+	spans=$(t_trace_spans "$f")
+
+	# Extract all in-session spawn spans from this skill (only actual trace spans)
+	in_session_spawns=$(printf '%s\n' "$spans" | grep -F 'kind=spawn' | grep -F 'outcome=in-session')
+
+	if [ -z "$in_session_spawns" ]; then
+		pass "/$s has no in-session spawns"
+		continue
+	fi
+
+	# Check if spawn.end exists for this skill at all
+	has_spawn_end=$(printf '%s\n' "$spans" | grep -qF 'kind=spawn.end' && echo yes || echo no)
+
+	if [ "$has_spawn_end" = "yes" ]; then
+		pass "/$s has spawn.end for in-session spawns"
+	else
+		fail "/$s has in-session spawns but no kind=spawn.end — every in-session spawn must have a corresponding spawn.end"
+	fi
+done
+
 t_done "trace skills contract"
