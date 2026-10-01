@@ -1234,8 +1234,9 @@ span=$(t_trace_spans "$PI" | grep -F 'kind=finding.dismiss')
 dismiss_iteration() {
 	scr="$D18/scratch.$$"
 	rm -rf "$scr" && mkdir -p "$scr"
-	(cd "$ROOT" && PATH="$D18/bin:$PATH" PR=7 scratch="$scr" GH_THREADS="$2" GH_COMMENTS="$D18/comments" GH_ME=iterbot \
+	(cd "$ROOT" && PATH="$D18/bin:$PATH" PR=7 scratch="$scr" GH_THREADS="$2" GH_COMMENTS="$D18/comments" GH_ME="${ME-iterbot}" \
 		sh -c '. "$1"; . "$2"' _ "$D18/fn.sh" "$D18/call.sh") >"$D18/rows" 2>"$D18/rows.err"
+	FENCE_RC=$?
 	while read -r thread where by; do
 		cmd=$(printf '%s\n' "$span" | sed -e 's/ *|| *:$//' -e 's/#<N>/#7/g' -e 's/data\.via=thread|review/data.via=thread/' \
 			-e "s|'<file:line>'|'$where'|" -e "s|'<the forge id[^>]*>'|'$thread'|" \
@@ -1271,6 +1272,11 @@ done
 # pair a reader counts once is the same pair: nothing new.
 dismiss_iteration "$TR18" "$D18/threads"
 pairs "$TR18" | sort -u >"$D18/after2"
+# The repeat is visible, not collapsed: two raw events, one pair. A later
+# dedupe, or a second iteration that drifts to another pair, shows here.
+raw=$(cat "$TR18"/events/*.jsonl 2>/dev/null | grep -c '"kind":"finding.dismiss"')
+[ "$raw" = 2 ] && pass "iteration 2 repeats the same event (2 raw, by ADR-0008's stated limitation)" ||
+	fail "after two iterations the trace should hold 2 raw finding.dismiss events; it holds $raw"
 [ -s "$D18/after1" ] && cmp -s "$D18/after1" "$D18/after2" && pass "iteration 2 over the same closed thread adds no new pair: the dismissal is counted once" ||
 	fail "iteration 2 added a pair: $(tr '\n' '|' <"$D18/after2")"
 # A path holding anything the emit may not carry is never typed into the line.
@@ -1279,5 +1285,19 @@ dismiss_iteration "$D18/trace.unsafe" "$D18/threads.unsafe"
 [ "$(pairs "$D18/trace.unsafe")" = 'pr:#7 PRRT_quote unsafe-path' ] &&
 	pass "a path with a quote in it is recorded as data.where=unsafe-path" ||
 	fail "a path with a quote in it should be recorded as unsafe-path; got '$(pairs "$D18/trace.unsafe")'"
+# The thread id is typed into the line too: held to the same rule (review of
+# PR #430, M-1).
+printf '.id=PRRT_q'"'"'x%s.isResolved=true%s.comments.nodes[0].databaseId=107%s.isOutdated=false%s.resolvedBy.login=bob%s.path=a.sh%s.originalLine=9\n' "$T" "$T" "$T" "$T" "$T" "$T" >"$D18/threads.qid"
+dismiss_iteration "$D18/trace.qid" "$D18/threads.qid"
+[ "$(pairs "$D18/trace.qid")" = 'pr:#7 unsafe-thread a.sh:9' ] &&
+	pass "a thread id with a quote in it is recorded as data.thread=unsafe-thread" ||
+	fail "a thread id with a quote in it should be recorded as unsafe-thread; got '$(pairs "$D18/trace.qid")'"
+# With no login to tell our own resolutions from a human's, nothing is a
+# dismissal: the fence refuses, loudly, and records nothing (review of PR
+# #430, H-1 — `gh api user` is refused to an app token and prints nothing).
+ME='' dismiss_iteration "$D18/trace.nologin" "$D18/threads"
+[ -z "$(pairs "$D18/trace.nologin")" ] && [ "$FENCE_RC" != 0 ] && [ -s "$D18/rows.err" ] &&
+	pass "an empty login records no dismissal, and the fence exits non-zero with a message" ||
+	fail "an empty login should refuse (non-zero, a message, no rows); exit $FENCE_RC, recorded '$(pairs "$D18/trace.nologin" | tr '\n' '|')'"
 
 t_done "trace skills contract"
