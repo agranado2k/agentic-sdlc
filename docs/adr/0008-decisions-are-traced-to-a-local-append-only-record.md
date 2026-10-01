@@ -159,8 +159,8 @@ Chosen: **option 1**.
    written with one as an advisory on stderr, file and line, the verdict
    unchanged, the way it treats an old subject spelling; `summary` and
    `export` say the count once. History is never rewritten. The table,
-   which the script carries as one list and from which its kind list is
-   derived:
+   which the script carries beside its kind list and the trace suite
+   holds row for row to it:
    - `session.start` `fail` · `session.end` none · `session.usage` `ok`
      `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail`
    - `run.start` none · `run.end` `ok` `stopped`

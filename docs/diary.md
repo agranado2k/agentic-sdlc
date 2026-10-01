@@ -1676,7 +1676,8 @@ whose outcome was a whole sentence. The kind set had been closed since #247
 and the outcome left open per kind, so nothing refused it, and every reader
 counting `pass`, `blocked` and `confirm` missed those three. #348 closes it:
 `scripts/trace.sh` carries one table — each kind and the words it declares —
-derives its kind list from it, refuses an undeclared word at emit with exit
+beside its kind list (the skill suites read that line literally, so it stays
+one), refuses an undeclared word at emit with exit
 2 in the vocabulary checker's shape, and `verify` advises on each line
 already written, the verdict unchanged, as it does for an old subject
 spelling. ADR-0008 clause 1 carries the table as a dated amendment.

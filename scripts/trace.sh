@@ -177,10 +177,10 @@ TRACE_EVENT_CAP=4000
 # one open kind, held to a single word ([a-z][a-z0-9-]*) and to nothing else,
 # because a note is the free remark. An emit with no outcome at all is legal
 # on every kind: the field is optional, as every field but kind is. The kind
-# list below is DERIVED from this table, so there is one list and never two.
+# list after it stays a literal line, because the skill suites read it as
+# one; the trace suite holds the two to the same kinds, row for row.
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS=$(printf '%s\n' "$TRACE_OUTCOMES" | tr ' ' '\n' | sed 's/=.*//' | tr '\n' ' ')
-TRACE_KINDS=${TRACE_KINDS% }
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -317,6 +317,7 @@ trace_is_kind() {
 # in the vocabulary checker's shape: the kind, the value, then the words.
 trace_check_outcome() {
 	_co_v=" $TRACE_OUTCOMES "
+	case $_co_v in *" $1="*) ;; *) TRACE_OUTCOME_WHY="$1 has no row in TRACE_OUTCOMES — the table and the kind list have drifted" && return 1 ;; esac
 	_co_v=${_co_v#* "$1"=}
 	_co_v=${_co_v%% *}
 	case $_co_v in

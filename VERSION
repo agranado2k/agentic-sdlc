@@ -1310,8 +1310,8 @@
 # arriving-from paragraph, a behaviour-change entry, and both worked
 # examples re-pin.
 #   From #348: scripts/trace.sh carries the kind table — every kind and the
-# outcome words it declares, ADR-0008 clause 1 as amended — and derives its
-# closed kind list from it, so there is one list. An emit whose outcome its
+# outcome words it declares, ADR-0008 clause 1 as amended — beside its
+# closed kind list, the trace suite holding the two row for row. An emit whose outcome its
 # kind does not declare is exit 2 naming the kind, the value and the
 # vocabulary, the vocabulary checker's shape; it used to write. That is a
 # NARROWING of the emit's contract: a consumer's own emit line with a typo or
