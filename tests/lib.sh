@@ -982,6 +982,13 @@ t_field_tokens() {
 	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 }
 
+# t_write_config <path> <contents> — <contents> and a newline, written to
+# <path>, its directory made first.
+t_write_config() {
+	mkdir -p "$(dirname "$1")"
+	printf '%s\n' "$2" >"$1"
+}
+
 # t_resolve_tier <args> — scripts/agents.lib.sh, run as an agent runs it,
 # streams kept apart (t_run_split owns why).
 t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }

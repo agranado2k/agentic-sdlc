@@ -78,11 +78,6 @@ AGENT_TIER_PLANNER_CONTENT='model-for-planning-prose'
 EOF
 )
 
-# write_config <path> <contents>
-write_config() {
-	mkdir -p "$(dirname "$1")"
-	printf '%s\n' "$2" >"$1"
-}
 
 # t_resolve_tier <args> (tests/lib.sh) — the library, run as an agent runs
 # it, streams kept apart.
@@ -142,9 +137,9 @@ SHELLS='sh bash zsh'
 FULL="$SCRATCH/full.config.sh"
 EMPTY="$SCRATCH/empty.config.sh"
 DOMAINS="$SCRATCH/domains.config.sh"
-write_config "$FULL" "$CONFIG_FULL"
-write_config "$EMPTY" "$CONFIG_EMPTY"
-write_config "$DOMAINS" "$CONFIG_DOMAINS"
+t_write_config "$FULL" "$CONFIG_FULL"
+t_write_config "$EMPTY" "$CONFIG_EMPTY"
+t_write_config "$DOMAINS" "$CONFIG_DOMAINS"
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks nothing gets an error, not a guess"
@@ -553,7 +548,7 @@ resolve_from() { t_run_split _resolve_from_body "$@"; }
 t_repo
 OWN=$REPO
 install_lib "$OWN/tools"
-write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
+t_write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
 resolve_from "$OWN" "$OWN/tools/agents.lib.sh" mechanical
 s_assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.sh is found with no env var set"
 
@@ -562,7 +557,7 @@ s_assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.
 # where the caller stands.
 LOOSE="$SCRATCH/loose"
 install_lib "$LOOSE"
-write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
+t_write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
 resolve_from "$SCRATCH" "$LOOSE/agents.lib.sh" reviewer
 s_assert_resolved "model-for-reviewing" "a sibling agents.config.sh is found for a library outside any repo"
 
@@ -581,7 +576,7 @@ banner "…and NOT from the repo the caller happens to be standing in"
 # absolute path, from inside somebody else's clone.
 t_repo
 FOREIGN=$REPO
-write_config "$FOREIGN/scripts/agents.config.sh" "$(
+t_write_config "$FOREIGN/scripts/agents.config.sh" "$(
 	cat <<'EOF'
 echo "FOREIGN-CONFIG-EXECUTED" >&2
 AGENT_TIER_MECHANICAL='model-the-foreign-repo-chose'
@@ -773,7 +768,7 @@ banner "The judge domain — named by its contract, mapped by nobody (#275)"
 # who has not decided is exactly where they were, the plain tier, with not a
 # word on stderr beyond the fallback's own, which is nothing.
 JUDGE="$SCRATCH/judge.config.sh"
-write_config "$JUDGE" "$CONFIG_DOMAINS
+t_write_config "$JUDGE" "$CONFIG_DOMAINS
 AGENT_TIER_MECHANICAL_JUDGE='model-for-typed-judging'"
 
 AGENTS_CONFIG="$DOMAINS"

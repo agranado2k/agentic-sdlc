@@ -76,11 +76,6 @@ AGENT_TIER_MECHANICAL='runtime-thing:8b'
 EOF
 )
 
-write_config() {
-	mkdir -p "$(dirname "$1")"
-	printf '%s\n' "$2" >"$1"
-}
-
 # t_resolve_tier <args> (tests/lib.sh) — the library, run as an agent runs
 # it, streams kept apart.
 
@@ -92,7 +87,7 @@ write_config() {
 banner "The old contract is untouched — a project that never declared one"
 # ---------------------------------------------------------------------------
 CFG="$SCRATCH/bare/agents.config.sh"
-write_config "$CFG" "$CONFIG_BARE"
+t_write_config "$CFG" "$CONFIG_BARE"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
@@ -111,7 +106,7 @@ s_assert_status 0 "and that emptiness is a success, not a failure"
 banner "The axis — a value that names an agent harness"
 # ---------------------------------------------------------------------------
 CFG="$SCRATCH/axis/agents.config.sh"
-write_config "$CFG" "$CONFIG_AXIS"
+t_write_config "$CFG" "$CONFIG_AXIS"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
@@ -160,7 +155,7 @@ s_assert_err_has "no model"
 banner "A colon is legal inside a model id — the split must be decidable"
 # ---------------------------------------------------------------------------
 CFG="$SCRATCH/colon/agents.config.sh"
-write_config "$CFG" "$CONFIG_COLON"
+t_write_config "$CFG" "$CONFIG_COLON"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
@@ -172,7 +167,7 @@ t_resolve_tier --harness mechanical
 s_assert_resolved '' "…and resolves no agent harness, rather than inventing 'runtime-thing'"
 
 CFG="$SCRATCH/colon2/agents.config.sh"
-write_config "$CFG" "$CONFIG_COLON_UNDECLARED"
+t_write_config "$CFG" "$CONFIG_COLON_UNDECLARED"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
@@ -223,7 +218,7 @@ banner "A malformed prefix is never silent"
 # ADR-0005 clause 5 forbids exactly that, so a malformed token now falls
 # through to the same warning an undeclared one gets.
 CFG="$SCRATCH/malformed/agents.config.sh"
-write_config "$CFG" "AGENT_HARNESSES='alpha beta'
+t_write_config "$CFG" "AGENT_HARNESSES='alpha beta'
 AGENT_TIER_REVIEWER='Alpha:some-model'
 AGENT_TIER_PLANNER=':some-model'
 AGENT_TIER_MECHANICAL='alpha_x:some-model'"
@@ -248,7 +243,7 @@ banner "The declaration, and the warnings, behave as the file claims"
 # A declaration written across lines must mean the same set — the resolver
 # normalises it — and a prefix of a declared token must not match it.
 CFG="$SCRATCH/multiline/agents.config.sh"
-write_config "$CFG" "AGENT_HARNESSES='alpha
+t_write_config "$CFG" "AGENT_HARNESSES='alpha
 	beta   gamma'
 AGENT_TIER_REVIEWER='gamma:some-model'
 AGENT_TIER_PLANNER='alph:some-model'
@@ -290,7 +285,7 @@ fi
 banner "A colon in the MODEL half survives the split"
 # ---------------------------------------------------------------------------
 CFG="$SCRATCH/twocolon/agents.config.sh"
-write_config "$CFG" "AGENT_HARNESSES='alpha'
+t_write_config "$CFG" "AGENT_HARNESSES='alpha'
 AGENT_TIER_REVIEWER='alpha:runtime-thing:8b'"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
