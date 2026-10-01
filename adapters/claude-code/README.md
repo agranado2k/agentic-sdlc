@@ -147,14 +147,13 @@ home directory and puts it on the path from your shell's startup files) is on
 every path you type at and on none of the hooks': every `session.usage` and
 every `agent.stop` then records `outcome=fail` with a reason naming node, and a
 session's cost goes unmeasured while nothing visibly breaks — the hooks exit 0,
-as always. One retro window held 4 of 4 usage events and 41 subagent stops
-failing exactly this way. That reason points here.
+as always. That reason points here.
 
-The fix is policy, not code, and it is personal: put the directory on the path
-through the `env` block of **`.claude/settings.local.json`** — the per-project
-settings file the agent harness keeps for one person's overrides. It is never
-committed: the agent harness adds it to git's global excludes the first time it
-writes one, and a file you create by hand you add to `.gitignore` yourself.
+The fix is policy, not code: put the directory on the path through the `env`
+block of **`.claude/settings.local.json`** — the per-project settings file the
+agent harness keeps for one person's overrides, and keeps uncommitted (it adds
+the file to git's global excludes the first time it writes one; a file you
+create by hand you add to `.gitignore` yourself).
 
 ```json
 {
@@ -177,12 +176,11 @@ things about the entry:
   session, the shell behind its command tool included. That is why the second
   half matters, and why this is the one place a path that is right on exactly
   one machine belongs.
-- **It is personal, so it is uncommitted — and that is the whole rule.** A
-  directory under one person's home is wrong on every other machine, which is
-  why it never goes into the shared `.claude/settings.json` that wires the
-  hooks, and never into a hook's own command line. The shared file says *which*
-  hooks run; the personal one says *where* their runtime is. This kit's own
-  authors keep theirs the same way.
+- **It is one person's, and that is the whole rule.** A directory under one
+  person's home is wrong on every other machine, which is why it never goes
+  into the shared `.claude/settings.json` that wires the hooks, and never into
+  a hook's own command line. The shared file says *which* hooks run; the
+  personal one says *where* their runtime is.
 
 ### And the tool hook, behind its own switch
 

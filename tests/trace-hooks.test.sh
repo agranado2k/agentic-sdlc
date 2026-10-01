@@ -1777,7 +1777,7 @@ for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
 done
 
 # ---------------------------------------------------------------------------
-banner "No node: the reason names the fix, and the README says where it goes (#350)"
+banner "29. No node: the reason names the fix, and the README says where it goes (#350)"
 # ---------------------------------------------------------------------------
 # Section 7 holds that a hook without node records a reason naming node. The
 # retro of 2026-10-01 (finding F5a) found 4 of 4 session.usage and 41 agent.stop
@@ -1787,10 +1787,19 @@ banner "No node: the reason names the fix, and the README says where it goes (#3
 # uncommitted settings entry in the agent harness — never a committed machine
 # path — and the event is where an operator first meets the gap. So the reason
 # names that file, and points at the adapter README section that gives the
-# entry's shape. Driven RED first against the section-7 reason and a README
-# with no such section.
+# entry's shape — by its heading, which this section reads back out of the
+# reason and looks up, so a renamed heading is a red suite rather than a
+# pointer at nothing. Driven RED first against the section-7 reason and a
+# README with no such section. Section 7 already asserts the session-end leg
+# exits 0 and names node; here that pair is asserted on the subagent leg only.
+#
+# A MACHINE PATH, for both the reason and the README section: anything rooted
+# at a directory that is one machine's or one platform's. One pattern for the
+# two, so they cannot drift apart (review of PR #367, M-2).
+MACHINE_PATH='(^|[^A-Za-z0-9_])/(home|Users|root|opt|usr|nix|var)/'
+ADAPTER_README="$KIT/adapters/claude-code/README.md"
 if env PATH="$NONODE" sh -c 'command -v node >/dev/null 2>&1'; then
-	echo "  skip  the scrubbed PATH still finds node — the leg would prove nothing"
+	fail "the scrubbed PATH still finds node — the leg would prove nothing"
 else
 	for h in session-end subagent-stop; do
 		case $h in
@@ -1799,26 +1808,39 @@ else
 		esac
 		new_trace
 		t_run_split env PATH="$NONODE" TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS= sh "$HOOKS/$h.sh" <"$P"
-		[ "$S_STATUS" = 0 ] && pass "$h.sh still exits 0 with no node on PATH" ||
-			fail "$h.sh exited $S_STATUS with no node: $S_ERR"
 		F=$(ev_of "$K" | sed -n '1p')
 		R=$(str "$F" reason)
+		if [ "$h" = subagent-stop ]; then
+			[ "$S_STATUS" = 0 ] && pass "$h.sh exits 0 with no node on PATH" ||
+				fail "$h.sh exited $S_STATUS with no node: $S_ERR"
+			case $R in
+			*node*) pass "$K's reason names node" ;;
+			*) fail "$K's reason does not name node: $F" ;;
+			esac
+		fi
 		case $R in
-		*node*) pass "$K's reason still names node" ;;
-		*) fail "$K's reason no longer names node: $F" ;;
-		esac
-		case $R in
-		*settings.local.json*) pass "and names the personal settings file the path goes in" ;;
+		*settings.local.json*) pass "$K's reason names the personal settings file the path goes in" ;;
 		*) fail "$K's reason does not say where the path goes (no settings.local.json): $F" ;;
 		esac
 		case $R in
 		*adapters/claude-code/README.md*) pass "and points at the adapter README for the entry's shape" ;;
 		*) fail "$K's reason does not point at adapters/claude-code/README.md: $F" ;;
 		esac
-		case $R in
-		*/home/* | */Users/* | */root/*) fail "$K's reason carries a machine path: $F" ;;
-		*) pass "and carries no machine path of its own" ;;
-		esac
+		if printf '%s\n' "$R" | grep -Eq "$MACHINE_PATH"; then
+			fail "$K's reason carries a machine path: $F"
+		else
+			pass "and carries no machine path of its own"
+		fi
+		# The heading the reason cites is the one the README has — read out of
+		# the event, never typed here twice.
+		H=$(printf '%s\n' "$R" | sed -n 's/.*adapters\/claude-code\/README\.md: \([^)]*\)).*/\1/p')
+		if [ -z "$H" ]; then
+			fail "$K's reason names the README but no section heading after it: $F"
+		elif grep -Fxq "### $H" "$ADAPTER_README"; then
+			pass "and the heading it cites, '$H', is a section of the README"
+		else
+			fail "$K's reason cites a README heading that does not exist: '$H'"
+		fi
 	done
 fi
 
@@ -1827,7 +1849,6 @@ fi
 # PATH key; and it holds no absolute machine path — a path that is right on
 # one machine is wrong on every other, and a reader copies the nearest
 # example. The section is the heading through to the next heading.
-ADAPTER_README="$KIT/adapters/claude-code/README.md"
 SECTION=$(awk '
 	/^#+ / && found { exit }
 	/^#+ / && tolower($0) ~ /node/ && tolower($0) ~ /per user/ { found = 1 }
@@ -1845,8 +1866,8 @@ if [ -n "$SECTION" ]; then
 	*uncommitted* | *"not committed"* | *"never committed"*) pass "and says the entry is uncommitted" ;;
 	*) fail "the section does not say the entry stays uncommitted" ;;
 	esac
-	if printf '%s\n' "$SECTION" | grep -Eq '(^|[^A-Za-z0-9_])/(home|Users|root|opt|usr|nix|var)/'; then
-		fail "the section names an absolute machine path: $(printf '%s\n' "$SECTION" | grep -E '/(home|Users|root|opt|usr|nix|var)/' | sed -n '1p')"
+	if printf '%s\n' "$SECTION" | grep -Eq "$MACHINE_PATH"; then
+		fail "the section names an absolute machine path: $(printf '%s\n' "$SECTION" | grep -E "$MACHINE_PATH" | sed -n '1p')"
 	else
 		pass "and names no absolute machine path"
 	fi
