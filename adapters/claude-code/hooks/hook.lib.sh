@@ -637,9 +637,10 @@ hook_behind_warn() {
 # A phantom stop writes no event (subagent-stop.sh, ticket #344), but how many
 # there were is still worth knowing (ticket #410): the subagent-stop hook adds
 # one line to a per-session counter, and the session-end hook records the count
-# as data.phantoms on session.end. The counter lives under the trace's own
-# current/ directory — the mutable per-identity state beside the run pointers —
-# as current/<session id>.phantoms, so two sessions never share one.
+# as data.phantoms on session.end. The counter lives in a directory this
+# adapter owns under the trace, claude-code/<session id>.phantoms, so two
+# sessions never share one — and never in current/, whose layout the shared
+# script keeps to itself (review of PR #432, M-1).
 
 # hook_phantom_add <session id> — one more phantom for that session. APPEND,
 # one short line per stop: an O_APPEND write of a few bytes lands whole, so two
@@ -649,8 +650,8 @@ hook_behind_warn() {
 hook_phantom_add() {
 	hook_id_ok "${1:-}" || return 0
 	_hp_dir=$(hook_dir) || return 0
-	mkdir -p "$_hp_dir/current" 2>/dev/null || return 0
-	echo . >>"$_hp_dir/current/$1.phantoms" 2>/dev/null || :
+	mkdir -p "$_hp_dir/claude-code" 2>/dev/null || return 0
+	echo . >>"$_hp_dir/claude-code/$1.phantoms" 2>/dev/null || :
 }
 
 # hook_phantom_take <session id> — print that session's count, 0 when it had
@@ -663,7 +664,7 @@ hook_phantom_add() {
 hook_phantom_take() {
 	hook_id_ok "${1:-}" || return 1
 	_hp_dir=$(hook_dir) || return 1
-	_hp_file="$_hp_dir/current/$1.phantoms"
+	_hp_file="$_hp_dir/claude-code/$1.phantoms"
 	_hp_n=0
 	if [ -f "$_hp_file" ] && mv "$_hp_file" "$_hp_file.$$" 2>/dev/null; then
 		_hp_n=$(wc -l <"$_hp_file.$$" | tr -d ' ')
