@@ -185,6 +185,10 @@ Chosen: **option 1**.
      every field but the kind is; the agent-harness adapter writes a
      successful `agent.stop` and `session.usage` with none, and a refusal
      there would turn the commonest event into a failure.
+   - **An alternation is not a word.** The skills print every vocabulary
+     as `pass|blocked`; a value carrying `|` is refused even though each
+     word in it is declared, because the line copied whole is the likeliest
+     typo there is (H-1, review of PR #380).
    - **A kind marked none carries no outcome at all** — `run.start` and
      `session.end` — and refuses one: an outcome on the opening of a run is
      a caller's mistake, not a fact. **`note` is the one open kind**,
@@ -209,7 +213,8 @@ Chosen: **option 1**.
      was decided.
    - **The kit-only review broker** carried the worker's whole `VERDICT:`
      line as its outcome. It now writes `pass` for a line opening "not
-     blocking", `blocked` for one opening "blocking", no outcome when the
+     blocking" or the worker contract's own "no findings", `blocked` for
+     one opening "blocking", no outcome when the
      line opens with neither, and the line itself as the reason.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit

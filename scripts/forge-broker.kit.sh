@@ -607,11 +607,12 @@ printf '%s\n%s\n' "$REVIEW_URL" "$COMMENT_URL"
 # clause 4). Kit-only script, so the kit's own policy is the default seam.
 # The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
 # and the worker's VERDICT line is a sentence: its opening is the contract's
-# "blocking or not", so that is read and nothing else — "not blocking" is
-# pass, "blocking" is blocked, any other opening carries no outcome — and the
-# sentence goes whole into the reason.
+# "blocking or not", so that is read and nothing else — "not blocking" and
+# the contract's own clean "no findings" are pass, "blocking" is blocked,
+# any other opening carries no outcome — and the sentence goes whole into
+# the reason.
 case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
-'not blocking'*) VERDICT_WORD=pass ;;
+'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
 blocking*) VERDICT_WORD=blocked ;;
 *) VERDICT_WORD= ;;
 esac

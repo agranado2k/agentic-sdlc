@@ -27,8 +27,9 @@
 # nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a malformed subject, value or price,
-# or a policy file named explicitly and missing; exit 1 is `verify`'s verdict, and an `export` that refuses because
-# verify fails carries that same verdict out. `begin` and `end` add two exits
+# or a policy file named explicitly and missing; exit 1 is `verify`'s
+# verdict, and an `export` that refuses because verify fails carries that
+# same verdict out. `begin` and `end` add two exits
 # of their own to the 2 — closing a run that is not open, and a run stack that
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
 # for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
@@ -327,7 +328,9 @@ trace_check_outcome() {
 		;;
 	'') TRACE_OUTCOME_WHY="$1: outcome '$2' — $1 carries no outcome; drop it" && return 1 ;;
 	esac
-	case "|$_co_v|" in *"|$2|"*) return 0 ;; esac
+	# A `|` is never part of a word: the alternation the skills print, copied
+	# whole, holds only declared words and must not pass as one of them.
+	case $2 in *'|'*) ;; *) case "|$_co_v|" in *"|$2|"*) return 0 ;; esac ;; esac
 	TRACE_OUTCOME_WHY="$1: outcome '$2' is not one of $(printf '%s' "$_co_v" | tr '|' ' ')"
 	return 1
 }
@@ -994,6 +997,7 @@ function outcome_words(k,   i, v) {
 	return v
 }
 function outcome_ok(k, o,   v) {
+	if (index(o, "|")) return 0
 	v = outcome_words(k)
 	if (v == "*") return (o ~ /^[a-z][a-z0-9-]*$/)
 	if (v == "") return 0
@@ -1005,6 +1009,8 @@ function outcome_scan(line,   env, d, k, o) {
 	if (d) env = substr(env, 1, d - 1)
 	if (!match(env, /,"kind":"[a-z.]+"/)) return
 	k = substr(env, RSTART + 9, RLENGTH - 10)
+	# Shown up to the first escaped quote: a value carrying one was written
+	# before the rule and is advised on whatever its tail says.
 	if (!match(env, /,"outcome":"[^"]*"/)) return
 	o = substr(env, RSTART + 12, RLENGTH - 13)
 	if (!outcome_ok(k, o)) outcome_bad(k, o)
@@ -1032,9 +1038,8 @@ trace_spelling_note() {
 		function outcome_bad(k, o) { m++ }
 		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0) }
 		END { print n + 0, m + 0 }' "$_sn_f")
-		set -- $_sn_c
-		_sn_n=$((_sn_n + ${1:-0}))
-		_sn_o=$((_sn_o + ${2:-0}))
+		_sn_n=$((_sn_n + ${_sn_c%% *}))
+		_sn_o=$((_sn_o + ${_sn_c#* }))
 	done
 	IFS=$_sn_ifs
 	trace_glob_on

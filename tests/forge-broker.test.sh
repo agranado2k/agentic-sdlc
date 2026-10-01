@@ -399,6 +399,14 @@ case "$REVIEW" in
 *'"comments":[]'*) pass "…with an empty inline-comments array, not a missing one" ;;
 *) fail "the empty review's comments array is missing or non-empty"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
 esac
+# "no findings" is the worker contract's own clean verdict, so its event is
+# a pass like any other — never one with no outcome a reader counting
+# verdicts would miss (H-2, review of PR #380).
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
+case $(printf '%s\n' "$S_OUT" | tail -n 1) in
+*'"outcome":"pass"'*'"reason":"no findings"'*) pass "…and its review.verdict is pass, with the sentence as the reason" ;;
+*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$S_OUT" | tail -n 1)" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "8. A finding whose location is not in the diff is dropped and named"

@@ -1209,6 +1209,11 @@ assert_status 2 "a kind that carries no outcome refuses one — session.end outc
 assert_out_has "session.end"
 assert_status 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
 assert_status 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" sh "$TRACE" end outcome=delivered
+# The skills print every vocabulary as `pass|blocked`, so the alternation
+# copied whole is the likeliest typo there is — and each word in it is
+# declared, so a substring test lets it through (H-1, review of PR #380).
+assert_status 2 "review.verdict outcome='pass|blocked' is refused — the alternation is not a word" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict outcome='pass|blocked'
+assert_status 2 "and run.end outcome='ok|stopped' too" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=run.end 'outcome=ok|stopped'
 
 # Every word a shipped emitter writes today is declared: each literal
 # `kind=<k> … outcome=<a|b|c>` in a skill and each literal `outcome=<w>` beside
@@ -1220,9 +1225,15 @@ _ov_pairs=$(
 		cat "$KIT"/.agents/skills/*/SKILL.md "$KIT"/.agents/skills/*/*.md
 		cat "$KIT"/adapters/claude-code/hooks/*.sh "$KIT"/scripts/agent-dispatch.sh
 	} | tr '`' '\n' |
-		sed -n -e 's/.*kind=\([a-z][a-z.]*\).* outcome=\([a-z|-]*\).*/\1 \2/p' -e 's/^sh scripts\/trace\.sh end .*outcome=\([a-z|-]*\).*/run.end \1/p' | sort -u
+		sed -n -e 's/.*kind=\([a-z][a-z.]*\).* outcome=\([a-z|-]*\).*/\1 \2/p' -e 's/^sh scripts\/trace\.sh end .*outcome=\([a-z|-]*\).*/run.end \1/p' \
+			-e 's/.*_dispatch_exit [0-9][0-9]* \([a-z][a-z-]*\).*/spawn.end \1/p' | sort -u
 )
 [ -n "$_ov_pairs" ] || _ov_emit_bad=" [no emit line was found — the reader is broken]"
+# The dispatcher names spawn.end's words through _dispatch_exit, not on an
+# emit line, and the scan must reach them (M-1, review of PR #380).
+for _ov_w in timeout budget unreachable; do
+	printf '%s\n' "$_ov_pairs" | grep -qx "spawn.end $_ov_w" || _ov_emit_bad="$_ov_emit_bad [the scan never saw the dispatcher's spawn.end $_ov_w]"
+done
 IFS='
 '
 for _ov_p in $_ov_pairs; do
@@ -1247,6 +1258,7 @@ printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o1","kind":"review.verdict","su
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o2","kind":"run.end","outcome":"delivered"}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o3","kind":"note","reason":"decoy","data":{"outcome":"a data key is not the outcome"}}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o4","kind":"agent.stop"}\n' >>"$OVV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o5","kind":"pr.iterate","outcome":"green|red|stopped"}\n' >>"$OVV/events/$TODAY.jsonl"
 t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" verify
 [ "$S_STATUS" = 0 ] && pass "verify over undeclared outcomes exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over undeclared outcomes: $S_OUT"
 [ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
@@ -1255,11 +1267,12 @@ case $S_ERR in *"$TODAY.jsonl:3"*run.end*delivered*) pass "and run.end's deliver
 case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves a declared outcome alone" ;; esac
 case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read data.outcome as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
 case $S_ERR in *"$TODAY.jsonl:5"*) fail "verify advised on an event with no outcome: $S_ERR" ;; *) pass "and an event with no outcome is no advisory" ;; esac
+case $S_ERR in *"$TODAY.jsonl:6"*"green|red|stopped"*) pass "and an alternation copied whole is advised on (H-1, review of PR #380)" ;; *) fail "verify did not advise on pr.iterate green|red|stopped: $S_ERR" ;; esac
 for _ov_cmd in summary export; do
 	t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" $_ov_cmd
 	[ "$S_STATUS" = 0 ] && pass "$_ov_cmd over undeclared outcomes still exits 0" || fail "$_ov_cmd exited $S_STATUS: $S_ERR"
 	[ "$(printf '%s\n' "$S_ERR" | grep -c 'outcome')" = 1 ] && pass "and $_ov_cmd says so in exactly one stderr line" || fail "$_ov_cmd did not print exactly one outcome advisory: $S_ERR"
-	case $S_ERR in *"2 "*outcome*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $S_ERR" ;; esac
+	case $S_ERR in *"3 "*outcome*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $S_ERR" ;; esac
 done
 
 # The vocabulary is written where the decisions live: the record's amendment
