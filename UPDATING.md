@@ -221,7 +221,8 @@ sections, and anything after it is annotation.
 
 **Arriving from 0.32.0 or older, a dispatched review lands through a broker,
 and two skills pre-screen what they read.** No shared file changes at 0.33.0;
-five skills and one worker prompt do, and Part 2 is how you take them.
+six skills, one worker prompt and the Claude Code adapter do, and Part 2 is
+how you take them.
 `/implement`'s review step now lands a *dispatched* review — one run on
 another agent harness — through a **broker**, a host-side role your root
 manual names, and never by hand: the worker is offline, prints its findings
@@ -237,7 +238,15 @@ product output through a tool-restricted reader whose two-line return is
 checked before it is read; `/retro` asks an eighth question, stamp
 calibration, and `QUESTIONS.md` carries it — so the count in your manual's
 `/retro` row and chain paragraph (9b) moves from seven to eight, as
-`constitution/AGENTS.md.template`'s did.
+`constitution/AGENTS.md.template`'s did; it also writes its report under
+`.retro/` at your root checkout instead of the OS temp directory, and
+`/housekeeping`'s `CHECKLIST.md` looks for it there — add `.retro/` to your
+ignore file, since the skill will not. `/implement` and `/review-pr` record
+a `tdd.cycle` per cycle, a `spawn.end` per spawn and the resolver's model id
+captured rather than typed. In 9e, the Claude Code adapter's `README.md` gains
+the section on denying a typed-return reader its tools, and its
+`transcript-usage.mjs` hook takes the last usage block per message id — take
+the hook if you wired it.
 
 **Arriving from 0.31.0 or older, a ticket's stamp gains a line.** No shared
 file changes at 0.32.0; two skills do, and Part 2 is how you take them.
@@ -643,10 +652,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2075 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2084 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2229 insertions(+), 1 deletion(-)
+ 3 files changed, 2238 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

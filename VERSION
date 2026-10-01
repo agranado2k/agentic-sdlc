@@ -1180,7 +1180,11 @@
 # NO file joins or leaves the shared layer, and NO shared script changes.
 # UPDATING.md changes content: the arriving-from paragraph for the release,
 # and both worked examples re-pin — Part 2 pins the diff stat of the
-# implement skill this moves. The broker itself is KIT-ONLY and never
+# implement skill this moves. Riding the same tag, untagged on main since
+# 0.32.0: the pre-screen and the retro's eighth question (PRD #273's last
+# two tickets), and six trace-wave fixes found by using the trace (#335,
+# #343, #349, #351, #353, PR #359) — enumerated below with the rest. The
+# broker itself is KIT-ONLY and never
 # shipped: scripts/forge-broker.kit.sh, its allow-list
 # scripts/forge-broker.kit.config.sh and tests/forge-broker.test.sh sit on
 # bootstrap.sh's kit-authoring deletion list, the same as tests/. What a
@@ -1234,6 +1238,33 @@
 # own description, constitution/AGENTS.md.template's chain paragraph and
 # quick-reference row, and .agents/skills/LICENSE-mattpocock-skills.md's
 # provenance note.
+#   From #351: /implement records each TDD cycle as it takes it —
+# `kind=tdd.cycle outcome=red|green|refactor`, after the step ran, never
+# before — and its spawn event carries `skill=implement`, the skill that
+# spawned, where it carried the spawned skill under `data.skill`.
+#   From #353: a spawn has an end. /implement's in-session reviewer and
+# each of /review-pr's seven agents emit `kind=spawn.end outcome=ok|fail`
+# when the agent completes or fails, paired with its `spawn`.
+#   From PR #359: the spawn event's `model` is the resolver's answer,
+# captured — `model=$(sh scripts/agents.lib.sh reviewer …)` then
+# `model=$model` — never a typed word, in /implement and /review-pr.
+#   From #349: /retro writes its export and its report INTO the project, at
+# the root checkout — `.retro/<YYYY>/<MM>/retro-<stamp>.{csv,md}`, local
+# and never committed; the skill checks the folder is ignored and says so,
+# touching no consumer's tracked file — where it wrote to the OS temp
+# directory and lost the report to the next sweep. The housekeeping
+# skill's CHECKLIST.md looks for the last retro there. The kit's own
+# .gitignore gains the folder.
+#   From #343: adapters/claude-code/hooks/transcript-usage.mjs takes the
+# LAST usage block per message id — a response that opens with a thinking
+# block is written twice, a partial snapshot first — so a session's
+# token sum matches the agent harness's own rollup; the fixtures beside
+# it carry the thinking transcripts.
+#   From #335: adapters/claude-code/README.md says how a typed-return
+# reader is denied a shell, a forge CLI and the network on this agent
+# harness — the CLI path withholds (`--tools`, `--restricted`,
+# `--strict-mcp-config`), the in-session path is asked — and
+# adapters/README.md's row names the section.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
 # none of it in the files: list above. .agents/skills/implement/SKILL.md
 # (steps 9b and 10). .agents/prompts/review-worker.md (the offline
@@ -1242,12 +1273,17 @@
 # SKILL.md and .agents/skills/retro/QUESTIONS.md (question 8).
 # constitution/AGENTS.md.template and
 # .agents/skills/LICENSE-mattpocock-skills.md (the eight-question count).
-# docs/domain-glossary.md's Broker, Typed return and Retro entries.
-# README.md's suite entries follow. tests/implement-deliver.test.sh,
+# .agents/skills/review-pr/SKILL.md (spawn.end and the captured model).
+# .agents/skills/housekeeping/CHECKLIST.md (where the last retro is).
+# adapters/claude-code/README.md and adapters/README.md (the reader's
+# tools), adapters/claude-code/hooks/transcript-usage.mjs (the last usage
+# block). docs/domain-glossary.md's Broker, Typed return and Retro
+# entries. README.md's suite entries follow. tests/implement-deliver.test.sh,
 # tests/prescreen-return.test.sh, tests/review-pr-output.test.sh,
-# tests/retro-skill.test.sh, tests/skill-phase.test.sh and
-# tests/trace-skills.test.sh hold the skills to it; the broker's own
-# suite and the pre-screen's are jobs in the kit's CI.
+# tests/retro-skill.test.sh, tests/skill-phase.test.sh,
+# tests/trace-skills.test.sh, tests/trace-hooks.test.sh and
+# tests/adapters-demo.sh hold it; the broker's own suite and the
+# pre-screen's are jobs in the kit's CI.
 
 shared-layer: 0.33.0
 
