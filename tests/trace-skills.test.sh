@@ -52,6 +52,13 @@
 #      amendment — the readers are the operator and the retrospective skill,
 #      and a diagnosis reads by the operator's hand — and the index row for
 #      0008 carries the same date (#309).
+#  14. /merge-train leaves a verdict for EVERY landing (#345, retro F2): the
+#      `feedback` emit is the train's exit condition per landed PR, and a train
+#      nobody can answer records `outcome=unasked` with the instruction that
+#      made it autonomous as the reason — a gap in the trace is a fact, never
+#      silence. `unasked` joins the outcome vocabulary in ADR-0008 (a dated
+#      amendment) and in the glossary; /pr-iterate's three verdicts are
+#      untouched, since it never asks a question nobody can answer.
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -688,5 +695,91 @@ printf '%s\n' "$dd_job" | grep -qE 'fetch-depth: 0' && printf '%s\n' "$dd_job" |
 grep -qF 'rev-parse -q --verify "v$KITV^{commit}"' tests/docs-demo.sh &&
 	pass "docs-demo peels the tag, as F3 does" ||
 	fail "docs-demo tests the tag ref without peeling it — an unpeelable ref would read as released"
+
+# ---------------------------------------------------------------------------
+banner "14. /merge-train leaves a verdict for every landing: asked, or recorded as unasked (#345)"
+# ---------------------------------------------------------------------------
+# Retro F2: fifteen landings, no verdict from the train — it ran autonomously
+# under a "do not stop" instruction and the question was simply skipped. The
+# verdict a human did not give is still not feedback; what changes is that
+# the train says so in the trace, so the retrospective reads a fact and not
+# a hole. One emit per landed PR on BOTH paths, through one line.
+MT=$(skill_md merge-train)
+step4=$(sed -n '/^### 4 /,/^### 5 /p' "$MT")
+mt_fb=$(t_trace_lines "$MT" | grep -F 'kind=feedback')
+n_fb=$(printf '%s\n' "$mt_fb" | grep -c . | tr -d ' ')
+[ "$n_fb" = 1 ] && pass "/merge-train has one feedback emit line — both paths run it" ||
+	fail "/merge-train has $n_fb feedback emit lines — one line, with the outcome naming both paths, so a reader joins one event per merge.land"
+printf '%s\n' "$mt_fb" | grep -qF 'outcome=hit|adjusted|missed|unasked' &&
+	pass "the train's feedback outcome is hit|adjusted|missed|unasked" ||
+	fail "/merge-train's feedback line does not spell outcome=hit|adjusted|missed|unasked — an autonomous train has no outcome to record"
+printf '%s\n' "$mt_fb" | grep -qF 'subject=ticket:#<ticket>' && printf '%s\n' "$mt_fb" | grep -qF 'related=pr:#<N>' &&
+	pass "and it sits on the ticket, related to the PR — the join to merge.land" ||
+	fail "/merge-train's feedback line does not carry subject=ticket:#<ticket> related=pr:#<N> — nothing joins it to the landing"
+printf '%s\n' "$step4" | grep -qF 'exit condition' &&
+	pass "step 4 names the feedback emit as the train's exit condition per landed PR" ||
+	fail "/merge-train step 4 does not call the feedback emit its exit condition — a landing with no verdict event can still end the train"
+printf '%s\n' "$step4" | grep -qF 'outcome=unasked' &&
+	pass "step 4 says what an autonomous train records: outcome=unasked" ||
+	fail "/merge-train step 4 never says outcome=unasked — the train nobody can answer leaves silence"
+# The prose rule, not the emit line: the line's placeholder already says
+# "instruction", so the check reads step 4 with every trace line removed
+# (review of PR #361, L-1).
+step4_prose=$(printf '%s\n' "$step4" | grep -v 'sh scripts/trace\.sh' | tr '\n' ' ' | tr -s ' ')
+printf '%s\n' "$step4_prose" | grep -qiE 'unasked[^.]*reason[^.]*naming the instruction that made the train autonomous' &&
+	pass "and the unasked reason names the instruction that made the train autonomous" ||
+	fail "/merge-train does not say the unasked reason names the instruction that made the train autonomous"
+printf '%s\n' "$step4_prose" | grep -qiE 'gets no event|no verdict[^.]*no event' &&
+	fail "/merge-train still says a landing with no verdict gets no event — that is the silence #345 replaces" ||
+	pass "the old 'no verdict, no event' sentence is gone"
+printf '%s\n' "$step4" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'unasked[^.]*is not (a verdict|feedback)|not (a verdict|feedback)[^.]*unasked' &&
+	pass "and unasked is still said to be no verdict — a reader counts it as a landing not asked, never as a hit" ||
+	fail "/merge-train does not say unasked is not a verdict — a reader could count it as one"
+# The join a reader makes: a landed merge.land has exactly one feedback after it.
+ml_line=$(grep -n 'kind=merge.land' "$MT" | head -1 | cut -d: -f1)
+fb_line=$(grep -n 'kind=feedback' "$MT" | head -1 | cut -d: -f1)
+[ -n "$ml_line" ] && [ -n "$fb_line" ] && [ "$ml_line" -lt "$fb_line" ] &&
+	pass "the feedback emit (line $fb_line) follows the merge.land emit (line $ml_line)" ||
+	fail "the feedback emit does not follow merge.land in the text — merge.land='$ml_line' feedback='$fb_line'"
+# /pr-iterate asks nobody: its feedback is a human comment that changed the
+# plan, so it has no unasked path and keeps the three verdicts.
+pi_fb=$(t_trace_lines "$(skill_md pr-iterate)" | grep -F 'kind=feedback')
+[ -n "$pi_fb" ] && printf '%s\n' "$pi_fb" | grep -qF 'outcome=hit|adjusted|missed ' &&
+	pass "/pr-iterate still emits feedback with the three verdicts" ||
+	fail "/pr-iterate's feedback line is gone or no longer spells outcome=hit|adjusted|missed"
+printf '%s\n' "$pi_fb" | grep -qw unasked &&
+	fail "/pr-iterate's feedback names unasked — only the train asks a question nobody may answer" ||
+	pass "/pr-iterate's feedback keeps its three verdicts — unasked is the train's alone"
+# The record and the glossary carry the fourth outcome: a widened vocabulary
+# is the record's to decide (ADR-0008 clause 1's own words), by a dated
+# amendment and never an edit of the old text.
+# $ADR8 is the record's path, set in section 8 above.
+c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$ADR8" 2>/dev/null)
+printf '%s\n' "$c1" | grep -qF 'outcome `hit|adjusted|missed`' &&
+	pass "ADR-0008 clause 1 still carries the three-verdict text of 2026-09-30 — amended, never edited" ||
+	fail "ADR-0008 clause 1 no longer carries 'outcome \`hit|adjusted|missed\`' as written on 2026-09-30 — a record is amended, never rewritten"
+am1=$(printf '%s\n' "$c1" | awk '/\*Amended [0-9-]* \(#345\):\*/ { on = 1 } on')
+[ -n "$am1" ] && pass "clause 1 carries a dated amendment for #345" ||
+	fail "ADR-0008 clause 1 has no '*Amended <date> (#345):*' block — unasked is in a skill and not in the record"
+printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qE '`feedback`.{0,80}`unasked`' &&
+	pass "the amendment names unasked as a feedback outcome" ||
+	fail "the #345 amendment does not name \`unasked\` on \`feedback\`"
+printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'not a verdict' &&
+	pass "and says unasked is not a verdict" ||
+	fail "the #345 amendment does not say unasked is not a verdict — a reader has no rule for counting it"
+am1_date=$(printf '%s\n' "$am1" | sed -n 's/.*\*Amended \([0-9-]*\) (#345):\*.*/\1/p' | tail -1)
+row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+case $row in
+*"amended $am1_date (#345"*"unasked"*) [ -n "$am1_date" ] &&
+	pass "the index row for 0008 carries the #345 amendment's dated note ($am1_date)" ||
+	fail "the #345 amendment carries no date the index row could be held to" ;;
+*) fail "the index row for 0008 has no 'amended ${am1_date:-<no date>} (#345 …' note naming unasked: $row" ;;
+esac
+gl=$(awk '/^- \*\*Feedback\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on' docs/domain-glossary.md | tr '\n' ' ' | tr -s ' ')
+[ -n "$gl" ] && pass "the glossary has a Feedback entry" || fail "docs/domain-glossary.md has no '- **Feedback**' entry"
+for v in hit adjusted missed unasked; do
+	printf '%s\n' "$gl" | grep -qF "\`$v\`" && pass "the glossary's Feedback entry names \`$v\`" ||
+		fail "the glossary's Feedback entry does not name \`$v\`"
+done
 
 t_done "trace skills contract"

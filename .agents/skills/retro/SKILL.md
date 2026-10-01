@@ -76,12 +76,12 @@ The full form — what to read, what counts as a finding, where it goes — is i
    produced the misses. The `feedback` events are the loop's own
    self-correction; no verdicts over landed slices is itself a finding.
 8. **Stamp calibration** — per decision field and per skill, never one
-   number for the chain: how often a tier stamped at each confidence was
-   overridden at the quiz, and how often a finding posted at each severity
-   was dismissed by a human. Every row carries the oracle clause; a row with
-   too few events says so instead of a rate; and the label's override rate
-   is computed wherever the trace carries the label from before the quiz,
-   and is a row that says it cannot be over a window older than that.
+   number for the chain: how often a tier or a label stamped at each
+   confidence was overridden at the quiz, and how often a finding posted at
+   each severity was dismissed by a human. Every row carries the oracle
+   clause; a row with too few events says so instead of a rate; and the
+   label's override rate is computable once its stamps carry
+   `data.label_proposed` — a row whose stamps predate that key says so.
 
 ## Procedure
 
@@ -119,8 +119,9 @@ change, and the report says which:
 - A **stamp** whose confidence does not track its overrides → the confidence
   rule or the rubric line in `/to-tickets` that the overridden stamps kept
   getting wrong; a severity dismissed more often than it stood → that band's
-  definition in `/review-pr`; a label row overridden the same way → the
-  label rule in `/to-tickets`.
+  definition in `/review-pr`; a label row with a rate that is a finding →
+  `/to-tickets` rules 4 and 14, the autonomy-label rule and the confidence
+  beside it.
 - One finding routes to the operator instead: verify's exit 3 — the shared
   layer is updated before any retro can read.
 - A finding that repeats a previous retro's with no ticket behind it → say

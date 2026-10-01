@@ -58,6 +58,91 @@ export AGENTS_CONFIG
 # tests/lib.sh owns why).
 dispatch() { t_run_split sh "$DISPATCH" "$@"; }
 
+# THE SUITE COUNTS ONLY ITS OWN SLEEPS (#336). Several legs prove the dispatcher
+# left no `sleep N` behind by counting them — and counted the HOST's: a sibling
+# session's wait loop on the same number turned this suite red for a reason
+# outside the tree. Two filters narrow the count, and that is all they give:
+# a leg counts the `sleep N` in this suite's process group, minus the ones
+# alive before the leg began. The group: every process this suite starts
+# inherits it, and keeps it when it is re-parented — which is exactly the
+# leftover these legs hunt, so a parent-pid walk would lose it — while another
+# session's shell normally runs in a group of its own. The baseline: a sleep
+# its caller started in the SAME group (`sleep 20 & sh tests/…`) was alive
+# before the dispatch and is not the dispatch's. Neither filter is isolation:
+# a sleep another process starts in this group during a leg is still counted.
+# Exact args, not `pgrep -f`: a loose pattern matches any process whose
+# command line mentions the number — including the suite's own.
+SUITE_PGID=$(ps -o pgid= -p $$ | tr -d ' ')
+# own_sleep_pids N — pids of `sleep N` in this suite's process group, one a line.
+own_sleep_pids() {
+	ps -A -o pid= -o pgid= -o args= 2>/dev/null |
+		awk -v n="$1" -v g="$SUITE_PGID" '$2 == g && $3 == "sleep" && $4 == n && NF == 4 { print $1 }'
+}
+# new_sleep_pids N BASELINE — those of them that were not in BASELINE (an
+# earlier own_sleep_pids answer): the sleeps the leg itself left behind.
+new_sleep_pids() {
+	own_sleep_pids "$1" | awk -v before=" $(printf '%s' "$2" | tr '\n' ' ') " 'index(before, " " $1 " ") == 0'
+}
+# new_sleeps N BASELINE — how many.
+new_sleeps() { new_sleep_pids "$@" | wc -l | tr -d ' '; }
+# await_sleep PID N — wait, bounded, until ps shows PID as `sleep N`: a pid
+# from `&` can be read while it is still the forked shell, before the exec.
+# Prints the pid's process group once it is visible; nothing if it never is.
+# About five seconds either way: a 50 ms nap is one try, and where sleep takes
+# whole seconds only, each one-second nap spends twenty.
+await_sleep() {
+	_as_try=0
+	until ps -o args= -p "$1" 2>/dev/null | awk -v n="$2" '$1 == "sleep" && $2 == n && NF == 2 { ok = 1 } END { exit !ok }'; do
+		_as_try=$((_as_try + 1))
+		[ "$_as_try" -gt 100 ] && return 0
+		sleep 0.05 2>/dev/null || { sleep 1; _as_try=$((_as_try + 19)); }
+	done
+	ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
+}
+# ---------------------------------------------------------------------------
+banner "The suite counts only the sleeps it started"
+# ---------------------------------------------------------------------------
+# The filters can see, and each one cuts: a count that read nothing — no
+# group, or a ps that answered nothing — would pass every leg below with the
+# dispatcher broken, and a count without one of its filters would count the
+# host's sleeps again. Three sleeps of one number: one of the suite's own alive
+# before the baseline, and two started after it — one of the suite's own, and
+# a decoy in a process group of its own, the shape of another session's. Only
+# the suite's own new one is counted. `setsid` is util-linux, not POSIX (the
+# same footing as tests/lib.sh's ps columns); `set -m` is the fallback, and
+# without a tty dash and busybox ash ignore it. A host where neither gives the
+# decoy a group of its own cannot stage another session's sleep: the decoy is
+# dropped before the count, and the leg says the group filter went unproven
+# here rather than failing a dispatcher that is fine.
+[ -n "$SUITE_PGID" ] || fail "this suite could not read its own process group — the leftover-sleep legs below would count nothing"
+sleep 7337 &
+held=$!
+await_sleep "$held" 7337 >/dev/null
+sleeps_before=$(own_sleep_pids 7337)
+if command -v setsid >/dev/null 2>&1; then
+	setsid sleep 7337 &
+	decoy=$!
+else
+	set -m
+	sleep 7337 &
+	decoy=$!
+	set +m
+fi
+decoy_pgid=$(await_sleep "$decoy" 7337)
+if [ -z "$decoy_pgid" ] || [ "$decoy_pgid" = "$SUITE_PGID" ]; then
+	printf '  skip  %s\n' "the decoy 'sleep 7337' got no process group of its own (no setsid, and no job control without a tty) — the group filter goes unproven on this host"
+	kill "$decoy" 2>/dev/null
+	wait "$decoy" 2>/dev/null
+fi
+sleep 7337 &
+probe=$!
+await_sleep "$probe" 7337 >/dev/null
+[ "$(new_sleep_pids 7337 "$sleeps_before")" = "$probe" ] &&
+	pass "the leftover count sees a sleep this suite started — not one alive before its baseline, not one in another process group" ||
+	fail "the leftover count saw [$(new_sleep_pids 7337 "$sleeps_before" | tr '\n' ' ')] as new 'sleep 7337', not only [$probe] — the legs below cannot go red, or count the host's"
+kill "$held" "$probe" "$decoy" 2>/dev/null
+wait "$held" "$probe" "$decoy" 2>/dev/null
+
 
 
 
@@ -679,6 +764,7 @@ cat >/dev/null
 echo "quick"
 exit 5
 EOF
+sleeps_before=$(own_sleep_pids 20)
 start=$(date +%s)
 dispatch implementer --prompt 'x' --timeout 20
 took=$(( $(date +%s) - start ))
@@ -689,11 +775,7 @@ s_assert_out_has "quick" "…and its output"
 	fail "a fast worker cost ${took}s — the watchdog's sleep was left holding stdout"
 # And nothing of the dispatcher's is left running.
 sleep 1
-# Exact-args match, not `pgrep -f`: a loose pattern matches any process whose
-# command line mentions the number — including the suite's own — and counted
-# three ghosts here before this line was written.
-sleeps_alive() { ps -eo args= 2>/dev/null | awk -v n="$1" '$1 == "sleep" && $2 == n' | wc -l | tr -d ' '; }
-leftover=$(sleeps_alive 20)
+leftover=$(new_sleeps 20 "$sleeps_before")
 [ "$leftover" = 0 ] &&
 	pass "the watchdog's sleep is gone with the watchdog" ||
 	fail "$leftover 'sleep 20' still running — the watchdog was killed without its sleep"
@@ -715,6 +797,7 @@ cat >/dev/null
 echo "\$\$" >"$PIDFILE"
 sleep 30
 EOF
+sleeps_before=$(own_sleep_pids 50)
 sh "$DISPATCH" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
 disp=$!
 sleep 2
@@ -729,7 +812,7 @@ if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 else
 	pass "a TERM to the dispatcher takes the worker down with it"
 fi
-leftover=$(sleeps_alive 50)
+leftover=$(new_sleeps 50 "$sleeps_before")
 [ "$leftover" = 0 ] && pass "…and the watchdog's sleep" || fail "$leftover watchdog sleep(s) outlived the dispatcher"
 
 AGENTS_CONFIG="$CFG"
@@ -1500,12 +1583,14 @@ AGENT_HARNESS_OR_CMD='$ORPHANER {model_flag} < {prompt_file}'
 AGENT_HARNESS_OR_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='or:'
 EOF
+	sleeps_before=$(own_sleep_pids 6161)
 	AGENTS_CONFIG="$CFG_ORPHAN" dispatch implementer --prompt 'orphan' --budget-tasks 300 --budget-memory 600 --timeout 3
 	s_assert_status 124 "a worker that stalls inside its budget times out with 124"
 	sleep 1
-	if ps -A -o args= | grep -q '^sleep 6161$'; then
+	if [ "$(new_sleeps 6161 "$sleeps_before")" != 0 ]; then
 		fail "the double-forked child survived the timeout — the scope was not killed whole"
-		pkill -f '^sleep 6161$' 2>/dev/null
+		# Only this suite's: another session's `sleep 6161` is not ours to kill.
+		new_sleep_pids 6161 "$sleeps_before" | while read -r p; do kill "$p" 2>/dev/null; done
 	else
 		pass "…and its double-forked child is gone with the scope — the tree is gone either way"
 	fi
