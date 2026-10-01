@@ -103,7 +103,11 @@ stale `none` is a ticket to make the decision again.
 - First compare the diary's Active worktrees row with `git worktree list`;
   a worktree on disk with no row, or a row with no worktree, is a finding —
   recorded before anything is pruned, or the pruning erases the evidence.
-- **The root checkout's lag.** Ask the operator for the last `session.start` event's `data.behind` — how far the checkout the agent-harness hooks run from was behind the last fetched origin/main — since this pass never reads the trace itself (ADR-0008); a count past the policy file's `TRACE_BEHIND_WARN`, or none recorded where hooks are wired, is a finding.
+- **The root checkout's lag.** Ask the operator for the last `session.start`
+  event's `data.behind` — how far the checkout the agent-harness hooks run
+  from was behind the last fetched origin/main — since this pass never reads
+  the trace itself (ADR-0008); a count past the policy file's
+  `TRACE_BEHIND_WARN`, or none recorded where hooks are wired, is a finding.
 - Then run `/worktree-cleanup`.
 - **Dispatch scratch.** A dispatch that died before its trap — killed, over a
   budget, on a host out of tasks — leaves its dispatch scratch behind: a
