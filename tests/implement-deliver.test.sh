@@ -357,7 +357,8 @@ stamp_has "never read it as a missing line" "outcome 4: a failed fetch is never 
 # Outcome 5 is the lift's bound (#400): a body with more stamp lines of one
 # key than the script lifts is a stop, reported the way a refusal is.
 stamp_has "**Exit 5**: too many stamp lines" "outcome 5: the lift's bound, named"
-stamp_has "a stop, reported like a refusal" "outcome 5: never the defaults, never a stamp"
+stamp_has "a stop, reported by the key and the count the stderr line names" "outcome 5: never the defaults, never a stamp"
+stamp_has "never a line of the body" "outcome 5: the report carries no hostile line — the stderr line holds none to quote"
 stamp_has "A refused value is a stop, reported for \`/to-tickets\` to re-stamp" "outcome 2: every refused value stops — a tier, a confidence with or without its tier, a domain"
 stamp_has "a line names a field this project's policy does not declare" "outcome 3: a line the checker would ignore is never printed"
 # A missing script is the shell's status, not the script's: 127, or 2 under a
@@ -373,6 +374,20 @@ assert_file_lacks "$SKILL" "with no \`Tier:\` line qualifies nothing" "the bulle
 order=$(printf '%s\n' "$stamp" | grep -oE '\*\*Exit [0-9]\*\*' | tr -d '*' | tr '\n' ' ')
 [ "$order" = "Exit 0 Exit 2 Exit 3 Exit 4 Exit 5 " ] && pass "the five outcomes, once each, in status order" ||
 	fail "the outcomes the bullet names are '$order', not 'Exit 0 Exit 2 Exit 3 Exit 4 Exit 5'"
+# The manual's quick-reference row names every status the bullet does — in
+# the kit's manual and in the template a consumer's is stamped from, which a
+# change to the contract has to move together (#400) — and the README's
+# paragraph on the script's suite counts them.
+for manual in AGENTS.md constitution/AGENTS.md.template; do
+	row=$(grep -F '| Hold a decision line to its vocabulary' "$manual")
+	case $row in
+	*"3 none, 4 fetch failed, 5 too many lines |") pass "$manual's stamp row names all five statuses" ;;
+	*) fail "$manual's stamp row does not end '4 fetch failed, 5 too many lines': $row" ;;
+	esac
+done
+grep -qF 'Five statuses, each driven red first' README.md &&
+	pass "the README counts the script's five statuses" ||
+	fail "the README does not say 'Five statuses, each driven red first'"
 # The domain is the third line the ticket spells and the one this skill goes
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
