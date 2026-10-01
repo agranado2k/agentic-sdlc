@@ -99,8 +99,8 @@ may contain hyphens and a variable name may not, so `html-report` reads
 
 ## Denying a typed-return reader its tools
 
-Three skills — `/to-tickets`, `/pr-iterate` and `/dogfood` — hand an untrusted
-read to a reader that has "no shell, no forge CLI, no network" and sends back a
+Three skills — `/to-tickets`, `/pr-iterate` and the optional dogfood skill,
+where it was taken — hand an untrusted read to a reader that has "no shell, no forge CLI, no network" and sends back a
 typed return, and each one says that how an agent harness withholds those tools
 is the adapter's to say. This is the answer, for the two ways a Claude Code
 session can spawn that reader. They are not the same kind of thing, and the
@@ -176,13 +176,13 @@ restriction**: a reader that honours it is well behaved, and a line injected
 into the file it reads can ask it to do otherwise with a shell to hand.
 
 That is the case the three skills already provide for — where yours cannot,
-say so at the quiz (`/to-tickets`) or say so in the report (`/pr-iterate`,
-`/dogfood`). Say it in those words — that the reader was tool-restricted by
-prompt alone — so the human reading the quiz or the report knows what fenced
-that read: the return's shape check and the vocabulary check, which do not
-weaken (a return that fails them is still refused unread), and not an absent
-tool. What the prompt cannot do is take the shell away for the length of the
-read.
+say so at the quiz (`/to-tickets`) or say so in the report (`/pr-iterate`
+and the dogfood skill). Say it in those words — that the reader was
+tool-restricted by prompt alone — so the human reading the quiz or the report
+knows what fenced that read: the return's shape check and the vocabulary
+check, which do not weaken (a return that fails them is still refused
+unread), and not an absent tool. What the prompt cannot do is take the shell
+away for the length of the read.
 
 A project can author an agent type of its own under `.claude/agents/`, whose
 definition names the tools it holds, and spawn the reader as that type. The
