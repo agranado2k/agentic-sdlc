@@ -157,7 +157,7 @@ Grouped by the seam each term belongs to. Entry shape:
   nothing — no fixtures written, no comparison made — has no comparator to
   name, and says so instead of implying one: `oracle: none — <why>`. Question
   8's label row is one when none of its stamps carries the pre-quiz label.
-  _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
+  _Ref_: #276 (PRD #273), #342, #332; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
     of comparison, not a single number or an assumption.
