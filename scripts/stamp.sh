@@ -14,15 +14,22 @@
 # looked like nothing at all (#331).
 #
 # EXIT STATUS, one outcome each; stdout carries the stamp and nothing else:
-#   0  the checked stamp lines on stdout, as the ticket spells them;
+#   0  the checked stamp lines on stdout, as the ticket spells them. A line
+#      whose field the policy does not declare is one the checker would
+#      ignore, so it is never printed: stderr names its field, and with one
+#      dropped the exit is 0 only when the Tier: line was checked and printed;
 #   2  a refused value, or a usage error: NOTHING on stdout, the reason on
 #      stderr naming the field — never the refused text, which is the
 #      ticket's, untrusted; read the line in the ticket, quote it only in a
 #      report;
-#   3  no stamp read: the body carries no stamp lines (a ticket written
-#      before the stamp existed — not a refusal), or the checker is gone from
-#      this project, which fails CLOSED here: nothing unchecked is printed,
-#      and stderr says which of the two it was;
+#   3  no stamp read, NOTHING on stdout, and stderr says which case: the
+#      body carries no stamp lines (a ticket written before the stamp
+#      existed — not a refusal); the checker is gone from this project, or
+#      cannot run (its `fields` fails — a policy file missing or malformed —
+#      or its check exits with anything but 0 or 2), which fails CLOSED;
+#      or a stamp line names a field the policy does not declare, and no
+#      Tier: line was left to check. Only a 2 from the check of the lines
+#      themselves is a refusal;
 #   4  the fetch failed, twice — one retry, never a loop. Never read it as a
 #      missing line: it is a stop.
 #
@@ -76,33 +83,72 @@ if ! stamp_fetch && ! stamp_fetch; then
 	exit 4
 fi
 
-# --- lift ------------------------------------------------------------------
-tr -d '\r' <"$_stamp_tmp/body" |
-	grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:' >"$_stamp_tmp/lines"
-if [ ! -s "$_stamp_tmp/lines" ]; then
-	stamp_say "issue #$issue carries no Tier:, Confidence: or Domain: line — no stamp read, not a refusal"
-	exit 3
-fi
-
+# --- the checker: present, runnable, and what it declares --------------------
+# Asked BEFORE anything is lifted. A checker that cannot answer `fields` —
+# gone, or a policy file missing or malformed — cannot check either, and its
+# exit 2 there is not a refusal of the ticket: exit 3, nothing printed.
 if [ ! -f "$vocab" ]; then
 	stamp_say "the checker $vocab is gone from this project — no stamp read, nothing unchecked printed"
 	exit 3
 fi
+if ! sh "$vocab" fields >"$_stamp_tmp/fields" 2>/dev/null; then
+	stamp_say "the checker $vocab cannot run here (its policy file missing or malformed?) — no stamp read, nothing unchecked printed"
+	exit 3
+fi
+# stamp_declared <key> — does the policy declare the field?
+stamp_declared() { grep -qE "^$1( \\(open\\))?: " "$_stamp_tmp/fields"; }
+# stamp_key <line> — the line's key, lower-cased: one of the three words the
+# filter matched, so it is safe to print; the value is not.
+stamp_key() { printf '%s\n' "$1" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr 'A-Z' 'a-z'; }
 
-# --- check -----------------------------------------------------------------
-if sh "$vocab" <"$_stamp_tmp/lines" 2>/dev/null; then
-	cat "$_stamp_tmp/lines"
-	exit 0
+# --- lift ------------------------------------------------------------------
+tr -d '\r' <"$_stamp_tmp/body" |
+	grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:' >"$_stamp_tmp/lifted"
+if [ ! -s "$_stamp_tmp/lifted" ]; then
+	stamp_say "issue #$issue carries no Tier:, Confidence: or Domain: line — no stamp read, not a refusal"
+	exit 3
 fi
 
-# Refused. Name the field of each line the checker refuses on its own — the
-# key is one of three words this filter matched, so it is safe to print; the
-# value is not — and say so when only the lines together are refused.
+# A line whose field the policy does not declare is one the checker would
+# ignore — so it is never checked, and never printed.
+_dropped=0
+: >"$_stamp_tmp/lines"
+while IFS= read -r line; do
+	key=$(stamp_key "$line")
+	if stamp_declared "$key"; then
+		printf '%s\n' "$line" >>"$_stamp_tmp/lines"
+	else
+		stamp_say "issue #$issue: the $key line names a field this project's policy does not declare — not checked, not printed"
+		_dropped=1
+	fi
+done <"$_stamp_tmp/lifted"
+
+# --- check -----------------------------------------------------------------
+_rc=0
+[ -s "$_stamp_tmp/lines" ] && { sh "$vocab" <"$_stamp_tmp/lines" 2>/dev/null || _rc=$?; }
+case $_rc in
+0)
+	if [ "$_dropped" = 1 ] && ! grep -qiE '^[[:space:]]*tier[[:space:]]*:' "$_stamp_tmp/lines"; then
+		stamp_say "issue #$issue: no Tier: line was checked — no stamp read"
+		exit 3
+	fi
+	cat "$_stamp_tmp/lines"
+	exit 0
+	;;
+2) ;;
+*)
+	stamp_say "the checker $vocab cannot run the check (exit $_rc) — no stamp read, nothing unchecked printed"
+	exit 3
+	;;
+esac
+
+# Refused. Name the field of each line the checker refuses on its own, and
+# say so when only the lines together are refused.
 _named=0
 while IFS= read -r line; do
-	key=$(printf '%s\n' "$line" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr 'A-Z' 'a-z')
+	key=$(stamp_key "$line")
 	printf '%s\n' "$line" | sh "$vocab" 2>/dev/null && continue
-	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sh "$vocab" fields 2>/dev/null | sed -n "s/^$key[^:]*: //p")); the value is not printed: it is the ticket's text"
+	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n "s/^$key[^:]*: //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
 	_named=1
 done <"$_stamp_tmp/lines"
 [ "$_named" = 1 ] ||

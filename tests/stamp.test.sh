@@ -30,6 +30,9 @@ STAMP="$KIT/scripts/stamp.sh"
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 t_init
+# The checker's policy is the kit's own unless a case below names one: a
+# VOCAB_CONFIG in the caller's environment would decide every verdict here.
+unset VOCAB_CONFIG
 
 # The stub tracker CLI. It records every argument vector it was called with,
 # fails as many times as $SCRATCH/fails-left says (printing an error, as the
@@ -214,6 +217,103 @@ s_assert_status 3 "the checker is gone: exit 3, the missing-line defaults — no
 [ -z "$S_OUT" ] && pass "the checker is gone: nothing unchecked on stdout" ||
 	fail "the checker is gone: an unchecked line was printed: '$S_OUT'"
 s_assert_err_has "vocab.sh"
+# …asked before anything is lifted: a body with no stamp lines, under a
+# checker that is gone, says the checker is gone — not that the ticket is old.
+body 'A ticket written before the stamp existed.\n'
+cd "$SCRATCH" || exit 2
+t_run_split sh "$SCRATCH/bare/scripts/stamp.sh" 331
+cd "$KIT" || exit 2
+s_assert_status 3 "the checker is gone, no stamp lines either: exit 3"
+s_assert_err_has "is gone from this project"
+
+# stamp_under <policy file> — the script, with VOCAB_CONFIG naming the policy.
+stamp_under() {
+	cd "$SCRATCH" || exit 2
+	t_run_split env VOCAB_CONFIG="$1" sh "$STAMP" 331
+	cd "$KIT" || exit 2
+}
+# unusable <label> <payload> — exit 3, nothing on stdout, stderr says the
+# checker could not run and never calls it a refusal, the payload nowhere.
+unusable() {
+	s_assert_status 3 "$1: the checker cannot run — exit 3, not a refusal"
+	[ -z "$S_OUT" ] && pass "$1: nothing on stdout" || fail "$1: stdout should be empty, got '$S_OUT'"
+	s_assert_err_has "cannot run"
+	s_assert_err_lacks "refused"
+	case "$S_OUT$S_ERR" in
+	*"$2"*) fail "$1: the ticket's text '$2' was printed" ;;
+	*) pass "$1: the ticket's text is printed on neither stream" ;;
+	esac
+}
+
+# A checker that is present but cannot answer is the same case as one that is
+# gone: its exit 2 on a policy error is not a refusal of the ticket. The script
+# asks it `fields` first, and a non-zero there is "checker unusable".
+body 'Tier: implementer\nConfidence: high\nDomain: x;touch PWN\n'
+stamp_under /nonexistent
+unusable "VOCAB_CONFIG names a file that does not exist" "touch PWN"
+printf 'VOCAB_FIELDS=(\n' >"$SCRATCH/broken.config.sh"
+stamp_under "$SCRATCH/broken.config.sh"
+unusable "a policy file that does not parse" "touch PWN"
+# One that answers `fields` and dies on the check itself: only a 2 from the
+# check of the lines is a refusal, any other failure is the checker's.
+cat >"$SCRATCH/dies.config.sh" <<'EOF'
+VOCAB_FIELDS='tier confidence domain'
+VOCAB_OPEN='domain'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_CONFIDENCE='low medium high'
+VOCAB_DOMAIN='code'
+case ${1:-check} in fields) ;; *) exit 5 ;; esac
+EOF
+body 'Tier: implementer\nConfidence: high\n'
+stamp_under "$SCRATCH/dies.config.sh"
+s_assert_status 3 "a checker that answers fields and dies on the check (exit 5): exit 3, not a refusal"
+[ -z "$S_OUT" ] && pass "…nothing on stdout" || fail "…stdout should be empty, got '$S_OUT'"
+s_assert_err_lacks "refused"
+no_pwn "an unusable checker"
+
+# ---------------------------------------------------------------------------
+banner "An undeclared field: never checked, so never printed"
+# ---------------------------------------------------------------------------
+# The checker ignores a line whose field its policy does not declare — so a
+# project whose policy drops `domain` would pass `Domain: x;touch PWN` at exit
+# 0, and the script would print it as a checked stamp line. The script asks
+# the checker which fields it declares before lifting, and a lifted line of
+# an undeclared field is named on stderr, never printed: exit 0 only when the
+# Tier: line was checked and printed, else 3.
+cat >"$SCRATCH/nodomain.config.sh" <<'EOF'
+VOCAB_FIELDS='tier confidence'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_CONFIDENCE='low medium high'
+EOF
+body 'Tier: implementer\nDomain: x;touch PWN\n'
+stamp_under "$SCRATCH/nodomain.config.sh"
+s_assert_resolved "Tier: implementer" \
+	"the reviewer's reproduction — Domain: x;touch PWN under a policy with no domain: exit 0, the Tier: line alone"
+s_assert_err_has "the domain line names a field this project's policy does not declare"
+case "$S_OUT$S_ERR" in
+*"touch PWN"*) fail "the undeclared line was printed: '$S_OUT$S_ERR'" ;;
+*) pass "the undeclared line is printed on neither stream" ;;
+esac
+no_pwn "undeclared domain"
+
+body 'Confidence: high\nDomain: x;touch PWN\n'
+stamp_under "$SCRATCH/nodomain.config.sh"
+s_assert_status 3 "an undeclared line dropped and no Tier: line checked: exit 3"
+[ -z "$S_OUT" ] && pass "…nothing on stdout" || fail "…stdout should be empty, got '$S_OUT'"
+
+cat >"$SCRATCH/notier.config.sh" <<'EOF'
+VOCAB_FIELDS='confidence domain'
+VOCAB_OPEN='domain'
+VOCAB_CONFIDENCE='low medium high'
+VOCAB_DOMAIN='code'
+EOF
+body 'Tier: x;touch PWN\nConfidence: high\nDomain: code\n'
+stamp_under "$SCRATCH/notier.config.sh"
+s_assert_status 3 "a policy that declares no tier: the Tier: line is never checked, so exit 3"
+[ -z "$S_OUT" ] && pass "…nothing on stdout, not even the lines that were checked" ||
+	fail "…stdout should be empty, got '$S_OUT'"
+s_assert_err_has "the tier line names a field this project's policy does not declare"
+s_assert_err_lacks "touch PWN"
 
 # ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"
