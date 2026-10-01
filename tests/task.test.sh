@@ -289,6 +289,21 @@ assert_status 2 'a local endpoint cannot claim remote delivery' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/local-delivery.task"
 assert_out_has 'phase delivery is not permitted for implementation/small'
 
+task_repo
+printf '%s\n' 'task|1' 'kind|implementation' 'size|small' \
+	'scope|Change only the example task boundary.' \
+	'acceptance|An unterminated contract round-trips through status.' \
+	'phases|implementation technical-verification review delivery' \
+	'endpoint|reviewed-pr' 'authorization|The operator authorized this task.' >"$SCRATCH/unterminated.task"
+printf '%s' 'provenance|ticket:#fixture' >>"$SCRATCH/unterminated.task"
+assert_status 0 'a contract whose last record has no newline starts' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/unterminated.task"
+assert_status 0 'status reads back the state an unterminated contract wrote' -- \
+	sh "$COMMAND" status "$REPO"
+printf '%s\n' "$LAST_OUT" | grep -qx 'provenance|ticket:#fixture' &&
+	pass 'the last contract record stays its own record' ||
+	fail 'the last contract record ran into the generated identity'
+
 [ -f "$KIT/scripts/task.md" ] && pass 'task grammar and routes are documented beside the command' ||
 	fail 'scripts/task.md is missing'
 grep -q 'Contracts are data and are never sourced as shell' "$KIT/scripts/task.md" &&

@@ -226,7 +226,7 @@ mkdir -p "$state_dir" || die "cannot create task state directory: $state_dir"
 tmp=$(mktemp "$state_dir/task.XXXXXX") || die 'cannot create temporary task state'
 trap 'rm -f "$tmp"; rm -rf "$scratch"' EXIT HUP INT TERM
 {
-	cat "$contract_copy"
+	awk '{ print }' "$contract_copy"
 	printf 'worktree|%s\nbranch|%s\nbaseline-head|%s\nbaseline-index|%s\nbaseline-worktree|%s\nbaseline-untracked|%s\ncatalogue-receipt|%s\n' \
 		"$repository" "$branch" "$baseline_head" "$baseline_index" "$baseline_worktree" "$baseline_untracked" "$catalogue"
 } >"$tmp"
