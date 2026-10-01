@@ -1180,10 +1180,12 @@ broker 34 "$RAISE"
 unset STUB_REVIEWS STUB_COMMENTS
 s_assert_status 0 "the retried run exits 0"
 assert_mutating 0 "…and posts nothing"
-retry_count() {
-	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind "$1"
-	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$1\""
+# retry_count_on <subject> <kind> — how many events of that kind the subject holds.
+retry_count_on() {
+	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "$1" --kind "$2"
+	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$2\""
 }
+retry_count() { retry_count_on 'pr:#34' "$1"; }
 [ "$(retry_count finding.raise)" = 3 ] &&
 	pass "the two runs leave the first run's three raises and no more" ||
 	fail "expected three finding.raise events for pr:#34, saw $(retry_count finding.raise)"
@@ -1194,10 +1196,35 @@ retry_count() {
 	pass "…and one note for the retry" ||
 	fail "expected one note for pr:#34, saw $(retry_count note)"
 t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
-case $S_OUT in
-*'"via":"broker"'*'already landed'* | *'already landed'*'"via":"broker"'*) pass "…marked via=broker, saying the review already landed" ;;
-*) fail "the retry note lacks via=broker or its reason: $S_OUT" ;;
-esac
+printf '%s\n' "$S_OUT" | grep -F '"via":"broker"' | grep -qF 'already landed' &&
+	pass "…marked via=broker, saying the review already landed" ||
+	fail "the retry note lacks via=broker or its reason: $S_OUT"
+
+# The gate is BOTH bodies, not the review alone. A first run that died
+# between its two writes left the review and no trace, so the run that finds
+# only the review posts the comment and emits the only set there will be.
+STUB_PR=35
+export STUB_PR
+# The first run lands untraced, standing in for the one that died before step 7.
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 35 "$RAISE"
+R_MARK=$(posted_marker pulls/35/reviews)
+printf 'https://forge.invalid/pull/35#pullrequestreview-71\t%s\n' "$R_MARK" >"$SCRATCH/half-reviews.tsv"
+STUB_REVIEWS="$SCRATCH/half-reviews.tsv"
+export STUB_REVIEWS
+broker 35 "$RAISE"
+unset STUB_REVIEWS
+s_assert_status 0 "a run that finds only the review exits 0"
+assert_mutating 1 "…and posts the behavior comment, and only that"
+[ "$(retry_count_on 'pr:#35' finding.raise)" = 3 ] &&
+	pass "…and raises the three findings the dead first run never traced" ||
+	fail "expected three finding.raise events for pr:#35, saw $(retry_count_on 'pr:#35' finding.raise)"
+[ "$(retry_count_on 'pr:#35' review.verdict)" = 2 ] &&
+	pass "…and records both verdicts" ||
+	fail "expected two review.verdict events for pr:#35, saw $(retry_count_on 'pr:#35' review.verdict)"
+[ "$(retry_count_on 'pr:#35' note)" = 0 ] &&
+	pass "…and no retry note: nothing was traced before it" ||
+	fail "a half-landed run recorded a retry note for pr:#35"
 STUB_PR=12
 export STUB_PR
 
