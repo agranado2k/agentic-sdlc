@@ -244,6 +244,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 #   - a prose mention of the command, closed by a backtick;
 #   - the argument form with the caller's own placeholder tokens,
 #     'Field: <token>', which nothing untrusted fills;
+#   - the argument form with one positional token, "Field: $2" — one
+#     argument, one line, the token the caller stamped itself;
 #   - or a site in LIFTED below: the input it reads (a fixed string on the
 #     call's line or the one before it — a pipe's head) and the lift stage
 #     that bounds that input, a fixed string earlier in the same function.
@@ -280,6 +282,7 @@ FNR == 1 { fn = "-"; start = 1; prev = "" }
 		tail = substr(s, RSTART + RLENGTH); s = tail
 		if (tail ~ /^`/ || tail ~ /^ fields/) continue
 		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue
+		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue
 		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, FNR, start, fn, prev, $0
 	}
 	prev = $0
