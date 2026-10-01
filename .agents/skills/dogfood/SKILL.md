@@ -275,9 +275,10 @@ as the row's outcome:
 ```sh
 # checked_outcome <row> <token> — the only way a row's outcome reaches the
 # report: the row's decision line when the checker passed it, otherwise one
-# fixed line naming the row, and no outcome.
+# fixed line naming the row, and no outcome. The checker is asked `fields`
+# first: one that cannot answer for its policy cannot refuse a row either.
 checked_outcome() {
-	if checker=$(vocab_checker); then
+	if checker=$(vocab_checker) && sh "$checker" fields >/dev/null 2>&1; then
 		sh "$checker" "Outcome: $2" >/dev/null 2>&1
 		case $? in
 		0) printf 'Outcome: %s\n' "$2" && return 0 ;;
@@ -291,16 +292,21 @@ checked_outcome() {
 
 Two lines name a row the check did not pass, by step and position — step 4,
 the walk, and the row's number in the matrix — and neither carries an outcome.
-`refused outcome: step 4, row N` is the checker's refusal, exit 2: the value is
-not in the `outcome` vocabulary of `scripts/vocab.config.sh`. A refused outcome
-is never reported: re-read the row and stamp a token the policy file declares.
-`unchecked outcome: step 4, row N` is the other refusal, and it fails closed
-the way the pre-screen does: no checker was found at the skills root, or it
-could not run, so the row could not be checked — and a decision line that
-could not be checked is not a reported outcome. Either way the row is never
-printed as an outcome: the report carries it under the line the check printed,
-and a run in which every row is so named is a project whose checker is gone,
-which is itself the finding to report.
+`refused outcome: step 4, row N` is the checker's refusal of the row's own
+line, exit 2: the value is not in the `outcome` vocabulary of
+`scripts/vocab.config.sh`. A refused outcome is never reported: re-read the
+row and stamp a token the policy file declares. The checker's reason stays on
+its stderr, discarded, because it quotes the value — untrusted text — and the
+session re-reads the row itself. `unchecked outcome: step 4, row N` is the
+other refusal, and it fails closed the way the pre-screen does: no checker was
+found at the skills root, or it could not run, or it could not answer `fields`
+for its own policy file — named and missing, or malformed, which is the
+checker's exit 2 too, and never the row's fault — so the row could not be
+checked, and a decision line that could not be checked is not a reported
+outcome. Either way the row is never printed as an outcome: the report
+carries it under the line the check printed, and a run in which every row is
+so named is a project whose checker is gone, which is itself the finding to
+report.
 
 Capture evidence per failed row — the screenshot, the response body, the command
 and its output, the relevant log lines. A finding without evidence is an opinion.

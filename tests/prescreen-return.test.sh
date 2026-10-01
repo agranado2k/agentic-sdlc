@@ -830,6 +830,7 @@ assert_file_has "$FLAT" '`refused outcome: step 4, row N`' "the prose names the 
 assert_file_has "$FLAT" '`unchecked outcome: step 4, row N`' "…and the line an unchecked row is reported under"
 assert_file_has "$FLAT" "never printed as an outcome" "…and its outcome is not"
 assert_file_has "$FLAT" "could not be checked" "a checker missing or unable to run is said to be the other refusal"
+assert_file_has "$FLAT" "re-reads the row itself" "the checker's reason stays discarded: it quotes the value, untrusted text, and the session re-reads the row"
 # outcome_run <row> <token> — the lifted fence's answer for one row, run
 # where a consumer runs it, on the pre-screen's lifted check for its
 # vocab_checker: exit status kept, both streams captured.
@@ -872,6 +873,23 @@ outcome_named "…and a declared token in the wrong case" 4 PASS refused
 sed "s/^VOCAB_OUTCOME=.*/VOCAB_OUTCOME='pass fail'/" "$POLICY" >"$SCRATCH/two.config.sh"
 POLICY_FOR="$SCRATCH/two.config.sh"
 outcome_named "an outcome the policy file does not declare is refused, whatever the skill offers" 5 paper-cut refused
+POLICY_FOR=
+# A checker that cannot answer for its policy cannot refuse either (ruling
+# on the review of PR #378, M-1 — the one the stamp reader took): the fence
+# asks the resolved checker `fields` first, and a non-zero exit THERE is
+# unchecked; only a 2 from the check of the row's own line is refused. The
+# checker exits 2 for a policy file named and missing and for one it reads
+# as malformed, which the fence would otherwise file as the value's fault.
+grep -q 'sh "$checker" fields' "$OUTCOME" && pass "/dogfood — the fence proves the checker usable with 'fields' before it asks about the row" ||
+	fail "/dogfood — the fence should run 'sh \"\$checker\" fields' first: a checker that cannot answer for its policy cannot refuse a row"
+POLICY_FOR=/nonexistent
+outcome_named "with VOCAB_CONFIG naming a policy file that does not exist, a declared outcome is unchecked, not refused" 5 pass unchecked
+{ cat "$POLICY"; printf 'VOCAB_RULES="not a rule"\n'; } >"$SCRATCH/malformed.config.sh"
+POLICY_FOR="$SCRATCH/malformed.config.sh"
+outcome_named "with a policy file the checker reads as malformed, a declared outcome is unchecked, not refused" 5 pass unchecked
+printf 'VOCAB_OUTCOME=(\n' >"$SCRATCH/unparsed.config.sh"
+POLICY_FOR="$SCRATCH/unparsed.config.sh"
+outcome_named "with a policy file the shell cannot parse, a declared outcome is unchecked" 5 pass unchecked
 POLICY_FOR=
 # Found from the skills root, as the pre-screen's check is.
 WHERE=src/deep
