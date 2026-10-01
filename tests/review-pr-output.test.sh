@@ -243,13 +243,10 @@ banner "7. The decision lines are the policy file's — read through the checker
 # in the agent's own classification prose. 🧬 MUTATION is on the list and is
 # deliberately no token: the skill says it measures the list, and the policy
 # file says the same, so it is set aside by name and by nothing looser.
-VOCAB="$ROOT/scripts/vocab.sh"
 POLICY="$ROOT/scripts/vocab.config.sh"
 BADGES='🔴|🟠|🟡|🔵|🟣|🟤|🟢|⚫|⚪'
 GLYPHS='✅|⚠️|❌|🔀|🧬'
 
-# declared <field> <policy file> — the field's tokens, through `fields`.
-declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
 
 # printed_severities <skill> — every band the skill prints, folded to a token.
 printed_severities() {
@@ -270,7 +267,7 @@ printed_statuses() {
 # undeclared <field> <printed tokens> <policy file> — the printed tokens the
 # policy file does not declare, space-joined.
 undeclared() {
-	_ud=$(declared "$1" "$3")
+	_ud=$(t_field_tokens "$1" "$3")
 	for _ud_tok in $2; do
 		case " $_ud " in *" $_ud_tok "*) ;; *) printf '%s ' "$_ud_tok" ;; esac
 	done | sed 's/ $//'
@@ -295,25 +292,25 @@ baited() {
 
 sev=$(printed_severities "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
 sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
-[ -n "$(declared severity "$POLICY")" ] && [ -n "$(declared status "$POLICY")" ] &&
+[ -n "$(t_field_tokens severity "$POLICY")" ] && [ -n "$(t_field_tokens status "$POLICY")" ] &&
 	pass "the policy file declares severity and status, read through 'fields'" ||
 	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
 # …and the reader agrees with its sibling in tests/vocab-policy.test.sh
 # (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
 # and a reader that does not know the mark reads nothing for an opened field.
 sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
-[ -n "$(declared severity "$POLICY")" ] && [ "$(declared severity "$SCRATCH/opened.config.sh")" = "$(declared severity "$POLICY")" ] &&
+[ -n "$(t_field_tokens severity "$POLICY")" ] && [ "$(t_field_tokens severity "$SCRATCH/opened.config.sh")" = "$(t_field_tokens severity "$POLICY")" ] &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
-	fail "with severity opened in the policy file the reader read '$(declared severity "$SCRATCH/opened.config.sh")', not '$(declared severity "$POLICY")'"
+	fail "with severity opened in the policy file the reader read '$(t_field_tokens severity "$SCRATCH/opened.config.sh")', not '$(t_field_tokens severity "$POLICY")'"
 held "every severity band the report prints is a token the policy file declares: $sev" severity "$sev" "$POLICY"
 held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
 # …and nothing declared goes unprinted: the two lists are one vocabulary.
-[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared severity "$POLICY") | sort | tr '\n' ' ')" ] &&
-	pass "…and every declared severity is a band the report prints" ||
-	fail "the report prints '$sev', the policy file declares '$(declared severity "$POLICY")'"
-[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared status "$POLICY") | sort | tr '\n' ' ')" ] &&
-	pass "…and every declared status is a tag Agent 7 prints" ||
-	fail "Agent 7 tags '$sta', the policy file declares '$(declared status "$POLICY")'"
+[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens severity "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every t_field_tokens severity is a band the report prints" ||
+	fail "the report prints '$sev', the policy file declares '$(t_field_tokens severity "$POLICY")'"
+[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens status "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every t_field_tokens status is a tag Agent 7 prints" ||
+	fail "Agent 7 tags '$sta', the policy file declares '$(t_field_tokens status "$POLICY")'"
 
 # The bait. Each plants ONE line in a copy of the skill — where a session
 # would print it from — and the same holder must name exactly that token.
