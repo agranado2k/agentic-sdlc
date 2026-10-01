@@ -452,7 +452,6 @@ else
 fi
 # The body between the two headings — the headings themselves are §3's, not Agent 5's.
 agent5=$(sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$SKILL_ABS")
-printf '%s\n' "$agent5" >"$SCRATCH/agent5.region"
 # Read unwrapped: the prompt is 80-column prose and a sentence may break
 # between the case and its ruling; the reviewer reads sentences, not lines.
 agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
