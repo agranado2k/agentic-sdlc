@@ -88,12 +88,14 @@ new_sleeps() { new_sleep_pids "$@" | wc -l | tr -d ' '; }
 # await_sleep PID N — wait, bounded, until ps shows PID as `sleep N`: a pid
 # from `&` can be read while it is still the forked shell, before the exec.
 # Prints the pid's process group once it is visible; nothing if it never is.
+# About five seconds either way: a 50 ms nap is one try, and where sleep takes
+# whole seconds only, each one-second nap spends twenty.
 await_sleep() {
 	_as_try=0
 	until ps -o args= -p "$1" 2>/dev/null | awk -v n="$2" '$1 == "sleep" && $2 == n && NF == 2 { ok = 1 } END { exit !ok }'; do
 		_as_try=$((_as_try + 1))
 		[ "$_as_try" -gt 100 ] && return 0
-		sleep 0.05 2>/dev/null || sleep 1
+		sleep 0.05 2>/dev/null || { sleep 1; _as_try=$((_as_try + 19)); }
 	done
 	ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
 }
@@ -107,7 +109,11 @@ banner "The suite counts only the sleeps it started"
 # before the baseline, and two started after it — one of the suite's own, and
 # a decoy in a process group of its own, the shape of another session's. Only
 # the suite's own new one is counted. `setsid` is util-linux, not POSIX (the
-# same footing as tests/lib.sh's ps columns); `set -m` is the fallback.
+# same footing as tests/lib.sh's ps columns); `set -m` is the fallback, and
+# without a tty dash and busybox ash ignore it. A host where neither gives the
+# decoy a group of its own cannot stage another session's sleep: the decoy is
+# dropped before the count, and the leg says the group filter went unproven
+# here rather than failing a dispatcher that is fine.
 [ -n "$SUITE_PGID" ] || fail "this suite could not read its own process group — the leftover-sleep legs below would count nothing"
 sleep 7337 &
 held=$!
@@ -123,8 +129,11 @@ else
 	set +m
 fi
 decoy_pgid=$(await_sleep "$decoy" 7337)
-[ -n "$decoy_pgid" ] && [ "$decoy_pgid" != "$SUITE_PGID" ] ||
-	fail "the decoy 'sleep 7337' is not running in a process group of its own (group '${decoy_pgid}') — the group filter goes unproven"
+if [ -z "$decoy_pgid" ] || [ "$decoy_pgid" = "$SUITE_PGID" ]; then
+	printf '  skip  %s\n' "the decoy 'sleep 7337' got no process group of its own (no setsid, and no job control without a tty) — the group filter goes unproven on this host"
+	kill "$decoy" 2>/dev/null
+	wait "$decoy" 2>/dev/null
+fi
 sleep 7337 &
 probe=$!
 await_sleep "$probe" 7337 >/dev/null
