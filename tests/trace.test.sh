@@ -1360,4 +1360,13 @@ grep -q "^TRACE_SHAPES='.*finding\.triage=id:.*pr\.iterate=iteration:" "$TRACE" 
 sed -n '/Amended 2026-10-01 (#420)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[A-Za-z0-9._#-]+' &&
 	pass "ADR-0008 records the shapes in a #420 amendment" || fail "ADR-0008 has no '*Amended 2026-10-01 (#420):*' block naming the shape"
 
+# The prose that describes the contract says so too: the header's exit-2
+# list and its open data.* line, and the glossary's Event entry.
+sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a data value its kind.s shape refuses' &&
+	pass "the script header's exit-2 list names a data value its kind's shape refuses" || fail "the script header's exit-2 list does not name the shape refusal"
+sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'keys are OPEN .* except the two shapes the kind table declares' &&
+	pass "and its data.* line says open, except the two shapes the kind table declares" || fail "the script header still says data.* keys are OPEN with no exception for TRACE_SHAPES"
+sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'TRACE_SHAPES' &&
+	pass "the glossary's Event entry names the two held data keys (TRACE_SHAPES)" || fail "the glossary's Event entry still calls data an open map with no held key"
+
 t_done "trace script"

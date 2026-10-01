@@ -26,8 +26,9 @@
 # line it would append; a successful `emit` and a successful `end` print
 # nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
-# an outcome its kind does not declare, a malformed subject, value or price,
-# or a policy file named explicitly and missing; exit 1 is `verify`'s
+# an outcome its kind does not declare, a data value its kind's shape refuses
+# (TRACE_SHAPES), a malformed subject, value or price, or a policy file named
+# explicitly and missing; exit 1 is `verify`'s
 # verdict, and an `export` that refuses because verify fails carries that
 # same verdict out. `begin` and `end` add two exits
 # of their own to the 2 — closing a run that is not open, and a run stack that
@@ -74,7 +75,8 @@
 #   blob · data
 # `kind` is a CLOSED vocabulary (an unknown one is exit 2, like an unknown
 # tier), and so is each kind's `outcome` (TRACE_OUTCOMES below); `data.*`
-# keys are OPEN (like task domains), string values only. A subject is
+# keys are OPEN (like task domains), string values only, except the two shapes
+# the kind table declares (TRACE_SHAPES below), which hold a present key. A subject is
 # `<type>:<reference>` — lowercase type, then anything without a space, a
 # quote or a backslash — so a PRD, a ticket, a PR, a branch, a session and a
 # run all join on one column. The types a project's policy
@@ -181,6 +183,7 @@ TRACE_EVENT_CAP=4000
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (ADR-0008 clause 1, as amended
 # 2026-10-01 for #420): a data key a reader joins on, held at emit to a
 # shape. Each entry is `<kind>=<key>:<class>`, the class a bracket
@@ -188,7 +191,6 @@ TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop
 # nothing else. Only a PRESENT key is held: data.* stays open, and an emit
 # missing the key writes as before.
 TRACE_SHAPES='finding.triage=id:A-Za-z0-9._#- pr.iterate=iteration:0-9'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
