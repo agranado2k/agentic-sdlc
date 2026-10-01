@@ -221,9 +221,11 @@ assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is nev
 assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
-# The count of answers that change what you do, held to the sentences that
-# follow it: `low` restates, a refused tier stops, a refused confidence stops.
-stamp_has "Three answers change what you do" "the count names the refused confidence as the third branch"
+# The count of answers that change what you do, scoped to what it counts —
+# the tier and its confidence — and held to the sentences that follow it:
+# `low` restates, a refused tier stops, a refused confidence stops. (The
+# refused domain is its own sentence, above, and not in this count.)
+stamp_has "Three answers on the tier and its confidence change what you do" "the count says what it counts, and names the refused confidence as the third"
 stamp_has "back to the restatement step" "restate-on-low: the rule"
 stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
 stamp_has "say so in your report" "restate-on-low: the report names it"
