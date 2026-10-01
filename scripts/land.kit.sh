@@ -20,7 +20,8 @@
 #      A PR behind its base is refused too: the train's update-branch step
 #      is the train's to take.
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
-#      one constitution/local-workflow.md mandates. A merge the forge rejects
+#      one /merge-train's hard rule 3 reads from the local workflow article
+#      (in this repo, the root AGENTS.md). A merge the forge rejects
 #      records merge.land `stopped` and exits 1; no verdict is asked.
 #   3. Waits for the base branch's workflows on the merge commit, each one
 #      watched to its end.
@@ -30,7 +31,8 @@
 #      `hit|adjusted|missed`; with no terminal, or --unasked, it emits
 #      `unasked` with the reason — never a verdict nobody gave.
 #   A failed post-merge workflow still records both events — the PR did land —
-#   and then exits 1: escalate, as the train's hard rule 6 says.
+#   and then exits 1: escalate, as the train's hard rule 6 says. So does a
+#   merge commit the forge never names (data.workflows=unknown, no sha).
 #
 # THE TICKET is the PR's first closing reference, or --ticket. With neither,
 # the feedback sits on the PR itself.
@@ -41,7 +43,7 @@
 # scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
 # TRACE_CONFIG still wins (the broker's arrangement).
 #
-# exit: 0 landed · 1 merge rejected, or a post-merge workflow failed · 2 usage, or the PR refused · 69 no forge CLI
+# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, or no merge commit named · 2 usage, or the PR refused · 69 no forge CLI
 #
 # tests/land.test.sh drives this file against a stub `gh` on PATH.
 set -u
@@ -59,7 +61,7 @@ usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
-exit: 0 landed · 1 merge rejected, or a post-merge workflow failed · 2 usage, or the PR refused · 69 no forge CLI
+exit: 0 landed · 1 merge rejected, a post-merge workflow failed, or no merge commit named · 2 usage, or the PR refused · 69 no forge CLI
 EOF
 	exit 2
 }
@@ -144,31 +146,56 @@ if ! gh pr merge "$PR" --merge >&2; then
 		"reason=the forge rejected the merge"
 	exit 1
 fi
-SHA=$(gh pr view "$PR" --json mergeCommit --jq .mergeCommit.oid)
-
-# --- 3. the base branch's workflows on the merge commit -----------------------
-START=$(date +%s)
-RUNS=
+# The forge can name the merge commit a moment after the merge: asked again,
+# within the same wait as step 3.
+SHA=
 i=0
 while [ "$i" -lt "$POLL_TRIES" ]; do
-	RUNS=$(gh run list --branch "$BASE" --commit "$SHA" --json databaseId --jq '.[].databaseId' 2>/dev/null)
-	[ -n "$RUNS" ] && break
+	SHA=$(gh pr view "$PR" --json mergeCommit --jq '.mergeCommit.oid // ""' 2>/dev/null) && [ -n "$SHA" ] && break
+	SHA=
 	i=$((i + 1))
 	[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 done
+
+# --- 3. the base branch's workflows on the merge commit -----------------------
+# Listed until nothing new appears: a workflow the forge registers a beat
+# after the first is watched too. With no sha there is nothing to list.
+START=$(date +%s)
 WORKFLOWS=success
-if [ -z "$RUNS" ]; then
-	WORKFLOWS=none
-	note "no workflow ran on $BASE at $SHA within the wait — nothing to watch"
+WATCHED=
+if [ -z "$SHA" ]; then
+	WORKFLOWS=unknown
+	note "the forge never reported the merge commit of PR #$PR — it merged; its workflows were not watched"
+else
+	i=0
+	while [ "$i" -lt "$POLL_TRIES" ]; do
+		NEW=
+		for id in $(gh run list --branch "$BASE" --commit "$SHA" --json databaseId --jq '.[].databaseId' 2>/dev/null); do
+			case " $WATCHED " in *" $id "*) ;; *) NEW="$NEW $id" ;; esac
+		done
+		if [ -n "$NEW" ]; then
+			for id in $NEW; do
+				gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+			done
+			WATCHED="$WATCHED$NEW"
+		elif [ -n "$WATCHED" ]; then
+			break
+		else
+			i=$((i + 1))
+		fi
+		[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
+	done
+	if [ -z "$WATCHED" ]; then
+		WORKFLOWS=none
+		note "no workflow ran on $BASE at $SHA within the wait — nothing to watch"
+	fi
 fi
-for id in $RUNS; do
-	gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
-done
 WAITED=$(($(date +%s) - START))
 
 # --- 4. the landing ---------------------------------------------------------------
-trace loud kind=merge.land "subject=pr:#$PR" "$@" outcome=landed "data.merge_sha=$SHA" data.method=merge \
-	"data.waited=$WAITED" "data.workflows=$WORKFLOWS" data.via=land "reason=$TITLE"
+set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" data.via=land "reason=$TITLE"
+[ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
+trace loud kind=merge.land "$@"
 
 # --- 5. the verdict ---------------------------------------------------------------
 VERDICT=unasked
@@ -200,10 +227,16 @@ set -- "subject=$FB_SUBJECT" "outcome=$VERDICT"
 [ -z "$WHY" ] || set -- "$@" "reason=$WHY"
 trace quiet kind=feedback "$@"
 
-printf 'landed #%s %s (merge) · workflows %s · waited %ss\n' "$PR" "$SHA" "$WORKFLOWS" "$WAITED"
+printf 'landed #%s %s (merge) · workflows %s · waited %ss\n' "$PR" "${SHA:-<merge commit unknown>}" "$WORKFLOWS" "$WAITED"
 printf 'feedback: %s\n' "$VERDICT"
-if [ "$WORKFLOWS" = failure ]; then
+case $WORKFLOWS in
+failure)
 	note "a post-merge workflow failed on $BASE at $SHA — escalate with the run log; land nothing else"
 	exit 1
-fi
+	;;
+unknown)
+	note "find the merge commit of PR #$PR and watch $BASE's workflows on it by hand"
+	exit 1
+	;;
+esac
 exit 0

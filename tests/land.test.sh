@@ -39,23 +39,31 @@ mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
 #!/bin/sh
 printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
+# The forge's state for one run: knob assignments land() wrote for it.
+[ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
 case " $* " in
-*" pr view "*"mergeCommit"*) printf '%s\n' "$STUB_SHA" ;;
+*" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
 *" pr view "*)
+	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
 	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
 		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_TITLE:-feat(x): a slice}"
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
-*" run list "*) printf '%s\n' ${STUB_RUNS-901} ;;
+*" run list "*)
+	# A run the forge registers late shows from the second listing on.
+	printf '%s\n' ${STUB_RUNS-901}
+	[ "$(grep -c '^ARGV: run list' "$STUB_LOG")" -lt 2 ] || printf '%s\n' ${STUB_RUNS_LATE:-}
+	;;
 *" run watch "*) exit "${STUB_WATCH_RC:-0}" ;;
 esac
 EOF
 chmod +x "$STUBDIR/gh"
 PATH="$STUBDIR:$PATH"
 STUB_LOG="$SCRATCH/gh.log"
+STUB_KNOBS="$SCRATCH/gh.knobs"
 STUB_SHA=abcdef0123456789abcdef0123456789abcdef01
-export PATH STUB_LOG STUB_SHA
+export PATH STUB_LOG STUB_KNOBS
 
 TRACE_DIR="$SCRATCH/trace"
 export TRACE_DIR
@@ -63,12 +71,24 @@ export TRACE_DIR
 # reader of the trace below reads the same policy the script wrote through.
 show() { env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" show "$@" 2>/dev/null; }
 
-# land <args> — the script with no terminal on stdin, streams kept apart,
-# the stub's log reset so every count is about one run. Short waits: the
-# stub's runs exist on the first look.
+# land [STUB_<KNOB>=<value> …] <args> — the script with no terminal on
+# stdin, streams kept apart, the stub's log reset so every count is about one
+# run. The leading knobs set the forge's state for this run only: they are
+# written to a file the stub reads, never put in front of a function call,
+# whose assignments POSIX may let outlive it (forge-broker.kit.sh says why).
+# Short waits: LAND_POLL_SECONDS=0.
 land() {
 	: >"$STUB_LOG"
+	: >"$STUB_KNOBS"
+	while [ $# -gt 0 ]; do
+		case $1 in
+		STUB_*=*) printf "%s='%s'\n" "${1%%=*}" "${1#*=}" >>"$STUB_KNOBS" ;;
+		*) break ;;
+		esac
+		shift
+	done
 	t_run_split env LAND_POLL_SECONDS=0 sh "$LAND" "$@" </dev/null
+	: >"$STUB_KNOBS"
 }
 merges() { grep -c '^ARGV: pr merge' "$STUB_LOG"; }
 events() { show "pr:#$1" | grep -c "\"kind\":\"$2\"" | tr -d ' '; }
@@ -76,27 +96,28 @@ events() { show "pr:#$1" | grep -c "\"kind\":\"$2\"" | tr -d ' '; }
 # ---------------------------------------------------------------------------
 banner "1. A PR that is not green and mergeable is refused: exit 2, nothing merged, nothing emitted"
 # ---------------------------------------------------------------------------
+# refused <knob> <pr> <label>
 refused() {
-	_r_pr=$1
-	_r_label=$2
-	shift 2
-	land "$_r_pr" "$@"
+	_r_pr=$2
+	_r_label=$3
+	land "$1" "$_r_pr"
 	s_assert_status 2 "$_r_label: refused with exit 2"
 	[ "$(merges)" = 0 ] && pass "$_r_label: no merge call reached the forge" ||
 		fail "$_r_label: the forge was asked to merge a PR the script should have refused"
 	[ "$(show "pr:#$_r_pr" | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "$_r_label: nothing reached the trace" ||
 		fail "$_r_label: an event was emitted for a refused PR"
 }
-STUB_CHECKS_RC=1 refused 101 "a red check"
-STUB_MERGEABLE=CONFLICTING refused 102 "a conflicting PR"
-STUB_DRAFT=true refused 103 "a draft"
-STUB_REVIEW=CHANGES_REQUESTED refused 104 "a human's changes requested"
-STUB_MSS=BEHIND refused 105 "a PR behind its base"
-STUB_PRSTATE=MERGED refused 106 "a PR already merged"
-STUB_CHECKS_RC=8 refused 107 "pending checks"
-STUB_CHECKS_RC=1 land 109
+refused STUB_CHECKS_RC=1 101 "a red check"
+refused STUB_MERGEABLE=CONFLICTING 102 "a conflicting PR"
+refused STUB_DRAFT=true 103 "a draft"
+refused STUB_REVIEW=CHANGES_REQUESTED 104 "a human's changes requested"
+refused STUB_MSS=BEHIND 105 "a PR behind its base"
+refused STUB_PRSTATE=MERGED 106 "a PR already merged"
+refused STUB_CHECKS_RC=8 107 "pending checks"
+land STUB_CHECKS_RC=1 109
 printf '%s\n' "$S_ERR" | grep -qi 'checks' && pass "a red refusal names the checks" ||
 	fail "a red refusal does not say the checks are what refused it: $S_ERR"
+refused STUB_VIEW_RC=1 110 "a forge that does not answer for the PR"
 land abc
 s_assert_status 2 "a PR that is not a number is a usage error"
 land
@@ -137,11 +158,11 @@ fb=$(show 'pr:#124' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"outcome":"unasked"' && printf '%s\n' "$fb" | grep -qF '"reason":"operator said land and do not stop"' &&
 	pass "--unasked records unasked with the reason given" || fail "--unasked did not record its reason: $fb"
 
-STUB_TICKET= land 125 --ticket 88
+land STUB_TICKET= 125 --ticket 88
 fb=$(show 'pr:#125' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"subject":"ticket:#88"' && pass "--ticket names the ticket when the PR closes none" ||
 	fail "--ticket did not set the feedback subject: $fb"
-STUB_TICKET= land 126
+land STUB_TICKET= 126
 fb=$(show 'pr:#126' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"subject":"pr:#126"' && pass "with no ticket known, feedback sits on the PR itself" ||
 	fail "with no ticket, feedback is not on pr:#126: $fb"
@@ -188,18 +209,39 @@ s_assert_status 0 "unconfigured, a green PR still lands with exit 0"
 # ---------------------------------------------------------------------------
 banner "5. The forge's answers after the decision"
 # ---------------------------------------------------------------------------
-STUB_MERGE_RC=1 land 150
+land STUB_MERGE_RC=1 150
 [ "$S_STATUS" != 0 ] && pass "a merge the forge rejects is not exit 0 (got $S_STATUS)" || fail "a rejected merge exited 0"
 show 'pr:#150' --kind merge.land | grep -qF '"outcome":"stopped"' && pass "and records merge.land stopped" ||
 	fail "a rejected merge did not record merge.land stopped: $(show 'pr:#150')"
 [ "$(events 150 feedback)" = 0 ] && pass "and asks no verdict of a PR that did not land" || fail "a rejected merge recorded feedback"
-STUB_WATCH_RC=1 land 151
+land STUB_WATCH_RC=1 151
 [ "$S_STATUS" = 1 ] && pass "a failed post-merge workflow is exit 1 — escalate, as the train's hard rule 6 says" ||
 	fail "a failed post-merge workflow exited $S_STATUS"
 show 'pr:#151' --kind merge.land | grep -qF '"workflows":"failure"' && pass "the landing still records, with data.workflows=failure" ||
 	fail "a failed post-merge workflow was not recorded on merge.land: $(show 'pr:#151')"
 [ "$(events 151 feedback)" = 1 ] && pass "and the landing still gets its feedback" || fail "no feedback after a failed workflow"
 printf '%s\n' "$S_ERR" | grep -qi 'escalate' && pass "stderr says to escalate" || fail "stderr does not say escalate: $S_ERR"
+
+land STUB_RUNS= 152
+s_assert_status 0 "no workflow on the merge commit: still a landing, exit 0"
+[ "$(grep -c '^ARGV: run list' "$STUB_LOG")" = 12 ] && pass "it looked LAND_POLL_TRIES times (12) before giving up" ||
+	fail "it listed the runs $(grep -c '^ARGV: run list' "$STUB_LOG") times, not 12"
+show 'pr:#152' --kind merge.land | grep -qF '"workflows":"none"' && pass "and records data.workflows=none" ||
+	fail "no run found was not recorded as workflows=none: $(show 'pr:#152')"
+land STUB_RUNS_LATE=902 153
+grep -q '^ARGV: run watch 902' "$STUB_LOG" && pass "a workflow the forge registers late is watched too" ||
+	fail "the late run 902 was never watched"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and the first is watched once" ||
+	fail "run 901 was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
+land STUB_SHA= 154
+s_assert_status 1 "a merge commit the forge never reports is exit 1"
+grep -q '^ARGV: run list' "$STUB_LOG" && fail "it listed runs for an empty merge commit" ||
+	pass "and no runs are listed for an empty commit"
+ml=$(show 'pr:#154' --kind merge.land)
+printf '%s\n' "$ml" | grep -qF '"outcome":"landed"' && printf '%s\n' "$ml" | grep -qF '"workflows":"unknown"' &&
+	pass "the landing still records, landed with data.workflows=unknown" || fail "an unknown sha was not recorded as such: $ml"
+printf '%s\n' "$ml" | grep -qF '"merge_sha"' && fail "an empty merge_sha was recorded: $ml" || pass "and no empty merge_sha"
+printf '%s\n' "$S_ERR" | grep -qi 'merge commit' && pass "stderr says the merge commit is unknown" || fail "stderr: $S_ERR"
 
 # ---------------------------------------------------------------------------
 banner "6. Kit-only: on bootstrap's deletion list, named by the root manual"
