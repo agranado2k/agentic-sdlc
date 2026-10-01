@@ -78,12 +78,6 @@ AGENT_TIER_PLANNER_CONTENT='model-for-planning-prose'
 EOF
 )
 
-# t_resolve_tier <args> (tests/lib.sh) — the library, run as an agent runs
-# it, streams kept apart.
-
-
-
-
 # assert_survived <label> — the caller reached the line AFTER the library call.
 #
 # What several cases below have to assert is not "what did it resolve" but "did
@@ -100,8 +94,9 @@ assert_survived() {
 }
 
 # capture <command...> — t_run_split under the name this suite has always used.
-# `t_resolve_tier` hard-codes `sh "$LIB"`; the cases below pick the shell and
-# choose between executing and sourcing, so they need the whole command.
+# `t_resolve_tier` (tests/lib.sh) always runs scripts/agents.lib.sh with sh;
+# the cases below pick the shell and choose between executing and sourcing,
+# so they need the whole command.
 capture() { t_run_split "$@"; }
 
 # capture_in <dir> <command...> — capture, run from <dir>. The cwd is an INPUT
