@@ -441,6 +441,33 @@ body "$(awk 'BEGIN { for (i = 0; i < 8; i++) printf "Tier: implementer\\nConfide
 stamp 331
 s_assert_status 0 "eight lines of each key: the bound is per key, never a total — exit 0"
 
+# Two keys past the bound: both named, each with its count, in one line —
+# sorted by key, so the message is the same whatever order awk counted in.
+body "$(awk 'BEGIN { for (i = 0; i < 9; i++) printf "Tier: implementer\\nConfidence: high\\n" }')"
+stamp 331
+s_assert_status 5 "nine Tier: and nine Confidence: lines: exit 5"
+s_assert_err_has "9 confidence lines, 9 tier lines"
+
+# The bound counts what is LIFTED, before the policy is asked which fields it
+# declares: nine lines of a field this project does not declare are still
+# nine lines the script read, and still exit 5 — never dropped one by one.
+body "$(awk 'BEGIN { printf "Tier: implementer\\n"; for (i = 0; i < 9; i++) printf "Domain: x;touch PWN\\n" }')"
+stamp_under "$SCRATCH/nodomain.config.sh"
+s_assert_status 5 "nine lines of an undeclared Domain: they count toward the bound, exit 5"
+s_assert_err_has "9 domain lines"
+[ -z "$S_OUT" ] && pass "…nothing on stdout, not even the Tier: line" || fail "…stdout should be empty, got '$S_OUT'"
+s_assert_err_lacks "touch PWN"
+no_pwn "nine undeclared lines"
+
+# Exit 5 comes before the check: nine Tier: lines that the checker WOULD
+# refuse are a stop of the bound, never a refusal — nothing reaches it.
+body "$(awk 'BEGIN { for (i = 0; i < 9; i++) printf "Tier: x;touch PWN\\n" }')"
+stamp 331
+s_assert_status 5 "nine illegal Tier: lines: exit 5 wins over the refusal (2)"
+s_assert_err_lacks "refused"
+s_assert_err_lacks "touch PWN"
+no_pwn "nine illegal lines"
+
 # ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"
 # ---------------------------------------------------------------------------
