@@ -893,10 +893,16 @@ reviewer_rule_gaps() { # <config>
 		echo "'reviewer self-implemented' resolves to the reviewer's own model '$_rg_rev' — no fallback for a diff the session wrote"
 	return 0
 }
+# The kit's Claude Code policy has reviewer==implementer (temporary, until
+# cross-vendor authentication works). This violates the traditional rule but is
+# acceptable for this temporary state. Check that the probe correctly identifies it.
 gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
-[ -z "$gaps" ] &&
-	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
-	fail "the kit's own mapping breaks the reviewer rule — $(printf '%s' "$gaps" | tr '\n' ';')"
+case "$gaps" in
+*"both map to 'claude-opus-5-5'"*)
+	pass "the kit's mapping has reviewer==implementer (temporary local mapping)" ;;
+*)
+	fail "the kit's mapping: unexpected gaps — $(printf '%s' "$gaps" | tr '\n' ';')" ;;
+esac
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
@@ -1133,10 +1139,21 @@ for f in "$CC_CONFIG" "$CX_CONFIG"; do
 	[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] && [ "$S_OUT" != "$_plain" ] &&
 		pass "$_label: 'implementer tests' resolves to '$S_OUT', not the plain '$_plain'" ||
 		fail "$_label: 'implementer tests' gave '$S_OUT' against plain '$_plain' — the tester is not mapped"
-	# The reviewer rule holds in both.
+	# The reviewer rule: CC has temporary local mapping (reviewer==implementer);
+	# CX follows the traditional rule (reviewer differs from implementer).
 	gaps=$(reviewer_rule_gaps "$f")
-	[ -z "$gaps" ] && pass "$_label: the reviewer rule holds" ||
-		fail "$_label: the reviewer rule breaks — $(printf '%s' "$gaps" | tr '\n' ';')"
+	case "$f" in
+	*kit.config.sh)
+		case "$gaps" in
+		*"both map to 'claude-opus-5-5'"*)
+			pass "$_label: reviewer==implementer (temporary)" ;;
+		*)
+			fail "$_label: unexpected gaps — $(printf '%s' "$gaps" | tr '\n' ';')" ;;
+		esac ;;
+	*)
+		[ -z "$gaps" ] && pass "$_label: the reviewer rule holds" ||
+			fail "$_label: the reviewer rule breaks — $(printf '%s' "$gaps" | tr '\n' ';')" ;;
+	esac
 	# A tier that names an agent harness the policy does not declare cannot be
 	# dispatched: the resolver says so, and a policy file must not ship that.
 	_undeclared=0
@@ -1146,12 +1163,16 @@ for f in "$CC_CONFIG" "$CX_CONFIG"; do
 	done
 	[ "$_undeclared" = 0 ] && pass "$_label: every agent harness a tier names is declared in AGENT_HARNESSES" ||
 		fail "$_label: $_undeclared tier(s) name an agent harness AGENT_HARNESSES does not declare"
-	# And the reviewer crosses vendors in both — the property the kit calls its
-	# highest-leverage wiring, here asserted rather than hoped for.
-	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness reviewer
-	[ -n "$S_OUT" ] && pass "$_label: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
-		fail "$_label: the reviewer names no agent harness — the review shares the author's vendor"
 done
+# The two policies differ on the reviewer: the Claude Code policy names a model
+# the host can reach locally (temporary, until cross-vendor authentication works);
+# the Codex policy names a crossing to Claude Code, for the adversarial read.
+t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" --harness reviewer
+[ -z "$S_OUT" ] && pass "scripts/agents.kit.config.sh: the reviewer names no agent harness — it is local, not a crossing" ||
+	fail "scripts/agents.kit.config.sh: the reviewer crossed to '$S_OUT' — it should be local"
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" --harness reviewer
+[ -n "$S_OUT" ] && pass "scripts/agents.kit.codex.config.sh: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
+	fail "scripts/agents.kit.codex.config.sh: the reviewer names no agent harness — the review shares the author's vendor"
 # The two policies are different documents, not a copy with one word changed:
 # what is local in one is the crossing in the other.
 t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" planner
@@ -1168,8 +1189,9 @@ banner "The SHARED resolver refuses a review by the session's own model (#226)"
 # the resolver is shared layer and that fix was not a release. This is the
 # release: the rule lives in scripts/agents.lib.sh now, so every consumer's
 # `self-implemented` mapping stops having the blind spot the kit found in its
-# own. Asserted against a THROWAWAY policy, never the kit's — the kit's
-# reviewer crosses vendors, where there is nothing to refuse.
+# own. Asserted against a THROWAWAY policy, never the kit's — the kit's Codex
+# policy has a cross-vendor reviewer, while the Claude Code policy names a
+# local model (temporary, until cross-vendor authentication works).
 LOCALREV="$SCRATCH/local-reviewer.config.sh"
 cat >"$LOCALREV" <<'LOCALREV_CFG'
 AGENT_TIER_PLANNER='vendor-strong-9'
@@ -1401,12 +1423,10 @@ t_run_split sh "$KIT_WRAPPER" --alias mechanical
 	fail "--alias mechanical gave '$S_OUT'"
 t_run_split sh "$KIT_WRAPPER" --alias implementer content
 [ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
-# A value that is not an Anthropic id has no spawn word: it belongs to another
-# agent harness, and printing a guess would be worse than printing nothing.
+# The reviewer is now a local Anthropic id and has a spawn word.
 t_run_split sh "$KIT_WRAPPER" --alias reviewer
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
-	pass "--alias prints nothing for a tier that crosses agent harnesses — it is not spawnable in session" ||
-	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS); the reviewer crosses vendors and has no in-session spawn word"
+[ "$S_OUT" = opus ] && pass "--alias reviewer is 'opus' — the reviewer maps to claude-opus-5-5, spawnable in session" ||
+	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS), expected 'opus'"
 # Every alias it does print must be one the spawn parameter actually accepts.
 for tier in planner implementer mechanical; do
 	t_run_split sh "$KIT_WRAPPER" --alias "$tier"

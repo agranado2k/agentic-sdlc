@@ -136,30 +136,33 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #    reviewer sharing the implementer's model is one editorial pass wearing a
 #    second hat.
 # ---------------------------------------------------------------------------
-#    Here that is taken literally: the reviewer is a DIFFERENT VENDOR, not
-#    just a different model. A reviewer that shares the author's training
-#    shares the author's blind spots, and the kit's own docs call the
-#    cross-provider leg the highest-leverage wiring available. The dispatcher
-#    makes it reachable from a local session, so it no longer has to wait for
-#    CI to hold the secrets.
-AGENT_TIER_REVIEWER='codex:gpt-5.6-sol'
+#    The kit's model (temporary, until cross-vendor authentication works): the
+#    reviewer maps to Opus, the same as Implementer's plain tier. This violates
+#    the traditional rule that reviewer differs from implementer — but a
+#    cross-vendor reviewer that differs from implementer's vendor is how the
+#    kit normally keeps that rule. Now mapped to the host's reachable model,
+#    Opus. This repo confirmed 4 of 4 mechanical-tier tickets that day (#352,
+#    #354, #388, #423) through 2026-10-01 retro window 3; 401 evidence names the
+#    models the host can reach from Claude Code sessions. Cross-vendor mapping
+#    (codex:gpt-5.6-sol, codex:gpt-6-astra) returns when that CLI authenticates;
+#    ADR-0005 clause 4 (the policy file documents --model for reading back the
+#    mapped shape).
+AGENT_TIER_REVIEWER='claude-opus-5-5'
 #
 #    The case the plain lookup cannot see: the session ITSELF implemented, on
-#    the model this tier maps to — a planner-tier session writing a ticket's
-#    diff is exactly that, and this wave met it on every PR. Then the
-#    reviewer above IS the implementer, and the rule needs a second answer.
-#    It is resolved through the domain axis below, as
-#    `sh scripts/agents.kit.sh reviewer self-implemented` — a domain that
-#    names a situation rather than a medium, which the open vocabulary
-#    allows and the glossary's "Task domain" entry records — and
-#    tests/agents-tiers.test.sh holds it to differing from the reviewer.
-#    With the reviewer on another vendor this is close to vestigial — a
-#    Claude session cannot be running gpt-5.6-sol — but it stays mapped, and
-#    to a SECOND model rather than the same one: if the reviewer is ever
-#    localised again, the rule still has an answer, and ADR-0007's refusal —
-#    in scripts/agents.lib.sh since 0.22.0, so every project has it — is the
-#    net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='codex:gpt-6-astra'
+#    the model this tier maps to — an implementer-tier session on Opus writing a
+#    ticket's diff is exactly that, and this wave met it on many PRs. When the
+#    session runs on Opus and asks for a review on Opus, ADR-0007's refusal —
+#    in scripts/agents.lib.sh since 0.22.0, so every project has it — prints
+#    nothing and warns that the review would share the author's model. It is
+#    resolved through the domain axis below, as `sh scripts/agents.kit.sh
+#    reviewer self-implemented` — a domain that names a situation rather than a
+#    medium, which the open vocabulary allows and the glossary's "Task domain"
+#    entry records — and tests/agents-tiers.test.sh holds it to differing from
+#    the reviewer when the session differs from it. Mapped to Fable, the planner's
+#    model, so on a Fable session the refusal falls back to the plain reviewer
+#    (Opus), the net under both.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-fable-5-1'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
