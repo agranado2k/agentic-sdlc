@@ -2206,6 +2206,34 @@ start_in "$NG" GIT_CEILING_DIRECTORIES="$SCRATCH" TRACE_BEHIND_WARN=0
 	pass "outside any repository: exit 0, silent, no behind field" ||
 	fail "outside a repository: exit $S_STATUS, stdout '$S_OUT', event '$START'"
 
+# A LINKED WORKTREE MEASURES THE ROOT. The kit's hooks execute from the root
+# checkout, so a session opened in worktree/<slug> must report the ROOT's lag
+# — the working tree of git's common directory, the derivation scripts/trace.sh
+# uses — and never its own feature branch's, where being behind is normal.
+WR="$SCRATCH/wt-root-384"
+behind_kit "$WR"
+WBASE=$(git -C "$WR" rev-parse HEAD)
+behind_remote "$WR" 2
+git -C "$WR" merge -q --ff-only origin/main
+git -C "$WR" worktree add -q -b feat/wt-384 "$WR.wt" "$WBASE" 2>/dev/null
+start_in "$WR.wt" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 0 ] &&
+	pass "from a worktree two behind on its feature branch, a level ROOT records data.behind=0" ||
+	fail "a level root seen from a worktree: exit $S_STATUS, event $START"
+[ "$(str "$START" behind_of)" = root ] &&
+	pass "and the event says what was measured: data.behind_of=root" ||
+	fail "no data.behind_of=root on: $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "and says nothing about the feature branch" ||
+	fail "a level root still drew a note from the worktree: $S_ERR"
+git -C "$WR" reset -q --hard "$WBASE"
+start_in "$WR.wt" TRACE_BEHIND_WARN=1
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "a root two behind records data.behind=2 from inside the worktree" ||
+	fail "a root two behind, seen from the worktree: $START"
+case $S_ERR in *"$WR is 2 commits behind"*) pass "and the note names the root's path, not the worktree's" ;;
+*) fail "the note does not name the root path $WR: $S_ERR" ;; esac
+
 # THE POLICY. The shipped file documents the variable and leaves it empty; the
 # kit's twin sets it.
 grep -q "^TRACE_BEHIND_WARN=''$" "$KIT/scripts/trace.config.sh" &&
