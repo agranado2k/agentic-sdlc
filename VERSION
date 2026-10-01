@@ -1440,8 +1440,13 @@
 # drives the four exits with hostile bodies; tests/implement-deliver.test.sh
 # runs the skill's own call against a stub tracker; bootstrap.sh strips the
 # suite with the rest of tests/, .github/workflows/kit-ci.yml runs it,
-# README.md names it. The 0.26.0 history note below was misfiled under the
-# not-shared commentary by its own release; it sits in order now (#339).
+# README.md names it. Landed beside it since 0.34.0, from #332 (PR #374):
+# .agents/skills/retro/QUESTIONS.md and .agents/skills/retro/SKILL.md read
+# `data.posted` on a raise and `data.label_proposed` on a ticket.write, so
+# the eighth question's two rates are computable over a window that carries
+# them, and say which form each row used. The 0.26.0 history note below was
+# misfiled under the not-shared commentary by its own release; it sits in
+# order now (#339).
 
 shared-layer: 0.35.0
 
