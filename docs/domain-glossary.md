@@ -318,7 +318,11 @@ Grouped by the seam each term belongs to. Entry shape:
   the train's alone: the train ran autonomously and nobody could answer, so
   the reason names the instruction that made it so. `unasked` is not a
   verdict — a reader counts it with the landings that got none (ADR-0008,
-  amended 2026-10-01).
+  amended 2026-10-01). `data.by` names who answered: `operator`, a human
+  in the session; `train`, `/merge-train` judging the slice itself under
+  the operator's delegating instruction. `unasked` carries `train` too, and
+  `/pr-iterate` writes `operator` always (ADR-0008, amended 2026-10-01,
+  #385).
   - _Avoid_: "review" (a review is on a diff; feedback is on a slice);
     "rating".
 - **Subject** — what an event is about, written `<type>:<reference>`:
