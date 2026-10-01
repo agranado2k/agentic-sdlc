@@ -744,6 +744,18 @@ POLICY_FOR=
 WHERE=src/deep
 outcome_passed "from a subdirectory, a declared outcome still passes — the checker is found from the skills root" 6 pass
 outcome_named "…and an undeclared one is still refused there" 6 partial refused
+# …from the repository that holds the skills, never the one the cwd is in —
+# section 4's cases, held here too (review of PR #378, M-2): a fence that
+# resolved the checker from the cwd's own repository would call the row
+# unchecked from a nested checkout with no skills, and pass an undeclared
+# reading through a checker of that checkout's own.
+WHERE=vendor/clone
+outcome_passed "from a nested checkout with no skills, a declared outcome passes — the project's checker, not the clone's absent one" 6 pass
+outcome_named "…and an undeclared one is still refused there" 6 partial refused
+mkdir -p "$PROJECT/vendor/clone/scripts"
+printf 'exit 0\n' >"$PROJECT/vendor/clone/scripts/vocab.sh"
+outcome_named "…even with a pass-everything checker of the clone's own — the project's checker is the one run" 6 partial refused
+rm -r "$PROJECT/vendor/clone/scripts"
 # The checker absent: a stub skills root with no scripts/vocab.sh — the
 # nested repository holding skills from section 4 — while the project's own
 # checker is made to pass everything, so a borrowed checker would have said
