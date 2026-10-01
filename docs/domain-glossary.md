@@ -156,7 +156,7 @@ Grouped by the seam each term belongs to. Entry shape:
   is the *who*, and the clause keeps its four parts. A row that measured
   nothing — no fixtures written, no comparison made — has no comparator to
   name, and says so instead of implying one: `oracle: none — <why>`. Question
-  8's label row is one, until #332 records the pre-quiz label.
+  8's label row is one when none of its stamps carries the pre-quiz label.
   _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context

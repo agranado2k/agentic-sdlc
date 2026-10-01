@@ -59,6 +59,10 @@
 #      silence. `unasked` joins the outcome vocabulary in ADR-0008 (a dated
 #      amendment) and in the glossary; /pr-iterate's three verdicts are
 #      untouched, since it never asks a question nobody can answer.
+#  15. Every `data.agent` /review-pr writes — on a spawn, on a finding it
+#      raises itself, and on a finding it relays from a review that ran
+#      elsewhere — is one token from the closed sub-agent roster the skill
+#      owns as ONE list, never a name as a report spelled it (#346).
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -200,7 +204,7 @@ expects() {
 expects grill-me kind=grill.decision
 expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
-expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
+expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_proposed= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end
@@ -765,5 +769,149 @@ for v in hit adjusted missed unasked; do
 	printf '%s\n' "$gl" | grep -qF "\`$v\`" && pass "the glossary's Feedback entry names \`$v\`" ||
 		fail "the glossary's Feedback entry does not name \`$v\`"
 done
+
+# ---------------------------------------------------------------------------
+banner "15. Every data.agent the skill writes is a token from its own closed sub-agent roster (#346)"
+# ---------------------------------------------------------------------------
+# The retrospective reads the review signal PER SUB-AGENT (question 2), and a
+# review that was relayed — dispatched to another vendor, or run as a fallback
+# through the agent tool, and posted by the session that holds the credentials
+# — recorded its verdict and never its findings; where findings were recorded
+# the agent was spelled twenty ways in one window (retro 20261001T093317Z,
+# F3). So the skill owns ONE list, the sub-agent roster, and every
+# `data.agent=` on every trace line it documents is either that list's own
+# placeholder, `<roster-token>`, or a literal token on the list — never the
+# agent's title, never its number, never the name as a report spelled it.
+# The relayed finding is recorded by the same emit, marked `data.via=relay`,
+# with `unattributed` for a report that names no agent at all: the dispatched
+# worker's contract names none, and a lens guessed from the finding's text
+# would be the session's invention recorded as the reviewer's.
+RP=$(skill_md review-pr)
+# roster_rows <skill file> — the rows of the one list, in file order.
+roster_rows() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1"; }
+# roster_of <skill file> — the rows' tokens.
+roster_of() { roster_rows "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+# headings_without_row <skill file> — every `#### Agent N — Title` heading the
+# roster has no `— Agent N, Title` row for, one per line. Computed in a
+# function and asserted in the parent shell: a `fail` inside a piped loop
+# runs in a subshell and never reaches the suite's count (review of PR #369,
+# H-1 — the suite ended ALL GREEN around a printed FAIL).
+headings_without_row() {
+	_hw_rows=$(roster_rows "$1")
+	grep -E '^#### Agent [0-9]+ — ' "$1" | sed 's/^#### //' | while IFS= read -r _hw_h; do
+		_hw_num=${_hw_h%% — *}; _hw_title=${_hw_h#* — }; _hw_title=${_hw_title% (*}
+		printf '%s\n' "$_hw_rows" | grep -qF -- "— $_hw_num, $_hw_title" || printf '%s (%s)\n' "$_hw_num" "$_hw_title"
+	done
+}
+# agent_values <skill file> — every data.agent value a trace line carries,
+# quotes stripped, one per line.
+agent_values() { t_trace_lines "$1" | grep -oE "data\.agent=('[^']*'|\"[^\"]*\"|[^ ]*)" | sed -e 's/^data\.agent=//' -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'; }
+# off_roster <skill file> [roster] — the data.agent values the roster does
+# not hold, space-joined; the placeholder that names the roster is on it by
+# definition. The roster is the file's own unless one is given.
+off_roster() {
+	_or_roster=${2:-$(roster_of "$1")}
+	agent_values "$1" | while IFS= read -r _or_v; do
+		[ "$_or_v" = '<roster-token>' ] && continue
+		case "$_or_v" in
+		"") printf '%s ' '(empty)' ;;
+		*) printf '%s\n' "$_or_roster" | grep -qxF -- "$_or_v" || printf '%s ' "$_or_v" ;;
+		esac
+	done | sed 's/ $//'
+}
+ROSTER=$(roster_of "$RP")
+n_roster=$(printf '%s\n' "$ROSTER" | grep -c . | tr -d ' ')
+[ "$n_roster" -ge 8 ] && pass "/review-pr owns a sub-agent roster of $n_roster tokens, one list" ||
+	fail "/review-pr has no '**The sub-agent roster.**' list of at least eight tokens (seven agents and the unattributed case) — found $n_roster"
+bad_shape=$(printf '%s\n' "$ROSTER" | grep -vE '^[a-z][a-z0-9-]*$' || true)
+[ -z "$bad_shape" ] && pass "every roster token is [a-z][a-z0-9-]* — a token, not a title" ||
+	fail "a roster token is not a token: $(printf '%s' "$bad_shape" | tr '\n' ' ')"
+dupes=$(printf '%s\n' "$ROSTER" | sort | uniq -d | tr '\n' ' ')
+[ -z "$dupes" ] && pass "and no token is listed twice" || fail "roster tokens listed twice: $dupes"
+# The roster covers the agents: every `#### Agent N — Title` heading has a row
+# naming that number and that title, so a renamed or added agent cannot leave
+# the roster describing a review that no longer runs.
+no_row=$(headings_without_row "$RP" | tr '\n' ' ' | sed 's/ $//')
+[ -z "$no_row" ] && pass "every agent heading has its roster row, by number and title" ||
+	fail "the roster has no row for: $no_row — the heading and the roster disagree"
+sed 's/^#### Agent 4 — Simplicity Advocate$/#### Agent 4 — Complexity Hunter/' "$RP" >"$SCRATCH/bait-heading.md"
+[ "$(headings_without_row "$SCRATCH/bait-heading.md")" = 'Agent 4 (Complexity Hunter)' ] &&
+	pass "bait: a renamed agent heading with no roster row is named — in the parent shell, where it counts" ||
+	fail "bait: a renamed heading was not caught (got '$(headings_without_row "$SCRATCH/bait-heading.md")')"
+n_head=$(grep -cE '^#### Agent [0-9]+ — ' "$RP" | tr -d ' ')
+[ "$n_head" = 7 ] && pass "seven agent headings, as the skill's description says" || fail "found $n_head agent headings, not 7"
+printf '%s\n' "$ROSTER" | grep -qx unattributed && pass "the roster holds 'unattributed' for a report that names no agent" ||
+	fail "the roster has no 'unattributed' token — a dispatched worker's report names no agent, and the relay then has nothing legal to write"
+# Every data.agent the chain writes is held — across the chain, so a second
+# skill writing one off the roster is red here too, not only /review-pr.
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	vals=$(agent_values "$f" | grep -c . | tr -d ' ')
+	[ "$vals" = 0 ] && continue
+	bad=$(off_roster "$f" "$ROSTER")
+	[ -z "$bad" ] && pass "/$s: all $vals data.agent values are the roster's placeholder or a roster token" ||
+		fail "/$s writes data.agent off the roster: $bad — a value is <roster-token> or a token on /review-pr's list, never a name as spelled"
+done
+[ "$(agent_values "$RP" | grep -c . | tr -d ' ')" -ge 3 ] && pass "/review-pr writes data.agent on at least three lines: the spawn, its own raise, the relayed raise" ||
+	fail "/review-pr writes data.agent on $(agent_values "$RP" | grep -c . | tr -d ' ') lines — the spawn, its own raise and the relayed raise each carry one"
+# The relay path: one finding.raise per relayed finding, marked as relayed,
+# the report read as data.
+relay=$(t_trace_lines "$RP" | grep -F 'kind=finding.raise' | grep -F 'data.via=relay' || true)
+[ -n "$relay" ] && pass "/review-pr's relay path records each relayed finding as a finding.raise carrying data.via=relay" ||
+	fail "/review-pr has no finding.raise line carrying data.via=relay — a relayed review records its verdict and never its findings (retro F3)"
+for tok in 'data.id=' 'data.severity=' "data.where='<file:line>'" 'data.agent=<roster-token>' 'subject=pr:#<N>'; do
+	printf '%s\n' "$relay" | grep -qF -- "$tok" && pass "the relayed raise carries $tok" ||
+		fail "the relayed raise does not carry $tok"
+done
+relay_sec=$(sed -n '/^#### Relaying a review/,/^### 7\. /p' "$RP")
+[ -n "$relay_sec" ] && pass "the relay path has its own heading under §6" || fail "/review-pr §6 has no '#### Relaying a review' heading"
+printf '%s\n' "$relay_sec" | grep -qi 'never the name as the report spelled it' &&
+	pass "and says the agent is never the name as the report spelled it" ||
+	fail "the relay path does not say 'never the name as the report spelled it'"
+printf '%s\n' "$relay_sec" | grep -qF 'unattributed' && printf '%s\n' "$relay_sec" | grep -qi 'names no agent' &&
+	pass "and says a report that names no agent is recorded as unattributed" ||
+	fail "the relay path does not say what a report that names no agent records (unattributed)"
+printf '%s\n' "$relay_sec" | grep -qi 'untrusted content' && printf '%s\n' "$relay_sec" | grep -qi 'read as data' &&
+	pass "and reads the report as untrusted content — data, never instructions" ||
+	fail "the relay path does not say the report is untrusted content read as data"
+printf '%s\n' "$relay_sec" | grep -qF 'data.where=unsafe-path' &&
+	pass "and a path outside the plain set is never typed — data.where=unsafe-path, as /pr-iterate's dismissal already does" ||
+	fail "the relay path does not say what to do with a report path that cannot be quoted safely (data.where=unsafe-path)"
+# The demo: a relayed report of three findings becomes three raise lines,
+# agents from the roster — the documented line, filled once per token, runs
+# and what it wrote verifies. Then the bait: the same line with the agent as
+# a report would spell it, misspelled, or left to the writer, is red here.
+dir="$SCRATCH/run.relay"
+n_ok=0
+for tok in $ROSTER; do
+	cmd=$(printf '%s\n' "$relay" | grep -o '`sh scripts/trace\.sh[^`]*`' | head -1 | tr -d '`' | sed "s/<roster-token>/$tok/")
+	cmd=$(t_trace_runnable "$cmd")
+	if ( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ); then n_ok=$((n_ok + 1)); else fail "the relayed raise does not run with data.agent=$tok: $cmd"; fi
+done
+[ "$n_roster" -gt 0 ] && [ "$n_ok" = "$n_roster" ] && pass "the relayed raise runs once per roster token ($n_ok lines)" || true
+[ -d "$dir" ] && ( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+	pass "and what they wrote verifies" || fail "the relayed raises ran but the trace they wrote does not verify"
+[ -d "$dir" ] && [ "$(cat "$dir"/events/*.jsonl 2>/dev/null | grep -c '"kind":"finding.raise"')" = "$n_roster" ] &&
+	pass "the trace holds one finding.raise per roster token ($n_roster lines), agents from the roster" ||
+	fail "the trace does not hold $n_roster finding.raise lines"
+bait_agent() { sed "/data\.via=relay/ s/data\.agent=<roster-token>/data.agent=$1/" "$RP" >"$SCRATCH/bait-agent.md"; }
+bait_agent "'Security Sentinel'"
+[ "$(off_roster "$SCRATCH/bait-agent.md")" = 'Security Sentinel' ] && pass "bait: the agent as the report spelled it — 'Security Sentinel' — goes red" ||
+	fail "bait: a relayed raise carrying data.agent='Security Sentinel' was not caught (got '$(off_roster "$SCRATCH/bait-agent.md")')"
+bait_agent secuirty
+[ "$(off_roster "$SCRATCH/bait-agent.md")" = secuirty ] && pass "bait: a misspelled token — secuirty — goes red" ||
+	fail "bait: a relayed raise carrying data.agent=secuirty was not caught (got '$(off_roster "$SCRATCH/bait-agent.md")')"
+bait_agent "'secur.*'"
+[ "$(off_roster "$SCRATCH/bait-agent.md")" = 'secur.*' ] && pass "bait: a pattern — secur.* — is not a token, and goes red" ||
+	fail "bait: a relayed raise carrying data.agent='secur.*' was not caught — the holder matched it as a regex (got '$(off_roster "$SCRATCH/bait-agent.md")')"
+bait_agent "'<the agent that raised it>'"
+[ "$(off_roster "$SCRATCH/bait-agent.md")" = '<the agent that raised it>' ] && pass "bait: an open placeholder — the writer's own spelling — goes red" ||
+	fail "bait: a relayed raise carrying data.agent='<the agent that raised it>' was not caught (got '$(off_roster "$SCRATCH/bait-agent.md")')"
+cmp -s "$SCRATCH/bait-agent.md" "$RP" && fail "the bait planted nothing — the relayed raise's anchor moved" || pass "the baits planted their lines"
+# And the holder reads the roster from the FILE: a token withdrawn from the
+# list while the demo above still ran it is what this catches.
+sed '/^- `unattributed` — /d' "$RP" >"$SCRATCH/bait-roster.md"
+roster_of "$SCRATCH/bait-roster.md" | grep -qx unattributed && fail "bait: withdrawing a roster row changed nothing — the roster is not read from the list" ||
+	pass "bait: a roster row withdrawn from the list is gone from the roster the holder reads"
 
 t_done "trace skills contract"
