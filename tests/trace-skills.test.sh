@@ -1130,4 +1130,154 @@ for tok in '`data.by`' '`operator`' '`train`'; do
 		fail "the glossary's Feedback entry does not name $tok"
 done
 
+
+# ---------------------------------------------------------------------------
+banner "18. A thread a human closed with no commit reaches finding.dismiss, driven through a stub forge (#413)"
+# ---------------------------------------------------------------------------
+# Section 5 holds the dismissal's tokens and that the snapshot asks for a
+# thread's resolved state; across two waves the kind still never fired. So
+# the path is DRIVEN here, end to end, from the skill's own text: step 1's
+# thread and inline-comment listings run against a stub forge, the fence that
+# names the dismissed threads runs on what they printed, and the documented
+# emit runs once per line it printed, into a scratch trace. A placeholder the
+# snapshot cannot fill — the line a comment was FIRST posted on, who resolved
+# the thread, whether a commit moved its line — is red here, by name.
+PI=$(skill_md pr-iterate)
+D18="$SCRATCH/dismiss"
+mkdir -p "$D18/bin"
+# The stub forge renders a `--jq` projection the one way the snapshot is held
+# to write one (tests/typed-return.test.sh): `<listing>[] | "<template>"`,
+# each `\(.fact)` replaced from a fixture node — one node per line, `.fact=value`
+# fields separated by tabs — and `null` for a fact the node lacks, as jq would.
+cat >"$D18/bin/gh" <<'GHEOF'
+#!/bin/sh
+jq=''; prev=''
+for a in "$@"; do [ "$prev" = --jq ] && jq=$a; prev=$a; done
+case "$1 $2" in
+'api user') printf '%s\n' "$GH_ME"; exit 0 ;;
+'api graphql') fx=$GH_THREADS ;;
+"api repos/{owner}/{repo}/pulls/$PR/comments") fx=$GH_COMMENTS ;;
+*) exit 0 ;;
+esac
+tpl=$(printf '%s\n' "$jq" | sed -n 's/^[^|]*\[\] | "\(.*\)"$/\1/p')
+TPL=$tpl awk -F '\t' '{
+	delete v
+	for (i = 1; i <= NF; i++) { k = $i; sub(/=.*/, "", k); x = $i; sub(/^[^=]*=/, "", x); v[k] = x }
+	out = ""; t = ENVIRON["TPL"]
+	while (match(t, /\\\([^)]*\)/)) {
+		k = substr(t, RSTART + 2, RLENGTH - 3)
+		out = out substr(t, 1, RSTART - 1) ((k in v) ? v[k] : "null")
+		t = substr(t, RSTART + RLENGTH)
+	}
+	print out t
+}' "$fx"
+GHEOF
+chmod +x "$D18/bin/gh"
+T=$(printf '\t')
+# The first iteration's forge. The comment was posted on scripts/check.sh:12
+# and the line has since moved to 15: data.where is the 12, the line its
+# finding.raise carries. One thread per way a resolved thread is NOT a
+# dismissal: answered by a reply of ours citing the commit, outdated by a
+# commit that moved its line, resolved by us, and still open.
+cat >"$D18/threads" <<EOF
+.id=PRRT_dismissed$T.isResolved=true$T.comments.nodes[0].databaseId=101$T.isOutdated=false$T.resolvedBy.login=alice$T.path=scripts/check.sh$T.line=15$T.originalLine=12
+.id=PRRT_answered$T.isResolved=true$T.comments.nodes[0].databaseId=102$T.isOutdated=false$T.resolvedBy.login=alice$T.path=scripts/vocab.sh$T.line=40$T.originalLine=40
+.id=PRRT_moved$T.isResolved=true$T.comments.nodes[0].databaseId=103$T.isOutdated=true$T.resolvedBy.login=alice$T.path=scripts/trace.sh$T.line=null$T.originalLine=7
+.id=PRRT_ours$T.isResolved=true$T.comments.nodes[0].databaseId=104$T.isOutdated=false$T.resolvedBy.login=iterbot$T.path=README.md$T.line=3$T.originalLine=3
+.id=PRRT_open$T.isResolved=false$T.comments.nodes[0].databaseId=105$T.isOutdated=false$T.path=bootstrap.sh$T.line=9$T.originalLine=9
+EOF
+cat >"$D18/comments" <<EOF
+.id=101$T.user.type=Bot$T.user.login=reviewbot$T.path=scripts/check.sh$T.line=15$T.original_line=12$T.in_reply_to_id=null
+.id=102$T.user.type=Bot$T.user.login=reviewbot$T.path=scripts/vocab.sh$T.line=40$T.original_line=40$T.in_reply_to_id=null
+.id=201$T.user.type=User$T.user.login=iterbot$T.path=scripts/vocab.sh$T.line=40$T.original_line=40$T.in_reply_to_id=102
+.id=103$T.user.type=Bot$T.user.login=reviewbot$T.path=scripts/trace.sh$T.line=null$T.original_line=7$T.in_reply_to_id=null
+.id=104$T.user.type=Bot$T.user.login=reviewbot$T.path=README.md$T.line=3$T.original_line=3$T.in_reply_to_id=null
+.id=105$T.user.type=Bot$T.user.login=reviewbot$T.path=bootstrap.sh$T.line=9$T.original_line=9$T.in_reply_to_id=null
+EOF
+# Step 1's two listings, lifted from the skill's own fence, continuation lines
+# joined: the thread listing and the inline-comment listing.
+awk '/^### 1 /{ on = 1 } /^### 2 /{ exit } on' "$PI" |
+	awk '/^```bash$/ { f = 1; next } f && /^```$/ { exit } f' |
+	awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' >"$D18/step1"
+grep -F 'reviewThreads' "$D18/step1" >"$D18/list.threads" || :
+grep -F 'pulls/$PR/comments' "$D18/step1" >"$D18/list.comments" || :
+[ "$(grep -c '' "$D18/list.threads")" = 1 ] && [ "$(grep -c '' "$D18/list.comments")" = 1 ] &&
+	pass "step 1 prints one thread listing and one inline-comment listing to drive" ||
+	fail "step 1's fence should hold exactly one reviewThreads listing and one pulls/\$PR/comments listing"
+# What the thread listing prints is what the dismissal is read from: run it.
+(cd "$D18" && PATH="$D18/bin:$PATH" PR=7 GH_THREADS="$D18/threads" GH_COMMENTS="$D18/comments" GH_ME=iterbot \
+	sh "$D18/list.threads") >"$D18/threads.out" 2>&1
+line1=$(grep '^PRRT_dismissed ' "$D18/threads.out")
+for fact in 'scripts/check.sh:12' 'alice' 'false'; do
+	case " $line1 " in
+	*" $fact "*) pass "the thread listing prints $fact for the dismissed thread — a fact the emit is filled from" ;;
+	*) fail "the thread listing does not print '$fact' for the dismissed thread — the emit's placeholder has nothing to fill it: '$line1'" ;;
+	esac
+done
+# The fence that names the dismissed threads: defined in one sh fence, called
+# in one bash fence whose placeholder line is where step 1's two listings are
+# saved — swapped here for the lifted listings, nothing else touched.
+t_lift_fence "$PI" 'dismissed_threads()' "$D18/fn.sh"
+t_lift_fence "$PI" 'dismissed_threads "$scratch/' "$D18/call.raw" bash
+[ -s "$D18/fn.sh" ] && pass "/pr-iterate defines dismissed_threads in a runnable fence" ||
+	fail "/pr-iterate has no fence defining dismissed_threads() — which thread a human closed is left to a session to work out"
+sed -e "s|^\\([[:space:]]*\\)# … step 1's thread listing .*|\\1sh '$D18/list.threads' >\"\$scratch/threads\"; sh '$D18/list.comments' >\"\$scratch/comments\"|" \
+	"$D18/call.raw" >"$D18/call.sh"
+[ -s "$D18/call.raw" ] && [ "$(grep -c "list.threads" "$D18/call.sh")" = 1 ] &&
+	pass "/pr-iterate calls it on step 1's two listings, saved to the scratch directory at one marked line" ||
+	fail "/pr-iterate should call dismissed_threads in a bash fence whose '# … step 1's thread listing …' line saves the two listings"
+# The documented emit, one per printed line: the forge id first, the
+# file:line second, who resolved it third.
+span=$(t_trace_spans "$PI" | grep -F 'kind=finding.dismiss')
+# dismiss_iteration <trace dir> <threads fixture> — one iteration: the fence
+# run where a consumer runs it, then the documented line per row it printed.
+dismiss_iteration() {
+	scr="$D18/scratch.$$"
+	rm -rf "$scr" && mkdir -p "$scr"
+	(cd "$ROOT" && PATH="$D18/bin:$PATH" PR=7 scratch="$scr" GH_THREADS="$2" GH_COMMENTS="$D18/comments" GH_ME=iterbot \
+		sh -c '. "$1"; . "$2"' _ "$D18/fn.sh" "$D18/call.sh") >"$D18/rows" 2>"$D18/rows.err"
+	while read -r thread where by; do
+		cmd=$(printf '%s\n' "$span" | sed -e 's/ *|| *:$//' -e 's/#<N>/#7/g' -e 's/data\.via=thread|review/data.via=thread/' \
+			-e "s|'<file:line>'|'$where'|" -e "s|'<the forge id[^>]*>'|'$thread'|" \
+			-e "s|reason='<[^>]*>'|reason='$by resolved it; no commit or reply answers it'|")
+		(cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$cmd") >/dev/null 2>"$D18/emit.err" ||
+			fail "the documented finding.dismiss line, filled from '$thread $where $by', does not run: $(head -1 "$D18/emit.err")"
+	done <"$D18/rows"
+	rm -rf "$scr"
+}
+# pairs <trace dir> — one line per finding.dismiss: subject, thread, where.
+pairs() {
+	cat "$1"/events/*.jsonl 2>/dev/null | grep -F '"kind":"finding.dismiss"' |
+		sed 's/.*"subject":"\([^"]*\)".*"thread":"\([^"]*\)".*/\1 \2/;' >"$D18/p.subj"
+	cat "$1"/events/*.jsonl 2>/dev/null | grep -F '"kind":"finding.dismiss"' |
+		sed 's/.*"where":"\([^"]*\)".*/\1/' | paste -d' ' "$D18/p.subj" -
+}
+TR18="$D18/trace"
+dismiss_iteration "$TR18" "$D18/threads"
+pairs "$TR18" >"$D18/after1"
+[ "$(grep -c '' "$D18/after1")" = 1 ] && pass "iteration 1: exactly one finding.dismiss" ||
+	fail "iteration 1 should record exactly one finding.dismiss; it recorded $(grep -c '' "$D18/after1"): $(tr '\n' '|' <"$D18/after1") (fence said: $(cat "$D18/rows" "$D18/rows.err" | tr '\n' '|'))"
+[ "$(cat "$D18/after1")" = 'pr:#7 PRRT_dismissed scripts/check.sh:12' ] &&
+	pass "…on the PR, for the thread resolved with no commit, at the line its comment was first posted on" ||
+	fail "the dismissal should be 'pr:#7 PRRT_dismissed scripts/check.sh:12'; it is '$(cat "$D18/after1")'"
+for t in PRRT_answered PRRT_moved PRRT_ours PRRT_open; do
+	grep -qF " $t " "$D18/after1" && fail "a dismissal was recorded for $t — not a thread a human closed with no commit" ||
+		pass "no dismissal for $t"
+done
+[ -s "$D18/after1" ] && ( cd "$ROOT" && TRACE_DIR="$TR18" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+	pass "the trace it wrote verifies" || fail "the dismissal's trace does not verify"
+# The second iteration sees the same closed thread. No iteration reads the
+# trace (ADR-0008 clause 7), so a repeat is possible by decision — and the
+# pair a reader counts once is the same pair: nothing new.
+dismiss_iteration "$TR18" "$D18/threads"
+pairs "$TR18" | sort -u >"$D18/after2"
+[ -s "$D18/after1" ] && cmp -s "$D18/after1" "$D18/after2" && pass "iteration 2 over the same closed thread adds no new pair: the dismissal is counted once" ||
+	fail "iteration 2 added a pair: $(tr '\n' '|' <"$D18/after2")"
+# A path holding anything the emit may not carry is never typed into the line.
+printf '.id=PRRT_quote%s.isResolved=true%s.comments.nodes[0].databaseId=106%s.isOutdated=false%s.resolvedBy.login=bob%s.path=a'"'"'b.sh%s.originalLine=4\n' "$T" "$T" "$T" "$T" "$T" "$T" >"$D18/threads.unsafe"
+dismiss_iteration "$D18/trace.unsafe" "$D18/threads.unsafe"
+[ "$(pairs "$D18/trace.unsafe")" = 'pr:#7 PRRT_quote unsafe-path' ] &&
+	pass "a path with a quote in it is recorded as data.where=unsafe-path" ||
+	fail "a path with a quote in it should be recorded as unsafe-path; got '$(pairs "$D18/trace.unsafe")'"
+
 t_done "trace skills contract"
