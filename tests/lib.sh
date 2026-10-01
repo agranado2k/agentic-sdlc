@@ -970,3 +970,15 @@ t_field_tokens() {
 	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 }
 
+# t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
+# <file> opened with ```<language> (sh when omitted) whose body holds <literal>
+# as a fixed string, written whole to <out>, to be sourced and run. The
+# literal is usually a function's `name()`, so the fence that defines it is
+# the one lifted; a document's executable text is run, never a mirror of it.
+# <out> is empty when no such fence exists, which the caller asserts on.
+t_lift_fence() {
+	awk -v lit="$2" -v lang="${4:-sh}" '$0 == "```" lang { buf = ""; on = 1; next }
+		on && /^```$/ { if (index(buf, lit)) { printf "%s", buf; exit } on = 0; next }
+		on { buf = buf $0 "\n" }' "$1" >"$3"
+}
+
