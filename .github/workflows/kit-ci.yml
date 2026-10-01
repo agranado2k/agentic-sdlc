@@ -142,7 +142,13 @@ jobs:
     name: Docs set + UPDATING recipe (end-to-end)
     runs-on: ubuntu-latest
     steps:
+      # Full depth with tags, as self-host: D and D2 mark a stale worked
+      # example release-bound only when the declared release's tag peels,
+      # and /pr-iterate reads that marker from this job's log (#347).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
