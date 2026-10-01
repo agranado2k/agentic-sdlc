@@ -415,11 +415,16 @@ hook_final() {
 	return 0
 }
 
-# hook_now_ms — the wall clock in milliseconds, or status 1 where `date` has no
-# sub-second field. `%N` is not POSIX: GNU date answers it, and a date that does
-# not leaves a letter behind, which the digit check turns into "no clock".
+# hook_now_ms [<file>] — the wall clock in milliseconds, or with a file its
+# last modification; status 1 where `date` has no sub-second field. `%N` is not
+# POSIX: GNU date answers it, and a date that does not leaves a letter behind,
+# which the digit check turns into "no clock".
 hook_now_ms() {
-	_nm=$(date +%s%N 2>/dev/null) || return 1
+	if [ -n "${1:-}" ]; then
+		_nm=$(date -r "$1" +%s%N 2>/dev/null) || return 1
+	else
+		_nm=$(date +%s%N 2>/dev/null) || return 1
+	fi
 	case $_nm in '' | *[!0-9]*) return 1 ;; esac
 	[ "${#_nm}" -gt 6 ] || return 1
 	printf '%s' "${_nm%??????}"
@@ -545,20 +550,12 @@ hook_tail_facts() {
 	[ "$_tf_kind" != "$_tf" ] && [ "${#_tf_kind}" -le 60 ] && hook_id_ok "$_tf_kind" &&
 		hook_last_kind=$_tf_kind
 	_tf_now=$(hook_now_ms) || _tf_now=
-	_tf_m=$(date -r "$1" +%s%N 2>/dev/null) || _tf_m=
-	case $_tf_m in
-	'' | *[!0-9]*)
+	if ! _tf_m=$(hook_now_ms "$1") || [ -z "$_tf_now" ]; then
 		_tf_m=$(date -r "$1" +%s 2>/dev/null) || _tf_m=
 		case $_tf_m in '' | *[!0-9]*) return 0 ;; esac
 		_tf_m=$((_tf_m * 1000))
-		[ -n "$_tf_now" ] || _tf_now=$(($(date +%s) * 1000))
-		;;
-	*)
-		[ "${#_tf_m}" -gt 6 ] || return 0
-		_tf_m=${_tf_m%??????}
-		[ -n "$_tf_now" ] || return 0
-		;;
-	esac
+		_tf_now=$(($(date +%s) * 1000))
+	fi
 	hook_last_age_ms=$((_tf_now - _tf_m))
 	[ "$hook_last_age_ms" -ge 0 ] || hook_last_age_ms=0
 	return 0
