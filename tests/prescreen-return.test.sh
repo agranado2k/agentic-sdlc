@@ -379,6 +379,17 @@ Evidence: "retry three times"'
 	refused "a span of 7 bytes is refused — though it is in the text" "$(with_evidence 'Evidence: "seven77"')" "$SCRATCH/short"
 	accepted "a span of 8 bytes passes" "$(with_evidence 'Evidence: "eight888"')" "$SCRATCH/short"
 	has "at least 8 bytes" "the floor is said where the check is, as the number the fence holds"
+	# …unless the span is the whole text, trimmed of trailing whitespace
+	# (ruling on PR #357): a text shorter than the floor is quoted whole.
+	printf 'LGTM\n' >"$SCRATCH/whole"
+	printf 'LGTM \t\n\n' >"$SCRATCH/whole-trailing"
+	printf 'LGTM, but rename the helper first\n' >"$SCRATCH/more-same-line"
+	printf 'LGTM\nbut rename the helper first\n' >"$SCRATCH/more-next-line"
+	accepted "a span under 8 bytes passes when it is the whole text" "$(with_evidence 'Evidence: "LGTM"')" "$SCRATCH/whole"
+	accepted "…the whole text, trimmed of trailing whitespace" "$(with_evidence 'Evidence: "LGTM"')" "$SCRATCH/whole-trailing"
+	refused "…and is refused when the text says more on the same line" "$(with_evidence 'Evidence: "LGTM"')" "$SCRATCH/more-same-line"
+	refused "…and is refused when the text says more on another line" "$(with_evidence 'Evidence: "LGTM"')" "$SCRATCH/more-next-line"
+	has "unless it is the whole" "the one exception to the floor is said where the floor is"
 	refused "a span carrying a tab is refused — though it is in the text" "$(with_evidence "Evidence: \"rename${TAB}the helper\"")"
 	refused "a span with a byte outside printable ASCII is refused — the reader quotes around it" "$(with_evidence 'Evidence: "an arrow → and a dash"')"
 	accepted "…and the printable part of the same line passes" "$(with_evidence 'Evidence: "and a dash"')"

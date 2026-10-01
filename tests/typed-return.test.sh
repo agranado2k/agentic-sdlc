@@ -342,6 +342,27 @@ refused "a span of 7 bytes is refused — though it is in the comment" bot \
 accepted "a span of 8 bytes passes" bot \
 	"$(with_evidence 'Evidence: "eight888"')" pulls/comments/5
 assert_file_has "$FLAT" "at least 8 bytes" "the floor is said where the check is, as the number the fence holds"
+# …unless the span is the whole comment (ruling on PR #357): a real review
+# comment can be shorter than the floor — `LGTM` — and quoting all of it is
+# all the reading there is to prove. Whole means the comment's entire body,
+# trimmed of trailing whitespace; the same four bytes inside a longer comment
+# are refused, and an empty comment still has nothing to quote.
+printf 'LGTM\n' >"$FORGE/pulls/comments/6"
+printf 'LGTM \t\n\n' >"$FORGE/pulls/comments/7"
+printf 'LGTM, but rename the helper first\n' >"$FORGE/pulls/comments/8"
+printf 'LGTM\nbut rename the helper first\n' >"$FORGE/pulls/comments/9"
+: >"$FORGE/pulls/comments/10"
+accepted "a span under 8 bytes passes when it is the whole comment" bot \
+	"$(with_evidence 'Evidence: "LGTM"')" pulls/comments/6
+accepted "…the whole comment, trimmed of trailing whitespace" bot \
+	"$(with_evidence 'Evidence: "LGTM"')" pulls/comments/7
+refused "…and is refused when the comment says more on the same line" bot \
+	"$(with_evidence 'Evidence: "LGTM"')" pulls/comments/8
+refused "…and is refused when the comment says more on another line" bot \
+	"$(with_evidence 'Evidence: "LGTM"')" pulls/comments/9
+refused "an empty span is refused against an empty comment — nothing was there to quote" bot \
+	"$(with_evidence 'Evidence: ""')" pulls/comments/10
+assert_file_has "$FLAT" "unless it is the whole" "the one exception to the floor is said where the floor is"
 
 TAB=$(printf '\t')
 ESC=$(printf '\033')
