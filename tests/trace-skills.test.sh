@@ -438,8 +438,22 @@ banner "10. Every data.agent the skill writes is a token from its own closed sub
 # worker's contract names none, and a lens guessed from the finding's text
 # would be the session's invention recorded as the reviewer's.
 RP=$(skill_md review-pr)
-# roster_of <skill file> — the tokens of the one list, in file order.
-roster_of() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+# roster_rows <skill file> — the rows of the one list, in file order.
+roster_rows() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1"; }
+# roster_of <skill file> — the rows' tokens.
+roster_of() { roster_rows "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+# headings_without_row <skill file> — every `#### Agent N — Title` heading the
+# roster has no `— Agent N, Title` row for, one per line. Computed in a
+# function and asserted in the parent shell: a `fail` inside a piped loop
+# runs in a subshell and never reaches the suite's count (review of PR #369,
+# H-1 — the suite ended ALL GREEN around a printed FAIL).
+headings_without_row() {
+	_hw_rows=$(roster_rows "$1")
+	grep -E '^#### Agent [0-9]+ — ' "$1" | sed 's/^#### //' | while IFS= read -r _hw_h; do
+		_hw_num=${_hw_h%% — *}; _hw_title=${_hw_h#* — }; _hw_title=${_hw_title% (*}
+		printf '%s\n' "$_hw_rows" | grep -qF -- "— $_hw_num, $_hw_title" || printf '%s (%s)\n' "$_hw_num" "$_hw_title"
+	done
+}
 # agent_values <skill file> — every data.agent value a trace line carries,
 # quotes stripped, one per line.
 agent_values() { t_trace_lines "$1" | grep -oE "data\.agent=('[^']*'|\"[^\"]*\"|[^ ]*)" | sed -e 's/^data\.agent=//' -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'; }
@@ -452,7 +466,7 @@ off_roster() {
 		[ "$_or_v" = '<roster-token>' ] && continue
 		case "$_or_v" in
 		"") printf '%s ' '(empty)' ;;
-		*) printf '%s\n' "$_or_roster" | grep -qx -- "$_or_v" || printf '%s ' "$_or_v" ;;
+		*) printf '%s\n' "$_or_roster" | grep -qxF -- "$_or_v" || printf '%s ' "$_or_v" ;;
 		esac
 	done | sed 's/ $//'
 }
@@ -468,13 +482,13 @@ dupes=$(printf '%s\n' "$ROSTER" | sort | uniq -d | tr '\n' ' ')
 # The roster covers the agents: every `#### Agent N — Title` heading has a row
 # naming that number and that title, so a renamed or added agent cannot leave
 # the roster describing a review that no longer runs.
-rows=$(awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$RP")
-n_head=0
-grep -E '^#### Agent [0-9]+ — ' "$RP" | sed 's/^#### //' | while IFS= read -r h; do
-	num=${h%% — *}; title=${h#* — }; title=${title% (*}
-	printf '%s\n' "$rows" | grep -qF -- "— $num, $title" && pass "roster row for $num ($title)" ||
-		fail "the roster has no row '— $num, $title' — the heading and the roster disagree"
-done
+no_row=$(headings_without_row "$RP" | tr '\n' ' ' | sed 's/ $//')
+[ -z "$no_row" ] && pass "every agent heading has its roster row, by number and title" ||
+	fail "the roster has no row for: $no_row — the heading and the roster disagree"
+sed 's/^#### Agent 4 — Simplicity Advocate$/#### Agent 4 — Complexity Hunter/' "$RP" >"$SCRATCH/bait-heading.md"
+[ "$(headings_without_row "$SCRATCH/bait-heading.md")" = 'Agent 4 (Complexity Hunter)' ] &&
+	pass "bait: a renamed agent heading with no roster row is named — in the parent shell, where it counts" ||
+	fail "bait: a renamed heading was not caught (got '$(headings_without_row "$SCRATCH/bait-heading.md")')"
 n_head=$(grep -cE '^#### Agent [0-9]+ — ' "$RP" | tr -d ' ')
 [ "$n_head" = 7 ] && pass "seven agent headings, as the skill's description says" || fail "found $n_head agent headings, not 7"
 printf '%s\n' "$ROSTER" | grep -qx unattributed && pass "the roster holds 'unattributed' for a report that names no agent" ||
@@ -508,7 +522,7 @@ printf '%s\n' "$relay_sec" | grep -qi 'never the name as the report spelled it' 
 printf '%s\n' "$relay_sec" | grep -qF 'unattributed' && printf '%s\n' "$relay_sec" | grep -qi 'names no agent' &&
 	pass "and says a report that names no agent is recorded as unattributed" ||
 	fail "the relay path does not say what a report that names no agent records (unattributed)"
-printf '%s\n' "$relay_sec" | grep -qi 'untrusted' && printf '%s\n' "$relay_sec" | grep -qi 'data' &&
+printf '%s\n' "$relay_sec" | grep -qi 'untrusted content' && printf '%s\n' "$relay_sec" | grep -qi 'read as data' &&
 	pass "and reads the report as untrusted content — data, never instructions" ||
 	fail "the relay path does not say the report is untrusted content read as data"
 printf '%s\n' "$relay_sec" | grep -qF 'data.where=unsafe-path' &&
@@ -529,7 +543,7 @@ done
 [ -d "$dir" ] && ( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
 	pass "and what they wrote verifies" || fail "the relayed raises ran but the trace they wrote does not verify"
 [ -d "$dir" ] && [ "$(cat "$dir"/events/*.jsonl 2>/dev/null | grep -c '"kind":"finding.raise"')" = "$n_roster" ] &&
-	pass "the trace holds one finding.raise per token — the demo's three findings are three lines, agents from the roster" ||
+	pass "the trace holds one finding.raise per roster token ($n_roster lines), agents from the roster" ||
 	fail "the trace does not hold $n_roster finding.raise lines"
 bait_agent() { sed "/data\.via=relay/ s/data\.agent=<roster-token>/data.agent=$1/" "$RP" >"$SCRATCH/bait-agent.md"; }
 bait_agent "'Security Sentinel'"
@@ -538,6 +552,9 @@ bait_agent "'Security Sentinel'"
 bait_agent secuirty
 [ "$(off_roster "$SCRATCH/bait-agent.md")" = secuirty ] && pass "bait: a misspelled token — secuirty — goes red" ||
 	fail "bait: a relayed raise carrying data.agent=secuirty was not caught (got '$(off_roster "$SCRATCH/bait-agent.md")')"
+bait_agent "'secur.*'"
+[ "$(off_roster "$SCRATCH/bait-agent.md")" = 'secur.*' ] && pass "bait: a pattern — secur.* — is not a token, and goes red" ||
+	fail "bait: a relayed raise carrying data.agent='secur.*' was not caught — the holder matched it as a regex (got '$(off_roster "$SCRATCH/bait-agent.md")')"
 bait_agent "'<the agent that raised it>'"
 [ "$(off_roster "$SCRATCH/bait-agent.md")" = '<the agent that raised it>' ] && pass "bait: an open placeholder — the writer's own spelling — goes red" ||
 	fail "bait: a relayed raise carrying data.agent='<the agent that raised it>' was not caught (got '$(off_roster "$SCRATCH/bait-agent.md")')"
