@@ -34,6 +34,11 @@
 #      opens by telling the worker it is offline, forbids a fetch and a forge
 #      call, and makes `REVIEWED: <full sha>` the report's first line — the
 #      sha pinned before the diff is read against it.
+#   9. The reuse/DRY lens's two cases (#419): a duplication the diff ADDS is a
+#      finding; one it merely touches or extends is a LOW candidate ticket
+#      citing shared invariant §10, with a fix line that asks this PR for
+#      nothing — in one sentence of Agent 5's prompt, the exception kept, the
+#      report's shape and the roster unchanged. Proved by two baits.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -494,13 +499,21 @@ printf '%s\n' "$ruling" | grep -qF -- "\`↳ fix:\` line reads \`$CT_FIX\`" &&
 # The citation reaches the report: a candidate ticket cites §10 on its
 # `↳ cites:` line, where /pr-iterate reads the reason for a LOW it may skip.
 a5_has "↳ cites:" "the citation is on the finding's own line, not only in the prompt's reasoning"
+# The one exception stays, and is held in one sentence with its verdict: a
+# divergent-behavior copy is a latent bug whichever branch introduced it, so
+# the candidate-ticket ruling never defers it.
+exception=$(printf '%s\n' "$agent5_flat" | tr '.' '\n' | grep -F "divergent-behavior" | grep -F "stays a finding")
+[ -n "$exception" ] &&
+	pass "the exception is pinned: a divergent-behavior copy stays a finding whichever branch introduced it" ||
+	fail "no sentence of Agent 5's prompt keeps the divergent-behavior copy a finding — the candidate-ticket ruling would defer a latent bug"
 # The report's shape is unchanged — the candidate ticket is a LOW with the §5
-# anatomy, not a fifth section, a new badge or a new status.
-printf '%s\n' "$agent5" | grep -qE '^#### |\| .* \| .* \| X \|' &&
-	fail "Agent 5's section grew a heading or a count-table row — the report's shape is §5's and does not change here" ||
-	pass "Agent 5's section adds no heading and no count-table row: the report's shape is unchanged"
+# anatomy, not a new section at any heading depth. (The count table is held
+# by sections 1 and 7 already.)
+printf '%s\n' "$agent5" | grep -qE '^#{1,6} ' &&
+	fail "Agent 5's section grew a heading — the report's shape is §5's and does not change here" ||
+	pass "Agent 5's section adds no heading: the report's shape is unchanged"
 # The roster is unchanged: still seven lenses and the unattributed token.
-roster=$(sed -n '/^\*\*The sub-agent roster\.\*\*/,/^#### Agent 1 /p' "$SKILL_ABS" | grep -c '^- `')
+roster=$(region '^\*\*The sub-agent roster\.\*\*' '^#### Agent 1 ' | grep -c '^- `')
 [ "$roster" = 8 ] &&
 	pass "the roster still names seven lenses and the unattributed token" ||
 	fail "the roster names $roster tokens, not 8 — this ticket does not change the roster"
