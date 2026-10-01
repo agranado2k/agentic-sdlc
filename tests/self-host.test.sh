@@ -1002,11 +1002,13 @@ landing_row_holds() {
 	return 0
 }
 # template_row_clean <template> — 0 when exactly one such row exists and
-# names no kit-only file; 1 when it names the landing script; 2 as above.
+# names no kit-only file; 1 when it names one — any `.kit.` name, by path or
+# bare, since every kit-only script carries that infix and bootstrap deletes
+# them all; 2 as above.
 template_row_clean() {
 	_trc_row=$(landing_row "$1")
 	[ "$(printf '%s\n' "$_trc_row" | grep -c .)" = 1 ] || return 2
-	printf '%s\n' "$_trc_row" | grep -qF "$LANDING_SCRIPT" && return 1
+	printf '%s\n' "$_trc_row" | grep -q '\.kit\.' && return 1
 	return 0
 }
 landing_row_holds "$KIT/AGENTS.md"
@@ -1021,7 +1023,7 @@ esac
 template_row_clean "$KIT/constitution/AGENTS.md.template"
 case $? in
 0) pass "the consumer template's /merge-train row names no kit-only landing script" ;;
-1) fail "constitution/AGENTS.md.template's /merge-train row names $LANDING_SCRIPT — a stamped project has no such file" ;;
+1) fail "constitution/AGENTS.md.template's /merge-train row names a kit-only file — a stamped project has no such file" ;;
 *) fail "constitution/AGENTS.md.template has no single 'Land a batch of green PRs' row to hold" ;;
 esac
 # Baits, one per return value, so a probe that cannot fail is caught here.
@@ -1037,10 +1039,14 @@ grep -vF '| Land a batch of green PRs' "$KIT/AGENTS.md" >"$SCRATCH/manual.f7-nor
 landing_row_holds "$SCRATCH/manual.f7-norow"; [ $? = 2 ] &&
 	pass "the landing-row probe reports a manual with no landing row as missing, never as passing" ||
 	fail "the landing-row probe passed a manual with no landing row"
-sed "s#^| Land a batch of green PRs.*#& — by hand: \`sh $LANDING_SCRIPT\` |#" "$KIT/constitution/AGENTS.md.template" >"$SCRATCH/template.f7-leak"
+sed "s#^| Land a batch of green PRs.*#& — by hand: \`sh $(basename "$LANDING_SCRIPT")\` |#" "$KIT/constitution/AGENTS.md.template" >"$SCRATCH/template.f7-leak"
 template_row_clean "$SCRATCH/template.f7-leak"; [ $? = 1 ] &&
-	pass "the template probe rejects a consumer row that names the kit-only script" ||
-	fail "the template probe passed a consumer row naming $LANDING_SCRIPT — the check is vacuous"
+	pass "the template probe rejects a consumer row that names a kit-only file, by bare name or by path" ||
+	fail "the template probe passed a consumer row naming $(basename "$LANDING_SCRIPT") — the check is vacuous"
+grep -vF '| Land a batch of green PRs' "$KIT/constitution/AGENTS.md.template" >"$SCRATCH/template.f7-norow"
+template_row_clean "$SCRATCH/template.f7-norow"; [ $? = 2 ] &&
+	pass "the template probe reports a template with no landing row as missing, never as passing" ||
+	fail "the template probe passed a template with no landing row"
 
 # ---------------------------------------------------------------------------
 banner "G. Every self-measurement carries an oracle clause"
