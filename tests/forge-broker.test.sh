@@ -1100,16 +1100,41 @@ done
 STUB_PR=32
 export STUB_PR
 : >"$STUB_LOG"
-t_run_split env -u TRACE_DIR TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
 s_assert_status 0 "with tracing unconfigured the broker still exits 0"
 assert_mutating 2 "…and still lands both operations"
 s_assert_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): L-2 (untouched.md:1 not in diff)')" \
 	"…printing exactly what a traced run prints"
-[ "$(printf '%s\n' "$S_ERR" | grep -c 'trace: unconfigured')" -le 1 ] &&
-	pass "…and at most one unconfigured note, not one per finding" ||
+[ "$(printf '%s\n' "$S_ERR" | grep -c 'trace: unconfigured')" = 1 ] &&
+	pass "…and exactly one unconfigured note, not one per finding and not none" ||
 	fail "the unconfigured note repeated: $S_ERR"
 t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#32'
 s_assert_out_lacks '"kind"' "…and nothing reaches the trace for pr:#32"
+STUB_PR=12
+export STUB_PR
+
+# The roster's titles live in /review-pr's own headings; the broker maps them
+# onto tokens. Lift each Axis-1 title from the skill, name it in one finding,
+# and the raise must carry that lens's token — so a rename on either side is
+# red here, not a silent drift to `unattributed`.
+ROSTER="$SCRATCH/roster.md"
+{
+	printf 'REVIEWED: %s\nVERDICT: six lenses\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	sed -n 's/^#### Agent \([1-6]\) — \(.*\)$/**L-\1** `scripts\/a.sh:3` — \2: one finding.\
+↳ fix: none./p' "$KIT/.agents/skills/review-pr/SKILL.md"
+	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six lenses.\n'
+} >"$ROSTER"
+STUB_PR=33
+export STUB_PR
+broker 33 "$ROSTER"
+s_assert_status 0 "a report naming each of the six titles lands"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#33' --kind finding.raise
+RAISES=$S_OUT
+n=1
+for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
+	raise_has "L-$n" "\"agent\":\"$tok\""
+	n=$((n + 1))
+done
 STUB_PR=12
 export STUB_PR
 
