@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift — see the end of this record)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis — see the end of this record)
 
 ## Context and problem statement
 
@@ -247,3 +247,27 @@ for it wherever the head does not:
 
 Clause 7's 65 therefore also reads "or a drifted report without
 `--commit`".
+
+### Amendment, 2026-10-01 — the trace records what landed (#375)
+
+Amends clause 10; it changes no posting, no exit status and no option, so the
+record is amended in place. One `review.verdict` left `/retro`'s second
+question — review signal per sub-agent — blind to every review the broker
+posted, while an in-session or relayed review records each finding
+(`/review-pr` §5, §6). So, after both operations land, the broker emits, all
+on subject `pr:#<N>` and all marked `data.via=broker`:
+
+- **one `finding.raise` per finding posted inline** — `data.id`, the
+  severity lower-cased, `data.where` as `path:line` (or `unsafe-path` when
+  the path leaves the plain set), and `data.agent`: the `/review-pr` §3
+  roster token for the one sub-agent the finding names by number or title,
+  `unattributed` when it names none or several. A finding withheld for its
+  location is not raised: the trace records what landed.
+- **one `review.verdict` per axis** — Axis 1 as clause 10 always said, now
+  carrying `data.axis=1`; Axis 2 as `/review-pr` §5b counts it, `confirm` or
+  `pass` with the tag counts.
+
+The report is untrusted content: nothing of its text reaches a raise — each
+field is lifted by its shape or mapped onto a closed list, and each reason is
+the broker's own words. Unconfigured, the posting is unchanged and the trace
+says so once on stderr.
