@@ -893,8 +893,11 @@ term_leg "$DISPATCH" ""
 # to its real siblings, under the name the dispatcher insists on.
 BAIT_DIR="$SCRATCH/slow-trap"
 mkdir -p "$BAIT_DIR"
-for _f in "$KIT"/scripts/*; do ln -s "$_f" "$BAIT_DIR/${_f##*/}"; done
-rm -f "$BAIT_DIR/agent-dispatch.sh"
+# The dispatcher itself is never linked: the copy is written to a path that
+# was never a link, so nothing can write through one into the real file.
+for _f in "$KIT"/scripts/*; do
+	[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$BAIT_DIR/${_f##*/}"
+done
 awk '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }' \
 	"$DISPATCH" >"$BAIT_DIR/agent-dispatch.sh"
 grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh" ||
