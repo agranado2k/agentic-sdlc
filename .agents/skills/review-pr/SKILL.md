@@ -235,7 +235,7 @@ Anatomy rules:
 - Items are numbered INITIAL-N (C = Critical, H = High, M = Medium, L = Low). Numbering resets per category, and the IDs are how findings stay citable across iterations and commit messages.
 - Axis 1 owns the four circle badges. It never borrows the confirm-list's glyph set, and never lends its badges to §5b — the two axes must be tell-apart-at-a-glance.
 
-Record every finding the report carries, as it is raised, and then the axis's verdict once: `sh scripts/trace.sh emit kind=finding.raise subject=pr:#<N> outcome=raised data.id='<its INITIAL-N id>' data.severity=critical|high|medium|low data.agent='<the agent that raised it>' data.where=<file:line> reason='<the finding what/where line>' || :` per finding, then `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1 reason='<the Verdict line>' || :`. A finding the filtering dropped in §4 is not raised and not recorded.
+Record the axis's verdict once: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1 reason='<the Verdict line>' || :`. The findings themselves are recorded in §6, once the post question is answered: a raise carries whether its finding went onto the pull request, and that is not known here.
 
 ### 5b. Behavior Confirm-List (MANDATORY — Axis 2, never merged with §5)
 
@@ -303,9 +303,10 @@ After presenting the summary, you MUST ask:
 1. Present the severity-based summary report (step 5) in the terminal.
 2. **Mandatory Step**: Ask the user which items to post on the PR.
 3. Only after user confirmation, post ALL selected findings as **inline review comments** in a single API call. Never post a summary comment — only inline comments per finding.
+4. **Record every finding the report carried**, one event per finding, once the post is done — or once the answer is that nothing is posted: `sh scripts/trace.sh emit kind=finding.raise subject=pr:#<N> outcome=raised data.id='<its INITIAL-N id>' data.severity=critical|high|medium|low data.agent='<the agent that raised it>' data.where=<file:line> data.posted=yes|no reason='<the finding what/where line>' || :`. `data.posted=yes` for a finding in the review the forge accepted, `no` for every other — not selected, or the call failed: a finding nobody posted is one no human could dismiss, and the dismissal rate counts only the posted. A finding the filtering dropped in §4 is not raised and not recorded. One event per finding, never a second when the post comes later: when the human's next message is not an answer to the post question, nothing was posted — record every raise with `data.posted=no` before acting on that message, then close the run (§7).
 
 This skill never merges (shared invariant §7). It reviews, reports, and stops.
 
 ### 7. Finalization
 
-**Closing**: Restate the verdict in one line — the reader answers the question below without scrolling back up — close the run with it (`sh scripts/trace.sh end outcome=ok reason='<the verdict, one line>' || :`), and then you MUST end the response with: "Review complete. Which severity categories or specific items should I post as PR comments?"
+**Closing**: Restate the verdict in one line — the reader answers the question below without scrolling back up — and then you MUST end the response with: "Review complete. Which severity categories or specific items should I post as PR comments?" A reviewer that was told before the review what to post — a spawned one, with nobody at the prompt — has its answer already: it posts, records the raises (§6, step 4) and closes the run in this same response. Either way the run closes after the raises, never before them, so every raise carries the review's run: `sh scripts/trace.sh end outcome=ok reason='<the verdict, one line>' || :`.
