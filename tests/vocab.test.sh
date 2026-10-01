@@ -241,7 +241,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # That last number is never paid, because no caller hands it a body: each
 # lifts the lines it owes before the check. This section holds the kit's
 # callers to that. Every invocation of the checker in a shipped file is found
-# — `sh` on scripts/vocab.sh, on "$checker", on "$vocab" — and must be one of:
+# — `sh` or `bash` on scripts/vocab.sh, on "$checker", on "$vocab", braced or
+# not, however spaced, a backslash-continued line read as one — and must be
+# one of (each exemption tagged in the audit, and baited below):
 #   - `fields`, which reads no input;
 #   - a prose mention of the command, closed by a backtick;
 #   - the argument form with the caller's own placeholder tokens,
@@ -253,7 +255,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 #     that bounds that input, a fixed string on an uncommented line earlier
 #     in the same function.
 # A new call site, a site whose input changed, or a site whose lift stage was
-# removed is named and fails — the baits below prove each of the three.
+# removed is named and fails — the baits below prove each of the three. So is
+# an entry no call matches: the inventory holds no more than the tree.
 #
 # stamp.sh lifts by KEY, not by count: a body carrying 2,000 `Tier:` lines
 # would hand over 2,000. That is a degenerate ticket, not a body handed whole,
@@ -273,22 +276,30 @@ EOLIFT
 # <file>\t<line>\t<function's first line>\t<function>\t<line before> <line>
 CALLS_AWK=$(
 	cat <<'EOAWK'
-FNR == 1 { fn = "-"; start = 1; prev = "" }
+FNR == 1 { fn = "-"; start = 1; prev = ""; cont = "" }
 /^[ \t]*#/ { prev = $0; next }
 /^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
 	fn = $1; sub(/\(\).*/, "", fn); start = FNR
 	one = ($0 ~ /\}[ \t]*$/)
 }
+/\\$/ {
+	if (cont == "") at = FNR
+	cont = cont substr($0, 1, length($0) - 1) " "
+	next
+}
 {
-	s = $0
-	while (match(s, /(^|[ \t(|`;&])sh ("[^"]*vocab\.sh"|[^ "`]*vocab\.sh|"\$checker"|"\$vocab")/)) {
+	if (cont == "") at = FNR
+	line = cont $0; cont = ""
+	s = line
+	while (match(s, /(^|[ \t(|`;&])(ba)?sh[ \t]+("[^"]*vocab\.sh"|[^ \t"`]*vocab\.sh|"\$\{?checker\}?"|"\$\{?vocab\}?")/)) {
 		tail = substr(s, RSTART + RLENGTH); s = tail
-		if (tail ~ /^`/ || tail ~ /^ fields/) continue
-		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue
-		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue
-		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, FNR, start, fn, prev, $0
+		if (tail ~ /^`/) continue # exempt:prose
+		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
+		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
+		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue # exempt:positional
+		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, at, start, fn, prev, line
 	}
-	prev = $0
+	prev = line
 }
 /^}/ || one { fn = "-"; start = 1; one = 0 }
 EOAWK
@@ -321,8 +332,24 @@ EOENTRIES
 	done
 }
 
-# stale <root> [inventory] — every inventory entry no call record matches.
-stale() { :; }
+# stale <root> [inventory] — every inventory entry (LIFTED by default) that
+# matches no call record under <root>, one per line; nothing when each does.
+stale() {
+	records=$(checker_calls "$1")
+	printf '%s\n' "${2:-$LIFTED}" | while IFS= read -r entry; do
+		e_file=${entry%%@@*} rest=${entry#*@@}
+		e_fn=${rest%%@@*} rest=${rest#*@@}
+		e_input=${rest%%@@*}
+		printf '%s\n' "$records" | {
+			while IFS="$(printf '\t')" read -r file line start fn text; do
+				[ "$file" = "$e_file" ] && [ "$fn" = "$e_fn" ] || continue
+				case $text in *"$e_input"*) exit 0 ;; esac
+			done
+			exit 1
+		} ||
+			printf '%s\n' "$entry"
+	done
+}
 
 calls=$(checker_calls "$KIT" | grep -c '')
 [ "$calls" -ge 5 ] && pass "the audit finds the kit's $calls checker calls that read input" ||
@@ -389,14 +416,14 @@ bad=$(stale "$KIT")
 [ -z "$bad" ] && pass "every LIFTED entry matches a checker call the audit found" ||
 	fail "a LIFTED entry matches no checker call: $(printf '%s' "$bad" | tr '\n' ' ')"
 bait_reset
-case $(stale "$BAIT" "$LIFTED
-.agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh \"\$checker\" <\"\$body\"@@return 1") in
-*'sh "$checker" <"$body"'*) pass "an inventory entry no call matches is named stale" ;;
-*) fail "an inventory entry no call matches stays quiet" ;;
-esac
+STALE_ENTRY='.agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$body"@@return 1'
+bad=$(stale "$BAIT" "$LIFTED
+$STALE_ENTRY")
+[ "$bad" = "$STALE_ENTRY" ] && pass "an inventory entry no call matches is named stale, and only it" ||
+	fail "a stale inventory entry is not named alone: '$bad'"
 bait_edit .agents/skills/dogfood/SKILL.md '/sh "$checker" <"$2"/d'
 case $(stale "$BAIT") in
-*'.agents/skills/dogfood/SKILL.md@@prescreen_ok'*) pass "a call site removed leaves its entry named stale" ;;
+.agents/skills/dogfood/SKILL.md@@prescreen_ok@@*) pass "a call site removed leaves its entry named stale" ;;
 *) fail "a call site removed leaves its entry vouching for nothing" ;;
 esac
 
