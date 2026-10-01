@@ -354,6 +354,21 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "rate card", "billing" — the kit charges nothing and talks to no
     vendor; "estimate" — the arithmetic is exact, it is the price that can be
     stale.
+- **Broker** — the host-side layer that performs actions on a forge on a
+  dispatched worker's behalf, under a policy: `scripts/forge-broker.kit.sh`,
+  with its allow-list in `scripts/forge-broker.kit.config.sh`, both kit-only.
+  The worker runs offline and read-only and prints its findings in the machine
+  contract; the coordinating session hands that report and the PR number to
+  the broker, which validates the report against the contract and the diff,
+  refuses anything not on the allow-list, and performs exactly the operations
+  the policy names — in this release one review with event COMMENT and one
+  top-level comment. Nothing in the report can choose the operation, the
+  target PR or the event. Distinct from a **gate** (a check on the tree) and a
+  **guard** (a check on a diff): a broker *acts*, and what it may do is a list
+  with a suite. Ref: ADR-0009, PRD #261.
+  - _Avoid_: "proxy" (a proxy forwards what it is given; the broker refuses
+    most of it), "relay" (the operator pasting a review by hand — the thing
+    the broker replaces), "poster".
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
   trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
   window — by default since its own last run end — it answers eight fixed

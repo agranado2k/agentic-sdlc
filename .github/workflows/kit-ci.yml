@@ -256,6 +256,18 @@ jobs:
       - name: Output-contract skill-text suite
         run: sh tests/review-pr-output.test.sh
 
+  forge-broker:
+    name: The broker lands a dispatched review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the broker is POSIX sh, git and gh, and the suite's forge is
+      # a stub `gh` first on PATH — no account, no network, no live PR. What
+      # this job holds is that every review payload carries event COMMENT and
+      # that nothing is posted when the report fails the contract (ADR-0009).
+      - name: Forge-broker suite
+        run: sh tests/forge-broker.test.sh
+
   gate-advisory:
     name: An advisory is audible through the gate
     runs-on: ubuntu-latest
