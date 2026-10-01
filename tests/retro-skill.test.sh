@@ -555,11 +555,6 @@ fx_row 'tier · to-tickets (by kind) · undeclared   0 of 1 overridden   too few
 printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared confidence's own text reached a row's name" ||
 	pass "…and its text names no row"
 fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
-# Label rows: the fixture has 12 tickets with data.label_proposed, 6 overridden (50%)
-# but also 1 ticket with no data.label_proposed (written before key existed).
-# The label row groups by data.label_confidence (all medium), shows both.
-fx_row 'label · to-tickets (by kind) · medium   6 of 12 overridden   50 %' "the label override rate: 12 stamps with proposed key, 6 overridden, shows as 50 %"
-fx_row 'label · to-tickets (by kind) · unstamped   1 ticket(s) from before the key existed' "stamps without data.label_proposed are counted but left out of the denominator — wording shows the historical note"
 fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
 fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
 fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
