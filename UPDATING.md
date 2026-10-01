@@ -238,7 +238,15 @@ that adoption. Also in 9a, untagged since 0.35.0: `/to-tickets`' step 1 reads
 the PRD copy its pre-screen reader screened, never a second fetch, and removes
 it when the decomposition ends; `/dogfood`'s per-row `Outcome:` check fails
 closed on a missing or broken checker and names the row by step and position
-instead of printing an outcome.
+instead of printing an outcome; `/merge-train` says a PR landed by hand goes
+through the landing script your root manual names, and `/implement` and
+`/pr-iterate` run their closing `end` from the checkout that ran `begin`. In
+9e, the Claude Code adapter's `session-start.sh` records `data.behind` — how
+far the root checkout is behind the last fetched `origin/main`, never a fetch
+of its own — through `hook.lib.sh`, and its `README.md` says so; `/housekeeping`'s
+`CHECKLIST.md` asks for that count. In 9d, your `scripts/trace.config.sh` gains
+`TRACE_BEHIND_WARN`, shipped empty: a number makes the hook say so on stderr
+past it. Take the hooks if you wired them.
 
 **Arriving from 0.34.0 or older, one file joins.** `scripts/stamp.sh` joins
 the shared layer at 0.35.0 — see "When a file joins the shared layer" below:
@@ -729,10 +737,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2164 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2172 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2318 insertions(+), 1 deletion(-)
+ 3 files changed, 2326 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

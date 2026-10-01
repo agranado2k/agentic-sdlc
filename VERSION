@@ -1506,6 +1506,31 @@
 # outcome; the check is the runnable fence `checked_outcome`.
 # tests/prescreen-return.test.sh §4c and §7 lift and run both. PR #373
 # moved docs/diary.md alone.
+#   Landed after this bump's first merge, the same untagged interval. From
+# #337 (PR #382): no file changes but tests/vocab.test.sh, which bounds a
+# check at the size the kit's callers send — measured first, the per-line
+# cost is linear — and lifts a decision line before checking it at every
+# call site. From #384 (PR #390): the Claude Code adapter's session-start.sh
+# records on every `session.start` how far the ROOT checkout — the hooks
+# run the code of the checkout they live in — is behind the LAST FETCHED
+# origin/main, `data.behind` with `data.behind_of=root`, counted with plain
+# git and never a fetch, no field where there is no origin/main;
+# hook.lib.sh carries hook_root, hook_behind and hook_behind_warn;
+# scripts/trace.config.sh, the consumer's policy file (9d), gains
+# TRACE_BEHIND_WARN, shipped empty — one stderr line at session start when
+# the count is past it — and the kit's own scripts/trace.kit.config.sh sets
+# 20; adapters/claude-code/README.md says so, and
+# .agents/skills/housekeeping/CHECKLIST.md asks the operator for the last
+# event's count. tests/trace-hooks.test.sh holds it. From #386 (PR #391):
+# one PR landed by hand is still a landing — scripts/land.kit.sh, KIT-ONLY
+# and on bootstrap.sh's deletion list with tests/land.test.sh, lands one
+# green PR the way /merge-train's step 4 does and records `merge.land` and
+# `feedback`; /merge-train says the landing script the root manual names
+# does that step for a by-hand landing, and /implement's and /pr-iterate's
+# closing `end` emits say to run from the same checkout as the `begin`,
+# since the run stack is per toplevel. AGENTS.md's merge-train row names
+# the script; .github/workflows/kit-ci.yml runs both new suites and
+# README.md names them.
 
 shared-layer: 0.36.0
 
