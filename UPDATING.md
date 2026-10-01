@@ -230,7 +230,12 @@ to find it. Lines already in your trace are history: `verify` names each as
 an advisory and its exit status does not change. In Part 2, `/merge-train`
 (9a) records `outcome=unasked` for a landing nobody could answer, and the
 Claude Code adapter's `hooks/subagent-stop.sh` and `README.md` (9e) write no
-event for a subagent stop whose transcript never existed.
+event for a subagent stop whose transcript never existed. Also in 9a: the
+typed-return fence in `/pr-iterate`, `/to-tickets` and `/dogfood` finds the
+checker in the repository that holds the skills and refuses an evidence span
+under 8 bytes; `/to-tickets` records its drafted label and `/retro`'s
+`QUESTIONS.md` rates it; `/review-pr` holds `data.agent` to a closed roster
+and records a relayed review's findings, and `/implement` points at that.
 
 **Arriving from 0.32.0 or older, a dispatched review lands through a broker,
 and two skills pre-screen what they read.** No shared file changes at 0.33.0;

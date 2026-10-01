@@ -1337,15 +1337,39 @@
 # does not exist — and one `agent.stop outcome=fail` at once for one that
 # exists and cannot be read; adapters/claude-code/README.md records why no
 # event and not a new outcome word.
+#   From #333 (PR #357): the typed-return fence the pre-screening skills
+# print — /pr-iterate, /to-tickets and the dogfood skill (without its slash,
+# for 0.33.0's reason) — finds the vocabulary checker in the repository that
+# holds the skills being run, the nearest directory at or above the cwd with
+# .agents/skills/, never whatever repository git names for the cwd; and it
+# refuses an evidence span under 8 bytes. Both halves are two shell
+# functions each skill prints line for line identical.
+#   From #354 (PR #368): /to-tickets records the label it drafted before the
+# quiz as `data.label_proposed` on `ticket.write`, and /retro's question 8
+# (.agents/skills/retro/QUESTIONS.md) rates the label's override rate per
+# confidence once five stamps carry the key.
+#   From #346 (PR #369): /review-pr owns a closed sub-agent roster — seven
+# tokens and `unattributed` — and every `data.agent` it writes is one; its
+# §6 gains the relay path, where the session posting a review that ran
+# elsewhere records one `finding.raise` per finding, `data.via=relay`, and
+# /implement's mechanism (b) points the relaying session at it.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
 # none of it in the files: list above. .agents/skills/merge-train/SKILL.md
-# (the unasked verdict, via 9a). adapters/claude-code/README.md and the
+# (the unasked verdict, via 9a); .agents/skills/pr-iterate/SKILL.md,
+# .agents/skills/to-tickets/SKILL.md and the dogfood skill's SKILL.md (the
+# fence); .agents/skills/to-tickets/SKILL.md, .agents/skills/retro/SKILL.md
+# and .agents/skills/retro/QUESTIONS.md (the drafted label);
+# .agents/skills/review-pr/SKILL.md and .agents/skills/implement/SKILL.md
+# (the roster and the relay) — all via 9a. adapters/claude-code/README.md and the
 # adapter's hooks/subagent-stop.sh (the phantom stop, via 9e).
 # docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
 # carries both amendments, docs/adr/INDEX.md its row, and
 # docs/domain-glossary.md the Feedback entry and the Event entry's rule.
-# tests/trace.test.sh section 22, tests/trace-skills.test.sh,
-# tests/trace-hooks.test.sh and tests/forge-broker.test.sh hold it.
+# README.md's suite entries follow. tests/trace.test.sh section 22,
+# tests/trace-skills.test.sh, tests/trace-hooks.test.sh,
+# tests/forge-broker.test.sh, tests/prescreen-return.test.sh,
+# tests/typed-return.test.sh, tests/retro-skill.test.sh and
+# tests/spec-skills.test.sh hold it.
 
 shared-layer: 0.34.0
 

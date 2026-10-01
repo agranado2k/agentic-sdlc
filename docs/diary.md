@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-30
+## Current state — 2026-10-01
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.34.0 is in review on `chore/release-outcome-vocabulary` (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`), untagged until its merge. 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `8b2c996` — merge of PR #329 (#281: `/retro`'s eighth question, stamp calibration), untagged past `v0.32.0`: it and PR #328 (#280) moved skills and suites and no shared file, so they ride the next release. |
+| **Last commit on `main`** | `9b2c217` — merge of PR #369 (#346: a relayed review records its findings, `data.agent` from a closed roster), untagged past `v0.33.0` with PRs #357, #361, #368 and #370; they moved skills, the adapter and suites and no shared file, so they ride 0.34.0, whose note enumerates them. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. Open from other work: the forge broker PRs #285, #320, #321, #322 (PRD #261); #283 (#266); #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
+| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. The retro wave of 2026-10-01 (#343–#354, from `.retro/2026/10/retro-20261001T093317Z.md`) runs in parallel worktrees; this release's is `worktree/outcome-vocabulary`. Open from other work: #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
 
 ### Open questions / unresolved decisions
 
@@ -1669,3 +1669,45 @@ the kit owns no consumer's tracked file); the recipe's step 9d could not
 carry it without moving the shared layer, so the note is here until a
 release writes it there.
 
+### 2026-10-01 (later) — 0.34.0: an outcome is its kind's word
+
+The retrospective of this morning (F8) found three `review.verdict` events
+whose outcome was a whole sentence. The kind set had been closed since #247
+and the outcome left open per kind, so nothing refused it, and every reader
+counting `pass`, `blocked` and `confirm` missed those three. #348 closes it:
+`scripts/trace.sh` carries one table — each kind and the words it declares —
+derives its kind list from it, refuses an undeclared word at emit with exit
+2 in the vocabulary checker's shape, and `verify` advises on each line
+already written, the verdict unchanged, as it does for an old subject
+spelling. ADR-0008 clause 1 carries the table as a dated amendment.
+
+The table was built from three sources, and they disagreed. The record had
+no table at all — the outcome words lived only in the skills. The skills and
+the hooks gave the words they emit, and the trace suite now reads them out of
+those files and holds each to the script, so a skill cannot grow a word the
+record never decided. The kit's own trace held thirty lines the table does
+not declare: `run.end delivered`, `pr.iterate ok|passed|pushed`, `spawn
+unreachable`, `spawn.end failed`, `ticket.write published`, `spike.verdict
+confirmed`, `grill.decision decided`, five broker verdict sentences and six
+`finding.triage` lines whose quoting folded `data.id=…` into the outcome. None
+came from a skill's text; the record wins and `verify` names them.
+
+Two decisions the ticket left open. No outcome is legal on every kind — the
+adapter writes a successful `agent.stop` with none, and refusing it would turn
+the commonest event into a failure. And `note` is the one open kind, held to
+one word, while `run.start` and `session.end` refuse any. `tool.use denied`
+was proposed and not declared: the adapter's own header says a denied call is
+invisible to it, and a word nobody writes is not one the record decides.
+
+The finding that mattered most was not in the ticket: the five verdict
+sentences came from the kit-only review broker, which wrote the worker's
+whole `VERDICT:` line as the outcome. With the refusal in place and the
+broker's emit ending `|| :`, every brokered review would have stopped
+leaving a verdict at all — silently. `tests/forge-broker.test.sh` caught it
+red; the broker now writes `pass` or `blocked` from the line's opening and
+the sentence as the reason.
+
+It is a NARROWING, the first in the trace: a consumer's own emit with a typo
+in `outcome=` stops writing. `UPDATING.md`'s behaviour section says how to find
+one (`--dry-run`, read stderr). The tag is NOT cut by this PR; self-host F3
+prints its pull-request note until the human's merge.
