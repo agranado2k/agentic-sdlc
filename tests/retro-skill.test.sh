@@ -425,7 +425,7 @@ route8=$(awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" 
 [ -n "$route8" ] && pass "routing has an entry for a stamp" || fail "the Routing section has no entry for a stamp"
 # …and the entry says where each of the three findings goes — the heading
 # alone survives the deletion of all three.
-for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'records no label from before the quiz'; do
+for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'label rule or rubric line in `/to-tickets`'; do
 	case "$route8" in
 	*"$needle"*) pass "the stamp's routing entry names: $needle" ;;
 	*) fail "the stamp's routing entry does not name: $needle" ;;
