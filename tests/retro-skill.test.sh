@@ -199,6 +199,7 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # read apart, as rows.
 sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "${1:-$SIDECAR_ABS}"; } # [<sidecar file>]
 fenced() { awk '/^```/ { fence = !fence; next } fence'; } # stdin's fenced lines, the example rows
+unfenced() { awk '/^```/ { fence = !fence; next } !fence'; } # stdin's lines outside a fence, the prose
 stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
 reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
 rows8=$(sec8 | fenced)
@@ -423,7 +424,7 @@ bait_label_row 's/ *— oracle: none — .*$//' &&
 # lost, one per line, and one bait per rule proves it red — in the parent
 # shell, where a fail counts.
 posted_rules_missing() { # <sidecar file>
-	_pr_stamp=$(sec8 "$1" | awk '/^```/ { fence = !fence; next } !fence' | flat)
+	_pr_stamp=$(sec8 "$1" | unfenced | flat)
 	for _r in \
 		'posted denominator|counts only the raises carrying `data.posted=yes`' \
 		'unposted out|A raise with `data.posted=no` is in no denominator and in no pairing' \
