@@ -146,22 +146,6 @@ kit_take() {
 	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
 }
 
-# assert_status <expected> <label> -- <command...>
-assert_status() {
-	expected=$1
-	label=$2
-	shift 3
-	out=$("$@" 2>&1)
-	actual=$?
-	if [ "$actual" = "$expected" ]; then
-		pass "$label (exit $actual)"
-	else
-		fail "$label — expected exit $expected, got $actual"
-		printf '%s\n' "$out" | sed 's/^/        | /'
-	fi
-	LAST_OUT=$out
-}
-
 TODAY=$(date +%Y-%m-%d)
 
 # Both transcripts this script produces are compared byte-for-byte against the

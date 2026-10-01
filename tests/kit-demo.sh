@@ -54,22 +54,6 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-# assert_status <expected> <label> -- <command...>
-assert_status() {
-	expected=$1
-	label=$2
-	shift 3
-	out=$("$@" 2>&1)
-	actual=$?
-	if [ "$actual" = "$expected" ]; then
-		pass "$label (exit $actual)"
-	else
-		fail "$label — expected exit $expected, got $actual"
-		printf '%s\n' "$out" | sed 's/^/        | /'
-	fi
-	LAST_OUT=$out
-}
-
 assert_out_lacks() {
 	case "$LAST_OUT" in
 	*"$1"*)
