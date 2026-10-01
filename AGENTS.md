@@ -310,7 +310,7 @@ answers produce a clean project.
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
 | Walk a product's personas through its surface | `/dogfood` — optional at bootstrap; the kit has no surface of its own |
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
-| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
+| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does. Its one-PR form, the **landing script**, is `sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']`: refuses a PR not green and mergeable (exit 2, nothing recorded), merges, waits for main's workflows, records `merge.land` and `feedback` (kit-only, never shipped) |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |
