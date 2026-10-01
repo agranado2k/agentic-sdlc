@@ -46,6 +46,8 @@ The transcripts are the files the agent harness itself wrote under
 | `resumed-transcript.redacted.jsonl` | one session run, then resumed: 34 lines, two ends, one appended file |
 | `thinking-transcript.redacted.jsonl` | a session whose responses open with a thinking block: 30 lines, one subagent spawned |
 | `thinking-subagent-transcript.redacted.jsonl` | that subagent's transcript: 21 lines, one message id carrying two different usage blocks |
+| `compacted-transcript.redacted.jsonl` | the resumed session in full: five runs, a `/compact` among them, 85 lines |
+| `forked-transcript.redacted.jsonl` | a `--fork-session` of it after the compaction: 39 lines, two copied lines with usage zeroed |
 
 ## The second capture: the two tool payloads
 
@@ -152,6 +154,32 @@ types, roles, models, request ids, stop reasons, timestamps, versions — and
 each `attachment` body, `rendered`, `wireToolInputs`, tool input and
 `toolUseResult` text is replaced whole. The organization id and the operator's
 e-mail address lived in attachment bodies and are gone with them.
+
+## The fifth capture: a compaction, and a fork
+
+`compacted-transcript.redacted.jsonl` and `forked-transcript.redacted.jsonl`
+are the rest of the #307 capture (the third, above), kept for ticket #407 on
+**2026-10-01**: the same session, CLI **2.1.285**, `claude-haiku-4-5-20251001`.
+Five non-interactive runs — the two of the resumed fixture, a third answer, a
+`/compact`, and two more answers — and then one `--fork-session`. What the
+capture established, and what the suite leans on:
+
+- **The compaction's summary call leaves no assistant line.** Line 47 is the
+  `system` / `compact_boundary` line, line 48 the summary as a user line, and
+  the `cost-state` rollup moves from line 42's `30 / 103 / 10316 / 61778` to
+  line 58's `1503 / 556 / 10354 / 85813` with no assistant line between them.
+  The last rollup, line 85, is `1521 / 744 / 17305 / 128201`; the five
+  messages sum to `48 / 291 / 17267 / 104166`; the gap, `1473 / 453 / 38 /
+  24035`, is the compaction's and nothing else's.
+- **A fork carries its parent's rollup.** The forked file is a new session id
+  whose first assistant lines are the parent's last response copied with all
+  four counts zero, and its rollup, `1513 / 595 / 17079 / 103626`, is the
+  parent's line 58 plus its own one response — so a gap read off a fork would
+  count the parent a second time.
+
+Redacted with the fourth capture's mechanical rule, keeping three more
+structural strings: `subtype` (so `compact_boundary` survives), `trigger` and
+`level`, and the compact boundary's uuids.
 
 ## What was redacted
 
