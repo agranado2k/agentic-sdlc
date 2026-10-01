@@ -328,6 +328,19 @@ case "$oracle_entry" in
 *'oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
 *) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
 esac
+# The none form does not repeal the entry's rule — the checklist's words, "a
+# comparator is always named, never implied" — it is the rule kept where
+# there is nothing to name: the row says it has no comparator, instead of
+# implying one. Both sentences are held, so neither can be edited into
+# contradicting the other.
+case "$oracle_entry" in
+*'a comparator is always named, never implied'*) pass "…and still states the rule in the checklist's words: a comparator is always named, never implied" ;;
+*) fail "the glossary's Oracle entry no longer states the rule the checklist states: a comparator is always named, never implied" ;;
+esac
+case "$oracle_entry" in
+*'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
+*) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
+esac
 # Every example row that carries an oracle clause must follow the proper form:
 # either four-part (— oracle: <who>, <when>, <version>, <comparator>) or
 # none form (— oracle: none — <why>). The label row in question 8 is the one

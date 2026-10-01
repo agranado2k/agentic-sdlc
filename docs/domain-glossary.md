@@ -148,15 +148,15 @@ Grouped by the seam each term belongs to. Entry shape:
   tool invocations, slash commands and repo paths.
 - **Oracle** — the thing a self-measurement is graded against: who wrote the test
   fixtures, when, which version they were written for, and the comparator
-  (another measurement, a held-out set, or the thing itself). A measured row
-  always names its oracle: who wrote the fixtures, when, against which version,
-  and what it was compared to. Where nothing was written as a fixture — a
-  calibration row in `/retro`, graded by a human's verdict at the quiz or on a
-  review thread — that human is the *who*, and the clause keeps its four parts.
-  A row that counted no measurements — where no fixtures were written and no
-  comparison exists — names no oracle and says why: `oracle: none — <why>`.
-  An example is the label row in question 8, until #332 records the pre-quiz
-  label and computable overrides return.
+  (another measurement, a held-out set, or the thing itself). Every measurement
+  the kit reports names its oracle so the reader can tell a self-graded number
+  from a held-out one. Rule: a comparator is always named, never implied.
+  Where nothing was written as a fixture — a calibration row in `/retro`,
+  graded by a human's verdict at the quiz or on a review thread — that human
+  is the *who*, and the clause keeps its four parts. A row that measured
+  nothing — no fixtures written, no comparison made — has no comparator to
+  name, and says so instead of implying one: `oracle: none — <why>`. Question
+  8's label row is one, until #332 records the pre-quiz label.
   _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
