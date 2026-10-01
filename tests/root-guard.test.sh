@@ -11,7 +11,9 @@
 #      tree is the root), and blocks a path inside that tree but not under
 #      `worktree/` — the runtime directories `.trace/` and `.retro/` excepted.
 #      For Bash it is a tripwire: a redirect into, or `sed -i`, `tee`, `cp`,
-#      `mv`, `git checkout` / `git restore` on, a TRACKED file at the root.
+#      `mv`, `git checkout` / `git restore` on, a TRACKED file at the root, and
+#      the three ways around the git layer (`--no-verify`, `-c
+#      core.hooksPath`, `git config core.hooksPath`) where git acts there.
 #   2. THE GIT LAYER refuses the commit. `.githooks/pre-commit` refuses a
 #      commit from the main working copy or on `main`, with a loud bypass in
 #      the pre-push hook's shape.
@@ -199,6 +201,52 @@ guard_on "$(payload Bash command 'echo hi > README.md' "$WT")"
 allowed "a redirect from a cwd inside the worktree"
 guard_on "$(payload Bash command 'git checkout -b feat/y')"
 allowed "git checkout of a branch name that is no tracked file"
+
+# The tripwire's own edge cases (the review's LOW findings): `cd` options are
+# not its directory, `git -C` moves where git acts, and a restore that only
+# touches the index writes no file.
+guard_on "$(payload Bash command 'cd -P . && echo x > README.md')"
+refused "a redirect after cd -P ."
+guard_on "$(payload Bash command "git -C $FIX checkout -- README.md" "$WT")"
+refused "git -C <the root> checkout from a cwd inside the worktree"
+guard_on "$(payload Bash command "git -C $OUTSIDE checkout -- README.md")"
+allowed "git -C <elsewhere> checkout, which writes elsewhere"
+guard_on "$(payload Bash command 'git restore --staged README.md')"
+allowed "git restore --staged, which touches only the index"
+guard_on "$(payload Bash command 'git restore -S README.md')"
+allowed "git restore -S, the same"
+guard_on "$(payload Bash command 'git restore --staged --worktree README.md')"
+refused "git restore --staged --worktree, which writes the file"
+
+# ---------------------------------------------------------------------------
+banner "4b. The agent harness layer: Bash may not walk past the commit guard"
+# ---------------------------------------------------------------------------
+# The commit guard is a git hook, and git has three ways around its own hooks.
+# From the main working tree the agent harness layer refuses all three, since
+# it is the layer an agent cannot opt out of (review finding M-1).
+guard_on "$(payload Bash command 'git commit --no-verify -m x')"
+refused "git commit --no-verify from the root"
+guard_on "$(payload Bash command 'git commit -qn -m x')"
+refused "git commit -n (the short form) from the root"
+guard_on "$(payload Bash command 'git -c core.hooksPath=/dev/null commit -m x')"
+refused "git -c core.hooksPath=… from the root"
+guard_on "$(payload Bash command 'git -c core.hookspath=/dev/null commit -m x')"
+refused "git -c with the key in another case (git config keys are case-blind)"
+guard_on "$(payload Bash command 'git config core.hooksPath /dev/null')"
+refused "git config core.hooksPath <value> from the root"
+guard_on "$(payload Bash command 'git config --unset core.hooksPath')"
+refused "git config --unset core.hooksPath from the root"
+guard_on "$(payload Bash command 'git config set core.hooksPath x')"
+refused "git config set core.hooksPath from the root"
+guard_on "$(payload Bash command 'git config core.hooksPath')"
+allowed "git config core.hooksPath with no value, which only reads it"
+guard_on "$(payload Bash command 'git commit --no-verify -m x' "$WT")"
+allowed "git commit --no-verify from a cwd inside the worktree"
+guard_on "$(payload Bash command 'cd worktree/x && git commit --no-verify -m x')"
+allowed "git commit --no-verify after cd into a worktree"
+guard_on "$(payload Bash command "git -C $WT commit --no-verify -m x")"
+allowed "git -C <a worktree> commit --no-verify from the root"
+
 
 # ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"

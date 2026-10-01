@@ -12,8 +12,12 @@
 # write at the root — `.trace/` and `.retro/` — pass, and so does every path
 # outside the repository (a dispatch's scratch lives under $TMPDIR). For Bash
 # it is a TRIPWIRE, not a proof: a command that redirects into, or runs
-# `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` on, a path that
-# resolves to a TRACKED file at the root. Everything else a shell can do — a
+# `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` (not
+# `--staged` alone, which touches only the index) on, a path that resolves to
+# a TRACKED file at the root, `git -C` followed; and, where git acts at the
+# root, the three ways around the commit guard — `git commit --no-verify` (or
+# `-n`), `git -c core.hooksPath=…`, and setting or unsetting
+# `core.hooksPath` with `git config`. Everything else a shell can do — a
 # script, an interpreter, `rm`, a variable or a glob it never expands, a `cd`
 # inside a subshell — goes through. ../README.md says so too.
 #
@@ -25,10 +29,12 @@
 # call and stderr is shown to the model, exit 0 lets it through. Nothing is
 # ever written to stdout, which the agent harness parses.
 #
-# IT FAILS OPEN, deliberately and unlike the git half. A payload it cannot
-# read, a tool it does not know or a root it cannot resolve is exit 0: a guard
-# that blocked every call on a parse failure would brick the session, and the
-# commit hook is the half that fails closed.
+# IT FAILS OPEN, deliberately. A payload it cannot read, a tool it does not
+# know or a root it cannot resolve is exit 0: a guard that blocked every call
+# on a parse failure would brick the session. The commit hook is no fail-closed
+# backstop for it — git lets any committer skip a hook, which is why this one
+# refuses the ways around it. Of the two, this is the layer that refuses; the
+# commit hook is a guard a cooperative agent meets.
 #
 # NOT hook.lib.sh's rule 1. The trace hooks beside this file exit 0 always,
 # because observability must never change a session; this hook exists to
@@ -157,7 +163,9 @@ command=$(field command)
 # data), continuation lines joined, quotes dropped, and `&&`, `||`, `;`, `|`,
 # `&`, parentheses and newlines end a simple command. A redirect's target is a
 # write; so are the operands of `sed -i`, `tee`, `mv`, `git checkout` and
-# `git restore`, and the last operand of `cp`.
+# `git restore`, and the last operand of `cp`. A git write is a `gwrite` line
+# carrying the directory any `-C` moved git to, and a way around the commit
+# guard is an `around` line carrying the same.
 plan=$(printf '%s\n' "$command" | awk '
 function endseg(   i, j, k, c, s, inplace, last) {
 	i = 1
@@ -169,7 +177,9 @@ function endseg(   i, j, k, c, s, inplace, last) {
 	if (i > nw) { nw = 0; return }
 	c = words[i]; sub(/.*\//, "", c)
 	if (c == "cd") {
-		print "cd " (i + 1 <= nw ? words[i + 1] : "~")
+		j = i + 1
+		while (j <= nw && words[j] ~ /^-./) j++
+		print "cd " (j <= nw ? words[j] : "~")
 	} else if (c == "sed" || c == "gsed") {
 		inplace = 0
 		for (j = i + 1; j <= nw; j++) if (words[j] ~ /^-[A-Za-z]*i/ || words[j] ~ /^--in-place/) inplace = 1
@@ -181,11 +191,43 @@ function endseg(   i, j, k, c, s, inplace, last) {
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) last = words[j]
 		if (last != "") print "write " last
 	} else if (c == "git") {
+		gdir = "."; around = 0
 		j = i + 1
-		while (j <= nw && words[j] ~ /^-/) { if (words[j] == "-C" || words[j] == "-c") j += 2; else j++ }
+		while (j <= nw && words[j] ~ /^-/) {
+			if (words[j] == "-C" && j + 1 <= nw) {
+				gdir = (words[j + 1] ~ /^\// ? words[j + 1] : gdir "/" words[j + 1]); j += 2
+			} else if (words[j] == "-c" && j + 1 <= nw) {
+				kv = tolower(words[j + 1]); sub(/=.*/, "", kv)
+				if (kv == "core.hookspath") around = 1
+				j += 2
+			} else j++
+		}
 		s = words[j]
-		if (s == "checkout" || s == "restore")
-			for (k = j + 1; k <= nw; k++) if (words[k] !~ /^-/) print "write " words[k]
+		if (s == "commit") {
+			for (k = j + 1; k <= nw; k++)
+				if (words[k] == "--no-verify" || words[k] ~ /^-[A-Za-z]*n[A-Za-z]*$/) around = 1
+		} else if (s == "config") {
+			key = 0; setting = 0
+			for (k = j + 1; k <= nw; k++) {
+				w = words[k]
+				if (k == j + 1 && (w == "set" || w == "unset")) { setting = 1; continue }
+				if (w ~ /^--(unset|unset-all|replace-all|add)$/) { setting = 1; continue }
+				if (w ~ /^-/) continue
+				if (key) { setting = 1; continue }
+				if (tolower(w) == "core.hookspath") key = 1
+			}
+			if (key && setting) around = 1
+		} else if (s == "checkout" || s == "restore") {
+			staged = 0; tree = 0
+			if (s == "restore")
+				for (k = j + 1; k <= nw; k++) {
+					if (words[k] == "--staged" || words[k] ~ /^-[A-Za-z]*S[A-Za-z]*$/) staged = 1
+					if (words[k] == "--worktree" || words[k] ~ /^-[A-Za-z]*W[A-Za-z]*$/) tree = 1
+				}
+			if (!staged || tree)
+				for (k = j + 1; k <= nw; k++) if (words[k] !~ /^-/) print "gwrite " gdir "\t" words[k]
+		}
+		if (around) print "around " gdir
 	}
 	nw = 0
 }
@@ -228,6 +270,7 @@ BEGIN { hd = ""; acc = ""; nw = 0 }
 END { if (acc != "") scan(acc) }
 ') || exit 0
 
+tab=$(printf '\t')
 here_cwd=$cwd
 while IFS= read -r step; do
 	case $step in
@@ -243,6 +286,22 @@ while IFS= read -r step; do
 		if guarded "$abs" && tracked "$abs"; then
 			refuse "Bash" "$abs"
 		fi
+		;;
+	'gwrite '*)
+		# A git write, relative to where git acts: the cwd moved by any -C.
+		_g=${step#gwrite }
+		_t=${_g#*"$tab"}
+		abs=$(resolve "$_t" "$(resolve "${_g%%"$tab"*}" "$here_cwd")")
+		if guarded "$abs" && tracked "$abs"; then
+			refuse "Bash" "$abs"
+		fi
+		;;
+	'around '*)
+		# A way around the commit guard — `commit --no-verify`, `-c
+		# core.hooksPath=…`, or setting core.hooksPath — where git acts at
+		# the root.
+		abs=$(resolve "${step#around }" "$here_cwd")
+		guarded "$abs" && refuse "Bash (a way around the commit guard)" "$abs"
 		;;
 	esac
 done <<EOF
