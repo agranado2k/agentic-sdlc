@@ -31,7 +31,8 @@
 #      Tier: line was left to check. Only a 2 from the check of the lines
 #      themselves is a refusal;
 #   4  the fetch failed, twice — one retry, never a loop. Never read it as a
-#      missing line: it is a stop.
+#      missing line: it is a stop. (A signal exits 128 + its number, nothing
+#      printed — never a verdict.)
 #
 # WHAT IS A STAMP LINE: a BARE `Key: value` line whose key is tier,
 # confidence or domain in any case, indented or not — the way the checker
@@ -75,7 +76,12 @@ _stamp_tmp=$(mktemp -d "${TMPDIR:-/tmp}/stamp.XXXXXX") || {
 	stamp_say "no scratch directory — nothing read"
 	exit 4
 }
-trap 'rm -rf "$_stamp_tmp"' EXIT INT TERM HUP
+# The EXIT trap cleans up; a signal EXITS, so the script never reads on with
+# its scratch directory gone (a handler that only cleaned up would return).
+trap 'rm -rf "$_stamp_tmp"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 stamp_fetch() { gh issue view "$issue" --json body --jq .body >"$_stamp_tmp/body"; }
 if ! stamp_fetch && ! stamp_fetch; then

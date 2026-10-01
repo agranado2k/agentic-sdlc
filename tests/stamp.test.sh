@@ -41,6 +41,9 @@ mkdir -p "$SCRATCH/bin"
 cat >"$SCRATCH/bin/gh" <<'STUB'
 #!/bin/sh
 printf '%s\n' "$*" >>"$STUB_DIR/calls"
+# A signal mid-fetch, delivered to the script — the stub's parent — while it
+# waits on the tracker.
+[ -e "$STUB_DIR/signal" ] && kill -"$(cat "$STUB_DIR/signal")" "$PPID"
 left=$(cat "$STUB_DIR/fails-left" 2>/dev/null || echo 0)
 if [ "$left" -gt 0 ]; then
 	echo $((left - 1)) >"$STUB_DIR/fails-left"
@@ -344,5 +347,26 @@ s_assert_status 4 "two failed fetches: exit 4, a stop — not 3, not 0"
 [ -z "$S_OUT" ] && pass "a failed fetch: nothing on stdout" || fail "a failed fetch: stdout should be empty, got '$S_OUT'"
 [ "$(calls)" = 2 ] && pass "…one retry, never a loop" || fail "…the tracker was called $(calls) time(s), not 2"
 s_assert_err_has "x stamp:"
+
+# ---------------------------------------------------------------------------
+banner "A signal ends the script: never read on with its scratch gone"
+# ---------------------------------------------------------------------------
+# A trap that only removes the scratch directory returns, and the script
+# carries on reading files that are gone — so an interrupt ended as exit 3
+# (the defaults) or 4, not as an interrupt. The scratch directory is gone
+# either way.
+mkdir -p "$SCRATCH/tmpd"
+for sig in TERM:143 INT:130 HUP:129; do
+	body 'Tier: implementer\n'
+	echo "${sig%%:*}" >"$SCRATCH/signal"
+	cd "$SCRATCH" || exit 2
+	t_run_split env TMPDIR="$SCRATCH/tmpd" sh "$STAMP" 331
+	cd "$KIT" || exit 2
+	rm -f "$SCRATCH/signal"
+	s_assert_status "${sig#*:}" "SIG${sig%%:*} mid-fetch: the script exits ${sig#*:}, not on to a verdict"
+	[ -z "$S_OUT" ] && pass "SIG${sig%%:*}: nothing on stdout" || fail "SIG${sig%%:*}: stdout should be empty, got '$S_OUT'"
+	[ -z "$(ls -A "$SCRATCH/tmpd")" ] && pass "SIG${sig%%:*}: the scratch directory is removed" ||
+		fail "SIG${sig%%:*}: left behind: $(ls -A "$SCRATCH/tmpd")"
+done
 
 t_done "the stamp reader"
