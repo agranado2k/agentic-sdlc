@@ -256,10 +256,11 @@ be nobody's. An event none of the three names goes on a row named
   stamp existed: it goes in a row named `unstamped`. One with no
   `data.label_proposed` was written before this key existed (a standing issue,
   not a finding per window): count it on its row and leave it out of the
-  denominator. If no stamp in the window carries `data.label_proposed`, the row
-  prints `not computable from the trace today` — the key was not yet recorded.
-  If fewer than five stamps carry it, apply the general "too few to rate" rule
-  below. Otherwise, compute the rate as for the tier row.
+  denominator. A label row none of whose stamps carries `data.label_proposed`
+  prints its stamp count and `not computable from the trace today` in place of
+  a rate — the key was not yet recorded. Each label row is held to the
+  five-event threshold below, per row — per confidence group, the same as every
+  other row — and otherwise its rate is computed as for the tier row.
 - **The severity, per band.** Group the `finding.raise` events by
   `data.severity`. One pairing rule says what a dismissal dismissed: a
   `finding.dismiss` pairs with the latest raise on its subject at its

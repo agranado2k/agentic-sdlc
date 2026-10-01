@@ -363,6 +363,17 @@ stamp_has '`data.label_proposed`' "the pre-quiz label is read, under its own key
 stamp_has '`data.label` differs from its `data.label_proposed`' "the override is defined as label change at quiz"
 stamp_has 'count it on its row and leave it out of the denominator' "stamps without the key stay in history but out of rate calculation"
 stamp_has 'a row of its own' "…the label row is a row of its own"
+# H-3 (review of PR #368): the label's own rules each have a needle. A row
+# whose stamps all predate the key says so in words, not as 0 of 0…
+stamp_has 'A label row none of whose stamps carries `data.label_proposed`' "a label row whose stamps all predate the key is named"
+stamp_has 'prints its stamp count and `not computable from the trace today` in place of a rate' "…and prints its count and 'not computable from the trace today', never a rate"
+# …and the threshold is the one every row has, per row — per confidence
+# group — never a count over the window (M-1).
+stamp_has 'Each label row is held to the five-event threshold below, per row' "the label's threshold is per row, the same as every other row's"
+case "$stamp" in
+*'If fewer than five stamps carry it'*) fail "question 8 still states a per-window threshold for the label beside the per-row one" ;;
+*) pass "no per-window threshold for the label beside the per-row one" ;;
+esac
 # Honesty point 3: a thin row prints its counts and the words, not a rate.
 # The bullet's HEADING says "too few" too, so the needle is the rule: the
 # threshold, and what is printed in the rate's place.
