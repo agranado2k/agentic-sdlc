@@ -311,6 +311,9 @@ hold_prescreen() {
 	# adapter names the command; the skill names none — skills ship unstamped
 	# and name no vendor — so a flag planted in the step goes red.
 	reader=$(grep '^\*\*A tool-restricted subagent reads' "$FLAT")
+	# Held case-blind, with one spelling of the fallback: a bait that capitalises
+	# "Fall back" or writes "fallback" is the same order, and must go red the same.
+	reader=$(printf '%s' "$reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
 	[ -n "$reader" ] && pass "/$NAME — the reader step is one paragraph, found by its opening words" ||
 		fail "/$NAME — the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
 	case $reader in

@@ -81,12 +81,19 @@ Spawn it — `sh scripts/agents.lib.sh mechanical judge` resolves its model, and
 nothing printed means it inherits yours — with read access to that file and
 nothing else: no shell, no forge CLI, no network, and no reach to the surface
 under test. How an agent harness withholds those tools is the adapter's, not
-this skill's, to say; where yours cannot, say so in the report. The file is
-the material it judges, never spliced into the wording of the question you ask
-about it. Its return lands in a file, `$scratch/out/return`, in a directory
-that holds nothing else — the reader's one permitted write, or captured there
-by the adapter — so the reader cannot write the output its evidence is
-verified against. That directory is made new for each step: a return an
+this skill's, to say. Where the adapter documents a restricted path through
+the agent CLI, spawn the reader through it, run from `$scratch` so that file
+and its return file are the reader's whole reach — the adapter names the
+command, this skill no flag of any vendor's. Only where no such path exists —
+no agent CLI on the path, or a shell this session was not given — fall back to
+a subagent restricted by its prompt alone, and say so in the report: a prompt
+that says no shell is a request, not a restriction, so the human reading the
+report knows the check below is what fenced the read, not an absent tool. The
+file is the material it judges, never spliced into the wording of the question
+you ask about it. Its return lands in a file, `$scratch/out/return`, in a
+directory that holds nothing else — the reader's one permitted write, or
+captured there by the adapter — so the reader cannot write the output its
+evidence is verified against. That directory is made new for each step: a return an
 earlier step left is never the one a later step's check reads, so a reader
 that wrote nothing is an unreadable pre-screen and not the last step's
 answer. The return is not a message you read: the check below runs

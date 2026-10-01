@@ -465,6 +465,9 @@ assert_file_has "$FLAT" "the adapter's, not this skill's" "how an agent harness 
 # skills ship unstamped and name no vendor — so a flag planted in the step
 # (`--tools`, `--restricted`, any other) goes red.
 reader=$(grep '^\*\*A tool-restricted subagent reads' "$FLAT")
+# Held case-blind, with one spelling of the fallback: a bait that capitalises
+# "Fall back" or writes "fallback" is the same order, and must go red the same.
+reader=$(printf '%s' "$reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
 [ -n "$reader" ] && pass "the reader step is one paragraph, found by its opening words" ||
 	fail "the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
 case $reader in
