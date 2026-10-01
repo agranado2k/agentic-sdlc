@@ -97,10 +97,10 @@
 # ---------------------------------------------------------------------------
 # THE OTHER AGENT HARNESS. Declaring it is what makes `<harness>:<model>` a
 # crossing rather than a malformed model id (ADR-0005), and the CMD/MODEL_FLAG
-# pair is what scripts/agent-dispatch.sh runs when a tier names it. Both the
-# reviewer and the tests agent below cross over, which is the point: the
+# pair is what scripts/agent-dispatch.sh runs when a tier names it. The tests
+# agent below crosses over, and the reviewer did until #423 and will again: the
 # cross-vendor review the kit calls its highest-leverage property is reachable
-# locally here, not only in CI.
+# locally here, not only in CI, once that CLI authenticates from this host.
 # ---------------------------------------------------------------------------
 # VERIFIED against the installed CLI on 2026-09-22, not guessed: `codex exec`
 # is the non-interactive form, `-m, --model <MODEL>` is its model flag, and
@@ -136,33 +136,44 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #    reviewer sharing the implementer's model is one editorial pass wearing a
 #    second hat.
 # ---------------------------------------------------------------------------
-#    The kit's model (temporary, until cross-vendor authentication works): the
-#    reviewer maps to Opus, the same as Implementer's plain tier. This violates
-#    the traditional rule that reviewer differs from implementer — but a
-#    cross-vendor reviewer that differs from implementer's vendor is how the
-#    kit normally keeps that rule. Now mapped to the host's reachable model,
-#    Opus. This repo confirmed 4 of 4 mechanical-tier tickets that day (#352,
-#    #354, #388, #423) through 2026-10-01 retro window 3; 401 evidence names the
-#    models the host can reach from Claude Code sessions. Cross-vendor mapping
-#    (codex:gpt-5.6-sol, codex:gpt-6-astra) returns when that CLI authenticates;
-#    ADR-0005 clause 4 (the policy file documents --model for reading back the
-#    mapped shape).
-AGENT_TIER_REVIEWER='claude-opus-5-5'
+#    The kit's answer to that is a DIFFERENT VENDOR, not just a different
+#    model: a reviewer that shares the author's training shares the author's
+#    blind spots. It is suspended, not abandoned. On 2026-10-01 every reviewer
+#    crossing this host attempted returned 401 — 4 of 4 in the third retro
+#    window — so a reviewer mapped to the other vendor answered nothing and the
+#    review fell to whatever the session happened to run on. Until that CLI
+#    authenticates the reviewer is local, on the two models this host CAN
+#    reach, and they are each other's complement:
+#
+#      plain `reviewer`, no session named     -> claude-fable-5-1, the content
+#                                                model — never the implementer's
+#                                                (claude-opus-5-5)
+#      `reviewer self-implemented` on a fable -> claude-opus-5-5, the code model
+#      session (the content model wrote it)
+#      `reviewer self-implemented` on an opus -> self-implemented names opus, the
+#      session (the code model wrote it)         session's own, so ADR-0007's
+#                                                refusal falls back to the plain
+#                                                reviewer: claude-fable-5-1
+#
+#    So the rule holds with no exception: whichever local model wrote the diff,
+#    the other one reads it — provided the caller says what it runs on
+#    (AGENT_SESSION_MODEL; nothing sets it for you). tests/agents-tiers.test.sh
+#    pins all three answers. The cross-vendor ids (codex:gpt-5.6-sol for the
+#    reviewer, codex:gpt-6-astra for self-implemented) come back when that CLI
+#    authenticates — ask the operator again on 2026-10-08.
+AGENT_TIER_REVIEWER='claude-fable-5-1'
 #
 #    The case the plain lookup cannot see: the session ITSELF implemented, on
-#    the model this tier maps to — an implementer-tier session on Opus writing a
-#    ticket's diff is exactly that, and this wave met it on many PRs. When the
-#    session runs on Opus and asks for a review on Opus, ADR-0007's refusal —
-#    in scripts/agents.lib.sh since 0.22.0, so every project has it — prints
-#    nothing and warns that the review would share the author's model. It is
-#    resolved through the domain axis below, as `sh scripts/agents.kit.sh
-#    reviewer self-implemented` — a domain that names a situation rather than a
-#    medium, which the open vocabulary allows and the glossary's "Task domain"
-#    entry records — and tests/agents-tiers.test.sh holds it to differing from
-#    the reviewer when the session differs from it. Mapped to Fable, the planner's
-#    model, so on a Fable session the refusal falls back to the plain reviewer
-#    (Opus), the net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-fable-5-1'
+#    the model the plain reviewer maps to — a content-domain session writing a
+#    ticket's prose on fable is exactly that. It is resolved through the domain
+#    axis below, as `sh scripts/agents.kit.sh reviewer self-implemented` — a
+#    domain that names a situation rather than a medium, which the open
+#    vocabulary allows and the glossary's "Task domain" entry records — and
+#    tests/agents-tiers.test.sh holds it to differing from the reviewer. When
+#    the session is the code model instead, this answer is the session's own,
+#    and ADR-0007's refusal — in scripts/agents.lib.sh since 0.22.0, so every
+#    project has it — falls back to the plain reviewer above.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-opus-5-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
