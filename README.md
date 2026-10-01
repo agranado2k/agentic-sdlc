@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.33.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.35.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.33.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.35.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -588,8 +588,10 @@ skeleton (K0).
   absence exit 65; no `gh` on PATH exits 69; a policy
   that omits an operation exits 78; a finding whose `path:line` is not in the
   diff is dropped and named; a retried run finds its marker and skips; the
-  word APPROVE in a finding never reaches the event; and the `review.verdict`
-  event is read back with the trace's `show`.
+  word APPROVE in a finding never reaches the event; and the trace's `show`
+  reads back one `finding.raise` per posted finding and a `review.verdict`
+  per axis, none of them carrying a line of the report, while an
+  unconfigured trace leaves the posting unchanged.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -626,6 +628,21 @@ skeleton (K0).
   a refused one is named by comment and position. The snapshot itself is held
   to metadata only: no command in it selects a body. It also holds the
   trust-boundary paragraph in the kit's manual and the template.
+- `sh tests/stamp.test.sh` holds `scripts/stamp.sh`, the one way `/implement`
+  reads its ticket's `Tier:`, `Confidence:` and `Domain:` lines (#331): the
+  issue number in, the body fetched through a stub tracker CLI, the bare
+  lines lifted and checked. Four statuses, each driven red first — 0 with the
+  checked lines and nothing else on stdout; 2 for a refused value, nothing on
+  stdout and the field named, never the text; 3 for a ticket with no stamp
+  lines, a checker that is gone or cannot run (its policy missing or
+  malformed), or a line of a field the policy does not declare with no tier
+  left — never a refusal and never an unchecked line; 4 for a fetch that
+  failed on its one retry; and a signal exits, never a verdict. The bodies
+  are hostile: a quote that closes its own argument, a no-break, em or
+  zero-width space in a value or a key — the em space under a caller's
+  C.UTF-8, so the script's own locale pin is what decides it — a NUL,
+  markdown-wrapped lines, and a foreign clone's checker under the caller's
+  cwd.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
   over a PRD issue body and `/dogfood` over product output it can capture
@@ -692,7 +709,9 @@ skeleton (K0).
   never the kit's never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
   error changes no skill's outcome; every kind a skill emits is one the script
   knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
-  and records a spawn per agent with that model; `/merge-train` and
+  and records a spawn per agent with that model, and every `data.agent` it
+  writes — spawn, raise, or a relayed review's raise — is a token from its
+  own closed sub-agent roster; `/merge-train` and
   `/pr-iterate` record the human's `feedback` verdict on a landed slice; and
   no skill, chain or not, ever calls `show`, `summary` or `export`.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
@@ -854,6 +873,7 @@ sh tests/forge-broker.test.sh                          # the broker lands a disp
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
+sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh

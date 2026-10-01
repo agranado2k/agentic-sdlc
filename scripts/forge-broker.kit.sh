@@ -69,9 +69,14 @@
 #      confirm-list. Print the two URLs on stdout, one per line, then one
 #      `dropped …` line when anything was withheld, then one `drift: …` line
 #      when the review was anchored behind the head.
-#   7. Emit one `review.verdict` trace event, subject `pr:#<N>`, the verdict
-#      as outcome, the model and agent harness when the caller passed them.
-#      Never load-bearing (ADR-0008 clause 4).
+#   7. Record what landed in the trace, subject `pr:#<N>`: one
+#      `finding.raise` per finding posted inline (withheld ones are not
+#      raised), then one `review.verdict` per axis — Axis 1 with the verdict
+#      as outcome, Axis 2 as /review-pr §5b counts it — each marked
+#      `data.via=broker`, with the model and agent harness when the caller
+#      passed them. The report is untrusted: what reaches an event is lifted
+#      by shape or mapped onto a closed list, never a line of it pasted into
+#      a reason. Never load-bearing (ADR-0008 clause 4).
 #
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
@@ -499,6 +504,7 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 				secdrop=$((secdrop + 1))
 			else
 				any=1
+				printf '%s\n' "$i" >>"$TMP/posted"
 				printf '**%s** `%s:%s` — inline below.\n' "$f_id" "$f_path" "$f_line" >>"$TMP/body.md"
 				[ -s "$TMP/comments.json" ] && printf ',' >>"$TMP/comments.json"
 				printf '{"path":"%s","line":%s,"side":"RIGHT","body":"%s"}' \
@@ -604,9 +610,79 @@ printf '%s\n%s\n' "$REVIEW_URL" "$COMMENT_URL"
 
 # --- 7. the trace ------------------------------------------------------------------------------
 # Never load-bearing: the review landed whatever the trace says (ADR-0008
-# clause 4). Kit-only script, so the kit's own policy is the default seam.
-set -- kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT" "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
-[ -z "$MODEL" ] || set -- "$@" "model=$MODEL"
-[ -z "$HARNESS" ] || set -- "$@" "harness=$HARNESS"
-TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" sh "$ROOT/scripts/trace.sh" emit "$@" || :
+# clause 4). Kit-only script, so the kit's own policy is the default seam —
+# scripts/trace.sh read through scripts/trace.kit.config.sh, what
+# scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins.
+#
+# trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured note.
+# The note's switch is set on the external command, never in front of this
+# function: POSIX leaves unspecified whether an assignment before a function
+# call outlives it, and a quiet that leaked would silence the loud call too.
+trace() {
+	_tr_quiet=
+	[ "$1" = quiet ] && _tr_quiet=1
+	shift
+	[ -z "$MODEL" ] || set -- "$@" "model=$MODEL"
+	[ -z "$HARNESS" ] || set -- "$@" "harness=$HARNESS"
+	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
+		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
+}
+# agent_token <finding body> — the /review-pr §3 roster token for the one
+# sub-agent the finding names by number or by title, `unattributed` when it
+# names none or more than one. The answer is always a token from the closed
+# list, never the report's spelling, and never a lens guessed from the text.
+agent_token() {
+	LC_ALL=C awk '
+		BEGIN {
+			split("security api-crud pattern simplicity reuse-dry test-hygiene", tok, " ")
+			t[1] = "Security Sentinel"; t[2] = "API & CRUD Contract Manager"; t[3] = "Pattern & Refactor Enforcer"
+			t[4] = "Simplicity Advocate"; t[5] = "Reuse & DRY Auditor"; t[6] = "Test Hygiene Inspector"
+		}
+		{
+			for (k = 1; k <= 6; k++) if (index($0, t[k]) || $0 ~ ("Agent " k "([^0-9]|$)")) hit[k] = 1
+		}
+		END {
+			for (k in hit) { n++; a = tok[k] }
+			print (n == 1 ? a : "unattributed")
+		}
+	' "$1"
+}
+# One raise per finding that landed inline, before the verdicts (/review-pr
+# §6: record, then verdict). The unconfigured note is said once, by the
+# Axis-1 verdict below, not once per finding.
+if [ -s "$TMP/posted" ]; then
+	while read -r i; do
+		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
+		f_where="${f_path}:${f_line}"
+		case $f_where in *[!A-Za-z0-9./_:-]*) f_where=unsafe-path ;; esac
+		f_note="posted inline by the forge broker"
+		[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
+		trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
+			"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
+			"data.where=$f_where" data.via=broker "reason=$f_note"
+	done <"$TMP/posted"
+fi
+# The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
+# and the worker's VERDICT line is a sentence: its opening is the contract's
+# "blocking or not", so that is read and nothing else — "not blocking" and
+# the contract's own clean "no findings" are pass, "blocking" is blocked,
+# any other opening carries no outcome — and the sentence goes whole into
+# the reason.
+case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
+'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
+blocking*) VERDICT_WORD=blocked ;;
+*) VERDICT_WORD= ;;
+esac
+trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+# Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
+# needs the human, `pass` when none does.
+tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
+N_UNSPEC=$(tagcount UNSPECIFIED)
+N_MIXED=$(tagcount 'MIXED COMMIT')
+N_MISSING=$(tagcount MISSING)
+AX2=pass
+[ $((N_UNSPEC + N_MIXED + N_MISSING)) = 0 ] || AX2=confirm
+trace quiet kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
+	"data.unspecified=$N_UNSPEC" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" \
+	"reason=the confirm-list counted by tag; the items are on the PR comment"
 exit 0

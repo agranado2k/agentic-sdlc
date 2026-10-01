@@ -74,13 +74,16 @@ The full form — what to read, what counts as a finding, where it goes — is i
 7. **Aim calibration** — of the slices landed in the window, how many were
    followed by a re-cut of what came after them, and which tier or skill
    produced the misses. The `feedback` events are the loop's own
-   self-correction; no verdicts over landed slices is itself a finding.
+   self-correction; no verdicts over landed slices is itself a finding, and
+   a landing whose `feedback` is `unasked` counts as one with no verdict.
 8. **Stamp calibration** — per decision field and per skill, never one
-   number for the chain: how often a tier stamped at each confidence was
-   overridden at the quiz, and how often a finding raised at each severity
-   was dismissed by a human. Every row carries the oracle clause; a row with
-   too few events says so instead of a rate; and the label's override rate,
-   which the trace cannot answer today, is a row that says exactly that.
+   number for the chain: how often a tier or a label stamped at each
+   confidence was overridden at the quiz, and how often a finding raised at
+   each severity was dismissed by a human, counting only the posted where
+   the raise says whether it was. Every row carries the oracle
+   clause; a row with too few events says so instead of a rate; and the
+   label's override rate is computable once its stamps carry
+   `data.label_proposed` — a row whose stamps predate that key says so.
 
 ## Procedure
 
@@ -118,8 +121,9 @@ change, and the report says which:
 - A **stamp** whose confidence does not track its overrides → the confidence
   rule or the rubric line in `/to-tickets` that the overridden stamps kept
   getting wrong; a severity dismissed more often than it stood → that band's
-  definition in `/review-pr`; the label's row → the `ticket.write` emit in
-  `/to-tickets`, which records no label from before the quiz.
+  definition in `/review-pr`; a label row with a rate that is a finding →
+  `/to-tickets` rules 4 and 14, the autonomy-label rule and the confidence
+  beside it.
 - One finding routes to the operator instead: verify's exit 3 — the shared
   layer is updated before any retro can read.
 - A finding that repeats a previous retro's with no ticket behind it → say

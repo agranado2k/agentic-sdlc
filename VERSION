@@ -955,6 +955,48 @@
 # adapters/claude-code/README.md updated (9e). No docs template or workflow
 # changed in this window.
 
+# 0.26.0 — the consumer's manual learns the judge task domain (PRD #273).
+# NO file joins or leaves the layer. ONE shared file changes content:
+# UPDATING.md, whose Part 2 worked example re-pins.
+#   From #275: the `judge` task domain is named by its CONTRACT and never by
+# a vendor — state and typed questions in, typed answers with per-option
+# probabilities out — in two shapes a mapping answers one of, decide (among
+# supplied options, the chain's triage questions) and rank-or-verify (over
+# supplied candidates). ADR-0010 records why it is a task domain and not a
+# fifth tier: the four tier names are a closed vocabulary (ADR-0003) and a
+# tier is how big the work is, where a judge is what the work is made of,
+# which is the open axis. It also records the negative, because the one
+# measurement anyone has published is of a decider failing at it: a decider
+# is never handed a verification, and no typed judge takes the review
+# verdict (shared invariant §5). The kit ships the domain UNMAPPED and its
+# own kit-only mapping declines it in so many words — the kit names no
+# model — so nothing a consumer runs changes in this window.
+#   Why UPDATING.md moves at all: the consumer's manual template gains the
+# same paragraph, and Part 2's worked example pins that template's diff
+# stat, so the transcript re-pins with it (58 -> 70 lines, 349 -> 361
+# insertions). That is the whole content change to the layer.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. The root manual's Capability tiers
+# section gains the judge paragraph and keeps ADR-0004's 350-line budget by
+# tightening the prose around it — the literal AGENTS_CONFIG= worked example
+# and the "this repo is itself a consumer of the mechanism it ships"
+# rationale both STAY, restored after a first pass traded them for the
+# space. constitution/AGENTS.md.template gains the consumer's paragraph.
+# docs/domain-glossary.md's Task domain entry names the judge and its two
+# shapes. docs/adr/0010-a-typed-judge-is-a-task-domain-named-by-its-
+# contract.md is the record, indexed, and on bootstrap.sh's KIT_OWN list.
+# scripts/agents.kit.config.sh and its codex twin carry the declining
+# comment. tests/agents-tiers.test.sh gains the unmapped-and-mapped case.
+#   Landing in the same window, from #276 (the oracle line): every
+# self-measurement the kit reports names its oracle — who wrote the
+# fixtures, when, against which version, and the comparator — so a
+# self-graded number cannot be read as a held-out one.
+# .agents/skills/housekeeping/CHECKLIST.md's measurement step asks for
+# the line, docs/domain-glossary.md defines **Oracle** with the rule
+# that a comparator is always named, and tests/self-host.test.sh holds
+# the kit's own diary row to it. It rode v0.25.0's merge train but
+# landed after the tag, so this note is where the recipe names it.
+
 # 0.27.0 — declared runtime catalogue admission (lifecycle wave).
 # NO file joins or leaves the shared layer. UPDATING.md changes its release
 # note and re-captures both worked examples; release scaffolding is drawn
@@ -1303,8 +1345,110 @@
 # tests/trace-skills.test.sh, tests/trace-hooks.test.sh and
 # tests/adapters-demo.sh hold it; the broker's own suite and the
 # pre-screen's are jobs in the kit's CI.
+# 0.34.0 — every trace kind holds its outcome to a vocabulary of its own
+# (PRD #237, from the retrospective of 2026-10-01).
+# NO file joins or leaves the shared layer. ONE shared file changes content
+# and BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the
+# arriving-from paragraph, a behaviour-change entry, and both worked
+# examples re-pin.
+#   From #348: scripts/trace.sh carries the kind table — every kind and the
+# outcome words it declares, ADR-0008 clause 1 as amended — beside its
+# closed kind list, the trace suite holding the two row for row. An emit whose outcome its
+# kind does not declare is exit 2 naming the kind, the value and the
+# vocabulary, the vocabulary checker's shape; it used to write. That is a
+# NARROWING of the emit's contract: a consumer's own emit line with a typo or
+# a sentence in `outcome=` stops silently succeeding, and because every call
+# site ends `|| :` it now writes nothing instead — run each of yours once
+# with `--dry-run` to find it. An emit with no outcome stays legal on every
+# kind; `run.start` and `session.end` carry none and refuse one; `note` is
+# the one open kind, held to a single word. `verify` names each line already
+# written with an undeclared outcome as an advisory on stderr, file and line,
+# exit status unchanged, and `summary` and `export` say the count once —
+# history is never rewritten, the pattern of the numbered-subject
+# advisory (#305). Every word a shipped skill, the Claude Code adapter's hooks or
+# the dispatcher writes today is declared; the kit's own trace held thirty
+# lines the record does not, all from sessions improvising. The kit-only
+# review broker writes `pass` or `blocked` with the worker's VERDICT
+# sentence as the reason, where it wrote the sentence as the outcome.
+#   From #345, untagged on main since 0.33.0: /merge-train's `feedback`
+# emit is the train's exit condition per landed PR, and `outcome=unasked`
+# records a landing nobody could answer — not a verdict; ADR-0008 clause 1
+# carries it as a dated amendment and the glossary gains Feedback.
+#   From #344, the same: the Claude Code adapter's hooks/subagent-stop.sh
+# writes no event for a phantom stop — a payload naming a transcript that
+# does not exist — and one `agent.stop outcome=fail` at once for one that
+# exists and cannot be read; adapters/claude-code/README.md records why no
+# event and not a new outcome word.
+#   From #333 (PR #357): the typed-return fence the pre-screening skills
+# print — /pr-iterate, /to-tickets and the dogfood skill (without its slash,
+# for 0.33.0's reason) — finds the vocabulary checker in the repository that
+# holds the skills being run, the nearest directory at or above the cwd with
+# .agents/skills/, never whatever repository git names for the cwd; and it
+# refuses an evidence span under 8 bytes. Both halves are two shell
+# functions each skill prints line for line identical.
+#   From #354 (PR #368): /to-tickets records the label it drafted before the
+# quiz as `data.label_proposed` on `ticket.write`, and /retro's question 8
+# (.agents/skills/retro/QUESTIONS.md) rates the label's override rate per
+# confidence once five stamps carry the key.
+#   From #346 (PR #369): /review-pr owns a closed sub-agent roster — seven
+# tokens and `unattributed` — and every `data.agent` it writes is one; its
+# §6 gains the relay path, where the session posting a review that ran
+# elsewhere records one `finding.raise` per finding, `data.via=relay`, and
+# /implement's mechanism (b) points the relaying session at it.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/merge-train/SKILL.md
+# (the unasked verdict, via 9a); .agents/skills/pr-iterate/SKILL.md,
+# .agents/skills/to-tickets/SKILL.md and the dogfood skill's SKILL.md (the
+# fence); .agents/skills/to-tickets/SKILL.md, .agents/skills/retro/SKILL.md
+# and .agents/skills/retro/QUESTIONS.md (the drafted label);
+# .agents/skills/review-pr/SKILL.md and .agents/skills/implement/SKILL.md
+# (the roster and the relay) — all via 9a. adapters/claude-code/README.md and the
+# adapter's hooks/subagent-stop.sh (the phantom stop, via 9e).
+# docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
+# carries both amendments, docs/adr/INDEX.md its row, and
+# docs/domain-glossary.md the Feedback entry and the Event entry's rule.
+# README.md's suite entries follow. tests/trace.test.sh section 22,
+# tests/trace-skills.test.sh, tests/trace-hooks.test.sh,
+# tests/forge-broker.test.sh, tests/prescreen-return.test.sh,
+# tests/typed-return.test.sh, tests/retro-skill.test.sh and
+# tests/spec-skills.test.sh hold it.
+# 0.35.0 — /implement reads a ticket's stamp through a script (PRD #273's
+# follow-ups, from the operator's rulings of 2026-10-01).
+# ONE file joins the shared layer: scripts/stamp.sh. NO shared file changes
+# content besides it. UPDATING.md changes content: the joining entry, and
+# both worked examples re-pin.
+#   From #331: the one-line pipe /implement typed to lift a ticket's `Tier:`,
+# `Confidence:` and `Domain:` lines and hand them to the checker grew a new
+# edge on every review (PR #311, five passes; the last an undefined exit
+# under pipefail). It is a script now, `sh scripts/stamp.sh <N>`, with four
+# exits the skill reads and nothing else: 0 and the checked lines on stdout;
+# 2 a refused value, nothing printed, stderr naming the field and never the
+# text (untrusted); 3 no stamp read — no stamp lines, or a checker the
+# script could not use, the defaults then and said so; 4 the fetch failed
+# twice, never read as a missing line. It asks the checker which fields it
+# declares BEFORE lifting, so a line in an undeclared field is never printed
+# (a reviewer's `Domain: x;touch PWN` once passed at exit 0), a policy file
+# that does not parse is "checker unusable", not a refusal, and the locale
+# is pinned inside the script — a mutant without the pin is red. #340's
+# answers hold: a refused value is a stop with or without a `Tier:` line, a
+# missing `Confidence:` line is not.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/implement/SKILL.md's
+# stamp bullet is the call, the four exits and those answers, no more.
+# AGENTS.md's and constitution/AGENTS.md.template's vocab.sh quick-reference
+# row gain the one sentence that names the script. tests/stamp.test.sh
+# drives the four exits with hostile bodies; tests/implement-deliver.test.sh
+# runs the skill's own call against a stub tracker; bootstrap.sh strips the
+# suite with the rest of tests/, .github/workflows/kit-ci.yml runs it,
+# README.md names it. Landed beside it since 0.34.0, from #332 (PR #374):
+# .agents/skills/retro/QUESTIONS.md and .agents/skills/retro/SKILL.md read
+# `data.posted` on a raise and `data.label_proposed` on a ticket.write, so
+# the eighth question's two rates are computable over a window that carries
+# them, and say which form each row used. The 0.26.0 history note below was
+# misfiled under the not-shared commentary by its own release; it sits in
+# order now (#339).
 
-shared-layer: 0.33.0
+shared-layer: 0.35.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -1319,48 +1463,6 @@ shared-layer: 0.33.0
 # that shared the mapping would be shipping a standing instruction with a timer
 # on it.
 
-# 0.26.0 — the consumer's manual learns the judge task domain (PRD #273).
-# NO file joins or leaves the layer. ONE shared file changes content:
-# UPDATING.md, whose Part 2 worked example re-pins.
-#   From #275: the `judge` task domain is named by its CONTRACT and never by
-# a vendor — state and typed questions in, typed answers with per-option
-# probabilities out — in two shapes a mapping answers one of, decide (among
-# supplied options, the chain's triage questions) and rank-or-verify (over
-# supplied candidates). ADR-0010 records why it is a task domain and not a
-# fifth tier: the four tier names are a closed vocabulary (ADR-0003) and a
-# tier is how big the work is, where a judge is what the work is made of,
-# which is the open axis. It also records the negative, because the one
-# measurement anyone has published is of a decider failing at it: a decider
-# is never handed a verification, and no typed judge takes the review
-# verdict (shared invariant §5). The kit ships the domain UNMAPPED and its
-# own kit-only mapping declines it in so many words — the kit names no
-# model — so nothing a consumer runs changes in this window.
-#   Why UPDATING.md moves at all: the consumer's manual template gains the
-# same paragraph, and Part 2's worked example pins that template's diff
-# stat, so the transcript re-pins with it (58 -> 70 lines, 349 -> 361
-# insertions). That is the whole content change to the layer.
-#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
-# none of it in the files: list above. The root manual's Capability tiers
-# section gains the judge paragraph and keeps ADR-0004's 350-line budget by
-# tightening the prose around it — the literal AGENTS_CONFIG= worked example
-# and the "this repo is itself a consumer of the mechanism it ships"
-# rationale both STAY, restored after a first pass traded them for the
-# space. constitution/AGENTS.md.template gains the consumer's paragraph.
-# docs/domain-glossary.md's Task domain entry names the judge and its two
-# shapes. docs/adr/0010-a-typed-judge-is-a-task-domain-named-by-its-
-# contract.md is the record, indexed, and on bootstrap.sh's KIT_OWN list.
-# scripts/agents.kit.config.sh and its codex twin carry the declining
-# comment. tests/agents-tiers.test.sh gains the unmapped-and-mapped case.
-#   Landing in the same window, from #276 (the oracle line): every
-# self-measurement the kit reports names its oracle — who wrote the
-# fixtures, when, against which version, and the comparator — so a
-# self-graded number cannot be read as a held-out one.
-# .agents/skills/housekeeping/CHECKLIST.md's measurement step asks for
-# the line, docs/domain-glossary.md defines **Oracle** with the rule
-# that a comparator is always named, and tests/self-host.test.sh holds
-# the kit's own diary row to it. It rode v0.25.0's merge train but
-# landed after the tag, so this note is where the recipe names it.
-
 files:
   constitution/shared-invariants.md
   constitution/shared-code-craft.md
@@ -1370,6 +1472,7 @@ files:
   scripts/agent-dispatch.sh
   scripts/manifest.lib.sh
   scripts/vocab.sh
+  scripts/stamp.sh
   scripts/trace.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh

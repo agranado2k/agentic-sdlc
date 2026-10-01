@@ -29,9 +29,12 @@
 # read-at-once behaviour above — because how long a hook may hold a session is
 # a project's decision; the kit's twin sets its own. When the bound passes the
 # absence is recorded, outcome=fail and no partial sum, with the wait it gave
-# in data.waited_ms. A file that does not exist at all is NOT waited for: every
-# measured stop found the file already there, and in the kit's own trace every
-# stop that named a missing file named one that never appeared.
+# in data.waited_ms.
+#
+# A PHANTOM STOP WRITES NOTHING (ticket #344): a transcript that does not
+# exist is neither waited for nor recorded — the adapter README says why. One
+# that EXISTS and cannot be read is a real stop whose usage is lost:
+# outcome=fail at once, naming the cause, since it would never become final.
 #
 # Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
 # is where a trace error belongs. See hook.lib.sh.
@@ -72,18 +75,23 @@ if [ -n "$hook_wait_bad" ]; then
 	set -- "$@" data.wait_refused="$hook_wait_bad"
 fi
 
-if [ -n "$transcript" ] && [ -f "$transcript" ] && [ -n "$hook_wait_ms" ]; then
+if [ -z "$transcript" ]; then
+	hook_trace emit kind=agent.stop \
+		reason="the payload named no subagent transcript, so no tokens were read" "$@"
+elif [ ! -e "$transcript" ] && [ ! -h "$transcript" ]; then
+	: # a phantom: no event (see the header)
+elif [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; then
+	hook_trace emit kind=agent.stop outcome=fail \
+		reason="the subagent transcript exists but cannot be read as a file, so no tokens were read: $transcript" "$@"
+elif [ -n "$hook_wait_ms" ]; then
 	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
 		hook_tokens "$transcript" agent.stop "$@" data.waited_ms="$waited"
 	else
 		hook_trace emit kind=agent.stop outcome=fail data.waited_ms="$waited" \
 			reason="the subagent transcript did not end on a final message within the ${hook_wait_ms} ms bound, so no tokens were read — a partial sum would be an undercount" "$@"
 	fi
-elif [ -n "$transcript" ] && [ -f "$transcript" ]; then
-	hook_tokens "$transcript" agent.stop "$@"
 else
-	hook_trace emit kind=agent.stop \
-		reason="the payload named no readable subagent transcript, so no tokens were read: ${transcript:-none named}" "$@"
+	hook_tokens "$transcript" agent.stop "$@"
 fi
 
 exit 0

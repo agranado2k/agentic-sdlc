@@ -395,6 +395,14 @@ jobs:
       - name: Pre-screen return suite
         run: sh tests/prescreen-return.test.sh
 
+  stamp:
+    name: /implement reads its ticket's stamp through one checked script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp reader suite
+        run: sh tests/stamp.test.sh
+
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest
