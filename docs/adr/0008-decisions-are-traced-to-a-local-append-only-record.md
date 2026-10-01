@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2)
 
 ## Context and problem statement
 
@@ -129,6 +129,24 @@ Chosen: **option 1**.
      answer a third party's review: this chain posts its own as comment
      reviews, which the forge lets nobody dismiss, so an event on that path
      has no `/review-pr` raise to join.
+   *Amended 2026-10-01 (#345):* `feedback`'s outcome vocabulary gains a
+   fourth word, **`unasked`** — the train landed the slice and nobody could
+   answer the question. The retrospective of 2026-10-01 found fifteen
+   landings and no verdict from `/merge-train`: the train ran autonomously
+   under a "do not stop" instruction and the question was skipped, which in
+   the trace is indistinguishable from a train that forgot to ask. So the
+   `feedback` emit becomes the train's exit condition per landed PR — one
+   event after every `merge.land outcome=landed`, on both paths — and an
+   autonomous train writes `outcome=unasked` with the instruction that made
+   it autonomous as the reason. **`unasked` is not a verdict.** The three
+   verdicts above stay a human's and only a human's; `unasked` says the
+   human was never reached, and a reader counts it with the landings that
+   got no verdict, never as a hit. It belongs on `feedback` and not on a
+   new kind because it sits where the verdict would — same subject, same
+   join to the landing — so a reader of the slice's verdicts finds the gap
+   in the one place it looks. `/pr-iterate`'s `feedback` keeps three words: it emits
+   on a human comment that changed the plan, so it never has a question
+   nobody answered.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -253,6 +271,8 @@ Chosen: **option 1**.
   file, the kit twin, the ignore rule and the glossary terms).
 - Amended for ticket #277 (PR #319): the `finding.dismiss` kind, its emit
   in `/pr-iterate`, and the suites that hold both.
+- Amended for ticket #345: `unasked` on `feedback`, the train's exit
+  condition per landing, and the suite section that holds it.
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

@@ -300,6 +300,19 @@ Grouped by the seam each term belongs to. Entry shape:
   it by the `file:line` both carry as `data.where` (ADR-0008, amended
   2026-09-30).
   - _Avoid_: "entry", "record" — both are used for the decision records.
+- **Feedback** — the event kind that carries a human's verdict on a landed
+  slice: subject `ticket:#N`, related to its `pr:#N`, outcome one of `hit`
+  (the slice as planned), `adjusted` (the next slices re-cut on what it
+  taught) or `missed` (it did not do what it was for), reason the operator's
+  words. The tracer bullet's adjust-aim record. `/merge-train` asks it once
+  per landed PR and may not end the landing without it; `/pr-iterate` emits
+  it when a human comment changes the plan. A fourth outcome, `unasked`, is
+  the train's alone: the train ran autonomously and nobody could answer, so
+  the reason names the instruction that made it so. `unasked` is not a
+  verdict — a reader counts it with the landings that got none (ADR-0008,
+  amended 2026-10-01).
+  - _Avoid_: "review" (a review is on a diff; feedback is on a slice);
+    "rating".
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
