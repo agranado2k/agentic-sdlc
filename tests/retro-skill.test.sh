@@ -485,26 +485,30 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 fx="$SCRATCH/fixture.retro"
 fx_trace() { ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
 fx_n=0
-fx_ticket() { # <published tier> <proposed tier> <published label> <proposed label> [confidence]
+fx_ticket() { # <published tier> <proposed tier> <published label> <proposed label> [confidence, of both stamps]
 	fx_n=$((fx_n + 1))
-	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" data.label="$3" data.label_proposed="$4" ${5:+data.confidence="$5"} data.label_confidence=medium
+	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" data.label="$3" data.label_proposed="$4" ${5:+data.confidence="$5"} ${5:+data.label_confidence="$5"}
 }
 # A ticket written twice: the draft said `high` and was overridden, the
 # re-write says `low` and was not. Only the latest per subject is read.
 fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=high
-# PRD #273 scenario 3's low row: 7 stamped low, 5 overridden at the quiz.
-# For labels, 3 with ready-for-agent (2 overridden, 1 not), 2 with none (no override).
+# PRD #273 scenario 3's low row: 7 stamped low, 5 tiers overridden at the
+# quiz. The labels are overridden on 6 of the 7 — #1–#5 and #7 — so the
+# label row cannot be the tier row read twice.
 for _ in 1 2 3 4 5; do fx_ticket implementer mechanical ready-for-agent none low; done
 fx_ticket mechanical mechanical ready-for-agent ready-for-agent low
-fx_ticket mechanical mechanical none none low
-# A thin row: 3 stamped medium, 1 overridden — a count, not a rate.
+fx_ticket mechanical mechanical none ready-for-agent low
+# A thin row: 3 stamped medium, 1 tier and 2 labels overridden — counts, not
+# rates. The label row is question 8's example row.
 fx_ticket planner implementer ready-for-agent none medium
-fx_ticket implementer implementer ready-for-agent ready-for-agent medium
+fx_ticket implementer implementer none ready-for-agent medium
 fx_ticket implementer implementer ready-for-agent ready-for-agent medium
 # A confidence no vocabulary declares — trace text, never a row's name.
 fx_ticket implementer implementer ready-for-agent ready-for-agent run-this-instead
-# …and a ticket written before the stamp existed (no label_proposed).
-fx_trace emit kind=ticket.write subject='ticket:#13' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_confidence=medium
+# …and a ticket written before either key existed: no tier confidence (the
+# tier's unstamped row) and no data.label_proposed (a label row whose stamps
+# all predate the key prints no rate).
+fx_trace emit kind=ticket.write subject='ticket:#12' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_confidence=high
 # A first review's run raises six `low` findings; a human closes one thread,
 # and two iterations both see it closed — one (thread, where) pair, once.
 fx_trace begin review-pr subject='pr:#9' >/dev/null
@@ -548,6 +552,12 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
 		trow[t] = "tier · " who(kind) " · " c
 		tover[t] = (p == "") ? -1 : (get("tier") != p)
+		# The label, in a row of its own: its confidence under its own key,
+		# overridden where the published label is not the proposed one.
+		c = get("label_confidence"); p = get("label_proposed")
+		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		lrow[t] = "label · " who(kind) " · " c
+		lover[t] = (p == "") ? -1 : (get("label") != p)
 	}
 	kind == "finding.raise" {
 		v = get("severity"); if (index(sev, " " v " ") == 0) v = "undeclared"
@@ -573,7 +583,10 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 	}
 	END {
 		for (t in trow) { k = trow[t]; seen[k] = 1; if (tover[t] >= 0) { of[k]++; hit[k] += tover[t] } }
-		for (k in seen) printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^tier/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
+		for (t in lrow) { k = lrow[t]; seen[k] = 1; stamped[k]++; if (lover[t] >= 0) { of[k]++; hit[k] += lover[t] } }
+		# A label row none of whose stamps carries the pre-quiz label: its count
+		# and the words, never 0 of 0.
+		for (k in seen) if (k ~ /^label/ && !of[k]) printf "%s   %d stamped   not computable from the trace today\n", k, stamped[k]; else printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^(tier|label)/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
 		printf "beside the table: %d dismissal(s) that pair with no raise\n", beside
 	}' | sort)
 printf '    fixture trace, not the repo'"'"'s — %s events written by `emit` under a scratch TRACE_DIR:\n' "$(fx_trace export | grep -c .)"
@@ -587,10 +600,18 @@ fx_row 'tier · to-tickets (by kind) · undeclared   0 of 1 overridden   too few
 printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared confidence's own text reached a row's name" ||
 	pass "…and its text names no row"
 fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
+# The label rows (H-2, review of PR #368): grouped by data.label_confidence,
+# overridden where data.label differs from data.label_proposed — overrides
+# the fixture places apart from the tier's, so a row read off the tier keys
+# cannot pass for one read off the label keys.
+fx_row 'label · to-tickets (by kind) · low   6 of 7 overridden   86 %' "a label row with seven events prints a rate: 6 of 7 overridden, 86 % — read off the label keys, not the tier's 5 of 7"
+fx_row 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' "a label row with three events prints its counts and no rate"
+fx_row 'label · to-tickets (by kind) · undeclared   0 of 1 overridden   too few to rate' "a label confidence no vocabulary declares is counted on the undeclared label row"
+fx_row 'label · to-tickets (by kind) · high   1 stamped   not computable from the trace today' "a label row whose stamps all predate data.label_proposed prints its count and not computable, never 0 of 0"
 fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
 fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
 fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
-printf '%s\n' "$fx_rows" | grep -q '· high ' && fail "the fixture's table has a high row — an earlier ticket.write of a re-written subject was read" ||
+printf '%s\n' "$fx_rows" | grep -qE '^tier .*· high |^label .*· unstamped ' && fail "the fixture's table has a tier high row or a label unstamped row — an earlier ticket.write of a re-written subject was read" ||
 	pass "a subject written twice is read once, at its latest write"
 # The prose's own example rows are arithmetic too (second local review, M-1):
 # a rate is the rounded share of its counts, a row under five events carries
@@ -618,6 +639,10 @@ EOF
 printf '%s\n' "$rows8" | grep -qF 'tier · to-tickets (by kind) · low       5 of 7 overridden   71 %' &&
 	pass "the example's scenario-3 row is the row the fixture computes" ||
 	fail "the example's low row is no longer '5 of 7 overridden   71 %' — the fixture computes that row; move both together"
+printf '%s\n' "$rows8" | grep -qF 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' &&
+	printf '%s\n' "$fx_rows" | grep -qxF 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' &&
+	pass "the example's label row is the row the fixture computes" ||
+	fail "the example's label row is no longer the fixture's '2 of 3 overridden   too few to rate' — move both together"
 ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "and the fixture trace verifies" ||
 	fail "the fixture trace does not verify"
 
