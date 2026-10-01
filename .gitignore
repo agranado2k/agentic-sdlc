@@ -10,3 +10,10 @@ worktree/
 # in plain text — and the kit never pushes it; a gitignored directory is also
 # invisible to the docs gate's placeholder scan, which is the point.
 .trace/
+
+# The retrospective's reports — /retro writes `.retro/<YYYY>/<MM>/retro-<stamp>.md`
+# and its CSV export here, at the root checkout, resolved through git's common
+# directory the way the trace directory above is. A report quotes the trace
+# (reasons, comment bodies, costs), so it is local for the same reason the
+# trace is, and never pushed.
+.retro/
