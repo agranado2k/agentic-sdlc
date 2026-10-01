@@ -221,8 +221,8 @@ sections, and anything after it is annotation.
 
 **Arriving from 0.32.0 or older, a dispatched review lands through a broker,
 and two skills pre-screen what they read.** No shared file changes at 0.33.0;
-six skills, one worker prompt and the Claude Code adapter do, and Part 2 is
-how you take them.
+seven skills, one worker prompt and the Claude Code adapter do, and Part 2
+is how you take them.
 `/implement`'s review step now lands a *dispatched* review — one run on
 another agent harness — through a **broker**, a host-side role your root
 manual names, and never by hand: the worker is offline, prints its findings
@@ -243,10 +243,13 @@ calibration, and `QUESTIONS.md` carries it — so the count in your manual's
 `/housekeeping`'s `CHECKLIST.md` looks for it there — add `.retro/` to your
 ignore file, since the skill will not. `/implement` and `/review-pr` record
 a `tdd.cycle` per cycle, a `spawn.end` per spawn and the resolver's model id
-captured rather than typed. In 9e, the Claude Code adapter's `README.md` gains
-the section on denying a typed-return reader its tools, and its
-`transcript-usage.mjs` hook takes the last usage block per message id — take
-the hook if you wired it.
+captured rather than typed; in `/implement` a refused `Confidence:` value now
+stops the session as a refused tier does. `/pr-iterate` sets aside a red whose
+own output says `release-bound:` instead of iterating on it. In 9e, the Claude
+Code adapter's `README.md` gains the section on denying a typed-return reader
+its tools and the one on where a per-user node goes, its `hook.lib.sh` names
+that fix in its no-node reason, and its `transcript-usage.mjs` hook takes the
+last usage block per message id — take the hooks if you wired them.
 
 **Arriving from 0.31.0 or older, a ticket's stamp gains a line.** No shared
 file changes at 0.32.0; two skills do, and Part 2 is how you take them.
@@ -652,10 +655,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2084 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2087 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2238 insertions(+), 1 deletion(-)
+ 3 files changed, 2241 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

@@ -1182,8 +1182,9 @@
 # and both worked examples re-pin — Part 2 pins the diff stat of the
 # implement skill this moves. Riding the same tag, untagged on main since
 # 0.32.0: the pre-screen and the retro's eighth question (PRD #273's last
-# two tickets), and six trace-wave fixes found by using the trace (#335,
-# #343, #349, #351, #353, PR #359) — enumerated below with the rest. The
+# two tickets), eight trace-wave fixes found by using the trace (#335,
+# #343, #347, #349, #350, #351, #353, PR #359) and a confidence ruling
+# (#340) — enumerated below with the rest. The
 # broker itself is KIT-ONLY and never
 # shipped: scripts/forge-broker.kit.sh, its allow-list
 # scripts/forge-broker.kit.config.sh and tests/forge-broker.test.sh sit on
@@ -1265,6 +1266,22 @@
 # harness — the CLI path withholds (`--tools`, `--restricted`,
 # `--strict-mcp-config`), the in-session path is asked — and
 # adapters/README.md's row names the section.
+#   From #340: in /implement a refused `Confidence:` value is a refused
+# stamp and stops the session on the same path as a refused tier — three
+# answers on the tier and its confidence, not two: `low` restates, a
+# refused tier stops, a refused confidence stops; a value outside the
+# vocabulary is never read as `low` or as any declared word.
+#   From #347: /pr-iterate sets a RELEASE-BOUND red aside before it
+# classifies the rest — a failing check whose own output carries
+# `release-bound:` (a pinned transcript only the version bump re-captures,
+# a shared file past its tag) goes green when the release merges and on no
+# commit of the PR, so it is named in the report and never iterated on;
+# the kit's own docs-demo and self-host suites print that marker.
+#   From #350: adapters/claude-code/hooks/hook.lib.sh's no-node reason
+# names the fix, and adapters/claude-code/README.md says where it goes —
+# a node managed per user is on every path you type at and on none of the
+# hooks', so the directory goes on the path through the `env` block of
+# `.claude/settings.local.json`, literal and whole.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
 # none of it in the files: list above. .agents/skills/implement/SKILL.md
 # (steps 9b and 10). .agents/prompts/review-worker.md (the offline
@@ -1274,10 +1291,12 @@
 # constitution/AGENTS.md.template and
 # .agents/skills/LICENSE-mattpocock-skills.md (the eight-question count).
 # .agents/skills/review-pr/SKILL.md (spawn.end and the captured model).
+# .agents/skills/pr-iterate/SKILL.md (the release-bound set-aside).
 # .agents/skills/housekeeping/CHECKLIST.md (where the last retro is).
 # adapters/claude-code/README.md and adapters/README.md (the reader's
-# tools), adapters/claude-code/hooks/transcript-usage.mjs (the last usage
-# block). docs/domain-glossary.md's Broker, Typed return and Retro
+# tools, and where node goes), adapters/claude-code/hooks/hook.lib.sh (the
+# no-node reason), adapters/claude-code/hooks/transcript-usage.mjs (the
+# last usage block). docs/domain-glossary.md's Broker, Typed return and Retro
 # entries. README.md's suite entries follow. tests/implement-deliver.test.sh,
 # tests/prescreen-return.test.sh, tests/review-pr-output.test.sh,
 # tests/retro-skill.test.sh, tests/skill-phase.test.sh,
