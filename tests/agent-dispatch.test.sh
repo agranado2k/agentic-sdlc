@@ -875,6 +875,10 @@ term_leg() {
 	# the leg would be passing for a worker nobody saw start.
 	if ! await_file -s "$PIDFILE" 30; then
 		fail "the worker never wrote its pid file in 30s — nothing to TERM$2"
+		# TERM first, so a worker that did start goes down with the trap;
+		# KILL after a grace, for a dispatcher still short of its trap.
+		kill -TERM "$disp" 2>/dev/null
+		sleep 1
 		kill -KILL "$disp" 2>/dev/null
 		wait "$disp" 2>/dev/null
 		return
@@ -2226,6 +2230,8 @@ if await_file -e "$TR_STARTED" 30; then
 	tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
 else
 	fail "the traced worker never said it started in 30s — nothing to TERM"
+	kill -TERM "$TR_TERM_PID" 2>/dev/null
+	sleep 1
 	kill -KILL "$TR_TERM_PID" 2>/dev/null
 	wait "$TR_TERM_PID" 2>/dev/null
 fi
