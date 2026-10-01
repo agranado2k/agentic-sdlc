@@ -2049,4 +2049,65 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"a phantom stop writes no event"*) pass "the adapter README records that a phantom stop writes no event" ;;
 *) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
+banner "32. A wait-bound stop says why: the transcript's last line, its age, its length"
+# ---------------------------------------------------------------------------
+# Ticket #387 (retro 20261001T150216Z, G4). 158 subagent stops in one window
+# hit the ready-wait bound and said only that the transcript "did not end on a
+# final message within the bound" — which cannot tell a bound too short (a
+# young last line, still streaming) from an agent that never wrote a final
+# message (an old one). So the fail event carries data.last_kind (the last
+# line's top-level `type`, as the agent harness names it), data.last_age_ms
+# (how old that line was when the bound elapsed) and data.lines. A transcript
+# that ends inside the bound records tokens and none of the three.
+#
+# THE FIXTURE NEVER ENDS: section 27's first 19 lines, then one assistant line
+# that called a tool — not final — written so that neither the first nor the
+# last "type" on it is the top-level one, with an unbalanced brace and an
+# escaped quoted key inside strings. Its mtime is set 30 s in the past: the
+# age is the file's, since the last write is the last line landing.
+{
+	cat "$SCRATCH/sub-head-308.jsonl"
+	printf '%s\n' '{"message":{"type":"message","role":"assistant","content":[{"type":"text","text":"a { brace and \"type\":\"fake\""},{"type":"tool_use","id":"t1","name":"Bash","input":{}}],"stop_reason":"tool_use"},"note":"\"type\":\"decoy\"","type":"assistant","toolUseResult":{"type":"text"},"uuid":"u-387"}'
+} >"$SCRATCH/never-387.jsonl"
+AGO_387=$(($(date +%s) - 30))
+touch -d "@$AGO_387" "$SCRATCH/never-387.jsonl" 2>/dev/null ||
+	touch -t "$(date -r "$AGO_387" +%Y%m%d%H%M.%S)" "$SCRATCH/never-387.jsonl"
+
+# val <line> <field> — a field's value, quoted or not.
+val() { printf '%s\n' "$1" | sed -n 's/.*"'"$2"'":"\{0,1\}\([^",}]*\)"\{0,1\}[,}].*/\1/p'; }
+
+new_trace
+stop_on "$SCRATCH/never-387.jsonl"
+timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+G=$(ev_of agent.stop)
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(printf '%s\n' "$G" | grep -c .)" = 1 ] &&
+	[ "$(str "$G" outcome)" = fail ] && [ -z "$(num "$G" tok_out)" ] &&
+	pass "a transcript that never ends, 50 ms bound: exit 0, one agent.stop outcome=fail, no tokens" ||
+	fail "never-ending transcript: exit $S_STATUS, stdout '$S_OUT', events: $G"
+[ "$(val "$G" last_kind)" = assistant ] &&
+	pass "data.last_kind is the last line's top-level type (assistant), not a nested one" ||
+	fail "data.last_kind is '$(val "$G" last_kind)', expected assistant: $G"
+[ "$(val "$G" lines)" = 20 ] && pass "data.lines is the transcript's 20 lines" ||
+	fail "data.lines is '$(val "$G" lines)', expected 20: $G"
+AGE_387=$(val "$G" last_age_ms)
+[ "$AGE_387" -ge 30000 ] 2>/dev/null && [ "$AGE_387" -lt 150000 ] &&
+	pass "data.last_age_ms is the last line's age when the bound elapsed (${AGE_387} ms, written 30 s before)" ||
+	fail "data.last_age_ms is '$AGE_387', expected 30000 and up (slack for a loaded machine): $G"
+
+# A TRANSCRIPT THAT ENDS INSIDE THE BOUND records tokens and none of the keys.
+if [ "$HAVE_NODE" = 1 ]; then
+	new_trace
+	stop_on "$FIX/subagent-transcript.redacted.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+	F=$(ev_of agent.stop)
+	[ "$(num "$F" tok_out)" = 156 ] && [ -z "$(str "$F" outcome)" ] &&
+		pass "a transcript final inside the bound records its tokens" ||
+		fail "a final transcript did not record its tokens: $F"
+	case $F in *'"last_kind"'* | *'"last_age_ms"'* | *'"lines"'*)
+		fail "a final transcript carried a wait-bound key: $F" ;;
+	*) pass "and none of last_kind, last_age_ms, lines" ;; esac
+else
+	echo "  skip  node is not on PATH — the final-transcript leg reads tokens with the extractor"
+fi
+
 t_done "trace hooks"
