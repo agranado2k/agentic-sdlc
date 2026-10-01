@@ -577,7 +577,9 @@ skeleton (K0).
   a report with no `REVIEWED` or `VERDICT` line, or a heading missing, posts
   nothing and exits 65; a reviewed commit the PR no longer holds exits 75,
   while one behind the head posts anchored to itself, checked against the
-  base...reviewed diff, with a drift line; no `gh` on PATH exits 69; a policy
+  base...reviewed diff, with a drift line — and only with a matching
+  `--commit`, which is optional at the head and mandatory on drift, its
+  absence exit 65; no `gh` on PATH exits 69; a policy
   that omits an operation exits 78; a finding whose `path:line` is not in the
   diff is dropped and named; a retried run finds its marker and skips; the
   word APPROVE in a finding never reaches the event; and the `review.verdict`

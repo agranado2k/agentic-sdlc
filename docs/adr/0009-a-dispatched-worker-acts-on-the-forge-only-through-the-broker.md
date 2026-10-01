@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift — see the end of this record)
 
 ## Context and problem statement
 
@@ -113,7 +113,8 @@ Chosen: **option 1**.
    order, findings in the ID / location / fix shape, behavior items opening
    with their tag — or the broker posts nothing and exits 65 (EX_DATAERR); a
    `REVIEWED` line that contradicts the session's `--commit` is the same
-   failure. Each finding's `path:line` must sit in the diff's right-hand
+   failure *(amended 2026-10-01 — a drifted report without `--commit` is
+   too; see the end of this record)*. Each finding's `path:line` must sit in the diff's right-hand
    side; a finding that does not is dropped from the inline comments and
    named on stderr, and stdout says how many were withheld.
 6. **The reviewed commit is part of the contract.** *(Amended 2026-09-30 —
@@ -222,3 +223,27 @@ So clause 7's "75 the reviewed commit is not the head" now reads "75 the
 reviewed commit is no longer in the PR". The forge lists at most 250 commits
 of a PR; a reviewed commit beyond that reads as "not in the list", which
 fails toward a re-run, never toward a misplaced review.
+
+### Amendment, 2026-10-01 — `--commit` is mandatory on drift (PR #320)
+
+Amends clause 5, and the drift case of the 2026-09-30 amendment above; it
+widens nothing, so the record is amended in place rather than reversed. The
+operator decided it on PR #320's behavior confirm-list.
+
+`REVIEWED` is the worker's word. While clause 6 required it to equal the
+head, the forge bounded it; once a review behind the head may post, any
+commit in the PR's list would be accepted on that word alone. So the
+session's `--commit` — the sha it recorded before dispatching — now vouches
+for it wherever the head does not:
+
+- **Reviewed is the head** — `--commit` stays optional, as before.
+- **Reviewed is in the list, behind the head** — `--commit` is required. A
+  drifted report without it posts nothing and exits 65, the same family as
+  a `REVIEWED` that contradicts `--commit`, with one line on stderr naming
+  the flag. With a matching `--commit` it posts anchored to the reviewed
+  commit, as the amendment above says.
+- **Reviewed is not in the list** — still exit 75, with or without
+  `--commit`: the remedy is a re-run, not a flag.
+
+Clause 7's 65 therefore also reads "or a drifted report without
+`--commit`".
