@@ -153,8 +153,11 @@ Grouped by the seam each term belongs to. Entry shape:
   from a held-out one. Rule: a comparator is always named, never implied.
   Where nothing was written as a fixture — a calibration row in `/retro`,
   graded by a human's verdict at the quiz or on a review thread — that human
-  is the *who*, and the clause keeps its four parts.
-  _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
+  is the *who*, and the clause keeps its four parts. A row that measured
+  nothing — no fixtures written, no comparison made — has no comparator to
+  name, and says so instead of implying one: `oracle: none — <why>`. Question
+  8's label row is one, until #332 records the pre-quiz label.
+  _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
     of comparison, not a single number or an assumption.
