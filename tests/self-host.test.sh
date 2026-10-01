@@ -642,7 +642,9 @@ fi
 #   (ii) the tag's content still matches the tree: a manifest-listed file that
 #        drifted past the tag with no bump is the 0.5.0-interval failure — an
 #        unreleased change wearing a released version's number. RED always,
-#        pull requests included, because the drift is already in the diff.
+#        pull requests included, because the drift is already in the diff —
+#        and marked `release-bound:` in its own output, because only a
+#        version bump cures it: /pr-iterate sets such a red aside (#347).
 
 # The manifest grammar is scripts/manifest.lib.sh's, sourced by tests/lib.sh;
 # UPDATING.md's own copies are held equal to it by tests/manifest.test.sh.
@@ -657,12 +659,12 @@ if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1;
 			# Absent at the tag is its own failure, not "differs": a joined
 			# file — even an EMPTY one, which a bare cmp against empty stdin
 			# would wave through — is a layer change wearing an old number.
-			fail "$f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
+			fail "release-bound: $f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
 			drift=$((drift + 1))
 		elif git -C "$KIT" show "v$version_now:$f" 2>/dev/null | cmp -s - "$KIT/$f"; then
 			:
 		else
-			fail "$f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
+			fail "release-bound: $f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
 			drift=$((drift + 1))
 		fi
 	done <<EOF

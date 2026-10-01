@@ -380,4 +380,297 @@ case $row in
 *) fail "the index row for 0008 has no 'amended ${am_date:-<no date>} (#309 …' note naming clause 7: $row" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "9. Every spawn records the resolver's model id, never a typed word"
+# ---------------------------------------------------------------------------
+# A spawn records the model the resolver answered, never a word a session typed.
+# Every `spawn` line in the skill must have `model=` that is either a resolver
+# call `$(sh scripts/agents.lib.sh ...)` or a variable reference `$model` /
+# `"$model"`, never a literal model name like `opus` or `claude-opus-5-5`.
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	bad=0
+	while IFS= read -r span; do
+		[ -n "$span" ] || continue
+		# Only check spawn lines
+		if printf '%s\n' "$span" | grep -qF 'kind=spawn'; then
+			# Check if model= is present
+			if printf '%s\n' "$span" | grep -qF 'model='; then
+				# Extract the model value - look for model=... and capture what follows
+				# Valid patterns are: $model, "$model", or $(sh scripts/agents.lib.sh ...)
+				# Invalid patterns are literal strings like 'opus' or 'claude-opus-5-5'
+				if printf '%s\n' "$span" | grep -qE 'model=\$model([ \)]|$)' ||
+					printf '%s\n' "$span" | grep -qE 'model="\$model"' ||
+					printf '%s\n' "$span" | grep -qE "model='\$model'" ||
+					printf '%s\n' "$span" | grep -qF 'model=$(sh scripts/agents.lib.sh'; then
+					pass "/$s spawn uses resolver or variable for model"
+				else
+					bad=$((bad + 1))
+					fail "/$s spawn does not use resolver/variable for model — should be \$(sh scripts/agents.lib.sh ...) or \$model"
+					printf '        | span: %s\n' "$span"
+				fi
+			fi
+		fi
+	done <<EOF
+$(t_trace_spans "$f")
+EOF
+	[ "$bad" = 0 ] || true
+done
+
+# ---------------------------------------------------------------------------
+banner "10. Every in-session spawn has a corresponding spawn.end in the same step"
+# ---------------------------------------------------------------------------
+# Skills that document in-session spawns (outcome=in-session) must also document
+# corresponding spawn.end events for each spawned agent/reviewer. Test verifies that
+# every documented in-session spawn line is followed by a documented spawn.end line
+# in the skill file (this tests documentation, not runtime behavior).
+# See ticket #353 acceptance: "skills suite asserts every in-session spawn line...
+# has a spawn.end line after it in the same step".
+
+for s in implement review-pr; do
+	f=$(skill_md "$s")
+	spans=$(t_trace_spans "$f")
+	bad=0
+
+	# Extract all in-session spawn spans from this skill
+	in_session_spawns=$(printf '%s\n' "$spans" | grep -F 'kind=spawn' | grep -F 'outcome=in-session')
+
+	if [ -z "$in_session_spawns" ]; then
+		pass "/$s has no in-session spawns"
+		continue
+	fi
+
+	# For each in-session spawn, verify there is a spawn.end somewhere in the skill
+	# (exact ordering within the skill document is verified here as a simpler check
+	# that spawn.end documentation exists for each spawned entity)
+	spawn_count=$(printf '%s\n' "$in_session_spawns" | wc -l)
+	end_count=$(printf '%s\n' "$spans" | grep -c 'kind=spawn.end' || true)
+
+	if [ "$end_count" -ge "$spawn_count" ]; then
+		pass "/$s has $end_count spawn.end lines for $spawn_count in-session spawns"
+	else
+		bad=$((bad + 1))
+		fail "/$s has $spawn_count in-session spawns but only $end_count spawn.end lines — every spawn must have a corresponding spawn.end"
+	fi
+
+	# Special check: review-pr should have 7 spawn.end (one per agent) when it has 7 in-session spawns
+	if [ "$s" = "review-pr" ] && [ "$spawn_count" -ge 7 ]; then
+		if [ "$end_count" -lt 7 ]; then
+			bad=$((bad + 1))
+			fail "/$s should document 7 spawn.end events (one per agent) but has only $end_count"
+		else
+			pass "/$s has at least 7 spawn.end lines for 7 agent spawns"
+		fi
+	fi
+done
+
+# ---------------------------------------------------------------------------
+banner "11. /implement emits tdd.cycle while driving /tdd's red-green-refactor loop"
+# ---------------------------------------------------------------------------
+# The /tdd skill defines tdd.cycle as one event per RED, per GREEN and per
+# refactor step. When /implement drives /tdd through each seam (step 4), it
+# emits tdd.cycle to record the cycle, not only /tdd's own invocation.
+# This ensures the operator sees every cycle a session ran, regardless of
+# whether /tdd was spawned or driven inline.
+IMPL=$(skill_md implement)
+impl_tdd=$(grep -F 'kind=tdd.cycle' "$IMPL")
+if [ -n "$impl_tdd" ]; then
+	pass "/implement emits tdd.cycle"
+	# Verify the emit has the required fields
+	if printf '%s\n' "$impl_tdd" | grep -qF 'outcome='; then
+		pass "/implement's tdd.cycle emit carries outcome="
+	else
+		fail "/implement's tdd.cycle emit is missing outcome="
+	fi
+	if printf '%s\n' "$impl_tdd" | grep -qF 'data.test='; then
+		pass "/implement's tdd.cycle emit carries data.test="
+	else
+		fail "/implement's tdd.cycle emit is missing data.test="
+	fi
+else
+	fail "/implement does not emit tdd.cycle — the operator cannot see which cycles a session ran"
+fi
+
+# ---------------------------------------------------------------------------
+banner "12. Every spawn emit carries skill= to name which skill made the spawn"
+# ---------------------------------------------------------------------------
+# When a skill spawns a subagent, the emit must carry skill=<skill_name> to
+# identify which skill made the decision to spawn. This allows the trace reader
+# to attribute each spawn to its originating skill without relying on event
+# ordering or the skill resolver's output.
+bad_spawns=0
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	spawns=$(grep -F 'kind=spawn' "$f" || true)
+	if [ -z "$spawns" ]; then
+		pass "/$s has no spawns"
+		continue
+	fi
+	# For each spawn line in this skill, check that it carries skill=
+	while IFS= read -r spawn_line; do
+		[ -z "$spawn_line" ] && continue
+		if printf '%s\n' "$spawn_line" | grep -qE 'skill=[a-z-]+' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$\{'; then
+			pass "/$s's spawn carries skill="
+		else
+			bad_spawns=$((bad_spawns + 1))
+			fail "/$s's spawn does not carry skill= — cannot attribute spawn to originating skill"
+			printf '        | span: %s\n' "$spawn_line"
+		fi
+	done <<EOF
+$spawns
+EOF
+done
+[ "$bad_spawns" = 0 ] || true
+
+# ---------------------------------------------------------------------------
+banner "13. /pr-iterate stops at the first release-bound red (#347)"
+# ---------------------------------------------------------------------------
+# A check that cannot pass until a release merges cannot pass on a branch, by
+# decision (root manual, hard rule 3) — and one window spent nine iterations
+# on such a red across three PRs, four of them re-running the same red. The
+# rule: the check's OWN OUTPUT marks the red release-bound (a line carrying
+# `release-bound:`, never a list of check names); the iteration sets it aside
+# before triage, never fixes or re-runs it, and when it is all that is left
+# records one stopped pr.iterate naming the check and ends. Every other red
+# still iterates. The classifier is a fence in the skill, lifted and RUN here
+# on a fixture PR, and the failing case is a second iteration on the same red.
+# No message below prints the marker itself: a red line of THIS suite that
+# carried it would be set aside as release-bound.
+PI=$(skill_md pr-iterate)
+RB_MARK='release-bound:'
+
+# The text: the stop, what marks it, and that the loop never re-fires on it.
+pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
+printf '%s' "$pi_flat" | grep -qiE "release-bound red" &&
+	pass "/pr-iterate names the release-bound red" ||
+	fail "/pr-iterate names no release-bound red — the stop has no rule"
+printf '%s' "$pi_flat" | grep -qiE "own output[^.]*\`$RB_MARK\`" &&
+	pass "/pr-iterate marks it by the check's own output, carrying the marker" ||
+	fail "/pr-iterate does not say the check's own output marks the red, with the release-bound marker"
+printf '%s' "$pi_flat" | grep -qiE "(never|not|nor)( inferred)? from (a|the) (list of )?check'?s? names?" &&
+	pass "/pr-iterate says a check's name is not what marks it" ||
+	fail "/pr-iterate does not say the marker is the output, never a list of check names"
+printf '%s' "$pi_flat" | grep -qiE "never (fixe[sd]|triage[sd]?)[^.]*re-run" &&
+	pass "/pr-iterate never fixes or re-runs a release-bound red" ||
+	fail "/pr-iterate does not say a release-bound red is never fixed or re-run"
+sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$PI")
+printf '%s\n' "$sc" | grep -qi 'release-bound' &&
+	pass "the stop conditions list the release-bound red" ||
+	fail "step 6's stop conditions do not list the release-bound red"
+
+# The emit: one pr.iterate, outcome stopped, reason naming release-bound and
+# the check.
+rb_emit=$(t_trace_spans "$PI" | grep -F 'kind=pr.iterate' | grep -F 'outcome=stopped' | grep -F "reason='release-bound" | head -1)
+[ -n "$rb_emit" ] && pass "/pr-iterate records the stop: pr.iterate outcome=stopped reason=release-bound" ||
+	fail "/pr-iterate has no trace line recording pr.iterate outcome=stopped with a release-bound reason"
+case $rb_emit in
+*"<the check by name>"*) pass "and the reason names the check" ;;
+*) fail "the release-bound stop does not name the check in its reason" ;;
+esac
+
+# The fence, lifted and run on a fixture PR.
+awk '/^```sh$/ { buf = ""; on = 1; next }
+	on && /^```$/ { if (buf ~ /triage_reds\(\)/) { printf "%s", buf; exit } on = 0; next }
+	on { buf = buf $0 "\n" }' "$PI" >"$SCRATCH/rb-fence.sh"
+[ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
+	fail "/pr-iterate has no sh fence defining triage_reds()"
+
+# The fixture: the failing checks, one name per line, and log i in logs/i.
+RBF="$SCRATCH/rb-pr"
+mkdir -p "$RBF/only" "$RBF/mixed" "$RBF/named"
+printf 'Docs set + UPDATING recipe (end-to-end)\n' >"$RBF/only/list"
+printf '  ok    the gate is RED after Part 1 alone\n  FAIL  %s UPDATING.md'"'"'s Part 2 worked example is STALE\n' "$RB_MARK" >"$RBF/only/1"
+printf 'Docs set + UPDATING recipe (end-to-end)\nTDD pairing guard\n' >"$RBF/mixed/list"
+cp "$RBF/only/1" "$RBF/mixed/1"
+printf '  FAIL  src/a.sh changed with no test change\n' >"$RBF/mixed/2"
+# A check NAMED like a release check, whose output says nothing of a release;
+# and an output that mentions the word in passing, without the marker.
+printf 'self-host (release-bound tag check)\nSkills suite\n' >"$RBF/named/list"
+printf '  FAIL  scripts/check.sh exited 1\n' >"$RBF/named/1"
+printf '  ok    the skill records reason=release-bound\n  FAIL  a span does not run\n' >"$RBF/named/2"
+
+# rb_iter <fixture> — one iteration's classification, as the fence prints it.
+rb_iter() { ( . "$SCRATCH/rb-fence.sh" && triage_reds "$RBF/$1/list" "$RBF/$1" ) 2>&1; }
+
+# Drive the loop the skill describes on a PR whose only red is release-bound:
+# an iteration that has nothing to triage and a red set aside records the
+# stop and ends. Iteration 2 on the same red is the failing case.
+RBT="$SCRATCH/rb-trace"
+rb_run=$(t_trace_runnable "$rb_emit")
+it=0
+while [ "$it" -lt 5 ]; do
+	it=$((it + 1))
+	out=$(rb_iter only)
+	# Anything but "nothing to triage, a red set aside" iterates again — a
+	# skill with no classifier triages every red, every time.
+	if printf '%s\n' "$out" | grep -q '^set-aside ' && ! printf '%s\n' "$out" | grep -q '^triage '; then
+		( cd "$ROOT" && TRACE_DIR="$RBT" TRACE_QUIET=1 sh -c "$rb_run" ) >/dev/null 2>&1
+		break
+	fi
+done
+[ "$it" = 1 ] && pass "a PR whose only red is release-bound stops at iteration 1" ||
+	fail "a PR whose only red is release-bound ran $it iterations — a second iteration on a red that cannot pass on a branch"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "the stop sets the check aside by name" ||
+	fail "the classifier did not set the release-bound check aside by name: $out"
+stopped=$(find "$RBT" -name '*.jsonl' -exec cat {} + 2>/dev/null | grep -c '"kind":"pr.iterate".*"outcome":"stopped"')
+[ "$stopped" = 1 ] && pass "one stopped pr.iterate is recorded" ||
+	fail "$stopped stopped pr.iterate events recorded — expected exactly one"
+# Were the loop re-fired anyway, iteration 2 on the same red triages nothing.
+out2=$(rb_iter only)
+if [ -s "$SCRATCH/rb-fence.sh" ] && ! printf '%s\n' "$out2" | grep -q '^triage '; then
+	pass "a second iteration on the same release-bound red triages nothing"
+else
+	fail "a second iteration on the same release-bound red would triage it: ${out2:-no classifier}"
+fi
+
+# Every other red still iterates.
+out=$(rb_iter mixed)
+printf '%s\n' "$out" | grep -qxF 'triage TDD pairing guard' &&
+	pass "a red that is not release-bound is still triaged" ||
+	fail "the pairing-guard red beside a release-bound one is not triaged: $out"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "…and the release-bound one beside it is set aside" ||
+	fail "the release-bound red beside another red is not set aside: $out"
+out=$(rb_iter named)
+[ "$(printf '%s\n' "$out" | grep -c '^triage ')" = 2 ] &&
+	pass "a check's name, and the word without the marker, set nothing aside" ||
+	fail "the classifier set aside a red by its name or by the bare word: $out"
+
+# The kit's own release-bound reds say so in their output.
+grep -E 'fail "[^"]*'"$RB_MARK" tests/self-host.test.sh | grep -qF 'drifted past the tag' &&
+	pass "self-host F3's drift red carries the marker" ||
+	fail "self-host F3's drift red does not print the release-bound marker — the kit's own release red is unmarked"
+grep -E 'fail "[^"]*'"$RB_MARK" tests/docs-demo.sh | grep -qF 'STALE' &&
+	pass "docs-demo's stale-transcript red carries the marker" ||
+	fail "docs-demo's stale-transcript red does not print the release-bound marker"
+
+# Review of PR #360. The log is captured per CHECK, not per run: one workflow
+# run holds many jobs, and a run-wide failed log would carry one job's marker
+# into every other red of the run (H-1).
+printf '%s\n' "$pi_flat" | grep -qE 'gh run view <run-id> --job <job-id> --log-failed >"\$scratch/checks/<i>"' &&
+	pass "/pr-iterate captures each failing check's own log, per job" ||
+	fail "/pr-iterate captures the failed log per run — one job's marker would set every red of the run aside"
+# The directory the capture writes into is made with the iteration's others (M-1).
+grep -E '^scratch=\$\(mktemp' "$PI" | grep -qF '"$scratch/checks"' &&
+	pass "step 1 makes the checks directory the capture writes into" ||
+	fail "step 1 does not make \$scratch/checks — the documented capture fails and every red is triaged"
+# The iteration line's reason gloss names both meanings of stopped (M-2).
+grep -F 'kind=pr.iterate' "$PI" | grep -F 'data.applied=' | grep -qF 'release-bound' &&
+	pass "the iteration line's reason names the release-bound stop beside the escalation" ||
+	fail "the iteration line still glosses stopped as the escalation alone"
+# The skill promises nothing of the loop runner it cannot keep (L-1).
+printf '%s\n' "$pi_flat" | grep -qF 'does not re-fire' &&
+	fail "/pr-iterate promises the loop runner will not re-fire — nothing the runner reads says so" ||
+	pass "/pr-iterate leaves ending the loop to the operator it reports to"
+# docs-demo's marker is gated on the declared release's tag, so the job that
+# runs it must check the tags out, at a depth the tag can be peeled at (H-2).
+dd_job=$(awk '/^  docs-demo:/ { on = 1; next } on && /^  [a-z]/ { exit } on' .github/workflows/kit-ci.yml)
+printf '%s\n' "$dd_job" | grep -qE 'fetch-depth: 0' && printf '%s\n' "$dd_job" | grep -qE 'fetch-tags: true' &&
+	pass "the docs-demo CI job checks out the tags its marker is gated on" ||
+	fail "the docs-demo CI job checks out no tags — its release-bound marker can never print where /pr-iterate reads"
+grep -qF 'rev-parse -q --verify "v$KITV^{commit}"' tests/docs-demo.sh &&
+	pass "docs-demo peels the tag, as F3 does" ||
+	fail "docs-demo tests the tag ref without peeling it — an unpeelable ref would read as released"
+
 t_done "trace skills contract"
