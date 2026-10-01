@@ -74,7 +74,8 @@ The full form — what to read, what counts as a finding, where it goes — is i
 7. **Aim calibration** — of the slices landed in the window, how many were
    followed by a re-cut of what came after them, and which tier or skill
    produced the misses. The `feedback` events are the loop's own
-   self-correction; no verdicts over landed slices is itself a finding.
+   self-correction; no verdicts over landed slices is itself a finding, and
+   a landing whose `feedback` is `unasked` counts as one with no verdict.
 8. **Stamp calibration** — per decision field and per skill, never one
    number for the chain: how often a tier or a label stamped at each
    confidence was overridden at the quiz, and how often a finding raised at
