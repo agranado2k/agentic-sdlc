@@ -30,9 +30,6 @@ GUARD_TEST_RE='(\.|_)(test|spec)\.(ts|tsx|mjs)$|\.feature$'
 EOF
 )
 
-configure() { t_write "$1" "scripts/guards.config.sh" "$2
-"; }
-
 # This suite runs the KIT's guard against throwaway repos — a cross-repo call,
 # which is exactly what discovery now refuses (a config is code; standing in a
 # repo must not run its code). So the config each case writes is handed over
@@ -62,7 +59,7 @@ new_repo_with_base() {
 banner "Usage and unrunnable ranges"
 # ---------------------------------------------------------------------------
 new_repo_with_base
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 
 assert_status 2 "no refs at all is a usage error" -- run_guard "$repo"
 assert_out_has "usage"
@@ -80,7 +77,7 @@ t_write "$repo" "src/thing.ts" "export const a = 1;
 "
 head=$(t_commit "$repo" "feat: unpaired source change")
 
-configure "$repo" "GUARD_SOURCE_RE=''"
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
 assert_status 0 "an unconfigured guard passes an unpaired source change" -- run_guard "$repo" "$BASE" "$head"
 assert_out_has "INACTIVE"
 assert_out_has "GUARD_SOURCE_RE"
@@ -98,13 +95,13 @@ cp "$KIT/scripts/guards.lib.sh" "$BARE/guards.lib.sh"
 assert_status 0 "with no config reachable by any order, the guard is INACTIVE and passes" -- sh -c "rm -f '$repo/scripts/guards.config.sh'; cd '$repo' && unset GUARDS_CONFIG && sh '$BARE/tdd-pairing-guard.sh' '$BASE' '$head'"
 assert_out_has "INACTIVE"
 
-configure "$repo" "GUARD_SOURCE_RE=''"
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
 assert_status 0 "TDD_PAIRING_GUARD_QUIET=1 silences the warning (one push, one warning)" -- sh -c "cd '$repo' && TDD_PAIRING_GUARD_QUIET=1 sh '$GUARD' '$BASE' '$head'"
 assert_out_lacks "INACTIVE"
 
 # Configured source but no way to recognise a test would fail EVERY source
 # change. That is a broken config, not a verdict — exit 2, not 1.
-configure "$repo" "GUARD_SOURCE_RE='^src/'
+t_guards_config "$repo" "GUARD_SOURCE_RE='^src/'
 GUARD_TEST_RE=''"
 assert_status 2 "an empty GUARD_TEST_RE is a configuration error, not a verdict" -- run_guard "$repo" "$BASE" "$head"
 assert_out_has "GUARD_TEST_RE"
@@ -116,7 +113,7 @@ new_repo_with_base
 t_write "$repo" "src/report.ts" "export const a = 1;
 "
 head=$(t_commit "$repo" "feat: source only")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 1 "blocks source changes that carry no test changes" -- run_guard "$repo" "$BASE" "$head"
 assert_out_has "src/report.ts"
 assert_out_has "source changes with no test changes"
@@ -127,7 +124,7 @@ t_write "$repo" "packages/domain/src/report.ts" "export const a = 1;
 t_write "$repo" "packages/domain/src/report.test.ts" "// test
 "
 head=$(t_commit "$repo" "feat: source with its test")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "passes source changes paired with a test change" -- run_guard "$repo" "$BASE" "$head"
 
 new_repo_with_base
@@ -136,7 +133,7 @@ t_write "$repo" "src/report.ts" "export const a = 1;
 t_write "$repo" "features/thing.feature" "Feature: thing
 "
 head=$(t_commit "$repo" "feat: source with an executable spec")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "accepts an executable spec as the paired test change" -- run_guard "$repo" "$BASE" "$head"
 
 new_repo_with_base
@@ -147,7 +144,7 @@ t_write "$repo" "infra/main.tf" "resource {}
 t_write "$repo" "app/routes/index.tsx" "export default () => null;
 "
 head=$(t_commit "$repo" "chore: everything outside the covered trees")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "ignores changes outside the configured source trees" -- run_guard "$repo" "$BASE" "$head"
 
 # ---------------------------------------------------------------------------
@@ -157,14 +154,14 @@ new_repo_with_base
 t_write "$repo" "src/globals.d.ts" "declare const x: 1;
 "
 head=$(t_commit "$repo" "chore: a type declaration")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "ignores type declaration files" -- run_guard "$repo" "$BASE" "$head"
 
 new_repo_with_base
 t_write "$repo" "packages/docs/src/config.mjs" "export default {};
 "
 head=$(t_commit "$repo" "chore: edit reviewable policy data")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "exempts reviewable policy DATA named in the exclude pattern" -- run_guard "$repo" "$BASE" "$head"
 
 # ---------------------------------------------------------------------------
@@ -177,11 +174,11 @@ t_write "$repo" "src/report.ts" "export const a = 1;
 BASE=$(t_commit "$repo" "feat: seed")
 git -C "$repo" mv src/report.ts src/moved.ts
 head=$(t_commit "$repo" "refactor: move the module")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "ignores a pure rename — a move is not new behavior" -- run_guard "$repo" "$BASE" "$head"
 
 new_repo_with_base
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "passes an empty range" -- run_guard "$repo" "$BASE" "$BASE"
 
 # ---------------------------------------------------------------------------
@@ -191,7 +188,7 @@ new_repo_with_base
 t_write "$repo" "src/report.ts" "export const a = 1;
 "
 head=$(t_commit "$repo" "feat: source only")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 1 "still fails when a caller names itself" -- run_guard "$repo" "$BASE" "$head" --label pre-push --hint "Bypass with FOO=1."
 assert_out_has "x pre-push: source changes with no test changes"
 assert_out_has "Bypass with FOO=1."
@@ -205,7 +202,7 @@ new_repo_with_base
 t_write "$repo" "src/report.ts" "export const a = 1;
 "
 head=$(t_commit "$repo" "feat: source only")
-configure "$repo" "GUARD_SOURCE_RE=''"
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
 printf '%s\n' "$CONFIG_STD" >"$SCRATCH/elsewhere.config.sh"
 
 assert_status 1 "GUARDS_CONFIG overrides the repo-root config" -- sh -c "cd '$repo' && GUARDS_CONFIG='$SCRATCH/elsewhere.config.sh' sh '$GUARD' '$BASE' '$head'"
@@ -225,7 +222,7 @@ banner "Config discovery is anchored, never a reward for standing somewhere"
 new_repo_with_base
 mkdir -p "$repo/scripts"
 cp "$GUARD" "$KIT/scripts/guards.lib.sh" "$repo/scripts/"
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 t_write "$repo" "src/own.ts" "export const own = 1;
 "
 head=$(t_commit "$repo" "feat: unpaired source change")
@@ -246,7 +243,7 @@ assert_out_lacks "refusing to source"
 # clone must not execute that clone's config. The canary prints on stderr the
 # moment the config is sourced, so its absence is proof of non-execution.
 new_repo_with_base
-configure "$repo" "echo 'FOREIGN-GUARDS-CONFIG-EXECUTED' >&2
+t_guards_config "$repo" "echo 'FOREIGN-GUARDS-CONFIG-EXECUTED' >&2
 GUARD_SOURCE_RE='^src/'
 GUARD_TEST_RE='\\.test\\.'"
 t_write "$repo" "src/mark.ts" "export const mark = 1;

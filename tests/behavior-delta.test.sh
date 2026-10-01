@@ -34,9 +34,6 @@ Security posture (headers, CSP)|^security/'
 EOF
 )
 
-configure() { t_write "$1" "scripts/guards.config.sh" "$2
-"; }
-
 # Cross-repo note: the KIT's script against a throwaway repo — discovery
 # refuses a foreign repo's config (a config is code), so hand it over.
 run_delta() {
@@ -93,7 +90,7 @@ branch "$repo" "feat/x"
 t_write "$repo" "docs/api/openapi.yaml" "openapi: 3.1.0
 "
 t_commit "$repo" "feat(api): add a path" >/dev/null
-configure "$repo" "BEHAVIOR_DELTA_SURFACES=''"
+t_guards_config "$repo" "BEHAVIOR_DELTA_SURFACES=''"
 
 assert_status 0 "an unconfigured script says so" -- run_delta "$repo"
 assert_out_has "No contract artifacts configured"
@@ -102,7 +99,7 @@ assert_out_lacks "No contract-artifact deltas"
 # ---------------------------------------------------------------------------
 banner "Branch-level sections"
 # ---------------------------------------------------------------------------
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "lists an API-surface delta under its own section" -- run_delta "$repo"
 assert_out_has "## API surface (docs/api/openapi.yaml)"
 assert_out_has "docs/api/openapi.yaml"
@@ -117,7 +114,7 @@ branch "$repo" "refactor/inert"
 t_write "$repo" "src/a.ts" "const b = 1;
 "
 t_commit "$repo" "refactor(domain): rename a local" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "reports no deltas when the branch touches nothing under contract" -- run_delta "$repo"
 assert_out_has "No contract-artifact deltas on this branch."
 
@@ -132,7 +129,7 @@ t_write "$repo" "src/old.test.ts" "// v2
 t_write "$repo" "src/new.test.ts" "// added
 "
 t_commit "$repo" "test: touch both" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "lists an edited existing test but not a newly added one" -- run_delta "$repo"
 assert_out_has "## Edited existing tests"
 assert_out_has "src/old.test.ts"
@@ -146,7 +143,7 @@ t_commit "$repo" "feat(db): a query" >/dev/null
 branch "$repo" "refactor/move"
 git -C "$repo" mv db/old.sql db/new.sql
 t_commit "$repo" "refactor(db): move the query" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "reports the path that exists at HEAD for a renamed contract file" -- run_delta "$repo"
 assert_out_has "db/new.sql"
 assert_out_lacks "db/old.sql"
@@ -167,7 +164,7 @@ paths: {}
 "
 t_commit "$repo" "refactor(api): tidy the handler" >/dev/null
 mixed_sha=$(t_short "$repo")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "flags a refactor commit that also edits a contract artifact" -- run_delta "$repo"
 assert_separation_has "$mixed_sha"
 assert_separation_has "refactor(api): tidy the handler"
@@ -182,7 +179,7 @@ branch "$repo" "style/mixed"
 t_write "$repo" "security/csp.conf" "default-src 'self'
 "
 t_commit "$repo" "style(security): reformat" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "flags a style commit just as it flags a refactor one" -- run_delta "$repo"
 assert_separation_has "security/csp.conf"
 
@@ -198,7 +195,7 @@ t_commit "$repo" "refactor(domain): rename a local" >/dev/null
 t_write "$repo" "docs/api/openapi.yaml" "openapi: 3.1.0
 "
 t_commit "$repo" "feat(api): add a path" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "prints no separation section when every commit is honest about its type" -- run_delta "$repo"
 assert_out_lacks "## Commit separation"
 # The behavior-changing commit is still on the branch-level list — the section
@@ -216,7 +213,7 @@ t_commit "$repo" "feat(db): a query" >/dev/null
 branch "$repo" "refactor/pure-move"
 git -C "$repo" mv db/old.sql db/new.sql
 t_commit "$repo" "refactor(db): move the query" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "does not flag a refactor commit that only renames a contract file" -- run_delta "$repo"
 assert_out_lacks "## Commit separation"
 
@@ -229,7 +226,7 @@ branch "$repo" "refactor/characterize"
 t_write "$repo" "db/schema.test.ts" "// characterization
 "
 t_commit "$repo" "refactor(db): pin the current shape first" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "does not flag a refactor commit that only ADDS a test under a contract path" -- run_delta "$repo"
 assert_out_lacks "## Commit separation"
 
@@ -246,7 +243,7 @@ t_write "$repo" "db/query.ts" "export const newName = () => 1;
 t_write "$repo" "db/query.test.ts" "// calls newName
 "
 t_commit "$repo" "refactor(db): rename oldName to newName" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 # The SOURCE edit under db/ is the finding; the co-moving unit test must not add
 # a second, noisier one — call-site churn is what a rename IS.
 assert_status 0 "does not flag the unit test that moved with a rename" -- run_delta "$repo"
@@ -268,7 +265,7 @@ t_write "$repo" "security/csp.conf" "default-src
 "
 t_commit "$repo" "wip: not conventional at all" >/dev/null
 git -C "$repo" merge -q --no-ff -m "Merge branch 'chore/side'" chore/side
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "ignores merge commits and subjects that are not Conventional Commits" -- run_delta "$repo"
 assert_out_lacks "Merge branch"
 assert_out_lacks "wip: not conventional"
@@ -286,7 +283,7 @@ t_write "$repo" "features/x.feature" "Feature: a
   Scenario: b
 "
 t_commit "$repo" "refactor(e2e): tidy the scenario" >/dev/null
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "does flag a refactor commit that edits an existing scenario" -- run_delta "$repo"
 assert_separation_has "features/x.feature"
 
@@ -310,7 +307,7 @@ t_write "$repo" "docs/events.md" "# Events
 "
 t_commit "$repo" "refactor(events): rename the emitter" >/dev/null
 mixed_sha=$(t_short "$repo")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 assert_status 0 "flags only the mixed commit on a branch that also carries a clean refactor" -- run_delta "$repo"
 assert_separation_has "$mixed_sha"
 assert_separation_lacks "$clean_sha"

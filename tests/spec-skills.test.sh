@@ -32,9 +32,6 @@ TIX_ABS="$ROOT/$TIX"
 
 cd "$ROOT" || exit 2
 
-# line_of <file> <fixed string> — first matching line number, empty if none.
-line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
-
 # section_of <file> <## heading> — the section's lines, from its heading up to
 # (not including) the next `## ` heading; the same slice the design-brief
 # suite takes of the engineering article.
@@ -156,7 +153,7 @@ assert_file_has "$PRD" "omitted when empty" "an empty section is omitted, never 
 assert_file_has "$PRD" "reread it as a stranger" "the reread is the rule; its citation is not a substitute for it"
 assert_file_has "$PRD" "shared invariant §4" "the reread cites the fresh-context invariant it serves"
 assert_file_has "$PRD" "only makes sense with the chat open" "the reread gives the reader a test, not a mood"
-reread_line=$(line_of "$PRD_ABS" "reread it as a stranger")
+reread_line=$(t_line_of "$PRD_ABS" "reread it as a stranger")
 publish_line=$(grep -n '^[0-9]\. .*[Pp]ublish' "$PRD_ABS" | head -1 | cut -d: -f1)
 if [ -n "$reread_line" ] && [ -n "$publish_line" ] && [ "$reread_line" -lt "$publish_line" ]; then
 	pass "the reread (line $reread_line) precedes the publish step (line $publish_line)"

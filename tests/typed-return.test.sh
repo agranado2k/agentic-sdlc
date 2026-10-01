@@ -102,9 +102,7 @@ banner "1. The declared shape — three bare lines, held to the policy file"
 # The shape is spelled ONCE, as a fence, so the subagent's prompt can quote it
 # and this suite can read it: the first fence whose first line is
 # `Command-shaped:`.
-awk '/^```/ { if (on) exit; hold = 1; next }
-	hold { hold = 0; if ($0 ~ /^Command-shaped: /) on = 1 }
-	on { print }' "$SKILL" >"$SCRATCH/shape"
+t_lift_shape "$SKILL" '^Command-shaped: ' "$SCRATCH/shape"
 if [ -s "$SCRATCH/shape" ]; then
 	pass "the skill declares the return shape as a fence"
 else
@@ -116,11 +114,10 @@ keys=$(sed 's/:.*//' "$SCRATCH/shape" | tr '\n' ' ' | sed 's/ $//')
 	fail "the shape's lines should be 'Command-shaped Action Evidence', the skill spells '$keys'"
 
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>/dev/null)
-field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1: //p"; }
 for key in Command-shaped Action; do
 	field=$(printf '%s' "$key" | tr 'A-Z' 'a-z')
 	spelled=$(sed -n "s/^$key: <\(.*\)>\$/\1/p" "$SCRATCH/shape" | tr '|' ' ')
-	declared=$(field_tokens "$field")
+	declared=$(t_field_tokens "$field")
 	if [ -n "$declared" ] && [ "$spelled" = "$declared" ]; then
 		pass "$key offers the policy file's tokens, in its order: $declared"
 	else
@@ -136,9 +133,9 @@ grep -q '^Evidence: "<.*>"$' "$SCRATCH/shape" &&
 assert_file_has "$FLAT" "\`Author-kind:\` is not the reader's to say" "who wrote a comment is a fact the forge states"
 assert_file_has "$FLAT" "you stamp it from the snapshot" "the caller takes it from the forge's author data"
 stamped=$(sed -n 's/.*`\([a-z]*\)` when the forge.s author type is `Bot`, `\([a-z]*\)` otherwise.*/\1 \2/p' "$FLAT" | head -1)
-[ -n "$stamped" ] && [ "$stamped" = "$(field_tokens author-kind)" ] &&
+[ -n "$stamped" ] && [ "$stamped" = "$(t_field_tokens author-kind)" ] &&
 	pass "the caller stamps the policy file's author tokens, in its order: $stamped" ||
-	fail "the caller stamps '$stamped', the policy file declares '$(field_tokens author-kind)'"
+	fail "the caller stamps '$stamped', the policy file declares '$(t_field_tokens author-kind)'"
 assert_file_has "$FLAT" "quoted from the comment read" "the evidence is a pointer into the source, so a human can verify the judgment"
 assert_file_has "$FLAT" "tool-restricted subagent" "the read is delegated, as the trust boundary says"
 assert_file_has "$FLAT" "bare lines, one per field" "the checker takes bare lines"
@@ -177,9 +174,7 @@ banner "4. The documented check, executed — PRD scenario 5"
 # The fence that defines typed_return_ok, lifted out of the skill verbatim and
 # run where a consumer runs it: a project root holding scripts/vocab.sh and
 # the shipped policy file, and no kit wrapper anywhere.
-awk '/^```sh$/ { buf = ""; on = 1; next }
-	on && /^```$/ { if (buf ~ /typed_return_ok\(\)/) { printf "%s", buf; exit } on = 0; next }
-	on { buf = buf $0 "\n" }' "$SKILL" >"$SCRATCH/check.sh"
+t_lift_fence "$SKILL" "typed_return_ok()" "$SCRATCH/check.sh"
 if [ -s "$SCRATCH/check.sh" ]; then
 	pass "the skill prints the check as a runnable fence"
 else

@@ -678,9 +678,7 @@ case $rb_emit in
 esac
 
 # The fence, lifted and run on a fixture PR.
-awk '/^```sh$/ { buf = ""; on = 1; next }
-	on && /^```$/ { if (buf ~ /triage_reds\(\)/) { printf "%s", buf; exit } on = 0; next }
-	on { buf = buf $0 "\n" }' "$PI" >"$SCRATCH/rb-fence.sh"
+t_lift_fence "$PI" "triage_reds()" "$SCRATCH/rb-fence.sh"
 [ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
 	fail "/pr-iterate has no sh fence defining triage_reds()"
 
@@ -1012,9 +1010,38 @@ sed '/^- `unattributed` — /d' "$RP" >"$SCRATCH/bait-roster.md"
 roster_of "$SCRATCH/bait-roster.md" | grep -qx unattributed && fail "bait: withdrawing a roster row changed nothing — the roster is not read from the list" ||
 	pass "bait: a roster row withdrawn from the list is gone from the roster the holder reads"
 
+# ---------------------------------------------------------------------------
+banner "16. A landing by hand records, and a run's end closes the run it began (#386)"
+# ---------------------------------------------------------------------------
+# Retro G2: a third of the landings were merged outside a train and left no
+# merge.land and no feedback. /merge-train names the one-PR form by its role —
+# the landing script the root manual names — never by a kit-only file, which a
+# consumer would not have. And one `end` run from the root checkout closed a
+# different run than its `begin` opened: the run stack is per toplevel, so the
+# two skills that close a run across a long session say where to run it from.
+MT=$(skill_md merge-train)
+mt_flat=$(tr '\n' ' ' <"$MT" | tr -s ' ')
+printf '%s\n' "$mt_flat" | grep -qiE 'one-PR form[^.]*landing script|landing script[^.]*one-PR form' &&
+	pass "/merge-train names the landing script as its one-PR form" ||
+	fail "/merge-train does not name the landing script as the one-PR form of step 4"
+printf '%s\n' "$mt_flat" | grep -qiE 'landing script[^.]*root `AGENTS\.md` names|root `AGENTS\.md` names[^.]*landing script' &&
+	pass "and says the root manual is where the landing script is named" ||
+	fail "/merge-train does not say the root AGENTS.md names the landing script"
+grep -qF 'land.kit.sh' "$MT" && fail "/merge-train names land.kit.sh — a kit-only file a consumer never has" ||
+	pass "/merge-train names no kit-only landing file"
+for s in pr-iterate implement; do
+	flat=$(tr '\n' ' ' <"$(skill_md "$s")" | tr -s ' ')
+	printf '%s\n' "$flat" | grep -qF 'from the same checkout as its `begin`' &&
+		pass "/$s says a run's end is run from the same checkout as its begin" ||
+		fail "/$s does not say its end runs from the same checkout as its begin"
+	printf '%s\n' "$flat" | grep -qiF 'the run stack is per toplevel' &&
+		pass "/$s says why: the run stack is per toplevel" ||
+		fail "/$s does not say the run stack is per toplevel"
+done
+
 
 # ---------------------------------------------------------------------------
-banner "16. A feedback event says who answered: the operator, or a delegated train (#385)"
+banner "17. A feedback event says who answered: the operator, or a delegated train (#385)"
 # ---------------------------------------------------------------------------
 # Retro G3: fifteen train verdicts in one window, every one written under a
 # standing instruction that delegated every decision — the train judged

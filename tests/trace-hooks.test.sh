@@ -2049,4 +2049,473 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"a phantom stop writes no event"*) pass "the adapter README records that a phantom stop writes no event" ;;
 *) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "32. SessionStart records how far its checkout is behind origin/main (#384)"
+# ---------------------------------------------------------------------------
+# Retro 20261001T150216Z, finding G1. The kit's hooks execute the checkout they
+# live in, and that checkout sat ~140 commits behind main for four hours with
+# nothing saying so: every adapter fix of the wave was inert for the kit's own
+# trace. The session-start hook now records the lag as data.behind — read with
+# plain git from the LAST FETCHED origin/main, never a fetch of its own — and,
+# past the policy threshold TRACE_BEHIND_WARN, says so once on stderr. With no
+# origin/main it records nothing and still exits 0.
+#
+# A hook measures the checkout it LIVES in, so each leg copies the hooks and
+# the shared script into a scratch repository with a real remote, and runs the
+# copy. None of these legs needs node.
+
+# behind_copy <dir> — the hooks and trace.sh, copied where a checkout would hold them.
+behind_copy() {
+	mkdir -p "$1/adapters/claude-code/hooks" "$1/scripts"
+	cp "$HOOKS"/*.sh "$HOOKS"/*.mjs "$1/adapters/claude-code/hooks/"
+	cp "$KIT/scripts/trace.sh" "$KIT/scripts/trace.config.sh" "$1/scripts/"
+}
+
+# behind_kit <dir> — a scratch checkout holding that copy, one commit, no
+# remote yet.
+behind_kit() {
+	behind_copy "$1"
+	t_git_identity "$1" "Behind Fixture" "behind@example.invalid"
+	git -C "$1" add -A >/dev/null
+	git -C "$1" commit -q -m "chore: the checkout the hooks run from"
+}
+
+# behind_remote <dir> <commits ahead> — give <dir> an origin whose main is
+# <commits ahead> past its HEAD, FETCHED, so the lag is in the last fetched ref.
+behind_remote() {
+	git init -q --bare -b main "$1.remote.git"
+	git -C "$1" remote add origin "$1.remote.git"
+	git -C "$1" push -q origin main 2>/dev/null
+	git clone -q "$1.remote.git" "$1.other" 2>/dev/null
+	t_git_identity "$1.other" "Behind Fixture" "behind@example.invalid" >/dev/null 2>&1
+	_br_i=0
+	while [ "$_br_i" -lt "$2" ]; do
+		_br_i=$((_br_i + 1))
+		git -C "$1.other" commit -q --allow-empty -m "feat: main moves on $_br_i"
+	done
+	git -C "$1.other" push -q origin main 2>/dev/null
+	git -C "$1" fetch -q origin 2>/dev/null
+}
+
+# start_in <dir> [env assignments…] — run <dir>'s copy of the session-start hook
+# on the fixture payload, into a fresh trace. Sets S_* and START.
+start_in() {
+	_si_dir=$1
+	shift
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" "$@" \
+		sh "$_si_dir/adapters/claude-code/hooks/session-start.sh" <"$SCRATCH/start.json"
+	START=$(ev_of session.start | sed -n '1p')
+}
+
+# behind_notes — how many stderr lines of the last run say the checkout is behind.
+behind_notes() { printf '%s\n' "$S_ERR" | grep -c 'behind origin/main' || :; }
+
+# BEHIND BY TWO: the field says 2; past a threshold of 1 the note prints ONCE.
+B2="$SCRATCH/behind-two-384"
+behind_kit "$B2"
+behind_remote "$B2" 2
+start_in "$B2"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a checkout two behind: the hook exits 0, silent on stdout" ||
+	fail "a checkout two behind: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "and its session.start carries data.behind=2" ||
+	fail "a checkout two behind recorded: $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "with no threshold set, nothing is said on stderr — the shipped default is silence" ||
+	fail "with no threshold the hook still said: $S_ERR"
+start_in "$B2" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "past a threshold of 1: still exit 0, silent on stdout, still data.behind=2" ||
+	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT', event $START"
+[ "$(behind_notes)" = 1 ] &&
+	pass "and stderr says so exactly once" ||
+	fail "past the threshold stderr said it $(behind_notes) times: $S_ERR"
+case $S_ERR in *'is 2 commits behind'*'TRACE_BEHIND_WARN=1'*) pass "the note names the count and the threshold's variable" ;;
+*) fail "the note does not name the count and TRACE_BEHIND_WARN: $S_ERR" ;; esac
+start_in "$B2" TRACE_BEHIND_WARN=2
+[ "$(behind_notes)" = 0 ] &&
+	pass "AT the threshold (2 behind, threshold 2) nothing is said — the note is for MORE than it" ||
+	fail "at the threshold the hook still said: $S_ERR"
+
+# THE POLICY FILE, not only the environment: the kit's twin is how this repo
+# sets it, so the file has to be read the way TRACE_AGENT_WAIT_MS is.
+printf "TRACE_BEHIND_WARN='1'\n" >"$SCRATCH/behind-policy-384.sh"
+start_in "$B2" TRACE_CONFIG="$SCRATCH/behind-policy-384.sh"
+[ "$(behind_notes)" = 1 ] &&
+	pass "a threshold the policy file names is read too" ||
+	fail "the policy file's TRACE_BEHIND_WARN=1 produced: '$S_ERR'"
+start_in "$B2" TRACE_CONFIG="$SCRATCH/behind-policy-384.sh" TRACE_BEHIND_WARN=
+[ "$(behind_notes)" = 0 ] &&
+	pass "and an environment value of '' turns it off even when the file names one" ||
+	fail "an empty environment threshold still printed: $S_ERR"
+
+# A MALFORMED THRESHOLD is refused, named, and never a failure — the values
+# section 27 drives for TRACE_AGENT_WAIT_MS, the leading zero (sh reads 0100 as
+# octal) and six digits among them.
+for bad in ten 1.5 -5 0100 1000000; do
+	start_in "$B2" TRACE_BEHIND_WARN="$bad"
+	[ "$S_STATUS" = 0 ] && [ "$(behind_notes)" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+		pass "a malformed threshold '$bad': exit 0, no behind note, the field still recorded" ||
+		fail "a malformed threshold '$bad': exit $S_STATUS, event $START, stderr '$S_ERR'"
+	case $S_ERR in *TRACE_BEHIND_WARN*"'$bad'"*) pass "and the refused '$bad' is named on stderr" ;;
+	*) fail "the malformed threshold '$bad' was not named: $S_ERR" ;; esac
+done
+
+# NEVER A FETCH: main moves again on the remote, unfetched; the hook still
+# reads the last fetched ref, so the count does not move.
+git -C "$B2.other" commit -q --allow-empty -m "feat: main moves, unfetched"
+git -C "$B2.other" push -q origin main 2>/dev/null
+start_in "$B2"
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "a commit pushed but not fetched does not count — the hook never fetches" ||
+	fail "after an unfetched push the hook recorded: $START"
+
+# LEVEL: the field says 0, and no threshold makes a note of it.
+L0="$SCRATCH/level-384"
+behind_kit "$L0"
+behind_remote "$L0" 0
+start_in "$L0" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 0 ] &&
+	pass "a checkout level with origin/main records data.behind=0" ||
+	fail "a level checkout: exit $S_STATUS, event $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "and says nothing, even at threshold 0" ||
+	fail "a level checkout still said: $S_ERR"
+
+# NO REMOTE: no field, exit 0, nothing on either stream about it.
+N0="$SCRATCH/no-remote-384"
+behind_kit "$N0"
+start_in "$N0" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -n "$START" ] &&
+	pass "a checkout with no origin/main: exit 0, silent, the session.start still written" ||
+	fail "no remote: exit $S_STATUS, stdout '$S_OUT', event '$START', stderr '$S_ERR'"
+case $START in *'"behind"'*) fail "a checkout with no origin/main recorded a behind field: $START" ;;
+*) pass "and it carries no behind field" ;; esac
+[ "$(behind_notes)" = 0 ] &&
+	pass "and nothing is said about a lag it cannot read" ||
+	fail "with no remote the hook still said: $S_ERR"
+
+# NOT A REPOSITORY AT ALL: the hooks copied somewhere git does not answer.
+NG="$SCRATCH/no-git-384"
+behind_copy "$NG"
+start_in "$NG" GIT_CEILING_DIRECTORIES="$SCRATCH" TRACE_BEHIND_WARN=0
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	case $START in *'"behind"'*) false ;; *) true ;; esac &&
+	pass "outside any repository: exit 0, silent, no behind field" ||
+	fail "outside a repository: exit $S_STATUS, stdout '$S_OUT', event '$START'"
+
+# A LINKED WORKTREE MEASURES THE ROOT. The kit's hooks execute from the root
+# checkout, so a session opened in worktree/<slug> must report the ROOT's lag
+# — the working tree of git's common directory, the derivation scripts/trace.sh
+# uses — and never its own feature branch's, where being behind is normal.
+WR="$SCRATCH/wt-root-384"
+behind_kit "$WR"
+WBASE=$(git -C "$WR" rev-parse HEAD)
+behind_remote "$WR" 2
+git -C "$WR" merge -q --ff-only origin/main
+git -C "$WR" worktree add -q -b feat/wt-384 "$WR.wt" "$WBASE" 2>/dev/null
+start_in "$WR.wt" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 0 ] &&
+	pass "from a worktree two behind on its feature branch, a level ROOT records data.behind=0" ||
+	fail "a level root seen from a worktree: exit $S_STATUS, event $START"
+[ "$(str "$START" behind_of)" = root ] &&
+	pass "and the event says what was measured: data.behind_of=root" ||
+	fail "no data.behind_of=root on: $START"
+[ "$(behind_notes)" = 0 ] &&
+	pass "and says nothing about the feature branch" ||
+	fail "a level root still drew a note from the worktree: $S_ERR"
+git -C "$WR" reset -q --hard "$WBASE"
+start_in "$WR.wt" TRACE_BEHIND_WARN=1
+[ "$(str "$START" behind)" = 2 ] &&
+	pass "a root two behind records data.behind=2 from inside the worktree" ||
+	fail "a root two behind, seen from the worktree: $START"
+case $S_ERR in *"$WR is 2 commits behind"*) pass "and the note names the root's path, not the worktree's" ;;
+*) fail "the note does not name the root path $WR: $S_ERR" ;; esac
+
+# THE POLICY. The shipped file documents the variable and leaves it empty; the
+# kit's twin sets it.
+grep -q "^TRACE_BEHIND_WARN=''$" "$KIT/scripts/trace.config.sh" &&
+	pass "scripts/trace.config.sh documents TRACE_BEHIND_WARN and ships it empty" ||
+	fail "scripts/trace.config.sh has no empty TRACE_BEHIND_WARN line"
+grep -qE "^TRACE_BEHIND_WARN='[1-9][0-9]*'$" "$KIT/scripts/trace.kit.config.sh" &&
+	pass "the kit's own policy file sets a threshold" ||
+	fail "scripts/trace.kit.config.sh sets no TRACE_BEHIND_WARN"
+
+# THE RECORD. The adapter README documents the field and the switch beside
+# their siblings.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ')
+case $d in *'data.behind'*'TRACE_BEHIND_WARN'*) pass "the adapter README documents data.behind and TRACE_BEHIND_WARN" ;;
+*) fail "the adapter README does not document data.behind and TRACE_BEHIND_WARN" ;; esac
+
+# THE READER. /housekeeping's checklist names the value and where it comes from.
+d=$(tr '\n' ' ' <"$KIT/.agents/skills/housekeeping/CHECKLIST.md" | tr -s ' ')
+case $d in *'session.start'*'data.behind'*) pass "the housekeeping checklist names the last session.start's data.behind" ;;
+*) fail "the housekeeping checklist does not name session.start's data.behind" ;; esac
+
+# ---------------------------------------------------------------------------
+banner "33. A wait-bound stop says why: the transcript's last line, its age, its length"
+# ---------------------------------------------------------------------------
+# Ticket #387 (retro 20261001T150216Z, G4). 158 subagent stops in one window
+# hit the ready-wait bound and said only that the transcript "did not end on a
+# final message within the bound" — which cannot tell a bound too short (a
+# young last line, still streaming) from an agent that never wrote a final
+# message (an old one). So the fail event carries data.last_kind (the last
+# line's top-level `type`, as the agent harness names it), data.last_age_ms
+# (how old that line was when the bound elapsed) and data.lines. A transcript
+# that ends inside the bound records tokens and none of the three.
+#
+# THE FIXTURE NEVER ENDS: section 27's first 19 lines, then one assistant line
+# that called a tool — not final — written so that neither the first nor the
+# last "type" on it is the top-level one, with an unbalanced brace and an
+# escaped quoted key inside strings. Its mtime is set 30 s in the past: the
+# age is the file's, since the last write is the last line landing.
+{
+	cat "$SCRATCH/sub-head-308.jsonl"
+	printf '%s\n' '{"message":{"type":"message","role":"assistant","content":[{"type":"text","text":"a { brace and \"type\":\"fake\""},{"type":"tool_use","id":"t1","name":"Bash","input":{}}],"stop_reason":"tool_use"},"note":"\"type\":\"decoy\"","type":"assistant","toolUseResult":{"type":"text"},"uuid":"u-387"}'
+} >"$SCRATCH/never-387.jsonl"
+AGO_387=$(($(date +%s) - 30))
+touch -d "@$AGO_387" "$SCRATCH/never-387.jsonl" 2>/dev/null ||
+	touch -t "$(date -r "$AGO_387" +%Y%m%d%H%M.%S)" "$SCRATCH/never-387.jsonl"
+
+new_trace
+stop_on "$SCRATCH/never-387.jsonl"
+timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+G=$(ev_of agent.stop)
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(printf '%s\n' "$G" | grep -c .)" = 1 ] &&
+	[ "$(str "$G" outcome)" = fail ] && [ -z "$(num "$G" tok_out)" ] &&
+	pass "a transcript that never ends, 50 ms bound: exit 0, one agent.stop outcome=fail, no tokens" ||
+	fail "never-ending transcript: exit $S_STATUS, stdout '$S_OUT', events: $G"
+[ "$(str "$G" last_kind)" = assistant ] &&
+	pass "data.last_kind is the last line's top-level type (assistant), not a nested one" ||
+	fail "data.last_kind is '$(str "$G" last_kind)', expected assistant: $G"
+[ "$(str "$G" lines)" = 20 ] && pass "data.lines is the transcript's 20 lines" ||
+	fail "data.lines is '$(str "$G" lines)', expected 20: $G"
+AGE_387=$(str "$G" last_age_ms)
+[ "$AGE_387" -ge 30000 ] 2>/dev/null && [ "$AGE_387" -lt 150000 ] &&
+	pass "data.last_age_ms is the last line's age when the bound elapsed (${AGE_387} ms, written 30 s before)" ||
+	fail "data.last_age_ms is '$AGE_387', expected 30000 and up (slack for a loaded machine): $G"
+
+# WHAT CANNOT BE READ IS LEFT OUT, never guessed (review of PR #394, M-1). A
+# last line whose top-level type is not a plain word names no last_kind — not
+# an empty one, not a placeholder, and not the nested "assistant" beneath it —
+# while the other two keys still arrive.
+{
+	cat "$SCRATCH/sub-head-308.jsonl"
+	printf '%s\n' '{"message":{"type":"assistant","stop_reason":"tool_use"},"type":"a b;c","uuid":"u-387b"}'
+} >"$SCRATCH/oddkind-387.jsonl"
+touch -d "@$AGO_387" "$SCRATCH/oddkind-387.jsonl" 2>/dev/null ||
+	touch -t "$(date -r "$AGO_387" +%Y%m%d%H%M.%S)" "$SCRATCH/oddkind-387.jsonl"
+new_trace
+stop_on "$SCRATCH/oddkind-387.jsonl"
+timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+O=$(ev_of agent.stop)
+case $O in *'"last_kind"'*) fail "an unreadable top-level type still named a last_kind: $O" ;;
+*) pass "a top-level type that is not a plain word names no last_kind" ;; esac
+[ "$(str "$O" lines)" = 20 ] && [ "$(str "$O" last_age_ms)" -ge 30000 ] 2>/dev/null &&
+	pass "and lines and last_age_ms still arrive" ||
+	fail "lines or last_age_ms missing beside an unreadable kind: $O"
+
+# NO MILLISECOND CLOCK: the age falls back to the file's whole seconds.
+new_trace
+stop_on "$SCRATCH/never-387.jsonl"
+STUBS="$SCRATCH/noclock-308:$SCRATCH/naps-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+N=$(ev_of agent.stop)
+AGE_387=$(str "$N" last_age_ms)
+[ "$AGE_387" -ge 30000 ] 2>/dev/null && [ $((AGE_387 % 1000)) = 0 ] &&
+	pass "with no millisecond clock the age is whole seconds, still the file's (${AGE_387} ms)" ||
+	fail "no-clock age is '$AGE_387', expected a whole-second multiple of at least 30000: $N"
+
+# A TRANSCRIPT THAT ENDS INSIDE THE BOUND records tokens and none of the keys.
+if [ "$HAVE_NODE" = 1 ]; then
+	new_trace
+	stop_on "$FIX/subagent-transcript.redacted.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+	F=$(ev_of agent.stop)
+	[ "$(num "$F" tok_out)" = 156 ] && [ -z "$(str "$F" outcome)" ] &&
+		pass "a transcript final inside the bound records its tokens" ||
+		fail "a final transcript did not record its tokens: $F"
+	case $F in *'"last_kind"'* | *'"last_age_ms"'* | *'"lines"'*)
+		fail "a final transcript carried a wait-bound key: $F" ;;
+	*) pass "and none of last_kind, last_age_ms, lines" ;; esac
+else
+	echo "  skip  node is not on PATH — the final-transcript leg reads tokens with the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "34. PostToolUseFailure records the first line of the error as reason"
+# ---------------------------------------------------------------------------
+# A failed tool call's error may span many lines. The event's reason holds its
+# first non-empty line, as written — quotes, dollar signs, backticks and
+# backslashes included, since trace.sh escapes for JSON and nothing else needs
+# to — with every character the trace refuses turned into a space and at most
+# 300 characters kept; the full error stays in the result blob (#388).
+# reason_of <event line> — the event's reason, DECODED from its JSON string, so
+# a leg compares the text a reader gets back rather than the escaped bytes.
+reason_of() {
+	printf '%s\n' "$1" | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).reason ?? "")'
+}
+if [ "$HAVE_NODE" = 1 ]; then
+	# A simple error with multiple lines: first line as reason, full error in blob
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cat /nope"},"tool_use_id":"%s","error":"Exit code 1\\ncat: /nope: No such file or directory"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-reason-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-reason-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "a PostToolUseFailure with multiline error exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	[ "$(ev_of tool.use | grep -c '')" = 1 ] && [ "$(events | grep -c '')" = 1 ] &&
+		pass "the failure writes exactly one event, a tool.use" ||
+		fail "the failure wrote $(events | grep -c '') line(s): $(events)"
+	VOUT=$(TRACE_DIR="$TDIR" sh "$KIT/scripts/trace.sh" verify 2>&1) &&
+		pass "and trace.sh verify accepts the day file it was written to" ||
+		fail "trace.sh verify refuses the day file: $VOUT"
+	E=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$E" outcome)" = fail ] && pass "the event records outcome=fail" ||
+		fail "the outcome is '$(str "$E" outcome)': $E"
+	REASON=$(str "$E" reason)
+	[ "$REASON" = "Exit code 1" ] && pass "the reason is the first line of the error: '$REASON'" ||
+		fail "the reason is '$REASON', expected 'Exit code 1'"
+	# Verify the full error is in the result blob
+	ERH=$(str "$E" result_blob)
+	FULL_ERR=$(cat "$(blob_file "$ERH")" 2>/dev/null)
+	case $FULL_ERR in *"No such file or directory"*) pass "the result blob holds the full error" ;;
+	*) fail "the result blob does not hold the full error: $FULL_ERR" ;; esac
+
+	# An error with a single quote in the first line (should still be quote-safe)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Can'"'"'t do it\\nmore details"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-quote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-quote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with a quote in first line exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EQ=$(ev_of tool.use | sed -n '1p')
+	QREASON=$(str "$EQ" reason)
+	[ -n "$QREASON" ] && [ "$QREASON" = "Can't do it" ] &&
+		pass "the reason with a quote is: '$QREASON'" ||
+		fail "the reason with quote is '$QREASON', expected \"Can't do it\""
+	# Verify no newline ended up in the reason
+	case $EQ in *"$QREASON"*) pass "the event line contains the reason" ;;
+	*) fail "the reason was not found in the event: $EQ" ;; esac
+
+	# An error with nothing after the first line (single-line error)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Something went wrong"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-single-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-single-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ES=$(ev_of tool.use | sed -n '1p')
+	SR=$(str "$ES" reason)
+	[ "$SR" = "Something went wrong" ] && pass "a single-line error's first line is: '$SR'" ||
+		fail "a single-line error's reason is '$SR', expected 'Something went wrong'"
+
+	# An error with double quotes (shell metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s"}' \
+		"$TSESSION" "$TUSE" 'Error opening \"config.json\"' >"$SCRATCH/tool-fail-dquote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dquote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with double quotes exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDQ=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDQ" outcome)" = fail ] && pass "the event records the double-quote error" ||
+		fail "the outcome is not fail: $EDQ"
+	[ "$(reason_of "$EDQ")" = 'Error opening "config.json"' ] && pass "the reason holds the double-quote error as written" ||
+		fail "the reason of the double-quote error decodes to '$(reason_of "$EDQ")'"
+
+	# An error with dollar sign (shell variable expansion metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Invalid value: $VAR"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dollar-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dollar-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with dollar sign exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDL=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDL" outcome)" = fail ] && pass "the event records the dollar-sign error" ||
+		fail "the outcome is not fail: $EDL"
+	[ "$(reason_of "$EDL")" = 'Invalid value: $VAR' ] && pass "the reason holds the dollar-sign error as written" ||
+		fail "the reason of the dollar-sign error decodes to '$(reason_of "$EDL")'"
+
+	# An error with backtick (shell command substitution metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Failed: `whoami`"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backtick-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backtick-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backtick exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBK=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBK" outcome)" = fail ] && pass "the event records the backtick error" ||
+		fail "the outcome is not fail: $EBK"
+	[ "$(reason_of "$EBK")" = 'Failed: `whoami`' ] && pass "the reason holds the backtick error as written" ||
+		fail "the reason of the backtick error decodes to '$(reason_of "$EBK")'"
+
+	# An error with backslash (shell escape character)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Path: C:\\\\Users\\\\file"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backslash-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backslash-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backslash exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBS=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBS" outcome)" = fail ] && pass "the event records the backslash error" ||
+		fail "the outcome is not fail: $EBS"
+	[ "$(reason_of "$EBS")" = 'Path: C:\Users\file' ] && pass "the reason holds the backslash error as written" ||
+		fail "the reason of the backslash error decodes to '$(reason_of "$EBS")'"
+
+	# Every character trace_json_str's [[:cntrl:]] refuses under a UTF-8 locale
+	# — C0, DEL, C1 (U+0085 among them), U+2028 and U+2029 — becomes a space: a
+	# reason carrying one would be refused by trace.sh and lose the event.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"a\\u0001b\\u007fc\\u0085d\\u009fe\\u2028f\\u2029g"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-cntrl-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cntrl-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECT=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECT")" = 'a b c d e f g' ] &&
+		pass "every control character the trace refuses, U+0085 U+2028 U+2029 included, becomes a space" ||
+		fail "the scrubbed reason decodes to '$(reason_of "$ECT")': $ECT"
+
+	# The cap is 300 CHARACTERS, counted by code point: a character outside the
+	# BMP at the boundary is kept whole, never split into half a surrogate pair.
+	LONG=$(printf '%0299d' 0 | tr 0 x)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s\\ud83d\\ude00yyyy"}' \
+		"$TSESSION" "$TUSE" "$LONG" >"$SCRATCH/tool-fail-cap-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cap-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECP=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECP")" = "$LONG$(printf '\360\237\230\200')" ] &&
+		pass "the reason is capped at 300 characters, the last one kept whole" ||
+		fail "the capped reason decodes to '$(reason_of "$ECP")'"
+
+	# An error that OPENS with an empty line: the reason is the first line that
+	# says something, not the empty one and not nothing.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"\\n\\r\\nPermission denied\\nmore"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-blankfirst-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-blankfirst-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	EBF=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$EBF")" = 'Permission denied' ] &&
+		pass "an error opening with an empty line records its first non-empty line" ||
+		fail "the reason after an empty first line decodes to '$(reason_of "$EBF")'"
+else
+	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
+fi
+
 t_done "trace hooks"

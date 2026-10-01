@@ -30,9 +30,6 @@ GUARD_TEST_RE='(\.|_)(test|spec)\.(ts|tsx|mjs)$|\.feature$'
 EOF
 )
 
-configure() { t_write "$1" "scripts/guards.config.sh" "$2
-"; }
-
 # run_ci <repo> [VAR=VALUE ...] — the guard as CI invokes it. The three env vars
 # it reads are cleared first, so a case that omits one is really testing the
 # absence rather than inheriting the developer's shell.
@@ -78,7 +75,7 @@ pr_repo() {
 "
 	HEAD=$(t_commit "$repo" "feat: pr work")
 	git -C "$repo" checkout -q main
-	configure "$repo" "$CONFIG_STD"
+	t_guards_config "$repo" "$CONFIG_STD"
 }
 
 # ---------------------------------------------------------------------------
@@ -134,7 +131,7 @@ git -C "$repo" checkout -q main
 t_write "$repo" "src/other.ts" "// v2, edited on main with no test
 "
 BASE=$(t_commit "$repo" "feat: main moves on without a test")
-configure "$repo" "$CONFIG_STD"
+t_guards_config "$repo" "$CONFIG_STD"
 
 assert_status 0 "judges the MERGE-BASE range — an unpaired commit on main is not the PR's fault" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
@@ -207,7 +204,7 @@ assert_status 0 "an exempt PR stays green even when the range was fine anyway" -
 banner "The unconfigured default reaches CI too"
 # ---------------------------------------------------------------------------
 pr_repo "src/report.ts"
-configure "$repo" "GUARD_SOURCE_RE=''"
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
 assert_status 0 "an unconfigured guard does not fail anybody's CI either" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
 assert_out_has "INACTIVE"

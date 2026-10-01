@@ -372,7 +372,7 @@ Chosen: **option 1**.
   emit, the advisory in `verify`, and the trace suite's section 22.
 - Amended for ticket #385: `data.by=operator|train` on `feedback`, its emit
   in `/merge-train` and `/pr-iterate`, `/retro` question 7's count, and the
-  suite sections that hold it (trace-skills §16, retro-skill §11).
+  suite sections that hold it (trace-skills §17, retro-skill §11).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

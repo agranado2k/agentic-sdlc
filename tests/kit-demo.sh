@@ -54,40 +54,6 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
-skip() { printf '  skip  %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
-
-# assert_status <expected> <label> -- <command...>
-assert_status() {
-	expected=$1
-	label=$2
-	shift 3
-	out=$("$@" 2>&1)
-	actual=$?
-	if [ "$actual" = "$expected" ]; then
-		pass "$label (exit $actual)"
-	else
-		fail "$label — expected exit $expected, got $actual"
-		printf '%s\n' "$out" | sed 's/^/        | /'
-	fi
-	LAST_OUT=$out
-}
-
-assert_out_has() {
-	case "$LAST_OUT" in
-	*"$1"*) pass "output mentions '$1'" ;;
-	*)
-		fail "output does not mention '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-		;;
-	esac
-}
-
 assert_out_lacks() {
 	case "$LAST_OUT" in
 	*"$1"*)
@@ -111,8 +77,6 @@ cb='}'
 mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
 mark_re="${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}"
 
-assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
-assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
 # Snapshot / restore the manual layer, so each red step starts from green.
 save_good() {

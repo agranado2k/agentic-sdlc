@@ -37,13 +37,13 @@ GLOSSARY="$KIT/docs/domain-glossary.md"
 . "$KIT/tests/lib.sh"
 t_init
 
-# field_tokens <field> — the shipped file's tokens for a field, through the
-# script's own reader, so the suite parses nothing itself.
+# t_field_tokens <field> is sourced from tests/lib.sh — the shipped file's
+# tokens for a field, through the script's own reader, so the suite parses
+# nothing itself.
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>"$SCRATCH/fields.err") || {
 	fail "the shipped policy file does not load: $(cat "$SCRATCH/fields.err")"
 	t_done "vocab-policy"
 }
-field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
 
 # assert_equal <label> <expected> <actual>
 assert_equal() {
@@ -88,9 +88,9 @@ t_run_split sh "$VOCAB" fields
 banner "2. tier — the resolver's literal, and /to-tickets' stamp"
 # ---------------------------------------------------------------------------
 resolver_tiers=$(sed -n 's/^[[:space:]]*\([a-z]* | [a-z]* | [a-z]* | [a-z]*\)) _rt_known=1 ;;$/\1/p' "$RESOLVER" | sed 's/ | / /g')
-assert_equal "the tier vocabulary is the resolver's four names, in its order" "$resolver_tiers" "$(field_tokens tier)"
+assert_equal "the tier vocabulary is the resolver's four names, in its order" "$resolver_tiers" "$(t_field_tokens tier)"
 stamp_tiers=$(sed -n 's/.*`Tier: <\([a-z|]*\)>`.*/\1/p' "$TICKETS" | head -1 | tr '|' ' ')
-assert_equal "/to-tickets stamps the same four, in the same order" "$stamp_tiers" "$(field_tokens tier)"
+assert_equal "/to-tickets stamps the same four, in the same order" "$stamp_tiers" "$(t_field_tokens tier)"
 assert_file_has "$POLICY" "tier — owned by scripts/agents.lib.sh" "the file says the tier is not its to widen"
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ assert_file_has "$TICKETS" '**no label**' "and its absence"
 # direction a literal could not see.
 skill_labels=$(sed -n "s/.*data\.label='<\([a-z][a-z0-9-]*\), or \([a-z][a-z0-9-]*\)>'.*/\1 \2/p" "$TICKETS" | head -1)
 [ -n "$skill_labels" ] || fail "/to-tickets no longer spells the label pair in its ticket.write line — the extractor has nothing to read"
-assert_equal "the label vocabulary is the pair /to-tickets writes, in its order" "$skill_labels" "$(field_tokens label)"
+assert_equal "the label vocabulary is the pair /to-tickets writes, in its order" "$skill_labels" "$(t_field_tokens label)"
 
 # ---------------------------------------------------------------------------
 banner "4. domain — open, and every shipped token is one the glossary names"
@@ -115,7 +115,7 @@ banner "4. domain — open, and every shipped token is one the glossary names"
 # oracle available, and naming every shipped token there is the whole check.
 printf '%s\n' "$FIELDS" | grep -q '^domain (open):' && pass "the task domain is declared open" ||
 	fail "the task domain must be OPEN — its vocabulary is local policy (ADR-0007)"
-for tok in $(field_tokens domain); do
+for tok in $(t_field_tokens domain); do
 	grep -q -F -- "\`$tok\`" "$GLOSSARY" && pass "domain token '$tok' is a name the glossary uses" ||
 		fail "domain token '$tok' is not spelled anywhere in docs/domain-glossary.md"
 done
@@ -124,7 +124,7 @@ done
 banner "5. severity — /review-pr's count table, in its order"
 # ---------------------------------------------------------------------------
 table_severities=$(sed -n 's/^| [^|]* | \([A-Z]*\) | X |$/\1/p' "$REVIEW" | tr 'A-Z' 'a-z' | tr '\n' ' ' | sed 's/ $//')
-assert_equal "the severity vocabulary is the report's four buckets, top to bottom" "$table_severities" "$(field_tokens severity)"
+assert_equal "the severity vocabulary is the report's four buckets, top to bottom" "$table_severities" "$(t_field_tokens severity)"
 
 # ---------------------------------------------------------------------------
 banner "6. status — /review-pr's confirm-list tags, in the list's order"
@@ -135,14 +135,14 @@ banner "6. status — /review-pr's confirm-list tags, in the list's order"
 # skill to still saying so.
 fence_tags=$(awk '/present Agent 7.s output verbatim in this shape/ { on = 1; next } on && /^```$/ { if (seen) exit; seen = 1; next } on && seen { print }' "$REVIEW" |
 	sed -n 's/^[^ ]* \([A-Z][A-Z ]*[A-Z]\)  *<.*/\1/p' | grep -v '^MUTATION$' | tr 'A-Z ' 'a-z-' | tr '\n' ' ' | sed 's/ $//')
-assert_equal "the status vocabulary is the confirm-list's tags, in the list's order" "$fence_tags" "$(field_tokens status)"
+assert_equal "the status vocabulary is the confirm-list's tags, in the list's order" "$fence_tags" "$(t_field_tokens status)"
 assert_file_has "$REVIEW" "It is **not** a classification" "the mutation line is a measurement, so it is no token"
 
 # ---------------------------------------------------------------------------
 banner "7. action — /pr-iterate's three triage arrows, in their order"
 # ---------------------------------------------------------------------------
 arrows=$(sed -n 's/^- If the suggestion .*→ \*\*\([a-z]*\).*/\1/p' "$ITERATE" | tr '\n' ' ' | sed 's/ $//')
-assert_equal "the action vocabulary is the triage's three verbs, in the skill's order" "$arrows" "$(field_tokens action)"
+assert_equal "the action vocabulary is the triage's three verbs, in the skill's order" "$arrows" "$(t_field_tokens action)"
 
 # ---------------------------------------------------------------------------
 banner "8. outcome — /dogfood's two readings of a row"
@@ -157,7 +157,7 @@ skill_binary=$(sed -n 's/.*decides \([a-z][a-z0-9-]*\) or \([a-z][a-z0-9-]*\)\..
 skill_cut=$(sed -n 's/.*\*\*\([a-z][a-z0-9]*\) \([a-z][a-z0-9]*\)s\*\*.*/\1-\2/p' "$DOGFOOD" | head -1)
 [ -n "$skill_binary" ] && [ -n "$skill_cut" ] ||
 	fail "/dogfood no longer spells its readings where the extractor reads them"
-assert_equal "the outcome vocabulary is the three readings /dogfood names" "$skill_binary $skill_cut" "$(field_tokens outcome)"
+assert_equal "the outcome vocabulary is the three readings /dogfood names" "$skill_binary $skill_cut" "$(t_field_tokens outcome)"
 
 # ---------------------------------------------------------------------------
 banner "9. confidence — /to-tickets' stamp, three tokens in its order"
@@ -169,16 +169,16 @@ banner "9. confidence — /to-tickets' stamp, three tokens in its order"
 confidence_stamp() { sed -n 's/.*`Confidence: <\([a-z|-]*\)>`.*/\1/p' "$1" | head -1 | tr '|' ' '; }
 skill_confidence=$(confidence_stamp "$TICKETS")
 [ -n "$skill_confidence" ] || fail "/to-tickets spells no \`Confidence: <…>\` stamp — the extractor has nothing to read"
-assert_equal "the confidence vocabulary is the three tokens /to-tickets stamps, in its order" "$skill_confidence" "$(field_tokens confidence)"
-n=$(field_tokens confidence | wc -w | tr -d ' ')
+assert_equal "the confidence vocabulary is the three tokens /to-tickets stamps, in its order" "$skill_confidence" "$(t_field_tokens confidence)"
+n=$(t_field_tokens confidence | wc -w | tr -d ' ')
 [ "$n" = 3 ] && pass "the confidence vocabulary has three tokens" || fail "the confidence vocabulary has $n tokens, the PRD says three"
 # BAIT — a rule with no failing check is a claim. Rename one token in a copy
 # of the skill and nowhere else: the extractor must read the renamed set, so
 # the comparison above would have gone red on it.
-first=$(field_tokens confidence | cut -d' ' -f1)
+first=$(t_field_tokens confidence | cut -d' ' -f1)
 sed "s/\`Confidence: <$first|/\`Confidence: <renamed|/" "$TICKETS" >"$SCRATCH/to-tickets.bait.md"
 bait_confidence=$(confidence_stamp "$SCRATCH/to-tickets.bait.md")
-if [ -n "$bait_confidence" ] && [ "$bait_confidence" != "$(field_tokens confidence)" ]; then
+if [ -n "$bait_confidence" ] && [ "$bait_confidence" != "$(t_field_tokens confidence)" ]; then
 	pass "bait: a token renamed in the skill alone reads '$bait_confidence' — the comparison goes red on it"
 else
 	fail "bait: a token renamed in the skill alone was not seen (read '$bait_confidence') — the extractor is vacuous"
@@ -199,6 +199,6 @@ banner "11. author-kind — /pr-iterate's two kinds of review thread, in their o
 # delegated read is never asked it. Read out of the two bucket
 # headings — `**Bot review threads**`, `**Human threads**` — case folded.
 kinds=$(sed -n 's/^- \*\*\([A-Z][a-z]*\) \(review \)\{0,1\}threads\*\*.*/\1/p' "$ITERATE" | tr 'A-Z\n' 'a-z ' | sed 's/ $//')
-assert_equal "the author-kind vocabulary is the two thread kinds, in the skill's order" "$kinds" "$(field_tokens author-kind)"
+assert_equal "the author-kind vocabulary is the two thread kinds, in the skill's order" "$kinds" "$(t_field_tokens author-kind)"
 
 t_done "vocab-policy"
