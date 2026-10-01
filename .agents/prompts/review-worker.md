@@ -130,9 +130,23 @@ become table cells.
     Each finding under a heading:
 
     **<ID>** `<file>:<line>` — <what is wrong, in one or two sentences>
+    ↳ lens: <the one lens that raised it — see below>
     ↳ fix: <the concrete change>
 
     IDs are C-1, H-1, M-1, L-1 …, numbered from 1 within each severity.
+
+    The lens line names WHICH of the six standards lenses raised the
+    finding, as one token and nothing else: `security` (injection,
+    trust boundaries, secrets, the agentic-skill audit), `api-crud`
+    (contracts and their artifacts), `pattern` (the repo's own patterns
+    and craft rules), `simplicity` (less code, fewer indirections),
+    `reuse-dry` (an existing helper that should have been called) or
+    `test-hygiene` (coverage, unitary tests, a check that cannot fail).
+    Spell the token exactly as listed; the session that lands your
+    report maps it onto its own closed list, and any other word — a
+    title, two tokens, a lens of your own — is recorded as unattributed.
+    A finding with no lens line is attributed only if its text names
+    the lens, so write the line on every finding.
 
     ## Axis 2 — Behavior (for a human)
 

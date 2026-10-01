@@ -1228,4 +1228,59 @@ assert_mutating 1 "…and posts the behavior comment, and only that"
 STUB_PR=12
 export STUB_PR
 
+# ---------------------------------------------------------------------------
+banner "20. A finding's lens line names its agent; the title match is the fallback (#412)"
+# ---------------------------------------------------------------------------
+# Most broker raises read `unattributed`: a worker's finding seldom names its
+# lens by title or number, and the broker never guesses one from the text. So
+# the contract asks for one line per finding — `↳ lens: <token>`, from
+# /review-pr §3's Axis-1 roster — and the broker reads it FIRST: a roster
+# token is the agent; a token outside the roster is `unattributed`, never the
+# title beside it and never the spelling the report used; and a finding with
+# no lens line still takes the title-or-number match above. One report, the
+# three cases, one raise each.
+LENS="$SCRATCH/lens.md"
+cat >"$LENS" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — three findings, three ways to name the lens
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+**H-1** \`scripts/a.sh:3\` — Security Sentinel would say so too, but the field decides.
+↳ lens: test-hygiene
+↳ fix: assert the failure path.
+
+#### MEDIUM
+**M-1** \`docs/b.md:10\` — Agent 1 — Security Sentinel: no lens line, so the title is read.
+↳ fix: delete the line.
+
+#### LOW
+**L-1** \`scripts/a.sh:3\` — Simplicity Advocate, says the title; the field says otherwise.
+↳ lens: vibes
+↳ fix: drop it.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    the lens field.
+EOF
+STUB_PR=36
+export STUB_PR
+broker 36 "$LENS"
+s_assert_status 0 "a report whose findings carry a lens line lands"
+assert_mutating 2 "…with the same two operations as ever"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#36' --kind finding.raise
+RAISES=$S_OUT
+raise_has H-1 '"agent":"test-hygiene"'
+raise_has M-1 '"agent":"security"'
+raise_has L-1 '"agent":"unattributed"'
+printf '%s\n' "$RAISES" | grep -qF vibes &&
+	fail "a lens outside the roster reached the trace as the report spelled it" ||
+	pass "a lens outside the roster never reaches the trace as spelled"
+STUB_PR=12
+export STUB_PR
+
 t_done "tests/forge-broker.test.sh"
