@@ -36,10 +36,9 @@ unset VOCAB_CONFIG
 
 # The stub tracker CLI. It records every argument vector it was called with,
 # fails as many times as $SCRATCH/fails-left says (printing an error, as the
-# real CLI does), and otherwise prints the fixture body.
-mkdir -p "$SCRATCH/bin"
-cat >"$SCRATCH/bin/gh" <<'STUB'
-#!/bin/sh
+# real CLI does), and otherwise prints the fixture body — t_stub_gh's frame
+# (tests/lib.sh), with this prelude.
+cat >"$SCRATCH/gh.prelude" <<'STUB'
 printf '%s\n' "$*" >>"$STUB_DIR/calls"
 # A signal mid-fetch, delivered to the script — the stub's parent — while it
 # waits on the tracker.
@@ -50,9 +49,8 @@ if [ "$left" -gt 0 ]; then
 	echo "HTTP 502: Bad gateway (https://api.github.com/graphql)" >&2
 	exit 1
 fi
-cat "$STUB_DIR/body"
 STUB
-chmod +x "$SCRATCH/bin/gh"
+t_stub_gh "$SCRATCH/bin" "$SCRATCH/body" "$SCRATCH/gh.prelude"
 STUB_DIR=$SCRATCH
 export STUB_DIR
 PATH="$SCRATCH/bin:$PATH"

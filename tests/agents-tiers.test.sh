@@ -78,19 +78,6 @@ AGENT_TIER_PLANNER_CONTENT='model-for-planning-prose'
 EOF
 )
 
-# write_config <path> <contents>
-write_config() {
-	mkdir -p "$(dirname "$1")"
-	printf '%s\n' "$2" >"$1"
-}
-
-# resolve <args> — the library, run as an agent runs it, streams kept apart
-# (t_run_split in tests/lib.sh owns why).
-resolve() { t_run_split sh "$LIB" "$@"; }
-
-
-
-
 # assert_survived <label> — the caller reached the line AFTER the library call.
 #
 # What several cases below have to assert is not "what did it resolve" but "did
@@ -107,8 +94,9 @@ assert_survived() {
 }
 
 # capture <command...> — t_run_split under the name this suite has always used.
-# `resolve` hard-codes `sh "$LIB"`; the cases below pick the shell and choose
-# between executing and sourcing, so they need the whole command.
+# `t_resolve_tier` (tests/lib.sh) always runs scripts/agents.lib.sh with sh;
+# the cases below pick the shell and choose between executing and sourcing,
+# so they need the whole command.
 capture() { t_run_split "$@"; }
 
 # capture_in <dir> <command...> — capture, run from <dir>. The cwd is an INPUT
@@ -123,7 +111,7 @@ capture_in() {
 	t_run_split _capture_cd "$_ci_dir" "$@"
 }
 
-# note <text> — a visible line that is neither a pass nor a fail.
+# note <text> (tests/lib.sh) — a visible line that is neither a pass nor a fail.
 #
 # The per-shell cases below can only run against a shell that is installed.
 # Silently skipping one would let a machine (or a CI image) quietly drop an
@@ -131,10 +119,6 @@ capture_in() {
 # per case here, and counted again beside the final summary, where a reader
 # who only checks the last lines will actually see it.
 SKIPPED=0
-note() {
-	printf '  --    %s\n' "$*"
-	SKIPPED=$((SKIPPED + 1))
-}
 
 # SHELLS — the shells the per-shell axes below sweep.
 #
@@ -147,9 +131,9 @@ SHELLS='sh bash zsh'
 FULL="$SCRATCH/full.config.sh"
 EMPTY="$SCRATCH/empty.config.sh"
 DOMAINS="$SCRATCH/domains.config.sh"
-write_config "$FULL" "$CONFIG_FULL"
-write_config "$EMPTY" "$CONFIG_EMPTY"
-write_config "$DOMAINS" "$CONFIG_DOMAINS"
+t_write_config "$FULL" "$CONFIG_FULL"
+t_write_config "$EMPTY" "$CONFIG_EMPTY"
+t_write_config "$DOMAINS" "$CONFIG_DOMAINS"
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks nothing gets an error, not a guess"
@@ -157,11 +141,11 @@ banner "Usage — a caller that asks nothing gets an error, not a guess"
 AGENTS_CONFIG="$FULL"
 export AGENTS_CONFIG
 
-resolve
+t_resolve_tier
 [ "$S_STATUS" = 2 ] && pass "no tier argument exits 2" || fail "no tier argument exited $S_STATUS, expected 2"
 s_assert_err_has "usage"
 
-resolve implementer content extra
+t_resolve_tier implementer content extra
 [ "$S_STATUS" = 2 ] && pass "a third argument exits 2" || fail "a third argument exited $S_STATUS, expected 2"
 s_assert_err_has "usage"
 
@@ -172,7 +156,7 @@ banner "The vocabulary is closed — an unknown tier is a caller bug"
 # back to the session model: silently running 'implementor' on whatever the
 # session happens to be is exactly the cost blindness this whole seam exists to
 # remove. Exit 2, and say what the four names are.
-resolve implementor
+t_resolve_tier implementor
 [ "$S_STATUS" = 2 ] && pass "an unknown tier exits 2" || fail "unknown tier exited $S_STATUS, expected 2"
 s_assert_err_has "implementor"
 s_assert_err_has "planner"
@@ -181,7 +165,7 @@ s_assert_err_has "mechanical"
 s_assert_err_has "reviewer"
 [ -z "$S_OUT" ] && pass "an unknown tier prints nothing on stdout" || fail "unknown tier printed '$S_OUT'"
 
-resolve ""
+t_resolve_tier ""
 [ "$S_STATUS" = 2 ] && pass "an empty tier exits 2" || fail "empty tier exited $S_STATUS, expected 2"
 
 # …and the four names in the MESSAGES cannot be reassigned out from under the
@@ -241,17 +225,17 @@ esac
 # ---------------------------------------------------------------------------
 banner "Configured — every tier resolves to its mapped value"
 # ---------------------------------------------------------------------------
-resolve planner
+t_resolve_tier planner
 s_assert_resolved "model-for-planning" "planner resolves to its configured model"
 s_assert_err_lacks "UNMAPPED"
 
-resolve implementer
+t_resolve_tier implementer
 s_assert_resolved "model-for-implementing" "implementer resolves to its configured model"
 
-resolve mechanical
+t_resolve_tier mechanical
 s_assert_resolved "model-for-mechanical" "mechanical resolves to its configured model"
 
-resolve reviewer
+t_resolve_tier reviewer
 s_assert_resolved "model-for-reviewing" "reviewer resolves to its configured model"
 
 # ---------------------------------------------------------------------------
@@ -267,11 +251,11 @@ banner "The optional DOMAIN — same tier, different medium, different model"
 AGENTS_CONFIG="$DOMAINS"
 export AGENTS_CONFIG
 
-resolve implementer content
+t_resolve_tier implementer content
 s_assert_resolved "model-for-writing-prose" "a mapped tier+domain resolves to the domain's model"
 s_assert_err_lacks "UNMAPPED"
 
-resolve reviewer content
+t_resolve_tier reviewer content
 s_assert_resolved "model-for-reading-prose" "the domain axis is per-tier, not a single global override"
 
 # ---------------------------------------------------------------------------
@@ -283,24 +267,24 @@ banner "An unmapped domain falls back to the tier — silently"
 # domain is a WORKING state and not a warning — it means "no special opinion
 # about this medium", which is exactly what the tier mapping already answers.
 # Warning about it would train people to ignore the warning that matters.
-resolve implementer code
+t_resolve_tier implementer code
 s_assert_resolved "model-for-implementing" "an unmapped domain falls back to the plain tier mapping"
 s_assert_err_lacks "UNMAPPED"
 [ -z "$S_ERR" ] && pass "…and says nothing at all on stderr" ||
 	fail "an unmapped domain wrote to stderr: $S_ERR"
 
-resolve mechanical content
+t_resolve_tier mechanical content
 s_assert_resolved "model-for-mechanical" "a tier with no domain mappings at all still resolves"
 
 # The fallback is per-VARIABLE, not per-tier-having-any-domain-at-all: the tier
 # below is unmapped, its domain is mapped, and the domain must still win.
-resolve planner content
+t_resolve_tier planner content
 s_assert_resolved "model-for-planning-prose" "a mapped domain resolves even when the plain tier is empty"
 s_assert_err_lacks "UNMAPPED"
 
 # …and the mirror: unmapped tier, unmapped domain, so the ordinary unmapped-tier
 # warning fires unchanged. The domain adds no second diagnostic.
-resolve planner code
+t_resolve_tier planner code
 [ "$S_STATUS" = 0 ] && pass "an unmapped tier+domain still exits 0" || fail "unmapped tier+domain exited $S_STATUS"
 [ -z "$S_OUT" ] && pass "…and prints nothing (the spawn inherits the session's model)" ||
 	fail "unmapped tier+domain printed '$S_OUT'"
@@ -313,7 +297,7 @@ banner "A hyphenated domain token folds to an underscore in the variable"
 # `html-report` is a legal token and `AGENT_TIER_IMPLEMENTER_HTML-REPORT` is not
 # a legal variable name. The fold has to be pinned, or the same config would
 # work or not work depending on which half of the kit last guessed.
-resolve implementer html-report
+t_resolve_tier implementer html-report
 s_assert_resolved "model-for-writing-html" "domain 'html-report' reads AGENT_TIER_IMPLEMENTER_HTML_REPORT"
 
 # ---------------------------------------------------------------------------
@@ -326,7 +310,7 @@ banner "The domain is INTERPOLATED into a variable name, so its shape is checked
 # eval is a caller bug, exit 2, and never a silent fallback to the tier.
 for bad in 'CONTENT' 'Content' '9code' 'code_x' 'code.x' 'code/x' '-code' '' \
 	'a;echo pwned' 'a$(echo pwned)' 'a`echo pwned`' 'a"b' "a'b" 'a b'; do
-	resolve implementer "$bad"
+	t_resolve_tier implementer "$bad"
 	if [ "$S_STATUS" = 2 ]; then
 		pass "malformed domain '$bad' exits 2"
 	else
@@ -349,7 +333,7 @@ for _at_locale in C en_US.UTF-8; do
 		continue
 	fi
 	for bad in CONTENT Content; do
-		LC_ALL=$_at_locale resolve implementer "$bad"
+		LC_ALL=$_at_locale t_resolve_tier implementer "$bad"
 		if [ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ]; then
 			pass "LC_ALL=$_at_locale: malformed domain '$bad' exits 2"
 		else
@@ -360,13 +344,13 @@ done
 
 # The message has to name the rule, not just say no: the caller is an agent
 # reading stderr, and "invalid domain" without the shape is a dead end.
-resolve implementer CONTENT
+t_resolve_tier implementer CONTENT
 s_assert_err_has "domain"
 s_assert_err_has "CONTENT"
 
 # An unknown TIER is still a caller bug even when the domain is impeccable —
 # the second axis does not soften the first.
-resolve implementor content
+t_resolve_tier implementor content
 [ "$S_STATUS" = 2 ] && pass "an unknown tier with a valid domain still exits 2" ||
 	fail "unknown tier with a domain exited $S_STATUS, expected 2"
 s_assert_err_has "unknown capability tier"
@@ -377,11 +361,11 @@ banner "No domain argument — byte-for-byte the behaviour that shipped at 0.6.0
 # The whole point of making the argument optional: every existing caller — the
 # skills, the adapters' worked example, a consumer's own script — keeps working
 # without being touched.
-resolve implementer
+t_resolve_tier implementer
 s_assert_resolved "model-for-implementing" "one argument still resolves the plain tier mapping"
 s_assert_err_lacks "UNMAPPED"
 
-resolve planner
+t_resolve_tier planner
 [ "$S_STATUS" = 0 ] && pass "one argument on an unmapped tier still exits 0" || fail "exited $S_STATUS"
 s_assert_err_has "UNMAPPED"
 
@@ -398,7 +382,7 @@ banner "Unconfigured — warn, print nothing, and PASS"
 AGENTS_CONFIG="$EMPTY"
 export AGENTS_CONFIG
 
-resolve implementer
+t_resolve_tier implementer
 [ "$S_STATUS" = 0 ] && pass "an unmapped tier still exits 0" || fail "unmapped tier exited $S_STATUS, expected 0"
 [ -z "$S_OUT" ] && pass "an unmapped tier prints nothing — the caller passes no model and inherits the session's" ||
 	fail "unmapped tier printed '$S_OUT' instead of nothing"
@@ -558,7 +542,7 @@ resolve_from() { t_run_split _resolve_from_body "$@"; }
 t_repo
 OWN=$REPO
 install_lib "$OWN/tools"
-write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
+t_write_config "$OWN/scripts/agents.config.sh" "$CONFIG_FULL"
 resolve_from "$OWN" "$OWN/tools/agents.lib.sh" mechanical
 s_assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.sh is found with no env var set"
 
@@ -567,7 +551,7 @@ s_assert_resolved "model-for-mechanical" "the repo root's scripts/agents.config.
 # where the caller stands.
 LOOSE="$SCRATCH/loose"
 install_lib "$LOOSE"
-write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
+t_write_config "$LOOSE/agents.config.sh" "$CONFIG_FULL"
 resolve_from "$SCRATCH" "$LOOSE/agents.lib.sh" reviewer
 s_assert_resolved "model-for-reviewing" "a sibling agents.config.sh is found for a library outside any repo"
 
@@ -586,7 +570,7 @@ banner "…and NOT from the repo the caller happens to be standing in"
 # absolute path, from inside somebody else's clone.
 t_repo
 FOREIGN=$REPO
-write_config "$FOREIGN/scripts/agents.config.sh" "$(
+t_write_config "$FOREIGN/scripts/agents.config.sh" "$(
 	cat <<'EOF'
 echo "FOREIGN-CONFIG-EXECUTED" >&2
 AGENT_TIER_MECHANICAL='model-the-foreign-repo-chose'
@@ -641,7 +625,7 @@ capture_in "$OWN" sh "$OWN/tools/agents.lib.sh" mechanical
 # than one that got an error.
 AGENTS_CONFIG="$SCRATCH/no-such.config.sh"
 export AGENTS_CONFIG
-resolve planner
+t_resolve_tier planner
 [ "$S_STATUS" = 2 ] && pass "an AGENTS_CONFIG that does not exist is an error, not a silent fallback" ||
 	fail "a missing AGENTS_CONFIG exited $S_STATUS, expected 2"
 s_assert_err_has "does not exist"
@@ -717,7 +701,7 @@ KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
 AGENTS_CONFIG="$KIT_CONFIG"
 export AGENTS_CONFIG
 for tier in planner implementer mechanical reviewer; do
-	resolve "$tier"
+	t_resolve_tier "$tier"
 	if [ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ]; then
 		pass "kit config resolves '$tier' to a non-empty value ('$S_OUT')"
 	else
@@ -738,10 +722,10 @@ done
 # code; writing AGENT_TIER_IMPLEMENTER_CODE to the same id the tier already
 # resolves to would be a non-decision recorded as a decision — the mirror of
 # the "a Domain: on every ticket" anti-pattern /to-tickets warns about.
-resolve implementer
+t_resolve_tier implementer
 KIT_IMPLEMENTER=$S_OUT
 
-resolve implementer content
+t_resolve_tier implementer content
 if [ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] && [ "$S_OUT" != "$KIT_IMPLEMENTER" ]; then
 	pass "kit config routes 'implementer content' ('$S_OUT') away from the plain tier ('$KIT_IMPLEMENTER')"
 else
@@ -750,7 +734,7 @@ else
 fi
 s_assert_err_lacks "UNMAPPED"
 
-resolve implementer code
+t_resolve_tier implementer code
 if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$KIT_IMPLEMENTER" ]; then
 	pass "kit config leaves 'implementer code' on the plain tier ('$S_OUT') — an unmapped domain is the ordinary case"
 else
@@ -778,22 +762,22 @@ banner "The judge domain — named by its contract, mapped by nobody (#275)"
 # who has not decided is exactly where they were, the plain tier, with not a
 # word on stderr beyond the fallback's own, which is nothing.
 JUDGE="$SCRATCH/judge.config.sh"
-write_config "$JUDGE" "$CONFIG_DOMAINS
+t_write_config "$JUDGE" "$CONFIG_DOMAINS
 AGENT_TIER_MECHANICAL_JUDGE='model-for-typed-judging'"
 
 AGENTS_CONFIG="$DOMAINS"
 export AGENTS_CONFIG
-resolve mechanical judge
+t_resolve_tier mechanical judge
 s_assert_resolved "model-for-mechanical" "unmapped, 'mechanical judge' resolves to the plain tier's answer"
 [ -z "$S_ERR" ] && pass "…and says nothing on stderr — the domain fallback's own silence, and no more" ||
 	fail "unmapped 'mechanical judge' wrote to stderr: $S_ERR"
 
 AGENTS_CONFIG="$JUDGE"
 export AGENTS_CONFIG
-resolve mechanical judge
+t_resolve_tier mechanical judge
 s_assert_resolved "model-for-typed-judging" "mapped in a throwaway policy file, 'mechanical judge' resolves to the mapping"
 s_assert_err_lacks "UNMAPPED"
-resolve mechanical
+t_resolve_tier mechanical
 s_assert_resolved "model-for-mechanical" "…and the plain tier is untouched by the judge mapping"
 
 # The kit's own mapping DECLINES the domain, and says so. The kit names no
@@ -803,9 +787,9 @@ s_assert_resolved "model-for-mechanical" "…and the plain tier is untouched by 
 # carries it as a comment that names the variable — and never assigns it.
 AGENTS_CONFIG="$KIT_CONFIG"
 export AGENTS_CONFIG
-resolve mechanical
+t_resolve_tier mechanical
 KIT_MECHANICAL=$S_OUT
-resolve mechanical judge
+t_resolve_tier mechanical judge
 if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$KIT_MECHANICAL" ]; then
 	pass "kit config leaves 'mechanical judge' on the plain tier ('$S_OUT') — declined, not mapped"
 else
@@ -875,7 +859,7 @@ fi
 AGENTS_CONFIG="$SHIPPED"
 export AGENTS_CONFIG
 for tier in planner implementer mechanical reviewer; do
-	resolve "$tier"
+	t_resolve_tier "$tier"
 	if [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ]; then
 		pass "scripts/agents.config.sh (shipped) still resolves '$tier' to EMPTY"
 	else

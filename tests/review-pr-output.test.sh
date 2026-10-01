@@ -48,7 +48,6 @@ SKILL_ABS="$ROOT/$SKILL"
 
 cd "$ROOT" || exit 2
 
-line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
 
 # region <start-re> <end-re> — the lines from the first match of start to the
 # first match of end (exclusive of nothing; sed range). Used to hold the two
@@ -74,11 +73,11 @@ assert_file_has "$SKILL" "| | Severity | Count |"
 # clean-audits, then the count table, all between the template's own header and
 # the findings paragraph. (The first shape anchored on prose and one mutant —
 # verdict moved out of the fence — survived; found by the review of PR #66.)
-rs=$(line_of "### Review Summary")
-v=$(line_of "**Verdict:**")
-c=$(line_of "Clean audits:")
-th=$(line_of "| | Severity | Count |")
-tf=$(line_of "**Then the findings**")
+rs=$(t_line_of "$SKILL_ABS" "### Review Summary")
+v=$(t_line_of "$SKILL_ABS" "**Verdict:**")
+c=$(t_line_of "$SKILL_ABS" "Clean audits:")
+th=$(t_line_of "$SKILL_ABS" "| | Severity | Count |")
+tf=$(t_line_of "$SKILL_ABS" "**Then the findings**")
 if [ -n "$rs" ] && [ -n "$v" ] && [ -n "$c" ] && [ -n "$th" ] && [ -n "$tf" ] &&
 	[ "$rs" -lt "$v" ] && [ "$v" -lt "$c" ] && [ "$c" -lt "$th" ] && [ "$th" -lt "$tf" ]; then
 	pass "summary template order holds: header ($rs) < verdict ($v) < clean audits ($c) < count table ($th) < findings ($tf)"
@@ -161,8 +160,8 @@ else
 	fail "the confirm-list template order broke — 🔀='$x' ⚠️='$w' ✅='$s'"
 fi
 
-a5=$(line_of "### 5. Severity-Based")
-a5b=$(line_of "### 5b. Behavior Confirm-List")
+a5=$(t_line_of "$SKILL_ABS" "### 5. Severity-Based")
+a5b=$(t_line_of "$SKILL_ABS" "### 5b. Behavior Confirm-List")
 if [ -n "$a5" ] && [ -n "$a5b" ] && [ "$a5" -lt "$a5b" ]; then
 	pass "Axis 1's report (line $a5) is specified before Axis 2's confirm-list (line $a5b)"
 else
@@ -177,8 +176,8 @@ assert_file_has "$SKILL" "Do NOT prefix comments with labels"
 # The closing restates the verdict so the question is answerable without
 # scrolling back up (PRD #62, solution point 6).
 assert_file_has "$SKILL" "Restate the verdict"
-q=$(line_of "Which severity categories or specific items should I post")
-r=$(line_of "Restate the verdict")
+q=$(t_line_of "$SKILL_ABS" "Which severity categories or specific items should I post")
+r=$(t_line_of "$SKILL_ABS" "Restate the verdict")
 # -le, not -lt: the closing may put both on one line, restatement first.
 if [ -n "$q" ] && [ -n "$r" ] && [ "$r" -le "$q" ]; then
 	pass "the closing restates the verdict (line $r) ahead of the question (line $q)"
@@ -243,13 +242,10 @@ banner "7. The decision lines are the policy file's — read through the checker
 # in the agent's own classification prose. 🧬 MUTATION is on the list and is
 # deliberately no token: the skill says it measures the list, and the policy
 # file says the same, so it is set aside by name and by nothing looser.
-VOCAB="$ROOT/scripts/vocab.sh"
 POLICY="$ROOT/scripts/vocab.config.sh"
 BADGES='🔴|🟠|🟡|🔵|🟣|🟤|🟢|⚫|⚪'
 GLYPHS='✅|⚠️|❌|🔀|🧬'
 
-# declared <field> <policy file> — the field's tokens, through `fields`.
-declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
 
 # printed_severities <skill> — every band the skill prints, folded to a token.
 printed_severities() {
@@ -270,7 +266,7 @@ printed_statuses() {
 # undeclared <field> <printed tokens> <policy file> — the printed tokens the
 # policy file does not declare, space-joined.
 undeclared() {
-	_ud=$(declared "$1" "$3")
+	_ud=$(t_field_tokens "$1" "$3")
 	for _ud_tok in $2; do
 		case " $_ud " in *" $_ud_tok "*) ;; *) printf '%s ' "$_ud_tok" ;; esac
 	done | sed 's/ $//'
@@ -295,25 +291,28 @@ baited() {
 
 sev=$(printed_severities "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
 sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
-[ -n "$(declared severity "$POLICY")" ] && [ -n "$(declared status "$POLICY")" ] &&
+[ -n "$(t_field_tokens severity "$POLICY")" ] && [ -n "$(t_field_tokens status "$POLICY")" ] &&
 	pass "the policy file declares severity and status, read through 'fields'" ||
 	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
-# …and the reader agrees with its sibling in tests/vocab-policy.test.sh
-# (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
-# and a reader that does not know the mark reads nothing for an opened field.
+# …and the reader knows the (open) mark (review of PR #328): `fields` marks an
+# open vocabulary `<field> (open):`, and a reader that does not know the mark
+# reads nothing for an opened field. The reader is t_field_tokens in
+# tests/lib.sh, the one copy every suite uses; this case holds it on THIS
+# suite's field and the policy-file argument, so it guards the shared reader,
+# not a local copy — keep it.
 sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
-[ -n "$(declared severity "$POLICY")" ] && [ "$(declared severity "$SCRATCH/opened.config.sh")" = "$(declared severity "$POLICY")" ] &&
+[ -n "$(t_field_tokens severity "$POLICY")" ] && [ "$(t_field_tokens severity "$SCRATCH/opened.config.sh")" = "$(t_field_tokens severity "$POLICY")" ] &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
-	fail "with severity opened in the policy file the reader read '$(declared severity "$SCRATCH/opened.config.sh")', not '$(declared severity "$POLICY")'"
+	fail "with severity opened in the policy file the reader read '$(t_field_tokens severity "$SCRATCH/opened.config.sh")', not '$(t_field_tokens severity "$POLICY")'"
 held "every severity band the report prints is a token the policy file declares: $sev" severity "$sev" "$POLICY"
 held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
 # …and nothing declared goes unprinted: the two lists are one vocabulary.
-[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared severity "$POLICY") | sort | tr '\n' ' ')" ] &&
+[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens severity "$POLICY") | sort | tr '\n' ' ')" ] &&
 	pass "…and every declared severity is a band the report prints" ||
-	fail "the report prints '$sev', the policy file declares '$(declared severity "$POLICY")'"
-[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared status "$POLICY") | sort | tr '\n' ' ')" ] &&
+	fail "the report prints '$sev', the policy file declares '$(t_field_tokens severity "$POLICY")'"
+[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens status "$POLICY") | sort | tr '\n' ' ')" ] &&
 	pass "…and every declared status is a tag Agent 7 prints" ||
-	fail "Agent 7 tags '$sta', the policy file declares '$(declared status "$POLICY")'"
+	fail "Agent 7 tags '$sta', the policy file declares '$(t_field_tokens status "$POLICY")'"
 
 # The bait. Each plants ONE line in a copy of the skill — where a session
 # would print it from — and the same holder must name exactly that token.

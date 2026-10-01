@@ -678,9 +678,7 @@ case $rb_emit in
 esac
 
 # The fence, lifted and run on a fixture PR.
-awk '/^```sh$/ { buf = ""; on = 1; next }
-	on && /^```$/ { if (buf ~ /triage_reds\(\)/) { printf "%s", buf; exit } on = 0; next }
-	on { buf = buf $0 "\n" }' "$PI" >"$SCRATCH/rb-fence.sh"
+t_lift_fence "$PI" "triage_reds()" "$SCRATCH/rb-fence.sh"
 [ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
 	fail "/pr-iterate has no sh fence defining triage_reds()"
 

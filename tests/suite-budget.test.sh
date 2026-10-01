@@ -279,7 +279,7 @@ rm -f "$HOST/sys/fs/cgroup/pids.max" "$HOST/sys/fs/cgroup/cgroup.controllers"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
 # Every suite in tests/ sources the test harness, so none has to remember any of
-# this — including the three that carry their own assertion helpers.
+# this — including the three that keep their own scratch and trap.
 for suite in "$KIT"/tests/*.sh; do
 	rel="tests/${suite##*/}"
 	[ "$rel" = tests/lib.sh ] && continue
