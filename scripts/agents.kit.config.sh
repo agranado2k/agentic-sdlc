@@ -128,7 +128,7 @@ AGENT_TIER_IMPLEMENTER='claude-opus-5-5'   # the builder
 # 3. MECHANICAL — cheapest capable model. The suite is the oracle; capability
 #    past "can follow the pattern" buys nothing here.
 # ---------------------------------------------------------------------------
-AGENT_TIER_MECHANICAL='claude-haiku-4-5-20251001'
+AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest model — three of three mechanical tickets that day (#352, #354, #388) reviewed themselves or shipped untested rules and needed a rescue session (retro 20261001T150216Z); the operator chose Opus 5 for the tier, Opus 5.5 stays the implementer
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — strongest reasoning, in fresh context, and DIFFERENT from
