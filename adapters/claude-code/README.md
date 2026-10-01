@@ -252,13 +252,14 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
+| `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
 | `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` splits a payload with |
-| `hooks/hook.lib.sh` | not a hook either: what the four share |
+| `hooks/hook.lib.sh` | not a hook either: what the five share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
-them writes to stdout, and each sets the trace's quiet variable so a project
+them writes to stdout but the behind note's one object, and each sets the trace's quiet variable so a project
 that never turned tracing on hears nothing. Observability that can fail a
 session is worse than none.
 
@@ -443,10 +444,29 @@ worktree measures the root, never its own feature branch, and says so with
 `data.behind_of=root` — counted with plain git and never a fetch of its own,
 `0` when level. A checkout with
 no `origin/main`, or no repository, records no field and still exits 0.
-`TRACE_BEHIND_WARN` in your trace policy file adds one line on stderr when the
-count is more than it; the policy file ships it empty, which records the count
-and says nothing. A malformed value is refused on stderr and otherwise
-ignored.
+`TRACE_BEHIND_WARN` in your trace policy file adds a note when the count is
+more than it; the policy file ships it empty, which records the count and says
+nothing. A malformed value is refused on stderr and otherwise ignored.
+
+**The note leaves by stdout, as one JSON object, because stderr reaches nobody**
+(ticket #427). The note began as a stderr line, and a live probe of the agent
+harness at 2.1.285 found a `SessionStart` hook's stderr on exit 0 kept in the
+transcript's own records and shown nowhere — not in an interactive terminal,
+not on a non-interactive run's stdout or stderr. The hooks reference documents
+three other routes; the probe settled which reaches a reader:
+
+| Route | Who reads it | Chosen |
+| --- | --- | --- |
+| a top-level `systemMessage` in a JSON object on stdout | the operator: documented as shown to the user, and an interactive session prints it under its banner | yes |
+| `hookSpecificOutput.additionalContext` in the same object | the model, which relays it — the one route into a non-interactive run's output | yes, beside it |
+| plain stdout | the model only, and it would make the object unparseable | no |
+| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (ADR-0008 clause 4) | no |
+
+So past the threshold the hook prints exactly one object carrying the note in
+both fields, still exits 0, and still writes the stderr line for a reader of the
+agent harness's records. Under the threshold, and on every other path, stdout
+stays empty: nothing about the trace ever takes this route, and `hook.lib.sh`'s
+rule 2 names this one object as its only exception.
 
 **A phantom stop writes no event.** Most `SubagentStop` payloads in a long
 session name a subagent transcript that does not exist and never appears:
@@ -462,6 +482,46 @@ cannot be read** is a real stop whose usage is lost, recorded at once as
 `agent.stop outcome=fail` with a reason saying so and naming the path — never
 polled, since a file the hook cannot open never ends on a final message. A
 payload that names no transcript at all is still recorded, as before.
+
+### The kill guard: a sub-agent signals only what it started
+
+Parallel sessions run the same suites on one machine, so a process matched by
+name is as likely a sibling's run as one's own — during PR #393's review a
+sub-agent ran `pkill -f` on two suite names (#414). `hooks/tool-pre-guard.sh`
+is a PreToolUse hook that refuses, for a **spawned sub-agent** only, a Bash
+command that signals by name: `pkill`, `killall`, `kill` alongside `pgrep`, or
+`kill` handed a word that is not a pid, a job or an expansion. `kill %1`,
+`kill $!` and `kill <pid>` pass, and so does everything the operator's own
+session runs. A refusal exits 2 — the agent harness's block status, the one
+non-zero exit any hook here makes — with the rule, `kill-guard`, named on
+stderr, and records one `note` with `outcome=denied` on the session (until the
+denied-call marker, #409, gives a refused call a `tool.use` of its own).
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre-guard.sh\"" } ] } ]
+  }
+}
+```
+
+**The marker is `agent_type` on the payload**, which the agent harness sets on
+a sub-agent's tool calls and never on the main session's. It is wider than
+"a review", deliberately: a review's agents are spawned through the Agent tool
+with a general type, so no payload field names a review; an environment
+variable cannot be set per in-session sub-agent, because they share the
+session's process; and a prompt marker would mean reading the sub-agent's
+transcript on every Bash call. Every spawned sub-agent shares the hazard, so
+every one is held to it.
+
+**A scan, not a sandbox.** It reads the command's words outside quotes, so
+`sh -c '…'`, `eval`, a script written and then run, or a pid list built from
+`ps` walks past it; negative pids and process groups are not read either.
+It errs closed the other way too: a heredoc's body is read as commands, so a
+sub-agent writing a script with a line that starts with `pkill` is refused.
+Without node it fails closed for a sub-agent: a payload naming `pkill`,
+`killall` or `pgrep` anywhere is refused unread.
 
 ### Reading it back: DuckDB and SQLite
 

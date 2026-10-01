@@ -21,8 +21,9 @@
 #      whether the env file survives a resumed or compacted session, so the
 #      fallback stays.
 #
-# Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
-# is where a trace error belongs. See hook.lib.sh.
+# Exits 0 unconditionally and says nothing on stdout but the behind note's one
+# JSON object (ticket #427); stderr stays loud, which is where a trace error
+# belongs. See hook.lib.sh, rule 2.
 
 set -u
 
@@ -32,7 +33,8 @@ hook_read
 
 # How far the ROOT checkout — the one these hooks execute from, even when the
 # session opened in a linked worktree — is behind the last fetched origin/main:
-# recorded on the event below, and said on stderr past the policy threshold.
+# recorded on the event below, and said past the policy threshold — on stderr,
+# and as one JSON object on stdout, the route that reaches a reader.
 # No origin/main is no field and no note (hook.lib.sh).
 behind=
 root=$(hook_root) && behind=$(hook_behind "$root") || behind=
