@@ -144,9 +144,9 @@ Chosen: **option 1**.
    got no verdict, never as a hit. It belongs on `feedback` and not on a
    new kind because it sits where the verdict would — same subject, same
    join to the landing — so a reader of the slice's verdicts finds the gap
-   in the one place it looks. `/pr-iterate`'s `feedback` keeps three words: it emits
-   on a human comment that changed the plan, so it never has a question
-   nobody answered.
+   in the one place it looks. `/pr-iterate`'s `feedback` keeps three
+   words: it emits on a human comment that changed the plan, so it never
+   has a question nobody answered.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
