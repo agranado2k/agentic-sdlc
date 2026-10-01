@@ -131,7 +131,8 @@ for f in VERSION scripts/guards.lib.sh constitution/shared-invariants.md \
 	docs/domain-glossary.md docs/adr/INDEX.md docs/adr/NNNN-template.md \
 	.github/PULL_REQUEST_TEMPLATE.md .github/workflows/tdd-pairing.yml \
 	scripts/docs-conformance/config.mjs scripts/agents.config.sh \
-	scripts/guards.config.sh scripts/vocab.config.sh scripts/docs-conformance/local-vocabulary.mjs; do
+	scripts/guards.config.sh scripts/vocab.config.sh scripts/docs-conformance/local-vocabulary.mjs \
+	scripts/trace.sh scripts/trace.config.sh; do
 	[ -e "$TARGET/$f" ] && pass "installed: $f" || fail "safe set is missing $f"
 done
 assert_file_has "$TARGET/docs/domain-glossary.md" "$PROJECT_NAME" "stamped, not copied"

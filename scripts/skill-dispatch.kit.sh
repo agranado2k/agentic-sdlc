@@ -5,6 +5,8 @@
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt <text>      [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt-file <path> [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --tier <tier> [--domain <token>] ...
+#   sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> \
+#                                     (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh --tier-of <skill>
 #   sh scripts/skill-dispatch.kit.sh --phase-tier <phase>
 #
@@ -44,6 +46,21 @@
 # tier `implementer` with the domain `tests`, and the policy files map that
 # pair to whichever model should be reading specifications that day.
 #
+# WHY /review-pr IS SENT A CONTRACT, NOT "Run /review-pr." (#266, PRD #261).
+# A dispatched worker runs under its agent harness's default sandbox: a
+# read-only tree and no network — and it must, because with network it would
+# hold a writable tree, the operator's forge token and an untrusted diff at
+# once. `/review-pr` needs a `git fetch`, a forge call and a human at its last
+# prompt, so a worker told to run it came back every time with the same "no
+# network" line and the session relayed the findings by hand. So for that one
+# skill this script stages .agents/prompts/review-worker.md — the same two
+# axes, returned on stdout, opening by telling the worker it is offline — and
+# the caller's --prompt fills the contract's %%SPEC%% slot; %%BRANCH%% and
+# %%BASE%% travel as the dispatcher's own `--set`. A --prompt-file is still the
+# caller's own document and is never swapped. Every other skill keeps the
+# prefix: their dispatched session has the same tree and the same rules, and
+# "run this skill" is the right instruction for it.
+#
 # KIT-ONLY FOR NOW. scripts/agent-dispatch.sh below it is shared layer, and
 # adding a second shared script is a release action (root AGENTS.md hard rule
 # 3). A later release carries the promotion — #226 — and until then the
@@ -63,8 +80,16 @@ die() { echo "skill-dispatch: $1" >&2; exit 2; }
 AGENTS_CONFIG="$ROOT/$(cd "$ROOT" && sh scripts/agents.kit.sh --policy)"
 export AGENTS_CONFIG
 
+# The dispatcher records every spawn through scripts/trace.sh, which reads the
+# SHIPPED trace policy file unless told otherwise — empty by principle, so the
+# kit's own dispatches would be traced nowhere. Name the kit's twin, the choice
+# scripts/trace.kit.sh makes for a session, $ROOT-anchored for the reason above.
+TRACE_CONFIG="$ROOT/scripts/trace.kit.config.sh"
+export TRACE_CONFIG
+
 usage() {
 	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]" >&2
+	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
 	echo "  phases: planner implementer tester mechanical reviewer" >&2
@@ -182,9 +207,19 @@ for a in "$@"; do
 	--prompt-file) PROMPT_SEEN=file ;;
 	esac
 done
-[ -n "$PROMPT_SEEN" ] || die "no --prompt or --prompt-file — there is nothing to send"
 
-if [ "$PROMPT_SEEN" = text ]; then
+# dispatch_rewritten <prefix | spec> <args…> — one pass over the arguments,
+# replacing each `--prompt <text>` pair in place, then the exec. A function,
+# because a rewritten "$@" cannot be handed back to the caller's positionals,
+# and both rewrites end in the same exec anyway.
+#   prefix   `--prompt "Run <skill>. <text>"` — the instruction every other
+#            skill's dispatched session needs.
+#   spec     `--set SPEC=<text>` — the caller's text fills the review
+#            contract's own slot; the contract itself rides in as the
+#            trailing `--prompt-file` the review-pr branch appends below.
+dispatch_rewritten() {
+	_dr_mode=$1
+	shift
 	_count=$#
 	take_next=0
 	while [ "$_count" -gt 0 ]; do
@@ -193,7 +228,10 @@ if [ "$PROMPT_SEEN" = text ]; then
 		_count=$((_count - 1))
 		if [ "$take_next" = 1 ]; then
 			take_next=0
-			set -- "$@" --prompt "Run $SKILL. $a"
+			case "$_dr_mode" in
+			prefix) set -- "$@" --prompt "Run $SKILL. $a" ;;
+			spec) set -- "$@" --set "SPEC=$a" ;;
+			esac
 			continue
 		fi
 		case "$a" in
@@ -204,6 +242,30 @@ if [ "$PROMPT_SEEN" = text ]; then
 		esac
 		set -- "$@" "$a"
 	done
-fi
+	# The dispatcher would refuse a trailing `--prompt` itself; a rewrite
+	# that swallowed it would send a contract with an empty spec instead.
+	[ "$take_next" = 0 ] || die "--prompt needs text"
+	# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
+	exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@"
+}
+
+case "${SKILL#/}" in
+review-pr)
+	# The header above says why: the worker is offline, so it gets the
+	# contract, never an instruction to run a skill that needs the network.
+	# With no --prompt the contract alone is the prompt — the spec arrives as
+	# `--set-file SPEC=<path>` when a ticket body is too large for argv.
+	if [ "$PROMPT_SEEN" != file ]; then
+		CONTRACT="$ROOT/.agents/prompts/review-worker.md"
+		[ -f "$CONTRACT" ] || die "no worker contract at .agents/prompts/review-worker.md — /review-pr cannot be dispatched without it"
+		dispatch_rewritten spec "$@" --prompt-file "$CONTRACT"
+	fi
+	;;
+*)
+	[ -n "$PROMPT_SEEN" ] || die "no --prompt or --prompt-file — there is nothing to send"
+	[ "$PROMPT_SEEN" != text ] || dispatch_rewritten prefix "$@"
+	;;
+esac
+# A --prompt-file, whichever the skill: the caller's own document, untouched.
 # shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
 exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@"

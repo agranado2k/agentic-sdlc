@@ -23,6 +23,17 @@
 #      same badge+label vocabulary, the ⚠️/🔀 tokens it lifts verbatim are
 #      byte-identical across the two documents, and its human-only block
 #      stays badge-free.
+#   7. The decision lines are the policy file's (ticket #280): every severity
+#      band the report prints and every status Agent 7 tags a line with is a
+#      token scripts/vocab.config.sh declares — READ from that file through
+#      the checker's own `fields` subcommand, never a hand-kept copy — so a
+#      band or a status the skill prints and the file does not declare goes
+#      red. Proved by bait: planted in a copy of the skill, withdrawn from a
+#      copy of the policy file.
+#   8. The dispatched worker's contract (#266): .agents/prompts/review-worker.md
+#      opens by telling the worker it is offline, forbids a fetch and a forge
+#      call, and makes `REVIEWED: <full sha>` the report's first line — the
+#      sha pinned before the diff is read against it.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -222,5 +233,202 @@ case "$iter_confirm" in
 	fi
 	;;
 esac
+
+# ---------------------------------------------------------------------------
+banner "7. The decision lines are the policy file's — read through the checker"
+# ---------------------------------------------------------------------------
+# The report's severity is a band on three kinds of line — a count-table row,
+# a section heading, and the badge+label pair wherever else it is spelled.
+# Agent 7's status is the TAG on a confirm-list line: in the §5b template and
+# in the agent's own classification prose. 🧬 MUTATION is on the list and is
+# deliberately no token: the skill says it measures the list, and the policy
+# file says the same, so it is set aside by name and by nothing looser.
+VOCAB="$ROOT/scripts/vocab.sh"
+POLICY="$ROOT/scripts/vocab.config.sh"
+BADGES='🔴|🟠|🟡|🔵|🟣|🟤|🟢|⚫|⚪'
+GLYPHS='✅|⚠️|❌|🔀|🧬'
+
+# declared <field> <policy file> — the field's tokens, through `fields`.
+declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
+
+# printed_severities <skill> — every band the skill prints, folded to a token.
+printed_severities() {
+	{
+		sed -n 's/^| [^|]* | \([A-Z][A-Z -]*[A-Z]\) | X |$/\1/p' "$1"
+		grep -o -E "($BADGES) \**[A-Z][A-Z-]+" "$1" | sed -e 's/^[^ ]* //' -e 's/^\**//'
+	} | tr 'A-Z ' 'a-z-' | sort -u
+}
+
+# printed_statuses <skill> — every tag on a confirm-list line, folded.
+printed_statuses() {
+	{
+		sed -n "/^### 5b\\. /,/^### 6\\. /p" "$1" | sed -n 's/^[^ A-Za-z<`#|>-][^ ]* \([A-Z][A-Z ]*[A-Z]\)  *[<a-z].*/\1/p'
+		grep -o -E "($GLYPHS) \*\*[A-Z][A-Z ]*[A-Z]" "$1" | sed 's/^[^ ]* \*\*//'
+	} | grep -v -x 'MUTATION' | tr 'A-Z ' 'a-z-' | sort -u
+}
+
+# undeclared <field> <printed tokens> <policy file> — the printed tokens the
+# policy file does not declare, space-joined.
+undeclared() {
+	_ud=$(declared "$1" "$3")
+	for _ud_tok in $2; do
+		case " $_ud " in *" $_ud_tok "*) ;; *) printf '%s ' "$_ud_tok" ;; esac
+	done | sed 's/ $//'
+}
+
+# held <label> <field> <printed tokens> <policy file> — green when every
+# printed token is declared and at least one was printed.
+held() {
+	_h_bad=$(undeclared "$2" "$3" "$4")
+	if [ -n "$3" ] && [ -z "$_h_bad" ]; then pass "$1"; else
+		fail "$1 — ${_h_bad:-nothing was extracted} is printed by the skill and not declared as a $2 in the policy file"
+	fi
+}
+# baited <label> <field> <printed tokens> <policy file> <the token that must
+# be caught> — green when exactly that token is reported undeclared.
+baited() {
+	_b_bad=$(undeclared "$2" "$3" "$4")
+	if [ "$_b_bad" = "$5" ]; then pass "$1"; else
+		fail "$1 — expected '$5' reported undeclared, got '${_b_bad:-nothing}'"
+	fi
+}
+
+sev=$(printed_severities "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
+sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
+[ -n "$(declared severity "$POLICY")" ] && [ -n "$(declared status "$POLICY")" ] &&
+	pass "the policy file declares severity and status, read through 'fields'" ||
+	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
+# …and the reader agrees with its sibling in tests/vocab-policy.test.sh
+# (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
+# and a reader that does not know the mark reads nothing for an opened field.
+sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
+[ -n "$(declared severity "$POLICY")" ] && [ "$(declared severity "$SCRATCH/opened.config.sh")" = "$(declared severity "$POLICY")" ] &&
+	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
+	fail "with severity opened in the policy file the reader read '$(declared severity "$SCRATCH/opened.config.sh")', not '$(declared severity "$POLICY")'"
+held "every severity band the report prints is a token the policy file declares: $sev" severity "$sev" "$POLICY"
+held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
+# …and nothing declared goes unprinted: the two lists are one vocabulary.
+[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared severity "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every declared severity is a band the report prints" ||
+	fail "the report prints '$sev', the policy file declares '$(declared severity "$POLICY")'"
+[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared status "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every declared status is a tag Agent 7 prints" ||
+	fail "Agent 7 tags '$sta', the policy file declares '$(declared status "$POLICY")'"
+
+# The bait. Each plants ONE line in a copy of the skill — where a session
+# would print it from — and the same holder must name exactly that token.
+bait_skill() { awk -v at="$1" -v add="$2" '{ print } index($0, at) == 1 { print add }' "$SKILL_ABS" >"$SCRATCH/bait.md"; }
+bait_skill '| 🔵 | LOW | X |' '| 🟣 | BLOCKER | X |'
+baited "bait: a band added to the count table goes red" severity "$(printed_severities "$SCRATCH/bait.md")" "$POLICY" blocker
+bait_skill '#### 🟠 HIGH' '#### 🟤 MEDIUM-HIGH'
+baited "bait: a band added as a section heading goes red" severity "$(printed_severities "$SCRATCH/bait.md")" "$POLICY" medium-high
+bait_skill '❌ MISSING ' '🟢 DEFERRED     <spec line the diff postpones>'
+baited "bait: a status added to the confirm-list template goes red" status "$(printed_statuses "$SCRATCH/bait.md")" "$POLICY" deferred
+bait_skill '- ⚠️ **UNSPECIFIED' '- ✅ **MOSTLY SPECIFIED** — the spec nearly asked for it.'
+baited "bait: a status added to Agent 7's classification goes red" status "$(printed_statuses "$SCRATCH/bait.md")" "$POLICY" mostly-specified
+cmp -s "$SCRATCH/bait.md" "$SKILL_ABS" && fail "the last bait planted nothing — its anchor line moved" || pass "the baits planted their lines"
+# The other half: the skill unchanged, the token withdrawn from the FILE — so
+# the list being read is the policy file's and not one this suite carries.
+sed "s/^VOCAB_SEVERITY=.*/VOCAB_SEVERITY='critical high medium'/" "$POLICY" >"$SCRATCH/no-low.config.sh"
+baited "bait: a band withdrawn from the policy file goes red" severity "$sev" "$SCRATCH/no-low.config.sh" low
+sed "s/^VOCAB_STATUS=.*/VOCAB_STATUS='mixed-commit unspecified specified'/" "$POLICY" >"$SCRATCH/no-missing.config.sh"
+baited "bait: a status withdrawn from the policy file goes red" status "$sta" "$SCRATCH/no-missing.config.sh" missing
+# The mutation line is set aside by name, and the skill still says why.
+assert_file_has "$SKILL" "It is **not** a classification" "the mutation line is a measurement, so it is no status"
+
+# ---------------------------------------------------------------------------
+banner "8. The dispatched worker's contract: offline, and says what it reviewed (#266)"
+# ---------------------------------------------------------------------------
+# .agents/prompts/review-worker.md is the review the kit dispatches to another
+# agent harness — the same two axes, returned on stdout instead of posted.
+# That worker runs in its harness's default sandbox, read-only and with no
+# network, and must stay that way (PRD #261): with network it would hold a
+# writable tree, the operator's forge token and an untrusted diff at once. So
+# the contract has to say two things the skill above never needed to: that
+# the worker is OFFLINE, up front, so it spends its budget on the diff rather
+# than on discovering the sandbox; and WHICH COMMIT it reviewed, so the session
+# that posts the findings can tell a head that moved from a commit it missed.
+# Same honest boundary as the rest of this suite — the contract is a document,
+# so its external behaviour is its text.
+WORKER=".agents/prompts/review-worker.md"
+WORKER_ABS="$ROOT/$WORKER"
+[ -f "$WORKER_ABS" ] && pass "$WORKER exists" || {
+	fail "$WORKER is missing — the dispatched review has no contract"
+	t_done "/review-pr output contract"
+}
+wline() { grep -nF -- "$1" "$WORKER_ABS" | head -1 | cut -d: -f1; }
+
+# The body the worker actually reads: the editor header stripped exactly the
+# way scripts/agent-dispatch.sh strips it (a `<!--` first line through the
+# first line that IS `-->`). "Opens by" means the first line of THAT, not the
+# first line of the file.
+body=$(awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
+            inhdr { if ($0 == "-->") inhdr = 0; next }
+            { print }' "$WORKER_ABS")
+first=$(printf '%s\n' "$body" | grep -m1 .)
+case "$first" in
+*"no network"*) pass "the contract's first line to the worker says it has no network" ;;
+*) fail "the contract does not OPEN by saying the worker is offline; its first line is: '$first'" ;;
+esac
+assert_file_has "$WORKER" "no credentials" "a worker that believes it holds a token will try to use it"
+# The PROHIBITION, in words a model acts on: not a fetch, not a forge call.
+# Read unwrapped — the contract is 80-column prose and a sentence may break
+# between the verb and its object; the worker reads sentences, not lines.
+unwrapped=$(printf '%s\n' "$body" | tr '\n' ' ')
+printf '%s\n' "$unwrapped" | grep -qiE 'do not (attempt|try|run)[^.]*fetch' &&
+	pass "$WORKER tells the worker not to attempt a fetch" ||
+	fail "$WORKER never forbids a fetch — the worker will try one and burn its budget on the sandbox"
+printf '%s\n' "$unwrapped" | grep -qiE 'do not (attempt|try|run)[^.]*forge' &&
+	pass "$WORKER tells the worker not to attempt a forge call" ||
+	fail "$WORKER never forbids a forge call"
+assert_file_has "$WORKER" "stdout" "stdout is the only channel out, and the contract must say so"
+
+# The machine contract: REVIEWED first, VERDICT second, and the sha comes from
+# the local branch — no fetch needed to produce it.
+assert_file_has "$WORKER" "REVIEWED: <full sha>"
+r=$(wline "REVIEWED: <full sha>")
+v=$(wline "VERDICT:")
+if [ -n "$r" ] && [ -n "$v" ] && [ "$r" -lt "$v" ]; then
+	pass "REVIEWED (line $r) is specified ahead of VERDICT (line $v) — the first line of the report names the commit"
+else
+	fail "REVIEWED must precede VERDICT in the contract — REVIEWED='$r' VERDICT='$v'"
+fi
+assert_file_has "$WORKER" "git rev-parse" "the sha is produced offline, from the branch the worker diffed"
+
+# The sha is PINNED FIRST, and the diff is read against it. A worker that
+# diffs a mutable branch ref and resolves that ref separately can report a
+# commit it never reviewed: the coordinating session holds the same checkout
+# and can commit while the worker reads. The ORDER is the guarantee the
+# REVIEWED header makes, so the order is what this asserts.
+rp=$(wline 'git rev-parse %%BRANCH%%')
+gd=$(wline 'git diff %%BASE%%')
+if [ -n "$rp" ] && [ -n "$gd" ] && [ "$rp" -lt "$gd" ]; then
+	pass "the contract pins the sha (line $rp) before it reads the diff (line $gd)"
+else
+	fail "the contract must resolve and retain the sha of %%BRANCH%% BEFORE the diff — rev-parse='$rp' diff='$gd'"
+fi
+if printf '%s\n' "$unwrapped" | grep -qF 'git diff %%BASE%%...%%BRANCH%%'; then
+	fail "the diff endpoint is still the mutable branch ref — diff against the pinned sha instead"
+else
+	pass "the diff endpoint is the pinned sha, not the mutable branch ref"
+fi
+
+# The header stays honest about why the file exists: it is what a session
+# stages in place of telling the worker to run /review-pr, and the reason is
+# the sandbox. A header that still described only the CI/branch split would
+# send the next editor to the wrong mental model.
+header=$(sed -n '1,/^-->$/p' "$WORKER_ABS")
+case "$header" in
+*"/review-pr"*) pass "the editor header names /review-pr as the skill this contract stands in for" ;;
+*) fail "the editor header never mentions /review-pr — it no longer says why this file is dispatched" ;;
+esac
+case "$header" in
+*offline* | *"no network"*) pass "…and says the worker is offline, which is the reason" ;;
+*) fail "…and does not say the worker is offline, which is the whole reason for the swap" ;;
+esac
+
+# Shared invariant §7 stays in the worker's own words (tests/agent-dispatch
+# holds the same line; repeated here because this suite owns the contract).
+assert_file_has "$WORKER" "do not push"
 
 t_done "/review-pr output contract"

@@ -36,6 +36,18 @@ LAST_STATUS=0
 LC_ALL=C
 export LC_ALL
 
+# The trace's identity and policy are scrubbed at the same moment, for the
+# same reason. A kit session's hooks export TRACE_SESSION to every tool call,
+# so a suite run inside one inherited it: the trace suite's emits carried a
+# session its assertions did not expect, red for the operator and green in CI
+# — a suite whose verdict depends on who ran it is no longer an oracle (#303).
+# Session, run and parent are the identity; TRACE_DIR and TRACE_CONFIG the
+# policy overrides scripts/trace.sh reads before its policy file; TRACE_QUIET
+# its unconfigured-note switch. Unset here, above the budget, so the run
+# re-executed inside it starts without them too. A suite that needs one sets
+# it on the command itself, as tests/trace.test.sh does with TRACE_CONFIG.
+unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET
+
 # The repo root, derived once from the suite that sourced this harness; every
 # helper below anchors on it rather than on the working directory.
 T_ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -874,6 +886,44 @@ t_assert_no_model_id() {
 	else
 		pass "no model identifier in $(t_skill_label "$@")"
 	fi
+}
+
+# The trace-span helpers (M-4, review of PR #293): two suites had each carried
+# a hand copy of the span tokeniser and the placeholder filler, and the copies
+# had drifted on their first day — one knew a date placeholder, the other a
+# blob file. Held once, here, the same way the skill-suite scaffold above is.
+
+# t_trace_lines <file> — the lines that run the trace script, whatever the
+# subcommand: the surface every trace rule reads.
+t_trace_lines() { grep -E "sh scripts/trace\\.sh( |\`)" "$1" 2>/dev/null; }
+
+# t_trace_spans <file> — the backticked `sh scripts/trace.sh …` spans, one per
+# line, backticks stripped: the commands an agent following the document runs.
+t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d '`'; }
+
+# t_trace_runnable <span> [blob file] — the span an agent would type, with the
+# document's placeholders made literal so the exit status is the script's own:
+# a date placeholder becomes a date and a subject placeholder a subject FIRST
+# (a read is exit 2 on `--since x`, and that would be the suite's fault);
+# `[optional]` groups are dropped; `<one word>` becomes `x` and `<several
+# words>` becomes `x y`, so a prose placeholder the document left unquoted
+# breaks exactly as the real value would; an `a|b|c` choice becomes its first
+# option; `$model` becomes a model id; `--blob x` becomes the file given, when
+# one is; and the trailing `|| :` goes.
+# A numbered reference `#<N>` becomes `#1`: a project that holds ticket, pr
+# and prd to `<type>:#<digits>` refuses anything else (ticket #305).
+t_trace_runnable() {
+	printf '%s\n' "$1" | sed \
+		-e 's/ *|| *:$//' \
+		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
+		-e 's/<type:ref>/pr:#1/g' \
+		-e 's/ \[[^][]*\]//g' \
+		-e 's/#<[^<>]*>/#1/g' \
+		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
+		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
+		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
+		-e 's/\$model/x/g' \
+		-e "s|--blob x|--blob ${2:-x}|"
 }
 
 # t_assert_skill_frontmatter <skill dir> — the Agent Skills specification's

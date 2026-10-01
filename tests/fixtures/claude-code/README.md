@@ -43,6 +43,7 @@ The transcripts are the files the agent harness itself wrote under
 | `subagent-transcript.redacted.jsonl` | the subagent's own transcript, 20 lines, every line `isSidechain` |
 | `tool-post.payload.json` | a `PostToolUse` hook's stdin — a shell call that succeeded |
 | `tool-post-failure.payload.json` | a `PostToolUseFailure` hook's stdin — the same shell, a command that exited 1 |
+| `resumed-transcript.redacted.jsonl` | one session run, then resumed: 34 lines, two ends, one appended file |
 
 ## The second capture: the two tool payloads
 
@@ -61,10 +62,13 @@ printf 'Run the shell command: cat file.txt ; then run the shell command: cat /n
 properties of that capture are what the suite leans on, and none of them is
 guessable from the session payloads beside them:
 
-- **A tool payload arrives COMPACT**, on one line, unlike the pretty-printed
-  session payloads in this directory. That is why `tool-post.sh` reads its
-  payload with a real parser: a key-name search on one line finds the *last*
-  occurrence, and a tool result can quote any key.
+- **A tool payload arrives COMPACT**, on one line — every live payload arrives
+  compact; the session payloads in this directory are pretty-printed only
+  because the redaction reformatted them. What sets a tool payload apart is
+  that it nests arbitrary objects (`tool_input`, `tool_response`) whose keys
+  can repeat the top-level ones, and a key-name search on one line finds the
+  *last* occurrence. That is why `tool-post.sh` reads its payload with a real
+  parser.
 - **`PostToolUseFailure` carries no `tool_response` at all.** The failure is in
   `error`, beside `is_interrupt`, and that is the result the hook stores.
 - **A DENIED call fires `PreToolUse` only.** Reproduced with a `Bash(rm:*)` deny
@@ -84,6 +88,41 @@ placeholder. Only the paths were rewritten, the same way: the capturing machine'
 home to `~`, the throwaway project to `/tmp/spike-proj` and its encoded form to
 `-tmp-spike-proj`. Session, prompt and tool-use ids are kept, because the whole
 point of a fixture is that they join.
+
+## The third capture: a resumed session
+
+`resumed-transcript.redacted.jsonl` was captured for ticket #307 on
+**2026-09-30** with the `claude` CLI at **2.1.285** and node **v26.10.0**, the
+same way as the first: a throwaway project under the scratchpad whose settings
+file wired `SessionStart`, `SessionEnd` and `PreCompact` to a one-line script
+that wrote its stdin to a file. It is ONE session run twice —
+
+```sh
+claude -p 'Reply with the single word: alpha' --output-format json --model haiku
+claude -p --resume <that session id> 'Now reply with the single word: beta' --output-format json --model haiku
+```
+
+— and the file is the transcript as it stood after the second run's
+`SessionEnd`. What the capture established, and what the suite leans on:
+
+- **A resume keeps the session id and APPENDS to the same transcript.** The
+  second run's `SessionStart` says `"source": "resume"` and names the same
+  `session_id` and `transcript_path`; `SessionEnd` fires once per run, so one
+  session has two ends. Lines 1–25 are byte-identical to the file as the first
+  `SessionEnd` found it, and lines 26–34 are what the resume added.
+- **The rollup is cumulative.** Line 25 is the first run's `cost-state`
+  (`10 / 41 / 10151 / 13796`), line 34 the second's (`20 / 72 / 10239 /
+  37743`) — the whole session, not the second run alone. Re-reading the whole
+  file at each end and summing the two events gives `30 / 113 / 20390 /
+  51539`, which is the double count this fixture exists to catch.
+- **Each run's one assistant response is streamed across two lines** (lines
+  20–21 and 30–31), so de-duplication by message id still matters inside each
+  half.
+
+Redacted by the rules below. One shape is new since the first capture: an
+`attachment` body can now carry the operator's git status and e-mail address,
+and `rendered` can be an array — both are replaced whole, with a placeholder
+that keeps the length of the JSON they held.
 
 ## What was redacted
 
