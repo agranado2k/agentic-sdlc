@@ -174,10 +174,10 @@ is never reachable.
 ## 7. Aim calibration
 
 *Reads: `feedback` — subject `ticket:#N`, `related` its `pr:#N`, `outcome`
-one of `hit`, `adjusted`, `missed`, `reason` the operator's words — emitted
-by `/merge-train` at landing and by `/pr-iterate` when a human comment
-changes the plan; joined to `ticket.write` for the tier and to the `skill`
-of the runs that built it.*
+one of `hit`, `adjusted`, `missed` or `unasked` (the train's alone),
+`reason` the operator's words — emitted by `/merge-train` at landing and
+by `/pr-iterate` when a human comment changes the plan; joined to
+`ticket.write` for the tier and to the `skill` of the runs that built it.*
 
 - Per landed slice in the window: its verdict, if one was given. `hit` is
   the plan holding; `adjusted` is a re-cut of what came after; `missed` is
@@ -193,9 +193,15 @@ of the runs that built it.*
   is not being asked, and without it the next slice is chosen from the plan
   alone. A wave with landings and no verdicts reports the count and routes
   it to `/merge-train`, where the question is asked.
+- A `feedback` whose outcome is `unasked` is not a verdict: `/merge-train`
+  records it when a train ran autonomously and nobody was at the prompt to
+  answer. Count it with the landings that got no verdict, never as a
+  verdict given, and name the two apart on the row — `<n> unasked, <m>
+  without a feedback event` — since the first is a question the train
+  could not ask and the second one it never recorded asking.
 
 Route: `/to-tickets` — the ordering rule or the tier rubric, with the misses
-as evidence; the missing verdicts to `/merge-train`.
+as evidence; the missing verdicts and the `unasked` ones to `/merge-train`.
 
 ## 8. Stamp calibration
 
