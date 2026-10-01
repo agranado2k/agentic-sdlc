@@ -380,4 +380,41 @@ case $row in
 *) fail "the index row for 0008 has no 'amended ${am_date:-<no date>} (#309 …' note naming clause 7: $row" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "9. Every spawn records the resolver's model id, never a typed word"
+# ---------------------------------------------------------------------------
+# A spawn records the model the resolver answered, never a word a session typed.
+# Every `spawn` line in the skill must have `model=` that is either a resolver
+# call `$(sh scripts/agents.lib.sh ...)` or a variable reference `$model` /
+# `"$model"`, never a literal model name like `opus` or `claude-opus-5-5`.
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	bad=0
+	while IFS= read -r span; do
+		[ -n "$span" ] || continue
+		# Only check spawn lines
+		if printf '%s\n' "$span" | grep -qF 'kind=spawn'; then
+			# Check if model= is present
+			if printf '%s\n' "$span" | grep -qF 'model='; then
+				# Extract the model value - look for model=... and capture what follows
+				# Valid patterns are: $model, "$model", or $(sh scripts/agents.lib.sh ...)
+				# Invalid patterns are literal strings like 'opus' or 'claude-opus-5-5'
+				if printf '%s\n' "$span" | grep -qE 'model=\$model([ \)]|$)' ||
+					printf '%s\n' "$span" | grep -qE 'model="\$model"' ||
+					printf '%s\n' "$span" | grep -qE "model='\$model'" ||
+					printf '%s\n' "$span" | grep -qF 'model=$(sh scripts/agents.lib.sh'; then
+					pass "/$s spawn uses resolver or variable for model"
+				else
+					bad=$((bad + 1))
+					fail "/$s spawn does not use resolver/variable for model — should be \$(sh scripts/agents.lib.sh ...) or \$model"
+					printf '        | span: %s\n' "$span"
+				fi
+			fi
+		fi
+	done <<EOF
+$(t_trace_spans "$f")
+EOF
+	[ "$bad" = 0 ] || true
+done
+
 t_done "trace skills contract"
