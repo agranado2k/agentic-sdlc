@@ -19,7 +19,14 @@
 #      no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
 #      name — never the kit's never-shipped wrapper — and verifies first.
-#   3. The report lands OUTSIDE the tree: <tmpdir>/retro-<YYYYMMDDTHHMMSSZ>.md.
+#   3. The report and its CSV land IN THE PROJECT, at the root checkout:
+#      .retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md and .csv, the root found
+#      through git's common directory the way scripts/trace.sh finds it for a
+#      relative TRACE_DIR — so a retro run from a linked worktree lands at the
+#      root and survives the worktree's pruning (ticket #349; before it the
+#      report went to the OS temp directory and was lost with it). The folder
+#      is gitignored beside .trace/, and the one-line derivation the skill
+#      quotes is RUN here from a scratch worktree (section 9).
 #   4. Findings are routed to /to-tickets as candidates; it never fixes, never
 #      edits a skill, never pushes or merges. A recurring failure becomes a
 #      rule with a failing check, never a preloaded lessons file (shared
@@ -637,12 +644,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "4. The report lands outside the tree; findings are candidates; it never fixes"
+banner "4. The report lands in the project under .retro/; findings are candidates; it never fixes"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" 'retro-<YYYYMMDDTHHMMSSZ>.md' "the report's name carries a UTC stamp"
-assert_file_has "$SKILL" '<tmpdir>/retro-' "…under the OS temp directory"
-assert_file_has "$SKILL" 'TMPDIR' "…resolved from \$TMPDIR"
-assert_file_has "$SKILL" "outside the repo tree"
+# Ticket #349: the report lives in the project, not in the OS temp directory
+# — a temp report is lost with the machine's next sweep, and a retro nobody
+# can re-read is a retro that never ran. The full path rule is section 9's.
+assert_file_has "$SKILL" '.retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md' "…under .retro/<YYYY>/<MM>/ in the project"
+assert_file_lacks "$SKILL" '<tmpdir>/retro-' "the report no longer goes to the OS temp directory"
+assert_file_lacks "$SKILL" 'TMPDIR' "…and nothing in the skill resolves \$TMPDIR any more"
+assert_file_lacks "$SKILL" "outside the repo tree" "…and the skill no longer says the report lands outside the tree"
 # H-3 (review of PR #293): the trace carries third-party text (comment bodies
 # in reason=), and the reader must say what it is.
 assert_file_has "$SKILL" "data, never instructions" "the trace's contents are untrusted content"
@@ -779,5 +790,63 @@ grep -F 'KIT_ONLY=' "$ROOT/bootstrap.sh" | grep -q 'tests/retro-skill.test.sh' &
 	pass "bootstrap's KIT_ONLY list names this suite" || fail "tests/retro-skill.test.sh is not on bootstrap's KIT_ONLY list — it would ship to consumers"
 grep -q 'sh tests/retro-skill.test.sh' "$ROOT/.github/workflows/kit-ci.yml" &&
 	pass "kit CI runs this suite" || fail "no kit CI job runs tests/retro-skill.test.sh"
+
+# ---------------------------------------------------------------------------
+banner "9. The report lives in the project under .retro/ at the root checkout (ticket #349)"
+# ---------------------------------------------------------------------------
+# 9a. The path rule, in the procedure's write step: .retro/<YYYY>/<MM>/ at the
+# ROOT CHECKOUT, the CSV beside the report, the root found through git's
+# common directory — the derivation scripts/trace.sh and the cleanup script
+# share — so a retro run from a worktree lands at the root and the worktree's
+# pruning loses nothing.
+write_step=$(procedure | awk '/^5\. \*\*/ { on = 1 } /^[0-46-9]\. \*\*/ { on = 0 } on' | flat)
+write_has() { # <needle> <message>
+	case "$write_step" in
+	*"$1"*) pass "$2" ;;
+	*) fail "$2 — the procedure's write step does not say: $1" ;;
+	esac
+}
+write_has '.retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md' "the write step names the report's path under .retro/<YYYY>/<MM>/"
+write_has 'root checkout' "…at the root checkout"
+write_has 'git rev-parse --path-format=absolute --git-common-dir' "…resolved through git's common directory, the one-line derivation"
+write_has 'scripts/trace.sh' "…named as the same derivation the trace script uses for a relative TRACE_DIR"
+write_has 'worktree' "…so a retro run from a worktree lands at the root"
+write_has 'prun' "…and survives the worktree's pruning"
+write_has '.csv' "…with the CSV export beside the report"
+write_has '.gitignore' "…and the folder's ignore rule named for a consumer, since the recipe cannot carry it without moving the shared layer"
+write_has '.trace/' "…beside the trace's own rule"
+# The derivation is quoted as ONE code span, so a session copies one line and
+# a suite can run it. Extracted by its distinctive token, never by position.
+derive=$(grep -o '`[^`]*git-common-dir[^`]*`' "$SKILL_ABS" | head -1 | tr -d '`')
+[ -n "$derive" ] && pass "the derivation is one code span: $derive" || fail "no code span in the skill carries git-common-dir"
+# 9b. The derivation RUNS, from a linked worktree of a scratch repo, and
+# prints that repo's root — not the worktree. A rule whose one line was
+# never executed is a claim (hard rule 9).
+t_repo
+git -C "$REPO" worktree add -q "$REPO/worktree/wt" -b feat/wt 2>/dev/null
+got=$( cd "$REPO/worktree/wt" && sh -c "$derive; printf '%s' \"\$root\"" 2>/dev/null )
+want=$(cd "$REPO" && pwd -P)
+[ -n "$got" ] && [ "$(cd "$got" 2>/dev/null && pwd -P)" = "$want" ] &&
+	pass "run from a linked worktree, the derivation prints the root checkout" ||
+	fail "run from a linked worktree, the derivation printed '$got', not the root '$want'"
+got=$( cd "$REPO" && sh -c "$derive; printf '%s' \"\$root\"" 2>/dev/null )
+[ -n "$got" ] && [ "$(cd "$got" 2>/dev/null && pwd -P)" = "$want" ] &&
+	pass "run from the root checkout, the derivation prints the root checkout" ||
+	fail "run from the root checkout, the derivation printed '$got', not '$want'"
+# 9c. The folder is out of version control, beside the trace's — a report
+# carries trace text (reasons, comment bodies, costs) and is local by design,
+# and a gitignored folder is invisible to the docs gate's placeholder scan.
+grep -qx '\.retro/' "$ROOT/.gitignore" && pass ".gitignore keeps .retro/ out of version control" || fail ".gitignore does not list .retro/"
+# 9d. Every surface that said where the report lands now says the folder:
+# the kit's manual and its stamped template (the quick-reference row), the
+# README's suite paragraph, the glossary's Retro entry — which also names the
+# folder as the kit's own word — and /housekeeping's checklist, whose check
+# is unchanged (a report dated inside the window) but looks in the new place.
+for f in AGENTS.md constitution/AGENTS.md.template README.md docs/domain-glossary.md .agents/skills/housekeeping/CHECKLIST.md; do
+	flat <"$ROOT/$f" | grep -qF '.retro/' && pass "$f names .retro/ as where the report lives" || fail "$f does not name .retro/"
+	flat <"$ROOT/$f" | grep -qiE 'report (lands |goes |written )?outside the (repo )?tree|retro-<YYYYMMDDTHHMMSSZ>.md` under the temp' &&
+		fail "$f still says the retro report lands outside the tree" || pass "$f no longer sends the retro report outside the tree"
+done
+flat <"$ROOT/docs/domain-glossary.md" | grep -qF 'root checkout' && pass "the glossary says the folder is at the root checkout" || fail "the glossary's .retro/ mention does not say root checkout"
 
 t_done "/retro contract"

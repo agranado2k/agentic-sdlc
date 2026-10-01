@@ -749,7 +749,10 @@ skeleton (K0).
   the three limits it states — its arithmetic run once over a fixture trace in
   scratch, so a row that prints a rate is a computed number and not a claim —
   the plain `sh scripts/trace.sh show|summary|export` name with
-  `verify` first, the report outside the tree, findings routed to
+  `verify` first, the report and its CSV under `.retro/<YYYY>/<MM>/` at the
+  root checkout — the one-line common-directory derivation the skill quotes
+  is run from a scratch worktree, and `.gitignore` holds the folder — findings
+  routed to
   `/to-tickets` and never fixed (a recurring failure becomes a rule with a
   failing check, never a lessons file — shared invariant §11), the run it
   opens and closes with `data.findings`, every documented trace line run
