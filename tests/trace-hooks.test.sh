@@ -2073,9 +2073,6 @@ AGO_387=$(($(date +%s) - 30))
 touch -d "@$AGO_387" "$SCRATCH/never-387.jsonl" 2>/dev/null ||
 	touch -t "$(date -r "$AGO_387" +%Y%m%d%H%M.%S)" "$SCRATCH/never-387.jsonl"
 
-# val <line> <field> — a field's value, quoted or not.
-val() { printf '%s\n' "$1" | sed -n 's/.*"'"$2"'":"\{0,1\}\([^",}]*\)"\{0,1\}[,}].*/\1/p'; }
-
 new_trace
 stop_on "$SCRATCH/never-387.jsonl"
 timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
@@ -2084,15 +2081,45 @@ G=$(ev_of agent.stop)
 	[ "$(str "$G" outcome)" = fail ] && [ -z "$(num "$G" tok_out)" ] &&
 	pass "a transcript that never ends, 50 ms bound: exit 0, one agent.stop outcome=fail, no tokens" ||
 	fail "never-ending transcript: exit $S_STATUS, stdout '$S_OUT', events: $G"
-[ "$(val "$G" last_kind)" = assistant ] &&
+[ "$(str "$G" last_kind)" = assistant ] &&
 	pass "data.last_kind is the last line's top-level type (assistant), not a nested one" ||
-	fail "data.last_kind is '$(val "$G" last_kind)', expected assistant: $G"
-[ "$(val "$G" lines)" = 20 ] && pass "data.lines is the transcript's 20 lines" ||
-	fail "data.lines is '$(val "$G" lines)', expected 20: $G"
-AGE_387=$(val "$G" last_age_ms)
+	fail "data.last_kind is '$(str "$G" last_kind)', expected assistant: $G"
+[ "$(str "$G" lines)" = 20 ] && pass "data.lines is the transcript's 20 lines" ||
+	fail "data.lines is '$(str "$G" lines)', expected 20: $G"
+AGE_387=$(str "$G" last_age_ms)
 [ "$AGE_387" -ge 30000 ] 2>/dev/null && [ "$AGE_387" -lt 150000 ] &&
 	pass "data.last_age_ms is the last line's age when the bound elapsed (${AGE_387} ms, written 30 s before)" ||
 	fail "data.last_age_ms is '$AGE_387', expected 30000 and up (slack for a loaded machine): $G"
+
+# WHAT CANNOT BE READ IS LEFT OUT, never guessed (review of PR #394, M-1). A
+# last line whose top-level type is not a plain word names no last_kind — not
+# an empty one, not a placeholder, and not the nested "assistant" beneath it —
+# while the other two keys still arrive.
+{
+	cat "$SCRATCH/sub-head-308.jsonl"
+	printf '%s\n' '{"message":{"type":"assistant","stop_reason":"tool_use"},"type":"a b;c","uuid":"u-387b"}'
+} >"$SCRATCH/oddkind-387.jsonl"
+touch -d "@$AGO_387" "$SCRATCH/oddkind-387.jsonl" 2>/dev/null ||
+	touch -t "$(date -r "$AGO_387" +%Y%m%d%H%M.%S)" "$SCRATCH/oddkind-387.jsonl"
+new_trace
+stop_on "$SCRATCH/oddkind-387.jsonl"
+timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+O=$(ev_of agent.stop)
+case $O in *'"last_kind"'*) fail "an unreadable top-level type still named a last_kind: $O" ;;
+*) pass "a top-level type that is not a plain word names no last_kind" ;; esac
+[ "$(str "$O" lines)" = 20 ] && [ "$(str "$O" last_age_ms)" -ge 30000 ] 2>/dev/null &&
+	pass "and lines and last_age_ms still arrive" ||
+	fail "lines or last_age_ms missing beside an unreadable kind: $O"
+
+# NO MILLISECOND CLOCK: the age falls back to the file's whole seconds.
+new_trace
+stop_on "$SCRATCH/never-387.jsonl"
+STUBS="$SCRATCH/noclock-308:$SCRATCH/naps-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+N=$(ev_of agent.stop)
+AGE_387=$(str "$N" last_age_ms)
+[ "$AGE_387" -ge 30000 ] 2>/dev/null && [ $((AGE_387 % 1000)) = 0 ] &&
+	pass "with no millisecond clock the age is whole seconds, still the file's (${AGE_387} ms)" ||
+	fail "no-clock age is '$AGE_387', expected a whole-second multiple of at least 30000: $N"
 
 # A TRANSCRIPT THAT ENDS INSIDE THE BOUND records tokens and none of the keys.
 if [ "$HAVE_NODE" = 1 ]; then
