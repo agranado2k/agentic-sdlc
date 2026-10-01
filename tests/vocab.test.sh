@@ -276,8 +276,9 @@ scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]
 EOLIFT
 )
 
-# checker_calls <root> — one record per invocation of the checker in the
-# shipped files under <root> that is not exempt above:
+# checker_calls <root> [awk program] — one record per invocation of the
+# checker in the shipped files under <root> that is not exempt above, found
+# by <awk program> (CALLS_AWK by default):
 # <file>\t<line>\t<function's first line>\t<function>\t<the call's command>
 # The command is the call's own: the line cut at `;`, `&&` and `||` around
 # the call, joined to the line before only when that line ends in a pipe.
@@ -499,7 +500,6 @@ exemption_bait() {
 	esac
 }
 exemption_bait fields scripts/stamp.sh "\`fields\`"
-exemption_bait fields .agents/skills/dogfood/SKILL.md "\`fields\`"
 exemption_bait positional .agents/skills/dogfood/SKILL.md "one-positional-token"
 exemption_bait quiz-tokens .agents/skills/to-tickets/SKILL.md "quiz's own tokens"
 exemption_bait prose .agents/skills/to-tickets/SKILL.md "prose mention"
