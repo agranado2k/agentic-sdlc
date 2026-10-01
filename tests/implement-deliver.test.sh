@@ -345,7 +345,6 @@ stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
 stamp_has "\`sh scripts/stamp.sh <N>\`, the ticket's number and nothing else" "the call: a number in, never the body's text"
-stamp_has "a markdown-wrapped line is prose, not a stamp" "the checker's contract, said where the agent reads it"
 stamp_has "The lines the script prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
 # The four outcomes, one sentence each, in status order — a status the skill
 # never defines is what PR #311's last HIGH was.
@@ -354,10 +353,21 @@ stamp_has "**Exit 0**: the checked lines are on stdout" "outcome 0: the stamp"
 stamp_has "**Exit 2**: a refused value — stdout is empty" "outcome 2: a refusal prints nothing to type"
 stamp_has "names the refused field, never its text" "outcome 2: the refused text stays in the ticket"
 stamp_has "**Exit 3**: no stamp read" "outcome 3: the old ticket, named"
-stamp_has "Neither is a refusal" "outcome 3: not a stop"
+stamp_has "None is a refusal" "outcome 3: not a stop"
 stamp_has "take the missing-line defaults below" "outcome 3: what it means for the tier"
 stamp_has "**Exit 4**: the fetch failed" "outcome 4: the fetch, named"
 stamp_has "never read it as a missing line" "outcome 4: a failed fetch is never outcome 3"
+stamp_has "A refused value is a stop, reported for \`/to-tickets\` to re-stamp" "outcome 2: every refused value stops — a tier, a confidence with or without its tier, a domain"
+stamp_has "a line names a field this project's policy does not declare" "outcome 3: a line the checker would ignore is never printed"
+# A missing script is the shell's status, not the script's: 127, or 2 under a
+# shell that reads an unopenable file as a usage error — which would read as
+# a refusal. The bullet has the agent test for the file first.
+stamp_has "test \`[ -f scripts/stamp.sh ]\` before the call" "no stamp.sh: tested for, never read off the shell's status"
+# The bullet is the call, its four outcomes and #340's three answers — no
+# more (#331). What the script does is the script's to say; a bullet that
+# restates it grows a second contract to drift.
+assert_file_lacks "$SKILL" "It fetches the body with your tracker's CLI" "the bullet does not restate what the script does"
+assert_file_lacks "$SKILL" "with no \`Tier:\` line qualifies nothing" "the bullet is the call, its four outcomes and #340's three answers — no more"
 # The order is the contract's: 0, 2, 3, 4.
 order=$(printf '%s\n' "$stamp" | grep -oE '\*\*Exit [0-9]\*\*' | tr -d '*' | tr '\n' ' ')
 [ "$order" = "Exit 0 Exit 2 Exit 3 Exit 4 " ] && pass "the four outcomes, once each, in status order" ||
@@ -445,22 +455,10 @@ weakened "stop turned into carry on" 's/: stop, and report/: carry on, and repor
 weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
 assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
 stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
-# A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
-# is unchanged, and the orphan line is said in the report — never a reason to
-# restate, because there is no stamp for the doubt to be about.
-stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the case is named"
-stamp_has "reported, not acted on" "orphan confidence: what happens to it"
-stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
-stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
-# …and an orphan the checker REFUSES is not that case (local review of this
-# PR, M-1): the refusal is about the value, not the pair, so it is a stop
-# with or without a `Tier:` line — only an orphan with a declared value is
-# the one reported and left.
-stamp_has "whether or not a \`Tier:\` line is present" "orphan confidence: a refused value is a stop either way — the refusal is about the value, not the pair"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
 # session in a project that never took the script.
-stamp_has "or the checker is gone from this project" "checker absent: tolerated — outcome 3, not a refusal"
+stamp_has "or the checker is gone or cannot run here" "checker absent or broken: tolerated — outcome 3, not a refusal"
 stamp_has "the script never prints a line it could not check" "checker absent: it fails closed — the defaults, never an unchecked value"
 stamp_has "never a stamp read by eye" "no stamp.sh at all: the defaults, not the body read unchecked"
 # The kit wrapper is never named: skills ship unstamped.
