@@ -150,6 +150,14 @@ and a reader counts an `unasked` landing as one the question never reached —
 a fact in the trace rather than silence, which no reader can tell from a
 train that forgot to ask.
 
+**One PR landed by hand is still a landing.** When the operator merges a
+single PR outside a train, its one-PR form is the **landing script** the
+root `AGENTS.md` names, where it names one: it does this step for that PR —
+refuses a PR that is not green and mergeable, merges with the mandated
+method, waits for the base branch's workflows, then records the same
+`merge.land` and `feedback` — so a by-hand landing is not a hole in the
+trace. It is the operator's command, exactly as a train is.
+
 ### 5 — After the batch
 
 Run **`/worktree-cleanup`** — the merged PRs' worktrees are now prunable, and

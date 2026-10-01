@@ -592,6 +592,15 @@ skeleton (K0).
   reads back one `finding.raise` per posted finding and a `review.verdict`
   per axis, none of them carrying a line of the report, while an
   unconfigured trace leaves the posting unchanged.
+- `sh tests/land.test.sh` proves a PR landed by hand records what the train
+  records (#386): against a stub forge CLI, a PR that is red, pending, a
+  draft, conflicting, behind its base or under a human's changes requested
+  is refused with exit 2, no merge call and no event; a green one is merged
+  with the merge-commit method, main's workflows on the merge commit are
+  watched, and the trace holds one `merge.land` then one `feedback` —
+  `unasked` with its reason when no terminal is at the prompt, the
+  operator's verdict when one is; an unconfigured trace leaves the merge and
+  stdout unchanged.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -876,6 +885,7 @@ sh tests/adopt-demo.sh                                 # the existing-repo adopt
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
+sh tests/land.test.sh                                  # one PR landed by hand records merge.land and feedback, through a stub forge CLI
 sh tests/task.test.sh                                  # task scope, baseline identity, proportional endpoint
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them

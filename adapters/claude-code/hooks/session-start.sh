@@ -30,6 +30,14 @@ set -u
 
 hook_read
 
+# How far the ROOT checkout — the one these hooks execute from, even when the
+# session opened in a linked worktree — is behind the last fetched origin/main:
+# recorded on the event below, and said on stderr past the policy threshold.
+# No origin/main is no field and no note (hook.lib.sh).
+behind=
+root=$(hook_root) && behind=$(hook_behind "$root") || behind=
+[ -z "$behind" ] || hook_behind_warn "$behind" "$root"
+
 sid=$(hook_field session_id)
 src=$(hook_field source)
 cwd=$(hook_field cwd)
@@ -58,7 +66,8 @@ fi
 # the PAYLOAD gave it rather than whatever the pointer file happens to say —
 # see session-end.sh for the two-sessions-in-one-checkout case that matters.
 hook_trace emit kind=session.start subject="session:$sid" session="$sid" \
-	harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript"
+	harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript" \
+	${behind:+"data.behind=$behind"} ${behind:+"data.behind_of=root"}
 
 hook_point_at "$sid"
 

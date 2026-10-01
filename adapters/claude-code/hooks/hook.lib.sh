@@ -484,3 +484,75 @@ hook_wait_final() {
 	printf '%s' "$_hw_waited"
 	return 1
 }
+
+# --- how far this checkout is behind main -----------------------------------
+# Read only by session-start.sh (ticket #384, retro 20261001T150216Z finding
+# G1). A hook runs the code of the checkout it LIVES in, and the kit's own sat
+# ~140 commits behind main for four hours with nothing saying so: every adapter
+# fix the wave had landed was inert for the trace that should have shown it.
+
+# hook_root — the ROOT checkout: the working tree of git's common directory,
+# the derivation scripts/trace.sh and scripts/worktree-cleanup.sh use. From a
+# linked worktree that is the main checkout, not the worktree; from the main
+# checkout it is itself. Nothing (status 1) when git does not answer.
+#
+# WHY THE ROOT AND NOT THIS CHECKOUT. The kit's hooks execute from the root
+# checkout, and a session opened in worktree/<slug> sits on a feature branch
+# where being behind main is normal and says nothing about the code the hooks
+# run (review of PR #390, Axis 2 item 3).
+hook_root() {
+	_hr=$( (unset GIT_DIR GIT_WORK_TREE &&
+		git -C "$hook_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
+	[ -n "$_hr" ] || return 1
+	dirname "$_hr"
+}
+
+# hook_behind <root> — how many commits the last FETCHED origin/main holds that
+# <root>'s HEAD does not, or nothing (status 1) when there is no origin/main,
+# no repository, or no git.
+#
+# NEVER THE NETWORK. A hook is on the session's critical path, so this reads
+# the remote-tracking ref as the last fetch left it and never fetches: the
+# count is "behind what this machine last saw", which is the honest claim.
+# GIT_NO_LAZY_FETCH keeps a partial clone from fetching a missing object behind
+# the walk's back; GIT_DIR and GIT_WORK_TREE are scrubbed for hook_pointer's
+# reason.
+hook_behind() {
+	_hb=$( (unset GIT_DIR GIT_WORK_TREE &&
+		GIT_NO_LAZY_FETCH=1 git -C "$1" rev-list --count HEAD..refs/remotes/origin/main) 2>/dev/null ) || return 1
+	case $_hb in '' | *[!0-9]*) return 1 ;; esac
+	printf '%s' "$_hb"
+}
+
+# hook_behind_warn <count> <root> — say once on stderr that the root checkout
+# <root> is <count> behind, when TRACE_BEHIND_WARN names a threshold and <count> is MORE than it.
+#
+# The same file and precedence as TRACE_AGENT_WAIT_MS: the environment wins, an
+# environment value of '' is off even when the file names one, and a missing
+# policy file is off. A malformed value is refused and named — one line — and
+# is never a failure. Said whether or not the trace is on: the note is about
+# the code the hooks run, not about the trace.
+hook_behind_warn() {
+	if [ -n "${TRACE_BEHIND_WARN+set}" ]; then
+		_bw=$TRACE_BEHIND_WARN
+	else
+		_bw_file=$(hook_policy)
+		_bw=
+		[ -f "$_bw_file" ] && _bw=$(
+			. "$_bw_file" >/dev/null 2>&1
+			printf '%s' "${TRACE_BEHIND_WARN:-}"
+		)
+	fi
+	case $_bw in
+	'') return 0 ;;
+	0) ;;
+	*[!0-9]* | 0* | ??????*)
+		printf "! session-start: TRACE_BEHIND_WARN='%s' is not a whole number of commits; ignored\n" \
+			"$(printf '%s' "$_bw" | tr -d '\n' | cut -c1-60)" >&2
+		return 0
+		;;
+	esac
+	[ "$1" -gt "$_bw" ] || return 0
+	printf '! session-start: %s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it\n' \
+		"$2" "$1" "$_bw" >&2
+}
