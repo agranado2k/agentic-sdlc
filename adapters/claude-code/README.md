@@ -513,6 +513,23 @@ It errs closed the other way too: a heredoc's body is read as commands, so a
 sub-agent writing a script with a line that starts with `pkill` is refused.
 Without node it fails closed for a sub-agent: a payload naming `pkill`,
 `killall` or `pgrep` anywhere is refused unread.
+**The phantom count survives on `session.end`.** No event per phantom still
+leaves the question of how many there were, and a sudden rise is worth seeing
+(ticket #410). So each phantom stop adds one line to a per-session counter,
+`claude-code/<session id>.phantoms` in the trace directory — a directory this
+adapter owns, never the shared script's `current/` — appended, so two stops
+at once both count without a lock, and keyed by the payload's session id, so
+two sessions never share one. The session-end hook takes that counter and
+records it as `data.phantoms` on `session.end`. **A session with no phantom
+stops records `phantoms=0`** rather than leaving the key out: `0` says the
+count was taken and came to nothing, while an absent key keeps meaning the hook
+could not take one — tracing off, a payload with no usable session id, or a
+`session.end` written before the count existed. Taking the counter removes it,
+so a resumed session's next end counts only the phantoms since the last one —
+the same once-only rule the usage read keeps; `/retro` sums a session's ends.
+A counter left by a session that never fires `SessionEnd` stays where it is
+until an end for that session id takes it — a resumed session's next end
+counts it — and is otherwise harmless.
 
 ### Reading it back: DuckDB and SQLite
 
