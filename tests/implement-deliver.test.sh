@@ -318,6 +318,159 @@ assert_file_has "$SKILL" "$TIER_CFG"
 	fail "$TIER_CFG does not exist, but the skill sends the agent to read it"
 
 # ---------------------------------------------------------------------------
+banner "4b. The stamp is read through the checker: restate on low, stop on refused"
+# ---------------------------------------------------------------------------
+# PRD #273. /to-tickets stamps a `Confidence:` line under the tier; this skill
+# is its reader. Two rules, each one line of one bullet so neither can drift
+# into another section and still count: a `low` on the tier is a second
+# reading at the cheapest point — back to the restatement, BEFORE any spawn,
+# and the report says so; a tier the checker refuses is /to-tickets' to
+# re-stamp — the session neither guesses the nearest legal name nor sizes
+# itself. And the confidence is described in the PRD's own words, so a reader
+# never takes it for a probability or a permission.
+#
+# HOW the lines reach the checker is held too (PR #311, H-1). The ticket body
+# is untrusted, and a value typed into a quoted shell argument closes the quote
+# with one `'` and runs what follows — so the lines travel on the checker's
+# standard input, filtered out of the body by the tracker's own CLI, and the
+# text the ticket spells is never part of a command the agent types.
+stamp=$(grep -F -- "sh scripts/vocab.sh" "$SKILL_ABS" | head -1)
+[ -n "$stamp" ] && pass "one bullet hands the ticket's stamp to the vocabulary checker" ||
+	fail "no line runs sh scripts/vocab.sh — the stamp is read unchecked"
+# stamp_has <fixed string> <why>
+stamp_has() {
+	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
+}
+stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
+stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
+# The filter reads a key the way the checker does — any case, indented or not
+# — so `domain: x;id` or an indented ` Domain: $(id)` cannot walk past a filter
+# narrower than the reader behind it. And what the pipe lifted IS the stamp: a
+# line it did not lift is prose, never a value to type.
+stamp_has "the way the checker reads a key" "the filter is no narrower than the checker behind it"
+stamp_has "The lines this pipe prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
+# The domain is the third line the ticket spells and the one this skill goes
+# on to TYPE — it is the resolver's second argument. Unchecked, it is the same
+# injection one bullet over; checked, the open vocabulary's token shape is
+# what refuses a quote, a space or a semicolon before any command carries it.
+stamp_has "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it"
+# The pipe's status is the checker's alone, and the checker says 0 to empty
+# input: a fetch that failed is indistinguishable from a ticket with no stamp
+# unless the skill says which it is.
+stamp_has "a fetch that failed looks like a ticket with no stamp lines" "the pipe's silent case is named"
+stamp_has "repeat the fetch" "and a failed fetch is never read as a missing line"
+stamp_has "a second failure is a stop" "the retry is bounded — an expired login is not a loop"
+stamp_has "on its standard input, never as arguments" "the rule, in words — an example alone is a habit, not a rule"
+# The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
+# how every quoted-argument call starts, whatever field follows.
+assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
+assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
+stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
+stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
+stamp_has "back to the restatement step" "restate-on-low: the rule"
+stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
+stamp_has "say so in your report" "restate-on-low: the report names it"
+stamp_has "A tier the checker refuses" "stop-on-refused: the case"
+stamp_has "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is"
+# The refused line is, by definition, text the checker would not pass — and
+# the trace emit one bullet down carries a quoted `reason=`.
+stamp_has "a refused line is never put into a command" "stop-on-refused: the line goes in the report, not in the trace's reason= or any other argument"
+stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
+stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
+stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
+# is unchanged, and the orphan line is said in the report — never a reason to
+# restate, because there is no stamp for the doubt to be about.
+stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the case is named"
+stamp_has "reported, not acted on" "orphan confidence: what happens to it"
+stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
+stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
+# A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
+# checker error; a refused value does not). Inverted, this branch stops every
+# session in a project that never took the script.
+stamp_has "is not a refusal: read the stamp as before and say so in your report" "checker absent: tolerated, and said"
+# The kit wrapper is never named: skills ship unstamped.
+assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
+
+# ---------------------------------------------------------------------------
+banner "4c. The checker pipe, EXECUTED: nothing unchecked is ever shown as a stamp"
+# ---------------------------------------------------------------------------
+# 4b reads the bullet; this runs it. The one leg of this suite that is not
+# text, because "the filter reads a key the way the checker does" is a claim
+# about two programs and a phrase cannot hold it (PR #311). The filter stage is
+# cut out of the skill's own line — whatever the skill tells an agent to run is
+# what runs here — and fed ticket bodies in place of the tracker's CLI.
+#
+# THE INVARIANT, for every hostile body: never BOTH a checker exit 0 AND the
+# payload among the lines the pipe showed the agent. Those shown lines are the
+# only ticket text the skill lets an agent type, so a payload that is refused,
+# or never shown, reaches no command.
+#
+# The `grep` FUNCTION below lifts every line. It stands in for an interactive
+# shell whose grep is not the system's (one agent shell wraps it in a function
+# whose [[:space:]] takes a no-break space the checker does not): a filter
+# that does not say `command grep` runs the function, and goes red here.
+t_init
+filter=$(printf '%s\n' "$stamp" | sed -n 's/.*--jq \.body | \(.*\) | sh scripts\/vocab\.sh`.*/\1/p')
+[ -n "$filter" ] && pass "the filter stage is cut out of the skill's own pipe: $filter" ||
+	fail "no filter stage between the tracker's CLI and the checker — nothing to execute"
+# Held as text because this host cannot show it: whether a no-break space is
+# "space" depends on the locale and the libc, and the bodies below run under
+# one of each. Read from the EXECUTED stage, not the bullet — the prose names
+# the same words, and would keep a bullet-wide probe green with the pipe bare.
+case $filter in
+"LC_ALL=C command grep "*) pass "the executed filter is the system's grep in the C locale — whatever shell and locale the agent runs in" ;;
+*) fail "the executed filter does not start 'LC_ALL=C command grep' — its [[:space:]] is the agent's locale's, and its grep the agent's shell's" ;;
+esac
+
+# read_stamp — a ticket body on stdin. Sets P_STATUS (the pipe's, which is the
+# checker's) and P_SHOWN (what the pipe printed for the agent to read).
+read_stamp() {
+	(
+		grep() { cat; }
+		eval "$filter" 2>"$SCRATCH/shown" | sh "$ROOT/scripts/vocab.sh" 2>"$SCRATCH/refusal"
+	)
+	P_STATUS=$?
+	P_SHOWN=$(cat "$SCRATCH/shown")
+}
+# hostile <name> <why> <printf format of the body> — the invariant, plus the
+# file the payload would have made. The body goes through a file, never a
+# pipe into this function: a pipe would run it in a subshell and lose the
+# failure count.
+hostile() {
+	# shellcheck disable=SC2059  # the format IS the fixture
+	printf "$3" >"$SCRATCH/body"
+	read_stamp <"$SCRATCH/body"
+	case $P_SHOWN in *PWN*) _h_shown=1 ;; *) _h_shown=0 ;; esac
+	if [ "$P_STATUS" = 0 ] && [ "$_h_shown" = 1 ]; then
+		fail "$1: the pipe exited 0 AND showed the payload as a stamp line — $2"
+	elif [ -e "$SCRATCH/PWN" ]; then
+		fail "$1: the payload RAN while the stamp was being read"
+	else
+		pass "$1: exit $P_STATUS, payload shown=$_h_shown — $2"
+	fi
+}
+
+printf 'Body prose.\nTier: implementer\nConfidence: low\nDomain: content\nMore prose.\n' >"$SCRATCH/legal"
+read_stamp <"$SCRATCH/legal"
+[ "$P_STATUS" = 0 ] && pass "a legal stamp: the pipe exits 0" || fail "a legal stamp was refused (exit $P_STATUS): $(cat "$SCRATCH/refusal")"
+# Without this the invariant below is vacuous: a pipe that shows nothing
+# shows no payload either.
+[ "$P_SHOWN" = "$(printf 'Tier: implementer\nConfidence: low\nDomain: content')" ] &&
+	pass "a legal stamp: its three lines, and only those, are shown to the agent" ||
+	fail "a legal stamp: the pipe showed the agent '$P_SHOWN', not the three stamp lines — the agent cannot tell what was checked"
+
+cd "$SCRATCH" || exit 2
+hostile "a quote in the tier" "refused, never executed" "Tier: implementer'; touch PWN; echo '\n"
+[ "$P_STATUS" = 2 ] && pass "…and it is a refusal, exit 2" || fail "a tier closing its own quote was not refused (exit $P_STATUS)"
+hostile "a lower-case, indented domain" "the checker folds the key, so the filter must lift it" 'Tier: implementer\n domain: x;touch PWN\n'
+[ "$P_STATUS" = 2 ] && pass "…and it is a refusal, exit 2" || fail "a lower-case, indented domain with a payload was not refused (exit $P_STATUS)"
+hostile "a no-break space in the key" "the checker does not read it as a field, so the filter must not lift it" 'Tier: implementer\nDomain\302\240: code;touch PWN\n'
+hostile "a zero-width space before the key" "renders like a stamp, is not one, is never shown" 'Tier: implementer\n\342\200\213Domain: code;touch PWN\n'
+hostile "a key in mid-line prose" "only the system grep, anchored, decides what is lifted" 'Tier: implementer\nsee the Domain: code;touch PWN\n'
+cd "$ROOT" || exit 2
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"

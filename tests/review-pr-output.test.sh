@@ -23,6 +23,17 @@
 #      same badge+label vocabulary, the ⚠️/🔀 tokens it lifts verbatim are
 #      byte-identical across the two documents, and its human-only block
 #      stays badge-free.
+#   7. The decision lines are the policy file's (ticket #280): every severity
+#      band the report prints and every status Agent 7 tags a line with is a
+#      token scripts/vocab.config.sh declares — READ from that file through
+#      the checker's own `fields` subcommand, never a hand-kept copy — so a
+#      band or a status the skill prints and the file does not declare goes
+#      red. Proved by bait: planted in a copy of the skill, withdrawn from a
+#      copy of the policy file.
+#   8. The dispatched worker's contract (#266): .agents/prompts/review-worker.md
+#      opens by telling the worker it is offline, forbids a fetch and a forge
+#      call, and makes `REVIEWED: <full sha>` the report's first line — the
+#      sha pinned before the diff is read against it.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -224,7 +235,109 @@ case "$iter_confirm" in
 esac
 
 # ---------------------------------------------------------------------------
-banner "7. The dispatched worker's contract: offline, and says what it reviewed (#266)"
+banner "7. The decision lines are the policy file's — read through the checker"
+# ---------------------------------------------------------------------------
+# The report's severity is a band on three kinds of line — a count-table row,
+# a section heading, and the badge+label pair wherever else it is spelled.
+# Agent 7's status is the TAG on a confirm-list line: in the §5b template and
+# in the agent's own classification prose. 🧬 MUTATION is on the list and is
+# deliberately no token: the skill says it measures the list, and the policy
+# file says the same, so it is set aside by name and by nothing looser.
+VOCAB="$ROOT/scripts/vocab.sh"
+POLICY="$ROOT/scripts/vocab.config.sh"
+BADGES='🔴|🟠|🟡|🔵|🟣|🟤|🟢|⚫|⚪'
+GLYPHS='✅|⚠️|❌|🔀|🧬'
+
+# declared <field> <policy file> — the field's tokens, through `fields`.
+declared() { VOCAB_CONFIG="$2" sh "$VOCAB" fields 2>/dev/null | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
+
+# printed_severities <skill> — every band the skill prints, folded to a token.
+printed_severities() {
+	{
+		sed -n 's/^| [^|]* | \([A-Z][A-Z -]*[A-Z]\) | X |$/\1/p' "$1"
+		grep -o -E "($BADGES) \**[A-Z][A-Z-]+" "$1" | sed -e 's/^[^ ]* //' -e 's/^\**//'
+	} | tr 'A-Z ' 'a-z-' | sort -u
+}
+
+# printed_statuses <skill> — every tag on a confirm-list line, folded.
+printed_statuses() {
+	{
+		sed -n "/^### 5b\\. /,/^### 6\\. /p" "$1" | sed -n 's/^[^ A-Za-z<`#|>-][^ ]* \([A-Z][A-Z ]*[A-Z]\)  *[<a-z].*/\1/p'
+		grep -o -E "($GLYPHS) \*\*[A-Z][A-Z ]*[A-Z]" "$1" | sed 's/^[^ ]* \*\*//'
+	} | grep -v -x 'MUTATION' | tr 'A-Z ' 'a-z-' | sort -u
+}
+
+# undeclared <field> <printed tokens> <policy file> — the printed tokens the
+# policy file does not declare, space-joined.
+undeclared() {
+	_ud=$(declared "$1" "$3")
+	for _ud_tok in $2; do
+		case " $_ud " in *" $_ud_tok "*) ;; *) printf '%s ' "$_ud_tok" ;; esac
+	done | sed 's/ $//'
+}
+
+# held <label> <field> <printed tokens> <policy file> — green when every
+# printed token is declared and at least one was printed.
+held() {
+	_h_bad=$(undeclared "$2" "$3" "$4")
+	if [ -n "$3" ] && [ -z "$_h_bad" ]; then pass "$1"; else
+		fail "$1 — ${_h_bad:-nothing was extracted} is printed by the skill and not declared as a $2 in the policy file"
+	fi
+}
+# baited <label> <field> <printed tokens> <policy file> <the token that must
+# be caught> — green when exactly that token is reported undeclared.
+baited() {
+	_b_bad=$(undeclared "$2" "$3" "$4")
+	if [ "$_b_bad" = "$5" ]; then pass "$1"; else
+		fail "$1 — expected '$5' reported undeclared, got '${_b_bad:-nothing}'"
+	fi
+}
+
+sev=$(printed_severities "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
+sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
+[ -n "$(declared severity "$POLICY")" ] && [ -n "$(declared status "$POLICY")" ] &&
+	pass "the policy file declares severity and status, read through 'fields'" ||
+	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
+# …and the reader agrees with its sibling in tests/vocab-policy.test.sh
+# (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
+# and a reader that does not know the mark reads nothing for an opened field.
+sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
+[ -n "$(declared severity "$POLICY")" ] && [ "$(declared severity "$SCRATCH/opened.config.sh")" = "$(declared severity "$POLICY")" ] &&
+	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
+	fail "with severity opened in the policy file the reader read '$(declared severity "$SCRATCH/opened.config.sh")', not '$(declared severity "$POLICY")'"
+held "every severity band the report prints is a token the policy file declares: $sev" severity "$sev" "$POLICY"
+held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
+# …and nothing declared goes unprinted: the two lists are one vocabulary.
+[ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared severity "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every declared severity is a band the report prints" ||
+	fail "the report prints '$sev', the policy file declares '$(declared severity "$POLICY")'"
+[ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(declared status "$POLICY") | sort | tr '\n' ' ')" ] &&
+	pass "…and every declared status is a tag Agent 7 prints" ||
+	fail "Agent 7 tags '$sta', the policy file declares '$(declared status "$POLICY")'"
+
+# The bait. Each plants ONE line in a copy of the skill — where a session
+# would print it from — and the same holder must name exactly that token.
+bait_skill() { awk -v at="$1" -v add="$2" '{ print } index($0, at) == 1 { print add }' "$SKILL_ABS" >"$SCRATCH/bait.md"; }
+bait_skill '| 🔵 | LOW | X |' '| 🟣 | BLOCKER | X |'
+baited "bait: a band added to the count table goes red" severity "$(printed_severities "$SCRATCH/bait.md")" "$POLICY" blocker
+bait_skill '#### 🟠 HIGH' '#### 🟤 MEDIUM-HIGH'
+baited "bait: a band added as a section heading goes red" severity "$(printed_severities "$SCRATCH/bait.md")" "$POLICY" medium-high
+bait_skill '❌ MISSING ' '🟢 DEFERRED     <spec line the diff postpones>'
+baited "bait: a status added to the confirm-list template goes red" status "$(printed_statuses "$SCRATCH/bait.md")" "$POLICY" deferred
+bait_skill '- ⚠️ **UNSPECIFIED' '- ✅ **MOSTLY SPECIFIED** — the spec nearly asked for it.'
+baited "bait: a status added to Agent 7's classification goes red" status "$(printed_statuses "$SCRATCH/bait.md")" "$POLICY" mostly-specified
+cmp -s "$SCRATCH/bait.md" "$SKILL_ABS" && fail "the last bait planted nothing — its anchor line moved" || pass "the baits planted their lines"
+# The other half: the skill unchanged, the token withdrawn from the FILE — so
+# the list being read is the policy file's and not one this suite carries.
+sed "s/^VOCAB_SEVERITY=.*/VOCAB_SEVERITY='critical high medium'/" "$POLICY" >"$SCRATCH/no-low.config.sh"
+baited "bait: a band withdrawn from the policy file goes red" severity "$sev" "$SCRATCH/no-low.config.sh" low
+sed "s/^VOCAB_STATUS=.*/VOCAB_STATUS='mixed-commit unspecified specified'/" "$POLICY" >"$SCRATCH/no-missing.config.sh"
+baited "bait: a status withdrawn from the policy file goes red" status "$sta" "$SCRATCH/no-missing.config.sh" missing
+# The mutation line is set aside by name, and the skill still says why.
+assert_file_has "$SKILL" "It is **not** a classification" "the mutation line is a measurement, so it is no status"
+
+# ---------------------------------------------------------------------------
+banner "8. The dispatched worker's contract: offline, and says what it reviewed (#266)"
 # ---------------------------------------------------------------------------
 # .agents/prompts/review-worker.md is the review the kit dispatches to another
 # agent harness — the same two axes, returned on stdout instead of posted.
