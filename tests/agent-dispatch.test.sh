@@ -861,14 +861,14 @@ term_leg() {
 	# path installs its traps and then spawns, so the worker's own marker is
 	# the one anchor that cannot precede them. A TERM that arrives earlier
 	# takes the global cleanup and reads "exited 127" — a flake on a loaded
-	# host, not a finding (#402; the same fix as L-4, review of PR #290).
-	_term_wait=0
-	until [ -s "$PIDFILE" ]; do
-		_term_wait=$((_term_wait + 1))
-		[ "$_term_wait" -gt 300 ] && break
-		sleep 0.1
-	done
-	[ -s "$PIDFILE" ] || fail "the worker never wrote its pid file in 30s$2"
+	# host, not a finding (#402). No marker is a fail, never a TERM anyway:
+	# the leg would be passing for a worker nobody saw start.
+	if ! await_file -s "$PIDFILE" 30; then
+		fail "the worker never wrote its pid file in 30s — nothing to TERM$2"
+		kill -KILL "$disp" 2>/dev/null
+		wait "$disp" 2>/dev/null
+		return
+	fi
 	kill -TERM "$disp" 2>/dev/null
 	wait "$disp" 2>/dev/null
 	disp_status=$?
@@ -2196,21 +2196,21 @@ TR_TERM_PID=$!
 # own marker is the one anchor that cannot precede them; on a loaded host a
 # signal that arrives earlier takes the global cleanup path, tears the scratch
 # out from under the dispatch and reports something else entirely — a flake,
-# not a finding (L-4, review of PR #290).
-TR_TERM_WAIT=0
-until [ -f "$TR_STARTED" ]; do
-	TR_TERM_WAIT=$((TR_TERM_WAIT + 1))
-	[ "$TR_TERM_WAIT" -gt 300 ] && break
-	sleep 0.1
-done
-kill -TERM "$TR_TERM_PID" 2>/dev/null
-wait "$TR_TERM_PID"
-TR_TERM_STATUS=$?
-[ "$TR_TERM_STATUS" = 143 ] &&
-	pass "a dispatcher sent TERM mid-run still exits 143" ||
-	fail "a signalled dispatcher exited $TR_TERM_STATUS"
-tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
-tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
+# not a finding (L-4, review of PR #290). No marker is a fail, never a TERM.
+if await_file -e "$TR_STARTED" 30; then
+	kill -TERM "$TR_TERM_PID" 2>/dev/null
+	wait "$TR_TERM_PID"
+	TR_TERM_STATUS=$?
+	[ "$TR_TERM_STATUS" = 143 ] &&
+		pass "a dispatcher sent TERM mid-run still exits 143" ||
+		fail "a signalled dispatcher exited $TR_TERM_STATUS"
+	tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
+	tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
+else
+	fail "the traced worker never said it started in 30s — nothing to TERM"
+	kill -KILL "$TR_TERM_PID" 2>/dev/null
+	wait "$TR_TERM_PID" 2>/dev/null
+fi
 
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
 # account has hit its usage limit, or one not installed here, is not a fail:
