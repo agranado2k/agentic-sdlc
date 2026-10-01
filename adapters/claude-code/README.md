@@ -248,7 +248,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 
 | File | The event it records |
 | --- | --- |
-| `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on |
+| `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on — with `data.behind`, how far the root checkout is behind `origin/main` |
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
@@ -414,12 +414,30 @@ it: `TRACE_AGENT_WAIT_MS` in your trace policy file is how many milliseconds
 it may poll for the transcript to end on a final message. When the final
 message lands in time, `agent.stop` carries the tokens and `data.waited_ms`.
 When the bound passes first, it records `outcome=fail` with no counts and the
-wait it gave. A malformed value is refused on stderr and as
+wait it gave, plus what the file can say of why: `data.last_kind` (the last
+line's `type`), `data.last_age_ms` (that line's age when the bound passed) and
+`data.lines`. A young last line means the bound is too short for an agent still
+writing; an old one, an agent that never wrote a final message. A malformed value is refused on stderr and as
 `data.wait_refused`, and is never waited. The policy file ships the value
 empty, which means no wait and the read-at-once behaviour, partial sum
 included. A session's own
 `session.usage` is unaffected either way, and the "usage plus agent.stop equals
 the rollup" identity holds only for the stops whose file was ready.
+
+**The session-start hook says how stale its own code is.** A hook runs the
+code of the checkout it lives in, so a checkout that has fallen behind main
+runs hooks main has already fixed, and nothing else says so (ticket #384).
+Every `session.start` therefore carries `data.behind`: how many commits the
+last FETCHED `origin/main` holds that the ROOT checkout's `HEAD` does not —
+the working tree of git's common directory, so a session opened in a linked
+worktree measures the root, never its own feature branch, and says so with
+`data.behind_of=root` — counted with plain git and never a fetch of its own,
+`0` when level. A checkout with
+no `origin/main`, or no repository, records no field and still exits 0.
+`TRACE_BEHIND_WARN` in your trace policy file adds one line on stderr when the
+count is more than it; the policy file ships it empty, which records the count
+and says nothing. A malformed value is refused on stderr and otherwise
+ignored.
 
 **A phantom stop writes no event.** Most `SubagentStop` payloads in a long
 session name a subagent transcript that does not exist and never appears:

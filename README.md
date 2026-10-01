@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.35.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.36.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.35.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.36.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -592,9 +592,24 @@ skeleton (K0).
   reads back one `finding.raise` per posted finding and a `review.verdict`
   per axis, none of them carrying a line of the report, while an
   unconfigured trace leaves the posting unchanged.
+- `sh tests/land.test.sh` proves a PR landed by hand records what the train
+  records (#386): against a stub forge CLI, a PR that is red, pending, a
+  draft, conflicting, behind its base or under a human's changes requested
+  is refused with exit 2, no merge call and no event; a green one is merged
+  with the merge-commit method, main's workflows on the merge commit are
+  watched, and the trace holds one `merge.land` then one `feedback` —
+  `unasked` with its reason when no terminal is at the prompt, the
+  operator's verdict when one is; an unconfigured trace leaves the merge and
+  stdout unchanged.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
+- `sh tests/task.test.sh` checks task entry before production work: missing
+  scope and unacknowledged baselines are refused; clean and preserved dirty
+  baselines record separate branch, HEAD, index, worktree, untracked-content and
+  catalogue identities; small changes, waves, reports and read-only requests
+  take proportional endpoints; an explicit local endpoint keeps its exception
+  and consequence without inventing remote delivery. See `scripts/task.md`.
 - `sh tests/vocab.test.sh` proves the vocabulary checker (PRD #273): every
   shipped vocabulary accepts its own tokens; a misspelling, an invented token,
   an empty value and a token outside the shape are each exit 2 with the field
@@ -870,6 +885,8 @@ sh tests/adopt-demo.sh                                 # the existing-repo adopt
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
+sh tests/land.test.sh                                  # one PR landed by hand records merge.land and feedback, through a stub forge CLI
+sh tests/task.test.sh                                  # task scope, baseline identity, proportional endpoint
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
