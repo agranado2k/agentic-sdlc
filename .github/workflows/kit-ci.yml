@@ -274,6 +274,18 @@ jobs:
       - name: Forge-broker suite
         run: sh tests/forge-broker.test.sh
 
+  land:
+    name: A PR landed by hand records what the train records
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the landing script is POSIX sh and gh, and the suite's forge
+      # is a stub `gh` first on PATH. What this job holds is that a PR not
+      # green and mergeable is refused with nothing merged or recorded, and a
+      # landed one leaves one merge.land and one feedback.
+      - name: Landing-script suite
+        run: sh tests/land.test.sh
+
   gate-advisory:
     name: An advisory is audible through the gate
     runs-on: ubuntu-latest
