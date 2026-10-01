@@ -322,6 +322,12 @@ stamp_has 'A calibration row has no fixtures' "question 8 says what stands in fo
 stamp_has 'the severity bands in `/review-pr` as they stood when the window closed' "a severity row's version is named: the bands as they stood when the window closed"
 stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
 stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
+# A row that measured nothing names no oracle and says why: oracle: none — <why>
+# (ticket #342). The glossary carries that form.
+case "$oracle_entry" in
+*'oracle: none — '* | *'`oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
+*) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
+esac
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
