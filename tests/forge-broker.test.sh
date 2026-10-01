@@ -276,7 +276,12 @@ t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts
 s_assert_status 0 "trace show answers for pr:#12"
 s_assert_out_has '"kind":"review.verdict"' "one review.verdict event was emitted"
 s_assert_out_has '"subject":"pr:#12"' "…with the PR as its subject"
-s_assert_out_has 'not blocking' "…and the verdict as its outcome"
+# The outcome is review.verdict's own word (ADR-0008 clause 1, as amended for
+# #348): the worker's VERDICT line is a sentence, so the broker reads its
+# opening — "not blocking" is pass, "blocking" is blocked — and keeps the
+# sentence whole as the reason, where prose belongs.
+s_assert_out_has '"outcome":"pass"' "…with pass as its outcome, the word the kind declares"
+s_assert_out_has '"reason":"not blocking — fix H-1 first"' "…and the VERDICT line, whole, as its reason"
 
 # ---------------------------------------------------------------------------
 banner "3. --dry-run prints both payloads and posts nothing"
@@ -393,6 +398,14 @@ esac
 case "$REVIEW" in
 *'"comments":[]'*) pass "…with an empty inline-comments array, not a missing one" ;;
 *) fail "the empty review's comments array is missing or non-empty"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+# "no findings" is the worker contract's own clean verdict, so its event is
+# a pass like any other — never one with no outcome a reader counting
+# verdicts would miss (H-2, review of PR #380).
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
+case $(printf '%s\n' "$S_OUT" | tail -n 1) in
+*'"outcome":"pass"'*'"reason":"no findings"'*) pass "…and its review.verdict is pass, with the sentence as the reason" ;;
+*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$S_OUT" | tail -n 1)" ;;
 esac
 
 # ---------------------------------------------------------------------------
