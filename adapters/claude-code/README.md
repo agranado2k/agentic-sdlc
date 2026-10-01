@@ -255,7 +255,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
 | `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` splits a payload with |
-| `hooks/hook.lib.sh` | not a hook either: what the four share |
+| `hooks/hook.lib.sh` | not a hook either: what the five share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
@@ -490,6 +490,8 @@ every one is held to it.
 **A scan, not a sandbox.** It reads the command's words outside quotes, so
 `sh -c '…'`, `eval`, a script written and then run, or a pid list built from
 `ps` walks past it; negative pids and process groups are not read either.
+It errs closed the other way too: a heredoc's body is read as commands, so a
+sub-agent writing a script with a line that starts with `pkill` is refused.
 Without node it fails closed for a sub-agent: a payload naming `pkill`,
 `killall` or `pgrep` anywhere is refused unread.
 
