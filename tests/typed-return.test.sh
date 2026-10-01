@@ -44,6 +44,10 @@
 #   4e. The caller fetches each body by id into its own scratch file, unseen,
 #      and the reader is given those files and nothing else — no shell, no
 #      forge CLI, no network. The scratch files go when the iteration ends.
+#      The reader is spawned through the adapter's restricted path first —
+#      the adapter names the command, the skill no vendor's flag — and the
+#      prompt-restricted subagent is the fallback, named second, keeping
+#      its say-so duty: say so in the report (ticket #406).
 #   4c. Returns are tied to comments by ORDER, so a count of returns that is
 #      not the count of comments ties none of them: every return is
 #      unreadable (review of PR #318, M-2: the rule had no test). The fence's
@@ -450,6 +454,50 @@ assert_file_has "$FLAT" "nothing printed to the session, exit status only" "…u
 assert_file_has "$FLAT" "with read access to those files and nothing else" "what the reader is given"
 assert_file_has "$FLAT" "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 assert_file_has "$FLAT" "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
+# The reader is spawned through the adapter's RESTRICTED PATH first (ticket
+# #406). The adapter says an in-session spawn withholds nothing — "no shell"
+# written into a prompt is a request, not a restriction — and documents a
+# path through the agent CLI that does withhold, run from the scratch
+# directory so the bodies and the return file are the reader's whole reach.
+# So the reader step names that path first and the prompt-restricted subagent
+# second, as the fallback, which keeps the duty the fence has always carried:
+# say so in the report. The adapter names the command; the skill names none —
+# skills ship unstamped and name no vendor — so a flag planted in the step
+# (`--tools`, `--restricted`, any other) goes red.
+reader=$(grep '^\*\*A tool-restricted subagent reads' "$FLAT")
+[ -n "$reader" ] && pass "the reader step is one paragraph, found by its opening words" ||
+	fail "the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
+case $reader in
+*"restricted path"*) pass "the reader step names the adapter's restricted path" ;;
+*) fail "the reader step never names a restricted path — the adapter documents one and nothing here takes it" ;;
+esac
+case ${reader%%fall back*} in
+*"restricted path"*) pass "…first: the adapter's path is named before the fallback is" ;;
+*) fail "the fallback comes before the adapter's path, or no fallback is named — the restricted path is the first spawn, not the alternative" ;;
+esac
+case $reader in
+*"fall back"*"prompt"*) pass "…and the prompt-restricted subagent is the fallback, named second" ;;
+*) fail "the reader step names no fallback to a prompt-restricted subagent — a session with no agent CLI has no path" ;;
+esac
+case ${reader#*fall back} in
+*"say so in the report"*) pass "…which keeps its say-so duty: say so in the report" ;;
+*) fail "the fallback lost its duty — a prompt-restricted read must be said so in the report" ;;
+esac
+case $reader in
+*"the adapter names the command"*) pass "the adapter names the command; the skill names none" ;;
+*) fail "the reader step should say the adapter names the command — a skill ships unstamped and names no vendor's" ;;
+esac
+case $reader in
+*'run from `$scratch`'*) pass "…run from the scratch directory, the one directory the reader reaches" ;;
+*) fail "the reader step should run the restricted path from \`\$scratch\` — from anywhere else, the caller's tree is in reach" ;;
+esac
+case $reader in
+*" --"[a-z]*) fail "the reader step carries a flag ($(printf '%s' "$reader" | sed 's/.* \(--[a-z-]*\).*/\1/')) — the adapter names the command, the skill names no vendor's flag" ;;
+*) pass "the reader step carries no flag of any name" ;;
+esac
+for flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
+	assert_file_lacks "$SKILL" "$flag" "a vendor's flag or command is the adapter's to name, never the skill's"
+done
 assert_file_has "$FLAT" "against the same scratch file" "the evidence match reads the file the reader read"
 # One home, with a name that says whose it is, and a removal that every way
 # out of the iteration reaches — a bare `mktemp -d` leaves a `tmp.*` nobody

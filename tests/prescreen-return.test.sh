@@ -28,6 +28,11 @@
 #   2. The caller writes the text to a scratch file without printing it; the
 #      reader has no shell, no forge CLI and no network, and its one write is
 #      the return, in a directory of its own.
+#      The reader is spawned through the adapter's restricted path first —
+#      the adapter names the command, the skill no vendor's flag — and the
+#      prompt-restricted subagent is the fallback, named second, keeping
+#      its say-so duty: at the quiz (/to-tickets), in the report (/dogfood)
+#      (ticket #406).
 #   3. The check runs on that file BEFORE the session reads it, through the
 #      PLAIN script name `sh scripts/vocab.sh` — skills ship unstamped.
 #   4. The documented check, executed: the shape, then the checker, found from
@@ -257,8 +262,8 @@ e2e_passed_return() {
 		fail "/$1 — the run left $(left_behind) entry under TMPDIR: the text outlived its run"
 }
 
-# hold_prescreen <name> <skill> <what the evidence is quoted from> — sections
-# 1 to 6, for one skill.
+# hold_prescreen <name> <skill> <what the evidence is quoted from> <the words
+# the fallback says so in> — sections 1 to 6, for one skill.
 hold_prescreen() {
 	NAME=$1
 	SKILL=$2
@@ -296,6 +301,49 @@ hold_prescreen() {
 	has "with read access to that file and nothing else" "what the reader is given"
 	has "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 	has "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
+	# The reader is spawned through the adapter's RESTRICTED PATH first (ticket
+	# #406): the adapter says an in-session spawn withholds nothing — "no
+	# shell" in a prompt is a request, not a restriction — and documents a path
+	# through the agent CLI that does withhold, run from the scratch directory
+	# so the text and the return file are the reader's whole reach. The step
+	# names that path first and the prompt-restricted subagent second, as the
+	# fallback, which keeps the duty the fence has always carried ($4). The
+	# adapter names the command; the skill names none — skills ship unstamped
+	# and name no vendor — so a flag planted in the step goes red.
+	reader=$(grep '^\*\*A tool-restricted subagent reads' "$FLAT")
+	[ -n "$reader" ] && pass "/$NAME — the reader step is one paragraph, found by its opening words" ||
+		fail "/$NAME — the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
+	case $reader in
+	*"restricted path"*) pass "/$NAME — the reader step names the adapter's restricted path" ;;
+	*) fail "/$NAME — the reader step never names a restricted path — the adapter documents one and nothing here takes it" ;;
+	esac
+	case ${reader%%fall back*} in
+	*"restricted path"*) pass "/$NAME — …first: the adapter's path is named before the fallback is" ;;
+	*) fail "/$NAME — the fallback comes before the adapter's path, or no fallback is named — the restricted path is the first spawn, not the alternative" ;;
+	esac
+	case $reader in
+	*"fall back"*"prompt"*) pass "/$NAME — …and the prompt-restricted subagent is the fallback, named second" ;;
+	*) fail "/$NAME — the reader step names no fallback to a prompt-restricted subagent — a session with no agent CLI has no path" ;;
+	esac
+	case ${reader#*fall back} in
+	*"$4"*) pass "/$NAME — …which keeps its say-so duty: $4" ;;
+	*) fail "/$NAME — the fallback lost its duty — a prompt-restricted read must $4" ;;
+	esac
+	case $reader in
+	*"the adapter names the command"*) pass "/$NAME — the adapter names the command; the skill names none" ;;
+	*) fail "/$NAME — the reader step should say the adapter names the command — a skill ships unstamped and names no vendor's" ;;
+	esac
+	case $reader in
+	*'run from `$scratch`'*) pass "/$NAME — …run from the scratch directory, the one directory the reader reaches" ;;
+	*) fail "/$NAME — the reader step should run the restricted path from \`\$scratch\` — from anywhere else, the caller's tree is in reach" ;;
+	esac
+	case $reader in
+	*" --"[a-z]*) fail "/$NAME — the reader step carries a flag ($(printf '%s' "$reader" | sed 's/.* \(--[a-z-]*\).*/\1/')) — the adapter names the command, the skill names no vendor's flag" ;;
+	*) pass "/$NAME — the reader step carries no flag of any name" ;;
+	esac
+	for flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
+		assert_file_lacks "$SKILL" "$flag" "a vendor's flag or command is the adapter's to name, never the skill's"
+	done
 	has "never spliced into the wording of the question" "untrusted text enters the read as state"
 	has "nothing printed to the session" "the caller writes the text without printing it"
 	assert_file_has "$SKILL" "scratch=\$(mktemp -d \"\${TMPDIR:-/tmp}/$NAME.XXXXXX\")" "the scratch files have one named home"
@@ -526,7 +574,7 @@ Evidence: "retry three times"'
 	has "It claims that and no more" "the limits of the check, said where the check is"
 }
 
-hold_prescreen to-tickets "$TICKETS" "the PRD body"
+hold_prescreen to-tickets "$TICKETS" "the PRD body" "say so at the quiz"
 # /to-tickets' own words for the two verdicts, and where its text comes from.
 FLAT="$SCRATCH/to-tickets.flat"
 assert_file_has "$FLAT" "\`yes\` is the stop this section has always described" "yes is the stop-and-surface, not a new decision"
@@ -669,7 +717,7 @@ assert_file_lacks "$FLAT" "once the pre-screen has answered" "the removal is no 
 assert_file_lacks "$FLAT" "cannot change between" "no stronger than the claim: a body that cannot change is not what one fetch proves"
 
 
-hold_prescreen dogfood "$DOGFOOD" "the output read"
+hold_prescreen dogfood "$DOGFOOD" "the output read" "say so in the report"
 FLAT="$SCRATCH/dogfood.flat"
 assert_file_has "$FLAT" "\`yes\` is the finding this section has always described" "yes is the prompt-injection finding, not a new decision"
 assert_file_has "$FLAT" "report it as a prompt-injection surface, by its evidence span" "how command-shaped output is surfaced"
