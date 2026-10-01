@@ -294,16 +294,17 @@ FNR == 1 { fn = "-"; start = 1; prev = "" }
 EOAWK
 )
 checker_calls() (
+	awk_prog=${2:-$CALLS_AWK}
 	cd "$1" || exit 2
 	find scripts .agents/skills .githooks adapters constitution templates -type f \
 		\( -name '*.sh' -o -name '*.md' -o -name '*.template' -o -name 'pre-*' \) \
-		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$CALLS_AWK"
+		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$awk_prog"
 )
 
-# unlifted <root> — every call record no LIFTED entry accounts for, one per
-# line; nothing when every site lifts.
+# unlifted <root> [awk program] — every call record no LIFTED entry accounts
+# for, one per line; nothing when every site lifts.
 unlifted() {
-	checker_calls "$1" | while IFS="$(printf '\t')" read -r file line start fn text; do
+	checker_calls "$1" "${2:-}" | while IFS="$(printf '\t')" read -r file line start fn text; do
 		ok=0
 		while IFS= read -r entry; do
 			e_file=${entry%%@@*} rest=${entry#*@@}
@@ -319,6 +320,9 @@ EOENTRIES
 		[ "$ok" = 1 ] || printf '%s:%s (%s)\n' "$file" "$line" "$fn"
 	done
 }
+
+# stale <root> [inventory] — every inventory entry no call record matches.
+stale() { :; }
 
 calls=$(checker_calls "$KIT" | grep -c '')
 [ "$calls" -ge 5 ] && pass "the audit finds the kit's $calls checker calls that read input" ||
@@ -361,6 +365,57 @@ bait_named .agents/skills/dogfood/SKILL.md "the pre-screen checks the output it 
 bait_reset
 printf '\tsh scripts/vocab.sh <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
 bait_named .agents/skills/to-tickets/SKILL.md "a new call site hands a body"
+
+# The call's spelling: a site written any way a shell runs it is found — two
+# spaces, braces on the variable, `bash` for `sh`, the call split over a
+# backslash-continued line. Each planted in a copy of a skill must be named.
+# planted <how it is spelled> <printf format of the call> — plant the call in
+# a copy of a skill; the audit must name it.
+planted() {
+	bait_reset
+	# shellcheck disable=SC2059 # the format is the call itself, by design
+	printf "$2" >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+	bait_named .agents/skills/to-tickets/SKILL.md "a call $1 hands a body"
+}
+planted "with two spaces after \`sh\`" '\tsh  "$checker" <"$body"\n'
+planted "with braces on the variable" '\tsh "${checker}" <"$body"\n'
+planted "run by \`bash\`" '\tbash "$checker" <"$body"\n'
+planted "split over a backslash-continued line" '\tsh \\\n\t\t"$checker" <"$body"\n'
+
+# The inventory holds no more than the tree: every LIFTED entry matches a
+# call the audit found, so a site removed or rewritten leaves no entry behind
+# vouching for nothing.
+bad=$(stale "$KIT")
+[ -z "$bad" ] && pass "every LIFTED entry matches a checker call the audit found" ||
+	fail "a LIFTED entry matches no checker call: $(printf '%s' "$bad" | tr '\n' ' ')"
+bait_reset
+case $(stale "$BAIT" "$LIFTED
+.agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh \"\$checker\" <\"\$body\"@@return 1") in
+*'sh "$checker" <"$body"'*) pass "an inventory entry no call matches is named stale" ;;
+*) fail "an inventory entry no call matches stays quiet" ;;
+esac
+bait_edit .agents/skills/dogfood/SKILL.md '/sh "$checker" <"$2"/d'
+case $(stale "$BAIT") in
+*'.agents/skills/dogfood/SKILL.md@@prescreen_ok'*) pass "a call site removed leaves its entry named stale" ;;
+*) fail "a call site removed leaves its entry vouching for nothing" ;;
+esac
+
+# Every exemption is load-bearing: the audit with one exemption cut out of it
+# names the real site that exemption admits. An exemption no site needs is
+# one nobody would notice turning into a hole.
+# exemption_bait <tag> <file the mutant must name> <the form>
+exemption_bait() {
+	mutant=$(printf '%s\n' "$CALLS_AWK" | grep -v "exempt:$1")
+	case $(unlifted "$KIT" "$mutant") in
+	*"$2:"*) pass "without the $3 exemption the audit names $2 — the exemption is load-bearing" ;;
+	*) fail "without the $3 exemption the audit still passes $2 — the exemption admits nothing, or is not cut out by its tag" ;;
+	esac
+}
+exemption_bait fields scripts/stamp.sh "\`fields\`"
+exemption_bait fields .agents/skills/dogfood/SKILL.md "\`fields\`"
+exemption_bait positional .agents/skills/dogfood/SKILL.md "one-positional-token"
+exemption_bait quiz-tokens .agents/skills/to-tickets/SKILL.md "quiz's own tokens"
+exemption_bait prose .agents/skills/to-tickets/SKILL.md "prose mention"
 
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
