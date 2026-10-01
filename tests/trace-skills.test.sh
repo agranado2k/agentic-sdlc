@@ -1301,8 +1301,8 @@ ME='' dismiss_iteration "$D18/trace.nologin" "$D18/threads"
 	fail "an empty login should refuse (non-zero, a message, no rows); exit $FENCE_RC, recorded '$(pairs "$D18/trace.nologin" | tr '\n' '|')'"
 
 banner "19. /pr-iterate's triage line quotes data.id, and its stated shape is the script's own (#420)"
-# A check name is forge data: the placeholder is single-quoted, so a filled
-# id is one shell word whatever the forge spelled. And the shape the skill
+# A check name is forge data: the skill collapses it to one token first, and
+# the placeholder is single-quoted besides — the quotes are defensive. And the shape the skill
 # states is read from TRACE_SHAPES, never copied: the script's table is the
 # one source, and the skill's sentence is held to it.
 PI=$(skill_md pr-iterate)
