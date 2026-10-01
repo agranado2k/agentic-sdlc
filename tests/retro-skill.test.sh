@@ -323,11 +323,31 @@ stamp_has 'the severity bands in `/review-pr` as they stood when the window clos
 stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
 stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
 # A row that measured nothing names no oracle and says why: oracle: none — <why>
-# (ticket #342). The glossary carries that form.
+# (ticket #342). The glossary carries that form, and the example rows hold to it.
 case "$oracle_entry" in
 *'oracle: none — '* | *'`oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
 *) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
 esac
+# Every example row that carries an oracle clause must follow the proper form:
+# either four-part (— oracle: <who>, <when>, <version>, <comparator>) or
+# none form (— oracle: none — <why>). The label row in question 8 is the one
+# that uses the none form.
+rows8_bad=
+while IFS= read -r row; do
+	[ -n "$row" ] || continue
+	case $row in
+	*'— oracle: '*)
+		# Has an oracle clause; check it's in one of the proper forms
+		if ! printf '%s\n' "$row" | grep -qE '— oracle: none — |— oracle: [^,]+, [^,]+, [^,]+, [^-]'; then
+			rows8_bad="$rows8_bad [$row]"
+		fi
+		;;
+	esac
+done <<EOF
+$rows8
+EOF
+[ -z "$rows8_bad" ] && pass "every example row in question 8 that carries an oracle clause follows the proper form" ||
+	fail "an example row's oracle clause does not follow the proper form:$rows8_bad"
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
