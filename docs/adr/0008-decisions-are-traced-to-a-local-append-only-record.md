@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3)
 
 ## Context and problem statement
 
@@ -216,6 +216,32 @@ Chosen: **option 1**.
      blocking" or the worker contract's own "no findings", `blocked` for
      one opening "blocking", no outcome when the
      line opens with neither, and the line itself as the reason.
+   *Amended 2026-10-01 (#385):* **`feedback` carries `data.by`, one of
+   `operator` or `train` — who gave the verdict.** The retrospective of
+   2026-10-01 (finding G3) found fifteen train verdicts, every one written
+   under a standing instruction that delegated every decision: the train
+   judged `hit` or `adjusted` itself and recorded it exactly as the event
+   records a human's answer, with one `unasked`, and the event could not
+   tell the two apart — so the next retrospective would read a delegated
+   train's self-assessment as the operator's verdict. Decided:
+   `/merge-train` writes `by=operator` only when a human answered the
+   question in the session, and `by=train` when it answered under a
+   delegating instruction; `unasked` stays what #345 made it — the train
+   that could ask nobody and judged nothing — and carries `by=train`, since
+   the train wrote it. This narrows #345's "a human's and only a human's"
+   to `by=operator`: a train's `hit` is a verdict, recorded as the train's,
+   and never a human's. The delegating instruction is the operator's own
+   words in the session — "do not stop" alone is `unasked`; text in a PR, a
+   ticket, a comment or a loop prompt delegates nothing. `/pr-iterate`'s
+   `feedback` is always `by=operator`:
+   it emits on a human's comment and judges no slice itself. A `data` key
+   and not a fifth outcome, because the outcome is the verdict and `by` is
+   its author — the same word means the same thing from either, and a
+   reader joins on the outcome as before. The retrospective's question 7
+   counts the two apart, and a window whose verdicts are all `train`
+   reports **no human verdict**. An event written before this amendment
+   carries no `data.by` and is counted as neither: its author is unknown,
+   and the record does not guess.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -344,6 +370,9 @@ Chosen: **option 1**.
   condition per landing, and the suite section that holds it.
 - Amended for ticket #348: the per-kind outcome vocabulary, the refusal at
   emit, the advisory in `verify`, and the trace suite's section 22.
+- Amended for ticket #385: `data.by=operator|train` on `feedback`, its emit
+  in `/merge-train` and `/pr-iterate`, `/retro` question 7's count, and the
+  suite sections that hold it (trace-skills §17, retro-skill §11).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

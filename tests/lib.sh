@@ -26,8 +26,8 @@ LAST_STATUS=0
 #
 # Pinned HERE, at source time, not in t_init: seven suites never call t_init,
 # and a pin that a suite has to opt into is the coupling this is removing.
-# Three suites carry their own assertion helpers (adapters-demo, setup-demo,
-# kit-demo) and source this file for the pin and the budget below alone. The
+# Three of them (adapters-demo, setup-demo, kit-demo) keep their own scratch
+# and trap, and take only the pin, the budget and the assertion helpers here. The
 # same posture t_git_identity takes for signing and hooks paths — a
 # developer's environment does not decide what a test asserts — and
 # tests/fixture-builders.test.sh holds this one the way it holds those. A
@@ -482,6 +482,14 @@ t_cleanup() { [ -n "${SCRATCH:-}" ] && rm -rf "$SCRATCH"; }
 
 banner() { printf '\n=== %s ===\n' "$*"; }
 pass() { printf '  ok    %s\n' "$*"; }
+# skip <text> — a case this host cannot run, said out loud and never counted.
+skip() { printf '  skip  %s\n' "$*"; }
+# note <text> — a visible line that is neither a pass nor a fail, counted in
+# SKIPPED so the suite can say so again beside its final summary.
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
+}
 fail() {
 	printf '  FAIL  %s\n' "$*"
 	failures=$((failures + 1))
@@ -538,6 +546,10 @@ assert_status() {
 		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
 	fi
 }
+
+# assert_file <path> / assert_no_file <path> — the path exists, or is gone.
+assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
+assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
 assert_out_has() {
 	case "$LAST_OUT" in
@@ -955,5 +967,93 @@ t_assert_skill_frontmatter() {
 		fail "SKILL.md is $_sf_lines lines — over the 500 the specification recommends; move reference material to a sidecar"
 	_sf_deep=$(find "$_sf_dir" -mindepth 2 -type f | head -1)
 	[ -z "$_sf_deep" ] && pass "supporting files are one level deep" || fail "a supporting file is nested deeper than one level: $_sf_deep"
+}
+
+# t_field_tokens <field-name> [<policy file>] — the value(s) of a field, as
+# `sh scripts/vocab.sh fields` prints them. With no policy file, read from
+# $FIELDS, which the suite set once from that same command; with one, the
+# checker is run against that file here. Handles the optional (open) mark that
+# vocabularies a consumer can extend carry.
+t_field_tokens() {
+	if [ $# -ge 2 ]; then
+		VOCAB_CONFIG="$2" sh "$T_ROOT/scripts/vocab.sh" fields 2>/dev/null
+	else
+		printf '%s\n' "$FIELDS"
+	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
+}
+
+# t_guards_config <repo> <contents> — the guards' policy file of a fixture
+# repo, scripts/guards.config.sh, holding <contents> and a newline.
+t_guards_config() { t_write "$1" "scripts/guards.config.sh" "$2
+"; }
+
+# t_write_config <path> <contents> — <contents> and a newline, written to
+# <path>, its directory made first.
+t_write_config() {
+	mkdir -p "$(dirname "$1")"
+	printf '%s\n' "$2" >"$1"
+}
+
+# t_resolve_tier <args> — scripts/agents.lib.sh, run as an agent runs it,
+# streams kept apart (t_run_split owns why).
+t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
+
+# t_line_of <file> <literal> — the number of the first line of <file> holding
+# <literal> as a fixed string; empty when none does.
+t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
+
+# t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
+# <file> opened with ```<language> (sh when omitted) whose body holds <literal>
+# as a fixed string, written whole to <out>, to be sourced and run. The
+# literal is usually a function's `name()`, so the fence that defines it is
+# the one lifted; a document's executable text is run, never a mirror of it.
+# <out> is empty when no such fence exists, which the caller asserts on.
+t_lift_fence() {
+	awk -v lit="$2" -v lang="${4:-sh}" '$0 == "```" lang { buf = ""; on = 1; next }
+		on && /^```$/ { if (index(buf, lit)) { printf "%s", buf; exit } on = 0; next }
+		on { buf = buf $0 "\n" }' "$1" >"$3"
+}
+
+# t_lift_shape <file> <first-line ERE> <out> — a declared return shape: the
+# first fenced block whose first line matches the pattern, from that line up
+# to the next fence line, written to <out>. A shape is spelled ONCE, as a
+# fence, so a reader's prompt can quote it and a suite can read it.
+t_lift_shape() {
+	awk -v pat="$2" '/^```/ { if (on) exit; hold = 1; next }
+		hold { hold = 0; if ($0 ~ pat) on = 1 }
+		on { print }' "$1" >"$3"
+}
+
+# t_stub_gh <dir> <body file> [<prelude file>] — writes <dir>/gh, an
+# executable stub of the forge CLI that prints <body file> (its path baked in
+# at write time) whatever it is asked. The prelude's lines, when given, run
+# first, verbatim: what a suite needs on top — a log of every call, a failure
+# mode — stays the suite's own, and only the stub's frame is shared.
+t_stub_gh() {
+	mkdir -p "$1"
+	{
+		printf '#!/bin/sh\n'
+		[ -z "${3:-}" ] || cat "$3"
+		printf "cat '%s'\n" "$(printf '%s' "$2" | sed "s/'/'\\\\''/g")"
+	} >"$1/gh"
+	chmod +x "$1/gh"
+}
+
+# t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
+# <file> whose FIRST line matches, printed verbatim. The suites that run a
+# document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the
+# adoption arm) run its text, never a mirror of it, so an edit that breaks a
+# fence breaks the suite instead of the next consumer. Prints nothing when no
+# fence matches; the caller refuses to be vacuous on that.
+t_sh_fence() {
+	awk -v pat="$2" '
+		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
+		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
+		grab {
+			n++
+			if (n == 1 && $0 ~ pat) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$1"
 }
 

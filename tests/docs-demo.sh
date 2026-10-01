@@ -55,14 +55,7 @@ trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
 
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
-
-# note <text> — a visible line that is neither a pass nor a fail.
+# note <text> (tests/lib.sh) — a visible line that is neither a pass nor a fail.
 #
 # Some cases below can only run against a shell that is installed. Silently
 # skipping one would let a machine (or a CI image) quietly drop an entire axis
@@ -70,13 +63,6 @@ fail() {
 # beside the final summary, where a reader who only checks the last lines will
 # actually see it. Same convention as tests/agents-tiers.test.sh.
 SKIPPED=0
-note() {
-	printf '  --    %s\n' "$*"
-	SKIPPED=$((SKIPPED + 1))
-}
-
-assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
-assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
 # assert_has <file> <string>
 assert_has() {
@@ -122,8 +108,8 @@ step6_check() {
 	done <"$3"
 }
 
-# recipe_block <awk-pattern> — the body of the ```sh fence in UPDATING.md whose
-# FIRST line matches, printed verbatim.
+# t_sh_fence "$KIT/UPDATING.md" <awk-pattern> (tests/lib.sh) — the body of the
+# ```sh fence in UPDATING.md whose FIRST line matches, printed verbatim.
 #
 # The two data-loss cases below run the recipe's OWN TEXT rather than a copy of
 # it. Every other executable claim in this suite is mirrored by hand (recipe,
@@ -132,17 +118,6 @@ step6_check() {
 # transcript, so there is no D to pin it with. A mirror is exactly the wrong
 # instrument there: it can be fixed in this file while the document a consumer
 # actually follows stays broken, which is the shape of the bug that shipped.
-recipe_block() {
-	awk -v pat="$1" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$KIT/UPDATING.md"
-}
 
 # assert_block <pattern> <destination> <label> — extract, and refuse to be vacuous.
 #
@@ -150,7 +125,7 @@ recipe_block() {
 # empty script. That is the same vacuity 9d's own key-set diff falls into, so it
 # gets the same treatment: no match is a failure, loudly.
 assert_block() {
-	recipe_block "$1" >"$2"
+	t_sh_fence "$KIT/UPDATING.md" "$1" >"$2"
 	if [ -s "$2" ]; then
 		pass "$3"
 	else
@@ -169,22 +144,6 @@ kit_take() {
 		return 1
 	}
 	cat "$WORK/take.$$" >"$3" && rm -f "$WORK/take.$$"
-}
-
-# assert_status <expected> <label> -- <command...>
-assert_status() {
-	expected=$1
-	label=$2
-	shift 3
-	out=$("$@" 2>&1)
-	actual=$?
-	if [ "$actual" = "$expected" ]; then
-		pass "$label (exit $actual)"
-	else
-		fail "$label — expected exit $expected, got $actual"
-		printf '%s\n' "$out" | sed 's/^/        | /'
-	fi
-	LAST_OUT=$out
 }
 
 TODAY=$(date +%Y-%m-%d)
@@ -1122,7 +1081,7 @@ assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
 assert_file "adapters/claude-code/README.md"
 
 # ---------------------------------------------------------------------------
-# The two data-loss cases. Both run UPDATING.md's own text (see recipe_block).
+# The two data-loss cases. Both run UPDATING.md's own text (see assert_block).
 # ---------------------------------------------------------------------------
 
 # recipe_prelude <file> — the shell state steps 8-10 assume, written to <file>.
@@ -1135,7 +1094,7 @@ kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
 FROM_REF=v0.3.0
 TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 EOF
-	recipe_block '^kit_take\(\)' >>"$1"
+	t_sh_fence "$KIT/UPDATING.md" '^kit_take\(\)' >>"$1"
 }
 
 banner "C4c. 9d does not destroy a config the kit ships only as a .template"
