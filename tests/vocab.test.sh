@@ -215,7 +215,8 @@ printf '%s\n' 'Author-kind: human' 'Command-shaped: no' 'Action: apply' 'Evidenc
 RETURN4_MS=2000 # five checks of the four lines; the bait below must break it
 within_budget "$VOCAB" "$RETURN4" "$RETURN4_MS" "a typed return's four lines"
 # The bait: a checker that does twelve times the work fails that budget —
-# the bound can go red, so its green says something.
+# the bound can go red, so its green says something. It stands for both
+# budgets: the body's bound shares within_budget, and is not baited apart.
 cat >"$SCRATCH/costly.vocab.sh" <<EOCOSTLY
 in=\$(mktemp) && cat >"\$in"
 for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do sh "$VOCAB" <"\$in"; done
