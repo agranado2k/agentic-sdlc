@@ -55,17 +55,29 @@ atype=$(hook_field agent_type)
 # line, or nothing. Quoted text is literal to the shell, so a single-quoted
 # segment, and a double-quoted one with no substitution inside, is dropped
 # before the words are read: `rg 'pkill|killall'` searches, it does not signal.
+# The quotes are read left to right, one character at a time, so a `'` inside
+# double quotes is text and never opens a single-quoted segment (review of PR
+# #433, L-1). A heredoc's body is not told apart from commands: a line in it
+# that starts with pkill is refused, which errs closed.
 guard_why() {
 	awk -v q="'" '
 	{ s = s $0 "\n" }
 	function base(w) { sub(/.*\//, "", w); return w }
 	END {
-		gsub(q "[^" q "]*" q, " ", s)
-		while (match(s, /"[^"]*"/)) {
-			seg = substr(s, RSTART + 1, RLENGTH - 2)
-			if (seg !~ /\$\(|`/) seg = " "
-			s = substr(s, 1, RSTART - 1) " " seg " " substr(s, RSTART + RLENGTH)
+		t = ""; st = ""; buf = ""
+		for (x = 1; x <= length(s); x++) {
+			ch = substr(s, x, 1)
+			if (st == "s") { if (ch == q) { st = ""; t = t " " } continue }
+			if (st == "d") {
+				if (ch == "\\") { buf = buf ch substr(s, x + 1, 1); x++; continue }
+				if (ch == "\"") { st = ""; t = t " " (buf ~ /\$\(|`/ ? buf : "") " "; continue }
+				buf = buf ch; continue
+			}
+			if (ch == q) { st = "s"; continue }
+			if (ch == "\"") { st = "d"; buf = ""; continue }
+			t = t ch
 		}
+		s = t
 		gsub(/\$\(|[`;&|(){}\n]/, "\n", s)
 		n = split(s, segs, "\n")
 		for (k = 1; k <= n; k++) {
@@ -73,7 +85,11 @@ guard_why() {
 			i = 1
 			while (i <= m && (w[i] == "" || w[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/ ||
 				w[i] ~ /^(sudo|xargs|exec|nohup|env|command|time|timeout|nice|then|do|else|if|while|until|!)$/ ||
-				w[i] ~ /^-/ || w[i] ~ /^[0-9.]+[smhd]?$/)) i++
+				w[i] ~ /^-/ || w[i] ~ /^[0-9.]+[smhd]?$/)) {
+				# sudo -u <user>, sudo -g <group>: the option takes the next word.
+				if (w[i] ~ /^-[ugCDhpRrTt]$/) i++
+				i++
+			}
 			if (i > m) continue
 			c = base(w[i])
 			if (c == "pkill" || c == "killall") { print c " signals every process whose name matches"; exit }
@@ -82,6 +98,12 @@ guard_why() {
 			kl = 1
 			for (j = i + 1; j <= m; j++) {
 				if (w[j] == "") continue
+				# A comment ends the command; a redirect is not an argument, and
+				# a bare one takes the next word as its target (review of PR
+				# #433, H-1: `kill $pid 2>/dev/null` is a pid, not a name).
+				if (w[j] ~ /^#/) break
+				if (w[j] ~ /^([0-9]*[<>]+&?|&>+)$/) { j++; continue }
+				if (w[j] ~ /^([0-9]*[<>]|&>)/) continue
 				if (w[j] ~ /^-(s|n|-signal)$/) { j++; continue }
 				if (w[j] ~ /^-/ || w[j] ~ /^([0-9]+|%.*|\$.*)$/) continue
 				print "kill was handed a name, " w[j] ", rather than a pid or a job"; exit

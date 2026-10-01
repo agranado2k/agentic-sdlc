@@ -2584,7 +2584,8 @@ guard '' 'pkill -f tests/x'
 # Signalling a job or a pid the sub-agent holds passes through.
 for c in 'kill %1' 'kill 12345' 'kill -9 12345' 'kill -s TERM 12345' 'sleep 30 & kill $!' \
 	'grep -n pkill adapters/claude-code/hooks/tool-pre-guard.sh' "rg 'pkill|killall' ." \
-	'git log --grep=killall'; do
+	'git log --grep=killall' 'kill $pid 2>/dev/null' 'kill 123 >/dev/null 2>&1' 'kill 123 > /dev/null' \
+	'kill $! # stop it' 'xargs kill < pids'; do
 	new_trace
 	guard general-purpose "$c"
 	[ "$S_STATUS" = 0 ] && [ -z "$(events)" ] &&
@@ -2595,7 +2596,8 @@ done
 # Signalling by name, in each shape, is blocked.
 for c in 'killall node' '/usr/bin/pkill -f vitest' 'cd tests && pkill -f x' 'sudo pkill x' \
 	'kill -9 $(pgrep -f tests/x)' 'pgrep -f tests/x | xargs kill' 'kill -TERM vitest' \
-	'timeout 5 killall sh' 'true; pkill x'; do
+	'timeout 5 killall sh' 'true; pkill x' 'sudo -u nobody pkill x' \
+	'echo "a'"'"'b"; pkill -f x; echo "'"'"'"'; do
 	new_trace
 	guard general-purpose "$c"
 	[ "$S_STATUS" = 2 ] && pass "a spawned sub-agent's '$c' is blocked" ||
