@@ -146,10 +146,12 @@ if (from === "error" && typeof payload.error === "string" && payload.error.lengt
   const lines = payload.error.split(/\r?\n/);
   if (lines.length > 0 && lines[0].length > 0) {
     errorFirstLine = lines[0];
-    // Trim to 300 characters for reasonable line length
-    errorFirstLine = errorFirstLine.substring(0, 300);
-    // Remove control characters (DEL and \x00–\x1f)
-    errorFirstLine = errorFirstLine.replace(/[\u0000-\u001f\u007f]/gu, " ");
+    // Capped at 300 characters, counted by code point so a character outside
+    // the BMP is never cut in half.
+    errorFirstLine = Array.from(errorFirstLine).slice(0, 300).join("");
+    // Every character trace.sh's [[:cntrl:]] refuses under a UTF-8 locale
+    // becomes a space: C0, DEL, C1 (U+0085 among them), U+2028 and U+2029.
+    errorFirstLine = errorFirstLine.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/gu, " ");
   }
 }
 

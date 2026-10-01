@@ -2172,6 +2172,34 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the outcome is not fail: $EBS"
 	[ "$(reason_of "$EBS")" = 'Path: C:\Users\file' ] && pass "the reason holds the backslash error as written" ||
 		fail "the reason of the backslash error decodes to '$(reason_of "$EBS")'"
+
+	# Every character trace_json_str's [[:cntrl:]] refuses under a UTF-8 locale
+	# — C0, DEL, C1 (U+0085 among them), U+2028 and U+2029 — becomes a space: a
+	# reason carrying one would be refused by trace.sh and lose the event.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"a\\u0001b\\u007fc\\u0085d\\u009fe\\u2028f\\u2029g"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-cntrl-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cntrl-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECT=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECT")" = 'a b c d e f g' ] &&
+		pass "every control character the trace refuses, U+0085 U+2028 U+2029 included, becomes a space" ||
+		fail "the scrubbed reason decodes to '$(reason_of "$ECT")': $ECT"
+
+	# The cap is 300 CHARACTERS, counted by code point: a character outside the
+	# BMP at the boundary is kept whole, never split into half a surrogate pair.
+	LONG=$(printf '%0299d' 0 | tr 0 x)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s\\ud83d\\ude00yyyy"}' \
+		"$TSESSION" "$TUSE" "$LONG" >"$SCRATCH/tool-fail-cap-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cap-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECP=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECP")" = "$LONG$(printf '\360\237\230\200')" ] &&
+		pass "the reason is capped at 300 characters, the last one kept whole" ||
+		fail "the capped reason decodes to '$(reason_of "$ECP")'"
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi
