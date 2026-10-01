@@ -347,6 +347,25 @@ printf '%s\n' "$S_ERR$S_OUT" | grep -qi "phase" &&
 	fail "the dry run does not name the phase as the source: $S_ERR"
 
 # ---------------------------------------------------------------------------
+banner "4c. The kit's own dispatches are traced (owed since #249's review)"
+# ---------------------------------------------------------------------------
+# The dispatcher records every spawn through scripts/trace.sh, which reads the
+# SHIPPED policy file unless TRACE_CONFIG names another — and the shipped one
+# is empty by principle, so a kit dispatch that did not name the kit's twin
+# wrote nothing at all. The wrapper names it, $ROOT-anchored like
+# AGENTS_CONFIG. The stub tree carries a twin pointing at scratch, and no
+# shipped policy file, so only the wrapper's choice can make the line appear.
+cp "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
+printf "TRACE_DIR='%s'\n" "$SCRATCH/kit-trace" >"$STUBTREE/scripts/trace.kit.config.sh"
+stub_dispatch /review-pr --prompt 'traced review'
+if grep -rqs '"kind":"spawn"' "$SCRATCH/kit-trace"; then
+	pass "a kit dispatch writes its spawn record to the kit's own trace"
+else
+	fail "a kit dispatch wrote no spawn record — the wrapper does not name scripts/trace.kit.config.sh (exit $S_STATUS)"
+fi
+rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+
+# ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
 # ---------------------------------------------------------------------------
 # The declaration is only worth having if it ends in an executable spawn. For

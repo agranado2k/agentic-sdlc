@@ -886,35 +886,52 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "19. The adapter's blob store IS the shared script's"
+banner "19. The adapter keeps no blob store of its own: it asks the shared script's"
 # ---------------------------------------------------------------------------
-# THE COUPLING CHECK, and the reason it is here rather than in a comment. One
-# `emit` carries one blob (scripts/trace.sh refuses a second), and a tool call
-# has two payloads — so this hook lands them itself rather than spending an
-# extra event per payload. Two writers of one store is a coupling, so the
-# assertion is not "a file appeared" but "the shared script, handed the same
-# bytes, stores them under the same name at the same path". If trace.sh ever
-# renames or re-lays-out the store, this goes red instead of the trace quietly
-# growing a second store nobody reads.
+# A tool call has two payloads and one event, and `emit` carries one blob — so
+# the first cut of this hook landed both payloads itself, a second writer of a
+# content-addressed store with its own staging, mode and hashing, and the review
+# of PR #295 found three defects in exactly that duplication. Ticket #306 gave
+# the shared script a `blob` subcommand (store, print `<hash> <bytes>`, write no
+# event), and the hook now calls it. Two halves, both asserted: the hook's names
+# are what `blob` prints for the same bytes, and nothing under the adapter still
+# hashes a payload or names the store's layout.
 if [ "$HAVE_NODE" = 1 ]; then
 	new_trace
 	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
-	IH=$(hash_of "$TIN")
-	HOOKREL=$(blob_file "$IH")
-	HOOKREL=${HOOKREL#"$TDIR"/}
+	T19=$(ev_of tool.use | sed -n '1p')
 	OWN=$(mktemp -d "$SCRATCH/trace-own.XXXXXX") || exit 2
 	printf '%s' "$TIN" >"$SCRATCH/tool-input-252"
-	env TRACE_DIR="$OWN" TRACE_CONFIG="$KIT/scripts/trace.config.sh" \
-		sh "$TRACE" emit kind=note reason='the same payload, stored by the shared script' \
-		--blob "$SCRATCH/tool-input-252" >/dev/null 2>&1
+	OWNSAYS=$(env TRACE_DIR="$OWN" TRACE_CONFIG="$KIT/scripts/trace.config.sh" \
+		sh "$TRACE" blob "$SCRATCH/tool-input-252" 2>/dev/null)
+	[ -n "$OWNSAYS" ] && [ "${OWNSAYS%% *}" = "$(str "$T19" input_blob)" ] &&
+		pass "the hook's input_blob is the name \`trace.sh blob\` prints for the same bytes: ${OWNSAYS%% *}" ||
+		fail "the two disagree — the hook recorded '$(str "$T19" input_blob)', trace.sh blob printed '$OWNSAYS'"
 	OWNREL=$(find "$OWN/blobs" -type f 2>/dev/null | sed -n '1p')
 	OWNREL=${OWNREL#"$OWN"/}
+	HOOKREL=$(blob_file "$(str "$T19" input_blob)")
+	HOOKREL=${HOOKREL#"$TDIR"/}
 	[ -n "$OWNREL" ] && [ "$OWNREL" = "$HOOKREL" ] &&
-		pass "scripts/trace.sh stores the same payload at the same path: $OWNREL" ||
-		fail "the two stores disagree — the hook wrote '$HOOKREL', trace.sh wrote '$OWNREL'"
+		pass "and it sits at the same path under both trace directories: $OWNREL" ||
+		fail "the hook's blob is at '$HOOKREL', trace.sh stored it at '$OWNREL'"
 else
 	echo "  skip  node is not on PATH — the coupling leg needs the payload reader"
 fi
+# The store code is GONE from the adapter, not merely unused: the old helper
+# or a `blobs/` path anywhere under hooks/, or a hash in the tool hook, is a
+# second writer waiting to drift again. (hook.lib.sh still hashes one thing —
+# the toplevel path the pointer file is keyed by, which is hook_pointer's
+# coupling and not a payload.)
+# `-e` twice rather than a BRE `\|`, which is a GNU extension: a grep without
+# it would match nothing, and nothing is this check's PASS. For the same reason
+# the files it reads must exist before an empty answer means anything.
+[ -f "$HOOKS/tool-post.sh" ] && [ -f "$HOOKS/hook.lib.sh" ] && [ -f "$HOOKS/tool-payload.mjs" ] ||
+	fail "the store-code check cannot read the adapter's hooks under $HOOKS"
+STORE_CODE=$(grep -n -e 'blobs/' -e 'hook_blob' "$HOOKS"/*.sh "$HOOKS"/*.mjs
+	grep -n 'git.*hash-object' "$HOOKS/tool-post.sh")
+[ -z "$STORE_CODE" ] &&
+	pass "no file under the adapter's hooks lands a payload, names the store's layout, or hashes a tool payload" ||
+	fail "the adapter still carries blob store code: $STORE_CODE"
 
 # ---------------------------------------------------------------------------
 banner "20. A tool that failed says so, and its error is the result"
@@ -1212,6 +1229,25 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "with no blob landed from outside the trace's own filesystem" ||
 		fail "a blob was landed from foreign scratch: $(find "$TDIR/blobs" -type f)"
 	rm -f "$TDIR/tmp"
+
+	# A STORE THAT REFUSES IS ONE fail EVENT (review of PR #317). Since #306 the
+	# hook stages fine and it is the shared script's `blob` that is refused, which
+	# answers with nothing on stdout — so `blobs` is made a FILE here, the
+	# cheapest way to fail the store's own mkdir while leaving tmp/ and the
+	# event file writable.
+	new_trace
+	: >"$TDIR/blobs"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	[ "$S_STATUS" = 0 ] && pass "a blob store that refuses the bytes exits 0" ||
+		fail "the hook exited $S_STATUS"
+	[ "$(ev_of tool.use | wc -l | tr -d ' ')" = 1 ] &&
+		[ "$(str "$(ev_of tool.use | sed -n '1p')" outcome)" = fail ] &&
+		pass "and records exactly one tool.use outcome=fail rather than an event naming blobs nobody can open" ||
+		fail "expected one fail event, got: $(events)"
+	[ -z "$(find "$TDIR/tmp" -mindepth 1 2>/dev/null)" ] &&
+		pass "and sweeps its scratch and the shared script's" ||
+		fail "scratch survives under $TDIR/tmp: $(find "$TDIR/tmp" -mindepth 1)"
+	rm -f "$TDIR/blobs"
 else
 	echo "  skip  node is not on PATH — the review's regression legs need the payload reader"
 fi
@@ -1403,5 +1439,341 @@ claude-other-307 10 31 88 23947 1 msg_three307" ] &&
 else
 	echo "  skip  node is not on PATH — the resumed-session legs need the extractor"
 fi
+
+# ---------------------------------------------------------------------------
+banner "27. SubagentStop waits, within a bound, for the subagent's final message"
+# ---------------------------------------------------------------------------
+# Ticket #308. Live, SubagentStop can run BEFORE the subagent's transcript holds
+# its final assistant line: two of seven stops in the ticket's own measurement
+# found the file present and the last line 170 and 223 ms away. Read then, the
+# hook either finds no usage at all or — worse — sums the turns that WERE there
+# and records a confident undercount. So the hook waits for the transcript to
+# END ON A FINAL MESSAGE (its last user-or-assistant line is an assistant line
+# with a stop_reason other than tool_use or null), polling, never past the
+# bound TRACE_AGENT_WAIT_MS names. Empty is no wait: today's behaviour, and
+# what the shipped policy file says.
+#
+# TIMING WITHOUT FLAKES. Wall time is read with `date +%s`, whole seconds, and
+# floor(end) - floor(start) is never less than the whole seconds that really
+# passed — so "at least the bound" is asserted exactly. Nothing asserts a TIGHT
+# upper limit on wall time, because a loaded machine (this section was written
+# at load average 29) stretches every hook run: "no wait" is proved instead by
+# a `sleep` on PATH that logs each nap it is asked for, and "stopped early" by
+# the wait the event itself reports. The appearing transcript is written by a
+# background writer one second in, against a ten-second bound: a machine that
+# stalls long enough for the writer to finish first still yields the tokens,
+# which is the claim.
+#
+# THE STAGES, cut from the subagent fixture at its natural seam: its first 19
+# lines end on the tool_result user line, after one assistant turn that used a
+# tool — exactly the live shape that yields a partial sum.
+head -n 19 "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/sub-head-308.jsonl"
+sed -n '20,$p' "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/sub-tail-308.jsonl"
+[ -s "$SCRATCH/sub-tail-308.jsonl" ] && pass "the fixture splits before its final message" ||
+	fail "the subagent fixture has no line 20 — the stage cut moved"
+
+# THE POLICY, shipped and kit. The shipped file names the variable and leaves
+# it empty — no wait, the behaviour a consumer had before this bound existed;
+# the kit's twin sets its own, from the measurement.
+grep -q "^TRACE_AGENT_WAIT_MS=''$" "$KIT/scripts/trace.config.sh" &&
+	pass "scripts/trace.config.sh ships TRACE_AGENT_WAIT_MS empty" ||
+	fail "scripts/trace.config.sh does not ship TRACE_AGENT_WAIT_MS=''"
+grep -qE "^TRACE_AGENT_WAIT_MS='[1-9][0-9]{0,4}'$" "$KIT/scripts/trace.kit.config.sh" &&
+	pass "scripts/trace.kit.config.sh sets a bound the hook accepts" ||
+	fail "scripts/trace.kit.config.sh sets no well-formed TRACE_AGENT_WAIT_MS"
+
+# stop_on <transcript> — the SubagentStop payload, pointed at that transcript.
+stop_on() {
+	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$1" >"$SCRATCH/stop-308.json"
+}
+
+# THE STUBS. A `sleep` that logs each nap and then really sleeps; one that
+# also refuses a fraction, as a POSIX-only sleep may; and a `date` with no
+# sub-second field, as POSIX date has none. Each is found first on PATH and
+# hands everything else to the real command.
+REAL_SLEEP=$(command -v sleep)
+REAL_DATE=$(command -v date)
+mkdir -p "$SCRATCH/naps-308" "$SCRATCH/whole-308" "$SCRATCH/noclock-308"
+printf '#!/bin/sh\necho "$1" >>"%s/naps-308.log"\nexec "%s" "$@"\n' "$SCRATCH" "$REAL_SLEEP" >"$SCRATCH/naps-308/sleep"
+printf '#!/bin/sh\necho "$1" >>"%s/naps-308.log"\ncase $1 in *.*) exit 1 ;; esac\nexec "%s" "$@"\n' "$SCRATCH" "$REAL_SLEEP" >"$SCRATCH/whole-308/sleep"
+printf '#!/bin/sh\ncase "$*" in *%%N*) echo "$("%s" +%%s)N" ;; *) exec "%s" "$@" ;; esac\n' "$REAL_DATE" "$REAL_DATE" >"$SCRATCH/noclock-308/date"
+chmod +x "$SCRATCH/naps-308/sleep" "$SCRATCH/whole-308/sleep" "$SCRATCH/noclock-308/date"
+
+# timed <env assignments…> — run the hook on the staged payload with the
+# logging sleep first on PATH ($STUBS, default the plain logger, overrides
+# it), and set ELAPSED to the whole seconds it took and NAPS to how many naps
+# it asked for.
+timed() {
+	: >"$SCRATCH/naps-308.log"
+	_t0=$(date +%s)
+	t_run_split env PATH="${STUBS:-$SCRATCH/naps-308}:$PATH" "$@" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-308.json"
+	ELAPSED=$(($(date +%s) - _t0))
+	NAPS=$(wc -l <"$SCRATCH/naps-308.log" | tr -d ' ')
+}
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE RACE, WON. The file is there, one turn short; the last turn lands once
+	# the hook has taken its first nap, inside a ten-second bound. The writer is
+	# driven by the nap log rather than by a clock, so a slow preamble cannot let
+	# the turn land before the hook first looks — which would let a hook that
+	# checks once and never polls pass this leg (review of PR #323).
+	new_trace
+	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-late-308.jsonl"
+	stop_on "$SCRATCH/sub-late-308.jsonl"
+	: >"$SCRATCH/naps-308.log"
+	(
+		_w=0
+		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
+			sleep 0.05 2>/dev/null || sleep 1
+			_w=$((_w + 1))
+		done
+		cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-late-308.jsonl"
+	) &
+	WRITER=$!
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=10000
+	wait "$WRITER"
+	[ "$S_STATUS" = 0 ] && pass "the hook exits 0 while it waits" || fail "the hook exited $S_STATUS: $S_ERR"
+	[ -z "$S_OUT" ] && pass "and says nothing on stdout" || fail "stdout carried: $S_OUT"
+	W=$(ev_of agent.stop | sed -n '1p')
+	for pair in tok_in=34 tok_out=156 tok_cache_w=17138 tok_cache_r=14968; do
+		f=${pair%=*}
+		want=${pair#*=}
+		got=$(num "$W" "$f")
+		[ "$got" = "$want" ] && pass "$f is $want — the final turn was waited for, not the partial sum" ||
+			fail "$f is '$got', expected $want: $W"
+	done
+	[ -n "$(str "$W" waited_ms)" ] && pass "and data.waited_ms says how long it waited ($(str "$W" waited_ms) ms)" ||
+		fail "no data.waited_ms on the event: $W"
+	[ "$NAPS" -ge 1 ] && [ "$(str "$W" waited_ms)" -gt 0 ] 2>/dev/null &&
+		pass "and it really polled: $NAPS nap(s) before the turn landed" ||
+		fail "the hook took $NAPS naps and reported waited_ms '$(str "$W" waited_ms)' — it did not poll"
+	[ "$(str "$W" waited_ms)" -lt 10000 ] 2>/dev/null &&
+		pass "and it stopped waiting once the turn landed, inside the 10000 ms bound" ||
+		fail "data.waited_ms is '$(str "$W" waited_ms)' — it waited out the bound instead of polling"
+
+	# THE RACE, LOST. The final turn never lands: the absence is recorded as
+	# before, with the wait it gave — after the bound, and not before.
+	new_trace
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=2000
+	[ "$S_STATUS" = 0 ] && pass "a transcript that never completes still exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	[ "$ELAPSED" -ge 2 ] && pass "and only after the 2000 ms bound (${ELAPSED}s)" ||
+		fail "the hook gave up after ${ELAPSED}s, before its 2000 ms bound"
+	[ "$NAPS" -le 41 ] && pass "and it asked for no more naps than the bound holds ($NAPS of at most 41)" ||
+		fail "the hook asked for $NAPS naps against a 2000 ms bound of 50 ms naps"
+	[ "$ELAPSED" -le 30 ] && pass "and not without end (${ELAPSED}s — the slack is for a loaded machine, the catch is a hang)" ||
+		fail "the hook took ${ELAPSED}s against a 2000 ms bound — it blocks past the bound"
+	L=$(ev_of agent.stop | sed -n '1p')
+	[ "$(ev_of agent.stop | wc -l | tr -d ' ')" = 1 ] && pass "one agent.stop event, as ever" ||
+		fail "expected one agent.stop, got $(ev_of agent.stop | wc -l)"
+	[ "$(str "$L" outcome)" = fail ] && pass "with outcome=fail" ||
+		fail "the event's outcome is '$(str "$L" outcome)': $L"
+	[ -z "$(num "$L" tok_out)" ] && pass "and no partial sum of the turns that were there" ||
+		fail "the event carried tokens from an unfinished transcript: $L"
+	[ "$(str "$L" waited_ms)" -ge 2000 ] 2>/dev/null && pass "and data.waited_ms is the wait it gave, at least the bound ($(str "$L" waited_ms))" ||
+		fail "data.waited_ms is '$(str "$L" waited_ms)': $L"
+
+	# EMPTY IS NO WAIT — from the environment, and from a policy file. Today's
+	# behaviour exactly: read what is there, now, and say nothing of a wait.
+	for how in env zero file; do
+		new_trace
+		if [ "$how" = env ]; then
+			timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+		elif [ "$how" = zero ]; then
+			timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=0
+		else
+			printf "TRACE_AGENT_WAIT_MS=''\n" >"$SCRATCH/policy-308.sh"
+			timed TRACE_DIR="$TDIR" TRACE_CONFIG="$SCRATCH/policy-308.sh"
+		fi
+		E=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$NAPS" = 0 ] &&
+			pass "an empty bound ($how) is no wait: exit 0, not one nap" ||
+			fail "an empty bound ($how) napped $NAPS times, exit $S_STATUS"
+		[ -n "$E" ] && [ -z "$(str "$E" waited_ms)" ] && pass "and the event claims no wait ($how)" ||
+			fail "the event with an empty bound ($how): $E"
+	done
+
+	# A BOUND FROM THE POLICY FILE is the kit's own case: its twin sets one.
+	new_trace
+	printf "TRACE_AGENT_WAIT_MS='1000'\n" >"$SCRATCH/policy-308.sh"
+	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$SCRATCH/policy-308.sh"
+	[ "$ELAPSED" -ge 1 ] && [ "$(str "$(ev_of agent.stop | sed -n '1p')" waited_ms)" -ge 1000 ] 2>/dev/null &&
+		pass "a bound in the policy file is read and waited (${ELAPSED}s, 1000 ms)" ||
+		fail "the policy file's 1000 ms bound was not waited: ${ELAPSED}s, $(events)"
+
+	# A MALFORMED BOUND IS REFUSED, like every other policy value: named on
+	# stderr, on the event, and never waited — but still exit 0, because a hook
+	# never fails a session. A leading zero is refused with the rest: sh
+	# arithmetic reads 0100 as octal.
+	for bad in soon 1.5 -5 0100 1000000; do
+		new_trace
+		timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS="$bad"
+		B=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$NAPS" = 0 ] &&
+			pass "TRACE_AGENT_WAIT_MS='$bad' exits 0 without a nap" ||
+			fail "TRACE_AGENT_WAIT_MS='$bad' napped $NAPS times, exit $S_STATUS"
+		case $S_ERR in *TRACE_AGENT_WAIT_MS*"$bad"*) pass "and is refused on stderr, naming the value" ;;
+		*) fail "no refusal on stderr for '$bad': $S_ERR" ;; esac
+		[ "$(str "$B" wait_refused)" = "$bad" ] && [ -z "$(str "$B" waited_ms)" ] &&
+			pass "and on the event, which claims no wait" ||
+			fail "the event for '$bad' does not carry the refusal: $B"
+	done
+
+	# NO FILE AT ALL IS NOT WAITED FOR. In every measured stop the transcript
+	# already existed; in the kit's own trace every stop that named a missing
+	# file named one that never appeared. Waiting for those would cost every
+	# such stop the whole bound and buy nothing.
+	new_trace
+	stop_on "$SCRATCH/never-there-308.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=5000
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 0 ] &&
+		pass "a transcript that does not exist is not waited for" ||
+		fail "a missing transcript napped $NAPS times against a 5000 ms bound"
+	case $(ev_of agent.stop) in *'no readable subagent transcript'*) pass "and is recorded as today" ;;
+	*) fail "the missing-transcript event changed: $(events)" ;; esac
+
+	# TRACING OFF IS NO WAIT, whatever the bound: there is nothing to write.
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	timed TRACE_DIR= TRACE_AGENT_WAIT_MS=5000
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 0 ] && [ -z "$S_ERR" ] &&
+		pass "with tracing off a 5000 ms bound is not waited, and the hook is silent" ||
+		fail "with tracing off the hook napped $NAPS times, exit $S_STATUS, stderr '$S_ERR'"
+
+	# NO MILLISECOND CLOCK: the wait is counted instead of clocked. POSIX date
+	# stops at seconds, so without %N the figure is the sum of the naps — here
+	# six 50 ms naps against a 300 ms bound, exactly.
+	new_trace
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/noclock-308:$SCRATCH/naps-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	C=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$C" waited_ms)" = 300 ] && [ "$NAPS" = 6 ] &&
+		pass "with no millisecond clock the wait is six counted 50 ms naps, reported as 300" ||
+		fail "no-clock wait: exit $S_STATUS, $NAPS naps, event $C"
+
+	# NO FRACTIONAL SLEEP: whole-second naps while a whole second remains, and
+	# the wait ends short of the bound rather than past it — and never spins.
+	new_trace
+	STUBS="$SCRATCH/noclock-308:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=2500
+	H=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$H" waited_ms)" = 2000 ] &&
+		pass "a sleep that refuses fractions naps whole seconds and stops at 2000 of a 2500 ms bound" ||
+		fail "whole-second wait: exit $S_STATUS, event $H"
+	[ "$NAPS" = 3 ] && pass "in three asks: one refused fraction, then two whole seconds" ||
+		fail "the hook asked for $NAPS naps: $(tr '\n' ' ' <"$SCRATCH/naps-308.log")"
+
+	# FROM THE REVIEW OF PR #323 — each a regression now.
+	#
+	# A CLOCK THAT STEPS BACK must not stretch the wait. `date +%s%N` is the
+	# realtime clock; the stub answers once with the real time and from then on
+	# with the real time two seconds EARLIER, so read naively the wait is two
+	# seconds longer than its bound — the review reproduced 3566 ms for a 500.
+	mkdir -p "$SCRATCH/backclock-308"
+	printf '#!/bin/sh\ncase "$*" in *%%N*) if [ -f "%s/back-308.seen" ]; then echo $(($("%s" +%%s%%N) - 2000000000)); else : >"%s/back-308.seen"; exec "%s" +%%s%%N; fi ;; *) exec "%s" "$@" ;; esac\n' \
+		"$SCRATCH" "$REAL_DATE" "$SCRATCH" "$REAL_DATE" "$REAL_DATE" >"$SCRATCH/backclock-308/date"
+	chmod +x "$SCRATCH/backclock-308/date"
+	rm -f "$SCRATCH/back-308.seen"
+	new_trace
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/backclock-308:$SCRATCH/naps-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	K=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" -le 7 ] && [ "$(str "$K" waited_ms)" = 300 ] &&
+		pass "a clock stepping back still ends the wait at the bound ($NAPS naps, waited_ms 300)" ||
+		fail "a backwards clock: exit $S_STATUS, $NAPS naps, event $K"
+
+	# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP still waits at the kit's own
+	# bound: the first check leaves a hair under 1000 ms, and one whole-second
+	# nap within a poll of the bound is taken rather than none.
+	new_trace
+	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+	J=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 950 ] 2>/dev/null &&
+		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
+		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
+
+	# THE READINESS RULE, half by half (hook_final's comment calls each one
+	# load-bearing, so each has a leg that fails without it). Built from the
+	# fixture: line 11 is a user line, line 20 the final assistant line.
+	sed -n '20p' "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/final-line-308.jsonl"
+	sed -n '11p' "$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/user-line-308.jsonl"
+	# final <label> <file> <expect: final|not> — run the hook with a short bound
+	# and read which way it went.
+	final() {
+		new_trace
+		stop_on "$2"
+		timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+		_f=$(ev_of agent.stop | sed -n '1p')
+		if [ "$3" = final ]; then
+			[ -n "$(num "$_f" tok_out)" ] && pass "$1 reads as final" || fail "$1 did not read as final: $_f"
+		else
+			[ "$(str "$_f" outcome)" = fail ] && [ -z "$(num "$_f" tok_out)" ] &&
+				pass "$1 is not final" || fail "$1 read as final: $_f"
+		fi
+	}
+	cat "$FIX/subagent-transcript.redacted.jsonl" "$SCRATCH/user-line-308.jsonl" >"$SCRATCH/resumed-308.jsonl"
+	final "an old end_turn followed by the user line that resumed the subagent" "$SCRATCH/resumed-308.jsonl" not
+	{ cat "$SCRATCH/sub-head-308.jsonl"; sed 's/"stop_reason":"end_turn"/"stop_reason":null/' "$SCRATCH/final-line-308.jsonl"; } >"$SCRATCH/null-308.jsonl"
+	final "a last assistant line with stop_reason null (a streamed block before its last)" "$SCRATCH/null-308.jsonl" not
+	{ cat "$SCRATCH/sub-head-308.jsonl"; sed 's/"stop_reason":"end_turn"/"stop_reason":"max_tokens"/' "$SCRATCH/final-line-308.jsonl"; } >"$SCRATCH/max-308.jsonl"
+	final "a last assistant line that stopped on max_tokens" "$SCRATCH/max-308.jsonl" final
+	sed 's/"type":"\(user\|assistant\)"/"type": "\1"/g; s/"stop_reason":"/"stop_reason": "/g' \
+		"$FIX/subagent-transcript.redacted.jsonl" >"$SCRATCH/spaced-308.jsonl"
+	grep -q '"type": "assistant"' "$SCRATCH/spaced-308.jsonl" &&
+		final "a transcript serialised with a space after each colon" "$SCRATCH/spaced-308.jsonl" final ||
+		fail "the spaced fixture was not built"
+
+	# A MALFORMED BOUND WITH TRACING OFF says nothing: there is nothing to wait
+	# for and nowhere to write, so a typo must not speak on every stop.
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	timed TRACE_DIR= TRACE_AGENT_WAIT_MS=soon
+	[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ "$NAPS" = 0 ] &&
+		pass "with tracing off a malformed bound is not refused aloud" ||
+		fail "with tracing off a malformed bound: exit $S_STATUS, $NAPS naps, stderr '$S_ERR'"
+else
+	echo "  skip  node is not on PATH — the wait legs read tokens with the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "28. The field reader on a compact payload, the shape a live hook gets"
+# ---------------------------------------------------------------------------
+# The checked-in payloads are pretty-printed because the REDACTION reformatted
+# them; a live hook's stdin is compact JSON on one line (#309). `hook_field`'s
+# greedy `.*` means the LAST match on a line wins, so on the live shape every
+# key the hooks read must occur exactly once at top level — and the text a
+# model wrote into `last_assistant_message`, which arrives after the ids and
+# may quote them, must never answer for one. JSON escapes every quote inside a
+# string, so a quoted `"agent_id":"…"` there is `\"agent_id\":\"…\"` and the
+# anchor never sees a bare `,"` before it.
+COMPACT='{"session_id":"'"$SESSION"'","transcript_path":"/p/main.jsonl","cwd":"/tmp/spike-proj","prompt_id":"fbfc3940-88d4-4de5-93bf-4acc79bb4f61","permission_mode":"bypassPermissions","agent_id":"'"$AGENT"'","agent_type":"general-purpose","effort":{"level":"high"},"hook_event_name":"SubagentStop","stop_hook_active":false,"agent_transcript_path":"/p/sub.jsonl","last_assistant_message":"done, {\"agent_id\":\"evil\",\"session_id\":\"evil\",\"transcript_path\":\"/evil\"}","background_tasks":[],"session_crons":[],"reason":"other","source":"startup"}'
+printf '%s' "$COMPACT" | grep -c '' | grep -qx 1 && pass "the compact payload is one line" ||
+	fail "the compact fixture is not one line"
+field() {
+	printf '%s' "$COMPACT" | (cd "$HOOKS" && sh -c '. ./hook.lib.sh; hook_read; hook_field "$1"' hook-field-case "$1")
+}
+for pair in session_id="$SESSION" agent_id="$AGENT" agent_type=general-purpose \
+	transcript_path=/p/main.jsonl agent_transcript_path=/p/sub.jsonl cwd=/tmp/spike-proj \
+	reason=other source=startup; do
+	k=${pair%%=*}
+	want=${pair#*=}
+	got=$(field "$k")
+	[ "$got" = "$want" ] && pass "hook_field $k reads '$want' on the compact line" ||
+		fail "hook_field $k read '$got' on the compact line, expected '$want'"
+done
+[ "$(field level)" = high ] &&
+	pass "a nested key reads as if top-level — the limit the comment names, harmless while no hook reads one" ||
+	fail "hook_field level read '$(field level)' — the comment's account of a nested key is wrong"
+# The two READMEs beside the hooks tell the same story as the comment: every
+# live payload is compact, and the session fixtures are pretty only because
+# the redaction reformatted them (review of PR #315, M-2).
+for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
+	d=$(tr '\n' ' ' <"$doc" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+	case $d in
+	*"unlike the pretty-printed session payloads"*)
+		fail "${doc#"$KIT"/} still says the session payloads arrive pretty-printed — every live payload is compact" ;;
+	*"every live payload arrives compact"*) pass "${doc#"$KIT"/} says every live payload arrives compact" ;;
+	*) fail "${doc#"$KIT"/} does not say every live payload arrives compact" ;;
+	esac
+done
 
 t_done "trace hooks"
