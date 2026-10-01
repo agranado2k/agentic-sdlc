@@ -917,6 +917,21 @@ _k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_imp" sh "$LIB"
 [ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_con" ] &&
 	pass "on a '$_k_imp' session, 'reviewer self-implemented' falls back to the plain reviewer '$_k_con'" ||
 	fail "on a '$_k_imp' session, 'reviewer self-implemented' gave '$_k_ans' — expected the fallback to '$_k_con'"
+# Every model the policy maps can be a session's, so every one is asked: the
+# self-implemented form never answers the session's own model, and the plain
+# form either answers another model or nothing at all — never the session's.
+for _k_tier in planner implementer mechanical; do
+	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" "$_k_tier" 2>/dev/null)
+	[ -n "$_k_ses" ] || continue
+	_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer self-implemented 2>/dev/null)
+	[ -n "$_k_ans" ] && [ "$_k_ans" != "$_k_ses" ] &&
+		pass "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' answers '$_k_ans', not the session's own" ||
+		fail "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' gave '$_k_ans' — the review shares the author's model, or names none"
+	_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer 2>/dev/null)
+	[ "$_k_ans" != "$_k_ses" ] &&
+		pass "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answers '${_k_ans:-nothing}', never the session's own" ||
+		fail "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answered the session's own model '$_k_ans'"
+done
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in

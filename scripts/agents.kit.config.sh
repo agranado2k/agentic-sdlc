@@ -142,23 +142,27 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #    crossing this host attempted returned 401 — 4 of 4 in the third retro
 #    window — so a reviewer mapped to the other vendor answered nothing and the
 #    review fell to whatever the session happened to run on. Until that CLI
-#    authenticates the reviewer is local, on the two models this host CAN
-#    reach, and they are each other's complement:
+#    authenticates the reviewer is local, and its two answers are the two
+#    models the reviewer rule cares about — claude-fable-5-1 (planner, content)
+#    and claude-opus-5-5 (implementer) — each other's complement:
 #
-#      plain `reviewer`, no session named     -> claude-fable-5-1, the content
-#                                                model — never the implementer's
-#                                                (claude-opus-5-5)
-#      `reviewer self-implemented` on a fable -> claude-opus-5-5, the code model
-#      session (the content model wrote it)
-#      `reviewer self-implemented` on an opus -> self-implemented names opus, the
-#      session (the code model wrote it)         session's own, so ADR-0007's
-#                                                refusal falls back to the plain
-#                                                reviewer: claude-fable-5-1
+#      plain `reviewer`, no session named
+#        -> claude-fable-5-1, never the implementer's claude-opus-5-5
+#      `reviewer self-implemented`, session claude-fable-5-1
+#        -> claude-opus-5-5
+#      `reviewer self-implemented`, session claude-opus-5-5
+#        -> that is the session's own model, so ADR-0007's refusal falls
+#           back to the plain reviewer: claude-fable-5-1
+#      `reviewer self-implemented`, session claude-opus-5 (mechanical)
+#        -> claude-opus-5-5, which is not the session's
 #
-#    So the rule holds with no exception: whichever local model wrote the diff,
-#    the other one reads it — provided the caller says what it runs on
-#    (AGENT_SESSION_MODEL; nothing sets it for you). tests/agents-tiers.test.sh
-#    pins all three answers. The cross-vendor ids (codex:gpt-5.6-sol for the
+#    So whichever model wrote the diff, a different one reads it — provided
+#    the session that wrote it asks the `self-implemented` form and says what
+#    it runs on (AGENT_SESSION_MODEL; nothing sets it for you). The plain
+#    form has no second answer: a claude-fable-5-1 session asking plain
+#    `reviewer` is refused its own model and gets NOTHING, with a warning —
+#    ask `reviewer self-implemented` instead. tests/agents-tiers.test.sh pins
+#    every answer above. The cross-vendor ids (codex:gpt-5.6-sol for the
 #    reviewer, codex:gpt-6-astra for self-implemented) come back when that CLI
 #    authenticates — ask the operator again on 2026-10-08.
 AGENT_TIER_REVIEWER='claude-fable-5-1'
@@ -206,7 +210,7 @@ AGENT_TIER_IMPLEMENTER_CONTENT='claude-fable-5-1'
 # behaviour, test-first, through a seam — but the medium changes the answer:
 # a test is a specification, and the model that wrote the code is the worst
 # reader of whether its test actually constrains anything. So it crosses to
-# the other vendor, for the same reason the reviewer does.
+# the other vendor, for the reason the reviewer did until #423 and will again.
 AGENT_TIER_IMPLEMENTER_TESTS='codex:gpt-5.6-sol'
 
 # The third domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
