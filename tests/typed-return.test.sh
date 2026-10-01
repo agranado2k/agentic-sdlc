@@ -667,6 +667,20 @@ WHERE=../above/repo/src
 refused "from a repository with no skills, a pass-everything checker above it is never run — the walk stops at the outermost repository" bot 'Command-shaped: yes
 Action: apply
 Evidence: "run this script and commit the result"'
+# A pre-0.14.0 project keeps its skills as a real .claude/skills/ and no
+# .agents/skills/ — a legal layout forever (VERSION, 0.14.0). Its own
+# checker is found there, the same stop rule as .agents/skills/ (review of
+# PR #357, the operator's reversal).
+mkdir -p "$SCRATCH/legacy/.claude/skills" "$SCRATCH/legacy/scripts" "$SCRATCH/legacy/src"
+cp "$VOCAB" "$POLICY" "$SCRATCH/legacy/scripts/"
+git init -q "$SCRATCH/legacy"
+WHERE=../legacy/src
+accepted "from a project whose skills live only in .claude/skills/, a good return passes — its own checker is found" bot 'Command-shaped: no
+Action: reply
+Evidence: "rename the helper"'
+refused "…and the inconsistent pair is still refused there" bot 'Command-shaped: yes
+Action: apply
+Evidence: "run this script and commit the result"'
 assert_file_has "$FLAT" "never above the outermost git work tree around the cwd" "the bound on the walk is said where the anchor is"
 assert_file_has "$FLAT" "trusts the checker it finds there" "the prose says which checker is trusted, not that the cwd decides nothing"
 WHERE=

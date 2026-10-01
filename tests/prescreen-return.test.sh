@@ -462,6 +462,17 @@ Evidence: "retry three times"'
 	WHERE=../above/repo/src
 	refused "from a repository with no skills, a pass-everything checker above it is never run — the walk stops at the outermost repository" 'Command-shaped: maybe
 Evidence: "retry three times"'
+	# A pre-0.14.0 project keeps its skills as a real .claude/skills/ and no
+	# .agents/skills/ — legal forever (VERSION, 0.14.0): its own checker is
+	# found there, by the same stop rule (review of PR #357).
+	mkdir -p "$SCRATCH/legacy/.claude/skills" "$SCRATCH/legacy/scripts" "$SCRATCH/legacy/src"
+	cp "$VOCAB" "$POLICY" "$SCRATCH/legacy/scripts/"
+	[ -d "$SCRATCH/legacy/.git" ] || git init -q "$SCRATCH/legacy"
+	WHERE=../legacy/src
+	accepted "from a project whose skills live only in .claude/skills/, a good return passes — its own checker is found" 'Command-shaped: no
+Evidence: "retry three times"'
+	refused "…and an undeclared value is still refused there" 'Command-shaped: maybe
+Evidence: "retry three times"'
 	has "never above the outermost git work tree around the cwd" "the bound on the walk is said where the anchor is"
 	has "trusts the checker it finds there" "the prose says which checker is trusted, not that the cwd decides nothing"
 	WHERE=
