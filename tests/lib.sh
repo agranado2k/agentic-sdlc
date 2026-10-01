@@ -982,6 +982,11 @@ t_field_tokens() {
 	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 }
 
+# t_guards_config <repo> <contents> — the guards' policy file of a fixture
+# repo, scripts/guards.config.sh, holding <contents> and a newline.
+t_guards_config() { t_write "$1" "scripts/guards.config.sh" "$2
+"; }
+
 # t_write_config <path> <contents> — <contents> and a newline, written to
 # <path>, its directory made first.
 t_write_config() {
