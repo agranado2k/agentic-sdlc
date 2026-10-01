@@ -797,23 +797,46 @@ cat >/dev/null
 echo "\$\$" >"$PIDFILE"
 sleep 30
 EOF
-sleeps_before=$(own_sleep_pids 50)
-sh "$DISPATCH" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
-disp=$!
-sleep 2
-kill -TERM "$disp" 2>/dev/null
-wait "$disp" 2>/dev/null
-disp_status=$?
-sleep 1
-[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143" || fail "a TERM to the dispatcher exited $disp_status"
-if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-	fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left"
-	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
-else
-	pass "a TERM to the dispatcher takes the worker down with it"
-fi
-leftover=$(new_sleeps 50 "$sleeps_before")
-[ "$leftover" = 0 ] && pass "…and the watchdog's sleep" || fail "$leftover watchdog sleep(s) outlived the dispatcher"
+
+# term_leg <dispatcher> <label> — TERM a dispatcher mid-run, then hold it to
+# 143, a dead worker and no watchdog sleep left behind.
+term_leg() {
+	rm -f "$PIDFILE"
+	sleeps_before=$(own_sleep_pids 50)
+	sh "$1" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
+	disp=$!
+	sleep 2
+	kill -TERM "$disp" 2>/dev/null
+	wait "$disp" 2>/dev/null
+	disp_status=$?
+	sleep 1
+	[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143$2" || fail "a TERM to the dispatcher exited $disp_status$2"
+	if kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
+		fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left$2"
+		kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+	else
+		pass "a TERM to the dispatcher takes the worker down with it$2"
+	fi
+	leftover=$(new_sleeps 50 "$sleeps_before")
+	[ "$leftover" = 0 ] && pass "…and the watchdog's sleep$2" || fail "$leftover watchdog sleep(s) outlived the dispatcher$2"
+}
+term_leg "$DISPATCH" ""
+
+# The bait: a copy of the dispatcher that is slow to reach its timed-path trap,
+# as a loaded host makes the real one. A leg that signals on the clock lands
+# its TERM before the trap and reads the global cleanup's status instead; a
+# leg that waits on the worker's own marker cannot, because the worker is
+# spawned after the trap. The copy lives in this suite's scratch, beside links
+# to its real siblings, under the name the dispatcher insists on.
+BAIT_DIR="$SCRATCH/slow-trap"
+mkdir -p "$BAIT_DIR"
+for _f in "$KIT"/scripts/*; do ln -s "$_f" "$BAIT_DIR/${_f##*/}"; done
+rm -f "$BAIT_DIR/agent-dispatch.sh"
+awk '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }' \
+	"$DISPATCH" >"$BAIT_DIR/agent-dispatch.sh"
+grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh" ||
+	fail "the bait was not planted — the timed path's INT trap line has moved"
+term_leg "$BAIT_DIR/agent-dispatch.sh" " (a dispatcher slow to reach its trap)"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
