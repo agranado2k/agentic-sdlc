@@ -1057,3 +1057,67 @@ t_sh_fence() {
 	' "$1"
 }
 
+
+# t_hold_reader_step <skill> <flat> <say-so words> [<label prefix>] — the
+# reader step of a typed-return fence, held to one spawn order (ticket #406).
+# <flat> is <skill> flattened one paragraph per line; the step is the
+# paragraph opening '**A tool-restricted subagent reads'. The adapter says an
+# in-session spawn withholds nothing — "no shell" in a prompt is a request,
+# not a restriction — and documents a path through the agent CLI that does
+# withhold, run from the scratch directory so the text and the return file
+# are the reader's whole reach. So the step names that path first and the
+# prompt-restricted subagent second, as the fallback, which keeps the duty the
+# fence has always carried: the <say-so words>. The adapter names the
+# command; the skill names none — skills ship unstamped and name no vendor —
+# so a flag planted in the skill goes red, whatever its case and whether or
+# not a code span wraps it (review of PR #440, M-4). One copy, for the two
+# suites that hold the three skills (review of PR #440, M-1).
+t_hold_reader_step() {
+	_hr_skill=$1 _hr_flat=$2 _hr_duty=$3 _hr_p=${4:-}
+	_hr_reader=$(grep '^\*\*A tool-restricted subagent reads' "$_hr_flat")
+	# Held case-blind, with one spelling of the fallback: a bait that capitalises
+	# "Fall back" or writes "fallback" is the same order, and must go red the same.
+	_hr_reader=$(printf '%s' "$_hr_reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
+	[ -n "$_hr_reader" ] && pass "${_hr_p}the reader step is one paragraph, found by its opening words" ||
+		fail "${_hr_p}the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
+	# One arm for presence and order both: a step that never names the path
+	# fails it the same way as one naming it after the fallback.
+	case ${_hr_reader%%fall back*} in
+	*"restricted path"*) pass "${_hr_p}the reader step names the adapter's restricted path, before the fallback" ;;
+	*) fail "${_hr_p}the reader step never names a restricted path, or names it after the fallback — the restricted path is the first spawn, not the alternative" ;;
+	esac
+	case $_hr_reader in
+	*"fall back"*"prompt"*) pass "${_hr_p}…and the prompt-restricted subagent is the fallback, named second" ;;
+	*) fail "${_hr_p}the reader step names no fallback to a prompt-restricted subagent" ;;
+	esac
+	case ${_hr_reader#*fall back} in
+	*"$_hr_duty"*) pass "${_hr_p}…which keeps its say-so duty: $_hr_duty" ;;
+	*) fail "${_hr_p}the fallback lost its duty — a prompt-restricted read must $_hr_duty" ;;
+	esac
+	case $_hr_reader in
+	*"the adapter names the command"*) pass "${_hr_p}the adapter names the command; the skill names none" ;;
+	*) fail "${_hr_p}the reader step should say the adapter names the command — a skill ships unstamped and names no vendor's" ;;
+	esac
+	case $_hr_reader in
+	*'run from `$scratch`'*) pass "${_hr_p}…run from the scratch directory, the one directory the reader reaches" ;;
+	*) fail "${_hr_p}the reader step should run the restricted path from \`\$scratch\` — from anywhere else, the caller's tree is in reach" ;;
+	esac
+	# The generic net: a flag after a space, a backtick or a paren — a code
+	# span or a parenthesis hides nothing — on the lower-cased step, so a
+	# capitalised flag is caught too.
+	if printf '%s' "$_hr_reader" | grep -q '[ `(]--[a-z]'; then
+		fail "${_hr_p}the reader step carries a flag ($(printf '%s' "$_hr_reader" | sed 's/.*[ `(]\(--[a-z-]*\).*/\1/')) — the adapter names the command, the skill names no vendor's flag"
+	else
+		pass "${_hr_p}the reader step carries no flag of any name"
+	fi
+	# The named net, whole file, case-blind: a flag planted outside the step,
+	# or spelled `Claude -p`, goes red the same. The one list, here.
+	for _hr_flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
+		if grep -qiF -- "$_hr_flag" "$_hr_skill"; then
+			fail "${_hr_p}$_hr_skill contains '$_hr_flag' — a vendor's flag or command is the adapter's to name, never the skill's"
+			grep -niF -- "$_hr_flag" "$_hr_skill" | sed 's/^/        | /'
+		else
+			pass "${_hr_p}no '$_hr_flag' in $_hr_skill, in any case (a vendor's flag or command is the adapter's to name, never the skill's)"
+		fi
+	done
+}

@@ -301,52 +301,7 @@ hold_prescreen() {
 	has "with read access to that file and nothing else" "what the reader is given"
 	has "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 	has "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
-	# The reader is spawned through the adapter's RESTRICTED PATH first (ticket
-	# #406): the adapter says an in-session spawn withholds nothing — "no
-	# shell" in a prompt is a request, not a restriction — and documents a path
-	# through the agent CLI that does withhold, run from the scratch directory
-	# so the text and the return file are the reader's whole reach. The step
-	# names that path first and the prompt-restricted subagent second, as the
-	# fallback, which keeps the duty the fence has always carried ($4). The
-	# adapter names the command; the skill names none — skills ship unstamped
-	# and name no vendor — so a flag planted in the step goes red.
-	reader=$(grep '^\*\*A tool-restricted subagent reads' "$FLAT")
-	# Held case-blind, with one spelling of the fallback: a bait that capitalises
-	# "Fall back" or writes "fallback" is the same order, and must go red the same.
-	reader=$(printf '%s' "$reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
-	[ -n "$reader" ] && pass "/$NAME — the reader step is one paragraph, found by its opening words" ||
-		fail "/$NAME — the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
-	case $reader in
-	*"restricted path"*) pass "/$NAME — the reader step names the adapter's restricted path" ;;
-	*) fail "/$NAME — the reader step never names a restricted path — the adapter documents one and nothing here takes it" ;;
-	esac
-	case ${reader%%fall back*} in
-	*"restricted path"*) pass "/$NAME — …first: the adapter's path is named before the fallback is" ;;
-	*) fail "/$NAME — the fallback comes before the adapter's path, or no fallback is named — the restricted path is the first spawn, not the alternative" ;;
-	esac
-	case $reader in
-	*"fall back"*"prompt"*) pass "/$NAME — …and the prompt-restricted subagent is the fallback, named second" ;;
-	*) fail "/$NAME — the reader step names no fallback to a prompt-restricted subagent — a session with no agent CLI has no path" ;;
-	esac
-	case ${reader#*fall back} in
-	*"$4"*) pass "/$NAME — …which keeps its say-so duty: $4" ;;
-	*) fail "/$NAME — the fallback lost its duty — a prompt-restricted read must $4" ;;
-	esac
-	case $reader in
-	*"the adapter names the command"*) pass "/$NAME — the adapter names the command; the skill names none" ;;
-	*) fail "/$NAME — the reader step should say the adapter names the command — a skill ships unstamped and names no vendor's" ;;
-	esac
-	case $reader in
-	*'run from `$scratch`'*) pass "/$NAME — …run from the scratch directory, the one directory the reader reaches" ;;
-	*) fail "/$NAME — the reader step should run the restricted path from \`\$scratch\` — from anywhere else, the caller's tree is in reach" ;;
-	esac
-	case $reader in
-	*" --"[a-z]*) fail "/$NAME — the reader step carries a flag ($(printf '%s' "$reader" | sed 's/.* \(--[a-z-]*\).*/\1/')) — the adapter names the command, the skill names no vendor's flag" ;;
-	*) pass "/$NAME — the reader step carries no flag of any name" ;;
-	esac
-	for flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
-		assert_file_lacks "$SKILL" "$flag" "a vendor's flag or command is the adapter's to name, never the skill's"
-	done
+	t_hold_reader_step "$SKILL" "$FLAT" "$4" "/$NAME — "
 	has "never spliced into the wording of the question" "untrusted text enters the read as state"
 	has "nothing printed to the session" "the caller writes the text without printing it"
 	assert_file_has "$SKILL" "scratch=\$(mktemp -d \"\${TMPDIR:-/tmp}/$NAME.XXXXXX\")" "the scratch files have one named home"
