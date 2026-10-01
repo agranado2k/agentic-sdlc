@@ -33,7 +33,9 @@
 # that line's age and the line count (#387).
 #
 # A PHANTOM STOP WRITES NOTHING (ticket #344): a transcript that does not
-# exist is neither waited for nor recorded — the adapter README says why. One
+# exist is neither waited for nor recorded — the adapter README says why — but
+# it is COUNTED, one line on its session's counter, which the session-end hook
+# records as data.phantoms (ticket #410, hook.lib.sh's hook_phantom_add). One
 # that EXISTS and cannot be read is a real stop whose usage is lost:
 # outcome=fail at once, naming the cause, since it would never become final.
 #
@@ -80,7 +82,7 @@ if [ -z "$transcript" ]; then
 	hook_trace emit kind=agent.stop \
 		reason="the payload named no subagent transcript, so no tokens were read" "$@"
 elif [ ! -e "$transcript" ] && [ ! -h "$transcript" ]; then
-	: # a phantom: no event (see the header)
+	hook_phantom_add "$sid" # a phantom: no event, one more on its session's count (see the header)
 elif [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; then
 	hook_trace emit kind=agent.stop outcome=fail \
 		reason="the subagent transcript exists but cannot be read as a file, so no tokens were read: $transcript" "$@"

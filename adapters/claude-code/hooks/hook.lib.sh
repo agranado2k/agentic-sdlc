@@ -694,3 +694,44 @@ hook_say_session() {
 	printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s Tell the operator this in your first reply."}}\n' \
 		"$_hs" "$_hs"
 }
+
+# --- the phantom-stop count ---------------------------------------------------
+# A phantom stop writes no event (subagent-stop.sh, ticket #344), but how many
+# there were is still worth knowing (ticket #410): the subagent-stop hook adds
+# one line to a per-session counter, and the session-end hook records the count
+# as data.phantoms on session.end. The counter lives in a directory this
+# adapter owns under the trace, claude-code/<session id>.phantoms, so two
+# sessions never share one — and never in current/, whose layout the shared
+# script keeps to itself (review of PR #432, M-1).
+
+# hook_phantom_add <session id> — one more phantom for that session. APPEND,
+# one short line per stop: an O_APPEND write of a few bytes lands whole, so two
+# stops at once both count and neither needs a lock. Nothing when tracing is
+# off or the id is not one hook_id_ok accepts — a counter keyed by a refused
+# id would be a path built from payload data.
+hook_phantom_add() {
+	hook_id_ok "${1:-}" || return 0
+	_hp_dir=$(hook_dir) || return 0
+	mkdir -p "$_hp_dir/claude-code" 2>/dev/null || return 0
+	echo . >>"$_hp_dir/claude-code/$1.phantoms" 2>/dev/null || :
+}
+
+# hook_phantom_take <session id> — print that session's count, 0 when it had
+# none, and remove its counter; print nothing (status 1) when tracing is off or
+# the id is refused. TAKEN, not read: a resumed session keeps its id and ends
+# again, and its next end must count only the stops after this one — the same
+# reason session-end.sh anchors its usage read (#307). The counter is RENAMED
+# aside before it is counted, so a stop landing during the end starts a fresh
+# counter for the next end rather than being counted and then deleted.
+hook_phantom_take() {
+	hook_id_ok "${1:-}" || return 1
+	_hp_dir=$(hook_dir) || return 1
+	_hp_file="$_hp_dir/claude-code/$1.phantoms"
+	_hp_n=0
+	if [ -f "$_hp_file" ] && mv "$_hp_file" "$_hp_file.$$" 2>/dev/null; then
+		_hp_n=$(wc -l <"$_hp_file.$$" | tr -d ' ')
+		rm -f "$_hp_file.$$"
+		case $_hp_n in '' | *[!0-9]*) _hp_n=0 ;; esac
+	fi
+	printf '%s' "$_hp_n"
+}
