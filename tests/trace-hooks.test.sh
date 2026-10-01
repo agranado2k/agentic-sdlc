@@ -2126,8 +2126,8 @@ start_in "$B2"
 	pass "with no threshold set, nothing is said on stderr — the shipped default is silence" ||
 	fail "with no threshold the hook still said: $S_ERR"
 start_in "$B2" TRACE_BEHIND_WARN=1
-[ "$S_STATUS" = 0 ] && case $S_OUT in '{'*'}') true ;; *) false ;; esac && [ "$(str "$START" behind)" = 2 ] &&
-	pass "past a threshold of 1: still exit 0, stdout only the note's object (section 35), still data.behind=2" ||
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "past a threshold of 1: still exit 0, still data.behind=2 (stdout's object is section 35's)" ||
 	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT', event $START"
 [ "$(behind_notes)" = 1 ] &&
 	pass "and stderr says so exactly once" ||
@@ -2560,7 +2560,7 @@ case $S_OUT in *'"systemMessage":"'*'is 2 commits behind origin/main'*'"hookSpec
 [ "$(behind_notes)" = 1 ] && [ "$(str "$START" behind)" = 2 ] &&
 	pass "and the stderr line and data.behind=2 are both still there" ||
 	fail "stderr said it $(behind_notes) times, event $START"
-if [ -n "${HAVE_NODE:-}" ]; then
+if [ "$HAVE_NODE" = 1 ]; then
 	behind_json_ok "$S_OUT" 'is 2 commits behind origin/main' &&
 		pass "the object parses as JSON, both fields holding the note" ||
 		fail "the object does not parse or lacks the note: $S_OUT"
@@ -2590,7 +2590,7 @@ start_in "$JQ" TRACE_BEHIND_WARN=1
 [ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] &&
 	pass "a root path holding a quote and a backslash: exit 0, one line on stdout" ||
 	fail "an escaping root path: exit $S_STATUS, stdout '$S_OUT'"
-if [ -n "${HAVE_NODE:-}" ]; then
+if [ "$HAVE_NODE" = 1 ]; then
 	behind_json_ok "$S_OUT" "$JQ is 3 commits behind origin/main" &&
 		pass "and it parses, the path read back exactly as written" ||
 		fail "the escaping root path broke the object: $S_OUT"
