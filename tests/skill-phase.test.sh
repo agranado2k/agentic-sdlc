@@ -174,32 +174,89 @@ AGENT_TIER_REVIEWER='stub:model-for-reviewing'
 STUB_CFG
 stub_dispatch() { t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
 
-# A reviewer-phase skill reaches the reviewer's model, and the prompt that
-# arrives says which skill to run — the one thing this wrapper adds over the
-# dispatcher it delegates to.
+# staged_prompt — what the stub read on stdin, which is the prompt the worker
+# would have received: the dispatcher's own stdout is the worker's.
+staged_prompt() { printf '%s\n' "$S_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p'; }
+
+# A reviewer-phase skill reaches the reviewer's model — and what arrives is
+# NOT "Run /review-pr." (#266, PRD #261). That skill needs a `git fetch`, a
+# forge call and a human at its last prompt, and a headless worker in another
+# agent harness's default sandbox has none of the three: told to run it, every
+# dispatched review came back with the same "no network" line and the session
+# relayed the findings by hand. So for this one skill the dispatcher stages the
+# worker contract, .agents/prompts/review-worker.md, with the caller's --prompt
+# filling its %%SPEC%% slot — and that contract opens by telling the worker it
+# is offline, so the budget goes on the diff rather than on discovering the
+# sandbox.
 stub_dispatch /review-pr --prompt 'review the branch'
 if [ "$S_STATUS" = 0 ]; then
 	pass "a dispatch of /review-pr runs end to end against a stub agent harness"
 	printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
 		pass "…on the model its reviewer phase resolves to" ||
 		fail "…but not on the reviewer's model: $S_OUT"
-	printf '%s\n' "$S_OUT" | grep -q 'Run /review-pr\.' &&
-		pass "…and the prompt it hands over says which skill to run" ||
-		fail "…but the prompt never names the skill: $S_OUT"
-	printf '%s\n' "$S_OUT" | grep -q 'review the branch' &&
-		pass "…with the caller's own prompt still in it" ||
+	staged=$(staged_prompt)
+	printf '%s\n' "$staged" | grep -q 'Run /review-pr\.' &&
+		fail "…but the worker was told to run /review-pr, which needs a fetch, a forge and a human it does not have" ||
+		pass "…and the prompt never tells the worker to run /review-pr itself"
+	# The OPENING line, not a mention somewhere below: a worker that reads
+	# "no network" after it has already tried three fetches got the fact late.
+	first=$(printf '%s\n' "$staged" | sed '1d;$d' | grep -m1 .)
+	case "$first" in
+	*"no network"*) pass "…the staged prompt is the worker contract, and its first line says the worker has no network" ;;
+	*) fail "…the staged prompt does not open by saying the worker is offline; it opens: '$first'" ;;
+	esac
+	printf '%s\n' "$staged" | grep -q 'no credentials' &&
+		pass "…and that it has no credentials" ||
+		fail "…and it never says the worker has no credentials"
+	printf '%s\n' "$staged" | grep -q '^ *REVIEWED: ' &&
+		pass "…and requires the REVIEWED line that names the commit it diffed" ||
+		fail "…but the contract has no REVIEWED line — the session cannot tell a moved head from a missed commit"
+	printf '%s\n' "$staged" | grep -q 'review the branch' &&
+		pass "…with the caller's own prompt filling the contract's spec slot" ||
 		fail "…and the caller's prompt was lost: $S_OUT"
 else
 	fail "a stub dispatch of /review-pr exited $S_STATUS"
 	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
 fi
 
+# The contract's other markers are the shared dispatcher's own --set path,
+# untouched: the branch and its base arrive filled when the caller names them,
+# and the "unfilled marker" note is the dispatcher's, not a silent blank.
+stub_dispatch /review-pr --prompt 'x' --set BRANCH=feat/under-review --set BASE=main
+staged=$(staged_prompt)
+printf '%s\n' "$staged" | grep -q 'feat/under-review' &&
+	pass "--set BRANCH=… reaches the contract's %%BRANCH%% through the dispatcher's own substitution" ||
+	fail "the BRANCH marker was not filled from --set: $S_OUT"
+case "$S_ERR" in
+*"unfilled marker"*) fail "every marker was set and the dispatcher still reports one unfilled: $S_ERR" ;;
+*) pass "…and with BRANCH, BASE and SPEC all set, nothing is reported unfilled" ;;
+esac
+
+# A spec too large for argv comes through --set-file, and then there is no
+# --prompt to give: for /review-pr the contract IS the prompt, so the
+# dispatcher does not demand one. Every other skill still does, below.
+printf 'the whole ticket body\n' >"$SCRATCH/spec.md"
+stub_dispatch /review-pr --set-file "SPEC=$SCRATCH/spec.md" --set BRANCH=b --set BASE=main
+[ "$S_STATUS" = 0 ] && pass "/review-pr dispatches with no --prompt at all — the contract is the prompt" ||
+	fail "/review-pr with --set-file SPEC and no --prompt exited $S_STATUS: $S_ERR"
+staged_prompt | grep -q 'the whole ticket body' &&
+	pass "…and the --set-file spec reaches the worker" ||
+	fail "…but the --set-file spec did not arrive: $S_OUT"
+stub_dispatch /tdd --set BRANCH=b
+[ "$S_STATUS" = 2 ] && pass "any other skill with no --prompt is still refused — there is nothing to send" ||
+	fail "/tdd with no prompt exited $S_STATUS, expected 2"
+
 # The tester phase carries its domain across the hop — the one phase that is
-# not a tier, so the one whose resolution a wrapper could silently drop.
+# not a tier, so the one whose resolution a wrapper could silently drop. And
+# its prompt keeps today's shape: the skill-name prefix is what every skill
+# but /review-pr still receives.
 stub_dispatch /tdd --prompt 'write the failing test'
 printf '%s\n' "$S_OUT" | grep -q 'model-for-testing' &&
 	pass "/tdd reaches the tests domain's model, not the plain implementer's" ||
 	fail "/tdd reached '$S_OUT'"
+staged_prompt | grep -q 'Run /tdd\. write the failing test' &&
+	pass "…and its prompt still opens with 'Run /tdd.' — the contract swap is /review-pr's alone" ||
+	fail "…but /tdd's prompt lost its skill-name prefix: $S_OUT"
 
 # A --prompt-file is the caller's own document: passed through unrewritten,
 # because rewriting a file someone wrote is a surprise. This pair is a
@@ -215,6 +272,9 @@ printf '%s\n' "$S_OUT" | grep -q 'the file the caller wrote' &&
 printf '%s\n' "$S_OUT" | grep -q 'Run /review-pr\.' &&
 	fail "the prompt file was rewritten — a file the caller wrote is not ours to edit" ||
 	pass "…and was not rewritten on the way"
+staged_prompt | grep -q 'no network' &&
+	fail "the caller's own prompt file was replaced by the worker contract — a file the caller wrote is what they meant to send" ||
+	pass "…nor replaced by the worker contract: the swap applies to --prompt, never to a caller's file"
 
 # An argument whose value carries a space survives the exec as ONE argument;
 # split, it would arrive as a stray positional the dispatcher reads as a task
