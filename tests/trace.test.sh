@@ -1301,4 +1301,48 @@ IFS=$_ov_ifs
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'outcome vocabulary of its own' &&
 	pass "the glossary's Event entry says every kind has an outcome vocabulary of its own" || fail "the glossary's Event entry does not name the per-kind outcome vocabulary"
 
+banner "23. The kind table holds two data keys to a shape: finding.triage's id and pr.iterate's iteration (ticket #420)"
+# The retrospective of 2026-10-01 (H3) found eight finding.triage events on
+# one PR carrying a commit sha beside the id inside data.id, and a pr.iterate
+# with no countable iteration — the reader cannot join either. Two keys are
+# held, beside the outcome words: a PRESENT key of the wrong shape is exit 2,
+# naming the kind, the key and the shape, and nothing is written; a MISSING
+# key is no violation — data.* stays open.
+SH="$SCRATCH/shape"; SHON=$(policy "$SH")
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=accepted data.source=bot data.id='PRRC_1 8f3c1a2' reason='a sha beside the id'
+[ "$S_STATUS" = 2 ] && pass "finding.triage data.id='PRRC_1 8f3c1a2' is exit 2 — two tokens are not one id" || fail "a two-token data.id exited $S_STATUS, not 2: $S_ERR"
+case $S_ERR in *finding.triage*data.id*"'PRRC_1 8f3c1a2'"*'[A-Za-z0-9._#-]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
+[ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.id was written: $(cat "$SH/events/$TODAY.jsonl")"
+assert_status 2 "finding.triage data.id='' is refused — the shape is one or more characters" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage data.id=''
+assert_status 2 "finding.triage data.id='kit-ci/self-host' is refused — a slash is outside the shape" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage data.id=kit-ci/self-host
+assert_status 2 "a refusal holds whichever order: data.id before kind" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit data.id='a b' kind=finding.triage
+assert_status 2 "and every occurrence: a good data.id does not cover a bad one before it" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage data.id='a b' data.id=ok
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=x reason=converged
+[ "$S_STATUS" = 2 ] && pass "pr.iterate data.iteration=x is exit 2 — an iteration is digits" || fail "pr.iterate data.iteration=x exited $S_STATUS, not 2: $S_ERR"
+case $S_ERR in *pr.iterate*data.iteration*"'x'"*'[0-9]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
+[ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.iteration was written: $(cat "$SH/events/$TODAY.jsonl")"
+assert_status 2 "pr.iterate data.iteration='2 of 3' is refused" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate data.iteration='2 of 3'
+# The good shapes write, and are written as given.
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=rejected data.source=check data.id='PRRC_kwDO#12.3-a_b' reason='ADR-0008'
+[ "$S_STATUS" = 0 ] && grep -qF '"id":"PRRC_kwDO#12.3-a_b"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "finding.triage data.id='PRRC_kwDO#12.3-a_b' is written — every character class of the shape" || fail "a good data.id was not written (exit $S_STATUS): $S_ERR"
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=12 data.applied=1 reason=converged
+[ "$S_STATUS" = 0 ] && grep -qF '"iteration":"12"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "pr.iterate data.iteration=12 is written" || fail "a good data.iteration was not written (exit $S_STATUS): $S_ERR"
+# A missing key is not a violation: the trace stays open in data.*.
+_sh_n=$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=escalated reason='no id given'
+_sh_s1=$S_STATUS
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red reason='no iteration given'
+[ "$_sh_s1" = 0 ] && [ "$S_STATUS" = 0 ] && [ "$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')" = $((_sh_n + 2)) ] &&
+	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a missing key is no violation" ||
+	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $S_STATUS): $S_ERR"
+# The shape is the kind's, not the key's: another kind's data.id stays open.
+assert_status 0 "finding.raise data.id='a b' still writes — only finding.triage holds data.id" -- env TRACE_CONFIG="$SHON" sh "$TRACE" emit --dry-run kind=finding.raise data.id='a b'
+# The shapes live in the kind table, beside the outcome words.
+grep -q "^TRACE_SHAPES='.*finding\.triage=id:.*pr\.iterate=iteration:" "$TRACE" &&
+	pass "the script declares both shapes in one TRACE_SHAPES table" || fail "scripts/trace.sh has no TRACE_SHAPES line declaring finding.triage's id and pr.iterate's iteration"
+sed -n '/Amended 2026-10-01 (#420)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[A-Za-z0-9._#-]+' &&
+	pass "ADR-0008 records the shapes in a #420 amendment" || fail "ADR-0008 has no '*Amended 2026-10-01 (#420):*' block naming the shape"
+
 t_done "trace script"
