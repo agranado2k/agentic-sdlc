@@ -71,7 +71,9 @@
 #      when the review was anchored behind the head.
 #   7. Record what landed in the trace, subject `pr:#<N>`: one
 #      `finding.raise` per finding posted inline (withheld ones are not
-#      raised), then one `review.verdict` per axis — Axis 1 with the verdict
+#      raised), each saying so — `data.posted=yes`, the key /retro's dismissal
+#      denominator counts, and `data.agent` a /review-pr roster token — then
+#      one `review.verdict` per axis — Axis 1 with the verdict
 #      as outcome, Axis 2 as /review-pr §5b counts it — each marked
 #      `data.via=broker`, with the model and agent harness when the caller
 #      passed them. The report is untrusted: what reaches an event is lifted
@@ -659,7 +661,7 @@ if [ -s "$TMP/posted" ]; then
 		[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
 		trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
 			"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
-			"data.where=$f_where" data.via=broker "reason=$f_note"
+			"data.where=$f_where" data.via=broker data.posted=yes "reason=$f_note"
 	done <"$TMP/posted"
 fi
 # The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
