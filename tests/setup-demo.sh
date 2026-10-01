@@ -51,22 +51,10 @@ fail() {
 ENTRY="$KIT/SETUP.md"
 PAYLOAD="$KIT/setup/agent-bootstrap.md"
 
-# sh_block <file> <first-line-pattern> — the body of the ```sh fence whose
-# FIRST line matches, printed verbatim. Same instrument as docs-demo.sh's
-# recipe_block, generalized over the file: the spine below runs the documents'
-# own text, never a mirror of it, so an edit that breaks a fence breaks this
-# suite instead of breaking the next consumer.
-sh_block() {
-	awk -v pat="$2" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$1"
-}
+# t_sh_fence <file> <first-line-pattern> (tests/lib.sh) — the body of the
+# ```sh fence whose FIRST line matches, printed verbatim: the spine below runs
+# the documents' own text, never a mirror of it, so an edit that breaks a
+# fence breaks this suite instead of breaking the next consumer.
 
 # take_block <file> <pattern> <destination> <label> — extract, and refuse to be
 # vacuous: an extractor that finds nothing would make every assertion after it
@@ -76,7 +64,7 @@ sh_block() {
 # fence arrives (found by the independent review of PR #61, by mutation).
 take_block() {
 	_tb="$SCRATCH/take_block.$$"
-	sh_block "$1" "$2" >"$_tb"
+	t_sh_fence "$1" "$2" >"$_tb"
 	if [ -s "$_tb" ]; then
 		cat "$_tb" >>"$3"
 		pass "$4"
@@ -185,12 +173,12 @@ banner "2. The fenced spine, executed verbatim"
 # The documents' fill-in fences (KIT_URL, PROJECT_DIR, PROJECT_NAME, ...) are
 # the values the prose tells the AGENT to choose; here the suite is the agent,
 # so it binds its own — and executes every command fence byte-for-byte.
-if sh_block "$ENTRY" '^KIT_URL=' | grep -q 'github\.com/agranado2k/agentic-sdlc'; then
+if t_sh_fence "$ENTRY" '^KIT_URL=' | grep -q 'github\.com/agranado2k/agentic-sdlc'; then
 	pass "SETUP.md's fill-in fence names the real kit URL"
 else
 	fail "SETUP.md's fill-in fence does not name the kit repository"
 fi
-if sh_block "$PAYLOAD" '^PROJECT_NAME=' | grep -q 'DOGFOOD_FLAG'; then
+if t_sh_fence "$PAYLOAD" '^PROJECT_NAME=' | grep -q 'DOGFOOD_FLAG'; then
 	pass "the payload's fill-in fence names DOGFOOD_FLAG — the opt-in is always explicit, never the silent headless skip"
 else
 	fail "the payload's fill-in fence does not name DOGFOOD_FLAG"
@@ -334,8 +322,8 @@ done
 # The README's by-hand ritual carries a copy of the resolve incantation, and
 # only SETUP.md's copy is executed above — hold the two byte-identical so the
 # unexecuted one cannot drift.
-sh_block "$ENTRY" '^KIT_TAG=' | sed -n '1,3p' >"$SCRATCH/resolve.setup"
-readme_hits=$(sh_block "$KIT/README.md" '^# 1\. Clone' | grep -Fx -f "$SCRATCH/resolve.setup" | wc -l)
+t_sh_fence "$ENTRY" '^KIT_TAG=' | sed -n '1,3p' >"$SCRATCH/resolve.setup"
+readme_hits=$(t_sh_fence "$KIT/README.md" '^# 1\. Clone' | grep -Fx -f "$SCRATCH/resolve.setup" | wc -l)
 readme_hits=$((readme_hits + 0))
 if [ -s "$SCRATCH/resolve.setup" ] && [ "$readme_hits" = 3 ]; then
 	pass "the README's resolve incantation matches SETUP.md's, byte for byte"
@@ -392,16 +380,16 @@ PROJ2="$SCRATCH/proj-broken"
 	printf 'KIT_URL=%s\n' "$ORIGIN"
 	printf 'PROJECT_DIR=%s\n' "$PROJ2"
 } >"$SPINE2"
-sh_block "$ENTRY" '^KIT_TAG=' >>"$SPINE2"
+t_sh_fence "$ENTRY" '^KIT_TAG=' >>"$SPINE2"
 {
 	printf 'PROJECT_NAME="Broken Demo"\n'
 	printf 'PROJECT_DESC="Should never bootstrap."\n'
 	printf 'DOGFOOD_FLAG=--no-dogfood\n'
 } >>"$SPINE2"
-sh_block "$BROKEN" '^\\[ -f bootstrap' >>"$SPINE2"
-sh_block "$BROKEN" '^sh bootstrap' >>"$SPINE2"
-sh_block "$BROKEN" '^sh scripts/check\.sh' >>"$SPINE2"
-sh_block "$BROKEN" '^KIT_RELEASE=' >>"$SPINE2"
+t_sh_fence "$BROKEN" '^\\[ -f bootstrap' >>"$SPINE2"
+t_sh_fence "$BROKEN" '^sh bootstrap' >>"$SPINE2"
+t_sh_fence "$BROKEN" '^sh scripts/check\.sh' >>"$SPINE2"
+t_sh_fence "$BROKEN" '^KIT_RELEASE=' >>"$SPINE2"
 
 if sh "$SPINE2" >/dev/null 2>&1; then
 	fail "the spine passed over a broken bootstrap step — the referee is vacuous"

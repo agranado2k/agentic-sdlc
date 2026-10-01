@@ -992,3 +992,21 @@ t_lift_shape() {
 		on { print }' "$1" >"$3"
 }
 
+# t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
+# <file> whose FIRST line matches, printed verbatim. The suites that run a
+# document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the
+# adoption arm) run its text, never a mirror of it, so an edit that breaks a
+# fence breaks the suite instead of the next consumer. Prints nothing when no
+# fence matches; the caller refuses to be vacuous on that.
+t_sh_fence() {
+	awk -v pat="$2" '
+		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
+		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
+		grab {
+			n++
+			if (n == 1 && $0 ~ pat) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$1"
+}
+

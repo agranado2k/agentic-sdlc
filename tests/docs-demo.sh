@@ -122,8 +122,8 @@ step6_check() {
 	done <"$3"
 }
 
-# recipe_block <awk-pattern> — the body of the ```sh fence in UPDATING.md whose
-# FIRST line matches, printed verbatim.
+# t_sh_fence "$KIT/UPDATING.md" <awk-pattern> (tests/lib.sh) — the body of the
+# ```sh fence in UPDATING.md whose FIRST line matches, printed verbatim.
 #
 # The two data-loss cases below run the recipe's OWN TEXT rather than a copy of
 # it. Every other executable claim in this suite is mirrored by hand (recipe,
@@ -132,17 +132,6 @@ step6_check() {
 # transcript, so there is no D to pin it with. A mirror is exactly the wrong
 # instrument there: it can be fixed in this file while the document a consumer
 # actually follows stays broken, which is the shape of the bug that shipped.
-recipe_block() {
-	awk -v pat="$1" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$KIT/UPDATING.md"
-}
 
 # assert_block <pattern> <destination> <label> — extract, and refuse to be vacuous.
 #
@@ -150,7 +139,7 @@ recipe_block() {
 # empty script. That is the same vacuity 9d's own key-set diff falls into, so it
 # gets the same treatment: no match is a failure, loudly.
 assert_block() {
-	recipe_block "$1" >"$2"
+	t_sh_fence "$KIT/UPDATING.md" "$1" >"$2"
 	if [ -s "$2" ]; then
 		pass "$3"
 	else
@@ -1114,7 +1103,7 @@ assert_verdict NEW 'ai-review\.example\.yml' "did not exist at 0.3.0"
 assert_file "adapters/claude-code/README.md"
 
 # ---------------------------------------------------------------------------
-# The two data-loss cases. Both run UPDATING.md's own text (see recipe_block).
+# The two data-loss cases. Both run UPDATING.md's own text (see assert_block).
 # ---------------------------------------------------------------------------
 
 # recipe_prelude <file> — the shell state steps 8-10 assume, written to <file>.
@@ -1127,7 +1116,7 @@ kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
 FROM_REF=v0.3.0
 TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 EOF
-	recipe_block '^kit_take\(\)' >>"$1"
+	t_sh_fence "$KIT/UPDATING.md" '^kit_take\(\)' >>"$1"
 }
 
 banner "C4c. 9d does not destroy a config the kit ships only as a .template"
