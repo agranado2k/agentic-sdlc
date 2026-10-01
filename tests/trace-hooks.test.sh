@@ -1850,16 +1850,19 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "a renamed key on the superseded line: exit $S_STATUS, '$S_ERR'"
 	sed '13s/"model":"[^"]*"/"model":"claude-other-1"/' "$TSUB" >"$SCRATCH/thinking-model-343.jsonl"
 	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-model-343.jsonl"
-	[ "$S_STATUS" = 2 ] && pass "the same id under a different model is still drift" ||
-		fail "a changed model under one id exited $S_STATUS: $S_OUT"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"different model"*) true ;; *) false ;; esac &&
+		pass "the same id under a different model is still drift, and says so" ||
+		fail "a changed model under one id: exit $S_STATUS, '$S_ERR'"
 	sed '13s/"requestId":"[^"]*"/"requestId":"req_other"/' "$TSUB" >"$SCRATCH/thinking-req-343.jsonl"
 	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-req-343.jsonl"
-	[ "$S_STATUS" = 2 ] && pass "the same id under a different requestId is still drift" ||
-		fail "a changed requestId under one id exited $S_STATUS: $S_OUT"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"different requestId"*) true ;; *) false ;; esac &&
+		pass "the same id under a different requestId is still drift, and says so" ||
+		fail "a changed requestId under one id: exit $S_STATUS, '$S_ERR'"
 	sed '13s/"model":"[^"]*",//' "$TSUB" >"$SCRATCH/thinking-nomodel-343.jsonl"
 	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-nomodel-343.jsonl"
-	[ "$S_STATUS" = 2 ] && pass "a missing model on the final block is still drift" ||
-		fail "a missing model exited $S_STATUS: $S_OUT"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *"message.model"*) true ;; *) false ;; esac &&
+		pass "a missing model on the final block is still drift, naming the key" ||
+		fail "a missing model: exit $S_STATUS, '$S_ERR'"
 
 	# A delta read anchored on the two-block id counts it once, in the earlier
 	# read, and the anchor's later block is not a new message.
