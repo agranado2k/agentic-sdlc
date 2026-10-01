@@ -173,8 +173,11 @@ await_file -e "$AF_MISSING" 1
 	fail "await_file returned 0 for a marker that never appeared — a leg would signal a worker nobody saw"
 AF_WHOLE="$SCRATCH/whole-second-sleep"
 mkdir -p "$AF_WHOLE"
+AF_HITS="$SCRATCH/whole-second-sleep.hits"
+: >"$AF_HITS"
 cat >"$AF_WHOLE/sleep" <<WHOLE
 #!/bin/sh
+echo "\$1" >>"$AF_HITS"
 case \$1 in *[!0-9]*) echo "sleep: invalid time interval '\$1'" >&2; exit 1 ;; esac
 exec $(command -v sleep) "\$1"
 WHOLE
@@ -183,9 +186,16 @@ start=$(date +%s)
 (PATH="$AF_WHOLE:$PATH" await_file -e "$AF_MISSING" 3)
 af_status=$?
 took=$(( $(date +%s) - start ))
-[ "$af_status" = 1 ] && [ "$took" -ge 2 ] &&
-	pass "where sleep takes whole seconds only, the budget is still spent in seconds (${took}s)" ||
-	fail "under a whole-second-only sleep await_file returned $af_status after ${took}s of a 3s budget — the wait collapsed"
+# Bounded both ways: under two seconds the wait collapsed; at ten or more a
+# whole-second nap is spending one tenth, and the legs' 30 s would be 300 s.
+# A shell whose sleep is a builtin never calls the stub, and proves nothing.
+if ! grep -qx 1 "$AF_HITS"; then
+	skip "this shell's sleep never reached the whole-second stub — the fallback goes unproven here"
+elif [ "$af_status" = 1 ] && [ "$took" -ge 2 ] && [ "$took" -lt 10 ]; then
+	pass "where sleep takes whole seconds only, the budget is still spent in seconds (${took}s)"
+else
+	fail "under a whole-second-only sleep await_file returned $af_status after ${took}s of a 3s budget — the wait collapsed or overran"
+fi
 AF_LATE="$SCRATCH/await-file.late"
 rm -f "$AF_LATE"
 (sleep 1; echo x >"$AF_LATE") &
