@@ -76,11 +76,12 @@ The full form — what to read, what counts as a finding, where it goes — is i
    produced the misses. The `feedback` events are the loop's own
    self-correction; no verdicts over landed slices is itself a finding.
 8. **Stamp calibration** — per decision field and per skill, never one
-   number for the chain: how often a tier stamped at each confidence was
-   overridden at the quiz, and how often a finding raised at each severity
-   was dismissed by a human. Every row carries the oracle clause; a row with
-   too few events says so instead of a rate; and the label's override rate,
-   which the trace cannot answer today, is a row that says exactly that.
+   number for the chain: how often a tier or a label stamped at each
+   confidence was overridden at the quiz, and how often a finding raised at
+   each severity was dismissed by a human. Every row carries the oracle
+   clause; a row with too few events says so instead of a rate; and the
+   label's override rate is computable once its stamps carry
+   `data.label_proposed` — a row whose stamps predate that key says so.
 
 ## Procedure
 

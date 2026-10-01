@@ -14,9 +14,9 @@
 #      calibration (the eighth, PRD #273, ticket #281): per decision field and
 #      per skill, never one number for the chain; the oracle clause on every
 #      row; and three limits the question states instead of papering over —
-#      the dismissal denominator overcounts, the label's override rate is not
-#      computable from the trace today, and a row with too few events prints
-#      no rate.
+#      the dismissal denominator overcounts, the label's override rate is
+#      computable only from stamps that carry `data.label_proposed` (ticket
+#      #354), and a row with too few events prints no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
 #      name — never the kit's never-shipped wrapper — and verifies first.
 #   3. The report and its CSV land IN THE PROJECT, at the root checkout:
@@ -420,7 +420,11 @@ item8_has() { # <needle> <message>
 item8_has 'per decision field and per skill, never one number for the chain' "SKILL.md's eighth item holds the per-field, per-skill rule"
 item8_has 'Every row carries the oracle clause' "…and the oracle clause on every row"
 item8_has 'too few events says so instead of a rate' "…and the thin row that prints no rate"
-item8_has 'is a row that says exactly that' "…and the label's row that says its rate is not answerable"
+item8_has 'computable once its stamps carry `data.label_proposed`' "…and the label's override rate, computable once its stamps carry the pre-quiz label"
+case "$item8" in
+*'which the trace cannot answer today'*) fail "SKILL.md's eighth item still says the trace cannot answer the label's override rate" ;;
+*) pass "…and no longer says the trace cannot answer it" ;;
+esac
 desc=$(sed -n 's/^description: //p' "$SKILL_ABS")
 case "$desc" in
 *'eight fixed questions'*'stamp calibration'*) pass "the frontmatter description counts eight and names stamp calibration" ;;
