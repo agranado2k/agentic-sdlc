@@ -805,13 +805,24 @@ term_leg() {
 	sleeps_before=$(own_sleep_pids 50)
 	sh "$1" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
 	disp=$!
-	sleep 2
+	# Wait for the WORKER's pid file, never for a fixed two seconds: the timed
+	# path installs its traps and then spawns, so the worker's own marker is
+	# the one anchor that cannot precede them. A TERM that arrives earlier
+	# takes the global cleanup and reads "exited 127" — a flake on a loaded
+	# host, not a finding (#402; the same fix as L-4, review of PR #290).
+	_term_wait=0
+	until [ -s "$PIDFILE" ]; do
+		_term_wait=$((_term_wait + 1))
+		[ "$_term_wait" -gt 300 ] && break
+		sleep 0.1
+	done
+	[ -s "$PIDFILE" ] || fail "the worker never wrote its pid file in 30s$2"
 	kill -TERM "$disp" 2>/dev/null
 	wait "$disp" 2>/dev/null
 	disp_status=$?
 	sleep 1
 	[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143$2" || fail "a TERM to the dispatcher exited $disp_status$2"
-	if kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
+	if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 		fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left$2"
 		kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
 	else
