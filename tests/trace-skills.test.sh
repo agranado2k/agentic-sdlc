@@ -413,10 +413,14 @@ printf '%s\n' "$step4" | grep -qF 'exit condition' &&
 printf '%s\n' "$step4" | grep -qF 'outcome=unasked' &&
 	pass "step 4 says what an autonomous train records: outcome=unasked" ||
 	fail "/merge-train step 4 never says outcome=unasked — the train nobody can answer leaves silence"
-printf '%s\n' "$step4" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'unasked.*reason.*instruction' &&
+# The prose rule, not the emit line: the line's placeholder already says
+# "instruction", so the check reads step 4 with every trace line removed
+# (review of PR #361, L-1).
+step4_prose=$(printf '%s\n' "$step4" | grep -v 'sh scripts/trace\.sh' | tr '\n' ' ' | tr -s ' ')
+printf '%s\n' "$step4_prose" | grep -qiE 'unasked[^.]*reason[^.]*naming the instruction that made the train autonomous' &&
 	pass "and the unasked reason names the instruction that made the train autonomous" ||
 	fail "/merge-train does not say the unasked reason names the instruction that made the train autonomous"
-printf '%s\n' "$step4" | grep -qF 'gets no event' &&
+printf '%s\n' "$step4_prose" | grep -qiE 'gets no event|no verdict[^.]*no event' &&
 	fail "/merge-train still says a landing with no verdict gets no event — that is the silence #345 replaces" ||
 	pass "the old 'no verdict, no event' sentence is gone"
 printf '%s\n' "$step4" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'unasked[^.]*is not (a verdict|feedback)|not (a verdict|feedback)[^.]*unasked' &&
@@ -431,13 +435,16 @@ fb_line=$(grep -n 'kind=feedback' "$MT" | head -1 | cut -d: -f1)
 # /pr-iterate asks nobody: its feedback is a human comment that changed the
 # plan, so it has no unasked path and keeps the three verdicts.
 pi_fb=$(t_trace_lines "$(skill_md pr-iterate)" | grep -F 'kind=feedback')
+[ -n "$pi_fb" ] && printf '%s\n' "$pi_fb" | grep -qF 'outcome=hit|adjusted|missed ' &&
+	pass "/pr-iterate still emits feedback with the three verdicts" ||
+	fail "/pr-iterate's feedback line is gone or no longer spells outcome=hit|adjusted|missed"
 printf '%s\n' "$pi_fb" | grep -qw unasked &&
 	fail "/pr-iterate's feedback names unasked — only the train asks a question nobody may answer" ||
 	pass "/pr-iterate's feedback keeps its three verdicts — unasked is the train's alone"
 # The record and the glossary carry the fourth outcome: a widened vocabulary
 # is the record's to decide (ADR-0008 clause 1's own words), by a dated
 # amendment and never an edit of the old text.
-ADR8=$(ls docs/adr/0008-*.md 2>/dev/null | head -1)
+# $ADR8 is the record's path, set in section 8 above.
 c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$ADR8" 2>/dev/null)
 printf '%s\n' "$c1" | grep -qF 'outcome `hit|adjusted|missed`' &&
 	pass "ADR-0008 clause 1 still carries the three-verdict text of 2026-09-30 — amended, never edited" ||
@@ -445,7 +452,7 @@ printf '%s\n' "$c1" | grep -qF 'outcome `hit|adjusted|missed`' &&
 am1=$(printf '%s\n' "$c1" | awk '/\*Amended [0-9-]* \(#345\):\*/ { on = 1 } on')
 [ -n "$am1" ] && pass "clause 1 carries a dated amendment for #345" ||
 	fail "ADR-0008 clause 1 has no '*Amended <date> (#345):*' block — unasked is in a skill and not in the record"
-printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qF '`unasked`' && printf '%s\n' "$am1" | grep -qF 'feedback' &&
+printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qE '`feedback`.{0,80}`unasked`' &&
 	pass "the amendment names unasked as a feedback outcome" ||
 	fail "the #345 amendment does not name \`unasked\` on \`feedback\`"
 printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'not a verdict' &&

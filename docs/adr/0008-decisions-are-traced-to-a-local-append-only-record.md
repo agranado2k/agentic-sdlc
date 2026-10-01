@@ -136,9 +136,10 @@ Chosen: **option 1**.
    under a "do not stop" instruction and the question was skipped, which in
    the trace is indistinguishable from a train that forgot to ask. So the
    `feedback` emit becomes the train's exit condition per landed PR — one
-   event after every `merge.land outcome=landed`, on both paths — and an
-   autonomous train writes `outcome=unasked` with the instruction that made
-   it autonomous as the reason. **`unasked` is not a verdict.** The three
+   event after every `merge.land outcome=landed`, whether the operator
+   answered or not — and an autonomous train writes `outcome=unasked` with
+   the instruction that made it autonomous as the reason, summarised to one
+   line with no quote character in it. **`unasked` is not a verdict.** The three
    verdicts above stay a human's and only a human's; `unasked` says the
    human was never reached, and a reader counts it with the landings that
    got no verdict, never as a hit. It belongs on `feedback` and not on a

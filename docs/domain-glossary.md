@@ -304,7 +304,7 @@ Grouped by the seam each term belongs to. Entry shape:
   slice: subject `ticket:#N`, related to its `pr:#N`, outcome one of `hit`
   (the slice as planned), `adjusted` (the next slices re-cut on what it
   taught) or `missed` (it did not do what it was for), reason the operator's
-  words. The tracer bullet's adjust-aim record. `/merge-train` asks it once
+  words summarised to one line. The tracer bullet's adjust-aim record. `/merge-train` asks it once
   per landed PR and may not end the landing without it; `/pr-iterate` emits
   it when a human comment changes the plan. A fourth outcome, `unasked`, is
   the train's alone: the train ran autonomously and nobody could answer, so
