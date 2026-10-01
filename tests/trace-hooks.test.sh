@@ -2830,7 +2830,7 @@ case $d in *"a session with no phantom stops records \`phantoms=0\`"*) pass "the
 *) fail "the adapter README does not say what a session with no phantom stops records" ;; esac
 
 # ---------------------------------------------------------------------------
-banner "37. A compaction's summary call is counted: the rollup gap becomes an event (#407)"
+banner "38. A compaction's summary call is counted: the rollup gap becomes an event (#407)"
 # ---------------------------------------------------------------------------
 # The call that writes a compaction summary leaves NO assistant line, so its
 # tokens reach the agent harness's own rollup and no message-by-message sum
