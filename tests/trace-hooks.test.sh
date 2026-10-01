@@ -1691,6 +1691,26 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
 		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
 
+	# THE READINESS CHECK IS SPENT INSIDE THE BOUND, NOT SUBTRACTED FROM THE
+	# DECISION TO NAP (#403). On a loaded host the first check alone cost just
+	# over 50 ms, which left 949 under the old 950 threshold, and the hook gave
+	# up at waited_ms 51 without one nap. Here a `tail` that costs 60 ms makes
+	# that host deterministic: a 1000 ms bound still takes its whole-second nap
+	# and waits the bound out — one refused fraction, then one whole second.
+	REAL_TAIL=$(command -v tail)
+	mkdir -p "$SCRATCH/slowcheck-403"
+	printf '#!/bin/sh
+"%s" 0.06
+exec "%s" "$@"
+' "$REAL_SLEEP" "$REAL_TAIL" >"$SCRATCH/slowcheck-403/tail"
+	chmod +x "$SCRATCH/slowcheck-403/tail"
+	new_trace
+	STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+	W=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$W" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+		pass "a readiness check costing 60 ms still waits a 1000 ms bound out ($(str "$W" waited_ms) ms, $NAPS asks)" ||
+		fail "a 60 ms readiness check cut the wait short: exit $S_STATUS, $NAPS asks, event $W"
+
 	# THE READINESS RULE, half by half (hook_final's comment calls each one
 	# load-bearing, so each has a leg that fails without it). Built from the
 	# fixture: line 11 is a user line, line 20 the final assistant line.
