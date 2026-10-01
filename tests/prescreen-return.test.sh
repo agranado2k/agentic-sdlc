@@ -647,7 +647,8 @@ else
 fi
 # …and the skill says so: step 1 reads the scratch path, step 5 removes the
 # home — the prose each session follows, held like the fence it mirrors
-# (review of PR #376, H-2).
+# (review of PR #376, H-2) — and the Trust boundary section says when the
+# copy goes, and what an abandoned session leaves (L-1).
 step1=$(awk '/^## Procedure/ { on = 1; next } on && /^1\. / { print; exit }' "$TICKETS")
 case $step1 in
 *'"$scratch/body"'*) pass "/to-tickets — step 1's read names the scratch path" ;;
@@ -668,6 +669,9 @@ case $step5 in
 esac
 assert_file_has "$FLAT" "the text read is the text screened" "the claim, in so many words"
 assert_file_has "$FLAT" "removed when the decomposition ends" "when the copy goes, said where the copy is"
+assert_file_has "$FLAT" "A session abandoned before either" "…and what an abandoned session leaves, said plainly"
+assert_file_has "$FLAT" "temp directory" "…where it leaves it: the operator's temp directory, which its own cleaning empties"
+assert_file_has "$FLAT" "no mechanism for abandonment" "no stronger than the claim: the skill removes at the end and at the stop, and nothing else"
 assert_file_lacks "$FLAT" "once the pre-screen has answered" "the removal is no longer the pre-screen's end"
 assert_file_lacks "$FLAT" "cannot change between" "no stronger than the claim: a body that cannot change is not what one fetch proves"
 
