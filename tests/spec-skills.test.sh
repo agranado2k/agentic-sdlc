@@ -313,6 +313,11 @@ has_in "$tier_entry" "one file or one pattern applied uniformly across many" "an
 has_in "$tier_entry" "many files for different reasons" "and names the refactor that fails it"
 has_in "$tier_entry" '"unless"' "and the definition of done with an exception in it"
 has_in "$tier_entry" "the rubric's later questions size it" "and says a failure is sized by the rest of the rubric, not sent to one tier"
+wf_rubric=$(awk '/^1\. \*\*Is the definition of done checkable/ { on = 1 } on && /^2\. / { exit } on { print }' "$ROOT/constitution/local-workflow.md.template" | tr '\n' ' ' | tr -s ' ')
+[ -n "$wf_rubric" ] && pass "the workflow template still carries rubric line 1" || fail "constitution/local-workflow.md.template lost its rubric line 1"
+has_in "$wf_rubric" "only when both conditions hold" "the workflow template's rubric line 1 carries the two conditions too"
+has_in "$wf_rubric" "one command whose exit is its oracle" "its condition one"
+has_in "$wf_rubric" "one file or one pattern applied uniformly across many" "its condition two"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 
 # ---------------------------------------------------------------------------
