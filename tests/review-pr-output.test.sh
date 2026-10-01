@@ -440,7 +440,11 @@ banner "9. The reuse/DRY lens tells added duplication from inherited duplication
 # ticket, never as a passenger on a feature diff. So the prompt names two
 # cases, and the suite holds it to both: a duplication the diff ADDS is a
 # finding at its severity; a duplication the diff merely touches or extends is
-# a CANDIDATE TICKET — named as such, LOW, no fix asked on this PR, §10 cited.
+# a CANDIDATE TICKET — named as such, LOW, §10 cited, and a fix line that
+# asks this PR for nothing. It is a fix LINE and not an absent one because the
+# broker refuses a whole report over one finding without it
+# (scripts/forge-broker.kit.sh; tests/forge-broker.test.sh section 19 runs the
+# line this suite pins through it).
 # Scoped to Agent 5's own section: the other lenses' prompts stay as they
 # were, and a rule written into §5's shared anatomy would bind all six.
 a5=$(t_line_of "$SKILL_ABS" "#### Agent 5 ")
@@ -465,16 +469,28 @@ a5_has() {
 # The two cases, each by name.
 a5_has "the diff ADDS" "the first case: a new copy is the author's, and a finding"
 a5_has "pre-date the branch" "the second case: copies the diff inherited are not the author's to consolidate"
-# The ruling on the second: named, LOW, no fix on this PR, §10 cited — all in
-# ONE sentence, so a prompt that names the candidate ticket in one breath and
-# keeps asking for the move in the next cannot pass by mentioning each word.
-ruling=$(printf '%s\n' "$agent5_flat" | tr '.' '\n' | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10")
+# ruling_of <a copy of the skill> — the ONE sentence of Agent 5's section that
+# names the candidate ticket, puts it at LOW and cites §10; empty when no
+# sentence carries all three. The one reader for the skill and for the baits
+# below, so a bait runs the assertion and never a retyped copy of it.
+ruling_of() {
+	sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1" | tr '\n' ' ' | tr '.' '\n' |
+		grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10"
+}
+# The fix line a candidate ticket carries, as the prompt spells it: the PR is
+# asked for nothing, and the line says so in words the broker accepts.
+CT_FIX='none on this PR — candidate ticket (shared invariant §10)'
+# The ruling on the second case: named, LOW, §10 cited, the fix line spelled —
+# all in ONE sentence, so the four cannot be met by a word each, scattered
+# across the section. (A later sentence that re-asks for the move is a
+# reviewer's catch, not this check's: it holds the ruling, not the whole prose.)
+ruling=$(ruling_of "$SKILL_ABS")
 [ -n "$ruling" ] &&
 	pass "one sentence rules the inherited case: a candidate ticket, LOW, citing invariant §10" ||
 	fail "no single sentence of Agent 5's prompt names the inherited duplication a candidate ticket AND puts it at LOW AND cites invariant §10"
-printf '%s\n' "$ruling" | grep -qiE 'no (`?↳ fix:`? ?(line)?|fix)' &&
-	pass "…and that sentence asks no fix on this PR" ||
-	fail "…and that sentence does not say the PR is asked for no fix — the reviewer will still ask for the move"
+printf '%s\n' "$ruling" | grep -qF -- "\`↳ fix:\` line reads \`$CT_FIX\`" &&
+	pass "…and that sentence spells the fix line — \`$CT_FIX\` — which asks this PR for nothing" ||
+	fail "…and that sentence does not spell the candidate ticket's fix line \`↳ fix: $CT_FIX\` — the reviewer will still ask for the move, or omit the line and the broker will refuse the report"
 # The citation reaches the report: a candidate ticket cites §10 on its
 # `↳ cites:` line, where /pr-iterate reads the reason for a LOW it may skip.
 a5_has "↳ cites:" "the citation is on the finding's own line, not only in the prompt's reasoning"
@@ -488,13 +504,24 @@ roster=$(sed -n '/^\*\*The sub-agent roster\.\*\*/,/^#### Agent 1 /p' "$SKILL_AB
 [ "$roster" = 8 ] &&
 	pass "the roster still names seven lenses and the unattributed token" ||
 	fail "the roster names $roster tokens, not 8 — this ticket does not change the roster"
-# The bait: the ruling withdrawn from a copy of the skill — the assertion
-# above must be the one that catches it, so it is known to read the prompt
-# and not a word that happens to be elsewhere in the file.
+# Bait 1: the ruling withdrawn from a copy of the skill — ruling_of must be
+# what catches it, so it is known to read the prompt and not a word that
+# happens to be elsewhere in the file.
 sed "$((a5 + 1)),$((a6 - 1))s/candidate ticket/follow-up/g" "$SKILL_ABS" >"$SCRATCH/bait5.md"
-b5=$(sed -n "$((a5 + 1)),$((a6 - 1))p" "$SCRATCH/bait5.md" | tr '\n' ' ' | tr '.' '\n' | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10")
+b5=$(ruling_of "$SCRATCH/bait5.md")
 [ -z "$b5" ] && ! cmp -s "$SCRATCH/bait5.md" "$SKILL_ABS" &&
 	pass "bait: the ruling renamed away from 'candidate ticket' goes red" ||
 	fail "bait: with 'candidate ticket' withdrawn from Agent 5's section the ruling still reads '$b5'"
+# Bait 2: the fix line replaced by a request for the move, in the same
+# sentence — the ruling still reads, and the fix assertion is what goes red.
+# This is the check that carries retro H2: a lens that names the ticket and
+# still asks for the consolidation.
+sed "$((a5 + 1)),$((a6 - 1))s/none on this PR[^\`]*/extract the copies into one helper and call it from both sites/" "$SKILL_ABS" >"$SCRATCH/bait5-fix.md"
+b5f=$(ruling_of "$SCRATCH/bait5-fix.md")
+if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! printf '%s\n' "$b5f" | grep -qF -- "$CT_FIX"; then
+	pass "bait: the fix line swapped for a request to move the copies goes red at the fix assertion"
+else
+	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"
+fi
 
 t_done "/review-pr output contract"

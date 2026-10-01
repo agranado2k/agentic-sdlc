@@ -1159,4 +1159,43 @@ done
 STUB_PR=12
 export STUB_PR
 
+# ---------------------------------------------------------------------------
+banner "19. A candidate-ticket LOW asks the PR for nothing, and the broker still lands it (#419)"
+# ---------------------------------------------------------------------------
+# /review-pr's reuse/DRY lens files a duplication the diff merely INHERITED as
+# a LOW candidate ticket: shared invariant §10 lands the consolidation on its
+# own ticket, so the PR is asked for nothing. Section 15 holds that a finding
+# with NO fix line costs the whole report — so the candidate ticket carries a
+# fix line that says so, and that line must be one the contract accepts. The
+# line is read from the skill's own prompt, never retyped here, so the
+# wording the lens is told to write and the wording the broker lets through
+# cannot drift apart unseen (#431 H-1).
+CT_FIX=$(grep -o '↳ fix:` line reads `[^`]*`' "$KIT/.agents/skills/review-pr/SKILL.md" | head -n 1 | sed 's/^.*reads `//; s/`$//')
+[ -n "$CT_FIX" ] && pass "the reuse/DRY prompt spells the candidate ticket's fix line: $CT_FIX" ||
+	fail "the reuse/DRY prompt no longer spells the candidate ticket's fix line (a code span after: fix: line reads) — nothing to run through the broker"
+awk -v fix="$CT_FIX" '
+	/^#### LOW$/ {
+		print
+		print "**L-1** `docs/b.md:11` — candidate ticket: line eleven mirrors a line that pre-dates the branch, in a pair this diff only extends."
+		print "↳ cites: shared invariant §10"
+		print "↳ fix: " fix
+		skip = 1
+		next
+	}
+	skip && /^— none found\.$/ { skip = 0; next }
+	{ print }
+' "$GOOD" >"$SCRATCH/candidate.md"
+grep -q '^↳ fix: none on this PR' "$SCRATCH/candidate.md" &&
+	pass "the fixture's L-1 carries the fix line the prompt spells, asking this PR for nothing" ||
+	fail "the fixture's L-1 lost its fix line — \$GOOD's LOW section moved under the awk"
+broker 12 "$SCRATCH/candidate.md" --dry-run
+s_assert_status 0 "a report carrying a candidate-ticket LOW passes the contract"
+assert_mutating 0 "…dry run: nothing posted"
+s_assert_out_has 'candidate ticket:' "…and the candidate ticket is among the inline comments"
+s_assert_out_has '"line":11' "…anchored on its own line of the diff"
+# The fix line is what carries it: the same report with that one line
+# withdrawn is the half-finding section 15 names, and costs the report.
+grep -v '^↳ fix: none on this PR' "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
+bad "$SCRATCH/candidate-no-fix.md" "…and the same candidate ticket with its fix line withdrawn is exit 65" 'L-1'
+
 t_done "tests/forge-broker.test.sh"
