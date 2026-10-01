@@ -674,6 +674,8 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 		if (kind == "finding.raise") return "review-pr (by kind)"
 		return "unattributed"
 	}
+	# A confidence names its row only when declared: none is unstamped, any other undeclared.
+	function bucket(c) { return c == "" ? "unstamped" : (index(conf, " " c " ") == 0 ? "undeclared" : c) }
 	function rate(hit, of) { return of < 5 ? "too few to rate" : sprintf("%.0f %%", 100 * hit / of) }
 	{ kind = get("kind") }
 	kind == "run.start" { runskill[get("run")] = get("skill") }
@@ -681,13 +683,13 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 	# later line for a subject replaces the earlier one.
 	kind == "ticket.write" {
 		c = get("confidence"); p = get("tier_proposed"); t = get("subject")
-		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		c = bucket(c)
 		trow[t] = "tier · " who(kind) " · " c
 		tover[t] = (p == "") ? -1 : (get("tier") != p)
 		# The label, in a row of its own: its confidence under its own key,
 		# overridden where the published label is not the proposed one.
 		c = get("label_confidence"); p = get("label_proposed")
-		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		c = bucket(c)
 		lrow[t] = "label · " who(kind) " · " c
 		lover[t] = (p == "") ? -1 : (get("label") != p)
 	}
