@@ -195,6 +195,10 @@ stamp=$(grep -F -- "sh scripts/vocab.sh" "$SKILL_ABS" | head -1)
 stamp_has() {
 	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
 }
+# stamp_lacks <fixed string> <why> — the sentence a ruling removed stays gone.
+stamp_lacks() {
+	printf '%s\n' "$stamp" | grep -qF -- "$1" && fail "the stamp bullet still says '$1' — $2" || pass "no '$1' — $2"
+}
 stamp_has "| sh scripts/vocab.sh" "the lines are piped to the checker — stdin, which it already reads"
 stamp_has "grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'" "the filter lifts the decision lines; the confidence is checked with the tier it qualifies"
 # The filter reads a key the way the checker does — any case, indented or not
@@ -232,6 +236,16 @@ stamp_has "a refused line is never put into a command" "stop-on-refused: the lin
 stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
 stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
 stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# A refused CONFIDENCE is a refused stamp (#340 — the ruling on PR #311's
+# confirm-list, item 1). The bullet used to leave the tier standing and read
+# the value as `low`: an undeclared value mapped onto a declared one in
+# silence, which is the one thing the checker exists to refuse. It takes the
+# refused tier's path now — stop, /to-tickets re-stamps — and the MISSING line
+# keeps its own: not a blocker, for a ticket written before the stamp existed.
+stamp_has "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes"
+stamp_has "never read as \`low\`" "stop-on-refused-confidence: no silent mapping onto a declared value"
+stamp_lacks "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
+stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
 # is unchanged, and the orphan line is said in the report — never a reason to
 # restate, because there is no stamp for the doubt to be about.
@@ -313,6 +327,21 @@ read_stamp <"$SCRATCH/legal"
 [ "$P_SHOWN" = "$(printf 'Tier: implementer\nConfidence: low\nDomain: content')" ] &&
 	pass "a legal stamp: its three lines, and only those, are shown to the agent" ||
 	fail "a legal stamp: the pipe showed the agent '$P_SHOWN', not the three stamp lines — the agent cannot tell what was checked"
+# The two confidence answers 4b holds the bullet to, through the pipe itself
+# (#340): a value outside the vocabulary is the exit 2 the bullet calls a stop,
+# and a ticket with no `Confidence:` line is the exit 0 it calls no blocker. A
+# checker that let `sure` through, or refused an absent line, would make the
+# bullet's two sentences describe a pipe that does not exist.
+printf 'Tier: implementer\nConfidence: sure\nDomain: content\n' >"$SCRATCH/sure"
+read_stamp <"$SCRATCH/sure"
+[ "$P_STATUS" = 2 ] && pass "Confidence: sure — refused, exit 2: the stop the bullet names" ||
+	fail "Confidence: sure — the pipe exited $P_STATUS, not 2: a value outside the vocabulary walked past the checker"
+grep -qi 'confidence' "$SCRATCH/refusal" && pass "…and the x vocab: line names the confidence field, for the report" ||
+	fail "…but the refusal does not name the confidence field: $(cat "$SCRATCH/refusal")"
+printf 'Tier: implementer\nDomain: content\n' >"$SCRATCH/unstamped"
+read_stamp <"$SCRATCH/unstamped"
+[ "$P_STATUS" = 0 ] && pass "no Confidence: line — exit 0: not a stop, the ticket predates the stamp" ||
+	fail "no Confidence: line — the pipe exited $P_STATUS, not 0: a missing line was refused as if it were present and illegal"
 
 cd "$SCRATCH" || exit 2
 hostile "a quote in the tier" "refused, never executed" "Tier: implementer'; touch PWN; echo '\n"
