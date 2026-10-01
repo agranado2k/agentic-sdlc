@@ -1681,35 +1681,70 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "a clock stepping back still ends the wait at the bound ($NAPS naps, waited_ms 300)" ||
 		fail "a backwards clock: exit $S_STATUS, $NAPS naps, event $K"
 
-	# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP still waits at the kit's own
-	# bound: the first check leaves a hair under 1000 ms, and one whole-second
-	# nap within a poll of the bound is taken rather than none.
+	# A SUB-SECOND BOUND IS NOT SERVED BY A WHOLE-SECOND SLEEP: the first
+	# fraction is refused, no whole second fits in 500 ms, and the hook returns
+	# without a nap — one ask, the refused one, and well under a second.
 	new_trace
-	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
-	J=$(ev_of agent.stop | sed -n '1p')
-	[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 950 ] 2>/dev/null &&
-		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
-		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=500
+	U=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 1 ] && [ "$(str "$U" waited_ms)" -lt 1000 ] 2>/dev/null &&
+		pass "a 500 ms bound with a whole-second sleep returns without a nap ($(str "$U" waited_ms) ms, $NAPS ask)" ||
+		fail "a 500 ms bound with a whole-second sleep: exit $S_STATUS, $NAPS asks, event $U"
 
-	# THE READINESS CHECK IS SPENT INSIDE THE BOUND, NOT SUBTRACTED FROM THE
-	# DECISION TO NAP (#403). On a loaded host the first check alone cost just
-	# over 50 ms, which left 949 under the old 950 threshold, and the hook gave
-	# up at waited_ms 51 without one nap. Here a `tail` that costs 60 ms makes
-	# that host deterministic: a 1000 ms bound still takes its whole-second nap
-	# and waits the bound out — one refused fraction, then one whole second.
-	REAL_TAIL=$(command -v tail)
-	mkdir -p "$SCRATCH/slowcheck-403"
-	printf '#!/bin/sh
-"%s" 0.06
-exec "%s" "$@"
-' "$REAL_SLEEP" "$REAL_TAIL" >"$SCRATCH/slowcheck-403/tail"
-	chmod +x "$SCRATCH/slowcheck-403/tail"
-	new_trace
-	STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
-	W=$(ev_of agent.stop | sed -n '1p')
-	[ "$S_STATUS" = 0 ] && [ "$(str "$W" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
-		pass "a readiness check costing 60 ms still waits a 1000 ms bound out ($(str "$W" waited_ms) ms, $NAPS asks)" ||
-		fail "a 60 ms readiness check cut the wait short: exit $S_STATUS, $NAPS asks, event $W"
+	# The legs below need a millisecond clock; on a host without one they would
+	# pass or fail on nothing, so they say so instead.
+	case $("$REAL_DATE" +%s%N) in
+	*[!0-9]*) HAVE_MS_CLOCK=0 ;;
+	*) HAVE_MS_CLOCK=1 ;;
+	esac
+	if [ "$HAVE_MS_CLOCK" = 0 ]; then
+		note "no millisecond clock on this host: the real-clock whole-second legs did not run"
+	else
+		# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP waits the kit's own bound
+		# out: one refused fraction, then the whole second.
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		J=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			pass "a real clock and a whole-second sleep wait a 1000 ms bound out ($(str "$J" waited_ms) ms, $NAPS asks)" ||
+			fail "a real clock and a whole-second sleep: exit $S_STATUS, $NAPS asks, event $J"
+
+		# THE READINESS CHECK IS SPENT INSIDE THE BOUND (#403). On a loaded host
+		# the first check alone cost just over 50 ms, and the hook gave up at
+		# waited_ms 51 without one nap. A `tail` that costs 60 ms makes that host
+		# deterministic, and one whose own fractional sleep fails says so rather
+		# than quietly costing nothing.
+		REAL_TAIL=$(command -v tail)
+		mkdir -p "$SCRATCH/slowcheck-403"
+		printf '#!/bin/sh\n"%s" 0.06 || { : >"%s/slowcheck-403.broken"; exit 1; }\nexec "%s" "$@"\n' \
+			"$REAL_SLEEP" "$SCRATCH" "$REAL_TAIL" >"$SCRATCH/slowcheck-403/tail"
+		chmod +x "$SCRATCH/slowcheck-403/tail"
+		rm -f "$SCRATCH/slowcheck-403.broken"
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		W=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$W" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a readiness check costing 60 ms still waits a 1000 ms bound out ($(str "$W" waited_ms) ms, $NAPS asks)" ||
+			fail "a 60 ms readiness check cut the wait short: exit $S_STATUS, $NAPS asks, event $W"
+
+		# THE OVERRUN IS BOUNDED. In whole-second mode the wait reaches the bound
+		# and may pass it by at most one whole-second nap plus a check: a 2500 ms
+		# bound with the same 60 ms check takes two whole seconds and no third,
+		# and reports no more than 2500 + 1000 + the check's cost (60 ms and the
+		# process it runs in, 200 ms in all).
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=2500
+		O=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$NAPS" = 3 ] && [ "$(str "$O" waited_ms)" -le 3700 ] 2>/dev/null &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a 2500 ms bound overruns by at most one nap and a check ($(str "$O" waited_ms) ms, $NAPS asks)" ||
+			fail "a 2500 ms whole-second wait overran its ceiling: exit $S_STATUS, $NAPS asks, event $O"
+	fi
 
 	# THE READINESS RULE, half by half (hook_final's comment calls each one
 	# load-bearing, so each has a leg that fails without it). Built from the
