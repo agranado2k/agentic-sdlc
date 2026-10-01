@@ -2049,4 +2049,66 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"a phantom stop writes no event"*) pass "the adapter README records that a phantom stop writes no event" ;;
 *) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "30. PostToolUseFailure records the first line of the error as reason"
+# ---------------------------------------------------------------------------
+# A failed tool call has an error message that may span multiple lines. The
+# reason field should hold the first line of that error, and the full error
+# should be stored in the result blob. The reason should be quote-safe (no
+# single quotes, no newlines) and trimmed to one line.
+if [ "$HAVE_NODE" = 1 ]; then
+	# A simple error with multiple lines: first line as reason, full error in blob
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cat /nope"},"tool_use_id":"%s","error":"Exit code 1\\ncat: /nope: No such file or directory"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-reason-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-reason-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "a PostToolUseFailure with multiline error exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	E=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$E" outcome)" = fail ] && pass "the event records outcome=fail" ||
+		fail "the outcome is '$(str "$E" outcome)': $E"
+	REASON=$(str "$E" reason)
+	[ "$REASON" = "Exit code 1" ] && pass "the reason is the first line of the error: '$REASON'" ||
+		fail "the reason is '$REASON', expected 'Exit code 1'"
+	# Verify the full error is in the result blob
+	ERH=$(str "$E" result_blob)
+	FULL_ERR=$(cat "$(blob_file "$ERH")" 2>/dev/null)
+	case $FULL_ERR in *"No such file or directory"*) pass "the result blob holds the full error" ;;
+	*) fail "the result blob does not hold the full error: $FULL_ERR" ;; esac
+
+	# An error with a single quote in the first line (should still be quote-safe)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Can'"'"'t do it\\nmore details"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-quote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-quote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with a quote in first line exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EQ=$(ev_of tool.use | sed -n '1p')
+	QREASON=$(str "$EQ" reason)
+	[ -n "$QREASON" ] && [ "$QREASON" = "Can't do it" ] &&
+		pass "the reason with a quote is: '$QREASON'" ||
+		fail "the reason with quote is '$QREASON', expected \"Can't do it\""
+	# Verify no newline ended up in the reason
+	case $EQ in *"$QREASON"*) pass "the event line contains the reason" ;;
+	*) fail "the reason was not found in the event: $EQ" ;; esac
+
+	# An error with nothing after the first line (single-line error)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Something went wrong"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-single-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-single-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ES=$(ev_of tool.use | sed -n '1p')
+	SR=$(str "$ES" reason)
+	[ "$SR" = "Something went wrong" ] && pass "a single-line error's first line is: '$SR'" ||
+		fail "a single-line error's reason is '$SR', expected 'Something went wrong'"
+else
+	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
+fi
+
 t_done "trace hooks"

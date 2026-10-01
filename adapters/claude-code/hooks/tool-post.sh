@@ -124,6 +124,7 @@ tuid=$(field tool_use_id)
 sid=$(field session)
 event=$(field event)
 from=$(field result_from)
+errfirstline=$(field error_first_line)
 
 # THE PAYLOAD IS DATA (the root manual's trust boundary). The two values that
 # become join columns are checked against this adapter's identifier class before
@@ -192,6 +193,11 @@ set -- kind=tool.use harness=claude-code outcome="$outcome"
 # rather than the call, so `show session:<id>` reads a session's tool calls in
 # order; the call's own id is a data key, which is what joins it to a transcript.
 [ -n "$sid" ] && id_usable "$sid" && set -- "$@" subject="session:$sid" session="$sid"
+# WHEN A TOOL CALL FAILS, record the first line of the error as the reason.
+# The reason field is quote-safe and one-line, with control characters removed.
+if [ "$outcome" = fail ] && [ -n "$errfirstline" ]; then
+	set -- "$@" reason="$errfirstline"
+fi
 hook_trace emit "$@" \
 	data.tool="$tool" data.tool_use_id="$tuid" \
 	data.input_head="$(cat "$stage/head" 2>/dev/null)" \

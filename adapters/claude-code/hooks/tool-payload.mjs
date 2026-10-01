@@ -134,12 +134,30 @@ try {
   die(`cannot write the staged payload under ${dir}: ${error.code ?? error.message}`);
 }
 
+// THE FIRST LINE OF AN ERROR, when the result is from a failed tool call.
+// This becomes the `reason` field on the event: the hook can parse it without
+// a second pass. Bounded to one line, with control characters removed: a shell
+// value that carries a newline would forge a second row.
+let errorFirstLine = "";
+if (from === "error" && typeof payload.error === "string" && payload.error.length > 0) {
+  // Extract the first line: split on \n or \r\n, take the first part
+  const lines = payload.error.split(/\r?\n/);
+  if (lines.length > 0 && lines[0].length > 0) {
+    errorFirstLine = lines[0];
+    // Trim to 300 characters for reasonable line length, and remove control characters
+    errorFirstLine = errorFirstLine.substring(0, 300).replace(/[\u0000-\u001f\u007f]/gu, " ");
+  }
+}
+
 // THE SCALARS. Printed only when the payload carries them as strings, because a
 // hook that read `[object Object]` off a drifted key would put it on a join
 // column. One per line, `key value`, which a POSIX `sed` consumes without a
 // parser; the values that become ids are checked against this adapter's own
 // identifier class by the hook (hook_id_ok), not here.
 let out = `result_from ${from}\n`;
+if (errorFirstLine) {
+  out += `error_first_line ${errorFirstLine}\n`;
+}
 for (const key of ["session_id", "tool_name", "tool_use_id", "hook_event_name"]) {
   const value = payload[key];
   if (typeof value !== "string" || value === "") continue;
