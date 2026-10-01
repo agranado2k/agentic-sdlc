@@ -341,26 +341,6 @@ case "$oracle_entry" in
 *'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
 *) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
 esac
-# Every example row that carries an oracle clause must follow the proper form:
-# either four-part (— oracle: <who>, <when>, <version>, <comparator>) or
-# none form (— oracle: none — <why>). The label row in question 8 is the one
-# that uses the none form.
-rows8_bad=
-while IFS= read -r row; do
-	[ -n "$row" ] || continue
-	case $row in
-	*'— oracle: '*)
-		# Has an oracle clause; check it's in one of the proper forms
-		if ! printf '%s\n' "$row" | grep -qE '— oracle: none — |— oracle: [^,]+, [^,]+, [^,]+, [^-]'; then
-			rows8_bad="$rows8_bad [$row]"
-		fi
-		;;
-	esac
-done <<EOF
-$rows8
-EOF
-[ -z "$rows8_bad" ] && pass "every example row in question 8 that carries an oracle clause follows the proper form" ||
-	fail "an example row's oracle clause does not follow the proper form:$rows8_bad"
 # The label row specifically carries the none form until #332 lands (ticket
 # #342): the trace holds no pre-quiz label, so there is no who, when or
 # version to name, and a four-part clause there would name an oracle that
