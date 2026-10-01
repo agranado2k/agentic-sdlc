@@ -415,11 +415,16 @@ hook_final() {
 	return 0
 }
 
-# hook_now_ms — the wall clock in milliseconds, or status 1 where `date` has no
-# sub-second field. `%N` is not POSIX: GNU date answers it, and a date that does
-# not leaves a letter behind, which the digit check turns into "no clock".
+# hook_now_ms [<file>] — the wall clock in milliseconds, or with a file its
+# last modification; status 1 where `date` has no sub-second field. `%N` is not
+# POSIX: GNU date answers it, and a date that does not leaves a letter behind,
+# which the digit check turns into "no clock".
 hook_now_ms() {
-	_nm=$(date +%s%N 2>/dev/null) || return 1
+	if [ -n "${1:-}" ]; then
+		_nm=$(date -r "$1" +%s%N 2>/dev/null) || return 1
+	else
+		_nm=$(date +%s%N 2>/dev/null) || return 1
+	fi
 	case $_nm in '' | *[!0-9]*) return 1 ;; esac
 	[ "${#_nm}" -gt 6 ] || return 1
 	printf '%s' "${_nm%??????}"
@@ -483,6 +488,77 @@ hook_wait_final() {
 	done
 	printf '%s' "$_hw_waited"
 	return 1
+}
+
+# hook_tail_facts <transcript> — what a wait that ran out of bound can still
+# say about the transcript, for the event that records it (ticket #387): sets
+# hook_last_kind to its last line's top-level `type`, as the agent harness
+# names it; hook_last_age_ms to how old that line is NOW, in milliseconds; and
+# hook_lines to how many non-empty lines it holds. Each is left empty when it
+# cannot be read, and the caller then names fewer keys — never a guess. A young
+# last line says the bound was too short for an agent still writing; an old one
+# says the agent stopped without a final message.
+#
+# THE TOP-LEVEL TYPE, NOT THE FIRST OR LAST ONE ON THE LINE. A transcript line
+# nests objects that carry a `type` of their own — a content block, an
+# attachment body, a tool's structured result — on either side of the line's
+# own key, so neither a first nor a greedy last match answers. The awk below
+# walks the line's characters once, keeping track of string and nesting depth,
+# and takes the string value of a `type` key at depth one. Quoted text cannot
+# fool it: a brace inside a string is skipped with the string, and a quote
+# inside one is escaped. The answer is kept only if it is a plain word — it is
+# data from a file a model wrote into, headed for the trace.
+#
+# THE AGE IS THE FILE'S: the agent harness appends a line at a time, so the
+# last modification is the last line landing, and reading the mtime asks
+# nothing of the line's own timestamp format. `date -r <file>` gives it on GNU
+# and BSD date alike; milliseconds where `%N` answers, whole seconds otherwise.
+hook_tail_facts() {
+	hook_last_kind=
+	hook_last_age_ms=
+	hook_lines=
+	_tf=$(awk '
+		NF { n++; last = $0 }
+		END {
+			printf "%d ", n
+			len = length(last); d = 0; ins = 0; esc = 0; st = 0; key = ""; want = 0
+			for (i = 1; i <= len; i++) {
+				c = substr(last, i, 1)
+				if (ins) {
+					if (esc) { esc = 0; continue }
+					if (c == "\\") { esc = 1; continue }
+					if (c == "\"") {
+						ins = 0
+						if (d == 1) {
+							s = substr(last, st, i - st)
+							if (want) { printf "%s", s; exit }
+							key = s
+						}
+					}
+					continue
+				}
+				if (c == "\"") { ins = 1; st = i + 1; continue }
+				if (c == "{" || c == "[") { d++; want = 0; key = ""; continue }
+				if (c == "}" || c == "]") { d--; continue }
+				if (d == 1 && c == ":") { want = (key == "type"); key = ""; continue }
+				if (d == 1 && c == ",") { want = 0; key = ""; continue }
+			}
+		}' "$1" 2>/dev/null) || _tf=
+	hook_lines=${_tf%% *}
+	case $hook_lines in '' | *[!0-9]*) hook_lines= ;; esac
+	_tf_kind=${_tf#* }
+	[ "$_tf_kind" != "$_tf" ] && [ "${#_tf_kind}" -le 60 ] && hook_id_ok "$_tf_kind" &&
+		hook_last_kind=$_tf_kind
+	_tf_now=$(hook_now_ms) || _tf_now=
+	if ! _tf_m=$(hook_now_ms "$1") || [ -z "$_tf_now" ]; then
+		_tf_m=$(date -r "$1" +%s 2>/dev/null) || _tf_m=
+		case $_tf_m in '' | *[!0-9]*) return 0 ;; esac
+		_tf_m=$((_tf_m * 1000))
+		_tf_now=$(($(date +%s) * 1000))
+	fi
+	hook_last_age_ms=$((_tf_now - _tf_m))
+	[ "$hook_last_age_ms" -ge 0 ] || hook_last_age_ms=0
+	return 0
 }
 
 # --- how far this checkout is behind main -----------------------------------

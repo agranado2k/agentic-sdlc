@@ -29,7 +29,8 @@
 # read-at-once behaviour above — because how long a hook may hold a session is
 # a project's decision; the kit's twin sets its own. When the bound passes the
 # absence is recorded, outcome=fail and no partial sum, with the wait it gave
-# in data.waited_ms.
+# in data.waited_ms and what the file can say of why — its last line's kind,
+# that line's age and the line count (#387).
 #
 # A PHANTOM STOP WRITES NOTHING (ticket #344): a transcript that does not
 # exist is neither waited for nor recorded — the adapter README says why. One
@@ -87,6 +88,11 @@ elif [ -n "$hook_wait_ms" ]; then
 	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
 		hook_tokens "$transcript" agent.stop "$@" data.waited_ms="$waited"
 	else
+		# Why it ran out, as far as the file can say (#387, hook_tail_facts).
+		hook_tail_facts "$transcript"
+		[ -n "$hook_last_kind" ] && set -- "$@" data.last_kind="$hook_last_kind"
+		[ -n "$hook_last_age_ms" ] && set -- "$@" data.last_age_ms="$hook_last_age_ms"
+		[ -n "$hook_lines" ] && set -- "$@" data.lines="$hook_lines"
 		hook_trace emit kind=agent.stop outcome=fail data.waited_ms="$waited" \
 			reason="the subagent transcript did not end on a final message within the ${hook_wait_ms} ms bound, so no tokens were read — a partial sum would be an undercount" "$@"
 	fi
