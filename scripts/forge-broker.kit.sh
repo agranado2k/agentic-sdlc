@@ -39,7 +39,8 @@
 #      `**ID** \`path:line\` — text` / `↳ fix:` shape with an ID whose letter
 #      matches its section, and a confirm-list whose items open with their
 #      tag. A report that fails ANY of this posts nothing — exit 65 — and a
-#      `REVIEWED` that contradicts `--commit` is the same failure. What the
+#      `REVIEWED` that contradicts `--commit` is the same failure, as is a
+#      drifted report (step 3) that carries no `--commit` at all. What the
 #      worker did not say, the broker does not write: absence is published
 #      only where the report stated it.
 #   3. Ask the forge for the PR head and, when the reviewed commit is not it,
@@ -47,8 +48,10 @@
 #      list but behind the head (commits were added) posts ANCHORED to the
 #      reviewed commit — `commit_id` is it, the review body's first line
 #      names it and the current head, stdout carries a `drift:` line — and
-#      exits 0. Reviewed not in the list (the branch was rewritten) posts
-#      nothing and is exit 75: re-run the review.
+#      exits 0, but ONLY when --commit vouches for it: a drifted report
+#      without --commit posts nothing and is exit 65. Reviewed not in the
+#      list (the branch was rewritten) posts nothing and is exit 75: re-run
+#      the review, whether --commit was given or not.
 #   4. Ask the forge for the diff that was reviewed — the PR diff, or on
 #      drift the base...reviewed diff — and check every finding's `path:line`
 #      against its right-hand side. A finding whose location is not in the
@@ -76,7 +79,8 @@
 # STREAMS AND EXIT STATUSES. stdout is the answer: URLs, one per line, then
 # the dropped and drift lines; under --dry-run, the two JSON payloads. Every reason is
 # on stderr, prefixed `forge-broker:`. Exit 0 posted, or already posted; 2 a
-# usage error; 65 (EX_DATAERR) a report that fails the contract; 69
+# usage error; 65 (EX_DATAERR) a report that fails the contract, a REVIEWED
+# that contradicts --commit, or a drifted report without --commit; 69
 # (EX_UNAVAILABLE) no forge CLI, or a forge call that failed; 75 (EX_TEMPFAIL)
 # the reviewed commit is no longer in the PR, re-run the review; 78 (EX_CONFIG) a
 # policy file that is missing, or does not allow an operation this script
@@ -106,9 +110,10 @@ usage: sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha
   <PR>       the pull request number the review lands on — the operator's, never the report's
   <report>   the dispatched reviewer's stdout, captured to a file; - reads standard input
   --dry-run  read the PR, print both payloads as they would be sent, post nothing
-  --commit   the sha the session recorded before dispatching; must equal the report's REVIEWED line
+  --commit   the sha the session recorded before dispatching; must equal the report's REVIEWED line.
+             Optional when REVIEWED is the PR head; REQUIRED when it is behind the head
   --model, --harness   recorded on the trace event, nothing else
-exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract · 69 no forge CLI · 75 reviewed commit no longer in the PR · 78 policy
+exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract, or drifted without --commit · 69 no forge CLI · 75 reviewed commit no longer in the PR · 78 policy
 EOF
 	exit "$EX_USAGE"
 }
@@ -340,8 +345,9 @@ HEAD=$(printf '%s' "$HEAD" | tr -d ' \r\n' | tr 'A-F' 'a-f')
 # amendment of clause 6). The review is always anchored to the commit it
 # REVIEWED, never to whatever the head is at post time:
 #   head      — post as ever;
-#   in list   — commits were added since: post at the reviewed commit, check
-#               locations against base...reviewed, and say so first in the body;
+#   in list   — commits were added since: with --commit, post at the reviewed
+#               commit, check locations against base...reviewed, and say so
+#               first in the body; without it, post nothing, exit 65;
 #   not there — the branch was rewritten: the reviewed code no longer exists
 #               on the PR, and posting would not make it current. Exit 75.
 # The forge lists at most 250 commits of a PR; a reviewed commit beyond that
@@ -354,6 +360,12 @@ if [ "$REVIEWED" != "$HEAD" ]; then
 	}
 	tr 'A-F' 'a-f' <"$TMP/commits" | tr -d ' \r' | grep -qx "$REVIEWED" ||
 		die "$EX_TEMPFAIL" "reviewed commit $REVIEWED is not in PR #$PR (head is $HEAD) — the branch was rewritten; re-run the review. Nothing posted"
+	# Behind the head, the forge no longer vouches for REVIEWED — it is the
+	# worker's word alone, and any commit in the list would be accepted. So
+	# on drift the session's own record is mandatory: without --commit,
+	# nothing posts, exit 65, the family of a contradicting --commit.
+	[ -n "$COMMIT" ] ||
+		die "$EX_DATAERR" "reviewed commit $REVIEWED is behind the head $HEAD of PR #$PR, and a drifted review needs --commit <sha> to vouch for it — nothing posted"
 	DRIFT=$HEAD
 fi
 

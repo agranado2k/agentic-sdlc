@@ -704,7 +704,7 @@ first_body_line() {
 STUB_COMMITS="$OTHER_SHA $HEAD_SHA"
 export STUB_COMMITS
 broker 12 "$GOOD"
-s_assert_status 0 "reviewed == head exits 0"
+s_assert_status 0 "reviewed == head exits 0, with no --commit — it stays optional at the head"
 assert_mutating 2 "reviewed == head makes both mutating calls"
 grep -q '^ARGV: .*/pulls/12/commits' "$STUB_LOG" &&
 	fail "reviewed == head: the broker asked for the commit list it does not need" ||
@@ -724,8 +724,26 @@ STUB_COMPARE_DIFF="$SCRATCH/reviewed.diff"
 BASE_SHA=89ABCDEF0123456789ABCDEF0123456789ABCDEF
 STUB_BASE=$BASE_SHA
 export STUB_HEAD STUB_COMMITS STUB_COMPARE_DIFF STUB_BASE
+# On drift, --commit is mandatory (the operator's decision on PR #320): the
+# head no longer vouches for REVIEWED, so the session's own record must. A
+# drifted report without it posts nothing, exit 65 — the family of a REVIEWED
+# line that contradicts --commit — with one line on stderr naming the flag.
 broker 12 "$GOOD"
-s_assert_status 0 "a reviewed commit behind the head exits 0"
+s_assert_status 65 "a reviewed commit behind the head, without --commit, is exit 65"
+assert_mutating 0 "…and nothing is posted"
+s_assert_err_has "--commit"
+[ "$(printf '%s\n' "$S_ERR" | grep -c .)" -eq 1 ] &&
+	pass "…with a one-line reason on stderr" ||
+	fail "the missing --commit is not a one-line reason: $S_ERR"
+grep -q '^ARGV: .*/compare/' "$STUB_LOG" &&
+	fail "the broker read the reviewed diff for a review it was about to refuse" ||
+	pass "…refused before the reviewed diff is read"
+broker 12 "$GOOD" --dry-run
+s_assert_status 65 "…and a dry run refuses it the same way"
+s_assert_out_lacks 'commit_id' "…printing no payload"
+
+broker 12 "$GOOD" --commit "$HEAD_SHA"
+s_assert_status 0 "a reviewed commit behind the head, with a matching --commit, exits 0"
 assert_mutating 2 "…and makes both mutating calls"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
@@ -780,7 +798,7 @@ case "$REVIEW" in
 esac
 
 # The demo: a dry run against the drifted head.
-broker 12 "$GOOD" --dry-run
+broker 12 "$GOOD" --dry-run --commit "$HEAD_SHA"
 s_assert_status 0 "a drifted dry run exits 0"
 assert_mutating 0 "…and posts nothing"
 s_assert_out_has "\"commit_id\":\"$HEAD_SHA\"" "…printing a payload anchored to the reviewed commit"
@@ -800,6 +818,7 @@ assert_mutating 0 "…and nothing is posted"
 s_assert_err_has "$HEAD_SHA"
 s_assert_err_has "PR #12"
 s_assert_err_has "re-run the review"
+s_assert_err_lacks "--commit"
 
 # A REVIEWED line the session's --commit contradicts, on a drifted PR too.
 STUB_COMMITS="$HEAD_SHA $OTHER_SHA"
@@ -816,7 +835,7 @@ s_assert_status 0 "an abbreviated --commit that agrees with REVIEWED posts the d
 for read in /commits baseRefOid /compare/; do
 	STUB_FAIL=$read
 	export STUB_FAIL
-	broker 12 "$GOOD"
+	broker 12 "$GOOD" --commit "$HEAD_SHA"
 	s_assert_status 69 "the forge refusing the drifted read '$read' is exit 69"
 	assert_mutating 0 "…and nothing is posted"
 	s_assert_err_has "HTTP 502"
@@ -826,7 +845,7 @@ unset STUB_FAIL
 for base in '' main; do
 	STUB_BASE=$base
 	export STUB_BASE
-	broker 12 "$GOOD"
+	broker 12 "$GOOD" --commit "$HEAD_SHA"
 	s_assert_status 69 "a base commit of '$base' is exit 69"
 	assert_mutating 0 "…and nothing is posted"
 	s_assert_err_has "no usable base commit"
