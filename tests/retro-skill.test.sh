@@ -444,9 +444,9 @@ missing=$(posted_rules_missing "$SIDECAR_ABS" | tr '\n' ',' | sed 's/,$//')
 for b in \
 	'posted denominator|s/counts only the raises carrying `data.posted=yes`/counts the raises/' \
 	'unposted out|s/is in no denominator and in no pairing/is counted/' \
-	'unposted counted beside|s/beside its row, `<n> not posted`/nowhere/' \
+	'unposted counted beside|s/`<n> not posted`/nowhere/' \
 	'unmarked overcounts|s/the denominator \*\*overcounts\*\*/the denominator is exact/' \
-	'row names its form|s/Each severity row says which form it used/A severity row may say which form it used/' \
+	'row names its form|s/says which form it used — `posted only`, or/may name a form, or/' \
 	'lower bound|s/the rate is a lower bound on the share/the rate is the share/' \
 	'example row names its form|/^severity · /s/   posted only   /   /'; do
 	sed "${b#*|}" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md"

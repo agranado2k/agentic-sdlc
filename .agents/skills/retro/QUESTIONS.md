@@ -279,21 +279,22 @@ be nobody's. An event none of the three names goes on a row named
   dismissal that pairs with no raise — a third party's review, a path the
   emitter would not type — is counted beside the table, in no band.
 - **The dismissal rate's denominator counts only the raises carrying `data.posted=yes`**
-  — the findings a human could have dismissed. A raise with `data.posted=no` is in no denominator and in no pairing: count it
-  beside its row, `<n> not posted`. A raise that carries no `data.posted`
-  was recorded before the key existed, and the denominator **overcounts**
-  wherever one is in it: it stays in, though nobody may have posted it.
-  Either form still counts a finding raised again by a second review, and a
-  raise no dismissal can reach — on a subject that is not a pull request,
-  where nothing is posted for a human to close, or at a `data.where` the
-  dismissal's emitter would not type; the report says so under the severity
-  rows, every time. Each severity row says which form it used — `posted
-  only`, or `overcounts` when any raise in it carries no `data.posted` — and
-  under an `overcounts` row the rate is a lower bound on the share of posted
-  findings a human dismissed, not a measurement of it. A row where raises
-  shared a dismissal is not even that: one closed thread may have answered
-  one of them, the numerator counts them all, and the row says so beside its
-  count.
+  — the findings a human could have dismissed. A raise with `data.posted=no`
+  is in no denominator and in no pairing: count it beside its row,
+  `<n> not posted`. A raise that carries no `data.posted` was recorded
+  before the key existed, and the denominator **overcounts** wherever one is
+  in it: it stays in, though nobody may have posted it. Each severity row
+  says which form it used — `posted only`, or `overcounts` when any raise in
+  it carries no `data.posted`.
+- **What the rate still is not.** Either form still counts a finding raised
+  again by a second review, and a raise no dismissal can reach — on a
+  subject that is not a pull request, where nothing is posted for a human to
+  close, or at a `data.where` the dismissal's emitter would not type; the
+  report says so under the severity rows, every time. Under an `overcounts`
+  row the rate is a lower bound on the share of posted findings a human
+  dismissed, not a measurement of it. A row where raises shared a dismissal
+  is not even that: one closed thread may have answered one of them, the
+  numerator counts them all, and the row says so beside its count.
 - **Every row carries the oracle clause** — the one `/housekeeping`'s
   checklist asks for and the glossary defines (`docs/domain-glossary.md`,
   Oracle), naming who wrote the test fixtures, when, against which version,
