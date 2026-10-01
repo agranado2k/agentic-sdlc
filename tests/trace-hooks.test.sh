@@ -2056,6 +2056,11 @@ banner "30. PostToolUseFailure records the first line of the error as reason"
 # reason field should hold the first line of that error, and the full error
 # should be stored in the result blob. The reason should be quote-safe (no
 # single quotes, no newlines) and trimmed to one line.
+# reason_of <event line> — the event's reason, DECODED from its JSON string, so
+# a leg compares the text a reader gets back rather than the escaped bytes.
+reason_of() {
+	printf '%s\n' "$1" | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).reason ?? "")'
+}
 if [ "$HAVE_NODE" = 1 ]; then
 	# A simple error with multiple lines: first line as reason, full error in blob
 	new_trace
@@ -2120,10 +2125,12 @@ if [ "$HAVE_NODE" = 1 ]; then
 	EDQ=$(ev_of tool.use | sed -n '1p')
 	[ "$(str "$EDQ" outcome)" = fail ] && pass "the event records the double-quote error" ||
 		fail "the outcome is not fail: $EDQ"
+	[ "$(reason_of "$EDQ")" = 'Error opening "config.json"' ] && pass "the reason holds the double-quote error as written" ||
+		fail "the reason of the double-quote error decodes to '$(reason_of "$EDQ")'"
 
 	# An error with dollar sign (shell variable expansion metacharacter)
 	new_trace
-	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Invalid value: \\$VAR"}' \
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Invalid value: $VAR"}' \
 		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dollar-388.json"
 	PAYLOAD="$SCRATCH/tool-fail-dollar-388.json"
 	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
@@ -2133,6 +2140,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 	EDL=$(ev_of tool.use | sed -n '1p')
 	[ "$(str "$EDL" outcome)" = fail ] && pass "the event records the dollar-sign error" ||
 		fail "the outcome is not fail: $EDL"
+	[ "$(reason_of "$EDL")" = 'Invalid value: $VAR' ] && pass "the reason holds the dollar-sign error as written" ||
+		fail "the reason of the dollar-sign error decodes to '$(reason_of "$EDL")'"
 
 	# An error with backtick (shell command substitution metacharacter)
 	new_trace
@@ -2146,6 +2155,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 	EBK=$(ev_of tool.use | sed -n '1p')
 	[ "$(str "$EBK" outcome)" = fail ] && pass "the event records the backtick error" ||
 		fail "the outcome is not fail: $EBK"
+	[ "$(reason_of "$EBK")" = 'Failed: `whoami`' ] && pass "the reason holds the backtick error as written" ||
+		fail "the reason of the backtick error decodes to '$(reason_of "$EBK")'"
 
 	# An error with backslash (shell escape character)
 	new_trace
@@ -2159,6 +2170,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 	EBS=$(ev_of tool.use | sed -n '1p')
 	[ "$(str "$EBS" outcome)" = fail ] && pass "the event records the backslash error" ||
 		fail "the outcome is not fail: $EBS"
+	[ "$(reason_of "$EBS")" = 'Path: C:\Users\file' ] && pass "the reason holds the backslash error as written" ||
+		fail "the reason of the backslash error decodes to '$(reason_of "$EBS")'"
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi
