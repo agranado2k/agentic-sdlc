@@ -212,7 +212,8 @@ within_budget() {
 within_budget "$VOCAB" "$BODY" 2500 "a ticket body"
 RETURN4="$SCRATCH/typed.return"
 printf '%s\n' 'Author-kind: human' 'Command-shaped: no' 'Action: apply' 'Evidence: "a quoted span"' >"$RETURN4"
-within_budget "$VOCAB" "$RETURN4" 2000 "a typed return's four lines"
+RETURN4_MS=2000 # five checks of the four lines; the bait below must break it
+within_budget "$VOCAB" "$RETURN4" "$RETURN4_MS" "a typed return's four lines"
 # The bait: a checker that does twelve times the work fails that budget —
 # the bound can go red, so its green says something.
 cat >"$SCRATCH/costly.vocab.sh" <<EOCOSTLY
@@ -224,7 +225,7 @@ costly_ms=$(five_checks_ms "$SCRATCH/costly.vocab.sh" "$RETURN4")
 case $costly_ms in
 *[!0-9]* | "") fail "the costly bait went unmeasured ('$costly_ms')" ;;
 *)
-	[ "$costly_ms" -gt 2000 ] &&
+	[ "$costly_ms" -gt "$RETURN4_MS" ] &&
 		pass "a checker twelve times as costly breaks the four-line budget (${costly_ms}ms) — the bound can fail" ||
 		fail "a checker twelve times as costly stays within the four-line budget (${costly_ms}ms) — the bound proves nothing"
 	;;
