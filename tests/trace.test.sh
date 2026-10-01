@@ -1313,27 +1313,27 @@ t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subjec
 [ "$S_STATUS" = 2 ] && pass "finding.triage data.id='PRRC_1 8f3c1a2' is exit 2 — two tokens are not one id" || fail "a two-token data.id exited $S_STATUS, not 2: $S_ERR"
 case $S_ERR in *finding.triage*data.id*"'PRRC_1 8f3c1a2'"*'[A-Za-z0-9._#-]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
 [ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.id was written: $(cat "$SH/events/$TODAY.jsonl")"
-# shape_refused <label> <value shown> <emit args…> — exit 2 AND the shape's
-# own refusal on stderr, so an exit 2 for any other reason is not a pass.
+# shape_refused <label> <key> <value shown> <emit args…> — exit 2 AND the
+# shape's own refusal of data.<key> on stderr, so an exit 2 for any other
+# reason is not a pass.
 shape_refused() {
-	_sr_label=$1 _sr_val=$2; shift 2
+	_sr_label=$1 _sr_key=$2 _sr_val=$3; shift 3
 	t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit "$@"
 	case $S_STATUS:$S_ERR in
-	2:*"data.id '$_sr_val' is not ["*) pass "$_sr_label" ;;
+	2:*"data.$_sr_key '$_sr_val' is not ["*) pass "$_sr_label" ;;
 	*) fail "$_sr_label — exit $S_STATUS, not the shape's refusal: $S_ERR" ;;
 	esac
 }
-shape_refused "finding.triage data.id='' is refused by the shape — one or more characters" '' kind=finding.triage data.id=''
-shape_refused "finding.triage data.id='kit-ci/self-host' is refused by the shape — a slash is outside it" 'kit-ci/self-host' kind=finding.triage data.id=kit-ci/self-host
-shape_refused "a refusal holds whichever order: data.id before kind" 'a b' data.id='a b' kind=finding.triage
-shape_refused "and every occurrence: a bad data.id after a good one is held" 'a b' kind=finding.triage data.id=ok data.id='a b'
-shape_refused "and a good data.id after a bad one does not cover it" 'a b' kind=finding.triage data.id='a b' data.id=ok
+shape_refused "finding.triage data.id='' is refused by the shape — one or more characters" id '' kind=finding.triage data.id=''
+shape_refused "finding.triage data.id='kit-ci/self-host' is refused by the shape — a slash is outside it" id 'kit-ci/self-host' kind=finding.triage data.id=kit-ci/self-host
+shape_refused "a refusal holds whichever order: data.id before kind" id 'a b' data.id='a b' kind=finding.triage
+shape_refused "and every occurrence: a bad data.id after a good one is held" id 'a b' kind=finding.triage data.id=ok data.id='a b'
+shape_refused "and a good data.id after a bad one does not cover it" id 'a b' kind=finding.triage data.id='a b' data.id=ok
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=x reason=converged
 [ "$S_STATUS" = 2 ] && pass "pr.iterate data.iteration=x is exit 2 — an iteration is digits" || fail "pr.iterate data.iteration=x exited $S_STATUS, not 2: $S_ERR"
 case $S_ERR in *pr.iterate*data.iteration*"'x'"*'[0-9]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
 [ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.iteration was written: $(cat "$SH/events/$TODAY.jsonl")"
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate data.iteration='2 of 3'
-case $S_STATUS:$S_ERR in 2:*"data.iteration '2 of 3' is not [0-9]+"*) pass "pr.iterate data.iteration='2 of 3' is refused by the shape" ;; *) fail "pr.iterate data.iteration='2 of 3' — exit $S_STATUS, not the shape's refusal: $S_ERR" ;; esac
+shape_refused "pr.iterate data.iteration='2 of 3' is refused by the shape" iteration '2 of 3' kind=pr.iterate data.iteration='2 of 3'
 # The good shapes write, and are written as given.
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=rejected data.source=check data.id='PRRC_kwDO#12.3-a_b' reason='ADR-0008'
 [ "$S_STATUS" = 0 ] && grep -qF '"id":"PRRC_kwDO#12.3-a_b"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
