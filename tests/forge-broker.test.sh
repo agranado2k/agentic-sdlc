@@ -1086,6 +1086,29 @@ raise_has M-1 '"agent":"unattributed"'
 raise_has L-1 '"agent":"simplicity"'
 raise_has L-1 '"where":"unsafe-path"'
 raise_has L-1 '"outcome":"raised"'
+# Retro H7 (#424): the broker's raises carried no data.posted, so /retro's
+# dismissal denominator overcounted them, and `unattributed` was the agent on
+# every one. The broker raises only what it posted inline, so every raise says
+# so — data.posted=yes, never no — and names its agent by a token on
+# /review-pr's roster, `unattributed` included: the two keys the relay's line
+# carries, so the three review paths read alike.
+raise_has H-1 '"posted":"yes"'
+raise_has M-1 '"posted":"yes"'
+raise_has L-1 '"posted":"yes"'
+[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"')" = 3 ] &&
+	pass "every raise the broker records carries data.posted=yes — it raises only what it posted" ||
+	fail "a broker raise carries no data.posted=yes: $(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"') of 3"
+printf '%s\n' "$RAISES" | grep -q '"posted":"no"' &&
+	fail "a broker raise says data.posted=no — the broker never records a finding it did not post" ||
+	pass "…and none says data.posted=no"
+# roster_tokens — /review-pr's closed sub-agent roster, read from its list.
+roster_tokens() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$KIT/.agents/skills/review-pr/SKILL.md" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+n_tok=0
+for tok in $(roster_tokens); do
+	n_tok=$((n_tok + $(printf '%s\n' "$RAISES" | grep -c "\"agent\":\"$tok\"")))
+done
+[ "$n_tok" = 3 ] && pass "every raise's data.agent is a token on /review-pr's roster ($n_tok of 3)" ||
+	fail "a broker raise's data.agent is off /review-pr's roster: $n_tok of 3 on it"
 printf '%s\n' "$RAISES" | grep -qF '"id":"L-2"' &&
 	fail "the withheld L-2 was raised — only a finding that landed is" ||
 	pass "the withheld L-2 is not raised: the trace records what was posted"
@@ -1156,6 +1179,8 @@ for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
 	raise_has "L-$n" "\"agent\":\"$tok\""
 	n=$((n + 1))
 done
+[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"')" = 6 ] && pass "and all six carry data.posted=yes" ||
+	fail "not every roster raise carries data.posted=yes: $(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"') of 6"
 STUB_PR=12
 export STUB_PR
 
