@@ -674,6 +674,12 @@ banner "7. /dogfood — a row's outcome is a decision line, checked before it is
 NAME=dogfood
 CHECK="$SCRATCH/dogfood.check.sh"
 OUTCOME="$SCRATCH/dogfood.outcome.sh"
+# The pre-screen's lifted fence is what the outcome check leans on for its
+# vocab_checker: without it every run below reads unchecked for want of the
+# function, not for the fence's own reason — said here, once, so a failure
+# below is not misread (review of PR #378).
+grep -qs '^vocab_checker() {$' "$CHECK" && pass "/dogfood — the pre-screen's lifted fence is at hand, with the vocab_checker the outcome check leans on" ||
+	fail "/dogfood — the pre-screen's fence was not lifted in section 4: the runs below cannot resolve the checker, whatever the outcome fence does"
 lift_fence "$DOGFOOD" checked_outcome "$OUTCOME"
 [ -s "$OUTCOME" ] && pass "/dogfood prints the outcome check as a runnable fence defining checked_outcome()" ||
 	fail "/dogfood has no sh fence defining checked_outcome(): a row's outcome is reported unchecked"
@@ -690,7 +696,6 @@ declared=$(field_tokens outcome)
 [ -n "$declared" ] && [ "$spelled" = "$declared" ] &&
 	pass "/dogfood — Outcome offers the policy file's tokens, in its order: $declared" ||
 	fail "/dogfood — the skill offers '$spelled', the policy file declares '$declared'"
-assert_file_has "$DOGFOOD" "sh scripts/vocab.sh" "the plain script name is still how the checker is named — correct in a consumer"
 assert_file_has "$FLAT" "before the report is written" "the check comes before the outcome is reported"
 assert_file_has "$FLAT" "one bare line per row" "the matrix's outcome is a decision line"
 assert_file_has "$FLAT" "A refused outcome is never reported" "exit 2 is a row to re-read, not a row to report"
@@ -777,9 +782,11 @@ outcome_named "a checker that cannot run leaves the row unchecked too" 9 pass un
 printf 'exit 1\n' >"$PROJECT/scripts/vocab.sh"
 outcome_named "…and so does one that fails for any reason but a refusal" 9 pass unchecked
 # A checker that passes everything is trusted: the fence keeps no list of
-# tokens of its own — the vocabulary is the checker's.
-printf 'exit 0\n' >"$PROJECT/scripts/vocab.sh"
-outcome_passed "with a checker that passes everything, an undeclared reading passes — the vocabulary is the checker's, not the fence's" 10 partial
+# tokens of its own — the vocabulary is the checker's. It speaks on both
+# streams, and neither reaches the report: the decision line is the whole of
+# what a pass prints (review of PR #378).
+printf 'echo noise; echo noise >&2; exit 0\n' >"$PROJECT/scripts/vocab.sh"
+outcome_passed "with a checker that passes everything, an undeclared reading passes — the vocabulary is the checker's, not the fence's — and what the checker printed is discarded" 10 partial
 cp "$SCRATCH/vocab.real" "$PROJECT/scripts/vocab.sh"
 outcome_passed "with the checker back, a declared outcome passes" 11 pass
 outcome_named "…and the undeclared reading is refused again" 11 partial refused
