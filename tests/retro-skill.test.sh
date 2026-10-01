@@ -189,10 +189,11 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # (`— oracle: `, `no held-out set`, `too few`, `run.start`), so a needle they
 # satisfy survives the rule's deletion (review of PR #329, H-5). The rows are
 # read apart, as rows.
-sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "${1:-$SIDECAR_ABS}"; } # [<sidecar file>]
+fenced() { awk '/^```/ { fence = !fence; next } fence'; } # stdin's fenced lines, the example rows
 stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
 reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
-rows8=$(sec8 | awk '/^```/ { fence = !fence; next } fence')
+rows8=$(sec8 | fenced)
 [ -n "$stamp" ] && [ -n "$reads8" ] && [ "$(printf '%s\n' "$rows8" | grep -c .)" -ge 3 ] &&
 	pass "question 8 has rule prose, a Reads line and example rows — each read apart" ||
 	fail "question 8 could not be split into its prose, its Reads line and its example rows"
@@ -347,8 +348,7 @@ esac
 # does not exist. The holder reads any sidecar, so the baits below can prove
 # it goes red (hard rule 9) without touching the real one.
 label_row_of() { # <sidecar file> — question 8's label example row, or nothing
-	awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$1" | awk '/^```/ { fence = !fence; next } fence' |
-		grep -E '^label · ' | head -1
+	sec8 "$1" | fenced | grep -E '^label · ' | head -1
 }
 label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
 	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
