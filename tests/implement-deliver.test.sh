@@ -489,12 +489,14 @@ printf '#!/bin/sh\ncat "%s/body"\n' "$SCRATCH" >"$SCRATCH/bin/gh"
 chmod +x "$SCRATCH/bin/gh"
 
 # read_stamp — a ticket body on stdin. Sets P_STATUS (the script's) and
-# P_SHOWN (what it printed for the agent to read). Run from the repository
-# root, where the skill's relative path resolves, with the cwd's PWN check
-# done by hostile() below.
+# P_SHOWN (what it printed for the agent to read). Run from the scratch
+# directory, never the repository root, so a payload that ran leaves its file
+# where hostile() looks and never in the checkout; the skill's relative path
+# resolves through a link to the kit's own scripts/.
+ln -s "$ROOT/scripts" "$SCRATCH/scripts"
 read_stamp() {
 	cat >"$SCRATCH/body"
-	P_SHOWN=$(cd "$ROOT" && PATH="$SCRATCH/bin:$PATH" eval "$(printf '%s' "$call" | sed 's/<N>/331/')" 2>"$SCRATCH/refusal")
+	P_SHOWN=$(cd "$SCRATCH" && PATH="$SCRATCH/bin:$PATH" eval "$(printf '%s' "$call" | sed 's/<N>/331/')" 2>"$SCRATCH/refusal")
 	P_STATUS=$?
 }
 # hostile <name> <why> <printf format of the body> — the invariant, plus the
@@ -508,9 +510,9 @@ hostile() {
 	case $P_SHOWN in *PWN*) _h_shown=1 ;; *) _h_shown=0 ;; esac
 	if [ "$P_STATUS" = 0 ] && [ "$_h_shown" = 1 ]; then
 		fail "$1: the script exited 0 AND printed the payload as a stamp line — $2"
-	elif [ -e "$ROOT/PWN" ] || [ -e "$SCRATCH/PWN" ]; then
+	elif [ -e "$SCRATCH/PWN" ]; then
 		fail "$1: the payload RAN while the stamp was being read"
-		rm -f "$ROOT/PWN" "$SCRATCH/PWN"
+		rm -f "$SCRATCH/PWN"
 	else
 		pass "$1: exit $P_STATUS, payload shown=$_h_shown — $2"
 	fi
