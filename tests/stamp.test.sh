@@ -120,6 +120,21 @@ cd "$KIT" || exit 2
 s_assert_resolved "Tier: implementer" \
 	"a key dressed in a no-break or zero-width space is never lifted, whatever the caller's locale"
 no_pwn "dressed key"
+# …and a body the locale DECIDES, so the pin itself is held: glibc's UTF-8
+# [[:space:]] takes an em space (U+2003), its C one does not. Pinned, a key
+# dressed in one is never lifted — exit 0, the Tier: line alone; unpinned, it
+# is lifted and refused — exit 2. The no-break space above cannot tell the
+# two apart: glibc counts it as space in neither locale.
+printf '\342\200\203' | LC_ALL=C.UTF-8 grep -q '^[[:space:]]$' &&
+	pass "this host's C.UTF-8 counts an em space as [[:space:]] — the body below is one the locale decides" ||
+	fail "this host's C.UTF-8 does not count an em space as [[:space:]] — the locale pin goes untested here"
+body 'Tier: implementer\nDomain\342\200\203: x;touch PWN\n'
+cd "$SCRATCH" || exit 2
+t_run_split env LC_ALL=C.UTF-8 sh "$STAMP" 331
+cd "$KIT" || exit 2
+s_assert_resolved "Tier: implementer" \
+	"a key dressed in an em space, under a caller's C.UTF-8: never lifted — the script's own C locale decides"
+no_pwn "em-space key"
 
 # Anchored on its own location, never the caller's cwd: a foreign clone's
 # checker and policy are not run from where you stand.
