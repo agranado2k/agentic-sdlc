@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-09-30
+## Current state — 2026-10-01
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (#269), closing PRD #261's wave — the forge broker, ADR-0009: a dispatched reviewer never holds network or credentials and its report lands through a host-side broker — and carrying every change that had landed untagged since 0.32.0. Before it: 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `8b2c996` — merge of PR #329 (#281: `/retro`'s eighth question, stamp calibration), untagged past `v0.32.0`: it and PR #328 (#280) moved skills and suites and no shared file, so they ride the next release. |
+| **Last commit on `main`** | `800f27f` — merge of PR #322, the 0.33.0 release, tagged `v0.33.0` the same hour. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. Open from other work: the forge broker PRs #285, #320, #321, #322 (PRD #261); #283 (#266); #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert. |
+| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. None from the forge-broker wave: PRD #261 is complete — #265–#269 landed on 2026-10-01 as PRs #285, #283, #321, #320 and the 0.33.0 release #322; the four stacked worktrees and the release worktree were pruned. Open from other work: #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert; codex has been logged out on the operator's machine since 2026-09-30, so no cross-vendor review has run since — every review has been an in-harness reviewer on a different model, posted through the broker. |
 
 ### Open questions / unresolved decisions
 
@@ -1669,3 +1669,74 @@ the kit owns no consumer's tracked file); the recipe's step 9d could not
 carry it without moving the shared layer, so the note is here until a
 release writes it there.
 
+### 2026-10-01 — 0.33.0: a dispatched review lands through the broker, never by hand
+
+PRD #261 closes. It began as a one-line complaint repeated on every dispatched
+review, "the reviewer ran in a sandbox without network", and the obvious
+answer was refused: on the installed codex CLI network exists only under a
+writable sandbox, the host filesystem stays readable, and a worker that read
+the diff would then also hold the operator's `gh` token. That is the lethal
+trifecta inside the least-trusted agent, and the review skill's own AST06
+finding names it. The operator's counter-proposal, a gate that decides which
+tool a worker may call, was right about the shape and wrong about the place:
+inside the sandbox it is a PATH shim an injected agent walks around; outside
+it is a **broker** on the host that validates the worker's stdout report
+against a policy and performs the two allowed forge actions on its behalf.
+ADR-0009 records it; the glossary gained the word.
+
+Five tickets, five PRs, four landed by one operator-invoked train on
+2026-10-01 — #285 (`f2f2a14`, the broker, whose own review was the first
+thing it posted), #283 (`f668a7b`, the offline worker contract and its
+`REVIEWED` line, which the dispatcher now stages for review-pr), #321
+(`a535865`, the refusals: proof only, because the #265 session had already
+built them), #320 (`b348349`, the three staleness cases) — and the fifth,
+#322, as release 0.33.0 (`800f27f`, tagged `v0.33.0`): the implement skill's
+wording is a shipped skill's, and the recipe's pinned worked example lists
+every skill that changed, so the change was a shared-layer re-pin and a
+release action under hard rule 3. Nothing in `files:` changed; the broker and
+its policy stay kit-only. The tag also carries everything that had landed
+untagged since 0.32.0 — the trace wave's eight fixes and the confidence ruling
+— and the note enumerates each, because self-host F6 holds a bump to its
+whole interval, not to its own wave. One lesson from that enumeration: the
+hooks suite forbids spelling the adapter's hook directory anywhere outside
+the adapter and the tests, so a note names a hook file by its basename.
+
+**Decisions the wave took on the PRs rather than in the PRD, all recorded on
+both:** `--prompt-file` stays the caller's own document (#283); the trace
+subject is `pr:#N` and the dry run performs its two reads (#285); `--commit`
+is optional at the head and mandatory on drift, and the ADR change is an
+amendment, not a reversal (#320); a project whose manual names no broker, or
+whose reviewer's agent harness is unreachable, gets no dispatched review and
+falls back to the in-session reviewer — no session ever hand-posts a
+dispatched report (#322). The PRD is at version 4 under its original link.
+
+**What the wave found out about the chain itself.**
+
+- *Codex was logged out from 2026-09-30 onward*, so every review after the
+  first two came from an in-session reviewer on a different model from the
+  implementer, same vendor. The sessions said so on each PR. The broker
+  posted all of them; hand relay did not happen once after #285 existed.
+- *Main moved faster than a PR could be re-merged.* #285 conflicted with main
+  five times in three days, always in the list files every landing edits:
+  the README's suite list, bootstrap's kit-only lists, the ADR index. The
+  cost is one re-merge per landing elsewhere; the cure is merging the base of
+  a stack early, which is what the train finally did.
+- *Two suites read the machine instead of the tree.* The dispatcher suite
+  counts every `sleep 20` on the host (#324, filed), and two trace suites
+  read the calling session's trace variables (#303). Under three parallel
+  sessions both looked like flakes; neither is.
+- *Blocked tickets were built stacked.* With the merge the operator's, #267,
+  #268 and #269 were built on the unmerged broker branch and retargeted when
+  it landed. It worked, at the price of re-merging each stacked PR once, and
+  it is the reason the train's order mattered.
+- *The scratchpad is shared and can vanish.* One wipe between two turns turned
+  an issue-body edit into a one-line body, recovered from GitHub's edit
+  history. The lesson is in memory: guard outward writes from scratch files.
+
+**Left for the operator:** resolve the review threads on the five PRs, all
+posted under the operator's account by design; log codex back in. The tag
+was cut minutes after the merge, and the one post-merge job that ran before
+it — self-host's F3 — was re-run green. **Candidate tickets, none filed beyond #324:** enable the AI-review CI job
+on this repo (the PRD's "later" with the highest leverage); make "skill
+dispatcher" a glossary term; promote the broker to the shared layer when a
+second caller needs it.
