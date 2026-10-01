@@ -414,7 +414,10 @@ it: `TRACE_AGENT_WAIT_MS` in your trace policy file is how many milliseconds
 it may poll for the transcript to end on a final message. When the final
 message lands in time, `agent.stop` carries the tokens and `data.waited_ms`.
 When the bound passes first, it records `outcome=fail` with no counts and the
-wait it gave. A malformed value is refused on stderr and as
+wait it gave, plus what the file can say of why: `data.last_kind` (the last
+line's `type`), `data.last_age_ms` (that line's age when the bound passed) and
+`data.lines`. A young last line means the bound is too short for an agent still
+writing; an old one, an agent that never wrote a final message. A malformed value is refused on stderr and as
 `data.wait_refused`, and is never waited. The policy file ships the value
 empty, which means no wait and the read-at-once behaviour, partial sum
 included. A session's own
