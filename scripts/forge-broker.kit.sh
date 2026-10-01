@@ -613,10 +613,19 @@ printf '%s\n%s\n' "$REVIEW_URL" "$COMMENT_URL"
 # clause 4). Kit-only script, so the kit's own policy is the default seam —
 # scripts/trace.sh read through scripts/trace.kit.config.sh, what
 # scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins.
+#
+# trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured note.
+# The note's switch is set on the external command, never in front of this
+# function: POSIX leaves unspecified whether an assignment before a function
+# call outlives it, and a quiet that leaked would silence the loud call too.
 trace() {
+	_tr_quiet=
+	[ "$1" = quiet ] && _tr_quiet=1
+	shift
 	[ -z "$MODEL" ] || set -- "$@" "model=$MODEL"
 	[ -z "$HARNESS" ] || set -- "$@" "harness=$HARNESS"
-	TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" sh "$ROOT/scripts/trace.sh" emit "$@" || :
+	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
+		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
 }
 # agent_token <finding body> — the /review-pr §3 roster token for the one
 # sub-agent the finding names by number or by title, `unattributed` when it
@@ -644,16 +653,16 @@ agent_token() {
 if [ -s "$TMP/posted" ]; then
 	while read -r i; do
 		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
-		f_where="$f_path:$f_line"
+		f_where="${f_path}:${f_line}"
 		case $f_where in *[!A-Za-z0-9./_:-]*) f_where=unsafe-path ;; esac
 		f_note="posted inline by the forge broker"
 		[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
-		TRACE_QUIET=1 trace kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
+		trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
 			"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
 			"data.where=$f_where" data.via=broker "reason=$f_note"
 	done <"$TMP/posted"
 fi
-trace kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
 # Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
 # needs the human, `pass` when none does.
 tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
@@ -662,7 +671,7 @@ N_MIXED=$(tagcount 'MIXED COMMIT')
 N_MISSING=$(tagcount MISSING)
 AX2=pass
 [ $((N_UNSPEC + N_MIXED + N_MISSING)) = 0 ] || AX2=confirm
-TRACE_QUIET=1 trace kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
+trace quiet kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
 	"data.unspecified=$N_UNSPEC" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" \
 	"reason=the confirm-list counted by tag; the items are on the PR comment"
 exit 0

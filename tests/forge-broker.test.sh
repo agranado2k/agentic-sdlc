@@ -1124,6 +1124,12 @@ ROSTER="$SCRATCH/roster.md"
 ↳ fix: none./p' "$KIT/.agents/skills/review-pr/SKILL.md"
 	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six lenses.\n'
 } >"$ROSTER"
+# The quiet switch rides the emit command, never a prefix on the `trace`
+# function: POSIX leaves unspecified whether an assignment before a function
+# call outlives it, and a quiet that leaked would mute the one loud note.
+LC_ALL=C grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+trace[[:space:]]' "$BROKER" >"$SCRATCH/prefixed" &&
+	{ fail "an assignment prefixes a call to the trace function:"; sed 's/^/        | /' "$SCRATCH/prefixed"; } ||
+	pass "no assignment prefixes a call to the trace function"
 STUB_PR=33
 export STUB_PR
 broker 33 "$ROSTER"
