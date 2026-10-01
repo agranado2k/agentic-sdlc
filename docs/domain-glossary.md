@@ -156,8 +156,8 @@ Grouped by the seam each term belongs to. Entry shape:
   is the *who*, and the clause keeps its four parts. A row that measured
   nothing — no fixtures written, no comparison made — has no comparator to
   name, and says so instead of implying one: `oracle: none — <why>`. Question
-  8's label row is one, until #332 records the pre-quiz label.
-  _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
+  8's label row is one when none of its stamps carries the pre-quiz label.
+  _Ref_: #276 (PRD #273), #342, #332; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
     of comparison, not a single number or an assumption.
@@ -293,8 +293,9 @@ Grouped by the seam each term belongs to. Entry shape:
     stands — the chain never reads it back).
 - **Event** — one line of the trace: a schema version, a UTC timestamp, an
   id, a **kind** from a closed vocabulary (unknown is a usage error, like an
-  unknown tier), the resolver's words where they apply, an outcome, a
-  one-line reason, raw token counts, and an open `data` map of strings.
+  unknown tier), the resolver's words where they apply, an outcome
+  (every kind has an outcome vocabulary of its own and refuses a word it
+  does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings.
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
   rewrites one — a correction is a new event. A finding has three kinds:
   `finding.raise` when a review reports it, `finding.triage` for the

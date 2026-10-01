@@ -1303,8 +1303,75 @@
 # tests/trace-skills.test.sh, tests/trace-hooks.test.sh and
 # tests/adapters-demo.sh hold it; the broker's own suite and the
 # pre-screen's are jobs in the kit's CI.
+# 0.34.0 — every trace kind holds its outcome to a vocabulary of its own
+# (PRD #237, from the retrospective of 2026-10-01).
+# NO file joins or leaves the shared layer. ONE shared file changes content
+# and BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the
+# arriving-from paragraph, a behaviour-change entry, and both worked
+# examples re-pin.
+#   From #348: scripts/trace.sh carries the kind table — every kind and the
+# outcome words it declares, ADR-0008 clause 1 as amended — beside its
+# closed kind list, the trace suite holding the two row for row. An emit whose outcome its
+# kind does not declare is exit 2 naming the kind, the value and the
+# vocabulary, the vocabulary checker's shape; it used to write. That is a
+# NARROWING of the emit's contract: a consumer's own emit line with a typo or
+# a sentence in `outcome=` stops silently succeeding, and because every call
+# site ends `|| :` it now writes nothing instead — run each of yours once
+# with `--dry-run` to find it. An emit with no outcome stays legal on every
+# kind; `run.start` and `session.end` carry none and refuse one; `note` is
+# the one open kind, held to a single word. `verify` names each line already
+# written with an undeclared outcome as an advisory on stderr, file and line,
+# exit status unchanged, and `summary` and `export` say the count once —
+# history is never rewritten, the pattern of the numbered-subject
+# advisory (#305). Every word a shipped skill, the Claude Code adapter's hooks or
+# the dispatcher writes today is declared; the kit's own trace held thirty
+# lines the record does not, all from sessions improvising. The kit-only
+# review broker writes `pass` or `blocked` with the worker's VERDICT
+# sentence as the reason, where it wrote the sentence as the outcome.
+#   From #345, untagged on main since 0.33.0: /merge-train's `feedback`
+# emit is the train's exit condition per landed PR, and `outcome=unasked`
+# records a landing nobody could answer — not a verdict; ADR-0008 clause 1
+# carries it as a dated amendment and the glossary gains Feedback.
+#   From #344, the same: the Claude Code adapter's hooks/subagent-stop.sh
+# writes no event for a phantom stop — a payload naming a transcript that
+# does not exist — and one `agent.stop outcome=fail` at once for one that
+# exists and cannot be read; adapters/claude-code/README.md records why no
+# event and not a new outcome word.
+#   From #333 (PR #357): the typed-return fence the pre-screening skills
+# print — /pr-iterate, /to-tickets and the dogfood skill (without its slash,
+# for 0.33.0's reason) — finds the vocabulary checker in the repository that
+# holds the skills being run, the nearest directory at or above the cwd with
+# .agents/skills/, never whatever repository git names for the cwd; and it
+# refuses an evidence span under 8 bytes. Both halves are two shell
+# functions each skill prints line for line identical.
+#   From #354 (PR #368): /to-tickets records the label it drafted before the
+# quiz as `data.label_proposed` on `ticket.write`, and /retro's question 8
+# (.agents/skills/retro/QUESTIONS.md) rates the label's override rate per
+# confidence once five stamps carry the key.
+#   From #346 (PR #369): /review-pr owns a closed sub-agent roster — seven
+# tokens and `unattributed` — and every `data.agent` it writes is one; its
+# §6 gains the relay path, where the session posting a review that ran
+# elsewhere records one `finding.raise` per finding, `data.via=relay`, and
+# /implement's mechanism (b) points the relaying session at it.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/merge-train/SKILL.md
+# (the unasked verdict, via 9a); .agents/skills/pr-iterate/SKILL.md,
+# .agents/skills/to-tickets/SKILL.md and the dogfood skill's SKILL.md (the
+# fence); .agents/skills/to-tickets/SKILL.md, .agents/skills/retro/SKILL.md
+# and .agents/skills/retro/QUESTIONS.md (the drafted label);
+# .agents/skills/review-pr/SKILL.md and .agents/skills/implement/SKILL.md
+# (the roster and the relay) — all via 9a. adapters/claude-code/README.md and the
+# adapter's hooks/subagent-stop.sh (the phantom stop, via 9e).
+# docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
+# carries both amendments, docs/adr/INDEX.md its row, and
+# docs/domain-glossary.md the Feedback entry and the Event entry's rule.
+# README.md's suite entries follow. tests/trace.test.sh section 22,
+# tests/trace-skills.test.sh, tests/trace-hooks.test.sh,
+# tests/forge-broker.test.sh, tests/prescreen-return.test.sh,
+# tests/typed-return.test.sh, tests/retro-skill.test.sh and
+# tests/spec-skills.test.sh hold it.
 
-shared-layer: 0.33.0
+shared-layer: 0.34.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
