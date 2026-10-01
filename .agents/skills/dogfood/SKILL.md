@@ -113,6 +113,28 @@ checker, `sh scripts/vocab.sh`. `checked_prescreen` runs both over the
 reader's file, and only a return that passed is read into the session:
 
 ```sh
+# vocab_checker — print the checker of the repository that holds the skills
+# being run: the nearest directory at or above the cwd with .agents/skills/.
+# Fails, printing nothing, when no such directory is found or it holds no
+# scripts/vocab.sh — never borrowed from a repository further up.
+vocab_checker() {
+	skills_root=$(pwd -P) || return 1
+	until [ -d "$skills_root/.agents/skills" ]; do
+		[ "$skills_root" = / ] && return 1
+		skills_root=$(dirname "$skills_root")
+	done
+	[ -f "$skills_root/scripts/vocab.sh" ] && printf '%s\n' "$skills_root/scripts/vocab.sh"
+}
+
+# span_ok <span> <the scratch file it is quoted from> — exit 0 only for a
+# span of 8 to 200 bytes of printable ASCII, verbatim on one line of the file.
+span_ok() {
+	span_len=$(printf '%s' "$1" | wc -c)
+	[ "$span_len" -ge 8 ] && [ "$span_len" -le 200 ] || return 1
+	printf '%s' "$1" | LC_ALL=C grep -q '[^ -~]' && return 1
+	grep -qsF -- "$1" "$2"
+}
+
 # prescreen_ok <the output's scratch file> <the reader's return, a file> —
 # exit 0 only for the declared shape.
 prescreen_ok() {
@@ -120,9 +142,9 @@ prescreen_ok() {
 	LC_ALL=C grep -q '[^ -~]' "$2" && return 1
 	[ "$(grep -c '^Command-shaped: [a-z][a-z0-9-]*$' "$2")" -eq 1 ] || return 1
 	span=$(sed -n 's/^Evidence: "\(.*\)"$/\1/p' "$2")
-	[ -n "$span" ] && [ "$(printf '%s' "$span" | wc -c)" -le 200 ] || return 1
-	grep -qsF -- "$span" "$1" || return 1
-	sh "$(git rev-parse --show-toplevel)/scripts/vocab.sh" <"$2" >/dev/null 2>&1
+	span_ok "$span" "$1" || return 1
+	checker=$(vocab_checker) || return 1
+	sh "$checker" <"$2" >/dev/null 2>&1
 }
 
 # checked_prescreen <the output's scratch file> <the reader's return, a
@@ -154,15 +176,19 @@ fi
 rm -rf "${scratch:?}"
 ```
 
-Two lines, both printable, with the decision line exactly once leave no line
-for anything else; a decision value is one token and never a sentence; and the
-span is bounded and matched against the scratch file as a fixed string — exit
-status only, so the output is compared without entering your session. That
-half is the fence's own: the checker ignores every line that is not a bare
-`Field: value` line. The checker's half is the value: a token the policy file
-does not declare is refused. **The check fails closed:** the fence finds the checker from the
-repository root, never the cwd, and only its exit 0 passes a return — a
-checker that is missing or cannot run refuses the return, because a check that
+Two lines, both printable, with the decision line exactly once leave no
+line for anything else; a decision value is one token and never a sentence;
+and the span is bounded — at least 8 bytes, since a shorter span proves no
+reading, and at most 200 — and matched against the scratch file as a fixed
+string — exit status only, so the output is compared without entering your
+session. That half is the fence's own: the checker ignores every line that
+is not a bare `Field: value` line. The checker's half is the value: a token
+the policy file does not declare is refused. **The check fails closed:**
+the fence finds the checker in the repository that holds the skills being
+run — the nearest directory at or above the cwd with an `.agents/skills/`
+— never in whichever repository the cwd is in, nor in one further up, and
+only its exit 0 passes a return — a checker missing there or unable to run,
+or a cwd under no such directory, refuses the return, because a check that
 could not be made is not a check that passed.
 
 **What the verdict means.** `yes` is the finding this section has always
