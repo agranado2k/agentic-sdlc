@@ -219,6 +219,19 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.33.0 or older, every trace kind holds its outcome to a
+vocabulary.** `scripts/trace.sh` (shared, changed at 0.34.0) refuses an
+`outcome=` its kind does not declare — exit 2, naming the kind, the value
+and the words it takes — where it used to write it. That NARROWS the emit,
+see "When a shared file's BEHAVIOUR changes": an emit line of your own with
+a typo or a sentence in `outcome=` stops silently succeeding, and because it
+ends `|| :` it now writes nothing. Run each of yours once with `--dry-run`
+to find it. Lines already in your trace are history: `verify` names each as
+an advisory and its exit status does not change. In Part 2, `/merge-train`
+(9a) records `outcome=unasked` for a landing nobody could answer, and the
+Claude Code adapter's `hooks/subagent-stop.sh` and `README.md` (9e) write no
+event for a subagent stop whose transcript never existed.
+
 **Arriving from 0.32.0 or older, a dispatched review lands through a broker,
 and two skills pre-screen what they read.** No shared file changes at 0.33.0;
 seven skills, one worker prompt and the Claude Code adapter do, and Part 2
@@ -596,6 +609,31 @@ worker prompt in the trace as a blob. Leave it out to keep prompts out; any
 other value is refused with exit 2 rather than read as off, because a switch
 about private data whose answer is hidden is worse than none. With the trace
 policy file empty, none of this writes anything.
+
+**0.34.0 is a narrowing, and the first one in the trace.** `scripts/trace.sh`
+now holds each kind's `outcome` to a vocabulary of its own — `review.verdict`
+takes `pass`, `blocked` or `confirm`, `merge.land` takes `landed`, `skipped`
+or `stopped`, and so on for every kind; the script's header carries the
+table beside its kind list, and your copy of ADR-0008 does not, since
+decision records are yours.
+An emit with no outcome is legal on every kind, `run.start` and
+`session.end` take none, and `note` takes any one word. What used to write
+and now exits 2 is an outcome its kind does not declare:
+
+```sh
+sh scripts/trace.sh emit kind=review.verdict outcome='not blocking'  # exit 2
+sh scripts/trace.sh emit kind=review.verdict outcome=pass            # writes
+```
+
+No argument, variable or stdout changes otherwise. Every emit the kit's
+skills, the Claude Code adapter's hooks and the dispatcher write is
+declared, so nothing the kit ships is affected; what you have to find is
+your OWN emit lines — a skill you wrote, a hook of yours, a local article
+that quotes one. Each ends `|| :`, so a refusal costs you the event and
+nothing else, silently: run each once with `--dry-run` and read stderr.
+Your existing trace needs nothing — `verify` names each old line whose
+outcome the table does not declare as an advisory, and `summary` and
+`export` say the count once, all with the exit status they had.
 
 ## When a shared file's path changes
 
