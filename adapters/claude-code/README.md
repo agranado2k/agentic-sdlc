@@ -188,9 +188,11 @@ you get it wrong:
 
 - **A streamed response is written more than once.** One assistant API response
   with two content blocks is two lines of the transcript, repeating the same
-  `message.id` and a byte-identical usage block. Summing lines over-counts;
-  de-duplicating by `message.id` reproduces the agent harness's own per-model
-  rollup exactly.
+  `message.id`. Summing lines over-counts; de-duplicating by `message.id`
+  reproduces the agent harness's own per-model rollup exactly — taking the
+  **last** usage block per id, because the blocks are not always identical: a
+  response that opens with a thinking block is written first with a partial
+  usage snapshot and then with the final one (#343).
 - **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
   payload carries two paths: `transcript_path` is the *parent session's* and
   `agent_transcript_path` is the subagent's. Read the first one there and every

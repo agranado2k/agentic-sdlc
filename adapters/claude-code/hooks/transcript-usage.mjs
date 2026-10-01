@@ -28,13 +28,22 @@
 //
 // WHAT DE-DUPLICATION MEANS HERE (#246's Q3, PRD #237's implementation
 // decision). One assistant API response with two content blocks is written as
-// TWO JSONL lines that repeat the same `message.id`, the same `requestId` and a
-// byte-identical `message.usage`. Summing lines counts that response twice;
-// summing distinct `message.id` reproduces the rollup the agent harness itself
-// writes on the transcript's last line, exactly. The request id is 1:1 with the
-// message id in the capture, so it is used as a CROSS-CHECK — if two lines ever
-// share a message id and disagree about anything, that is drift and it stops
+// TWO JSONL lines that repeat the same `message.id` and the same `requestId`.
+// Summing lines counts that response twice; summing distinct `message.id`
+// reproduces the rollup the agent harness itself writes on the transcript's
+// last line, exactly. The request id is 1:1 with the message id in the
+// capture, so it is used as a CROSS-CHECK — if two lines ever share a message
+// id and disagree about the model or the request, that is drift and it stops
 // here rather than becoming a number.
+//
+// THE LAST USAGE BLOCK PER ID WINS (#343, PRD #237's implementation decision
+// as amended 2026-10-01). The usage is NOT always byte-identical across those
+// lines: a response that opens with a thinking block is written first with a
+// partial usage snapshot (output_tokens 1, say) and then with the final one
+// (113). The final block is what the rollup counts, so the last block read
+// for an id replaces any earlier one, and a superseded block contributes
+// nothing. Every line is still checked for shape — a renamed key on a
+// superseded line is drift all the same.
 //
 // WHAT THIS FILE DOES NOT DO. It never reads the transcript's `cost-state`
 // rollup, though that line holds per-model totals and a cost figure and would
@@ -62,7 +71,9 @@
 // taken as already counted — exactly the set a read that stopped at the anchor
 // counted, because the file only ever grows — and only the ids first seen after
 // it are summed. Their streamed duplicates are still checked against the first
-// line either way. An anchor the file does not hold means this is not the file
+// line either way, and a later block of an id the earlier read counted is not
+// counted again: that read saw the response finished, so it took the final
+// block. An anchor the file does not hold means this is not the file
 // the anchor was read from, or it was rewritten: that is drift, exit 2, because
 // both "count everything" and "count nothing" would be a confident wrong number.
 
@@ -112,12 +123,13 @@ try {
 /** A non-negative integer, and nothing that merely looks like one. */
 const isCount = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
-/** Per-model running totals, in first-seen order. */
-const totals = new Map();
-/** message.id -> what the first line carrying it said, for the duplicate check. */
+/**
+ * message.id -> { model, requestId, counts, fresh }, in first-seen order. The
+ * model and request id are the first line's, for the duplicate check; `counts`
+ * is the LAST block read for the id; `fresh` is false for an id first seen at
+ * or before the --after anchor, which an earlier read already counted.
+ */
 const seen = new Map();
-/** Per-model count of the distinct messages summed, in step with `totals`. */
-const counted = new Map();
 /** Still at or before the anchor: ids first seen here were counted by an earlier read. */
 let before = after !== null;
 /** The id of the last message summed, which the next read passes as --after. */
@@ -189,36 +201,40 @@ for (const line of raw.split("\n")) {
 
   const first = seen.get(message.id);
   if (first) {
-    // A streamed response, written once per content block. Everything about it
-    // must repeat; anything that does not is drift, not a second response.
+    // A streamed response, written once per content block. Its model and its
+    // request must repeat — anything else is drift, not a second response —
+    // and its usage is the last block read (#343: a thinking block's line
+    // carries a partial snapshot the next line supersedes).
     if (first.model !== message.model) {
       die(`line ${lineNo}: message.id ${message.id} appears again under a different model ('${first.model}' then '${message.model}')`);
     }
     if (first.requestId !== requestId) {
       die(`line ${lineNo}: message.id ${message.id} appears again under a different requestId ('${first.requestId}' then '${requestId}')`);
     }
-    for (const [field] of FIELDS) {
-      if (first.counts[field] !== counts[field]) {
-        die(`line ${lineNo}: message.id ${message.id} appears again with a different ${field} (${first.counts[field]} then ${counts[field]}) — de-duplicating would drop real tokens`);
-      }
-    }
+    first.counts = counts;
     continue;
   }
-  seen.set(message.id, { model: message.model, requestId, counts });
+  seen.set(message.id, { model: message.model, requestId, counts, fresh: !before });
   if (before) {
     if (message.id === after) before = false;
     continue;
   }
-
   last = message.id;
-  counted.set(message.model, (counted.get(message.model) ?? 0) + 1);
-  const running = totals.get(message.model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
-  for (const [field] of FIELDS) running[field] += counts[field];
-  totals.set(message.model, running);
 }
 
 if (before) {
   die(`the anchor ${after} is not an assistant message in ${path} — the transcript is not the append-only file an earlier read stopped in, so what is new cannot be told apart from what was counted`);
+}
+
+/** Per-model totals and distinct-message counts, in first-seen order. */
+const totals = new Map();
+const counted = new Map();
+for (const { model, counts, fresh } of seen.values()) {
+  if (!fresh) continue;
+  counted.set(model, (counted.get(model) ?? 0) + 1);
+  const running = totals.get(model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
+  for (const [field] of FIELDS) running[field] += counts[field];
+  totals.set(model, running);
 }
 
 let out = "";
