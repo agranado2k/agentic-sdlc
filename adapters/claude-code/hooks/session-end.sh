@@ -64,6 +64,9 @@ else
 		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"
 fi
 
+# How many phantom stops this session had since its last end (#410).
+phantoms=$(hook_phantom_take "$sid") && set -- "$@" data.phantoms="$phantoms"
+
 hook_trace emit kind=session.end harness=claude-code \
 	reason="the agent harness ended the session (${why:-reason unstated})" "$@"
 

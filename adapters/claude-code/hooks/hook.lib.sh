@@ -1,5 +1,6 @@
 #!/bin/sh
-# hook.lib.sh — what the three trace hooks beside this file share.
+# hook.lib.sh — what the hooks beside this file share: the trace hooks and the
+# kill guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
@@ -13,7 +14,7 @@
 # execution path; a hook runs only once a settings file wires it (see
 # ../README.md, "Wiring the session hooks"). In THIS kit that file is
 # `.claude/settings.json`, which is kit-authoring only and never shipped. In
-# your project it is yours to write, and until you write it these five files
+# your project it is yours to write, and until you write it the files here
 # are reference material you can read.
 #
 # THE THREE RULES A HOOK HERE KEEPS, and why each one is not negotiable:
@@ -22,12 +23,20 @@
 #      non-zero exit is a signal to the agent harness about the SESSION, and
 #      observability that can fail a session is worse than none (PRD #237,
 #      story 15; ADR-0008 clause 4). Every call into the trace ends in `|| :`
-#      and every hook ends in `exit 0`.
-#   2. SILENT ON STDOUT. What a hook prints on stdout can reach the agent
-#      harness's own parser. The trace's answers go to a file; nothing here
-#      has anything to say. STDERR is a different stream and is deliberately
-#      loud — ADR-0008 clause 4 wants a trace error visible, and the operator
-#      is the reader.
+#      and every hook ends in `exit 0`. ONE SANCTIONED EXCEPTION: the kill
+#      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
+#      exits 2 — the agent harness's block status — when, and only when, it
+#      refuses a spawned sub-agent's call (#414). Every other path in it is
+#      exit 0 like everything else here.
+#   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
+#      reaches the agent harness's own parser. The trace's answers go to a
+#      file; nothing about the trace is ever said there. STDERR is a different
+#      stream and is deliberately loud — ADR-0008 clause 4 wants a trace error
+#      visible. The one exception is session-start's behind note, which is
+#      about the code the hooks run, not the trace: stderr on exit 0 reaches
+#      no reader on this agent harness, so past its threshold the note is also
+#      one JSON object on stdout, written by hook_say_session and nothing else
+#      (ticket #427). A trace error never takes that route.
 #   3. TRACE_QUIET=1. An unconfigured trace prints one note per process, which
 #      is the right nudge for an operator typing a command and pure noise on
 #      every session start of a project that has decided not to trace.
@@ -629,6 +638,69 @@ hook_behind_warn() {
 		;;
 	esac
 	[ "$1" -gt "$_bw" ] || return 0
-	printf '! session-start: %s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it\n' \
-		"$2" "$1" "$_bw" >&2
+	_bw_note=$(printf '%s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it' \
+		"$2" "$1" "$_bw")
+	printf '! session-start: %s\n' "$_bw_note" >&2
+	hook_say_session "$_bw_note"
+}
+
+# hook_json_str <text> — <text> as the inside of a JSON string: backslash and
+# double quote escaped, every control character dropped. A root path is data
+# and may hold any of them; one that broke the object would silence the note.
+hook_json_str() {
+	printf '%s' "$1" | tr -d '\000-\037\177' | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# hook_say_session <note> — the ONE thing a hook here prints on stdout (rule 2's
+# exception, ticket #427): a single JSON object the agent harness parses on exit
+# 0, carrying <note> twice. `systemMessage` is the field the hooks reference
+# documents as shown to the user — an interactive session prints it under its
+# banner; `hookSpecificOutput.additionalContext` goes to the model, which relays
+# it — the only route that reaches a non-interactive run's output. stderr on
+# exit 0 reaches neither (the live probe of 2.1.285, adapter README).
+hook_say_session() {
+	_hs=$(hook_json_str "$1")
+	printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s Tell the operator this in your first reply."}}\n' \
+		"$_hs" "$_hs"
+}
+
+# --- the phantom-stop count ---------------------------------------------------
+# A phantom stop writes no event (subagent-stop.sh, ticket #344), but how many
+# there were is still worth knowing (ticket #410): the subagent-stop hook adds
+# one line to a per-session counter, and the session-end hook records the count
+# as data.phantoms on session.end. The counter lives in a directory this
+# adapter owns under the trace, claude-code/<session id>.phantoms, so two
+# sessions never share one — and never in current/, whose layout the shared
+# script keeps to itself (review of PR #432, M-1).
+
+# hook_phantom_add <session id> — one more phantom for that session. APPEND,
+# one short line per stop: an O_APPEND write of a few bytes lands whole, so two
+# stops at once both count and neither needs a lock. Nothing when tracing is
+# off or the id is not one hook_id_ok accepts — a counter keyed by a refused
+# id would be a path built from payload data.
+hook_phantom_add() {
+	hook_id_ok "${1:-}" || return 0
+	_hp_dir=$(hook_dir) || return 0
+	mkdir -p "$_hp_dir/claude-code" 2>/dev/null || return 0
+	echo . >>"$_hp_dir/claude-code/$1.phantoms" 2>/dev/null || :
+}
+
+# hook_phantom_take <session id> — print that session's count, 0 when it had
+# none, and remove its counter; print nothing (status 1) when tracing is off or
+# the id is refused. TAKEN, not read: a resumed session keeps its id and ends
+# again, and its next end must count only the stops after this one — the same
+# reason session-end.sh anchors its usage read (#307). The counter is RENAMED
+# aside before it is counted, so a stop landing during the end starts a fresh
+# counter for the next end rather than being counted and then deleted.
+hook_phantom_take() {
+	hook_id_ok "${1:-}" || return 1
+	_hp_dir=$(hook_dir) || return 1
+	_hp_file="$_hp_dir/claude-code/$1.phantoms"
+	_hp_n=0
+	if [ -f "$_hp_file" ] && mv "$_hp_file" "$_hp_file.$$" 2>/dev/null; then
+		_hp_n=$(wc -l <"$_hp_file.$$" | tr -d ' ')
+		rm -f "$_hp_file.$$"
+		case $_hp_n in '' | *[!0-9]*) _hp_n=0 ;; esac
+	fi
+	printf '%s' "$_hp_n"
 }
