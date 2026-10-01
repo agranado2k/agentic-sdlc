@@ -31,8 +31,20 @@
 #      Tier: line was left to check. Only a 2 from the check of the lines
 #      themselves is a refusal;
 #   4  the fetch failed, twice — one retry, never a loop. Never read it as a
-#      missing line: it is a stop. (A signal exits 128 + its number, nothing
-#      printed — never a verdict.)
+#      missing line: it is a stop;
+#   5  too many stamp lines — more than STAMP_PER_KEY (8) of one key: a stop,
+#      NOTHING on stdout, and stderr names the key and the count, never the
+#      lines. Not a refusal and not "no stamp lines"; nothing reaches the
+#      checker. (A signal exits 128 + its number, nothing printed — never a
+#      verdict.)
+#
+# THE BOUND. The lift reads by key, and the checker's work is linear in the
+# lines it is handed: 2,000 `Tier:` lines cost about 30 CPU-seconds and came
+# back at exit 0, every one printed (PR #382). So at most 8 lines of each key
+# go on — enough that a field written twice with two values still reaches the
+# checker and is refused (exit 2) — and the count is the one pass over the
+# lifted lines that runs before any per-line work, so a body past the bound
+# costs what reading it costs.
 #
 # WHAT IS A STAMP LINE: a BARE `Key: value` line whose key is tier,
 # confidence or domain in any case, indented or not — the way the checker
@@ -115,6 +127,15 @@ tr -d '\r' <"$_stamp_tmp/body" | tr '\000' '\n' |
 if [ ! -s "$_stamp_tmp/lifted" ]; then
 	stamp_say "issue #$issue carries no Tier:, Confidence: or Domain: line — no stamp read, not a refusal"
 	exit 3
+fi
+# The bound, per key whatever its case: the keys are the filter's three words,
+# safe to print, and so is a count; the lines are not.
+STAMP_PER_KEY=8
+_over=$(awk -v max="$STAMP_PER_KEY" '{ k = tolower($0); sub(/^[[:space:]]*/, "", k); sub(/[^a-z].*/, "", k); n[k]++ }
+	END { for (k in n) if (n[k] > max) print n[k] " " k " lines" }' "$_stamp_tmp/lifted" | sort -k2)
+if [ -n "$_over" ]; then
+	stamp_say "issue #$issue: too many stamp lines — $(printf '%s' "$_over" | tr '\n' ',' | sed 's/,/, /g'), past the bound of $STAMP_PER_KEY a key; nothing checked, nothing printed — a stop"
+	exit 5
 fi
 
 # A line whose field the policy does not declare is one the checker would

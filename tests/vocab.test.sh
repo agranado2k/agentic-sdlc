@@ -255,9 +255,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # A new call site, a site whose input changed, or a site whose lift stage was
 # removed is named and fails — the baits below prove each of the three.
 #
-# stamp.sh lifts by KEY, not by count: a body carrying 2,000 `Tier:` lines
-# would hand over 2,000. That is a degenerate ticket, not a body handed whole,
-# and it is the one unbounded input this inventory admits.
+# stamp.sh lifts by KEY and bounds the count: at most 8 lines of one key reach
+# the checker, and a body with more is its exit 5, nothing checked (#400) — so
+# its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
 scripts/stamp.sh@@-@@<"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'

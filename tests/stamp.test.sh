@@ -397,7 +397,7 @@ stamp_cpu_ms() {
 	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
 	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
 }
-STAMP_BOUND_MS=2000 # one run on 2,000 Tier: lines; unbounded it cost ~30,000
+STAMP_BOUND_MS=1500 # one run on 2,000 Tier: lines: bounded ~180, unbounded ~28,000
 awk 'BEGIN { for (i = 0; i < 2000; i++) print "Tier: implementer" }' >"$SCRATCH/body"
 echo 0 >"$SCRATCH/fails-left"
 stamp 331
