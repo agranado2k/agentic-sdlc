@@ -177,9 +177,9 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [--after <message id>] [<field>=<value> …] —
+# hook_tokens <transcript> <kind> [--rollup] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
-# token counts, and at least one event whatever happens. Five shapes, all of
+# token counts, and at least one event whatever happens. Seven shapes, all of
 # them exit 0:
 #
 #   the numbers      one event per model, tokens on it, and how far the read
@@ -191,6 +191,16 @@ hook_point_at() {
 #                    assistant message with a usage block yet
 #   nothing new      with --after only: one event, no tokens and no failure,
 #                    carrying the anchor forward as data.last_msg
+#   the rollup gap   with --rollup only, beside the numbers: one more event per
+#                    model the rollup counts beyond them, data.via=rollup and
+#                    data.reason=compaction, with no data.last_msg — it counts
+#                    no message, so it never anchors a later read (#407)
+#   rollup refused   with --rollup only: the numbers as usual, then one event,
+#                    outcome=fail and data.via=rollup, the extractor's reason
+#
+# --rollup reads the trace's own earlier events for this session on stdin —
+# session-end.sh pipes them in — so a gap already recorded is not recorded
+# again; transcript-usage.mjs says when a rollup is judged at all.
 #
 # --after is the previous read's data.last_msg, and with it only the messages
 # after it are counted (#307): see transcript-usage.mjs for why a resumed
@@ -209,11 +219,17 @@ hook_tokens() {
 	_ht_kind=$2
 	shift 2
 	_ht_after=
-	if [ "${1:-}" = --after ]; then
-		_ht_after=${2:-}
-		# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
-		if [ $# -ge 2 ]; then shift 2; else shift; fi
-	fi
+	_ht_rollup=
+	while :; do
+		case ${1:-} in
+		--rollup) _ht_rollup=--rollup; shift ;;
+		--after)
+			_ht_after=${2:-}
+			# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
+			if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+		*) break ;;
+		esac
+	done
 	# THE REASON NAMES THE FIX, not only the gap. A node managed per user
 	# (a version manager under the home directory) is on the operator's shell
 	# PATH and on none of the agent harness's, and every usage event of every
@@ -237,7 +253,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -248,15 +264,30 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup ${_ht_after:+--after "$_ht_after"} "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi
-	if [ "$_ht_st" != 0 ]; then
+	# EXIT 3 is --rollup's own: the message rows are good and the rollup was
+	# refused. The rows are recorded as usual and the refusal after them.
+	if [ "$_ht_st" != 0 ] && [ "$_ht_st" != 3 ]; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason="${_ht_why:-the transcript usage extractor failed and said nothing}" "$@"
 		return 0
 	fi
+	if [ "$_ht_st" = 3 ]; then
+		hook_trace emit kind="$_ht_kind" outcome=fail data.via=rollup \
+			reason="${_ht_why:-the rollup was refused and the extractor said nothing}" "$@"
+	fi
+	_ht_gap=$(printf '%s\n' "$_ht_out" | awk '$6 == "rollup"')
+	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF && $6 != "rollup"')
+	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c; do
+		[ -n "$_ht_m" ] || continue
+		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
+			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
+			data.via="$_ht_v" data.reason="$_ht_c" \
+			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
+	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
 		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \
 			reason="nothing new in the transcript since $_ht_after, which an earlier usage event counted" "$@"
