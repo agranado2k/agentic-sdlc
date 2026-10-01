@@ -142,10 +142,11 @@ try {
 // JSON itself — an escape here would be recorded as part of the text.
 let errorFirstLine = "";
 if (from === "error" && typeof payload.error === "string" && payload.error.length > 0) {
-  // Extract the first line: split on \n or \r\n, take the first part
-  const lines = payload.error.split(/\r?\n/);
-  if (lines.length > 0 && lines[0].length > 0) {
-    errorFirstLine = lines[0];
+  // The first NON-EMPTY line: an error that opens with an empty line still
+  // says something on the next, and that is its reason.
+  const first = payload.error.split(/\r?\n/).find((line) => line.trim() !== "");
+  if (first !== undefined) {
+    errorFirstLine = first;
     // Capped at 300 characters, counted by code point so a character outside
     // the BMP is never cut in half.
     errorFirstLine = Array.from(errorFirstLine).slice(0, 300).join("");

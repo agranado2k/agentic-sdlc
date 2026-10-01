@@ -2200,6 +2200,19 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ "$(reason_of "$ECP")" = "$LONG$(printf '\360\237\230\200')" ] &&
 		pass "the reason is capped at 300 characters, the last one kept whole" ||
 		fail "the capped reason decodes to '$(reason_of "$ECP")'"
+
+	# An error that OPENS with an empty line: the reason is the first line that
+	# says something, not the empty one and not nothing.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"\\n\\r\\nPermission denied\\nmore"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-blankfirst-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-blankfirst-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	EBF=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$EBF")" = 'Permission denied' ] &&
+		pass "an error opening with an empty line records its first non-empty line" ||
+		fail "the reason after an empty first line decodes to '$(reason_of "$EBF")'"
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi
