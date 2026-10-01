@@ -227,10 +227,24 @@ When the bound passes first, it records `outcome=fail` with no counts and the
 wait it gave. A malformed value is refused on stderr and as
 `data.wait_refused`, and is never waited. The policy file ships the value
 empty, which means no wait and the read-at-once behaviour, partial sum
-included. The wait does not cover a transcript that does not exist when the
-hook runs: that is recorded at once, as before. A session's own
+included. A session's own
 `session.usage` is unaffected either way, and the "usage plus agent.stop equals
 the rollup" identity holds only for the stops whose file was ready.
+
+**A phantom stop writes no event.** Most `SubagentStop` payloads in a long
+session name a subagent transcript that does not exist and never appears:
+1,418 of 1,614 stops in one window of the kit's own trace, about one every 30
+seconds, under agent ids no transcript holds. No subagent's work stands behind
+one, so the hook neither waits for it nor records it (ticket #344). Two shapes
+were weighed. One `agent.stop` with a new `outcome=phantom` and no tokens would
+keep a count of them, but every rate `/retro` reads off the `agent.stop` count
+would then carry them in its denominator, and the trace decision record would
+need a dated amendment for a word only this hook writes. No event costs neither,
+and the distinction it has to keep still holds: a transcript that **exists and
+cannot be read** is a real stop whose usage is lost, recorded at once as
+`agent.stop outcome=fail` with a reason saying so and naming the path — never
+polled, since a file the hook cannot open never ends on a final message. A
+payload that names no transcript at all is still recorded, as before.
 
 ### Reading it back: DuckDB and SQLite
 

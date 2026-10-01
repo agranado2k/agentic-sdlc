@@ -1631,8 +1631,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 0 ] &&
 		pass "a transcript that does not exist is not waited for" ||
 		fail "a missing transcript napped $NAPS times against a 5000 ms bound"
-	case $(ev_of agent.stop) in *'no readable subagent transcript'*) pass "and is recorded as today" ;;
-	*) fail "the missing-transcript event changed: $(events)" ;; esac
+	# What it records instead — nothing — is section 29's claim (#344).
 
 	# TRACING OFF IS NO WAIT, whatever the bound: there is nothing to write.
 	stop_on "$SCRATCH/sub-head-308.jsonl"
@@ -1775,5 +1774,82 @@ for doc in "$FIX/README.md" "$KIT/adapters/claude-code/README.md"; do
 	*) fail "${doc#"$KIT"/} does not say every live payload arrives compact" ;;
 	esac
 done
+
+# ---------------------------------------------------------------------------
+banner "29. A phantom stop writes nothing; an unreadable transcript is a named failure"
+# ---------------------------------------------------------------------------
+# Ticket #344, from retro 20261001T093317Z finding F5b. 1,418 of 1,614
+# `agent.stop` events in that window named a subagent transcript that did not
+# exist: one about every 30 seconds of a long session, under agent ids no
+# transcript holds. They are PHANTOMS — no subagent's work stands behind them —
+# and /retro divides by the `agent.stop` count, so each one diluted every rate
+# it reads. The hook now writes NO EVENT for one (the adapter README records
+# why that shape and not a new outcome word). A transcript that DOES exist and
+# cannot be read is a different thing — a real stop whose usage is lost — and
+# it stays `outcome=fail`, its reason naming the cause, read at once rather
+# than polled to the bound: a file the hook cannot open never "becomes final".
+#
+# None of these legs needs node: neither shape reaches the extractor.
+
+# stop_344 <transcript> — the SubagentStop payload, pointed at that transcript.
+stop_344() {
+	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$1" >"$SCRATCH/stop-344.json"
+}
+# run_344 <env assignments…> — the hook on that payload, a logging sleep first
+# on PATH; sets NAPS to how many naps it asked for.
+mkdir -p "$SCRATCH/naps-344"
+printf '#!/bin/sh\necho "$1" >>"%s/naps-344.log"\nexec "%s" "$@"\n' "$SCRATCH" "$(command -v sleep)" >"$SCRATCH/naps-344/sleep"
+chmod +x "$SCRATCH/naps-344/sleep"
+run_344() {
+	: >"$SCRATCH/naps-344.log"
+	t_run_split env PATH="$SCRATCH/naps-344:$PATH" "$@" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-344.json"
+	NAPS=$(wc -l <"$SCRATCH/naps-344.log" | tr -d ' ')
+}
+
+# THE PHANTOM, with no bound and with one: nothing in the day file, nothing on
+# either stream, no nap.
+for bound in '' 5000; do
+	new_trace
+	stop_344 "$SCRATCH/never-there-344.jsonl"
+	run_344 TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS="$bound"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && [ "$NAPS" = 0 ] &&
+		pass "a phantom stop (bound '${bound:-none}') exits 0, silent, without a nap" ||
+		fail "a phantom stop (bound '${bound:-none}'): exit $S_STATUS, $NAPS naps, stdout '$S_OUT', stderr '$S_ERR'"
+	[ -z "$(ev_of agent.stop)" ] &&
+		pass "and writes no agent.stop event" ||
+		fail "a phantom stop was recorded: $(ev_of agent.stop)"
+	case $(events) in *'"outcome":"fail"'*) fail "a phantom stop put a fail line in the day file: $(events)" ;;
+	*) pass "and the day file gains no fail line" ;; esac
+done
+
+# THE UNREADABLE FILE, with no bound and with one. Root reads a mode-000 file,
+# so the leg cannot be driven there and says so.
+if [ "$(id -u)" = 0 ]; then
+	echo "  skip  running as root — a mode-000 file is readable, so the unreadable leg cannot be driven"
+else
+	cp "$FIX/subagent-transcript.redacted.jsonl" "$SCRATCH/unreadable-344.jsonl"
+	chmod 000 "$SCRATCH/unreadable-344.jsonl"
+	for bound in '' 5000; do
+		new_trace
+		stop_344 "$SCRATCH/unreadable-344.jsonl"
+		run_344 TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS="$bound"
+		U=$(ev_of agent.stop)
+		[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$NAPS" = 0 ] &&
+			pass "an unreadable transcript (bound '${bound:-none}') exits 0 without a nap" ||
+			fail "an unreadable transcript (bound '${bound:-none}'): exit $S_STATUS, $NAPS naps, stdout '$S_OUT'"
+		[ "$(printf '%s\n' "$U" | grep -c .)" = 1 ] && [ "$(str "$U" outcome)" = fail ] && [ -z "$(num "$U" tok_out)" ] &&
+			pass "and records one agent.stop outcome=fail with no tokens" ||
+			fail "an unreadable transcript recorded: $U"
+		case $(str "$U" reason) in *'cannot be read'*) pass "whose reason names the cause" ;;
+		*) fail "the reason does not say the transcript cannot be read: $(str "$U" reason)" ;; esac
+	done
+	chmod 600 "$SCRATCH/unreadable-344.jsonl"
+fi
+
+# THE RECORD. The adapter README says which shape a phantom takes.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"a phantom stop writes no event"*) pass "the adapter README records that a phantom stop writes no event" ;;
+*) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
 t_done "trace hooks"
