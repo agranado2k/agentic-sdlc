@@ -15,6 +15,7 @@
 //   tool_use_id <tool_use_id>
 //   event <hook_event_name>
 //   result_from tool_response|error
+//   error_first_line <the error's first non-empty line>   (failed calls only)
 //
 // A key the payload does not carry is simply not printed; the hook decides what
 // a missing one means. EXIT 2 is shape drift, with the key named on stderr, and

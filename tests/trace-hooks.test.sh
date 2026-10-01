@@ -2050,12 +2050,13 @@ case $d in *"a phantom stop writes no event"*) pass "the adapter README records 
 *) fail "the adapter README does not record the phantom stop's shape" ;; esac
 
 # ---------------------------------------------------------------------------
-banner "30. PostToolUseFailure records the first line of the error as reason"
+banner "32. PostToolUseFailure records the first line of the error as reason"
 # ---------------------------------------------------------------------------
-# A failed tool call has an error message that may span multiple lines. The
-# reason field should hold the first line of that error, and the full error
-# should be stored in the result blob. The reason should be quote-safe (no
-# single quotes, no newlines) and trimmed to one line.
+# A failed tool call's error may span many lines. The event's reason holds its
+# first non-empty line, as written — quotes, dollar signs, backticks and
+# backslashes included, since trace.sh escapes for JSON and nothing else needs
+# to — with every character the trace refuses turned into a space and at most
+# 300 characters kept; the full error stays in the result blob (#388).
 # reason_of <event line> — the event's reason, DECODED from its JSON string, so
 # a leg compares the text a reader gets back rather than the escaped bytes.
 reason_of() {
