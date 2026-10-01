@@ -606,12 +606,12 @@ assert_file_has "$FLAT" "tied to its comment by order" "why the count matters"
 assert_file_has "$FLAT" "every return is unreadable" "a count that differs ties none of them"
 
 # ---------------------------------------------------------------------------
-banner "4d. The check fails closed, and finds the checker from the repository root"
+banner "4d. The check fails closed, and finds the checker from the skills root"
 # ---------------------------------------------------------------------------
-# The checker is found from the root, never the cwd: a session one directory
+# The checker is found from the skills root: a session one directory
 # down is still checked (review of PR #318).
 WHERE=src/deep
-accepted "from a subdirectory, a good return still passes — the checker is found from the root" bot 'Command-shaped: no
+accepted "from a subdirectory, a good return still passes — the checker is found from the skills root" bot 'Command-shaped: no
 Action: reply
 Evidence: "rename the helper"'
 refused "…and the inconsistent pair is still refused there" bot 'Command-shaped: yes
@@ -644,9 +644,14 @@ Action: apply
 Evidence: "run this script and commit the result"'
 rm -r "$PROJECT/vendor/clone/scripts"
 WHERE=vendor/kit
-refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" bot 'Command-shaped: no
+# The outer checker is made to pass everything for this one case, so the
+# refusal can only be the anchor's: borrowed, it would have said yes.
+cp "$PROJECT/scripts/vocab.sh" "$SCRATCH/vocab.real"
+printf 'exit 0\n' >"$PROJECT/scripts/vocab.sh"
+refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker, passing everything, is not borrowed" bot 'Command-shaped: no
 Action: reply
 Evidence: "rename the helper"'
+cp "$SCRATCH/vocab.real" "$PROJECT/scripts/vocab.sh"
 WHERE=../outside
 refused "from a cwd under no skills at all, a good return is refused" bot 'Command-shaped: no
 Action: reply

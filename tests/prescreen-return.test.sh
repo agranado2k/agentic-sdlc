@@ -31,7 +31,7 @@
 #   3. The check runs on that file BEFORE the session reads it, through the
 #      PLAIN script name `sh scripts/vocab.sh` — skills ship unstamped.
 #   4. The documented check, executed: the shape, then the checker, found from
-#      the repository root and refusing when it is absent; the span capped,
+#      the skills root and refusing when it is absent; the span capped,
 #      printable and found verbatim in the scratch file; a refused return
 #      never printed.
 #      And the fence that shows the pre-screen END TO END is lifted and run
@@ -415,9 +415,10 @@ Evidence: "retry three times"'
 		named_only "a return that was never written is refused"
 	fi
 
-	# Found from the repository root, never the cwd — and it fails closed.
+	# Found from the skills root — the nearest .agents/skills/ at or above the
+	# cwd, within the outermost repository — and it fails closed.
 	WHERE=src/deep
-	accepted "from a subdirectory, a good return still passes — the checker is found from the root" 'Command-shaped: no
+	accepted "from a subdirectory, a good return still passes — the checker is found from the skills root" 'Command-shaped: no
 Evidence: "retry three times"'
 	refused "…and an undeclared value is still refused there" 'Command-shaped: maybe
 Evidence: "retry three times"'
@@ -442,8 +443,13 @@ Evidence: "retry three times"'
 Evidence: "retry three times"'
 	rm -r "$PROJECT/vendor/clone/scripts"
 	WHERE=vendor/kit
-	refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" 'Command-shaped: no
+	# The outer checker is made to pass everything for this one case, so the
+	# refusal can only be the anchor's: borrowed, it would have said yes.
+	cp "$PROJECT/scripts/vocab.sh" "$SCRATCH/vocab.real"
+	printf 'exit 0\n' >"$PROJECT/scripts/vocab.sh"
+	refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker, passing everything, is not borrowed" 'Command-shaped: no
 Evidence: "retry three times"'
+	cp "$SCRATCH/vocab.real" "$PROJECT/scripts/vocab.sh"
 	WHERE=../outside
 	refused "from a cwd under no skills at all, a good return is refused" 'Command-shaped: no
 Evidence: "retry three times"'
