@@ -317,17 +317,26 @@ checker_calls() (
 		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$awk_prog"
 )
 
+# entry_matches <LIFTED entry> <file> <function> <call text> — exit 0 when
+# the entry names this call: its file, its function, and its input in the
+# call's text. The one reading of an entry, so `unlifted` and `stale` cannot
+# disagree on what an entry matches; sets e_guard, the entry's lift stage.
+entry_matches() {
+	e_file=${1%%@@*} rest=${1#*@@}
+	e_fn=${rest%%@@*} rest=${rest#*@@}
+	e_input=${rest%%@@*} e_guard=${rest#*@@}
+	[ "$2" = "$e_file" ] && [ "$3" = "$e_fn" ] || return 1
+	case $4 in *"$e_input"*) return 0 ;; esac
+	return 1
+}
+
 # unlifted <root> [awk program] — every call record no LIFTED entry accounts
 # for, one per line; nothing when every site lifts.
 unlifted() {
 	checker_calls "$1" "${2:-}" | while IFS="$(printf '\t')" read -r file line start fn text; do
 		ok=0
 		while IFS= read -r entry; do
-			e_file=${entry%%@@*} rest=${entry#*@@}
-			e_fn=${rest%%@@*} rest=${rest#*@@}
-			e_input=${rest%%@@*} e_guard=${rest#*@@}
-			[ "$e_file" = "$file" ] && [ "$e_fn" = "$fn" ] || continue
-			case $text in *"$e_input"*) ;; *) continue ;; esac
+			entry_matches "$entry" "$file" "$fn" "$text" || continue
 			sed -n "${start},$((line - 1))p" "$1/$file" | grep -v '^[[:space:]]*#' | grep -qF -- "$e_guard" || continue
 			ok=1 && break
 		done <<EOENTRIES
@@ -341,19 +350,17 @@ EOENTRIES
 # matches no call record under <root>, one per line; nothing when each does.
 stale() {
 	records=$(checker_calls "$1")
-	printf '%s\n' "${2:-$LIFTED}" | while IFS= read -r entry; do
-		e_file=${entry%%@@*} rest=${entry#*@@}
-		e_fn=${rest%%@@*} rest=${rest#*@@}
-		e_input=${rest%%@@*}
-		printf '%s\n' "$records" | {
-			while IFS="$(printf '\t')" read -r file line start fn text; do
-				[ "$file" = "$e_file" ] && [ "$fn" = "$e_fn" ] || continue
-				case $text in *"$e_input"*) exit 0 ;; esac
-			done
-			exit 1
-		} ||
-			printf '%s\n' "$entry"
-	done
+	while IFS= read -r entry; do
+		found=0
+		while IFS="$(printf '\t')" read -r file line start fn text; do
+			entry_matches "$entry" "$file" "$fn" "$text" && found=1 && break
+		done <<EORECORDS
+$records
+EORECORDS
+		[ "$found" = 1 ] || printf '%s\n' "$entry"
+	done <<EOENTRIES
+${2:-$LIFTED}
+EOENTRIES
 }
 
 calls=$(checker_calls "$KIT" | grep -c '')
