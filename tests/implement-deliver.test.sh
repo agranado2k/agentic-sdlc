@@ -482,9 +482,7 @@ t_init
 call=$(printf '%s\n' "$stamp" | grep -oE '`sh scripts/stamp\.sh <N>`' | head -1 | tr -d '`')
 [ "$call" = "sh scripts/stamp.sh <N>" ] && pass "the call is cut out of the skill's own bullet: $call" ||
 	fail "no \`sh scripts/stamp.sh <N>\` span in the bullet — nothing to execute"
-mkdir -p "$SCRATCH/bin"
-printf '#!/bin/sh\ncat "%s/body"\n' "$SCRATCH" >"$SCRATCH/bin/gh"
-chmod +x "$SCRATCH/bin/gh"
+t_stub_gh "$SCRATCH/bin" "$SCRATCH/body"
 
 # read_stamp — a ticket body on stdin. Sets P_STATUS (the script's) and
 # P_SHOWN (what it printed for the agent to read). Run from the scratch

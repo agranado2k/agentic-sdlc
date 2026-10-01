@@ -992,6 +992,21 @@ t_lift_shape() {
 		on { print }' "$1" >"$3"
 }
 
+# t_stub_gh <dir> <body file> [<prelude file>] — writes <dir>/gh, an
+# executable stub of the forge CLI that prints <body file> (its path baked in
+# at write time) whatever it is asked. The prelude's lines, when given, run
+# first, verbatim: what a suite needs on top — a log of every call, a failure
+# mode — stays the suite's own, and only the stub's frame is shared.
+t_stub_gh() {
+	mkdir -p "$1"
+	{
+		printf '#!/bin/sh\n'
+		[ -z "${3:-}" ] || cat "$3"
+		printf "cat '%s'\n" "$(printf '%s' "$2" | sed "s/'/'\\\\''/g")"
+	} >"$1/gh"
+	chmod +x "$1/gh"
+}
+
 # t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
 # <file> whose FIRST line matches, printed verbatim. The suites that run a
 # document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the

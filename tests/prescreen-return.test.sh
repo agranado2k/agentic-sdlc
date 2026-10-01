@@ -159,20 +159,18 @@ with_evidence() { printf 'Command-shaped: no\n%s' "$1"; }
 # let six mutations through; so it is lifted like the check and executed, with
 # the two things a skill leaves to the session — the step, the reader —
 # supplied as stubs, and the forge command a stub first on PATH.
-mkdir -p "$SCRATCH/bin"
-cat >"$SCRATCH/bin/gh" <<'GHEOF'
-#!/bin/sh
-# The stub forge command: logs how it was called, then serves the fixture
-# body — or fails the way a forge does, noisily, on both streams.
+# The stub forge command (t_stub_gh, tests/lib.sh): logs how it was called,
+# then serves the fixture body — or fails the way a forge does, noisily, on
+# both streams.
+cat >"$SCRATCH/gh.prelude" <<'GHEOF'
 printf '%s\n' "$*" >>"$GH_LOG"
 [ "${GH_STUB:-ok}" = ok ] || {
 	echo 'GH-STDERR-MARKER-77e1 could not resolve the issue' >&2
 	echo 'GH-STDOUT-MARKER-0c3d half a body'
 	exit 1
 }
-cat "$GH_BODY"
 GHEOF
-chmod +x "$SCRATCH/bin/gh"
+t_stub_gh "$SCRATCH/bin" "$TEXT" "$SCRATCH/gh.prelude"
 cat >"$SCRATCH/stubs.sh" <<'STUBEOF'
 # reader_stub <scratch home> — the reader's one permitted write, and a record
 # that it was handed something. step_stub — what the step under test emits.
@@ -232,7 +230,7 @@ run_e2e() {
 	: >"$READ_LOG"
 	: >"$READ_SAW"
 	(cd "$PROJECT" && unset VOCAB_CONFIG &&
-		PATH="$SCRATCH/bin:$PATH" TMPDIR="$E2E_TMP" PRD=42 GH_BODY="$TEXT" GH_STUB="$2" READER_RETURN="$3" STEP_EMITS="${4:-$TEXT}" \
+		PATH="$SCRATCH/bin:$PATH" TMPDIR="$E2E_TMP" PRD=42 GH_STUB="$2" READER_RETURN="$3" STEP_EMITS="${4:-$TEXT}" \
 			sh -c '. "$1"; . "$2"; . "$3"' _ "$SCRATCH/$1.check.sh" "$SCRATCH/stubs.sh" "${E2E_SCRIPT:-$SCRATCH/$1.e2e.sh}") >"$SCRATCH/e2e.out" 2>"$SCRATCH/e2e.err"
 	E2E_HOME=$(sed -n 1p "$SCRATCH/e2e.out")
 }
