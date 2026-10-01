@@ -482,6 +482,8 @@ t_cleanup() { [ -n "${SCRATCH:-}" ] && rm -rf "$SCRATCH"; }
 
 banner() { printf '\n=== %s ===\n' "$*"; }
 pass() { printf '  ok    %s\n' "$*"; }
+# skip <text> — a case this host cannot run, said out loud and never counted.
+skip() { printf '  skip  %s\n' "$*"; }
 fail() {
 	printf '  FAIL  %s\n' "$*"
 	failures=$((failures + 1))

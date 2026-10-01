@@ -42,7 +42,6 @@ PROMPT_ABS="$ROOT/$PROMPT"
 cd "$ROOT" || exit 2
 t_init
 
-skip() { printf '  skip  %s\n' "$*"; }
 # assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
 # implementation, used here and by the /implement contract suite.
 

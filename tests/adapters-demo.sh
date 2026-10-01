@@ -45,8 +45,6 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-skip() { printf '  skip  %s\n' "$*"; }
-
 check() {
 	# check <label> -- <command...>
 	_label=$1
