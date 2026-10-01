@@ -2071,6 +2071,12 @@ if [ "$HAVE_NODE" = 1 ]; then
 	PAYLOAD="$FIX/tool-post-failure.payload.json"
 	[ "$S_STATUS" = 0 ] && pass "a PostToolUseFailure with multiline error exits 0" ||
 		fail "the hook exited $S_STATUS: $S_ERR"
+	[ "$(ev_of tool.use | grep -c '')" = 1 ] && [ "$(events | grep -c '')" = 1 ] &&
+		pass "the failure writes exactly one event, a tool.use" ||
+		fail "the failure wrote $(events | grep -c '') line(s): $(events)"
+	VOUT=$(TRACE_DIR="$TDIR" sh "$KIT/scripts/trace.sh" verify 2>&1) &&
+		pass "and trace.sh verify accepts the day file it was written to" ||
+		fail "trace.sh verify refuses the day file: $VOUT"
 	E=$(ev_of tool.use | sed -n '1p')
 	[ "$(str "$E" outcome)" = fail ] && pass "the event records outcome=fail" ||
 		fail "the outcome is '$(str "$E" outcome)': $E"
