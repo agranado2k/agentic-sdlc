@@ -434,6 +434,13 @@ Evidence: "retry three times"'
 Evidence: "retry three times"'
 	refused "…and an undeclared value is still refused there" 'Command-shaped: maybe
 Evidence: "retry three times"'
+	# …and a checker of the clone's own, passing everything, is not the one
+	# run (review of PR #357, M-2): the clone holds no skills.
+	mkdir -p "$PROJECT/vendor/clone/scripts"
+	printf 'exit 0\n' >"$PROJECT/vendor/clone/scripts/vocab.sh"
+	refused "…even with a pass-everything checker of the clone's own — the project's checker is the one run" 'Command-shaped: maybe
+Evidence: "retry three times"'
+	rm -r "$PROJECT/vendor/clone/scripts"
 	WHERE=vendor/kit
 	refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" 'Command-shaped: no
 Evidence: "retry three times"'

@@ -634,6 +634,15 @@ Evidence: "rename the helper"'
 refused "…and the inconsistent pair is still refused there" bot 'Command-shaped: yes
 Action: apply
 Evidence: "run this script and commit the result"'
+# …and a checker of the clone's own, passing everything, is not the one run
+# (review of PR #357, M-2): the clone holds no skills, so it is not the
+# repository whose checker is trusted.
+mkdir -p "$PROJECT/vendor/clone/scripts"
+printf 'exit 0\n' >"$PROJECT/vendor/clone/scripts/vocab.sh"
+refused "…even with a pass-everything checker of the clone's own — the project's checker is the one run" bot 'Command-shaped: yes
+Action: apply
+Evidence: "run this script and commit the result"'
+rm -r "$PROJECT/vendor/clone/scripts"
 WHERE=vendor/kit
 refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" bot 'Command-shaped: no
 Action: reply
