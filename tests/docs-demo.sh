@@ -1845,6 +1845,17 @@ trim_blank_edges() {
 	     END { for (i = first; i <= last; i++) print line[i] }'
 }
 
+# A stale worked example is RELEASE-BOUND when the release this tree declares
+# is already tagged: the transcripts live in UPDATING.md, which is shared
+# layer, so on such a branch only the next version bump may re-paste them
+# (root manual, hard rule 3) and no commit here can turn the red green. The
+# red says so in its own output, and /pr-iterate sets it aside on that marker
+# (#347). On the bump's own branch the tag does not exist yet, and the red is
+# that branch's to fix. The tag is peeled, as self-host F3 does, and the CI
+# job checks out full depth with tags so it can be.
+D_RELEASED=
+git -C "$KIT" rev-parse -q --verify "v$KITV^{commit}" >/dev/null 2>&1 && D_RELEASED=1
+
 # assert_transcript <n> <captured file> <label>
 assert_transcript() {
 	console_block "$KIT/UPDATING.md" "$1" | trim_blank_edges >"$SCRATCH/doc.$1"
@@ -1852,7 +1863,11 @@ assert_transcript() {
 	if cmp -s "$SCRATCH/doc.$1" "$SCRATCH/run.$1"; then
 		pass "UPDATING.md's $3 worked example is byte-identical to this run"
 	else
-		fail "UPDATING.md's $3 worked example is STALE — re-run this script and re-paste it"
+		if [ -n "$D_RELEASED" ]; then
+			fail "release-bound: UPDATING.md's $3 worked example is STALE against v$KITV — shared layer, re-pasted by the next version bump, not on this branch"
+		else
+			fail "UPDATING.md's $3 worked example is STALE — re-run this script and re-paste it"
+		fi
 		diff -u "$SCRATCH/doc.$1" "$SCRATCH/run.$1" |
 			sed -e '1,2d' -e 's/^/        | /'
 	fi
@@ -1879,7 +1894,11 @@ prose_probe() {
 	elif printf '%s' "$_pp_line" | grep -qF "$D2V"; then
 		pass "worked-example prose tracks $D2V: $1"
 	else
-		fail "STALE worked-example prose ($1) does not name $D2V:"
+		if [ -n "$D_RELEASED" ]; then
+			fail "release-bound: STALE worked-example prose ($1) does not name $D2V — shared layer, moved by the next version bump:"
+		else
+			fail "STALE worked-example prose ($1) does not name $D2V:"
+		fi
 		printf '        | %s\n' "$_pp_line"
 	fi
 }

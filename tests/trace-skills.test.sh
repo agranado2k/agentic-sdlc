@@ -52,7 +52,7 @@
 #      amendment — the readers are the operator and the retrospective skill,
 #      and a diagnosis reads by the operator's hand — and the index row for
 #      0008 carries the same date (#309).
-#  13. /merge-train leaves a verdict for EVERY landing (#345, retro F2): the
+#  14. /merge-train leaves a verdict for EVERY landing (#345, retro F2): the
 #      `feedback` emit is the train's exit condition per landed PR, and a train
 #      nobody can answer records `outcome=unasked` with the instruction that
 #      made it autonomous as the reason — a gap in the trace is a fact, never
@@ -530,7 +530,158 @@ done
 [ "$bad_spawns" = 0 ] || true
 
 # ---------------------------------------------------------------------------
-banner "13. /merge-train leaves a verdict for every landing: asked, or recorded as unasked (#345)"
+banner "13. /pr-iterate stops at the first release-bound red (#347)"
+# ---------------------------------------------------------------------------
+# A check that cannot pass until a release merges cannot pass on a branch, by
+# decision (root manual, hard rule 3) — and one window spent nine iterations
+# on such a red across three PRs, four of them re-running the same red. The
+# rule: the check's OWN OUTPUT marks the red release-bound (a line carrying
+# `release-bound:`, never a list of check names); the iteration sets it aside
+# before triage, never fixes or re-runs it, and when it is all that is left
+# records one stopped pr.iterate naming the check and ends. Every other red
+# still iterates. The classifier is a fence in the skill, lifted and RUN here
+# on a fixture PR, and the failing case is a second iteration on the same red.
+# No message below prints the marker itself: a red line of THIS suite that
+# carried it would be set aside as release-bound.
+PI=$(skill_md pr-iterate)
+RB_MARK='release-bound:'
+
+# The text: the stop, what marks it, and that the loop never re-fires on it.
+pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
+printf '%s' "$pi_flat" | grep -qiE "release-bound red" &&
+	pass "/pr-iterate names the release-bound red" ||
+	fail "/pr-iterate names no release-bound red — the stop has no rule"
+printf '%s' "$pi_flat" | grep -qiE "own output[^.]*\`$RB_MARK\`" &&
+	pass "/pr-iterate marks it by the check's own output, carrying the marker" ||
+	fail "/pr-iterate does not say the check's own output marks the red, with the release-bound marker"
+printf '%s' "$pi_flat" | grep -qiE "(never|not|nor)( inferred)? from (a|the) (list of )?check'?s? names?" &&
+	pass "/pr-iterate says a check's name is not what marks it" ||
+	fail "/pr-iterate does not say the marker is the output, never a list of check names"
+printf '%s' "$pi_flat" | grep -qiE "never (fixe[sd]|triage[sd]?)[^.]*re-run" &&
+	pass "/pr-iterate never fixes or re-runs a release-bound red" ||
+	fail "/pr-iterate does not say a release-bound red is never fixed or re-run"
+sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$PI")
+printf '%s\n' "$sc" | grep -qi 'release-bound' &&
+	pass "the stop conditions list the release-bound red" ||
+	fail "step 6's stop conditions do not list the release-bound red"
+
+# The emit: one pr.iterate, outcome stopped, reason naming release-bound and
+# the check.
+rb_emit=$(t_trace_spans "$PI" | grep -F 'kind=pr.iterate' | grep -F 'outcome=stopped' | grep -F "reason='release-bound" | head -1)
+[ -n "$rb_emit" ] && pass "/pr-iterate records the stop: pr.iterate outcome=stopped reason=release-bound" ||
+	fail "/pr-iterate has no trace line recording pr.iterate outcome=stopped with a release-bound reason"
+case $rb_emit in
+*"<the check by name>"*) pass "and the reason names the check" ;;
+*) fail "the release-bound stop does not name the check in its reason" ;;
+esac
+
+# The fence, lifted and run on a fixture PR.
+awk '/^```sh$/ { buf = ""; on = 1; next }
+	on && /^```$/ { if (buf ~ /triage_reds\(\)/) { printf "%s", buf; exit } on = 0; next }
+	on { buf = buf $0 "\n" }' "$PI" >"$SCRATCH/rb-fence.sh"
+[ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
+	fail "/pr-iterate has no sh fence defining triage_reds()"
+
+# The fixture: the failing checks, one name per line, and log i in logs/i.
+RBF="$SCRATCH/rb-pr"
+mkdir -p "$RBF/only" "$RBF/mixed" "$RBF/named"
+printf 'Docs set + UPDATING recipe (end-to-end)\n' >"$RBF/only/list"
+printf '  ok    the gate is RED after Part 1 alone\n  FAIL  %s UPDATING.md'"'"'s Part 2 worked example is STALE\n' "$RB_MARK" >"$RBF/only/1"
+printf 'Docs set + UPDATING recipe (end-to-end)\nTDD pairing guard\n' >"$RBF/mixed/list"
+cp "$RBF/only/1" "$RBF/mixed/1"
+printf '  FAIL  src/a.sh changed with no test change\n' >"$RBF/mixed/2"
+# A check NAMED like a release check, whose output says nothing of a release;
+# and an output that mentions the word in passing, without the marker.
+printf 'self-host (release-bound tag check)\nSkills suite\n' >"$RBF/named/list"
+printf '  FAIL  scripts/check.sh exited 1\n' >"$RBF/named/1"
+printf '  ok    the skill records reason=release-bound\n  FAIL  a span does not run\n' >"$RBF/named/2"
+
+# rb_iter <fixture> — one iteration's classification, as the fence prints it.
+rb_iter() { ( . "$SCRATCH/rb-fence.sh" && triage_reds "$RBF/$1/list" "$RBF/$1" ) 2>&1; }
+
+# Drive the loop the skill describes on a PR whose only red is release-bound:
+# an iteration that has nothing to triage and a red set aside records the
+# stop and ends. Iteration 2 on the same red is the failing case.
+RBT="$SCRATCH/rb-trace"
+rb_run=$(t_trace_runnable "$rb_emit")
+it=0
+while [ "$it" -lt 5 ]; do
+	it=$((it + 1))
+	out=$(rb_iter only)
+	# Anything but "nothing to triage, a red set aside" iterates again — a
+	# skill with no classifier triages every red, every time.
+	if printf '%s\n' "$out" | grep -q '^set-aside ' && ! printf '%s\n' "$out" | grep -q '^triage '; then
+		( cd "$ROOT" && TRACE_DIR="$RBT" TRACE_QUIET=1 sh -c "$rb_run" ) >/dev/null 2>&1
+		break
+	fi
+done
+[ "$it" = 1 ] && pass "a PR whose only red is release-bound stops at iteration 1" ||
+	fail "a PR whose only red is release-bound ran $it iterations — a second iteration on a red that cannot pass on a branch"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "the stop sets the check aside by name" ||
+	fail "the classifier did not set the release-bound check aside by name: $out"
+stopped=$(find "$RBT" -name '*.jsonl' -exec cat {} + 2>/dev/null | grep -c '"kind":"pr.iterate".*"outcome":"stopped"')
+[ "$stopped" = 1 ] && pass "one stopped pr.iterate is recorded" ||
+	fail "$stopped stopped pr.iterate events recorded — expected exactly one"
+# Were the loop re-fired anyway, iteration 2 on the same red triages nothing.
+out2=$(rb_iter only)
+if [ -s "$SCRATCH/rb-fence.sh" ] && ! printf '%s\n' "$out2" | grep -q '^triage '; then
+	pass "a second iteration on the same release-bound red triages nothing"
+else
+	fail "a second iteration on the same release-bound red would triage it: ${out2:-no classifier}"
+fi
+
+# Every other red still iterates.
+out=$(rb_iter mixed)
+printf '%s\n' "$out" | grep -qxF 'triage TDD pairing guard' &&
+	pass "a red that is not release-bound is still triaged" ||
+	fail "the pairing-guard red beside a release-bound one is not triaged: $out"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "…and the release-bound one beside it is set aside" ||
+	fail "the release-bound red beside another red is not set aside: $out"
+out=$(rb_iter named)
+[ "$(printf '%s\n' "$out" | grep -c '^triage ')" = 2 ] &&
+	pass "a check's name, and the word without the marker, set nothing aside" ||
+	fail "the classifier set aside a red by its name or by the bare word: $out"
+
+# The kit's own release-bound reds say so in their output.
+grep -E 'fail "[^"]*'"$RB_MARK" tests/self-host.test.sh | grep -qF 'drifted past the tag' &&
+	pass "self-host F3's drift red carries the marker" ||
+	fail "self-host F3's drift red does not print the release-bound marker — the kit's own release red is unmarked"
+grep -E 'fail "[^"]*'"$RB_MARK" tests/docs-demo.sh | grep -qF 'STALE' &&
+	pass "docs-demo's stale-transcript red carries the marker" ||
+	fail "docs-demo's stale-transcript red does not print the release-bound marker"
+
+# Review of PR #360. The log is captured per CHECK, not per run: one workflow
+# run holds many jobs, and a run-wide failed log would carry one job's marker
+# into every other red of the run (H-1).
+printf '%s\n' "$pi_flat" | grep -qE 'gh run view <run-id> --job <job-id> --log-failed >"\$scratch/checks/<i>"' &&
+	pass "/pr-iterate captures each failing check's own log, per job" ||
+	fail "/pr-iterate captures the failed log per run — one job's marker would set every red of the run aside"
+# The directory the capture writes into is made with the iteration's others (M-1).
+grep -E '^scratch=\$\(mktemp' "$PI" | grep -qF '"$scratch/checks"' &&
+	pass "step 1 makes the checks directory the capture writes into" ||
+	fail "step 1 does not make \$scratch/checks — the documented capture fails and every red is triaged"
+# The iteration line's reason gloss names both meanings of stopped (M-2).
+grep -F 'kind=pr.iterate' "$PI" | grep -F 'data.applied=' | grep -qF 'release-bound' &&
+	pass "the iteration line's reason names the release-bound stop beside the escalation" ||
+	fail "the iteration line still glosses stopped as the escalation alone"
+# The skill promises nothing of the loop runner it cannot keep (L-1).
+printf '%s\n' "$pi_flat" | grep -qF 'does not re-fire' &&
+	fail "/pr-iterate promises the loop runner will not re-fire — nothing the runner reads says so" ||
+	pass "/pr-iterate leaves ending the loop to the operator it reports to"
+# docs-demo's marker is gated on the declared release's tag, so the job that
+# runs it must check the tags out, at a depth the tag can be peeled at (H-2).
+dd_job=$(awk '/^  docs-demo:/ { on = 1; next } on && /^  [a-z]/ { exit } on' .github/workflows/kit-ci.yml)
+printf '%s\n' "$dd_job" | grep -qE 'fetch-depth: 0' && printf '%s\n' "$dd_job" | grep -qE 'fetch-tags: true' &&
+	pass "the docs-demo CI job checks out the tags its marker is gated on" ||
+	fail "the docs-demo CI job checks out no tags — its release-bound marker can never print where /pr-iterate reads"
+grep -qF 'rev-parse -q --verify "v$KITV^{commit}"' tests/docs-demo.sh &&
+	pass "docs-demo peels the tag, as F3 does" ||
+	fail "docs-demo tests the tag ref without peeling it — an unpeelable ref would read as released"
+
+# ---------------------------------------------------------------------------
+banner "14. /merge-train leaves a verdict for every landing: asked, or recorded as unasked (#345)"
 # ---------------------------------------------------------------------------
 # Retro F2: fifteen landings, no verdict from the train — it ran autonomously
 # under a "do not stop" instruction and the question was simply skipped. The

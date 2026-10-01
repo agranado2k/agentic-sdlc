@@ -161,7 +161,7 @@ checked_returns() {
 One iteration's read, end to end:
 
 ```bash
-scratch=$(mktemp -d "${TMPDIR:-/tmp}/pr-iterate.XXXXXX") && mkdir "$scratch/bodies" "$scratch/out" && echo "$scratch"
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/pr-iterate.XXXXXX") && mkdir "$scratch/bodies" "$scratch/out" "$scratch/checks" && echo "$scratch"
 # … write the reader's list to "$scratch/list" …
 fetch_bodies "$scratch/list" "$scratch/bodies" || { rm -rf "${scratch:?}"; echo "a body could not be fetched — stop"; }
 # … the reader runs: "$scratch/bodies" to read, "$scratch/out/returns" to write, nothing else …
@@ -199,6 +199,28 @@ The local review is **complementary** to any automated reviewers configured on t
 gh run list --workflow=<workflow-file> --branch="$PR_BRANCH" --limit 1 --json databaseId,conclusion
 gh run view <run-id> --log-failed   # cheapest — only the failing step's output
 ```
+
+**A release-bound red is set aside before it is classified.** Some reds cannot pass on a branch by decision: a check that waits on a release — a pinned transcript only the version bump re-captures, a shared-layer file that moved past its release tag — goes green when the release merges and on no commit of this PR. What marks one is the check's **own output**: a failing line carrying `release-bound:`, which the check prints because it knows why it is red. It is never inferred from a check's name, nor from a list of check names kept here: a name says what a check is, not why it failed this time. Save each failing check's **own** log to the iteration's scratch directory — `gh run view <run-id> --job <job-id> --log-failed >"$scratch/checks/<i>"`, the job id read from the check's link in `gh pr checks`, the names one per line in `$scratch/checks/list` — and split them. Per job, never per run: one run holds many checks, and a run-wide log would carry one check's marker into every other red beside it.
+
+```sh
+# triage_reds <the failing checks, one name per line> <a directory holding
+# log i of that list as <directory>/i> — prints `triage <name>` for a red this
+# iteration classifies and acts on, and `set-aside <name>` for a red whose own
+# output says it waits on a release.
+triage_reds() {
+	i=0
+	while IFS= read -r name; do
+		i=$((i + 1))
+		if grep -qF 'release-bound:' "$2/$i" 2>/dev/null; then
+			printf 'set-aside %s\n' "$name"
+		else
+			printf 'triage %s\n' "$name"
+		fi
+	done <"$1"
+}
+```
+
+A set-aside red is **never fixed, never triaged and never re-run** — no commit aimed at it, no re-run of the job, no empty push to try it again — on this iteration or any later one: the next iteration's split sets it aside again. Every `triage` red goes through the table below exactly as before. When the set-aside reds are all that is left — nothing to triage, no open bot thread, no unanswered human thread — the iteration stops there (step 6), and the release-bound red is the operator's to carry to the release.
 
 Classify the failure:
 
@@ -301,12 +323,13 @@ until ! gh pr checks "$PR" 2>&1 | grep -qE 'pending'; do sleep 30; done
 Stop iterating and report when ANY of:
 
 - All required checks green **AND** no open bot threads **AND** no unanswered human threads → ✅ converged
+- The only reds left are release-bound (step 3) → 🛑 stopped at the first release-bound red: record it — `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=stopped data.iteration=<i> data.check='<the check by name>' reason='release-bound — <the check by name>' || :`, in place of the iteration's line below — report the check to the operator by name with the line its output carried, and end with `Next: stop — release-bound: <the check by name>` — ending a `/loop` is the operator's, and no later iteration fixes or re-runs the red
 - 5 iterations completed without convergence (likely stuck) → 🟡 escalate with diagnosis
 - A bot suggestion conflicts with a binding record and you can't reply confidently → 🟡 escalate
 - Branch protection blocks a legitimate operation → 🟡 escalate
 - A check is failing in a way you can't diagnose from the logs → 🟡 escalate
 
-Whichever way it ends, remove the scratch files — `rm -rf "${scratch:?}"`: the bodies do not outlive the iteration that fetched them. Then record the iteration before the report, and close the run: `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied=<count> data.rejected=<count> data.escalated=<count> reason='<the failing check by name when red; converged when green; the escalation when stopped>' || :` and `sh scripts/trace.sh end outcome=ok|stopped reason='<the Next line>' || :`.
+Whichever way it ends, remove the scratch files — `rm -rf "${scratch:?}"`: the bodies do not outlive the iteration that fetched them. Then record the iteration before the report, and close the run: `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied=<count> data.rejected=<count> data.escalated=<count> reason='<the failing check by name when red; converged when green; the escalation when stopped — a release-bound stop records its own line above instead>' || :` and `sh scripts/trace.sh end outcome=ok|stopped reason='<the Next line>' || :`.
 
 ## Output format
 
@@ -329,7 +352,7 @@ This iteration:
   Replied:    <list of bot threads with one-line reasoning each>
   Escalated:  <items needing operator judgment>
 
-Next: <continue / stop — converged / stop — escalation>
+Next: <continue / stop — converged / stop — escalation / stop — release-bound: the check by name>
 ```
 
 ## Cross-references
