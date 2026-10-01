@@ -119,6 +119,14 @@ TEXTEOF
 TAB=$(printf '\t')
 printf 'rename%sthe helper\nan arrow → and a dash — in prose\n' "$TAB" >>"$TEXT"
 
+# lift_fence <skill> <function> <file> — the first sh fence of the skill
+# that names <function>(), written whole to <file>, to be sourced and run.
+lift_fence() {
+	awk -v fn="$2" '/^```sh$/ { buf = ""; on = 1; next }
+		on && /^```$/ { if (index(buf, fn "()")) { printf "%s", buf; exit } on = 0; next }
+		on { buf = buf $0 "\n" }' "$1" >"$3"
+}
+
 # verdict <return text> [text file] — the lifted fence's answer for one
 # return: checked_prescreen's exit status, its output kept in verdict.out.
 verdict() {
@@ -327,9 +335,7 @@ hold_prescreen() {
 	fi
 
 	banner "4. /$NAME — the documented check, executed"
-	awk '/^```sh$/ { buf = ""; on = 1; next }
-		on && /^```$/ { if (buf ~ /prescreen_ok\(\)/) { printf "%s", buf; exit } on = 0; next }
-		on { buf = buf $0 "\n" }' "$SKILL" >"$CHECK"
+	lift_fence "$SKILL" prescreen_ok "$CHECK"
 	[ -s "$CHECK" ] && pass "/$NAME prints the check as a runnable fence" ||
 		fail "/$NAME has no sh fence defining prescreen_ok()"
 	grep -q '^checked_prescreen() {$' "$CHECK" && pass "/$NAME — the fence defines checked_prescreen, the only way the return is read" ||
@@ -782,11 +788,34 @@ grep -q '^	\[ "\$span_len" -ge 8 \]' "$SCRATCH/span_ok.to-tickets" &&
 # ---------------------------------------------------------------------------
 banner "7. /dogfood — a row's outcome is a decision line, checked before it is reported"
 # ---------------------------------------------------------------------------
+# The check is a fenced function like the pre-screen's, lifted and RUN: the
+# row's outcome reaches the report only through it. It finds the checker the
+# way the pre-screen does — vocab_checker, from the skills root — so a missing
+# or broken checker refuses the row (ticket #341: as text, exit 2 blocked the
+# row and a checker that was gone or could not run let it through). A row the
+# checker refused, or could not check, is named by step and position, and its
+# outcome is never printed.
 NAME=dogfood
-outcome_line=$(grep -o "sh scripts/vocab.sh 'Outcome: <[^>]*>'" "$DOGFOOD" | head -1)
-[ -n "$outcome_line" ] && pass "/dogfood hands each row's outcome to the checker, under the plain script name" ||
-	fail "/dogfood never runs sh scripts/vocab.sh 'Outcome: <…>' — a row's outcome is reported unchecked"
-spelled=$(printf '%s' "$outcome_line" | sed -n "s/.*'Outcome: <\(.*\)>'\$/\1/p" | tr '|' ' ')
+CHECK="$SCRATCH/dogfood.check.sh"
+OUTCOME="$SCRATCH/dogfood.outcome.sh"
+# The pre-screen's lifted fence is what the outcome check leans on for its
+# vocab_checker: without it every run below reads unchecked for want of the
+# function, not for the fence's own reason — said here, once, so a failure
+# below is not misread (review of PR #378).
+grep -qs '^vocab_checker() {$' "$CHECK" && pass "/dogfood — the pre-screen's lifted fence is at hand, with the vocab_checker the outcome check leans on" ||
+	fail "/dogfood — the pre-screen's fence was not lifted in section 4: the runs below cannot resolve the checker, whatever the outcome fence does"
+lift_fence "$DOGFOOD" checked_outcome "$OUTCOME"
+[ -s "$OUTCOME" ] && pass "/dogfood prints the outcome check as a runnable fence defining checked_outcome()" ||
+	fail "/dogfood has no sh fence defining checked_outcome(): a row's outcome is reported unchecked"
+grep -q 'vocab_checker' "$OUTCOME" && pass "/dogfood — the fence finds the checker through vocab_checker, as the pre-screen does" ||
+	fail "/dogfood — the fence should resolve the checker with vocab_checker, the pre-screen's own resolution"
+grep -q '^vocab_checker() {$' "$OUTCOME" && fail "/dogfood — the fence carries a second vocab_checker(): the pre-screen's is the one" ||
+	pass "/dogfood — the fence defines no vocab_checker() of its own"
+assert_file_lacks "$OUTCOME" "scripts/vocab.sh" "the fence names no checker path of its own — the one vocab_checker finds is the one run"
+outcome_line=$(grep -o 'checked_outcome <row> <[^>]*>' "$DOGFOOD" | head -1)
+[ -n "$outcome_line" ] && pass "/dogfood hands each row's outcome to checked_outcome, with the row's position" ||
+	fail "/dogfood never says to run checked_outcome <row> <…> — a row's outcome is reported unchecked"
+spelled=$(printf '%s' "$outcome_line" | sed -n 's/.*<row> <\(.*\)>$/\1/p' | tr '|' ' ')
 declared=$(field_tokens outcome)
 [ -n "$declared" ] && [ "$spelled" = "$declared" ] &&
 	pass "/dogfood — Outcome offers the policy file's tokens, in its order: $declared" ||
@@ -794,34 +823,118 @@ declared=$(field_tokens outcome)
 assert_file_has "$FLAT" "before the report is written" "the check comes before the outcome is reported"
 assert_file_has "$FLAT" "one bare line per row" "the matrix's outcome is a decision line"
 assert_file_has "$FLAT" "A refused outcome is never reported" "exit 2 is a row to re-read, not a row to report"
-# The documented command, executed where a consumer runs it — the project
-# root — with each placeholder filled: every token the policy file declares
-# passes, and a reading no vocabulary declares is refused with exit 2.
+assert_file_has "$FLAT" "by step and position" "a row the check did not pass is named in the report, not reported"
+# The prose names the lines the fence prints, as the session will read them —
+# a phrase the fence cannot satisfy, since it prints the row's number.
+assert_file_has "$FLAT" '`refused outcome: step 4, row N`' "the prose names the line a refused row is reported under"
+assert_file_has "$FLAT" '`unchecked outcome: step 4, row N`' "…and the line an unchecked row is reported under"
+assert_file_has "$FLAT" "never printed as an outcome" "…and its outcome is not"
+assert_file_has "$FLAT" "could not be checked" "a checker missing or unable to run is said to be the other refusal"
+assert_file_has "$FLAT" "re-reads the row itself" "the checker's reason stays discarded: it quotes the value, untrusted text, and the session re-reads the row"
+# outcome_run <row> <token> — the lifted fence's answer for one row, run
+# where a consumer runs it, on the pre-screen's lifted check for its
+# vocab_checker: exit status kept, both streams captured.
 outcome_run() {
-	(cd "$PROJECT" && unset VOCAB_CONFIG && { [ -z "${POLICY_FOR:-}" ] || export VOCAB_CONFIG="$POLICY_FOR"; } &&
-		eval "$(printf '%s' "$outcome_line" | sed "s/<[^>]*>/$1/")") >/dev/null 2>"$SCRATCH/outcome.err"
+	(cd "$PROJECT/${WHERE:-}" && unset VOCAB_CONFIG && { [ -z "${POLICY_FOR:-}" ] || export VOCAB_CONFIG="$POLICY_FOR"; } &&
+		sh -c '. "$1"; . "$2"; checked_outcome "$3" "$4"' _ "$CHECK" "$OUTCOME" "$1" "$2") >"$SCRATCH/outcome.out" 2>"$SCRATCH/outcome.err"
 }
-if [ -n "$outcome_line" ]; then
-	for tok in $declared; do
-		outcome_run "$tok" && pass "/dogfood — the checker accepts 'Outcome: $tok'" ||
-			fail "/dogfood — the documented command refused the declared outcome '$tok'"
-	done
-	for bad in partial 'paper cut' PASS; do
-		outcome_run "$bad"
-		st=$?
-		[ "$st" -eq 2 ] && pass "/dogfood — 'Outcome: $bad' is refused, exit 2" ||
-			fail "/dogfood — 'Outcome: $bad' should be refused with exit 2, the documented command exited $st"
-	done
-	assert_file_has "$SCRATCH/outcome.err" "outcome" "the refusal names the field"
-	# By the policy file, not by a list in the skill: a band withdrawn from the
-	# file is refused though the skill still offers it.
-	sed "s/^VOCAB_OUTCOME=.*/VOCAB_OUTCOME='pass fail'/" "$POLICY" >"$SCRATCH/two.config.sh"
-	POLICY_FOR="$SCRATCH/two.config.sh"
-	outcome_run paper-cut
-	st=$?
-	POLICY_FOR=
-	[ "$st" -eq 2 ] && pass "/dogfood — an outcome the policy file does not declare is refused, whatever the skill offers" ||
-		fail "/dogfood — with 'paper-cut' withdrawn from the policy file the documented command exited $st"
-fi
+# outcome_passed <label> <row> <token> — the check printed the row's decision
+# line, and nothing else on either stream.
+outcome_passed() {
+	if [ -s "$OUTCOME" ] && outcome_run "$2" "$3" && [ "$(cat "$SCRATCH/outcome.out")" = "Outcome: $3" ] && [ ! -s "$SCRATCH/outcome.err" ]; then
+		pass "/dogfood — $1"
+	else
+		fail "/dogfood — $1 — got: $(cat "$SCRATCH/outcome.out" "$SCRATCH/outcome.err" 2>/dev/null | tr '\n' '|')"
+	fi
+}
+# outcome_named <label> <row> <token> <refused|unchecked> — the check said
+# no, naming the row by step and position with the one fixed line for that
+# refusal, and printed no outcome and no reason on either stream.
+outcome_named() {
+	if [ ! -s "$OUTCOME" ] || outcome_run "$2" "$3"; then
+		fail "/dogfood — $1 — the documented check passed it"
+	elif [ "$(cat "$SCRATCH/outcome.out")" = "$4 outcome: step 4, row $2" ] && [ ! -s "$SCRATCH/outcome.err" ]; then
+		pass "/dogfood — $1 — named '$4', by step and position, and no outcome printed"
+	else
+		fail "/dogfood — $1 — refused, but the check printed: $(cat "$SCRATCH/outcome.out" "$SCRATCH/outcome.err" | head -2 | tr '\n' '|')"
+	fi
+}
+WHERE= POLICY_FOR=
+row=0
+for tok in $declared; do
+	row=$((row + 1))
+	outcome_passed "the checker accepts 'Outcome: $tok', and the row's decision line is printed" "$row" "$tok"
+done
+outcome_named "a reading no vocabulary declares is refused" 4 partial refused
+outcome_named "…a two-word reading too" 4 'paper cut' refused
+outcome_named "…and a declared token in the wrong case" 4 PASS refused
+# By the policy file, not by a list in the skill: a band withdrawn from the
+# file is refused though the skill still offers it.
+sed "s/^VOCAB_OUTCOME=.*/VOCAB_OUTCOME='pass fail'/" "$POLICY" >"$SCRATCH/two.config.sh"
+POLICY_FOR="$SCRATCH/two.config.sh"
+outcome_named "an outcome the policy file does not declare is refused, whatever the skill offers" 5 paper-cut refused
+POLICY_FOR=
+# A checker that cannot answer for its policy cannot refuse either (ruling
+# on the review of PR #378, M-1 — the one the stamp reader took): the fence
+# asks the resolved checker `fields` first, and a non-zero exit THERE is
+# unchecked; only a 2 from the check of the row's own line is refused. The
+# checker exits 2 for a policy file named and missing and for one it reads
+# as malformed, which the fence would otherwise file as the value's fault.
+grep -q 'sh "$checker" fields' "$OUTCOME" && pass "/dogfood — the fence proves the checker usable with 'fields' before it asks about the row" ||
+	fail "/dogfood — the fence should run 'sh \"\$checker\" fields' first: a checker that cannot answer for its policy cannot refuse a row"
+POLICY_FOR=/nonexistent
+outcome_named "with VOCAB_CONFIG naming a policy file that does not exist, a declared outcome is unchecked, not refused" 5 pass unchecked
+{ cat "$POLICY"; printf 'VOCAB_RULES="not a rule"\n'; } >"$SCRATCH/malformed.config.sh"
+POLICY_FOR="$SCRATCH/malformed.config.sh"
+outcome_named "with a policy file the checker reads as malformed, a declared outcome is unchecked, not refused" 5 pass unchecked
+printf 'VOCAB_OUTCOME=(\n' >"$SCRATCH/unparsed.config.sh"
+POLICY_FOR="$SCRATCH/unparsed.config.sh"
+outcome_named "with a policy file the shell cannot parse, a declared outcome is unchecked" 5 pass unchecked
+POLICY_FOR=
+# Found from the skills root, as the pre-screen's check is.
+WHERE=src/deep
+outcome_passed "from a subdirectory, a declared outcome still passes — the checker is found from the skills root" 6 pass
+outcome_named "…and an undeclared one is still refused there" 6 partial refused
+# …from the repository that holds the skills, never the one the cwd is in —
+# section 4's cases, held here too (review of PR #378, M-2): a fence that
+# resolved the checker from the cwd's own repository would call the row
+# unchecked from a nested checkout with no skills, and pass an undeclared
+# reading through a checker of that checkout's own.
+WHERE=vendor/clone
+outcome_passed "from a nested checkout with no skills, a declared outcome passes — the project's checker, not the clone's absent one" 6 pass
+outcome_named "…and an undeclared one is still refused there" 6 partial refused
+mkdir -p "$PROJECT/vendor/clone/scripts"
+printf 'exit 0\n' >"$PROJECT/vendor/clone/scripts/vocab.sh"
+outcome_named "…even with a pass-everything checker of the clone's own — the project's checker is the one run" 6 partial refused
+rm -r "$PROJECT/vendor/clone/scripts"
+# The checker absent: a stub skills root with no scripts/vocab.sh — the
+# nested repository holding skills from section 4 — while the project's own
+# checker is made to pass everything, so a borrowed checker would have said
+# yes. The row is not refused by the checker, it is unchecked: named so, and
+# not reported (ticket #341).
+cp "$PROJECT/scripts/vocab.sh" "$SCRATCH/vocab.real"
+printf 'exit 0\n' >"$PROJECT/scripts/vocab.sh"
+WHERE=vendor/kit
+outcome_named "from a skills root with no checker, a declared outcome is unchecked — the outer checker is not borrowed" 7 pass unchecked
+WHERE=../outside
+outcome_named "from a cwd under no skills at all, a declared outcome is unchecked" 7 pass unchecked
+cp "$SCRATCH/vocab.real" "$PROJECT/scripts/vocab.sh"
+WHERE=
+rm -f "$PROJECT/scripts/vocab.sh"
+outcome_named "with the checker deleted, a declared outcome is unchecked — a missing checker refuses, it does not pass" 8 pass unchecked
+# The checker present and broken: a status that is not the checker's refusal.
+printf 'exit 126\n' >"$PROJECT/scripts/vocab.sh"
+outcome_named "a checker that cannot run leaves the row unchecked too" 9 pass unchecked
+printf 'exit 1\n' >"$PROJECT/scripts/vocab.sh"
+outcome_named "…and so does one that fails for any reason but a refusal" 9 pass unchecked
+# A checker that passes everything is trusted: the fence keeps no list of
+# tokens of its own — the vocabulary is the checker's. It speaks on both
+# streams, and neither reaches the report: the decision line is the whole of
+# what a pass prints (review of PR #378).
+printf 'echo noise; echo noise >&2; exit 0\n' >"$PROJECT/scripts/vocab.sh"
+outcome_passed "with a checker that passes everything, an undeclared reading passes — the vocabulary is the checker's, not the fence's — and what the checker printed is discarded" 10 partial
+cp "$SCRATCH/vocab.real" "$PROJECT/scripts/vocab.sh"
+outcome_passed "with the checker back, a declared outcome passes" 11 pass
+outcome_named "…and the undeclared reading is refused again" 11 partial refused
 
 t_done "prescreen-return"
