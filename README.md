@@ -692,7 +692,9 @@ skeleton (K0).
   never the kit's never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
   error changes no skill's outcome; every kind a skill emits is one the script
   knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
-  and records a spawn per agent with that model; `/merge-train` and
+  and records a spawn per agent with that model, and every `data.agent` it
+  writes — spawn, raise, or a relayed review's raise — is a token from its
+  own closed sub-agent roster; `/merge-train` and
   `/pr-iterate` record the human's `feedback` verdict on a landed slice; and
   no skill, chain or not, ever calls `show`, `summary` or `export`.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
