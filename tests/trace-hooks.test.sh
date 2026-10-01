@@ -2128,8 +2128,8 @@ start_in "$B2"
 	pass "with no threshold set, nothing is said on stderr — the shipped default is silence" ||
 	fail "with no threshold the hook still said: $S_ERR"
 start_in "$B2" TRACE_BEHIND_WARN=1
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(str "$START" behind)" = 2 ] &&
-	pass "past a threshold of 1: still exit 0, silent on stdout, still data.behind=2" ||
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "past a threshold of 1: still exit 0, still data.behind=2 (stdout's object is section 35's)" ||
 	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT', event $START"
 [ "$(behind_notes)" = 1 ] &&
 	pass "and stderr says so exactly once" ||
@@ -2638,5 +2638,88 @@ if [ "$HAVE_NODE" = 1 ]; then
 else
 	echo "  skip  node is not on PATH — the PreToolUse wiring check needs a JSON parser"
 fi
+
+# ---------------------------------------------------------------------------
+banner "36. The behind note reaches the operator: one JSON object on stdout (#427)"
+# ---------------------------------------------------------------------------
+# Ticket #427, from the live check of #384. On the agent harness as it is, a
+# SessionStart hook's stderr on exit 0 reaches nobody: the note of section 32
+# landed only in the transcript's own records. Two channels do reach a reader,
+# and the adapter README records the probe that chose them: a top-level
+# `systemMessage`, which the agent harness documents as shown to the user and
+# an interactive session prints under its banner, and
+# `hookSpecificOutput.additionalContext`, which the model reads and relays —
+# the one that reaches a non-interactive run's output. So past the threshold
+# the hook prints exactly one JSON object carrying both, still exits 0, and
+# still says the line on stderr. Under the threshold stdout stays empty.
+
+# behind_json_ok <stdout> <needle> — node parses the object: systemMessage and
+# additionalContext both hold <needle>, the event name is SessionStart. Status 0
+# for yes. Without node the caller skips the leg.
+behind_json_ok() {
+	printf '%s' "$1" | node -e '
+		let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+			const o = JSON.parse(s), n = process.argv[1], h = o.hookSpecificOutput || {};
+			const ok = typeof o.systemMessage === "string" && o.systemMessage.includes(n) &&
+				h.hookEventName === "SessionStart" &&
+				typeof h.additionalContext === "string" && h.additionalContext.includes(n);
+			process.exit(ok ? 0 : 1);
+		});' "$2" 2>/dev/null
+}
+
+J2="$SCRATCH/behind-json-427"
+behind_kit "$J2"
+behind_remote "$J2" 2
+start_in "$J2" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] &&
+	case $S_OUT in '{'*'}') true ;; *) false ;; esac &&
+	pass "past the threshold: exit 0, and stdout is exactly one line holding one JSON object" ||
+	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT'"
+case $S_OUT in *'"systemMessage":"'*'is 2 commits behind origin/main'*'"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"'*'is 2 commits behind origin/main'*)
+	pass "the object carries the note as systemMessage and as SessionStart additionalContext" ;;
+*) fail "the object does not carry the note in both fields: $S_OUT" ;; esac
+[ "$(behind_notes)" = 1 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "and the stderr line and data.behind=2 are both still there" ||
+	fail "stderr said it $(behind_notes) times, event $START"
+if [ "$HAVE_NODE" = 1 ]; then
+	behind_json_ok "$S_OUT" 'is 2 commits behind origin/main' &&
+		pass "the object parses as JSON, both fields holding the note" ||
+		fail "the object does not parse or lacks the note: $S_OUT"
+else
+	echo "  skip  node is not on PATH — the JSON parse leg needs it"
+fi
+
+start_in "$J2" TRACE_BEHIND_WARN=2
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "AT the threshold stdout stays empty — no object when there is nothing to say" ||
+	fail "at the threshold stdout held: '$S_OUT'"
+start_in "$J2"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "with no threshold stdout stays empty" ||
+	fail "with no threshold stdout held: '$S_OUT'"
+start_in "$J2" TRACE_BEHIND_WARN=ten
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a malformed threshold is refused on stderr only — stdout stays empty" ||
+	fail "a malformed threshold put on stdout: '$S_OUT'"
+
+# A ROOT PATH THAT NEEDS ESCAPING: a quote and a backslash in the directory
+# name still make one valid object — the path is data, not JSON.
+JQ="$SCRATCH/behind \"q\\427"
+behind_kit "$JQ"
+behind_remote "$JQ" 3
+start_in "$JQ" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] &&
+	pass "a root path holding a quote and a backslash: exit 0, one line on stdout" ||
+	fail "an escaping root path: exit $S_STATUS, stdout '$S_OUT'"
+if [ "$HAVE_NODE" = 1 ]; then
+	behind_json_ok "$S_OUT" "$JQ is 3 commits behind origin/main" &&
+		pass "and it parses, the path read back exactly as written" ||
+		fail "the escaping root path broke the object: $S_OUT"
+fi
+
+# THE RECORD. The adapter README says which channel and why.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ')
+case $d in *'#427'*'systemMessage'*'additionalContext'*'rule 1'*) pass "the adapter README records the channel: systemMessage, additionalContext, and the ticket" ;;
+*) fail "the adapter README does not record the behind note's channel" ;; esac
 
 t_done "trace hooks"

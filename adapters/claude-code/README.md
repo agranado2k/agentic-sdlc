@@ -259,7 +259,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
-them writes to stdout, and each sets the trace's quiet variable so a project
+them writes to stdout but the behind note's one object, and each sets the trace's quiet variable so a project
 that never turned tracing on hears nothing. Observability that can fail a
 session is worse than none.
 
@@ -435,10 +435,29 @@ worktree measures the root, never its own feature branch, and says so with
 `data.behind_of=root` — counted with plain git and never a fetch of its own,
 `0` when level. A checkout with
 no `origin/main`, or no repository, records no field and still exits 0.
-`TRACE_BEHIND_WARN` in your trace policy file adds one line on stderr when the
-count is more than it; the policy file ships it empty, which records the count
-and says nothing. A malformed value is refused on stderr and otherwise
-ignored.
+`TRACE_BEHIND_WARN` in your trace policy file adds a note when the count is
+more than it; the policy file ships it empty, which records the count and says
+nothing. A malformed value is refused on stderr and otherwise ignored.
+
+**The note leaves by stdout, as one JSON object, because stderr reaches nobody**
+(ticket #427). The note began as a stderr line, and a live probe of the agent
+harness at 2.1.285 found a `SessionStart` hook's stderr on exit 0 kept in the
+transcript's own records and shown nowhere — not in an interactive terminal,
+not on a non-interactive run's stdout or stderr. The hooks reference documents
+three other routes; the probe settled which reaches a reader:
+
+| Route | Who reads it | Chosen |
+| --- | --- | --- |
+| a top-level `systemMessage` in a JSON object on stdout | the operator: documented as shown to the user, and an interactive session prints it under its banner | yes |
+| `hookSpecificOutput.additionalContext` in the same object | the model, which relays it — the one route into a non-interactive run's output | yes, beside it |
+| plain stdout | the model only, and it would make the object unparseable | no |
+| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (ADR-0008 clause 4) | no |
+
+So past the threshold the hook prints exactly one object carrying the note in
+both fields, still exits 0, and still writes the stderr line for a reader of the
+agent harness's records. Under the threshold, and on every other path, stdout
+stays empty: nothing about the trace ever takes this route, and `hook.lib.sh`'s
+rule 2 names this one object as its only exception.
 
 **A phantom stop writes no event.** Most `SubagentStop` payloads in a long
 session name a subagent transcript that does not exist and never appears:

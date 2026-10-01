@@ -28,11 +28,15 @@
 #      exits 2 — the agent harness's block status — when, and only when, it
 #      refuses a spawned sub-agent's call (#414). Every other path in it is
 #      exit 0 like everything else here.
-#   2. SILENT ON STDOUT. What a hook prints on stdout can reach the agent
-#      harness's own parser. The trace's answers go to a file; nothing here
-#      has anything to say. STDERR is a different stream and is deliberately
-#      loud — ADR-0008 clause 4 wants a trace error visible, and the operator
-#      is the reader.
+#   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
+#      reaches the agent harness's own parser. The trace's answers go to a
+#      file; nothing about the trace is ever said there. STDERR is a different
+#      stream and is deliberately loud — ADR-0008 clause 4 wants a trace error
+#      visible. The one exception is session-start's behind note, which is
+#      about the code the hooks run, not the trace: stderr on exit 0 reaches
+#      no reader on this agent harness, so past its threshold the note is also
+#      one JSON object on stdout, written by hook_say_session and nothing else
+#      (ticket #427). A trace error never takes that route.
 #   3. TRACE_QUIET=1. An unconfigured trace prints one note per process, which
 #      is the right nudge for an operator typing a command and pure noise on
 #      every session start of a project that has decided not to trace.
@@ -634,6 +638,28 @@ hook_behind_warn() {
 		;;
 	esac
 	[ "$1" -gt "$_bw" ] || return 0
-	printf '! session-start: %s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it\n' \
-		"$2" "$1" "$_bw" >&2
+	_bw_note=$(printf '%s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it' \
+		"$2" "$1" "$_bw")
+	printf '! session-start: %s\n' "$_bw_note" >&2
+	hook_say_session "$_bw_note"
+}
+
+# hook_json_str <text> — <text> as the inside of a JSON string: backslash and
+# double quote escaped, every control character dropped. A root path is data
+# and may hold any of them; one that broke the object would silence the note.
+hook_json_str() {
+	printf '%s' "$1" | tr -d '\000-\037\177' | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# hook_say_session <note> — the ONE thing a hook here prints on stdout (rule 2's
+# exception, ticket #427): a single JSON object the agent harness parses on exit
+# 0, carrying <note> twice. `systemMessage` is the field the hooks reference
+# documents as shown to the user — an interactive session prints it under its
+# banner; `hookSpecificOutput.additionalContext` goes to the model, which relays
+# it — the only route that reaches a non-interactive run's output. stderr on
+# exit 0 reaches neither (the live probe of 2.1.285, adapter README).
+hook_say_session() {
+	_hs=$(hook_json_str "$1")
+	printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s Tell the operator this in your first reply."}}\n' \
+		"$_hs" "$_hs"
 }
