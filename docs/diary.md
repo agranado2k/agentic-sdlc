@@ -1654,3 +1654,16 @@ form, and the PR's demo table predates the final row wording.
   hermetic.
 - The copied suite helpers move to the shared test library, as one refactor.
 
+### 2026-10-01 — The retro's report moves into the project (#349, PR #362)
+
+`/retro` wrote its report and CSV to the OS temp directory, and the first
+retro over this repo's own trace had to be recovered into the tree by hand.
+The skill now writes `.retro/<YYYY>/<MM>/retro-<stamp>.md` and `.csv` at the
+root checkout, the root resolved with the trace's own common-directory line,
+and checks the folder is ignored before it writes. **For the next `VERSION`
+bump's history note, the non-manifest half (hard rule 3):** `/retro` moved its
+output into the tree, and a consumer taking the skill owes `.retro/` in its
+`.gitignore` beside `.trace/` — the skill adds the line itself on first run
+and says so, but the recipe's step 9d could not carry it without moving the
+shared layer, so the note is here until a release writes it there.
+

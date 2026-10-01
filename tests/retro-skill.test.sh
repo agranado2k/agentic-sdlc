@@ -650,9 +650,8 @@ assert_file_has "$SKILL" 'retro-<YYYYMMDDTHHMMSSZ>.md' "the report's name carrie
 # Ticket #349: the report lives in the project, not in the OS temp directory
 # — a temp report is lost with the machine's next sweep, and a retro nobody
 # can re-read is a retro that never ran. The full path rule is section 9's.
-assert_file_has "$SKILL" '.retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md' "…under .retro/<YYYY>/<MM>/ in the project"
+# — and that section holds the path; here only the old home is refused.
 assert_file_lacks "$SKILL" '<tmpdir>/retro-' "the report no longer goes to the OS temp directory"
-assert_file_lacks "$SKILL" 'TMPDIR' "…and nothing in the skill resolves \$TMPDIR any more"
 assert_file_lacks "$SKILL" "outside the repo tree" "…and the skill no longer says the report lands outside the tree"
 # H-3 (review of PR #293): the trace carries third-party text (comment bodies
 # in reason=), and the reader must say what it is.
@@ -794,31 +793,49 @@ grep -q 'sh tests/retro-skill.test.sh' "$ROOT/.github/workflows/kit-ci.yml" &&
 # ---------------------------------------------------------------------------
 banner "9. The report lives in the project under .retro/ at the root checkout (ticket #349)"
 # ---------------------------------------------------------------------------
-# 9a. The path rule, in the procedure's write step: .retro/<YYYY>/<MM>/ at the
-# ROOT CHECKOUT, the CSV beside the report, the root found through git's
-# common directory — the derivation scripts/trace.sh and the cleanup script
-# share — so a retro run from a worktree lands at the root and the worktree's
-# pruning loses nothing.
+# 9a. The path rule, in the procedure's two writing steps — the export (step
+# 4, the first thing written, so the folder is resolved and made THERE: review
+# of PR #362, M1) and the report (step 5, beside it): .retro/<YYYY>/<MM>/ at
+# the ROOT CHECKOUT, the root found through git's common directory — the
+# derivation scripts/trace.sh and the cleanup script share — so a retro run
+# from a worktree lands at the root and the worktree's pruning loses nothing.
+export_step=$(procedure | awk '/^4\. \*\*/ { on = 1 } /^[0-35-9]\. \*\*/ { on = 0 } on' | flat)
 write_step=$(procedure | awk '/^5\. \*\*/ { on = 1 } /^[0-46-9]\. \*\*/ { on = 0 } on' | flat)
-write_has() { # <needle> <message>
-	case "$write_step" in
-	*"$1"*) pass "$2" ;;
-	*) fail "$2 — the procedure's write step does not say: $1" ;;
+step_has() { # <step text> <step name> <needle> <message>
+	case "$1" in
+	*"$3"*) pass "$4" ;;
+	*) fail "$4 — the procedure's $2 step does not say: $3" ;;
 	esac
 }
+export_has() { step_has "$export_step" export "$@"; }
+write_has() { step_has "$write_step" write "$@"; }
+export_has 'git rev-parse --path-format=absolute --git-common-dir' "the export step resolves the root through git's common directory — the one-line derivation, before anything is written"
+export_has 'mkdir -p "$root/.retro/<YYYY>/<MM>"' "…and makes the folder there"
+export_has 'root checkout' "…at the root checkout"
+export_has 'scripts/trace.sh' "…named as the same derivation the trace script uses for a relative TRACE_DIR"
+export_has 'as `.csv`' "…and saves the export there as .csv"
+export_has 'prints nothing' "…and says what to do when the derivation prints nothing: outside a repository there is no trace to read (L5)"
 write_has '.retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md' "the write step names the report's path under .retro/<YYYY>/<MM>/"
-write_has 'root checkout' "…at the root checkout"
-write_has 'git rev-parse --path-format=absolute --git-common-dir' "…resolved through git's common directory, the one-line derivation"
-write_has 'scripts/trace.sh' "…named as the same derivation the trace script uses for a relative TRACE_DIR"
-write_has 'worktree' "…so a retro run from a worktree lands at the root"
-write_has 'prun' "…and survives the worktree's pruning"
-write_has '.csv' "…with the CSV export beside the report"
-write_has '.gitignore' "…and the folder's ignore rule named for a consumer, since the recipe cannot carry it without moving the shared layer"
-write_has '.trace/' "…beside the trace's own rule"
+write_has 'beside the export' "…beside the export step 4 saved"
+write_has 'linked worktree' "…so a retro run from a linked worktree lands at the root"
+write_has "worktree's pruning" "…and survives the worktree's pruning"
+write_has 'check-ignore -q .retro/' "the write step checks the folder is ignored before it writes (H1)"
+write_has 'beside `.trace/`' "…and when it is not, the line is added beside the trace's own"
+write_has "report's first line" "…and said in the report's first line, so a consumer's ignore file never gains a line in silence"
+write_has 'a project that takes this skill' "…which is also the consumer's note, since the recipe cannot carry it without moving the shared layer"
 # The derivation is quoted as ONE code span, so a session copies one line and
-# a suite can run it. Extracted by its distinctive token, never by position.
-derive=$(grep -o '`[^`]*git-common-dir[^`]*`' "$SKILL_ABS" | head -1 | tr -d '`')
-[ -n "$derive" ] && pass "the derivation is one code span: $derive" || fail "no code span in the skill carries git-common-dir"
+# a suite can run it. Extracted from the export step by its distinctive token
+# (L1) — never from the whole file, never by position.
+derive=$(printf '%s' "$export_step" | grep -o '`[^`]*git-common-dir[^`]*`' | head -1 | tr -d '`')
+[ -n "$derive" ] && pass "the derivation is one code span in the export step: $derive" || fail "no code span in the export step carries git-common-dir"
+# The parity the skill claims is held to the two scripts it is claimed with
+# (L2): the same flag pair in scripts/trace.sh and the cleanup script, so a
+# change to either goes red here and the sentence is re-read.
+for f in scripts/trace.sh scripts/worktree-cleanup.sh; do
+	grep -qF -- 'rev-parse --path-format=absolute --git-common-dir' "$ROOT/$f" &&
+		pass "$f still resolves the root with the same flag pair the skill quotes" ||
+		fail "$f no longer uses 'rev-parse --path-format=absolute --git-common-dir' — the skill's parity claim is stale"
+done
 # 9b. The derivation RUNS, from a linked worktree of a scratch repo, and
 # prints that repo's root — not the worktree. A rule whose one line was
 # never executed is a claim (hard rule 9).
@@ -842,11 +859,33 @@ grep -qx '\.retro/' "$ROOT/.gitignore" && pass ".gitignore keeps .retro/ out of 
 # README's suite paragraph, the glossary's Retro entry — which also names the
 # folder as the kit's own word — and /housekeeping's checklist, whose check
 # is unchanged (a report dated inside the window) but looks in the new place.
+# Scoped to the unit that describes the retro (M3): other skills write their
+# reports outside the tree on purpose, and a row about one of them is not
+# this suite's to fail. The manuals' unit is the quick-reference row (one
+# line); the README's is this suite's own bullet; the glossary's is the two
+# Retro entries; the checklist's is the retrospective bullet.
+retro_text() { # <file> — the unit about the retro, flattened
+	case "$1" in
+	*CHECKLIST.md) awk '/^- \*\*The retrospective/ { on = 1; print; next } /^- / { on = 0 } on' "$ROOT/$1" ;;
+	README.md) awk '/^- `sh tests\/retro-skill\.test\.sh`/ { on = 1; print; next } /^- / { on = 0 } on' "$ROOT/$1" ;;
+	*glossary.md) awk '/^- \*\*Retro( folder)?\*\*/ { on = 1; print; next } /^- \*\*/ { on = 0 } on' "$ROOT/$1" ;;
+	*) grep -F '`/retro`' "$ROOT/$1" ;;
+	esac | flat
+}
 for f in AGENTS.md constitution/AGENTS.md.template README.md docs/domain-glossary.md .agents/skills/housekeeping/CHECKLIST.md; do
-	flat <"$ROOT/$f" | grep -qF '.retro/' && pass "$f names .retro/ as where the report lives" || fail "$f does not name .retro/"
-	flat <"$ROOT/$f" | grep -qiE 'report (lands |goes |written )?outside the (repo )?tree|retro-<YYYYMMDDTHHMMSSZ>.md` under the temp' &&
-		fail "$f still says the retro report lands outside the tree" || pass "$f no longer sends the retro report outside the tree"
+	t=$(retro_text "$f")
+	[ -n "$t" ] || { fail "$f has no line about the retro"; continue; }
+	printf '%s' "$t" | grep -qF '.retro/' && pass "$f names .retro/ where it describes the retro" || fail "$f's retro line does not name .retro/"
+	printf '%s' "$t" | grep -qiE 'outside the (repo )?tree|under the temp' &&
+		fail "$f still sends the retro report outside the tree" || pass "$f no longer sends the retro report outside the tree"
 done
-flat <"$ROOT/docs/domain-glossary.md" | grep -qF 'root checkout' && pass "the glossary says the folder is at the root checkout" || fail "the glossary's .retro/ mention does not say root checkout"
+# The glossary's own word for the folder — an entry, held to its text (M2).
+entry=$(awk '/^- \*\*Retro folder\*\*/ { on = 1; print; next } /^- \*\*/ { on = 0 } on' "$ROOT/docs/domain-glossary.md" | flat)
+[ -n "$entry" ] && pass "the glossary has a Retro folder entry" || fail "the glossary has no '**Retro folder**' entry"
+entry_has() { case "$entry" in *"$1"*) pass "$2" ;; *) fail "$2 — the Retro folder entry does not say: $1" ;; esac; }
+entry_has '.retro/<YYYY>/<MM>/' "…naming the path"
+entry_has 'root checkout' "…at the root checkout"
+entry_has 'common directory' "…resolved through git's common directory"
+entry_has '`.trace/`' "…gitignored beside the trace"
 
 t_done "/retro contract"

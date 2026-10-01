@@ -750,11 +750,11 @@ skeleton (K0).
   scratch, so a row that prints a rate is a computed number and not a claim —
   the plain `sh scripts/trace.sh show|summary|export` name with
   `verify` first, the report and its CSV under `.retro/<YYYY>/<MM>/` at the
-  root checkout — the one-line common-directory derivation the skill quotes
-  is run from a scratch worktree, and `.gitignore` holds the folder — findings
-  routed to
-  `/to-tickets` and never fixed (a recurring failure becomes a rule with a
-  failing check, never a lessons file — shared invariant §11), the run it
+  root checkout (the one-line common-directory derivation the skill quotes
+  is run from a scratch worktree, and `.gitignore` holds the folder),
+  findings routed to `/to-tickets` and never fixed (a recurring failure
+  becomes a rule with a failing check, never a lessons file — shared
+  invariant §11), the run it
   opens and closes with `data.findings`, every documented trace line run
   against a scratch trace, the default window since its own last run end,
   planner-tier work, and every roster surface — including `/housekeeping`'s
