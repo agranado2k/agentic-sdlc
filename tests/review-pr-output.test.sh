@@ -430,4 +430,72 @@ esac
 # holds the same line; repeated here because this suite owns the contract).
 assert_file_has "$WORKER" "do not push"
 
+# ---------------------------------------------------------------------------
+banner "9. The reuse/DRY lens tells added duplication from inherited duplication (#419)"
+# ---------------------------------------------------------------------------
+# Retro H2 (2026-10-01): Agent 5's findings were accepted once and rejected
+# four times with a citation over three PRs — each time it asked a feature PR
+# to move copies that pre-date the branch into a shared file. That move is a
+# behaviour-preserving refactor, and shared invariant §10 lands one on its own
+# ticket, never as a passenger on a feature diff. So the prompt names two
+# cases, and the suite holds it to both: a duplication the diff ADDS is a
+# finding at its severity; a duplication the diff merely touches or extends is
+# a CANDIDATE TICKET — named as such, LOW, no fix asked on this PR, §10 cited.
+# Scoped to Agent 5's own section: the other lenses' prompts stay as they
+# were, and a rule written into §5's shared anatomy would bind all six.
+a5=$(t_line_of "$SKILL_ABS" "#### Agent 5 ")
+a6=$(t_line_of "$SKILL_ABS" "#### Agent 6 ")
+if [ -n "$a5" ] && [ -n "$a6" ] && [ "$a5" -lt "$a6" ]; then
+	pass "Agent 5's section is extractable (lines $a5-$a6)"
+else
+	fail "Agent 5's section is not extractable — a5='$a5' a6='$a6'"
+fi
+# The body between the two headings — the headings themselves are §3's, not Agent 5's.
+agent5=$(sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$SKILL_ABS")
+printf '%s\n' "$agent5" >"$SCRATCH/agent5.region"
+# Read unwrapped: the prompt is 80-column prose and a sentence may break
+# between the case and its ruling; the reviewer reads sentences, not lines.
+agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
+a5_has() {
+	if printf '%s\n' "$agent5_flat" | grep -qF -- "$1"; then
+		pass "Agent 5's prompt says '$1'${2:+ ($2)}"
+	else
+		fail "Agent 5's prompt never says '$1'${2:+ — $2}"
+	fi
+}
+# The two cases, each by name.
+a5_has "the diff ADDS" "the first case: a new copy is the author's, and a finding"
+a5_has "pre-date the branch" "the second case: copies the diff inherited are not the author's to consolidate"
+# The ruling on the second: named, LOW, no fix on this PR, §10 cited — all in
+# ONE sentence, so a prompt that names the candidate ticket in one breath and
+# keeps asking for the move in the next cannot pass by mentioning each word.
+ruling=$(printf '%s\n' "$agent5_flat" | tr '.' '\n' | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10")
+[ -n "$ruling" ] &&
+	pass "one sentence rules the inherited case: a candidate ticket, LOW, citing invariant §10" ||
+	fail "no single sentence of Agent 5's prompt names the inherited duplication a candidate ticket AND puts it at LOW AND cites invariant §10"
+printf '%s\n' "$ruling" | grep -qiE 'no (`?↳ fix:`? ?(line)?|fix)' &&
+	pass "…and that sentence asks no fix on this PR" ||
+	fail "…and that sentence does not say the PR is asked for no fix — the reviewer will still ask for the move"
+# The citation reaches the report: a candidate ticket cites §10 on its
+# `↳ cites:` line, where /pr-iterate reads the reason for a LOW it may skip.
+a5_has "↳ cites:" "the citation is on the finding's own line, not only in the prompt's reasoning"
+# The report's shape is unchanged — the candidate ticket is a LOW with the §5
+# anatomy, not a fifth section, a new badge or a new status.
+printf '%s\n' "$agent5" | grep -qE '^#### |\| .* \| .* \| X \|' &&
+	fail "Agent 5's section grew a heading or a count-table row — the report's shape is §5's and does not change here" ||
+	pass "Agent 5's section adds no heading and no count-table row: the report's shape is unchanged"
+# The roster is unchanged: still seven lenses and the unattributed token.
+roster=$(sed -n '/^\*\*The sub-agent roster\.\*\*/,/^#### Agent 1 /p' "$SKILL_ABS" | grep -c '^- `')
+[ "$roster" = 8 ] &&
+	pass "the roster still names seven lenses and the unattributed token" ||
+	fail "the roster names $roster tokens, not 8 — this ticket does not change the roster"
+# The bait: the ruling withdrawn from a copy of the skill — the assertion
+# above must be the one that catches it, so it is known to read the prompt
+# and not a word that happens to be elsewhere in the file.
+sed "$((a5 + 1)),$((a6 - 1))s/candidate ticket/follow-up/g" "$SKILL_ABS" >"$SCRATCH/bait5.md"
+b5=$(sed -n "$((a5 + 1)),$((a6 - 1))p" "$SCRATCH/bait5.md" | tr '\n' ' ' | tr '.' '\n' | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10")
+[ -z "$b5" ] && ! cmp -s "$SCRATCH/bait5.md" "$SKILL_ABS" &&
+	pass "bait: the ruling renamed away from 'candidate ticket' goes red" ||
+	fail "bait: with 'candidate ticket' withdrawn from Agent 5's section the ruling still reads '$b5'"
+
 t_done "/review-pr output contract"
