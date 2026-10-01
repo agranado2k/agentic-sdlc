@@ -156,7 +156,7 @@ _named=0
 while IFS= read -r line; do
 	key=$(stamp_key "$line")
 	printf '%s\n' "$line" | sh "$vocab" 2>/dev/null && continue
-	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n "s/^$key[^:]*: //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
+	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n "s/^$key\\( (open)\\)\\{0,1\\}: //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
 	_named=1
 done <"$_stamp_tmp/lines"
 [ "$_named" = 1 ] ||

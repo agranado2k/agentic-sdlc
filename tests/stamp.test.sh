@@ -207,6 +207,21 @@ s_assert_status 2 "two tiers, two answers: refused, exit 2"
 [ -z "$S_OUT" ] && pass "two tiers: nothing on stdout" || fail "two tiers: stdout should be empty, got '$S_OUT'"
 s_assert_err_has "x stamp:"
 
+# The refusal names the refused field's OWN vocabulary: a declared field whose
+# name merely starts with the key is another field, never listed under it.
+cat >"$SCRATCH/tiernote.config.sh" <<'EOF2'
+VOCAB_FIELDS='tier tier-note'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_TIER_NOTE='alpha'
+EOF2
+body 'Tier: bogus\n'
+cd "$SCRATCH" || exit 2
+t_run_split env VOCAB_CONFIG="$SCRATCH/tiernote.config.sh" sh "$STAMP" 331
+cd "$KIT" || exit 2
+s_assert_status 2 "a refused tier beside a field named tier-note: exit 2"
+s_assert_err_has "the tier vocabulary (planner implementer mechanical reviewer)"
+s_assert_err_lacks "alpha"
+
 # The argument is a number, or nothing is fetched at all.
 for arg in '' '331; touch PWN' '-1' '#331'; do
 	body 'Tier: implementer\n'
