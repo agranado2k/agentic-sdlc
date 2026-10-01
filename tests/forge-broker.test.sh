@@ -1086,21 +1086,17 @@ raise_has M-1 '"agent":"unattributed"'
 raise_has L-1 '"agent":"simplicity"'
 raise_has L-1 '"where":"unsafe-path"'
 raise_has L-1 '"outcome":"raised"'
-# Retro H7 (#424): the broker's raises carried no data.posted, so /retro's
-# dismissal denominator overcounted them, and `unattributed` was the agent on
-# every one. The broker raises only what it posted inline, so every raise says
-# so — data.posted=yes, never no — and names its agent by a token on
+# Retro H7 (#424): the broker's raises carried no data.posted, and /retro's
+# dismissal denominator counts only a raise that says whether it was posted —
+# so every finding the broker posted went unmeasured, and `unattributed` was
+# the agent on every one. The broker raises only what it posted inline, so
+# every raise says so — data.posted=yes — and names its agent by a token on
 # /review-pr's roster, `unattributed` included: the two keys the relay's line
-# carries, so the three review paths read alike.
+# carries, so the three review paths read alike. One line per raise: each
+# localises its own failure, and the raise count is held above.
 raise_has H-1 '"posted":"yes"'
 raise_has M-1 '"posted":"yes"'
 raise_has L-1 '"posted":"yes"'
-[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"')" = 3 ] &&
-	pass "every raise the broker records carries data.posted=yes — it raises only what it posted" ||
-	fail "a broker raise carries no data.posted=yes: $(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"') of 3"
-printf '%s\n' "$RAISES" | grep -q '"posted":"no"' &&
-	fail "a broker raise says data.posted=no — the broker never records a finding it did not post" ||
-	pass "…and none says data.posted=no"
 n_tok=0
 for tok in $(t_roster_of "$KIT/.agents/skills/review-pr/SKILL.md"); do
 	n_tok=$((n_tok + $(printf '%s\n' "$RAISES" | grep -c "\"agent\":\"$tok\"")))
