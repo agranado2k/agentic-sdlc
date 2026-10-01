@@ -308,10 +308,10 @@ held "every severity band the report prints is a token the policy file declares:
 held "every status Agent 7 tags a line with is a token the policy file declares: $sta" status "$sta" "$POLICY"
 # …and nothing declared goes unprinted: the two lists are one vocabulary.
 [ "$(printf '%s\n' $sev | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens severity "$POLICY") | sort | tr '\n' ' ')" ] &&
-	pass "…and every t_field_tokens severity is a band the report prints" ||
+	pass "…and every declared severity is a band the report prints" ||
 	fail "the report prints '$sev', the policy file declares '$(t_field_tokens severity "$POLICY")'"
 [ "$(printf '%s\n' $sta | sort | tr '\n' ' ')" = "$(printf '%s\n' $(t_field_tokens status "$POLICY") | sort | tr '\n' ' ')" ] &&
-	pass "…and every t_field_tokens status is a tag Agent 7 prints" ||
+	pass "…and every declared status is a tag Agent 7 prints" ||
 	fail "Agent 7 tags '$sta', the policy file declares '$(t_field_tokens status "$POLICY")'"
 
 # The bait. Each plants ONE line in a copy of the skill — where a session
