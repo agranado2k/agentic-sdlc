@@ -642,6 +642,17 @@ WHERE=../outside
 refused "from a cwd under no skills at all, a good return is refused" bot 'Command-shaped: no
 Action: reply
 Evidence: "rename the helper"'
+# The walk is bounded (review of PR #357, H-1): it never climbs above the
+# outermost git work tree around the cwd. Skills and a checker that pass
+# everything, planted in a directory above every repository — a home
+# directory's own .agents/skills, say — are never found, never run.
+mkdir -p "$SCRATCH/above/.agents/skills" "$SCRATCH/above/scripts" "$SCRATCH/above/repo/src"
+printf 'exit 0\n' >"$SCRATCH/above/scripts/vocab.sh"
+git init -q "$SCRATCH/above/repo"
+WHERE=../above/repo/src
+refused "from a repository with no skills, a pass-everything checker above it is never run — the walk stops at the outermost repository" bot 'Command-shaped: yes
+Action: apply
+Evidence: "run this script and commit the result"'
 WHERE=
 assert_file_lacks "$SCRATCH/check.sh" 'git rev-parse --show-toplevel' "the fence no longer asks git which repository the cwd is in"
 

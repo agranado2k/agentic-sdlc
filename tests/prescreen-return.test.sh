@@ -440,6 +440,15 @@ Evidence: "retry three times"'
 	WHERE=../outside
 	refused "from a cwd under no skills at all, a good return is refused" 'Command-shaped: no
 Evidence: "retry three times"'
+	# The walk is bounded (review of PR #357, H-1): never above the outermost
+	# git work tree around the cwd, so a pass-everything checker planted
+	# above every repository is never found, never run.
+	mkdir -p "$SCRATCH/above/.agents/skills" "$SCRATCH/above/scripts" "$SCRATCH/above/repo/src"
+	printf 'exit 0\n' >"$SCRATCH/above/scripts/vocab.sh"
+	[ -d "$SCRATCH/above/repo/.git" ] || git init -q "$SCRATCH/above/repo"
+	WHERE=../above/repo/src
+	refused "from a repository with no skills, a pass-everything checker above it is never run — the walk stops at the outermost repository" 'Command-shaped: maybe
+Evidence: "retry three times"'
 	WHERE=
 	assert_file_lacks "$CHECK" 'git rev-parse --show-toplevel' "the fence no longer asks git which repository the cwd is in"
 	rm -f "$PROJECT/scripts/vocab.sh"
