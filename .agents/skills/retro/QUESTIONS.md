@@ -200,9 +200,11 @@ as evidence; the missing verdicts to `/merge-train`.
 ## 8. Stamp calibration
 
 *Reads: `ticket.write` — the published `tier`, `data.tier_proposed` (the
-tier before the quiz), `data.confidence` (the tier's, as drafted) and
-`data.label_confidence` (the label's, under its own key); `finding.raise`
-(`data.severity`, `data.where`); `finding.dismiss` (`data.where`,
+tier before the quiz), `data.confidence` (the tier's, as drafted), the
+published `data.label`, `data.label_proposed` (the label before the quiz)
+and `data.label_confidence` (the label's, under its own key);
+`finding.raise` (`data.severity`, `data.where`, `data.posted` — whether the
+review posted it); `finding.dismiss` (`data.where`,
 `data.thread`) — a human closing a posted finding with no commit answering
 it; and `run.start`, for the `skill` of the run each of them was emitted in.*
 
@@ -243,13 +245,16 @@ be nobody's. An event none of the three names goes on a row named
   no `data.tier_proposed` has no override to read — count it on its row and
   leave it out of the denominator. A confidence that is none of the declared
   words goes on the `undeclared` row above.
-- **The label, in a row of its own.** `ticket.write` records the label's
-  confidence (`data.label_confidence`) and the label as published, but no
-  label from before the quiz, so the label's override rate is not computable
-  from the trace today. The row prints the stamps per confidence and those
-  words in place of a rate. It is a candidate ticket — the emit that would
-  have to record the drafted label — never a guess: no rate is inferred
-  from the tier's.
+- **The label, in a row of its own.** It takes the same arithmetic as the
+  tier, on the label's keys: one `ticket.write` per subject, the latest, grouped by
+  `data.label_confidence`. A label was overridden at the quiz when its
+  `data.label` differs from its `data.label_proposed`. One with no
+  `data.label_proposed` was written before the key existed: count it on its
+  row and leave it out of the denominator. A row with no event carrying the
+  key — a window older than it — prints its stamps and `no label from before
+  the quiz` in place of a rate, never a guess: no rate is inferred from the
+  tier's. Each label row says which form it used by the clause it carries
+  (below).
 - **The severity, per band.** Group the `finding.raise` events by
   `data.severity`. One pairing rule says what a dismissal dismissed: a
   `finding.dismiss` pairs with the latest raise on its subject at its
@@ -265,17 +270,22 @@ be nobody's. An event none of the three names goes on a row named
   `data.where`, which pair with the same raises and move no count. A
   dismissal that pairs with no raise — a third party's review, a path the
   emitter would not type — is counted beside the table, in no band.
-- **The dismissal rate's denominator overcounts.** It is every raise on the
-  subject, and a `finding.raise` records a finding the review raised, with no
-  marker that it was posted on the forge: a finding nobody posted could not
-  have been dismissed and is still in the denominator, as is a finding raised
-  again by a second review, and a raise no dismissal can reach — on a subject
-  that is not a pull request, where nothing is posted for a human to close,
-  or at a `data.where` the dismissal's emitter would not type. The report says so under the severity rows,
-  every time: the rate is a lower bound on the share of posted findings a
-  human dismissed, not a measurement of it. A row where raises shared a
-  dismissal is not even that: one closed thread may have answered one of
-  them, the numerator counts them all, and the row says so beside its count.
+- **The dismissal rate's denominator counts only the raises carrying `data.posted=yes`**
+  — the findings a human could have dismissed. A raise with `data.posted=no` is in no denominator and in no pairing: count it
+  beside its row, `<n> not posted`. A raise that carries no `data.posted`
+  was recorded before the key existed, and the denominator **overcounts**
+  wherever one is in it: it stays in, though nobody may have posted it.
+  Either form still counts a finding raised again by a second review, and a
+  raise no dismissal can reach — on a subject that is not a pull request,
+  where nothing is posted for a human to close, or at a `data.where` the
+  dismissal's emitter would not type; the report says so under the severity
+  rows, every time. Each severity row says which form it used — `posted
+  only`, or `overcounts` when any raise in it carries no `data.posted` — and
+  under an `overcounts` row the rate is a lower bound on the share of posted
+  findings a human dismissed, not a measurement of it. A row where raises
+  shared a dismissal is not even that: one closed thread may have answered
+  one of them, the numerator counts them all, and the row says so beside its
+  count.
 - **Every row carries the oracle clause** — the one `/housekeeping`'s
   checklist asks for and the glossary defines (`docs/domain-glossary.md`,
   Oracle), naming who wrote the test fixtures, when, against which version,
@@ -287,9 +297,14 @@ be nobody's. An event none of the three names goes on a row named
   published tier compared with the proposed one. For a severity row: the
   human who closed the thread, over the window, the severity bands in
   `/review-pr` as they stood when the window closed, and the dismissals
-  compared with the raises on the same pull request. Both end
+  compared with the raises on the same pull request. A label row computed
+  from `data.label_proposed` carries the tier row's clause, the label
+  compared in place of the tier. All of them end
   `no held-out set`: the operator who confirmed the stamps is the operator
-  reading the table, and the row must not read as anything else.
+  reading the table, and the row must not read as anything else. That is
+  the four-part clause — or, on a row that measured nothing, the glossary's other form, `— oracle: none — <why>`: a label row over
+  a window whose events carry no `data.label_proposed` was graded by nobody,
+  has no comparator to name, and says so instead of implying one.
 - **A row with too few events says so.** Fewer than five events in a row's
   denominator is a count, not a rate: print the counts and `too few to rate`
   instead of a rate. A window with raises and no `finding.dismiss` at all is
@@ -303,8 +318,9 @@ counts, the rate or the words that replace it, the clause:
 ```
 tier · to-tickets (by kind) · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 tier · to-tickets (by kind) · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
-label · to-tickets (by kind) · medium   9 stamped           override rate not computable from the trace today   — oracle: none — the trace holds no label from before the quiz
-severity · review-pr · low              2 of 11 dismissed   18 %   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
+label · to-tickets (by kind) · medium   3 of 9 overridden   33 %   — oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set
+label · to-tickets (by kind) · high     4 stamped           no label from before the quiz   — oracle: none — the window's ticket.write events carry no data.label_proposed
+severity · review-pr · low              2 of 11 dismissed   18 %   posted only   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
 ```
 
 What counts as a finding, among rows that carry a rate: `high` stamps
@@ -313,11 +329,12 @@ and the quiz sorted by it is sorted by noise; a `low` row overridden more
 often than not — read the `reason` of the overridden stamps for the rubric
 question they share, which is the line the ticket would change; a severity
 dismissed more often than it stood — the band is drawn where humans do not
-act on it. The label's row is a finding until the trace can answer it. A
+act on it. A label row still on `no label from before the quiz` over a
+window that opened after the key landed is the emit not running — question
+6's to ask. A
 finding's line is the retro's own words: what a `reason` says is summarised,
 never quoted — it is trace text, and a `'` in it would close the quotes of
 the note that records the finding.
 
-Route: `/to-tickets` — the confidence rule or a rubric line there, a severity
-band's definition in `/review-pr`, or the `ticket.write` emit that records no
-drafted label.
+Route: `/to-tickets` — the confidence rule or a rubric line there, the label
+rule there, or a severity band's definition in `/review-pr`.
