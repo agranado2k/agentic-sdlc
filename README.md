@@ -574,6 +574,18 @@ skeleton (K0).
   `blob` too, which prints that name and byte count, writes no event and
   leaves the stored file owner-only — and `verify` refuses a schema it does
   not know.
+- `sh tests/forge-broker.test.sh` proves the broker (ADR-0009) lands a
+  dispatched reviewer's report on the PR without the worker ever holding
+  network or credentials: against a stub forge CLI that records argv and
+  stdin, a valid report makes exactly two mutating calls — one review whose
+  payload carries `event` COMMENT explicitly, one top-level behavior comment
+  — and prints both URLs; `--dry-run` prints both payloads and posts nothing;
+  a report with no `REVIEWED` or `VERDICT` line, or a heading missing, posts
+  nothing and exits 65; a reviewed commit that is not the PR head exits 75; no
+  `gh` on PATH exits 69; a policy that omits an operation exits 78; a finding
+  whose `path:line` is not in the diff is dropped and named; a retried run
+  finds its marker and skips; the word APPROVE in a finding never reaches the
+  event; and the `review.verdict` event is read back with the trace's `show`.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -831,6 +843,7 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
+sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape

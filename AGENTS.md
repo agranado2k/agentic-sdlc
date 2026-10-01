@@ -258,11 +258,10 @@ and rule 3 above is when you owe it an entry.
 
 The skills in `.agents/skills/` — the vendor-neutral home, bridged into
 `.claude/skills/` by committed per-skill symlinks — are the lifecycle above,
-made runnable. Each one
-is a whole document; read the one you are about to use, not all of them. They
-ship to consumers unstamped, so they must read correctly in a repo nobody
-personalized — which is exactly why editing one is a kit change with a suite
-attached, not a note to self.
+made runnable. Each one is a whole document; read the one you are about to use,
+not all of them. They ship to consumers unstamped, so they must read correctly
+in a repo nobody personalized — which is exactly why editing one is a kit change
+with a suite attached, not a note to self.
 
 Spec → tickets → implementation → review → landing:
 
@@ -328,6 +327,7 @@ answers produce a clean project.
 | Record a decision, or read the trail | `scripts/trace.sh` — `emit`, `begin`/`end` around a run, `blob <file>\|-` (store a payload, print `<hash> <bytes>`, no event), `show <subject>`, `summary --by`, `export [--csv]`, `verify`, `dir`; in THIS repo `sh scripts/trace.kit.sh …` (hard rule 10). Exit 1 is `verify`'s verdict, 2 a caller error, **exit 3 a trace whose `SCHEMA` this reader cannot judge** — `export` refuses with it, `summary` marks it and still exits 0. Policy in `scripts/trace.config.sh`, ships empty; the kit's own in `scripts/trace.kit.config.sh` (never shipped) — including the price table cost is read from, dated in its header, advised on past `TRACE_PRICES_STALE_DAYS` and refreshed on demand by `sh scripts/trace-prices.kit.sh --check\|--write` (kit-only, network, two sources, commits nothing). ADR-0008 |
 | Hold a decision line to its vocabulary | `scripts/vocab.sh` — `sh scripts/vocab.sh '<Field>: <value>' …` (or lines on stdin) exits 2 naming the field, the value and the vocabulary; `fields` prints the effective ones. Policy in `scripts/vocab.config.sh`, ships FILLED with the kit's own words — no kit twin, the same command here and in a consumer |
 | Run a skill on the model its work deserves | `sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]` — the skill's `metadata.phase` sizes it, a ticket's stamp overrides that, and `--dry-run` says which answered (kit-only; a later release promotes it — #226) |
+| Land a dispatched reviewer's report on the PR | `sh scripts/forge-broker.kit.sh <PR> <report\|-> [--dry-run] [--commit <sha>]` — the **broker**: validates the worker's stdout against the contract, posts one review (event COMMENT, findings inline) and one behavior comment, prints both URLs, traces the verdict. The worker never holds network or credentials (ADR-0009). Allow-list in `scripts/forge-broker.kit.config.sh`; both kit-only, never shipped |
 | Change what a consumer's manual says | `constitution/AGENTS.md.template` — stamped by `bootstrap.sh`; this file is the KIT's manual and is removed by it |
 | Change what a consumer's docs look like | `templates/docs/` — stamped or copied at bootstrap |
 | Ship a consumer CI workflow         | `templates/workflows/` — copied into a project's `.github/workflows/` |
