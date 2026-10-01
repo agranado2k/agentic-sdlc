@@ -900,9 +900,14 @@ for _f in "$KIT"/scripts/*; do
 done
 awk '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }' \
 	"$DISPATCH" >"$BAIT_DIR/agent-dispatch.sh"
-grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh" ||
+# A bait that is not planted proves nothing: the leg is not run, and the suite
+# says why rather than printing passes against an unbaited copy.
+if grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh"; then
+	term_leg "$BAIT_DIR/agent-dispatch.sh" " (a dispatcher slow to reach its trap)"
+else
 	fail "the bait was not planted — the timed path's INT trap line has moved"
-term_leg "$BAIT_DIR/agent-dispatch.sh" " (a dispatcher slow to reach its trap)"
+	skip "the slow-trap TERM leg — no bait to run it against"
+fi
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
