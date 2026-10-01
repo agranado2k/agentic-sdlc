@@ -487,7 +487,8 @@ hook_wait_final() {
 		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
 		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
 			_hw_step=1000
-			[ $(($2 - _hw_count)) -ge 1000 ] || break
+			_hw_unspent=$(($2 - _hw_count))
+			[ "$_hw_unspent" -ge 1000 ] || break
 			sleep 1
 			_hw_nap=1000
 		fi
