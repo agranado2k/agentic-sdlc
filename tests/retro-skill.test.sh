@@ -820,8 +820,18 @@ write_has 'beside the export' "…beside the export step 4 saved"
 write_has 'linked worktree' "…so a retro run from a linked worktree lands at the root"
 write_has "worktree's pruning" "…and survives the worktree's pruning"
 write_has 'check-ignore -q .retro/' "the write step checks the folder is ignored before it writes (H1)"
-write_has 'beside `.trace/`' "…and when it is not, the line is added beside the trace's own"
-write_has "report's first line" "…and said in the report's first line, so a consumer's ignore file never gains a line in silence"
+# Not ignored: the pass TELLS, it never writes a consumer's ignore file — the
+# kit owns no consumer's tracked file and nothing it ships edits one at
+# runtime (PRD #237, alternatives considered). The line to add is printed,
+# the report's first line says so, and the pass carries on.
+write_has 'does not touch the project' "…and when it is not, the pass does not touch the project's ignore file"
+write_has 'the one line to add' "…it prints the one line to add"
+write_has 'beside `.trace/`' "…`.retro/` beside the trace's own"
+write_has "report's first line" "…and says so in the report's first line"
+case "$write_step" in
+*'add `.retro/` to the project'* | *'adds the line'* | *'add it yourself'*) fail "the write step still has the pass write a consumer's ignore file — it tells, it never edits" ;;
+*) pass "the write step never has the pass edit a consumer's ignore file" ;;
+esac
 write_has 'a project that takes this skill' "…which is also the consumer's note, since the recipe cannot carry it without moving the shared layer"
 # The derivation is quoted as ONE code span, so a session copies one line and
 # a suite can run it. Extracted from the export step by its distinctive token

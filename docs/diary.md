@@ -1663,7 +1663,9 @@ root checkout, the root resolved with the trace's own common-directory line,
 and checks the folder is ignored before it writes. **For the next `VERSION`
 bump's history note, the non-manifest half (hard rule 3):** `/retro` moved its
 output into the tree, and a consumer taking the skill owes `.retro/` in its
-`.gitignore` beside `.trace/` — the skill adds the line itself on first run
-and says so, but the recipe's step 9d could not carry it without moving the
-shared layer, so the note is here until a release writes it there.
+`.gitignore` beside `.trace/` — the skill checks, prints the line and says
+so in its report, never writing a consumer's ignore file itself (PRD #237:
+the kit owns no consumer's tracked file); the recipe's step 9d could not
+carry it without moving the shared layer, so the note is here until a
+release writes it there.
 
