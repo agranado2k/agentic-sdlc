@@ -245,20 +245,23 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # in vocab.sh (quoted, bare, or a quoted prefix: "$ROOT"/scripts/vocab.sh) or
 # on $checker or $vocab (quoted or bare, braced or not), however spaced, a
 # backslash-continued line read as one. Those forms and no others: a call
-# through `.` or `source`, `env`, `exec`, `xargs`, or a shell named by a
-# variable is not found. Each one found must be one of (each exemption tagged
-# in the audit, and baited below):
+# through `.` or `source`, a shell named by its path (`/bin/sh`), as `dash`
+# or by a variable, an option that takes an argument (`sh -o errexit`), or
+# `env`, `exec` or `xargs` running the checker with no `sh` before it is not
+# found. Each one found must be one of (each exemption tagged in the audit,
+# and baited below):
 #   - `fields`, which reads no input;
 #   - a prose mention of the command, closed by a backtick;
 #   - the argument form with the caller's own placeholder tokens,
 #     'Field: <token>', which nothing untrusted fills;
 #   - the argument form with one positional token, "Field: $2" — one
 #     argument, one line, the token the caller stamped itself;
-#   - or a site in LIFTED below: the input it reads (a fixed string in the
-#     call's own command — its line cut at `;`, `&&` and `||`, or the head
-#     of a pipe the line before ends with) and the lift stage
-#     that bounds that input, a fixed string on an uncommented line earlier
-#     in the same function.
+#   - or a site in LIFTED below: the input it reads, spelled with the call
+#     itself so nothing can stand between them (a fixed string in the
+#     call's own command — its line cut at `;`, `&&`, `||` and a lone `&`,
+#     joined to the head of a pipe the line before ends with), and the lift
+#     stage that bounds that input, a fixed string on an uncommented line
+#     earlier in the same function.
 # A new call site, a site whose input changed, or a site whose lift stage was
 # removed is named and fails — the baits below prove each of the three. So is
 # an entry no call matches: the inventory holds no more than the tree.
@@ -268,9 +271,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # and it is the one unbounded input this inventory admits.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@<"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
 scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
-.agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" |@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
+.agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 EOLIFT
@@ -285,10 +288,13 @@ EOLIFT
 CALLS_AWK=$(
 	cat <<'EOAWK'
 # scan <line> <file> — print a record for each call on one logical line
-function scan(line, file,    cut, s, off, from, to, tail, before, after, command) {
-	# cut: the line with each && and || spelled ;; — the same length, so a
-	# command is the span between two ; at the same offsets as in line
+function scan(line, file,    cut, i, s, off, from, to, tail, before, after, command) {
+	# cut: the line with each &&, || and lone & spelled as ; — the same
+	# length, so a command is the span between two ; at line's offsets
 	cut = line; gsub(/&&|\|\|/, ";;", cut)
+	for (i = 1; i <= length(cut); i++)
+		if (substr(cut, i, 1) == "&" && substr(cut, i - 1, 1) !~ /[<>]/ && substr(cut, i + 1, 1) != ">")
+			cut = substr(cut, 1, i - 1) ";" substr(cut, i + 1)
 	s = line; off = 0
 	while (match(s, /(^|[ \t(|`;&])(ba)?sh([ \t]+-[A-Za-z]+)*[ \t]+("[^"]*vocab\.sh"|[^ \t`]*vocab\.sh"?|"?\$\{?(checker|vocab)\}?"?)/)) {
 		from = off + RSTART; to = off + RSTART + RLENGTH
@@ -298,9 +304,10 @@ function scan(line, file,    cut, s, off, from, to, tail, before, after, command
 		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
 		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
 		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue # exempt:positional
-		before = substr(cut, 1, from - 1); sub(/.*;/, "", before)
+		# before keeps the character the match opened on: it may be the ;
+		before = substr(cut, 1, from); sub(/.*;/, "", before)
 		after = substr(cut, to); sub(/;.*/, "", after)
-		command = before substr(line, from, to - from) after
+		command = before substr(line, from + 1, to - from - 1) after
 		if (before ~ /^[ \t{(]*$/ && pipe_head != "") command = pipe_head " " command
 		gsub(/[ \t]+/, " ", command); sub(/^ /, "", command); sub(/ $/, "", command)
 		printf "%s\t%d\t%d\t%s\t%s\n", file, at, start, fn, command
@@ -369,6 +376,8 @@ EOENTRIES
 
 # stale <root> [inventory] — every inventory entry (LIFTED by default) that
 # matches no call record under <root>, one per line; nothing when each does.
+# Its second argument is the inventory, not `unlifted`'s awk program: stale
+# always reads the calls through CALLS_AWK, since no mutant of it is baited.
 stale() {
 	records=$(checker_calls "$1")
 	while IFS= read -r entry; do
@@ -447,6 +456,23 @@ planted "with an option before the checker" '\tsh -e "$checker" <"$body"\n'
 planted "on the variable unquoted" '\tsh $checker <"$body"\n'
 planted "with braces on \$vocab" '\tsh "${vocab}" <"$body"\n'
 planted "continued on the file's last line" '\tsh "$checker" <"$body" \\\n'
+# … and on the last file the audit reads, where only the end of input is left
+bait_reset
+printf '\tsh "$vocab" <"$body" \\\n' >>"$BAIT/scripts/stamp.sh"
+bait_named scripts/stamp.sh "a call continued on the last file's last line hands a body"
+# A continued call is named at its first line, where a reader would look.
+bait_reset
+first=$(($(grep -c '' "$BAIT/.agents/skills/to-tickets/SKILL.md") + 1))
+printf '\tsh \\\n\t\t"$checker" <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+case $(unlifted "$BAIT") in
+*".agents/skills/to-tickets/SKILL.md:$first "*) pass "a continued call is named at its first line ($first)" ;;
+*) fail "a continued call is not named at its first line ($first): $(unlifted "$BAIT")" ;;
+esac
+# A longer name is not the checker: `$checker_x` is somebody else's variable.
+bait_reset
+printf '\tsh "$checker_x" <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+[ -z "$(unlifted "$BAIT")" ] && pass "a call on a longer name than \$checker is not taken for the checker" ||
+	fail "a call on \$checker_x is taken for the checker: $(unlifted "$BAIT")"
 
 # The inventory holds no more than the tree: every LIFTED entry matches a
 # call the audit found, so a site removed or rewritten leaves no entry behind
@@ -487,6 +513,24 @@ rewritten .agents/skills/dogfood/SKILL.md "under a comment carrying the old inpu
 rewritten .agents/skills/dogfood/SKILL.md "under a line quoting the old input" "s|sh \"\$checker\" <\"\$2\"|: 'sh \"\$checker\" <\"\$2\"'\\
 	sh \"\$checker\" <\"\$body\"|"
 rewritten scripts/stamp.sh "beside the old input in another command" 's|{ sh "$vocab" <"$_stamp_tmp/lines"|{ : <"$_stamp_tmp/lines"; sh "$vocab" <"$_stamp_tmp/body"|'
+# beside <file> <how> <sed script> — a second call planted beside the lifted
+# one in <file>, sharing its line but not its command; the audit names it.
+beside() {
+	bait_reset
+	bait_edit "$1" "$3"
+	bait_named "$1" "a call is planted $2"
+}
+beside .agents/skills/dogfood/SKILL.md "glued to the lifted call by a bare \`;\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2";sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "after the lifted call and a lone \`&\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2" \& sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "after the lifted call and \`&&\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2" \&\& sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "before the lifted call and \`;\`" 's|sh "$checker" <"$2"|sh "$checker" <"$body"; sh "$checker" <"$2"|'
+rewritten scripts/stamp.sh "behind a pipe from the old input" 's|{ sh "$vocab" <"$_stamp_tmp/lines"|{ : <"$_stamp_tmp/lines" \| sh "$vocab" <"$_stamp_tmp/body"|'
+# A comment between a pipe's head and the call ends the join: the audit
+# reads no further back than the line before, and names the call.
+bait_reset
+bait_edit .agents/skills/pr-iterate/SKILL.md 's|^\([[:space:]]*\)sh "$checker" >/dev/null|\1# a comment\
+\1sh "$checker" >/dev/null|'
+bait_named .agents/skills/pr-iterate/SKILL.md "a comment parts the pipe's head from the call"
 
 # Every exemption is load-bearing: the audit with one exemption cut out of it
 # names the real site that exemption admits. An exemption no site needs is
