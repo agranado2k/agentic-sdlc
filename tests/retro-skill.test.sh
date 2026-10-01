@@ -1150,10 +1150,8 @@ banner "11. Question 7 counts a delegated train's verdict apart from the operato
 # 2026-10-01, #385); the question counts the two apart and a window whose
 # verdicts are all `train` is reported as no human verdict. Held the way
 # section 10 holds unasked: the seventh section's prose, Reads and Route
-# apart, flattened.
-sec7_prose=$(sec7 | awk '/^\*Reads:/ { r = 1 } /^Route:/ { x = 1 } (r || x) && /^$/ { r = x = 0; next } !r && !x' | flat)
-sec7_route=$(sec7 | awk '/^Route:/ { on = 1 } on && /^$/ { exit } on' | flat)
-sec7_reads=$(sec7 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat)
+# apart, flattened — section 10's own $sec7_prose, $sec7_route, $sec7_reads
+# and $q7_line (review of PR #393, M-7).
 q7_has '`data.by`' "question 7 reads data.by"
 q7_has '`operator`' "…names the operator's verdict"
 q7_has '`train`' "…and the train's"
@@ -1161,6 +1159,11 @@ q7_has 'never the human'"'"'s verdict' "…says a train's verdict is never the h
 q7_has '`<n> operator, <m> train`' "…counts the two apart on the row: n operator, m train"
 q7_has 'no human verdict' "…and reports a window whose verdicts are all train as no human verdict"
 q7_has 'no `data.by`' "…and says what a feedback written before the key counts as"
+q7_has '`<p> unattributed`' "…: p unattributed (L-3 of the same review)"
+q7_has 'never as the operator'"'"'s' "…never as the operator's"
+# The first bullet, which counts re-cuts and misses, counts the operator's
+# verdicts and not a train's self-assessment (L-1 of the same review).
+q7_has 'counting `operator` verdicts' "the per-slice bullet counts operator verdicts toward re-cuts and misses, not a train's"
 case "$sec7_reads" in
 *'`data.by`'*'`operator`'*'`train`'*) pass "the Reads paragraph lists data.by with its two words" ;;
 *) fail "the Reads paragraph does not list \`data.by\` as \`operator\` or \`train\`" ;;
@@ -1169,7 +1172,6 @@ case "$sec7_route" in
 *'`train`'*) pass "question 7's route says where a window of train verdicts goes" ;;
 *) fail "question 7's Route line does not route the train's verdicts" ;;
 esac
-q7_line=$(awk '/^7\. \*\*Aim calibration\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat)
 case "$q7_line" in
 *'`train`'*'no human verdict'*) pass "SKILL.md's question 7 counts a train's verdict apart and names the window with no human verdict" ;;
 *) fail "SKILL.md's question 7 does not count a \`train\` verdict apart from the operator's as no human verdict" ;;

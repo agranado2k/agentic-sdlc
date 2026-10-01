@@ -181,7 +181,8 @@ answerer's words — emitted by `/merge-train` at landing and by
 `/pr-iterate` when a human comment changes the plan; joined to
 `ticket.write` for the tier and to the `skill` of the runs that built it.*
 
-- Per landed slice in the window: its verdict, if one was given. `hit` is
+- Per landed slice in the window: its verdict, if one was given, counting
+  `operator` verdicts; `train` ones are reported apart (below). `hit` is
   the plan holding; `adjusted` is a re-cut of what came after; `missed` is
   the slice itself being wrong. Count how many landed slices were followed
   by a re-cut (`adjusted` or `missed`), and name the tier and the skill that
@@ -201,16 +202,13 @@ answerer's words — emitted by `/merge-train` at landing and by
   verdict given, and name the two apart on the row — `<n> unasked, <m>
   without a feedback event` — since the first is a question the train
   could not ask and the second one it never recorded asking.
-- Count the verdicts given by `data.by`. `operator` is a human's answer;
-  `train` is the train judging the slice itself under an instruction that
-  delegated the question — a self-assessment by the chain that built the
-  slice, never the human's verdict, and never evidence that the aim held.
-  Report the two apart on the row — `<n> operator, <m> train` — and a
-  window whose verdicts are all `train` as **no human verdict**: the
-  question reached nobody who was not already the train, so the row is
-  read with the landings that got none, not as a wave that hit. A
-  `feedback` with no `data.by` was written before the key existed; count it
-  as `<p> unattributed`, never as the operator's.
+- Count the verdicts by `data.by`. `operator` is a human's answer; `train`
+  is the train judging the slice itself under a delegating instruction —
+  never the human's verdict. Report the two apart on the row — `<n>
+  operator, <m> train` — and a window whose verdicts are all `train` as
+  **no human verdict**, read with the landings that got none. A `feedback`
+  with no `data.by` was written before the key existed: count it as `<p>
+  unattributed`, never as the operator's.
 
 Route: `/to-tickets` — the ordering rule or the tier rubric, with the misses
 as evidence; the missing verdicts and the `unasked` ones to `/merge-train`;

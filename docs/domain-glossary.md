@@ -315,11 +315,10 @@ Grouped by the seam each term belongs to. Entry shape:
   the reason names the instruction that made it so. `unasked` is not a
   verdict — a reader counts it with the landings that got none (ADR-0008,
   amended 2026-10-01). `data.by` names who answered: `operator`, a human
-  in the session, or `train`, `/merge-train` judging the slice itself under
-  a delegating instruction — a verdict the human did not give, counted apart
-  from theirs, and a window of only `train` verdicts is no human verdict;
-  `unasked` carries `train` too. `/pr-iterate` writes `operator` always
-  (ADR-0008, amended 2026-10-01, #385).
+  in the session; `train`, `/merge-train` judging the slice itself under
+  the operator's delegating instruction. `unasked` carries `train` too, and
+  `/pr-iterate` writes `operator` always (ADR-0008, amended 2026-10-01,
+  #385).
   - _Avoid_: "review" (a review is on a diff; feedback is on a slice);
     "rating".
 - **Subject** — what an event is about, written `<type>:<reference>`:

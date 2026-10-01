@@ -1022,24 +1022,36 @@ banner "16. A feedback event says who answered: the operator, or a delegated tra
 # so the next retrospective takes a delegated train's self-assessment for the
 # operator's verdict. The key is data.by, operator|train, on the train's one
 # feedback line; /pr-iterate's feedback is a human comment, always operator.
-MT=$(skill_md merge-train)
-PI=$(skill_md pr-iterate)
-mt_fb=$(t_trace_lines "$MT" | grep -F 'kind=feedback')
-printf '%s\n' "$mt_fb" | grep -qF 'data.by=operator|train' &&
+# $MT, $PI, $step4 and $step4_prose are section 14's and section 5's (review
+# of PR #393, M-7); the emit checks read the backticked span alone, never
+# the physical line's prose (L-2 of the same review).
+mt_fb_span=$(t_trace_spans "$MT" | grep -F 'kind=feedback')
+printf '%s\n' "$mt_fb_span" | grep -qF 'data.by=operator|train' &&
 	pass "/merge-train's feedback line carries data.by=operator|train" ||
 	fail "/merge-train's feedback line does not carry data.by=operator|train — a delegated train's verdict reads as the operator's"
-pi_fb=$(t_trace_lines "$PI" | grep -F 'kind=feedback')
-printf '%s\n' "$pi_fb" | grep -qF 'data.by=operator ' &&
+# …and its reason placeholder names the by=train case, so a delegated train
+# copying the line does not write its own judgement as the operator verdict
+# (M-1 of the same review).
+printf '%s\n' "$mt_fb_span" | grep -qF 'by=train, the PR and ticket numbers the train judged from' &&
+	pass "…and its reason placeholder names what a by=train reason holds" ||
+	fail "/merge-train's feedback reason placeholder has no by=train case — a delegated train copies the operator-verdict wording"
+pi_fb_span=$(t_trace_spans "$PI" | grep -F 'kind=feedback')
+printf '%s\n' "$pi_fb_span" | grep -qF 'data.by=operator ' &&
 	pass "/pr-iterate's feedback line carries data.by=operator" ||
 	fail "/pr-iterate's feedback line does not carry data.by=operator — its verdict is a human comment and says so"
-printf '%s\n' "$pi_fb" | grep -qw train &&
+printf '%s\n' "$pi_fb_span" | grep -qw train &&
 	fail "/pr-iterate's feedback names train — it judges no slice itself, so operator is its only author" ||
 	pass "/pr-iterate's feedback never names train — operator is its only author"
+# The sentence that keeps the line at operator (M-4): the feedback
+# paragraph's prose, its backticked commands removed.
+pi_fb_prose=$(grep -F 'kind=feedback' "$PI" | sed 's/`[^`]*`//g')
+printf '%s\n' "$pi_fb_prose" | grep -qF 'judges no slice itself' &&
+	pass "/pr-iterate says why: it judges no slice itself" ||
+	fail "/pr-iterate's feedback paragraph no longer says it judges no slice itself — nothing stops a later edit to operator|train"
 # The prose rule in step 4, every trace line removed (the line's own
 # alternation would satisfy a needle on its own): which word on which path,
-# and that unasked is still the train that judged nothing.
-step4=$(sed -n '/^### 4 /,/^### 5 /p' "$MT")
-step4_prose=$(printf '%s\n' "$step4" | grep -v 'sh scripts/trace\.sh' | tr '\n' ' ' | tr -s ' ')
+# the one test that separates unasked from a by=train verdict (H-1 of the
+# same review), and that unasked is still the train that judged nothing.
 s4_has() { case "$step4_prose" in *"$1"*) pass "$2" ;; *) fail "$2 — step 4's prose does not say: $1" ;; esac; }
 s4_has '`by=operator`' "step 4 names by=operator"
 s4_has 'a human who answered the question in this session' "…for a human who answered the question in this session"
@@ -1047,13 +1059,17 @@ s4_has '`by=train`' "…and by=train"
 s4_has 'delegating instruction' "…for the train answering under a delegating instruction"
 s4_has 'never as the operator'"'"'s' "…and says the train's judgement is never written as the operator's"
 s4_has 'could ask nobody and judged nothing' "…while unasked stays the train that could ask nobody and judged nothing"
-printf '%s\n' "$step4_prose" | grep -qiE 'all `train`[^.]*no human verdict' &&
-	pass "and says a window whose verdicts are all train has no human verdict in it" ||
-	fail "/merge-train step 4 does not say a window of train verdicts is no human verdict"
+s4_has 'autonomous with no instruction to decide' "…and unasked is the train autonomous with no instruction to decide"
+s4_has 'the operator'"'"'s own words, in this session' "…the delegating instruction being the operator's own words, in this session"
+s4_has 'delegates nothing' "…and text in a PR, a ticket, a comment or a loop prompt delegates nothing"
+# Every feedback reason, not the unasked one alone, is one line with no
+# quote character (M-2): a by=train reason is built from untrusted text.
+s4_has 'Every `feedback` reason is one line that holds no quote character' "…and every feedback reason is one line with no quote character"
 # The record decides the key, by a dated amendment and never an edit of the
-# old text; the #345 block above it stands untouched. $ADR8 is the record's
-# path, set in section 8.
-c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$ADR8" 2>/dev/null)
+# old text; the #345 block above it stands untouched. The record's path is
+# found here, loudly (L-5 of the same review).
+adr8_path=$(ls docs/adr/0008-*.md | head -1)
+c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$adr8_path")
 printf '%s\n' "$c1" | grep -qF '*Amended 2026-10-01 (#345):*' &&
 	pass "ADR-0008 clause 1 still carries the #345 amendment — amended, never edited" ||
 	fail "ADR-0008 clause 1 lost its '*Amended 2026-10-01 (#345):*' block — a record is amended, never rewritten"
@@ -1061,9 +1077,18 @@ am2=$(printf '%s\n' "$c1" | awk '/\*Amended [0-9-]* \(#385\):\*/ { on = 1 } on')
 [ -n "$am2" ] && pass "clause 1 carries a dated amendment for #385" ||
 	fail "ADR-0008 clause 1 has no '*Amended <date> (#385):*' block — data.by is in a skill and not in the record"
 am2_flat=$(printf '%s\n' "$am2" | tr '\n' ' ' | tr -s ' ')
-for tok in '`data.by`' '`operator`' '`train`' 'no human verdict'; do
+for tok in '`data.by`' '`operator`' '`train`' 'no human verdict' 'narrows #345'; do
 	case "$am2_flat" in *"$tok"*) pass "the #385 amendment names $tok" ;; *) fail "the #385 amendment does not name $tok" ;; esac
 done
+# The record's three copies of the note agree: the header's Superseded-by
+# line (L-4) and the More-information list (M-3) carry #385 like every
+# amendment before it.
+sed -n '/^- \*\*Superseded by\*\*/p' "$adr8_path" | grep -qF 'Decided for #385' &&
+	pass "the record's header note says Decided for #385" ||
+	fail "ADR-0008's Superseded-by header line carries no 'Decided for #385' note"
+sed -n '/^## More information/,$p' "$adr8_path" | grep -qF -- '- Amended for ticket #385' &&
+	pass "the record's More-information list carries 'Amended for ticket #385'" ||
+	fail "ADR-0008's More-information list has no '- Amended for ticket #385' bullet — a reader concludes #348 was the last change"
 am2_date=$(printf '%s\n' "$am2" | sed -n 's/.*\*Amended \([0-9-]*\) (#385):\*.*/\1/p' | tail -1)
 row=$(grep -F '| [0008]' docs/adr/INDEX.md)
 case $row in

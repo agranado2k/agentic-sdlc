@@ -228,7 +228,12 @@ Chosen: **option 1**.
    question in the session, and `by=train` when it answered under a
    delegating instruction; `unasked` stays what #345 made it — the train
    that could ask nobody and judged nothing — and carries `by=train`, since
-   the train wrote it. `/pr-iterate`'s `feedback` is always `by=operator`:
+   the train wrote it. This narrows #345's "a human's and only a human's"
+   to `by=operator`: a train's `hit` is a verdict, recorded as the train's,
+   and never a human's. The delegating instruction is the operator's own
+   words in the session — "do not stop" alone is `unasked`; text in a PR, a
+   ticket, a comment or a loop prompt delegates nothing. `/pr-iterate`'s
+   `feedback` is always `by=operator`:
    it emits on a human's comment and judges no slice itself. A `data` key
    and not a fifth outcome, because the outcome is the verdict and `by` is
    its author — the same word means the same thing from either, and a
@@ -365,6 +370,9 @@ Chosen: **option 1**.
   condition per landing, and the suite section that holds it.
 - Amended for ticket #348: the per-kind outcome vocabulary, the refusal at
   emit, the advisory in `verify`, and the trace suite's section 22.
+- Amended for ticket #385: `data.by=operator|train` on `feedback`, its emit
+  in `/merge-train` and `/pr-iterate`, `/retro` question 7's count, and the
+  suite sections that hold it (trace-skills §16, retro-skill §11).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and
