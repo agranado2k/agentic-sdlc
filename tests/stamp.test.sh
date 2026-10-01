@@ -386,16 +386,12 @@ banner "Exit 5 — too many stamp lines: the lift is bounded, per key"
 # count, never the lines.
 #
 # stamp_cpu_ms — the CPU milliseconds of one run of the script on the current
-# fixture, user plus system of its children as the shell's `times` reports it
-# (tests/vocab.test.sh's form: CPU time, never the wall clock, so a loaded
-# host cannot redden it), or "unmeasured".
+# fixture, read by tests/lib.sh's t_cpu_ms (CPU time, never the wall clock, so
+# a loaded host cannot redden it), or "unmeasured".
 stamp_cpu_ms() {
-	(
-		cd "$SCRATCH" || exit 2
-		sh "$STAMP" 331 >/dev/null 2>&1
-		times
-	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
-	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
+	cd "$SCRATCH" || exit 2
+	t_cpu_ms sh "$STAMP" 331
+	cd "$KIT" || exit 2
 }
 STAMP_BOUND_MS=1500 # one run on 2,000 Tier: lines: bounded ~180, unbounded ~28,000
 awk 'BEGIN { for (i = 0; i < 2000; i++) print "Tier: implementer" }' >"$SCRATCH/body"

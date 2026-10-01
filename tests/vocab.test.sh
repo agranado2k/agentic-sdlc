@@ -191,13 +191,8 @@ s_assert_err_has "usage"
 #
 # five_checks_ms <checker> <input> — the CPU milliseconds of five checks of
 # <input>, or "unmeasured".
-five_checks_ms() {
-	(
-		for _ in 1 2 3 4 5; do sh "$1" <"$2"; done >/dev/null 2>&1
-		times
-	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
-	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
-}
+five_checks() { for _ in 1 2 3 4 5; do sh "$1" <"$2"; done; }
+five_checks_ms() { t_cpu_ms five_checks "$1" "$2"; }
 # within_budget <checker> <input> <ms for five> <what> — pass or fail it.
 within_budget() {
 	cpu_ms=$(five_checks_ms "$1" "$2")
