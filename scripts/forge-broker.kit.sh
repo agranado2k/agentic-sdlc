@@ -590,7 +590,9 @@ COMMENT_URL=$(existing "$COMMENT_EP") || {
 }
 
 # --- 6. the two operations ---------------------------------------------------------------------
-REVIEW_FOUND=$REVIEW_URL COMMENT_FOUND=$COMMENT_URL
+# Both bodies already carry the marker: a retry of a run that reached step 7.
+RETRY=
+[ -n "$REVIEW_URL" ] && [ -n "$COMMENT_URL" ] && RETRY=1
 if [ -n "$REVIEW_URL" ]; then
 	note "the review for this report already landed: $REVIEW_URL"
 else
@@ -656,7 +658,7 @@ agent_token() {
 # every finding /retro reads. One note says the retry happened. A run that
 # found only the review posted the comment itself: the first run died before
 # the trace, and this run's emits are the only ones.
-if [ -n "$REVIEW_FOUND" ] && [ -n "$COMMENT_FOUND" ]; then
+if [ -n "$RETRY" ]; then
 	trace loud kind=note "subject=pr:#$PR" outcome=retry data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" \
 		"reason=the review already landed with this report's marker; its raises and verdicts are the first run's"
 	exit 0
