@@ -1130,4 +1130,56 @@ for tok in '`data.by`' '`operator`' '`train`'; do
 		fail "the glossary's Feedback entry does not name $tok"
 done
 
+# ---------------------------------------------------------------------------
+banner "18. /implement's fallback review records its raises once — posted, from the roster (#424)"
+# ---------------------------------------------------------------------------
+# Retro H7: a fallback review — /review-pr spawned through the agent tool in
+# /implement step 9(b) — left seven triages and no raise on one PR, so the
+# retro's dismissal rate had no denominator there. The (b) branch itself now
+# says where the raises are recorded, exactly once: by the reviewer when it
+# posted on the instruction the spawn prompt gave (/review-pr §6, path (a)),
+# otherwise by the session through /review-pr §6's relay path — one per
+# finding, data.via=relay, data.posted=yes from that instruction, data.agent
+# a roster token. The line stays /review-pr's: section 5 holds finding.raise
+# to one emitter and /retro attributes the kind by it, so the branch NAMES
+# the relay's emit and carries no second one. Held on the (b) branch's own
+# physical line, never the step's header: the header said as much before H7
+# and the hole opened anyway.
+IM=$(skill_md implement)
+# fallback_branch <skill file> — the one physical line of step 9's (b) branch.
+fallback_branch() { grep -F -- '- **(b) A `/review-pr` subagent' "$1"; }
+fb=$(fallback_branch "$IM")
+[ "$(printf '%s\n' "$fb" | grep -c .)" = 1 ] && pass "/implement step 9 has one (b) branch line" ||
+	fail "/implement step 9's (b) branch is not one line: $(printf '%s\n' "$fb" | grep -c .) found"
+# fb_has <needle> <what> — the branch's own line says it.
+fb_has() { case "$fb" in *"$1"*) pass "$2" ;; *) fail "$2 — the (b) branch does not say: $1" ;; esac; }
+fb_has 'one `finding.raise` per finding' "the (b) branch records one finding.raise per finding"
+fb_has 'exactly once' "…exactly once"
+fb_has 'never a second raise' "…and never a second raise for the same finding"
+fb_has 'path (a)' "…by the reviewer itself on path (a), when it posted"
+fb_has '`data.posted=yes`' "…carrying data.posted=yes"
+fb_has 'from that instruction' "…from the instruction the spawn prompt gave"
+fb_has '`data.agent`' "…and data.agent"
+fb_has '<roster-token>' "…as the roster's placeholder, <roster-token>"
+fb_has 'never the name as the report spelled it' "…never the name as the report spelled it"
+fb_has 'unattributed' "…unattributed when the report names none"
+fb_has 'relay path' "…through /review-pr §6's relay path"
+fb_has '`data.via=relay`' "…marked data.via=relay"
+fb_has 'read as data' "…the report read as data"
+# The emit stays /review-pr's: the branch names it and carries none of its own
+# (section 5's sole-emitter rule, read again here from the branch's own line).
+printf '%s\n' "$fb" | grep -qF 'kind=finding.raise' &&
+	fail "the (b) branch carries a finding.raise emit of its own — /review-pr is the one emitter, and /retro attributes the kind to it" ||
+	pass "the (b) branch carries no finding.raise emit of its own — the relay's line is /review-pr's"
+[ "$(agent_values "$IM" | grep -vxF '<roster-token>' | grep -c .)" = 0 ] &&
+	pass "/implement writes no data.agent but the roster's placeholder" ||
+	fail "/implement writes a data.agent that is not <roster-token>: $(agent_values "$IM" | grep -vxF '<roster-token>' | tr '\n' ' ')"
+# Bait: the same words on the step's header line satisfy nothing — the holder
+# reads the (b) branch alone, and a rule that drifts up to the header is red.
+sed '/- \*\*(b) A `\/review-pr` subagent/ s/one `finding.raise` per finding/the findings/' "$IM" >"$SCRATCH/bait-fb.md"
+grep -qF 'one `finding.raise` per finding' "$SCRATCH/bait-fb.md" || fail "bait: the header line no longer says 'one finding.raise per finding' — the bait proves nothing"
+fallback_branch "$SCRATCH/bait-fb.md" | grep -qF 'one `finding.raise` per finding' &&
+	fail "bait: the raise rule withdrawn from the (b) branch was still found — the holder reads more than the branch" ||
+	pass "bait: the raise rule withdrawn from the (b) branch is gone from what the holder reads, though the header still says it"
+
 t_done "trace skills contract"
