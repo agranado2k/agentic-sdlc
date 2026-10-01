@@ -2212,6 +2212,12 @@ grep -qE "^TRACE_BEHIND_WARN='[1-9][0-9]*'$" "$KIT/scripts/trace.kit.config.sh" 
 	pass "the kit's own policy file sets a threshold" ||
 	fail "scripts/trace.kit.config.sh sets no TRACE_BEHIND_WARN"
 
+# THE RECORD. The adapter README documents the field and the switch beside
+# their siblings.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ')
+case $d in *'data.behind'*'TRACE_BEHIND_WARN'*) pass "the adapter README documents data.behind and TRACE_BEHIND_WARN" ;;
+*) fail "the adapter README does not document data.behind and TRACE_BEHIND_WARN" ;; esac
+
 # THE READER. /housekeeping's checklist names the value and where it comes from.
 d=$(tr '\n' ' ' <"$KIT/.agents/skills/housekeeping/CHECKLIST.md" | tr -s ' ')
 case $d in *'session.start'*'data.behind'*) pass "the housekeeping checklist names the last session.start's data.behind" ;;
