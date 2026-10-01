@@ -280,6 +280,11 @@ stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the cas
 stamp_has "reported, not acted on" "orphan confidence: what happens to it"
 stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
 stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
+# …and an orphan the checker REFUSES is not that case (local review of this
+# PR, M-1): the refusal is about the value, not the pair, so it is a stop
+# with or without a `Tier:` line — only an orphan with a declared value is
+# the one reported and left.
+stamp_has "whether or not a \`Tier:\` line is present" "orphan confidence: a refused value is a stop either way — the refusal is about the value, not the pair"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
 # session in a project that never took the script.
