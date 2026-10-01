@@ -54,13 +54,7 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
 skip() { printf '  skip  %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
 
 # assert_status <expected> <label> -- <command...>
 assert_status() {
@@ -76,16 +70,6 @@ assert_status() {
 		printf '%s\n' "$out" | sed 's/^/        | /'
 	fi
 	LAST_OUT=$out
-}
-
-assert_out_has() {
-	case "$LAST_OUT" in
-	*"$1"*) pass "output mentions '$1'" ;;
-	*)
-		fail "output does not mention '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-		;;
-	esac
 }
 
 assert_out_lacks() {

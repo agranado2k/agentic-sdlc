@@ -55,13 +55,6 @@ trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
 
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
-
 # note <text> — a visible line that is neither a pass nor a fail.
 #
 # Some cases below can only run against a shell that is installed. Silently

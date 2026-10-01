@@ -45,13 +45,7 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
 skip() { printf '  skip  %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
 
 check() {
 	# check <label> -- <command...>

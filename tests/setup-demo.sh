@@ -41,12 +41,6 @@ SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
-banner() { printf '\n=== %s ===\n' "$*"; }
-pass() { printf '  ok    %s\n' "$*"; }
-fail() {
-	printf '  FAIL  %s\n' "$*"
-	failures=$((failures + 1))
-}
 
 ENTRY="$KIT/SETUP.md"
 PAYLOAD="$KIT/setup/agent-bootstrap.md"

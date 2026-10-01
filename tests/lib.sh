@@ -26,8 +26,8 @@ LAST_STATUS=0
 #
 # Pinned HERE, at source time, not in t_init: seven suites never call t_init,
 # and a pin that a suite has to opt into is the coupling this is removing.
-# Three suites carry their own assertion helpers (adapters-demo, setup-demo,
-# kit-demo) and source this file for the pin and the budget below alone. The
+# Three of them (adapters-demo, setup-demo, kit-demo) keep their own scratch
+# and trap, and take only the pin, the budget and the assertion helpers here. The
 # same posture t_git_identity takes for signing and hooks paths — a
 # developer's environment does not decide what a test asserts — and
 # tests/fixture-builders.test.sh holds this one the way it holds those. A
