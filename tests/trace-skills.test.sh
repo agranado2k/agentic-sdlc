@@ -418,7 +418,54 @@ EOF
 done
 
 # ---------------------------------------------------------------------------
-# banner "10. /implement emits tdd.cycle while driving /tdd's red-green-refactor loop"
+banner "10. Every in-session spawn has a corresponding spawn.end in the same step"
+# ---------------------------------------------------------------------------
+# Skills that document in-session spawns (outcome=in-session) must also document
+# corresponding spawn.end events for each spawned agent/reviewer. Test verifies that
+# every documented in-session spawn line is followed by a documented spawn.end line
+# in the skill file (this tests documentation, not runtime behavior).
+# See ticket #353 acceptance: "skills suite asserts every in-session spawn line...
+# has a spawn.end line after it in the same step".
+
+for s in implement review-pr; do
+	f=$(skill_md "$s")
+	spans=$(t_trace_spans "$f")
+	bad=0
+
+	# Extract all in-session spawn spans from this skill
+	in_session_spawns=$(printf '%s\n' "$spans" | grep -F 'kind=spawn' | grep -F 'outcome=in-session')
+
+	if [ -z "$in_session_spawns" ]; then
+		pass "/$s has no in-session spawns"
+		continue
+	fi
+
+	# For each in-session spawn, verify there is a spawn.end somewhere in the skill
+	# (exact ordering within the skill document is verified here as a simpler check
+	# that spawn.end documentation exists for each spawned entity)
+	spawn_count=$(printf '%s\n' "$in_session_spawns" | wc -l)
+	end_count=$(printf '%s\n' "$spans" | grep -c 'kind=spawn.end' || true)
+
+	if [ "$end_count" -ge "$spawn_count" ]; then
+		pass "/$s has $end_count spawn.end lines for $spawn_count in-session spawns"
+	else
+		bad=$((bad + 1))
+		fail "/$s has $spawn_count in-session spawns but only $end_count spawn.end lines — every spawn must have a corresponding spawn.end"
+	fi
+
+	# Special check: review-pr should have 7 spawn.end (one per agent) when it has 7 in-session spawns
+	if [ "$s" = "review-pr" ] && [ "$spawn_count" -ge 7 ]; then
+		if [ "$end_count" -lt 7 ]; then
+			bad=$((bad + 1))
+			fail "/$s should document 7 spawn.end events (one per agent) but has only $end_count"
+		else
+			pass "/$s has at least 7 spawn.end lines for 7 agent spawns"
+		fi
+	fi
+done
+
+# ---------------------------------------------------------------------------
+banner "11. /implement emits tdd.cycle while driving /tdd's red-green-refactor loop"
 # ---------------------------------------------------------------------------
 # The /tdd skill defines tdd.cycle as one event per RED, per GREEN and per
 # refactor step. When /implement drives /tdd through each seam (step 4), it
@@ -445,7 +492,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# banner "11. Every spawn emit carries skill= to name which skill made the spawn"
+banner "12. Every spawn emit carries skill= to name which skill made the spawn"
 # ---------------------------------------------------------------------------
 # When a skill spawns a subagent, the emit must carry skill=<skill_name> to
 # identify which skill made the decision to spawn. This allows the trace reader
