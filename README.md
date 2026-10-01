@@ -632,11 +632,15 @@ skeleton (K0).
   lines lifted and checked. Four statuses, each driven red first — 0 with the
   checked lines and nothing else on stdout; 2 for a refused value, nothing on
   stdout and the field named, never the text; 3 for a ticket with no stamp
-  lines or a project with no checker, never a refusal and never an unchecked
-  line; 4 for a fetch that failed on its one retry. The bodies are hostile: a
-  quote that closes its own argument, a no-break space in a value or a key, a
-  zero-width space, markdown-wrapped lines, a caller's UTF-8 locale and a
-  foreign clone's checker under the caller's cwd.
+  lines, a checker that is gone or cannot run (its policy missing or
+  malformed), or a line of a field the policy does not declare with no tier
+  left — never a refusal and never an unchecked line; 4 for a fetch that
+  failed on its one retry; and a signal exits, never a verdict. The bodies
+  are hostile: a quote that closes its own argument, a no-break, em or
+  zero-width space in a value or a key — the em space under a caller's
+  C.UTF-8, so the script's own locale pin is what decides it — a NUL,
+  markdown-wrapped lines, and a foreign clone's checker under the caller's
+  cwd.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
   over a PRD issue body and `/dogfood` over product output it can capture
