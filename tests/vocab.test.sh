@@ -283,20 +283,8 @@ EOLIFT
 # the call, joined to the line before only when that line ends in a pipe.
 CALLS_AWK=$(
 	cat <<'EOAWK'
-FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
-/^[ \t]*#/ { pipe_head = ""; next }
-/^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
-	fn = $1; sub(/\(\).*/, "", fn); start = FNR
-	one = ($0 ~ /\}[ \t]*$/)
-}
-/\\$/ {
-	if (cont == "") at = FNR
-	cont = cont substr($0, 1, length($0) - 1) " "
-	next
-}
-{
-	if (cont == "") at = FNR
-	line = cont $0; cont = ""
+# scan <line> <file> — print a record for each call on one logical line
+function scan(line, file,    cut, s, off, from, to, tail, before, after, command) {
 	# cut: the line with each && and || spelled ;; — the same length, so a
 	# command is the span between two ; at the same offsets as in line
 	cut = line; gsub(/&&|\|\|/, ";;", cut)
@@ -314,12 +302,31 @@ FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
 		command = before substr(line, from, to - from) after
 		if (before ~ /^[ \t{(]*$/ && pipe_head != "") command = pipe_head " " command
 		gsub(/[ \t]+/, " ", command); sub(/^ /, "", command); sub(/ $/, "", command)
-		printf "%s\t%d\t%d\t%s\t%s\n", FILENAME, at, start, fn, command
+		printf "%s\t%d\t%d\t%s\t%s\n", file, at, start, fn, command
 	}
 	pipe_head = cut; sub(/.*;/, "", pipe_head)
 	if (pipe_head !~ /\|[ \t]*$/) pipe_head = ""
 }
+# a continued line still open when its file ends is a call all the same
+FNR == 1 && cont != "" { scan(cont, cont_file) }
+FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
+/^[ \t]*#/ { pipe_head = ""; next }
+/^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
+	fn = $1; sub(/\(\).*/, "", fn); start = FNR
+	one = ($0 ~ /\}[ \t]*$/)
+}
+/\\$/ {
+	if (cont == "") at = FNR
+	cont = cont substr($0, 1, length($0) - 1) " "; cont_file = FILENAME
+	next
+}
+{
+	if (cont == "") at = FNR
+	line = cont $0; cont = ""
+	scan(line, FILENAME)
+}
 /^}/ || one { fn = "-"; start = 1; one = 0 }
+END { if (cont != "") scan(cont, cont_file) }
 EOAWK
 )
 checker_calls() (
@@ -437,6 +444,8 @@ planted "split over a backslash-continued line" '\tsh \\\n\t\t"$checker" <"$body
 planted "on a quoted prefix of the path" '\tsh "$ROOT"/scripts/vocab.sh <"$body"\n'
 planted "with an option before the checker" '\tsh -e "$checker" <"$body"\n'
 planted "on the variable unquoted" '\tsh $checker <"$body"\n'
+planted "with braces on \$vocab" '\tsh "${vocab}" <"$body"\n'
+planted "continued on the file's last line" '\tsh "$checker" <"$body" \\\n'
 
 # The inventory holds no more than the tree: every LIFTED entry matches a
 # call the audit found, so a site removed or rewritten leaves no entry behind
