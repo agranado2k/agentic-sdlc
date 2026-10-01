@@ -450,10 +450,14 @@ hook_now_ms() {
 #
 # A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
 # refuses a fraction (POSIX promises only whole seconds) is answered with
-# whole-second naps while about a whole second remains — within one poll of
-# it, so a bound of exactly 1000 still gets its nap after the first check has
-# spent a few milliseconds — and the wait otherwise ends early rather than
-# overrun. Never a busy loop; past the bound by at most one poll.
+# whole-second naps while the naps already taken leave a whole second of the
+# bound, and the wait otherwise ends early rather than overrun. THE BOUND IS
+# THE BUDGET FOR THE WHOLE WAIT, its checks included: a check's cost is spent
+# inside it, never subtracted from the decision to nap, so a 1000 ms bound
+# naps its second whatever the first check cost (#403 — on a loaded host that
+# check took 51 ms, the old 950 ms threshold read 949, and the hook gave up
+# without one nap). The clock still ends the wait once the bound has passed.
+# Never a busy loop; past the bound by at most one poll.
 hook_wait_final() {
 	_hw_t0=$(hook_now_ms) || _hw_t0=
 	_hw_waited=0
@@ -479,7 +483,7 @@ hook_wait_final() {
 		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
 		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
 			_hw_step=1000
-			[ "$_hw_left" -ge 950 ] || break
+			[ $(($2 - _hw_count)) -ge 1000 ] || break
 			sleep 1
 			_hw_nap=1000
 		fi
