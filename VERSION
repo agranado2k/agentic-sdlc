@@ -1256,7 +1256,7 @@
 # directory and lost the report to the next sweep. The housekeeping
 # skill's CHECKLIST.md looks for the last retro there. The kit's own
 # .gitignore gains the folder.
-#   From #343: adapters/claude-code/hooks/transcript-usage.mjs takes the
+#   From #343: the Claude Code adapter's hooks/transcript-usage.mjs takes the
 # LAST usage block per message id — a response that opens with a thinking
 # block is written twice, a partial snapshot first — so a session's
 # token sum matches the agent harness's own rollup; the fixtures beside
@@ -1277,7 +1277,7 @@
 # a shared file past its tag) goes green when the release merges and on no
 # commit of the PR, so it is named in the report and never iterated on;
 # the kit's own docs-demo and self-host suites print that marker.
-#   From #350: adapters/claude-code/hooks/hook.lib.sh's no-node reason
+#   From #350: the Claude Code adapter's hooks/hook.lib.sh's no-node reason
 # names the fix, and adapters/claude-code/README.md says where it goes —
 # a node managed per user is on every path you type at and on none of the
 # hooks', so the directory goes on the path through the `env` block of
@@ -1294,8 +1294,8 @@
 # .agents/skills/pr-iterate/SKILL.md (the release-bound set-aside).
 # .agents/skills/housekeeping/CHECKLIST.md (where the last retro is).
 # adapters/claude-code/README.md and adapters/README.md (the reader's
-# tools, and where node goes), adapters/claude-code/hooks/hook.lib.sh (the
-# no-node reason), adapters/claude-code/hooks/transcript-usage.mjs (the
+# tools, and where node goes), the Claude Code adapter's hooks/hook.lib.sh (the
+# no-node reason), the Claude Code adapter's hooks/transcript-usage.mjs (the
 # last usage block). docs/domain-glossary.md's Broker, Typed return and Retro
 # entries. README.md's suite entries follow. tests/implement-deliver.test.sh,
 # tests/prescreen-return.test.sh, tests/review-pr-output.test.sh,
