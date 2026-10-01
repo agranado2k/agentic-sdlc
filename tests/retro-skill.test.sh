@@ -14,7 +14,8 @@
 #      calibration (the eighth, PRD #273, ticket #281): per decision field and
 #      per skill, never one number for the chain; the oracle clause on every
 #      row; and three limits the question states instead of papering over —
-#      the dismissal denominator overcounts, the label's override rate is
+#      the dismissal denominator overcounts where a raise carries no posted
+#      marker (#332), the label's override rate is
 #      computable only from stamps that carry `data.label_proposed` (ticket
 #      #354), and a row with too few events prints no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
@@ -198,6 +199,7 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # read apart, as rows.
 sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "${1:-$SIDECAR_ABS}"; } # [<sidecar file>]
 fenced() { awk '/^```/ { fence = !fence; next } fence'; } # stdin's fenced lines, the example rows
+unfenced() { awk '/^```/ { fence = !fence; next } !fence'; } # stdin's lines outside a fence, the prose
 stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
 reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
 rows8=$(sec8 | fenced)
@@ -315,6 +317,15 @@ case "$(flat <"$ROOT/.agents/skills/housekeeping/CHECKLIST.md")" in
 *) fail "/housekeeping's checklist no longer states the oracle clause in the words this suite holds question 8 to — move both together" ;;
 esac
 stamp_has "$oracle_form" "…in the checklist's own words, not a paraphrase of them"
+# …and the checklist admits the glossary's second form (#332, after PR #355):
+# a row that measured nothing names no oracle and says why, and is not a
+# finding for that. Question 8 says the same of its own rows.
+none_form='`— oracle: none — <why>`'
+case "$(flat <"$ROOT/.agents/skills/housekeeping/CHECKLIST.md")" in
+*"$none_form"*'with neither is a finding'*) pass "/housekeeping's checklist admits the none form, and a row with neither form is the finding" ;;
+*) fail "/housekeeping's checklist still gives the four-part clause as the only form — a row in the glossary's $none_form form reads as a finding" ;;
+esac
+stamp_has "or, on a row that measured nothing, the glossary's other form, $none_form" "question 8's rule admits the none form beside the four-part clause"
 oracle_entry=$(awk '/^- \*\*Oracle\*\*/ { on = 1 } on && /^- \*\*/ && !/^- \*\*Oracle\*\*/ { exit } on && /^## / { exit } on' "$ROOT/docs/domain-glossary.md" | flat)
 case "$oracle_entry" in
 *'who wrote the test fixtures, when'*) pass "the glossary's Oracle entry opens on the same parts" ;;
@@ -404,12 +415,46 @@ bait_label_row 's/ *— oracle: none — .*$//' &&
 	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
 	pass "bait: a label row with no oracle clause at all goes red" ||
 	fail "bait: a label row with no oracle clause passed the none-form holder — or the bait planted nothing"
-# Honesty point 1: finding.raise has no posted marker, so the denominator is
-# raises on the subject and it OVERCOUNTS what a human could have dismissed.
-stamp_has 'overcounts' "the dismissal denominator is said to overcount"
-stamp_has 'It is every raise on the subject' "the denominator is stated: every raise on the subject"
-stamp_has 'every time: the rate is a lower bound on the share of posted findings' "the report says so every time — the rate is a lower bound, not a measurement"
-stamp_has 'no marker that it was posted' "…and why: a raise carries no marker that it was posted"
+# Honesty point 1 (#332): a raise now says whether it was posted, and the
+# denominator counts only the posted; a raise recorded before the key existed
+# carries no marker, stays in, and its row OVERCOUNTS what a human could have
+# dismissed. The row says which form it used.
+# Each of these rules has a test that fails without it (review of PR #374,
+# H-2): posted_rules_missing reads any sidecar and names every rule it has
+# lost, one per line, and one bait per rule proves it red — in the parent
+# shell, where a fail counts.
+posted_rules_missing() { # <sidecar file>
+	_pr_stamp=$(sec8 "$1" | unfenced | flat)
+	for _r in \
+		'posted denominator|counts only the raises carrying `data.posted=yes`' \
+		'unposted out|A raise with `data.posted=no` is in no denominator and in no pairing' \
+		'unposted counted beside|count it beside its row, `<n> not posted`' \
+		'unmarked overcounts|A raise that carries no `data.posted` was recorded before the key existed, and the denominator **overcounts**' \
+		'row names its form|Each severity row says which form it used — `posted only`, or `overcounts`' \
+		'lower bound|the rate is a lower bound on the share of posted findings'; do
+		case "$_pr_stamp" in *"${_r#*|}"*) ;; *) printf '%s\n' "${_r%%|*}" ;; esac
+	done
+	# …and every severity example row carries the form it used.
+	_pr_bare=$(sec8 "$1" | fenced | grep -E '^severity · ' | grep -vE '   (posted only|overcounts)   ' || true)
+	_pr_any=$(sec8 "$1" | fenced | grep -cE '^severity · ')
+	[ -z "$_pr_bare" ] && [ "$_pr_any" -gt 0 ] || printf '%s\n' 'example row names its form'
+}
+missing=$(posted_rules_missing "$SIDECAR_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$missing" ] && pass "the posted marker's rules are all stated: the denominator, the unposted counted beside, the overcount, the form each row names, and the example rows carry it" ||
+	fail "question 8 has lost posted-marker rules: $missing"
+for b in \
+	'posted denominator|s/counts only the raises carrying `data.posted=yes`/counts the raises/' \
+	'unposted out|s/is in no denominator and in no pairing/is counted/' \
+	'unposted counted beside|s/`<n> not posted`/nowhere/' \
+	'unmarked overcounts|s/the denominator \*\*overcounts\*\*/the denominator is exact/' \
+	'row names its form|s/says which form it used — `posted only`, or/may name a form, or/' \
+	'lower bound|s/the rate is a lower bound on the share/the rate is the share/' \
+	'example row names its form|/^severity · /s/   posted only   /   /'; do
+	sed "${b#*|}" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md"
+	! cmp -s "$SCRATCH/bait-sidecar.md" "$SIDECAR_ABS" && posted_rules_missing "$SCRATCH/bait-sidecar.md" | grep -qxF -- "${b%%|*}" &&
+		pass "bait: question 8 without '${b%%|*}' goes red" ||
+		fail "bait: question 8 without '${b%%|*}' was not caught — or the bait planted nothing"
+done
 # …and a dismissal is one (data.thread, data.where) pair per subject — a
 # resolved thread and its dismissed review can both emit.
 stamp_has '(`data.thread`, `data.where`) pair' "a dismissal is identified by the (data.thread, data.where) pair"
@@ -514,6 +559,14 @@ item8_has() { # <needle> <message>
 	esac
 }
 item8_has 'per decision field and per skill, never one number for the chain' "SKILL.md's eighth item holds the per-field, per-skill rule"
+# …and no stronger than QUESTIONS.md (review of PR #374): a raise with no
+# posted marker is still counted, so the item says the dismissal rate counts
+# only the posted where the raise says, never "a finding posted" outright.
+item8_has 'counting only the posted where the raise says whether it was' "…and the dismissal rate counts only the posted where the raise says, no stronger than question 8"
+case "$item8" in
+*'how often a finding posted at'*) fail "SKILL.md's eighth item says 'a finding posted' outright — raises with no posted marker are counted too" ;;
+*) pass "…and never says 'a finding posted' outright" ;;
+esac
 item8_has 'Every row carries the oracle clause' "…and the oracle clause on every row"
 item8_has 'too few events says so instead of a rate' "…and the thin row that prints no rate"
 item8_has 'computable once its stamps carry `data.label_proposed`' "…and the label's override rate, computable once its stamps carry the pre-quiz label"
@@ -588,13 +641,18 @@ fx_trace emit kind=ticket.write subject='ticket:#12' tier=implementer data.tier_
 # and two iterations both see it closed — one (thread, where) pair, once.
 fx_trace begin review-pr subject='pr:#9' >/dev/null
 for line in 1 2 3 4 5 6; do
-	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id="L-$line" data.severity=low data.agent=simplicity data.where="a.sh:$line" reason=fixture
+	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id="L-$line" data.severity=low data.agent=simplicity data.where="a.sh:$line" data.posted=yes reason=fixture
 done
+# A seventh `low` the human chose not to post (#332), the latest raise on
+# the line the human later closes: nobody could have dismissed it, so it is
+# in no denominator and pairs with nothing.
+fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id=L-7 data.severity=low data.agent=simplicity data.where=a.sh:2 data.posted=no reason=fixture
 fx_trace end outcome=ok
 for _ in 1 2; do
 	fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T1 reason=fixture
 done
-# A second review raises five `medium` findings, two of them on the line the
+# A second review — recorded before the posted marker existed, so its raises
+# carry none and its row overcounts — raises five `medium` findings, two of them on the line the
 # first review raised on; a human closes one thread there. The dismissal
 # pairs with the LATEST raise at that line and its same-review sibling —
 # both count, the row says two shared it — and not with the first review's.
@@ -617,6 +675,8 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 		if (kind == "finding.raise") return "review-pr (by kind)"
 		return "unattributed"
 	}
+	# A confidence names its row only when declared: none is unstamped, any other undeclared.
+	function bucket(c) { return c == "" ? "unstamped" : (index(conf, " " c " ") == 0 ? "undeclared" : c) }
 	function rate(hit, of) { return of < 5 ? "too few to rate" : sprintf("%.0f %%", 100 * hit / of) }
 	{ kind = get("kind") }
 	kind == "run.start" { runskill[get("run")] = get("skill") }
@@ -624,20 +684,25 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 	# later line for a subject replaces the earlier one.
 	kind == "ticket.write" {
 		c = get("confidence"); p = get("tier_proposed"); t = get("subject")
-		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		c = bucket(c)
 		trow[t] = "tier · " who(kind) " · " c
 		tover[t] = (p == "") ? -1 : (get("tier") != p)
 		# The label, in a row of its own: its confidence under its own key,
 		# overridden where the published label is not the proposed one.
 		c = get("label_confidence"); p = get("label_proposed")
-		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		c = bucket(c)
 		lrow[t] = "label · " who(kind) " · " c
 		lover[t] = (p == "") ? -1 : (get("label") != p)
 	}
 	kind == "finding.raise" {
 		v = get("severity"); if (index(sev, " " v " ") == 0) v = "undeclared"
-		n++; rrow[n] = "severity · " who(kind) " · " v; rat[n] = get("subject") " " get("where"); rrun[n] = get("run")
-		seen[rrow[n]] = 1; of[rrow[n]]++
+		k = "severity · " who(kind) " · " v; seen[k] = 1
+		# Not posted: in no denominator and in no pairing. No marker: an
+		# older raise, counted, and its row overcounts.
+		if (get("posted") == "no") { notposted[k]++; next }
+		if (get("posted") == "") unmarked[k] = 1
+		n++; rrow[n] = k; rat[n] = get("subject") " " get("where"); rrun[n] = get("run")
+		of[k]++
 	}
 	# The one pairing rule: the latest raise at the line before the dismissal,
 	# and its siblings there from the same run. A pair seen again is skipped —
@@ -661,7 +726,17 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 		for (t in lrow) { k = lrow[t]; seen[k] = 1; stamped[k]++; if (lover[t] >= 0) { of[k]++; hit[k] += lover[t] } }
 		# A label row none of whose stamps carries the pre-quiz label: its count
 		# and the words, never 0 of 0.
-		for (k in seen) if (k ~ /^label/ && !of[k]) printf "%s   %d stamped   not computable from the trace today\n", k, stamped[k]; else printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^(tier|label)/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
+		for (k in seen) {
+			if (k ~ /^label/ && !of[k]) { printf "%s   %d stamped   not computable from the trace today\n", k, stamped[k]; continue }
+			line = sprintf("%s   %d of %d %s   %s", k, hit[k], of[k], (k ~ /^(tier|label)/ ? "overridden" : "dismissed"), rate(hit[k], of[k]))
+			if (k in shared) line = line "   " shared[k] " shared a dismissal"
+			# A severity row says which form it used, and counts its unposted raises beside it.
+			if (k ~ /^severity/) {
+				line = line "   " (k in unmarked ? "overcounts" : "posted only")
+				if (notposted[k]) line = line "   " notposted[k] " not posted"
+			}
+			print line
+		}
 		printf "beside the table: %d dismissal(s) that pair with no raise\n", beside
 	}' | sort)
 printf '    fixture trace, not the repo'"'"'s — %s events written by `emit` under a scratch TRACE_DIR:\n' "$(fx_trace export | grep -c .)"
@@ -683,8 +758,8 @@ fx_row 'label · to-tickets (by kind) · low   6 of 7 overridden   86 %' "a labe
 fx_row 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' "a label row with three events prints its counts and no rate"
 fx_row 'label · to-tickets (by kind) · undeclared   0 of 1 overridden   too few to rate' "a label confidence no vocabulary declares is counted on the undeclared label row"
 fx_row 'label · to-tickets (by kind) · high   1 stamped   not computable from the trace today' "a label row whose stamps all predate data.label_proposed prints its count and not computable, never 0 of 0"
-fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
-fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
+fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %   posted only   1 not posted' "six posted raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start, and the raise nobody posted is in no denominator and no pairing"
+fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal   overcounts' "a second review's two raises on one line share one dismissal: both count, the row says so, the first review's raise there is not paired again — and raises with no posted marker say the row overcounts"
 fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
 printf '%s\n' "$fx_rows" | grep -qE '^tier .*· high |^label .*· unstamped ' && fail "the fixture's table has a tier high row or a label unstamped row — an earlier ticket.write of a re-written subject was read" ||
 	pass "a subject written twice is read once, at its latest write"
