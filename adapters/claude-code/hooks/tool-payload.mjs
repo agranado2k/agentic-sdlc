@@ -141,7 +141,7 @@ try {
 // as one argument and never meets a shell parser, and trace.sh escapes it for
 // JSON itself — an escape here would be recorded as part of the text.
 let errorFirstLine = "";
-if (from === "error" && typeof payload.error === "string" && payload.error.length > 0) {
+if (from === "error" && typeof payload.error === "string") {
   // The first NON-EMPTY line: an error that opens with an empty line still
   // says something on the next, and that is its reason.
   const first = payload.error.split(/\r?\n/).find((line) => line.trim() !== "");
