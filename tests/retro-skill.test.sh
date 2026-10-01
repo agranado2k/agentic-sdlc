@@ -348,17 +348,46 @@ $rows8
 EOF
 [ -z "$rows8_bad" ] && pass "every example row in question 8 that carries an oracle clause follows the proper form" ||
 	fail "an example row's oracle clause does not follow the proper form:$rows8_bad"
-# The label row specifically must use the none form until #332 lands (ticket #342).
-label_row=$(printf '%s\n' "$rows8" | grep -E '^label · ' | head -1)
+# The label row specifically carries the none form until #332 lands (ticket
+# #342): the trace holds no pre-quiz label, so there is no who, when or
+# version to name, and a four-part clause there would name an oracle that
+# does not exist. The holder reads any sidecar, so the baits below can prove
+# it goes red (hard rule 9) without touching the real one.
+label_row_of() { # <sidecar file> — question 8's label example row, or nothing
+	awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$1" | awk '/^```/ { fence = !fence; next } fence' |
+		grep -E '^label · ' | head -1
+}
+label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
+	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
+}
+label_row=$(label_row_of "$SIDECAR_ABS")
 if [ -n "$label_row" ]; then
-	if printf '%s\n' "$label_row" | grep -qE '— oracle: none — [^ ]'; then
-		pass "the label row carries oracle: none — <why> form"
-	else
+	label_row_none_form "$SIDECAR_ABS" && pass "the label row carries oracle: none — <why> form" ||
 		fail "the label row does not carry oracle: none — <why>; found: $label_row"
-	fi
 else
 	fail "no label row found in question 8 examples"
 fi
+# The bait: three copies of the sidecar whose label row names an oracle it
+# does not have, names none and gives no why, or carries no clause at all.
+# The holder must refuse every one — and each bait must have planted its
+# line: a copy whose label row is missing or unchanged proves nothing.
+bait_label_row() { # <sed substitution on the label row> — exit 0 only when the copy's row is there and changed
+	sed "/^label · /$1" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md" || return 1
+	bait_row=$(label_row_of "$SCRATCH/bait-sidecar.md")
+	[ -n "$bait_row" ] && [ "$bait_row" != "$label_row" ]
+}
+bait_label_row 's/— oracle: none — .*$/— oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that names a four-part oracle it does not have goes red" ||
+	fail "bait: a label row carrying a four-part clause passed as the none form (the holder reads the clause's presence, not its form) — or the bait planted nothing"
+bait_label_row 's/— oracle: none — .*$/— oracle: none/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that says none and gives no why goes red" ||
+	fail "bait: a label row reading '— oracle: none' with no <why> passed (the why is the half that keeps the row honest) — or the bait planted nothing"
+bait_label_row 's/ *— oracle: none — .*$//' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row with no oracle clause at all goes red" ||
+	fail "bait: a label row with no oracle clause passed the none-form holder — or the bait planted nothing"
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
