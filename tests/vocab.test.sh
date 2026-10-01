@@ -254,8 +254,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 #     'Field: <token>', which nothing untrusted fills;
 #   - the argument form with one positional token, "Field: $2" — one
 #     argument, one line, the token the caller stamped itself;
-#   - or a site in LIFTED below: the input it reads (a fixed string on the
-#     call's line or the one before it — a pipe's head) and the lift stage
+#   - or a site in LIFTED below: the input it reads (a fixed string in the
+#     call's own command — its line cut at `;`, `&&` and `||`, or the head
+#     of a pipe the line before ends with) and the lift stage
 #     that bounds that input, a fixed string on an uncommented line earlier
 #     in the same function.
 # A new call site, a site whose input changed, or a site whose lift stage was
@@ -277,11 +278,13 @@ EOLIFT
 
 # checker_calls <root> — one record per invocation of the checker in the
 # shipped files under <root> that is not exempt above:
-# <file>\t<line>\t<function's first line>\t<function>\t<line before> <line>
+# <file>\t<line>\t<function's first line>\t<function>\t<the call's command>
+# The command is the call's own: the line cut at `;`, `&&` and `||` around
+# the call, joined to the line before only when that line ends in a pipe.
 CALLS_AWK=$(
 	cat <<'EOAWK'
-FNR == 1 { fn = "-"; start = 1; prev = ""; cont = "" }
-/^[ \t]*#/ { prev = $0; next }
+FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
+/^[ \t]*#/ { pipe_head = ""; next }
 /^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
 	fn = $1; sub(/\(\).*/, "", fn); start = FNR
 	one = ($0 ~ /\}[ \t]*$/)
@@ -294,17 +297,27 @@ FNR == 1 { fn = "-"; start = 1; prev = ""; cont = "" }
 {
 	if (cont == "") at = FNR
 	line = cont $0; cont = ""
-	s = line
+	# cut: the line with each && and || spelled ;; — the same length, so a
+	# command is the span between two ; at the same offsets as in line
+	cut = line; gsub(/&&|\|\|/, ";;", cut)
+	s = line; off = 0
 	while (match(s, /(^|[ \t(|`;&])(ba)?sh([ \t]+-[A-Za-z]+)*[ \t]+("[^"]*vocab\.sh"|[^ \t`]*vocab\.sh"?|"?\$\{?(checker|vocab)\}?"?)/)) {
-		tail = substr(s, RSTART + RLENGTH); s = tail
+		from = off + RSTART; to = off + RSTART + RLENGTH
+		tail = substr(s, RSTART + RLENGTH); s = tail; off = to - 1
 		if (tail ~ /^[A-Za-z0-9_]/) continue # a longer name, not the checker
 		if (tail ~ /^`/) continue # exempt:prose
 		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
 		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
 		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue # exempt:positional
-		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, at, start, fn, prev, line
+		before = substr(cut, 1, from - 1); sub(/.*;/, "", before)
+		after = substr(cut, to); sub(/;.*/, "", after)
+		command = before substr(line, from, to - from) after
+		if (before ~ /^[ \t{(]*$/ && pipe_head != "") command = pipe_head " " command
+		gsub(/[ \t]+/, " ", command); sub(/^ /, "", command); sub(/ $/, "", command)
+		printf "%s\t%d\t%d\t%s\t%s\n", FILENAME, at, start, fn, command
 	}
-	prev = line
+	pipe_head = cut; sub(/.*;/, "", pipe_head)
+	if (pipe_head !~ /\|[ \t]*$/) pipe_head = ""
 }
 /^}/ || one { fn = "-"; start = 1; one = 0 }
 EOAWK
@@ -442,6 +455,28 @@ case $(stale "$BAIT") in
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@*) pass "a call site removed leaves its entry named stale" ;;
 *) fail "a call site removed leaves its entry vouching for nothing" ;;
 esac
+
+# The input an entry names is the call's own: on the call's command, or at
+# the head of a pipe the line before ends with — never merely nearby. The
+# old input left on the line before, or beside the call in another command
+# on its line, vouches for nothing: the rewritten call is named, and so is
+# the entry it no longer matches.
+# rewritten <file> <how> <sed script> — the site in <file> rewritten <how>;
+# the audit names it, and the entry is stale.
+rewritten() {
+	bait_reset
+	bait_edit "$1" "$3"
+	bait_named "$1" "a call is rewritten $2"
+	case $(stale "$BAIT") in
+	*"$1@@"*) pass "the entry left behind by a call rewritten $2 is named stale" ;;
+	*) fail "a call rewritten $2 leaves its entry vouching for it in $1" ;;
+	esac
+}
+rewritten .agents/skills/dogfood/SKILL.md "under a comment carrying the old input" 's|sh "$checker" <"$2"|# sh "$checker" <"$2"\
+	sh "$checker" <"$body"|'
+rewritten .agents/skills/dogfood/SKILL.md "under a line quoting the old input" "s|sh \"\$checker\" <\"\$2\"|: 'sh \"\$checker\" <\"\$2\"'\\
+	sh \"\$checker\" <\"\$body\"|"
+rewritten scripts/stamp.sh "beside the old input in another command" 's|{ sh "$vocab" <"$_stamp_tmp/lines"|{ : <"$_stamp_tmp/lines"; sh "$vocab" <"$_stamp_tmp/body"|'
 
 # Every exemption is load-bearing: the audit with one exemption cut out of it
 # names the real site that exemption admits. An exemption no site needs is
