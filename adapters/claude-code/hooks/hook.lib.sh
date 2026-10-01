@@ -205,9 +205,18 @@ hook_tokens() {
 		# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
 		if [ $# -ge 2 ]; then shift 2; else shift; fi
 	fi
+	# THE REASON NAMES THE FIX, not only the gap. A node managed per user
+	# (a version manager under the home directory) is on the operator's shell
+	# PATH and on none of the agent harness's, and every usage event of every
+	# session then fails this way — 4 of 4 session.usage and 41 agent.stop
+	# events in one retro window (F5a, 2026-10-01) — while the event said only
+	# what was missing. The fix is policy, not code: a personal, uncommitted
+	# settings entry that puts that directory on the path, whose shape the
+	# adapter README gives. No machine path is spelled here: the one on this
+	# machine is wrong on every other, and a reason is copied.
 	if ! command -v node >/dev/null 2>&1; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
-			reason='node is not on PATH, so the transcript could not be read for token counts' "$@"
+			reason='node is not on PATH, so the transcript could not be read for token counts — put its directory on the path through a personal, uncommitted .claude/settings.local.json env entry (see adapters/claude-code/README.md: When node is managed per user)' "$@"
 		return 0
 	fi
 	# TWO STREAMS, KEPT APART. The first draft merged them, and a node that

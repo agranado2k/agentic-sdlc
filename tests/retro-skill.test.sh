@@ -19,7 +19,14 @@
 #      no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
 #      name — never the kit's never-shipped wrapper — and verifies first.
-#   3. The report lands OUTSIDE the tree: <tmpdir>/retro-<YYYYMMDDTHHMMSSZ>.md.
+#   3. The report and its CSV land IN THE PROJECT, at the root checkout:
+#      .retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md and .csv, the root found
+#      through git's common directory the way scripts/trace.sh finds it for a
+#      relative TRACE_DIR — so a retro run from a linked worktree lands at the
+#      root and survives the worktree's pruning (ticket #349; before it the
+#      report went to the OS temp directory and was lost with it). The folder
+#      is gitignored beside .trace/, and the one-line derivation the skill
+#      quotes is RUN here from a scratch worktree (section 9).
 #   4. Findings are routed to /to-tickets as candidates; it never fixes, never
 #      edits a skill, never pushes or merges. A recurring failure becomes a
 #      rule with a failing check, never a preloaded lessons file (shared
@@ -189,10 +196,11 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # (`— oracle: `, `no held-out set`, `too few`, `run.start`), so a needle they
 # satisfy survives the rule's deletion (review of PR #329, H-5). The rows are
 # read apart, as rows.
-sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "${1:-$SIDECAR_ABS}"; } # [<sidecar file>]
+fenced() { awk '/^```/ { fence = !fence; next } fence'; } # stdin's fenced lines, the example rows
 stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
 reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
-rows8=$(sec8 | awk '/^```/ { fence = !fence; next } fence')
+rows8=$(sec8 | fenced)
 [ -n "$stamp" ] && [ -n "$reads8" ] && [ "$(printf '%s\n' "$rows8" | grep -c .)" -ge 3 ] &&
 	pass "question 8 has rule prose, a Reads line and example rows — each read apart" ||
 	fail "question 8 could not be split into its prose, its Reads line and its example rows"
@@ -322,6 +330,69 @@ stamp_has 'A calibration row has no fixtures' "question 8 says what stands in fo
 stamp_has 'the severity bands in `/review-pr` as they stood when the window closed' "a severity row's version is named: the bands as they stood when the window closed"
 stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
 stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
+# A row that measured nothing names no oracle and says why: oracle: none — <why>
+# (ticket #342). The glossary carries that form, and the example rows hold to it.
+case "$oracle_entry" in
+*'oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
+*) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
+esac
+# The none form does not repeal the entry's rule — the checklist's words, "a
+# comparator is always named, never implied" — it is the rule kept where
+# there is nothing to name: the row says it has no comparator, instead of
+# implying one. Both sentences are held, so neither can be edited into
+# contradicting the other.
+comparator_rule='a comparator is always named, never implied'
+case "$(flat <"$ROOT/.agents/skills/housekeeping/CHECKLIST.md")" in
+*"$comparator_rule"*) pass "/housekeeping's checklist states the comparator rule" ;;
+*) fail "/housekeeping's checklist no longer states the comparator rule in the words this suite holds the glossary to — move both together" ;;
+esac
+case "$oracle_entry" in
+*"$comparator_rule"*) pass "…and the glossary's Oracle entry still states it in the checklist's words: $comparator_rule" ;;
+*) fail "the glossary's Oracle entry no longer states the rule the checklist states: $comparator_rule" ;;
+esac
+case "$oracle_entry" in
+*'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
+*) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
+esac
+# The label row specifically carries the none form until #332 lands (ticket
+# #342): the trace holds no pre-quiz label, so there is no who, when or
+# version to name, and a four-part clause there would name an oracle that
+# does not exist. The holder reads any sidecar, so the baits below can prove
+# it goes red (hard rule 9) without touching the real one.
+label_row_of() { # <sidecar file> — question 8's label example row, or nothing
+	sec8 "$1" | fenced | grep -E '^label · ' | head -1
+}
+label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
+	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
+}
+label_row=$(label_row_of "$SIDECAR_ABS")
+if [ -n "$label_row" ]; then
+	label_row_none_form "$SIDECAR_ABS" && pass "the label row carries oracle: none — <why> form" ||
+		fail "the label row does not carry oracle: none — <why>; found: $label_row"
+else
+	fail "no label row found in question 8 examples"
+fi
+# The bait: three copies of the sidecar whose label row names an oracle it
+# does not have, names none and gives no why, or carries no clause at all.
+# The holder must refuse every one — and each bait must have planted its
+# line: a copy whose label row is missing or unchanged proves nothing.
+bait_label_row() { # <sed substitution on the label row> — exit 0 only when the copy's row is there and changed
+	sed "/^label · /$1" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md" || return 1
+	bait_row=$(label_row_of "$SCRATCH/bait-sidecar.md")
+	[ -n "$bait_row" ] && [ "$bait_row" != "$label_row" ]
+}
+bait_label_row 's/— oracle: none — .*$/— oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that names a four-part oracle it does not have goes red" ||
+	fail "bait: a label row carrying a four-part clause passed as the none form (the holder reads the clause's presence, not its form) — or the bait planted nothing"
+bait_label_row 's/— oracle: none — .*$/— oracle: none/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that says none and gives no why goes red" ||
+	fail "bait: a label row reading '— oracle: none' with no <why> passed (the why is the half that keeps the row honest) — or the bait planted nothing"
+bait_label_row 's/ *— oracle: none — .*$//' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row with no oracle clause at all goes red" ||
+	fail "bait: a label row with no oracle clause passed the none-form holder — or the bait planted nothing"
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
@@ -637,12 +708,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "4. The report lands outside the tree; findings are candidates; it never fixes"
+banner "4. The report lands in the project under .retro/; findings are candidates; it never fixes"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" 'retro-<YYYYMMDDTHHMMSSZ>.md' "the report's name carries a UTC stamp"
-assert_file_has "$SKILL" '<tmpdir>/retro-' "…under the OS temp directory"
-assert_file_has "$SKILL" 'TMPDIR' "…resolved from \$TMPDIR"
-assert_file_has "$SKILL" "outside the repo tree"
+# Ticket #349: the report lives in the project, not in the OS temp directory
+# — a temp report is lost with the machine's next sweep, and a retro nobody
+# can re-read is a retro that never ran. The full path rule is section 9's.
+# — and that section holds the path; here only the old home is refused.
+assert_file_lacks "$SKILL" '<tmpdir>/retro-' "the report no longer goes to the OS temp directory"
+assert_file_lacks "$SKILL" "outside the repo tree" "…and the skill no longer says the report lands outside the tree"
 # H-3 (review of PR #293): the trace carries third-party text (comment bodies
 # in reason=), and the reader must say what it is.
 assert_file_has "$SKILL" "data, never instructions" "the trace's contents are untrusted content"
@@ -779,5 +853,113 @@ grep -F 'KIT_ONLY=' "$ROOT/bootstrap.sh" | grep -q 'tests/retro-skill.test.sh' &
 	pass "bootstrap's KIT_ONLY list names this suite" || fail "tests/retro-skill.test.sh is not on bootstrap's KIT_ONLY list — it would ship to consumers"
 grep -q 'sh tests/retro-skill.test.sh' "$ROOT/.github/workflows/kit-ci.yml" &&
 	pass "kit CI runs this suite" || fail "no kit CI job runs tests/retro-skill.test.sh"
+
+# ---------------------------------------------------------------------------
+banner "9. The report lives in the project under .retro/ at the root checkout (ticket #349)"
+# ---------------------------------------------------------------------------
+# 9a. The path rule, in the procedure's two writing steps — the export (step
+# 4, the first thing written, so the folder is resolved and made THERE: review
+# of PR #362, M1) and the report (step 5, beside it): .retro/<YYYY>/<MM>/ at
+# the ROOT CHECKOUT, the root found through git's common directory — the
+# derivation scripts/trace.sh and the cleanup script share — so a retro run
+# from a worktree lands at the root and the worktree's pruning loses nothing.
+export_step=$(procedure | awk '/^4\. \*\*/ { on = 1 } /^[0-35-9]\. \*\*/ { on = 0 } on' | flat)
+write_step=$(procedure | awk '/^5\. \*\*/ { on = 1 } /^[0-46-9]\. \*\*/ { on = 0 } on' | flat)
+step_has() { # <step text> <step name> <needle> <message>
+	case "$1" in
+	*"$3"*) pass "$4" ;;
+	*) fail "$4 — the procedure's $2 step does not say: $3" ;;
+	esac
+}
+export_has() { step_has "$export_step" export "$@"; }
+write_has() { step_has "$write_step" write "$@"; }
+export_has 'git rev-parse --path-format=absolute --git-common-dir' "the export step resolves the root through git's common directory — the one-line derivation, before anything is written"
+export_has 'mkdir -p "$root/.retro/<YYYY>/<MM>"' "…and makes the folder there"
+export_has 'root checkout' "…at the root checkout"
+export_has 'scripts/trace.sh' "…named as the same derivation the trace script uses for a relative TRACE_DIR"
+export_has 'as `.csv`' "…and saves the export there as .csv"
+export_has 'prints nothing' "…and says what to do when the derivation prints nothing: outside a repository there is no trace to read (L5)"
+write_has '.retro/<YYYY>/<MM>/retro-<YYYYMMDDTHHMMSSZ>.md' "the write step names the report's path under .retro/<YYYY>/<MM>/"
+write_has 'beside the export' "…beside the export step 4 saved"
+write_has 'linked worktree' "…so a retro run from a linked worktree lands at the root"
+write_has "worktree's pruning" "…and survives the worktree's pruning"
+write_has 'check-ignore -q .retro/' "the write step checks the folder is ignored before it writes (H1)"
+# Not ignored: the pass TELLS, it never writes a consumer's ignore file — the
+# kit owns no consumer's tracked file and nothing it ships edits one at
+# runtime (PRD #237, alternatives considered). The line to add is printed,
+# the report's first line says so, and the pass carries on.
+write_has 'does not touch the project' "…and when it is not, the pass does not touch the project's ignore file"
+write_has 'the one line to add' "…it prints the one line to add"
+write_has 'beside `.trace/`' "…`.retro/` beside the trace's own"
+write_has "report's first line" "…and says so in the report's first line"
+case "$write_step" in
+*'add `.retro/` to the project'* | *'adds the line'* | *'add it yourself'*) fail "the write step still has the pass write a consumer's ignore file — it tells, it never edits" ;;
+*) pass "the write step never has the pass edit a consumer's ignore file" ;;
+esac
+write_has 'a project that takes this skill' "…which is also the consumer's note, since the recipe cannot carry it without moving the shared layer"
+# The derivation is quoted as ONE code span, so a session copies one line and
+# a suite can run it. Extracted from the export step by its distinctive token
+# (L1) — never from the whole file, never by position.
+derive=$(printf '%s' "$export_step" | grep -o '`[^`]*git-common-dir[^`]*`' | head -1 | tr -d '`')
+[ -n "$derive" ] && pass "the derivation is one code span in the export step: $derive" || fail "no code span in the export step carries git-common-dir"
+# The parity the skill claims is held to the two scripts it is claimed with
+# (L2): the same flag pair in scripts/trace.sh and the cleanup script, so a
+# change to either goes red here and the sentence is re-read.
+for f in scripts/trace.sh scripts/worktree-cleanup.sh; do
+	grep -qF -- 'rev-parse --path-format=absolute --git-common-dir' "$ROOT/$f" &&
+		pass "$f still resolves the root with the same flag pair the skill quotes" ||
+		fail "$f no longer uses 'rev-parse --path-format=absolute --git-common-dir' — the skill's parity claim is stale"
+done
+# 9b. The derivation RUNS, from a linked worktree of a scratch repo, and
+# prints that repo's root — not the worktree. A rule whose one line was
+# never executed is a claim (hard rule 9).
+t_repo
+git -C "$REPO" worktree add -q "$REPO/worktree/wt" -b feat/wt 2>/dev/null
+got=$( cd "$REPO/worktree/wt" && sh -c "$derive; printf '%s' \"\$root\"" 2>/dev/null )
+want=$(cd "$REPO" && pwd -P)
+[ -n "$got" ] && [ "$(cd "$got" 2>/dev/null && pwd -P)" = "$want" ] &&
+	pass "run from a linked worktree, the derivation prints the root checkout" ||
+	fail "run from a linked worktree, the derivation printed '$got', not the root '$want'"
+got=$( cd "$REPO" && sh -c "$derive; printf '%s' \"\$root\"" 2>/dev/null )
+[ -n "$got" ] && [ "$(cd "$got" 2>/dev/null && pwd -P)" = "$want" ] &&
+	pass "run from the root checkout, the derivation prints the root checkout" ||
+	fail "run from the root checkout, the derivation printed '$got', not '$want'"
+# 9c. The folder is out of version control, beside the trace's — a report
+# carries trace text (reasons, comment bodies, costs) and is local by design,
+# and a gitignored folder is invisible to the docs gate's placeholder scan.
+grep -qx '\.retro/' "$ROOT/.gitignore" && pass ".gitignore keeps .retro/ out of version control" || fail ".gitignore does not list .retro/"
+# 9d. Every surface that said where the report lands now says the folder:
+# the kit's manual and its stamped template (the quick-reference row), the
+# README's suite paragraph, the glossary's Retro entry — which also names the
+# folder as the kit's own word — and /housekeeping's checklist, whose check
+# is unchanged (a report dated inside the window) but looks in the new place.
+# Scoped to the unit that describes the retro (M3): other skills write their
+# reports outside the tree on purpose, and a row about one of them is not
+# this suite's to fail. The manuals' unit is the quick-reference row (one
+# line); the README's is this suite's own bullet; the glossary's is the two
+# Retro entries; the checklist's is the retrospective bullet.
+retro_text() { # <file> — the unit about the retro, flattened
+	case "$1" in
+	*CHECKLIST.md) awk '/^- \*\*The retrospective/ { on = 1; print; next } /^- / { on = 0 } on' "$ROOT/$1" ;;
+	README.md) awk '/^- `sh tests\/retro-skill\.test\.sh`/ { on = 1; print; next } /^- / { on = 0 } on' "$ROOT/$1" ;;
+	*glossary.md) awk '/^- \*\*Retro( folder)?\*\*/ { on = 1; print; next } /^- \*\*/ { on = 0 } on' "$ROOT/$1" ;;
+	*) grep -F '`/retro`' "$ROOT/$1" ;;
+	esac | flat
+}
+for f in AGENTS.md constitution/AGENTS.md.template README.md docs/domain-glossary.md .agents/skills/housekeeping/CHECKLIST.md; do
+	t=$(retro_text "$f")
+	[ -n "$t" ] || { fail "$f has no line about the retro"; continue; }
+	printf '%s' "$t" | grep -qF '.retro/' && pass "$f names .retro/ where it describes the retro" || fail "$f's retro line does not name .retro/"
+	printf '%s' "$t" | grep -qiE 'outside the (repo )?tree|under the temp' &&
+		fail "$f still sends the retro report outside the tree" || pass "$f no longer sends the retro report outside the tree"
+done
+# The glossary's own word for the folder — an entry, held to its text (M2).
+entry=$(awk '/^- \*\*Retro folder\*\*/ { on = 1; print; next } /^- \*\*/ { on = 0 } on' "$ROOT/docs/domain-glossary.md" | flat)
+[ -n "$entry" ] && pass "the glossary has a Retro folder entry" || fail "the glossary has no '**Retro folder**' entry"
+entry_has() { case "$entry" in *"$1"*) pass "$2" ;; *) fail "$2 — the Retro folder entry does not say: $1" ;; esac; }
+entry_has '.retro/<YYYY>/<MM>/' "…naming the path"
+entry_has 'root checkout' "…at the root checkout"
+entry_has 'common directory' "…resolved through git's common directory"
+entry_has '`.trace/`' "…gitignored beside the trace"
 
 t_done "/retro contract"

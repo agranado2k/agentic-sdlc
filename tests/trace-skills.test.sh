@@ -52,6 +52,13 @@
 #      amendment — the readers are the operator and the retrospective skill,
 #      and a diagnosis reads by the operator's hand — and the index row for
 #      0008 carries the same date (#309).
+#  14. /merge-train leaves a verdict for EVERY landing (#345, retro F2): the
+#      `feedback` emit is the train's exit condition per landed PR, and a train
+#      nobody can answer records `outcome=unasked` with the instruction that
+#      made it autonomous as the reason — a gap in the trace is a fact, never
+#      silence. `unasked` joins the outcome vocabulary in ADR-0008 (a dated
+#      amendment) and in the glossary; /pr-iterate's three verdicts are
+#      untouched, since it never asks a question nobody can answer.
 #
 # Every case is driven RED first (hard rule 9): the suite was written against
 # skills that emitted nothing and a script that knew no `feedback`.
@@ -415,6 +422,348 @@ for s in $CHAIN; do
 $(t_trace_spans "$f")
 EOF
 	[ "$bad" = 0 ] || true
+done
+
+# ---------------------------------------------------------------------------
+banner "10. Every in-session spawn has a corresponding spawn.end in the same step"
+# ---------------------------------------------------------------------------
+# Skills that document in-session spawns (outcome=in-session) must also document
+# corresponding spawn.end events for each spawned agent/reviewer. Test verifies that
+# every documented in-session spawn line is followed by a documented spawn.end line
+# in the skill file (this tests documentation, not runtime behavior).
+# See ticket #353 acceptance: "skills suite asserts every in-session spawn line...
+# has a spawn.end line after it in the same step".
+
+for s in implement review-pr; do
+	f=$(skill_md "$s")
+	spans=$(t_trace_spans "$f")
+	bad=0
+
+	# Extract all in-session spawn spans from this skill
+	in_session_spawns=$(printf '%s\n' "$spans" | grep -F 'kind=spawn' | grep -F 'outcome=in-session')
+
+	if [ -z "$in_session_spawns" ]; then
+		pass "/$s has no in-session spawns"
+		continue
+	fi
+
+	# For each in-session spawn, verify there is a spawn.end somewhere in the skill
+	# (exact ordering within the skill document is verified here as a simpler check
+	# that spawn.end documentation exists for each spawned entity)
+	spawn_count=$(printf '%s\n' "$in_session_spawns" | wc -l)
+	end_count=$(printf '%s\n' "$spans" | grep -c 'kind=spawn.end' || true)
+
+	if [ "$end_count" -ge "$spawn_count" ]; then
+		pass "/$s has $end_count spawn.end lines for $spawn_count in-session spawns"
+	else
+		bad=$((bad + 1))
+		fail "/$s has $spawn_count in-session spawns but only $end_count spawn.end lines — every spawn must have a corresponding spawn.end"
+	fi
+
+	# Special check: review-pr should have 7 spawn.end (one per agent) when it has 7 in-session spawns
+	if [ "$s" = "review-pr" ] && [ "$spawn_count" -ge 7 ]; then
+		if [ "$end_count" -lt 7 ]; then
+			bad=$((bad + 1))
+			fail "/$s should document 7 spawn.end events (one per agent) but has only $end_count"
+		else
+			pass "/$s has at least 7 spawn.end lines for 7 agent spawns"
+		fi
+	fi
+done
+
+# ---------------------------------------------------------------------------
+banner "11. /implement emits tdd.cycle while driving /tdd's red-green-refactor loop"
+# ---------------------------------------------------------------------------
+# The /tdd skill defines tdd.cycle as one event per RED, per GREEN and per
+# refactor step. When /implement drives /tdd through each seam (step 4), it
+# emits tdd.cycle to record the cycle, not only /tdd's own invocation.
+# This ensures the operator sees every cycle a session ran, regardless of
+# whether /tdd was spawned or driven inline.
+IMPL=$(skill_md implement)
+impl_tdd=$(grep -F 'kind=tdd.cycle' "$IMPL")
+if [ -n "$impl_tdd" ]; then
+	pass "/implement emits tdd.cycle"
+	# Verify the emit has the required fields
+	if printf '%s\n' "$impl_tdd" | grep -qF 'outcome='; then
+		pass "/implement's tdd.cycle emit carries outcome="
+	else
+		fail "/implement's tdd.cycle emit is missing outcome="
+	fi
+	if printf '%s\n' "$impl_tdd" | grep -qF 'data.test='; then
+		pass "/implement's tdd.cycle emit carries data.test="
+	else
+		fail "/implement's tdd.cycle emit is missing data.test="
+	fi
+else
+	fail "/implement does not emit tdd.cycle — the operator cannot see which cycles a session ran"
+fi
+
+# ---------------------------------------------------------------------------
+banner "12. Every spawn emit carries skill= to name which skill made the spawn"
+# ---------------------------------------------------------------------------
+# When a skill spawns a subagent, the emit must carry skill=<skill_name> to
+# identify which skill made the decision to spawn. This allows the trace reader
+# to attribute each spawn to its originating skill without relying on event
+# ordering or the skill resolver's output.
+bad_spawns=0
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	spawns=$(grep -F 'kind=spawn' "$f" || true)
+	if [ -z "$spawns" ]; then
+		pass "/$s has no spawns"
+		continue
+	fi
+	# For each spawn line in this skill, check that it carries skill=
+	while IFS= read -r spawn_line; do
+		[ -z "$spawn_line" ] && continue
+		if printf '%s\n' "$spawn_line" | grep -qE 'skill=[a-z-]+' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$\{'; then
+			pass "/$s's spawn carries skill="
+		else
+			bad_spawns=$((bad_spawns + 1))
+			fail "/$s's spawn does not carry skill= — cannot attribute spawn to originating skill"
+			printf '        | span: %s\n' "$spawn_line"
+		fi
+	done <<EOF
+$spawns
+EOF
+done
+[ "$bad_spawns" = 0 ] || true
+
+# ---------------------------------------------------------------------------
+banner "13. /pr-iterate stops at the first release-bound red (#347)"
+# ---------------------------------------------------------------------------
+# A check that cannot pass until a release merges cannot pass on a branch, by
+# decision (root manual, hard rule 3) — and one window spent nine iterations
+# on such a red across three PRs, four of them re-running the same red. The
+# rule: the check's OWN OUTPUT marks the red release-bound (a line carrying
+# `release-bound:`, never a list of check names); the iteration sets it aside
+# before triage, never fixes or re-runs it, and when it is all that is left
+# records one stopped pr.iterate naming the check and ends. Every other red
+# still iterates. The classifier is a fence in the skill, lifted and RUN here
+# on a fixture PR, and the failing case is a second iteration on the same red.
+# No message below prints the marker itself: a red line of THIS suite that
+# carried it would be set aside as release-bound.
+PI=$(skill_md pr-iterate)
+RB_MARK='release-bound:'
+
+# The text: the stop, what marks it, and that the loop never re-fires on it.
+pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
+printf '%s' "$pi_flat" | grep -qiE "release-bound red" &&
+	pass "/pr-iterate names the release-bound red" ||
+	fail "/pr-iterate names no release-bound red — the stop has no rule"
+printf '%s' "$pi_flat" | grep -qiE "own output[^.]*\`$RB_MARK\`" &&
+	pass "/pr-iterate marks it by the check's own output, carrying the marker" ||
+	fail "/pr-iterate does not say the check's own output marks the red, with the release-bound marker"
+printf '%s' "$pi_flat" | grep -qiE "(never|not|nor)( inferred)? from (a|the) (list of )?check'?s? names?" &&
+	pass "/pr-iterate says a check's name is not what marks it" ||
+	fail "/pr-iterate does not say the marker is the output, never a list of check names"
+printf '%s' "$pi_flat" | grep -qiE "never (fixe[sd]|triage[sd]?)[^.]*re-run" &&
+	pass "/pr-iterate never fixes or re-runs a release-bound red" ||
+	fail "/pr-iterate does not say a release-bound red is never fixed or re-run"
+sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$PI")
+printf '%s\n' "$sc" | grep -qi 'release-bound' &&
+	pass "the stop conditions list the release-bound red" ||
+	fail "step 6's stop conditions do not list the release-bound red"
+
+# The emit: one pr.iterate, outcome stopped, reason naming release-bound and
+# the check.
+rb_emit=$(t_trace_spans "$PI" | grep -F 'kind=pr.iterate' | grep -F 'outcome=stopped' | grep -F "reason='release-bound" | head -1)
+[ -n "$rb_emit" ] && pass "/pr-iterate records the stop: pr.iterate outcome=stopped reason=release-bound" ||
+	fail "/pr-iterate has no trace line recording pr.iterate outcome=stopped with a release-bound reason"
+case $rb_emit in
+*"<the check by name>"*) pass "and the reason names the check" ;;
+*) fail "the release-bound stop does not name the check in its reason" ;;
+esac
+
+# The fence, lifted and run on a fixture PR.
+awk '/^```sh$/ { buf = ""; on = 1; next }
+	on && /^```$/ { if (buf ~ /triage_reds\(\)/) { printf "%s", buf; exit } on = 0; next }
+	on { buf = buf $0 "\n" }' "$PI" >"$SCRATCH/rb-fence.sh"
+[ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
+	fail "/pr-iterate has no sh fence defining triage_reds()"
+
+# The fixture: the failing checks, one name per line, and log i in logs/i.
+RBF="$SCRATCH/rb-pr"
+mkdir -p "$RBF/only" "$RBF/mixed" "$RBF/named"
+printf 'Docs set + UPDATING recipe (end-to-end)\n' >"$RBF/only/list"
+printf '  ok    the gate is RED after Part 1 alone\n  FAIL  %s UPDATING.md'"'"'s Part 2 worked example is STALE\n' "$RB_MARK" >"$RBF/only/1"
+printf 'Docs set + UPDATING recipe (end-to-end)\nTDD pairing guard\n' >"$RBF/mixed/list"
+cp "$RBF/only/1" "$RBF/mixed/1"
+printf '  FAIL  src/a.sh changed with no test change\n' >"$RBF/mixed/2"
+# A check NAMED like a release check, whose output says nothing of a release;
+# and an output that mentions the word in passing, without the marker.
+printf 'self-host (release-bound tag check)\nSkills suite\n' >"$RBF/named/list"
+printf '  FAIL  scripts/check.sh exited 1\n' >"$RBF/named/1"
+printf '  ok    the skill records reason=release-bound\n  FAIL  a span does not run\n' >"$RBF/named/2"
+
+# rb_iter <fixture> — one iteration's classification, as the fence prints it.
+rb_iter() { ( . "$SCRATCH/rb-fence.sh" && triage_reds "$RBF/$1/list" "$RBF/$1" ) 2>&1; }
+
+# Drive the loop the skill describes on a PR whose only red is release-bound:
+# an iteration that has nothing to triage and a red set aside records the
+# stop and ends. Iteration 2 on the same red is the failing case.
+RBT="$SCRATCH/rb-trace"
+rb_run=$(t_trace_runnable "$rb_emit")
+it=0
+while [ "$it" -lt 5 ]; do
+	it=$((it + 1))
+	out=$(rb_iter only)
+	# Anything but "nothing to triage, a red set aside" iterates again — a
+	# skill with no classifier triages every red, every time.
+	if printf '%s\n' "$out" | grep -q '^set-aside ' && ! printf '%s\n' "$out" | grep -q '^triage '; then
+		( cd "$ROOT" && TRACE_DIR="$RBT" TRACE_QUIET=1 sh -c "$rb_run" ) >/dev/null 2>&1
+		break
+	fi
+done
+[ "$it" = 1 ] && pass "a PR whose only red is release-bound stops at iteration 1" ||
+	fail "a PR whose only red is release-bound ran $it iterations — a second iteration on a red that cannot pass on a branch"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "the stop sets the check aside by name" ||
+	fail "the classifier did not set the release-bound check aside by name: $out"
+stopped=$(find "$RBT" -name '*.jsonl' -exec cat {} + 2>/dev/null | grep -c '"kind":"pr.iterate".*"outcome":"stopped"')
+[ "$stopped" = 1 ] && pass "one stopped pr.iterate is recorded" ||
+	fail "$stopped stopped pr.iterate events recorded — expected exactly one"
+# Were the loop re-fired anyway, iteration 2 on the same red triages nothing.
+out2=$(rb_iter only)
+if [ -s "$SCRATCH/rb-fence.sh" ] && ! printf '%s\n' "$out2" | grep -q '^triage '; then
+	pass "a second iteration on the same release-bound red triages nothing"
+else
+	fail "a second iteration on the same release-bound red would triage it: ${out2:-no classifier}"
+fi
+
+# Every other red still iterates.
+out=$(rb_iter mixed)
+printf '%s\n' "$out" | grep -qxF 'triage TDD pairing guard' &&
+	pass "a red that is not release-bound is still triaged" ||
+	fail "the pairing-guard red beside a release-bound one is not triaged: $out"
+printf '%s\n' "$out" | grep -qxF 'set-aside Docs set + UPDATING recipe (end-to-end)' &&
+	pass "…and the release-bound one beside it is set aside" ||
+	fail "the release-bound red beside another red is not set aside: $out"
+out=$(rb_iter named)
+[ "$(printf '%s\n' "$out" | grep -c '^triage ')" = 2 ] &&
+	pass "a check's name, and the word without the marker, set nothing aside" ||
+	fail "the classifier set aside a red by its name or by the bare word: $out"
+
+# The kit's own release-bound reds say so in their output.
+grep -E 'fail "[^"]*'"$RB_MARK" tests/self-host.test.sh | grep -qF 'drifted past the tag' &&
+	pass "self-host F3's drift red carries the marker" ||
+	fail "self-host F3's drift red does not print the release-bound marker — the kit's own release red is unmarked"
+grep -E 'fail "[^"]*'"$RB_MARK" tests/docs-demo.sh | grep -qF 'STALE' &&
+	pass "docs-demo's stale-transcript red carries the marker" ||
+	fail "docs-demo's stale-transcript red does not print the release-bound marker"
+
+# Review of PR #360. The log is captured per CHECK, not per run: one workflow
+# run holds many jobs, and a run-wide failed log would carry one job's marker
+# into every other red of the run (H-1).
+printf '%s\n' "$pi_flat" | grep -qE 'gh run view <run-id> --job <job-id> --log-failed >"\$scratch/checks/<i>"' &&
+	pass "/pr-iterate captures each failing check's own log, per job" ||
+	fail "/pr-iterate captures the failed log per run — one job's marker would set every red of the run aside"
+# The directory the capture writes into is made with the iteration's others (M-1).
+grep -E '^scratch=\$\(mktemp' "$PI" | grep -qF '"$scratch/checks"' &&
+	pass "step 1 makes the checks directory the capture writes into" ||
+	fail "step 1 does not make \$scratch/checks — the documented capture fails and every red is triaged"
+# The iteration line's reason gloss names both meanings of stopped (M-2).
+grep -F 'kind=pr.iterate' "$PI" | grep -F 'data.applied=' | grep -qF 'release-bound' &&
+	pass "the iteration line's reason names the release-bound stop beside the escalation" ||
+	fail "the iteration line still glosses stopped as the escalation alone"
+# The skill promises nothing of the loop runner it cannot keep (L-1).
+printf '%s\n' "$pi_flat" | grep -qF 'does not re-fire' &&
+	fail "/pr-iterate promises the loop runner will not re-fire — nothing the runner reads says so" ||
+	pass "/pr-iterate leaves ending the loop to the operator it reports to"
+# docs-demo's marker is gated on the declared release's tag, so the job that
+# runs it must check the tags out, at a depth the tag can be peeled at (H-2).
+dd_job=$(awk '/^  docs-demo:/ { on = 1; next } on && /^  [a-z]/ { exit } on' .github/workflows/kit-ci.yml)
+printf '%s\n' "$dd_job" | grep -qE 'fetch-depth: 0' && printf '%s\n' "$dd_job" | grep -qE 'fetch-tags: true' &&
+	pass "the docs-demo CI job checks out the tags its marker is gated on" ||
+	fail "the docs-demo CI job checks out no tags — its release-bound marker can never print where /pr-iterate reads"
+grep -qF 'rev-parse -q --verify "v$KITV^{commit}"' tests/docs-demo.sh &&
+	pass "docs-demo peels the tag, as F3 does" ||
+	fail "docs-demo tests the tag ref without peeling it — an unpeelable ref would read as released"
+
+# ---------------------------------------------------------------------------
+banner "14. /merge-train leaves a verdict for every landing: asked, or recorded as unasked (#345)"
+# ---------------------------------------------------------------------------
+# Retro F2: fifteen landings, no verdict from the train — it ran autonomously
+# under a "do not stop" instruction and the question was simply skipped. The
+# verdict a human did not give is still not feedback; what changes is that
+# the train says so in the trace, so the retrospective reads a fact and not
+# a hole. One emit per landed PR on BOTH paths, through one line.
+MT=$(skill_md merge-train)
+step4=$(sed -n '/^### 4 /,/^### 5 /p' "$MT")
+mt_fb=$(t_trace_lines "$MT" | grep -F 'kind=feedback')
+n_fb=$(printf '%s\n' "$mt_fb" | grep -c . | tr -d ' ')
+[ "$n_fb" = 1 ] && pass "/merge-train has one feedback emit line — both paths run it" ||
+	fail "/merge-train has $n_fb feedback emit lines — one line, with the outcome naming both paths, so a reader joins one event per merge.land"
+printf '%s\n' "$mt_fb" | grep -qF 'outcome=hit|adjusted|missed|unasked' &&
+	pass "the train's feedback outcome is hit|adjusted|missed|unasked" ||
+	fail "/merge-train's feedback line does not spell outcome=hit|adjusted|missed|unasked — an autonomous train has no outcome to record"
+printf '%s\n' "$mt_fb" | grep -qF 'subject=ticket:#<ticket>' && printf '%s\n' "$mt_fb" | grep -qF 'related=pr:#<N>' &&
+	pass "and it sits on the ticket, related to the PR — the join to merge.land" ||
+	fail "/merge-train's feedback line does not carry subject=ticket:#<ticket> related=pr:#<N> — nothing joins it to the landing"
+printf '%s\n' "$step4" | grep -qF 'exit condition' &&
+	pass "step 4 names the feedback emit as the train's exit condition per landed PR" ||
+	fail "/merge-train step 4 does not call the feedback emit its exit condition — a landing with no verdict event can still end the train"
+printf '%s\n' "$step4" | grep -qF 'outcome=unasked' &&
+	pass "step 4 says what an autonomous train records: outcome=unasked" ||
+	fail "/merge-train step 4 never says outcome=unasked — the train nobody can answer leaves silence"
+# The prose rule, not the emit line: the line's placeholder already says
+# "instruction", so the check reads step 4 with every trace line removed
+# (review of PR #361, L-1).
+step4_prose=$(printf '%s\n' "$step4" | grep -v 'sh scripts/trace\.sh' | tr '\n' ' ' | tr -s ' ')
+printf '%s\n' "$step4_prose" | grep -qiE 'unasked[^.]*reason[^.]*naming the instruction that made the train autonomous' &&
+	pass "and the unasked reason names the instruction that made the train autonomous" ||
+	fail "/merge-train does not say the unasked reason names the instruction that made the train autonomous"
+printf '%s\n' "$step4_prose" | grep -qiE 'gets no event|no verdict[^.]*no event' &&
+	fail "/merge-train still says a landing with no verdict gets no event — that is the silence #345 replaces" ||
+	pass "the old 'no verdict, no event' sentence is gone"
+printf '%s\n' "$step4" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'unasked[^.]*is not (a verdict|feedback)|not (a verdict|feedback)[^.]*unasked' &&
+	pass "and unasked is still said to be no verdict — a reader counts it as a landing not asked, never as a hit" ||
+	fail "/merge-train does not say unasked is not a verdict — a reader could count it as one"
+# The join a reader makes: a landed merge.land has exactly one feedback after it.
+ml_line=$(grep -n 'kind=merge.land' "$MT" | head -1 | cut -d: -f1)
+fb_line=$(grep -n 'kind=feedback' "$MT" | head -1 | cut -d: -f1)
+[ -n "$ml_line" ] && [ -n "$fb_line" ] && [ "$ml_line" -lt "$fb_line" ] &&
+	pass "the feedback emit (line $fb_line) follows the merge.land emit (line $ml_line)" ||
+	fail "the feedback emit does not follow merge.land in the text — merge.land='$ml_line' feedback='$fb_line'"
+# /pr-iterate asks nobody: its feedback is a human comment that changed the
+# plan, so it has no unasked path and keeps the three verdicts.
+pi_fb=$(t_trace_lines "$(skill_md pr-iterate)" | grep -F 'kind=feedback')
+[ -n "$pi_fb" ] && printf '%s\n' "$pi_fb" | grep -qF 'outcome=hit|adjusted|missed ' &&
+	pass "/pr-iterate still emits feedback with the three verdicts" ||
+	fail "/pr-iterate's feedback line is gone or no longer spells outcome=hit|adjusted|missed"
+printf '%s\n' "$pi_fb" | grep -qw unasked &&
+	fail "/pr-iterate's feedback names unasked — only the train asks a question nobody may answer" ||
+	pass "/pr-iterate's feedback keeps its three verdicts — unasked is the train's alone"
+# The record and the glossary carry the fourth outcome: a widened vocabulary
+# is the record's to decide (ADR-0008 clause 1's own words), by a dated
+# amendment and never an edit of the old text.
+# $ADR8 is the record's path, set in section 8 above.
+c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$ADR8" 2>/dev/null)
+printf '%s\n' "$c1" | grep -qF 'outcome `hit|adjusted|missed`' &&
+	pass "ADR-0008 clause 1 still carries the three-verdict text of 2026-09-30 — amended, never edited" ||
+	fail "ADR-0008 clause 1 no longer carries 'outcome \`hit|adjusted|missed\`' as written on 2026-09-30 — a record is amended, never rewritten"
+am1=$(printf '%s\n' "$c1" | awk '/\*Amended [0-9-]* \(#345\):\*/ { on = 1 } on')
+[ -n "$am1" ] && pass "clause 1 carries a dated amendment for #345" ||
+	fail "ADR-0008 clause 1 has no '*Amended <date> (#345):*' block — unasked is in a skill and not in the record"
+printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qE '`feedback`.{0,80}`unasked`' &&
+	pass "the amendment names unasked as a feedback outcome" ||
+	fail "the #345 amendment does not name \`unasked\` on \`feedback\`"
+printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'not a verdict' &&
+	pass "and says unasked is not a verdict" ||
+	fail "the #345 amendment does not say unasked is not a verdict — a reader has no rule for counting it"
+am1_date=$(printf '%s\n' "$am1" | sed -n 's/.*\*Amended \([0-9-]*\) (#345):\*.*/\1/p' | tail -1)
+row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+case $row in
+*"amended $am1_date (#345"*"unasked"*) [ -n "$am1_date" ] &&
+	pass "the index row for 0008 carries the #345 amendment's dated note ($am1_date)" ||
+	fail "the #345 amendment carries no date the index row could be held to" ;;
+*) fail "the index row for 0008 has no 'amended ${am1_date:-<no date>} (#345 …' note naming unasked: $row" ;;
+esac
+gl=$(awk '/^- \*\*Feedback\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on' docs/domain-glossary.md | tr '\n' ' ' | tr -s ' ')
+[ -n "$gl" ] && pass "the glossary has a Feedback entry" || fail "docs/domain-glossary.md has no '- **Feedback**' entry"
+for v in hit adjusted missed unasked; do
+	printf '%s\n' "$gl" | grep -qF "\`$v\`" && pass "the glossary's Feedback entry names \`$v\`" ||
+		fail "the glossary's Feedback entry does not name \`$v\`"
 done
 
 t_done "trace skills contract"
