@@ -864,7 +864,9 @@ for field in $(printf '%s' "$view" | sed 's/.*--json *//; s/ .*//' | tr ',' ' ')
 	esac
 done
 pass "the aggregate view was read against its allowlist"
-ALLOWED_TERMS=" .id .user.type .user.login .path .line .in_reply_to_id .state .isResolved .comments.nodes[0].databaseId "
+# A thread's outdated mark, its resolver and the line it was first posted on
+# are forge facts too: finding.dismiss is filled from them (#413).
+ALLOWED_TERMS=" .id .user.type .user.login .path .line .in_reply_to_id .state .isResolved .comments.nodes[0].databaseId .isOutdated .resolvedBy.login .originalLine "
 SHAPE='(\.\[\]|\.data\.repository\.pullRequest\.reviewThreads\.nodes\[\]) \| (select\(\(\.body \| length\) > 0\) \| )?"[^"]*"'
 : >"$SCRATCH/projection.bad"
 while IFS= read -r call; do
