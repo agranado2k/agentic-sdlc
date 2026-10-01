@@ -205,7 +205,12 @@ body 'Tier: implementer\nTier: planner\n'
 stamp 331
 s_assert_status 2 "two tiers, two answers: refused, exit 2"
 [ -z "$S_OUT" ] && pass "two tiers: nothing on stdout" || fail "two tiers: stdout should be empty, got '$S_OUT'"
-s_assert_err_has "x stamp:"
+# Each line passes alone, so no field is named: the stderr line says the
+# lines are refused together, and quotes neither value.
+s_assert_err_has "the stamp lines are refused together"
+s_assert_err_lacks "the tier line is refused"
+s_assert_err_lacks "implementer"
+s_assert_err_lacks "planner"
 
 # The refusal names the refused field's OWN vocabulary: a declared field whose
 # name merely starts with the key is another field, never listed under it.
@@ -223,14 +228,25 @@ s_assert_err_has "the tier vocabulary (planner implementer mechanical reviewer)"
 s_assert_err_lacks "alpha"
 
 # The argument is a number, or nothing is fetched at all.
-for arg in '' '331; touch PWN' '-1' '#331'; do
+# usage_refused <label> — exit 2, the usage line on stderr, nothing fetched.
+usage_refused() {
+	s_assert_status 2 "$1: a usage error, exit 2"
+	s_assert_err_has "usage: sh scripts/stamp.sh <issue-number>"
+	[ "$(calls)" = 0 ] && pass "$1: the tracker was never called" ||
+		fail "$1: the tracker was called $(calls) time(s)"
+	no_pwn "$1"
+}
+for arg in '' '331; touch PWN' '-1' '#331' '33a1'; do
 	body 'Tier: implementer\n'
-	if [ -z "$arg" ]; then stamp; else stamp "$arg"; fi
-	s_assert_status 2 "issue number '$arg': a usage error, exit 2"
-	[ "$(calls)" = 0 ] && pass "issue number '$arg': the tracker was never called" ||
-		fail "issue number '$arg': the tracker was called $(calls) time(s)"
-	no_pwn "issue number '$arg'"
+	stamp "$arg"
+	usage_refused "issue number '$arg'"
 done
+body 'Tier: implementer\n'
+stamp
+usage_refused "no argument at all"
+body 'Tier: implementer\n'
+stamp 331 332
+usage_refused "two issue numbers"
 
 # ---------------------------------------------------------------------------
 banner "Exit 3 — no stamp lines: an old ticket, not a refusal"
