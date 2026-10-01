@@ -209,6 +209,143 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+banner "A6. The Claude Code adapter says how a typed-return reader is denied its tools"
+# ---------------------------------------------------------------------------
+# Three skills (/to-tickets, /pr-iterate, /dogfood) fence an untrusted read
+# behind a reader that has "no shell, no forge CLI, no network", and each one
+# defers the HOW to the adapter: "How an agent harness withholds those tools is
+# the adapter's, not this skill's, to say". A pointer with nothing at the other
+# end is a claim (shared invariant §8), so this block holds both ends: the
+# adapter names the mechanism for each of its two spawn paths, and the skills
+# still point at it. Two paths because they are not the same kind of thing —
+# the CLI's tool flags are a RESTRICTION, and a prompt to the in-session agent
+# tool is a REQUEST — and the section must say which is which (#335).
+#
+# Every assertion below is on the SECTION, cut out of the README first, so a
+# phrase the rest of a 400-line note happens to carry cannot keep one green.
+CC_README="adapters/claude-code/README.md"
+cc_sec=$(sed -n '/^## Denying a typed-return reader/,/^## Wiring/p' "$CC_README")
+cc_low=$(printf '%s' "$cc_sec" | tr -d '`' | tr '\n' ' ' | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+# cc_says <phrase, case-insensitive, backticks ignored> <pass> <fail> — one
+# stanza for the section's prose; what it must say, in the words a reader of
+# the skills will look for.
+cc_says() {
+	case $cc_low in
+	*"$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"*) pass "$2" ;;
+	*) fail "$3" ;;
+	esac
+}
+
+if [ -n "$cc_sec" ]; then
+	pass "$CC_README has a section on the typed-return reader"
+else
+	fail "$CC_README has no section on the typed-return reader — the skills defer to an adapter that says nothing"
+fi
+
+# The flags, by their real names on the CLI this adapter wires (`claude
+# --help`: "--tools <tools...>  Specify the list of available tools from the
+# built-in set"; "--restricted … confines the file tools to the working
+# directories"; "--strict-mcp-config  Only use MCP servers from --mcp-config"),
+# and ON THE ONE LINE a reader copies: the `claude -p` line of the fenced sh
+# block. Prose that names a flag three paragraphs away from the line sends the
+# reader to a line without it, so each flag is asserted on that line itself —
+# a per-line match, not a glob over the flattened note.
+cc_cmd=$(printf '%s\n' "$cc_sec" | grep -E '^claude -p ')
+if [ -n "$cc_cmd" ] && [ "$(printf '%s\n' "$cc_cmd" | grep -c '')" -eq 1 ]; then
+	pass "…and has exactly one \`claude -p\` line in its fenced sh block, the headless form the fence spawns"
+else
+	fail "…but has $(printf '%s' "$cc_cmd" | grep -c '') \`claude -p\` lines in its fenced sh block — the reader needs one line to copy"
+fi
+for flag in '--restricted' '--tools Read' '--strict-mcp-config'; do
+	case " $cc_cmd " in
+	*" $flag "*) pass "…and that line carries $flag" ;;
+	*) fail "…but that line does not carry $flag — a reader that copies it keeps what the flag withholds" ;;
+	esac
+done
+
+# What each flag does is quoted from the CLI's own help, not paraphrased, so a
+# release that changes a flag's meaning is a diff against a quote and not a
+# drift nobody notices. `--restricted` is the one that confines Read to the
+# working directory — the confinement `--tools Read` alone does not give —
+# and it goes WITH `--tools`, not instead of it.
+cc_says 'confines the file tools to the working directories' \
+	"…and quotes --restricted's own help: it confines the file tools to the working directories" \
+	"…but never quotes what --restricted does — the confinement of Read to \$scratch is asserted, not shown"
+cc_says '--restricted goes with --tools' \
+	"…and says --restricted goes with --tools, not instead of it" \
+	"…but never says --restricted goes with --tools Read"
+
+# The flag that looks like it and is not: `--allowedTools` is the permission
+# allowlist, which pre-approves and withholds nothing. A reader spawned with it
+# keeps the shell, so the section must name it and say what it fails to do.
+cc_says '--allowedTools' \
+	"…and names --allowedTools, the flag that looks like the restriction" \
+	"…but does not name \`--allowedTools\` — the flag that looks like the restriction and is not"
+cc_says 'withholds nothing' \
+	"…and says it withholds nothing" \
+	"…but does not say \`--allowedTools\` withholds nothing"
+
+# The read is still a read of whatever is in reach, and what makes that safe is
+# the FENCE the skills put around the return — typed lines and one evidence
+# span verified against the scratch file — not the flag. The section must say
+# so, in those terms, so nobody reads the flag as the whole of the boundary.
+cc_says 'one evidence span' \
+	"…and names the fence — the typed return and its one evidence span — as what the flags are used together with" \
+	"…but never names the fence (the typed return and its one evidence span) beside the flags"
+
+# The in-session path: the Agent tool's spawn call takes no tool list, so a
+# skill run inside a session can only ASK — unless it runs the CLI line above
+# itself, from the shell every session holds, which is the recommended path.
+# The section must say the prompt-only spawn is a request, say that the CLI
+# from inside the session is the way out, and keep the fence's duty for when
+# it cannot: "say so at the quiz" (/to-tickets) and "say so in the report"
+# (/pr-iterate, /dogfood) — the fallback's own words, not a bare "in the
+# report" any later prose could carry.
+cc_says 'request, not a restriction' \
+	"…and says the in-session prompt is a request, not a restriction" \
+	"…but never says plainly that the in-session prompt is a request, not a restriction"
+cc_says 'from inside the session' \
+	"…and recommends spawning the reader with the CLI from inside the session" \
+	"…but does not recommend the CLI from inside the session"
+cc_says 'prompt-only spawn is the fallback' \
+	"…with the prompt-only spawn as the fallback" \
+	"…but does not make the prompt-only spawn the fallback"
+cc_says 'say so at the quiz' \
+	"…and carries the fallback /to-tickets requires: say so at the quiz" \
+	"…but does not carry \"say so at the quiz\" — /to-tickets's fallback is unstated"
+cc_says 'say so in the report' \
+	"…and the one /pr-iterate and /dogfood require: say so in the report" \
+	"…but does not carry \"say so in the report\" — /pr-iterate's and /dogfood's fallback is unstated"
+
+# A dispatched reader (scripts/agent-dispatch.sh) runs the command template the
+# consumer wrote, AGENT_HARNESS_<TOKEN>_CMD; the kit writes no flag into it. So
+# the section may not claim the restriction is real on that path unless it
+# says where the flags go: the template.
+cc_says 'AGENT_HARNESS_' \
+	"…and says a dispatched reader's flags live in the AGENT_HARNESS_<TOKEN>_CMD template, which the kit does not write" \
+	"…but says nothing about where a dispatched reader's flags go — agent-dispatch.sh adds none of its own"
+
+# The index row in adapters/README.md names the topic, so a reader who starts
+# at the index finds the section — one grep beside the ruby-row check above.
+if grep -E '^\| \[`claude-code/`\]' adapters/README.md | grep -q 'typed-return reader'; then
+	pass "adapters/README.md's claude-code row names the typed-return reader"
+else
+	fail "adapters/README.md's claude-code row does not name the typed-return reader — the index does not say the section exists"
+fi
+
+# The other end of the pointer: each of the three skills still defers to the
+# adapter in the one sentence the section above answers. Lose it from a skill
+# and the adapter's section documents a mechanism nothing invokes.
+for s in to-tickets pr-iterate dogfood; do
+	sk=".agents/skills/$s/SKILL.md"
+	if tr '\n' ' ' <"$sk" | tr -s ' ' | grep -q "How an agent harness withholds those tools is the adapter's, not this skill's, to say"; then
+		pass "$sk still defers the how to the adapter"
+	else
+		fail "$sk no longer says how the tools are withheld is the adapter's to say — the pointer this section answers is gone"
+	fi
+done
+
+# ---------------------------------------------------------------------------
 banner "B. Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------
 mkdir -p "$PROJ"
