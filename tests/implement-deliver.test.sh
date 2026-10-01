@@ -251,17 +251,29 @@ stamp_has "A refused *confidence* is a refused stamp, on the same path as a refu
 conf=$(printf '%s\n' "$stamp" | sed -n 's/.*\(A refused \*confidence\*.*\) A missing `Confidence:`.*/\1/p')
 [ -n "$conf" ] && pass "the refused-confidence sentence is cut out of the bullet, up to the missing-line sentence" ||
 	fail "no sentence runs from 'A refused *confidence*' to 'A missing \`Confidence:\`' — nothing to hold the ruling's words to"
-# stop_on_refused_confidence <sentence> — exit 0 only when every load-bearing
-# word of the ruling is in it; prints the first one that is not.
+# The load-bearing words, one per line, spelled ONCE: the live assertions and
+# the probe the weakened copies drive read the same list, so neither can be
+# edited without the other.
+RULING_WORDS='stop
+report the line as written
+`/to-tickets` to re-stamp
+does not stand on its own
+never read as `low`, or as any declared one'
+# stop_on_refused_confidence <sentence> — exit 0 only when every word of
+# RULING_WORDS is in it; prints the first one that is not.
 stop_on_refused_confidence() {
-	for _w in "stop" "report the line as written" "\`/to-tickets\` to re-stamp" "does not stand on its own" "never read as \`low\`, or as any declared one"; do
+	while IFS= read -r _w; do
 		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
-	done
+	done <<EOF
+$RULING_WORDS
+EOF
 }
-for word in "stop" "report the line as written" "\`/to-tickets\` to re-stamp" "does not stand on its own" "never read as \`low\`, or as any declared one"; do
+while IFS= read -r word; do
 	printf '%s\n' "$conf" | grep -qF -- "$word" && pass "'$word' — stop-on-refused-confidence, in the sentence that rules it" ||
 		fail "the refused-confidence sentence never says '$word' — the ruling lost a load-bearing word"
-done
+done <<EOF
+$RULING_WORDS
+EOF
 # weakened <name> <sed expression over the sentence> — the copy must differ
 # from the subject (or the bait is the subject), and the probe must refuse it.
 weakened() {
