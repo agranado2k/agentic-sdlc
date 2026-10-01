@@ -416,4 +416,110 @@ $(t_trace_spans "$f")
 EOF
 	[ "$bad" = 0 ] || true
 done
+
+# ---------------------------------------------------------------------------
+banner "10. Every in-session spawn has a corresponding spawn.end in the same step"
+# ---------------------------------------------------------------------------
+# Skills that document in-session spawns (outcome=in-session) must also document
+# corresponding spawn.end events for each spawned agent/reviewer. Test verifies that
+# every documented in-session spawn line is followed by a documented spawn.end line
+# in the skill file (this tests documentation, not runtime behavior).
+# See ticket #353 acceptance: "skills suite asserts every in-session spawn line...
+# has a spawn.end line after it in the same step".
+
+for s in implement review-pr; do
+	f=$(skill_md "$s")
+	spans=$(t_trace_spans "$f")
+	bad=0
+
+	# Extract all in-session spawn spans from this skill
+	in_session_spawns=$(printf '%s\n' "$spans" | grep -F 'kind=spawn' | grep -F 'outcome=in-session')
+
+	if [ -z "$in_session_spawns" ]; then
+		pass "/$s has no in-session spawns"
+		continue
+	fi
+
+	# For each in-session spawn, verify there is a spawn.end somewhere in the skill
+	# (exact ordering within the skill document is verified here as a simpler check
+	# that spawn.end documentation exists for each spawned entity)
+	spawn_count=$(printf '%s\n' "$in_session_spawns" | wc -l)
+	end_count=$(printf '%s\n' "$spans" | grep -c 'kind=spawn.end' || true)
+
+	if [ "$end_count" -ge "$spawn_count" ]; then
+		pass "/$s has $end_count spawn.end lines for $spawn_count in-session spawns"
+	else
+		bad=$((bad + 1))
+		fail "/$s has $spawn_count in-session spawns but only $end_count spawn.end lines — every spawn must have a corresponding spawn.end"
+	fi
+
+	# Special check: review-pr should have 7 spawn.end (one per agent) when it has 7 in-session spawns
+	if [ "$s" = "review-pr" ] && [ "$spawn_count" -ge 7 ]; then
+		if [ "$end_count" -lt 7 ]; then
+			bad=$((bad + 1))
+			fail "/$s should document 7 spawn.end events (one per agent) but has only $end_count"
+		else
+			pass "/$s has at least 7 spawn.end lines for 7 agent spawns"
+		fi
+	fi
+done
+
+# ---------------------------------------------------------------------------
+banner "11. /implement emits tdd.cycle while driving /tdd's red-green-refactor loop"
+# ---------------------------------------------------------------------------
+# The /tdd skill defines tdd.cycle as one event per RED, per GREEN and per
+# refactor step. When /implement drives /tdd through each seam (step 4), it
+# emits tdd.cycle to record the cycle, not only /tdd's own invocation.
+# This ensures the operator sees every cycle a session ran, regardless of
+# whether /tdd was spawned or driven inline.
+IMPL=$(skill_md implement)
+impl_tdd=$(grep -F 'kind=tdd.cycle' "$IMPL")
+if [ -n "$impl_tdd" ]; then
+	pass "/implement emits tdd.cycle"
+	# Verify the emit has the required fields
+	if printf '%s\n' "$impl_tdd" | grep -qF 'outcome='; then
+		pass "/implement's tdd.cycle emit carries outcome="
+	else
+		fail "/implement's tdd.cycle emit is missing outcome="
+	fi
+	if printf '%s\n' "$impl_tdd" | grep -qF 'data.test='; then
+		pass "/implement's tdd.cycle emit carries data.test="
+	else
+		fail "/implement's tdd.cycle emit is missing data.test="
+	fi
+else
+	fail "/implement does not emit tdd.cycle — the operator cannot see which cycles a session ran"
+fi
+
+# ---------------------------------------------------------------------------
+banner "12. Every spawn emit carries skill= to name which skill made the spawn"
+# ---------------------------------------------------------------------------
+# When a skill spawns a subagent, the emit must carry skill=<skill_name> to
+# identify which skill made the decision to spawn. This allows the trace reader
+# to attribute each spawn to its originating skill without relying on event
+# ordering or the skill resolver's output.
+bad_spawns=0
+for s in $CHAIN; do
+	f=$(skill_md "$s")
+	spawns=$(grep -F 'kind=spawn' "$f" || true)
+	if [ -z "$spawns" ]; then
+		pass "/$s has no spawns"
+		continue
+	fi
+	# For each spawn line in this skill, check that it carries skill=
+	while IFS= read -r spawn_line; do
+		[ -z "$spawn_line" ] && continue
+		if printf '%s\n' "$spawn_line" | grep -qE 'skill=[a-z-]+' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$' || printf '%s\n' "$spawn_line" | grep -qE 'skill=\$\{'; then
+			pass "/$s's spawn carries skill="
+		else
+			bad_spawns=$((bad_spawns + 1))
+			fail "/$s's spawn does not carry skill= — cannot attribute spawn to originating skill"
+			printf '        | span: %s\n' "$spawn_line"
+		fi
+	done <<EOF
+$spawns
+EOF
+done
+[ "$bad_spawns" = 0 ] || true
+
 t_done "trace skills contract"

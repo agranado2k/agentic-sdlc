@@ -1,10 +1,11 @@
 # `claude-code/` — wiring one agent harness into the kit
 
-Two questions the portable core cannot answer, because both are this agent
-harness's own: **where does a resolved capability tier go at spawn time**, and
-**how does a session's token usage reach the decision trace**. The first half of
-this note is prose about a mechanism; the second half ("Wiring the session
-hooks") points at real files under `hooks/`, which ship and arrive inert.
+Three questions the portable core cannot answer, because each is this agent
+harness's own: **where does a resolved capability tier go at spawn time**,
+**how is a typed-return reader denied a shell, a forge CLI and the network**,
+and **how does a session's token usage reach the decision trace**. The first
+two are prose about a mechanism; the third ("Wiring the session hooks") points
+at real files under `hooks/`, which ship and arrive inert.
 
 The kit resolves a **capability tier** — and optionally a **task domain** — to a
 model identifier and stops there:
@@ -96,6 +97,147 @@ two-line change rather than a matrix to maintain. Note the fold: a domain token
 may contain hyphens and a variable name may not, so `html-report` reads
 `AGENT_TIER_IMPLEMENTER_HTML_REPORT`.
 
+## Denying a typed-return reader its tools
+
+Three skills — `/to-tickets`, `/pr-iterate` and the optional dogfood skill,
+where it was taken — hand an untrusted read to a reader that has "no shell, no
+forge CLI, no network" and sends back a typed return, and each one says that
+how an agent harness withholds those tools is the adapter's to say. This is
+the answer, for the two ways a Claude Code session can spawn that reader. They
+are not the same kind of thing, and the one job of this section is to say
+which is which: **the CLI withholds; the in-session tool is asked.**
+
+### The CLI path — a restriction
+
+Headless, `claude -p` takes three flags that together leave a reader with one
+tool, confined to one directory, and no tool server. From `claude --help` on
+2.1.285, verbatim:
+
+- **`--tools`** — *"Specify the list of available tools from the built-in
+  set. Use "" to disable all tools, "default" to use all tools, or specify
+  tool names (e.g. "Bash,Edit,Read")"*. A reader gets exactly one.
+- **`--restricted`** — *"Restricted mode: removes the built-in tools that run
+  commands or code (Bash, PowerShell, REPL and the other code-running tools)
+  and WebFetch unless --tools names them, and ignores user, project and local
+  settings files (managed settings and --settings still apply; add
+  --strict-mcp-config to skip MCP servers too). Also confines the file tools
+  to the working directories (--add-dir included), refuses bypassPermissions,
+  and lets only a person or the configured permission handler approve writes
+  to settings, git and tool-configuration files."*
+- **`--strict-mcp-config`** — *"Only use MCP servers from --mcp-config,
+  ignoring all other MCP configurations"*.
+
+The shell catches what the reader sends back:
+
+```sh
+# from $scratch: --restricted confines Read to the working directory, so
+# the bodies are in reach and nothing else is. The prompt is on stdin, the
+# return lands where the skill says, in a directory that holds nothing else
+cd "$scratch" || exit 2
+[ -n "$model" ] && set -- --model "$model"
+claude -p --restricted --tools Read --strict-mcp-config "$@" < prompt > out/returns
+```
+
+- **`--tools Read`** — every built-in tool but file reading is gone: no
+  `Bash` (so no shell and no `gh`), no `WebFetch`, no `WebSearch`, no `Write`
+  or `Edit`. A tool that is absent cannot be asked for, prompted into use or
+  talked around: the model's turn has no such call to make.
+- **`--restricted` goes with `--tools`, not instead of it.** `--tools Read`
+  alone leaves `Read` with the reach the user has: a credential file is a
+  path like any other, and whether a read outside the working directory is
+  refused then rests on the permission mode, which a settings file can open.
+  `--restricted` confines the file tools to the working directories, ignores
+  those settings files, and refuses `bypassPermissions` — so from `$scratch`
+  the one directory in reach is `$scratch`, whatever the user's settings say.
+- **`--strict-mcp-config`** — the built-in set is only half the list. Your
+  project's and your user's settings may wire MCP servers, each a tool server
+  with reach of its own (a forge, a mailbox, a browser), and `--tools` does
+  not touch them. This flag admits only the servers named on `--mcp-config`,
+  and you name none.
+- **The redirect is the reader's one write.** The skills allow the return to be
+  "captured there by the adapter", and that is this: the shell puts stdout in
+  the file, so the reader needs no write tool to deliver it. The file's name
+  is the calling skill's — `out/returns` for `/pr-iterate`, `out/return` for
+  the other two.
+- **The `set --` line** is the empty-means-omit branch from the top of this
+  note, for `model=$(sh scripts/agents.lib.sh mechanical judge)`, written so
+  the flag and its value stay two words under any `sh`.
+
+**The flags are half of the fence, and the half the skills own is the other.**
+A reader still reads whatever is in reach, and nothing here inspects what it
+read. What makes the read safe is the return: typed lines held to a
+vocabulary, and one evidence span verified against the scratch file the reader
+was handed — so nothing it read can leave except by that span, and the span
+is shown quoted, never obeyed. Use the two halves together. The flags without
+the fence leave a reader that can write anything into the session's lap; the
+fence without the flags leaves a reader with a shell to hand, which is the
+case the next subsection is about.
+
+Not the flags that look like it. `--allowedTools` is the permission
+allowlist: it pre-approves the tools it names and withholds nothing, so a
+reader spawned with `--allowedTools Read` still holds `Bash` and is merely
+asked before each use — and headless, with nobody to ask, each use is denied
+one call at a time, which leaves the shell in front of the model to keep
+trying. `--disallowedTools` denies by name, and a name you forgot is a tool it
+keeps. Name what stays, never what goes.
+
+Watched on this host, from a directory holding one file, with the `-p` line
+above and three prompts — the tool names, the tools the reader must not have,
+and a read outside the directory:
+
+```text
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'List the names of every tool you can call, one per line, nothing else. …'
+Read
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'Run `git status` and `gh pr list`, then fetch https://example.com. For each, report in one line whether you could, and by which tool. …'
+I don't have shell execution tools available in my current environment—only the Read tool for reading files. I cannot run `git status`, `gh pr list`, or fetch URLs. …
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'Read ./one, then read /etc/hostname. For each, one line: the contents, or the error the tool returned, verbatim. …'
+alpha beta
+/etc/hostname is outside /tmp/…/358-probe.EBvjNu; --restricted confines the file tools to the working directory.
+```
+
+A reader dispatched through `scripts/agent-dispatch.sh` is on this path too,
+with one thing to know: the dispatcher runs the command template you wrote,
+`AGENT_HARNESS_<TOKEN>_CMD`, with `{model_flag}` and `{prompt_file}` filled,
+from the caller's own directory, and writes no flag of its own — the script's
+header says the autonomy flags "are yours to choose". So the three flags above
+belong in that template, and a reader's template needs the working directory
+to be the scratch directory — `--add-dir` reaches it too, but leaves the
+caller's directory in reach beside it. An agent harness token the reader's
+tier alone maps to is the shape that fits: the template that runs implementers
+needs `Bash`, so it cannot carry `--tools Read`. The kit ships no template, as
+it ships no mapping.
+
+### The in-session path — a request
+
+Inside a session, a skill spawns through the `Agent` tool, and that call has no
+tool list: a prompt, a type, an optional model, and nothing that withholds. A
+subagent's tools come from its type's definition, and the types a plain
+session offers for a read both hold `Bash`: the general-purpose type holds
+every tool, and the read-only `Explore` type drops the write tools and keeps
+the shell. So "read this file and nothing else: no shell, no forge CLI, no
+network" written into the prompt is a **request, not a restriction**: a
+reader that honours it is well behaved, and a line injected into the file it
+reads can ask it to do otherwise with a shell to hand.
+
+So the recommended in-session path is the CLI one: **spawn the reader with the
+CLI from inside the session.** A session holds a shell, the `-p` line above
+runs under it, and the restriction is then real whichever path the skill
+started on — the same three flags, from `$scratch`, with the return in the
+file the skill names. The **prompt-only spawn is the fallback**, for a
+session that cannot run the CLI — no `claude` on the path, or a shell it was
+not given — and it keeps the duty the three skills already provide for: where
+yours cannot, say so at the quiz (`/to-tickets`) or say so in the report
+(`/pr-iterate` and the dogfood skill). Say what fenced the read — for
+example, that the reader was tool-restricted by prompt alone — so the human
+reading the quiz or the report knows: the return's shape check and the
+vocabulary check, which do not weaken (a return that fails them is still
+refused unread), and not an absent tool. What the prompt cannot do is take the
+shell away for the length of the read.
+
+A project can author an agent type of its own under `.claude/agents/`, whose
+definition names the tools it holds, and spawn the reader as that type; the
+kit ships none, and the list at the end of this note says why.
+
 ## Wiring the session hooks
 
 The other half of this adapter is `hooks/`, and it answers a different
@@ -137,6 +279,50 @@ To turn them on, wire the three events in your own `.claude/settings.json`:
 
 Then set `TRACE_DIR` in `scripts/trace.config.sh` — without it every emit is a
 silent no-op, which is the shipped default and a working state.
+
+### When node is managed per user
+
+The extractor is the one part of this adapter with a runtime, so `node` has to
+be on the path **the hooks run with** — the agent harness's own, not your
+shell's. A node managed per user (a version manager that keeps it under your
+home directory and puts it on the path from your shell's startup files) is on
+every path you type at and on none of the hooks': every `session.usage` and
+every `agent.stop` then records `outcome=fail` with a reason naming node, and a
+session's cost goes unmeasured while nothing visibly breaks — the hooks exit 0,
+as always. That reason points here.
+
+The fix is policy, not code: put the directory on the path through the `env`
+block of **`.claude/settings.local.json`** — the per-project settings file the
+agent harness keeps for one person's overrides, and keeps uncommitted (it adds
+the file to git's global excludes the first time it writes one; a file you
+create by hand you add to `.gitignore` yourself).
+
+```json
+{
+  "env": {
+    "PATH": "<the directory your node lives in>:<the path the hooks had before>"
+  }
+}
+```
+
+`dirname "$(command -v node)"` in your own shell prints the first half. Three
+things about the entry:
+
+- **The value is literal and whole** — checked against a live hook, not read
+  off a page. The agent harness expands nothing in it (`$HOME` arrives as five
+  characters) and merges nothing: what you write is the entire path. So write
+  the directory out, and keep the directories the hooks already relied on
+  after it.
+- **It reaches the hooks** — the same probe — and, by the agent harness's own
+  account, a settings `env` overrides the shell's exports for the whole
+  session, the shell behind its command tool included. That is why the second
+  half matters, and why this is the one place a path that is right on exactly
+  one machine belongs.
+- **It is one person's, and that is the whole rule.** A directory under one
+  person's home is wrong on every other machine, which is why it never goes
+  into the shared `.claude/settings.json` that wires the hooks, and never into
+  a hook's own command line. The shared file says *which* hooks run; the
+  personal one says *where* their runtime is.
 
 ### And the tool hook, behind its own switch
 
@@ -188,9 +374,13 @@ you get it wrong:
 
 - **A streamed response is written more than once.** One assistant API response
   with two content blocks is two lines of the transcript, repeating the same
-  `message.id` and a byte-identical usage block. Summing lines over-counts;
-  de-duplicating by `message.id` reproduces the agent harness's own per-model
-  rollup exactly.
+  `message.id`. Summing lines over-counts; de-duplicating by `message.id`
+  reproduces the agent harness's own per-model rollup exactly — taking the
+  **last** usage block per id, because the blocks are not always identical: a
+  response that opens with a thinking block is written first with a partial
+  usage snapshot and then with the final one (#343). Only `output_tokens`
+  may differ, and only by growing; a later block that shrinks it, or changes
+  the input or cache counts, is still drift.
 - **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
   payload carries two paths: `transcript_path` is the *parent session's* and
   `agent_transcript_path` is the subagent's. Read the first one there and every
@@ -290,6 +480,11 @@ a token-bearing event whose model has no price in your table, which is why the
   `bootstrap.sh` before your tree is stamped. That is the precise form of
   [`../README.md`](../README.md)'s claim that this tree arrives dormant: the
   scripts arrive, the wiring is yours to write.
+- **No agent type for the reader.** The in-session path above is a request
+  because the kit ships no `.claude/agents/` definition that would make it a
+  restriction, and it will not: that file names a tool set, which is a
+  consumer's decision in a consumer's file. The CLI flag is the one restriction
+  this adapter can name without owning a file in your tree.
 - **No workflow, and no check on tier selection.** Tier selection is a
   spawn-time decision inside a session. There is nothing for CI to enforce, and
   a check that asserted "this ticket ran on the right model" would be asserting
