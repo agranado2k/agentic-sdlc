@@ -399,7 +399,16 @@ you get it wrong:
   last one the trace holds. The events stay a plain sum: `summary`, the export
   and the query below need no rule about which event supersedes which. A
   compaction appends to the same file too, but the call that writes its summary
-  leaves no assistant line, so its tokens are in the rollup and in no event.
+  leaves no assistant line, so its tokens are in the rollup and in no message.
+  The session-end hook therefore reads the rollup beside the messages and
+  records the difference, per model, as one more `session.usage` event with
+  `data.via=rollup` and `data.reason=compaction` and no `data.last_msg` — so
+  the plain sum of the events is the rollup (#407). It judges the rollup only
+  in a file that holds a compact boundary, whose last rollup line follows its
+  last message and that is not a fork; the subagents' own files and any gap an
+  earlier end recorded are taken off first. A rollup smaller than what the
+  events already hold records the messages as usual plus one `outcome=fail`,
+  `data.via=rollup` event saying why no gap was recorded.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
