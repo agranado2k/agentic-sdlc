@@ -2,6 +2,9 @@
 //
 //   node transcript-usage.mjs [--rollup] [--after <message id>] <transcript.jsonl>
 //
+// --rollup also reads the session's recorded trace events on stdin (empty is
+// fine; a terminal blocks until EOF).
+//
 // STDOUT is one row per model, seven space-separated fields — the four token
 // fields in the order they sit in a trace event, then how far the read went:
 //
@@ -106,7 +109,7 @@ function die(message) {
   process.exit(2);
 }
 
-const USAGE = "usage: node transcript-usage.mjs [--after <message id>] [--rollup] <transcript.jsonl>";
+const USAGE = "usage: node transcript-usage.mjs [--rollup] [--after <message id>] <transcript.jsonl>  (--rollup reads recorded events on stdin)";
 const args = process.argv.slice(2);
 let after = null;
 let rollup = false;
@@ -277,15 +280,23 @@ function scan(file, after, where = "", fail = die) {
 
 const { seen, last, compacted, copied, rollup: lastRollup } = scan(path, after);
 
+/** Four zero counts, a fresh object each time. */
+const zero = () => ({ tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 });
+
+/** model -> four counts, summed into `into`. */
+function add(into, model, counts) {
+  const running = into.get(model) ?? zero();
+  for (const [field] of FIELDS) running[field] += counts[field];
+  into.set(model, running);
+}
+
 /** Per-model totals and distinct-message counts, in first-seen order. */
 const totals = new Map();
 const counted = new Map();
 for (const { model, counts, fresh } of seen.values()) {
   if (!fresh) continue;
   counted.set(model, (counted.get(model) ?? 0) + 1);
-  const running = totals.get(model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
-  for (const [field] of FIELDS) running[field] += counts[field];
-  totals.set(model, running);
+  add(totals, model, counts);
 }
 
 let out = "";
@@ -340,13 +351,6 @@ const refuse = (message) => {
   throw new Refused(message);
 };
 
-/** model -> four counts, summed into `into`. */
-function add(into, model, counts) {
-  const running = into.get(model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
-  for (const [field] of FIELDS) running[field] += counts[field];
-  into.set(model, running);
-}
-
 function judgeRollup() {
   if (!compacted || copied || lastRollup === null) return "";
   if (typeof lastRollup !== "object" || Array.isArray(lastRollup)) {
@@ -362,28 +366,39 @@ function judgeRollup() {
       if (!isCount(usage?.[k])) refuse(`the rollup's '${key}.${k}' is missing or not a non-negative integer`);
       counts[field] = usage[k];
     }
-    add(said, key.replace(/\[[^\]]*\]$/, ""), counts);
+    const model = key.replace(/\[[^\]]*\]$/, "");
+    // The same class line by line a message's model is held to: the key
+    // becomes a word in the hook's `read` loop, and a space in it would shift
+    // four numbers by one column (review of PR #438, H-2).
+    if (model === "" || /[\s"\\]/.test(model)) {
+      refuse(`the rollup's model key '${key}' is empty or carries whitespace, a quote or a backslash, which an event cannot record unambiguously`);
+    }
+    add(said, model, counts);
   }
   // What the events hold, or are about to.
   const held = new Map();
   for (const { model, counts } of seen.values()) add(held, model, counts);
   const dir = path.replace(/\.jsonl$/, "") + "/subagents";
+  // No subagents directory is no subagents; any other failure to list it is a
+  // refusal, because "none" would over-state the gap (review of PR #438, M-1).
   let names = [];
   try {
     names = readdirSync(dir).filter((n) => /^agent-.*\.jsonl$/.test(n)).sort();
-  } catch {
-    names = [];
+  } catch (error) {
+    if (error.code !== "ENOENT") refuse(`cannot list ${dir}: ${error.code ?? error.message}`);
   }
   for (const name of names) {
     for (const { model, counts } of scan(`${dir}/${name}`, null, `subagents/${name}: `, refuse).seen.values()) {
       add(held, model, counts);
     }
   }
+  // Read as "nothing recorded", an unreadable stdin would record a gap a
+  // second time — the double record this input exists to prevent.
   let recorded = "";
   try {
     recorded = readFileSync(0, "utf8");
-  } catch {
-    recorded = "";
+  } catch (error) {
+    refuse(`cannot read the recorded events on stdin: ${error.code ?? error.message}`);
   }
   let n = 0;
   for (const line of recorded.split("\n")) {
@@ -407,8 +422,8 @@ function judgeRollup() {
 
   let rows = "";
   for (const model of new Set([...said.keys(), ...held.keys()])) {
-    const r = said.get(model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
-    const h = held.get(model) ?? { tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 };
+    const r = said.get(model) ?? zero();
+    const h = held.get(model) ?? zero();
     const gap = {};
     for (const [field] of FIELDS) {
       gap[field] = r[field] - h[field];

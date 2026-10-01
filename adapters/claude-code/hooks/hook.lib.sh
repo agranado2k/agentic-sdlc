@@ -170,7 +170,7 @@ hook_point_at() {
 
 # hook_tokens <transcript> <kind> [--rollup] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
-# token counts, and at least one event whatever happens. Five shapes, all of
+# token counts, and at least one event whatever happens. Seven shapes, all of
 # them exit 0:
 #
 #   the numbers      one event per model, tokens on it, and how far the read
@@ -277,7 +277,7 @@ hook_tokens() {
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
 			data.via="$_ht_v" data.reason="$_ht_c" \
-			reason='the agent harness rollup counts these tokens and no assistant line carries them: a compaction summary call' "$@"
+			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
 	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
 		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \

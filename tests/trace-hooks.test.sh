@@ -2680,6 +2680,48 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ "$(printf '%s\n' "$SHORT" | grep -c .)" = 1 ] && [ "$(data_of "$SHORT" via)" = rollup ] &&
 		pass "beside one failure event, data.via=rollup, that says why no gap was recorded" ||
 		fail "the short-rollup failure: $SHORT"
+
+	# FROM THE REVIEW OF PR #438 — each a regression now.
+	# H-1: a rollup key's context-window suffix names the same model.
+	sed '$s/"'"$RMODEL"'":{"inputTokens"/"'"$RMODEL"'[1m]":{"inputTokens"/' "$CFIX" >"$SCRATCH/compacted-suffix-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-suffix-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "a rollup key with a context-window suffix ([1m]) is the message's model" ||
+		fail "the suffixed rollup key: status $S_STATUS, '$S_OUT'"
+	# H-1: drift in a subagent file refuses the rollup, names the file, keeps the rows.
+	mkdir -p "$SCRATCH/compacted-subdrift-407/subagents"
+	sed 's/"output_tokens":/"output_tokenz":/g' "$FIX/thinking-subagent-transcript.redacted.jsonl" \
+		>"$SCRATCH/compacted-subdrift-407/subagents/agent-x.jsonl"
+	cp "$CFIX" "$SCRATCH/compacted-subdrift-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-subdrift-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		case $S_ERR in *"subagents/agent-x.jsonl: "*) true ;; *) false ;; esac &&
+		pass "a subagent file's drift refuses the rollup (exit 3), names the file and keeps the rows" ||
+		fail "subagent drift: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# H-1: a modelUsage that is not an object, and a recorded line that is not JSON.
+	sed '$s/"modelUsage":{/"modelUsage":[{/; $s/}},"hasUnknownModelCost"/}}],"hasUnknownModelCost"/' "$CFIX" >"$SCRATCH/compacted-arr-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-arr-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a modelUsage that is not an object is refused (exit 3)" ||
+		fail "an array modelUsage: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	t_run_split sh -c 'printf "not json\n" | node "$1" --rollup "$2"' rollup-case "$EXTRACTOR" "$CFIX"
+	[ "$S_STATUS" = 3 ] && pass "a recorded event that is not JSON is refused (exit 3)" ||
+		fail "a non-JSON recorded line: status $S_STATUS, '$S_OUT'"
+	# H-2: a rollup key an event cannot record unambiguously is refused, never a shifted row.
+	sed '$s/"modelUsage":{/"modelUsage":{"bad model":{"inputTokens":900,"outputTokens":10,"cacheReadInputTokens":0,"cacheCreationInputTokens":0},/' \
+		"$CFIX" >"$SCRATCH/compacted-space-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-space-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "a rollup key with whitespace is refused (exit 3), never a row with shifted columns" ||
+		fail "a rollup key with a space: status $S_STATUS, '$S_OUT'"
+	# M-1: an unreadable subagents directory or stdin is a refusal, never "nothing there".
+	cp "$CFIX" "$SCRATCH/compacted-notdir-407.jsonl"
+	: >"$SCRATCH/compacted-notdir-407"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-notdir-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a subagents path that cannot be listed is refused (exit 3)" ||
+		fail "an unlistable subagents path: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" <"$SCRATCH"
+	[ "$S_STATUS" = 3 ] && pass "a stdin that cannot be read is refused (exit 3), not read as no gap recorded" ||
+		fail "an unreadable stdin: status $S_STATUS, '$S_OUT'"
 else
 	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
 fi
