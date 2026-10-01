@@ -153,8 +153,11 @@ Grouped by the seam each term belongs to. Entry shape:
   from a held-out one. Rule: a comparator is always named, never implied.
   Where nothing was written as a fixture — a calibration row in `/retro`,
   graded by a human's verdict at the quiz or on a review thread — that human
-  is the *who*, and the clause keeps its four parts.
-  _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
+  is the *who*, and the clause keeps its four parts. A row that measured
+  nothing — no fixtures written, no comparison made — has no comparator to
+  name, and says so instead of implying one: `oracle: none — <why>`. Question
+  8's label row is one, until #332 records the pre-quiz label.
+  _Ref_: #276 (PRD #273), #342; extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
     of comparison, not a single number or an assumption.
@@ -376,12 +379,21 @@ Grouped by the seam each term belongs to. Entry shape:
   failures, diagnosis calibration, spend, chain health, aim calibration,
   stamp calibration — per decision field and per skill, every row carrying
   its oracle clause),
-  writes its report outside the tree, and routes every finding to
-  `/to-tickets` as a candidate; it never fixes and never edits a skill. A
-  recurring failure becomes a rule with a failing check (shared invariant
-  §11). Ref: PRD #237; the eighth question is PRD #273's.
+  writes its report and CSV export into the **retro folder**, and routes
+  every finding to `/to-tickets` as a candidate; it never fixes and never
+  edits a skill. A recurring failure becomes a rule with a failing check
+  (shared invariant §11). Ref: PRD #237; the eighth question is PRD #273's.
   - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
     "lessons file" (the thing §11 forbids it from writing).
+- **Retro folder** — `.retro/<YYYY>/<MM>/` at the root checkout, where
+  `/retro` writes `retro-<YYYYMMDDTHHMMSSZ>.md` and the `.csv` it pivoted,
+  the root resolved through git's common directory exactly as the trace
+  directory is, so a retro run from a worktree lands at the root and survives
+  the worktree's pruning. Gitignored beside `.trace/`: a report quotes the
+  trace, so it is local for the same reason. Ref: ticket #349, PRD #237.
+  - _Avoid_: "the temp report", "the tmp file" (where it went before #349
+    and was lost with the next sweep); "the retro log" (the trace is the log;
+    the folder holds readings of it).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
   worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
   removed by the dispatcher's own trap — and, when a dispatch dies before

@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.32.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.33.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.32.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.33.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -751,9 +751,12 @@ skeleton (K0).
   the three limits it states — its arithmetic run once over a fixture trace in
   scratch, so a row that prints a rate is a computed number and not a claim —
   the plain `sh scripts/trace.sh show|summary|export` name with
-  `verify` first, the report outside the tree, findings routed to
-  `/to-tickets` and never fixed (a recurring failure becomes a rule with a
-  failing check, never a lessons file — shared invariant §11), the run it
+  `verify` first, the report and its CSV under `.retro/<YYYY>/<MM>/` at the
+  root checkout (the one-line common-directory derivation the skill quotes
+  is run from a scratch worktree, and `.gitignore` holds the folder),
+  findings routed to `/to-tickets` and never fixed (a recurring failure
+  becomes a rule with a failing check, never a lessons file — shared
+  invariant §11), the run it
   opens and closes with `data.findings`, every documented trace line run
   against a scratch trace, the default window since its own last run end,
   planner-tier work, and every roster surface — including `/housekeeping`'s

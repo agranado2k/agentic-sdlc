@@ -50,6 +50,14 @@ cd "$ROOT" || exit 2
 # line_of <literal> — first matching line number, or empty.
 line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
 
+# offset_of <literal> — where the literal first starts, counted in characters
+# from the top of the file, or empty. Order WITHIN a line: the skill's steps
+# are single long lines, so two phrases of one step share a line number.
+offset_of() {
+	LIT=$1 awk 'BEGIN { lit = ENVIRON["LIT"] }
+		{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "$SKILL_ABS"
+}
+
 # ---------------------------------------------------------------------------
 banner "0. The file under test"
 # ---------------------------------------------------------------------------
@@ -144,6 +152,144 @@ assert_file_has "$SKILL" "the URL of the review it posted"
 # findings to post and a spawned reviewer has nobody at that prompt.
 assert_file_has "$SKILL" "Say who posts"
 assert_file_has "$SKILL" "cannot reach the forge"
+
+# ---------------------------------------------------------------------------
+banner "3c. A DISPATCHED review lands through the broker, and only through it"
+# ---------------------------------------------------------------------------
+# #269, PRD #261. A reviewer dispatched to another agent harness runs offline
+# and credential-less, so it can never post; until the broker existed the skill
+# told the session to post by hand, and three PRs landed with a review that
+# reached only the session. Each assertion below closes one way the relay was
+# improvised. The skill says these things with ROLE names — "the broker", "the
+# skill dispatcher" — because it ships unstamped and both scripts are kit-only;
+# the root manual is what names the files (asserted at the end of this block).
+assert_file_has "$SKILL" "**broker**"
+assert_file_has "$SKILL" "skill dispatcher"
+assert_file_has "$SKILL" "never posts"
+# The composition: two commands, never one pipeline, and WHY — without the
+# reason the next editor "simplifies" it back into a pipe.
+assert_file_has "$SKILL" "redirect followed by the broker"
+assert_file_has "$SKILL" "never as one pipeline"
+assert_file_has "$SKILL" "cannot see the dispatcher's exit status through a pipe"
+# Not a keyword match on one spelling of the pipe: NO `|` anywhere between the
+# dispatcher and the broker inside the composition's code span, so `|<broker>`,
+# `| sh <broker>` and a `| tee … | <broker>` are all refused.
+if grep -qE '<skill dispatcher>[^`]*\|[^`]*<broker>' "$SKILL_ABS"; then
+	fail "a pipe stands between the skill dispatcher and the broker in the composition"
+else
+	pass "no pipe stands between the skill dispatcher and the broker, however it is spelled"
+fi
+# The exit-status check comes BEFORE the broker runs, and a non-dispatch exit
+# is reported as no review rather than handed to the broker.
+assert_file_has "$SKILL" "Check the dispatcher's exit status"
+assert_file_has "$SKILL" "Only on 0"
+assert_file_has "$SKILL" "a model id"
+assert_file_has "$SKILL" "no dispatched review ran"
+# `rc`, never `status`: zsh holds `status` read-only, and the first real run of
+# this composition died on the assignment with the exit status lost.
+assert_file_lacks "$SKILL" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
+_status=$(offset_of '; rc=$?;')
+_broker=$(offset_of '<broker> <PR#>')
+if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
+	grep -qF '[ "$rc" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
+	pass "the exit status is captured (offset $_status) before the broker runs (offset $_broker), and the broker command is conditional on 0"
+else
+	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
+fi
+# ONE shell invocation. The tip and the exit status are shell state, and an
+# agent harness that starts a fresh shell per command loses both: `$?` is then
+# a new shell's 0 and the gate passes vacuously, which is the failure the gate
+# exists to prevent. So the skill says it, says why, and gives the four steps
+# as one literal command line rather than as four commands to type in turn.
+assert_file_has "$SKILL" "one shell invocation"
+assert_file_has "$SKILL" "a fresh shell per command"
+_one='`tip=$(git rev-parse HEAD); <skill dispatcher> review-pr … > <report file>; rc=$?; [ "$rc" -eq 0 ] && <broker> <PR#> <report file> --commit "$tip"`'
+assert_file_has "$SKILL" "$_one" "the composition is one literal command line: tip, dispatch, status, gated broker"
+# The recorded tip is the cross-check, taken BEFORE the dispatch.
+assert_file_has "$SKILL" "Record the branch tip"
+assert_file_has "$SKILL" '--commit "$tip"'
+_tip=$(offset_of 'tip=$(git rev-parse HEAD)')
+_disp=$(offset_of '<skill dispatcher> review-pr')
+if [ -n "$_tip" ] && [ -n "$_disp" ] && [ "$_tip" -lt "$_disp" ] && [ "$_disp" -lt "${_status:-0}" ]; then
+	pass "the tip is recorded (offset $_tip) before the dispatch (offset $_disp), and the dispatch before the status is read"
+else
+	fail "the tip is not recorded before the dispatch — tip='$_tip' dispatch='$_disp'"
+fi
+# Operator decision on PR #283: the dispatcher stages the offline contract;
+# a --prompt-file is the caller's own document, so the skill says not to pass one.
+assert_file_has "$SKILL" "Pass no \`--prompt-file\`"
+# The report lifts BOTH URLs the broker printed.
+assert_file_has "$SKILL" "the comment URL"
+# A broker that refuses is not an invitation to post around it.
+assert_file_has "$SKILL" "never post around a refusal"
+# Hand posting is no longer the default for a dispatched reviewer.
+assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
+# ... and the absence of one old sentence guards nothing a rewording cannot
+# walk around, so the POSITIVE rule is asserted: the broker is the only way a
+# dispatched report lands, the header's "post them yourself" belongs to the
+# in-session subagent and is the ONLY "post ... yourself" in the skill, and no
+# sentence anywhere offers hand posting to a dispatched reviewer.
+assert_file_has "$SKILL" "lands through the **broker** and no other way"
+assert_file_has "$SKILL" "post them yourself only when that subagent cannot reach the forge"
+if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$SKILL_ABS"; then
+	fail "a sentence offers hand posting to a dispatched reviewer — the broker is the only way its report lands"
+else
+	pass "no sentence offers hand posting to a dispatched reviewer"
+fi
+_yourself=$(grep -oE 'post [a-z ]*yourself' "$SKILL_ABS" | grep -c '')
+if [ "$_yourself" -eq 1 ]; then
+	pass "the in-session subagent's is the only 'post ... yourself' in the skill"
+else
+	fail "the skill says 'post ... yourself' $_yourself times — only the in-session subagent's sentence may"
+fi
+# Operator decision on PR #322 (M-2, option c): a project whose root manual
+# names no broker gets NO dispatched review — the review step falls back to the
+# in-session reviewer and the report says no cross-vendor review ran. A
+# credentialed session posting an unvalidated worker report is the
+# untrusted-content-to-forge path ADR-0009 closes, so the skill never offers
+# hand posting as the gap-filler it once was.
+_clause=$(grep -oE 'No broker named by the root manual[^.]*\.' "$SKILL_ABS")
+case "$_clause" in
+*'in-session'*'no cross-vendor review ran'*)
+	pass "the no-broker clause falls back to the in-session reviewer and reports that no cross-vendor review ran" ;;
+*) fail "the no-broker clause does not fall back in-session and say no cross-vendor review ran: '$_clause'" ;;
+esac
+assert_file_lacks "$SKILL" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
+assert_file_lacks "$SKILL" "post the captured report" "the captured report is never the session's to post"
+# The same rule for the dispatcher's "harness not reachable" exit (69): like
+# the no-harness exit (3), stdout is the model id and the in-session spawn is
+# the review — the skill names both as the working cases, and says so.
+assert_file_has "$SKILL" "not reachable from here"
+assert_file_has "$SKILL" "two working cases"
+# The shipped skill names no kit-only file: bootstrap deletes them, and a
+# consumer following the line would run nothing.
+assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
+# ... and the kit's own manual is what gives a kit session the two names and
+# the composition, on the broker's quick-reference row.
+_row=$(grep -F '| Land a dispatched reviewer' AGENTS.md)
+case "$_row" in
+*'/implement'*'skill-dispatch.kit.sh review-pr'*'forge-broker.kit.sh'*'--commit "$tip"'*)
+	pass "the kit manual's broker row names the skill dispatcher, the broker and the --commit cross-check for /implement" ;;
+*) fail "the kit manual's broker row does not give /implement's step 9(b) its two kit commands" ;;
+esac
+# The row is what hard rule 10 steers a kit session to, so it carries the same
+# one-invocation composition the skill gives, status capture included ...
+case "$_row" in
+*'`tip=$(git rev-parse HEAD); sh scripts/skill-dispatch.kit.sh review-pr '*'; rc=$?; [ "$rc" -eq 0 ] && sh scripts/forge-broker.kit.sh <PR> <file> --commit "$tip"`'*'one shell invocation'*)
+	pass "the kit manual's broker row gives the composition as one command line, with the rc capture" ;;
+*) fail "the kit manual's broker row does not give the one-invocation composition with its rc capture" ;;
+esac
+# ... the domain is the stamp the session resolved, not a constant, and SPEC
+# takes a path — the dispatcher reads a file there.
+case "$_row" in
+*'--tier reviewer [--domain self-implemented]'*'--set-file SPEC=<path to the ticket body>'*)
+	pass "the kit manual's broker row leaves the domain optional and hands SPEC a path" ;;
+*) fail "the kit manual's broker row hard-codes the domain, or hands SPEC something other than a path" ;;
+esac
+case "$_row" in
+*'never a pipe'*) pass "the kit manual's broker row refuses the pipe too" ;;
+*) fail "the kit manual's broker row does not say 'never a pipe'" ;;
+esac
 # And the step is an ordered part of Deliver, not an aside: it must come after
 # the PR is opened and before the skill stops.
 _open=$(line_of "Open the pull request")
@@ -221,6 +367,11 @@ assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is nev
 assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
+# The count of answers that change what you do, scoped to what it counts —
+# the tier and its confidence — and held to the sentences that follow it:
+# `low` restates, a refused tier stops, a refused confidence stops. (The
+# refused domain is its own sentence, above, and not in this count.)
+stamp_has "Three answers on the tier and its confidence change what you do" "the count says what it counts, and names the refused confidence as the third"
 stamp_has "back to the restatement step" "restate-on-low: the rule"
 stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
 stamp_has "say so in your report" "restate-on-low: the report names it"
@@ -232,6 +383,59 @@ stamp_has "a refused line is never put into a command" "stop-on-refused: the lin
 stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
 stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
 stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# A refused CONFIDENCE is a refused stamp (#340 — the ruling on PR #311's
+# confirm-list, item 1). The bullet used to leave the tier standing and read
+# the value as `low`: an undeclared value mapped onto a declared one in
+# silence, which is the one thing the checker exists to refuse. It takes the
+# refused tier's path now — stop, /to-tickets re-stamps — and the MISSING line
+# keeps its own: not a blocker, for a ticket written before the stamp existed.
+stamp_has "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes"
+# The headline alone is green on a sentence that goes on to say the opposite
+# (local review of this PR, H-1): the words that carry the ruling are held
+# one by one, inside the sentence that states it — cut from its first word to
+# the missing-line sentence that follows — and the probe is driven by three
+# weakened copies that each have to go red: the tier left standing, the stop
+# turned into a carry-on, and the value remapped onto a declared one.
+conf=$(printf '%s\n' "$stamp" | sed -n 's/.*\(A refused \*confidence\*.*\) A missing `Confidence:`.*/\1/p')
+[ -n "$conf" ] && pass "the refused-confidence sentence is cut out of the bullet, up to the missing-line sentence" ||
+	fail "no sentence runs from 'A refused *confidence*' to 'A missing \`Confidence:\`' — nothing to hold the ruling's words to"
+# The load-bearing words, one per line, spelled ONCE: the live assertions and
+# the probe the weakened copies drive read the same list, so neither can be
+# edited without the other.
+RULING_WORDS='stop
+report the line as written
+`/to-tickets` to re-stamp
+does not stand on its own
+never read as `low`, or as any declared one'
+# stop_on_refused_confidence <sentence> — exit 0 only when every word of
+# RULING_WORDS is in it; prints the first one that is not.
+stop_on_refused_confidence() {
+	while IFS= read -r _w; do
+		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
+	done <<EOF
+$RULING_WORDS
+EOF
+}
+while IFS= read -r word; do
+	printf '%s\n' "$conf" | grep -qF -- "$word" && pass "'$word' — stop-on-refused-confidence, in the sentence that rules it" ||
+		fail "the refused-confidence sentence never says '$word' — the ruling lost a load-bearing word"
+done <<EOF
+$RULING_WORDS
+EOF
+# weakened <name> <sed expression over the sentence> — the copy must differ
+# from the subject (or the bait is the subject), and the probe must refuse it.
+weakened() {
+	_m=$(printf '%s\n' "$conf" | sed "$2")
+	[ "$_m" != "$conf" ] || { fail "mutant '$1' left the sentence unchanged — the bait is the subject"; return; }
+	_miss=$(stop_on_refused_confidence "$_m") &&
+		fail "mutant '$1' passes every word — the assertions are green on weakened wording" ||
+		pass "mutant '$1' is red — it lost '$_miss'"
+}
+weakened "the tier left standing" 's/does not stand on its own/stands on its own/'
+weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
+weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
+assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
+stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
 # is unchanged, and the orphan line is said in the report — never a reason to
 # restate, because there is no stamp for the doubt to be about.
@@ -239,6 +443,11 @@ stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the cas
 stamp_has "reported, not acted on" "orphan confidence: what happens to it"
 stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
 stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
+# …and an orphan the checker REFUSES is not that case (local review of this
+# PR, M-1): the refusal is about the value, not the pair, so it is a stop
+# with or without a `Tier:` line — only an orphan with a declared value is
+# the one reported and left.
+stamp_has "whether or not a \`Tier:\` line is present" "orphan confidence: a refused value is a stop either way — the refusal is about the value, not the pair"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
 # session in a project that never took the script.
@@ -313,6 +522,21 @@ read_stamp <"$SCRATCH/legal"
 [ "$P_SHOWN" = "$(printf 'Tier: implementer\nConfidence: low\nDomain: content')" ] &&
 	pass "a legal stamp: its three lines, and only those, are shown to the agent" ||
 	fail "a legal stamp: the pipe showed the agent '$P_SHOWN', not the three stamp lines — the agent cannot tell what was checked"
+# The two confidence answers 4b holds the bullet to, through the pipe itself
+# (#340): a value outside the vocabulary is the exit 2 the bullet calls a stop,
+# and a ticket with no `Confidence:` line is the exit 0 it calls no blocker. A
+# checker that let `sure` through, or refused an absent line, would make the
+# bullet's two sentences describe a pipe that does not exist.
+printf 'Tier: implementer\nConfidence: sure\nDomain: content\n' >"$SCRATCH/sure"
+read_stamp <"$SCRATCH/sure"
+[ "$P_STATUS" = 2 ] && pass "Confidence: sure — refused, exit 2: the stop the bullet names" ||
+	fail "Confidence: sure — the pipe exited $P_STATUS, not 2: a value outside the vocabulary walked past the checker"
+grep -qF "x vocab: confidence: 'sure'" "$SCRATCH/refusal" && pass "…and the x vocab: line names the confidence field and the value, for the report" ||
+	fail "…but no x vocab: line names the field and the value the report quotes: $(cat "$SCRATCH/refusal")"
+printf 'Tier: implementer\nDomain: content\n' >"$SCRATCH/unstamped"
+read_stamp <"$SCRATCH/unstamped"
+[ "$P_STATUS" = 0 ] && pass "no Confidence: line — exit 0: not a stop, the ticket predates the stamp" ||
+	fail "no Confidence: line — the pipe exited $P_STATUS, not 0: a missing line was refused as if it were present and illegal"
 
 cd "$SCRATCH" || exit 2
 hostile "a quote in the tier" "refused, never executed" "Tier: implementer'; touch PWN; echo '\n"
