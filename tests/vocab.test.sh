@@ -241,9 +241,13 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # That last number is never paid, because no caller hands it a body: each
 # lifts the lines it owes before the check. This section holds the kit's
 # callers to that. Every invocation of the checker in a shipped file is found
-# — `sh` or `bash` on scripts/vocab.sh, on "$checker", on "$vocab", braced or
-# not, however spaced, a backslash-continued line read as one — and must be
-# one of (each exemption tagged in the audit, and baited below):
+# — `sh` or `bash`, after any single-dash options (`sh -e`), on a word ending
+# in vocab.sh (quoted, bare, or a quoted prefix: "$ROOT"/scripts/vocab.sh) or
+# on $checker or $vocab (quoted or bare, braced or not), however spaced, a
+# backslash-continued line read as one. Those forms and no others: a call
+# through `.` or `source`, `env`, `exec`, `xargs`, or a shell named by a
+# variable is not found. Each one found must be one of (each exemption tagged
+# in the audit, and baited below):
 #   - `fields`, which reads no input;
 #   - a prose mention of the command, closed by a backtick;
 #   - the argument form with the caller's own placeholder tokens,
@@ -291,8 +295,9 @@ FNR == 1 { fn = "-"; start = 1; prev = ""; cont = "" }
 	if (cont == "") at = FNR
 	line = cont $0; cont = ""
 	s = line
-	while (match(s, /(^|[ \t(|`;&])(ba)?sh[ \t]+("[^"]*vocab\.sh"|[^ \t"`]*vocab\.sh|"\$\{?checker\}?"|"\$\{?vocab\}?")/)) {
+	while (match(s, /(^|[ \t(|`;&])(ba)?sh([ \t]+-[A-Za-z]+)*[ \t]+("[^"]*vocab\.sh"|[^ \t`]*vocab\.sh"?|"?\$\{?(checker|vocab)\}?"?)/)) {
 		tail = substr(s, RSTART + RLENGTH); s = tail
+		if (tail ~ /^[A-Za-z0-9_]/) continue # a longer name, not the checker
 		if (tail ~ /^`/) continue # exempt:prose
 		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
 		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
@@ -393,9 +398,10 @@ bait_reset
 printf '\tsh scripts/vocab.sh <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
 bait_named .agents/skills/to-tickets/SKILL.md "a new call site hands a body"
 
-# The call's spelling: a site written any way a shell runs it is found — two
+# The call's spelling: each form the audit claims above is found — two
 # spaces, braces on the variable, `bash` for `sh`, the call split over a
-# backslash-continued line. Each planted in a copy of a skill must be named.
+# backslash-continued line, a quoted prefix of the path, an option before the
+# checker, the variable bare. Each planted in a copy of a skill must be named.
 # planted <how it is spelled> <printf format of the call> — plant the call in
 # a copy of a skill; the audit must name it.
 planted() {
@@ -408,6 +414,9 @@ planted "with two spaces after \`sh\`" '\tsh  "$checker" <"$body"\n'
 planted "with braces on the variable" '\tsh "${checker}" <"$body"\n'
 planted "run by \`bash\`" '\tbash "$checker" <"$body"\n'
 planted "split over a backslash-continued line" '\tsh \\\n\t\t"$checker" <"$body"\n'
+planted "on a quoted prefix of the path" '\tsh "$ROOT"/scripts/vocab.sh <"$body"\n'
+planted "with an option before the checker" '\tsh -e "$checker" <"$body"\n'
+planted "on the variable unquoted" '\tsh $checker <"$body"\n'
 
 # The inventory holds no more than the tree: every LIFTED entry matches a
 # call the audit found, so a site removed or rewritten leaves no entry behind
