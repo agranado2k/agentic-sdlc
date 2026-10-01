@@ -1,5 +1,6 @@
 #!/bin/sh
-# hook.lib.sh — what the three trace hooks beside this file share.
+# hook.lib.sh — what the hooks beside this file share: the trace hooks and the
+# kill guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
@@ -13,7 +14,7 @@
 # execution path; a hook runs only once a settings file wires it (see
 # ../README.md, "Wiring the session hooks"). In THIS kit that file is
 # `.claude/settings.json`, which is kit-authoring only and never shipped. In
-# your project it is yours to write, and until you write it these five files
+# your project it is yours to write, and until you write it the files here
 # are reference material you can read.
 #
 # THE THREE RULES A HOOK HERE KEEPS, and why each one is not negotiable:
@@ -22,7 +23,11 @@
 #      non-zero exit is a signal to the agent harness about the SESSION, and
 #      observability that can fail a session is worse than none (PRD #237,
 #      story 15; ADR-0008 clause 4). Every call into the trace ends in `|| :`
-#      and every hook ends in `exit 0`.
+#      and every hook ends in `exit 0`. ONE SANCTIONED EXCEPTION: the kill
+#      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
+#      exits 2 — the agent harness's block status — when, and only when, it
+#      refuses a spawned sub-agent's call (#414). Every other path in it is
+#      exit 0 like everything else here.
 #   2. SILENT ON STDOUT. What a hook prints on stdout can reach the agent
 #      harness's own parser. The trace's answers go to a file; nothing here
 #      has anything to say. STDERR is a different stream and is deliberately

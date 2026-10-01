@@ -78,7 +78,9 @@
 #      `data.via=broker`, with the model and agent harness when the caller
 #      passed them. The report is untrusted: what reaches an event is lifted
 #      by shape or mapped onto a closed list, never a line of it pasted into
-#      a reason. Never load-bearing (ADR-0008 clause 4).
+#      a reason. Never load-bearing (ADR-0008 clause 4). A retry that found
+#      both bodies already landed records one `note` instead: the first run
+#      traced them, and a second set would double-count.
 #
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
@@ -590,6 +592,9 @@ COMMENT_URL=$(existing "$COMMENT_EP") || {
 }
 
 # --- 6. the two operations ---------------------------------------------------------------------
+# Both bodies already carry the marker: a retry of a run that reached step 7.
+RETRY=
+[ -n "$REVIEW_URL" ] && [ -n "$COMMENT_URL" ] && RETRY=1
 if [ -n "$REVIEW_URL" ]; then
 	note "the review for this report already landed: $REVIEW_URL"
 else
@@ -649,6 +654,17 @@ agent_token() {
 		}
 	' "$1"
 }
+# A retry traces nothing the first run traced. Both bodies carrying the
+# marker means the first run got past both writes, and so reached the emits
+# below — this section never exits early — so a second set would double-count
+# every finding /retro reads. One note says the retry happened. A run that
+# found only the review posted the comment itself: the first run died before
+# the trace, and this run's emits are the only ones.
+if [ -n "$RETRY" ]; then
+	trace loud kind=note "subject=pr:#$PR" outcome=retry data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" \
+		"reason=the review already landed with this report's marker; its raises and verdicts are the first run's"
+	exit 0
+fi
 # One raise per finding that landed inline, before the verdicts (/review-pr
 # §6: record, then verdict). The unconfigured note is said once, by the
 # Axis-1 verdict below, not once per finding.

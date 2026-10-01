@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the same amendment)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the same amendment)
 
 ## Context and problem statement
 
@@ -274,3 +274,19 @@ The report is untrusted content: nothing of its text reaches a raise — each
 field is lifted by its shape or mapped onto a closed list, and each reason is
 the broker's own words. Unconfigured, the posting is unchanged and the trace
 says so once on stderr.
+
+### Amendment, 2026-10-01 — a retry records a note, not a second set (#411)
+
+Amends clause 10 as #375 left it; it changes no posting, no exit status and
+no option, so the record is amended in place. Clause 8's marker stops a
+retried run from posting twice, but the emits above ran regardless, so each
+retry doubled the raises and verdicts `/retro`'s second question counts. The
+emits are gated on the same marker:
+
+- **both bodies carry the marker** — the first run got past both writes and
+  so reached its emits. The retry records one `note` on subject `pr:#<N>`,
+  `outcome=retry`, `data.via=broker`, with the two URLs that already landed,
+  and no raise and no verdict.
+- **only the review carries it** — the first run died between its two
+  writes, before any emit. The run posts the comment and emits the full set,
+  which is the only one there will be.
