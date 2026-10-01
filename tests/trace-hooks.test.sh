@@ -2064,12 +2064,17 @@ banner "32. SessionStart records how far its checkout is behind origin/main (#38
 # the shared script into a scratch repository with a real remote, and runs the
 # copy. None of these legs needs node.
 
-# behind_kit <dir> — a scratch checkout holding the hooks and trace.sh, one
-# commit, no remote yet.
-behind_kit() {
+# behind_copy <dir> — the hooks and trace.sh, copied where a checkout would hold them.
+behind_copy() {
 	mkdir -p "$1/adapters/claude-code/hooks" "$1/scripts"
 	cp "$HOOKS"/*.sh "$HOOKS"/*.mjs "$1/adapters/claude-code/hooks/"
 	cp "$KIT/scripts/trace.sh" "$KIT/scripts/trace.config.sh" "$1/scripts/"
+}
+
+# behind_kit <dir> — a scratch checkout holding that copy, one commit, no
+# remote yet.
+behind_kit() {
+	behind_copy "$1"
 	t_git_identity "$1" "Behind Fixture" "behind@example.invalid"
 	git -C "$1" add -A >/dev/null
 	git -C "$1" commit -q -m "chore: the checkout the hooks run from"
@@ -2194,9 +2199,7 @@ case $START in *'"behind"'*) fail "a checkout with no origin/main recorded a beh
 
 # NOT A REPOSITORY AT ALL: the hooks copied somewhere git does not answer.
 NG="$SCRATCH/no-git-384"
-mkdir -p "$NG/adapters/claude-code/hooks" "$NG/scripts"
-cp "$HOOKS"/*.sh "$HOOKS"/*.mjs "$NG/adapters/claude-code/hooks/"
-cp "$KIT/scripts/trace.sh" "$KIT/scripts/trace.config.sh" "$NG/scripts/"
+behind_copy "$NG"
 start_in "$NG" GIT_CEILING_DIRECTORIES="$SCRATCH" TRACE_BEHIND_WARN=0
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	case $START in *'"behind"'*) false ;; *) true ;; esac &&

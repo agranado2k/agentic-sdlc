@@ -502,9 +502,8 @@ hook_wait_final() {
 # the walk's back; GIT_DIR and GIT_WORK_TREE are scrubbed for hook_pointer's
 # reason.
 hook_behind() {
-	_hb=$( (unset GIT_DIR GIT_WORK_TREE && GIT_NO_LAZY_FETCH=1 &&
-		export GIT_NO_LAZY_FETCH &&
-		git -C "$hook_repo" rev-list --count HEAD..refs/remotes/origin/main) 2>/dev/null ) || return 1
+	_hb=$( (unset GIT_DIR GIT_WORK_TREE &&
+		GIT_NO_LAZY_FETCH=1 git -C "$hook_repo" rev-list --count HEAD..refs/remotes/origin/main) 2>/dev/null ) || return 1
 	case $_hb in '' | *[!0-9]*) return 1 ;; esac
 	printf '%s' "$_hb"
 }
