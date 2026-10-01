@@ -1397,7 +1397,7 @@ t_run_split sh "$KIT_WRAPPER" --alias planner
 t_run_split sh "$KIT_WRAPPER" --alias implementer
 [ "$S_OUT" = opus ] && pass "--alias implementer is 'opus'" || fail "--alias implementer gave '$S_OUT'"
 t_run_split sh "$KIT_WRAPPER" --alias mechanical
-[ "$S_OUT" = haiku ] && pass "--alias mechanical is 'haiku' — a dated id folds to its family too" ||
+[ "$S_OUT" = opus ] && pass "--alias mechanical is 'opus' — the tier moved off the cheapest model on 2026-10-01 (retro 20261001T150216Z)" ||
 	fail "--alias mechanical gave '$S_OUT'"
 t_run_split sh "$KIT_WRAPPER" --alias implementer content
 [ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
