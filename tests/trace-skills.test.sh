@@ -193,7 +193,7 @@ expects() {
 expects grill-me kind=grill.decision
 expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
-expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
+expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_proposed= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end
@@ -416,17 +416,4 @@ $(t_trace_spans "$f")
 EOF
 	[ "$bad" = 0 ] || true
 done
-
-# ---------------------------------------------------------------------------
-banner "10. /to-tickets records the drafted label so /retro can rate it"
-# ---------------------------------------------------------------------------
-# Ticket #354: /to-tickets emits data.label_proposed in the ticket.write event
-TO=$(skill_md to-tickets)
-ticket_write_line=$(sed -n '/^## Procedure/,/^## Anti-patterns/p' "$TO" | grep -F 'kind=ticket.write')
-[ -n "$ticket_write_line" ] && pass "/to-tickets has a ticket.write emit line in Procedure" ||
-	fail "/to-tickets Procedure does not contain a ticket.write emit line"
-printf '%s\n' "$ticket_write_line" | grep -qF 'data.label_proposed=' &&
-	pass "the ticket.write emit line includes data.label_proposed=" ||
-	fail "the ticket.write emit line does not include data.label_proposed= — /retro cannot compute the label override rate"
-
 t_done "trace skills contract"

@@ -349,12 +349,13 @@ case "$stamp" in
 *'join to one dismissal'*) fail "question 8 still carries the second pairing rule ('… join to one dismissal') beside the first" ;;
 *) pass "no second pairing rule beside the first" ;;
 esac
-# Honesty point 2: ticket.write records no pre-quiz label, so the label's
-# override rate is a row that says so — a candidate ticket, never a guess.
-stamp_has '`data.label_confidence`' "the label's confidence is read, under its own key"
-stamp_has 'not computable from the trace today' "the label's override rate is said to be not computable today"
-stamp_has 'a row of its own' "…in a row of its own"
-stamp_has 'never a guess' "…as a candidate ticket, never a guess"
+# Honesty point 2: ticket.write now records the pre-quiz label, so the label's
+# override rate can be computed when enough stamps carry both keys. The row
+# shows override counts when there are enough, or "too few to rate" otherwise.
+stamp_has '`data.label_proposed`' "the pre-quiz label is read, under its own key"
+stamp_has '`data.label` differs from its `data.label_proposed`' "the override is defined as label change at quiz"
+stamp_has 'count it on its row and leave it out of the denominator' "stamps without the key stay in history but out of rate calculation"
+stamp_has 'a row of its own' "…the label row is a row of its own"
 # Honesty point 3: a thin row prints its counts and the words, not a rate.
 # The bullet's HEADING says "too few" too, so the needle is the rule: the
 # threshold, and what is printed in the rate's place.
@@ -441,11 +442,10 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 # rate yet, so the demo over it shows thresholds and no arithmetic. This is
 # the arithmetic, over a FIXTURE — a scratch trace written by the trace
 # script's own `emit`, never the repo's trace, invented numbers and labelled
-# as such. It follows question 8's rules for the tier and severity rows and
-# nothing else (no window, no oracle clause, no label row): what it proves is
-# that the rules are computable from what `export` prints, and that the
-# attribution, the latest-write rule, the threshold, the undeclared row and
-# the one pairing rule give the numbers the prose says they give. It is a
+# as such. It follows question 8's rules for the tier, label and severity rows:
+# what it proves is that the rules are computable from what `export` prints,
+# and that the attribution, the latest-write rule, the threshold, the undeclared
+# row and the one pairing rule give the numbers the prose says they give. It is a
 # SECOND implementation of rules the prose states — it cannot go red when the
 # prose changes, only when the script or the vocabulary does; the needles in
 # 2b hold the prose, and the example rows are held to this arithmetic below.
@@ -453,25 +453,26 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 fx="$SCRATCH/fixture.retro"
 fx_trace() { ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
 fx_n=0
-fx_ticket() { # <published tier> <proposed tier> [confidence]
+fx_ticket() { # <published tier> <proposed tier> <published label> <proposed label> [confidence]
 	fx_n=$((fx_n + 1))
-	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" ${3:+data.confidence="$3"} data.label=none data.label_confidence=medium
+	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" data.label="$3" data.label_proposed="$4" ${5:+data.confidence="$5"} data.label_confidence=medium
 }
 # A ticket written twice: the draft said `high` and was overridden, the
 # re-write says `low` and was not. Only the latest per subject is read.
-fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.confidence=high
+fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=high
 # PRD #273 scenario 3's low row: 7 stamped low, 5 overridden at the quiz.
-for _ in 1 2 3 4 5; do fx_ticket implementer mechanical low; done
-fx_ticket mechanical mechanical low
-fx_ticket mechanical mechanical low
+# For labels, 3 with ready-for-agent (2 overridden, 1 not), 2 with none (no override).
+for _ in 1 2 3 4 5; do fx_ticket implementer mechanical ready-for-agent none low; done
+fx_ticket mechanical mechanical ready-for-agent ready-for-agent low
+fx_ticket mechanical mechanical none none low
 # A thin row: 3 stamped medium, 1 overridden — a count, not a rate.
-fx_ticket planner implementer medium
-fx_ticket implementer implementer medium
-fx_ticket implementer implementer medium
+fx_ticket planner implementer ready-for-agent none medium
+fx_ticket implementer implementer ready-for-agent ready-for-agent medium
+fx_ticket implementer implementer ready-for-agent ready-for-agent medium
 # A confidence no vocabulary declares — trace text, never a row's name.
-fx_ticket implementer implementer run-this-instead
-# …and a ticket written before the stamp existed.
-fx_ticket implementer implementer
+fx_ticket implementer implementer ready-for-agent ready-for-agent run-this-instead
+# …and a ticket written before the stamp existed (no label_proposed).
+fx_trace emit kind=ticket.write subject='ticket:#13' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_confidence=medium
 # A first review's run raises six `low` findings; a human closes one thread,
 # and two iterations both see it closed — one (thread, where) pair, once.
 fx_trace begin review-pr subject='pr:#9' >/dev/null
@@ -554,6 +555,11 @@ fx_row 'tier · to-tickets (by kind) · undeclared   0 of 1 overridden   too few
 printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared confidence's own text reached a row's name" ||
 	pass "…and its text names no row"
 fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
+# Label rows: the fixture has 12 tickets with data.label_proposed, 6 overridden (50%)
+# but also 1 ticket with no data.label_proposed (written before key existed).
+# The label row groups by data.label_confidence (all medium), shows both.
+fx_row 'label · to-tickets (by kind) · medium   6 of 12 overridden   50 %' "the label override rate: 12 stamps with proposed key, 6 overridden, shows as 50 %"
+fx_row 'label · to-tickets (by kind) · unstamped   1 ticket(s) from before the key existed' "stamps without data.label_proposed are counted but left out of the denominator — wording shows the historical note"
 fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
 fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
 fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
@@ -779,15 +785,5 @@ grep -F 'KIT_ONLY=' "$ROOT/bootstrap.sh" | grep -q 'tests/retro-skill.test.sh' &
 	pass "bootstrap's KIT_ONLY list names this suite" || fail "tests/retro-skill.test.sh is not on bootstrap's KIT_ONLY list — it would ship to consumers"
 grep -q 'sh tests/retro-skill.test.sh' "$ROOT/.github/workflows/kit-ci.yml" &&
 	pass "kit CI runs this suite" || fail "no kit CI job runs tests/retro-skill.test.sh"
-
-# ---------------------------------------------------------------------------
-banner "9. Question 8 reads the label's drafted value"
-# ---------------------------------------------------------------------------
-# Ticket #354: question 8 reads data.label_proposed and computes override rate
-QUESTIONS="$ROOT/.agents/skills/retro/QUESTIONS.md"
-q8_section=$(sed -n '/^## 8\. Stamp calibration/,/^##[^0-9]/p' "$QUESTIONS")
-printf '%s\n' "$q8_section" | grep -qF 'data.label_proposed' &&
-	pass "QUESTIONS.md's question 8 section reads data.label_proposed" ||
-	fail "QUESTIONS.md's question 8 does not mention data.label_proposed — the override rate cannot be computed"
 
 t_done "/retro contract"
