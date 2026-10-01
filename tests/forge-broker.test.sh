@@ -1159,4 +1159,46 @@ done
 STUB_PR=12
 export STUB_PR
 
+# ---------------------------------------------------------------------------
+banner "19. A retried run records one note, not a second set of raises and verdicts"
+# ---------------------------------------------------------------------------
+# R4 proves a retry posts nothing; this proves it TRACES nothing it already
+# traced. The first run's raises and verdicts are what /retro question 2
+# counts, so a retry that emitted them again would double every finding. The
+# gate is the marker itself: both bodies found means the first run got past
+# both writes and so reached its emits; the retry says so in one `note`.
+STUB_PR=34
+export STUB_PR
+broker 34 "$RAISE"
+s_assert_status 0 "the first run on pr:#34 posts"
+R_MARK=$(posted_marker pulls/34/reviews)
+printf 'https://forge.invalid/pull/34#pullrequestreview-61\t%s\n' "$R_MARK" >"$SCRATCH/retry-reviews.tsv"
+printf 'https://forge.invalid/pull/34#issuecomment-62\t%s\n' "$R_MARK" >"$SCRATCH/retry-comments.tsv"
+STUB_REVIEWS="$SCRATCH/retry-reviews.tsv" STUB_COMMENTS="$SCRATCH/retry-comments.tsv"
+export STUB_REVIEWS STUB_COMMENTS
+broker 34 "$RAISE"
+unset STUB_REVIEWS STUB_COMMENTS
+s_assert_status 0 "the retried run exits 0"
+assert_mutating 0 "…and posts nothing"
+retry_count() {
+	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind "$1"
+	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$1\""
+}
+[ "$(retry_count finding.raise)" = 3 ] &&
+	pass "the two runs leave the first run's three raises and no more" ||
+	fail "expected three finding.raise events for pr:#34, saw $(retry_count finding.raise)"
+[ "$(retry_count review.verdict)" = 2 ] &&
+	pass "…and the first run's two verdicts and no more" ||
+	fail "expected two review.verdict events for pr:#34, saw $(retry_count review.verdict)"
+[ "$(retry_count note)" = 1 ] &&
+	pass "…and one note for the retry" ||
+	fail "expected one note for pr:#34, saw $(retry_count note)"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
+case $S_OUT in
+*'"via":"broker"'*'already landed'* | *'already landed'*'"via":"broker"'*) pass "…marked via=broker, saying the review already landed" ;;
+*) fail "the retry note lacks via=broker or its reason: $S_OUT" ;;
+esac
+STUB_PR=12
+export STUB_PR
+
 t_done "tests/forge-broker.test.sh"
