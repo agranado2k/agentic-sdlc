@@ -78,7 +78,6 @@ AGENT_TIER_PLANNER_CONTENT='model-for-planning-prose'
 EOF
 )
 
-
 # t_resolve_tier <args> (tests/lib.sh) — the library, run as an agent runs
 # it, streams kept apart.
 
