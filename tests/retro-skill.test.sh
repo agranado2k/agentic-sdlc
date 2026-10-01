@@ -780,4 +780,14 @@ grep -F 'KIT_ONLY=' "$ROOT/bootstrap.sh" | grep -q 'tests/retro-skill.test.sh' &
 grep -q 'sh tests/retro-skill.test.sh' "$ROOT/.github/workflows/kit-ci.yml" &&
 	pass "kit CI runs this suite" || fail "no kit CI job runs tests/retro-skill.test.sh"
 
+# ---------------------------------------------------------------------------
+banner "9. Question 8 reads the label's drafted value"
+# ---------------------------------------------------------------------------
+# Ticket #354: question 8 reads data.label_proposed and computes override rate
+QUESTIONS="$ROOT/.agents/skills/retro/QUESTIONS.md"
+q8_section=$(sed -n '/^## 8\. Stamp calibration/,/^##[^0-9]/p' "$QUESTIONS")
+printf '%s\n' "$q8_section" | grep -qF 'data.label_proposed' &&
+	pass "QUESTIONS.md's question 8 section reads data.label_proposed" ||
+	fail "QUESTIONS.md's question 8 does not mention data.label_proposed — the override rate cannot be computed"
+
 t_done "/retro contract"

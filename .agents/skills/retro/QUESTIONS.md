@@ -200,7 +200,8 @@ as evidence; the missing verdicts to `/merge-train`.
 ## 8. Stamp calibration
 
 *Reads: `ticket.write` — the published `tier`, `data.tier_proposed` (the
-tier before the quiz), `data.confidence` (the tier's, as drafted) and
+tier before the quiz), `data.confidence` (the tier's, as drafted),
+`data.label_proposed` (the label before the quiz), and
 `data.label_confidence` (the label's, under its own key); `finding.raise`
 (`data.severity`, `data.where`); `finding.dismiss` (`data.where`,
 `data.thread`) — a human closing a posted finding with no commit answering
@@ -244,12 +245,22 @@ be nobody's. An event none of the three names goes on a row named
   leave it out of the denominator. A confidence that is none of the declared
   words goes on the `undeclared` row above.
 - **The label, in a row of its own.** `ticket.write` records the label's
-  confidence (`data.label_confidence`) and the label as published, but no
-  label from before the quiz, so the label's override rate is not computable
-  from the trace today. The row prints the stamps per confidence and those
-  words in place of a rate. It is a candidate ticket — the emit that would
-  have to record the drafted label — never a guess: no rate is inferred
-  from the tier's.
+  confidence (`data.label_confidence`), the label as published, and the label
+  before the quiz (`data.label_proposed`), so the label's override rate can be
+  computed when enough stamps carry the label keys. Take one `ticket.write` per
+  subject, the latest by `ts`, and group by `data.label_confidence` — one group
+  per declared word. A label was overridden at the quiz when its `data.label`
+  differs from its `data.label_proposed`. Per group: count how many were
+  overridden, of how many carry both `data.label` and `data.label_proposed`
+  keys. A `ticket.write` with no `data.label_confidence` was written before the
+  stamp existed: it goes in a row named `unstamped`. One with no
+  `data.label_proposed` was written before this key existed (a standing issue,
+  not a finding per window): count it on its row and leave it out of the
+  denominator. When fewer than five stamps carry both keys, the row prints those
+  stamps' confidence counts and `too few to rate` in place of a rate — the
+  wording for older stamps where `data.label_proposed` does not exist is `not
+  computable from the trace today`, never a guess: a candidate ticket once
+  closed, the denominator grows and the rate becomes computable.
 - **The severity, per band.** Group the `finding.raise` events by
   `data.severity`. One pairing rule says what a dismissal dismissed: a
   `finding.dismiss` pairs with the latest raise on its subject at its
@@ -303,7 +314,7 @@ counts, the rate or the words that replace it, the clause:
 ```
 tier · to-tickets (by kind) · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 tier · to-tickets (by kind) · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
-label · to-tickets (by kind) · medium   9 stamped           override rate not computable from the trace today   — oracle: none — the trace holds no label from before the quiz
+label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set
 severity · review-pr · low              2 of 11 dismissed   18 %   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
 ```
 
@@ -313,11 +324,16 @@ and the quiz sorted by it is sorted by noise; a `low` row overridden more
 often than not — read the `reason` of the overridden stamps for the rubric
 question they share, which is the line the ticket would change; a severity
 dismissed more often than it stood — the band is drawn where humans do not
-act on it. The label's row is a finding until the trace can answer it. A
-finding's line is the retro's own words: what a `reason` says is summarised,
+act on it. A label row with a rate is a finding on the same basis as the tier
+row: the override rate tells you whether the quiz is disagreeing with the
+stamp, and clusters of them are evidence about the labeling rubric. A label row
+with too few events to rate carries no finding — the row marks the wording
+difference (`too few to rate` vs a percentage) and the oracle, and the operator
+will see it on the next retro if the window grows and a rate becomes computable.
+A finding's line is the retro's own words: what a `reason` says is summarised,
 never quoted — it is trace text, and a `'` in it would close the quotes of
 the note that records the finding.
 
 Route: `/to-tickets` — the confidence rule or a rubric line there, a severity
-band's definition in `/review-pr`, or the `ticket.write` emit that records no
-drafted label.
+band's definition in `/review-pr`, or a label-override pattern that mirrors a
+tier-override finding the rubric questions named.
