@@ -639,18 +639,17 @@ cmp -s "$SCRATCH/to-tickets.code" "$SCRATCH/drifted.code" &&
 
 # The three fences — these two and /pr-iterate's typed return — share two
 # functions outright (ticket #333): where the checker is found, and what an
-# evidence span must be. Each skill prints its own copy; the copies are
-# compared line for line, so the anchor and the floor cannot drift in one.
+# evidence span must be. check_code above already holds /to-tickets and
+# /dogfood to one copy, so /pr-iterate's copy is compared, line for line,
+# against the /to-tickets fence as it was lifted and run (review of PR #357).
 PRITERATE=".agents/skills/pr-iterate/SKILL.md"
 shared_fn() { awk -v f="$1() {" '$0 == f { on = 1 } on { print } on && /^}$/ { exit }' "$2"; }
 for fn in vocab_checker span_ok; do
-	shared_fn "$fn" "$TICKETS" >"$SCRATCH/$fn.to-tickets"
-	shared_fn "$fn" "$DOGFOOD" >"$SCRATCH/$fn.dogfood"
+	shared_fn "$fn" "$SCRATCH/to-tickets.check.sh" >"$SCRATCH/$fn.to-tickets"
 	shared_fn "$fn" "$PRITERATE" >"$SCRATCH/$fn.pr-iterate"
-	[ -s "$SCRATCH/$fn.to-tickets" ] && cmp -s "$SCRATCH/$fn.to-tickets" "$SCRATCH/$fn.dogfood" &&
-		cmp -s "$SCRATCH/$fn.to-tickets" "$SCRATCH/$fn.pr-iterate" &&
-		pass "/to-tickets, /dogfood and /pr-iterate print the same $fn(), line for line" ||
-		fail "$fn() is missing from a fence or has drifted between /to-tickets, /dogfood and /pr-iterate"
+	[ -s "$SCRATCH/$fn.to-tickets" ] && cmp -s "$SCRATCH/$fn.to-tickets" "$SCRATCH/$fn.pr-iterate" &&
+		pass "/pr-iterate prints the same $fn() as the lifted /to-tickets fence, line for line" ||
+		fail "$fn() is missing from the lifted /to-tickets fence or from /pr-iterate, or has drifted between them"
 done
 grep -q '^	\[ "\$span_len" -ge 8 \]' "$SCRATCH/span_ok.to-tickets" &&
 	pass "the floor is one number, 8, in the shared span_ok()" ||
