@@ -2127,7 +2127,7 @@ start_in "$B2" TRACE_BEHIND_WARN=1
 [ "$(behind_notes)" = 1 ] &&
 	pass "and stderr says so exactly once" ||
 	fail "past the threshold stderr said it $(behind_notes) times: $S_ERR"
-case $S_ERR in *2*'TRACE_BEHIND_WARN'*) pass "the note names the count and the threshold's variable" ;;
+case $S_ERR in *'is 2 commits behind'*'TRACE_BEHIND_WARN=1'*) pass "the note names the count and the threshold's variable" ;;
 *) fail "the note does not name the count and TRACE_BEHIND_WARN: $S_ERR" ;; esac
 start_in "$B2" TRACE_BEHIND_WARN=2
 [ "$(behind_notes)" = 0 ] &&
@@ -2146,13 +2146,17 @@ start_in "$B2" TRACE_CONFIG="$SCRATCH/behind-policy-384.sh" TRACE_BEHIND_WARN=
 	pass "and an environment value of '' turns it off even when the file names one" ||
 	fail "an empty environment threshold still printed: $S_ERR"
 
-# A MALFORMED THRESHOLD is refused, named, and never a failure.
-start_in "$B2" TRACE_BEHIND_WARN='ten'
-[ "$S_STATUS" = 0 ] && [ "$(behind_notes)" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
-	pass "a malformed threshold: exit 0, no behind note, the field still recorded" ||
-	fail "a malformed threshold: exit $S_STATUS, event $START, stderr '$S_ERR'"
-case $S_ERR in *TRACE_BEHIND_WARN*ten*) pass "and the refused value is named on stderr" ;;
-*) fail "the malformed threshold was not named: $S_ERR" ;; esac
+# A MALFORMED THRESHOLD is refused, named, and never a failure — the values
+# section 27 drives for TRACE_AGENT_WAIT_MS, the leading zero (sh reads 0100 as
+# octal) and six digits among them.
+for bad in ten 1.5 -5 0100 1000000; do
+	start_in "$B2" TRACE_BEHIND_WARN="$bad"
+	[ "$S_STATUS" = 0 ] && [ "$(behind_notes)" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+		pass "a malformed threshold '$bad': exit 0, no behind note, the field still recorded" ||
+		fail "a malformed threshold '$bad': exit $S_STATUS, event $START, stderr '$S_ERR'"
+	case $S_ERR in *TRACE_BEHIND_WARN*"'$bad'"*) pass "and the refused '$bad' is named on stderr" ;;
+	*) fail "the malformed threshold '$bad' was not named: $S_ERR" ;; esac
+done
 
 # NEVER A FETCH: main moves again on the remote, unfetched; the hook still
 # reads the last fetched ref, so the count does not move.
