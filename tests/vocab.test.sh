@@ -201,6 +201,123 @@ case $cpu_ms in
 esac
 
 # ---------------------------------------------------------------------------
+banner "Every call site hands the checker lifted lines, never a body (#337)"
+# ---------------------------------------------------------------------------
+# The checker's cost is per line that carries a colon, and linear: one check
+# of 3 such lines costs about 0.15 CPU-seconds, of 100 about 1.5, of 2,000
+# between 7 (keys no policy declares) and 32 (every line a declared field).
+# That last number is never paid, because no caller hands it a body: each
+# lifts the lines it owes before the check. This section holds the kit's
+# callers to that. Every invocation of the checker in a shipped file is found
+# — `sh` on scripts/vocab.sh, on "$checker", on "$vocab" — and must be one of:
+#   - `fields`, which reads no input;
+#   - a prose mention of the command, closed by a backtick;
+#   - the argument form with the caller's own placeholder tokens,
+#     'Field: <token>', which nothing untrusted fills;
+#   - or a site in LIFTED below: the input it reads (a fixed string on the
+#     call's line or the one before it — a pipe's head) and the lift stage
+#     that bounds that input, a fixed string earlier in the same function.
+# A new call site, a site whose input changed, or a site whose lift stage was
+# removed is named and fails — the baits below prove each of the three.
+#
+# stamp.sh lifts by KEY, not by count: a body carrying 2,000 `Tier:` lines
+# would hand over 2,000. That is a degenerate ticket, not a body handed whole,
+# and it is the one unbounded input this inventory admits.
+LIFTED=$(
+	cat <<'EOLIFT'
+EOLIFT
+)
+
+# checker_calls <root> — one record per invocation of the checker in the
+# shipped files under <root> that is not exempt above:
+# <file>\t<line>\t<function's first line>\t<function>\t<line before> <line>
+CALLS_AWK=$(
+	cat <<'EOAWK'
+FNR == 1 { fn = "-"; start = 1; prev = "" }
+/^[ \t]*#/ { prev = $0; next }
+/^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
+	fn = $1; sub(/\(\).*/, "", fn); start = FNR
+	one = ($0 ~ /\}[ \t]*$/)
+}
+{
+	s = $0
+	while (match(s, /(^|[ \t(|`;&])sh ("[^"]*vocab\.sh"|[^ "`]*vocab\.sh|"\$checker"|"\$vocab")/)) {
+		tail = substr(s, RSTART + RLENGTH); s = tail
+		if (tail ~ /^`/ || tail ~ /^ fields/) continue
+		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue
+		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, FNR, start, fn, prev, $0
+	}
+	prev = $0
+}
+/^}/ || one { fn = "-"; start = 1; one = 0 }
+EOAWK
+)
+checker_calls() (
+	cd "$1" || exit 2
+	find scripts .agents/skills .githooks adapters constitution templates -type f \
+		\( -name '*.sh' -o -name '*.md' -o -name '*.template' -o -name 'pre-*' \) \
+		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$CALLS_AWK"
+)
+
+# unlifted <root> — every call record no LIFTED entry accounts for, one per
+# line; nothing when every site lifts.
+unlifted() {
+	checker_calls "$1" | while IFS="$(printf '\t')" read -r file line start fn text; do
+		ok=0
+		while IFS= read -r entry; do
+			e_file=${entry%%@@*} rest=${entry#*@@}
+			e_fn=${rest%%@@*} rest=${rest#*@@}
+			e_input=${rest%%@@*} e_guard=${rest#*@@}
+			[ "$e_file" = "$file" ] && [ "$e_fn" = "$fn" ] || continue
+			case $text in *"$e_input"*) ;; *) continue ;; esac
+			sed -n "${start},$((line - 1))p" "$1/$file" | grep -qF -- "$e_guard" || continue
+			ok=1 && break
+		done <<EOENTRIES
+$LIFTED
+EOENTRIES
+		[ "$ok" = 1 ] || printf '%s:%s (%s)\n' "$file" "$line" "$fn"
+	done
+}
+
+calls=$(checker_calls "$KIT" | grep -c '')
+[ "$calls" -ge 5 ] && pass "the audit finds the kit's $calls checker calls that read input" ||
+	fail "the audit finds $calls checker calls that read input — fewer than the five lifted sites; it has gone blind"
+bad=$(unlifted "$KIT")
+[ -z "$bad" ] && pass "every checker call in a shipped file reads lifted lines — none hands a body" ||
+	fail "a checker call reads input no lift stage bounds: $(printf '%s' "$bad" | tr '\n' ' ')"
+
+# The baits: a copy of the call sites, each broken one way, must be named.
+BAIT="$SCRATCH/lift-bait"
+bait_reset() {
+	rm -rf "$BAIT"
+	for f in scripts/stamp.sh .agents/skills/pr-iterate/SKILL.md .agents/skills/to-tickets/SKILL.md \
+		.agents/skills/dogfood/SKILL.md; do
+		mkdir -p "$BAIT/$(dirname "$f")" && cp "$KIT/$f" "$BAIT/$f"
+	done
+}
+# bait_named <file> <what was broken> — the audit names a site in <file>.
+bait_named() {
+	case $(unlifted "$BAIT") in
+	*"$1:"*) pass "the audit names $1 when $2" ;;
+	*) fail "the audit stays quiet when $2 in $1" ;;
+	esac
+}
+bait_reset
+[ -z "$(unlifted "$BAIT")" ] && pass "the unbroken copy of the call sites is clean" ||
+	fail "the unbroken copy of the call sites is named: $(unlifted "$BAIT")"
+sed -i "/grep -c '')\" -eq 3 \] || return 1/d" "$BAIT/.agents/skills/pr-iterate/SKILL.md"
+bait_named .agents/skills/pr-iterate/SKILL.md "the typed return's line count is removed"
+bait_reset
+sed -i 's|sh "$vocab" <"$_stamp_tmp/lines"|sh "$vocab" <"$_stamp_tmp/body"|' "$BAIT/scripts/stamp.sh"
+bait_named scripts/stamp.sh "the fetched body is handed over in place of the lifted lines"
+bait_reset
+sed -i 's|sh "$checker" <"$2"|sh "$checker" <"$1"|' "$BAIT/.agents/skills/dogfood/SKILL.md"
+bait_named .agents/skills/dogfood/SKILL.md "the pre-screen checks the output it screened instead of the return"
+bait_reset
+printf '\tsh scripts/vocab.sh <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+bait_named .agents/skills/to-tickets/SKILL.md "a new call site hands a body"
+
+# ---------------------------------------------------------------------------
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
 # ---------------------------------------------------------------------------
 vocab --frobnicate
