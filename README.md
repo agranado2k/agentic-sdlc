@@ -581,11 +581,15 @@ skeleton (K0).
   payload carries `event` COMMENT explicitly, one top-level behavior comment
   — and prints both URLs; `--dry-run` prints both payloads and posts nothing;
   a report with no `REVIEWED` or `VERDICT` line, or a heading missing, posts
-  nothing and exits 65; a reviewed commit that is not the PR head exits 75; no
-  `gh` on PATH exits 69; a policy that omits an operation exits 78; a finding
-  whose `path:line` is not in the diff is dropped and named; a retried run
-  finds its marker and skips; the word APPROVE in a finding never reaches the
-  event; and the `review.verdict` event is read back with the trace's `show`.
+  nothing and exits 65; a reviewed commit the PR no longer holds exits 75,
+  while one behind the head posts anchored to itself, checked against the
+  base...reviewed diff, with a drift line — and only with a matching
+  `--commit`, which is optional at the head and mandatory on drift, its
+  absence exit 65; no `gh` on PATH exits 69; a policy
+  that omits an operation exits 78; a finding whose `path:line` is not in the
+  diff is dropped and named; a retried run finds its marker and skips; the
+  word APPROVE in a finding never reaches the event; and the `review.verdict`
+  event is read back with the trace's `show`.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
