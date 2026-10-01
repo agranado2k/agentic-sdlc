@@ -265,8 +265,9 @@ in_order "$publish" "ticket.write carries the confidence beside the pre-quiz tie
 # PRD #273 scenario 3 reports calibration per field, so a label's confidence
 # filed under the tier's key — or not recorded at all — is a row /retro cannot
 # print. It sits beside the label it qualifies, as the tier's sits beside the
-# pre-quiz tier.
-in_order "$publish" "ticket.write carries the label's confidence under its own key, beside the label" \
+# pre-quiz tier. The pre-quiz label (ticket #354) sits between them, so /retro
+# can read the label's override as it reads the tier's.
+in_order "$publish" "ticket.write carries the label, the pre-quiz label, then the label's confidence under its own key" \
 	"kind=ticket.write" "data.confidence=" "data.label=" "data.label_proposed=" "data.label_confidence="
 has_in "$publish" "never folded into \`data.confidence\`" "the two keys are told apart in words"
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
