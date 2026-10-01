@@ -269,6 +269,36 @@ in_order "$publish" "ticket.write carries the label, the pre-quiz label, then th
 has_in "$publish" "never folded into \`data.confidence\`" "the two keys are told apart in words"
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
 assert_file_has "$TIX" "## The tier rubric" "the heading the update recipe's worked example merges around"
+# The mechanical rubric's two conditions (ticket #418, retro H1): over two
+# windows 4 of 7 PRs from `mechanical` tickets were blocked at their first
+# review and rebuilt on a stronger model, 0 of 8 `implementer` PRs were. The
+# first rubric line — "checkable definition of done" — admitted refactors
+# across many suites, which the suite could verify but the smallest model
+# could not produce. So a `mechanical` stamp now needs both: the ticket names
+# the ONE command whose exit is its oracle, and the change is one file or one
+# pattern applied uniformly. The failure cases are named in the same line,
+# with the tier they go to, and rule 14 says what a doubt on either does to
+# the confidence. The glossary's entry says the same in one sentence, so a
+# reader who meets the tier there first meets the conditions too.
+rubric=$(section_of "$TIX_ABS" "The tier rubric")
+rline1=$(printf '%s\n' "$rubric" | awk '/^1\. / { print; exit }')
+[ -n "$rline1" ] && pass "the tier rubric still opens with a numbered first question" ||
+	fail "the tier rubric has no numbered first line — the mechanical question is gone"
+has_in "$rline1" "names the one command whose exit is its oracle" "condition one: the oracle is one command, named in the ticket"
+has_in "$rline1" "one file or one pattern applied uniformly" "condition two: the change is one file, or one pattern everywhere"
+has_in "$rline1" "many files for different reasons" "the refactor the suite verifies but the smallest model cannot produce is named"
+has_in "$rline1" '"unless"' "a definition of done with an exception in it is not checkable without judgement"
+in_order "$rline1" "the failure cases are sent to implementer, after both conditions are stated" \
+	"names the one command" "one file or one pattern" "many files for different reasons" '"unless"' '`implementer`'
+printf '%s\n' "$rline1" | grep -q -F '⇒ `mechanical`' &&
+	pass "the first line still answers mechanical — the conditions narrow the tier, they do not remove it" ||
+	fail "the first rubric line no longer resolves to mechanical"
+has_in "$conf" '`mechanical` stamp with either condition in doubt is `low`' "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
+tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
+[ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
+has_in "$tier_entry" "one command whose exit is its oracle" "the glossary's tier entry carries condition one"
+has_in "$tier_entry" "one file or one pattern" "and condition two"
+has_in "$tier_entry" "many files for different reasons" "and names the refactor that is implementer"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 
 # ---------------------------------------------------------------------------
