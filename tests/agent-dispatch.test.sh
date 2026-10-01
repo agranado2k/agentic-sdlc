@@ -99,6 +99,20 @@ await_sleep() {
 	done
 	ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
 }
+# await_file TEST PATH SECONDS — wait, bounded, until `[ TEST PATH ]` holds:
+# what a signal leg waits on before it signals is the worker's own marker,
+# never the clock (#402; L-4, review of PR #290). Exit 0 once it holds, 1 once
+# SECONDS have passed without it — and a 1 is the caller's to FAIL, never to
+# signal on anyway. A 0.1 s nap spends a tenth of a second of the budget; where
+# sleep takes whole seconds only, each one-second nap spends ten tenths.
+await_file() {
+	_af_try=0
+	until [ "$1" "$2" ]; do
+		[ "$_af_try" -ge $(($3 * 10)) ] && return 1
+		_af_try=$((_af_try + 1))
+		sleep 0.1 2>/dev/null || { sleep 1; _af_try=$((_af_try + 9)); }
+	done
+}
 # ---------------------------------------------------------------------------
 banner "The suite counts only the sleeps it started"
 # ---------------------------------------------------------------------------
@@ -142,6 +156,44 @@ await_sleep "$probe" 7337 >/dev/null
 	fail "the leftover count saw [$(new_sleep_pids 7337 "$sleeps_before" | tr '\n' ' ')] as new 'sleep 7337', not only [$probe] — the legs below cannot go red, or count the host's"
 kill "$held" "$probe" "$decoy" 2>/dev/null
 wait "$held" "$probe" "$decoy" 2>/dev/null
+
+# ---------------------------------------------------------------------------
+banner "A signal leg waits on a marker, bounded, and a timeout is a fail"
+# ---------------------------------------------------------------------------
+# await_file is what the signal legs below wait on before they signal: the
+# worker's own marker, never the clock (#402). Its budget has to be real
+# seconds on every sleep — a whole-second-only sleep that refused 0.1 would
+# otherwise spin the budget away at once and send the TERM early — and it has
+# to say when it ran out, so a leg can fail rather than signal a worker
+# nobody saw start.
+AF_MISSING="$SCRATCH/await-file.never"
+rm -f "$AF_MISSING"
+await_file -e "$AF_MISSING" 1
+[ $? = 1 ] && pass "await_file reports a marker that never appeared — exit 1, not 0" ||
+	fail "await_file returned 0 for a marker that never appeared — a leg would signal a worker nobody saw"
+AF_WHOLE="$SCRATCH/whole-second-sleep"
+mkdir -p "$AF_WHOLE"
+cat >"$AF_WHOLE/sleep" <<WHOLE
+#!/bin/sh
+case \$1 in *[!0-9]*) echo "sleep: invalid time interval '\$1'" >&2; exit 1 ;; esac
+exec $(command -v sleep) "\$1"
+WHOLE
+chmod +x "$AF_WHOLE/sleep"
+start=$(date +%s)
+(PATH="$AF_WHOLE:$PATH" await_file -e "$AF_MISSING" 3)
+af_status=$?
+took=$(( $(date +%s) - start ))
+[ "$af_status" = 1 ] && [ "$took" -ge 2 ] &&
+	pass "where sleep takes whole seconds only, the budget is still spent in seconds (${took}s)" ||
+	fail "under a whole-second-only sleep await_file returned $af_status after ${took}s of a 3s budget — the wait collapsed"
+AF_LATE="$SCRATCH/await-file.late"
+rm -f "$AF_LATE"
+(sleep 1; echo x >"$AF_LATE") &
+af_writer=$!
+await_file -s "$AF_LATE" 30 &&
+	pass "await_file returns once the marker is written" ||
+	fail "await_file timed out on a marker written a second in"
+wait "$af_writer" 2>/dev/null
 
 
 
