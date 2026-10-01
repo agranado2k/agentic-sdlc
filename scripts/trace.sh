@@ -25,9 +25,9 @@
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
 # line it would append; a successful `emit` and a successful `end` print
 # nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
-# INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind, a
-# malformed subject, value or price, or a policy file named explicitly and
-# missing; exit 1 is `verify`'s verdict, and an `export` that refuses because
+# INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
+# an outcome its kind does not declare, a malformed subject, value or price,
+# or a policy file named explicitly and missing; exit 1 is `verify`'s verdict, and an `export` that refuses because
 # verify fails carries that same verdict out. `begin` and `end` add two exits
 # of their own to the 2 — closing a run that is not open, and a run stack that
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
@@ -72,10 +72,11 @@
 #   harness model · outcome reason · tok_in tok_out tok_cache_w tok_cache_r ·
 #   blob · data
 # `kind` is a CLOSED vocabulary (an unknown one is exit 2, like an unknown
-# tier); `data.*` keys are OPEN (like task domains), string values only. A
-# subject is `<type>:<reference>` — lowercase type, then anything without a
-# space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
-# session and a run all join on one column. The types a project's policy
+# tier), and so is each kind's `outcome` (TRACE_OUTCOMES below); `data.*`
+# keys are OPEN (like task domains), string values only. A subject is
+# `<type>:<reference>` — lowercase type, then anything without a space, a
+# quote or a backslash — so a PRD, a ticket, a PR, a branch, a session and a
+# run all join on one column. The types a project's policy
 # file names in TRACE_NUMBERED_TYPES are spelled one way, `<type>:#<digits>`,
 # because a join key with synonyms is not one (#305); every other type, and
 # every type when the list is empty as it ships, stays open.
@@ -1090,10 +1091,10 @@ trace_verify() {
 		function outcome_bad(k, o,   w) {
 			if (advise != "list") return
 			w = outcome_words(k)
-			if (w == "") w = "nothing — the kind carries no outcome"
+			if (w == "") w = "allowed — the kind carries no outcome"
 			else if (w == "*") w = "one word"
-			else gsub(/\|/, " ", w)
-			printf "!  trace: %s:%d: %s outcome %s%s%s is not one of %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, q, o, q, w | "cat 1>&2"
+			else { gsub(/\|/, " ", w); w = "one of " w }
+			printf "!  trace: %s:%d: %s outcome %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, q, o, q, w | "cat 1>&2"
 		}
 		{
 			bad = ""
