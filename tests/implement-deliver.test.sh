@@ -47,9 +47,6 @@ cd "$ROOT" || exit 2
 # assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
 # implementation, used here and by the AI review template suite.
 
-# line_of <literal> — first matching line number, or empty.
-line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
-
 # offset_of <literal> — where the literal first starts, counted in characters
 # from the top of the file, or empty. Order WITHIN a line: the skill's steps
 # are single long lines, so two phrases of one step share a line number.
@@ -96,12 +93,12 @@ banner "3. The review request is mechanism-ORDERED: forge workflows first"
 # leg runs where the secrets are, so only it can reach a different vendor. If a
 # later edit flips these, the skill still reads fine and the cross-provider leg
 # has silently become the fallback — which is exactly what this asserts against.
-a=$(line_of "(a) Forge review workflows")
+a=$(t_line_of "$SKILL_ABS" "(a) Forge review workflows")
 # Matched on the bold LABEL, never on the prose after it: this asserts where
 # the mechanism sits and what it is called, so an editorial change to its
 # sentence must not fail it. Bare `(b)` is not enough — it appears earlier in
 # the file.
-b=$(line_of "**(b)")
+b=$(t_line_of "$SKILL_ABS" "**(b)")
 if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
 	pass "forge review workflows (line $a) come before the in-harness fallback (line $b)"
 else
@@ -292,9 +289,9 @@ case "$_row" in
 esac
 # And the step is an ordered part of Deliver, not an aside: it must come after
 # the PR is opened and before the skill stops.
-_open=$(line_of "Open the pull request")
-_review=$(line_of "invoke \`/review-pr\`")
-_stop=$(line_of "**Stop.**")
+_open=$(t_line_of "$SKILL_ABS" "Open the pull request")
+_review=$(t_line_of "$SKILL_ABS" "invoke \`/review-pr\`")
+_stop=$(t_line_of "$SKILL_ABS" "**Stop.**")
 if [ -n "$_open" ] && [ -n "$_review" ] && [ -n "$_stop" ] &&
 	[ "$_open" -lt "$_review" ] && [ "$_review" -lt "$_stop" ]; then
 	pass "the invocation sits between opening the PR (line $_open) and stopping (line $_stop)"

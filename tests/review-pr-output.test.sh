@@ -48,7 +48,6 @@ SKILL_ABS="$ROOT/$SKILL"
 
 cd "$ROOT" || exit 2
 
-line_of() { grep -nF -- "$1" "$SKILL_ABS" | head -1 | cut -d: -f1; }
 
 # region <start-re> <end-re> — the lines from the first match of start to the
 # first match of end (exclusive of nothing; sed range). Used to hold the two
@@ -74,11 +73,11 @@ assert_file_has "$SKILL" "| | Severity | Count |"
 # clean-audits, then the count table, all between the template's own header and
 # the findings paragraph. (The first shape anchored on prose and one mutant —
 # verdict moved out of the fence — survived; found by the review of PR #66.)
-rs=$(line_of "### Review Summary")
-v=$(line_of "**Verdict:**")
-c=$(line_of "Clean audits:")
-th=$(line_of "| | Severity | Count |")
-tf=$(line_of "**Then the findings**")
+rs=$(t_line_of "$SKILL_ABS" "### Review Summary")
+v=$(t_line_of "$SKILL_ABS" "**Verdict:**")
+c=$(t_line_of "$SKILL_ABS" "Clean audits:")
+th=$(t_line_of "$SKILL_ABS" "| | Severity | Count |")
+tf=$(t_line_of "$SKILL_ABS" "**Then the findings**")
 if [ -n "$rs" ] && [ -n "$v" ] && [ -n "$c" ] && [ -n "$th" ] && [ -n "$tf" ] &&
 	[ "$rs" -lt "$v" ] && [ "$v" -lt "$c" ] && [ "$c" -lt "$th" ] && [ "$th" -lt "$tf" ]; then
 	pass "summary template order holds: header ($rs) < verdict ($v) < clean audits ($c) < count table ($th) < findings ($tf)"
@@ -161,8 +160,8 @@ else
 	fail "the confirm-list template order broke — 🔀='$x' ⚠️='$w' ✅='$s'"
 fi
 
-a5=$(line_of "### 5. Severity-Based")
-a5b=$(line_of "### 5b. Behavior Confirm-List")
+a5=$(t_line_of "$SKILL_ABS" "### 5. Severity-Based")
+a5b=$(t_line_of "$SKILL_ABS" "### 5b. Behavior Confirm-List")
 if [ -n "$a5" ] && [ -n "$a5b" ] && [ "$a5" -lt "$a5b" ]; then
 	pass "Axis 1's report (line $a5) is specified before Axis 2's confirm-list (line $a5b)"
 else
@@ -177,8 +176,8 @@ assert_file_has "$SKILL" "Do NOT prefix comments with labels"
 # The closing restates the verdict so the question is answerable without
 # scrolling back up (PRD #62, solution point 6).
 assert_file_has "$SKILL" "Restate the verdict"
-q=$(line_of "Which severity categories or specific items should I post")
-r=$(line_of "Restate the verdict")
+q=$(t_line_of "$SKILL_ABS" "Which severity categories or specific items should I post")
+r=$(t_line_of "$SKILL_ABS" "Restate the verdict")
 # -le, not -lt: the closing may put both on one line, restatement first.
 if [ -n "$q" ] && [ -n "$r" ] && [ "$r" -le "$q" ]; then
 	pass "the closing restates the verdict (line $r) ahead of the question (line $q)"

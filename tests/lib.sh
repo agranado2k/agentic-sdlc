@@ -982,6 +982,10 @@ t_field_tokens() {
 	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 }
 
+# t_line_of <file> <literal> — the number of the first line of <file> holding
+# <literal> as a fixed string; empty when none does.
+t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
+
 # t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
 # <file> opened with ```<language> (sh when omitted) whose body holds <literal>
 # as a fixed string, written whole to <out>, to be sourced and run. The
