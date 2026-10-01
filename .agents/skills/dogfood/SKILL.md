@@ -183,23 +183,24 @@ fi
 rm -rf "${scratch:?}"
 ```
 
-Two lines, both printable, with the decision line exactly once leave no
-line for anything else; a decision value is one token and never a sentence;
-and the span is bounded — at least 8 bytes, since a shorter span proves no
-reading, unless it is the whole text trimmed of trailing whitespace, and at
-most 200 — and matched against the scratch file as a fixed string — exit
-status only, so the output is compared without entering your
-session. That half is the fence's own: the checker ignores every line that
-is not a bare `Field: value` line. The checker's half is the value: a token
-the policy file does not declare is refused. **The check fails closed:**
-the fence finds the checker in the repository that holds the skills being
-run — the nearest directory at or above the cwd with an `.agents/skills/`,
-never above the outermost git work tree around the cwd — and trusts the
-checker it finds there: a nested checkout with no skills of its own is
-checked by the project around it, a repository further up is never
-consulted, and only its exit 0 passes a return — a checker missing there or
-unable to run, or a cwd under no such directory, refuses the return,
-because a check that could not be made is not a check that passed.
+Two lines, both printable, with the decision line exactly once, leave no
+line for anything else. Within those lines, a decision value is one token
+and never a sentence. The span is bounded: at least 8 bytes, since a
+shorter span proves no reading, unless it is the whole text trimmed of
+trailing whitespace; and at most 200. It is matched against the scratch
+file as a fixed string, by exit status only, so the output is compared
+without entering your session. That half is the fence's own: the checker
+ignores every line that is not a bare `Field: value` line. The checker's
+half is the value: a token the policy file does not declare is refused.
+**The check fails closed.** The fence finds the checker in the repository
+that holds the skills being run: the nearest directory at or above the cwd
+with an `.agents/skills/`, never above the outermost git work tree around
+the cwd. It trusts the checker it finds there. A nested checkout with no
+skills of its own is checked by the project around it, and a repository
+further up is never consulted. Only the checker's exit 0 passes a return. A
+checker missing there or unable to run refuses the return, and so does a
+cwd under no such directory: a check that could not be made is not a check
+that passed.
 
 **What the verdict means.** `yes` is the finding this section has always
 described: do not read that output, stop the row there, and report it as a
