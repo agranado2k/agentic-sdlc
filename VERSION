@@ -1531,6 +1531,12 @@
 # since the run stack is per toplevel. AGENTS.md's merge-train row names
 # the script; .github/workflows/kit-ci.yml runs both new suites and
 # README.md names them.
+# From #387 (PR #394), the same adapter: when subagent-stop.sh's ready-wait
+# bound elapses before the transcript ends on a final message, its one
+# `agent.stop outcome=fail` also carries `data.last_kind`, `data.last_age_ms`
+# and `data.lines`, so a retro tells a bound too short from an agent that
+# never finished; hook.lib.sh reads them, adapters/claude-code/README.md
+# says so, tests/trace-hooks.test.sh holds it.
 
 shared-layer: 0.36.0
 

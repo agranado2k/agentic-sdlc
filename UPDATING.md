@@ -246,7 +246,9 @@ far the root checkout is behind the last fetched `origin/main`, never a fetch
 of its own — through `hook.lib.sh`, and its `README.md` says so; `/housekeeping`'s
 `CHECKLIST.md` asks for that count. In 9d, your `scripts/trace.config.sh` gains
 `TRACE_BEHIND_WARN`, shipped empty: a number makes the hook say so on stderr
-past it. Take the hooks if you wired them.
+past it. Also in 9e, `subagent-stop.sh`'s wait-bound failure records the last
+transcript line's kind, age and the line count. Take the hooks if you wired
+them.
 
 **Arriving from 0.34.0 or older, one file joins.** `scripts/stamp.sh` joins
 the shared layer at 0.35.0 — see "When a file joins the shared layer" below:
@@ -737,10 +739,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2172 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2174 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2326 insertions(+), 1 deletion(-)
+ 3 files changed, 2328 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
