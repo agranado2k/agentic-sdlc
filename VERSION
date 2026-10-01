@@ -1447,8 +1447,67 @@
 # them, and say which form each row used. The 0.26.0 history note below was
 # misfiled under the not-shared commentary by its own release; it sits in
 # order now (#339).
+# 0.36.0 — a task contract is admitted before an ordinary request's first
+# edit (ADR-0011's second lifecycle slice, ticket #297, PR #325 — drafted as
+# 0.29.0 when 0.28.0 was current, renumbered at the merge).
+# NO file joins or leaves the shared layer, and NO shared script changes
+# content — checked entry by entry against v0.35.0 at the bump, main
+# included. UPDATING.md changes content: the arriving-from paragraph for
+# the release, and both worked examples re-pin (Part 2 pins the adapters
+# archive, which gains the codex directory).
+#   From #297: `sh scripts/task.sh start <repo> <contract>` admits an
+# ordinary request before production work, and `status` reports what it
+# admitted. The contract names the request's kind, a bounded scope,
+# acceptance, the phases it must pass, its endpoint, standing authorization
+# and source provenance; start records them with the runtime catalogue's
+# identity (through scripts/catalogue.sh) and the worktree's baseline as
+# SEPARATE git identities — branch, HEAD, index, worktree and untracked
+# content — under the linked worktree's own git directory, mode 600, so
+# sibling worktrees share no current task. Missing scope, a route out of
+# proportion to the request (a wave is never one implementation phase), a
+# dirty baseline the contract did not say to preserve, and a second start
+# are each exit 2 with nothing created; a record is terminated before the
+# task identity is appended. An explicit do-not-push endpoint ends at the
+# local worktree with its exception and consequence recorded — review may
+# still be required, remote delivery is never claimed. It is a validator
+# and a small record: no dispatcher, broker, trace dependency, completion
+# engine, push, pull request or merge.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. scripts/task.sh and scripts/task.md
+# SHIP outside files:, on scripts/catalogue.sh's 0.27.0 footing — a fresh
+# bootstrap carries them, an existing consumer inspects them through Part 2
+# and takes nothing of them until #302, the wave's adoption ticket, decides
+# how the lifecycle mechanisms are adopted. scripts/catalogue.config, the
+# repository-owned declaration, gains the executable's row.
+# adapters/codex/README.md is new and DORMANT (via 9e): the single
+# before-edit entry rule, the capability boundary observed on Codex CLI
+# 0.159.0 and the opt-in hook trust constraints, with no hook installed and
+# no trust changed; adapters/README.md indexes it and counts three
+# agent-harness adapters. The root manual AGENTS.md gains the command's
+# quick-reference row within ADR-0004's budget, docs/domain-glossary.md
+# defines Task contract, and ADR-0011 — already recorded — stays on
+# bootstrap.sh's KIT_OWN list. KIT-ONLY, never shipped: tests/task.test.sh,
+# on bootstrap.sh's kit-authoring deletion list, run by
+# .github/workflows/kit-ci.yml's task-entry job and named by README.md;
+# tests/adapters-demo.sh holds the Codex adapter dormant.
+#   Landed untagged on main since 0.35.0, named here because the bump's
+# interval holds them (self-host F6) — two skills and one suite, no shared
+# file. From #334 (PR #376): /to-tickets' step 1 reads the PRD body the
+# tool-restricted reader screened — the scratch copy, as data — never a
+# second fetch from the tracker; the copy and its home are removed when the
+# decomposition ends or at the stop, not once the pre-screen has answered,
+# and the Trust boundary section claims exactly that the text read is the
+# text screened. From #341 (PR #378): the dogfood skill's step 4 (without
+# its slash here, for 0.33.0's reason) holds each row's `Outcome:` to the
+# vocabulary through the checker `vocab_checker()` finds from the skills
+# root and FAILS CLOSED — a checker missing, or exiting for a reason other
+# than a refusal, refuses the row as exit 2 does, and a refused or
+# unchecked row is named by step and position, never printed as an
+# outcome; the check is the runnable fence `checked_outcome`.
+# tests/prescreen-return.test.sh §4c and §7 lift and run both. PR #373
+# moved docs/diary.md alone.
 
-shared-layer: 0.35.0
+shared-layer: 0.36.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
