@@ -325,7 +325,7 @@ stamp_has 'no held-out set' "…and the comparator is named as what it is — no
 # A row that measured nothing names no oracle and says why: oracle: none — <why>
 # (ticket #342). The glossary carries that form, and the example rows hold to it.
 case "$oracle_entry" in
-*'oracle: none — '* | *'`oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
+*'oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
 *) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
 esac
 # Every example row that carries an oracle clause must follow the proper form:
@@ -348,6 +348,17 @@ $rows8
 EOF
 [ -z "$rows8_bad" ] && pass "every example row in question 8 that carries an oracle clause follows the proper form" ||
 	fail "an example row's oracle clause does not follow the proper form:$rows8_bad"
+# The label row specifically must use the none form until #332 lands (ticket #342).
+label_row=$(printf '%s\n' "$rows8" | grep -E '^label · ' | head -1)
+if [ -n "$label_row" ]; then
+	if printf '%s\n' "$label_row" | grep -qE '— oracle: none — [^ ]'; then
+		pass "the label row carries oracle: none — <why> form"
+	else
+		fail "the label row does not carry oracle: none — <why>; found: $label_row"
+	fi
+else
+	fail "no label row found in question 8 examples"
+fi
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
