@@ -196,10 +196,11 @@ banner "2b. The eighth question: stamp calibration (PRD #273, ticket #281)"
 # (`— oracle: `, `no held-out set`, `too few`, `run.start`), so a needle they
 # satisfy survives the rule's deletion (review of PR #329, H-5). The rows are
 # read apart, as rows.
-sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+sec8() { awk '/^## 8\. / { on = 1; next } /^## / { on = 0 } on' "${1:-$SIDECAR_ABS}"; } # [<sidecar file>]
+fenced() { awk '/^```/ { fence = !fence; next } fence'; } # stdin's fenced lines, the example rows
 stamp=$(sec8 | awk '/^```/ { fence = !fence; next } !fence' | awk '/^\*Reads: / { reads = 1 } !reads; reads && /\*$/ { reads = 0 }' | flat)
 reads8=$(sec8 | awk '/^\*Reads: / { reads = 1 } reads; reads && /\*$/ { reads = 0 }' | flat)
-rows8=$(sec8 | awk '/^```/ { fence = !fence; next } fence')
+rows8=$(sec8 | fenced)
 [ -n "$stamp" ] && [ -n "$reads8" ] && [ "$(printf '%s\n' "$rows8" | grep -c .)" -ge 3 ] &&
 	pass "question 8 has rule prose, a Reads line and example rows — each read apart" ||
 	fail "question 8 could not be split into its prose, its Reads line and its example rows"
@@ -329,6 +330,69 @@ stamp_has 'A calibration row has no fixtures' "question 8 says what stands in fo
 stamp_has 'the severity bands in `/review-pr` as they stood when the window closed' "a severity row's version is named: the bands as they stood when the window closed"
 stamp_has 'the human at the quiz' "the tier rows' oracle is named: the human at the quiz"
 stamp_has 'no held-out set' "…and the comparator is named as what it is — no held-out set"
+# A row that measured nothing names no oracle and says why: oracle: none — <why>
+# (ticket #342). The glossary carries that form, and the example rows hold to it.
+case "$oracle_entry" in
+*'oracle: none — '*) pass "the glossary's Oracle entry mentions the form: oracle: none — <why>" ;;
+*) fail "the glossary's Oracle entry does not mention: oracle: none — <why>" ;;
+esac
+# The none form does not repeal the entry's rule — the checklist's words, "a
+# comparator is always named, never implied" — it is the rule kept where
+# there is nothing to name: the row says it has no comparator, instead of
+# implying one. Both sentences are held, so neither can be edited into
+# contradicting the other.
+comparator_rule='a comparator is always named, never implied'
+case "$(flat <"$ROOT/.agents/skills/housekeeping/CHECKLIST.md")" in
+*"$comparator_rule"*) pass "/housekeeping's checklist states the comparator rule" ;;
+*) fail "/housekeeping's checklist no longer states the comparator rule in the words this suite holds the glossary to — move both together" ;;
+esac
+case "$oracle_entry" in
+*"$comparator_rule"*) pass "…and the glossary's Oracle entry still states it in the checklist's words: $comparator_rule" ;;
+*) fail "the glossary's Oracle entry no longer states the rule the checklist states: $comparator_rule" ;;
+esac
+case "$oracle_entry" in
+*'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
+*) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
+esac
+# The label row specifically carries the none form until #332 lands (ticket
+# #342): the trace holds no pre-quiz label, so there is no who, when or
+# version to name, and a four-part clause there would name an oracle that
+# does not exist. The holder reads any sidecar, so the baits below can prove
+# it goes red (hard rule 9) without touching the real one.
+label_row_of() { # <sidecar file> — question 8's label example row, or nothing
+	sec8 "$1" | fenced | grep -E '^label · ' | head -1
+}
+label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
+	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
+}
+label_row=$(label_row_of "$SIDECAR_ABS")
+if [ -n "$label_row" ]; then
+	label_row_none_form "$SIDECAR_ABS" && pass "the label row carries oracle: none — <why> form" ||
+		fail "the label row does not carry oracle: none — <why>; found: $label_row"
+else
+	fail "no label row found in question 8 examples"
+fi
+# The bait: three copies of the sidecar whose label row names an oracle it
+# does not have, names none and gives no why, or carries no clause at all.
+# The holder must refuse every one — and each bait must have planted its
+# line: a copy whose label row is missing or unchanged proves nothing.
+bait_label_row() { # <sed substitution on the label row> — exit 0 only when the copy's row is there and changed
+	sed "/^label · /$1" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md" || return 1
+	bait_row=$(label_row_of "$SCRATCH/bait-sidecar.md")
+	[ -n "$bait_row" ] && [ "$bait_row" != "$label_row" ]
+}
+bait_label_row 's/— oracle: none — .*$/— oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that names a four-part oracle it does not have goes red" ||
+	fail "bait: a label row carrying a four-part clause passed as the none form (the holder reads the clause's presence, not its form) — or the bait planted nothing"
+bait_label_row 's/— oracle: none — .*$/— oracle: none/' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row that says none and gives no why goes red" ||
+	fail "bait: a label row reading '— oracle: none' with no <why> passed (the why is the half that keeps the row honest) — or the bait planted nothing"
+bait_label_row 's/ *— oracle: none — .*$//' &&
+	! label_row_none_form "$SCRATCH/bait-sidecar.md" &&
+	pass "bait: a label row with no oracle clause at all goes red" ||
+	fail "bait: a label row with no oracle clause passed the none-form holder — or the bait planted nothing"
 # Honesty point 1: finding.raise has no posted marker, so the denominator is
 # raises on the subject and it OVERCOUNTS what a human could have dismissed.
 stamp_has 'overcounts' "the dismissal denominator is said to overcount"
