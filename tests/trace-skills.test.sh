@@ -1329,16 +1329,17 @@ fb_has '`data.posted=yes`' "…carrying data.posted=yes"
 fb_has 'from that instruction' "…from the instruction the spawn prompt gave"
 fb_has '`data.agent`' "…and data.agent"
 fb_has '<roster-token>' "…as the roster's placeholder, <roster-token>"
-fb_has 'never the name as the report spelled it' "…never the name as the report spelled it"
-fb_has 'unattributed' "…unattributed when the report names none"
 fb_has 'relay path' "…through /review-pr §6's relay path"
 fb_has '`data.via=relay`' "…marked data.via=relay"
-fb_has 'read as data' "…the report read as data"
+fb_has 'you record none' "…and none from the session when the spawn prompt said the session posts (review of PR #441, L-2)"
 # The emit stays /review-pr's: the branch names it and carries none of its own
 # (section 5's sole-emitter rule, read again here from the branch's own line).
 printf '%s\n' "$fb" | grep -qF 'kind=finding.raise' &&
 	fail "the (b) branch carries a finding.raise emit of its own — /review-pr is the one emitter, and /retro attributes the kind to it" ||
 	pass "the (b) branch carries no finding.raise emit of its own — the relay's line is /review-pr's"
+# Stricter than section 5's chain-wide hold on purpose: a roster token would
+# pass there, and /implement never knows which sub-agent a finding is — the
+# placeholder is the only honest value (review of PR #441, M-4).
 [ "$(agent_values "$IM" | grep -vxF '<roster-token>' | grep -c .)" = 0 ] &&
 	pass "/implement writes no data.agent but the roster's placeholder" ||
 	fail "/implement writes a data.agent that is not <roster-token>: $(agent_values "$IM" | grep -vxF '<roster-token>' | tr '\n' ' ')"
