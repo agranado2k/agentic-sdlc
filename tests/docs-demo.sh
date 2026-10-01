@@ -55,7 +55,7 @@ trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
 
-# note <text> — a visible line that is neither a pass nor a fail.
+# note <text> (tests/lib.sh) — a visible line that is neither a pass nor a fail.
 #
 # Some cases below can only run against a shell that is installed. Silently
 # skipping one would let a machine (or a CI image) quietly drop an entire axis
@@ -63,10 +63,6 @@ failures=0
 # beside the final summary, where a reader who only checks the last lines will
 # actually see it. Same convention as tests/agents-tiers.test.sh.
 SKIPPED=0
-note() {
-	printf '  --    %s\n' "$*"
-	SKIPPED=$((SKIPPED + 1))
-}
 
 assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
 assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }

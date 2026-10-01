@@ -484,6 +484,12 @@ banner() { printf '\n=== %s ===\n' "$*"; }
 pass() { printf '  ok    %s\n' "$*"; }
 # skip <text> — a case this host cannot run, said out loud and never counted.
 skip() { printf '  skip  %s\n' "$*"; }
+# note <text> — a visible line that is neither a pass nor a fail, counted in
+# SKIPPED so the suite can say so again beside its final summary.
+note() {
+	printf '  --    %s\n' "$*"
+	SKIPPED=$((SKIPPED + 1))
+}
 fail() {
 	printf '  FAIL  %s\n' "$*"
 	failures=$((failures + 1))

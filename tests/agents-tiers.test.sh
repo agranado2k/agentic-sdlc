@@ -123,7 +123,7 @@ capture_in() {
 	t_run_split _capture_cd "$_ci_dir" "$@"
 }
 
-# note <text> — a visible line that is neither a pass nor a fail.
+# note <text> (tests/lib.sh) — a visible line that is neither a pass nor a fail.
 #
 # The per-shell cases below can only run against a shell that is installed.
 # Silently skipping one would let a machine (or a CI image) quietly drop an
@@ -131,10 +131,6 @@ capture_in() {
 # per case here, and counted again beside the final summary, where a reader
 # who only checks the last lines will actually see it.
 SKIPPED=0
-note() {
-	printf '  --    %s\n' "$*"
-	SKIPPED=$((SKIPPED + 1))
-}
 
 # SHELLS — the shells the per-shell axes below sweep.
 #
