@@ -438,7 +438,7 @@ stamp 331
 s_assert_status 0 "eight lines of each key: the bound is per key, never a total — exit 0"
 
 # Two keys past the bound: both named, each with its count, in one line —
-# sorted by key, so the message is the same whatever order awk counted in.
+# in key order, so the message is the same whatever order awk counted in.
 body "$(awk 'BEGIN { for (i = 0; i < 9; i++) printf "Tier: implementer\\nConfidence: high\\n" }')"
 stamp 331
 s_assert_status 5 "nine Tier: and nine Confidence: lines: exit 5"

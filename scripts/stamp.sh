@@ -132,9 +132,9 @@ fi
 # safe to print, and so is a count; the lines are not.
 STAMP_PER_KEY=8
 _over=$(awk -v max="$STAMP_PER_KEY" '{ k = tolower($0); sub(/^[[:space:]]*/, "", k); sub(/[^a-z].*/, "", k); n[k]++ }
-	END { for (k in n) if (n[k] > max) print n[k] " " k " lines" }' "$_stamp_tmp/lifted" | sort -k2)
+	END { split("confidence domain tier", ks, " "); for (i = 1; i <= 3; i++) if (n[ks[i]] > max) printf "%s%d %s lines", (s++ ? ", " : ""), n[ks[i]], ks[i] }' "$_stamp_tmp/lifted")
 if [ -n "$_over" ]; then
-	stamp_say "issue #$issue: too many stamp lines — $(printf '%s' "$_over" | tr '\n' ',' | sed 's/,/, /g'), past the bound of $STAMP_PER_KEY a key; nothing checked, nothing printed — a stop"
+	stamp_say "issue #$issue: too many stamp lines — $_over, past the bound of $STAMP_PER_KEY a key; nothing checked, nothing printed — a stop"
 	exit 5
 fi
 
