@@ -193,7 +193,7 @@ stamp 331
 s_assert_status 3 "a body with no stamp lines: exit 3"
 [ -z "$S_OUT" ] && pass "no stamp lines: nothing on stdout" || fail "no stamp lines: stdout should be empty, got '$S_OUT'"
 
-body '- Tier: planner\n**Confidence:** high\n'
+body 'Prose.\n- Tier: planner\n**Confidence:** high\n'
 stamp 331
 s_assert_status 3 "a body whose only stamps are markdown-wrapped: exit 3, nothing lifted"
 
