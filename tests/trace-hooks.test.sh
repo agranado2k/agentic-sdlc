@@ -2518,4 +2518,84 @@ else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi
 
+
+# ---------------------------------------------------------------------------
+banner "35. The phantom-stop count survives on session.end (#410)"
+# ---------------------------------------------------------------------------
+# Ticket #410 (a known gap of 2026-10-01, origin #344). A phantom stop still
+# writes no event (section 31), but it now adds one line to a per-session
+# counter under the trace's current/ directory, and the session-end hook
+# records the count as data.phantoms on session.end — 0 when there were none —
+# and takes the counter with it, so a resumed session's next end counts only
+# what came after. None of these legs needs node: a phantom never reaches the
+# extractor, and session.end is written whether the usage read worked or not.
+
+# phantom_of <session id> — a SubagentStop payload for that session, naming a
+# subagent transcript that does not exist.
+phantom_of() {
+	set_key session_id "$1" <"$FIX/subagent-stop.payload.json" |
+		set_key transcript_path "$SCRATCH/main.jsonl" |
+		set_key agent_transcript_path "$SCRATCH/never-there-410.jsonl" >"$SCRATCH/phantom-410.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-410.json" >/dev/null 2>&1
+}
+
+# end_of <session id> — the SessionEnd hook for that session.
+end_of() {
+	set_key session_id "$1" <"$FIX/session-end.payload.json" |
+		set_key transcript_path "$SCRATCH/main.jsonl" >"$SCRATCH/end-410.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-410.json" >/dev/null 2>&1
+}
+
+# end_line <session id> — that session's session.end lines.
+end_line() { ev_of session.end | grep -F "\"subject\":\"session:$1\"" || :; }
+
+S410A=sess-410-a
+S410B=sess-410-b
+new_trace
+phantom_of "$S410A"
+phantom_of "$S410A"
+phantom_of "$S410B"
+phantom_of "$S410A"
+[ -z "$(ev_of agent.stop)" ] && pass "four phantom stops still write no agent.stop event" ||
+	fail "a phantom stop was recorded: $(ev_of agent.stop)"
+[ "$(find "$TDIR/current" -name '*.phantoms' 2>/dev/null | wc -l | tr -d ' ')" = 2 ] &&
+	pass "the stops are counted under the trace's current/ directory, one counter per session" ||
+	fail "expected two counters under current/, found: $(find "$TDIR" -type f ! -path '*/events/*' 2>/dev/null)"
+end_of "$S410A"
+EA=$(end_line "$S410A")
+[ "$(data_of "$EA" phantoms)" = 3 ] &&
+	pass "three phantoms then a session end: session.end carries phantoms=3" ||
+	fail "session.end for $S410A carries phantoms='$(data_of "$EA" phantoms)': $EA"
+end_of "$S410B"
+EB=$(end_line "$S410B")
+[ "$(data_of "$EB" phantoms)" = 1 ] &&
+	pass "the counter is per session: the other session reads its own one" ||
+	fail "session.end for $S410B carries phantoms='$(data_of "$EB" phantoms)': $EB"
+
+# NONE, and a resumed session's second end: 0, written rather than left out.
+end_of "$S410A"
+EA2=$(end_line "$S410A" | sed -n '2p')
+[ "$(data_of "$EA2" phantoms)" = 0 ] &&
+	pass "a second end of the same session counts only what came after it: phantoms=0" ||
+	fail "the second session.end for $S410A carries phantoms='$(data_of "$EA2" phantoms)': $EA2"
+end_of sess-410-none
+[ "$(data_of "$(end_line sess-410-none)" phantoms)" = 0 ] &&
+	pass "a session with no phantom stops records phantoms=0" ||
+	fail "a session with none recorded: $(end_line sess-410-none)"
+[ -z "$(find "$TDIR" -name '*.phantoms*' 2>/dev/null)" ] &&
+	pass "and every ended session's counter is gone from the trace directory" ||
+	fail "a counter outlived its session's end: $(find "$TDIR" -name '*.phantoms*')"
+
+# TRACING OFF — no TRACE_DIR and the shipped, empty policy file: the counter
+# has nowhere to go, and the hook still exits 0 and says nothing.
+t_run_split env -u TRACE_DIR TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-410.json"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "with tracing off a phantom stop exits 0 and says nothing" ||
+	fail "with tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+# THE RECORD. The adapter README says what a session with none writes.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"a session with no phantom stops records \`phantoms=0\`"*) pass "the adapter README records that a session with none writes 0" ;;
+*) fail "the adapter README does not say what a session with no phantom stops records" ;; esac
+
 t_done "trace hooks"

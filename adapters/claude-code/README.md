@@ -454,6 +454,20 @@ cannot be read** is a real stop whose usage is lost, recorded at once as
 polled, since a file the hook cannot open never ends on a final message. A
 payload that names no transcript at all is still recorded, as before.
 
+**The phantom count survives on `session.end`.** No event per phantom still
+leaves the question of how many there were, and a sudden rise is worth seeing
+(ticket #410). So each phantom stop adds one line to a per-session counter,
+`current/<session id>.phantoms` in the trace directory — appended, so two stops
+at once both count without a lock, and keyed by the payload's session id, so
+two sessions never share one. The session-end hook takes that counter and
+records it as `data.phantoms` on `session.end`. **A session with no phantom
+stops records `phantoms=0`** rather than leaving the key out: `0` says the
+count was taken and came to nothing, while an absent key keeps meaning the hook
+could not take one — tracing off, a payload with no usable session id, or a
+`session.end` written before the count existed. Taking the counter removes it,
+so a resumed session's next end counts only the phantoms since the last one —
+the same once-only rule the usage read keeps.
+
 ### Reading it back: DuckDB and SQLite
 
 `sh scripts/trace.sh summary --by model` answers the usual question without
