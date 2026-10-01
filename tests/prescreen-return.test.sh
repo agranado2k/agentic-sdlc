@@ -700,6 +700,10 @@ assert_file_has "$FLAT" "before the report is written" "the check comes before t
 assert_file_has "$FLAT" "one bare line per row" "the matrix's outcome is a decision line"
 assert_file_has "$FLAT" "A refused outcome is never reported" "exit 2 is a row to re-read, not a row to report"
 assert_file_has "$FLAT" "by step and position" "a row the check did not pass is named in the report, not reported"
+# The prose names the lines the fence prints, as the session will read them —
+# a phrase the fence cannot satisfy, since it prints the row's number.
+assert_file_has "$FLAT" '`refused outcome: step 4, row N`' "the prose names the line a refused row is reported under"
+assert_file_has "$FLAT" '`unchecked outcome: step 4, row N`' "…and the line an unchecked row is reported under"
 assert_file_has "$FLAT" "never printed as an outcome" "…and its outcome is not"
 assert_file_has "$FLAT" "could not be checked" "a checker missing or unable to run is said to be the other refusal"
 # outcome_run <row> <token> — the lifted fence's answer for one row, run
