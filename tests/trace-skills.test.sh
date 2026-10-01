@@ -499,8 +499,36 @@ out=$(rb_iter named)
 grep -E 'fail "[^"]*'"$RB_MARK" tests/self-host.test.sh | grep -qF 'drifted past the tag' &&
 	pass "self-host F3's drift red carries the marker" ||
 	fail "self-host F3's drift red does not print the release-bound marker — the kit's own release red is unmarked"
-grep -F "$RB_MARK" tests/docs-demo.sh | grep -qF 'STALE' &&
+grep -E 'fail "[^"]*'"$RB_MARK" tests/docs-demo.sh | grep -qF 'STALE' &&
 	pass "docs-demo's stale-transcript red carries the marker" ||
 	fail "docs-demo's stale-transcript red does not print the release-bound marker"
+
+# Review of PR #360. The log is captured per CHECK, not per run: one workflow
+# run holds many jobs, and a run-wide failed log would carry one job's marker
+# into every other red of the run (H-1).
+printf '%s\n' "$pi_flat" | grep -qE 'gh run view <run-id> --job <job-id> --log-failed >"\$scratch/checks/<i>"' &&
+	pass "/pr-iterate captures each failing check's own log, per job" ||
+	fail "/pr-iterate captures the failed log per run — one job's marker would set every red of the run aside"
+# The directory the capture writes into is made with the iteration's others (M-1).
+grep -E '^scratch=\$\(mktemp' "$PI" | grep -qF '"$scratch/checks"' &&
+	pass "step 1 makes the checks directory the capture writes into" ||
+	fail "step 1 does not make \$scratch/checks — the documented capture fails and every red is triaged"
+# The iteration line's reason gloss names both meanings of stopped (M-2).
+grep -F 'kind=pr.iterate' "$PI" | grep -F 'data.applied=' | grep -qF 'release-bound' &&
+	pass "the iteration line's reason names the release-bound stop beside the escalation" ||
+	fail "the iteration line still glosses stopped as the escalation alone"
+# The skill promises nothing of the loop runner it cannot keep (L-1).
+printf '%s\n' "$pi_flat" | grep -qF 'does not re-fire' &&
+	fail "/pr-iterate promises the loop runner will not re-fire — nothing the runner reads says so" ||
+	pass "/pr-iterate leaves ending the loop to the operator it reports to"
+# docs-demo's marker is gated on the declared release's tag, so the job that
+# runs it must check the tags out, at a depth the tag can be peeled at (H-2).
+dd_job=$(awk '/^  docs-demo:/ { on = 1; next } on && /^  [a-z]/ { exit } on' .github/workflows/kit-ci.yml)
+printf '%s\n' "$dd_job" | grep -qE 'fetch-depth: 0' && printf '%s\n' "$dd_job" | grep -qE 'fetch-tags: true' &&
+	pass "the docs-demo CI job checks out the tags its marker is gated on" ||
+	fail "the docs-demo CI job checks out no tags — its release-bound marker can never print where /pr-iterate reads"
+grep -qF 'rev-parse -q --verify "v$KITV^{commit}"' tests/docs-demo.sh &&
+	pass "docs-demo peels the tag, as F3 does" ||
+	fail "docs-demo tests the tag ref without peeling it — an unpeelable ref would read as released"
 
 t_done "trace skills contract"

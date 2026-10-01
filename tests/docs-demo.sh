@@ -1851,9 +1851,10 @@ trim_blank_edges() {
 # (root manual, hard rule 3) and no commit here can turn the red green. The
 # red says so in its own output, and /pr-iterate sets it aside on that marker
 # (#347). On the bump's own branch the tag does not exist yet, and the red is
-# that branch's to fix.
+# that branch's to fix. The tag is peeled, as self-host F3 does, and the CI
+# job checks out full depth with tags so it can be.
 D_RELEASED=
-git -C "$KIT" rev-parse -q --verify "refs/tags/v$KITV" >/dev/null 2>&1 && D_RELEASED=1
+git -C "$KIT" rev-parse -q --verify "v$KITV^{commit}" >/dev/null 2>&1 && D_RELEASED=1
 
 # assert_transcript <n> <captured file> <label>
 assert_transcript() {
