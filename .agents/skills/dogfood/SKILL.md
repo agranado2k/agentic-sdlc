@@ -127,11 +127,13 @@ vocab_checker() {
 }
 
 # span_ok <span> <the scratch file it is quoted from> — exit 0 only for a
-# span of 8 to 200 bytes of printable ASCII, verbatim on one line of the file.
+# span of 8 to 200 bytes of printable ASCII, verbatim on one line of the file;
+# a shorter span only when it is the whole file, trailing whitespace trimmed.
 span_ok() {
 	span_len=$(printf '%s' "$1" | wc -c)
-	[ "$span_len" -ge 8 ] && [ "$span_len" -le 200 ] || return 1
+	[ "$span_len" -gt 0 ] && [ "$span_len" -le 200 ] || return 1
 	printf '%s' "$1" | LC_ALL=C grep -q '[^ -~]' && return 1
+	[ "$span_len" -ge 8 ] || [ "$1" = "$(sed 's/[[:space:]]*$//' "$2" 2>/dev/null)" ] || return 1
 	grep -qsF -- "$1" "$2"
 }
 
@@ -179,8 +181,9 @@ rm -rf "${scratch:?}"
 Two lines, both printable, with the decision line exactly once leave no
 line for anything else; a decision value is one token and never a sentence;
 and the span is bounded — at least 8 bytes, since a shorter span proves no
-reading, and at most 200 — and matched against the scratch file as a fixed
-string — exit status only, so the output is compared without entering your
+reading, unless it is the whole text trimmed of trailing whitespace, and at
+most 200 — and matched against the scratch file as a fixed string — exit
+status only, so the output is compared without entering your
 session. That half is the fence's own: the checker ignores every line that
 is not a bare `Field: value` line. The checker's half is the value: a token
 the policy file does not declare is refused. **The check fails closed:**
