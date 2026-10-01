@@ -107,7 +107,7 @@ the answer, for the two ways a Claude Code session can spawn that reader. They
 are not the same kind of thing, and the one job of this section is to say
 which is which: **the CLI withholds; the in-session tool is asked.**
 
-### The CLI path — a restriction
+### The restricted path — a restriction
 
 Headless, `claude -p` takes three flags that together leave a reader with one
 tool, confined to one directory, and no tool server. From `claude --help` on
