@@ -251,7 +251,7 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # found. Each one found must be one of (each exemption tagged in the audit,
 # and baited below):
 #   - `fields`, which reads no input;
-#   - a prose mention of the command, closed by a backtick;
+#   - a prose mention of the command, closed by a backtick, in Markdown;
 #   - the argument form with the caller's own placeholder tokens,
 #     'Field: <token>', which nothing untrusted fills;
 #   - the argument form with one positional token, "Field: $2" — one
@@ -300,7 +300,7 @@ function scan(line, file,    cut, i, s, off, from, to, tail, before, after, comm
 		from = off + RSTART; to = off + RSTART + RLENGTH
 		tail = substr(s, RSTART + RLENGTH); s = tail; off = to - 1
 		if (tail ~ /^[A-Za-z0-9_]/) continue # a longer name, not the checker
-		if (tail ~ /^`/) continue # exempt:prose
+		if (tail ~ /^`/ && file ~ /\.md(\.template)?$/) continue # exempt:prose
 		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
 		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
 		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue # exempt:positional
@@ -468,6 +468,11 @@ case $(unlifted "$BAIT") in
 *".agents/skills/to-tickets/SKILL.md:$first "*) pass "a continued call is named at its first line ($first)" ;;
 *) fail "a continued call is not named at its first line ($first): $(unlifted "$BAIT")" ;;
 esac
+# A backtick closes a prose mention only in prose: in a script it opens a
+# command substitution, and the call inside it is a call.
+bait_reset
+printf '%s\n' 'out=`printf x | sh "$vocab"`' >>"$BAIT/scripts/stamp.sh"
+bait_named scripts/stamp.sh "a call in a backtick substitution hands a body"
 # A longer name is not the checker: `$checker_x` is somebody else's variable.
 bait_reset
 printf '\tsh "$checker_x" <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
