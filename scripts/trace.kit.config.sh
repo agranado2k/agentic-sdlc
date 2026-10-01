@@ -14,6 +14,11 @@
 # Under the root checkout, gitignored, shared by every worktree.
 TRACE_DIR='.trace'
 
+# The kit's forge numbers tickets, PRs and PRDs with digits, so its own trace
+# holds them to one spelling, `<type>:#<digits>` (#305). The shipped file
+# leaves this empty: which types a tracker numbers is each project's call.
+TRACE_NUMBERED_TYPES='ticket pr prd'
+
 # TOOL CAPTURE IS ON HERE, and this is the one file in the repository that says
 # so. The kit's product IS the chain, so what its own sessions actually did —
 # which command, against which file, with what result — is the raw material a
@@ -113,6 +118,7 @@ TRACE_PRICES_DISAGREE_PCT='5'
 #   reaches them, and a price is one number per token field.
 TRACE_PRICE_CLAUDE_FABLE_5_1='10,50,12.50,0.25'
 TRACE_PRICE_CLAUDE_OPUS_5_5='4,20,5,0.20'
+TRACE_PRICE_CLAUDE_SONNET_5_5='3,15,3.75,0.30'
 TRACE_PRICE_CLAUDE_HAIKU_4_5_20251001='1,5,1.25,0.10'
 TRACE_PRICE_CODEX_GPT_5_6_SOL='4,20,5,0.40'
 TRACE_PRICE_CODEX_GPT_6_ASTRA='10,50,12.50,1.00'

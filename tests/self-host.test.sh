@@ -248,6 +248,9 @@ done
 [ -f "$PROJ/scripts/trace.config.sh" ] && grep -q "^TRACE_DIR=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/trace.config.sh arrived with TRACE_DIR empty — tracing is the consumer's decision" ||
 	fail "the consumer's scripts/trace.config.sh is missing or not empty"
+grep -q "^TRACE_NUMBERED_TYPES=''" "$PROJ/scripts/trace.config.sh" &&
+	pass "and with TRACE_NUMBERED_TYPES empty — which of its subjects are numbered is the consumer's policy, never the kit's (#305)" ||
+	fail "the consumer's scripts/trace.config.sh does not carry TRACE_NUMBERED_TYPES=''"
 # The vocabulary policy file (PRD #273) is the one policy file that ships
 # FILLED, and it must arrive that way: a file that exists is the whole policy
 # — the checker's own words stand in only for a consumer with NO file, and an
@@ -639,7 +642,9 @@ fi
 #   (ii) the tag's content still matches the tree: a manifest-listed file that
 #        drifted past the tag with no bump is the 0.5.0-interval failure — an
 #        unreleased change wearing a released version's number. RED always,
-#        pull requests included, because the drift is already in the diff.
+#        pull requests included, because the drift is already in the diff —
+#        and marked `release-bound:` in its own output, because only a
+#        version bump cures it: /pr-iterate sets such a red aside (#347).
 
 # The manifest grammar is scripts/manifest.lib.sh's, sourced by tests/lib.sh;
 # UPDATING.md's own copies are held equal to it by tests/manifest.test.sh.
@@ -654,12 +659,12 @@ if git -C "$KIT" rev-parse -q --verify "v$version_now^{commit}" >/dev/null 2>&1;
 			# Absent at the tag is its own failure, not "differs": a joined
 			# file — even an EMPTY one, which a bare cmp against empty stdin
 			# would wave through — is a layer change wearing an old number.
-			fail "$f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
+			fail "release-bound: $f is manifest-listed but absent at v$version_now — a file joined the layer with no bump"
 			drift=$((drift + 1))
 		elif git -C "$KIT" show "v$version_now:$f" 2>/dev/null | cmp -s - "$KIT/$f"; then
 			:
 		else
-			fail "$f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
+			fail "release-bound: $f differs from v$version_now — shared content drifted past the tag with no bump (bump VERSION, or the change is unreachable)"
 			drift=$((drift + 1))
 		fi
 	done <<EOF
@@ -864,7 +869,7 @@ fi
 # While the declared version has NO tag yet — a wave in flight — every file
 # that changed since the previous release in the categories the recipe's
 # step 9 names (9a the skills, 9b the manual and article templates, 9c the
-# docs and workflow templates, 9d the five policy files, 9e the adapters)
+# docs and workflow templates, 9d the six policy files, 9e the adapters)
 # must be named in the current note or in an "Arriving from <previous> or
 # older" paragraph of the recipe — that paragraph only, from its bold lead
 # at column one to the next blank line. Once the version is tagged there is
@@ -879,7 +884,7 @@ fi
 # hidden behind a mention of its skill for another reason all pass. What is
 # caught is a changed file that no current note mentions at all — which is
 # what #159's two were.
-DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
+DELTA_CATEGORIES=".agents/skills constitution templates adapters scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/trace.config.sh scripts/docs-conformance/config.mjs scripts/docs-conformance/local-vocabulary.mjs.template"
 # notes_text <repo> <prev version> — the current note plus the recipe's
 # arriving-from paragraph(s) for that previous release.
 notes_text() {
@@ -923,7 +928,7 @@ git init -q -b main && git config user.name t && git config user.email t@example
 f6_write() { # <content> — every category's file
 	printf '%s\n' "$1" >.agents/skills/probe/SKILL.md; printf '%s\n' "$1" >templates/docs/x.md.template
 	printf '%s\n' "$1" >constitution/local-x.md.template; printf '%s\n' "$1" >scripts/docs-conformance/config.mjs
-	printf '%s\n' "$1" >adapters/a/README.md
+	printf '%s\n' "$1" >adapters/a/README.md; printf '%s\n' "$1" >scripts/trace.config.sh
 }
 f6_write one; printf 'shared-layer: 0.1.0\n' >VERSION; printf '# recipe\n' >UPDATING.md
 git add -A >/dev/null && git commit -q -m "release 0.1.0" && git tag v0.1.0
@@ -931,24 +936,24 @@ f6_write two
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >VERSION
 git add -A >/dev/null && git commit -q -m "bump without notes"
 cd "$KIT" || exit 2
-F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template"
+F6_ALL=".agents/skills/probe/SKILL.md adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs scripts/trace.config.sh templates/docs/x.md.template"
 [ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "$F6_ALL " ] &&
 	pass "the delta probe names every changed file an in-flight note omits, one per category" ||
 	fail "the delta probe missed a category: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
 # Named in the note — a skill by command, two files by basename, two by
 # repo path (which the basename match covers).
-printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template and adapters/a/README.md.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
+printf '# 0.2.0 — bait\n# From #1: /probe, x.md.template and config.mjs changed; so did\n# constitution/local-x.md.template, adapters/a/README.md and trace.config.sh.\n#   NON-MANIFEST HALF, enumerated: above.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
 [ -z "$(notes_gaps "$F6R")" ] && pass "the delta probe is silent once the note names each — by command, basename or path" || fail "the delta probe still reports a named file: $(notes_gaps "$F6R" | tr '\n' ' ')"
 printf '# 0.2.0 — bait\n#   NON-MANIFEST HALF, enumerated: nothing named here.\nshared-layer: 0.2.0\n' >"$F6R/VERSION"
 # The recipe's paragraph for the PREVIOUS release counts; an older release's
 # does not, a paragraph not at column one does not, and the paragraph ends
 # at the first blank line.
 printf '# recipe\n\n**Arriving from 0.0.1 or older, everything.** /probe, x.md.template,\nconstitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "an older release's arriving-from paragraph does not count" || fail "an older release's paragraph satisfied the probe"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 6 ] && pass "an older release's arriving-from paragraph does not count" || fail "an older release's paragraph satisfied the probe"
 printf '> **Arriving from 0.1.0 or older, quoted.** /probe, x.md.template,\n> constitution/local-x.md.template, config.mjs, adapters/a/README.md.\n\n' >>"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 5 ] && pass "a lead that is not at column one does not count" || fail "an indented lead satisfied the probe"
+[ "$(notes_gaps "$F6R" | wc -l | tr -d ' ')" = 6 ] && pass "a lead that is not at column one does not count" || fail "an indented lead satisfied the probe"
 printf '**Arriving from 0.1.0 or older, one thing.** /probe changed.\n\nAlso x.md.template, constitution/local-x.md.template, config.mjs and\nadapters/a/README.md — but this line is past the blank, so it is prose.\n' >>"$F6R/UPDATING.md"
-[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs templates/docs/x.md.template " ] &&
+[ "$(notes_gaps "$F6R" | sort | tr '\n' ' ')" = "adapters/a/README.md constitution/local-x.md.template scripts/docs-conformance/config.mjs scripts/trace.config.sh templates/docs/x.md.template " ] &&
 	pass "the previous release's paragraph counts, and ends at the first blank line" ||
 	fail "the paragraph terminator or the lead match is wrong: '$(notes_gaps "$F6R" | sort | tr '\n' ' ')'"
 printf '# recipe\n' >"$F6R/UPDATING.md"; git -C "$F6R" tag v0.2.0

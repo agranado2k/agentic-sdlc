@@ -44,6 +44,8 @@ The transcripts are the files the agent harness itself wrote under
 | `tool-post.payload.json` | a `PostToolUse` hook's stdin — a shell call that succeeded |
 | `tool-post-failure.payload.json` | a `PostToolUseFailure` hook's stdin — the same shell, a command that exited 1 |
 | `resumed-transcript.redacted.jsonl` | one session run, then resumed: 34 lines, two ends, one appended file |
+| `thinking-transcript.redacted.jsonl` | a session whose responses open with a thinking block: 30 lines, one subagent spawned |
+| `thinking-subagent-transcript.redacted.jsonl` | that subagent's transcript: 21 lines, one message id carrying two different usage blocks |
 
 ## The second capture: the two tool payloads
 
@@ -62,10 +64,13 @@ printf 'Run the shell command: cat file.txt ; then run the shell command: cat /n
 properties of that capture are what the suite leans on, and none of them is
 guessable from the session payloads beside them:
 
-- **A tool payload arrives COMPACT**, on one line, unlike the pretty-printed
-  session payloads in this directory. That is why `tool-post.sh` reads its
-  payload with a real parser: a key-name search on one line finds the *last*
-  occurrence, and a tool result can quote any key.
+- **A tool payload arrives COMPACT**, on one line — every live payload arrives
+  compact; the session payloads in this directory are pretty-printed only
+  because the redaction reformatted them. What sets a tool payload apart is
+  that it nests arbitrary objects (`tool_input`, `tool_response`) whose keys
+  can repeat the top-level ones, and a key-name search on one line finds the
+  *last* occurrence. That is why `tool-post.sh` reads its payload with a real
+  parser.
 - **`PostToolUseFailure` carries no `tool_response` at all.** The failure is in
   `error`, beside `is_interrupt`, and that is the result the hook stores.
 - **A DENIED call fires `PreToolUse` only.** Reproduced with a `Bash(rm:*)` deny
@@ -120,6 +125,33 @@ Redacted by the rules below. One shape is new since the first capture: an
 `attachment` body can now carry the operator's git status and e-mail address,
 and `rendered` can be an array — both are replaced whole, with a placeholder
 that keeps the length of the JSON they held.
+
+## The fourth capture: one id, two usage blocks
+
+`thinking-transcript.redacted.jsonl` and `thinking-subagent-transcript.redacted.jsonl`
+were cut for ticket #343 on **2026-10-01** from a real session captured on
+**2026-09-30** with the `claude` CLI at **2.1.285** (a throwaway project from
+the #308 demo, `claude-haiku-4-5-20251001`, one session that spawned one
+subagent). They were chosen out of every transcript on the capturing machine
+because they are the smallest complete session whose own `cost-state` rollup
+is reproduced by the LAST usage block per message id and NOT by the first.
+What the capture established, and what the suite leans on:
+
+- **A thinking block's line carries a partial usage snapshot.** Subagent
+  lines 12–13 share `msg_011CfZXyUJMx7CpnvxyFG4X1` and its request id; line 12
+  (the thinking block, `stop_reason` null) says `output_tokens 1`, line 13 (the
+  tool use) says `113`. The usage block is not byte-identical, and the earlier
+  extractor refused the whole transcript as drift.
+- **The last block is the one the rollup counts.** Session `18 / 261 / 10549 /
+  37677` plus subagent `18 / 158 / 15600 / 13892` is the rollup's `36 / 419 /
+  26149 / 51569`; taking the first block instead gives `tok_out` 307.
+
+Redacted by the rules below, mechanically: every string value is replaced
+with a length-keeping placeholder except the structural ones — ids, uuids,
+types, roles, models, request ids, stop reasons, timestamps, versions — and
+each `attachment` body, `rendered`, `wireToolInputs`, tool input and
+`toolUseResult` text is replaced whole. The organization id and the operator's
+e-mail address lived in attachment bodies and are gone with them.
 
 ## What was redacted
 

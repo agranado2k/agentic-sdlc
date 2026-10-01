@@ -27,11 +27,11 @@ the Agent Skills specification.*
   to see what is lost. Copying a skill in and keeping it are separate
   decisions.
 - **The retrospective.** A `/retro` ran inside this window: its report,
-  `retro-<YYYYMMDDTHHMMSSZ>.md` under the temp location, or a PR body or a
-  diary entry quoting one, dated after the last pass. This pass does not open
-  the trace to find out — the chain never reads it (ADR-0008), and the
-  retro's own record is its report. A window with landed PRs and no retro is
-  a finding: the loop has no clock.
+  `retro-<YYYYMMDDTHHMMSSZ>.md` under `.retro/<YYYY>/<MM>/` at the root
+  checkout, or a PR body or a diary entry quoting one, dated after the last
+  pass. This pass does not open the trace to find out — the chain never reads
+  it (ADR-0008), and the retro's own record is its report. A window with
+  landed PRs and no retro is a finding: the loop has no clock.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
   description under the specification's 1024 characters and leading with the
   use case; the body under
@@ -82,9 +82,12 @@ Route: candidate tickets.
   measured — a finding in its own right once there is a layer to measure.
 - **Ask for the oracle line.** Every measurement row carries an oracle clause
   naming who wrote the test fixtures, when, against which version, and what it
-  was compared to: `— oracle: <who>, <when>, <version>, <comparator>`. Any
-  measurement row without it is a finding. Route it as a candidate ticket. The
-  rule: a comparator is always named, never implied.
+  was compared to: `— oracle: <who>, <when>, <version>, <comparator>`. A row
+  that measured nothing — no fixtures written, no comparison made — carries
+  the glossary's other form instead, `— oracle: none — <why>`, and is not a
+  finding for that. Any measurement row with neither is a finding. Route it
+  as a candidate ticket. The rule: a comparator is always named, never
+  implied.
 - A score that fell is a finding about the tests that stopped enforcing.
 - A decision line reading `none — <reason>` is re-read against the codebase
   as it is now: a reason that was true at one file and one script may not be

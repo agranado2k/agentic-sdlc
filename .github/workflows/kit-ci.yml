@@ -150,7 +150,13 @@ jobs:
     name: Docs set + UPDATING recipe (end-to-end)
     runs-on: ubuntu-latest
     steps:
+      # Full depth with tags, as self-host: D and D2 mark a stale worked
+      # example release-bound only when the declared release's tag peels,
+      # and /pr-iterate reads that marker from this job's log (#347).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -264,6 +270,18 @@ jobs:
       - name: Output-contract skill-text suite
         run: sh tests/review-pr-output.test.sh
 
+  forge-broker:
+    name: The broker lands a dispatched review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the broker is POSIX sh, git and gh, and the suite's forge is
+      # a stub `gh` first on PATH — no account, no network, no live PR. What
+      # this job holds is that every review payload carries event COMMENT and
+      # that nothing is posted when the report fails the contract (ADR-0009).
+      - name: Forge-broker suite
+        run: sh tests/forge-broker.test.sh
+
   gate-advisory:
     name: An advisory is audible through the gate
     runs-on: ubuntu-latest
@@ -368,6 +386,31 @@ jobs:
       - uses: actions/checkout@v4
       - name: Vocabulary policy suite
         run: sh tests/vocab-policy.test.sh
+
+  typed-return:
+    name: /pr-iterate refuses a return that is not the declared shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Typed return suite
+        run: sh tests/typed-return.test.sh
+
+  prescreen-return:
+    name: The pre-screen of a PRD body and of product output is a checked typed return
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pre-screen return suite
+        run: sh tests/prescreen-return.test.sh
+
+  stamp:
+    name: /implement reads its ticket's stamp through one checked script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp reader suite
+        run: sh tests/stamp.test.sh
+
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest

@@ -25,10 +25,11 @@
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
 # line it would append; a successful `emit` and a successful `end` print
 # nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
-# INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind, a
-# malformed subject, value or price, or a policy file named explicitly and
-# missing; exit 1 is `verify`'s verdict, and an `export` that refuses because
-# verify fails carries that same verdict out. `begin` and `end` add two exits
+# INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
+# an outcome its kind does not declare, a malformed subject, value or price,
+# or a policy file named explicitly and missing; exit 1 is `verify`'s
+# verdict, and an `export` that refuses because verify fails carries that
+# same verdict out. `begin` and `end` add two exits
 # of their own to the 2 — closing a run that is not open, and a run stack that
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
 # for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
@@ -72,10 +73,15 @@
 #   harness model · outcome reason · tok_in tok_out tok_cache_w tok_cache_r ·
 #   blob · data
 # `kind` is a CLOSED vocabulary (an unknown one is exit 2, like an unknown
-# tier); `data.*` keys are OPEN (like task domains), string values only. A
-# subject is `<type>:<reference>` — lowercase type, then anything without a
-# space, a quote or a backslash — so a PRD, a ticket, a PR, a branch, a
-# session and a run all join on one column. Token counts are bare integers.
+# tier), and so is each kind's `outcome` (TRACE_OUTCOMES below); `data.*`
+# keys are OPEN (like task domains), string values only. A subject is
+# `<type>:<reference>` — lowercase type, then anything without a space, a
+# quote or a backslash — so a PRD, a ticket, a PR, a branch, a session and a
+# run all join on one column. The types a project's policy
+# file names in TRACE_NUMBERED_TYPES are spelled one way, `<type>:#<digits>`,
+# because a join key with synonyms is not one (#305); every other type, and
+# every type when the list is empty as it ships, stays open.
+# Token counts are bare integers.
 # A value may not carry a control character other than a tab: a multi-line
 # payload is a blob, not a field.
 #
@@ -163,7 +169,19 @@ TRACE_SCHEMA=1
 # and summary recognises it to mark its own first line (ADR-0008 clause 4).
 TRACE_EX_SCHEMA=3
 TRACE_EVENT_CAP=4000
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+# THE KIND TABLE: every kind, and the outcome vocabulary of its own (ADR-0008
+# clause 1, as amended 2026-10-01 for #348). The kind set was closed from the
+# start; the outcome was open per kind, so a whole sentence could stand where
+# a verdict belonged and every reader counting the verdict missed it. Each
+# entry is `<kind>=<word>|<word>…`; `<kind>=` with nothing after it is a kind
+# that carries NO outcome, and any outcome on it is refused; `note=*` is the
+# one open kind, held to a single word ([a-z][a-z0-9-]*) and to nothing else,
+# because a note is the free remark. An emit with no outcome at all is legal
+# on every kind: the field is optional, as every field but kind is. The kind
+# list after it stays a literal line, because the skill suites read it as
+# one; the trace suite holds the two to the same kinds, row for row.
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -245,6 +263,13 @@ trace_load_config() {
 		fi
 	fi
 	TRACE_CONFIG_PATH=$_tl_path
+	# Each numbered type is a type word, or the check that reads the list would
+	# silently never match it — a policy error, said as one.
+	trace_glob_off
+	for _tl_w in $TRACE_NUMBERED_TYPES; do
+		case $_tl_w in *[!a-z]*) trace_glob_on; die "TRACE_NUMBERED_TYPES word '$_tl_w' in $_tl_path is not a lowercase type" ;; esac
+	done
+	trace_glob_on
 	# The environment wins over the file — set on its own line after the
 	# source, so a policy file that assigns TRACE_DIR cannot undo it, even
 	# when what the environment said was "off".
@@ -288,6 +313,28 @@ trace_is_kind() {
 	return 1
 }
 
+# trace_check_outcome <kind> <value> — the kind's own vocabulary, read from
+# TRACE_OUTCOMES. Returns 1 with TRACE_OUTCOME_WHY set to the refusal's tail,
+# in the vocabulary checker's shape: the kind, the value, then the words.
+trace_check_outcome() {
+	_co_v=" $TRACE_OUTCOMES "
+	case $_co_v in *" $1="*) ;; *) TRACE_OUTCOME_WHY="$1 has no row in TRACE_OUTCOMES — the table and the kind list have drifted" && return 1 ;; esac
+	_co_v=${_co_v#* "$1"=}
+	_co_v=${_co_v%% *}
+	case $_co_v in
+	'*')
+		case $2 in [!a-z]* | *[!a-z0-9-]*) TRACE_OUTCOME_WHY="$1: outcome '$2' is not one word — $1's outcome is open, held to [a-z][a-z0-9-]*" && return 1 ;; esac
+		return 0
+		;;
+	'') TRACE_OUTCOME_WHY="$1: outcome '$2' — $1 carries no outcome; drop it" && return 1 ;;
+	esac
+	# A `|` is never part of a word: the alternation the skills print, copied
+	# whole, holds only declared words and must not pass as one of them.
+	case $2 in *'|'*) ;; *) case "|$_co_v|" in *"|$2|"*) return 0 ;; esac ;; esac
+	TRACE_OUTCOME_WHY="$1: outcome '$2' is not one of $(printf '%s' "$_co_v" | tr '|' ' ')"
+	return 1
+}
+
 # trace_check_token <value> — a field or data key: [a-z][a-z0-9_]*. Checked
 # BEFORE any membership test or eval, so a key with a space in it is refused
 # as a key and never reaches the list or the assignment.
@@ -299,14 +346,33 @@ trace_check_token() {
 # trace_check_subject <value> — `<type>:<reference>`: a lowercase type, a
 # colon, then a non-empty reference with no space, quote or backslash (the
 # three characters that would make the exact-match filter in `show` a
-# question rather than a comparison).
+# question rather than a comparison). On a refusal TRACE_SUBJECT_FORM names
+# the form the value should have taken, for the caller's message.
+#   A NUMBERED type takes ONE spelling, `<type>:#<digits>` with no leading
+# zero: the first retrospective over the kit's own trace found a ticket written
+# three ways, and `show` on the documented one missed the rest (#305). WHICH
+# types are numbered is the project's policy, not this script's: the kit names
+# no tracker, and one that writes PROJ-12 must not be refused. So the list is
+# TRACE_NUMBERED_TYPES in the policy file, empty by default — every type open,
+# as before — and only the policy file may set it: the assignment below runs
+# before the file is sourced, so an environment value never reaches the check.
+# `verify` holds the same rule to the lines already written, as an advisory,
+# and hands its awk this same list as `numbered` — one list, never two.
+TRACE_NUMBERED_TYPES=''
 trace_check_subject() {
+	TRACE_SUBJECT_FORM='<type>:<reference>'
 	case $1 in *' '* | *'"'* | *'\'* | '') return 1 ;; esac
 	_cs_type=${1%%:*}
 	_cs_ref=${1#*:}
 	[ "$_cs_ref" = "$1" ] && return 1
 	[ -z "$_cs_ref" ] && return 1
 	case $_cs_type in '' | *[!a-z]*) return 1 ;; esac
+	case " $TRACE_NUMBERED_TYPES " in
+	*" $_cs_type "*)
+		TRACE_SUBJECT_FORM="$_cs_type:#<digits> (no leading zero)"
+		case $_cs_ref in '#' | '#'*[!0-9]* | '#0'?* | [!#]*) return 1 ;; esac
+		;;
+	esac
 	return 0
 }
 
@@ -593,6 +659,7 @@ trace_emit() {
 	_em_kind=
 	_em_data=
 	_em_blob_src=
+	_em_outcome=
 	_em_on=0
 	TRACE_BLOB=
 	TRACE_BLOB_BYTES=
@@ -638,15 +705,16 @@ trace_emit() {
 				case " $TRACE_STRING_FIELDS " in
 				*" $_em_key "*)
 					case $_em_key in
-					subject) [ -z "$_em_val" ] || trace_check_subject "$_em_val" || die "subject '$_em_val' is not <type>:<reference>" ;;
+					subject) [ -z "$_em_val" ] || trace_check_subject "$_em_val" || die "subject '$_em_val' is not $TRACE_SUBJECT_FORM" ;;
 					related)
 						for _em_tok in $_em_val; do
-							trace_check_subject "$_em_tok" || die "related token '$_em_tok' is not <type>:<reference>"
+							trace_check_subject "$_em_tok" || die "related token '$_em_tok' is not $TRACE_SUBJECT_FORM"
 						done
 						;;
 					esac
 					_em_esc=$(trace_json_str "$_em_val") || die "$_em_key carries a control character; a multi-line value is a blob, not a field, and --blob is a later slice."
 					eval "_em_v_$_em_key=\$_em_esc"
+					[ "$_em_key" = outcome ] && _em_outcome=$_em_val
 					;;
 				*)
 					case " $TRACE_TOKEN_FIELDS " in
@@ -666,6 +734,9 @@ trace_emit() {
 		esac
 	done
 	[ -n "$_em_kind" ] || die "emit needs kind=<kind>"
+	# Checked once the kind is known, which may be after the outcome on the
+	# command line. An empty value is no outcome: the line omits it.
+	[ -z "$_em_outcome" ] || trace_check_outcome "$_em_kind" "$_em_outcome" || die "$TRACE_OUTCOME_WHY"
 
 	# The directory first: identity's fallbacks and the blob store both live in
 	# it, and whether it resolves at all is what makes this emit a no-op.
@@ -823,7 +894,7 @@ trace_show() {
 	[ $# -ge 1 ] || usage
 	_sh_subject=$1
 	shift
-	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not <type>:<reference>"
+	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not $TRACE_SUBJECT_FORM — the one spelling emit writes, so the only one worth asking for"
 	# A run id never appears as a subject: `begin` writes it into the `run`
 	# field and every event inside the run carries it there, so a subject-only
 	# reader answered nothing for `run:<id>` — the one question a run id is for
@@ -882,6 +953,101 @@ trace_show() {
 	done
 }
 
+# TRACE_AWK_SPELLED — the awk half of the numbered-subject rule, shared by
+# verify's per-line advisory and the count `summary` and `export` say once.
+# The caller defines spelled(field, value), called for every subject and
+# related token in a line's ENVELOPE — the data map is cut off first, as
+# `show` cuts it, so a data key called subject is never read as the event's.
+# spelled_ok is trace_check_subject's numbered arm, in awk; `numbered` is
+# TRACE_NUMBERED_TYPES, handed over, so the two cannot name different lists.
+# Single-quoted, so it may carry no apostrophe.
+TRACE_AWK_SPELLED='
+function spelled_type(v,   t) { t = v; sub(/:.*/, "", t); return t }
+function spelled_ok(v,   t, r) {
+	t = spelled_type(v)
+	if (index(numbered, " " t " ") == 0) return 1
+	r = substr(v, length(t) + 2)
+	return (r ~ /^#(0|[1-9][0-9]*)$/)
+}
+function spelled_scan(line,   env, d, m, i, tok) {
+	env = line
+	d = index(env, ",\"data\":{")
+	if (d) env = substr(env, 1, d - 1)
+	if (match(env, /,"subject":"[^"]*"/)) spelled("subject", substr(env, RSTART + 12, RLENGTH - 13))
+	if (match(env, /,"related":"[^"]*"/)) {
+		m = split(substr(env, RSTART + 12, RLENGTH - 13), tok, " ")
+		for (i = 1; i <= m; i++) spelled("related token", tok[i])
+	}
+}
+'
+
+# TRACE_AWK_OUTCOME — the awk half of the per-kind outcome rule (#348), shared
+# by verify's per-line advisory and the count `summary` and `export` say once.
+# outcome_ok is trace_check_outcome in awk; `outcomes` is TRACE_OUTCOMES,
+# handed over, so the two cannot read different tables. outcome_scan reads the
+# ENVELOPE only — a data key called outcome is never the event's — and calls
+# the caller's outcome_bad(kind, value) for a value its kind does not declare.
+# An event with no outcome is never one. Single-quoted: no apostrophe in it.
+TRACE_AWK_OUTCOME='
+function outcome_words(k,   i, v) {
+	i = index(outcomes, " " k "=")
+	if (i == 0) return ""
+	v = substr(outcomes, i + length(k) + 2)
+	sub(/ .*/, "", v)
+	return v
+}
+function outcome_ok(k, o,   v) {
+	if (index(o, "|")) return 0
+	v = outcome_words(k)
+	if (v == "*") return (o ~ /^[a-z][a-z0-9-]*$/)
+	if (v == "") return 0
+	return (index("|" v "|", "|" o "|") > 0)
+}
+function outcome_scan(line,   env, d, k, o) {
+	env = line
+	d = index(env, ",\"data\":{")
+	if (d) env = substr(env, 1, d - 1)
+	if (!match(env, /,"kind":"[a-z.]+"/)) return
+	k = substr(env, RSTART + 9, RLENGTH - 10)
+	# Shown up to the first escaped quote: a value carrying one was written
+	# before the rule and is advised on whatever its tail says.
+	if (!match(env, /,"outcome":"[^"]*"/)) return
+	o = substr(env, RSTART + 12, RLENGTH - 13)
+	if (!outcome_ok(k, o)) outcome_bad(k, o)
+}
+'
+
+# trace_spelling_note [<since>] — the stderr lines `summary` and `export` say
+# when the trace holds history a rule younger than it would refuse: old
+# numbered spellings (#305) and outcomes their kind does not declare (#348).
+# One line each, the count and where the list is. Repeating verify's per-line
+# advisories on every read would bury the command's own output under history
+# nobody may rewrite. Reads the lines that open as an event does; a line that
+# does not is verify's verdict, not this.
+trace_spelling_note() {
+	_sn_n=0
+	_sn_o=0
+	_sn_files=$(trace_files "${1:-}")
+	_sn_ifs=$IFS
+	IFS=$_trace_nl
+	trace_glob_off
+	for _sn_f in $_sn_files; do
+		IFS=$_sn_ifs
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME"'
+		function spelled(field, v) { if (!spelled_ok(v)) n++ }
+		function outcome_bad(k, o) { m++ }
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0) }
+		END { print n + 0, m + 0 }' "$_sn_f")
+		_sn_n=$((_sn_n + ${_sn_c%% *}))
+		_sn_o=$((_sn_o + ${_sn_c#* }))
+	done
+	IFS=$_sn_ifs
+	trace_glob_on
+	[ "$_sn_n" = 0 ] || echo "!  trace: $_sn_n numbered subject(s) in the trace are spelled the old way — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	[ "$_sn_o" = 0 ] || echo "!  trace: $_sn_o outcome(s) in the trace are not a word their kind declares — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	return 0
+}
+
 trace_verify() {
 	_vf_since=
 	while [ $# -gt 0 ]; do
@@ -916,7 +1082,26 @@ trace_verify() {
 	trace_glob_off
 	for _vf_f in $_vf_files; do
 		IFS=$_vf_ifs
-		awk -v kinds=" $TRACE_KINDS " -v f="$_vf_f" '
+		# A numbered subject in any spelling but `<type>:#<digits>` is an
+		# ADVISORY, never a bad line: the rule (#305) is younger than the trace,
+		# and history is never rewritten, so a line written before it is still a
+		# good line. Only a line that is otherwise good is read for it, and the
+		# note goes to stderr through a pipe, which POSIX awk has where it has no
+		# /dev/stderr. `summary` and `export` switch the per-line notes off and
+		# say the count once instead (trace_spelling_note).
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME"'
+		function spelled(field, v) {
+			if (advise != "list" || spelled_ok(v)) return
+			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
+		}
+		function outcome_bad(k, o,   w) {
+			if (advise != "list") return
+			w = outcome_words(k)
+			if (w == "") w = "allowed — the kind carries no outcome"
+			else if (w == "*") w = "one word"
+			else { gsub(/\|/, " ", w); w = "one of " w }
+			printf "!  trace: %s:%d: %s outcome %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, q, o, q, w | "cat 1>&2"
+		}
 		{
 			bad = ""
 			if (substr($0, 1, 13) != "{\"v\":1,\"ts\":\"") bad = "does not open with the schema version and a timestamp"
@@ -928,8 +1113,9 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
+			else { spelled_scan($0); outcome_scan($0) }
 		}
-		END { exit (n > 0) }' "$_vf_f" || _vf_bad=1
+		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then
 			node -e '
 				const fs = require("fs"); let bad = 0;
@@ -1289,11 +1475,14 @@ trace_summary() {
 	# clean; verify's findings go to stderr as they do for export, which still
 	# refuses outright (operator decision, 2026-09-28).
 	_su_vst=0
+	_trace_quiet_advice=count
 	if [ -n "$_su_since" ]; then
 		_su_bad=$(trace_verify --since "$_su_since") || _su_vst=$?
 	else
 		_su_bad=$(trace_verify) || _su_vst=$?
 	fi
+	_trace_quiet_advice=
+	[ "$_su_vst" = "$TRACE_EX_SCHEMA" ] || trace_spelling_note "$_su_since"
 	if [ "$_su_vst" = "$TRACE_EX_SCHEMA" ]; then
 		# A different marker, because it is a different state: verify judged no
 		# line, so there is no count to print and a count of 0 would read as
@@ -1421,11 +1610,14 @@ trace_export() {
 	# the one nobody goes looking for. verify's findings are the answer to WHY
 	# there is no answer, so they leave with it, on stderr.
 	_ex_vst=0
+	_trace_quiet_advice=count
 	if [ -n "$_ex_since" ]; then
 		_ex_bad=$(trace_verify --since "$_ex_since") || _ex_vst=$?
 	else
 		_ex_bad=$(trace_verify) || _ex_vst=$?
 	fi
+	_trace_quiet_advice=
+	[ "$_ex_vst" = "$TRACE_EX_SCHEMA" ] || trace_spelling_note "$_ex_since"
 	if [ "$_ex_vst" = "$TRACE_EX_SCHEMA" ]; then
 		# Not a bad line — no line was read at all. Saying "verify fails" here
 		# would send the operator hunting for damage that is not there, when the
@@ -1505,6 +1697,7 @@ trace_export() {
 # ---------------------------------------------------------------------------
 
 [ $# -ge 1 ] || usage
+_trace_quiet_advice=
 _trace_cmd=$1
 shift
 trace_load_config

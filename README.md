@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.29.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.35.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.29.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.35.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -543,6 +543,11 @@ skeleton (K0).
   confirm-list's verbatim-liftable line shape and 🔀→⚠️→✅ order, the
   one-top-level-comment and inline-only posting rules, and the absence of any
   ANSI escape — the report is markdown for two hosts, not a terminal program.
+  The report's severity lines and Agent 7's status lines are held to the
+  policy file (ticket #280): the suite reads the `severity` and `status`
+  vocabularies through `sh scripts/vocab.sh fields`, never from a list of its
+  own, and a band or a status planted in a copy of the skill — or withdrawn
+  from a copy of the policy file — goes red.
 
 - `sh tests/manifest.test.sh` pins the manifest grammar once — first word is
   the name, annotation is legal, comments and blanks skipped, a list ends at
@@ -569,6 +574,24 @@ skeleton (K0).
   `blob` too, which prints that name and byte count, writes no event and
   leaves the stored file owner-only — and `verify` refuses a schema it does
   not know.
+- `sh tests/forge-broker.test.sh` proves the broker (ADR-0009) lands a
+  dispatched reviewer's report on the PR without the worker ever holding
+  network or credentials: against a stub forge CLI that records argv and
+  stdin, a valid report makes exactly two mutating calls — one review whose
+  payload carries `event` COMMENT explicitly, one top-level behavior comment
+  — and prints both URLs; `--dry-run` prints both payloads and posts nothing;
+  a report with no `REVIEWED` or `VERDICT` line, or a heading missing, posts
+  nothing and exits 65; a reviewed commit the PR no longer holds exits 75,
+  while one behind the head posts anchored to itself, checked against the
+  base...reviewed diff, with a drift line — and only with a matching
+  `--commit`, which is optional at the head and mandatory on drift, its
+  absence exit 65; no `gh` on PATH exits 69; a policy
+  that omits an operation exits 78; a finding whose `path:line` is not in the
+  diff is dropped and named; a retried run finds its marker and skips; the
+  word APPROVE in a finding never reaches the event; and the trace's `show`
+  reads back one `finding.raise` per posted finding and a `review.verdict`
+  per axis, none of them carrying a line of the report, while an
+  unconfigured trace leaves the posting unchanged.
 - `sh tests/catalogue.test.sh` checks runtime catalogue admission: source and
   active content identities, exact case, explicit executable references, stale
   copies, and reproduction after bootstrap. See `scripts/catalogue.md`.
@@ -590,10 +613,65 @@ skeleton (K0).
   tier is read and never widened — the resolver still refuses a fifth token.
 - `sh tests/vocab-policy.test.sh` holds the shipped `scripts/vocab.config.sh`
   to the skills that spell the same words — the severity buckets and
-  confirm-list tags of `/review-pr`, the triage verbs of `/pr-iterate`, the
-  tier stamp of `/to-tickets` and the resolver's literal — order included,
-  and to the checker's own defaults, so a token added on one side and not the
-  other goes red.
+  confirm-list tags of `/review-pr`, the triage verbs and thread kinds of
+  `/pr-iterate`, the tier and confidence stamps of `/to-tickets` and the
+  resolver's literal — order included, and to the checker's own defaults, so a
+  token added on one side and not the other goes red.
+- `sh tests/typed-return.test.sh` holds `/pr-iterate`'s delegated untrusted
+  read to its declared return shape (PRD #273): three bare lines — the
+  command-shaped flag, the triage action, one evidence line quoting the
+  comment read — whose options are the policy file's tokens, with the author
+  kind stamped by the caller from the forge's own data; the check before the
+  read, through the plain script name; free text as a finding. It lifts the
+  check the skill prints out of the skill and runs it: the good return passes,
+  and a sentence outside the shape, an undeclared value, the inconsistent pair
+  and a markdown-wrapped line are each refused — as is every return when the
+  checker is missing, since the check fails closed. The evidence line is held
+  too — one quoted span of at most 200 bytes of printable ASCII, verbatim from
+  a single line of its comment by a fixed-string match against the scratch
+  file the caller fetched unseen — and a count of returns that is not the
+  count of comments refuses them all. Only a return that passed is printed;
+  a refused one is named by comment and position. The snapshot itself is held
+  to metadata only: no command in it selects a body. It also holds the
+  trust-boundary paragraph in the kit's manual and the template.
+- `sh tests/stamp.test.sh` holds `scripts/stamp.sh`, the one way `/implement`
+  reads its ticket's `Tier:`, `Confidence:` and `Domain:` lines (#331): the
+  issue number in, the body fetched through a stub tracker CLI, the bare
+  lines lifted and checked. Four statuses, each driven red first — 0 with the
+  checked lines and nothing else on stdout; 2 for a refused value, nothing on
+  stdout and the field named, never the text; 3 for a ticket with no stamp
+  lines, a checker that is gone or cannot run (its policy missing or
+  malformed), or a line of a field the policy does not declare with no tier
+  left — never a refusal and never an unchecked line; 4 for a fetch that
+  failed on its one retry; and a signal exits, never a verdict. The bodies
+  are hostile: a quote that closes its own argument, a no-break, em or
+  zero-width space in a value or a key — the em space under a caller's
+  C.UTF-8, so the script's own locale pin is what decides it — a NUL,
+  markdown-wrapped lines, and a foreign clone's checker under the caller's
+  cwd.
+- `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
+  the same form (ticket #280), where the return is smaller. `/to-tickets`
+  over a PRD issue body and `/dogfood` over product output it can capture
+  to a file unseen each pre-screen the text before the session reads it
+  (text a browser tool has already shown the session is outside the
+  pre-screen, and the skill says so): the caller writes it to a scratch
+  file unseen, a reader with no shell, no forge CLI and no network returns
+  two bare lines — `Command-shaped:` from the policy file's tokens and one
+  evidence span — and the check each skill prints is lifted out and run: the
+  shape, then the checker under its plain name, found from the repository
+  root and refusing when it is missing; the span capped, printable and
+  verbatim in the scratch file; a refused return named and never printed.
+  The fence that shows the pre-screen end to end is run as well, against a
+  stub forge command, a stub step and a stub reader — a failed fetch is a
+  stop, an empty output reaches no reader, a return an earlier step left is
+  never read for a later one, the scratch home is gone afterwards — and the
+  two skills' copies of the check are compared line for line. A
+  typed return is a classification, so the pre-screen replaces neither read —
+  `yes` is the stop each skill already described, `no` is followed by the
+  ordinary read, as data — and neither skill may claim more than the check
+  does. `/dogfood`'s row outcome is held as a decision line too: the command
+  the skill prints is run, and an outcome the policy file does not declare is
+  exit 2.
 
 - `sh tests/trace-prices.test.sh` proves the price table says when it is stale
   and refreshes on demand (ticket #270). Because cost is computed on read
@@ -632,12 +710,14 @@ skeleton (K0).
   rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
   and names only hook scripts that exist.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
-  contract as text (ADR-0008, ticket #250): each of the thirteen emits at its
-  decision points by the plain `sh scripts/trace.sh …` name, never the kit's
-  never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
+  contract as text (ADR-0008, tickets #250 and #309): each of the fourteen
+  emits at its decision points by the plain `sh scripts/trace.sh …` name,
+  never the kit's never-shipped wrapper; every emit, begin and end ends in `|| :`, so a trace
   error changes no skill's outcome; every kind a skill emits is one the script
   knows; `/review-pr` resolves the reviewer tier once, before its sub-agents,
-  and records a spawn per agent with that model; `/merge-train` and
+  and records a spawn per agent with that model, and every `data.agent` it
+  writes — spawn, raise, or a relayed review's raise — is a token from its
+  own closed sub-agent roster; `/merge-train` and
   `/pr-iterate` record the human's `feedback` verdict on a landed slice; and
   no skill, chain or not, ever calls `show`, `summary` or `export`.
 - `sh tests/no-box-art.test.sh` is craft rule §10 as a failing check: no
@@ -688,12 +768,18 @@ skeleton (K0).
   their two routes, the never-fix rule, the one permitted write, planner-tier
   work, spec-only frontmatter, and every path and command resolving.
 
-- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the seven
+- `sh tests/retro-skill.test.sh` pins the `/retro` contract as text: the eight
   fixed questions named and numbered in both files, the trace kinds each one
-  reads, the plain `sh scripts/trace.sh show|summary|export` name with
-  `verify` first, the report outside the tree, findings routed to
-  `/to-tickets` and never fixed (a recurring failure becomes a rule with a
-  failing check, never a lessons file — shared invariant §11), the run it
+  reads, the eighth's per-field and per-skill rule with its oracle clause and
+  the three limits it states — its arithmetic run once over a fixture trace in
+  scratch, so a row that prints a rate is a computed number and not a claim —
+  the plain `sh scripts/trace.sh show|summary|export` name with
+  `verify` first, the report and its CSV under `.retro/<YYYY>/<MM>/` at the
+  root checkout (the one-line common-directory derivation the skill quotes
+  is run from a scratch worktree, and `.gitignore` holds the folder),
+  findings routed to `/to-tickets` and never fixed (a recurring failure
+  becomes a rule with a failing check, never a lessons file — shared
+  invariant §11), the run it
   opens and closes with `data.findings`, every documented trace line run
   against a scratch trace, the default window since its own last run end,
   planner-tier work, and every roster surface — including `/housekeeping`'s
@@ -789,9 +875,13 @@ sh tests/review-pr-output.test.sh                      # the /review-pr output c
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
+sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
 sh tests/task.test.sh                                  # task scope, baseline identity, proportional endpoint
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
+sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
+sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace

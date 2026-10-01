@@ -219,6 +219,89 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.34.0 or older, one file joins.** `scripts/stamp.sh` joins
+the shared layer at 0.35.0 — see "When a file joins the shared layer" below:
+a project bootstrapped as new at 0.35.0 or later has it, one that adopted
+the kit into an existing repo takes it with Part 1. `/implement` now reads a
+ticket's `Tier:`, `Confidence:` and `Domain:` lines through it and nothing
+else, so a project without the script reads every ticket at the defaults
+and says so — the script's four exits are in its header. Nothing else in the
+layer changes.
+
+**Arriving from 0.33.0 or older, every trace kind holds its outcome to a
+vocabulary.** `scripts/trace.sh` (shared, changed at 0.34.0) refuses an
+`outcome=` its kind does not declare — exit 2, naming the kind, the value
+and the words it takes — where it used to write it. That NARROWS the emit,
+see "When a shared file's BEHAVIOUR changes": an emit line of your own with
+a typo or a sentence in `outcome=` stops silently succeeding, and because it
+ends `|| :` it now writes nothing. Run each of yours once with `--dry-run`
+to find it. Lines already in your trace are history: `verify` names each as
+an advisory and its exit status does not change. In Part 2, `/merge-train`
+(9a) records `outcome=unasked` for a landing nobody could answer, and the
+Claude Code adapter's `hooks/subagent-stop.sh` and `README.md` (9e) write no
+event for a subagent stop whose transcript never existed. Also in 9a: the
+typed-return fence in `/pr-iterate`, `/to-tickets` and `/dogfood` finds the
+checker in the repository that holds the skills and refuses an evidence span
+under 8 bytes; `/to-tickets` records its drafted label and `/retro`'s
+`QUESTIONS.md` rates it; `/review-pr` holds `data.agent` to a closed roster
+and records a relayed review's findings, and `/implement` points at that.
+
+**Arriving from 0.32.0 or older, a dispatched review lands through a broker,
+and two skills pre-screen what they read.** No shared file changes at 0.33.0;
+seven skills, one worker prompt and the Claude Code adapter do, and Part 2
+is how you take them.
+`/implement`'s review step now lands a *dispatched* review — one run on
+another agent harness — through a **broker**, a host-side role your root
+manual names, and never by hand: the worker is offline, prints its findings
+and stops, and the session checks the dispatcher's exit status before anything
+reads the report. A manual that names no broker is a working state — the
+in-session reviewer is the review, and the report says no cross-vendor review
+ran — so a project that dispatches nothing needs nothing here. The worker
+contract `.agents/prompts/review-worker.md` opens by saying the worker is
+offline and makes `REVIEWED: <sha>` the report's first line; it ships, so take
+it in 9a's three-way. The broker script itself is the kit's own and is not
+shipped. `/to-tickets` and `/dogfood` pre-screen an untrusted PRD body or
+product output through a tool-restricted reader whose two-line return is
+checked before it is read; `/retro` asks an eighth question, stamp
+calibration, and `QUESTIONS.md` carries it — so the count in your manual's
+`/retro` row and chain paragraph (9b) moves from seven to eight, as
+`constitution/AGENTS.md.template`'s did; it also writes its report under
+`.retro/` at your root checkout instead of the OS temp directory, and
+`/housekeeping`'s `CHECKLIST.md` looks for it there — add `.retro/` to your
+ignore file, since the skill will not. `/implement` and `/review-pr` record
+a `tdd.cycle` per cycle, a `spawn.end` per spawn and the resolver's model id
+captured rather than typed; in `/implement` a refused `Confidence:` value now
+stops the session as a refused tier does. `/pr-iterate` sets aside a red whose
+own output says `release-bound:` instead of iterating on it. In 9e, the Claude
+Code adapter's `README.md` gains the section on denying a typed-return reader
+its tools and the one on where a per-user node goes, its `hook.lib.sh` names
+that fix in its no-node reason, and its `transcript-usage.mjs` hook takes the
+last usage block per message id — take the hooks if you wired them.
+
+**Arriving from 0.31.0 or older, a ticket's stamp gains a line.** No shared
+file changes at 0.32.0; two skills do, and Part 2 is how you take them.
+`/to-tickets` now writes `Confidence: low|medium|high` under a ticket's
+`Tier:` line, and `/implement` reads it: a `low` sends the session back to
+its restatement before it builds. Tickets you wrote before this carry no
+such line and need none — a missing line is not a blocker. The three tokens
+are the policy file's `confidence` vocabulary, declared since 0.25.0.
+
+**Arriving from 0.30.0 or older, the trace's kind vocabulary gains one
+word.** `scripts/trace.sh` (shared, changed at 0.31.0) accepts
+`kind=finding.dismiss`: a human closed a posted finding with no commit
+answering it. `/pr-iterate` emits it, on the subject of the `finding.raise`
+it answers, and nothing reads it but the retrospective. Your existing trace
+files need nothing — the vocabulary only widened — and if you do not trace,
+the emit is the same silent no-op every other one is.
+
+**Arriving from 0.28.0 or older, one file joins and one changes behaviour.**
+`scripts/trace.sh`, the decision trace, joins the shared layer — see "When a
+file joins the shared layer" below, because a consumer bootstrapped as a new
+project at 0.25.0 or later already has it, and one that adopted the kit into
+an existing repo does not. `scripts/agent-dispatch.sh` now records every spawn
+in that trace — a widening, see "When a shared file's BEHAVIOUR changes". The
+policy file beside the trace stays yours, and it is 9d's to add.
+
 **Arriving from 0.16.0 or older, no file joins and one changed content.** This
 recipe itself: its prose now uses the kit's own words — *policy files* where
 it said `config files` (step 9d is renamed accordingly), *copied* where it said
@@ -448,6 +531,28 @@ Step 5 writes it for you. Three things to check afterwards:
   article nothing points at binds nobody, and would drift unnoticed. (Node
   engine only — the reduced fallback cannot check reachability, and says so.)
 
+**0.29.0 is the joining file you may already have.** `scripts/trace.sh` has
+shipped with every NEW-PROJECT bootstrap since 0.25.0, outside `files:`, so a
+consumer bootstrapped that way since then holds a copy that step 3 never measured — it was not in
+`from.list`, so no drift report names it. Before step 5 overwrites it, compare
+it with the release it came from, and move any local change out as step 3 says:
+
+```sh
+# no output means nothing of yours is in it
+kit show "${FROM_REF}:scripts/trace.sh" | diff - scripts/trace.sh
+```
+
+A consumer from before 0.25.0 has no file there, and neither has one that
+ADOPTED the kit into an existing repo at any release before 0.29.0 — the
+adoption arm copied neither the script nor its policy file. For both, step 5
+simply writes the script, and 9d's policy file is a take, not a merge.
+Either way the script arrives **inert**: its policy file,
+`scripts/trace.config.sh`, is not shared layer and ships with `TRACE_DIR`
+empty, so every emit exits 0 having written nothing, after one note on stderr.
+That is a working state, not a failure — and it is the half-update this
+release is most likely to leave you in, which is why 9d names the one line
+that turns it on.
+
 ## When a shared file's BEHAVIOUR changes
 
 Most releases move prose. Some move **code**, and step 5 replaces it without
@@ -504,6 +609,46 @@ Take Part 1 alone here and you are not broken, merely unchanged: the seam is
 present and nothing reaches it. That is the same inert half-update this file
 opens with, in its mildest form.
 
+**0.29.0 is a widening of the same kind.** `scripts/agent-dispatch.sh` appends
+a `spawn` line to the decision trace when it crosses to another agent harness —
+tier, domain, agent harness, model, depth, prompt size — and a `spawn.end` at
+every way out past that point, with its outcome (`ok`, `timeout`, `budget`,
+`unreachable`, or `fail` with the exit status). The worker it starts is handed
+a run of its own in `TRACE_RUN`, with the dispatching run as its parent in
+`TRACE_PARENT`, so its emits join the dispatching trail. No
+exit status, argument or stdout changes, and every emit ends `|| :`, so nothing
+you call it from has to change. What it adds is one optional key in **your**
+`scripts/agents.config.sh` (9d): `AGENT_DISPATCH_TRACE_PROMPT='1'` keeps each
+worker prompt in the trace as a blob. Leave it out to keep prompts out; any
+other value is refused with exit 2 rather than read as off, because a switch
+about private data whose answer is hidden is worse than none. With the trace
+policy file empty, none of this writes anything.
+
+**0.34.0 is a narrowing, and the first one in the trace.** `scripts/trace.sh`
+now holds each kind's `outcome` to a vocabulary of its own — `review.verdict`
+takes `pass`, `blocked` or `confirm`, `merge.land` takes `landed`, `skipped`
+or `stopped`, and so on for every kind; the script's header carries the
+table beside its kind list, and your copy of ADR-0008 does not, since
+decision records are yours.
+An emit with no outcome is legal on every kind, `run.start` and
+`session.end` take none, and `note` takes any one word. What used to write
+and now exits 2 is an outcome its kind does not declare:
+
+```sh
+sh scripts/trace.sh emit kind=review.verdict outcome='not blocking'  # exit 2
+sh scripts/trace.sh emit kind=review.verdict outcome=pass            # writes
+```
+
+No argument, variable or stdout changes otherwise. Every emit the kit's
+skills, the Claude Code adapter's hooks and the dispatcher write is
+declared, so nothing the kit ships is affected; what you have to find is
+your OWN emit lines — a skill you wrote, a hook of yours, a local article
+that quotes one. Each ends `|| :`, so a refusal costs you the event and
+nothing else, silently: run each once with `--dry-run` and read stderr.
+Your existing trace needs nothing — `verify` names each old line whose
+outcome the table does not declare as an advisory, and `summary` and
+`export` say the count once, all with the exit status they had.
+
 ## When a shared file's path changes
 
 Treat it as one leaving and one joining: it falls out of `from.list` and into
@@ -517,7 +662,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.29.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.35.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -530,9 +675,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.29.0
+v0.35.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.29.0
+v0.1.0 -> v0.35.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -554,17 +699,19 @@ scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
 scripts/manifest.lib.sh
+scripts/stamp.sh
 scripts/tdd-pairing-guard-ci.sh
 scripts/tdd-pairing-guard.sh
+scripts/trace.sh
 scripts/vocab.sh
 $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 1964 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2142 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2118 insertions(+), 1 deletion(-)
+ 3 files changed, 2296 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -619,10 +766,12 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
   updated scripts/manifest.lib.sh
+  updated scripts/stamp.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
+  updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.29.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.35.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -645,8 +794,10 @@ verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
 verbatim  scripts/manifest.lib.sh
+verbatim  scripts/stamp.sh
 verbatim  scripts/tdd-pairing-guard-ci.sh
 verbatim  scripts/tdd-pairing-guard.sh
+verbatim  scripts/trace.sh
 verbatim  scripts/vocab.sh
 $ sh scripts/check.sh
 FAIL  docs gate: violations found
@@ -664,10 +815,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.29.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.35.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.29.0
-Part 1 complete — shared layer at v0.29.0. The update is not done: go to step 8.
+0.35.0
+Part 1 complete — shared layer at v0.35.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1267,9 +1418,51 @@ because both facts change what you do with it:
 | `scripts/docs-conformance/config.mjs` | a file at that path | reading the diff |
 | `scripts/docs-conformance/local-vocabulary.mjs` | **only a `.template`** | reading the diff of the `.template` |
 | `scripts/vocab.config.sh` | a file at that path, since 0.25.0 — and shipped **filled** | key sets (`NAME=`), then the diff of the values |
+| `scripts/trace.config.sh` | a file at that path, in new-project bootstraps since 0.25.0, adopted repos since 0.29.0, and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`) |
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
+
+**Arriving from 0.29.0 or older, the vocabulary policy file gains one field.**
+`scripts/vocab.sh` (shared, changed at 0.30.0) now ships an `author-kind`
+vocabulary — `bot`, `human` — for the line `/pr-iterate` stamps from the
+forge's own author data before it triages a review comment. If you took
+`scripts/vocab.config.sh` as yours, add the entry from the kit's copy at
+`${TO_REF}`; without it the checker still holds the line to its shipped
+default, and a copy that redeclares the field list without the entry is the
+one state where `Author-kind:` goes unchecked. The checker's header and usage
+text also say what it has always done: it takes bare `Field: value` lines,
+and a line wearing a list marker or emphasis is not a decision line to it.
+
+**Arriving from 0.28.0 or older, the trace's policy file becomes a row, and
+one line in it turns tracing on.** `scripts/trace.config.sh` is what
+`scripts/trace.sh` — shared from this release — reads to decide whether to
+write anything. Ask YOUR tree, not only the kit's ref: a repo that adopted the
+kit before 0.29.0 has no copy even though the kit had one at `${FROM_REF}`.
+Missing in your tree, take it whole
+(`kit_take "${TO_REF}" scripts/trace.config.sh scripts/trace.config.sh`); present,
+diff its keys as below — 0.29.0 added `TRACE_NUMBERED_TYPES` and
+`TRACE_AGENT_WAIT_MS`, 0.27.0 `TRACE_TOOLS` and `TRACE_PRICES_STALE_DAYS`, all
+shipped empty. It ships with every value empty, so
+until you decide otherwise the chain's emits, the dispatcher's spawn records
+and the adapter's hooks write nothing. **To turn tracing on, this is the one
+line** — plus the ignore rule, because a trace is findings, reasons and prompts
+in plain text, and it is never meant to be committed:
+
+```sh
+sed -i.bak "s|^TRACE_DIR=''|TRACE_DIR='.trace'|" scripts/trace.config.sh && rm scripts/trace.config.sh.bak
+printf '.trace/\n' >>.gitignore
+sh scripts/trace.sh emit kind=note reason='tracing on'   # silent, exit 0
+ls "$(sh scripts/trace.sh dir)/events"                    # a day file now holds it
+```
+
+A relative `TRACE_DIR` resolves against the root checkout, so an emit from a
+linked worktree lands beside the root's `.git`. The other keys are refinements
+you can leave empty: `TRACE_TOOLS` captures every tool call (volume and
+privacy both grow — read its comment first), `TRACE_NUMBERED_TYPES` holds your
+forge's numbered references to one spelling, `TRACE_AGENT_WAIT_MS` bounds how
+long a subagent-stop hook waits for its transcript, and the price table with
+its `TRACE_PRICES_STALE_DAYS` window prices tokens on read.
 
 **Arriving from 0.27.0 or older, one skill joins and nothing in Part 1
 moves.** `/retro` is the reader of the decision trace: over a window it
@@ -1392,7 +1585,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.29.0 case for this file, and `ADD` is the 0.3.0 → 0.29.0
+`MERGE` is the 0.4.0 → 0.35.0 case for this file, and `ADD` is the 0.3.0 → 0.35.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1482,6 +1675,15 @@ It is shared layer, so Part 1 already replaced it: what it reads *now* is the
 authority on what your policy file has to provide.
 
 ### 9e. Adapters — opt-in, whole-directory
+
+**Arriving from 0.28.0 or older, the Claude Code adapter's hooks changed.**
+If you kept the `hooks` directory of `adapters/claude-code`, take it whole as this
+category says: `subagent-stop.sh` and `hook.lib.sh` now wait, up to
+`TRACE_AGENT_WAIT_MS` from your trace policy file (empty: no wait, as before),
+for a subagent's transcript to hold its final message before reading its
+usage, and record the absence rather than a partial sum when it never does;
+`adapters/claude-code/README.md` says a live payload is compact. Dormant for
+a consumer who wired no hooks.
 
 **Arriving from 0.23.0 or older, the dispatcher gained an exit status**: 69
 (EX_UNAVAILABLE) now means the agent harness a tier names is not installed
@@ -1697,14 +1899,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.29.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.35.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.29.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.35.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -1803,9 +2005,9 @@ improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
 $ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$S" "$K"
- .agents/skills/implement/SKILL.md | 63 +++++++++++++++++++++++++++++++++++++++
- .claude/skills/implement/SKILL.md | 43 --------------------------
- 2 files changed, 63 insertions(+), 43 deletions(-)
+ .agents/skills/implement/SKILL.md | 64 +++++++++++++++++++++++++++++++++++++++
+ .claude/skills/implement/SKILL.md | 44 ---------------------------
+ 2 files changed, 64 insertions(+), 44 deletions(-)
 $ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
@@ -1880,7 +2082,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.29.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.35.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -1906,7 +2108,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.29.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.35.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -1920,7 +2122,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.25.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.34.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
