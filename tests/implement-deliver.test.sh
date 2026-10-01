@@ -230,6 +230,11 @@ assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is nev
 assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
+# The count of answers that change what you do, scoped to what it counts —
+# the tier and its confidence — and held to the sentences that follow it:
+# `low` restates, a refused tier stops, a refused confidence stops. (The
+# refused domain is its own sentence, above, and not in this count.)
+stamp_has "Three answers on the tier and its confidence change what you do" "the count says what it counts, and names the refused confidence as the third"
 stamp_has "back to the restatement step" "restate-on-low: the rule"
 stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
 stamp_has "say so in your report" "restate-on-low: the report names it"
@@ -241,6 +246,59 @@ stamp_has "a refused line is never put into a command" "stop-on-refused: the lin
 stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
 stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
 stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+# A refused CONFIDENCE is a refused stamp (#340 — the ruling on PR #311's
+# confirm-list, item 1). The bullet used to leave the tier standing and read
+# the value as `low`: an undeclared value mapped onto a declared one in
+# silence, which is the one thing the checker exists to refuse. It takes the
+# refused tier's path now — stop, /to-tickets re-stamps — and the MISSING line
+# keeps its own: not a blocker, for a ticket written before the stamp existed.
+stamp_has "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes"
+# The headline alone is green on a sentence that goes on to say the opposite
+# (local review of this PR, H-1): the words that carry the ruling are held
+# one by one, inside the sentence that states it — cut from its first word to
+# the missing-line sentence that follows — and the probe is driven by three
+# weakened copies that each have to go red: the tier left standing, the stop
+# turned into a carry-on, and the value remapped onto a declared one.
+conf=$(printf '%s\n' "$stamp" | sed -n 's/.*\(A refused \*confidence\*.*\) A missing `Confidence:`.*/\1/p')
+[ -n "$conf" ] && pass "the refused-confidence sentence is cut out of the bullet, up to the missing-line sentence" ||
+	fail "no sentence runs from 'A refused *confidence*' to 'A missing \`Confidence:\`' — nothing to hold the ruling's words to"
+# The load-bearing words, one per line, spelled ONCE: the live assertions and
+# the probe the weakened copies drive read the same list, so neither can be
+# edited without the other.
+RULING_WORDS='stop
+report the line as written
+`/to-tickets` to re-stamp
+does not stand on its own
+never read as `low`, or as any declared one'
+# stop_on_refused_confidence <sentence> — exit 0 only when every word of
+# RULING_WORDS is in it; prints the first one that is not.
+stop_on_refused_confidence() {
+	while IFS= read -r _w; do
+		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
+	done <<EOF
+$RULING_WORDS
+EOF
+}
+while IFS= read -r word; do
+	printf '%s\n' "$conf" | grep -qF -- "$word" && pass "'$word' — stop-on-refused-confidence, in the sentence that rules it" ||
+		fail "the refused-confidence sentence never says '$word' — the ruling lost a load-bearing word"
+done <<EOF
+$RULING_WORDS
+EOF
+# weakened <name> <sed expression over the sentence> — the copy must differ
+# from the subject (or the bait is the subject), and the probe must refuse it.
+weakened() {
+	_m=$(printf '%s\n' "$conf" | sed "$2")
+	[ "$_m" != "$conf" ] || { fail "mutant '$1' left the sentence unchanged — the bait is the subject"; return; }
+	_miss=$(stop_on_refused_confidence "$_m") &&
+		fail "mutant '$1' passes every word — the assertions are green on weakened wording" ||
+		pass "mutant '$1' is red — it lost '$_miss'"
+}
+weakened "the tier left standing" 's/does not stand on its own/stands on its own/'
+weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
+weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
+assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
+stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
 # is unchanged, and the orphan line is said in the report — never a reason to
 # restate, because there is no stamp for the doubt to be about.
@@ -248,6 +306,11 @@ stamp_has "with no \`Tier:\` line qualifies nothing" "orphan confidence: the cas
 stamp_has "reported, not acted on" "orphan confidence: what happens to it"
 stamp_has "the missing-tier default below still applies" "orphan confidence: the tier is still the default, said in the report"
 stamp_has "do not restate on its \`low\`" "orphan confidence: the branch itself — no second reading with no stamp to doubt"
+# …and an orphan the checker REFUSES is not that case (local review of this
+# PR, M-1): the refusal is about the value, not the pair, so it is a stop
+# with or without a `Tier:` line — only an orphan with a declared value is
+# the one reported and left.
+stamp_has "whether or not a \`Tier:\` line is present" "orphan confidence: a refused value is a stop either way — the refusal is about the value, not the pair"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
 # session in a project that never took the script.
@@ -319,6 +382,22 @@ printf 'A ticket written before the stamp existed.\n' >"$SCRATCH/old"
 read_stamp <"$SCRATCH/old"
 [ "$P_STATUS" = 3 ] && [ -z "$P_SHOWN" ] && pass "an old ticket: exit 3 and nothing shown — the outcome the bullet calls the defaults" ||
 	fail "an old ticket: exit $P_STATUS, shown '$P_SHOWN' — not the exit 3 the bullet defines"
+# The two confidence answers 4b holds the bullet to, through the script itself
+# (#340): a value outside the vocabulary is the exit 2 the bullet calls a stop,
+# and a ticket with no `Confidence:` line is the exit 0 it calls no blocker. A
+# checker that let `sure` through, or refused an absent line, would make the
+# bullet's two sentences describe a reader that does not exist.
+printf 'Tier: implementer\nConfidence: sure\nDomain: content\n' >"$SCRATCH/sure"
+read_stamp <"$SCRATCH/sure"
+[ "$P_STATUS" = 2 ] && pass "Confidence: sure — refused, exit 2: the stop the bullet names" ||
+	fail "Confidence: sure — the script exited $P_STATUS, not 2: a value outside the vocabulary walked past the checker"
+grep -qF "x stamp:" "$SCRATCH/refusal" && grep -qF "confidence line is refused" "$SCRATCH/refusal" && ! grep -qF "sure" "$SCRATCH/refusal" &&
+	pass "…and the x stamp: line names the confidence field, never the value — the report quotes it from the ticket" ||
+	fail "…but the refusal does not name the confidence field, or prints the value: $(cat "$SCRATCH/refusal")"
+printf 'Tier: implementer\nDomain: content\n' >"$SCRATCH/unstamped"
+read_stamp <"$SCRATCH/unstamped"
+[ "$P_STATUS" = 0 ] && pass "no Confidence: line — exit 0: not a stop, the ticket predates the stamp" ||
+	fail "no Confidence: line — the script exited $P_STATUS, not 0: a missing line was refused as if it were present and illegal"
 
 hostile "a quote in the tier" "refused, never executed" "Tier: implementer'; touch PWN; echo '\n"
 [ "$P_STATUS" = 2 ] && pass "…and it is a refusal, exit 2" || fail "a tier closing its own quote was not refused (exit $P_STATUS)"
