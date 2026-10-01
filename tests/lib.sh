@@ -957,3 +957,8 @@ t_assert_skill_frontmatter() {
 	[ -z "$_sf_deep" ] && pass "supporting files are one level deep" || fail "a supporting file is nested deeper than one level: $_sf_deep"
 }
 
+# t_field_tokens <field-name> — extract the value(s) of a field from FIELDS (set
+# by calling `sh scripts/vocab.sh fields`). Handles the optional (open) mark
+# that vocabularies a consumer can extend carry.
+t_field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
+

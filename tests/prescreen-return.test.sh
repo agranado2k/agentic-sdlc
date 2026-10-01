@@ -84,8 +84,7 @@ done
 # The vocabularies, READ from the policy file through the checker's own
 # subcommand — this suite keeps no copy of a token.
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>/dev/null)
-field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1\( (open)\)\{0,1\}: //p"; }
-[ -n "$(field_tokens command-shaped)" ] && [ -n "$(field_tokens outcome)" ] &&
+[ -n "$(t_field_tokens command-shaped)" ] && [ -n "$(t_field_tokens outcome)" ] &&
 	pass "the policy file declares command-shaped and outcome" ||
 	fail "the policy file declares no command-shaped or no outcome vocabulary — nothing below can be held"
 # The reader agrees with its sibling in tests/vocab-policy.test.sh (review of
@@ -94,9 +93,9 @@ field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain command-shaped'/" "$POLICY" >"$SCRATCH/opened.config.sh"
 FIELDS_OPENED=$(VOCAB_CONFIG="$SCRATCH/opened.config.sh" sh "$VOCAB" fields 2>/dev/null)
 printf '%s\n' "$FIELDS_OPENED" | grep -q '^command-shaped (open): ' &&
-	[ "$(FIELDS=$FIELDS_OPENED field_tokens command-shaped)" = "$(field_tokens command-shaped)" ] &&
+	[ "$(FIELDS=$FIELDS_OPENED t_field_tokens command-shaped)" = "$(t_field_tokens command-shaped)" ] &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
-	fail "with command-shaped opened in the policy file the reader read '$(FIELDS=$FIELDS_OPENED field_tokens command-shaped)', not '$(field_tokens command-shaped)'"
+	fail "with command-shaped opened in the policy file the reader read '$(FIELDS=$FIELDS_OPENED t_field_tokens command-shaped)', not '$(t_field_tokens command-shaped)'"
 
 # A project of its own: the fence finds the checker in the repository that
 # holds the skills — the nearest directory with .agents/skills/ — and this
@@ -292,7 +291,7 @@ hold_prescreen() {
 		pass "/$NAME — the shape is two lines: the command-shaped flag and one evidence line, and no line it does not need" ||
 		fail "/$NAME — the shape's lines should be 'Command-shaped Evidence', the skill spells '$keys'"
 	spelled=$(sed -n 's/^Command-shaped: <\(.*\)>$/\1/p' "$SCRATCH/shape" | tr '|' ' ')
-	declared=$(field_tokens command-shaped)
+	declared=$(t_field_tokens command-shaped)
 	[ -n "$declared" ] && [ "$spelled" = "$declared" ] &&
 		pass "/$NAME — Command-shaped offers the policy file's tokens, in its order: $declared" ||
 		fail "/$NAME — the skill offers '$spelled', the policy file declares '$declared'"
@@ -816,7 +815,7 @@ outcome_line=$(grep -o 'checked_outcome <row> <[^>]*>' "$DOGFOOD" | head -1)
 [ -n "$outcome_line" ] && pass "/dogfood hands each row's outcome to checked_outcome, with the row's position" ||
 	fail "/dogfood never says to run checked_outcome <row> <…> — a row's outcome is reported unchecked"
 spelled=$(printf '%s' "$outcome_line" | sed -n 's/.*<row> <\(.*\)>$/\1/p' | tr '|' ' ')
-declared=$(field_tokens outcome)
+declared=$(t_field_tokens outcome)
 [ -n "$declared" ] && [ "$spelled" = "$declared" ] &&
 	pass "/dogfood — Outcome offers the policy file's tokens, in its order: $declared" ||
 	fail "/dogfood — the skill offers '$spelled', the policy file declares '$declared'"

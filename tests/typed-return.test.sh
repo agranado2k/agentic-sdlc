@@ -116,11 +116,10 @@ keys=$(sed 's/:.*//' "$SCRATCH/shape" | tr '\n' ' ' | sed 's/ $//')
 	fail "the shape's lines should be 'Command-shaped Action Evidence', the skill spells '$keys'"
 
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>/dev/null)
-field_tokens() { printf '%s\n' "$FIELDS" | sed -n "s/^$1: //p"; }
 for key in Command-shaped Action; do
 	field=$(printf '%s' "$key" | tr 'A-Z' 'a-z')
 	spelled=$(sed -n "s/^$key: <\(.*\)>\$/\1/p" "$SCRATCH/shape" | tr '|' ' ')
-	declared=$(field_tokens "$field")
+	declared=$(t_field_tokens "$field")
 	if [ -n "$declared" ] && [ "$spelled" = "$declared" ]; then
 		pass "$key offers the policy file's tokens, in its order: $declared"
 	else
@@ -136,9 +135,9 @@ grep -q '^Evidence: "<.*>"$' "$SCRATCH/shape" &&
 assert_file_has "$FLAT" "\`Author-kind:\` is not the reader's to say" "who wrote a comment is a fact the forge states"
 assert_file_has "$FLAT" "you stamp it from the snapshot" "the caller takes it from the forge's author data"
 stamped=$(sed -n 's/.*`\([a-z]*\)` when the forge.s author type is `Bot`, `\([a-z]*\)` otherwise.*/\1 \2/p' "$FLAT" | head -1)
-[ -n "$stamped" ] && [ "$stamped" = "$(field_tokens author-kind)" ] &&
+[ -n "$stamped" ] && [ "$stamped" = "$(t_field_tokens author-kind)" ] &&
 	pass "the caller stamps the policy file's author tokens, in its order: $stamped" ||
-	fail "the caller stamps '$stamped', the policy file declares '$(field_tokens author-kind)'"
+	fail "the caller stamps '$stamped', the policy file declares '$(t_field_tokens author-kind)'"
 assert_file_has "$FLAT" "quoted from the comment read" "the evidence is a pointer into the source, so a human can verify the judgment"
 assert_file_has "$FLAT" "tool-restricted subagent" "the read is delegated, as the trust boundary says"
 assert_file_has "$FLAT" "bare lines, one per field" "the checker takes bare lines"
