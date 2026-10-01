@@ -558,6 +558,14 @@ item8_has() { # <needle> <message>
 	esac
 }
 item8_has 'per decision field and per skill, never one number for the chain' "SKILL.md's eighth item holds the per-field, per-skill rule"
+# …and no stronger than QUESTIONS.md (review of PR #374): a raise with no
+# posted marker is still counted, so the item says the dismissal rate counts
+# only the posted where the raise says, never "a finding posted" outright.
+item8_has 'counting only the posted where the raise says whether it was' "…and the dismissal rate counts only the posted where the raise says, no stronger than question 8"
+case "$item8" in
+*'how often a finding posted at'*) fail "SKILL.md's eighth item says 'a finding posted' outright — raises with no posted marker are counted too" ;;
+*) pass "…and never says 'a finding posted' outright" ;;
+esac
 item8_has 'Every row carries the oracle clause' "…and the oracle clause on every row"
 item8_has 'too few events says so instead of a rate' "…and the thin row that prints no rate"
 item8_has 'computable once its stamps carry `data.label_proposed`' "…and the label's override rate, computable once its stamps carry the pre-quiz label"
