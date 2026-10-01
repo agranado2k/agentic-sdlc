@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the same amendment)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the end of this record)
 
 ## Context and problem statement
 
@@ -262,10 +262,9 @@ on subject `pr:#<N>` and all marked `data.via=broker`:
   the path leaves the plain set), and `data.agent`: the `/review-pr` §3
   roster token for the one sub-agent the finding names by number or title,
   `unattributed` when it names none or several. A finding withheld for its
-  location is not raised: the trace records what landed. *Amended
-  2026-10-01 (#424, retro H7): each raise also carries `data.posted=yes` —
-  the broker raises only what it posted, and `/retro`'s dismissal denominator
-  counts only the raises that say so; a raise without the key overcounts.*
+  location is not raised: the trace records what landed. *(Amended
+  2026-10-01, #424 — each raise also says it was posted; see the amendment at
+  the end of this record.)*
 - **one `review.verdict` per axis** — Axis 1 as clause 10 always said, now
   carrying `data.axis=1`; Axis 2 as `/review-pr` §5b counts it, `confirm` or
   `pass` with the tag counts.
@@ -290,3 +289,17 @@ emits are gated on the same marker:
 - **only the review carries it** — the first run died between its two
   writes, before any emit. The run posts the comment and emits the full set,
   which is the only one there will be.
+
+### Amendment, 2026-10-01 — every raise says it was posted (#424)
+
+Amends the raise #375 added to clause 10; it changes no posting, no exit
+status and no option, so the record is amended in place. `/retro`'s eighth
+question — the dismissal rate per severity — counts only a raise that says
+whether it was posted (`/retro` §8), and the broker's raises carried no
+`data.posted` at all: every finding the broker posted was left out of the
+denominator, and a human dismissing one was a dismissal of nothing the
+retrospective could count (retro H7). The broker raises only what it posted
+inline, so each raise carries `data.posted=yes` — the same key, with the
+same meaning, as the raise `/review-pr` records in session and the one its
+relay path records — and `data.agent` stays a token on `/review-pr`'s roster,
+`unattributed` included, so the three review paths read alike.
