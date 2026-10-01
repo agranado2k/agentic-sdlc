@@ -116,6 +116,14 @@ TEXTEOF
 TAB=$(printf '\t')
 printf 'rename%sthe helper\nan arrow → and a dash — in prose\n' "$TAB" >>"$TEXT"
 
+# lift_fence <skill> <function> <file> — the first sh fence of the skill
+# that names <function>(), written whole to <file>, to be sourced and run.
+lift_fence() {
+	awk -v fn="$2" '/^```sh$/ { buf = ""; on = 1; next }
+		on && /^```$/ { if (index(buf, fn "()")) { printf "%s", buf; exit } on = 0; next }
+		on { buf = buf $0 "\n" }' "$1" >"$3"
+}
+
 # verdict <return text> [text file] — the lifted fence's answer for one
 # return: checked_prescreen's exit status, its output kept in verdict.out.
 verdict() {
@@ -310,9 +318,7 @@ hold_prescreen() {
 	fi
 
 	banner "4. /$NAME — the documented check, executed"
-	awk '/^```sh$/ { buf = ""; on = 1; next }
-		on && /^```$/ { if (buf ~ /prescreen_ok\(\)/) { printf "%s", buf; exit } on = 0; next }
-		on { buf = buf $0 "\n" }' "$SKILL" >"$CHECK"
+	lift_fence "$SKILL" prescreen_ok "$CHECK"
 	[ -s "$CHECK" ] && pass "/$NAME prints the check as a runnable fence" ||
 		fail "/$NAME has no sh fence defining prescreen_ok()"
 	grep -q '^checked_prescreen() {$' "$CHECK" && pass "/$NAME — the fence defines checked_prescreen, the only way the return is read" ||
@@ -668,9 +674,7 @@ banner "7. /dogfood — a row's outcome is a decision line, checked before it is
 NAME=dogfood
 CHECK="$SCRATCH/dogfood.check.sh"
 OUTCOME="$SCRATCH/dogfood.outcome.sh"
-awk '/^```sh$/ { buf = ""; on = 1; next }
-	on && /^```$/ { if (buf ~ /checked_outcome\(\)/) { printf "%s", buf; exit } on = 0; next }
-	on { buf = buf $0 "\n" }' "$DOGFOOD" >"$OUTCOME"
+lift_fence "$DOGFOOD" checked_outcome "$OUTCOME"
 [ -s "$OUTCOME" ] && pass "/dogfood prints the outcome check as a runnable fence defining checked_outcome()" ||
 	fail "/dogfood has no sh fence defining checked_outcome(): a row's outcome is reported unchecked"
 grep -q 'vocab_checker' "$OUTCOME" && pass "/dogfood — the fence finds the checker through vocab_checker, as the pre-screen does" ||
