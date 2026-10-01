@@ -250,7 +250,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 #     argument, one line, the token the caller stamped itself;
 #   - or a site in LIFTED below: the input it reads (a fixed string on the
 #     call's line or the one before it — a pipe's head) and the lift stage
-#     that bounds that input, a fixed string earlier in the same function.
+#     that bounds that input, a fixed string on an uncommented line earlier
+#     in the same function.
 # A new call site, a site whose input changed, or a site whose lift stage was
 # removed is named and fails — the baits below prove each of the three.
 #
@@ -310,7 +311,7 @@ unlifted() {
 			e_input=${rest%%@@*} e_guard=${rest#*@@}
 			[ "$e_file" = "$file" ] && [ "$e_fn" = "$fn" ] || continue
 			case $text in *"$e_input"*) ;; *) continue ;; esac
-			sed -n "${start},$((line - 1))p" "$1/$file" | grep -qF -- "$e_guard" || continue
+			sed -n "${start},$((line - 1))p" "$1/$file" | grep -v '^[[:space:]]*#' | grep -qF -- "$e_guard" || continue
 			ok=1 && break
 		done <<EOENTRIES
 $LIFTED
@@ -348,6 +349,9 @@ bait_reset
 	fail "the unbroken copy of the call sites is named: $(unlifted "$BAIT")"
 bait_edit .agents/skills/pr-iterate/SKILL.md "/grep -c '')\" -eq 3 \] || return 1/d"
 bait_named .agents/skills/pr-iterate/SKILL.md "the typed return's line count is removed"
+bait_reset
+bait_edit .agents/skills/pr-iterate/SKILL.md "/grep -c '')\" -eq 3 \] || return 1/s/^/# /"
+bait_named .agents/skills/pr-iterate/SKILL.md "the typed return's line count is commented out"
 bait_reset
 bait_edit scripts/stamp.sh 's|sh "$vocab" <"$_stamp_tmp/lines"|sh "$vocab" <"$_stamp_tmp/body"|'
 bait_named scripts/stamp.sh "the fetched body is handed over in place of the lifted lines"
