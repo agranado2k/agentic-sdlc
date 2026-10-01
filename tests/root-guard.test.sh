@@ -392,9 +392,12 @@ grep -q '"PreToolUse"' "$SETTINGS" && pass "the kit's settings wire PreToolUse" 
 	fail ".claude/settings.json does not wire PreToolUse"
 grep -q 'hooks/root-guard.sh' "$SETTINGS" && pass "to the root guard" ||
 	fail ".claude/settings.json does not name the root guard"
+# Each tool is matched as a whole alternative of the matcher, so `Edit` is
+# never satisfied by `MultiEdit` or `NotebookEdit` (review finding M-4).
+matcher_tools=$(grep '"matcher"' "$SETTINGS" | grep 'Bash' | sed 's/.*"matcher"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | tr '|' '\n')
 for t in Edit Write MultiEdit NotebookEdit Bash; do
-	grep '"matcher"' "$SETTINGS" | grep -q "$t" && pass "the matcher covers $t" ||
-		fail "the PreToolUse matcher does not cover $t"
+	printf '%s\n' "$matcher_tools" | grep -qx "$t" && pass "the matcher covers $t" ||
+		fail "the PreToolUse matcher does not cover $t as a whole alternative"
 done
 # The marker list the suites unset is the hook's own, word for word.
 hook_markers=$(sed -n "s/^agent_markers='\(.*\)'$/\1/p" "$PRECOMMIT_SRC")
