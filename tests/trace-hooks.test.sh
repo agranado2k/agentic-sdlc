@@ -2327,8 +2327,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 
 	# An error with double quotes (shell metacharacter)
 	new_trace
-	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Error opening \\\"config.json\\\""}' \
-		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dquote-388.json"
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s"}' \
+		"$TSESSION" "$TUSE" 'Error opening \"config.json\"' >"$SCRATCH/tool-fail-dquote-388.json"
 	PAYLOAD="$SCRATCH/tool-fail-dquote-388.json"
 	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
 	PAYLOAD="$FIX/tool-post-failure.payload.json"
