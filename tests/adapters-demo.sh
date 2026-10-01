@@ -209,6 +209,73 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+banner "A6. The Claude Code adapter says how a typed-return reader is denied its tools"
+# ---------------------------------------------------------------------------
+# Three skills (/to-tickets, /pr-iterate, /dogfood) fence an untrusted read
+# behind a reader that has "no shell, no forge CLI, no network", and each one
+# defers the HOW to the adapter: "How an agent harness withholds those tools is
+# the adapter's, not this skill's, to say". A pointer with nothing at the other
+# end is a claim (shared invariant §8), so this block holds both ends: the
+# adapter names the mechanism for each of its two spawn paths, and the skills
+# still point at it. Two paths because they are not the same kind of thing —
+# the CLI's tool flag is a RESTRICTION, and a prompt to the in-session agent
+# tool is a REQUEST — and the section must say which is which (#335).
+CC_README="adapters/claude-code/README.md"
+cc_doc=$(tr '\n' ' ' <"$CC_README" | tr -s ' ')
+cc_low=$(printf '%s' "$cc_doc" | tr '[:upper:]' '[:lower:]')
+
+if grep -qE '^## .*typed-return reader' "$CC_README"; then
+	pass "$CC_README has a section on the typed-return reader"
+else
+	fail "$CC_README has no section on the typed-return reader — the skills defer to an adapter that says nothing"
+fi
+
+# The flag, by its real name on the CLI this adapter wires (`claude --help`:
+# "--tools <tools...>  Specify the list of available tools from the built-in
+# set"), with the one tool a reader keeps. Prose that says "a read-only tool
+# list" without the flag sends the reader to the help text; prose that names
+# the WRONG flag (`--allowedTools` is the permission allowlist, which
+# pre-approves and withholds nothing) sends them to a reader with a shell.
+case $cc_doc in
+*'--tools Read'*) pass "…and names the CLI flag that withholds every tool but Read: --tools Read" ;;
+*) fail "…but never names \`--tools Read\` — the CLI path has no flag the reader can copy" ;;
+esac
+case $cc_doc in
+*'claude -p'*'--tools Read'*) pass "…on a \`claude -p\` line, the headless form the fence spawns" ;;
+*) fail "…but the flag is not shown on a \`claude -p\` line" ;;
+esac
+
+# The in-session path: the Agent tool's spawn call takes no tool list, so a
+# skill run inside a session can only ASK. The section must say so, and say
+# the fence's duty that follows: "say so at the quiz" (/to-tickets) and "in the
+# report" (/pr-iterate, /dogfood).
+case $cc_low in
+*'request, not a restriction'* | *'a request and not a restriction'*)
+	pass "…and says the in-session prompt is a request, not a restriction" ;;
+*) fail "…but never says plainly that the in-session path is a request, not a restriction" ;;
+esac
+case $cc_low in
+*'say so at the quiz'*) pass "…and carries the fallback /to-tickets requires: say so at the quiz" ;;
+*) fail "…but does not carry \"say so at the quiz\" — /to-tickets's fallback is unstated" ;;
+esac
+case $cc_low in
+*'in the report'*) pass "…and the one /pr-iterate and /dogfood require: say so in the report" ;;
+*) fail "…but does not carry \"in the report\" — /pr-iterate's and /dogfood's fallback is unstated" ;;
+esac
+
+# The other end of the pointer: each of the three skills still defers to the
+# adapter in the one sentence the section above answers. Lose it from a skill
+# and the adapter's section documents a mechanism nothing invokes.
+for s in to-tickets pr-iterate dogfood; do
+	sk=".agents/skills/$s/SKILL.md"
+	if tr '\n' ' ' <"$sk" | tr -s ' ' | grep -q "How an agent harness withholds those tools is the adapter's, not this skill's, to say"; then
+		pass "$sk still defers the how to the adapter"
+	else
+		fail "$sk no longer says how the tools are withheld is the adapter's to say — the pointer this section answers is gone"
+	fi
+done
+
+# ---------------------------------------------------------------------------
 banner "B. Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------
 mkdir -p "$PROJ"
