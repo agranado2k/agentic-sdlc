@@ -246,19 +246,95 @@ done
 # Whether a raise was POSTED (#332): /retro's dismissal denominator counts
 # only what a human could have dismissed. The raise carries the answer on its
 # own line — never a second event per finding — so it is recorded where the
-# answer is known: after the Axis-1 post (§6), not as the report is drafted
-# (§5), and the run closes after it, so the raises stay inside the review's run.
+# answer is known: after the post question is settled (§6), not as the report
+# is drafted (§5), and the run closes after it, so the raises stay inside the
+# review's run.
+RP=$(skill_md review-pr)
 printf '%s\n' "$raise" | grep -qF -- 'data.posted=yes|no' && pass "/review-pr's raise carries data.posted=yes|no" ||
 	fail "/review-pr's finding.raise does not carry data.posted=yes|no — the dismissal rate's denominator counts findings nobody posted"
-RP_RAISE=$(grep -nF 'kind=finding.raise' "$(skill_md review-pr)" | head -1 | cut -d: -f1)
-RP_S6=$(grep -n '^### 6\. ' "$(skill_md review-pr)" | head -1 | cut -d: -f1)
-RP_END=$(grep -nF "sh $TRACE end" "$(skill_md review-pr)" | tail -1 | cut -d: -f1)
-[ "$(grep -cF 'kind=finding.raise' "$(skill_md review-pr)")" = 1 ] && pass "/review-pr names one finding.raise line — a raise is never recorded twice" ||
-	fail "/review-pr names finding.raise on more than one line — a posted marker must not be a second raise"
-[ -n "$RP_RAISE" ] && [ -n "$RP_S6" ] && [ "$RP_RAISE" -gt "$RP_S6" ] && pass "the raise is recorded in §6 (line $RP_RAISE), where the post is known" ||
-	fail "the raise (line ${RP_RAISE:-none}) is recorded before §6 (line ${RP_S6:-none}) — it cannot know whether its finding was posted"
-[ -n "$RP_END" ] && [ "$RP_END" -gt "${RP_RAISE:-0}" ] && pass "…and the run ends after it (line $RP_END), so the raises carry the review's run" ||
-	fail "the review's run ends (line ${RP_END:-none}) before the raises are recorded — they would fall outside the run the pairing rule reads"
+# The operator's ruling on the review of PR #374 (H-1, M-1, M-2): the post
+# question is settled on one of THREE paths, each named in the skill, and on
+# each the raises are recorded exactly once, at the point the answer is known,
+# with the run's end after them. The instruction comes from the caller's spawn
+# prompt; only with none is the human asked. post_rules_missing names every
+# rule a skill file has lost, one per line, so a bait that deletes a rule is
+# red by name — computed in a function, asserted in the parent shell.
+approval_of() { awk '/^#### Approval Process/ { on = 1; next } on && /^###/ { exit } on' "$1"; }
+closing_of() { awk '/^### 7\. / { on = 1; next } on && /^##/ { exit } on' "$1"; }
+post_rules_missing() { # <review-pr skill file>
+	_ap=$(approval_of "$1" | tr '\n' ' ')
+	_cl=$(closing_of "$1" | tr '\n' ' ')
+	for _r in \
+		"source|the caller's spawn prompt" \
+		"path a|**(a) The caller said what to post.**" \
+		"a never asks|The reviewer never asks" \
+		"a posted from the instruction|\`data.posted\` from that instruction" \
+		"a caller posts|on the caller's word" \
+		"path b|**(b) No instruction, and the human answers.**" \
+		"b follows the answer|\`data.posted\` follows the answer" \
+		"path c|**(c) No instruction, and no answer.**" \
+		"c posted no|record every raise \`data.posted=no\` before acting on that message"; do
+		case "$_ap" in *"${_r#*|}"*) ;; *) printf '%s\n' "${_r%%|*}" ;; esac
+	done
+	case "$_cl" in *'On path (b) only'*) ;; *) printf '%s\n' 'the question on (b) only' ;; esac
+	case "$_cl" in *'never before them'*) ;; *) printf '%s\n' 'end after the raises' ;; esac
+	# Exactly once: one raise line of the skill's own (the relay's is marked
+	# data.via=relay and is its own path), and no trace end above it.
+	_own=$(t_trace_lines "$1" | grep -F 'kind=finding.raise' | grep -vcF 'data.via=relay')
+	[ "$_own" = 1 ] || printf '%s\n' 'one own raise line'
+	_rl=$(grep -nF 'kind=finding.raise' "$1" | grep -vF 'data.via=relay' | head -1 | cut -d: -f1)
+	_e1=$(grep -nE "sh scripts/trace\\.sh end( |\`)" "$1" | head -1 | cut -d: -f1)
+	[ -n "$_rl" ] && [ -n "$_e1" ] && [ "$_e1" -gt "$_rl" ] || printf '%s\n' 'no end above the raise'
+	_s6=$(grep -n '^### 6\. ' "$1" | head -1 | cut -d: -f1)
+	[ -n "$_rl" ] && [ -n "$_s6" ] && [ "$_rl" -gt "$_s6" ] || printf '%s\n' 'raise in section 6'
+}
+missing=$(post_rules_missing "$RP" | tr '\n' ',' | sed 's/,$//')
+[ -z "$missing" ] && pass "/review-pr settles the post question on three named paths, the instruction from the caller's spawn prompt, each raise recorded once and the run ending after them" ||
+	fail "/review-pr's post rules are missing: $missing"
+# Each rule has a test that fails without it (H-2/H-3 of the same review):
+# one bait per rule, the rule's own needle removed from a copy.
+bait_post() { # <rule name> <sed script> — exit 0 only when the copy changed and the holder names the rule
+	sed "$2" "$RP" >"$SCRATCH/bait-post.md"
+	! cmp -s "$SCRATCH/bait-post.md" "$RP" && post_rules_missing "$SCRATCH/bait-post.md" | grep -qxF -- "$1"
+}
+for b in \
+	"source|s/the caller's spawn prompt/the prompt/" \
+	"path a|s/\*\*(a) The caller said what to post\.\*\*/**(a) Told.**/" \
+	"a never asks|s/The reviewer never asks/The reviewer may ask/" \
+	"a posted from the instruction|s/\`data.posted\` from that instruction/\`data.posted\` as it likes/" \
+	"a caller posts|s/on the caller's word/when it can/" \
+	"path b|s/\*\*(b) No instruction, and the human answers\.\*\*/**(b) Asked.**/" \
+	"b follows the answer|s/\`data.posted\` follows the answer/\`data.posted\` is a guess/" \
+	"path c|s/\*\*(c) No instruction, and no answer\.\*\*/**(c) Silence.**/" \
+	"c posted no|s/record every raise \`data.posted=no\` before acting on that message/move on/" \
+	"the question on (b) only|s/On path (b) only/On every path/" \
+	"end after the raises|s/never before them/whenever/" \
+	"one own raise line|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Also \`sh scripts\/trace.sh emit kind=finding.raise subject=pr:#<N> data.posted=yes || :\`./" \
+	"no end above the raise|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Then \`sh scripts\/trace.sh end outcome=ok || :\`./"; do
+	bait_post "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+# The callers give the instruction, in their spawn prompts (M-2): /implement
+# step 9 tells its reviewer to post both reports, /pr-iterate step 2 tells its
+# reviewer to post nothing — the (a) path, never a question nobody answers.
+grep -F 'post both reports' "$(skill_md implement)" | grep -qF 'spawn prompt' &&
+	pass "/implement step 9 tells its reviewer, in the spawn prompt, to post both reports" ||
+	fail "/implement step 9 does not tell its reviewer in the spawn prompt to post both reports — /review-pr would ask a question nobody answers"
+grep -F 'do NOT post' "$PI" | grep -qF 'spawn prompt' &&
+	pass "/pr-iterate step 2 tells its reviewer, in the spawn prompt, do NOT post" ||
+	fail "/pr-iterate step 2 does not tell its reviewer in the spawn prompt not to post — its review would end with no recorded raises"
+# The reviewer's own raise quotes what it types as the relay's does (review
+# of PR #374, the raise line): data.where is forge data, and the reason is
+# the finding summarised, never a line pasted into the quotes.
+own_raise=$(t_trace_lines "$RP" | grep -F 'kind=finding.raise' | grep -vF 'data.via=relay')
+for tok in "data.where='<file:line>'" "reason='<the finding, in your words>'"; do
+	printf '%s\n' "$own_raise" | grep -qF -- "$tok" && pass "/review-pr's own raise carries $tok" ||
+		fail "/review-pr's own raise does not carry $tok — an unquoted path or a pasted line breaks the emit"
+done
+# A relayed raise was posted by the relay: it carries data.posted=yes.
+t_trace_lines "$RP" | grep -F 'kind=finding.raise' | grep -F 'data.via=relay' | grep -qF 'data.posted=yes' &&
+	pass "the relayed raise carries data.posted=yes — the relay posts the report whole" ||
+	fail "the relayed raise carries no data.posted=yes — the retro would count it as recorded before the key existed"
 printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
 	pass "a human's dismissal message is quoted or summarised — data, never pasted" ||
 	fail "/pr-iterate's dismissal does not say a human's words are quoted or summarised (agent trust boundary)"
