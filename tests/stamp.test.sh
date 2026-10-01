@@ -13,7 +13,8 @@
 #   2  a refused value: NOTHING on stdout, the reason on stderr, and the
 #      refused line never printed anywhere — it is the ticket's text;
 #   3  no stamp lines: an old ticket, not a refusal — stdout empty;
-#   4  the fetch failed, after one retry — never read as a missing line.
+#   4  the fetch failed, after one retry — never read as a missing line;
+#   5  too many stamp lines — more than 8 of one key: a stop, stdout empty.
 #
 # The tracker's CLI is a STUB `gh` on PATH, so every body here is a fixture
 # and nothing touches the network. What is asserted is the verdict through
@@ -372,6 +373,73 @@ s_assert_status 3 "a policy that declares no tier: the Tier: line is never check
 	fail "…stdout should be empty, got '$S_OUT'"
 s_assert_err_has "the tier line names a field this project's policy does not declare"
 s_assert_err_lacks "touch PWN"
+
+# ---------------------------------------------------------------------------
+banner "Exit 5 — too many stamp lines: the lift is bounded, per key"
+# ---------------------------------------------------------------------------
+# The lift reads by KEY, and the checker's work is linear in the lines it is
+# handed: a body carrying 2,000 `Tier:` lines cost about 30 CPU-seconds and
+# came back at exit 0 with all 2,000 printed (PR #382). The script lifts at
+# most 8 lines of any one key — enough that a field written twice with two
+# values still reaches the checker and is refused — and a body with more is a
+# stop of its own: exit 5, nothing printed, stderr naming the key and the
+# count, never the lines.
+#
+# stamp_cpu_ms — the CPU milliseconds of one run of the script on the current
+# fixture, user plus system of its children as the shell's `times` reports it
+# (tests/vocab.test.sh's form: CPU time, never the wall clock, so a loaded
+# host cannot redden it), or "unmeasured".
+stamp_cpu_ms() {
+	(
+		cd "$SCRATCH" || exit 2
+		sh "$STAMP" 331 >/dev/null 2>&1
+		times
+	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
+}
+STAMP_BOUND_MS=2000 # one run on 2,000 Tier: lines; unbounded it cost ~30,000
+awk 'BEGIN { for (i = 0; i < 2000; i++) print "Tier: implementer" }' >"$SCRATCH/body"
+echo 0 >"$SCRATCH/fails-left"
+stamp 331
+s_assert_status 5 "2,000 Tier: lines: exit 5, too many stamp lines — not a refusal, not a stamp"
+[ -z "$S_OUT" ] && pass "2,000 Tier: lines: nothing on stdout" ||
+	fail "2,000 Tier: lines: stdout should be empty, got $(printf '%s' "$S_OUT" | grep -c '') line(s)"
+s_assert_err_has "too many stamp lines"
+s_assert_err_has "2000 tier lines"
+s_assert_err_lacks "implementer"
+s_assert_err_lacks "refused"
+cpu_ms=$(stamp_cpu_ms)
+case $cpu_ms in
+*[!0-9]* | "") fail "2,000 Tier: lines — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+*)
+	[ "$cpu_ms" -le "$STAMP_BOUND_MS" ] && pass "2,000 Tier: lines cost ${cpu_ms}ms of CPU — within ${STAMP_BOUND_MS}ms" ||
+		fail "2,000 Tier: lines cost ${cpu_ms}ms of CPU — over the ${STAMP_BOUND_MS}ms budget"
+	;;
+esac
+
+# The bound is per key, whatever its case: nine lines of one key spelled
+# three ways are nine lines of that key.
+body 'Tier: implementer\ntier: implementer\nTIER: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\n  Tier: implementer\n'
+stamp 331
+s_assert_status 5 "nine Tier: lines in three cases: exit 5"
+s_assert_err_has "9 tier lines"
+[ -z "$S_OUT" ] && pass "nine Tier: lines: nothing on stdout" || fail "nine Tier: lines: stdout should be empty, got '$S_OUT'"
+
+# Eight of one key is within the bound, and reaches the checker: eight equal
+# lines pass, and eight carrying two values are refused together, exit 2.
+body 'Tier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nConfidence: high\nDomain: code\n'
+stamp 331
+s_assert_status 0 "eight Tier: lines, one value: within the bound, checked, exit 0"
+body 'Tier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: planner\n'
+stamp 331
+s_assert_status 2 "eight Tier: lines, two values: within the bound, so the checker refuses them, exit 2"
+s_assert_err_has "the stamp lines are refused together"
+
+# Eight of each of the three keys is twenty-four lines, and within the bound:
+# it is per key, never a total.
+body "$(awk 'BEGIN { for (i = 0; i < 8; i++) printf "Tier: implementer\\nConfidence: high\\nDomain: code\\n" }')"
+stamp 331
+s_assert_status 0 "eight lines of each key: the bound is per key, never a total — exit 0"
 
 # ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"
