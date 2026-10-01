@@ -31,16 +31,10 @@
 # absence is recorded, outcome=fail and no partial sum, with the wait it gave
 # in data.waited_ms.
 #
-# A PHANTOM STOP WRITES NOTHING (ticket #344). A payload whose transcript does
-# not exist is not waited for and not recorded: every measured stop found its
-# file already there, and in the kit's own trace every stop that named a missing
-# file named one that never appeared — 1,418 of 1,614 stops in one retro window,
-# about one every 30 seconds of a long session, under agent ids no transcript
-# holds. No subagent's work stands behind one, so an event would only dilute
-# every rate /retro reads off the agent.stop count; the adapter README records
-# why the shape is no event rather than a new outcome word. A file that EXISTS
-# and cannot be read is a real stop whose usage is lost: outcome=fail at once,
-# naming that cause — it would never "become final", so it is not polled.
+# A PHANTOM STOP WRITES NOTHING (ticket #344): a transcript that does not
+# exist is neither waited for nor recorded — the adapter README says why. One
+# that EXISTS and cannot be read is a real stop whose usage is lost:
+# outcome=fail at once, naming the cause, since it would never become final.
 #
 # Exits 0 unconditionally and says nothing on stdout; stderr stays loud, which
 # is where a trace error belongs. See hook.lib.sh.
@@ -81,23 +75,23 @@ if [ -n "$hook_wait_bad" ]; then
 	set -- "$@" data.wait_refused="$hook_wait_bad"
 fi
 
-if [ -n "$transcript" ] && [ ! -e "$transcript" ] && [ ! -h "$transcript" ]; then
+if [ -z "$transcript" ]; then
+	hook_trace emit kind=agent.stop \
+		reason="the payload named no subagent transcript, so no tokens were read" "$@"
+elif [ ! -e "$transcript" ] && [ ! -h "$transcript" ]; then
 	: # a phantom: no event (see the header)
-elif [ -n "$transcript" ] && { [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; }; then
+elif [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; then
 	hook_trace emit kind=agent.stop outcome=fail \
 		reason="the subagent transcript exists but cannot be read as a file, so no tokens were read: $transcript" "$@"
-elif [ -n "$transcript" ] && [ -n "$hook_wait_ms" ]; then
+elif [ -n "$hook_wait_ms" ]; then
 	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
 		hook_tokens "$transcript" agent.stop "$@" data.waited_ms="$waited"
 	else
 		hook_trace emit kind=agent.stop outcome=fail data.waited_ms="$waited" \
 			reason="the subagent transcript did not end on a final message within the ${hook_wait_ms} ms bound, so no tokens were read — a partial sum would be an undercount" "$@"
 	fi
-elif [ -n "$transcript" ]; then
-	hook_tokens "$transcript" agent.stop "$@"
 else
-	hook_trace emit kind=agent.stop \
-		reason="the payload named no subagent transcript, so no tokens were read" "$@"
+	hook_tokens "$transcript" agent.stop "$@"
 fi
 
 exit 0
