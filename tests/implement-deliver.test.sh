@@ -227,9 +227,8 @@ assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "th
 # ... and the absence of one old sentence guards nothing a rewording cannot
 # walk around, so the POSITIVE rule is asserted: the broker is the only way a
 # dispatched report lands, the header's "post them yourself" belongs to the
-# in-session subagent, no sentence anywhere offers hand posting to a dispatched
-# reviewer, and whatever the skill says about posting the captured report by
-# hand sits after the no-broker clause and nowhere else.
+# in-session subagent and is the ONLY "post ... yourself" in the skill, and no
+# sentence anywhere offers hand posting to a dispatched reviewer.
 assert_file_has "$SKILL" "lands through the **broker** and no other way"
 assert_file_has "$SKILL" "post them yourself only when that subagent cannot reach the forge"
 if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$SKILL_ABS"; then
@@ -237,14 +236,31 @@ if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$S
 else
 	pass "no sentence offers hand posting to a dispatched reviewer"
 fi
-_nobroker=$(offset_of 'No broker named by the root manual')
-_hand=$(LIT='the captured report' awk 'BEGIN { lit = ENVIRON["LIT"] }
-	{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "$SKILL_ABS")
-if [ -n "$_nobroker" ] && { [ -z "$_hand" ] || [ "$_hand" -gt "$_nobroker" ]; }; then
-	pass "the captured report is spoken of only after the no-broker clause (offset $_nobroker)"
+_yourself=$(grep -oE 'post [a-z ]*yourself' "$SKILL_ABS" | grep -c '')
+if [ "$_yourself" -eq 1 ]; then
+	pass "the in-session subagent's is the only 'post ... yourself' in the skill"
 else
-	fail "the captured report is handled before, or without, the no-broker clause — nobroker='$_nobroker' first mention='$_hand'"
+	fail "the skill says 'post ... yourself' $_yourself times — only the in-session subagent's sentence may"
 fi
+# Operator decision on PR #322 (M-2, option c): a project whose root manual
+# names no broker gets NO dispatched review — the review step falls back to the
+# in-session reviewer and the report says no cross-vendor review ran. A
+# credentialed session posting an unvalidated worker report is the
+# untrusted-content-to-forge path ADR-0009 closes, so the skill never offers
+# hand posting as the gap-filler it once was.
+_clause=$(grep -oE 'No broker named by the root manual[^.]*\.' "$SKILL_ABS")
+case "$_clause" in
+*'in-session'*'no cross-vendor review ran'*)
+	pass "the no-broker clause falls back to the in-session reviewer and reports that no cross-vendor review ran" ;;
+*) fail "the no-broker clause does not fall back in-session and say no cross-vendor review ran: '$_clause'" ;;
+esac
+assert_file_lacks "$SKILL" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
+assert_file_lacks "$SKILL" "post the captured report" "the captured report is never the session's to post"
+# The same rule for the dispatcher's "harness not reachable" exit (69): like
+# the no-harness exit (3), stdout is the model id and the in-session spawn is
+# the review — the skill names both as the working cases, and says so.
+assert_file_has "$SKILL" "not reachable from here"
+assert_file_has "$SKILL" "two working cases"
 # The shipped skill names no kit-only file: bootstrap deletes them, and a
 # consumer following the line would run nothing.
 assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
