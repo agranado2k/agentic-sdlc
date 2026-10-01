@@ -330,8 +330,7 @@ bad=$(unlifted "$KIT")
 BAIT="$SCRATCH/lift-bait"
 bait_reset() {
 	rm -rf "$BAIT"
-	for f in scripts/stamp.sh .agents/skills/pr-iterate/SKILL.md .agents/skills/to-tickets/SKILL.md \
-		.agents/skills/dogfood/SKILL.md; do
+	for f in $(printf '%s\n' "$LIFTED" | sed 's/@@.*//' | sort -u); do
 		mkdir -p "$BAIT/$(dirname "$f")" && cp "$KIT/$f" "$BAIT/$f"
 	done
 }
