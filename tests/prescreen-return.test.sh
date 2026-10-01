@@ -677,6 +677,12 @@ assert_file_lacks "$FLAT" "cannot change between" "no stronger than the claim: a
 
 hold_prescreen dogfood "$DOGFOOD" "the output read" "say so in the report"
 FLAT="$SCRATCH/dogfood.flat"
+# The reader step keeps the file's 78-column wrap (review of PR #440, L on line
+# 96): a paragraph re-wrapped by hand is held to the style it claims.
+reader_lines=$(awk '/^\*\*A tool-restricted subagent reads/ { on = 1 } on && /^$/ { exit } on' "$DOGFOOD")
+over=$(printf '%s\n' "$reader_lines" | LC_ALL=C awk 'length > 78 { print length; exit }')
+[ -z "$over" ] && pass "/dogfood — the reader step is wrapped at 78 columns, the file's style" ||
+	fail "/dogfood — the reader step has a line of $over columns; the file wraps at 78"
 assert_file_has "$FLAT" "\`yes\` is the finding this section has always described" "yes is the prompt-injection finding, not a new decision"
 assert_file_has "$FLAT" "report it as a prompt-injection surface, by its evidence span" "how command-shaped output is surfaced"
 assert_file_has "$FLAT" "the ordinary read of the output" "no is followed by the ordinary read"

@@ -1066,8 +1066,10 @@ t_sh_fence() {
 # not a restriction — and documents a path through the agent CLI that does
 # withhold, run from the scratch directory so the text and the return file
 # are the reader's whole reach. So the step names that path first and the
-# prompt-restricted subagent second, as the fallback, which keeps the duty the
-# fence has always carried: the <say-so words>. The adapter names the
+# prompt-restricted subagent second, as the fallback — taken where the adapter
+# documents no path, or where the run through it fails (review of PR #440,
+# M-3) — and the fallback keeps the duty the fence has always carried, the
+# <say-so words>, and says which of the two it was. The adapter names the
 # command; the skill names none — skills ship unstamped and name no vendor —
 # so a flag planted in the skill goes red, whatever its case and whether or
 # not a code span wraps it (review of PR #440, M-4). One copy, for the two
@@ -1090,9 +1092,24 @@ t_hold_reader_step() {
 	*"fall back"*"prompt"*) pass "${_hr_p}…and the prompt-restricted subagent is the fallback, named second" ;;
 	*) fail "${_hr_p}the reader step names no fallback to a prompt-restricted subagent" ;;
 	esac
+	# The fallback's two triggers, both named before it: the adapter documents
+	# no path, or the run through the path fails. A run that fails is not a
+	# path that exists; "where no such path exists" alone left it uncovered.
+	case ${_hr_reader%%fall back*} in
+	*"documents no such path"*) pass "${_hr_p}…taken where the adapter documents no such path" ;;
+	*) fail "${_hr_p}the fallback's first trigger is unnamed — it is taken where the adapter documents no such path" ;;
+	esac
+	case ${_hr_reader%%fall back*} in
+	*"the run through it fails"*) pass "${_hr_p}…or where the run through it fails" ;;
+	*) fail "${_hr_p}the fallback's second trigger is unnamed — a run through the restricted path that fails falls back too" ;;
+	esac
 	case ${_hr_reader#*fall back} in
 	*"$_hr_duty"*) pass "${_hr_p}…which keeps its say-so duty: $_hr_duty" ;;
 	*) fail "${_hr_p}the fallback lost its duty — a prompt-restricted read must $_hr_duty" ;;
+	esac
+	case ${_hr_reader#*fall back} in
+	*"which of the two"*) pass "${_hr_p}…and says which of the two triggers it was" ;;
+	*) fail "${_hr_p}the say-so does not say which trigger was taken — no path documented, or a run that failed" ;;
 	esac
 	case $_hr_reader in
 	*"the adapter names the command"*) pass "${_hr_p}the adapter names the command; the skill names none" ;;
