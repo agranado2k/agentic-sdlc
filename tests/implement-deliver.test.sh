@@ -243,7 +243,38 @@ stamp_has "no autonomy decision reads it" "a confidence is not a permission"
 # refused tier's path now — stop, /to-tickets re-stamps — and the MISSING line
 # keeps its own: not a blocker, for a ticket written before the stamp existed.
 stamp_has "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes"
-stamp_has "never read as \`low\`" "stop-on-refused-confidence: no silent mapping onto a declared value"
+# The headline alone is green on a sentence that goes on to say the opposite
+# (local review of this PR, H-1): the words that carry the ruling are held
+# one by one, inside the sentence that states it — cut from its first word to
+# the missing-line sentence that follows — and the probe is driven by three
+# weakened copies that each have to go red: the tier left standing, the stop
+# turned into a carry-on, and the value remapped onto a declared one.
+conf=$(printf '%s\n' "$stamp" | sed -n 's/.*\(A refused \*confidence\*.*\) A missing `Confidence:`.*/\1/p')
+[ -n "$conf" ] && pass "the refused-confidence sentence is cut out of the bullet, up to the missing-line sentence" ||
+	fail "no sentence runs from 'A refused *confidence*' to 'A missing \`Confidence:\`' — nothing to hold the ruling's words to"
+# stop_on_refused_confidence <sentence> — exit 0 only when every load-bearing
+# word of the ruling is in it; prints the first one that is not.
+stop_on_refused_confidence() {
+	for _w in "stop" "report the line as written" "\`/to-tickets\` to re-stamp" "does not stand on its own" "never read as \`low\`, or as any declared one"; do
+		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
+	done
+}
+for word in "stop" "report the line as written" "\`/to-tickets\` to re-stamp" "does not stand on its own" "never read as \`low\`, or as any declared one"; do
+	printf '%s\n' "$conf" | grep -qF -- "$word" && pass "'$word' — stop-on-refused-confidence, in the sentence that rules it" ||
+		fail "the refused-confidence sentence never says '$word' — the ruling lost a load-bearing word"
+done
+# weakened <name> <sed expression over the sentence> — the copy must differ
+# from the subject (or the bait is the subject), and the probe must refuse it.
+weakened() {
+	_m=$(printf '%s\n' "$conf" | sed "$2")
+	[ "$_m" != "$conf" ] || { fail "mutant '$1' left the sentence unchanged — the bait is the subject"; return; }
+	_miss=$(stop_on_refused_confidence "$_m") &&
+		fail "mutant '$1' passes every word — the assertions are green on weakened wording" ||
+		pass "mutant '$1' is red — it lost '$_miss'"
+}
+weakened "the tier left standing" 's/does not stand on its own/stands on its own/'
+weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
+weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
 stamp_lacks "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
 stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A confidence with no tier to qualify (PR #311, L-2): the missing-tier default
