@@ -14,9 +14,9 @@
 #      calibration (the eighth, PRD #273, ticket #281): per decision field and
 #      per skill, never one number for the chain; the oracle clause on every
 #      row; and three limits the question states instead of papering over —
-#      the dismissal denominator overcounts, the label's override rate is not
-#      computable from the trace today, and a row with too few events prints
-#      no rate.
+#      the dismissal denominator overcounts, the label's override rate is
+#      computable only from stamps that carry `data.label_proposed` (ticket
+#      #354), and a row with too few events prints no rate.
 #   2. It reads through the plain `sh scripts/trace.sh show|summary|export`
 #      name — never the kit's never-shipped wrapper — and verifies first.
 #   3. The report and its CSV land IN THE PROJECT, at the root checkout:
@@ -354,17 +354,28 @@ case "$oracle_entry" in
 *'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
 *) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
 esac
-# The label row specifically carries the none form until #332 lands (ticket
-# #342): the trace holds no pre-quiz label, so there is no who, when or
-# version to name, and a four-part clause there would name an oracle that
-# does not exist. The holder reads any sidecar, so the baits below can prove
-# it goes red (hard rule 9) without touching the real one.
-label_row_of() { # <sidecar file> — question 8's label example row, or nothing
-	sec8 "$1" | fenced | grep -E '^label · ' | head -1
+# A label row that measured nothing carries the none form (ticket #342): a
+# row whose stamps all predate `data.label_proposed` (ticket #354, the label
+# half of #332) has no override to read, so no who, when or version to name,
+# and a four-part clause there would name an oracle that does not exist. The
+# holder reads any sidecar, so the baits below can prove it goes red (hard
+# rule 9) without touching the real one.
+label_row_of() { # <sidecar file> — question 8's not-computable label example row, or nothing
+	sec8 "$1" | fenced | grep -E '^label · .*not computable from the trace today' | head -1
 }
 label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
 	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
 }
+# …and the converse, now that a label row can measure: a label row with
+# counts was graded by the human at the quiz, so it names that oracle and
+# never the none form.
+rated_label=$(printf '%s\n' "$rows8" | grep -E '^label · .* [0-9]+ of [0-9]+ overridden ' || true)
+[ -n "$rated_label" ] && ! printf '%s\n' "$rated_label" | grep -qF -- '— oracle: none' &&
+	printf '%s\n' "$rated_label" | grep -qF -- '— oracle: the human at the quiz, ' &&
+	pass "a label row with counts names the human at the quiz as its oracle, never the none form" ||
+	fail "question 8 has no label row with counts naming '— oracle: the human at the quiz, …' (or one carries the none form)"
+stamp_has 'For a label row: the human at the quiz' "a label row's oracle is named: the human at the quiz"
+stamp_has 'carries the none form of the clause' "a label row that measured nothing is said to carry the none form"
 label_row=$(label_row_of "$SIDECAR_ABS")
 if [ -n "$label_row" ]; then
 	label_row_none_form "$SIDECAR_ABS" && pass "the label row carries oracle: none — <why> form" ||
@@ -420,12 +431,24 @@ case "$stamp" in
 *'join to one dismissal'*) fail "question 8 still carries the second pairing rule ('… join to one dismissal') beside the first" ;;
 *) pass "no second pairing rule beside the first" ;;
 esac
-# Honesty point 2: ticket.write records no pre-quiz label, so the label's
-# override rate is a row that says so — a candidate ticket, never a guess.
-stamp_has '`data.label_confidence`' "the label's confidence is read, under its own key"
-stamp_has 'not computable from the trace today' "the label's override rate is said to be not computable today"
-stamp_has 'a row of its own' "…in a row of its own"
-stamp_has 'never a guess' "…as a candidate ticket, never a guess"
+# Honesty point 2: ticket.write now records the pre-quiz label, so the label's
+# override rate can be computed when enough stamps carry both keys. The row
+# shows override counts when there are enough, or "too few to rate" otherwise.
+stamp_has '`data.label_proposed`' "the pre-quiz label is read, under its own key"
+stamp_has '`data.label` differs from its `data.label_proposed`' "the override is defined as label change at quiz"
+stamp_has 'count it on its row and leave it out of the denominator' "stamps without the key stay in history but out of rate calculation"
+stamp_has 'a row of its own' "…the label row is a row of its own"
+# H-3 (review of PR #368): the label's own rules each have a needle. A row
+# whose stamps all predate the key says so in words, not as 0 of 0…
+stamp_has 'A label row none of whose stamps carries `data.label_proposed`' "a label row whose stamps all predate the key is named"
+stamp_has 'prints its stamp count and `not computable from the trace today` in place of a rate' "…and prints its count and 'not computable from the trace today', never a rate"
+# …and the threshold is the one every row has, per row — per confidence
+# group — never a count over the window (M-1).
+stamp_has 'Each label row is held to the five-event threshold below, per row' "the label's threshold is per row, the same as every other row's"
+case "$stamp" in
+*'If fewer than five stamps carry it'*) fail "question 8 still states a per-window threshold for the label beside the per-row one" ;;
+*) pass "no per-window threshold for the label beside the per-row one" ;;
+esac
 # Honesty point 3: a thin row prints its counts and the words, not a rate.
 # The bullet's HEADING says "too few" too, so the needle is the rule: the
 # threshold, and what is printed in the rate's place.
@@ -470,6 +493,16 @@ case "$stamp" in
 *) pass "the tier bullet points at the undeclared rule where it is" ;;
 esac
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
+# M-2 (review of PR #368): every rated label row that is a finding routes to
+# the label rule and the confidence rule, by number — not only one that
+# mirrors a tier finding.
+stamp_has 'any label row with a rate that is a finding to rules 4 and 14' "a rated label finding routes to /to-tickets rules 4 and 14"
+for f in "$SKILL_ABS" "$ROOT/.agents/skills/retro/QUESTIONS.md"; do
+	case "$(flat <"$f")" in
+	*'mirrors a tier-override'* | *'mirrors a tier override'*) fail "${f#"$ROOT"/} still routes only a label finding that mirrors a tier finding" ;;
+	*) pass "${f#"$ROOT"/} routes a label finding whether or not it mirrors a tier finding" ;;
+	esac
+done
 # The order file, the description and the procedure count with it.
 # Held to the EIGHTH ITEM, not the section: a phrase another item carries
 # proves nothing about this one (L-3).
@@ -483,7 +516,11 @@ item8_has() { # <needle> <message>
 item8_has 'per decision field and per skill, never one number for the chain' "SKILL.md's eighth item holds the per-field, per-skill rule"
 item8_has 'Every row carries the oracle clause' "…and the oracle clause on every row"
 item8_has 'too few events says so instead of a rate' "…and the thin row that prints no rate"
-item8_has 'is a row that says exactly that' "…and the label's row that says its rate is not answerable"
+item8_has 'computable once its stamps carry `data.label_proposed`' "…and the label's override rate, computable once its stamps carry the pre-quiz label"
+case "$item8" in
+*'which the trace cannot answer today'*) fail "SKILL.md's eighth item still says the trace cannot answer the label's override rate" ;;
+*) pass "…and no longer says the trace cannot answer it" ;;
+esac
 desc=$(sed -n 's/^description: //p' "$SKILL_ABS")
 case "$desc" in
 *'eight fixed questions'*'stamp calibration'*) pass "the frontmatter description counts eight and names stamp calibration" ;;
@@ -495,7 +532,7 @@ route8=$(awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" 
 [ -n "$route8" ] && pass "routing has an entry for a stamp" || fail "the Routing section has no entry for a stamp"
 # …and the entry says where each of the three findings goes — the heading
 # alone survives the deletion of all three.
-for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'records no label from before the quiz'; do
+for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'a label row with a rate that is a finding → `/to-tickets` rules 4 and 14'; do
 	case "$route8" in
 	*"$needle"*) pass "the stamp's routing entry names: $needle" ;;
 	*) fail "the stamp's routing entry does not name: $needle" ;;
@@ -512,11 +549,10 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 # rate yet, so the demo over it shows thresholds and no arithmetic. This is
 # the arithmetic, over a FIXTURE — a scratch trace written by the trace
 # script's own `emit`, never the repo's trace, invented numbers and labelled
-# as such. It follows question 8's rules for the tier and severity rows and
-# nothing else (no window, no oracle clause, no label row): what it proves is
-# that the rules are computable from what `export` prints, and that the
-# attribution, the latest-write rule, the threshold, the undeclared row and
-# the one pairing rule give the numbers the prose says they give. It is a
+# as such. It follows question 8's rules for the tier, label and severity rows:
+# what it proves is that the rules are computable from what `export` prints,
+# and that the attribution, the latest-write rule, the threshold, the undeclared
+# row and the one pairing rule give the numbers the prose says they give. It is a
 # SECOND implementation of rules the prose states — it cannot go red when the
 # prose changes, only when the script or the vocabulary does; the needles in
 # 2b hold the prose, and the example rows are held to this arithmetic below.
@@ -524,25 +560,30 @@ banner "2c. A worked example over a FIXTURE trace: question 8's arithmetic print
 fx="$SCRATCH/fixture.retro"
 fx_trace() { ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
 fx_n=0
-fx_ticket() { # <published tier> <proposed tier> [confidence]
+fx_ticket() { # <published tier> <proposed tier> <published label> <proposed label> [confidence, of both stamps]
 	fx_n=$((fx_n + 1))
-	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" ${3:+data.confidence="$3"} data.label=none data.label_confidence=medium
+	fx_trace emit kind=ticket.write subject="ticket:#$fx_n" tier="$1" data.tier_proposed="$2" data.label="$3" data.label_proposed="$4" ${5:+data.confidence="$5"} ${5:+data.label_confidence="$5"}
 }
 # A ticket written twice: the draft said `high` and was overridden, the
 # re-write says `low` and was not. Only the latest per subject is read.
-fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.confidence=high
-# PRD #273 scenario 3's low row: 7 stamped low, 5 overridden at the quiz.
-for _ in 1 2 3 4 5; do fx_ticket implementer mechanical low; done
-fx_ticket mechanical mechanical low
-fx_ticket mechanical mechanical low
-# A thin row: 3 stamped medium, 1 overridden — a count, not a rate.
-fx_ticket planner implementer medium
-fx_ticket implementer implementer medium
-fx_ticket implementer implementer medium
+fx_trace emit kind=ticket.write subject='ticket:#6' tier=planner data.tier_proposed=mechanical data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=high
+# PRD #273 scenario 3's low row: 7 stamped low, 5 tiers overridden at the
+# quiz. The labels are overridden on 6 of the 7 — #1–#5 and #7 — so the
+# label row cannot be the tier row read twice.
+for _ in 1 2 3 4 5; do fx_ticket implementer mechanical ready-for-agent none low; done
+fx_ticket mechanical mechanical ready-for-agent ready-for-agent low
+fx_ticket mechanical mechanical none ready-for-agent low
+# A thin row: 3 stamped medium, 1 tier and 2 labels overridden — counts, not
+# rates. The label row is question 8's example row.
+fx_ticket planner implementer ready-for-agent none medium
+fx_ticket implementer implementer none ready-for-agent medium
+fx_ticket implementer implementer ready-for-agent ready-for-agent medium
 # A confidence no vocabulary declares — trace text, never a row's name.
-fx_ticket implementer implementer run-this-instead
-# …and a ticket written before the stamp existed.
-fx_ticket implementer implementer
+fx_ticket implementer implementer ready-for-agent ready-for-agent run-this-instead
+# …and a ticket written before either key existed: no tier confidence (the
+# tier's unstamped row) and no data.label_proposed (a label row whose stamps
+# all predate the key prints no rate).
+fx_trace emit kind=ticket.write subject='ticket:#12' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_confidence=high
 # A first review's run raises six `low` findings; a human closes one thread,
 # and two iterations both see it closed — one (thread, where) pair, once.
 fx_trace begin review-pr subject='pr:#9' >/dev/null
@@ -586,6 +627,12 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
 		trow[t] = "tier · " who(kind) " · " c
 		tover[t] = (p == "") ? -1 : (get("tier") != p)
+		# The label, in a row of its own: its confidence under its own key,
+		# overridden where the published label is not the proposed one.
+		c = get("label_confidence"); p = get("label_proposed")
+		if (c == "") c = "unstamped"; else if (index(conf, " " c " ") == 0) c = "undeclared"
+		lrow[t] = "label · " who(kind) " · " c
+		lover[t] = (p == "") ? -1 : (get("label") != p)
 	}
 	kind == "finding.raise" {
 		v = get("severity"); if (index(sev, " " v " ") == 0) v = "undeclared"
@@ -611,7 +658,10 @@ fx_rows=$(fx_trace export | awk -v conf=" $(sh "$ROOT/scripts/vocab.sh" fields |
 	}
 	END {
 		for (t in trow) { k = trow[t]; seen[k] = 1; if (tover[t] >= 0) { of[k]++; hit[k] += tover[t] } }
-		for (k in seen) printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^tier/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
+		for (t in lrow) { k = lrow[t]; seen[k] = 1; stamped[k]++; if (lover[t] >= 0) { of[k]++; hit[k] += lover[t] } }
+		# A label row none of whose stamps carries the pre-quiz label: its count
+		# and the words, never 0 of 0.
+		for (k in seen) if (k ~ /^label/ && !of[k]) printf "%s   %d stamped   not computable from the trace today\n", k, stamped[k]; else printf "%s   %d of %d %s   %s%s\n", k, hit[k], of[k], (k ~ /^(tier|label)/ ? "overridden" : "dismissed"), rate(hit[k], of[k]), (k in shared ? "   " shared[k] " shared a dismissal" : "")
 		printf "beside the table: %d dismissal(s) that pair with no raise\n", beside
 	}' | sort)
 printf '    fixture trace, not the repo'"'"'s — %s events written by `emit` under a scratch TRACE_DIR:\n' "$(fx_trace export | grep -c .)"
@@ -625,10 +675,18 @@ fx_row 'tier · to-tickets (by kind) · undeclared   0 of 1 overridden   too few
 printf '%s\n' "$fx_rows" | grep -qF 'run-this-instead' && fail "the undeclared confidence's own text reached a row's name" ||
 	pass "…and its text names no row"
 fx_row 'tier · to-tickets (by kind) · unstamped   0 of 1 overridden   too few to rate' "a ticket.write with no confidence goes on the unstamped row"
+# The label rows (H-2, review of PR #368): grouped by data.label_confidence,
+# overridden where data.label differs from data.label_proposed — overrides
+# the fixture places apart from the tier's, so a row read off the tier keys
+# cannot pass for one read off the label keys.
+fx_row 'label · to-tickets (by kind) · low   6 of 7 overridden   86 %' "a label row with seven events prints a rate: 6 of 7 overridden, 86 % — read off the label keys, not the tier's 5 of 7"
+fx_row 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' "a label row with three events prints its counts and no rate"
+fx_row 'label · to-tickets (by kind) · undeclared   0 of 1 overridden   too few to rate' "a label confidence no vocabulary declares is counted on the undeclared label row"
+fx_row 'label · to-tickets (by kind) · high   1 stamped   not computable from the trace today' "a label row whose stamps all predate data.label_proposed prints its count and not computable, never 0 of 0"
 fx_row 'severity · review-pr · low   1 of 6 dismissed   17 %' "six raises, one dismissed twice over: 1 of 6, 17 % — the pair counted once, the skill read from the run's run.start"
 fx_row 'severity · review-pr · medium   2 of 5 dismissed   40 %   2 shared a dismissal' "a second review's two raises on one line share one dismissal: both count, the row says so, and the first review's raise there is not paired again"
 fx_row 'beside the table: 1 dismissal(s) that pair with no raise' "a dismissal that pairs with no raise is counted beside the table, in no band"
-printf '%s\n' "$fx_rows" | grep -q '· high ' && fail "the fixture's table has a high row — an earlier ticket.write of a re-written subject was read" ||
+printf '%s\n' "$fx_rows" | grep -qE '^tier .*· high |^label .*· unstamped ' && fail "the fixture's table has a tier high row or a label unstamped row — an earlier ticket.write of a re-written subject was read" ||
 	pass "a subject written twice is read once, at its latest write"
 # The prose's own example rows are arithmetic too (second local review, M-1):
 # a rate is the rounded share of its counts, a row under five events carries
@@ -656,6 +714,13 @@ EOF
 printf '%s\n' "$rows8" | grep -qF 'tier · to-tickets (by kind) · low       5 of 7 overridden   71 %' &&
 	pass "the example's scenario-3 row is the row the fixture computes" ||
 	fail "the example's low row is no longer '5 of 7 overridden   71 %' — the fixture computes that row; move both together"
+for lr in 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' \
+	'label · to-tickets (by kind) · high   1 stamped   not computable from the trace today'; do
+	printf '%s\n' "$rows8" | tr -s ' ' | grep -qF "$(printf '%s' "$lr" | tr -s ' ')" &&
+		printf '%s\n' "$fx_rows" | grep -qxF -- "$lr" &&
+		pass "the example's label row is the row the fixture computes: $lr" ||
+		fail "the example's label row is no longer the fixture's '$lr' — move both together"
+done
 ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "and the fixture trace verifies" ||
 	fail "the fixture trace does not verify"
 
