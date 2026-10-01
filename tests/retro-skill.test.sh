@@ -1140,4 +1140,39 @@ case "$q7_line" in
 *) fail "SKILL.md's question 7 does not name the unasked verdict" ;;
 esac
 
+
+# ---------------------------------------------------------------------------
+banner "11. Question 7 counts a delegated train's verdict apart from the operator's (ticket #385)"
+# ---------------------------------------------------------------------------
+# Retro G3: fifteen train verdicts, all written under a standing instruction
+# that delegated every decision, and question 7 read them as the human's.
+# `feedback` now carries data.by=operator|train (ADR-0008, amended
+# 2026-10-01, #385); the question counts the two apart and a window whose
+# verdicts are all `train` is reported as no human verdict. Held the way
+# section 10 holds unasked: the seventh section's prose, Reads and Route
+# apart, flattened.
+sec7_prose=$(sec7 | awk '/^\*Reads:/ { r = 1 } /^Route:/ { x = 1 } (r || x) && /^$/ { r = x = 0; next } !r && !x' | flat)
+sec7_route=$(sec7 | awk '/^Route:/ { on = 1 } on && /^$/ { exit } on' | flat)
+sec7_reads=$(sec7 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat)
+q7_has '`data.by`' "question 7 reads data.by"
+q7_has '`operator`' "…names the operator's verdict"
+q7_has '`train`' "…and the train's"
+q7_has 'never the human'"'"'s verdict' "…says a train's verdict is never the human's"
+q7_has '`<n> operator, <m> train`' "…counts the two apart on the row: n operator, m train"
+q7_has 'no human verdict' "…and reports a window whose verdicts are all train as no human verdict"
+q7_has 'no `data.by`' "…and says what a feedback written before the key counts as"
+case "$sec7_reads" in
+*'`data.by`'*'`operator`'*'`train`'*) pass "the Reads paragraph lists data.by with its two words" ;;
+*) fail "the Reads paragraph does not list \`data.by\` as \`operator\` or \`train\`" ;;
+esac
+case "$sec7_route" in
+*'`train`'*) pass "question 7's route says where a window of train verdicts goes" ;;
+*) fail "question 7's Route line does not route the train's verdicts" ;;
+esac
+q7_line=$(awk '/^7\. \*\*Aim calibration\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat)
+case "$q7_line" in
+*'`train`'*'no human verdict'*) pass "SKILL.md's question 7 counts a train's verdict apart and names the window with no human verdict" ;;
+*) fail "SKILL.md's question 7 does not count a \`train\` verdict apart from the operator's as no human verdict" ;;
+esac
+
 t_done "/retro contract"

@@ -1012,4 +1012,70 @@ sed '/^- `unattributed` — /d' "$RP" >"$SCRATCH/bait-roster.md"
 roster_of "$SCRATCH/bait-roster.md" | grep -qx unattributed && fail "bait: withdrawing a roster row changed nothing — the roster is not read from the list" ||
 	pass "bait: a roster row withdrawn from the list is gone from the roster the holder reads"
 
+
+# ---------------------------------------------------------------------------
+banner "16. A feedback event says who answered: the operator, or a delegated train (#385)"
+# ---------------------------------------------------------------------------
+# Retro G3: fifteen train verdicts in one window, every one written under a
+# standing instruction that delegated every decision — the train judged
+# hit/adjusted itself and the event read exactly as a human's answer would,
+# so the next retrospective takes a delegated train's self-assessment for the
+# operator's verdict. The key is data.by, operator|train, on the train's one
+# feedback line; /pr-iterate's feedback is a human comment, always operator.
+MT=$(skill_md merge-train)
+PI=$(skill_md pr-iterate)
+mt_fb=$(t_trace_lines "$MT" | grep -F 'kind=feedback')
+printf '%s\n' "$mt_fb" | grep -qF 'data.by=operator|train' &&
+	pass "/merge-train's feedback line carries data.by=operator|train" ||
+	fail "/merge-train's feedback line does not carry data.by=operator|train — a delegated train's verdict reads as the operator's"
+pi_fb=$(t_trace_lines "$PI" | grep -F 'kind=feedback')
+printf '%s\n' "$pi_fb" | grep -qF 'data.by=operator ' &&
+	pass "/pr-iterate's feedback line carries data.by=operator" ||
+	fail "/pr-iterate's feedback line does not carry data.by=operator — its verdict is a human comment and says so"
+printf '%s\n' "$pi_fb" | grep -qw train &&
+	fail "/pr-iterate's feedback names train — it judges no slice itself, so operator is its only author" ||
+	pass "/pr-iterate's feedback never names train — operator is its only author"
+# The prose rule in step 4, every trace line removed (the line's own
+# alternation would satisfy a needle on its own): which word on which path,
+# and that unasked is still the train that judged nothing.
+step4=$(sed -n '/^### 4 /,/^### 5 /p' "$MT")
+step4_prose=$(printf '%s\n' "$step4" | grep -v 'sh scripts/trace\.sh' | tr '\n' ' ' | tr -s ' ')
+s4_has() { case "$step4_prose" in *"$1"*) pass "$2" ;; *) fail "$2 — step 4's prose does not say: $1" ;; esac; }
+s4_has '`by=operator`' "step 4 names by=operator"
+s4_has 'a human who answered the question in this session' "…for a human who answered the question in this session"
+s4_has '`by=train`' "…and by=train"
+s4_has 'delegating instruction' "…for the train answering under a delegating instruction"
+s4_has 'never as the operator'"'"'s' "…and says the train's judgement is never written as the operator's"
+s4_has 'could ask nobody and judged nothing' "…while unasked stays the train that could ask nobody and judged nothing"
+printf '%s\n' "$step4_prose" | grep -qiE 'all `train`[^.]*no human verdict' &&
+	pass "and says a window whose verdicts are all train has no human verdict in it" ||
+	fail "/merge-train step 4 does not say a window of train verdicts is no human verdict"
+# The record decides the key, by a dated amendment and never an edit of the
+# old text; the #345 block above it stands untouched. $ADR8 is the record's
+# path, set in section 8.
+c1=$(awk '/^1\. \*\*One event per line/ { on = 1 } on && /^2\. / { exit } on' "$ADR8" 2>/dev/null)
+printf '%s\n' "$c1" | grep -qF '*Amended 2026-10-01 (#345):*' &&
+	pass "ADR-0008 clause 1 still carries the #345 amendment — amended, never edited" ||
+	fail "ADR-0008 clause 1 lost its '*Amended 2026-10-01 (#345):*' block — a record is amended, never rewritten"
+am2=$(printf '%s\n' "$c1" | awk '/\*Amended [0-9-]* \(#385\):\*/ { on = 1 } on')
+[ -n "$am2" ] && pass "clause 1 carries a dated amendment for #385" ||
+	fail "ADR-0008 clause 1 has no '*Amended <date> (#385):*' block — data.by is in a skill and not in the record"
+am2_flat=$(printf '%s\n' "$am2" | tr '\n' ' ' | tr -s ' ')
+for tok in '`data.by`' '`operator`' '`train`' 'no human verdict'; do
+	case "$am2_flat" in *"$tok"*) pass "the #385 amendment names $tok" ;; *) fail "the #385 amendment does not name $tok" ;; esac
+done
+am2_date=$(printf '%s\n' "$am2" | sed -n 's/.*\*Amended \([0-9-]*\) (#385):\*.*/\1/p' | tail -1)
+row=$(grep -F '| [0008]' docs/adr/INDEX.md)
+case $row in
+*"amended $am2_date (#385"*"data.by"*) [ -n "$am2_date" ] &&
+	pass "the index row for 0008 carries the #385 amendment's dated note ($am2_date)" ||
+	fail "the #385 amendment carries no date the index row could be held to" ;;
+*) fail "the index row for 0008 has no 'amended ${am2_date:-<no date>} (#385 …' note naming data.by: $row" ;;
+esac
+gl=$(awk '/^- \*\*Feedback\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on' docs/domain-glossary.md | tr '\n' ' ' | tr -s ' ')
+for tok in '`data.by`' '`operator`' '`train`'; do
+	printf '%s\n' "$gl" | grep -qF "$tok" && pass "the glossary's Feedback entry names $tok" ||
+		fail "the glossary's Feedback entry does not name $tok"
+done
+
 t_done "trace skills contract"

@@ -132,7 +132,7 @@ is the ticket it implemented):
 
 **Then ask the operator, once per landed PR — after the plan step, never
 before the merge** — whether the slice hit its target, and record the answer
-as the slice's verdict: `sh scripts/trace.sh emit kind=feedback subject=ticket:#<ticket> related=pr:#<N> outcome=hit|adjusted|missed|unasked reason='<the operator verdict in one line: what the slice taught, what gets re-cut; or, unasked, the instruction that made the train autonomous>' || :`.
+as the slice's verdict: `sh scripts/trace.sh emit kind=feedback subject=ticket:#<ticket> related=pr:#<N> outcome=hit|adjusted|missed|unasked data.by=operator|train reason='<the operator verdict in one line: what the slice taught, what gets re-cut; or, unasked, the instruction that made the train autonomous>' || :`.
 `hit` is the slice as planned; `adjusted` is the next slices re-cut on what
 this one taught; `missed` is a slice that did not do what it was for. This is
 the tracer bullet's adjust-aim record, the one the next slice is chosen from.
@@ -149,6 +149,18 @@ would close the reason's quotes and fail the emit in silence.
 and a reader counts an `unasked` landing as one the question never reached —
 a fact in the trace rather than silence, which no reader can tell from a
 train that forgot to ask.
+`data.by` says who answered. `by=operator` is a human who answered the
+question in this session, and only that; `by=train` is the train answering
+it itself under a delegating instruction — the operator said to decide
+every question without stopping, and the train judged the slice from the
+PR and the ticket. Delegation lets the train judge, but the judgement is
+recorded as the train's and never as the operator's: a delegated verdict
+carries `by=train`, and its reason says what the train read it from.
+`unasked` is still the train that could ask nobody and judged nothing — a
+loop drove it, no instruction said to decide — and carries `by=train` too,
+since the train wrote it. A reader counts the two apart: a window whose
+verdicts are all `train` has no human verdict in it, and the retrospective
+says so.
 
 ### 5 — After the batch
 

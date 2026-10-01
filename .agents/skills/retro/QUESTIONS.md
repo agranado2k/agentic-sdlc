@@ -175,8 +175,10 @@ is never reachable.
 
 *Reads: `feedback` — subject `ticket:#N`, `related` its `pr:#N`, `outcome`
 one of `hit`, `adjusted`, `missed` or `unasked` (the train's alone),
-`reason` the operator's words — emitted by `/merge-train` at landing and
-by `/pr-iterate` when a human comment changes the plan; joined to
+`data.by` one of `operator` or `train` (who gave the verdict: a human in
+the session, or the train under a delegating instruction), `reason` the
+answerer's words — emitted by `/merge-train` at landing and by
+`/pr-iterate` when a human comment changes the plan; joined to
 `ticket.write` for the tier and to the `skill` of the runs that built it.*
 
 - Per landed slice in the window: its verdict, if one was given. `hit` is
@@ -199,9 +201,21 @@ by `/pr-iterate` when a human comment changes the plan; joined to
   verdict given, and name the two apart on the row — `<n> unasked, <m>
   without a feedback event` — since the first is a question the train
   could not ask and the second one it never recorded asking.
+- Count the verdicts given by `data.by`. `operator` is a human's answer;
+  `train` is the train judging the slice itself under an instruction that
+  delegated the question — a self-assessment by the chain that built the
+  slice, never the human's verdict, and never evidence that the aim held.
+  Report the two apart on the row — `<n> operator, <m> train` — and a
+  window whose verdicts are all `train` as **no human verdict**: the
+  question reached nobody who was not already the train, so the row is
+  read with the landings that got none, not as a wave that hit. A
+  `feedback` with no `data.by` was written before the key existed; count it
+  as `<p> unattributed`, never as the operator's.
 
 Route: `/to-tickets` — the ordering rule or the tier rubric, with the misses
-as evidence; the missing verdicts and the `unasked` ones to `/merge-train`.
+as evidence; the missing verdicts and the `unasked` ones to `/merge-train`;
+a window of `train` verdicts to the operator who delegated them — no skill
+asks the question on their behalf.
 
 ## 8. Stamp calibration
 
