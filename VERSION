@@ -1175,8 +1175,136 @@
 # follow. tests/spec-skills.test.sh, tests/implement-deliver.test.sh,
 # tests/trace-skills.test.sh and tests/vocab-policy.test.sh hold the two
 # skills to it, the last by reading the tokens from the policy file.
+# 0.33.0 — a dispatched review lands through the broker, never by hand
+# (PRD #261).
+# NO file joins or leaves the shared layer, and NO shared script changes.
+# UPDATING.md changes content: the arriving-from paragraph for the release,
+# and both worked examples re-pin — Part 2 pins the diff stat of the
+# implement skill this moves. Riding the same tag, untagged on main since
+# 0.32.0: the pre-screen and the retro's eighth question (PRD #273's last
+# two tickets), eight trace-wave fixes found by using the trace (#335,
+# #343, #347, #349, #350, #351, #353, PR #359) and a confidence ruling
+# (#340) — enumerated below with the rest. The
+# broker itself is KIT-ONLY and never
+# shipped: scripts/forge-broker.kit.sh, its allow-list
+# scripts/forge-broker.kit.config.sh and tests/forge-broker.test.sh sit on
+# bootstrap.sh's kit-authoring deletion list, the same as tests/. What a
+# consumer takes is the two ROLES the skill names — the skill dispatcher
+# and the broker, both named by the root manual, neither by file — and the
+# worker contract below; a project with no broker named has no sanctioned
+# way for a dispatched review to land, and the skill says so rather than
+# posting one.
+#   From #269: /implement's step 9b lands a DISPATCHED review through the
+# broker and no other way. The worker is offline by design, prints its
+# findings and stops; the session records the branch tip before it
+# dispatches and hands it to the broker as `--commit`; the dispatch and the
+# broker run as ONE shell invocation — a redirect to a file, then the
+# broker, never a pipe, the status kept in `rc` — and the dispatcher's exit
+# status is checked before anything reads the file; no broker named, or no
+# reachable agent harness behind the reviewer tier, falls back to the
+# in-session reviewer and the report says no cross-vendor review ran. A
+# dispatched report is never hand-posted, validated or not: a credentialed
+# session relaying one is the path to the forge the broker exists to close.
+# The spawn event's outcome gains `dispatched` beside `in-session`, and
+# step 10 reports the review URL and the comment URL as the broker printed
+# them.
+#   From #266: .agents/prompts/review-worker.md — shipped, the contract the
+# skill dispatcher stages for a dispatched `/review-pr` — opens by telling
+# the worker it is OFFLINE (no network, no credentials, stdout its only
+# channel out), has it pin the reviewed sha BEFORE reading the diff, and
+# makes `REVIEWED: <full sha>` the report's required first line, so a head
+# that moved after the read is told apart from a commit the review never
+# saw.
+#   From #265, with #267 and #268: the broker — kit-only, above — validates
+# the whole report contract, posts one review (event COMMENT) and one
+# top-level comment, refuses what its policy does not allow and refuses a
+# report about any commit but the one `--commit` names, mandatory when the
+# reviewed commit is behind the head. ADR-0009 records the decision and
+# its amendments; docs/domain-glossary.md defines Broker.
+#   From #280: /to-tickets and the optional dogfood skill PRE-SCREEN their
+# untrusted text — a PRD issue body, a product's output captured to a file
+# — through a tool-restricted reader that returns a declared two-line
+# shape, `Command-shaped:` and a verified `Evidence:` span, checked by
+# shape and by the vocabulary checker before a line of it is read; `yes`
+# is a stop, `no` is followed by the ordinary read, as data. The dogfood
+# skill also stamps each row's `Outcome:` through the checker. (Spelled
+# without its slash here on purpose: VERSION ships wholesale, and a
+# consumer who declined the skill may carry no command name for it.)
+# tests/review-pr-output.test.sh holds the review report's severity and
+# status lines to the policy file.
+#   From #281: /retro asks an EIGHTH fixed question, stamp calibration —
+# per decision field and per skill, never one number for the chain, every
+# row carrying its oracle clause — and .agents/skills/retro/QUESTIONS.md
+# carries it in full. Every count of the questions follows: the skill's
+# own description, constitution/AGENTS.md.template's chain paragraph and
+# quick-reference row, and .agents/skills/LICENSE-mattpocock-skills.md's
+# provenance note.
+#   From #351: /implement records each TDD cycle as it takes it —
+# `kind=tdd.cycle outcome=red|green|refactor`, after the step ran, never
+# before — and its spawn event carries `skill=implement`, the skill that
+# spawned, where it carried the spawned skill under `data.skill`.
+#   From #353: a spawn has an end. /implement's in-session reviewer and
+# each of /review-pr's seven agents emit `kind=spawn.end outcome=ok|fail`
+# when the agent completes or fails, paired with its `spawn`.
+#   From PR #359: the spawn event's `model` is the resolver's answer,
+# captured — `model=$(sh scripts/agents.lib.sh reviewer …)` then
+# `model=$model` — never a typed word, in /implement and /review-pr.
+#   From #349: /retro writes its export and its report INTO the project, at
+# the root checkout — `.retro/<YYYY>/<MM>/retro-<stamp>.{csv,md}`, local
+# and never committed; the skill checks the folder is ignored and says so,
+# touching no consumer's tracked file — where it wrote to the OS temp
+# directory and lost the report to the next sweep. The housekeeping
+# skill's CHECKLIST.md looks for the last retro there. The kit's own
+# .gitignore gains the folder.
+#   From #343: the Claude Code adapter's hooks/transcript-usage.mjs takes the
+# LAST usage block per message id — a response that opens with a thinking
+# block is written twice, a partial snapshot first — so a session's
+# token sum matches the agent harness's own rollup; the fixtures beside
+# it carry the thinking transcripts.
+#   From #335: adapters/claude-code/README.md says how a typed-return
+# reader is denied a shell, a forge CLI and the network on this agent
+# harness — the CLI path withholds (`--tools`, `--restricted`,
+# `--strict-mcp-config`), the in-session path is asked — and
+# adapters/README.md's row names the section.
+#   From #340: in /implement a refused `Confidence:` value is a refused
+# stamp and stops the session on the same path as a refused tier — three
+# answers on the tier and its confidence, not two: `low` restates, a
+# refused tier stops, a refused confidence stops; a value outside the
+# vocabulary is never read as `low` or as any declared word.
+#   From #347: /pr-iterate sets a RELEASE-BOUND red aside before it
+# classifies the rest — a failing check whose own output carries
+# `release-bound:` (a pinned transcript only the version bump re-captures,
+# a shared file past its tag) goes green when the release merges and on no
+# commit of the PR, so it is named in the report and never iterated on;
+# the kit's own docs-demo and self-host suites print that marker.
+#   From #350: the Claude Code adapter's hooks/hook.lib.sh's no-node reason
+# names the fix, and adapters/claude-code/README.md says where it goes —
+# a node managed per user is on every path you type at and on none of the
+# hooks', so the directory goes on the path through the `env` block of
+# `.claude/settings.local.json`, literal and whole.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/implement/SKILL.md
+# (steps 9b and 10). .agents/prompts/review-worker.md (the offline
+# statement and the REVIEWED line). .agents/skills/to-tickets/SKILL.md and
+# the dogfood skill's SKILL.md (the pre-screen). .agents/skills/retro/
+# SKILL.md and .agents/skills/retro/QUESTIONS.md (question 8).
+# constitution/AGENTS.md.template and
+# .agents/skills/LICENSE-mattpocock-skills.md (the eight-question count).
+# .agents/skills/review-pr/SKILL.md (spawn.end and the captured model).
+# .agents/skills/pr-iterate/SKILL.md (the release-bound set-aside).
+# .agents/skills/housekeeping/CHECKLIST.md (where the last retro is).
+# adapters/claude-code/README.md and adapters/README.md (the reader's
+# tools, and where node goes), the Claude Code adapter's hooks/hook.lib.sh (the
+# no-node reason), the Claude Code adapter's hooks/transcript-usage.mjs (the
+# last usage block). docs/domain-glossary.md's Broker, Typed return and Retro
+# entries. README.md's suite entries follow. tests/implement-deliver.test.sh,
+# tests/prescreen-return.test.sh, tests/review-pr-output.test.sh,
+# tests/retro-skill.test.sh, tests/skill-phase.test.sh,
+# tests/trace-skills.test.sh, tests/trace-hooks.test.sh and
+# tests/adapters-demo.sh hold it; the broker's own suite and the
+# pre-screen's are jobs in the kit's CI.
 
-shared-layer: 0.32.0
+shared-layer: 0.33.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
