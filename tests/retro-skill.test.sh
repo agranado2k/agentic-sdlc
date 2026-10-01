@@ -1036,9 +1036,10 @@ banner "10. Question 7 counts an unasked verdict with the landings that got none
 # hit|adjusted|missed, an unasked landing passes for an answered one and the
 # retro goes blind to the gap. Held to the seventh SECTION's prose, flattened:
 # the `Reads:` paragraph lists the outcomes too, so a needle it satisfies
-# would survive the rule's deletion; the Route line is held apart.
+# would survive the rule's deletion; the Route paragraph, wrapped lines and
+# all, is held apart (review of PR #377, M-1).
 sec7() { awk '/^## 7\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
-sec7_prose=$(sec7 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { r = 0; next } !r && !/^Route:/' | flat)
+sec7_prose=$(sec7 | awk '/^\*Reads:/ { r = 1 } /^Route:/ { x = 1 } (r || x) && /^$/ { r = x = 0; next } !r && !x' | flat)
 sec7_route=$(sec7 | awk '/^Route:/ { on = 1 } on && /^$/ { exit } on' | flat)
 q7_has() { case "$sec7_prose" in *"$1"*) pass "$2" ;; *) fail "$2 — question 7's prose does not say: $1" ;; esac; }
 q7_has '`unasked`' "question 7 names the unasked outcome"
