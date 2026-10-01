@@ -449,6 +449,8 @@ Evidence: "retry three times"'
 	WHERE=../above/repo/src
 	refused "from a repository with no skills, a pass-everything checker above it is never run — the walk stops at the outermost repository" 'Command-shaped: maybe
 Evidence: "retry three times"'
+	has "never above the outermost git work tree around the cwd" "the bound on the walk is said where the anchor is"
+	has "trusts the checker it finds there" "the prose says which checker is trusted, not that the cwd decides nothing"
 	WHERE=
 	assert_file_lacks "$CHECK" 'git rev-parse --show-toplevel' "the fence no longer asks git which repository the cwd is in"
 	rm -f "$PROJECT/scripts/vocab.sh"
