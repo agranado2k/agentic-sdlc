@@ -418,12 +418,42 @@ bait_label_row 's/ *— oracle: none — .*$//' &&
 # denominator counts only the posted; a raise recorded before the key existed
 # carries no marker, stays in, and its row OVERCOUNTS what a human could have
 # dismissed. The row says which form it used.
-stamp_has 'counts only the raises carrying `data.posted=yes`' "the dismissal denominator counts only the posted raises"
-stamp_has 'A raise with `data.posted=no` is in no denominator and in no pairing' "a raise nobody posted is out of the denominator and out of the pairing"
-stamp_has 'overcounts' "a row holding an unmarked raise is said to overcount"
-stamp_has 'carries no `data.posted`' "…and why: a raise recorded before the key carries no marker that it was posted"
-stamp_has 'the rate is a lower bound on the share of posted findings' "…its rate is a lower bound, not a measurement"
-stamp_has 'says which form it used' "every severity row says which form it used"
+# Each of these rules has a test that fails without it (review of PR #374,
+# H-2): posted_rules_missing reads any sidecar and names every rule it has
+# lost, one per line, and one bait per rule proves it red — in the parent
+# shell, where a fail counts.
+posted_rules_missing() { # <sidecar file>
+	_pr_stamp=$(sec8 "$1" | awk '/^```/ { fence = !fence; next } !fence' | flat)
+	for _r in \
+		'posted denominator|counts only the raises carrying `data.posted=yes`' \
+		'unposted out|A raise with `data.posted=no` is in no denominator and in no pairing' \
+		'unposted counted beside|count it beside its row, `<n> not posted`' \
+		'unmarked overcounts|A raise that carries no `data.posted` was recorded before the key existed, and the denominator **overcounts**' \
+		'row names its form|Each severity row says which form it used — `posted only`, or `overcounts`' \
+		'lower bound|the rate is a lower bound on the share of posted findings'; do
+		case "$_pr_stamp" in *"${_r#*|}"*) ;; *) printf '%s\n' "${_r%%|*}" ;; esac
+	done
+	# …and every severity example row carries the form it used.
+	_pr_bare=$(sec8 "$1" | fenced | grep -E '^severity · ' | grep -vE '   (posted only|overcounts)   ' || true)
+	_pr_any=$(sec8 "$1" | fenced | grep -cE '^severity · ')
+	[ -z "$_pr_bare" ] && [ "$_pr_any" -gt 0 ] || printf '%s\n' 'example row names its form'
+}
+missing=$(posted_rules_missing "$SIDECAR_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$missing" ] && pass "the posted marker's rules are all stated: the denominator, the unposted counted beside, the overcount, the form each row names, and the example rows carry it" ||
+	fail "question 8 has lost posted-marker rules: $missing"
+for b in \
+	'posted denominator|s/counts only the raises carrying `data.posted=yes`/counts the raises/' \
+	'unposted out|s/is in no denominator and in no pairing/is counted/' \
+	'unposted counted beside|s/beside its row, `<n> not posted`/nowhere/' \
+	'unmarked overcounts|s/the denominator \*\*overcounts\*\*/the denominator is exact/' \
+	'row names its form|s/Each severity row says which form it used/A severity row may say which form it used/' \
+	'lower bound|s/the rate is a lower bound on the share/the rate is the share/' \
+	'example row names its form|/^severity · /s/   posted only   /   /'; do
+	sed "${b#*|}" "$SIDECAR_ABS" >"$SCRATCH/bait-sidecar.md"
+	! cmp -s "$SCRATCH/bait-sidecar.md" "$SIDECAR_ABS" && posted_rules_missing "$SCRATCH/bait-sidecar.md" | grep -qxF -- "${b%%|*}" &&
+		pass "bait: question 8 without '${b%%|*}' goes red" ||
+		fail "bait: question 8 without '${b%%|*}' was not caught — or the bait planted nothing"
+done
 # …and a dismissal is one (data.thread, data.where) pair per subject — a
 # resolved thread and its dismissed review can both emit.
 stamp_has '(`data.thread`, `data.where`) pair' "a dismissal is identified by the (data.thread, data.where) pair"
