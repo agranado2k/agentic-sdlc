@@ -434,6 +434,13 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
+			# The root guard (#392) is no trace hook: it reads no trace
+			# policy, so it is held to its script alone, and its own suite,
+			# tests/root-guard.test.sh, holds the rest.
+			PreToolUse)
+				case $_w_cmd in *"/hooks/root-guard.sh"*) ;; *) _w_bad=1 ;; esac
+				continue
+				;;
 			*)
 				_w_bad=1
 				continue
@@ -475,11 +482,12 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Five events, four scripts: one script serves both post-tool events,
-	# because the only difference between them is the outcome it records.
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 5 ] &&
-		pass "it names a hook script per wired event, five in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 5"
+	# Six events, five scripts: one script serves both post-tool events,
+	# because the only difference between them is the outcome it records, and
+	# the sixth is the root guard on PreToolUse (#392).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 6 ] &&
+		pass "it names a hook script per wired event, six in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 6"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||

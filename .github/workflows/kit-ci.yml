@@ -446,6 +446,16 @@ jobs:
       - name: Trace hooks suite
         run: sh tests/trace-hooks.test.sh
 
+  root-guard:
+    name: The root checkout refuses an agent's edit and an agent's commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pure sh and git: the pre-tool hook reads its payload without a JSON
+      # parser, and the pre-commit hook is plain git, so no node here.
+      - name: Root guard suite
+        run: sh tests/root-guard.test.sh
+
   trace-prices:
     name: The price table's staleness advisory and its refresh
     runs-on: ubuntu-latest

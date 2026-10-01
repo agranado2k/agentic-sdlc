@@ -571,7 +571,7 @@ take_g '^git switch -c' "$SCRATCH/arm.branch"
 # an anchor rather than becoming an end-of-line match mid-pattern.
 take_g '^sh "\\$KIT_CLONE/bootstrap' "$SCRATCH/arm.adopt"
 take_g '^git add -A$' "$SCRATCH/arm.commit"
-take_g '^git add -A && git commit' "$SCRATCH/arm.finish"
+take_g '^git add -A && COMMIT_WITHOUT_WORKTREE=1 git commit' "$SCRATCH/arm.finish"
 take_g '^sh scripts/check' "$SCRATCH/arm.gate"
 
 # Fresh fixture pair, then the DOC's own fences do the driving.

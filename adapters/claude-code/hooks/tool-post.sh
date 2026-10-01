@@ -28,7 +28,7 @@
 # of its own and a ticket rather than a line. An INTERRUPTED call does reach
 # PostToolUseFailure (`is_interrupt` on the payload) and reads as fail.
 #
-# THERE IS NO PreToolUse HOOK BESIDE THIS ONE, for one measured reason: both post
+# THERE IS NO PreToolUse CAPTURE HOOK BESIDE THIS ONE, for one measured reason: both post
 # payloads carry the full `tool_input` themselves, so a pre hook would have
 # nothing to add to the event and nothing of its own to emit — an extra process
 # per tool call for no line. See the ticket's report and ../README.md.

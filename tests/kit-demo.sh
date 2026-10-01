@@ -37,6 +37,13 @@
 # suite's own, so nothing else of the harness is used.
 . "$(dirname "$0")/lib.sh"
 
+# THE CONSUMER HERE COMMITS ON main FROM ITS MAIN WORKING COPY, which the
+# shipped .githooks/pre-commit refuses once core.hooksPath is wired (hard rule
+# 1, #392). This suite tests other gates, so it takes that hook's own loud
+# bypass for every commit; tests/root-guard.test.sh is where the refusal is held.
+COMMIT_WITHOUT_WORKTREE=1
+export COMMIT_WITHOUT_WORKTREE
+
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)

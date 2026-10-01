@@ -1,0 +1,47 @@
+#!/bin/sh
+# Pre-commit gate — agentic-sdlc.
+#
+# Wired by the same `git config core.hooksPath .githooks` that wires pre-push,
+# so a clone that set it once has both.
+#
+# One check: the manual's hard rule 1, "Worktree, always". A commit is refused
+#   - from the MAIN working copy (git's own directory is its common directory:
+#     a linked worktree's is a subdirectory of it), whatever the branch, and
+#   - on `main`, from anywhere.
+# Work happens in `worktree/<slug>` on a `<type>/<slug>` branch. Git has no
+# hook for an edit; the agent harness's pre-tool hook in the adapter refuses
+# that half where one is wired, and this one holds the commit for every
+# committer, agent or human.
+#
+# A repository's FIRST commit passes: nothing exists yet to cut a worktree
+# from, and bootstrapping a project ends in exactly that commit.
+#
+# The bypass is deliberate, LOUD and narrow, in the pre-push hook's shape — the
+# operator's own release or diary commit from the root is the case it is for:
+#
+#     COMMIT_WITHOUT_WORKTREE=1 git commit …
+
+if [ "${COMMIT_WITHOUT_WORKTREE:-}" = "1" ]; then
+	echo "WARNING  COMMIT_WITHOUT_WORKTREE=1 — worktree rule BYPASSED for this commit." >&2
+	exit 0
+fi
+
+# No HEAD yet: the root commit.
+git rev-parse -q --verify HEAD >/dev/null 2>&1 || exit 0
+
+git_dir=$(cd "$(git rev-parse --git-dir)" && pwd -P) || exit 1
+common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd -P) || exit 1
+branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || :)
+
+why=
+if [ "$git_dir" = "$common_dir" ]; then
+	why="this is the main working copy, not a worktree"
+elif [ "$branch" = "main" ]; then
+	why="the branch is main"
+fi
+[ -z "$why" ] && exit 0
+
+echo "x pre-commit: refused — $why (hard rule 1, \"Worktree, always\")." >&2
+echo "  Commit from a worktree on a feature branch: git worktree add worktree/<slug> -b <type>/<slug>" >&2
+echo "  Or bypass once, loudly: COMMIT_WITHOUT_WORKTREE=1 git commit …" >&2
+exit 1

@@ -5,7 +5,9 @@ harness's own: **where does a resolved capability tier go at spawn time**,
 **how is a typed-return reader denied a shell, a forge CLI and the network**,
 and **how does a session's token usage reach the decision trace**. The first
 two are prose about a mechanism; the third ("Wiring the session hooks") points
-at real files under `hooks/`, which ship and arrive inert.
+at real files under `hooks/`, which ship and arrive inert. One more file there
+answers no question of the core's but a rule of the manual's: "Refusing an
+edit at the root checkout" wires the guard that holds hard rule 1 for an agent.
 
 The kit resolves a **capability tier** — and optionally a **task domain** — to a
 model identifier and stops there:
@@ -359,9 +361,11 @@ Three things this hook deliberately does not do:
   decision, so nothing on it says the call was denied. A denied call is
   therefore invisible here. An *interrupted* one is not: it reaches
   `PostToolUseFailure` and reads as `fail`.
-- **There is no `PreToolUse` hook.** Both post payloads carry the whole
+- **There is no `PreToolUse` capture hook.** Both post payloads carry the whole
   `tool_input` themselves, so a pre hook would have nothing to add to the event
   and nothing of its own to emit — one more process per tool call for no line.
+  (The one `PreToolUse` hook here is the root guard below, which records
+  nothing.)
 - **It never uses `hook_field` on a tool payload.** Every live payload arrives
   compact, as one line of JSON, so a key-name search finds the LAST occurrence
   — harmless for the session payloads, whose keys occur once, but a tool
@@ -481,6 +485,56 @@ when `verify` fails on the selection, so a half-import is not a shape you can
 reach by accident. And `cost_usd` reads the literal `unpriced` — never 0 — for
 a token-bearing event whose model has no price in your table, which is why the
 `CASE` above exists rather than a bare `CAST`.
+
+## Refusing an edit at the root checkout
+
+The manual's first hard rule is "Worktree, always": the root checkout is never
+where in-progress work is edited. Git has no hook for an edit, so the rule is
+held twice. `.githooks/pre-commit` refuses the commit, for every committer;
+`hooks/root-guard.sh` refuses the edit itself, for an agent, before the tool
+runs. Wire it to `PreToolUse` in your own `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [ { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash", "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/root-guard.sh\"" } ] } ]
+  }
+}
+```
+
+It reads the tool payload, resolves the target path against the repository's
+**main** working tree — found through git's common directory, so a session
+started inside a worktree still guards the right tree — and answers in the
+agent harness's own terms: exit 2 blocks the call and its one-line reason,
+naming hard rule 1 and the `git worktree add` line to run instead, reaches the
+model on stderr; exit 0 lets the call through. Nothing goes to stdout.
+
+- **Refused:** an Edit, Write, MultiEdit or notebook edit whose path is inside
+  the main working tree and not under `worktree/` — a new file as much as an
+  existing one, a relative path resolved against the session's directory, a
+  `..` that climbs out of a worktree.
+- **Let through:** paths under `worktree/`, paths outside the repository (a
+  dispatch's scratch lives under `$TMPDIR`), and the two runtime directories a
+  session legitimately writes at the root, `.trace/` and `.retro/`.
+- **It fails open.** A payload it cannot read, a tool it does not know or a
+  root it cannot resolve lets the call through: a guard that blocked every
+  call on a parse failure would end the session, and the commit hook is the
+  half that fails closed. Unlike the trace hooks above it does exit non-zero —
+  changing the session is its whole purpose — and records nothing.
+
+### What Bash coverage it does not give
+
+For Bash it is a tripwire, not a proof. It reads the command roughly as a
+shell would — quotes dropped, heredoc bodies skipped, `cd` followed between
+simple commands — and refuses one that redirects into, or runs `sed -i`, `tee`,
+`cp` (onto), `mv`, `git checkout` or `git restore` on, a path that resolves to
+a **tracked** file at the root. Everything else goes through: a script or an
+interpreter that writes (`sh tests/x.sh`, `node -e …`), `rm`, `git stash` or
+`git reset --hard`, a path spelled through a variable or a glob it never
+expands, a `cd` inside a subshell or a function, and any write to an untracked
+file. The commit hook is what catches what this misses — a change it let
+through still cannot be committed from the root.
 
 ## What this adapter deliberately does NOT contain
 

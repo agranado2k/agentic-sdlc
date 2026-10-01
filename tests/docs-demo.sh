@@ -382,6 +382,13 @@ fi
 # A consumer bootstrapped at 0.1.0.
 CONSUMER="$SCRATCH/older-consumer"
 t_consumer_from "$OLDKIT" "$CONSUMER" "Older Consumer" "older@example.invalid" "Older Consumer" "A project that bootstrapped at shared-layer 0.1.0."
+# The consumer commits on main from its main working copy, which the shipped
+# .githooks/pre-commit refuses (hard rule 1, #392). This suite proves the update
+# recipe, not the hooks, and its transcripts are pinned byte for byte in
+# UPDATING.md — so the consumer's hooks are pointed at nothing, as tests/lib.sh
+# does for every small fixture, rather than bypassed with a warning that would
+# land in the transcript. tests/root-guard.test.sh holds the refusal.
+git config core.hooksPath .git/no-such-hooks
 assert_status 0 "the 0.1.0 consumer's gate is green before the update" -- sh scripts/check.sh
 
 # The local edit that should never have been made to a verbatim file.
@@ -757,6 +764,7 @@ banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 
 C3="$SCRATCH/consumer-0.3.0"
 t_consumer_from "$OLD3" "$C3" "Tier Consumer" "tier@example.invalid" --no-dogfood "Tier Consumer" "A project that bootstrapped at shared-layer 0.3.0."
+git config core.hooksPath .git/no-such-hooks # as above: the recipe, not the hooks (#392)
 assert_status 0 "the 0.3.0 consumer's gate is green before the update" -- sh scripts/check.sh
 assert_no_file ".claude/skills/dogfood"
 

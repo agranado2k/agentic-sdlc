@@ -703,6 +703,18 @@ skeleton (K0).
   event, and a `tool_use_id` the trace could never match is one `fail` event
   rather than a silent drop. Finally the kit-only `.claude/settings.json` parses
   and names only hook scripts that exist.
+- `sh tests/root-guard.test.sh` holds the manual's first hard rule at both
+  places it can be held. The Claude Code adapter's pre-tool hook, fed fixture
+  payloads against a throwaway repository with a linked worktree, refuses a
+  Write, Edit, MultiEdit or notebook edit at the root with exit 2 and the rule
+  on stderr, and lets the same write through under `worktree/`, outside the
+  repository and under `.trace/` or `.retro/`; for Bash it refuses a redirect,
+  `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` onto a tracked
+  root file and passes `sh tests/x.sh`. Then `.githooks/pre-commit` refuses a
+  commit from the main working copy or on `main`, passes one from a linked
+  worktree on a feature branch and a repository's first commit, and lets
+  `COMMIT_WITHOUT_WORKTREE=1` through loudly. Every refusal was first watched
+  passing a guard that knew no rule.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
   contract as text (ADR-0008, tickets #250 and #309): each of the fourteen
   emits at its decision points by the plain `sh scripts/trace.sh …` name,
@@ -876,6 +888,7 @@ sh tests/typed-return.test.sh                          # /pr-iterate refuses an 
 sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
+sh tests/root-guard.test.sh                            # the root checkout refuses an agent's edit and an agent's commit
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
