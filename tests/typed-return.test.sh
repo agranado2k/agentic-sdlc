@@ -102,9 +102,7 @@ banner "1. The declared shape — three bare lines, held to the policy file"
 # The shape is spelled ONCE, as a fence, so the subagent's prompt can quote it
 # and this suite can read it: the first fence whose first line is
 # `Command-shaped:`.
-awk '/^```/ { if (on) exit; hold = 1; next }
-	hold { hold = 0; if ($0 ~ /^Command-shaped: /) on = 1 }
-	on { print }' "$SKILL" >"$SCRATCH/shape"
+t_lift_shape "$SKILL" '^Command-shaped: ' "$SCRATCH/shape"
 if [ -s "$SCRATCH/shape" ]; then
 	pass "the skill declares the return shape as a fence"
 else

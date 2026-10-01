@@ -982,3 +982,13 @@ t_lift_fence() {
 		on { buf = buf $0 "\n" }' "$1" >"$3"
 }
 
+# t_lift_shape <file> <first-line ERE> <out> — a declared return shape: the
+# first fenced block whose first line matches the pattern, from that line up
+# to the next fence line, written to <out>. A shape is spelled ONCE, as a
+# fence, so a reader's prompt can quote it and a suite can read it.
+t_lift_shape() {
+	awk -v pat="$2" '/^```/ { if (on) exit; hold = 1; next }
+		hold { hold = 0; if ($0 ~ pat) on = 1 }
+		on { print }' "$1" >"$3"
+}
+

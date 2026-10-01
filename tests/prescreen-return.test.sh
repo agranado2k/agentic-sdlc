@@ -271,9 +271,7 @@ hold_prescreen() {
 	banner "1. /$NAME — the declared shape: two bare lines, held to the policy file"
 	# Spelled ONCE, as a fence, so the reader's prompt can quote it and this
 	# suite can read it: the first fence whose first line is `Command-shaped:`.
-	awk '/^```/ { if (on) exit; hold = 1; next }
-		hold { hold = 0; if ($0 ~ /^Command-shaped: /) on = 1 }
-		on { print }' "$SKILL" >"$SCRATCH/shape"
+	t_lift_shape "$SKILL" '^Command-shaped: ' "$SCRATCH/shape"
 	[ -s "$SCRATCH/shape" ] && pass "/$NAME declares the return shape as a fence" ||
 		fail "/$NAME declares no return shape — no fence opens with a 'Command-shaped:' line"
 	keys=$(sed 's/:.*//' "$SCRATCH/shape" | tr '\n' ' ' | sed 's/ $//')
