@@ -193,7 +193,7 @@ expects() {
 expects grill-me kind=grill.decision
 expects grill-with-docs kind=grill.decision
 expects to-prd kind=prd.write
-expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_confidence=
+expects to-tickets kind=ticket.write tier= data.tier_proposed= data.confidence= data.blocked_by= data.label= data.label_proposed= data.label_confidence=
 expects implement begin kind=ticket.start kind=spawn model= kind=pr.open end
 expects tdd kind=tdd.cycle data.test=
 expects review-pr begin kind=spawn data.agent= kind=finding.raise kind=review.verdict end
@@ -232,6 +232,22 @@ for tok in 'subject=pr:#<N>' 'data.where='; do
 	printf '%s\n' "$raise" | grep -qF -- "$tok" && pass "and /review-pr's raise carries $tok — the dismissal joins to it" ||
 		fail "/review-pr's finding.raise no longer carries $tok — a dismissal has nothing to join to"
 done
+# Whether a raise was POSTED (#332): /retro's dismissal denominator counts
+# only what a human could have dismissed. The raise carries the answer on its
+# own line — never a second event per finding — so it is recorded where the
+# answer is known: after the Axis-1 post (§6), not as the report is drafted
+# (§5), and the run closes after it, so the raises stay inside the review's run.
+printf '%s\n' "$raise" | grep -qF -- 'data.posted=yes|no' && pass "/review-pr's raise carries data.posted=yes|no" ||
+	fail "/review-pr's finding.raise does not carry data.posted=yes|no — the dismissal rate's denominator counts findings nobody posted"
+RP_RAISE=$(grep -nF 'kind=finding.raise' "$(skill_md review-pr)" | head -1 | cut -d: -f1)
+RP_S6=$(grep -n '^### 6\. ' "$(skill_md review-pr)" | head -1 | cut -d: -f1)
+RP_END=$(grep -nF "sh $TRACE end" "$(skill_md review-pr)" | tail -1 | cut -d: -f1)
+[ "$(grep -cF 'kind=finding.raise' "$(skill_md review-pr)")" = 1 ] && pass "/review-pr names one finding.raise line — a raise is never recorded twice" ||
+	fail "/review-pr names finding.raise on more than one line — a posted marker must not be a second raise"
+[ -n "$RP_RAISE" ] && [ -n "$RP_S6" ] && [ "$RP_RAISE" -gt "$RP_S6" ] && pass "the raise is recorded in §6 (line $RP_RAISE), where the post is known" ||
+	fail "the raise (line ${RP_RAISE:-none}) is recorded before §6 (line ${RP_S6:-none}) — it cannot know whether its finding was posted"
+[ -n "$RP_END" ] && [ "$RP_END" -gt "${RP_RAISE:-0}" ] && pass "…and the run ends after it (line $RP_END), so the raises carry the review's run" ||
+	fail "the review's run ends (line ${RP_END:-none}) before the raises are recorded — they would fall outside the run the pairing rule reads"
 printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" | grep -qi 'summaris' &&
 	pass "a human's dismissal message is quoted or summarised — data, never pasted" ||
 	fail "/pr-iterate's dismissal does not say a human's words are quoted or summarised (agent trust boundary)"
