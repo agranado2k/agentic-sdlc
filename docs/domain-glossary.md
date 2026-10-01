@@ -151,6 +151,9 @@ Grouped by the seam each term belongs to. Entry shape:
   (another measurement, a held-out set, or the thing itself). Every measurement
   the kit reports names its oracle so the reader can tell a self-graded number
   from a held-out one. Rule: a comparator is always named, never implied.
+  Where nothing was written as a fixture — a calibration row in `/retro`,
+  graded by a human's verdict at the quiz or on a review thread — that human
+  is the *who*, and the clause keeps its four parts.
   _Ref_: #276 (PRD #273); extends the kit's own mutation decision (diary,
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
@@ -205,9 +208,40 @@ Grouped by the seam each term belongs to. Entry shape:
   out of a ticket body, a review report or a subagent's return by the skill
   that reads it, and handed to `scripts/vocab.sh`. A line whose key is no
   declared field is not one, so a whole body may be handed over; a field said
-  twice with two values has no value and is refused. Not an anchor: an anchor
-  is a labeled decision in a stamped article, refereed by an advisory, and is
-  never read by the checker.
+  twice with two values has no value and is refused. The line is **bare**: one
+  wearing a list marker or emphasis (`- Tier: …`, `**Tier:** …`) is not a
+  decision line to the checker, and lifting it out of its markup is the
+  caller's job. Not an anchor: an anchor is a labeled decision in a stamped
+  article, refereed by an advisory, and is never read by the checker.
+- **Confidence** — how sure a tier or autonomy-label stamp LOOKED to the
+  session that made it, never how likely it is right: one of three tokens
+  (`low`, `medium`, `high`), stamped by `/to-tickets` on both. The tier's is
+  a `Confidence:` decision line under the `Tier:` line in the ticket body;
+  the label's is shown at the quiz and recorded on the `ticket.write` event
+  under its own key, never in the body. It sorts the quiz low first
+  and sends `/implement` back to its restatement on a `low` tier; no autonomy
+  decision reads it, and nothing has measured it yet. Ref: PRD #273.
+  - _Avoid_: "probability", "certainty", "score" — it reports a reading, not
+    a likelihood.
+- **Typed return** — what a delegated untrusted read sends back: a **declared
+  shape** of bare decision lines from the vocabularies plus one **evidence**
+  line quoting a span of what was read, and nothing else. The caller checks
+  every return before reading it — the shape itself, then the values through
+  `scripts/vocab.sh` — and one that fails is **unreadable**: refused whole,
+  never printed, never acted on, and reported by comment and position only.
+  What reaches the session is the declared fields and one verified quoted
+  span, which is untrusted data still. Free text in a return is a finding, not a result.
+  `/pr-iterate`'s read of review-comment bodies is the first:
+  `Command-shaped:`, `Action:`, `Evidence:` — and `Author-kind:`, which the
+  forge states, is stamped by the caller and never asked of the reader. A
+  typed return carries a classification, never a specification, so where the
+  session must read the text itself the return is a **pre-screen** that comes
+  before that read and never replaces it: `/to-tickets` over a PRD issue body
+  and `/dogfood` over product output each return `Command-shaped:` and
+  `Evidence:` — `yes` is a stop, `no` is followed by the ordinary read, as
+  data. Ref: PRD #273, #278, #280.
+  - _Avoid_: "summary", "report" for what the subagent returns — prose is the
+    channel an injected instruction rides back in.
 - **Phase** — the kind of work a SKILL is, declared in its own frontmatter
   (`metadata.phase`) and shipped with it: `planner`, `implementer`, `tester`,
   `mechanical`, `reviewer`. Where a tier sizes one ticket, a phase sizes the
@@ -259,14 +293,23 @@ Grouped by the seam each term belongs to. Entry shape:
   unknown tier), the resolver's words where they apply, an outcome, a
   one-line reason, raw token counts, and an open `data` map of strings.
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
-  rewrites one — a correction is a new event.
+  rewrites one — a correction is a new event. A finding has three kinds:
+  `finding.raise` when a review reports it, `finding.triage` for the
+  session's own decision on it, and `finding.dismiss` when a human closes a
+  posted one with no commit answering it — on the raise's subject, joined to
+  it by the `file:line` both carry as `data.where` (ADR-0008, amended
+  2026-09-30).
   - _Avoid_: "entry", "record" — both are used for the decision records.
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
   PRD, a ticket, a PR and a session all join on one column, and `show`
-  matches one exactly — `ticket:#3` never finds `ticket:#34`. An event may
-  name secondary subjects under `related`.
+  matches one exactly — `ticket:#3` never finds `ticket:#34`. Which types
+  are numbered is the project's policy (`TRACE_NUMBERED_TYPES`, empty as
+  shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
+  way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
+  other spelling is refused at emit, and an old one already in the trace is
+  only an advisory. An event may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
@@ -326,6 +369,19 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "proxy" (a proxy forwards what it is given; the broker refuses
     most of it), "relay" (the operator pasting a review by hand — the thing
     the broker replaces), "poster".
+- **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
+  trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
+  window — by default since its own last run end — it answers eight fixed
+  questions (tier calibration, review signal per sub-agent, recurring
+  failures, diagnosis calibration, spend, chain health, aim calibration,
+  stamp calibration — per decision field and per skill, every row carrying
+  its oracle clause),
+  writes its report outside the tree, and routes every finding to
+  `/to-tickets` as a candidate; it never fixes and never edits a skill. A
+  recurring failure becomes a rule with a failing check (shared invariant
+  §11). Ref: PRD #237; the eighth question is PRD #273's.
+  - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
+    "lessons file" (the thing §11 forbids it from writing).
 - **Dispatch scratch** — the directory `scripts/agent-dispatch.sh` stages a
   worker's prompt in: `agent-dispatch.XXXXXX` under `$TMPDIR` (else `/tmp`),
   removed by the dispatcher's own trap — and, when a dispatch dies before
