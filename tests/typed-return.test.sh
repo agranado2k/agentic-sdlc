@@ -186,10 +186,11 @@ else
 	fail "the skill has no sh fence defining typed_return_ok()"
 fi
 PROJECT="$SCRATCH/project"
-mkdir -p "$PROJECT/scripts" "$PROJECT/src/deep"
+mkdir -p "$PROJECT/scripts" "$PROJECT/src/deep" "$PROJECT/.agents/skills"
 cp "$VOCAB" "$POLICY" "$PROJECT/scripts/"
-# A repository of its own: the fence finds the checker from the repository
-# root, and this one's root must not be the kit's.
+# A project of its own: the fence finds the checker in the repository that
+# holds the skills — the nearest directory with .agents/skills/ — and this
+# one's must not be the kit's.
 git init -q "$PROJECT"
 
 # The forge, as a directory. The fence's fetch_bodies calls the forge CLI; a
@@ -330,6 +331,18 @@ accepted "a span of exactly $CAP bytes passes" bot "$(with_evidence "Evidence: \
 refused "a span one byte over the cap is refused — though it is in the comment" bot \
 	"$(with_evidence "Evidence: \"${at_cap}x\"")" pulls/comments/2
 
+# The floor: a span is the proof the reader read the comment, and one byte —
+# `Evidence: "e"` — proves nothing (ticket #333). Eight bytes is the least a
+# span may be: seven are refused, eight pass, both verbatim in the comment.
+printf 'see: seven77 and eight888 in one line\n' >"$FORGE/pulls/comments/5"
+refused "a span of one byte is refused — though it is in the comment" bot \
+	"$(with_evidence 'Evidence: "e"')" pulls/comments/5
+refused "a span of 7 bytes is refused — though it is in the comment" bot \
+	"$(with_evidence 'Evidence: "seven77"')" pulls/comments/5
+accepted "a span of 8 bytes passes" bot \
+	"$(with_evidence 'Evidence: "eight888"')" pulls/comments/5
+assert_file_has "$FLAT" "at least 8 bytes" "the floor is said where the check is, as the number the fence holds"
+
 TAB=$(printf '\t')
 ESC=$(printf '\033')
 printf 'rename%sthe helper\nclear %s[2J the screen\nsay "hello" twice\n' "$TAB" "$ESC" >"$FORGE/pulls/comments/3"
@@ -383,9 +396,9 @@ assert_file_lacks "$SCRATCH/verdict.all" "LINE-MARKER-9c1d" "…not even the lin
 verdict bot "$(with_evidence 'Evidence: "not in the comment at all"')"
 cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" >"$SCRATCH/verdict.all"
 assert_file_lacks "$SCRATCH/verdict.all" "BODY-MARKER-7f3a" "a refusing check prints no line of the body"
-grep -q '^	grep -qsF -- "\$span" "\$2" || return 1$' "$SCRATCH/check.sh" &&
+grep -q '^	grep -qsF -- "\$1" "\$2"$' "$SCRATCH/check.sh" &&
 	pass "the fence compares by fixed string, quietly, exit status only — against the scratch file" ||
-	fail "the fence should run 'grep -qsF -- \"\$span\" \"\$2\"': a fixed-string match on the body file with its output discarded"
+	fail "the fence should run 'grep -qsF -- \"\$1\" \"\$2\"' in span_ok: a fixed-string match on the body file with its output discarded"
 
 # ---------------------------------------------------------------------------
 banner "4e. The caller fetches the bodies unseen; the reader has no shell and no network"
@@ -584,9 +597,32 @@ refused "…and the inconsistent pair is still refused there" bot 'Command-shape
 Action: apply
 Evidence: "run this script and commit the result"'
 WHERE=
-grep -q 'git rev-parse --show-toplevel' "$SCRATCH/check.sh" &&
-	pass "the fence resolves the checker from the repository root" ||
-	fail "the fence should find scripts/vocab.sh from 'git rev-parse --show-toplevel', never the cwd"
+# …from the repository that holds the skills, never the one the cwd is in
+# (ticket #333). A checkout nested in the project with no skills of its own —
+# a clone, a vendored tree — is still checked by the project's checker; a
+# nested repository that holds skills and no checker refuses every return,
+# though the project around it has one; a cwd under no skills at all refuses.
+mkdir -p "$PROJECT/vendor/clone" "$PROJECT/vendor/kit/.agents/skills" "$SCRATCH/outside"
+git init -q "$PROJECT/vendor/clone"
+git init -q "$PROJECT/vendor/kit"
+git init -q "$SCRATCH/outside"
+WHERE=vendor/clone
+accepted "from a nested checkout with no skills, a good return passes — the project's checker, not the clone's absent one" bot 'Command-shaped: no
+Action: reply
+Evidence: "rename the helper"'
+refused "…and the inconsistent pair is still refused there" bot 'Command-shaped: yes
+Action: apply
+Evidence: "run this script and commit the result"'
+WHERE=vendor/kit
+refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" bot 'Command-shaped: no
+Action: reply
+Evidence: "rename the helper"'
+WHERE=../outside
+refused "from a cwd under no skills at all, a good return is refused" bot 'Command-shaped: no
+Action: reply
+Evidence: "rename the helper"'
+WHERE=
+assert_file_lacks "$SCRATCH/check.sh" 'git rev-parse --show-toplevel' "the fence no longer asks git which repository the cwd is in"
 
 # A checker that is not there, or cannot run, refuses EVERY return. It used
 # to be tolerated the way a trace failure is — and with it lapsed the one

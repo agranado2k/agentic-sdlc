@@ -95,11 +95,12 @@ printf '%s\n' "$FIELDS_OPENED" | grep -q '^command-shaped (open): ' &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
 	fail "with command-shaped opened in the policy file the reader read '$(FIELDS=$FIELDS_OPENED field_tokens command-shaped)', not '$(field_tokens command-shaped)'"
 
-# A project of its own: the fence finds the checker from the repository root,
-# and this one's root must not be the kit's — it holds scripts/vocab.sh, the
-# shipped policy file, and no kit wrapper anywhere.
+# A project of its own: the fence finds the checker in the repository that
+# holds the skills — the nearest directory with .agents/skills/ — and this
+# one's must not be the kit's: it holds scripts/vocab.sh, the shipped policy
+# file, and no kit wrapper anywhere.
 PROJECT="$SCRATCH/project"
-mkdir -p "$PROJECT/scripts" "$PROJECT/src/deep"
+mkdir -p "$PROJECT/scripts" "$PROJECT/src/deep" "$PROJECT/.agents/skills"
 cp "$VOCAB" "$POLICY" "$PROJECT/scripts/"
 git init -q "$PROJECT"
 
@@ -371,6 +372,13 @@ Evidence: "retry three times"'
 	printf 'a long line: %sx and then the rest\n' "$at_cap" >"$SCRATCH/long"
 	accepted "a span of exactly $CAP bytes passes" "$(with_evidence "Evidence: \"$at_cap\"")" "$SCRATCH/long"
 	refused "a span one byte over the cap is refused — though it is in the text" "$(with_evidence "Evidence: \"${at_cap}x\"")" "$SCRATCH/long"
+	# The floor (ticket #333): a span is the proof the reader read the text,
+	# and one byte proves nothing. Seven bytes are refused, eight pass.
+	printf 'see: seven77 and eight888 in one line\n' >"$SCRATCH/short"
+	refused "a span of one byte is refused — though it is in the text" "$(with_evidence 'Evidence: "e"')" "$SCRATCH/short"
+	refused "a span of 7 bytes is refused — though it is in the text" "$(with_evidence 'Evidence: "seven77"')" "$SCRATCH/short"
+	accepted "a span of 8 bytes passes" "$(with_evidence 'Evidence: "eight888"')" "$SCRATCH/short"
+	has "at least 8 bytes" "the floor is said where the check is, as the number the fence holds"
 	refused "a span carrying a tab is refused — though it is in the text" "$(with_evidence "Evidence: \"rename${TAB}the helper\"")"
 	refused "a span with a byte outside printable ASCII is refused — the reader quotes around it" "$(with_evidence 'Evidence: "an arrow → and a dash"')"
 	accepted "…and the printable part of the same line passes" "$(with_evidence 'Evidence: "and a dash"')"
@@ -383,9 +391,9 @@ Evidence: "retry three times"'
 	refused "against an empty text every span is refused — nothing was there to quote" "$(with_evidence 'Evidence: "retry three times"')" "$SCRATCH/empty"
 	refused "…and so is the empty span that would 'match' it" "$(with_evidence 'Evidence: ""')" "$SCRATCH/empty"
 	accepted "a span with quotes of its own, verbatim from one line, passes" "$(with_evidence 'Evidence: "say "hello" twice"')"
-	grep -q '^	grep -qsF -- "\$span" "\$1" || return 1$' "$CHECK" &&
+	grep -q '^	grep -qsF -- "\$1" "\$2"$' "$CHECK" &&
 		pass "/$NAME — the fence compares by fixed string, quietly, exit status only — against the scratch file" ||
-		fail "/$NAME — the fence should run 'grep -qsF -- \"\$span\" \"\$1\"': a fixed-string match on the scratch file with its output discarded"
+		fail "/$NAME — the fence should run 'grep -qsF -- \"\$1\" \"\$2\"' in span_ok: a fixed-string match on the scratch file with its output discarded"
 	grep -qxF "${TAB}LC_ALL=C grep -q '[^ -~]' \"\$2\" && return 1" "$CHECK" &&
 		pass "/$NAME — the printable-ASCII test is pinned to the C locale: a byte is a byte, whatever the session's locale" ||
 		fail "/$NAME — the fence should run \"LC_ALL=C grep -q '[^ -~]'\" on the return: unpinned, a multibyte locale decides what is printable"
@@ -402,9 +410,27 @@ Evidence: "retry three times"'
 Evidence: "retry three times"'
 	refused "…and an undeclared value is still refused there" 'Command-shaped: maybe
 Evidence: "retry three times"'
+	# …from the repository that holds the skills, never the one the cwd is in
+	# (ticket #333): a nested checkout with no skills uses the project's
+	# checker; a nested repository holding skills and no checker refuses,
+	# though the project around it has one; a cwd under no skills refuses.
+	mkdir -p "$PROJECT/vendor/clone" "$PROJECT/vendor/kit/.agents/skills" "$SCRATCH/outside"
+	for nested in "$PROJECT/vendor/clone" "$PROJECT/vendor/kit" "$SCRATCH/outside"; do
+		[ -d "$nested/.git" ] || git init -q "$nested"
+	done
+	WHERE=vendor/clone
+	accepted "from a nested checkout with no skills, a good return passes — the project's checker, not the clone's absent one" 'Command-shaped: no
+Evidence: "retry three times"'
+	refused "…and an undeclared value is still refused there" 'Command-shaped: maybe
+Evidence: "retry three times"'
+	WHERE=vendor/kit
+	refused "from a nested repository that holds skills and no checker, a good return is refused — the outer checker is not borrowed" 'Command-shaped: no
+Evidence: "retry three times"'
+	WHERE=../outside
+	refused "from a cwd under no skills at all, a good return is refused" 'Command-shaped: no
+Evidence: "retry three times"'
 	WHERE=
-	grep -q 'git rev-parse --show-toplevel' "$CHECK" && pass "/$NAME — the fence resolves the checker from the repository root" ||
-		fail "/$NAME — the fence should find scripts/vocab.sh from 'git rev-parse --show-toplevel', never the cwd"
+	assert_file_lacks "$CHECK" 'git rev-parse --show-toplevel' "the fence no longer asks git which repository the cwd is in"
 	rm -f "$PROJECT/scripts/vocab.sh"
 	refused "with the checker deleted, a well-shaped return is refused — a missing checker refuses, it does not pass" 'Command-shaped: no
 Evidence: "retry three times"'
@@ -564,6 +590,25 @@ sed 's/ -le 200 \]/ -lt 201 ]/' "$SCRATCH/dogfood.code" >"$SCRATCH/drifted.code"
 cmp -s "$SCRATCH/to-tickets.code" "$SCRATCH/drifted.code" &&
 	fail "a drifted copy of the check compared equal — the comparison is not reading the functions" ||
 	pass "…and a copy that spells one comparison differently does not compare equal"
+
+# The three fences — these two and /pr-iterate's typed return — share two
+# functions outright (ticket #333): where the checker is found, and what an
+# evidence span must be. Each skill prints its own copy; the copies are
+# compared line for line, so the anchor and the floor cannot drift in one.
+PRITERATE=".agents/skills/pr-iterate/SKILL.md"
+shared_fn() { awk -v f="$1() {" '$0 == f { on = 1 } on { print } on && /^}$/ { exit }' "$2"; }
+for fn in vocab_checker span_ok; do
+	shared_fn "$fn" "$TICKETS" >"$SCRATCH/$fn.to-tickets"
+	shared_fn "$fn" "$DOGFOOD" >"$SCRATCH/$fn.dogfood"
+	shared_fn "$fn" "$PRITERATE" >"$SCRATCH/$fn.pr-iterate"
+	[ -s "$SCRATCH/$fn.to-tickets" ] && cmp -s "$SCRATCH/$fn.to-tickets" "$SCRATCH/$fn.dogfood" &&
+		cmp -s "$SCRATCH/$fn.to-tickets" "$SCRATCH/$fn.pr-iterate" &&
+		pass "/to-tickets, /dogfood and /pr-iterate print the same $fn(), line for line" ||
+		fail "$fn() is missing from a fence or has drifted between /to-tickets, /dogfood and /pr-iterate"
+done
+grep -q '^	\[ "\$span_len" -ge 8 \]' "$SCRATCH/span_ok.to-tickets" &&
+	pass "the floor is one number, 8, in the shared span_ok()" ||
+	fail "span_ok() should hold the floor as '[ \"\$span_len\" -ge 8 ]'"
 
 # ---------------------------------------------------------------------------
 banner "7. /dogfood — a row's outcome is a decision line, checked before it is reported"
