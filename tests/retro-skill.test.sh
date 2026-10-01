@@ -1050,6 +1050,14 @@ case "$sec7_route" in
 *'`unasked`'*'`/merge-train`'*) pass "question 7's route sends the unasked verdicts to /merge-train with the missing ones" ;;
 *) fail "question 7's Route line does not send the unasked verdicts to /merge-train" ;;
 esac
+# `unasked` is the train's word alone (tests/trace-skills.test.sh holds
+# /pr-iterate to hit|adjusted|missed): the Reads paragraph, which names both
+# emitters, says so rather than listing it as theirs (review of PR #377, L-1).
+sec7_reads=$(sec7 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat)
+case "$sec7_reads" in
+*'`unasked` (the train'"'"'s alone)'*) pass "the Reads paragraph says unasked is /merge-train's alone" ;;
+*) fail "the Reads paragraph lists unasked without saying it is /merge-train's alone" ;;
+esac
 # The order's one-line summary in SKILL.md carries the same distinction.
 q7_line=$(awk '/^7\. \*\*Aim calibration\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat)
 case "$q7_line" in

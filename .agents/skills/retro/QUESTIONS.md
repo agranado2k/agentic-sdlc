@@ -174,10 +174,10 @@ is never reachable.
 ## 7. Aim calibration
 
 *Reads: `feedback` — subject `ticket:#N`, `related` its `pr:#N`, `outcome`
-one of `hit`, `adjusted`, `missed` or `unasked`, `reason` the operator's
-words — emitted by `/merge-train` at landing and by `/pr-iterate` when a
-human comment changes the plan; joined to `ticket.write` for the tier and
-to the `skill` of the runs that built it.*
+one of `hit`, `adjusted`, `missed` or `unasked` (the train's alone),
+`reason` the operator's words — emitted by `/merge-train` at landing and
+by `/pr-iterate` when a human comment changes the plan; joined to
+`ticket.write` for the tier and to the `skill` of the runs that built it.*
 
 - Per landed slice in the window: its verdict, if one was given. `hit` is
   the plan holding; `adjusted` is a re-cut of what came after; `missed` is
