@@ -1017,9 +1017,7 @@ case $? in
 1) fail "AGENTS.md's /merge-train row no longer names $LANDING_SCRIPT as the landing script — a by-hand merge then has no named path, and goes unrecorded" ;;
 *) fail "AGENTS.md has no single 'Land a batch of green PRs' row to hold" ;;
 esac
-[ -f "$KIT/$LANDING_SCRIPT" ] &&
-	pass "$LANDING_SCRIPT exists — the row names a script, not a ghost" ||
-	fail "$LANDING_SCRIPT is missing — the row sends the operator to a script that is not there"
+assert_file "$KIT/$LANDING_SCRIPT"
 template_row_clean "$KIT/constitution/AGENTS.md.template"
 case $? in
 0) pass "the consumer template's /merge-train row names no kit-only landing script" ;;
