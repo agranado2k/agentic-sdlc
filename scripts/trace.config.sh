@@ -122,6 +122,33 @@ TRACE_TOOLS=''
 TRACE_AGENT_WAIT_MS=''
 
 # ---------------------------------------------------------------------------
+# TRACE_BEHIND_WARN — how many commits the checkout your agent-harness hooks run
+# from may sit behind origin/main before the session-start hook says so. Two
+# honest values:
+#
+#   ''         no note (the shipped default)
+#   <0-99999>  one line on stderr at every session start whose checkout is
+#              MORE than that many commits behind
+#
+# WHY IT EXISTS. A hook runs the code of the checkout it lives in. When that
+# checkout falls behind main, every fix to the hooks that main has landed is
+# inert for the sessions it starts, and nothing says so. The session-start hook
+# of an agent-harness adapter records the lag on every `session.start` whatever
+# this line says — data.behind, counted with plain git against the LAST FETCHED
+# origin/main, never a fetch of its own; a checkout with no origin/main records
+# nothing — and this line only decides when that number is also said out loud.
+#
+# WHY THE KIT SHIPS NO NUMBER. How far behind is too far depends on how fast
+# your main moves and how often you sync, which only you know.
+#
+# A value that is not a whole number of at most five digits with no leading
+# zero is refused, named on stderr, and otherwise ignored — the hook still
+# exits 0. An environment TRACE_BEHIND_WARN overrides this line for one
+# process, and an environment value of '' is no note even when this file names
+# one.
+TRACE_BEHIND_WARN=''
+
+# ---------------------------------------------------------------------------
 # THE PRICE TABLE — what a token costs, so `summary` and `export` can say what
 # a wave cost.
 #

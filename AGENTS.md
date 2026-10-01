@@ -20,8 +20,7 @@ replace. -->
 
 Binding for any LLM-driven agent working in this repo. This file is the **root
 layer** of a layered constitution: orientation, the hard rules, and the command
-map — small on purpose (budgeted at 350 lines, ADR-0004), because every token
-here is re-read on every request (shared invariant §11). The elaboration lives in the articles listed below; read
+map — small on purpose (budgeted at 350 lines, ADR-0004), because every token here is re-read on every request (shared invariant §11). The elaboration lives in the articles listed below; read
 the one you need, when you need it.
 
 `AGENTS.md` is the one manual, whichever agent tool reads it. `CLAUDE.md` and
@@ -309,10 +308,11 @@ answers produce a clean project.
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
 | Walk a product's personas through its surface | `/dogfood` — optional at bootstrap; the kit has no surface of its own |
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
-| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
+| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does. Its one-PR form, the **landing script**, is `sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']`: refuses a PR not green and mergeable (exit 2, nothing recorded), merges, waits for main's workflows, records `merge.land` and `feedback` (kit-only, never shipped) |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |
+| Start or inspect the task contract | `sh scripts/task.sh start . <contract>` / `sh scripts/task.sh status .` — scope, endpoint, authority, baseline and catalogue provenance before edits |
 | Run the docs gate on this repo      | `scripts/check.sh` — also runs on every push     |
 | Run the whole suite                 | every script in `tests/`, e.g. `sh tests/kit-demo.sh` — the end-to-end bootstrap acceptance test |
 | Prove the kit keeps its own rules   | `tests/self-host.test.sh` — the root gate is green, and bootstrap still strips the kit's own files |

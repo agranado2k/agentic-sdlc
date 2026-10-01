@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the two agent-harness adapters (claude-code, gemini-cli) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.36.0 is in review on `feat/lifecycle-entry` (PR #325; #297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main), untagged until its merge. 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `282e0a8` — merge of PR #379 (#375: a broker-posted review records its findings and both verdicts), untagged past `v0.34.0` with PR #377 (#372); both moved a skill or the kit-only broker and no shared file, so they ride the next release. |
+| **Last commit on `main`** | `1222838` — merge of PR #390 (#384: the session-start hook records how far the root checkout is behind `origin/main`), untagged past `v0.35.0` with PRs #373, #376 (#334: `/to-tickets` reads the copy it screened), #378 (#341: `/dogfood`'s outcome check fails closed), #382 (#337, a suite), #391 (#386, the kit-only landing script) and #394 (#387, a wait-bound subagent stop records the last line's kind and age); they moved skills, the adapter, a policy file and suites and no shared file, so they ride 0.36.0, whose note enumerates them. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. The retro wave of 2026-10-01 (#343–#354, from `.retro/2026/10/retro-20261001T093317Z.md`) is complete: all twelve landed the same day, with the follow-ups #372 and #375, in PRs #359–#370, #377, #379 and the release #380; its nine merged worktrees were pruned on 2026-10-01. What that wave left for the next retro is on PRD #237's closing comment. None from the forge-broker wave: PRD #261 is complete — #265–#269 landed on 2026-10-01 as PRs #285, #283, #321, #320 and the 0.33.0 release #322; the four stacked worktrees and the release worktree were pruned. Open from other work: #325, the lifecycle wave's next slice (ADR-0011). Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert; codex has been logged out on the operator's machine since 2026-09-30, so no cross-vendor review has run since — every review has been an in-session reviewer on a different model, posted through the broker. |
+| **Active worktrees** | None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. The retro wave of 2026-10-01 (#343–#354, from `.retro/2026/10/retro-20261001T093317Z.md`) is complete: all twelve landed the same day, with the follow-ups #372 and #375, in PRs #359–#370, #377, #379 and the release #380; its nine merged worktrees were pruned on 2026-10-01. What that wave left for the next retro is on PRD #237's closing comment. None from the forge-broker wave: PRD #261 is complete — #265–#269 landed on 2026-10-01 as PRs #285, #283, #321, #320 and the 0.33.0 release #322; the four stacked worktrees and the release worktree were pruned. `worktree/lifecycle-entry` is PR #325, the lifecycle wave's second slice (#297, ADR-0011), carrying the 0.36.0 bump; #298–#302 are the later slices, and #302 owns consumer adoption of the mechanisms. Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert; codex has been logged out on the operator's machine since 2026-09-30, so no cross-vendor review has run since — every review has been an in-session reviewer on a different model, posted through the broker. |
 
 ### Open questions / unresolved decisions
 
@@ -1784,3 +1784,79 @@ It is a NARROWING, the first in the trace: a consumer's own emit with a typo
 in `outcome=` stops writing. `UPDATING.md`'s behaviour section says how to find
 one (`--dry-run`, read stderr). The tag is NOT cut by this PR; self-host F3
 prints its pull-request note until the human's merge.
+### 2026-09-30 — Catalogue admission shipped and task entry followed it
+
+PR #310 landed ticket #296 at `24103c7` and the same merge carries signed tag
+`v0.27.0`. The post-merge self-host run initially checked out before the tag was
+published and reported only the expected missing-tag failure; its rerun after
+publication passed all 31 checks. The clean merged `worktree/lifecycle-catalogue`
+was then pruned. The Current state row above remained stale until this entry and
+still named that removed worktree.
+
+`worktree/lifecycle-entry` now builds ticket #297, the Process half of ADR-0011's
+first vertical slice. A task contract is admitted before production work through
+one POSIX command. It records proportional scope and endpoint, standing
+authorization, canonical catalogue provenance, and separate HEAD, staged,
+unstaged and untracked baseline identities. Prior work is preserved only when
+the contract says so; an explicit do-not-push endpoint records its exception and
+consequence without forbidding an independent review or claiming delivery.
+
+The Codex adapter is deliberately dormant. It records the ordinary-request
+entry rule and the observed 0.159.0 hook/trust boundary, while calling scope-first
+advisory until a later live evaluation demonstrates interception. The shared
+layer moves to 0.28.0 only because its manifest-listed update recipe must inventory
+this independently mergeable slice and re-pin its transcripts. Task mechanisms
+remain non-manifest until ticket #302 defines complete consumer adoption.
+
+### 2026-09-30 — A fresh Codex CLI session is available for a later live evaluation
+
+A read-only feasibility probe asked one narrow question: can this host start a
+fresh non-interactive Codex session now? Yes for the observed case. At 11:44 UTC,
+Codex CLI 0.159.0 with requested model `gpt-5.6-sol`, ephemeral state, read-only
+sandbox and skipped repository discovery returned `READY` and exit 0. The JSON
+evidence is `/tmp/lifecycle-wave/codex-preflight-20260930.json`; no probe code
+exists to promote.
+
+The result is deliberately smaller than a hook claim. An earlier `gpt-6-sol`
+attempt was credit-limited, so availability does not generalize across models or
+times. The probe changed no hook trust, configuration, or credentials and tested
+no hook behavior. It removes the known fresh-session preflight blocker for ticket
+#301; that ticket must still demonstrate enabled versus disabled interception at
+the live host boundary or report the integration blocked.
+
+### 2026-09-30 — The task-entry scaffold advanced after a concurrent release
+
+While ticket #297 was being prepared, PR #293 published signed tag `v0.28.0` at
+`39b10e2` for `/retro`, and main advanced again to `8d948bc`. The task-entry
+release scaffold therefore moved from the provisional 0.28.0 named above to
+0.29.0. Its release inventory preserves both halves: #297's non-manifest task
+entry and dormant Codex adapter, plus the Claude Code adapter's post-tag
+sub-agent transcript wait policy already on main. No operational task mechanism
+joins the shared manifest before ticket #302.
+
+### 2026-10-01 (later still) — 0.36.0: a task contract is admitted before an ordinary request's first edit
+
+PR #325 carries ticket #297, ADR-0011's second slice, and lands as the
+shared-layer release 0.36.0. The branch was drafted when 0.28.0 was current
+and numbered its bump 0.29.0; by the time its review closed, main had
+released 0.29.0 through 0.35.0 — seven releases, 411 commits — and the three
+entries above dated 2026-09-30 name that stale number. They are left as
+written; this entry is the correction. The operator ruled on the pr-iterate
+escalation: renumber and release. `origin/main` was taken as a merge commit,
+every conflict resolved to main's newer content plus this branch's additions
+— its README bullets, its bootstrap deletion-list entry, its adapter row, its
+recipe paragraph and note, both rewritten against 0.35.0.
+
+What 0.36.0 moves: no shared file but UPDATING.md — checked entry by entry
+against v0.35.0, main included — whose arriving-from paragraph and both
+worked examples re-pin. `scripts/task.sh` and `scripts/task.md` ship outside
+`files:` on `scripts/catalogue.sh`'s footing; `tests/task.test.sh` is
+kit-only and on bootstrap's deletion list; the Codex adapter is dormant.
+Riding the tag untagged since 0.35.0: #334 (`/to-tickets` reads the screened
+copy), #341 (`/dogfood`'s outcome check fails closed) and — landed while the
+first merge was under test, so the drill ran twice — #337, #384 (`data.behind`
+on `session.start`, `TRACE_BEHIND_WARN` in the trace policy file), #386
+(the kit-only landing script) and #387 (the wait-bound stop's last line), all
+enumerated in the note so self-host F6 holds — the third pass because CI's
+self-host runs on the PR's merge ref, where F6 saw #394 before this branch did. The tag `v0.36.0` on the merge commit is the
+operator's action; F3 is red on main until it exists.

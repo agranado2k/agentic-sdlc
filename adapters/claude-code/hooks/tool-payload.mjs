@@ -15,6 +15,7 @@
 //   tool_use_id <tool_use_id>
 //   event <hook_event_name>
 //   result_from tool_response|error
+//   error_first_line <the error's first non-empty line>   (failed calls only)
 //
 // A key the payload does not carry is simply not printed; the hook decides what
 // a missing one means. EXIT 2 is shape drift, with the key named on stderr, and
@@ -134,12 +135,37 @@ try {
   die(`cannot write the staged payload under ${dir}: ${error.code ?? error.message}`);
 }
 
+// THE FIRST LINE OF AN ERROR, when the result is from a failed tool call.
+// This becomes the `reason` field on the event: the hook can parse it without
+// a second pass. Bounded to one line with control characters removed, because
+// trace.sh refuses a value that carries one. NOT shell-escaped: the value travels
+// as one argument and never meets a shell parser, and trace.sh escapes it for
+// JSON itself — an escape here would be recorded as part of the text.
+let errorFirstLine = "";
+if (from === "error" && typeof payload.error === "string") {
+  // The first NON-EMPTY line: an error that opens with an empty line still
+  // says something on the next, and that is its reason.
+  const first = payload.error.split(/\r?\n/).find((line) => line.trim() !== "");
+  if (first !== undefined) {
+    errorFirstLine = first;
+    // Capped at 300 characters, counted by code point so a character outside
+    // the BMP is never cut in half.
+    errorFirstLine = Array.from(errorFirstLine).slice(0, 300).join("");
+    // Every character trace.sh's [[:cntrl:]] refuses under a UTF-8 locale
+    // becomes a space: C0, DEL, C1 (U+0085 among them), U+2028 and U+2029.
+    errorFirstLine = errorFirstLine.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/gu, " ");
+  }
+}
+
 // THE SCALARS. Printed only when the payload carries them as strings, because a
 // hook that read `[object Object]` off a drifted key would put it on a join
 // column. One per line, `key value`, which a POSIX `sed` consumes without a
 // parser; the values that become ids are checked against this adapter's own
 // identifier class by the hook (hook_id_ok), not here.
 let out = `result_from ${from}\n`;
+if (errorFirstLine) {
+  out += `error_first_line ${errorFirstLine}\n`;
+}
 for (const key of ["session_id", "tool_name", "tool_use_id", "hook_event_name"]) {
   const value = payload[key];
   if (typeof value !== "string" || value === "") continue;

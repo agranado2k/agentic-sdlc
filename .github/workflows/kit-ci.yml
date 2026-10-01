@@ -66,6 +66,14 @@ permissions:
   contents: read
 
 jobs:
+  task-entry:
+    name: Task entry contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Task entry acceptance test
+        run: sh tests/task.test.sh
+
   catalogue:
     name: Runtime catalogue admission
     runs-on: ubuntu-latest
@@ -273,6 +281,18 @@ jobs:
       # that nothing is posted when the report fails the contract (ADR-0009).
       - name: Forge-broker suite
         run: sh tests/forge-broker.test.sh
+
+  land:
+    name: A PR landed by hand records what the train records
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the landing script is POSIX sh and gh, and the suite's forge
+      # is a stub `gh` first on PATH. What this job holds is that a PR not
+      # green and mergeable is refused with nothing merged or recorded, and a
+      # landed one leaves one merge.land and one feedback.
+      - name: Landing-script suite
+        run: sh tests/land.test.sh
 
   gate-advisory:
     name: An advisory is audible through the gate
