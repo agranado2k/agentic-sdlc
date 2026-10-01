@@ -192,7 +192,9 @@ you get it wrong:
   reproduces the agent harness's own per-model rollup exactly — taking the
   **last** usage block per id, because the blocks are not always identical: a
   response that opens with a thinking block is written first with a partial
-  usage snapshot and then with the final one (#343).
+  usage snapshot and then with the final one (#343). Only `output_tokens`
+  may differ, and only by growing; a later block that shrinks it, or changes
+  the input or cache counts, is still drift.
 - **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
   payload carries two paths: `transcript_path` is the *parent session's* and
   `agent_transcript_path` is the subagent's. Read the first one there and every

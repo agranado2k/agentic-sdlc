@@ -42,8 +42,10 @@
 // partial usage snapshot (output_tokens 1, say) and then with the final one
 // (113). The final block is what the rollup counts, so the last block read
 // for an id replaces any earlier one, and a superseded block contributes
-// nothing. Every line is still checked for shape — a renamed key on a
-// superseded line is drift all the same.
+// nothing. Only output_tokens may differ, and only by growing: a later block
+// that shrinks it, or that changes the input or cache counts, is drift (M-1,
+// review of PR #363). Every line is still checked for shape — a renamed key
+// on a superseded line is drift all the same.
 //
 // WHAT THIS FILE DOES NOT DO. It never reads the transcript's `cost-state`
 // rollup, though that line holds per-model totals and a cost figure and would
@@ -204,12 +206,23 @@ for (const line of raw.split("\n")) {
     // A streamed response, written once per content block. Its model and its
     // request must repeat — anything else is drift, not a second response —
     // and its usage is the last block read (#343: a thinking block's line
-    // carries a partial snapshot the next line supersedes).
+    // carries a partial snapshot the next line supersedes). The superseding
+    // is NARROW (review of PR #363, M-1): only output_tokens may move, and
+    // only up. A snapshot cannot exceed the final count, so a later block
+    // that shrinks it is the pair out of order, and the input and cache
+    // counts are fixed before the first token streams — either is drift.
     if (first.model !== message.model) {
       die(`line ${lineNo}: message.id ${message.id} appears again under a different model ('${first.model}' then '${message.model}')`);
     }
     if (first.requestId !== requestId) {
       die(`line ${lineNo}: message.id ${message.id} appears again under a different requestId ('${first.requestId}' then '${requestId}')`);
+    }
+    for (const [field] of FIELDS) {
+      const was = first.counts[field];
+      const now = counts[field];
+      if (field === "tok_out" ? now < was : now !== was) {
+        die(`line ${lineNo}: message.id ${message.id} appears again with ${field} ${was} then ${now} — a later block may only grow tok_out, with the other counts unchanged, so this is not the same response's final snapshot`);
+      }
     }
     first.counts = counts;
     continue;

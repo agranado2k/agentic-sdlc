@@ -1864,6 +1864,27 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "a missing model on the final block is still drift, naming the key" ||
 		fail "a missing model: exit $S_STATUS, '$S_ERR'"
 
+	# THE SUPERSEDING RULE IS NARROW (review of PR #363, M-1). Only a later
+	# block that GROWS output_tokens with the other three counts equal is the
+	# final snapshot. The same pair written final-first would sum 46 where the
+	# truth is 158 — so a shrinking output, or any change in the input or cache
+	# counts, is still drift: exit 2, naming the id and the field.
+	sed -n '13p' "$TSUB" >"$SCRATCH/thinking-l13-343.jsonl"
+	{ sed -n '1,11p' "$TSUB"; cat "$SCRATCH/thinking-l13-343.jsonl"; sed -n '12p;14,$p' "$TSUB"; } >"$SCRATCH/thinking-swap-343.jsonl"
+	t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-swap-343.jsonl"
+	[ "$S_STATUS" = 2 ] && case $S_ERR in *msg_011CfZXyUJMx7CpnvxyFG4X1*tok_out*) true ;; *) false ;; esac &&
+		pass "the pair written final-first (output 113 then 1) is drift, naming the id and tok_out" ||
+		fail "the final-first pair: exit $S_STATUS, row '$S_OUT', '$S_ERR'"
+	for pair in tok_in:input_tokens tok_cache_w:cache_creation_input_tokens tok_cache_r:cache_read_input_tokens; do
+		f=${pair%:*}
+		key=${pair#*:}
+		sed '13s/"'"$key"'":\([0-9]*\)/"'"$key"'":9\1/' "$TSUB" >"$SCRATCH/thinking-$f-343.jsonl"
+		t_run_split node "$EXTRACTOR" "$SCRATCH/thinking-$f-343.jsonl"
+		[ "$S_STATUS" = 2 ] && case $S_ERR in *msg_011CfZXyUJMx7CpnvxyFG4X1*"$f"*) true ;; *) false ;; esac &&
+			pass "a later block whose $f differs is drift, naming the id and $f" ||
+			fail "a later block with a different $f: exit $S_STATUS, row '$S_OUT', '$S_ERR'"
+	done
+
 	# A delta read anchored on the two-block id counts it once, in the earlier
 	# read, and the anchor's later block is not a new message.
 	t_run_split node "$EXTRACTOR" --after msg_011CfZXyUJMx7CpnvxyFG4X1 "$TSUB"
