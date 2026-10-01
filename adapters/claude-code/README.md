@@ -508,9 +508,12 @@ a token-bearing event whose model has no price in your table, which is why the
 
 The manual's first hard rule is "Worktree, always": the root checkout is never
 where in-progress work is edited. Git has no hook for an edit, so the rule is
-held twice. `.githooks/pre-commit` refuses the commit, for every committer;
-`hooks/root-guard.sh` refuses the edit itself, for an agent, before the tool
-runs. Wire it to `PreToolUse` in your own `.claude/settings.json`:
+held twice. `.githooks/pre-commit` refuses an agent's commit from the main
+working copy or on the default branch; `hooks/root-guard.sh` refuses the edit
+itself, before the tool runs. Of the two, the pre-tool hook is the one that
+refuses: git lets any committer skip a hook, so the commit hook is a guard a
+cooperative agent meets, and the pre-tool hook is what refuses the ways around
+it. Wire it to `PreToolUse` in your own `.claude/settings.json`:
 
 ```json
 {
@@ -537,22 +540,54 @@ model on stderr; exit 0 lets the call through. Nothing goes to stdout.
   session legitimately writes at the root, `.trace/` and `.retro/`.
 - **It fails open.** A payload it cannot read, a tool it does not know or a
   root it cannot resolve lets the call through: a guard that blocked every
-  call on a parse failure would end the session, and the commit hook is the
-  half that fails closed. Unlike the trace hooks above it does exit non-zero —
-  changing the session is its whole purpose — and records nothing.
+  call on a parse failure would end the session. The commit hook is no
+  fail-closed backstop for that — a cooperative agent meets it, and nothing
+  more. Unlike the trace hooks above it does exit non-zero — changing the
+  session is its whole purpose — and records nothing.
+
+### Which commits the commit hook refuses
+
+`.githooks/pre-commit` refuses agents only. A commit is refused when one of
+these variables is set, non-empty, in the committing environment, and the
+commit comes from the main working copy or lands on the default branch (the
+branch `origin/HEAD` names, or `main` where there is none). With none set, a
+human commits as before — so a consumer following `UPDATING.md` by hand on
+`main` is let through.
+
+| Variable | Set by | Status |
+| --- | --- | --- |
+| `CLAUDECODE` | Claude Code, in the shell it runs commands in | verified on a live host |
+| `CLAUDE_CODE_SESSION_ID` | Claude Code, the same shell | verified on a live host |
+| `TRACE_SESSION` | the kit's trace layer, while a session is traced | verified on a live host |
+| `GEMINI_CLI` | Gemini CLI, `1` in every shell command its tool runs | documented only — the CLI's own shell-tool documentation |
+| `CODEX_SANDBOX` | Codex, in a command it runs sandboxed | documented only |
+| `CODEX_SANDBOX_NETWORK_DISABLED` | Codex, in a sandboxed command with the network off | documented only |
+| `CODEX_THREAD_ID` | Codex | found in the 0.159.0 CLI binary, not verified live |
+
+A documented-only marker is the agent harness's own claim, not a run watched
+here; an agent harness that sets none of them commits as a human would, and
+only the pre-tool hook — where one is wired — still stands between it and the
+root. The refusal names hard rule 1 and the manual's quick-reference row, and
+never prints its own bypass: that lives in the hook's source and in the row,
+where it is the operator's call.
 
 ### What Bash coverage it does not give
 
 For Bash it is a tripwire, not a proof. It reads the command roughly as a
-shell would — quotes dropped, heredoc bodies skipped, `cd` followed between
-simple commands — and refuses one that redirects into, or runs `sed -i`, `tee`,
-`cp` (onto), `mv`, `git checkout` or `git restore` on, a path that resolves to
-a **tracked** file at the root. Everything else goes through: a script or an
+shell would — quotes dropped, heredoc bodies skipped, `cd` (and `git -C`)
+followed between simple commands — and refuses one that redirects into, or
+runs `sed -i`, `tee`, `cp` (onto), `mv`, `git checkout` or `git restore` on, a
+path that resolves to a **tracked** file at the root (`git restore --staged`
+alone touches only the index and passes). Where git acts at the root it also
+refuses the three ways around the commit hook: `git commit --no-verify` (or
+`-n`), `git -c core.hooksPath=…`, and setting or unsetting `core.hooksPath`
+with `git config`. Everything else goes through: a script or an
 interpreter that writes (`sh tests/x.sh`, `node -e …`), `rm`, `git stash` or
 `git reset --hard`, a path spelled through a variable or a glob it never
 expands, a `cd` inside a subshell or a function, and any write to an untracked
-file. The commit hook is what catches what this misses — a change it let
-through still cannot be committed from the root.
+file. The commit hook is what an agent meets next — a change this let
+through is still refused at the commit from the root, for an agent that keeps
+its marker and its hooks.
 
 ## What this adapter deliberately does NOT contain
 

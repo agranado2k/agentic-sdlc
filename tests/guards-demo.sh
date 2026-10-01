@@ -26,12 +26,11 @@ KIT=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 
-# THE CONSUMER HERE COMMITS ON main FROM ITS MAIN WORKING COPY, which the
-# shipped .githooks/pre-commit refuses once core.hooksPath is wired (hard rule
-# 1, #392). This suite tests other gates, so it takes that hook's own loud
-# bypass for every commit; tests/root-guard.test.sh is where the refusal is held.
-COMMIT_WITHOUT_WORKTREE=1
-export COMMIT_WITHOUT_WORKTREE
+# THE CONSUMER HERE IS A HUMAN COMMITTING ON main FROM ITS MAIN WORKING COPY,
+# which the shipped .githooks/pre-commit lets through: it refuses an agent's
+# commit only (hard rule 1, #392). An agent may be the one running this suite,
+# so its markers are cleared first; tests/root-guard.test.sh holds the refusal.
+t_as_human
 t_init
 
 PROJ="$SCRATCH/demo-project"

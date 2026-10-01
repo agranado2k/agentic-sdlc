@@ -336,7 +336,7 @@ answers produce a clean project.
 | Run the kit's own CI locally        | every job in `.github/workflows/kit-ci.yml` runs one of four things — a suite under `tests/`, the docs harness's fixture tests, the gate, or the portability run (`node scripts/docs-conformance/index.mjs .`); `self-host` runs the last two — and `.github/workflows/kit-guards.yml` holds the guards' |
 | Understand `CLAUDE.md` / `GEMINI.md` | shims — one import line each, pointing here. Never edit them; the gate rejects a shim that grows content |
 | Bypass the gate once, loudly        | `PUSH_WITHOUT_DOCS=1 git push` — logged, and it only defers the failure |
-| Keep work out of the root checkout  | hard rule 1, held twice: `.githooks/pre-commit` refuses a commit from the main working copy or on `main` (once, loudly: `COMMIT_WITHOUT_WORKTREE=1 git commit`), and the Claude Code adapter's `root-guard.sh` pre-tool hook, wired in `.claude/settings.json` (kit-only), refuses an agent's edit there — a tripwire for Bash; its README says where it stops |
+| Keep work out of the root checkout  | hard rule 1, held twice: `.githooks/pre-commit` refuses an agent's commit (an agent-harness marker set) from the main working copy or on the default branch — on the operator's say-so only, once, loudly: `COMMIT_WITHOUT_WORKTREE=1 git commit` — and the Claude Code adapter's `root-guard.sh` pre-tool hook, wired in `.claude/settings.json` (kit-only), refuses an agent's edit there and the ways around the commit hook — a tripwire for Bash; its README names the markers and says where it stops |
 
 Add a row per skill, script and gate this repo gains, and delete the row when
 you delete the thing. The gate enforces one half of that already: every slash

@@ -14,9 +14,12 @@
 #      `mv`, `git checkout` / `git restore` on, a TRACKED file at the root, and
 #      the three ways around the git layer (`--no-verify`, `-c
 #      core.hooksPath`, `git config core.hooksPath`) where git acts there.
-#   2. THE GIT LAYER refuses the commit. `.githooks/pre-commit` refuses a
-#      commit from the main working copy or on `main`, with a loud bypass in
-#      the pre-push hook's shape.
+#   2. THE GIT LAYER refuses an agent's commit. `.githooks/pre-commit` refuses
+#      a commit from the main working copy or on the default branch when an
+#      agent-harness marker is in the environment, and lets a human with none
+#      through; a loud bypass in the pre-push hook's shape, never printed to
+#      the agent it refuses. Git lets any committer skip a hook, so this layer
+#      is a guard a cooperative agent meets; layer 1 is the one that refuses.
 #
 # On 2026-10-01 a session edited two suites in the root checkout and left
 # them uncommitted; the root's `main` then could not fast-forward for a day.
@@ -247,67 +250,128 @@ allowed "git commit --no-verify after cd into a worktree"
 guard_on "$(payload Bash command "git -C $WT commit --no-verify -m x")"
 allowed "git -C <a worktree> commit --no-verify from the root"
 
-
 # ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"
 # ---------------------------------------------------------------------------
 # A guard that blocks every tool call on a parse failure bricks the session;
-# this one is a tripwire, and the git layer below is the half that fails
-# closed.
+# this one is a tripwire. The git layer below is no backstop for it either: it
+# is a guard a cooperative agent meets, and section 4b is where this layer
+# refuses the ways around it.
 guard_on ""
 allowed "an empty payload"
 guard_on "not json at all"
 allowed "a payload that is not JSON"
 
 # ---------------------------------------------------------------------------
-banner "6. The git layer: a commit from the main working copy is refused"
+banner "6. The git layer refuses an AGENT's commit from the main working copy"
 # ---------------------------------------------------------------------------
+# The guard refuses agents only: a commit is refused when an agent-harness
+# marker is in the environment. A human on main, with none, commits as before,
+# so the UPDATING recipe a consumer follows by hand keeps working.
+# T_AGENT_MARKERS (tests/lib.sh) is the marker list; section 8 holds it equal
+# to the hook's own.
+
+# as_human <command…> — run it with every agent-harness marker unset.
+as_human() { (t_as_human && "$@"); }
+# as_agent <marker> <command…> — the same, with only <marker> set.
+as_agent() { (_m=$1 && shift && t_as_human && eval "$_m=1" && export "$_m" && "$@"); }
+
+# refused_commit <label> — non-zero, the rule named, its bypass never printed.
+refused_commit() {
+	[ "$S_STATUS" != 0 ] && pass "$1 is refused" || fail "$1 went through"
+	case $S_ERR in
+	*'hard rule 1'*) pass "and names hard rule 1" ;;
+	*) fail "$1: the refusal does not name hard rule 1: $S_ERR" ;;
+	esac
+	case $S_ERR in
+	*COMMIT_WITHOUT_WORKTREE*) fail "$1: the refusal prints its own bypass to the agent it refuses (M-2)" ;;
+	*) pass "and does not print its own bypass (M-2)" ;;
+	esac
+}
+
 git -C "$FIX" config core.hooksPath .githooks
-printf 'x\n' >>"$FIX/README.md"
-git -C "$FIX" add README.md
-t_run_split git -C "$FIX" commit -q -m "docs: from the root"
-[ "$S_STATUS" != 0 ] && pass "a commit from the main working copy exits non-zero" ||
-	fail "a commit from the main working copy went through"
+n=0
+# stage_root — one fresh staged change at the root.
+stage_root() {
+	n=$((n + 1))
+	printf 'x%s\n' "$n" >>"$FIX/README.md"
+	git -C "$FIX" add README.md
+}
+
+stage_root
+t_run_split as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root"
+refused_commit "an agent's commit (CLAUDECODE=1) on main from the main working copy"
 case $S_ERR in
-*'hard rule 1'*) pass "and names the rule" ;;
-*) fail "the refusal does not name hard rule 1: $S_ERR" ;;
+*'Keep work out of the root checkout'*) pass "and points at the manual's row" ;;
+*) fail "the refusal does not name the manual's row: $S_ERR" ;;
 esac
 
-git -C "$FIX" checkout -q -b feat/on-root
-printf 'x2\n' >>"$FIX/README.md"
-git -C "$FIX" add README.md
-t_run_split git -C "$FIX" commit -q -m "docs: from the root, on a feature branch"
-[ "$S_STATUS" != 0 ] && pass "the main working copy is refused on a feature branch too" ||
-	fail "a feature branch in the main working copy went through"
+t_run_split as_human git -C "$FIX" commit -q -m "docs: a human, from the root"
+s_assert_status 0 "the same commit with no agent marker goes through — a human on main is let through"
+case $S_ERR in
+*refused*) fail "a human's commit printed a refusal: $S_ERR" ;;
+*) pass "and says nothing about a refusal" ;;
+esac
 
-printf 'x3\n' >>"$FIX/README.md"
-git -C "$FIX" add README.md
-t_run_split env COMMIT_WITHOUT_WORKTREE=1 git -C "$FIX" commit -q -m "docs: the operator's own, bypassed"
+for m in $T_AGENT_MARKERS; do
+	stage_root
+	t_run_split as_agent "$m" git -C "$FIX" commit -q -m "docs: from the root, $m"
+	[ "$S_STATUS" != 0 ] && pass "$m alone marks an agent, and the commit is refused" ||
+		fail "$m=1 alone did not refuse a root commit"
+done
+
+stage_root
+t_run_split as_human env CLAUDECODE= git -C "$FIX" commit -q -m "docs: an empty marker"
+s_assert_status 0 "a marker set to the empty string is no marker"
+
+git -C "$FIX" checkout -q -b feat/on-root
+stage_root
+t_run_split as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root, on a feature branch"
+refused_commit "an agent's commit from the main working copy on a feature branch"
+
+stage_root
+t_run_split as_agent CLAUDECODE env COMMIT_WITHOUT_WORKTREE=1 git -C "$FIX" commit -q -m "docs: the operator's own, bypassed"
 s_assert_status 0 "COMMIT_WITHOUT_WORKTREE=1 lets it through"
 case $S_ERR in
 *COMMIT_WITHOUT_WORKTREE=1*BYPASSED*) pass "and says so, loudly, on stderr" ;;
 *) fail "the bypass was silent: $S_ERR" ;;
 esac
+assert_file_has "$PRECOMMIT_SRC" "COMMIT_WITHOUT_WORKTREE=1" "the bypass stays documented in the hook's source"
 
 # ---------------------------------------------------------------------------
 banner "7. The git layer: a linked worktree on a feature branch commits"
 # ---------------------------------------------------------------------------
 printf 'y\n' >>"$WT/README.md"
 git -C "$WT" add -A
-t_run_split git -C "$WT" commit -q -m "docs: from a worktree"
-s_assert_status 0 "a commit from worktree/x on feat/x goes through"
+t_run_split as_agent CLAUDECODE git -C "$WT" commit -q -m "docs: from a worktree"
+s_assert_status 0 "an agent's commit from worktree/x on feat/x goes through"
 
-# A linked worktree on main is still main.
-git -C "$FIX" checkout -q feat/on-root
+# A linked worktree on the default branch is still the default branch.
 git -C "$FIX" worktree add -q "$FIX/worktree/m" main 2>/dev/null
 printf 'z\n' >>"$FIX/worktree/m/README.md"
 git -C "$FIX/worktree/m" add README.md
-t_run_split git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree"
-[ "$S_STATUS" != 0 ] && pass "a linked worktree on main is refused" ||
-	fail "a commit on main from a linked worktree went through"
+t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree"
+refused_commit "an agent's commit on main from a linked worktree"
+t_run_split as_human git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree, by a human"
+s_assert_status 0 "a human's commit on main from a linked worktree goes through"
+
+# The default branch is the repository's, not a hard-coded name: where
+# origin/HEAD names one, that is the branch an agent may not commit on.
+git -C "$FIX" update-ref refs/remotes/origin/trunk HEAD
+git -C "$FIX" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+git -C "$FIX" worktree add -q "$FIX/worktree/t" -b trunk 2>/dev/null
+printf 't\n' >>"$FIX/worktree/t/README.md"
+git -C "$FIX/worktree/t" add README.md
+t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/t" commit -q -m "docs: on trunk, the default"
+refused_commit "an agent's commit on the default branch origin/HEAD names (trunk)"
+printf 'z2\n' >>"$FIX/worktree/m/README.md"
+git -C "$FIX/worktree/m" add README.md
+t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, which is not the default here"
+s_assert_status 0 "with trunk the default, a worktree on a branch named main is a branch like any other"
+git -C "$FIX" symbolic-ref --delete refs/remotes/origin/HEAD
 
 # The first commit of a fresh repository has no worktree to come from: nothing
-# exists yet to branch one off, so the root commit passes.
+# exists yet to branch one off, so the root commit passes, agent or not.
 FRESH=$(mktemp -d "$SCRATCH/fresh.XXXXXX") || exit 2
 git -C "$FRESH" init -q -b main
 git -C "$FRESH" config user.name "Guard Fixture"
@@ -317,7 +381,7 @@ mkdir -p "$FRESH/.githooks"
 [ -f "$PRECOMMIT_SRC" ] && cp "$PRECOMMIT_SRC" "$FRESH/.githooks/pre-commit"
 git -C "$FRESH" config core.hooksPath .githooks
 git -C "$FRESH" add -A
-t_run_split git -C "$FRESH" commit -q -m "chore: bootstrap"
+t_run_split as_agent CLAUDECODE git -C "$FRESH" commit -q -m "chore: bootstrap"
 s_assert_status 0 "a repository's root commit goes through — there is nothing to cut a worktree from yet"
 
 # ---------------------------------------------------------------------------
@@ -332,6 +396,15 @@ for t in Edit Write MultiEdit NotebookEdit Bash; do
 	grep '"matcher"' "$SETTINGS" | grep -q "$t" && pass "the matcher covers $t" ||
 		fail "the PreToolUse matcher does not cover $t"
 done
+# The marker list the suites unset is the hook's own, word for word.
+hook_markers=$(sed -n "s/^agent_markers='\(.*\)'$/\1/p" "$PRECOMMIT_SRC")
+[ -n "$hook_markers" ] && [ "$hook_markers" = "$T_AGENT_MARKERS" ] &&
+	pass "tests/lib.sh's T_AGENT_MARKERS is the hook's agent_markers list" ||
+	fail "the hook's markers ($hook_markers) differ from tests/lib.sh's ($T_AGENT_MARKERS)"
+for m in $T_AGENT_MARKERS; do
+	assert_file_has "$KIT/adapters/claude-code/README.md" "\`$m\`" "the adapter README names every marker the guard reads"
+done
+assert_file_has "$KIT/README.md" "| \`.githooks/pre-commit\` |" "the ship table names every hook the kit ships"
 assert_file_has "$KIT/README.md" "tests/root-guard.test.sh" "a contributor asked to run the suites would miss it"
 assert_file_has "$KIT/.github/workflows/kit-ci.yml" "sh tests/root-guard.test.sh" "CI runs every suite"
 assert_file_has "$KIT/bootstrap.sh" "tests/root-guard.test.sh" "the suite is kit-only"
@@ -344,12 +417,17 @@ lines=$(wc -l <"$KIT/AGENTS.md")
 [ "$lines" -le 350 ] && pass "AGENTS.md stays within its 350-line budget ($lines)" ||
 	fail "AGENTS.md is $lines lines, over its 350-line budget (ADR-0004)"
 
-# Neither hook names a model, a vendor or a kit-only file: both ship.
+# Neither hook names a model, a vendor or a kit-only file: both ship. The one
+# exception is the commit guard's agent markers, which are environment variable
+# names the agent harnesses chose; they are read out before the check, and
+# nothing else in the file may name a vendor.
 for f in "$GUARD_SRC" "$PRECOMMIT_SRC"; do
 	[ -f "$f" ] || continue
-	if grep -niE 'anthropic|openai|claude|codex|gemini|gpt-|opus|sonnet|haiku|fable' "$f" >/dev/null; then
+	unmarked=$(cat "$f")
+	for m in $T_AGENT_MARKERS; do unmarked=$(printf '%s\n' "$unmarked" | sed "s/$m//g"); done
+	if printf '%s\n' "$unmarked" | grep -niE 'anthropic|openai|claude|codex|gemini|gpt-|opus|sonnet|haiku|fable' >/dev/null; then
 		fail "${f#"$KIT"/} names a model or a vendor"
-		grep -niE 'anthropic|openai|claude|codex|gemini|gpt-|opus|sonnet|haiku|fable' "$f" | sed 's/^/        | /'
+		printf '%s\n' "$unmarked" | grep -niE 'anthropic|openai|claude|codex|gemini|gpt-|opus|sonnet|haiku|fable' | sed 's/^/        | /'
 	else
 		pass "${f#"$KIT"/} names no model and no vendor"
 	fi

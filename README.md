@@ -90,6 +90,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
+| `.githooks/pre-commit` | Refuses an agent's commit from the main working copy or on the default branch (hard rule 1, "Worktree, always"); a human with no agent-harness marker set commits as before. One loud bypass, documented in the hook. |
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. Two ship live (the docs gate, the TDD pairing gate); two ship as `.example` — commit linting, and the AI review below. |
 | `templates/workflows/ai-review.example.yml` | The cross-provider review workflow: two advisory reviewers from two vendors, one identical prompt, firing on PR open. This is what `/implement` requests when it delivers. **Inert on arrival** — rename it once a provider secret exists. |
 | `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
@@ -725,9 +726,13 @@ skeleton (K0).
   on stderr, and lets the same write through under `worktree/`, outside the
   repository and under `.trace/` or `.retro/`; for Bash it refuses a redirect,
   `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` onto a tracked
-  root file and passes `sh tests/x.sh`. Then `.githooks/pre-commit` refuses a
-  commit from the main working copy or on `main`, passes one from a linked
-  worktree on a feature branch and a repository's first commit, and lets
+  root file (following `cd` and `git -C`), and `git commit --no-verify`,
+  `git -c core.hooksPath=…` or a `core.hooksPath` change made at the root, and
+  passes `sh tests/x.sh`. Then `.githooks/pre-commit` refuses a commit from
+  the main working copy or on the default branch when any agent-harness marker
+  is set, each marker alone, without printing its bypass; lets the same commit
+  through for a human with none; passes an agent's commit from a linked
+  worktree on a feature branch and a repository's first commit; and lets
   `COMMIT_WITHOUT_WORKTREE=1` through loudly. Every refusal was first watched
   passing a guard that knew no rule.
 - `sh tests/trace-skills.test.sh` holds every chain skill to the trace's
