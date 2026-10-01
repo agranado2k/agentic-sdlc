@@ -64,9 +64,6 @@ failures=0
 # actually see it. Same convention as tests/agents-tiers.test.sh.
 SKIPPED=0
 
-assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
-assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
-
 # assert_has <file> <string>
 assert_has() {
 	if grep -qF "$2" "$1" 2>/dev/null; then

@@ -30,9 +30,6 @@ t_init
 PROJ="$SCRATCH/demo-project"
 REMOTE="$SCRATCH/demo-remote.git"
 
-assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
-assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
-
 # ---------------------------------------------------------------------------
 banner "Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------

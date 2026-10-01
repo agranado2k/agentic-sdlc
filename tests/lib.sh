@@ -547,6 +547,10 @@ assert_status() {
 	fi
 }
 
+# assert_file <path> / assert_no_file <path> — the path exists, or is gone.
+assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
+assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
+
 assert_out_has() {
 	case "$LAST_OUT" in
 	*"$1"*) pass "output mentions '$1'" ;;

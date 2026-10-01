@@ -93,8 +93,6 @@ cb='}'
 mark() { printf '%s%s%s%s%s' "$ob" "$ob" "$1" "$cb" "$cb"; }
 mark_re="${ob}${ob}[A-Z][A-Z0-9_]*${cb}${cb}"
 
-assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
-assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
 
 # Snapshot / restore the manual layer, so each red step starts from green.
 save_good() {
