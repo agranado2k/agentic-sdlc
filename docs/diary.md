@@ -1860,3 +1860,61 @@ on `session.start`, `TRACE_BEHIND_WARN` in the trace policy file), #386
 enumerated in the note so self-host F6 holds — the third pass because CI's
 self-host runs on the PR's merge ref, where F6 saw #394 before this branch did. The tag `v0.36.0` on the merge commit is the
 operator's action; F3 is red on main until it exists.
+
+### 2026-10-01 (last) — PRD #273's follow-ups land: twelve rulings become twelve PRs, and one of them is 0.35.0
+
+The operator delegated the rulings PRD #273 had left open — the five confirm-lists,
+two acceptance gaps, the resolved threads — and then the follow-ups themselves. The
+rulings: 46 of 49 confirm-list items accepted as landed, three rejected into fix
+tickets (#340, #341, #342). The follow-ups: twelve tickets, #331–#342, filed with
+`ticket.write` events this time, built in three waves sized by which files they
+touch, each with its own review and iteration, all merged on 2026-10-01.
+
+| Ticket | What | PR | Release |
+| --- | --- | --- | --- |
+| #331 | `/implement` reads a stamp through `scripts/stamp.sh` | #371 | **0.35.0** |
+| #332 | `data.label_proposed` and `data.posted`; the retro reads both | #374 | — |
+| #333 | the fence's checker anchor, and an 8-byte span floor | #357 | — |
+| #334 | `/to-tickets` reads the copy it screened | #376 | — |
+| #335 | the adapter says how a reader loses its shell | #358 | — |
+| #336 | the dispatch suite counts only its own sleeps | #366 | — |
+| #337 | the checker's cost measured; a bound and an audit | #382 | — |
+| #338 | fifteen copied test helpers move to `tests/lib.sh` | #383 | — |
+| #339 | the 0.26.0 note back in order | rode #371 | 0.35.0 |
+| #340 | a refused `Confidence:` is a stop | #356 | — |
+| #341 | `/dogfood`'s outcome check fails closed | #378 | — |
+| #342 | a row with no oracle says `oracle: none — <why>` | #355 | — |
+
+**Three rulings reversed a session's — or the orchestrator's — first answer.** The
+fence's anchor first required `.agents/skills/`; `VERSION`'s 0.14.0 note promises the
+older `.claude/skills/`-only layout stays legal, so it accepts either. The 8-byte
+evidence floor refused `LGTM`; a span shorter than the floor passes when it is the
+whole text. And `vocab.sh` exits 2 for a refused value and for a broken policy file
+alike, so two fences (`stamp.sh`, `/dogfood`'s outcome) now ask `fields` first and
+call a checker that cannot answer "unusable", never "refused".
+
+**Two real defects the reviews caught before landing**: `stamp.sh` printed a line in a
+field the policy file did not declare, unchecked (`Domain: x;touch PWN` at exit 0);
+and `/dogfood`'s per-step return file was never cleared, so a stale return passed a
+later step's check. Both are tests now.
+
+**The measurement.** Every kit call site lifts before it checks; the checker costs
+about 15 ms per declared line, linear, so the only change was a bound at the sizes
+callers send. One input is still unbounded and recorded: `stamp.sh` lifts by key,
+and 2,000 `Tier:` lines cost 30 CPU-seconds — a shared-file change, for a bump.
+
+**Running it.** Main moved under every merge — other waves landed 0.33.0, 0.34.0
+and 0.36.0 in the same hours — so an untagged PR is merged on green checks and a
+clean merge state, and a release PR only when the commits that moved main touch no
+release input (a shipped file, a skill, an article, the recipe); otherwise it is
+re-captured on the new main first. 0.35.0 took three attempts. Every review again
+shared the author's vendor. Mechanical tickets on the smallest model twice delivered
+a fraction of the ticket (#342, #338); both were finished by the iteration pass on a
+stronger model, and the tier mapping is worth a look.
+
+**Candidates, none filed:** the `stamp.sh` count bound and the `vocab.sh` header
+wording (both a bump); the dispatch suite's TERM leg signalling before the trap is
+installed; `trace-hooks`'s one-second bound against a 51 ms readiness check; a
+`LIFTED` entry-match assertion with baits for the exemptions; the fence extractors
+with a mode; the verdict runners in two suites with different bodies.
+
