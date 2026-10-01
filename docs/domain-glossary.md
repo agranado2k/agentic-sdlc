@@ -174,8 +174,9 @@ Grouped by the seam each term belongs to. Entry shape:
   `scripts/agents.config.sh`. The kit names no model anywhere. A `mechanical`
   stamp needs both of the rubric's conditions — the ticket names the one
   command whose exit is its oracle, and the change is one file or one pattern
-  applied uniformly — and a refactor that touches many files for different
-  reasons is `implementer`.
+  applied uniformly across many — so a refactor that touches many files for
+  different reasons, or a definition of done with an "unless" in it, is not
+  `mechanical`, and the rubric's later questions size it.
   - _Avoid_: "model", "agent size" — the tier is a decision about the *work*,
     deliberately made before anyone knows which model will run it.
 - **Task domain** — the resolver's optional *second* axis: what the work is made

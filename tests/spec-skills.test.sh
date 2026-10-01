@@ -274,31 +274,45 @@ assert_file_has "$TIX" "## The tier rubric" "the heading the update recipe's wor
 # review and rebuilt on a stronger model, 0 of 8 `implementer` PRs were. The
 # first rubric line — "checkable definition of done" — admitted refactors
 # across many suites, which the suite could verify but the smallest model
-# could not produce. So a `mechanical` stamp now needs both: the ticket names
-# the ONE command whose exit is its oracle, and the change is one file or one
-# pattern applied uniformly. The failure cases are named in the same line,
-# with the tier they go to, and rule 14 says what a doubt on either does to
-# the confidence. The glossary's entry says the same in one sentence, so a
-# reader who meets the tier there first meets the conditions too.
+# could not produce. So the `mechanical` answer now needs both conditions: the
+# ticket names the ONE command whose exit is its oracle, and the change is one
+# file or one pattern applied uniformly across many. The conditions gate that
+# answer and nothing else (PR #443 review): a ticket that fails one is no hit,
+# so the rubric goes on to questions 2, 3 and 4 — a failed condition never
+# jumps past the planner and reviewer questions straight to `implementer`.
+# The oracle has a home in the ticket — the first line of its Acceptance
+# section — which the publish step names. Rule 14 says what a doubt on either
+# condition does to the confidence, and the glossary's entry says the same in
+# one sentence, so a reader who meets the tier there first meets them too.
 rubric=$(section_of "$TIX_ABS" "The tier rubric")
 rline1=$(printf '%s\n' "$rubric" | awk '/^1\. / { print; exit }')
 [ -n "$rline1" ] && pass "the tier rubric still opens with a numbered first question" ||
 	fail "the tier rubric has no numbered first line — the mechanical question is gone"
+has_in "$rline1" "only when both conditions hold" "the two conditions are both required, not either"
 has_in "$rline1" "names the one command whose exit is its oracle" "condition one: the oracle is one command, named in the ticket"
-has_in "$rline1" "one file or one pattern applied uniformly" "condition two: the change is one file, or one pattern everywhere"
+has_in "$rline1" "first line of its Acceptance section" "condition one says where in the ticket the oracle is written"
+has_in "$rline1" "one file or one pattern applied uniformly across many" "condition two: the change is one file, or one pattern everywhere"
 has_in "$rline1" "many files for different reasons" "the refactor the suite verifies but the smallest model cannot produce is named"
 has_in "$rline1" '"unless"' "a definition of done with an exception in it is not checkable without judgement"
-in_order "$rline1" "the failure cases are sent to implementer, after both conditions are stated" \
-	"names the one command" "one file or one pattern" "many files for different reasons" '"unless"' '`implementer`'
-printf '%s\n' "$rline1" | grep -q -F '⇒ `mechanical`' &&
-	pass "the first line still answers mechanical — the conditions narrow the tier, they do not remove it" ||
-	fail "the first rubric line no longer resolves to mechanical"
-has_in "$conf" '`mechanical` stamp with either condition in doubt is `low`' "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
-tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
+has_in "$rline1" '⇒ `mechanical`' "the first line still answers mechanical — the conditions narrow the tier, they do not remove it"
+in_order "$rline1" "a failed condition is no hit: the rubric goes on to question 2, after the answer and the conditions" \
+	'⇒ `mechanical`' "only when both conditions hold" "many files for different reasons" '"unless"' "no hit" "goes on to question 2"
+case $rline1 in
+*'is `implementer`'*) fail "rubric line 1 sends a failed condition straight to implementer, past the planner and reviewer questions" ;;
+*) pass "rubric line 1 resolves nothing but mechanical — a failed condition is sized by questions 2 to 4" ;;
+esac
+has_in "$rubric" "first hit wins" "the rubric still reads first hit wins — a failed condition is simply not a hit"
+has_in "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
+in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
+	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
+has_in "$conf" "A \`mechanical\` stamp with either of the rubric's two conditions in doubt is \`low\`." "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
+tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^  - /) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
 has_in "$tier_entry" "one command whose exit is its oracle" "the glossary's tier entry carries condition one"
-has_in "$tier_entry" "one file or one pattern" "and condition two"
-has_in "$tier_entry" "many files for different reasons" "and names the refactor that is implementer"
+has_in "$tier_entry" "one file or one pattern applied uniformly across many" "and condition two, with its across-many"
+has_in "$tier_entry" "many files for different reasons" "and names the refactor that fails it"
+has_in "$tier_entry" '"unless"' "and the definition of done with an exception in it"
+has_in "$tier_entry" "the rubric's later questions size it" "and says a failure is sized by the rest of the rubric, not sent to one tier"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 
 # ---------------------------------------------------------------------------
