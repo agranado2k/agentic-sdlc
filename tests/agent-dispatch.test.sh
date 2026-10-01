@@ -61,14 +61,17 @@ dispatch() { t_run_split sh "$DISPATCH" "$@"; }
 # THE SUITE COUNTS ONLY ITS OWN SLEEPS (#336). Several legs prove the dispatcher
 # left no `sleep N` behind by counting them — and counted the HOST's: a sibling
 # session's wait loop on the same number turned this suite red for a reason
-# outside the tree. Two filters make a count the suite's own. The process
-# group: every process this suite starts inherits it, and keeps it when it is
-# re-parented — which is exactly the leftover these legs hunt, so a parent-pid
-# walk would lose it — while another session's shell has a group of its own.
-# And a baseline taken before the leg: a sleep its caller started in the SAME
-# group (`sleep 20 & sh tests/…`) was alive before the dispatch and is not the
-# dispatch's. Exact args, not `pgrep -f`: a loose pattern matches any process
-# whose command line mentions the number — including the suite's own.
+# outside the tree. Two filters narrow the count, and that is all they give:
+# a leg counts the `sleep N` in this suite's process group, minus the ones
+# alive before the leg began. The group: every process this suite starts
+# inherits it, and keeps it when it is re-parented — which is exactly the
+# leftover these legs hunt, so a parent-pid walk would lose it — while another
+# session's shell normally runs in a group of its own. The baseline: a sleep
+# its caller started in the SAME group (`sleep 20 & sh tests/…`) was alive
+# before the dispatch and is not the dispatch's. Neither filter is isolation:
+# a sleep another process starts in this group during a leg is still counted.
+# Exact args, not `pgrep -f`: a loose pattern matches any process whose
+# command line mentions the number — including the suite's own.
 SUITE_PGID=$(ps -o pgid= -p $$ | tr -d ' ')
 # own_sleep_pids N — pids of `sleep N` in this suite's process group, one a line.
 own_sleep_pids() {
@@ -82,24 +85,54 @@ new_sleep_pids() {
 }
 # new_sleeps N BASELINE — how many.
 new_sleeps() { new_sleep_pids "$@" | wc -l | tr -d ' '; }
+# await_sleep PID N — wait, bounded, until ps shows PID as `sleep N`: a pid
+# from `&` can be read while it is still the forked shell, before the exec.
+# Prints the pid's process group once it is visible; nothing if it never is.
+await_sleep() {
+	_as_try=0
+	until ps -o args= -p "$1" 2>/dev/null | awk -v n="$2" '$1 == "sleep" && $2 == n && NF == 2 { ok = 1 } END { exit !ok }'; do
+		_as_try=$((_as_try + 1))
+		[ "$_as_try" -gt 100 ] && return 0
+		sleep 0.05 2>/dev/null || sleep 1
+	done
+	ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
+}
 # ---------------------------------------------------------------------------
 banner "The suite counts only the sleeps it started"
 # ---------------------------------------------------------------------------
-# The filters can see: a count that read nothing — no group, or a ps that
-# answered nothing — would pass every leg below with the dispatcher broken.
-# A sleep of the suite's own, started after a baseline, is counted once and
-# only once; one alive before the baseline is not counted at all.
+# The filters can see, and each one cuts: a count that read nothing — no
+# group, or a ps that answered nothing — would pass every leg below with the
+# dispatcher broken, and a count without one of its filters would count the
+# host's sleeps again. Three sleeps of one number: one of the suite's own alive
+# before the baseline, and two started after it — one of the suite's own, and
+# a decoy in a process group of its own, the shape of another session's. Only
+# the suite's own new one is counted. `setsid` is util-linux, not POSIX (the
+# same footing as tests/lib.sh's ps columns); `set -m` is the fallback.
 [ -n "$SUITE_PGID" ] || fail "this suite could not read its own process group — the leftover-sleep legs below would count nothing"
 sleep 7337 &
 held=$!
+await_sleep "$held" 7337 >/dev/null
 sleeps_before=$(own_sleep_pids 7337)
+if command -v setsid >/dev/null 2>&1; then
+	setsid sleep 7337 &
+	decoy=$!
+else
+	set -m
+	sleep 7337 &
+	decoy=$!
+	set +m
+fi
+decoy_pgid=$(await_sleep "$decoy" 7337)
+[ -n "$decoy_pgid" ] && [ "$decoy_pgid" != "$SUITE_PGID" ] ||
+	fail "the decoy 'sleep 7337' is not running in a process group of its own (group '${decoy_pgid}') — the group filter goes unproven"
 sleep 7337 &
 probe=$!
-[ "$(new_sleeps 7337 "$sleeps_before")" = 1 ] &&
-	pass "the leftover count sees a sleep this suite started, and not one alive before its baseline" ||
-	fail "the leftover count saw $(new_sleeps 7337 "$sleeps_before") new 'sleep 7337', not 1 — the legs below cannot go red"
-kill "$held" "$probe" 2>/dev/null
-wait "$held" "$probe" 2>/dev/null
+await_sleep "$probe" 7337 >/dev/null
+[ "$(new_sleep_pids 7337 "$sleeps_before")" = "$probe" ] &&
+	pass "the leftover count sees a sleep this suite started — not one alive before its baseline, not one in another process group" ||
+	fail "the leftover count saw [$(new_sleep_pids 7337 "$sleeps_before" | tr '\n' ' ')] as new 'sleep 7337', not only [$probe] — the legs below cannot go red, or count the host's"
+kill "$held" "$probe" "$decoy" 2>/dev/null
+wait "$held" "$probe" "$decoy" 2>/dev/null
 
 
 
