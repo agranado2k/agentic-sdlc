@@ -293,8 +293,9 @@ Grouped by the seam each term belongs to. Entry shape:
     stands — the chain never reads it back).
 - **Event** — one line of the trace: a schema version, a UTC timestamp, an
   id, a **kind** from a closed vocabulary (unknown is a usage error, like an
-  unknown tier), the resolver's words where they apply, an outcome, a
-  one-line reason, raw token counts, and an open `data` map of strings.
+  unknown tier), the resolver's words where they apply, an outcome
+  (every kind has an outcome vocabulary of its own and refuses a word it
+  does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings.
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
   rewrites one — a correction is a new event. A finding has three kinds:
   `finding.raise` when a review reports it, `finding.triage` for the

@@ -262,7 +262,7 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
 # PR #284).
 REAL=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#272')
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason=real-id-inside
-env TRACE_CONFIG=$RON sh "$TRACE" end outcome=green reason=real-id-done
+env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason=real-id-done
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
 [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $S_OUT"
 # The type is what switches the run field on: a ticket subject must not start
@@ -470,7 +470,7 @@ printf 'line one\nline two\na quote " and a backslash \\ and a tab\there\n' >"$P
 HASH=$(git hash-object "$PAY")
 FAN=$(printf '%.2s' "$HASH")
 BYTES=$(wc -c <"$PAY" | tr -d ' ')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob "$PAY" outcome=confirmed reason='the evidence is in the blob'
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob "$PAY" outcome=true reason='the evidence is in the blob'
 [ "$S_STATUS" = 0 ] && pass "an emit carrying a blob exits 0" || fail "the blob emit exited $S_STATUS: $S_ERR"
 [ -f "$R/blobs/$FAN/$HASH" ] && pass "the payload is stored at blobs/<first two of the hash>/<the hash>" || fail "no blob at $R/blobs/$FAN/$HASH"
 [ "$HASH" = "$(git hash-object "$R/blobs/$FAN/$HASH")" ] && pass "and its name is git's hash of its own content — one hashing mechanism, not a second one" || fail "the stored blob does not hash to its name"
@@ -1108,5 +1108,184 @@ t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
 # The rule is written where the vocabulary lives, in one sentence.
 sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:#<digits>' &&
 	pass "the glossary's Subject entry states the numbered spelling" || fail "the glossary's Subject entry does not name ticket:#<digits>"
+
+
+banner "22. Every kind holds outcome to its own vocabulary (ticket #348)"
+# The retrospective of 2026-10-01 (F8) found three review.verdict events whose
+# outcome was a whole sentence: the kind set was closed and the outcome open
+# per kind, so a reader counting pass, blocked and confirm missed them. This
+# table is the specification — ADR-0008's, as amended for #348 — written out
+# here so a script that drifted from it fails. `-` is a kind that carries no
+# outcome; `*` is the one open kind, held to a single word.
+OV_TABLE='
+session.start fail
+session.end -
+session.usage ok fail
+agent.stop ok fail
+tool.use ok fail
+run.start -
+run.end ok stopped
+spawn dispatched in-session refused
+spawn.end ok fail timeout budget unreachable
+prd.write published
+ticket.write stamped
+ticket.start read defaulted disputed
+tdd.cycle red green refactor
+review.verdict pass blocked confirm
+finding.raise raised
+finding.triage accepted rejected escalated answered
+finding.dismiss dismissed
+pr.open opened
+pr.iterate green red stopped
+merge.land landed skipped stopped
+hypothesis proposed confirmed refuted inconclusive
+spike.verdict true false inconclusive
+brief.decide presented recorded
+housekeeping.finding ticket deepening brief deletion none
+worktree.prune removed kept
+grill.decision accepted overridden
+feedback hit adjusted missed unasked
+note *
+'
+OV="$SCRATCH/outcome-vocab"; OVON=$(policy "$OV")
+
+# The demo, first: the ticket's two lines.
+t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome='not blocking'
+[ "$S_STATUS" = 2 ] && pass "review.verdict outcome='not blocking' is exit 2 — a sentence is not a verdict" || fail "a sentence in review.verdict's outcome exited $S_STATUS, not 2: $S_ERR"
+case $S_ERR in *review.verdict*"'not blocking'"*"pass blocked confirm"*) pass "and the refusal names the kind, the value and the vocabulary, the checker's shape" ;; *) fail "the refusal did not name kind, value and vocabulary: $S_ERR" ;; esac
+[ ! -e "$OV/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused outcome was written: $(cat "$OV/events/$TODAY.jsonl")"
+t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass
+[ "$S_STATUS" = 0 ] && grep -q '"outcome":"pass"' "$OV/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "outcome=pass is written" || fail "review.verdict outcome=pass was not written (exit $S_STATUS): $S_ERR"
+
+# The table is the whole kind set: the closed kind list the script names on an
+# unknown kind is exactly the table's first column, so no kind is left open.
+t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=bogus
+_ov_script=$(printf '%s\n' "$S_ERR" | sed -n 's/.*the vocabulary is closed: //p' | tr ' ' '\n' | sed '/^$/d' | sort)
+_ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
+[ -n "$_ov_script" ] && [ "$_ov_script" = "$_ov_table" ] && pass "every kind the script knows has a row in the table, and no row names a kind it does not" ||
+	fail "the kind list and the outcome table disagree: script [$(printf '%s' "$_ov_script" | tr '\n' ' ')] table [$(printf '%s' "$_ov_table" | tr '\n' ' ')]"
+
+# Every row, both ways: each declared word writes, no outcome at all writes,
+# and a word from another kind's vocabulary is refused naming the kind.
+_ov_bad=
+_ov_rows=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d')
+_ov_ifs=$IFS
+IFS='
+'
+for _ov_row in $_ov_rows; do
+	IFS=$_ov_ifs
+	set -f
+	set -- $_ov_row
+	set +f
+	_ov_k=$1
+	shift
+	env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k with no outcome refused]"
+	case $1 in
+	-)
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome=ok >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k carries no outcome, ok accepted]"
+		;;
+	'*')
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome=correction >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k is open, a word refused]"
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome='a whole sentence' >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k is open to a word, a sentence accepted]"
+		;;
+	*)
+		for _ov_w in "$@"; do
+			env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k $_ov_w refused]"
+		done
+		# `landed` belongs to merge.land, `opened` to pr.open — a word no other
+		# row declares, so its refusal is the per-kind check and not a global one.
+		_ov_foreign=landed
+		[ "$_ov_k" = merge.land ] && _ov_foreign=opened
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_foreign" >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k accepted $_ov_foreign]"
+		;;
+	esac
+	IFS='
+'
+done
+IFS=$_ov_ifs
+[ -z "$_ov_bad" ] && pass "every row writes its own words and no outcome, and refuses another kind's word" || fail "the script disagrees with the table:$_ov_bad"
+assert_status 2 "a kind that carries no outcome refuses one — session.end outcome=ok" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=session.end outcome=ok
+assert_out_has "session.end"
+assert_status 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
+assert_status 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" sh "$TRACE" end outcome=delivered
+
+# Every word a shipped emitter writes today is declared: each literal
+# `kind=<k> … outcome=<a|b|c>` in a skill and each literal `outcome=<w>` beside
+# a kind in the Claude Code adapter's hooks and the shared dispatcher. A skill
+# gaining a word the record never decided fails here, before a session does.
+_ov_emit_bad=
+_ov_pairs=$(
+	{
+		cat "$KIT"/.agents/skills/*/SKILL.md "$KIT"/.agents/skills/*/*.md
+		cat "$KIT"/adapters/claude-code/hooks/*.sh "$KIT"/scripts/agent-dispatch.sh
+	} | tr '`' '\n' |
+		sed -n -e 's/.*kind=\([a-z][a-z.]*\).* outcome=\([a-z|-]*\).*/\1 \2/p' -e 's/^sh scripts\/trace\.sh end .*outcome=\([a-z|-]*\).*/run.end \1/p' | sort -u
+)
+[ -n "$_ov_pairs" ] || _ov_emit_bad=" [no emit line was found — the reader is broken]"
+IFS='
+'
+for _ov_p in $_ov_pairs; do
+	IFS=$_ov_ifs
+	_ov_k=${_ov_p%% *}
+	for _ov_w in $(printf '%s' "${_ov_p#* }" | tr '|' ' '); do
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" >/dev/null 2>&1 || _ov_emit_bad="$_ov_emit_bad [$_ov_k $_ov_w]"
+	done
+	IFS='
+'
+done
+IFS=$_ov_ifs
+[ -z "$_ov_emit_bad" ] && pass "every outcome a skill, a hook or the dispatcher writes today is declared for its kind" || fail "an emitter writes an outcome its kind does not declare:$_ov_emit_bad"
+
+# verify: history is never rewritten, so an undeclared outcome ALREADY written
+# is an advisory — stderr, file and line, the kind and the value; never a bad
+# line, never a change to the exit code. The lines are shaped as the emitter
+# wrote them before the rule, from the kit's own trace.
+OVV="$SCRATCH/outcome-verify"; OVVON=$(policy "$OVV")
+TRACE_CONFIG=$OVVON sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=blocked reason=clean
+printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o1","kind":"review.verdict","subject":"pr:#320","outcome":"not blocking \\u2014 fix M-1 first"}\n' >>"$OVV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o2","kind":"run.end","outcome":"delivered"}\n' >>"$OVV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o3","kind":"note","reason":"decoy","data":{"outcome":"a data key is not the outcome"}}\n' >>"$OVV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o4","kind":"agent.stop"}\n' >>"$OVV/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over undeclared outcomes exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over undeclared outcomes: $S_OUT"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2"*review.verdict*"not blocking"*) pass "and names the sentence's file:line, kind and value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict and the sentence: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3"*run.end*delivered*) pass "and run.end's delivered too" ;; *) fail "stderr did not name $TODAY.jsonl:3 run.end delivered: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves a declared outcome alone" ;; esac
+case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read data.outcome as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $S_ERR in *"$TODAY.jsonl:5"*) fail "verify advised on an event with no outcome: $S_ERR" ;; *) pass "and an event with no outcome is no advisory" ;; esac
+for _ov_cmd in summary export; do
+	t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" $_ov_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_ov_cmd over undeclared outcomes still exits 0" || fail "$_ov_cmd exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'outcome')" = 1 ] && pass "and $_ov_cmd says so in exactly one stderr line" || fail "$_ov_cmd did not print exactly one outcome advisory: $S_ERR"
+	case $S_ERR in *"2 "*outcome*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $S_ERR" ;; esac
+done
+
+# The vocabulary is written where the decisions live: the record's amendment
+# spells every row, and the glossary's Event entry names the rule.
+_ov_adr=$(ls "$KIT"/docs/adr/0008-*.md)
+_ov_amend=$(sed -n '/Amended 2026-10-01 (#348)/,/^[0-9][0-9]*\. /p' "$_ov_adr" | tr '\n' ' ')
+_ov_miss=
+IFS='
+'
+for _ov_row in $_ov_rows; do
+	IFS=$_ov_ifs
+	set -f
+	set -- $_ov_row
+	set +f
+	case $_ov_amend in *"\`$1\`"*) ;; *) _ov_miss="$_ov_miss $1" ;; esac
+	shift
+	for _ov_w in "$@"; do
+		case $_ov_w in -|'*') continue ;; esac
+		case $_ov_amend in *"\`$_ov_w\`"*) ;; *) _ov_miss="$_ov_miss $_ov_w" ;; esac
+	done
+	IFS='
+'
+done
+IFS=$_ov_ifs
+[ -n "$_ov_amend" ] && [ -z "$_ov_miss" ] && pass "ADR-0008's #348 amendment spells every kind and every word of the table" || fail "ADR-0008's #348 amendment is missing:${_ov_miss:- the amendment itself}"
+sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'outcome vocabulary of its own' &&
+	pass "the glossary's Event entry says every kind has an outcome vocabulary of its own" || fail "the glossary's Event entry does not name the per-kind outcome vocabulary"
 
 t_done "trace script"
