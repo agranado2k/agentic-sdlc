@@ -81,9 +81,8 @@ write_config() {
 	printf '%s\n' "$2" >"$1"
 }
 
-# resolve <args> — the library, run as an agent runs it, streams kept apart
-# (t_run_split in tests/lib.sh owns why).
-resolve() { t_run_split sh "$LIB" "$@"; }
+# t_resolve_tier <args> (tests/lib.sh) — the library, run as an agent runs
+# it, streams kept apart.
 
 
 
@@ -97,14 +96,14 @@ write_config "$CFG" "$CONFIG_BARE"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve implementer
+t_resolve_tier implementer
 s_assert_resolved 'model-for-implementing' "a bare mapping still resolves to the model id, with no flag"
 s_assert_err_lacks "agent harness"
 
-resolve --model implementer
+t_resolve_tier --model implementer
 s_assert_resolved 'model-for-implementing' "--model is the same answer, said explicitly"
 
-resolve --harness implementer
+t_resolve_tier --harness implementer
 s_assert_resolved '' "a bare mapping resolves to NO agent harness — meaning the caller's own"
 s_assert_status 0 "and that emptiness is a success, not a failure"
 
@@ -116,17 +115,17 @@ write_config "$CFG" "$CONFIG_AXIS"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --harness implementer
+t_resolve_tier --harness implementer
 s_assert_resolved 'beta' "'beta:<id>' resolves its agent harness"
-resolve --model implementer
+t_resolve_tier --model implementer
 s_assert_resolved 'model-for-implementing' "…and its model, without the prefix"
 
-resolve --harness reviewer
+t_resolve_tier --harness reviewer
 s_assert_resolved 'gamma' "a second tier resolves a DIFFERENT agent harness — the point of the axis"
 
-resolve --harness planner
+t_resolve_tier --harness planner
 s_assert_resolved '' "a bare tier beside prefixed ones still means the caller's own agent harness"
-resolve --model planner
+t_resolve_tier --model planner
 s_assert_resolved 'model-for-planning' "…and still resolves its model"
 
 # ---------------------------------------------------------------------------
@@ -134,12 +133,12 @@ banner "The two optional axes compose"
 # ---------------------------------------------------------------------------
 # A task domain may legitimately change the agent harness as well as the model:
 # the best prose model and the best coding model need not live at one vendor.
-resolve --harness implementer content
+t_resolve_tier --harness implementer content
 s_assert_resolved 'alpha' "the domain override carries its own agent harness"
-resolve --model implementer content
+t_resolve_tier --model implementer content
 s_assert_resolved 'model-for-writing-prose' "…and its own model"
 
-resolve --harness implementer code
+t_resolve_tier --harness implementer code
 s_assert_resolved 'beta' "an UNMAPPED domain falls back to the tier's agent harness, silently"
 s_assert_err_lacks "not a declared"
 
@@ -150,9 +149,9 @@ banner "An agent harness with no model resolves — unset is a working state"
 # and the caller omits the parameter. Refusing here would make an error of the
 # one case the rest of the file treats as normal (ADR-0005 clause 6), so
 # `alpha:` means "that agent harness, on its own default model".
-resolve --harness mechanical
+t_resolve_tier --harness mechanical
 s_assert_resolved 'alpha' "'alpha:' resolves the agent harness"
-resolve --model mechanical
+t_resolve_tier --model mechanical
 s_assert_resolved '' "…and NO model, rather than refusing"
 s_assert_status 0 "which is a success"
 s_assert_err_has "no model"
@@ -165,11 +164,11 @@ write_config "$CFG" "$CONFIG_COLON"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --model mechanical
+t_resolve_tier --model mechanical
 s_assert_resolved 'runtime-thing:8b' "an UNDECLARED prefix leaves the value whole — it was never an agent harness"
 s_assert_err_has "not a declared"
 
-resolve --harness mechanical
+t_resolve_tier --harness mechanical
 s_assert_resolved '' "…and resolves no agent harness, rather than inventing 'runtime-thing'"
 
 CFG="$SCRATCH/colon2/agents.config.sh"
@@ -177,7 +176,7 @@ write_config "$CFG" "$CONFIG_COLON_UNDECLARED"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --model mechanical
+t_resolve_tier --model mechanical
 s_assert_resolved 'runtime-thing:8b' "a project that declared NO agent harness keeps its colon'd id"
 s_assert_err_lacks "not a declared"
 
@@ -188,29 +187,29 @@ CFG="$SCRATCH/axis/agents.config.sh"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve implementer
+t_resolve_tier implementer
 s_assert_resolved 'model-for-implementing' "the no-flag caller still receives the model — the contract holds"
 s_assert_err_has "DROPPED"
 
-resolve --model implementer
+t_resolve_tier --model implementer
 s_assert_err_lacks "DROPPED"
 
-resolve --harness implementer
+t_resolve_tier --harness implementer
 s_assert_err_lacks "DROPPED"
 
 # ---------------------------------------------------------------------------
 banner "Bad input points at the thing that is actually wrong"
 # ---------------------------------------------------------------------------
-resolve --harnes implementer
+t_resolve_tier --harnes implementer
 s_assert_status 2 "a mistyped flag is refused"
 s_assert_err_has "unknown option"
 s_assert_err_lacks "unknown capability tier"
 
-resolve --harness not-a-tier
+t_resolve_tier --harness not-a-tier
 s_assert_status 2 "the closed tier vocabulary still closes, whichever half is asked for"
 s_assert_err_has "unknown capability tier"
 
-resolve --harness implementer NOT-A-DOMAIN
+t_resolve_tier --harness implementer NOT-A-DOMAIN
 s_assert_status 2 "the domain's shape check still runs behind the flag"
 s_assert_err_has "malformed task domain"
 
@@ -231,15 +230,15 @@ AGENT_TIER_MECHANICAL='alpha_x:some-model'"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --model reviewer
+t_resolve_tier --model reviewer
 s_assert_resolved 'Alpha:some-model' "an upper-case prefix leaves the value whole"
 s_assert_err_has "not a well-formed"
 
-resolve --harness planner
+t_resolve_tier --harness planner
 s_assert_resolved '' "a leading colon resolves no agent harness"
 s_assert_err_has "not a well-formed"
 
-resolve --model mechanical
+t_resolve_tier --model mechanical
 s_assert_resolved 'alpha_x:some-model' "an underscore is not in the token alphabet"
 s_assert_err_has "not a well-formed"
 
@@ -257,12 +256,12 @@ AGENT_TIER_IMPLEMENTER='alphabet:some-model'"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --harness reviewer
+t_resolve_tier --harness reviewer
 s_assert_resolved 'gamma' "a declaration split across lines and tabs still declares its tokens"
 
-resolve --model planner
+t_resolve_tier --model planner
 s_assert_resolved 'alph:some-model' "a PREFIX of a declared token does not match it"
-resolve --model implementer
+t_resolve_tier --model implementer
 s_assert_resolved 'alphabet:some-model' "…and neither does a token that merely starts with one"
 
 # The escape hatch the rest of the file honours has to cover the new warnings
@@ -296,9 +295,9 @@ AGENT_TIER_REVIEWER='alpha:runtime-thing:8b'"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-resolve --harness reviewer
+t_resolve_tier --harness reviewer
 s_assert_resolved 'alpha' "the FIRST colon splits"
-resolve --model reviewer
+t_resolve_tier --model reviewer
 s_assert_resolved 'runtime-thing:8b' "…and every later one stays in the model id"
 
 # ---------------------------------------------------------------------------

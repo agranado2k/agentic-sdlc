@@ -982,6 +982,10 @@ t_field_tokens() {
 	fi | sed -n "s/^$1\( (open)\)\{0,1\}: //p"
 }
 
+# t_resolve_tier <args> — scripts/agents.lib.sh, run as an agent runs it,
+# streams kept apart (t_run_split owns why).
+t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
+
 # t_line_of <file> <literal> — the number of the first line of <file> holding
 # <literal> as a fixed string; empty when none does.
 t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
