@@ -371,8 +371,8 @@ printf 'Tier: implementer\nConfidence: sure\nDomain: content\n' >"$SCRATCH/sure"
 read_stamp <"$SCRATCH/sure"
 [ "$P_STATUS" = 2 ] && pass "Confidence: sure — refused, exit 2: the stop the bullet names" ||
 	fail "Confidence: sure — the pipe exited $P_STATUS, not 2: a value outside the vocabulary walked past the checker"
-grep -qi 'confidence' "$SCRATCH/refusal" && pass "…and the x vocab: line names the confidence field, for the report" ||
-	fail "…but the refusal does not name the confidence field: $(cat "$SCRATCH/refusal")"
+grep -qF "x vocab: confidence: 'sure'" "$SCRATCH/refusal" && pass "…and the x vocab: line names the confidence field and the value, for the report" ||
+	fail "…but no x vocab: line names the field and the value the report quotes: $(cat "$SCRATCH/refusal")"
 printf 'Tier: implementer\nDomain: content\n' >"$SCRATCH/unstamped"
 read_stamp <"$SCRATCH/unstamped"
 [ "$P_STATUS" = 0 ] && pass "no Confidence: line — exit 0: not a stop, the ticket predates the stamp" ||
