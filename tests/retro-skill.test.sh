@@ -418,6 +418,16 @@ case "$stamp" in
 *) pass "the tier bullet points at the undeclared rule where it is" ;;
 esac
 stamp_has 'Route: `/to-tickets`' "its findings leave through /to-tickets like the other seven"
+# M-2 (review of PR #368): every rated label row that is a finding routes to
+# the label rule and the confidence rule, by number — not only one that
+# mirrors a tier finding.
+stamp_has 'any label row with a rate that is a finding to rules 4 and 14' "a rated label finding routes to /to-tickets rules 4 and 14"
+for f in "$SKILL_ABS" "$ROOT/.agents/skills/retro/QUESTIONS.md"; do
+	case "$(flat <"$f")" in
+	*'mirrors a tier-override'* | *'mirrors a tier override'*) fail "${f#"$ROOT"/} still routes only a label finding that mirrors a tier finding" ;;
+	*) pass "${f#"$ROOT"/} routes a label finding whether or not it mirrors a tier finding" ;;
+	esac
+done
 # The order file, the description and the procedure count with it.
 # Held to the EIGHTH ITEM, not the section: a phrase another item carries
 # proves nothing about this one (L-3).
@@ -447,7 +457,7 @@ route8=$(awk '/^## Routing/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" 
 [ -n "$route8" ] && pass "routing has an entry for a stamp" || fail "the Routing section has no entry for a stamp"
 # …and the entry says where each of the three findings goes — the heading
 # alone survives the deletion of all three.
-for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'label rule or rubric line in `/to-tickets`'; do
+for needle in 'rubric line in `/to-tickets`' "that band's definition in \`/review-pr\`" 'a label row with a rate that is a finding → `/to-tickets` rules 4 and 14'; do
 	case "$route8" in
 	*"$needle"*) pass "the stamp's routing entry names: $needle" ;;
 	*) fail "the stamp's routing entry does not name: $needle" ;;

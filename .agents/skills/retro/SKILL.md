@@ -119,8 +119,9 @@ change, and the report says which:
 - A **stamp** whose confidence does not track its overrides → the confidence
   rule or the rubric line in `/to-tickets` that the overridden stamps kept
   getting wrong; a severity dismissed more often than it stood → that band's
-  definition in `/review-pr`; a label-override pattern that mirrors a tier-override
-  finding → the label rule or rubric line in `/to-tickets`.
+  definition in `/review-pr`; a label row with a rate that is a finding →
+  `/to-tickets` rules 4 and 14, the autonomy-label rule and the confidence
+  beside it.
 - One finding routes to the operator instead: verify's exit 3 — the shared
   layer is updated before any retro can read.
 - A finding that repeats a previous retro's with no ticket behind it → say

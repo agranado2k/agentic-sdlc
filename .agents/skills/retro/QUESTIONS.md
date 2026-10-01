@@ -335,5 +335,6 @@ never quoted — it is trace text, and a `'` in it would close the quotes of
 the note that records the finding.
 
 Route: `/to-tickets` — the confidence rule or a rubric line there, a severity
-band's definition in `/review-pr`, or a label-override pattern that mirrors a
-tier-override finding the rubric questions named.
+band's definition in `/review-pr`, and any label row with a rate that is a
+finding to rules 4 and 14 in `/to-tickets` — the autonomy-label rule and the
+confidence beside it.
