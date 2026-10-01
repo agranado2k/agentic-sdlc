@@ -883,17 +883,15 @@ banner "15. Every data.agent the skill writes is a token from its own closed sub
 # worker's contract names none, and a lens guessed from the finding's text
 # would be the session's invention recorded as the reviewer's.
 RP=$(skill_md review-pr)
-# roster_rows <skill file> — the rows of the one list, in file order.
-roster_rows() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1"; }
-# roster_of <skill file> — the rows' tokens.
-roster_of() { roster_rows "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+# The roster readers are the harness's: t_roster_rows and t_roster_of in
+# tests/lib.sh, shared with the broker's suite.
 # headings_without_row <skill file> — every `#### Agent N — Title` heading the
 # roster has no `— Agent N, Title` row for, one per line. Computed in a
 # function and asserted in the parent shell: a `fail` inside a piped loop
 # runs in a subshell and never reaches the suite's count (review of PR #369,
 # H-1 — the suite ended ALL GREEN around a printed FAIL).
 headings_without_row() {
-	_hw_rows=$(roster_rows "$1")
+	_hw_rows=$(t_roster_rows "$1")
 	grep -E '^#### Agent [0-9]+ — ' "$1" | sed 's/^#### //' | while IFS= read -r _hw_h; do
 		_hw_num=${_hw_h%% — *}; _hw_title=${_hw_h#* — }; _hw_title=${_hw_title% (*}
 		printf '%s\n' "$_hw_rows" | grep -qF -- "— $_hw_num, $_hw_title" || printf '%s (%s)\n' "$_hw_num" "$_hw_title"
@@ -906,7 +904,7 @@ agent_values() { t_trace_lines "$1" | grep -oE "data\.agent=('[^']*'|\"[^\"]*\"|
 # not hold, space-joined; the placeholder that names the roster is on it by
 # definition. The roster is the file's own unless one is given.
 off_roster() {
-	_or_roster=${2:-$(roster_of "$1")}
+	_or_roster=${2:-$(t_roster_of "$1")}
 	agent_values "$1" | while IFS= read -r _or_v; do
 		[ "$_or_v" = '<roster-token>' ] && continue
 		case "$_or_v" in
@@ -915,7 +913,7 @@ off_roster() {
 		esac
 	done | sed 's/ $//'
 }
-ROSTER=$(roster_of "$RP")
+ROSTER=$(t_roster_of "$RP")
 n_roster=$(printf '%s\n' "$ROSTER" | grep -c . | tr -d ' ')
 [ "$n_roster" -ge 8 ] && pass "/review-pr owns a sub-agent roster of $n_roster tokens, one list" ||
 	fail "/review-pr has no '**The sub-agent roster.**' list of at least eight tokens (seven agents and the unattributed case) — found $n_roster"
@@ -1007,7 +1005,7 @@ cmp -s "$SCRATCH/bait-agent.md" "$RP" && fail "the bait planted nothing — the 
 # And the holder reads the roster from the FILE: a token withdrawn from the
 # list while the demo above still ran it is what this catches.
 sed '/^- `unattributed` — /d' "$RP" >"$SCRATCH/bait-roster.md"
-roster_of "$SCRATCH/bait-roster.md" | grep -qx unattributed && fail "bait: withdrawing a roster row changed nothing — the roster is not read from the list" ||
+t_roster_of "$SCRATCH/bait-roster.md" | grep -qx unattributed && fail "bait: withdrawing a roster row changed nothing — the roster is not read from the list" ||
 	pass "bait: a roster row withdrawn from the list is gone from the roster the holder reads"
 
 # ---------------------------------------------------------------------------

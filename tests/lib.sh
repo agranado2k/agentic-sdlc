@@ -791,6 +791,14 @@ t_ignored_commands() {
 # t_is_ignored_command <cmd> — true when the policy file exempts it.
 t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
 
+# /review-pr's sub-agent roster — the one list every `data.agent` the chain
+# writes is held to. Read from the skill file, never mirrored: two suites had
+# each carried a copy of this reader (review of PR #441, M-1).
+# t_roster_rows <skill file> — the rows of the one list, in file order.
+t_roster_rows() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1"; }
+# t_roster_of <skill file> — the rows' tokens, one per line.
+t_roster_of() { t_roster_rows "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+
 # The skill-suite scaffold (#223): four suites had each carried a hand copy of
 # the tokeniser, the command and path resolution and the model-id ban, and the
 # copies had drifted — one verdict weaker than the rest, one root list missing

@@ -1101,10 +1101,8 @@ raise_has L-1 '"posted":"yes"'
 printf '%s\n' "$RAISES" | grep -q '"posted":"no"' &&
 	fail "a broker raise says data.posted=no — the broker never records a finding it did not post" ||
 	pass "…and none says data.posted=no"
-# roster_tokens — /review-pr's closed sub-agent roster, read from its list.
-roster_tokens() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$KIT/.agents/skills/review-pr/SKILL.md" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
 n_tok=0
-for tok in $(roster_tokens); do
+for tok in $(t_roster_of "$KIT/.agents/skills/review-pr/SKILL.md"); do
 	n_tok=$((n_tok + $(printf '%s\n' "$RAISES" | grep -c "\"agent\":\"$tok\"")))
 done
 [ "$n_tok" = 3 ] && pass "every raise's data.agent is a token on /review-pr's roster ($n_tok of 3)" ||
