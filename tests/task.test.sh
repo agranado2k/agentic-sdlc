@@ -199,7 +199,16 @@ assert_status 0 'a decomposed wave ends at bounded tickets' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/wave.task"
 assert_status 0 'wave status records the tickets endpoint' -- sh "$COMMAND" status "$REPO"
 assert_out_has 'endpoint|tickets'
-assert_out_lacks 'phase|implementation'
+printf '%s\n' "$LAST_OUT" | grep -qx 'phases|specification decomposition' &&
+	pass 'wave status carries the exact admitted phases record' ||
+	fail 'wave status does not carry the exact phases record'
+
+task_repo
+sed 's/phases|specification decomposition/phases|specification decomposition implementation/' \
+	"$SCRATCH/wave.task" >"$SCRATCH/wave-implementation.task"
+assert_status 2 'a wave contract naming the implementation phase is refused' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/wave-implementation.task"
+assert_out_has 'phase implementation is not permitted for implementation/wave'
 
 task_repo
 cat >"$SCRATCH/investigation-wave.task" <<'EOF'
