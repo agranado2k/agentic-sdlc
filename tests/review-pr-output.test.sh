@@ -295,9 +295,12 @@ sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
 [ -n "$(t_field_tokens severity "$POLICY")" ] && [ -n "$(t_field_tokens status "$POLICY")" ] &&
 	pass "the policy file declares severity and status, read through 'fields'" ||
 	fail "'sh scripts/vocab.sh fields' printed no severity or no status vocabulary"
-# …and the reader agrees with its sibling in tests/vocab-policy.test.sh
-# (review of PR #328): `fields` marks an open vocabulary `<field> (open):`,
-# and a reader that does not know the mark reads nothing for an opened field.
+# …and the reader knows the (open) mark (review of PR #328): `fields` marks an
+# open vocabulary `<field> (open):`, and a reader that does not know the mark
+# reads nothing for an opened field. The reader is t_field_tokens in
+# tests/lib.sh, the one copy every suite uses; this case holds it on THIS
+# suite's field and the policy-file argument, so it guards the shared reader,
+# not a local copy — keep it.
 sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
 [ -n "$(t_field_tokens severity "$POLICY")" ] && [ "$(t_field_tokens severity "$SCRATCH/opened.config.sh")" = "$(t_field_tokens severity "$POLICY")" ] &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||

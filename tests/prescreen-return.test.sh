@@ -87,9 +87,11 @@ FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>/dev/null)
 [ -n "$(t_field_tokens command-shaped)" ] && [ -n "$(t_field_tokens outcome)" ] &&
 	pass "the policy file declares command-shaped and outcome" ||
 	fail "the policy file declares no command-shaped or no outcome vocabulary — nothing below can be held"
-# The reader agrees with its sibling in tests/vocab-policy.test.sh (review of
-# PR #328): `fields` marks an open vocabulary `<field> (open):`, and a reader
-# that does not know the mark reads nothing for a field a consumer opened.
+# The (open) mark (review of PR #328): `fields` marks an open vocabulary
+# `<field> (open):`, and a reader that does not know the mark reads nothing
+# for a field a consumer opened. The reader is t_field_tokens in tests/lib.sh,
+# the one copy every suite uses; this case holds it on THIS suite's field, so
+# it guards the shared reader, not a local copy — keep it.
 sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain command-shaped'/" "$POLICY" >"$SCRATCH/opened.config.sh"
 FIELDS_OPENED=$(VOCAB_CONFIG="$SCRATCH/opened.config.sh" sh "$VOCAB" fields 2>/dev/null)
 printf '%s\n' "$FIELDS_OPENED" | grep -q '^command-shaped (open): ' &&
