@@ -114,15 +114,15 @@ reader's file, and only a return that passed is read into the session:
 
 ```sh
 # vocab_checker — print the checker of the repository that holds the skills
-# being run: the nearest directory at or above the cwd with .agents/skills/,
-# never above the outermost git work tree around the cwd. Fails, printing
+# being run: the nearest directory at or above the cwd with .agents/skills/
+# or .claude/skills/, never above the outermost git work tree around the cwd. Fails, printing
 # nothing, when no such directory is found or it holds no scripts/vocab.sh —
 # never borrowed from a repository further up.
 vocab_checker() {
 	walk=$(pwd -P) || return 1
 	skills_root='' git_root=''
 	while :; do
-		[ -z "$skills_root" ] && [ -d "$walk/.agents/skills" ] && skills_root=$walk
+		[ -z "$skills_root" ] && { [ -d "$walk/.agents/skills" ] || [ -d "$walk/.claude/skills" ]; } && skills_root=$walk
 		[ -e "$walk/.git" ] && git_root=$walk
 		[ "$walk" = / ] && break
 		walk=$(dirname "$walk")
@@ -194,13 +194,13 @@ ignores every line that is not a bare `Field: value` line. The checker's
 half is the value: a token the policy file does not declare is refused.
 **The check fails closed.** The fence finds the checker in the repository
 that holds the skills being run: the nearest directory at or above the cwd
-with an `.agents/skills/`, never above the outermost git work tree around
-the cwd. It trusts the checker it finds there. A nested checkout with no
-skills of its own is checked by the project around it, and a repository
-further up is never consulted. Only the checker's exit 0 passes a return. A
-checker missing there or unable to run refuses the return, and so does a
-cwd under no such directory: a check that could not be made is not a check
-that passed.
+with an `.agents/skills/` or a `.claude/skills/`, never above the outermost
+git work tree around the cwd. It trusts the checker it finds there. A
+nested checkout with no skills of its own is checked by the project around
+it, and a repository further up is never consulted. Only the checker's exit
+0 passes a return. A checker missing there or unable to run refuses the
+return, and so does a cwd under no such directory: a check that could not
+be made is not a check that passed.
 
 **What the verdict means.** `yes` is the finding this section has always
 described: do not read that output, stop the row there, and report it as a
