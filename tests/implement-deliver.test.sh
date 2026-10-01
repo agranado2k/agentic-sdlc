@@ -78,12 +78,13 @@ assert_file_has "$SKILL" "git push -u origin HEAD"
 # by a session's own forge call, each leaving no `merge.land` for the
 # retrospective to read, after a by-hand landing path existed. The boundary
 # paragraph says where the merge goes once the session has stopped — the
-# project's train or its by-hand landing path, both named by the root manual,
-# never a bare forge merge — in words a consumer's manual can carry: the skill
-# ships unstamped and names no kit file (3c holds that), so it names the path
-# by role and leaves the file to the manual.
-assert_file_has "$SKILL" "the project's merge train or its by-hand landing path"
-assert_file_has "$SKILL" "never a bare forge merge"
+# project's train, or its by-hand landing path where the root manual names
+# one, never a bare forge merge — in words a consumer's manual can carry: the
+# skill ships unstamped and names no kit file (3c holds that), and a consumer's
+# manual may name no by-hand path at all, so the path is conditional, named by
+# role, and left to the manual. ("never a bare forge merge" is held by the
+# placement check below, which fails when the sentence is absent.)
+assert_file_has "$SKILL" "the by-hand landing path where the root manual names one"
 # …and in the boundary paragraph, not buried in a step: after §7's sentence,
 # before the Boundaries section.
 _b7=$(offset_of "autonomy never includes merge")
