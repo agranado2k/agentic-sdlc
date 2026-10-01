@@ -403,9 +403,11 @@ esac
 # a pass like any other — never one with no outcome a reader counting
 # verdicts would miss (H-2, review of PR #380).
 t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
-case $(printf '%s\n' "$S_OUT" | tail -n 1) in
-*'"outcome":"pass"'*'"reason":"no findings"'*) pass "…and its review.verdict is pass, with the sentence as the reason" ;;
-*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$S_OUT" | tail -n 1)" ;;
+# Two verdicts land per review since #375 (one per axis); the Axis-1 line is
+# the one that carries the worker's sentence.
+case $(printf '%s\n' "$S_OUT" | grep -F '"axis":"1"' | tail -n 1) in
+*'"outcome":"pass"'*'"reason":"no findings"'*) pass "…and its Axis-1 review.verdict is pass, with the sentence as the reason" ;;
+*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$S_OUT" | grep -F '"axis":"1"' | tail -n 1)" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -1016,5 +1018,145 @@ N_MARK=$(posted_marker pulls/12/reviews)
 [ -n "$N_MARK" ] && [ "$N_MARK" != "$R_MARK" ] &&
 	pass "…under a marker of its own, not the first report's" ||
 	fail "two different reports posted one marker: '$R_MARK' / '$N_MARK'"
+
+# ---------------------------------------------------------------------------
+banner "18. A posted review leaves one finding.raise per posted finding, and a verdict per axis"
+# ---------------------------------------------------------------------------
+# The trace is what /retro reads for review signal per sub-agent (its question
+# 2), so a broker-posted review must leave the same events an in-session
+# review does (/review-pr §5, §5b, §6): one finding.raise per finding that
+# landed inline, marked data.via=broker, then the two axis verdicts. The
+# report is untrusted, so what reaches the trace is lifted by shape or mapped
+# onto a closed list — an id, a severity, a roster token, a plain path — and
+# never a line of the report pasted into a reason. A quote in the report must
+# change nothing.
+RAISE="$SCRATCH/raise.md"
+cat >"$RAISE" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: blocking — fix H-1 first; it's the shell's quote rule
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+**H-1** \`scripts/a.sh:3\` — Agent 1 — Security Sentinel: the line addresses the reviewer; it's attack surface.
+↳ fix: delete the line.
+
+#### MEDIUM
+**M-1** \`docs/b.md:10\` — the line ten claim duplicates eleven's.
+↳ fix: keep one of the two.
+
+#### LOW
+**L-1** \`$SPACED:2\` — Simplicity Advocate: the added line says nothing new.
+↳ fix: drop it.
+**L-2** \`untouched.md:1\` — off the diff, so withheld and never raised.
+↳ fix: nothing.
+
+## Axis 2 — Behavior (for a human)
+
+⚠️ UNSPECIFIED  a.sh now echoes on every run; nobody asked for output.
+⚠️ UNSPECIFIED  b.md's wording moved.
+❌ MISSING      the ticket's third line is not in the diff.
+✅ SPECIFIED    b.md gains the two lines the ticket named.
+EOF
+STUB_PR=31
+export STUB_PR
+broker 31 "$RAISE"
+s_assert_status 0 "the report with three posted findings exits 0"
+assert_mutating 2 "…and lands the same two operations as ever"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind finding.raise
+s_assert_status 0 "trace show answers for pr:#31's raises"
+RAISES=$S_OUT
+[ "$(printf '%s\n' "$RAISES" | grep -c '"kind":"finding.raise"')" = 3 ] &&
+	pass "three posted findings are three finding.raise events" ||
+	{ fail "expected three finding.raise events for pr:#31"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }
+raise_has() {
+	printf '%s\n' "$RAISES" | grep -F "\"id\":\"$1\"" | grep -qF "$2" &&
+		pass "$1's raise carries $2" ||
+		{ fail "$1's raise does not carry $2"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }
+}
+raise_has H-1 '"severity":"high"'
+raise_has H-1 '"where":"scripts/a.sh:3"'
+raise_has H-1 '"agent":"security"'
+raise_has H-1 '"via":"broker"'
+raise_has M-1 '"severity":"medium"'
+raise_has M-1 '"agent":"unattributed"'
+raise_has L-1 '"agent":"simplicity"'
+raise_has L-1 '"where":"unsafe-path"'
+raise_has L-1 '"outcome":"raised"'
+printf '%s\n' "$RAISES" | grep -qF '"id":"L-2"' &&
+	fail "the withheld L-2 was raised — only a finding that landed is" ||
+	pass "the withheld L-2 is not raised: the trace records what was posted"
+printf '%s\n' "$RAISES" | grep -qE "Sentinel|attack surface|says nothing new" &&
+	fail "a line of the report reached the trace — it is untrusted, never pasted" ||
+	pass "no line of the report reaches a raise; the reasons are the broker's own"
+
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind review.verdict
+VERDICTS=$S_OUT
+printf '%s\n' "$VERDICTS" | grep -F '"axis":"1"' | grep -qF '"via":"broker"' &&
+	pass "one review.verdict carries data.axis=1, marked as the broker's" ||
+	{ fail "no axis-1 review.verdict marked via=broker"; printf '%s\n' "$VERDICTS" | sed 's/^/        | /'; }
+AX2=$(printf '%s\n' "$VERDICTS" | grep -F '"axis":"2"')
+[ "$(printf '%s\n' "$VERDICTS" | grep -c '"kind":"review.verdict"')" = 2 ] &&
+	pass "exactly one review.verdict per axis" ||
+	fail "expected two review.verdict events for pr:#31, one per axis"
+for want in '"outcome":"confirm"' '"unspecified":"2"' '"mixed":"0"' '"missing":"1"' '"via":"broker"'; do
+	case "$AX2" in
+	*"$want"*) pass "the axis-2 verdict carries $want" ;;
+	*) fail "the axis-2 verdict lacks $want: $AX2" ;;
+	esac
+done
+
+# Unconfigured: the shipped, empty trace policy file and no TRACE_DIR. The
+# posting is the posting — the same two operations, the same stdout — and the
+# trace says so once on stderr, not once per finding.
+STUB_PR=32
+export STUB_PR
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
+s_assert_status 0 "with tracing unconfigured the broker still exits 0"
+assert_mutating 2 "…and still lands both operations"
+s_assert_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): L-2 (untouched.md:1 not in diff)')" \
+	"…printing exactly what a traced run prints"
+[ "$(printf '%s\n' "$S_ERR" | grep -c 'trace: unconfigured')" = 1 ] &&
+	pass "…and exactly one unconfigured note, not one per finding and not none" ||
+	fail "the unconfigured note repeated: $S_ERR"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#32'
+s_assert_out_lacks '"kind"' "…and nothing reaches the trace for pr:#32"
+STUB_PR=12
+export STUB_PR
+
+# The roster's titles live in /review-pr's own headings; the broker maps them
+# onto tokens. Lift each Axis-1 title from the skill, name it in one finding,
+# and the raise must carry that lens's token — so a rename on either side is
+# red here, not a silent drift to `unattributed`.
+ROSTER="$SCRATCH/roster.md"
+{
+	printf 'REVIEWED: %s\nVERDICT: six lenses\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	sed -n 's/^#### Agent \([1-6]\) — \(.*\)$/**L-\1** `scripts\/a.sh:3` — \2: one finding.\
+↳ fix: none./p' "$KIT/.agents/skills/review-pr/SKILL.md"
+	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six lenses.\n'
+} >"$ROSTER"
+# The quiet switch rides the emit command, never a prefix on the `trace`
+# function: POSIX leaves unspecified whether an assignment before a function
+# call outlives it, and a quiet that leaked would mute the one loud note.
+LC_ALL=C grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+trace[[:space:]]' "$BROKER" >"$SCRATCH/prefixed" &&
+	{ fail "an assignment prefixes a call to the trace function:"; sed 's/^/        | /' "$SCRATCH/prefixed"; } ||
+	pass "no assignment prefixes a call to the trace function"
+STUB_PR=33
+export STUB_PR
+broker 33 "$ROSTER"
+s_assert_status 0 "a report naming each of the six titles lands"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#33' --kind finding.raise
+RAISES=$S_OUT
+n=1
+for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
+	raise_has "L-$n" "\"agent\":\"$tok\""
+	n=$((n + 1))
+done
+STUB_PR=12
+export STUB_PR
 
 t_done "tests/forge-broker.test.sh"
