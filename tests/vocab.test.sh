@@ -175,28 +175,58 @@ vocab fieldz
 s_assert_status 2 "a first argument that is neither a subcommand nor a 'Field: value' line is a usage error"
 s_assert_err_has "usage"
 
-# One ticket body checks in under a second — it is called inside the quiz
-# loop. The claim is about the CHECKER's work, so it is the checker's own CPU
-# time that is measured — user plus system, of the five child runs, as the
-# shell's `times` reports it — and not the wall clock: this assertion used to
-# read `date +%s` around the loop, and on a loaded host the same five checks
-# took 7 and 22 wall seconds while doing the same work, a red that said
-# nothing about the checker. CPU time is what a slower checker moves and what
-# a busy host leaves alone. The bound is what is claimed and no more: THIS
-# body, a ticket's dozen lines. It is not a claim about scale — the checker
-# does per-line work on every line that carries a colon, and a body with
-# thousands of those costs in proportion (measured: 2000 such lines, about
-# seven CPU-seconds a check).
-cpu_ms=$( (
-	for _ in 1 2 3 4 5; do sh "$VOCAB" <"$BODY"; done >/dev/null 2>&1
-	times
-) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
-	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }')
-case $cpu_ms in
-*[!0-9]* | "") fail "five body checks — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+# One check is bounded in CPU time at the sizes the callers send. The claim
+# is about the CHECKER's work, so it is the checker's own CPU time that is
+# measured — user plus system, of five child runs, as the shell's `times`
+# reports it — and not the wall clock: this assertion used to read `date +%s`
+# around the loop, and on a loaded host the same five checks took 7 and 22
+# wall seconds while doing the same work, a red that said nothing about the
+# checker. CPU time is what a slower checker moves and what a busy host
+# leaves alone. The bounds are what is claimed and no more: a ticket's dozen
+# lines, and a typed return's four — the most any kit call site hands over
+# (the section after this one holds them to it). They are not a claim about
+# scale: the checker does per-line work on every line that carries a colon,
+# linear in their number (#337 measured 2,000 such lines at 7 to 32
+# CPU-seconds a check, by whether their keys are declared fields).
+#
+# five_checks_ms <checker> <input> — the CPU milliseconds of five checks of
+# <input>, or "unmeasured".
+five_checks_ms() {
+	(
+		for _ in 1 2 3 4 5; do sh "$1" <"$2"; done >/dev/null 2>&1
+		times
+	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
+}
+# within_budget <checker> <input> <ms for five> <what> — pass or fail it.
+within_budget() {
+	cpu_ms=$(five_checks_ms "$1" "$2")
+	case $cpu_ms in
+	*[!0-9]* | "") fail "five checks of $4 — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+	*)
+		[ "$cpu_ms" -le "$3" ] && pass "five checks of $4 cost ${cpu_ms}ms of CPU — within ${3}ms" ||
+			fail "five checks of $4 cost ${cpu_ms}ms of CPU — over the ${3}ms budget"
+		;;
+	esac
+}
+within_budget "$VOCAB" "$BODY" 2500 "a ticket body"
+RETURN4="$SCRATCH/typed.return"
+printf '%s\n' 'Author-kind: human' 'Command-shaped: no' 'Action: apply' 'Evidence: "a quoted span"' >"$RETURN4"
+within_budget "$VOCAB" "$RETURN4" 2000 "a typed return's four lines"
+# The bait: a checker that does twelve times the work fails that budget —
+# the bound can go red, so its green says something.
+cat >"$SCRATCH/costly.vocab.sh" <<EOCOSTLY
+in=\$(mktemp) && cat >"\$in"
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do sh "$VOCAB" <"\$in"; done
+rm -f "\$in"
+EOCOSTLY
+costly_ms=$(five_checks_ms "$SCRATCH/costly.vocab.sh" "$RETURN4")
+case $costly_ms in
+*[!0-9]* | "") fail "the costly bait went unmeasured ('$costly_ms')" ;;
 *)
-	[ "$cpu_ms" -le 5000 ] && pass "five body checks cost ${cpu_ms}ms of CPU — under one CPU-second each" ||
-		fail "five body checks cost ${cpu_ms}ms of CPU — over the one-second budget per body"
+	[ "$costly_ms" -gt 2000 ] &&
+		pass "a checker twelve times as costly breaks the four-line budget (${costly_ms}ms) — the bound can fail" ||
+		fail "a checker twelve times as costly stays within the four-line budget (${costly_ms}ms) — the bound proves nothing"
 	;;
 esac
 
@@ -225,6 +255,11 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # and it is the one unbounded input this inventory admits.
 LIFTED=$(
 	cat <<'EOLIFT'
+scripts/stamp.sh@@-@@<"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+.agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" |@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
+.agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
+.agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 EOLIFT
 )
 
@@ -302,16 +337,18 @@ bait_named() {
 	*) fail "the audit stays quiet when $2 in $1" ;;
 	esac
 }
+# bait_edit <file> <sed script> — break one site in the copy, portably.
+bait_edit() { sed "$2" "$BAIT/$1" >"$BAIT/edit" && mv "$BAIT/edit" "$BAIT/$1"; }
 bait_reset
 [ -z "$(unlifted "$BAIT")" ] && pass "the unbroken copy of the call sites is clean" ||
 	fail "the unbroken copy of the call sites is named: $(unlifted "$BAIT")"
-sed -i "/grep -c '')\" -eq 3 \] || return 1/d" "$BAIT/.agents/skills/pr-iterate/SKILL.md"
+bait_edit .agents/skills/pr-iterate/SKILL.md "/grep -c '')\" -eq 3 \] || return 1/d"
 bait_named .agents/skills/pr-iterate/SKILL.md "the typed return's line count is removed"
 bait_reset
-sed -i 's|sh "$vocab" <"$_stamp_tmp/lines"|sh "$vocab" <"$_stamp_tmp/body"|' "$BAIT/scripts/stamp.sh"
+bait_edit scripts/stamp.sh 's|sh "$vocab" <"$_stamp_tmp/lines"|sh "$vocab" <"$_stamp_tmp/body"|'
 bait_named scripts/stamp.sh "the fetched body is handed over in place of the lifted lines"
 bait_reset
-sed -i 's|sh "$checker" <"$2"|sh "$checker" <"$1"|' "$BAIT/.agents/skills/dogfood/SKILL.md"
+bait_edit .agents/skills/dogfood/SKILL.md 's|sh "$checker" <"$2"|sh "$checker" <"$1"|'
 bait_named .agents/skills/dogfood/SKILL.md "the pre-screen checks the output it screened instead of the return"
 bait_reset
 printf '\tsh scripts/vocab.sh <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
