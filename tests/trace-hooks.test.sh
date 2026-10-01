@@ -2343,4 +2343,179 @@ else
 	echo "  skip  node is not on PATH — the final-transcript leg reads tokens with the extractor"
 fi
 
+# ---------------------------------------------------------------------------
+banner "34. PostToolUseFailure records the first line of the error as reason"
+# ---------------------------------------------------------------------------
+# A failed tool call's error may span many lines. The event's reason holds its
+# first non-empty line, as written — quotes, dollar signs, backticks and
+# backslashes included, since trace.sh escapes for JSON and nothing else needs
+# to — with every character the trace refuses turned into a space and at most
+# 300 characters kept; the full error stays in the result blob (#388).
+# reason_of <event line> — the event's reason, DECODED from its JSON string, so
+# a leg compares the text a reader gets back rather than the escaped bytes.
+reason_of() {
+	printf '%s\n' "$1" | node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).reason ?? "")'
+}
+if [ "$HAVE_NODE" = 1 ]; then
+	# A simple error with multiple lines: first line as reason, full error in blob
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cat /nope"},"tool_use_id":"%s","error":"Exit code 1\\ncat: /nope: No such file or directory"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-reason-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-reason-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "a PostToolUseFailure with multiline error exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	[ "$(ev_of tool.use | grep -c '')" = 1 ] && [ "$(events | grep -c '')" = 1 ] &&
+		pass "the failure writes exactly one event, a tool.use" ||
+		fail "the failure wrote $(events | grep -c '') line(s): $(events)"
+	VOUT=$(TRACE_DIR="$TDIR" sh "$KIT/scripts/trace.sh" verify 2>&1) &&
+		pass "and trace.sh verify accepts the day file it was written to" ||
+		fail "trace.sh verify refuses the day file: $VOUT"
+	E=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$E" outcome)" = fail ] && pass "the event records outcome=fail" ||
+		fail "the outcome is '$(str "$E" outcome)': $E"
+	REASON=$(str "$E" reason)
+	[ "$REASON" = "Exit code 1" ] && pass "the reason is the first line of the error: '$REASON'" ||
+		fail "the reason is '$REASON', expected 'Exit code 1'"
+	# Verify the full error is in the result blob
+	ERH=$(str "$E" result_blob)
+	FULL_ERR=$(cat "$(blob_file "$ERH")" 2>/dev/null)
+	case $FULL_ERR in *"No such file or directory"*) pass "the result blob holds the full error" ;;
+	*) fail "the result blob does not hold the full error: $FULL_ERR" ;; esac
+
+	# An error with a single quote in the first line (should still be quote-safe)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Can'"'"'t do it\\nmore details"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-quote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-quote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with a quote in first line exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EQ=$(ev_of tool.use | sed -n '1p')
+	QREASON=$(str "$EQ" reason)
+	[ -n "$QREASON" ] && [ "$QREASON" = "Can't do it" ] &&
+		pass "the reason with a quote is: '$QREASON'" ||
+		fail "the reason with quote is '$QREASON', expected \"Can't do it\""
+	# Verify no newline ended up in the reason
+	case $EQ in *"$QREASON"*) pass "the event line contains the reason" ;;
+	*) fail "the reason was not found in the event: $EQ" ;; esac
+
+	# An error with nothing after the first line (single-line error)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Something went wrong"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-single-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-single-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ES=$(ev_of tool.use | sed -n '1p')
+	SR=$(str "$ES" reason)
+	[ "$SR" = "Something went wrong" ] && pass "a single-line error's first line is: '$SR'" ||
+		fail "a single-line error's reason is '$SR', expected 'Something went wrong'"
+
+	# An error with double quotes (shell metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s"}' \
+		"$TSESSION" "$TUSE" 'Error opening \"config.json\"' >"$SCRATCH/tool-fail-dquote-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dquote-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with double quotes exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDQ=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDQ" outcome)" = fail ] && pass "the event records the double-quote error" ||
+		fail "the outcome is not fail: $EDQ"
+	[ "$(reason_of "$EDQ")" = 'Error opening "config.json"' ] && pass "the reason holds the double-quote error as written" ||
+		fail "the reason of the double-quote error decodes to '$(reason_of "$EDQ")'"
+
+	# An error with dollar sign (shell variable expansion metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Invalid value: $VAR"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-dollar-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-dollar-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with dollar sign exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EDL=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EDL" outcome)" = fail ] && pass "the event records the dollar-sign error" ||
+		fail "the outcome is not fail: $EDL"
+	[ "$(reason_of "$EDL")" = 'Invalid value: $VAR' ] && pass "the reason holds the dollar-sign error as written" ||
+		fail "the reason of the dollar-sign error decodes to '$(reason_of "$EDL")'"
+
+	# An error with backtick (shell command substitution metacharacter)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Failed: `whoami`"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backtick-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backtick-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backtick exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBK=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBK" outcome)" = fail ] && pass "the event records the backtick error" ||
+		fail "the outcome is not fail: $EBK"
+	[ "$(reason_of "$EBK")" = 'Failed: `whoami`' ] && pass "the reason holds the backtick error as written" ||
+		fail "the reason of the backtick error decodes to '$(reason_of "$EBK")'"
+
+	# An error with backslash (shell escape character)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"Path: C:\\\\Users\\\\file"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-backslash-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-backslash-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	[ "$S_STATUS" = 0 ] && pass "an error with backslash exits 0" ||
+		fail "the hook exited $S_STATUS: $S_ERR"
+	EBS=$(ev_of tool.use | sed -n '1p')
+	[ "$(str "$EBS" outcome)" = fail ] && pass "the event records the backslash error" ||
+		fail "the outcome is not fail: $EBS"
+	[ "$(reason_of "$EBS")" = 'Path: C:\Users\file' ] && pass "the reason holds the backslash error as written" ||
+		fail "the reason of the backslash error decodes to '$(reason_of "$EBS")'"
+
+	# Every character trace_json_str's [[:cntrl:]] refuses under a UTF-8 locale
+	# — C0, DEL, C1 (U+0085 among them), U+2028 and U+2029 — becomes a space: a
+	# reason carrying one would be refused by trace.sh and lose the event.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"a\\u0001b\\u007fc\\u0085d\\u009fe\\u2028f\\u2029g"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-cntrl-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cntrl-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECT=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECT")" = 'a b c d e f g' ] &&
+		pass "every control character the trace refuses, U+0085 U+2028 U+2029 included, becomes a space" ||
+		fail "the scrubbed reason decodes to '$(reason_of "$ECT")': $ECT"
+
+	# The cap is 300 CHARACTERS, counted by code point: a character outside the
+	# BMP at the boundary is kept whole, never split into half a surrogate pair.
+	LONG=$(printf '%0299d' 0 | tr 0 x)
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"%s\\ud83d\\ude00yyyy"}' \
+		"$TSESSION" "$TUSE" "$LONG" >"$SCRATCH/tool-fail-cap-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-cap-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	ECP=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$ECP")" = "$LONG$(printf '\360\237\230\200')" ] &&
+		pass "the reason is capped at 300 characters, the last one kept whole" ||
+		fail "the capped reason decodes to '$(reason_of "$ECP")'"
+
+	# An error that OPENS with an empty line: the reason is the first line that
+	# says something, not the empty one and not nothing.
+	new_trace
+	printf '{"session_id":"%s","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"cmd"},"tool_use_id":"%s","error":"\\n\\r\\nPermission denied\\nmore"}' \
+		"$TSESSION" "$TUSE" >"$SCRATCH/tool-fail-blankfirst-388.json"
+	PAYLOAD="$SCRATCH/tool-fail-blankfirst-388.json"
+	tool_post TRACE_DIR="$TDIR" TRACE_TOOLS=1
+	PAYLOAD="$FIX/tool-post-failure.payload.json"
+	EBF=$(ev_of tool.use | sed -n '1p')
+	[ "$(reason_of "$EBF")" = 'Permission denied' ] &&
+		pass "an error opening with an empty line records its first non-empty line" ||
+		fail "the reason after an empty first line decodes to '$(reason_of "$EBF")'"
+else
+	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
+fi
+
 t_done "trace hooks"
