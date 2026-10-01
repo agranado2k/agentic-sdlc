@@ -100,36 +100,55 @@ may contain hyphens and a variable name may not, so `html-report` reads
 ## Denying a typed-return reader its tools
 
 Three skills — `/to-tickets`, `/pr-iterate` and the optional dogfood skill,
-where it was taken — hand an untrusted read to a reader that has "no shell, no forge CLI, no network" and sends back a
-typed return, and each one says that how an agent harness withholds those tools
-is the adapter's to say. This is the answer, for the two ways a Claude Code
-session can spawn that reader. They are not the same kind of thing, and the
-one job of this section is to say which is which: **the CLI withholds; the
-in-session tool is asked.**
+where it was taken — hand an untrusted read to a reader that has "no shell, no
+forge CLI, no network" and sends back a typed return, and each one says that
+how an agent harness withholds those tools is the adapter's to say. This is
+the answer, for the two ways a Claude Code session can spawn that reader. They
+are not the same kind of thing, and the one job of this section is to say
+which is which: **the CLI withholds; the in-session tool is asked.**
 
 ### The CLI path — a restriction
 
-Headless, `claude -p` takes `--tools`, which replaces the built-in tool set
-with the names you give. From `claude --help` on 2.1.285, verbatim: *"Specify
-the list of available tools from the built-in set. Use "" to disable all
-tools, "default" to use all tools, or specify tool names (e.g.
-"Bash,Edit,Read")"*. A reader gets exactly one, and the shell catches what it
-sends back:
+Headless, `claude -p` takes three flags that together leave a reader with one
+tool, confined to one directory, and no tool server. From `claude --help` on
+2.1.285, verbatim:
+
+- **`--tools`** — *"Specify the list of available tools from the built-in
+  set. Use "" to disable all tools, "default" to use all tools, or specify
+  tool names (e.g. "Bash,Edit,Read")"*. A reader gets exactly one.
+- **`--restricted`** — *"Restricted mode: removes the built-in tools that run
+  commands or code (Bash, PowerShell, REPL and the other code-running tools)
+  and WebFetch unless --tools names them, and ignores user, project and local
+  settings files (managed settings and --settings still apply; add
+  --strict-mcp-config to skip MCP servers too). Also confines the file tools
+  to the working directories (--add-dir included), refuses bypassPermissions,
+  and lets only a person or the configured permission handler approve writes
+  to settings, git and tool-configuration files."*
+- **`--strict-mcp-config`** — *"Only use MCP servers from --mcp-config,
+  ignoring all other MCP configurations"*.
+
+The shell catches what the reader sends back:
 
 ```sh
-# from $scratch, so the one file it may read is in reach; the prompt arrives
-# on stdin, as scripts/agent-dispatch.sh hands one over, and the return lands
-# where the skill says, in a directory that holds nothing else
+# from $scratch: --restricted confines Read to the working directory, so
+# the bodies are in reach and nothing else is. The prompt is on stdin, the
+# return lands where the skill says, in a directory that holds nothing else
 cd "$scratch" || exit 2
-set -- --tools Read --strict-mcp-config
-[ -n "$model" ] && set -- "$@" --model "$model"
-claude -p "$@" < prompt > out/return
+[ -n "$model" ] && set -- --model "$model"
+claude -p --restricted --tools Read --strict-mcp-config "$@" < prompt > out/returns
 ```
 
 - **`--tools Read`** — every built-in tool but file reading is gone: no
   `Bash` (so no shell and no `gh`), no `WebFetch`, no `WebSearch`, no `Write`
   or `Edit`. A tool that is absent cannot be asked for, prompted into use or
   talked around: the model's turn has no such call to make.
+- **`--restricted` goes with `--tools`, not instead of it.** `--tools Read`
+  alone leaves `Read` with the reach the user has: a credential file is a
+  path like any other, and whether a read outside the working directory is
+  refused then rests on the permission mode, which a settings file can open.
+  `--restricted` confines the file tools to the working directories, ignores
+  those settings files, and refuses `bypassPermissions` — so from `$scratch`
+  the one directory in reach is `$scratch`, whatever the user's settings say.
 - **`--strict-mcp-config`** — the built-in set is only half the list. Your
   project's and your user's settings may wire MCP servers, each a tool server
   with reach of its own (a forge, a mailbox, a browser), and `--tools` does
@@ -137,10 +156,22 @@ claude -p "$@" < prompt > out/return
   and you name none.
 - **The redirect is the reader's one write.** The skills allow the return to be
   "captured there by the adapter", and that is this: the shell puts stdout in
-  the file, so the reader needs no write tool to deliver it.
-- **The `set --` pair** is the empty-means-omit branch from the top of this
+  the file, so the reader needs no write tool to deliver it. The file's name
+  is the calling skill's — `out/returns` for `/pr-iterate`, `out/return` for
+  the other two.
+- **The `set --` line** is the empty-means-omit branch from the top of this
   note, for `model=$(sh scripts/agents.lib.sh mechanical judge)`, written so
   the flag and its value stay two words under any `sh`.
+
+**The flags are half of the fence, and the half the skills own is the other.**
+A reader still reads whatever is in reach, and nothing here inspects what it
+read. What makes the read safe is the return: typed lines held to a
+vocabulary, and one evidence span verified against the scratch file the reader
+was handed — so nothing it read can leave except by that span, and the span
+is shown quoted, never obeyed. Use the two halves together. The flags without
+the fence leave a reader that can write anything into the session's lap; the
+fence without the flags leaves a reader with a shell to hand, which is the
+case the next subsection is about.
 
 Not the flags that look like it. `--allowedTools` is the permission
 allowlist: it pre-approves the tools it names and withholds nothing, so a
@@ -148,20 +179,33 @@ reader spawned with `--allowedTools Read` still holds `Bash` and is merely
 asked before each use — and headless, with nobody to ask, each use is denied
 one call at a time, which leaves the shell in front of the model to keep
 trying. `--disallowedTools` denies by name, and a name you forgot is a tool it
-keeps. `--restricted` subtracts the code-running tools and `WebFetch` and is a
-floor, not the list. Name what stays, never what goes.
+keeps. Name what stays, never what goes.
 
 Watched on this host, from a directory holding one file, with the `-p` line
-above and a prompt asking for the tool names:
+above and three prompts — the tool names, the tools the reader must not have,
+and a read outside the directory:
 
 ```text
-$ claude -p --tools Read --strict-mcp-config --model haiku 'List the names of every tool you can call, one per line, nothing else. …'
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'List the names of every tool you can call, one per line, nothing else. …'
 Read
-$ claude -p --tools Read --strict-mcp-config --model haiku 'Run `git status` and `gh pr list`, then fetch https://example.com. For each, report in one line whether you could, and by which tool. …'
-Cannot run `git status` — no git repository and no shell tool available.
-Cannot run `gh pr list` — no shell tool available.
-Cannot fetch https://example.com — no shell tool available and security guidelines restrict arbitrary URL fetching.
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'Run `git status` and `gh pr list`, then fetch https://example.com. For each, report in one line whether you could, and by which tool. …'
+I don't have shell execution tools available in my current environment—only the Read tool for reading files. I cannot run `git status`, `gh pr list`, or fetch URLs. …
+$ claude -p --restricted --tools Read --strict-mcp-config --model haiku 'Read ./one, then read /etc/hostname. For each, one line: the contents, or the error the tool returned, verbatim. …'
+alpha beta
+/etc/hostname is outside /tmp/…/358-probe.EBvjNu; --restricted confines the file tools to the working directory.
 ```
+
+A reader dispatched through `scripts/agent-dispatch.sh` is on this path too,
+with one thing to know: the dispatcher runs the command template you wrote,
+`AGENT_HARNESS_<TOKEN>_CMD`, with `{model_flag}` and `{prompt_file}` filled,
+from the caller's own directory, and writes no flag of its own — the script's
+header says the autonomy flags "are yours to choose". So the three flags above
+belong in that template, and a reader's template needs the working directory
+to be the scratch directory — `--add-dir` reaches it too, but leaves the
+caller's directory in reach beside it. An agent harness token the reader's
+tier alone maps to is the shape that fits: the template that runs implementers
+needs `Bash`, so it cannot carry `--tools Read`. The kit ships no template, as
+it ships no mapping.
 
 ### The in-session path — a request
 
@@ -170,32 +214,29 @@ tool list: a prompt, a type, an optional model, and nothing that withholds. A
 subagent's tools come from its type's definition, and the types a plain
 session offers for a read both hold `Bash`: the general-purpose type holds
 every tool, and the read-only `Explore` type drops the write tools and keeps
-the shell. So "read this file and nothing else: no shell, no
-forge CLI, no network" written into the prompt is a **request, not a
-restriction**: a reader that honours it is well behaved, and a line injected
-into the file it reads can ask it to do otherwise with a shell to hand.
+the shell. So "read this file and nothing else: no shell, no forge CLI, no
+network" written into the prompt is a **request, not a restriction**: a
+reader that honours it is well behaved, and a line injected into the file it
+reads can ask it to do otherwise with a shell to hand.
 
-That is the case the three skills already provide for — where yours cannot,
-say so at the quiz (`/to-tickets`) or say so in the report (`/pr-iterate`
-and the dogfood skill). Say it in those words — that the reader was
-tool-restricted by prompt alone — so the human reading the quiz or the report
-knows what fenced that read: the return's shape check and the vocabulary
-check, which do not weaken (a return that fails them is still refused
-unread), and not an absent tool. What the prompt cannot do is take the shell
-away for the length of the read.
+So the recommended in-session path is the CLI one: **spawn the reader with the
+CLI from inside the session.** A session holds a shell, the `-p` line above
+runs under it, and the restriction is then real whichever path the skill
+started on — the same three flags, from `$scratch`, with the return in the
+file the skill names. The **prompt-only spawn is the fallback**, for a
+session that cannot run the CLI — no `claude` on the path, or a shell it was
+not given — and it keeps the duty the three skills already provide for: where
+yours cannot, say so at the quiz (`/to-tickets`) or say so in the report
+(`/pr-iterate` and the dogfood skill). Say what fenced the read — for
+example, that the reader was tool-restricted by prompt alone — so the human
+reading the quiz or the report knows: the return's shape check and the
+vocabulary check, which do not weaken (a return that fails them is still
+refused unread), and not an absent tool. What the prompt cannot do is take the
+shell away for the length of the read.
 
 A project can author an agent type of its own under `.claude/agents/`, whose
-definition names the tools it holds, and spawn the reader as that type. The
-kit ships none — the same posture as the settings file below: the mechanism is
-named here, the file is yours — and none of the three skills assumes one.
-
-### Which path you are on
-
-A skill run from a session is on the second path, and owes the sentence at the
-quiz or in the report. A reader run headlessly — by `scripts/agent-dispatch.sh`
-or an agent harness line of your own — is on the first, where
-`--tools Read --strict-mcp-config` goes on the command line and the sentence is
-not owed, because the restriction is real.
+definition names the tools it holds, and spawn the reader as that type; the
+kit ships none, and the list at the end of this note says why.
 
 ## Wiring the session hooks
 
