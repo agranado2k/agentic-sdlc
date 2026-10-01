@@ -139,6 +139,17 @@ s_assert_resolved "Tier: implementer" \
 	"a key dressed in an em space, under a caller's C.UTF-8: never lifted — the script's own C locale decides"
 no_pwn "em-space key"
 
+# A NUL anywhere in the body makes GNU grep read it as binary and lift
+# nothing — a stamped ticket read as an old one. A NUL is a line break to the
+# script: the stamp beside one is read, and a NUL inside a value splits it,
+# so the value is refused — never glued back together into a legal word.
+body 'Prose with a NUL \000 in it.\nTier: mechanical\n'
+stamp 331
+s_assert_resolved "Tier: mechanical" "a NUL elsewhere in the body: the stamp is still read, exit 0"
+body 'Tier: impl\000ementer\n'
+stamp 331
+s_assert_status 2 "a NUL inside the tier's value: the value is split and refused, exit 2"
+
 # Anchored on its own location, never the caller's cwd: a foreign clone's
 # checker and policy are not run from where you stand.
 body 'Tier: reviewer\n'

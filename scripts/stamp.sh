@@ -108,7 +108,9 @@ stamp_declared() { grep -qE "^$1( \\(open\\))?: " "$_stamp_tmp/fields"; }
 stamp_key() { printf '%s\n' "$1" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr 'A-Z' 'a-z'; }
 
 # --- lift ------------------------------------------------------------------
-tr -d '\r' <"$_stamp_tmp/body" |
+# A NUL is a line break here: GNU grep reads a body holding one as binary and
+# lifts nothing, and a NUL inside a value must split it, never vanish from it.
+tr -d '\r' <"$_stamp_tmp/body" | tr '\000' '\n' |
 	grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:' >"$_stamp_tmp/lifted"
 if [ ! -s "$_stamp_tmp/lifted" ]; then
 	stamp_say "issue #$issue carries no Tier:, Confidence: or Domain: line — no stamp read, not a refusal"
