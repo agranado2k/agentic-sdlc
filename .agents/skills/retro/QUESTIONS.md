@@ -258,7 +258,8 @@ be nobody's. An event none of the three names goes on a row named
   not a finding per window): count it on its row and leave it out of the
   denominator. A label row none of whose stamps carries `data.label_proposed`
   prints its stamp count and `not computable from the trace today` in place of
-  a rate — the key was not yet recorded. Each label row is held to the
+  a rate — the key was not yet recorded — and carries the none form of the
+  clause, `— oracle: none — <why>`: it measured nothing. Each label row is held to the
   five-event threshold below, per row — per confidence group, the same as every
   other row — and otherwise its rate is computed as for the tier row.
 - **The severity, per band.** Group the `finding.raise` events by
@@ -295,7 +296,9 @@ be nobody's. An event none of the three names goes on a row named
   the stamp, and that human is the clause's `<who>`. For a tier row: the
   human at the quiz, over the window, the tier rubric in `/to-tickets` as it
   stood when the window closed — its version or its commit — and the
-  published tier compared with the proposed one. For a severity row: the
+  published tier compared with the proposed one. For a label row: the human at
+  the quiz, the same way, with the published label compared with the proposed
+  one. For a severity row: the
   human who closed the thread, over the window, the severity bands in
   `/review-pr` as they stood when the window closed, and the dismissals
   compared with the raises on the same pull request. Both end
@@ -315,6 +318,7 @@ counts, the rate or the words that replace it, the clause:
 tier · to-tickets (by kind) · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 tier · to-tickets (by kind) · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set
+label · to-tickets (by kind) · high     1 stamped           not computable from the trace today   — oracle: none — no stamp on the row carries the label from before the quiz
 severity · review-pr · low              2 of 11 dismissed   18 %   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
 ```
 

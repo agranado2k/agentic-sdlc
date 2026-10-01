@@ -354,17 +354,28 @@ case "$oracle_entry" in
 *'no comparator to name'*) pass "…and the none form is that rule kept: a row that measured nothing has no comparator to name, and says so" ;;
 *) fail "the glossary's Oracle entry does not say the none form has 'no comparator to name' — read beside the rule, a row naming none would imply one" ;;
 esac
-# The label row specifically carries the none form until #332 lands (ticket
-# #342): the trace holds no pre-quiz label, so there is no who, when or
-# version to name, and a four-part clause there would name an oracle that
-# does not exist. The holder reads any sidecar, so the baits below can prove
-# it goes red (hard rule 9) without touching the real one.
-label_row_of() { # <sidecar file> — question 8's label example row, or nothing
-	sec8 "$1" | fenced | grep -E '^label · ' | head -1
+# A label row that measured nothing carries the none form (ticket #342): a
+# row whose stamps all predate `data.label_proposed` (ticket #354, the label
+# half of #332) has no override to read, so no who, when or version to name,
+# and a four-part clause there would name an oracle that does not exist. The
+# holder reads any sidecar, so the baits below can prove it goes red (hard
+# rule 9) without touching the real one.
+label_row_of() { # <sidecar file> — question 8's not-computable label example row, or nothing
+	sec8 "$1" | fenced | grep -E '^label · .*not computable from the trace today' | head -1
 }
 label_row_none_form() { # <sidecar file> — exit 0 only when the label row reads `— oracle: none — <why>`
 	label_row_of "$1" | grep -qE -- '— oracle: none — [^ ]'
 }
+# …and the converse, now that a label row can measure: a label row with
+# counts was graded by the human at the quiz, so it names that oracle and
+# never the none form.
+rated_label=$(printf '%s\n' "$rows8" | grep -E '^label · .* [0-9]+ of [0-9]+ overridden ' || true)
+[ -n "$rated_label" ] && ! printf '%s\n' "$rated_label" | grep -qF -- '— oracle: none' &&
+	printf '%s\n' "$rated_label" | grep -qF -- '— oracle: the human at the quiz, ' &&
+	pass "a label row with counts names the human at the quiz as its oracle, never the none form" ||
+	fail "question 8 has no label row with counts naming '— oracle: the human at the quiz, …' (or one carries the none form)"
+stamp_has 'For a label row: the human at the quiz' "a label row's oracle is named: the human at the quiz"
+stamp_has 'carries the none form of the clause' "a label row that measured nothing is said to carry the none form"
 label_row=$(label_row_of "$SIDECAR_ABS")
 if [ -n "$label_row" ]; then
 	label_row_none_form "$SIDECAR_ABS" && pass "the label row carries oracle: none — <why> form" ||
@@ -703,10 +714,13 @@ EOF
 printf '%s\n' "$rows8" | grep -qF 'tier · to-tickets (by kind) · low       5 of 7 overridden   71 %' &&
 	pass "the example's scenario-3 row is the row the fixture computes" ||
 	fail "the example's low row is no longer '5 of 7 overridden   71 %' — the fixture computes that row; move both together"
-printf '%s\n' "$rows8" | grep -qF 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' &&
-	printf '%s\n' "$fx_rows" | grep -qxF 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' &&
-	pass "the example's label row is the row the fixture computes" ||
-	fail "the example's label row is no longer the fixture's '2 of 3 overridden   too few to rate' — move both together"
+for lr in 'label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate' \
+	'label · to-tickets (by kind) · high   1 stamped   not computable from the trace today'; do
+	printf '%s\n' "$rows8" | tr -s ' ' | grep -qF "$(printf '%s' "$lr" | tr -s ' ')" &&
+		printf '%s\n' "$fx_rows" | grep -qxF -- "$lr" &&
+		pass "the example's label row is the row the fixture computes: $lr" ||
+		fail "the example's label row is no longer the fixture's '$lr' — move both together"
+done
 ( cd "$ROOT" && TRACE_DIR="$fx" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "and the fixture trace verifies" ||
 	fail "the fixture trace does not verify"
 
