@@ -311,6 +311,32 @@ case "$(ls -l "$TARGET/scripts/theirs.sh")" in
 esac
 [ -x "$TARGET/.githooks/pre-push" ] && pass "the kit's hook still arrived executable" ||
 	fail "the kit's hook lost its executable bit"
+# Both hooks the one core.hooksPath wires arrive: pre-commit too (#392).
+[ -x "$TARGET/.githooks/pre-commit" ] && pass "the kit's commit hook arrived executable" ||
+	fail "the kit's .githooks/pre-commit did not arrive executable"
+cmp -s "$KITCOPY/.githooks/pre-commit" "$TARGET/.githooks/pre-commit" &&
+	pass "and it is the kit's, byte-verbatim" ||
+	fail ".githooks/pre-commit is not the kit's copy after the clean run"
+
+# A target that already owns a pre-commit hook gets the same chain verdict as
+# one that owns a pre-push hook: theirs untouched, the wiring held back.
+mk_kitcopy
+mk_target
+t_write "$TARGET" ".githooks/pre-commit" "#!/bin/sh
+echo their commit hook
+"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their commit hook"
+cp "$TARGET/.githooks/pre-commit" "$SCRATCH/their-pre-commit"
+t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$LAST_STATUS" = 3 ] && pass "their own pre-commit parks the adoption (exit 3)" ||
+	fail "expected exit 3 on their pre-commit, got $LAST_STATUS"
+assert_out_has "COLLISION hook .githooks/pre-commit chain"
+cmp -s "$SCRATCH/their-pre-commit" "$TARGET/.githooks/pre-commit" &&
+	pass "theirs, byte-identical: .githooks/pre-commit" ||
+	fail "adopt touched their .githooks/pre-commit before any approval"
+[ "$(git -C "$TARGET" config core.hooksPath || true)" = ".githooks" ] &&
+	fail "the hook was wired while their pre-commit collision pends" ||
+	pass "core.hooksPath untouched while the pre-commit collision pends"
 
 # M-1: flipping the dogfood flag between runs, with the gate policy already
 # installed stripped, must SAY that the kept config lacks the exemption the
@@ -563,7 +589,7 @@ take_g '^git switch -c' "$SCRATCH/arm.branch"
 # an anchor rather than becoming an end-of-line match mid-pattern.
 take_g '^sh "\\$KIT_CLONE/bootstrap' "$SCRATCH/arm.adopt"
 take_g '^git add -A$' "$SCRATCH/arm.commit"
-take_g '^git add -A && git commit' "$SCRATCH/arm.finish"
+take_g '^git add -A && COMMIT_WITHOUT_WORKTREE=1 git commit' "$SCRATCH/arm.finish"
 take_g '^sh scripts/check' "$SCRATCH/arm.gate"
 
 # Fresh fixture pair, then the DOC's own fences do the driving.
