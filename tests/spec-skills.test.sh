@@ -343,13 +343,24 @@ handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "
 t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
 t_text_has "$handoff" "concurrent-subagent limit" "the cap is derived from the host's concurrent-subagent limit"
 t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
+# The divisor is /review-pr's roster, read from that skill and never a hand
+# copy: a lens added or dropped there must move every place this cap spells
+# its count, or the formula goes stale under a green suite (#514, L-1).
+lenses=$(t_roster_of "$ROOT/.agents/skills/review-pr/SKILL.md" | grep -cvx unattributed)
+case $lenses in
+5) lens_word=five ;; 6) lens_word=six ;; 7) lens_word=seven ;; 8) lens_word=eight ;; 9) lens_word=nine ;;
+*) lens_word="" ;;
+esac
+[ -n "$lens_word" ] && pass "/review-pr's roster holds $lens_word lenses" ||
+	fail "/review-pr's roster holds $lenses lenses — extend the number words in this check"
+t_text_has "$handoff" "spawns $lens_word subagents" "the hand-off's lens count is /review-pr's roster"
 # The formula is held on its own sentence: across the whole step, the
 # rationale sentence's "concurrent-subagent limit" would satisfy the first
 # anchor for a formula that divides something else by seven.
 formula=$(printf '%s\n' "$handoff" | grep -o 'The cap is [^.]*\.')
 [ -n "$formula" ] && pass "the hand-off states the cap in a sentence of its own" || fail "the hand-off has no 'The cap is …' sentence"
-in_order "$formula" "the cap is the limit divided by the seven lenses, rounded down, never below one — in one sentence" \
-	"concurrent-subagent limit" "divided by seven" "rounded down" "never below one"
+in_order "$formula" "the cap is the limit divided by the roster's lenses, rounded down, never below one — in one sentence" \
+	"concurrent-subagent limit" "divided by $lens_word" "rounded down" "never below one"
 t_text_has "$handoff" "as the project states it" "the limit is the project's stated value, read where it is written"
 t_text_has "$handoff" "never a number this skill names" "no host's number is baked into a skill that ships to every host"
 in_order "$handoff" "a project that states no limit is told so, and runs one session at a time" \
@@ -373,6 +384,10 @@ cap_entry=$(awk '/^- \*\*Session cap\*\*/ { on = 1; print; next } on && /^- \*\*
 [ -n "$cap_entry" ] && pass "the glossary carries a **Session cap** entry" || fail "docs/domain-glossary.md has no **Session cap** entry"
 t_text_has "$cap_entry" "concurrent-subagent limit" "the glossary's session-cap entry derives it from the concurrent-subagent limit"
 t_text_has "$cap_entry" "/to-tickets" "the glossary's session-cap entry names the skill that states it"
+t_text_has "$cap_entry" "the $lens_word lenses" "the glossary's divisor is /review-pr's roster"
+grep -qF "the $lens_word lenses one" "$ROOT/constitution/local-workflow.md.template" &&
+	pass "the workflow template's divisor is /review-pr's roster" ||
+	fail "the workflow template's comment does not divide by the $lens_word lenses /review-pr's roster holds"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
