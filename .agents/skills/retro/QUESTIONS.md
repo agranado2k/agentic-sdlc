@@ -113,9 +113,12 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
 
 ## 5. Spend
 
-*Reads: `session.usage` (four token counts per model per session),
-`agent.stop` and `spawn.end` (a sub-agent's or a worker's tokens), and the
-`cost_usd` column the export computes from the price table at read time.*
+*Reads: `session.usage` (four token counts per model per session, and
+`data.via=rollup` on the gap a compaction left — or, with `outcome=fail`,
+on a rollup that was refused), `session.end` (`data.phantoms`, the
+session's phantom stops), `agent.stop` and `spawn.end` (a sub-agent's or a
+worker's tokens), and the `cost_usd` column the export computes from the
+price table at read time.*
 
 - `sh scripts/trace.sh summary --by model --since <YYYY-MM-DD>` for the models and their cost; `--by skill` and `--by session` for where it went. The pivot gives cost per ticket: every token-bearing event inside a run whose skill opened on that ticket.
 - A cost cell reading `unpriced` is a model the price table does not name.
@@ -133,6 +136,18 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
 - Cost per skill against what the skill produced: a review that costs more
   than the implementation it reviewed is worth naming, not necessarily worth
   changing.
+- **The compaction gap**: a `session.usage` with `data.via=rollup` holds the
+  tokens a compaction spent and no message carries — part of the session's
+  sum, never a second count of it. Report per session how much of the spend
+  came that way. One with `outcome=fail` is a rollup the hook refused: that
+  session's figure is an undercount by an unknown amount, and the report
+  says so beside it instead of quoting the sum as whole.
+- **Phantom stops**: sum `data.phantoms` over a session's `session.end`
+  events (a resumed session ends more than once). `0` is a count taken; a
+  `session.end` with no `data.phantoms` is a count not taken, never zero. A
+  window whose phantoms rise against the last retro's is a finding about
+  the agent harness's stop events: a ticket against the adapter that
+  counts them.
 
 Route: `/to-tickets` — a price-table row or re-check, a domain mapping in
 `scripts/agents.config.sh`, or a sizing finding for the wave's next
@@ -142,6 +157,7 @@ decomposition.
 
 *Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
 `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
+`agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
 `data.input_head`).*
 
@@ -162,6 +178,13 @@ decomposition.
   finding about the emitter (the dispatcher or the skill that spawned), never
   one per spawn. The same rule holds for any kind: an absent kind is one
   hole, not a finding per event that should have had it.
+- **Stops read too early**: an `agent.stop` with `outcome=fail` is a
+  sub-agent whose transcript had not ended when the hook's wait bound
+  passed, so its tokens are in no event. `data.last_kind` is the type of the
+  file's last line and `data.last_age_ms` that line's age when the bound
+  passed: a young line is an agent still writing — the bound is too short,
+  a policy-file value — and an old one an agent that never wrote a final
+  message. Count them per shape, not per stop.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
 - **Denied tool calls**: each `tool.use` with `outcome=denied` — a call that
