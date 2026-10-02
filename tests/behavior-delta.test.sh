@@ -288,6 +288,35 @@ assert_status 0 "does flag a refactor commit that edits an existing scenario" --
 assert_separation_has "features/x.feature"
 
 # ---------------------------------------------------------------------------
+banner "The shipped policy — a changed adapter hook is an agent-and-process change"
+# ---------------------------------------------------------------------------
+# Every other case drives a synthetic config; this one reads the policy file a
+# project actually receives, scripts/guards.config.sh, because that file — not
+# a fixture — decides whether a hook edit reaches the review's inventory. The
+# hooks under adapters/claude-code/hooks/ are what .claude/settings.json runs
+# on every tool call, so a change there changes how every agent session
+# behaves, and a structure-only commit that edits one is a mixed commit.
+t_repo
+repo=$REPO
+t_write "$repo" "adapters/claude-code/hooks/tool-pre.sh" "#!/bin/sh
+exit 0
+"
+t_commit "$repo" "feat(adapter): a pre-tool hook" >/dev/null
+branch "$repo" "refactor/hook"
+t_write "$repo" "adapters/claude-code/hooks/tool-pre.sh" "#!/bin/sh
+exit 2
+"
+t_commit "$repo" "refactor(adapter): tidy the pre-tool hook" >/dev/null
+hook_sha=$(t_short "$repo")
+t_guards_config "$repo" "$(cat "$KIT/scripts/guards.config.sh")"
+assert_status 0 "lists a changed adapter hook under the agent and process surface" -- run_delta "$repo"
+assert_out_has "## Agent & process surfaces"
+assert_out_has "  adapters/claude-code/hooks/tool-pre.sh"
+assert_out_lacks "No contract-artifact deltas"
+assert_separation_has "$hook_sha"
+assert_separation_has "adapters/claude-code/hooks/tool-pre.sh"
+
+# ---------------------------------------------------------------------------
 banner "The demo, as a test — only the mixed commit is flagged"
 # ---------------------------------------------------------------------------
 t_repo
