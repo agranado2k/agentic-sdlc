@@ -1856,7 +1856,7 @@
 # and a Session cap line carries the stated limit or `unstated` (#510, #483).
 # constitution/AGENTS.md.template: the `mechanical` row's signal is "only when
 # both hold" — a named oracle command and one file or one pattern (#467).
-# adapters/claude-code/hooks/ (hook.lib.sh, session-start.sh, session-end.sh,
+# The claude-code adapter's hooks (hook.lib.sh, session-start.sh, session-end.sh,
 # subagent-stop.sh, tool-pre.sh, tool-post.sh): each hook asks for the trace
 # directory once and spawns nothing for the trace with tracing off; a broken
 # policy file is reported once by the session hooks (#463).
