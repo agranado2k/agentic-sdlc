@@ -164,9 +164,9 @@ hook_pointer() {
 
 # hook_current_of <toplevel> — the per-toplevel path `scripts/trace.sh` keys a
 # working tree's pointer file on; its run stack is the same path plus `.runs`.
-# Nothing (status 1) when tracing is off or git cannot hash the path. The ONE
-# place this adapter repeats the shared script's derivation — hook_pointer's
-# coupling, now also hook_run_of's.
+# Nothing (status 1) when tracing is off or git cannot hash the path.
+# DELIBERATE COUPLING: this repeats the shared script's key derivation
+# (trace_key); hook_pointer and hook_run_of both depend on it.
 hook_current_of() {
 	_hc_dir=$(hook_dir) || return 1
 	_hc_key=$(printf '%s' "$1" |
@@ -195,6 +195,14 @@ hook_current_of() {
 # whose stack holds no run exports TRACE_RUN='' — the shared script's spelling
 # of "no run" — so an idle worktree never borrows the root's run.
 #
+# DELIBERATE COUPLING, the second one. The stack is read here, not by running
+# the shared script: this runs on every subagent stop, and the script exposes
+# no read of a stack (its trace_stack and trace_stack_readable are internal).
+# So the adapter repeats the stack's format — one run per line, the top last,
+# its parent the line below — and its exists-but-unreadable rule. Both are
+# read from ONE snapshot of the file, so a begin or end that replaces the
+# stack between two reads cannot pair a run with another stack's parent.
+#
 # THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
 # whose trail it joins) is left alone, and with it the parent, exactly as the
 # shared script's own precedence has it; a TRACE_PARENT already set is kept.
@@ -211,8 +219,11 @@ hook_run_of() {
 		echo "x  trace: the run stack at $_ro_stack exists and cannot be read — this event carries no run." >&2
 		_ro_run= _ro_parent=
 	else
-		_ro_run=$(awk 'END { print }' "$_ro_stack" 2>/dev/null) || _ro_run=
-		_ro_parent=$(awk '{ below = top; top = $0 } END { if (NR >= 2) print below }' "$_ro_stack" 2>/dev/null) || _ro_parent=
+		_ro_nl='
+'
+		_ro_pair=$(awk '{ below = top; top = $0 } END { print top; if (NR >= 2) print below }' "$_ro_stack" 2>/dev/null) || _ro_pair=
+		_ro_run=${_ro_pair%%"$_ro_nl"*}
+		case $_ro_pair in *"$_ro_nl"*) _ro_parent=${_ro_pair#*"$_ro_nl"} ;; *) _ro_parent= ;; esac
 	fi
 	TRACE_RUN=$_ro_run
 	export TRACE_RUN
