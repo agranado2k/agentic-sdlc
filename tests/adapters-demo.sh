@@ -293,6 +293,11 @@ cc_says 'one evidence span' \
 # it cannot: "say so at the quiz" (/to-tickets) and "say so in the report"
 # (/pr-iterate, /dogfood) — the fallback's own words, not a bare "in the
 # report" any later prose could carry.
+# One name per concept (review of PR #440, M-2): the skills say "a restricted
+# path through the agent CLI", so the adapter names its path the same way.
+cc_says 'the restricted path' \
+	"…and names the path by the skills' name: the restricted path" \
+	"…but never names the restricted path — the skills' name for it, one name per concept"
 cc_says 'request, not a restriction' \
 	"…and says the in-session prompt is a request, not a restriction" \
 	"…but never says plainly that the in-session prompt is a request, not a restriction"

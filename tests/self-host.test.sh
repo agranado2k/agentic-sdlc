@@ -902,6 +902,11 @@ notes_gaps() {
 	# shellcheck disable=SC2086  # the categories are a list on purpose
 	git -C "$1" diff --name-only "$_gap_prev" HEAD -- $DELTA_CATEGORIES | while IFS= read -r _gap_f; do
 		case "$_gap_f" in
+		# The OPTIONAL skill is the one a note may not name by its command: a
+		# consumer who declined it still receives VERSION, and
+		# tests/dogfood-optin.test.sh holds that tree to no mention of the
+		# command. A note names it "the dogfood skill" instead.
+		.agents/skills/dogfood/SKILL.md) _gap_alt="dogfood skill" ;;
 		.agents/skills/*/SKILL.md) _gap_alt="/$(basename "$(dirname "$_gap_f")")" ;;
 		*) _gap_alt=$(basename "$_gap_f") ;;
 		esac
