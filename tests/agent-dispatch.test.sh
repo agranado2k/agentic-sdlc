@@ -2306,6 +2306,42 @@ else
 	fail "the traced gap bait never wrote its marker in 30s — nothing to TERM"
 fi
 
+# The UNTIMED path has no trap of its own: a signal there is the global
+# trap's, deferred until the worker this shell is waiting on finishes, and it
+# still ends the dispatch with the signal's status — 143, never the worker's
+# own — and closes the pair with it (#465; H-1, review of PR #488). The worker
+# says it started, then runs two seconds and exits 5, so a dispatcher that
+# passed its worker's status through would read 5 here.
+TR_BRIEF="$SCRATCH/traced-brief"
+cat >"$TR_BRIEF" <<EOF
+#!/bin/sh
+cat >/dev/null
+: >"$TR_STARTED"
+sleep 2
+exit 5
+EOF
+chmod +x "$TR_BRIEF"
+CFG_TR_BRIEF="$SCRATCH/traced-brief.config.sh"
+cat >"$CFG_TR_BRIEF" <<EOF
+AGENT_HARNESSES='trb'
+AGENT_HARNESS_TRB_CMD='$TR_BRIEF {model_flag} < {prompt_file}'
+AGENT_HARNESS_TRB_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='trb:'
+EOF
+TR_UNTIMED="$SCRATCH/trace-untimed-term"
+tr_new "$TR_UNTIMED"
+rm -f "$TR_STARTED"
+if bait_term -e "$TR_STARTED" env AGENTS_CONFIG="$CFG_TR_BRIEF" TRACE_DIR="$TR_UNTIMED" \
+	sh "$DISPATCH" implementer --prompt 'x'; then
+	[ "$bt_status" = 143 ] &&
+		pass "an untimed dispatcher sent TERM mid-run exits 143 once its worker is done, not the worker's 5" ||
+		fail "an untimed dispatcher sent TERM mid-run exited $bt_status"
+	tr_assert_count "$TR_UNTIMED" 2 "…and its spawn is a pair"
+	tr_event_has "$TR_UNTIMED" 2 '"exit":"143"' "…closed with the signal's own status"
+else
+	fail "the untimed worker never said it started in 30s — nothing to TERM"
+fi
+
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
 # account has hit its usage limit, or one not installed here, is not a fail:
 # the caller's fallback — a review on its own model family — is a decision the
