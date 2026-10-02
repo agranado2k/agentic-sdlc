@@ -308,9 +308,13 @@ Grouped by the seam each term belongs to. Entry shape:
   unknown tier), the resolver's words where they apply, an outcome
   (every kind has an outcome vocabulary of its own and refuses a word it
   does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings —
-  open except two keys a reader joins on, held at emit to the shape
-  `TRACE_SHAPES` declares: `finding.triage`'s `data.id`, one token, and
-  `pr.iterate`'s `data.iteration`, digits (ADR-0008, amended 2026-10-01).
+  open except the keys a reader joins on, held at emit to the shapes
+  `TRACE_SHAPES` declares: `finding.triage`'s `data.id`, one token, its
+  `data.source`, one of check, bot, human or local, and a local finding's
+  id, `[CHML]-[0-9]+` — or `A2-[0-9]+` for a confirm-list item, numbered in
+  the list's order — which no other source may carry; `pr.iterate`'s
+  `data.iteration` and its three counts, digits, the counts required when
+  the outcome is green or red (ADR-0008, amended 2026-10-01 and 2026-10-02).
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
   rewrites one — a correction is a new event. A finding has three kinds:
   `finding.raise` when a review reports it, `finding.triage` for the
