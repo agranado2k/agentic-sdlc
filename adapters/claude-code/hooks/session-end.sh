@@ -31,6 +31,11 @@ sid=$(hook_field session_id)
 why=$(hook_field reason)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
+# The run handed to this session at its start, on its prompt's first line
+# (#474; see hook_run_handed), carried by every event below. With none
+# handed, the shared script resolves the run as it always has.
+hook_run_handed "$transcript" || :
+
 # The subject, once, as positional arguments — so that a session with no id
 # still produces events, without an unquoted expansion standing in for a
 # conditional argument.

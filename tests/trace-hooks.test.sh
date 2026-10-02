@@ -4187,5 +4187,10 @@ if [ "$HAVE_NODE" = 1 ]; then
 else
 	skip "the tool-post legs need node, which is not on PATH"
 fi
+for h474 in subagent-stop session-end tool-post; do
+	_r4=$(grep -F "| \`hooks/$h474.sh\` |" "$KIT/adapters/claude-code/README.md")
+	case $_r4 in *"Trace-Run: <run id>"*"#474"*) pass "the README row for $h474.sh names the run handed over at spawn" ;;
+	*) fail "the README row for $h474.sh does not name the Trace-Run line (#474)" ;; esac
+done
 
 t_done "trace hooks"
