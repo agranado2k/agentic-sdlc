@@ -1014,16 +1014,29 @@ t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
 # <literal> as a fixed string; empty when none does.
 t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
 
-# t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
-# <file> opened with ```<language> (sh when omitted) whose body holds <literal>
-# as a fixed string, written whole to <out>, to be sourced and run. The
-# literal is usually a function's `name()`, so the fence that defines it is
-# the one lifted; a document's executable text is run, never a mirror of it.
-# <out> is empty when no such fence exists, which the caller asserts on.
-t_lift_fence() {
-	awk -v lit="$2" -v lang="${4:-sh}" '$0 == "```" lang { buf = ""; on = 1; next }
-		on && /^```$/ { if (index(buf, lit)) { printf "%s", buf; exit } on = 0; next }
-		on { buf = buf $0 "\n" }' "$1" >"$3"
+# t_fence <file> <holds|opens> <needle> [<language>] — the body of the first
+# fenced block of <file> opened with ```<language> (sh when omitted) that the
+# needle picks, printed verbatim; nothing when none does, which the caller
+# asserts on — it refuses to be vacuous. The two modes are the two ways a
+# suite names the fence it runs:
+#   holds — the body holds <needle> as a fixed string, anywhere. The needle is
+#           usually a function's `name()`, so the fence that defines it is the
+#           one lifted, to be sourced and run.
+#   opens — the body's FIRST line matches <needle>, an ERE. The suites that run
+#           a document's own fenced steps (UPDATING.md's recipe, SETUP.md's
+#           spine, the adoption arm) name each step by how it opens.
+# Either way a document's executable text is run, never a mirror of it, so an
+# edit that breaks a fence breaks the suite instead of the next consumer.
+t_fence() {
+	awk -v mode="$2" -v needle="$3" -v lang="${4:-sh}" '
+		$0 == "```" lang { on = 1; n = 0; buf = ""; hit = 0; next }
+		on && /^```$/    { on = 0; if (hit || (mode == "holds" && index(buf, needle))) { printf "%s", buf; exit } next }
+		on {
+			n++
+			if (mode == "opens" && n == 1 && $0 ~ needle) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$1"
 }
 
 # t_lift_shape <file> <first-line ERE> <out> — a declared return shape: the
@@ -1050,25 +1063,6 @@ t_stub_gh() {
 	} >"$1/gh"
 	chmod +x "$1/gh"
 }
-
-# t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
-# <file> whose FIRST line matches, printed verbatim. The suites that run a
-# document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the
-# adoption arm) run its text, never a mirror of it, so an edit that breaks a
-# fence breaks the suite instead of the next consumer. Prints nothing when no
-# fence matches; the caller refuses to be vacuous on that.
-t_sh_fence() {
-	awk -v pat="$2" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$1"
-}
-
 
 # t_hold_reader_step <skill> <flat> <say-so words> [<label prefix>] — the
 # reader step of a typed-return fence, held to one spawn order (ticket #406).

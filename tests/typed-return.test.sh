@@ -178,7 +178,7 @@ banner "4. The documented check, executed — PRD scenario 5"
 # The fence that defines typed_return_ok, lifted out of the skill verbatim and
 # run where a consumer runs it: a project root holding scripts/vocab.sh and
 # the shipped policy file, and no kit wrapper anywhere.
-t_lift_fence "$SKILL" "typed_return_ok()" "$SCRATCH/check.sh"
+t_fence "$SKILL" holds "typed_return_ok()" >"$SCRATCH/check.sh"
 if [ -s "$SCRATCH/check.sh" ]; then
 	pass "the skill prints the check as a runnable fence"
 else

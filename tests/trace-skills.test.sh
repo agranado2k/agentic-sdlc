@@ -678,7 +678,7 @@ case $rb_emit in
 esac
 
 # The fence, lifted and run on a fixture PR.
-t_lift_fence "$PI" "triage_reds()" "$SCRATCH/rb-fence.sh"
+t_fence "$PI" holds "triage_reds()" >"$SCRATCH/rb-fence.sh"
 [ -s "$SCRATCH/rb-fence.sh" ] && pass "/pr-iterate prints the classifier as a runnable fence" ||
 	fail "/pr-iterate has no sh fence defining triage_reds()"
 
@@ -1217,8 +1217,8 @@ done
 # The fence that names the dismissed threads: defined in one sh fence, called
 # in one bash fence whose placeholder line is where step 1's two listings are
 # saved — swapped here for the lifted listings, nothing else touched.
-t_lift_fence "$PI" 'dismissed_threads()' "$D18/fn.sh"
-t_lift_fence "$PI" 'dismissed_threads "$scratch/' "$D18/call.raw" bash
+t_fence "$PI" holds 'dismissed_threads()' >"$D18/fn.sh"
+t_fence "$PI" holds 'dismissed_threads "$scratch/' bash >"$D18/call.raw"
 [ -s "$D18/fn.sh" ] && pass "/pr-iterate defines dismissed_threads in a runnable fence" ||
 	fail "/pr-iterate has no fence defining dismissed_threads() — which thread a human closed is left to a session to work out"
 sed -e "s|^\\([[:space:]]*\\)# … step 1's thread listing .*|\\1sh '$D18/list.threads' >\"\$scratch/threads\"; sh '$D18/list.comments' >\"\$scratch/comments\"|" \
