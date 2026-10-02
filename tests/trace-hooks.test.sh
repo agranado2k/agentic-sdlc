@@ -3496,7 +3496,7 @@ stop_from() {
 }
 
 stop_from "$R421.wt"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "a stop from the linked worktree exits 0, silent on stdout" ||
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && pass "a stop from the linked worktree exits 0, silent on stdout and stderr" ||
 	fail "a stop from the worktree: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 [ "$(str "$STOP" run)" = "$WTINNER" ] &&
 	pass "it carries the worktree's open run, not the root's" ||
@@ -3535,18 +3535,47 @@ stop_from "$OTHER421"
 	pass "a cwd in an UNRELATED repository is not a checkout of this one: the root's run" ||
 	fail "a stop from an unrelated repository carries run '$(str "$STOP" run)', want $ROOTRUN"
 
-# No cwd in the payload: the hook's own working directory answers.
-(cd "$R421.wt" && stop_from '')
-STOP=$(ev_of agent.stop | sed -n '$p')
-[ "$(str "$STOP" run)" = "$WTINNER" ] &&
-	pass "a payload with no cwd field: the hook's own working directory names the checkout" ||
-	fail "with no cwd field, a hook run inside the worktree carries run '$(str "$STOP" run)', want $WTINNER"
+# No cwd in the payload: the hook's own working directory answers. The hook is
+# run from the worktree in THIS shell, not a subshell, so S_STATUS and S_ERR
+# survive to be asserted on (L, review of PR #449).
+_here421=$PWD
+cd "$R421.wt" && stop_from ''
+cd "$_here421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a payload with no cwd field: the hook's own working directory names the checkout, exit 0" ||
+	fail "with no cwd field, a hook run inside the worktree: exit $S_STATUS, run '$(str "$STOP" run)', want $WTINNER"
 
 # The environment still beats every stack, as it does for the shared script.
 stop_from "$R421.wt" TRACE_RUN=run-from-env-421
 [ "$(str "$STOP" run)" = run-from-env-421 ] && [ -z "$(str "$STOP" parent)" ] &&
 	pass "a TRACE_RUN in the environment still wins over the worktree's stack" ||
 	fail "with TRACE_RUN set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+
+# A TRACE_PARENT alone is kept, and the run still comes from the worktree's
+# stack: the parent is the caller's to say, the run is not (M, review of PR #449).
+stop_from "$R421.wt" TRACE_PARENT=parent-from-env-421
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = parent-from-env-421 ] &&
+	pass "a TRACE_PARENT with no TRACE_RUN: the worktree's run, the environment's parent" ||
+	fail "with only TRACE_PARENT set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / parent-from-env-421"
+
+# A stack that EXISTS and cannot be read is said, on stderr, and the stop
+# carries no run — never the root's (H-1, review of PR #449). Root reads a
+# mode-000 file, so the leg cannot be driven there and says so.
+if [ "$(id -u)" = 0 ]; then
+	echo "  skip  running as root — a mode-000 file is readable, so the unreadable-stack leg cannot be driven"
+else
+	STACK421="$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh dir)/current/$(printf '%s' "$(git -C "$R421.wt" rev-parse --show-toplevel)" | git hash-object --stdin).runs"
+	[ -f "$STACK421" ] && pass "the worktree's run stack is where the leg looks for it" ||
+		fail "no run stack at $STACK421"
+	chmod 000 "$STACK421"
+	stop_from "$R421.wt"
+	chmod 644 "$STACK421"
+	[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] && [ -z "$(str "$STOP" run)" ] && [ -z "$(str "$STOP" parent)" ] &&
+		pass "an unreadable worktree stack: exit 0, the stop carries no run and no parent, not the root's" ||
+		fail "an unreadable worktree stack: exit $S_STATUS, run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', event '$STOP'"
+	case $S_ERR in *"$STACK421 exists and cannot be read"*) pass "and stderr names the stack that could not be read" ;;
+	*) fail "an unreadable worktree stack says nothing on stderr naming it: '$S_ERR'" ;; esac
+fi
 
 # A worktree with NO run open says so: it never borrows the root's.
 (cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1 &&
