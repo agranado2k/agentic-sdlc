@@ -50,19 +50,29 @@ set --
 # anchor — a fresh session, or a trace that is off — means the whole file,
 # which is exactly what a first end should read. The value came out of a file,
 # so it is held to the identifier class before it goes near a command line.
+#
+# THE SAME LINES ARE THE RECORDED ROLLUP GAPS (#407). The extractor reads them
+# on stdin under --rollup, so a compaction's gap an earlier end recorded is
+# never recorded again; a gap event carries no last_msg, so it never anchors.
 after=
+recorded=
 if [ $# -gt 0 ]; then
-	after=$(hook_trace show "session:$sid" --kind session.usage |
+	recorded=$(hook_trace show "session:$sid" --kind session.usage)
+	after=$(printf '%s\n' "$recorded" |
 		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
 	hook_id_ok "$after" || after=
 fi
 
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-	hook_tokens "$transcript" session.usage ${after:+--after "$after"} "$@"
+	printf '%s\n' "$recorded" |
+		hook_tokens "$transcript" session.usage --rollup ${after:+--after "$after"} "$@"
 else
 	hook_trace emit kind=session.usage outcome=fail \
 		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"
 fi
+
+# How many phantom stops this session had since its last end (#410).
+phantoms=$(hook_phantom_take "$sid") && set -- "$@" data.phantoms="$phantoms"
 
 hook_trace emit kind=session.end harness=claude-code \
 	reason="the agent harness ended the session (${why:-reason unstated})" "$@"
