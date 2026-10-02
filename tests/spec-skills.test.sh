@@ -430,6 +430,248 @@ grep -qF "the $lens_word lenses one" "$ROOT/constitution/local-workflow.md.templ
 	fail "the workflow template's comment does not divide by the $lens_word lenses /review-pr's roster holds"
 
 # ---------------------------------------------------------------------------
+banner "4b. A retro's candidates merge into a sibling retro's tickets (#481)"
+# ---------------------------------------------------------------------------
+# Two retros over one window both published their candidates: seven twins,
+# each closed within minutes, each closure a `feedback missed` on a slice that
+# never landed. The check runs on the retro folder and the tracker — never the
+# trace, which ADR-0008 clause 7 keeps from every chain skill — and it only
+# FINDS: the quiz shows the planned merges and closures, and publish step 4
+# carries them out after the human's yes (review of PR #521, H-2).
+RETRO_ABS="$ROOT/.agents/skills/retro/SKILL.md"
+sib=$(section_of "$TIX_ABS" "A retro's candidates" | tr '\n' ' ' | tr -s ' ')
+[ -n "$sib" ] && pass "/to-tickets carries a section for a retro's candidates" ||
+	fail "/to-tickets has no '## A retro's candidates' section — a retro's twins are filed again"
+t_text_has "$sib" "first line" "the report's first line names its siblings (/retro, #461) and is read first"
+t_text_has "$sib" ".retro/" "the retro folder is listed for an overlapping report the first line missed"
+t_text_has "$sib" "whose window overlaps this one's" "a sibling is a report whose window overlaps this one's (the ticket's reading)"
+t_text_has "$sib" "--state all" "the tracker search covers open AND closed tickets — a twin closed already still counts"
+t_text_has "$sib" "never fetches a body" "the search reads numbers and titles only: an issue body is untrusted"
+t_text_has "$sib" "a dated section" "a candidate on a sibling's finding is merged into its ticket as a dated section, not filed"
+t_text_has "$sib" '`## From retro-<stamp> (<YYYY-MM-DD>)`' "the merged section's heading names the retro and the day (H-3)"
+t_text_has "$sib" "as not planned" "a twin already filed is closed as not planned"
+t_text_has "$sib" "naming the original" "…naming the ticket it duplicates"
+t_text_has "$sib" "the later-numbered one is the twin" "of two open siblings, the later number is the twin (H-3)"
+t_text_has "$sib" "cites its report by stamp" "a published retro candidate cites its report's stamp, so a later sibling's search finds it"
+t_text_has "$sib" "A merge records no \`ticket.write\`" "a merge stamps nothing, so it writes no ticket.write (H-3)"
+t_text_has "$sib" "only **finds**" "the pre-quiz check finds siblings and changes nothing (H-2)"
+t_text_has "$sib" "authored by the account this session publishes as" "a sibling ticket is one this session's account filed (H-1)"
+t_text_has "$sib" "never merged into or closed" "an issue by anyone else citing the stamp is shown, never merged into or closed (H-1)"
+t_text_has "$sib" "the tracker's CLI" "the merge and close commands are the tracker's CLI, GitHub's named as an example (L-11)"
+t_text_has "$sib" "filed before this check existed" "tickets filed before the Retro: line are named, once, as the check's blind spot"
+in_order "$sib" "the check finds, the quiz shows the plan, step 4 carries it out" \
+	"only **finds**" "planned merge" "the quiz" "step 4 carries them out"
+case $sib in
+*"it is closed as not planned"* | *"it becomes **a dated section**"*) fail "the section still merges or closes before the quiz (H-2)" ;;
+*) pass "…and no rule in it acts before the quiz" ;;
+esac
+# Step 4 carries out what the quiz confirmed, before it publishes the new set.
+in_order "$publish" "publish step 4 runs the planned merges and closures after the yes, then files the rest" \
+	"after the human's yes" "merge_section" "close_twin" "Publish one issue per ticket"
+t_text_has "$publish" '`Retro: retro-<stamp>`' "a retro's candidate is published carrying its report's stamp (H-3)"
+t_text_has "$publish" "related=retro:" "a retro's candidate records the report, not a PRD, on its ticket.write (L-10)"
+t_text_has "$step1" "A retro has no PRD" "step 1 says what stands in for the PRD when the input is a retro report (L-10)"
+# The procedure sends a retro's draft through the check before step 3's quiz.
+draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
+t_text_has "$draft" "A retro's candidates" "the draft step routes a retro report through the sibling check, by the section's name"
+# A twin is no landed slice: its closure records no verdict, and the same
+# sentence stands wherever a `feedback` event is written or could be.
+twin_rule="A ticket closed as a duplicate records no \`feedback\`: feedback is a verdict on a landed slice, and a twin is none."
+for f in "$TIX_ABS" "$ROOT/.agents/skills/merge-train/SKILL.md" "$ROOT/.agents/skills/pr-iterate/SKILL.md"; do
+	tr '\n' ' ' <"$f" | tr -s ' ' | grep -qF -- "$twin_rule" &&
+		pass "$(basename "$(dirname "$f")") says a duplicate closure records no feedback" ||
+		fail "$(basename "$(dirname "$f")") never says '$twin_rule'"
+done
+# One window start, one form: /retro writes it on the report's first line, and
+# /to-tickets reads it back from there (M-4).
+for f in "$RETRO_ABS" "$TIX_ABS"; do
+	grep -qF -- '`window-start <YYYYMMDDTHHMMSSZ>`' "$f" &&
+		pass "$(basename "$(dirname "$f")") names the first line's window-start form" ||
+		fail "$(basename "$(dirname "$f")") never names '\`window-start <YYYYMMDDTHHMMSSZ>\`' — the start has no one form"
+done
+
+# The section's fence runs: the sibling listing over a scratch retro folder,
+# and the tracker calls against a stand-in CLI that records what it was asked.
+t_init
+fence=$(t_fence "$TIX_ABS" holds 'retro_siblings()')
+if [ -z "$fence" ]; then
+	fail "no sh fence defines retro_siblings() — the listing is prose nobody can run"
+else
+	printf '%s\n' "$fence" >"$SCRATCH/fence.sh"
+	# One listing rule (M-3): /to-tickets' listing is /retro step 5's, the same
+	# glob and the same awk program, character for character.
+	r_awk=$(grep -o "awk -F/ -v since=[^']*'[^']*'" "$RETRO_ABS" | head -1 | sed "s/^[^']*//")
+	t_awk=$(printf '%s\n' "$fence" | grep -o "awk -F/ -v since=[^']*'[^']*'" | head -1 | sed "s/^[^']*//")
+	[ -n "$r_awk" ] && [ "$r_awk" = "$t_awk" ] &&
+		pass "the sibling listing's awk program is /retro step 5's, verbatim" ||
+		fail "the two listings differ: /retro $r_awk, /to-tickets $t_awk"
+	glob='/.retro/*/*/retro-*.md 2>/dev/null'
+	grep -qF -- "$glob" "$RETRO_ABS" && printf '%s\n' "$fence" | grep -qF -- "$glob" &&
+		pass "…and so is the glob it lists" || fail "the two listings do not share the glob '$glob'"
+
+	# window_start reads the first line's named form, and nothing else (M-4).
+	printf 'window-start 20261001T150216Z — siblings: none\nbody\n' >"$SCRATCH/report.md"
+	got=$( (. "$SCRATCH/fence.sh" && window_start "$SCRATCH/report.md"))
+	[ "$got" = 20261001T150216Z ] && pass "window_start reads the start the report's first line opens with" ||
+		fail "window_start read '$got' from a first line opening 'window-start 20261001T150216Z'"
+	printf 'the window: since 2026-10-01\nwindow-start 20261001T150216Z\n' >"$SCRATCH/report2.md"
+	got=$( (. "$SCRATCH/fence.sh" && window_start "$SCRATCH/report2.md")); rc=$?
+	[ "$rc" != 0 ] && [ -z "$got" ] && pass "…and a report whose first line does not open with it has no start (a stop)" ||
+		fail "window_start read '$got' (exit $rc) from a report whose first line names no start"
+
+	for bad in 'window-start 2026T1Z' 'window-start 1T12345678901234Z' 'window-start 20261001T150216Zab'; do
+		printf '%s\n' "$bad" >"$SCRATCH/report3.md"
+		got=$( (. "$SCRATCH/fence.sh" && window_start "$SCRATCH/report3.md")); rc=$?
+		[ "$rc" != 0 ] && [ -z "$got" ] && pass "…nor a first line '$bad', not a stamp's shape" ||
+			fail "window_start read '$got' (exit $rc) from a first line '$bad'"
+	done
+	mkdir -p "$SCRATCH/root/.retro/2026/09" "$SCRATCH/root/.retro/2026/10" "$SCRATCH/bin"
+	for n in 2026/09/retro-20260930T120000Z 2026/10/retro-20261001T150216Z 2026/10/retro-20261001T190528Z \
+		2026/10/retro-20261001T191425Z 2026/10/retro-20261002T080718Z 2026/10/retro-2026x \
+		2026/10/retro-20261001T200000Z-copy; do
+		: >"$SCRATCH/root/.retro/$n.md"
+	done
+	got=$( (. "$SCRATCH/fence.sh" && retro_siblings "$SCRATCH/root" 20261001T191527Z retro-20261002T080718Z.md) | tr '\n' ' ')
+	[ "$got" = "" ] && pass "a window no other report falls in has no sibling" ||
+		fail "retro_siblings listed '$got' for a window only this report falls in"
+	got=$( (. "$SCRATCH/fence.sh" && retro_siblings "$SCRATCH/root" 20261001T150216Z retro-20261001T191425Z.md) | tr '\n' ' ')
+	[ "$got" = "retro-20261001T150216Z retro-20261001T190528Z retro-20261002T080718Z " ] &&
+		pass "the siblings are the reports stamped at or after the start — the one stamped AT it included (M-5) — not itself, nor a malformed name" ||
+		fail "retro_siblings listed '$got' — wanted 'retro-20261001T150216Z retro-20261001T190528Z retro-20261002T080718Z '"
+	# The export beside a report is a csv of the same stamp: no report, no sibling.
+	mkdir -p "$SCRATCH/csv/.retro/2026/10"
+	: >"$SCRATCH/csv/.retro/2026/10/retro-20261001T195000Z.csv"
+	got=$( (. "$SCRATCH/fence.sh" && retro_siblings "$SCRATCH/csv" 20261001T150216Z retro-20261002T080718Z.md) | tr '\n' ' ')
+	[ "$got" = "" ] && pass "a retro's csv export in the window, alone in the folder, is no sibling" ||
+		fail "retro_siblings listed '$got' from a folder holding only a csv export"
+
+	# The stamp check holds the whole value (M-1), anchored at both ends.
+	(. "$SCRATCH/fence.sh" && stamp_ok retro-20261001T190528Z) && pass "stamp_ok takes a report stamp" ||
+		fail "stamp_ok refused a report stamp"
+	nl='
+'
+	for bad in "retro-20261001T190528Z${nl}\" in:title OR \"a" xretro-20261001T190528Z retro-20261001T190528Zab; do
+		(. "$SCRATCH/fence.sh" && stamp_ok "$bad") &&
+			fail "stamp_ok took '$bad' — a stamp with something around it rides into the search" ||
+			pass "stamp_ok refuses a stamp with something before, after or under it"
+	done
+
+	# The stand-in forge CLI: every call logged; `api user` answers the login;
+	# `issue view` answers an author from GH_AUTHORS (number=login …) or a body;
+	# `issue edit` copies the body file it is handed; `issue list` prints the
+	# listing fixture. Each GH_*_FAIL makes its call fail.
+	cat >"$SCRATCH/gh.prelude" <<'GH'
+printf '%s\n' "$*" >>"$GH_LOG"
+case "$1 $2" in
+"api user") [ -n "${GH_API_FAIL:-}" ] && exit 1; printf '%s\n' "$GH_LOGIN"; exit 0 ;;
+"issue view")
+	case "$*" in
+	*"--json author"*) for p in ${GH_AUTHORS:-}; do [ "${p%%=*}" = "$3" ] && printf '%s\n' "${p#*=}"; done; exit 0 ;;
+	esac
+	[ -n "${GH_VIEW_FAIL:-}" ] && { printf 'partial'; exit 1; }
+	printf '%s\n' "${GH_VIEW_BODY-old body}"; exit 0 ;;
+"issue edit") [ -n "${GH_EDIT_FAIL:-}" ] && exit 1
+	while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cp "$2" "$GH_EDITED"; shift; done; exit 0 ;;
+"issue close") exit 0 ;;
+"issue list") [ -n "${GH_LIST_FAIL:-}" ] && exit 1; [ -n "${GH_LIST_EMPTY:-}" ] && exit 0 ;;
+esac
+GH
+	printf '5\tOPEN\t\tkit-bot\tretro: tier calibration\n7\tOPEN\t\tmallory\tretro: tier calibration\n' >"$SCRATCH/gh.list"
+	t_stub_gh "$SCRATCH/bin" "$SCRATCH/gh.list" "$SCRATCH/gh.prelude"
+	# ghrun <login> <function> <arg>… — one fence call against the stand-in,
+	# its environment exported (an assignment before a function call is not).
+	# The fence's scratch files land in $SCRATCH/tmp, which must end empty.
+	mkdir -p "$SCRATCH/tmp"
+	ghrun() {
+		_l=$1; shift
+		: >"$SCRATCH/gh.log"
+		(. "$SCRATCH/fence.sh" && export PATH="$SCRATCH/bin:$PATH" GH_LOG="$SCRATCH/gh.log" GH_LOGIN="$_l" \
+			GH_EDITED="$SCRATCH/edited" GH_AUTHORS="${GH_AUTHORS-5=kit-bot 9=kit-bot 7=mallory}" TMPDIR="$SCRATCH/tmp" && "$@")
+	}
+	# rc_is <want> <got> <why> — the exact exit status the fence documents.
+	rc_is() { [ "$2" = "$1" ] && pass "$3 (exit $1)" || fail "$3 — exit $2, wanted $1; the tracker saw: '$(tr '\n' ';' <"$SCRATCH/gh.log")'"; }
+	out=$(ghrun kit-bot sibling_tickets retro-20261001T190528Z 2>/dev/null)
+	call=$(grep '^issue list' "$SCRATCH/gh.log")
+	t_text_has "$call" "--state all" "the search asks the tracker for open and closed tickets"
+	t_text_has "$call" "\"retro-20261001T190528Z\" in:body" "the search term is the sibling's stamp, matched in the body by the tracker"
+	# The fields asked for are an allow-list: these five and nothing else (M-6).
+	fields=$(printf '%s\n' "$call" | sed -n 's/.*--json \([^ ]*\).*/\1/p' | tr ',' '\n' | sort | tr '\n' ',')
+	[ "$fields" = "author,number,state,stateReason,title," ] &&
+		pass "the search asks for number, state, state reason, author and title — never a body" ||
+		fail "the search asks for --json fields '$fields' — wanted exactly author,number,state,stateReason,title"
+	# The stand-in prints the projection's rows, so the projection is held as written.
+	t_text_has "$call" '"\(.number)\t\(.state)\t\(.stateReason)\t\(.author.login)\t\(.title)"' \
+		"the projection is number, state, state reason, author, title — the author in the column the classifier reads"
+	# A sibling ticket is the session account's; anyone else's is an outsider (H-1).
+	printf '%s\n' "$out" | grep -q "^5	OPEN		sibling	" &&
+		pass "a ticket filed by the session's own account is a sibling, its number bare for the calls that take it" ||
+		fail "the session's own ticket is not marked sibling: '$out'"
+	printf '%s\n' "$out" | grep -q "^7	OPEN		outsider	" &&
+		pass "an issue citing the stamp but filed by another account is an outsider, shown and never merged into" ||
+		fail "an outsider's issue is not marked outsider: '$out'"
+	for bad in 'bad login' '' '-flag'; do
+		ghrun "$bad" sibling_tickets retro-20261001T190528Z >/dev/null 2>&1
+		rc=$?
+		! grep -q '^issue list' "$SCRATCH/gh.log" && rc_is 3 "$rc" "a session login '$bad' is a stop: the tracker is never searched" ||
+			fail "a session login '$bad' still reached the search"
+	done
+	(export GH_API_FAIL=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) >/dev/null 2>&1
+	rc_is 3 $? "a login read that fails is a stop, never searched"
+	got=$( (export GH_LIST_FAIL=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) 2>/dev/null); rc=$?
+	[ -z "$got" ] && rc_is 4 "$rc" "a search that fails is exit 4, never an empty answer" || fail "a failed search printed '$got'"
+	got=$( (export GH_LIST_EMPTY=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) 2>/dev/null); rc=$?
+	[ -z "$got" ] && rc_is 0 "$rc" "a search that finds nothing prints nothing — no phantom row" || fail "an empty search printed '$got'"
+	ghrun kit-bot sibling_tickets 'retro-x" in:title OR "a' >/dev/null 2>&1
+	rc=$?
+	[ ! -s "$SCRATCH/gh.log" ] && rc_is 2 "$rc" "a term that is not a report stamp is refused and never reaches the tracker" ||
+		fail "a malformed stamp reached the tracker: '$(cat "$SCRATCH/gh.log")'"
+
+	# The merge appends the dated section to the body it read, and a failed or
+	# empty read is a stop, never an edit (M-2) — as is a target another
+	# account filed, whichever list named it.
+	printf '## From retro-20261002T080718Z (2026-10-02)\nthe evidence\n' >"$SCRATCH/section"
+	rm -f "$SCRATCH/edited"
+	ghrun kit-bot merge_section 5 "$SCRATCH/section" >/dev/null 2>&1
+	rc_is 0 $? "merge_section succeeds on the session's own ticket"
+	grep -q '^old body' "$SCRATCH/edited" 2>/dev/null && grep -q '^## From retro-20261002T080718Z' "$SCRATCH/edited" &&
+		pass "merge_section edits the ticket to its body plus the dated section" ||
+		fail "merge_section did not hand the edit the old body and the section"
+	for mode in fail empty edit outsider number; do
+		rm -f "$SCRATCH/edited"
+		case $mode in
+		fail) want=1; (export GH_VIEW_FAIL=1 && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		empty) want=1; (export GH_VIEW_BODY='' && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		edit) want=1; (export GH_EDIT_FAIL=1 && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		outsider) want=5; ghrun kit-bot merge_section 7 "$SCRATCH/section" >/dev/null 2>&1 ;;
+		number) want=2; ghrun kit-bot merge_section 5x "$SCRATCH/section" >/dev/null 2>&1 ;;
+		esac
+		rc=$?
+		rc_is "$want" "$rc" "merge_section stops on a $mode case"
+		[ "$mode" = edit ] || ! grep -q '^issue edit' "$SCRATCH/gh.log" ||
+			fail "merge_section's $mode case still edited the ticket"
+	done
+	[ -z "$(ls -A "$SCRATCH/tmp")" ] && pass "merge_section leaves no scratch file behind, whichever way it ends" ||
+		fail "merge_section left '$(ls -A "$SCRATCH/tmp" | tr '\n' ' ')' behind"
+
+	# The twin is the later number, closed as not planned naming the original (H-3).
+	ghrun kit-bot close_twin 9 5 >/dev/null 2>&1
+	rc_is 0 $? "close_twin closes a twin of the session's own"
+	t_text_has "$(cat "$SCRATCH/gh.log")" 'issue close 9 --reason not planned --comment Duplicate of #5' \
+		"close_twin closes the later number as not planned, naming the original"
+	for args in '5 9' '5 5' '9x 5'; do
+		# shellcheck disable=SC2086 # the pair splits on purpose
+		ghrun kit-bot close_twin $args >/dev/null 2>&1
+		rc=$?
+		! grep -q '^issue close' "$SCRATCH/gh.log" && rc_is 2 "$rc" "close_twin refuses '$args' — the twin must be the later number" ||
+			fail "close_twin '$args' reached the close"
+	done
+	ghrun kit-bot close_twin 9 7 >/dev/null 2>&1
+	rc=$?
+	! grep -q '^issue close' "$SCRATCH/gh.log" && rc_is 5 "$rc" "close_twin refuses an original another account filed" ||
+		fail "close_twin closed a ticket as a duplicate of an outsider's"
+fi
+
+# ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
 # ---------------------------------------------------------------------------
 t_assert_skill_commands 5 "the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief" "$PRD_ABS" "$TIX_ABS"
