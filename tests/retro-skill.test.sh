@@ -1257,11 +1257,15 @@ if [ -n "$ospan" ]; then
 else
 	fail "the procedure carries no span listing the retro runs still open"
 fi
-proc_flat=$(proc | flat)
-proc_has() { case "$proc_flat" in *"$1"*) pass "$2" ;; *) fail "$2 — the procedure does not say: $1" ;; esac; }
-proc_has 'another retro is open' "the procedure names the case of another retro open"
-proc_has 'report'"'"'s first line' "…says so in the report's first line"
-proc_has 'never closes it' "…and never closes the other run"
+# Each needle is held to its own numbered step, not the whole procedure: step
+# 5 also says "report's first line", and a needle it satisfies would survive
+# step 2's rule being deleted (L-1, review of PR #475).
+step() { proc | awk -v n="$1" '$0 ~ "^" n "\\. \\*\\*" { on = 1; print; next } /^[0-9]+\. \*\*/ { on = 0 } on' | flat; }
+step_has() { case "$(step "$1")" in *"$2"*) pass "$3" ;; *) fail "$3 — step $1 does not say: $2" ;; esac; }
+step_has 2 'another retro is open' "step 2 names the case of another retro open"
+step_has 2 'report'"'"'s first line' "…says so in the report's first line"
+step_has 2 'never closes it' "…and never closes the other run"
+step_has 2 'below yours' "…and says where a sibling in this working tree sits: below this pass's run (L-5)"
 
 # 13c. Question 5 reads the compaction gap and the phantom stops; question 6
 # the wait-bound keys of a failed agent.stop. Each key is held to the
@@ -1291,17 +1295,43 @@ assert_file_has "$SIDECAR" '`data.label_proposed`' "question 8 reads data.label_
 
 # 13d. The report's first line names the sibling reports written in the same
 # window, so /to-tickets deduplicates two retros' findings.
-proc_has 'sibling report' "the report step names the sibling reports"
-proc_has 'same window' "…the ones written in the same window"
+step_has 5 'sibling report' "the report step names the sibling reports"
+step_has 5 'same window' "…the ones written in the same window"
+# The rule RUNS (M-2, review of PR #475): step 5's listing over a scratch
+# .retro/ holding a report from before the window, one inside it and this
+# pass's own prints only the one inside it.
+lspan=$(step 5 | grep -o '`ls "$root"/.retro/[^`]*`' | tr -d '`' | head -1)
+if [ -n "$lspan" ]; then
+	sr="$SCRATCH/sibling.root"; mkdir -p "$sr/.retro/2026/09" "$sr/.retro/2026/10"
+	: >"$sr/.retro/2026/09/retro-20260930T120000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261001T080000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261001T120000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261002T090000Z.md"
+	lcmd=$(printf '%s\n' "$lspan" | sed -e 's/<the window start as YYYYMMDDTHHMMSSZ>/20261001T100000Z/' -e 's/<the file name of this report>/retro-20261002T090000Z.md/')
+	lout=$(root="$sr" sh -c "$lcmd" 2>&1)
+	case "$lout" in *retro-20261001T120000Z.md*) pass "step 5's listing prints the report inside the window" ;; *) fail "step 5's listing missed the sibling inside the window: $lcmd → $lout" ;; esac
+	case "$lout" in *retro-20260930T*|*retro-20261001T080000Z*) fail "step 5's listing prints a report from before the window: $lout" ;; *) pass "…and none from before it, the previous retro's own included" ;; esac
+	case "$lout" in *retro-20261002T090000Z.md*) fail "step 5's listing prints this pass's own report" ;; *) pass "…and not this pass's own" ;; esac
+else
+	fail "step 5 carries no runnable listing of the sibling reports (\`ls \"\$root\"/.retro/…\`)"
+fi
 
 # 13e. Before a finding is recorded, the tracker is searched for it since the
 # window start; a match is named in the findings table and the note's
 # related, and a finding with a landed ticket is reported closed.
-proc_has 'gh issue list --state all --search' "the routing step searches the tracker, open and closed"
-proc_has 'created:>=<YYYY-MM-DD>' "…since the window start"
-proc_has 'findings table' "…names a match in the findings table"
-proc_has 'reported closed' "…reports a finding with a landed ticket closed"
-proc_has 'not as a candidate' "…not as a candidate"
+step_has 6 'gh issue list --state all --search' "the routing step searches the tracker, open and closed"
+step_has 6 'created:>=<YYYY-MM-DD>' "…since the window start"
+step_has 6 'findings table' "…names a match in the findings table"
+step_has 6 'reported closed' "…reports a finding with a landed ticket closed"
+step_has 6 'not as a candidate' "…not as a candidate"
+# The fix-not-holding exception needs the landing's date, so the search asks
+# for it (M-1, L-2, review of PR #475).
+step_has 6 'closedAt' "the search returns each match's closing date"
+step_has 6 'postdates the landing' "…which a finding's evidence is compared with: a fix that did not hold is a candidate again"
+# Step 8 and the never-fix paragraph say every CANDIDATE leaves for
+# /to-tickets — a finding reported closed is not one (L-4).
+step_has 8 'Every candidate is a ticket' "step 8 routes the candidates, not every finding"
+assert_file_has "$SKILL" 'reported closed is named and routed nowhere' "…and says what happens to a finding reported closed"
 note_span=$(proc | grep -o '`sh scripts/trace\.sh emit kind=note[^`]*`' | head -1)
 case "$note_span" in *'outcome=candidate|closed'*) pass "the note records closed beside candidate" ;; *) fail "the note's outcome is not candidate|closed: $note_span" ;; esac
 
