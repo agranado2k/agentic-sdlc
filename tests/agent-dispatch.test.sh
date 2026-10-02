@@ -1170,24 +1170,66 @@ cat >"$SLEEPER" <<EOF
 #!/bin/sh
 cat >/dev/null
 echo "\$\$" >"$PIDFILE"
-sleep 30
+exec sleep 30
 EOF
-env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' >/dev/null 2>&1 &
-disp=$!
-sleep 2
-# KILL is uncatchable, so the cleanup trap never runs; the worker is orphaned
-# and reaped here so it cannot outlive the suite.
-kill -KILL "$disp" 2>/dev/null
-wait "$disp" 2>/dev/null
-kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
-LEFTOVER=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null)
-if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
-	pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone"
+# kill_leg DISPATCHER TMP LABEL — KILL a dispatch run by DISPATCHER under
+# TMPDIR=TMP mid-run, then hold TMP to ONE leftover named agent-dispatch.*
+# carrying its staged prompt; LEFTOVER names it (a placeholder on a fail, so
+# the sweep legs below still have one to age). The KILL waits on the worker's
+# pid file — why is beside the bait below. No marker is one fail, never a
+# KILL anyway.
+kill_leg() {
+	rm -f "$PIDFILE"
+	sleeps_before=$(own_sleep_pids 30)
+	# KILL is uncatchable, so the cleanup trap never runs; the worker is
+	# orphaned and reaped here so it cannot outlive the suite.
+	bt_sig=KILL
+	bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x'
+	_kl_marked=$?
+	bt_sig=TERM
+	LEFTOVER=
+	if [ "$_kl_marked" != 0 ]; then
+		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
+	else
+		[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+		LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
+		if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
+			pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
+		else
+			fail "the leftover scratch is not recognisable by name$3: $(ls "$2" | tr '\n' ' ')"
+			LEFTOVER=
+		fi
+		# The reap takes the worker's sleep with it: the pid file names the sleep
+		# itself, not a shell that would leave it orphaned for thirty seconds.
+		# Bounded: about two seconds for the signal to land.
+		_kl_try=0
+		until [ "$(new_sleeps 30 "$sleeps_before")" = 0 ] || [ "$_kl_try" -ge 20 ]; do
+			_kl_try=$((_kl_try + 1))
+			sleep 0.1 2>/dev/null || { sleep 1; _kl_try=$((_kl_try + 9)); }
+		done
+		_kl_left=$(new_sleeps 30 "$sleeps_before")
+		[ "$_kl_left" = 0 ] && pass "…and the suite's own reap leaves no worker sleep behind$3" ||
+			fail "$_kl_left worker sleep(s) outlived the reap$3"
+	fi
+	[ -n "$LEFTOVER" ] || { LEFTOVER="$2/agent-dispatch.unnamed"; mkdir -p "$LEFTOVER"; }
+}
+# The bait first, under a temp location of its own so the sweep legs below see
+# only the real dispatcher's leftover: a copy slow to create its scratch, as a
+# loaded host makes the real one. A KILL sent on the clock lands before the
+# scratch exists and leaves nothing to name; one sent on the worker's own pid
+# file cannot, because the worker is spawned after its prompt is staged — the
+# one anchor that cannot precede the scratch (#473, the class #402 removed
+# from the TERM leg).
+KILL_BAIT_DIR="$SCRATCH/slow-scratch"
+KILL_BAIT_TMP="$SCRATCH/sweep-tmp-bait"
+mkdir -p "$KILL_BAIT_TMP"
+if bait_copy "$KILL_BAIT_DIR" "" '/^SCRATCH=\$\(mktemp -d / { print "sleep 3" } { print }'; then
+	kill_leg "$KILL_BAIT_DIR/agent-dispatch.sh" "$KILL_BAIT_TMP" " (a dispatcher slow to create its scratch)"
 else
-	fail "the leftover scratch is not recognisable by name: $(ls "$SWEEP_TMP" | tr '\n' ' ')"
-	LEFTOVER="$SWEEP_TMP/agent-dispatch.unnamed"
-	mkdir -p "$LEFTOVER"
+	fail "the bait was not planted — the dispatcher's scratch mktemp line has moved"
+	skip "the slow-scratch KILL leg — no bait to run it against"
 fi
+kill_leg "$DISPATCH" "$SWEEP_TMP" ""
 
 # Age the leftover past the sweep age, and plant what the sweep must NOT
 # touch: a fresh dispatch scratch (a dispatch still running), a stale
