@@ -36,7 +36,9 @@ hook_tools_on || {
 	cat >/dev/null 2>&1
 	exit 0
 }
-tdir=$(hook_dir) || {
+# The ask's error line is discarded here: this hook runs on every tool call,
+# and the session hooks already say a refused policy once (hook_dir).
+tdir=$(hook_dir 2>/dev/null) || {
 	cat >/dev/null 2>&1
 	exit 0
 }

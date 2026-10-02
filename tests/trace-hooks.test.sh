@@ -3812,4 +3812,173 @@ else
 	note "node is not on PATH: the kit-bound lag legs did not run"
 fi
 
+# ---------------------------------------------------------------------------
+banner "45. Tracing off spawns no git, and a hook asks for the trace directory once (#463)"
+# ---------------------------------------------------------------------------
+# PR #449's review, M-2 and L-5: the stop hook resolved a checkout's run by
+# spawning git before it had learned whether tracing was on, and the library's
+# helpers each asked for the trace directory again, against hook_dir's own
+# "ask it once" rule. Two recorders on PATH count what a hook spawns: `git`,
+# which with tracing off must stay unrun, and `sh`, whose `scripts/trace.sh
+# dir` calls are the asks and whose every other `scripts/trace.sh` call is
+# trace work tracing off must not reach. The policy file is named by an
+# absolute TRACE_CONFIG, so the shared script's own discovery spawns no git
+# either: what is counted is the hook's.
+SHIM463="$SCRATCH/shim-463"
+LOG463="$SCRATCH/spawned-463.log"
+mkdir -p "$SHIM463"
+SH463=$(command -v sh)
+for bin463 in git sh; do
+	real463=$(command -v "$bin463")
+	printf '#!%s\nprintf "%s %%s\\n" "$*" >>"%s"\nexec "%s" "$@"\n' \
+		"$SH463" "$bin463" "$LOG463" "$real463" >"$SHIM463/$bin463"
+	chmod +x "$SHIM463/$bin463"
+done
+# spawned_in <hooks dir> <hook> <payload> [env assignments…] — run that copy of
+# the hook with the recorders first on PATH; sets S_* and leaves the log in
+# LOG463, with no behind note on stdout to mistake for trace output. spawned
+# is the same for the hooks in place.
+spawned_in() {
+	_sp_dir=$1 _sp_hook=$2 _sp_payload=$3
+	shift 3
+	: >"$LOG463"
+	t_run_split env PATH="$SHIM463:$PATH" TRACE_CONFIG="$KIT/scripts/trace.config.sh" \
+		GIT_CEILING_DIRECTORIES="$SCRATCH" TRACE_BEHIND_WARN= "$@" sh "$_sp_dir/$_sp_hook" <"$_sp_payload"
+}
+spawned() { spawned_in "$HOOKS" "$@"; }
+asks463() { grep -c '^sh .*scripts/trace\.sh dir$' "$LOG463"; }
+# traced463 — the last run's calls into the shared script other than the ask.
+traced463() { grep '^sh .*scripts/trace\.sh ' "$LOG463" | grep -v 'scripts/trace\.sh dir$' || :; }
+# stray_gits463 [<repo>] — the last run's git spawns, less the behind note's
+# two lookups exactly as the hooks living in <repo> make them, when a repo is
+# named: its common directory asked from <repo>, and the lag counted in the
+# root checkout that directory belongs to. Any other git, the same lookup for
+# another path included, is stray.
+stray_gits463() {
+	if [ -n "${1:-}" ]; then
+		_sg_repo=$(cd "$1" && pwd -P)
+		_sg_root=$( (unset GIT_DIR GIT_WORK_TREE &&
+			git -C "$_sg_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null) || _sg_root=
+		_sg_root=$(dirname "${_sg_root:-/}")
+		grep '^git ' "$LOG463" | grep -v -x -F \
+			-e "git -C $_sg_repo rev-parse --path-format=absolute --git-common-dir" \
+			-e "git -C $_sg_root rev-list --count HEAD..refs/remotes/origin/main" || :
+	else
+		grep '^git ' "$LOG463" || :
+	fi
+}
+# quiet463 [<repo>] — the last run, tracing off, did nothing for the trace: one
+# ask, no other call into the shared script, no git but the behind note's.
+quiet463() {
+	[ "$(asks463)" = 1 ] && [ -z "$(traced463)" ] && [ -z "$(stray_gits463 "${1:-}")" ]
+}
+# spent463 — what the last run spawned, on one line, for a fail message.
+spent463() { tr '\n' ';' <"$LOG463"; }
+
+set_key cwd "$KIT" <"$FIX/subagent-stop.payload.json" |
+	set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-463.json"
+set_key cwd "$KIT" <"$FIX/subagent-stop.payload.json" |
+	set_key agent_transcript_path "$SCRATCH/absent-463.jsonl" >"$SCRATCH/phantom-463.json"
+# The start and end payloads are section 2's and section 3's, $SCRATCH/start.json
+# and $SCRATCH/end.json, written once and never rewritten.
+set_key session_id 'not;an;id' <"$SCRATCH/start.json" >"$SCRATCH/refused-463.json"
+
+# TRACING OFF: the stop hook, from a checkout of this repository with a wait
+# bound set (the two places it asked), and a phantom; the end hook.
+for leg463 in "subagent-stop.sh|stop-463" "subagent-stop.sh|phantom-463" "session-end.sh|end"; do
+	spawned "${leg463%|*}" "$SCRATCH/${leg463#*|}.json" TRACE_DIR= TRACE_AGENT_WAIT_MS=1
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+		pass "tracing off: ${leg463%|*} on ${leg463#*|} exits 0 and says nothing on either stream" ||
+		fail "tracing off: ${leg463%|*} on ${leg463#*|} exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	quiet463 && pass "tracing off: ${leg463%|*} on ${leg463#*|} asks once, and spawns no git and no trace work" ||
+		fail "tracing off: ${leg463%|*} on ${leg463#*|} asked $(asks463) times and spawned: $(spent463)"
+done
+# The start hook's behind note is about the code the hooks run, not the trace,
+# and is said whether or not tracing is on: its two lookups are the only git
+# it may spawn — never the pointer's. A refused session id takes the refusal's
+# path, which with tracing off writes no refusal either.
+for leg463 in start refused-463; do
+	spawned session-start.sh "$SCRATCH/$leg463.json" TRACE_DIR=
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		pass "tracing off: session-start.sh on $leg463 exits 0, silent on stdout" ||
+		fail "tracing off: session-start.sh on $leg463 exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	quiet463 "$KIT" &&
+		pass "tracing off: session-start.sh on $leg463 asks once, and spawns no trace work and no git but the behind note's" ||
+		fail "tracing off: session-start.sh on $leg463 asked $(asks463) times and spawned: $(spent463)"
+done
+# The export is not the trace's, and tracing off keeps it (local review M-1,
+# PR #518).
+: >"$SCRATCH/env-463.sh"
+spawned session-start.sh "$SCRATCH/start.json" TRACE_DIR= CLAUDE_ENV_FILE="$SCRATCH/env-463.sh"
+[ "$S_STATUS" = 0 ] && grep -qxF "export TRACE_SESSION='$SESSION'" "$SCRATCH/env-463.sh" &&
+	pass "tracing off: session-start.sh still writes the session's export" ||
+	fail "tracing off: session-start.sh exit $S_STATUS, the env file holds '$(cat "$SCRATCH/env-463.sh")'"
+
+# EACH GUARD IS LOAD-BEARING. A hook's copy with one guard taken out must turn
+# the check above red: the end and the stop hooks carry on past the ask, the
+# start hook writes its event, or its refusal, with nothing to write it to.
+# guard_off463 <name> <hook> <payload> <sed program> [<repo>] — the hooks
+# copied, that one edited, run with tracing off; passes when the edit took and
+# the check fails on the copy.
+guard_off463() {
+	_go_copy="$SCRATCH/guard-off-463-$1"
+	behind_copy "$_go_copy"
+	sed "$4" "$HOOKS/$2" >"$_go_copy/adapters/claude-code/hooks/$2"
+	if cmp -s "$HOOKS/$2" "$_go_copy/adapters/claude-code/hooks/$2"; then
+		fail "guard off ($1): the edit did not change $2 — the guard has moved"
+		return
+	fi
+	spawned_in "$_go_copy/adapters/claude-code/hooks" "$2" "$SCRATCH/$3.json" TRACE_DIR=
+	if [ "$S_STATUS" = 0 ] && ! quiet463 "$_go_copy"; then
+		pass "guard off ($1): $2 spawns trace work with tracing off, and the check goes red"
+	else
+		fail "guard off ($1): $2 with the guard removed still passes the check — it holds nothing"
+	fi
+}
+guard_off463 end session-end.sh end 's/^tdir=$(hook_dir) || exit 0$/tdir=$(hook_dir) || tdir=/'
+guard_off463 stop subagent-stop.sh stop-463 's/^tdir=$(hook_dir) || exit 0$/tdir=$(hook_dir) || tdir=/'
+guard_off463 start session-start.sh start 's/^if \[ -n "\$tdir" \]; then$/if :; then/'
+guard_off463 refusal session-start.sh refused-463 's/^	if \[ -n "\$tdir" \]; then$/	if :; then/'
+
+# A BROKEN POLICY IS NOT TRACING OFF. Off is the ask answering nothing, and the
+# hook stops quietly; a policy file the shared script refuses is an error, and
+# the hook still exits 0 — it never fails its agent harness — but says the
+# shared script's own line on stderr, once, as the emit it no longer reaches
+# used to (H-1, review of PR #518).
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='Not-a-type'\n" "$SCRATCH/broken-463" >"$SCRATCH/broken-463.sh"
+for leg463 in "session-start.sh|start" "subagent-stop.sh|stop-463" "session-end.sh|end"; do
+	spawned "${leg463%|*}" "$SCRATCH/${leg463#*|}.json" TRACE_CONFIG="$SCRATCH/broken-463.sh"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		[ "$(printf '%s\n' "$S_ERR" | grep -c "^x trace: TRACE_NUMBERED_TYPES word 'Not-a-type'")" = 1 ] &&
+		pass "a broken policy: ${leg463%|*} exits 0, silent on stdout, and says the shared script's line once" ||
+		fail "a broken policy: ${leg463%|*} exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
+# The tool hooks run on every tool call, and the session hooks have said it:
+# they stay quiet on a broken policy, as they were before (local review M-2).
+for hook463 in tool-pre.sh tool-post.sh; do
+	spawned "$hook463" "$FIX/tool-post.payload.json" TRACE_TOOLS=1 TRACE_CONFIG="$SCRATCH/broken-463.sh"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+		pass "a broken policy: $hook463 exits 0 and says nothing on either stream" ||
+		fail "a broken policy: $hook463 exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
+
+# TRACING ON: the same hooks, one ask each, and what they write unchanged.
+new_trace
+stops463=
+for leg463 in "session-start.sh|start" "subagent-stop.sh|stop-463" "subagent-stop.sh|phantom-463" "session-end.sh|end"; do
+	spawned "${leg463%|*}" "$SCRATCH/${leg463#*|}.json" TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1
+	[ "$S_STATUS" = 0 ] && [ "$(asks463)" = 1 ] &&
+		pass "tracing on: ${leg463%|*} on ${leg463#*|} exits 0 and asks for the trace directory once" ||
+		fail "tracing on: ${leg463%|*} on ${leg463#*|} exit $S_STATUS, asked $(asks463) times"
+	stops463="$stops463 $(ev_of agent.stop | grep -c '')"
+done
+[ -n "$(ev_of session.start)" ] && pass "tracing on: the start is written" ||
+	fail "tracing on: no session.start in $TDIR"
+# The running count of agent.stop after each leg: none after the start, one
+# after the stop, still one after the phantom and the end.
+[ "$stops463" = " 0 1 1 1" ] && pass "tracing on: the stop is written, and the phantom writes none" ||
+	fail "tracing on: agent.stop events after each leg (start, stop, phantom, end):$stops463"
+[ "$(data_of "$(ev_of session.end)" phantoms)" = 1 ] && pass "tracing on: the end is written, counting the phantom" ||
+	fail "tracing on: the end is '$(ev_of session.end)', not one counting a phantom"
+
 t_done "trace hooks"

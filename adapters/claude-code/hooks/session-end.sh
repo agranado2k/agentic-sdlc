@@ -21,6 +21,12 @@ set -u
 
 hook_read
 
+# The trace directory, asked for once (hook.lib.sh's hook_dir). Everything this
+# hook does is the trace's, so with tracing off it stops here and spawns
+# nothing more (#463); a policy file the shared script refuses stops it here
+# too, after the ask has said so on stderr.
+tdir=$(hook_dir) || exit 0
+
 sid=$(hook_field session_id)
 why=$(hook_field reason)
 transcript=$(hook_expand "$(hook_field transcript_path)")
@@ -81,10 +87,10 @@ else
 fi
 
 # The tool calls this session began and never returned from: denied (#409).
-hook_pending_sweep "$sid" "$@"
+hook_pending_sweep "$tdir" "$sid" "$@"
 
 # How many phantom stops this session had since its last end (#410).
-phantoms=$(hook_phantom_take "$sid") && set -- "$@" data.phantoms="$phantoms"
+phantoms=$(hook_phantom_take "$tdir" "$sid") && set -- "$@" data.phantoms="$phantoms"
 
 hook_trace emit kind=session.end harness=claude-code \
 	reason="the agent harness ended the session (${why:-reason unstated})" "$@"

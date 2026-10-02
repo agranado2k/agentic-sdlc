@@ -146,9 +146,9 @@ hook_expand() {
 
 # --- the session pointer ----------------------------------------------------
 
-# hook_pointer — the per-toplevel pointer file `scripts/trace.sh` reads a
-# session id back from, or nothing (status 1) when tracing is off or git cannot
-# hash the path.
+# hook_pointer <trace dir> — the per-toplevel pointer file `scripts/trace.sh`
+# reads a session id back from, or nothing (status 1) when <trace dir> is empty
+# (tracing is off) or git cannot hash the path. Empty spawns nothing.
 #
 # THIS IS A DELIBERATE COUPLING, and it is the one thing in this file worth
 # reviewing twice. The shared script derives that path from git's hash of the
@@ -159,20 +159,23 @@ hook_expand() {
 # for. GIT_DIR and GIT_WORK_TREE are scrubbed because git exports them into
 # hooks and a pinned pair would answer for another repository.
 hook_pointer() {
+	[ -n "${1:-}" ] || return 1
 	_hp_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" rev-parse --show-toplevel) 2>/dev/null ) || _hp_top=
 	[ -n "$_hp_top" ] || _hp_top=$hook_repo
-	hook_current_of "$_hp_top"
+	hook_current_of "$1" "$_hp_top"
 }
 
-# hook_current_of <toplevel> — the per-toplevel path `scripts/trace.sh` keys a
-# working tree's pointer file on; its run stack is the same path plus
-# `.<session>.runs` for a session with an id, `.runs` for one without (#453).
-# Nothing (status 1) when tracing is off or git cannot hash the path.
+# hook_current_of <trace dir> <toplevel> — the per-toplevel path
+# `scripts/trace.sh` keys a working tree's pointer file on; its run stack is
+# the same path plus `.<session>.runs` for a session with an id, `.runs` for one
+# without (#453). Nothing (status 1) when <trace dir> is empty (tracing is off)
+# or git cannot hash the path.
 # DELIBERATE COUPLING: this repeats the shared script's key derivation
 # (trace_key); hook_pointer and hook_run_of both depend on it.
 hook_current_of() {
-	_hc_dir=$(hook_dir) || return 1
-	_hc_key=$(printf '%s' "$1" |
+	_hc_dir=${1:-}
+	[ -n "$_hc_dir" ] || return 1
+	_hc_key=$(printf '%s' "$2" |
 		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hc_key=
 	[ -n "$_hc_key" ] || return 1
 	printf '%s/current/%s' "$_hc_dir" "$_hc_key"
@@ -180,9 +183,10 @@ hook_current_of() {
 
 # --- the run of the checkout the work happened in ----------------------------
 
-# hook_run_of <dir> [<session id>] — export TRACE_RUN and TRACE_PARENT from
-# that session's run stack in the checkout <dir> is in, so every emit after
-# it carries that checkout's run.
+# hook_run_of <trace dir> <dir> [<session id>] — export TRACE_RUN and
+# TRACE_PARENT from that session's run stack in the checkout <dir> is in, so
+# every emit after it carries that checkout's run. An empty <trace dir> is
+# tracing off: nothing is exported and nothing is spawned (#463).
 # Ticket #421, retro finding H4 (#417).
 #
 # WHY. The shared script reads the stack of the toplevel IT lives in, and the
@@ -218,12 +222,15 @@ hook_current_of() {
 # shared script's own precedence has it; a TRACE_PARENT already set is kept.
 hook_run_of() {
 	[ -n "${TRACE_RUN+set}" ] && return 0
-	[ -n "$1" ] || return 0
+	[ -n "${1:-}" ] || return 0
+	_ro_tdir=$1
+	shift
+	[ -n "${1:-}" ] || return 0
 	_ro_common=$(hook_common_dir "$1") || return 0
 	_ro_own=$(hook_common_dir "$hook_repo") || return 0
 	[ "$_ro_common" = "$_ro_own" ] || return 0
 	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
-	_ro_stack=$(hook_current_of "$_ro_top") || return 0
+	_ro_stack=$(hook_current_of "$_ro_tdir" "$_ro_top") || return 0
 	if hook_id_ok "${2:-}"; then
 		_ro_stack="$_ro_stack.$2.runs"
 	else
@@ -248,11 +255,12 @@ hook_run_of() {
 	return 0
 }
 
-# hook_point_at <session id> — write the pointer, or do nothing at all.
+# hook_point_at <trace dir> <session id> — write the pointer, or do nothing at
+# all.
 hook_point_at() {
-	_pa_p=$(hook_pointer) || return 0
+	_pa_p=$(hook_pointer "${1:-}") || return 0
 	mkdir -p "$(dirname "$_pa_p")" 2>/dev/null || return 0
-	printf '%s\n' "$1" >"$_pa_p" 2>/dev/null || :
+	printf '%s\n' "$2" >"$_pa_p" 2>/dev/null || :
 	return 0
 }
 
@@ -458,17 +466,30 @@ hook_tools_on() {
 	[ -n "$_ht_want" ]
 }
 
-# hook_dir — the resolved trace directory, or nothing (status 1) when tracing is
-# off. Asked of the shared script itself, which is the only thing that knows how
-# a relative policy value resolves against the root checkout.
+# hook_dir — the resolved trace directory; nothing, status 1, when tracing is
+# off; nothing, status 2, when the ask itself fails — a policy file the shared
+# script refuses, or a shared script that could not run at all. Asked
+# of the shared script itself, which is the only thing that knows how a relative
+# policy value resolves against the root checkout.
+#
+# OFF IS NOT AN ERROR, AND AN ERROR IS NOT OFF. Off is the documented no-op and
+# is said nowhere (rule 3). A refused policy file is the shared script's error,
+# and its own line reaches the hook's stderr untouched, the way an emit's would
+# (rule 1 keeps the exit 0, ADR-0008 clause 4 keeps it loud) — so a session
+# hook that stops at the ask still says why (H-1, review of PR #518). The tool
+# hooks, which run on every tool call, discard it at their own call site.
 #
 # ASK IT ONCE. There is no cache here on purpose: a caller reads this through a
 # command substitution, so anything remembered inside would be remembered in a
 # subshell and thrown away — a cache that cannot work, paid for on every tool
-# call (M-4, review of PR #295). The one caller resolves it once and hands it
-# down.
+# call (M-4, review of PR #295). So each hook asks once, before anything else
+# that would spawn a process for the trace, and hands the answer to every
+# helper that needs it as that helper's first argument; no helper here asks
+# again (#463). With tracing off the hook has its answer, and the trace work
+# after it spawns nothing, git included: the end and the stop hooks stop there,
+# and the start hook skips its event and pointer and carries on to the export.
 hook_dir() {
-	_hd_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hd_dir=
+	_hd_dir=$(cd "$hook_repo" && sh scripts/trace.sh dir) || return 2
 	[ -n "$_hd_dir" ] || return 1
 	printf '%s' "$_hd_dir"
 }
@@ -817,29 +838,29 @@ hook_say_session() {
 # sessions never share one — and never in current/, whose layout the shared
 # script keeps to itself (review of PR #432, M-1).
 
-# hook_phantom_add <session id> — one more phantom for that session. APPEND,
-# one short line per stop: an O_APPEND write of a few bytes lands whole, so two
-# stops at once both count and neither needs a lock. Nothing when tracing is
-# off or the id is not one hook_id_ok accepts — a counter keyed by a refused
-# id would be a path built from payload data.
+# hook_phantom_add <trace dir> <session id> — one more phantom for that
+# session. APPEND, one short line per stop: an O_APPEND write of a few bytes
+# lands whole, so two stops at once both count and neither needs a lock.
+# Nothing when <trace dir> is empty (tracing is off) or the id is not one
+# hook_id_ok accepts — a counter keyed by a refused id would be a path built
+# from payload data.
 hook_phantom_add() {
-	hook_id_ok "${1:-}" || return 0
-	_hp_dir=$(hook_dir) || return 0
-	mkdir -p "$_hp_dir/claude-code" 2>/dev/null || return 0
-	echo . >>"$_hp_dir/claude-code/$1.phantoms" 2>/dev/null || :
+	[ -n "${1:-}" ] && hook_id_ok "${2:-}" || return 0
+	mkdir -p "$1/claude-code" 2>/dev/null || return 0
+	echo . >>"$1/claude-code/$2.phantoms" 2>/dev/null || :
 }
 
-# hook_phantom_take <session id> — print that session's count, 0 when it had
-# none, and remove its counter; print nothing (status 1) when tracing is off or
-# the id is refused. TAKEN, not read: a resumed session keeps its id and ends
-# again, and its next end must count only the stops after this one — the same
-# reason session-end.sh anchors its usage read (#307). The counter is RENAMED
-# aside before it is counted, so a stop landing during the end starts a fresh
-# counter for the next end rather than being counted and then deleted.
+# hook_phantom_take <trace dir> <session id> — print that session's count, 0
+# when it had none, and remove its counter; print nothing (status 1) when
+# <trace dir> is empty (tracing is off) or the id is refused. TAKEN, not read:
+# a resumed session keeps its id and ends again, and its next end must count
+# only the stops after this one — the same reason session-end.sh anchors its
+# usage read (#307). The counter is RENAMED aside before it is counted, so a
+# stop landing during the end starts a fresh counter for the next end rather
+# than being counted and then deleted.
 hook_phantom_take() {
-	hook_id_ok "${1:-}" || return 1
-	_hp_dir=$(hook_dir) || return 1
-	_hp_file="$_hp_dir/claude-code/$1.phantoms"
+	[ -n "${1:-}" ] && hook_id_ok "${2:-}" || return 1
+	_hp_file="$1/claude-code/$2.phantoms"
 	_hp_n=0
 	if [ -f "$_hp_file" ] && mv "$_hp_file" "$_hp_file.$$" 2>/dev/null; then
 		_hp_n=$(wc -l <"$_hp_file.$$" | tr -d ' ')
@@ -897,9 +918,9 @@ hook_pending_drop() {
 	return 0
 }
 
-# hook_pending_sweep <session id> [<field>=<value> …] — one `tool.use
-# outcome=denied` per marker that session left, each carrying the fields after
-# the id (the session-end hook's subject and session), then the markers gone.
+# hook_pending_sweep <trace dir> <session id> [<field>=<value> …] — one
+# `tool.use outcome=denied` per marker that session left, each carrying the
+# fields after the id (the session-end hook's subject and session), then the markers gone.
 # TAKEN, the way hook_phantom_take takes its counter: the directory is renamed
 # aside first, so a resumed session's next end sweeps only what came after this
 # one, and a marker landing during the end waits for that next end.
@@ -909,10 +930,9 @@ hook_pending_drop() {
 # behind; every directory of that shape for this session is swept here too,
 # so no denial is lost to an interrupted end (review of PR #446, M-1).
 hook_pending_sweep() {
-	hook_pending_ok "${1:-}" || return 0
-	_ps_root=$(hook_dir) || return 0
-	_ps_d="$_ps_root/claude-code/$1.pending"
-	shift
+	[ -n "${1:-}" ] && hook_pending_ok "${2:-}" || return 0
+	_ps_d="$1/claude-code/$2.pending"
+	shift 2
 	[ -d "$_ps_d" ] && { mv "$_ps_d" "$_ps_d.$$" 2>/dev/null || :; }
 	for _ps_t in "$_ps_d".*; do
 		[ -d "$_ps_t" ] || continue
