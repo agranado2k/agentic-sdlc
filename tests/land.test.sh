@@ -357,8 +357,12 @@ f=$(body noticket "<!-- implement: ticket=#999 tier=planner -->")
 land STUB_TICKET= "STUB_BODY_FILE=$f" 167
 landed_with 167 "with no ticket known, the line's own" '"implement":"yes"' '"implement_tier":"planner"'
 
-land STUB_BODY_RC=1 "STUB_BODY_FILE=$f" 168
-landed_with 168 "a body the forge does not answer for" '"implement":"no"'
+# The body the forge fails on is one that would otherwise count — #160's, a
+# good line naming the landing's own ticket — so only the failed read can
+# leave it absent.
+land STUB_BODY_RC=1 "STUB_BODY_FILE=$SCRATCH/body.yes" 168
+landed_with 168 "a good body the forge does not answer for" '"implement":"no"'
+no_tier 168 "a good body the forge does not answer for"
 
 # ---------------------------------------------------------------------------
 banner "7. Kit-only: on bootstrap's deletion list, named by the root manual"
