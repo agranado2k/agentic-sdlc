@@ -1741,7 +1741,17 @@
 # hook_run_of and hooks/subagent-stop.sh record on `agent.stop` the run open
 # in the checkout the payload's cwd names — a linked worktree's, not the
 # root's — with README.md's row saying so; and, kit-only, #450's fold of the
-# suites' assertion helpers into tests/lib.sh.
+# suites' assertion helpers into tests/lib.sh. From #461 (PR #475), in 9a:
+# .agents/skills/retro/SKILL.md and .agents/skills/retro/QUESTIONS.md learn
+# from the retro's own runs — a closed window, an open sibling run, the new
+# keys, the tracker. From #392 (PR #395), the root guard: in 9e,
+# adapters/claude-code/hooks/root-guard.sh, a pre-tool hook refusing an
+# agent's edit in the root checkout, with hooks/hook.lib.sh, README.md and
+# adapters/README.md naming it — rewire if you wired the adapter; in 9b,
+# constitution/AGENTS.md.template's row "Keep work out of the root
+# checkout"; .githooks/pre-commit refuses an agent's commit from the main
+# working copy or the default branch; docs/domain-glossary.md, README.md
+# and setup/agent-bootstrap.md say so.
 
 shared-layer: 0.42.0
 
