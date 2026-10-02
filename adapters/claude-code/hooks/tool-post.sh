@@ -135,7 +135,8 @@ errfirstline=$(field error_first_line)
 # THE RUN HANDED OVER AT SPAWN (#474; see hook_run_handed): read from the
 # transcript of the agent this call belongs to — the subagent's own when the
 # payload names one, the session's otherwise — so a subagent's calls carry the
-# run its spawn prompt named, and one handed none never borrows its session's.
+# run its spawn prompt named, and one handed none never borrows the run handed
+# to its session.
 # With none handed, the shared script resolves the run as it always has.
 if own=$(hook_agent_transcript "$(hook_expand "$(field transcript)")" "$sid" "$(field agent)"); then
 	hook_run_handed "$own" || :
