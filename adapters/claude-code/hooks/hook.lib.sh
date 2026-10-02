@@ -177,7 +177,7 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [--rollup] [--resume [--after <message id>]] [<field>=<value> …] —
+# hook_tokens <transcript> <kind> [--rollup] [--resume] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
 # token counts, and at least one event whatever happens. Seven shapes, all of
 # them exit 0:
@@ -207,11 +207,12 @@ hook_point_at() {
 # between two models' events loses neither: see transcript-usage.mjs for why a
 # resumed session needs it and session-end.sh for where the events come from.
 #
-# --after is the last data.last_msg the trace holds for this session, of any
-# model, and it decides one thing only: that an earlier read exists, so an
-# empty read is "nothing new" rather than "nothing to read", and which id that
-# event carries forward. It is never the extractor's anchor — one id for every
-# model is the shape a kill partway turned into lost messages (#408).
+# --after is an earlier read's data.last_msg: an empty read is then "nothing
+# new" rather than "nothing to read", carrying that id forward. Alone, it is
+# also the extractor's one anchor for every model (#307). Beside --resume it
+# is only that signal and never the anchor — one id for every model is the
+# shape a kill partway turned into lost messages (#408) — and session-end.sh
+# passes the last data.last_msg the trace holds, of any model.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -239,6 +240,9 @@ hook_tokens() {
 		*) break ;;
 		esac
 	done
+	# The extractor's anchor: --resume's per-model anchors, or else the one id.
+	_ht_one=
+	[ -n "$_ht_resume" ] || _ht_one=$_ht_after
 	# THE REASON NAMES THE FIX, not only the gap. A node managed per user
 	# (a version manager under the home directory) is on the operator's shell
 	# PATH and on none of the agent harness's, and every usage event of every
@@ -262,7 +266,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume ${_ht_one:+--after "$_ht_one"} "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -273,7 +277,7 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume ${_ht_one:+--after "$_ht_one"} "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi

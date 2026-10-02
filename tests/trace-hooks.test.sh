@@ -3102,8 +3102,10 @@ $MB 12 120 1200 12000 2 msg_b2" ] &&
 		'{"kind":"session.usage","model":"'"$MA"'","tok_in":1,"data":{"msgs":"1","last_msg":"msg_a1"}}' \
 		>"$SCRATCH/rec-a-408.jsonl"
 	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-a-408.jsonl"
-	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MB 12 120 1200 12000 2 msg_b2
-$MA 2 20 200 2000 1 msg_a2" ] &&
+	# The rows are compared as a set: their order is not a contract (L-4,
+	# review of PR #447).
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$MA 2 20 200 2000 1 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
 		pass "--resume reads alpha after its anchor and beta, anchorless, from the start" ||
 		fail "--resume with alpha's anchor only printed '$S_OUT' (status $S_STATUS: $S_ERR)"
 	t_run_split sh -c 'node "$1" --resume "$2" </dev/null' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
@@ -3128,6 +3130,14 @@ $MB 12 120 1200 12000 2 msg_b2" ] &&
 	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
 		pass "a stdin that cannot be read is exit 2 under --resume, no row" ||
 		fail "an unreadable stdin under --resume: status $S_STATUS, '$S_OUT'"
+	# M-1, review of PR #447: hook_tokens --after WITHOUT --resume is still the
+	# one anchor for every model, never silently a whole-file read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh -c '. "$0"; hook_tokens "$1" agent.stop --after msg_a1 subject=agent:m1-408' \
+		"$HOOKS/hook.lib.sh" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(sum_tok tok_in agent.stop)" = 14 ] &&
+		pass "hook_tokens --after alone still anchors every model: b1, a2, b2 counted (14), a1 not" ||
+		fail "hook_tokens --after alone counted tok_in $(sum_tok tok_in agent.stop): $(ev_of agent.stop)"
 	t_run_split node "$EXTRACTOR" --resume --after msg_a1 "$SCRATCH/run2-408.jsonl" </dev/null
 	[ "$S_STATUS" = 2 ] && pass "--resume and --after together is a usage error: two answers to one question" ||
 		fail "--resume with --after: status $S_STATUS, '$S_OUT'"
@@ -3165,11 +3175,23 @@ $MB 12 120 1200 12000 2 msg_b2" ] &&
 		[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
 		pass "a third end with nothing new leaves one tokenless event and moves no total" ||
 		fail "the nothing-new end: '$N3', alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	# AND IT ANCHORS NOBODY (L-3, review of PR #447): it names no model, so a
+	# fourth end with one new message per model counts exactly those two.
+	{
+		asst408 msg_a3 "$MA" 16 160 1600 16000
+		asst408 msg_b3 "$MB" 32 320 3200 32000
+	} >>"$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "19 190 1900 19000" ] &&
+		[ "$(model_row "$MB")" = "44 440 4400 44000" ] &&
+		pass "a fourth end after it counts each model's one new message, no more" ||
+		fail "the fourth end: alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
 
 	# A TRACE THE OLD HOOK WROTE: both events carried the whole read's last id,
 	# and the kill took beta's. Alpha's anchor is a POSITION in the file, so it
 	# still counts alpha's messages after it; beta has none and starts over.
 	new_trace
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
 	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject="session:$S408" \
 		session="$S408" model="$MA" tok_in=1 tok_out=10 tok_cache_w=100 tok_cache_r=1000 \
 		data.msgs=1 data.last_msg=msg_b1
