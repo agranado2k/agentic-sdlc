@@ -1175,16 +1175,19 @@ EOF
 # kill_leg DISPATCHER TMP LABEL — KILL a dispatch run by DISPATCHER under
 # TMPDIR=TMP mid-run, then hold TMP to ONE leftover named agent-dispatch.*
 # carrying its staged prompt; LEFTOVER names it (a placeholder on a fail, so
-# the sweep legs below still have one to age).
+# the sweep legs below still have one to age). The KILL waits on the worker's
+# pid file, never on a fixed two seconds (#473, the class #402 removed from
+# the TERM leg): the worker is spawned after the prompt is staged, so its
+# marker is the one anchor that cannot precede the scratch. No marker is a
+# fail, never a KILL anyway.
 kill_leg() {
 	rm -f "$PIDFILE"
-	env TMPDIR="$2" sh "$1" implementer --prompt 'x' >/dev/null 2>&1 &
-	disp=$!
-	sleep 2
 	# KILL is uncatchable, so the cleanup trap never runs; the worker is
 	# orphaned and reaped here so it cannot outlive the suite.
-	kill -KILL "$disp" 2>/dev/null
-	wait "$disp" 2>/dev/null
+	bt_sig=KILL
+	bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x' ||
+		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
+	bt_sig=TERM
 	[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
 	LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
 	if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
