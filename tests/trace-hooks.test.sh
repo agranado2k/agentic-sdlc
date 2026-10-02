@@ -3767,8 +3767,8 @@ banner "44. The kit's wait bound covers the measured lag of a final message (#47
 # reads the KIT'S OWN policy file, the way its wiring does.
 #
 # The writer is section 27's late_writer, so the 2 s run from the hook's first
-# nap, never from a clock a slow preamble could eat.
-unset TRACE_AGENT_WAIT_MS
+# nap, never from a clock a slow preamble could eat. An inherited
+# TRACE_AGENT_WAIT_MS would override the policy file; tests/lib.sh unsets it.
 # lag479 <policy file> — the hook on a transcript one turn short, whose final
 # turn lands 2 s into the wait, under that policy file. Sets S_*, NAPS and
 # LAG479, the agent.stop it wrote.
