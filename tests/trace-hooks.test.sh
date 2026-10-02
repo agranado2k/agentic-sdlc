@@ -3608,5 +3608,9 @@ case $ROW421 in *"parent from the same checkout's stack"*) pass "the README row 
 *) fail "the README row for subagent-stop.sh does not say the parent comes from the same checkout's stack" ;; esac
 case $ROW421 in *"a checkout with no run open makes a stop that carries no run, never the root's"*) pass "the README row says an idle checkout's stop carries no run" ;;
 *) fail "the README row for subagent-stop.sh does not say a checkout with no run open makes a stop that carries no run" ;; esac
+case $ROW421 in *"the hook's own working directory when the payload names no \`cwd\`"*) pass "the README row names the no-cwd fallback" ;;
+*) fail "the README row for subagent-stop.sh does not name the hook's own working directory as the no-cwd fallback" ;; esac
+case $ROW421 in *"a \`TRACE_RUN\` already in the environment wins, with its parent; a \`TRACE_PARENT\` alone is kept"*) pass "the README row names the environment's precedence" ;;
+*) fail "the README row for subagent-stop.sh does not say a TRACE_RUN in the environment wins and a TRACE_PARENT alone is kept" ;; esac
 
 t_done "trace hooks"
