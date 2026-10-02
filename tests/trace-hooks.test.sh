@@ -1725,8 +1725,9 @@ if [ "$HAVE_NODE" = 1 ]; then
 	if [ "$HAVE_MS_CLOCK" = 0 ]; then
 		note "no millisecond clock on this host: the real-clock whole-second legs did not run"
 	else
-		# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP waits the kit's own bound
-		# out: one refused fraction, then the whole second.
+		# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP waits a 1000 ms bound
+		# out (the kit's own bound until #479): one refused fraction, then the
+		# whole second.
 		new_trace
 		stop_on "$SCRATCH/sub-head-308.jsonl"
 		STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
@@ -3780,7 +3781,8 @@ lag479() {
 
 if [ "$HAVE_NODE" = 1 ]; then
 	lag479 "$KIT/scripts/trace.kit.config.sh"
-	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" = ok ] && [ "$(num "$LAG479" tok_out)" = 156 ] &&
+	# A priced stop writes no outcome key at all; only a give-up says fail.
+	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" != fail ] && [ "$(num "$LAG479" tok_out)" = 156 ] &&
 		pass "under the kit's policy a final turn 1.5 s late is waited for and priced (waited_ms $(str "$LAG479" waited_ms))" ||
 		fail "under the kit's policy a final turn 1.5 s late was given up on: exit $S_STATUS, event $LAG479"
 
