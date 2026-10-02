@@ -343,7 +343,12 @@ handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "
 t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
 t_text_has "$handoff" "concurrent-subagent limit" "the cap is derived from the host's concurrent-subagent limit"
 t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
-in_order "$handoff" "the cap is the limit divided by the seven lenses, rounded down, never below one" \
+# The formula is held on its own sentence: across the whole step, the
+# rationale sentence's "concurrent-subagent limit" would satisfy the first
+# anchor for a formula that divides something else by seven.
+formula=$(printf '%s\n' "$handoff" | grep -o 'The cap is [^.]*\.')
+[ -n "$formula" ] && pass "the hand-off states the cap in a sentence of its own" || fail "the hand-off has no 'The cap is …' sentence"
+in_order "$formula" "the cap is the limit divided by the seven lenses, rounded down, never below one — in one sentence" \
 	"concurrent-subagent limit" "divided by seven" "rounded down" "never below one"
 t_text_has "$handoff" "as the project states it" "the limit is the project's stated value, read where it is written"
 t_text_has "$handoff" "never a number this skill names" "no host's number is baked into a skill that ships to every host"
