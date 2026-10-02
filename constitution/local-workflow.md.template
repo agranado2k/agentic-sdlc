@@ -100,9 +100,13 @@ The rubric, in the order to ask it:
 1. **Is the definition of done checkable without judgement?** A rename, a
    codemod, a dependency bump, a mechanical migration of call sites — the suite
    is the oracle. ⇒ `mechanical`, but only when both conditions hold: the
-   ticket names the one command whose exit is its oracle, as the first line of
-   its Acceptance section, and the change is one file or one pattern applied
-   uniformly across many. A refactor that touches many files for different
+   ticket names the one command whose exit is its oracle — the docs gate,
+   `sh scripts/check.sh`; one suite, `sh tests/<name>.sh`; or the full suite,
+   the `sh -c` loop `/implement`'s step 4 spells — as the first line of its
+   Acceptance section, and the change is one file or one pattern applied
+   uniformly across many. Those three are the forms `/implement` runs, so a
+   ticket whose only honest oracle is outside that list is not `mechanical`.
+   A refactor that touches many files for different
    reasons, or a definition of done with an "unless" in it, is no hit — ask
    question 2. This is the one that saves real money, because it is also the
    most common ticket in an expand–migrate–contract wave.
