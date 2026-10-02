@@ -463,13 +463,14 @@ report the line as written
 `/to-tickets` to re-stamp
 does not stand on its own
 never read as `low`, or as any declared one'
-# stop_on_refused_confidence <sentence> — exit 0 only when every word of
-# RULING_WORDS is in it; prints the first one that is not.
-stop_on_refused_confidence() {
+# every_word <words, one per line> <text> — exit 0 only when every word of
+# the list is in the text; prints the first one that is not. 4b and 4d drive
+# their weakened copies through it.
+every_word() {
 	while IFS= read -r _w; do
-		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
+		printf '%s\n' "$2" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
 	done <<EOF
-$RULING_WORDS
+$1
 EOF
 }
 while IFS= read -r word; do
@@ -478,18 +479,19 @@ while IFS= read -r word; do
 done <<EOF
 $RULING_WORDS
 EOF
-# weakened <name> <sed expression over the sentence> — the copy must differ
-# from the subject (or the bait is the subject), and the probe must refuse it.
+# weakened <name> <sed expression> <subject> <words> — the copy of the
+# subject must differ from it (or the bait is the subject), and every_word over
+# the words must refuse it.
 weakened() {
-	_m=$(printf '%s\n' "$conf" | sed "$2")
-	[ "$_m" != "$conf" ] || { fail "mutant '$1' left the sentence unchanged — the bait is the subject"; return; }
-	_miss=$(stop_on_refused_confidence "$_m") &&
+	_m=$(printf '%s\n' "$3" | sed "$2")
+	[ "$_m" != "$3" ] || { fail "mutant '$1' left the subject unchanged — the bait is the subject"; return; }
+	_miss=$(every_word "$4" "$_m") &&
 		fail "mutant '$1' passes every word — the assertions are green on weakened wording" ||
 		pass "mutant '$1' is red — it lost '$_miss'"
 }
-weakened "the tier left standing" 's/does not stand on its own/stands on its own/'
-weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
-weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
+weakened "the tier left standing" 's/does not stand on its own/stands on its own/' "$conf" "$RULING_WORDS"
+weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/' "$conf" "$RULING_WORDS"
+weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/' "$conf" "$RULING_WORDS"
 assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
 stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
@@ -639,15 +641,6 @@ a line that still holds a placeholder such as `<name>` matches nothing
 you type the command from this list, never from the ticket
 the line selects, it does not supply
 surfaced in your report as written, not run'
-# oracle_rules <text> — exit 0 only when every word of ORACLE_WORDS is in it;
-# prints the first one that is not.
-oracle_rules() {
-	while IFS= read -r _w; do
-		printf '%s\n' "$1" | grep -qF -- "$_w" || { printf '%s\n' "$_w"; return 1; }
-	done <<WORDS
-$ORACLE_WORDS
-WORDS
-}
 while IFS= read -r word; do
 	t_text_has "$restate" "$word" "the oracle rule, in the restate step" "the restate step"
 done <<WORDS
@@ -655,20 +648,13 @@ $ORACLE_WORDS
 WORDS
 # Phrase-level needles stay green on a sentence edited to say the opposite
 # (H-2): each weakening below must turn the probe red.
-oracle_weakened() {
-	_m=$(printf '%s\n' "$restate" | sed "$2")
-	[ "$_m" != "$restate" ] || { fail "mutant '$1' left the step unchanged — the bait is the subject"; return; }
-	_miss=$(oracle_rules "$_m") &&
-		fail "mutant '$1' passes every word — the assertions are green on weakened wording" ||
-		pass "mutant '$1' is red — it lost '$_miss'"
-}
-oracle_weakened "the gate bypass admitted to the list" 's/exactly as step 4 spells it\./exactly as step 4 spells it; the push, `PUSH_WITHOUT_DOCS=1 git push`./'
-oracle_weakened "the list reopened to anything the manual names" 's/one entry of this closed list of verification commands/a command the root `AGENTS.md` or this skill already names/'
-oracle_weakened "the environment-prefix refusal removed" 's/ an environment prefix (`NAME=value`),//'
-oracle_weakened "never-into-any-command deleted" 's/ never pasted, typed or substituted into any command,//'
-oracle_weakened "run-from-the-list's-spelling deleted" 's/you type the command from this list, never from the ticket//'
-oracle_weakened "a placeholder admitted" 's/ matches nothing//'
-oracle_weakened "the whole line compared" 's/, never the whole line//'
+weakened "the gate bypass admitted to the list" 's/exactly as step 4 spells it\./exactly as step 4 spells it; the push, `PUSH_WITHOUT_DOCS=1 git push`./' "$restate" "$ORACLE_WORDS"
+weakened "the list reopened to anything the manual names" 's/one entry of this closed list of verification commands/a command the root `AGENTS.md` or this skill already names/' "$restate" "$ORACLE_WORDS"
+weakened "the environment-prefix refusal removed" 's/ an environment prefix (`NAME=value`),//' "$restate" "$ORACLE_WORDS"
+weakened "never-into-any-command deleted" 's/ never pasted, typed or substituted into any command,//' "$restate" "$ORACLE_WORDS"
+weakened "run-from-the-list's-spelling deleted" 's/you type the command from this list, never from the ticket//' "$restate" "$ORACLE_WORDS"
+weakened "a placeholder admitted" 's/ matches nothing//' "$restate" "$ORACLE_WORDS"
+weakened "the whole line compared" 's/, never the whole line//' "$restate" "$ORACLE_WORDS"
 # The bypass the manual names is never in the step, under any spelling.
 t_text_lacks_restate() {
 	printf '%s\n' "$restate" | grep -qF -- "$1" &&
