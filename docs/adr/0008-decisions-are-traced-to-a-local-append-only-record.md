@@ -162,7 +162,8 @@ Chosen: **option 1**.
    which the script carries beside its kind list and the trace suite
    holds row for row to it:
    - `session.start` `fail` · `session.end` none · `session.usage` `ok`
-     `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail`
+     `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail` (and
+     `denied` since the #409 amendment below)
    - `run.start` none · `run.end` `ok` `stopped`
    - `spawn` `dispatched` `in-session` `refused` · `spawn.end` `ok` `fail`
      `timeout` `budget` `unreachable`

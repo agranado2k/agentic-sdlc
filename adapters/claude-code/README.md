@@ -362,8 +362,8 @@ refuses — or a blocking `PreToolUse` hook such as the kill guard below — fir
 payload is handed to the hook *before* the decision, so nothing on it says the
 call was denied. So `hooks/tool-pre.sh` leaves a pending marker per call,
 `claude-code/<session id>.pending/<tool-use id>` in the trace directory — the
-directory the phantom counters live in, owner-only, holding the tool's name
-and the input head — and writes no event; `tool-post.sh` removes the call's
+directory the phantom counters live in, each marker owner-only, holding the
+tool's name and the input head — and writes no event; `tool-post.sh` removes the call's
 marker when it returns, whatever it then records. At the session's end, **each
 marker left is swept into one `tool.use` with `outcome=denied`**, the tool's
 name and the input head on it, before `session.end` (ticket #409). Swept per
@@ -380,7 +380,11 @@ Two things the post-tool hook deliberately does not do:
 - **It writes no event at `PreToolUse`.** Both post payloads carry the whole
   `tool_input` themselves, so the pre hook has nothing to add to the event;
   its marker is only the evidence that a call began.
-- **It never uses `hook_field` on a tool payload.** Every live payload arrives
+- **It never reads an event's fields with `hook_field` on a tool payload.**
+  One best-effort use is not a field of the event: when the reader refuses a
+  post payload, the call still returned, so its pending marker is dropped by
+  the ids `hook_field` finds — held to the marker's identifier class, so a
+  wrong answer leaves a marker behind and is never a path. Every live payload arrives
   compact, as one line of JSON, so a key-name search finds the LAST occurrence
   — harmless for the session payloads, whose keys occur once, but a tool
   payload nests arbitrary objects, and a tool result can carry `"session_id"`
