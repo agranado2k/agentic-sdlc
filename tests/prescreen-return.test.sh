@@ -125,8 +125,11 @@ TEXTEOF
 TAB=$(printf '\t')
 printf 'rename%sthe helper\nan arrow → and a dash — in prose\n' "$TAB" >>"$TEXT"
 
-# verdict <return text> [text file] — the lifted fence's answer for one
-# return: checked_prescreen's exit status, its output kept in verdict.out.
+# verdict <return text> [text file] [return file] — the lifted fence's answer
+# for one return: checked_prescreen's exit status, its output kept in
+# verdict.out. A return file given is read as it stands, written or not — the
+# return text is then ignored — so a return that was never written runs
+# through the same frame as every other.
 # t_verdict_is (tests/lib.sh) asserts on it, as accepted or refused. A
 # refusal is held further: it said no, AND said it with the one fixed line
 # and nothing else — not the return's text, not the checker's reason, which
@@ -134,13 +137,13 @@ printf 'rename%sthe helper\nan arrow → and a dash — in prose\n' "$TAB" >>"$T
 # assertion about what a refusal printed never depends on which call happened
 # to run before it (review of PR #328).
 verdict() {
-	printf '%s\n' "$1" >"$SCRATCH/return"
-	t_check_run "$CHECK" checked_prescreen "${2:-$TEXT}" "$SCRATCH/return"
+	[ -n "${3:-}" ] || printf '%s\n' "$1" >"$SCRATCH/return"
+	t_check_run "$CHECK" checked_prescreen "${2:-$TEXT}" "${3:-$SCRATCH/return}"
 }
 T_VERDICT_REFUSED=named_only
 # named_only <label> — the refusal in verdict.out/.err named the pre-screen
-# unreadable and printed nothing else. Called right after a run of the check:
-# by t_verdict_is on every refusal, and by the never-written return below.
+# unreadable and printed nothing else. Called right after a run of the check,
+# by t_verdict_is on every refusal.
 # The label comes prefix and all, so the skill's name is spelled once, in
 # T_VERDICT_PREFIX.
 named_only() {
@@ -416,12 +419,7 @@ Evidence: "retry three times"'
 	grep -qxF "${TAB}LC_ALL=C grep -q '[^ -~]' \"\$2\" && return 1" "$CHECK" &&
 		pass "/$NAME — the printable-ASCII test is pinned to the C locale: a byte is a byte, whatever the session's locale" ||
 		fail "/$NAME — the fence should run \"LC_ALL=C grep -q '[^ -~]'\" on the return: unpinned, a multibyte locale decides what is printable"
-	# A return that was never written is refused like any other.
-	if (cd "$PROJECT" && sh -c '. "$1"; checked_prescreen "$2" "$3"' _ "$CHECK" "$TEXT" "$SCRATCH/no-such-return") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"; then
-		fail "/$NAME — a return file that does not exist passed the check"
-	else
-		named_only "${T_VERDICT_PREFIX}a return that was never written is refused"
-	fi
+	t_verdict_is refused "a return that was never written is refused" '' "$TEXT" "$SCRATCH/no-such-return"
 
 	# Found from the skills root — the nearest .agents/skills/ at or above the
 	# cwd, within the outermost repository — and it fails closed.
