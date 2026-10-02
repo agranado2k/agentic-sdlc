@@ -1173,12 +1173,13 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 # content-addressed blob, only when the policy switch above asked for it.
 #
 # WHERE IT IS CALLED FROM MATTERS, and it is why this is a function rather than
-# a line: an event cannot be taken back (ADR-0008 clause 5), so a spawn must
-# not be on disk before the last thing that can end this dispatch WITHOUT a
-# spawn.end has had its say. Deriving the budget is that thing — half an
-# inherited budget is a usage error — so the ordinary path emits after it,
-# while the unreachable crossing, judged deliberately before the budget, emits
-# its own pair at its own site (H-1, review of PR #290).
+# a line: an event cannot be taken back (ADR-0008: the record is
+# append-only), so a spawn must not be on disk before the last thing that can
+# end this dispatch WITHOUT a spawn.end has had its say. Deriving the budget
+# is that thing — half an inherited budget is a usage error — so the ordinary
+# path emits after it, while the unreachable crossing, judged deliberately
+# before the budget, emits its own pair at its own site (H-1, review of PR
+# #290).
 _trace_spawn() {
 	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
@@ -1187,7 +1188,8 @@ _trace_spawn() {
 	_trace "$@"
 	# Only now is there a pair for a signal to close: a signal that lands
 	# while the spawn is being written ends the dispatch with no end at all,
-	# never with an end that pairs with nothing (ADR-0008 clause 5).
+	# never with an end that pairs with nothing (ADR-0008: the record is
+	# append-only).
 	_SPAWNED=1
 }
 

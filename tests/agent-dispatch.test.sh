@@ -2348,11 +2348,11 @@ fi
 
 # A signal BEFORE THE SPAWN IS ON DISK leaves no pair to close: the dispatch
 # ends 143 and writes nothing at all — an end that paired with no spawn would
-# be an event nobody can take back (ADR-0008 clause 5; H-2 and L-2, review of
-# PR #488). The bait sits inside _trace_spawn, the last moment before the spawn
-# is written, so it holds where the flag is set as well as the branch. Run a
-# second time with _SPAWNED=1 in the environment: the flag is the
-# dispatcher's own, never a caller's (L-1).
+# be an event nobody can take back (ADR-0008: the record is append-only; H-2
+# and L-2, review of PR #488). The bait sits inside _trace_spawn, the last
+# moment before the spawn is written, so it holds where the flag is set as
+# well as the branch. Run a second time with _SPAWNED=1 in the environment:
+# the flag is the dispatcher's own, never a caller's (L-1).
 PRE_DIR="$SCRATCH/pre-spawn"
 PRE_MARK="$SCRATCH/pre-spawn.entered"
 if bait_copy "$PRE_DIR" "$PRE_MARK" 'index(prev, "--blob \"$PROMPT_FILE\"") && $0 == "\t_trace \"$@\"" { print "\t: >\"" mark "\"; sleep 3" } { print; prev = $0 }'; then
@@ -2419,7 +2419,7 @@ tr_event_has "$TR_69" 2 '"exit":"69"' "…with 69 recorded"
 # NO HALF PAIRS. Deriving the budget can end the dispatch on its own — half an
 # inherited budget is a usage error — and the spawn must not already be on disk
 # when it does, because an append-only record has no way to close a pair
-# afterwards (ADR-0008 clause 5; H-1, review of PR #290).
+# afterwards (ADR-0008, append-only; H-1, review of PR #290).
 TR_HALF="$SCRATCH/trace-half"
 tr_new "$TR_HALF"
 t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_HALF" AGENT_DISPATCH_BUDGET_TASKS=64 \
