@@ -1335,4 +1335,27 @@ assert_file_has "$SKILL" 'reported closed is named and routed nowhere' "…and s
 note_span=$(proc | grep -o '`sh scripts/trace\.sh emit kind=note[^`]*`' | head -1)
 case "$note_span" in *'outcome=candidate|closed'*) pass "the note records closed beside candidate" ;; *) fail "the note's outcome is not candidate|closed: $note_span" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "14. Question 6 reads a refused spawn as refused, not as a worker nobody waited for (#482)"
+# ---------------------------------------------------------------------------
+# /review-pr records a lens the host refused to start as `spawn
+# outcome=refused` with no `spawn.end` — nothing started, so nothing ends
+# (ruling on PR #512). Question 6's no-end rule would count each one as a
+# worker nobody waited for, and the refusal itself nowhere. So the Reads
+# paragraph lists the spawn's refused outcome, and the no-end sentence
+# exempts it and counts it on its own.
+case "$sec6_reads" in
+*'`spawn` (`outcome` `refused`)'*) pass "question 6's Reads paragraph lists spawn with outcome refused" ;;
+*) fail "question 6's Reads paragraph does not list \`spawn\` (\`outcome\` \`refused\`)" ;;
+esac
+noend=$(printf '%s\n' "$sec6_prose" | awk '{ gsub(/\. /, ".\n"); print }' | grep -F 'nobody waited for')
+case "$noend" in
+*'`outcome=refused`'*'never started'*) pass "question 6's no-end rule exempts a refused spawn, which never started" ;;
+*) fail "question 6 counts a refused spawn as a worker nobody waited for: $noend" ;;
+esac
+case "$sec6_prose" in
+*'**Refused spawns**'*) pass "question 6 counts refused spawns as their own row" ;;
+*) fail "question 6 has no **Refused spawns** bullet" ;;
+esac
+
 t_done "/retro contract"

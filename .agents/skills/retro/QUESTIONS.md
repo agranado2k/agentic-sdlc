@@ -156,7 +156,7 @@ decomposition.
 ## 6. Chain health
 
 *Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
-`spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
+`spawn` (`outcome` `refused`), `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
 `agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
 `data.input_head`).*
@@ -173,11 +173,16 @@ decomposition.
   crossing never worked is a finding about the mapping, not about the
   session. `outcome=in-session` on a `spawn` is not a fallback marker: every
   spawn a skill runs itself carries it. A
-  `spawn` with no `spawn.end` is a worker nobody waited for — but a window
+  `spawn` with no `spawn.end` is a worker nobody waited for, unless it
+  carries `outcome=refused`: that one never started, so nothing ends — but a window
   with no `spawn.end` at all, against spawns that plainly ended, is **one**
   finding about the emitter (the dispatcher or the skill that spawned), never
   one per spawn. The same rule holds for any kind: an absent kind is one
   hole, not a finding per event that should have had it.
+- **Refused spawns**: a `spawn` with `outcome=refused` and no `spawn.end` —
+  a worker the host or the dispatcher would not start, such as a review lens
+  refused at the host's concurrent-subagent limit. Counted per skill; one
+  that recurs is a skill planning more workers than the host will run.
 - **Stops read too early**: an `agent.stop` with `outcome=fail` is a
   sub-agent whose transcript had not ended when the hook's wait bound
   passed, so its tokens are in no event. `data.last_kind` is the type of the
