@@ -24,8 +24,9 @@
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
 # prints the resolved directory, `begin` the run id it just opened, `show` the
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
-# line it would append, `stack` the open run of a checkout and the run below it;
-# a successful `emit` and a successful `end` print nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
+# line it would append, `stack` a checkout's open run and the run below it; a
+# successful `emit` and a successful `end` print nothing. Every diagnostic is
+# on stderr, prefixed `trace:`. Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a data value its kind's shape refuses
 # (TRACE_SHAPES) or a data key a row requires and the line lacks, a malformed
@@ -538,8 +539,8 @@ trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1
 # trace_key — sets TRACE_KEY, TRACE_POINTER, TRACE_KEY_SESSION (the session
 # this process belongs to, or empty) and TRACE_STACK, that session's stack in
 # this working tree — or in the toplevel its one optional argument names, for
-# `stack`, which reads another checkout's. A non-empty `session=` on the command line names the
-# session first (trace_arg_session), so an event's run is read from the stack
+# `stack`, which reads another checkout's. A non-empty `session=` on the
+# command line names the session first (trace_arg_session), so an event's run is read from the stack
 # of the session the event itself names — a hook that is told its session id
 # by a payload and passes it explicitly reads that session's runs. Needs
 # TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which leaves
@@ -1047,7 +1048,7 @@ trace_stack_of() {
 	[ $# -ge 1 ] && [ $# -le 2 ] || usage
 	_so_dir=$1
 	shift
-	case $_so_dir in '' | -* | *=*) usage ;; esac
+	case $_so_dir in '' | -* | session=*) usage ;; esac
 	case ${1-session=} in session=*) ;; *) usage ;; esac
 	trace_arg_session "$@"
 	trace_dir || { trace_unconfigured_note; return 0; }
@@ -1055,9 +1056,10 @@ trace_stack_of() {
 		git -C "$_so_dir" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null) || _so_common=
 	_so_own=$(trace_git rev-parse --path-format=absolute --git-common-dir) || _so_own=
 	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] ||
-		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's to read"
-	_so_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_so_dir" rev-parse --show-toplevel) 2>/dev/null) || _so_top=
-	[ -n "$_so_top" ] || die "$_so_dir is not a checkout of the repository this script lives in — git names no working tree for it"
+		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's"
+	_so_top=$( (unset GIT_DIR GIT_WORK_TREE &&
+		git -C "$_so_dir" rev-parse --show-toplevel) 2>/dev/null) || _so_top=
+	[ -n "$_so_top" ] || die "$_so_dir is not a checkout of the repository this script lives in — git names no working tree"
 	trace_key "$_so_top" || die "cannot name the run stack of $_so_dir: git could not hash its path"
 	trace_stack_readable || die "cannot read the run stack of $_so_dir"
 	_so_pair=$(trace_stack pair) || die "cannot read the run stack of $_so_dir"

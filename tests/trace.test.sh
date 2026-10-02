@@ -1706,6 +1706,11 @@ sk_ask TRACE_SESSION=sk-s "$SK_WT/deeper/still"
 [ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "a directory deep inside the worktree names the same checkout" ||
 	fail "a deep directory: exit $S_STATUS, stdout '$S_OUT'"
+mkdir -p "$SK_WT/a=b"
+sk_ask TRACE_SESSION=sk-s "$SK_WT/a=b"
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	pass "a directory whose name carries '=' is a directory, not a field" ||
+	fail "a directory named a=b: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 sk_ask TRACE_SESSION=sk-s "$SK_REPO"
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
