@@ -150,6 +150,24 @@ assert_file_has "$SKILL" "sh scripts/agents.lib.sh reviewer self-implemented"
 assert_file_has "$SKILL" "fresh context"
 
 # ---------------------------------------------------------------------------
+banner "3a. The PR body carries the one line the landing reads (#480)"
+# ---------------------------------------------------------------------------
+# Retro F1 (#477): three tickets of a wave were built with no /implement run,
+# and nothing at landing could tell — so a `mechanical` stamp could not be
+# rated. The landing reads the forge, never the trace (ADR-0008 clause 7), so
+# the signal is a line /implement writes into the body of the PR it opens: the
+# ticket and the tier it read through the stamp checker. Its exact shape is
+# the contract the landing matches, byte for byte — tests/land.test.sh lifts
+# the line from this skill and lands a PR carrying it, so the two cannot drift.
+step8=$(awk '/^8\. \*\*Open the pull request/ { on = 1 } /^9\. / { on = 0 } on' "$SKILL_ABS")
+IMPL_LINE='`<!-- implement: ticket=#<N> tier=<tier> -->`'
+t_text_has "$step8" "$IMPL_LINE" "step 8 writes the line the landing reads" "step 8"
+[ "$(grep -cF -- '<!-- implement:' "$SKILL_ABS")" = 1 ] && pass "the skill spells the line once — one shape, no second variant" ||
+	fail "the skill spells '<!-- implement:' $(grep -cF -- '<!-- implement:' "$SKILL_ABS") times"
+t_text_has "$step8" "scripts/stamp.sh" "the line's tier is the one read through the stamp checker" "step 8"
+t_text_has "$step8" "line of its own" "the line sits on a line of its own, the landing's match being whole-line" "step 8"
+
+# ---------------------------------------------------------------------------
 banner "3b. The review is INVOKED by name, and lands on the PR"
 # ---------------------------------------------------------------------------
 # Three ways a session has actually skipped this step, each closed by one
