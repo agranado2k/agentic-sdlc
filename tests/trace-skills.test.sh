@@ -19,9 +19,10 @@
 #   2. Every emit, begin and end ends in `|| :` — the trace changes no skill's
 #      outcome, whatever the trace does.
 #   3. Never `show`, `summary` or `export` — the chain does not read its own
-#      history — and never `stack`, a hook's read of a run stack (#472). Held over EVERY skill directory, chain or not, with ONE named
+#      history. Held over EVERY skill directory, chain or not, with ONE named
 #      exception: /retro, the sanctioned reader (ADR-0008 clause 7, #254),
-#      which the same rule holds to the opposite — it MUST read.
+#      which the same rule holds to the opposite — it MUST read. And never
+#      `stack`, a hook's read of a run stack (#472), with no exception.
 #   4. Every kind a skill emits is one scripts/trace.sh knows: the vocabulary is
 #      closed, and a skill that emits an unknown kind emits nothing.
 #   5. The decision points themselves: the plan's table of one kind per

@@ -400,8 +400,9 @@ Chosen: **option 1**.
    session a `session=` names first, then `TRACE_SESSION` (empty is none),
    then that checkout's pointer file. Its refusals are the reader's own,
    exit 2 with nothing on stdout: a stack that exists and cannot be read,
-   and a `<dir>` that is no checkout of this script's repository — its stack
-   would be a stranger's. It reads a stack, never an event, writes nothing,
+   a stack git cannot name (its path cannot be hashed), and a `<dir>` that
+   is no checkout of this script's repository — its stack would be a
+   stranger's. It reads a stack, never an event, writes nothing,
    and leaves the environment's `TRACE_RUN` to the caller's own precedence.
    Clause 7 stands: the caller is a hook, the adapter's business (clause 8),
    not the chain, and no skill calls `stack` — the skills suite holds every
