@@ -1819,8 +1819,22 @@
 # .agents/skills/retro/QUESTIONS.md: question 6 reads a refused spawn as its
 # own row, never as a worker nobody waited for. tests/review-pr-output.test.sh
 # and tests/retro-skill.test.sh hold both.
+# 0.46.0 — /implement leaves one line a landing can read (retro of
+# 2026-10-02, finding F1; ticket #480).
+# NO file joins or leaves the shared layer, and NO shared file changes
+# content. UPDATING.md changes content: the arriving-from paragraph, and
+# both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/implement/SKILL.md's delivery step writes one line into the
+# PR body it opens, `<!-- implement: ticket=#<N> tier=<tier> -->`, the tier
+# the stamp reader printed — a fact a landing can read from the forge,
+# never from the trace (ADR-0008 clause 7). In this repository the kit-only
+# landing script reads it through one fixed-shape match, checks the tier
+# against the vocabulary and records `data.implement` and
+# `data.implement_tier` on `merge.land`; a missing, malformed or hostile
+# line records `no`, and the record never blocks a landing.
 
-shared-layer: 0.45.0
+shared-layer: 0.46.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
