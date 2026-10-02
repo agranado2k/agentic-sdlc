@@ -1170,7 +1170,7 @@ cat >"$SLEEPER" <<EOF
 #!/bin/sh
 cat >/dev/null
 echo "\$\$" >"$PIDFILE"
-sleep 30
+exec sleep 30
 EOF
 # kill_leg DISPATCHER TMP LABEL — KILL a dispatch run by DISPATCHER under
 # TMPDIR=TMP mid-run, then hold TMP to ONE leftover named agent-dispatch.*
@@ -1180,6 +1180,7 @@ EOF
 # KILL anyway.
 kill_leg() {
 	rm -f "$PIDFILE"
+	sleeps_before=$(own_sleep_pids 30)
 	# KILL is uncatchable, so the cleanup trap never runs; the worker is
 	# orphaned and reaped here so it cannot outlive the suite.
 	bt_sig=KILL
@@ -1192,6 +1193,17 @@ kill_leg() {
 	fi
 	bt_sig=TERM
 	[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+	# The reap takes the worker's sleep with it: the pid file names the sleep
+	# itself, not a shell that would leave it orphaned for thirty seconds.
+	# Bounded: about two seconds for the signal to land.
+	_kl_try=0
+	until [ "$(new_sleeps 30 "$sleeps_before")" = 0 ] || [ "$_kl_try" -ge 20 ]; do
+		_kl_try=$((_kl_try + 1))
+		sleep 0.1 2>/dev/null || { sleep 1; _kl_try=$((_kl_try + 9)); }
+	done
+	_kl_left=$(new_sleeps 30 "$sleeps_before")
+	[ "$_kl_left" = 0 ] && pass "…and the reaped worker leaves no sleep behind$3" ||
+		fail "$_kl_left worker sleep(s) outlived the reap$3"
 	LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
 	if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
 		pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
