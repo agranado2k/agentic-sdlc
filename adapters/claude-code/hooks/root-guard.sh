@@ -208,8 +208,23 @@ function endseg(   i, j, k, c, s, inplace, last) {
 		}
 		s = words[j]
 		if (s == "commit") {
-			for (k = j + 1; k <= nw; k++)
-				if (words[k] == "--no-verify" || words[k] ~ /^-[A-Za-z]*n[A-Za-z]*$/) around = 1
+			# A short cluster is read letter by letter: `n` is --no-verify,
+			# but an option that takes an argument ends the cluster, so the
+			# `n` of `-uno` or `-Fn` is that argument, and `-m` alone takes
+			# the next word whole, `-n` or not.
+			for (k = j + 1; k <= nw; k++) {
+				w = words[k]
+				if (w == "--") break
+				if (w == "--no-verify") around = 1
+				else if (w ~ /^--(message|file|author|date|template|reuse-message|reedit-message|fixup|squash|trailer|cleanup)$/) k++
+				else if (w ~ /^-[^-]/)
+					for (q = 2; q <= length(w); q++) {
+						ch = substr(w, q, 1)
+						if (ch == "n") around = 1
+						else if (index("mFcCt", ch)) { if (q == length(w)) k++; break }
+						else if (index("uS", ch)) break
+					}
+			}
 		} else if (s == "config") {
 			key = 0; setting = 0
 			for (k = j + 1; k <= nw; k++) {
