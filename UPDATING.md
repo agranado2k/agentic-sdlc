@@ -219,6 +219,12 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.40.0 or older, one header changes and nothing else.**
+`scripts/vocab.sh` (shared, prose-only change at 0.41.0) says in its header
+what the checker takes: bare `Field: value` lines a caller lifted, never a
+whole body — the contract every kit caller has kept since 0.35.0. Take it
+with Part 1 as usual; no behaviour moves, and your policy file is untouched.
+
 **Arriving from 0.39.0 or older, a denied tool call is visible.**
 `scripts/trace.sh` (shared, changed at 0.40.0) declares `denied` on
 `tool.use` and on no other kind — a widening, see "When a shared file's
