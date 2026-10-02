@@ -3868,7 +3868,7 @@ guard_off463() {
 guard_off463 end session-end.sh end 's/^tdir=$(hook_dir) || exit 0$/tdir=$(hook_dir) || tdir=/'
 guard_off463 stop subagent-stop.sh stop-463 's/^tdir=$(hook_dir) || exit 0$/tdir=$(hook_dir) || tdir=/'
 guard_off463 start session-start.sh start 's/^if \[ -n "\$tdir" \]; then$/if :; then/'
-guard_off463 refusal session-start.sh refused-463 's/\[ -z "\$tdir" \] || hook_trace emit/hook_trace emit/'
+guard_off463 refusal session-start.sh refused-463 's/^	if \[ -n "\$tdir" \]; then$/	if :; then/'
 
 # A BROKEN POLICY IS NOT TRACING OFF. Off is the ask answering nothing, and the
 # hook stops quietly; a policy file the shared script refuses is an error, and

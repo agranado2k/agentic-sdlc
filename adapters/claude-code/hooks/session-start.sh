@@ -63,8 +63,10 @@ elif ! hook_id_ok "$sid"; then
 	why='the SessionStart payload named a session_id that is not a plain identifier (letters, digits, dot, dash, underscore), and it is refused rather than written into a file the agent harness sources'
 fi
 if [ -n "$why" ]; then
-	[ -z "$tdir" ] || hook_trace emit kind=session.start outcome=fail \
-		reason="$why — this session has no identity in the trace"
+	if [ -n "$tdir" ]; then
+		hook_trace emit kind=session.start outcome=fail \
+			reason="$why — this session has no identity in the trace"
+	fi
 	exit 0
 fi
 
