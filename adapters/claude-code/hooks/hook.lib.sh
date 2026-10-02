@@ -385,7 +385,8 @@ hook_dir() {
 # landing 170 and 223 ms after the hook began, in two of seven live stops), and
 # a transcript read then either has no usage at all or — worse — holds the turns
 # before the last one, whose sum is a confident undercount. So the hook may
-# wait, for as long as the policy says and never longer.
+# wait, for as long as the policy says — and past it by at most one poll, which
+# under a `sleep` that refuses fractions is one whole-second nap (see below).
 
 # hook_wait_bound — set hook_wait_ms to the bound TRACE_AGENT_WAIT_MS names, in
 # milliseconds, or to nothing for no wait; set hook_wait_bad to a refused value.
@@ -478,7 +479,9 @@ hook_now_ms() {
 # session and a loaded machine makes every poll slower than its nap: counting
 # only the naps, a 2000 ms bound reported 2000 on a machine at load average 29
 # while the hook ran six seconds end to end. So on a clock with milliseconds the wait is measured, the
-# check comes last before giving up, and the overshoot is at most one poll.
+# check comes last before giving up, and the overshoot is at most one poll —
+# 50 ms and a check, or one whole-second nap and a check where `sleep` refuses
+# fractions.
 # Without one (POSIX `date` stops at seconds) the figure is the sum of the naps
 # taken — honest about what it is, and the best a portable shell can say.
 #
@@ -490,10 +493,15 @@ hook_now_ms() {
 #
 # A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
 # refuses a fraction (POSIX promises only whole seconds) is answered with
-# whole-second naps while about a whole second remains — within one poll of
-# it, so a bound of exactly 1000 still gets its nap after the first check has
-# spent a few milliseconds — and the wait otherwise ends early rather than
-# overrun. Never a busy loop; past the bound by at most one poll.
+# whole-second naps while the naps already taken leave a whole second of the
+# bound unspent. THE NAPS ARE WEIGHED AGAINST THE BOUND, THE CHECKS ARE NOT:
+# whether a whole second fits is decided on the naps already taken, never on
+# what a check cost, so a 1000 ms bound naps its second whatever the first
+# check cost. In whole-second mode the wait therefore reaches the bound and may
+# overrun it by at most one whole-second nap and a check — a `sleep` that
+# refuses fractions cannot trim a nap to what is left. A bound under 1000 ms
+# cannot be served by a whole-second sleep at all, and returns without a nap.
+# The clock still ends the wait once the bound has passed. Never a busy loop.
 hook_wait_final() {
 	_hw_t0=$(hook_now_ms) || _hw_t0=
 	_hw_waited=0
@@ -519,7 +527,8 @@ hook_wait_final() {
 		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
 		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
 			_hw_step=1000
-			[ "$_hw_left" -ge 950 ] || break
+			_hw_unspent=$(($2 - _hw_count))
+			[ "$_hw_unspent" -ge 1000 ] || break
 			sleep 1
 			_hw_nap=1000
 		fi

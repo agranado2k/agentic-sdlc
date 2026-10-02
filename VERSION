@@ -1573,7 +1573,37 @@
 # transcript-usage.mjs (the lifecycle wave's root-behind marker, the
 # usage extractor's last-block rule, and the wait that spends its readiness
 # check inside the bound).
-# 0.38.0 — a denied tool call is visible (PRD #237's known gaps of
+# 0.38.0 — a mechanical stamp names its one oracle and one pattern (retro of
+# 2026-10-01, finding H1; ticket #418).
+# NO file joins or leaves the shared layer. ONE shared file changes content:
+# constitution/local-workflow.md.template, the consumer's workflow article,
+# whose tier rubric line 1 gains the same two conditions as the kit's.
+# UPDATING.md changes content: the entry, and both worked examples re-pin.
+#   From #418: over two retro windows, 4 of 7 pull requests from
+# `mechanical` tickets were blocked at their first review and rebuilt on a
+# stronger model; 0 of 8 `implementer` ones were. The rubric's first line
+# had admitted refactors across many files and a glossary-plus-suite change
+# — verifiable by a suite, not producible by the smallest model. A
+# `mechanical` stamp now needs two things: the ticket names the ONE command
+# whose exit is its oracle, as the first line of its Acceptance section,
+# and the change is one file or one pattern applied uniformly; a ticket
+# that fails either is no hit, and the rubric goes on to its later
+# questions. Rule 14 says a mechanical stamp with either in doubt is `low`.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/to-tickets/SKILL.md
+# carries the rubric line, the drafted oracle line at step 2 (rule 8's one
+# exception to the no-paths rule) and the publish step's Acceptance line;
+# docs/domain-glossary.md's Tier entry echoes it; tests/spec-skills.test.sh
+# holds all of it. Landed beside it since 0.37.0: #406 (PR #440) — the
+# typed-return reader is spawned through the adapter's restricted path
+# first, prompt-only as the fallback, say-so naming which — in
+# .agents/skills/pr-iterate/SKILL.md, .agents/skills/to-tickets/SKILL.md
+# and the dogfood skill's SKILL.md, with adapters/claude-code/README.md
+# naming that path "the restricted path" and quoting the skills' say-so;
+# and #403 (PR #434) — the claude-code adapter's hooks/hook.lib.sh wait
+# naps its whole second whatever its first readiness check cost, reaching
+# the bound and overrunning it by at most one nap.
+# 0.39.0 — a denied tool call is visible (PRD #237's known gaps of
 # 2026-10-01, origin #252; ticket #409).
 # NO file joins or leaves the shared layer. ONE shared file changes content
 # and BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the
@@ -1582,7 +1612,7 @@
 #   From #409: scripts/trace.sh's kind table declares `denied` on
 # `tool.use` — `ok|fail|denied` — and on no other kind. A WIDENING of one
 # kind's vocabulary, the first since the table was closed at 0.34.0: an emit
-# that 0.37.0 refused with exit 2 now writes, and nothing that wrote before
+# that 0.38.0 refused with exit 2 now writes, and nothing that wrote before
 # changes; `verify` stops advising on a `tool.use` line already written with
 # it. ADR-0008 clause 1 carries the dated amendment. The word has a writer:
 # a tool call the permission system or a blocking hook refuses fires the
@@ -1592,7 +1622,7 @@
 # owner-only, holding the tool's name and the input head; tool-post.sh
 # removes it when the call returns; session-end.sh sweeps each marker left
 # into one `tool.use outcome=denied` before `session.end`, per session and
-# never across. Behind TRACE_TOOLS, the switch the post-tool hook reads,
+# never across, along with any directory an interrupted end took aside. Behind TRACE_TOOLS, the switch the post-tool hook reads,
 # and no marker without node. `/retro`'s question 6 counts the denials per
 # session and per tool.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
@@ -1607,17 +1637,16 @@
 # (question 6). docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
 # and docs/adr/INDEX.md carry the amendment. KIT-ONLY: .claude/settings.json
 # wires tool-pre.sh; tests/trace-hooks.test.sh, tests/trace.test.sh,
-# tests/retro-skill.test.sh and tests/adapters-demo.sh hold it. Landed beside
-# it since 0.37.0, from #412 (PR #444): .agents/prompts/review-worker.md,
-# which ships beside the skills, asks a dispatched reviewer for one
-# `↳ lens:` line per finding, and the kit-only broker records it on the
-# raise; from PR #426 and PR #437, kit-only policy and suites. Shipped at
-# 0.37.0 and named there by file only, for a consumer reading this note to
-# take the adapter: the kill guard hooks/tool-pre-guard.sh (#414), the
+# tests/retro-skill.test.sh and tests/adapters-demo.sh hold it. Shipped
+# at 0.38.0 and named in no note, from #412 (PR #444):
+# .agents/prompts/review-worker.md, which ships beside the skills, asks a
+# dispatched reviewer for one `↳ lens:` line per finding, and the kit-only
+# broker records it on the raise. Shipped at 0.37.0 and named there by
+# file only, for a consumer reading this note to take the adapter: the kill guard hooks/tool-pre-guard.sh (#414), the
 # phantom-stop count on `session.end` (#410), a compaction's rollup gap as
 # a `session.usage` event (#407) and the behind note on stdout (#427).
 
-shared-layer: 0.38.0
+shared-layer: 0.39.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
