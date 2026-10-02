@@ -218,6 +218,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
        sh scripts/trace.sh stack <dir> [session=<id>]
+         (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
 }
@@ -256,8 +257,11 @@ trace_glob_on() { [ "$_trace_had_f" = 1 ] || set +f; }
 # make `git -C` answer for the pinned repository — so an anchored lookup that
 # trusted the environment could source a foreign checkout's policy file. The
 # guards loader scrubs the same two for the same reason.
-trace_git() {
-	(unset GIT_DIR GIT_WORK_TREE && git -C "$_trace_here" "$@") 2>/dev/null
+trace_git() { trace_git_at "$_trace_here" "$@"; }
+
+# trace_git_at <dir> <git args…> — the same, asked of the checkout <dir> is in.
+trace_git_at() {
+	(_tga_dir=$1 && shift && unset GIT_DIR GIT_WORK_TREE && git -C "$_tga_dir" "$@") 2>/dev/null
 }
 
 trace_load_config() {
@@ -540,11 +544,12 @@ trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1
 # this process belongs to, or empty) and TRACE_STACK, that session's stack in
 # this working tree — or in the toplevel its one optional argument names, for
 # `stack`, which reads another checkout's. A non-empty `session=` on the
-# command line names the session first (trace_arg_session), so an event's run is read from the stack
-# of the session the event itself names — a hook that is told its session id
-# by a payload and passes it explicitly reads that session's runs. Needs
-# TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which leaves
-# identity to the environment alone rather than failing an emit. Answered
+# command line names the session first (trace_arg_session), so an event's run
+# is read from the stack of the session the event itself names — a hook that
+# is told its session id by a payload and passes it explicitly reads that
+# session's runs. Needs TRACE_ROOT_DIR. Returns 1 when git cannot hash the
+# path, which leaves identity to the environment alone rather than failing an
+# emit. Answered
 # once per process: nothing it reads changes while it runs, and a second
 # pointer read would repeat the pointer's note.
 _trace_keyed=
@@ -632,7 +637,7 @@ trace_stack() {
 	awk -v want="$1" '{ below = top; top = $0 } END {
 		if (want == "top") print top
 		else if (want == "below") { if (NR >= 2) print below }
-		else if (NR >= 1) { print top; if (NR >= 2) print below }
+		else { print top; if (NR >= 2) print below }
 	}' "$TRACE_STACK" 2>/dev/null
 	return 0
 }
@@ -1041,25 +1046,29 @@ trace_end() {
 # stack's, and what a caller does with an environment that names a run is the
 # caller's precedence to keep. The refusals are the reader's own, exit 2 and
 # nothing on stdout: a stack that exists and cannot be read (as `end` refuses
-# one), and a <dir> whose git common directory is not this script's — another
-# repository's checkout, or no checkout at all — because its stack, if it had
-# one, would be a stranger's. Unconfigured, it prints nothing and exits 0.
+# one) or cannot be named, and a <dir> whose git common directory is not this
+# script's — another repository's checkout, or no checkout at all — because
+# its stack, if it had one, would be a stranger's. A malformed call is the
+# usage's 2: a `session=` naming no session the stack could be keyed on, and
+# a <dir> beginning with `-` or `session=`, which reads as an option or a
+# field — `./<dir>` names the same directory. Unconfigured, it prints nothing
+# and exits 0.
 trace_stack_of() {
 	[ $# -ge 1 ] && [ $# -le 2 ] || usage
 	_so_dir=$1
 	shift
 	case $_so_dir in '' | -* | session=*) usage ;; esac
 	case ${1-session=} in session=*) ;; *) usage ;; esac
+	case ${1-session=} in session=*[!A-Za-z0-9._-]*) usage ;; esac
 	trace_arg_session "$@"
 	trace_dir || { trace_unconfigured_note; return 0; }
-	_so_common=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$_so_dir" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null) || _so_common=
+	_so_git=$(trace_git_at "$_so_dir" rev-parse --path-format=absolute \
+		--git-common-dir --show-toplevel) || _so_git=
+	_so_common=${_so_git%%"$_trace_nl"*}
+	_so_top=${_so_git#*"$_trace_nl"}
 	_so_own=$(trace_git rev-parse --path-format=absolute --git-common-dir) || _so_own=
-	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] ||
+	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] && [ "$_so_top" != "$_so_git" ] ||
 		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's"
-	_so_top=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$_so_dir" rev-parse --show-toplevel) 2>/dev/null) || _so_top=
-	[ -n "$_so_top" ] || die "$_so_dir is not a checkout of the repository this script lives in — git names no working tree"
 	trace_key "$_so_top" || die "cannot name the run stack of $_so_dir: git could not hash its path"
 	trace_stack_readable || die "cannot read the run stack of $_so_dir"
 	_so_pair=$(trace_stack pair) || die "cannot read the run stack of $_so_dir"

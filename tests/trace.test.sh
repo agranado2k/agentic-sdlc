@@ -1672,7 +1672,7 @@ t_commit "$SK_REPO" "chore: carry the trace script" >/dev/null
 git -C "$SK_REPO" worktree add -q "$SK_REPO/worktree/sk" -b feat/sk 2>/dev/null || fail "could not add a linked worktree"
 SK_WT="$SK_REPO/worktree/sk"
 SK="$SCRATCH/stack-472"; SKON=$(policy "$SK")
-# sk_ask [NAME=value …] <trace.sh stack args…> — the FIXTURE's own copy of the
+# sk_run [NAME=value …] <trace.sh stack args…> — the FIXTURE's own copy of the
 # script asked from the fixture's ROOT checkout, the way a hook asks, with the
 # leading assignments in its environment (a session, a pinned git pair).
 sk_run() {
@@ -1686,6 +1686,8 @@ sk_run() {
 		exec sh scripts/trace.sh stack "$@"
 	)
 }
+# sk_ask <the same> — sk_run, its exit, stdout and stderr in S_STATUS, S_OUT
+# and S_ERR.
 sk_ask() { t_run_split sk_run "$@"; }
 sk_ask TRACE_SESSION=sk-s "$SK_WT"
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "a checkout with no stack at all: exit 0, nothing on stdout" ||
@@ -1727,6 +1729,38 @@ sk_ask TRACE_SESSION= "$SK_WT"
 [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_NOID" ] &&
 	pass "TRACE_SESSION set to the empty string reads the per-toplevel stack, and only it" ||
 	fail "TRACE_SESSION=: exit $S_STATUS, stdout '$S_OUT', want '$SK_NOID'"
+# No session on the line and none in the environment: the NAMED checkout's
+# pointer file names it — the worktree's, never the root's the caller runs in.
+SK_TOP=$(git -C "$SK_WT" rev-parse --show-toplevel)
+SK_KEY=$(printf '%s' "$SK_TOP" | git hash-object --stdin)
+SK_ROOTKEY=$(printf '%s' "$(git -C "$SK_REPO" rev-parse --show-toplevel)" | git hash-object --stdin)
+printf 'sk-s\n' >"$SK/current/$SK_KEY"
+printf 'someone-else\n' >"$SK/current/$SK_ROOTKEY"
+(unset TRACE_SESSION && sk_ask "$SK_WT" && printf '%s\n%s\n%s\n' "$S_STATUS" "$S_OUT" "$S_ERR") >"$SCRATCH/sk-pointer.out"
+[ "$(sed -n 1p "$SCRATCH/sk-pointer.out")" = 0 ] && [ "$(sed -n 2p "$SCRATCH/sk-pointer.out")" = "$SK_INNER" ] &&
+	pass "with no session given, the named checkout's pointer file names the stack — not the caller's" ||
+	fail "the pointer fallback: '$(cat "$SCRATCH/sk-pointer.out")', want exit 0 and '$SK_INNER' first"
+rm -f "$SK/current/$SK_KEY" "$SK/current/$SK_ROOTKEY"
+# A session= the script would never key on is refused, not read as none.
+for _sk_bad in 'session=a b' 'session=../../x'; do
+	sk_ask TRACE_SESSION= "$SK_WT" "$_sk_bad"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "stack refuses '$_sk_bad' with exit 2 — never the per-toplevel stack in its place" ||
+		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+done
+# A <dir> that reads as an option or a field is refused, as the usage says;
+# ./ in front names the same directory.
+mkdir -p "$SK_WT/-x" "$SK_WT/session=y"
+for _sk_bad in -x session=y; do
+	t_run_split sk_run TRACE_SESSION=sk-s "$_sk_bad"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a <dir> written '$_sk_bad' is a usage error, exit 2" ||
+		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+	sk_ask TRACE_SESSION=sk-s "$SK_WT/$_sk_bad"
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+		pass "and the same directory named by a path is read" ||
+		fail "stack '$SK_WT/$_sk_bad': exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
 # An empty stack — the file is there, every run closed — is no run, exit 0.
 (cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end outcome=ok 2>/dev/null)
 sk_ask TRACE_SESSION= "$SK_WT"
@@ -1787,6 +1821,7 @@ t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$KIT"
 # The interface is recorded where a caller reads it: the usage, the header, the record.
 t_run_split sh "$TRACE"
 case $S_ERR in *'trace.sh stack <dir> [session=<id>]'*) pass "the usage names stack <dir> [session=<id>]" ;; *) fail "the usage does not name 'stack <dir> [session=<id>]': $S_ERR" ;; esac
+case $S_ERR in *'a <dir> beginning with - or session= is refused'*) pass "and says which <dir> it refuses" ;; *) fail "the usage does not say a <dir> beginning with - or session= is refused: $S_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> [session=<id>]' &&
 	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> [session=<id>]"
 _sk_adr=$(sed -n '/Amended 2026-10-02 (#472)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
