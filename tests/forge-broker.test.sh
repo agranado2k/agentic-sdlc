@@ -1367,13 +1367,28 @@ banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still
 # line is read from the skill's own prompt, never retyped here, so the
 # wording the lens is told to write and the wording the broker lets through
 # cannot drift apart unseen (#431 H-1).
-CT_FIX=$(grep -o '↳ fix:` line reads `[^`]*`' "$KIT/.agents/skills/review-pr/SKILL.md" | head -n 1 | sed 's/^.*reads `//; s/`$//')
+# fix_line_of <a prompt> — the candidate ticket's fix line as that prompt
+# spells it, read over prose unwrapped and spaces squeezed (a contract is
+# 80-column prose, the skill is not): the one reader for both prompts below.
+fix_line_of() { tr '\n' ' ' <"$1" | tr -s ' ' | grep -o '↳ fix:` line reads `[^`]*`' | head -n 1 | sed 's/^.*reads `//; s/`$//'; }
+CT_FIX=$(fix_line_of "$KIT/.agents/skills/review-pr/SKILL.md")
 [ -n "$CT_FIX" ] && pass "the reuse/DRY prompt spells the candidate ticket's fix line: $CT_FIX" ||
 	fail "the reuse/DRY prompt no longer spells the candidate ticket's fix line (a code span after: fix: line reads) — nothing to run through the broker"
-awk -v fix="$CT_FIX" '
+# The dispatched worker is told the same line (#471): its contract spells it
+# as the skill does, so a worker following it writes a line this broker
+# accepts.
+W_FIX=$(fix_line_of "$KIT/.agents/prompts/review-worker.md")
+[ -n "$CT_FIX" ] && [ "$W_FIX" = "$CT_FIX" ] &&
+	pass "the worker contract spells the same candidate-ticket fix line as the skill" ||
+	fail "the worker contract's candidate-ticket fix line '$W_FIX' is not the skill's '$CT_FIX'"
+# The fixture is the worker's shape and the worker's spelling: the lens line
+# its contract requires first, then the citation, then the fix line as the
+# worker contract spells it — so it is the worker's line the broker accepts.
+awk -v fix="$W_FIX" '
 	/^#### LOW$/ {
 		print
 		print "**L-1** `docs/b.md:11` — candidate ticket: line eleven mirrors a line that pre-dates the branch, in a pair this diff only extends."
+		print "↳ lens: reuse-dry"
 		print "↳ cites: shared invariant §10"
 		print "↳ fix: " fix
 		skip = 1
@@ -1382,7 +1397,7 @@ awk -v fix="$CT_FIX" '
 	skip && /^— none found\.$/ { skip = 0; next }
 	{ print }
 ' "$GOOD" >"$SCRATCH/candidate.md"
-grep -qF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" &&
+grep -qF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" &&
 	pass "the fixture's L-1 carries the fix line the prompt spells, asking this PR for nothing" ||
 	fail "the fixture's L-1 lost its fix line — \$GOOD's LOW section moved under the awk"
 broker 12 "$SCRATCH/candidate.md" --dry-run
@@ -1392,7 +1407,7 @@ s_assert_out_has 'candidate ticket:' "…and the candidate ticket is among the i
 s_assert_out_has '"line":11' "…anchored on its own line of the diff"
 # The fix line is what carries it: the same report with that one line
 # withdrawn is the half-finding section 15 names, and costs the report.
-grep -vF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
+grep -vF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
 bad "$SCRATCH/candidate-no-fix.md" "…and the same candidate ticket with its fix line withdrawn is exit 65" 'L-1'
 
 t_done "tests/forge-broker.test.sh"
