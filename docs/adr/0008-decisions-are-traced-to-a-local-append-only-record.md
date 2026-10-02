@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1)
 
 ## Context and problem statement
 
@@ -327,6 +327,23 @@ Chosen: **option 1**.
    an append-mode descriptor; a cap on the line and a content-addressed blob
    directory for larger payloads arrive with #248. Nothing ever rewrites an
    event file; a correction is a new event.
+   *Amended 2026-10-02 (#453):* **the run stack is keyed by session as well
+   as by toplevel.** `begin` and `end` kept one stack per working tree, so
+   two sessions in the root checkout read each other's open run onto their
+   events and an `end` in one could pop the other's: the retrospective of
+   2026-10-01 (finding R1) counted 290 events in one window carrying another
+   session's run, and a retrospective had to open its own run last to stay
+   unpopped. When a session id is known — a `session=` on the line, then
+   `TRACE_SESSION`, then the pointer file, the precedence the event's own
+   `session` field takes — the stack is `current/<toplevel>.<session>.runs`;
+   an event's `run` and `parent` are read from it and `end` pops only it.
+   With no session id, or one that is not a single path segment of
+   `[A-Za-z0-9._-]`, the stack is `current/<toplevel>.runs`, exactly as
+   before, so a consumer with no session id sees no change. The pointer file
+   stays per toplevel. A run opened before the change sits on the
+   per-toplevel stack; `TRACE_SESSION= sh scripts/trace.sh end` closes it.
+   The Claude Code adapter's subagent-stop hook, which repeats the stack's
+   path, keys it on the payload's `session_id` the same way.
 6. **Cost is computed on read, never on write.** Events carry raw token
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
@@ -410,6 +427,9 @@ Chosen: **option 1**.
 - Amended for ticket #385: `data.by=operator|train` on `feedback`, its emit
   in `/merge-train` and `/pr-iterate`, `/retro` question 7's count, and the
   suite sections that hold it (trace-skills §17, retro-skill §11).
+- Amended for ticket #453: the session-keyed run stack, the subagent-stop
+  hook's matching read, and the suite sections that hold both (trace §25,
+  trace-hooks §42).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

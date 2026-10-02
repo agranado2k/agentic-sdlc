@@ -103,8 +103,9 @@
 # is an explicit field, then TRACE_SESSION / TRACE_RUN / TRACE_PARENT in the
 # environment (how a dispatched worker is told whose trail it joins), then the
 # pointer file and the run stack, then the field is omitted. The stack is
-# per-working-tree, and `begin` and `end` are its only writers — an emit never
-# touches it, so fifty parallel sub-agents only ever append.
+# per working tree and per session (#453), and `begin` and `end` are its only
+# writers — an emit never touches it, so fifty parallel sub-agents only ever
+# append.
 #
 # A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
 # spike evidence. `--blob <file>` (or `--blob=<file>`, the same thing; or `-`
@@ -448,6 +449,19 @@ trace_id() {
 # toplevel THIS SCRIPT lives in — git's hash of that path, the same hash the
 # blob store names payloads by, so there is one hashing mechanism here.
 #
+# WHY PER SESSION TOO. Two sessions working in ONE toplevel — the root
+# checkout, most often — shared that stack, so each read the other's open run
+# onto its events and each `end` could pop the other's run (ticket #453, retro
+# finding R1). So when a session id is known — TRACE_SESSION, then the pointer
+# file, the same precedence an event's `session` takes — the stack is
+# current/<toplevel key>.<session>.runs, and `begin`, `end` and every emit
+# read and write that one. With no session id the stack is
+# current/<toplevel key>.runs, exactly as before; TRACE_SESSION set to the
+# empty string is a caller saying it has none. An id that is not one path
+# segment of [A-Za-z0-9._-] keys nothing and takes the per-toplevel stack,
+# rather than writing under a directory the id invented. The pointer file
+# stays per toplevel: it is how an emit no hook can see learns its session.
+#
 # WHY ONLY begin AND end WRITE THE STACK. Fifty parallel sub-agents all emit;
 # an emit that touched the stack would make fifty writers race over one file.
 # An emit only appends to the day's event file, and both stack writers replace
@@ -463,16 +477,47 @@ trace_id() {
 trace_hash_stdin() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null; }
 trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1") 2>/dev/null; }
 
-# trace_key — sets TRACE_KEY, TRACE_POINTER and TRACE_STACK for this working
-# tree. Needs TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which
-# leaves identity to the environment alone rather than failing an emit.
+# trace_key — sets TRACE_KEY, TRACE_POINTER, TRACE_KEY_SESSION (the session
+# this process belongs to, or empty) and TRACE_STACK, that session's stack in
+# this working tree. A non-empty `session=` on the command line names the
+# session first (trace_arg_session), so an event's run is read from the stack
+# of the session the event itself names — a hook that is told its session id
+# by a payload and passes it explicitly reads that session's runs. Needs
+# TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which leaves
+# identity to the environment alone rather than failing an emit. Answered
+# once per process: nothing it reads changes while it runs, and a second
+# pointer read would repeat the pointer's note.
+_trace_keyed=
+_trace_arg_session=
 trace_key() {
+	[ -n "$_trace_keyed" ] && return 0
 	_tk_top=$(trace_git rev-parse --show-toplevel) || _tk_top=
 	[ -n "$_tk_top" ] || _tk_top=$(cd "$_trace_here/.." && pwd -P)
 	TRACE_KEY=$(printf '%s' "$_tk_top" | trace_hash_stdin)
 	[ -n "$TRACE_KEY" ] || return 1
 	TRACE_POINTER="$TRACE_ROOT_DIR/current/$TRACE_KEY"
-	TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+	if [ -n "$_trace_arg_session" ]; then
+		TRACE_KEY_SESSION=$_trace_arg_session
+	elif [ -n "${TRACE_SESSION+set}" ]; then
+		TRACE_KEY_SESSION=$TRACE_SESSION
+	else
+		TRACE_KEY_SESSION=$(trace_pointer_session)
+	fi
+	case $TRACE_KEY_SESSION in
+	'' | *[!A-Za-z0-9._-]*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs" ;;
+	*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs" ;;
+	esac
+	_trace_keyed=1
+	return 0
+}
+
+# trace_arg_session <argument…> — remembers a non-empty `session=` among the
+# arguments, for trace_key. Called by emit, begin and end before identity is
+# asked for; the last one given wins, as it does for the field.
+trace_arg_session() {
+	for _as_a in "$@"; do
+		case $_as_a in session=?*) _trace_arg_session=${_as_a#session=} ;; esac
+	done
 	return 0
 }
 
@@ -546,7 +591,7 @@ trace_identity() {
 	_id_parent_set=${TRACE_PARENT+set}
 	[ -n "${TRACE_ROOT_DIR:-}" ] || return 0
 	trace_key || return 0
-	[ -n "$_id_session_set" ] || _id_session=$(trace_pointer_session)
+	[ -n "$_id_session_set" ] || _id_session=$TRACE_KEY_SESSION
 	# Once the environment has named the run, the stack is not consulted for
 	# the PARENT either: a run from elsewhere has its lineage elsewhere, and
 	# reading this working tree's stack for it would invent an edge. TRACE_PARENT
@@ -702,6 +747,7 @@ trace_emit() {
 	TRACE_BLOB=
 	TRACE_BLOB_BYTES=
 	for _em_f in $TRACE_STRING_FIELDS $TRACE_TOKEN_FIELDS; do eval "_em_v_$_em_f="; done
+	trace_arg_session "$@"
 
 	# A while loop rather than a `for`, because --blob takes the NEXT argument
 	# and a `for` cannot consume one.
@@ -874,6 +920,7 @@ trace_begin() {
 	shift
 	case $_bg_skill in '' | -* | *=*) usage ;; esac
 	trace_reject_owned begin "$@"
+	trace_arg_session "$@"
 	trace_dir || { trace_unconfigured_note; return 0; }
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	_bg_run=$(trace_id)
@@ -888,16 +935,17 @@ trace_begin() {
 	printf '%s\n' "$_bg_run"
 }
 
-# trace_end [<field>=<value> …] — pops this working tree's current run and
-# appends run.end for it. With no run open it is exit 2: a pop with nothing to
-# pop is a caller's mistake, not an outcome to record.
+# trace_end [<field>=<value> …] — pops this session's current run in this
+# working tree and appends run.end for it. With no run open it is exit 2: a
+# pop with nothing to pop is a caller's mistake, not an outcome to record.
 trace_end() {
 	trace_reject_owned end "$@"
+	trace_arg_session "$@"
 	trace_dir || { trace_unconfigured_note; return 0; }
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	trace_stack_readable || die "cannot close a run this working tree's stack will not answer for"
 	_en_run=$(trace_stack top)
-	[ -n "$_en_run" ] || die "no run is open for this working tree — begin opens one, end closes it"
+	[ -n "$_en_run" ] || die "no run is open for this session in this working tree — begin opens one, end closes it"
 	_en_parent=$(trace_stack below)
 	# The event FIRST, the pop after it: `run` and `parent` are passed
 	# explicitly, so writing the event with the run still on the stack changes
