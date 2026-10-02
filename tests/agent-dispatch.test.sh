@@ -2303,6 +2303,13 @@ if [ "$GAP_PLANTED" = 1 ]; then
 		tr_assert_count "$TR_GAP" 2 "…and its spawn is still a pair"
 		tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…closed from the global trap"
 		tr_event_has "$TR_GAP" 2 '"exit":"143"' "…with the signal's own status recorded"
+		# No worker ever started, so no rung ran one; the signal that ended the
+		# dispatch is a field of its own (L-4, review of PR #488).
+		tr_event_has "$TR_GAP" 2 '"signal":"TERM"' "…and names the signal"
+		case $(tr_nth "$TR_GAP" 2) in
+		*'"rung"'*) fail "…an end before any worker started names a rung: $(tr_nth "$TR_GAP" 2)" ;;
+		*) pass "…and names no rung, since no worker started" ;;
+		esac
 	else
 		fail "the traced gap bait never wrote its marker in 30s — nothing to TERM"
 	fi

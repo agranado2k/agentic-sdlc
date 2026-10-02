@@ -913,8 +913,14 @@ cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
 # 0 HERE, never from the environment — a caller's _SPAWNED=1 would otherwise
 # have a signal before the spawn write an end that pairs with nothing.
 _SPAWNED=0
+# _WORKER_STARTED and _SIGNAL are what the end a signal writes says about it:
+# a rung only once a worker has started under one, and the signal by name.
+_WORKER_STARTED=0
+_SIGNAL=""
 _on_signal() {
 	cleanup
+	case $1 in 130) _SIGNAL=INT ;; 143) _SIGNAL=TERM ;; 129) _SIGNAL=HUP ;; esac
+	[ "$_WORKER_STARTED" = 1 ] || RUN_RUNG=""
 	[ "$_SPAWNED" = 1 ] && _dispatch_exit "$1"
 	exit "$1"
 }
@@ -1211,6 +1217,9 @@ _trace_spawn() {
 #
 # The RUNG rides the end rather than the spawn: which mechanism the worker
 # actually ran under is not settled until the scope preflight has had its say.
+# An end written by _on_signal names the rung only when a worker has started —
+# a signal in the gap before the spawn ran nothing under any rung — and adds
+# data.signal=INT|TERM|HUP, the signal that ended the dispatch.
 _dispatch_exit() {
 	_de_status=$1
 	_de_outcome=${2:-}
@@ -1219,6 +1228,7 @@ _dispatch_exit() {
 	fi
 	set -- kind=spawn.end subject="run:$WORKER_RUN" outcome="$_de_outcome" "data.exit=$_de_status"
 	[ -n "${RUN_RUNG:-}" ] && set -- "$@" "data.rung=$RUN_RUNG"
+	[ -n "$_SIGNAL" ] && set -- "$@" "data.signal=$_SIGNAL"
 	_trace "$@"
 	# The pair is closed. A signal from here on — during the EXIT trap's
 	# cleanup, say — ends the dispatch without writing a second end.
@@ -1593,6 +1603,7 @@ _spawn_run() {
 	# own inherited pipe. The prompt reaches the worker by {prompt_file}; a
 	# template that redirects `< {prompt_file}` still wins over this </dev/null.
 	if [ -z "$TIMEOUT" ]; then
+		_WORKER_STARTED=1
 		if [ "$RUN_RUNG" = rlimit ]; then
 			sh -c "$RUN_CMD" </dev/null
 		else
@@ -1618,6 +1629,7 @@ _spawn_run() {
 	trap '_down; _on_signal 130' INT
 	trap '_down; _on_signal 143' TERM
 	trap '_down; _on_signal 129' HUP
+	_WORKER_STARTED=1
 	sh -c "$RUN_CMD" </dev/null &
 	_worker=$!
 	(
