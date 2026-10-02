@@ -71,6 +71,10 @@ if [ -n "$sid" ] && hook_id_ok "$sid"; then
 fi
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
+# The cwd the run was resolved against, recorded so a retro can read what the
+# agent tool reports for a subagent — its worktree or the root — rather than
+# infer it (#478); nothing when the payload names none.
+[ -n "$cwd" ] && set -- "$@" data.cwd="$cwd"
 
 hook_wait_bound
 # Nothing to write, nothing to wait for: with tracing off the bound is moot, and
