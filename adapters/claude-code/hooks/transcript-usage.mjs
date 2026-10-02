@@ -1,9 +1,9 @@
 // transcript-usage.mjs — per-model token counts out of one agent-harness transcript.
 //
-//   node transcript-usage.mjs [--rollup] [--after <message id>] <transcript.jsonl>
+//   node transcript-usage.mjs [--rollup] [--resume | --after <message id>] <transcript.jsonl>
 //
-// --rollup also reads the session's recorded trace events on stdin (empty is
-// fine; a terminal blocks until EOF).
+// --rollup and --resume read the session's recorded trace events on stdin
+// (empty is fine; a terminal blocks until EOF), once, for both.
 //
 // STDOUT is one row per model, seven space-separated fields — the four token
 // fields in the order they sit in a trace event, then how far the read went:
@@ -12,8 +12,9 @@
 //
 // so a POSIX `while read -r` consumes it without a parser. <messages> is how
 // many distinct assistant messages of THAT model the row counts; <last id> is
-// the message id counted last in the whole read, the same on every row, and it
-// is what the next read of this transcript passes as --after. A transcript with
+// the last message of THAT model the row counts, and it is the model's resume
+// anchor: the event the row becomes carries it, and --resume reads it back
+// (#408, below). A transcript with
 // no assistant message — or none after the anchor — prints nothing and exits 0.
 // EXIT 2 is shape drift, with the line number and the key on stderr; exit 0 is
 // numbers you can trust; exit 3, under --rollup only, is rows you can trust
@@ -84,6 +85,23 @@
 // the anchor was read from, or it was rewritten: that is drift, exit 2, because
 // both "count everything" and "count nothing" would be a confident wrong number.
 
+// --resume: ONE ANCHOR PER MODEL (#408, PRD #237's known gap of 2026-10-01,
+// origin #307 L-1). The session-end hook writes one event per model, and until
+// this ticket every one carried the whole read's last id — so an end killed
+// after its first event left the trace saying "read up to here" for a model
+// whose event was never written, and the next end skipped messages nobody
+// recorded. Now each row's anchor is its own model's last message, and
+// --resume takes the anchors from the recorded events on stdin: per model,
+// the last event that names that model and a data.last_msg, a failure passed
+// over. A model with no anchor is read from the start; a model's messages
+// first seen at or before ITS anchor's first line are the ones counted
+// already. The anchor is a POSITION in the file, not a model's own message,
+// so an event the old hook wrote — any model's id on every model's event —
+// still marks exactly what that end counted for the model it names. An
+// event that names no model (a nothing-new end's) anchors nobody: the model
+// events before it already say where each one stands. --after is the one
+// anchor for every model, kept for a caller that holds a single id.
+
 // READ WHOLE, and the ceiling named rather than discovered: `readFileSync` plus
 // `split` holds the transcript twice, and V8 refuses a string past roughly
 // 512 MB with ERR_STRING_TOO_LONG — which arrives here as exit 2 and therefore
@@ -109,13 +127,19 @@ function die(message) {
   process.exit(2);
 }
 
-const USAGE = "usage: node transcript-usage.mjs [--rollup] [--after <message id>] <transcript.jsonl>  (--rollup reads recorded events on stdin)";
+const USAGE = "usage: node transcript-usage.mjs [--rollup] [--resume | --after <message id>] <transcript.jsonl>  (--rollup and --resume read recorded events on stdin)";
 const args = process.argv.slice(2);
 let after = null;
 let rollup = false;
-while (args[0] === "--after" || args[0] === "--rollup") {
+let resume = false;
+while (args[0] === "--after" || args[0] === "--rollup" || args[0] === "--resume") {
   if (args[0] === "--rollup") {
     rollup = true;
+    args.splice(0, 1);
+    continue;
+  }
+  if (args[0] === "--resume") {
+    resume = true;
     args.splice(0, 1);
     continue;
   }
@@ -124,18 +148,67 @@ while (args[0] === "--after" || args[0] === "--rollup") {
   args.splice(0, 2);
 }
 const path = args[0];
-if (!path || args.length > 1) die(USAGE);
+if (!path || args.length > 1 || (resume && after !== null)) die(USAGE);
 
 /** A non-negative integer, and nothing that merely looks like one. */
 const isCount = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 /**
- * One transcript, read once: its messages de-duplicated, how far the read
- * went, and what the --rollup judgement needs. `where` prefixes a drift
- * message, so a subagent file's line is never mistaken for the session's, and
- * `fail` is what drift does — exit 2 for the file whose rows are printed.
+ * The session's recorded events on stdin, read once for --rollup and --resume
+ * both. A read that fails is kept as its error: --resume dies on it below, and
+ * the rollup judgement refuses on it, each in its own way.
  */
-function scan(file, after, where = "", fail = die) {
+let recorded = "";
+let recordedError = null;
+if (rollup || resume) {
+  try {
+    recorded = readFileSync(0, "utf8");
+  } catch (error) {
+    recordedError = error;
+  }
+}
+
+/**
+ * The recorded lines, each parsed with its line number — parsed ONCE, here, for
+ * both readers (L-1, review of PR #447); the first line that is not JSON is
+ * kept as `bad`, and each reader fails on it its own way.
+ */
+const recordedEvents = [];
+let bad = 0;
+for (const [i, line] of recorded.split("\n").entries()) {
+  if (bad !== 0 || line.trim() === "") continue;
+  try {
+    recordedEvents.push([i + 1, JSON.parse(line)]);
+  } catch {
+    bad = i + 1;
+  }
+}
+const notJson = () => `line ${bad} of the recorded events on stdin is not JSON`;
+
+/** model -> the last recorded data.last_msg for it, a failure passed over (--resume). */
+const anchors = new Map();
+if (resume) {
+  if (recordedError !== null) {
+    die(`cannot read the recorded events on stdin: ${recordedError.code ?? recordedError.message} — where each model's last read stopped cannot be told`);
+  }
+  if (bad !== 0) die(`${notJson()}, so where each model's last read stopped cannot be told`);
+  for (const [, event] of recordedEvents) {
+    if (event?.outcome === "fail") continue;
+    const id = event?.data?.last_msg;
+    if (typeof event?.model !== "string" || event.model === "" || typeof id !== "string" || id === "") continue;
+    anchors.set(event.model, id);
+  }
+}
+
+/**
+ * One transcript, read once: its messages de-duplicated, how far each model's
+ * read went, and what the --rollup judgement needs. `after` is the one anchor
+ * for every model and `byModel` one per model (--resume); `where` prefixes a
+ * drift message, so a subagent file's line is never mistaken for the
+ * session's, and `fail` is what drift does — exit 2 for the file whose rows
+ * are printed.
+ */
+function scan(file, after, byModel = new Map(), where = "", fail = die) {
   let raw;
   try {
     raw = readFileSync(file, "utf8");
@@ -144,16 +217,13 @@ function scan(file, after, where = "", fail = die) {
   }
 
   /**
-   * message.id -> { model, requestId, counts, fresh }, in first-seen order. The
-   * model and request id are the first line's, for the duplicate check; `counts`
-   * is the LAST block read for the id; `fresh` is false for an id first seen at
-   * or before the --after anchor, which an earlier read already counted.
+   * message.id -> { model, requestId, counts, at, fresh }, in first-seen order.
+   * The model and request id are the first line's, for the duplicate check;
+   * `counts` is the LAST block read for the id; `at` is the id's first-seen
+   * position; `fresh` (set after the read) is false for an id first seen at or
+   * before its model's anchor, which an earlier read already counted.
    */
   const seen = new Map();
-  /** Still at or before the anchor: ids first seen here were counted by an earlier read. */
-  let before = after !== null;
-  /** The id of the last message summed, which the next read passes as --after. */
-  let last = "";
   /** The last `cost-state` line's per-model rollup, and the line each kind was last seen on. */
   let lastRollup = null;
   let rollupLine = 0;
@@ -264,21 +334,27 @@ function scan(file, after, where = "", fail = die) {
       first.counts = counts;
       continue;
     }
-    seen.set(message.id, { model: message.model, requestId, counts, fresh: !before });
-    if (before) {
-      if (message.id === after) before = false;
-      continue;
-    }
-    last = message.id;
+    seen.set(message.id, { model: message.model, requestId, counts, at: seen.size, fresh: true });
   }
 
-  if (before) {
-    fail(`the anchor ${after} is not an assistant message in ${file} — the transcript is not the append-only file an earlier read stopped in, so what is new cannot be told apart from what was counted`);
+  /** The first-seen position of an anchor, or drift when the file does not hold it. */
+  const at = (id) => {
+    const anchor = seen.get(id);
+    if (!anchor) {
+      fail(`the anchor ${id} is not an assistant message in ${file} — the transcript is not the append-only file an earlier read stopped in, so what is new cannot be told apart from what was counted`);
+    }
+    return anchor.at;
+  };
+  const everyAt = after === null ? null : at(after);
+  const modelAt = new Map([...byModel].map(([model, id]) => [model, at(id)]));
+  for (const message of seen.values()) {
+    const stop = modelAt.get(message.model) ?? everyAt;
+    message.fresh = stop === null || message.at > stop;
   }
-  return { seen, last, compacted, copied, rollup: rollupLine > lastMessageLine ? lastRollup : null };
+  return { seen, compacted, copied, rollup: rollupLine > lastMessageLine ? lastRollup : null };
 }
 
-const { seen, last, compacted, copied, rollup: lastRollup } = scan(path, after);
+const { seen, compacted, copied, rollup: lastRollup } = scan(path, after, anchors);
 
 /** Four zero counts, a fresh object each time. */
 const zero = () => ({ tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 });
@@ -290,18 +366,20 @@ function add(into, model, counts) {
   into.set(model, running);
 }
 
-/** Per-model totals and distinct-message counts, in first-seen order. */
+/** Per-model totals, distinct-message counts and last ids, in first-seen order. */
 const totals = new Map();
 const counted = new Map();
-for (const { model, counts, fresh } of seen.values()) {
+const lastOf = new Map();
+for (const [id, { model, counts, fresh }] of seen) {
   if (!fresh) continue;
   counted.set(model, (counted.get(model) ?? 0) + 1);
+  lastOf.set(model, id);
   add(totals, model, counts);
 }
 
 let out = "";
 for (const [model, c] of totals) {
-  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${last}\n`;
+  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${lastOf.get(model)}\n`;
 }
 
 // --rollup: THE COMPACTION GAP (#407). The call that writes a compaction
@@ -388,28 +466,17 @@ function judgeRollup() {
     if (error.code !== "ENOENT") refuse(`cannot list ${dir}: ${error.code ?? error.message}`);
   }
   for (const name of names) {
-    for (const { model, counts } of scan(`${dir}/${name}`, null, `subagents/${name}: `, refuse).seen.values()) {
+    for (const { model, counts } of scan(`${dir}/${name}`, null, new Map(), `subagents/${name}: `, refuse).seen.values()) {
       add(held, model, counts);
     }
   }
   // Read as "nothing recorded", an unreadable stdin would record a gap a
   // second time — the double record this input exists to prevent.
-  let recorded = "";
-  try {
-    recorded = readFileSync(0, "utf8");
-  } catch (error) {
-    refuse(`cannot read the recorded events on stdin: ${error.code ?? error.message}`);
+  if (recordedError !== null) {
+    refuse(`cannot read the recorded events on stdin: ${recordedError.code ?? recordedError.message}`);
   }
-  let n = 0;
-  for (const line of recorded.split("\n")) {
-    n += 1;
-    if (line.trim() === "") continue;
-    let event;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      refuse(`line ${n} of the recorded events on stdin is not JSON`);
-    }
+  if (bad !== 0) refuse(notJson());
+  for (const [n, event] of recordedEvents) {
     if (event?.data?.via !== "rollup" || event.outcome === "fail") continue;
     const counts = {};
     for (const [field] of FIELDS) {

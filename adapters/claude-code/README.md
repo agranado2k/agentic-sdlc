@@ -107,7 +107,7 @@ the answer, for the two ways a Claude Code session can spawn that reader. They
 are not the same kind of thing, and the one job of this section is to say
 which is which: **the CLI withholds; the in-session tool is asked.**
 
-### The CLI path — a restriction
+### The restricted path — a restriction
 
 Headless, `claude -p` takes three flags that together leave a reader with one
 tool, confined to one directory, and no tool server. From `claude --help` on
@@ -219,14 +219,14 @@ network" written into the prompt is a **request, not a restriction**: a
 reader that honours it is well behaved, and a line injected into the file it
 reads can ask it to do otherwise with a shell to hand.
 
-So the recommended in-session path is the CLI one: **spawn the reader with the
-CLI from inside the session.** A session holds a shell, the `-p` line above
-runs under it, and the restriction is then real whichever path the skill
+So the recommended in-session path is the restricted path: **spawn the reader
+with the CLI from inside the session.** A session holds a shell, the `-p` line
+above runs under it, and the restriction is then real whichever path the skill
 started on — the same three flags, from `$scratch`, with the return in the
 file the skill names. The **prompt-only spawn is the fallback**, for a
 session that cannot run the CLI — no `claude` on the path, or a shell it was
-not given — and it keeps the duty the three skills already provide for: where
-yours cannot, say so at the quiz (`/to-tickets`) or say so in the report
+not given — and it keeps the duty the three skills already provide for:
+say so at the quiz (`/to-tickets`) or say so in the report
 (`/pr-iterate` and the dogfood skill). Say what fenced the read — for
 example, that the reader was tool-restricted by prompt alone — so the human
 reading the quiz or the report knows: the return's shape check and the
@@ -252,10 +252,11 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
+| `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
-| `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` splits a payload with |
-| `hooks/hook.lib.sh` | not a hook either: what the five share |
+| `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` and `tool-pre.sh` split a payload with |
+| `hooks/hook.lib.sh` | not a hook either: what the six share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
@@ -331,13 +332,16 @@ Every tool call can be captured too, as one `tool.use` event carrying the tool's
 name, the call's id, the first 512 bytes of its input on the line, and the FULL
 input and FULL result in the blob store with the result's size — each stored
 by `sh scripts/trace.sh blob`, which prints the name the event carries, so the
-adapter keeps no store of its own. Two more events
-wire it, both to the same script — the only difference between them is the
-outcome it records:
+adapter keeps no store of its own. Three more events
+wire it: the two post-tool events to the same script — the only difference
+between them is the outcome it records — and `PreToolUse` to the marker a
+denied call leaves behind (below):
 
 ```json
 {
   "hooks": {
+    "PreToolUse": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre.sh\"" } ] } ],
     "PostToolUse": [ { "hooks": [ { "type": "command",
       "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\"" } ] } ],
     "PostToolUseFailure": [ { "hooks": [ { "type": "command",
@@ -352,18 +356,35 @@ That is a decision, not a formality — a tool call is the least decision-bearin
 line in the trace and there are hundreds per session, and a tool *result* is the
 contents of whatever was read. Turn it on for a wave you want to study.
 
-Three things this hook deliberately does not do:
+**A denied call is swept, not seen.** A tool call the permission system
+refuses — or a blocking `PreToolUse` hook such as the kill guard below — fires
+`PreToolUse` **only**: no `PostToolUse` and no `PostToolUseFailure`, and that
+payload is handed to the hook *before* the decision, so nothing on it says the
+call was denied. So `hooks/tool-pre.sh` leaves a pending marker per call,
+`claude-code/<session id>.pending/<tool-use id>` in the trace directory — the
+directory the phantom counters live in, each marker owner-only, holding the
+tool's name and the input head — and writes no event; `tool-post.sh` removes the call's
+marker when it returns, whatever it then records. At the session's end, **each
+marker left is swept into one `tool.use` with `outcome=denied`**, the tool's
+name and the input head on it, before `session.end` (ticket #409). Swept per
+session, never across: another session's marker may be a call still running.
+A marker whose session never fires `SessionEnd` stays on disk until an end for
+that session id sweeps it. An *interrupted* call is not a denial: it reaches
+`PostToolUseFailure` and reads as `fail`. The marker is behind `TRACE_TOOLS`
+as well, because only a post-tool hook that runs can remove it — with capture
+off, every call would read as denied — and without node there is no marker,
+because the post-tool hook could not read the id that removes it.
 
-- **It records `ok` and `fail`, never `denied`.** A tool call the permission
-  system refuses fires `PreToolUse` **only** — no `PostToolUse` and no
-  `PostToolUseFailure` — and that payload is handed to the hook *before* the
-  decision, so nothing on it says the call was denied. A denied call is
-  therefore invisible here. An *interrupted* one is not: it reaches
-  `PostToolUseFailure` and reads as `fail`.
-- **There is no `PreToolUse` hook.** Both post payloads carry the whole
-  `tool_input` themselves, so a pre hook would have nothing to add to the event
-  and nothing of its own to emit — one more process per tool call for no line.
-- **It never uses `hook_field` on a tool payload.** Every live payload arrives
+Two things the post-tool hook deliberately does not do:
+
+- **It writes no event at `PreToolUse`.** Both post payloads carry the whole
+  `tool_input` themselves, so the pre hook has nothing to add to the event;
+  its marker is only the evidence that a call began.
+- **It never reads an event's fields with `hook_field` on a tool payload.**
+  One best-effort use is not a field of the event: when the reader refuses a
+  post payload, the call still returned, so its pending marker is dropped by
+  the ids `hook_field` finds — held to the marker's identifier class, so a
+  wrong answer leaves a marker behind and is never a path. Every live payload arrives
   compact, as one line of JSON, so a key-name search finds the LAST occurrence
   — harmless for the session payloads, whose keys occur once, but a tool
   payload nests arbitrary objects, and a tool result can carry `"session_id"`
@@ -395,9 +416,12 @@ you get it wrong:
   `--continue` keep the session id and append to the same transcript, and
   `SessionEnd` fires at the end of every run — so an end that re-read the whole
   file would count every earlier response again. Each `session.usage` event
-  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
-  model), and the next end of that session counts only what came after the
-  last one the trace holds. The events stay a plain sum: `summary`, the export
+  therefore says how far it read for its model (`data.last_msg`, that model's
+  last message, and `data.msgs`, its message count), and the next end of that
+  session counts each model only after the last anchor the trace holds for
+  that model — a model with none is read from the start. One anchor per model
+  because the events are written one per model: an end killed after the first
+  of them leaves the others to the next end rather than skipping them (#408). The events stay a plain sum: `summary`, the export
   and the query below need no rule about which event supersedes which. A
   compaction appends to the same file too, but the call that writes its summary
   leaves no assistant line, so its tokens are in the rollup and in no message.
@@ -494,8 +518,9 @@ command that signals by name: `pkill`, `killall`, `kill` alongside `pgrep`, or
 `kill $!` and `kill <pid>` pass, and so does everything the operator's own
 session runs. A refusal exits 2 — the agent harness's block status, the one
 non-zero exit any hook here makes — with the rule, `kill-guard`, named on
-stderr, and records one `note` with `outcome=denied` on the session (until the
-denied-call marker, #409, gives a refused call a `tool.use` of its own).
+stderr, and records one `note` with `outcome=denied` on the session, naming
+the rule. With tool capture on, the refused call is also swept at the
+session's end into a `tool.use` with `outcome=denied` of its own (#409).
 
 ```json
 {
