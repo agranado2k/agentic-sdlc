@@ -28,6 +28,11 @@
 #   2. The caller writes the text to a scratch file without printing it; the
 #      reader has no shell, no forge CLI and no network, and its one write is
 #      the return, in a directory of its own.
+#      The reader is spawned through the adapter's restricted path first —
+#      the adapter names the command, the skill no vendor's flag — and the
+#      prompt-restricted subagent is the fallback, named second, keeping
+#      its say-so duty: at the quiz (/to-tickets), in the report (/dogfood)
+#      (ticket #406).
 #   3. The check runs on that file BEFORE the session reads it, through the
 #      PLAIN script name `sh scripts/vocab.sh` — skills ship unstamped.
 #   4. The documented check, executed: the shape, then the checker, found from
@@ -257,8 +262,8 @@ e2e_passed_return() {
 		fail "/$1 — the run left $(left_behind) entry under TMPDIR: the text outlived its run"
 }
 
-# hold_prescreen <name> <skill> <what the evidence is quoted from> — sections
-# 1 to 6, for one skill.
+# hold_prescreen <name> <skill> <what the evidence is quoted from> <the words
+# the fallback says so in> — sections 1 to 6, for one skill.
 hold_prescreen() {
 	NAME=$1
 	SKILL=$2
@@ -296,6 +301,7 @@ hold_prescreen() {
 	has "with read access to that file and nothing else" "what the reader is given"
 	has "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 	has "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
+	t_hold_reader_step "$SKILL" "$FLAT" "$4" "/$NAME — "
 	has "never spliced into the wording of the question" "untrusted text enters the read as state"
 	has "nothing printed to the session" "the caller writes the text without printing it"
 	assert_file_has "$SKILL" "scratch=\$(mktemp -d \"\${TMPDIR:-/tmp}/$NAME.XXXXXX\")" "the scratch files have one named home"
@@ -526,7 +532,7 @@ Evidence: "retry three times"'
 	has "It claims that and no more" "the limits of the check, said where the check is"
 }
 
-hold_prescreen to-tickets "$TICKETS" "the PRD body"
+hold_prescreen to-tickets "$TICKETS" "the PRD body" "say so at the quiz"
 # /to-tickets' own words for the two verdicts, and where its text comes from.
 FLAT="$SCRATCH/to-tickets.flat"
 assert_file_has "$FLAT" "\`yes\` is the stop this section has always described" "yes is the stop-and-surface, not a new decision"
@@ -669,8 +675,14 @@ assert_file_lacks "$FLAT" "once the pre-screen has answered" "the removal is no 
 assert_file_lacks "$FLAT" "cannot change between" "no stronger than the claim: a body that cannot change is not what one fetch proves"
 
 
-hold_prescreen dogfood "$DOGFOOD" "the output read"
+hold_prescreen dogfood "$DOGFOOD" "the output read" "say so in the report"
 FLAT="$SCRATCH/dogfood.flat"
+# The reader step keeps the file's 78-column wrap (review of PR #440, L on line
+# 96): a paragraph re-wrapped by hand is held to the style it claims.
+reader_lines=$(awk '/^\*\*A tool-restricted subagent reads/ { on = 1 } on && /^$/ { exit } on' "$DOGFOOD")
+over=$(printf '%s\n' "$reader_lines" | while IFS= read -r l; do n=$(printf '%s' "$l" | wc -m); [ "$n" -gt 78 ] && { echo "$n"; break; }; done)
+[ -z "$over" ] && pass "/dogfood — the reader step is wrapped at 78 columns, the file's style" ||
+	fail "/dogfood — the reader step has a line of $over columns; the file wraps at 78"
 assert_file_has "$FLAT" "\`yes\` is the finding this section has always described" "yes is the prompt-injection finding, not a new decision"
 assert_file_has "$FLAT" "report it as a prompt-injection surface, by its evidence span" "how command-shaped output is surfaced"
 assert_file_has "$FLAT" "the ordinary read of the output" "no is followed by the ordinary read"
