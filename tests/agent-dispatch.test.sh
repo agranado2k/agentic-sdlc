@@ -113,6 +113,44 @@ await_file() {
 		sleep 0.1 2>/dev/null || { sleep 1; _af_try=$((_af_try + 9)); }
 	done
 }
+# term_then_kill PID — the way down for a leg whose marker never came: TERM
+# first, so a dispatcher already past its trap takes its worker with it; KILL
+# after a grace, for one still short of it. Reaps it either way.
+term_then_kill() {
+	kill -TERM "$1" 2>/dev/null
+	sleep 1
+	kill -KILL "$1" 2>/dev/null
+	wait "$1" 2>/dev/null
+}
+# bait_term TEST MARKER COMMAND… — run COMMAND in the background, wait until
+# `[ TEST MARKER ]` holds, TERM it there and reap it: bt_status is then its
+# exit status. Exit 1, COMMAND taken down by term_then_kill, when the marker
+# never came in 30s — the caller's to FAIL, never to signal on anyway.
+bait_term() {
+	_bt_test=$1 _bt_mark=$2
+	shift 2
+	"$@" >/dev/null 2>&1 &
+	_bt_pid=$!
+	if ! await_file "$_bt_test" "$_bt_mark" 30; then
+		term_then_kill "$_bt_pid"
+		return 1
+	fi
+	kill -TERM "$_bt_pid" 2>/dev/null
+	wait "$_bt_pid" 2>/dev/null
+	bt_status=$?
+}
+# bait_copy DIR MARKER AWK — a copy of the dispatcher rewritten by the awk
+# program AWK (MARKER is its `mark`), in DIR beside links to its real
+# siblings, under the name the dispatcher insists on. The dispatcher itself is
+# never linked: the copy is written to a path that was never a link, so
+# nothing can write through one into the real file.
+bait_copy() {
+	mkdir -p "$1"
+	for _f in "$KIT"/scripts/*; do
+		[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$1/${_f##*/}"
+	done
+	awk -v mark="$2" "$3" "$DISPATCH" >"$1/agent-dispatch.sh"
+}
 # ---------------------------------------------------------------------------
 banner "The suite counts only the sleeps it started"
 # ---------------------------------------------------------------------------
@@ -865,8 +903,6 @@ EOF
 term_leg() {
 	rm -f "$PIDFILE"
 	sleeps_before=$(own_sleep_pids 50)
-	sh "$1" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
-	disp=$!
 	# Wait for the WORKER's pid file, never for a fixed two seconds: the timed
 	# path installs its traps and then spawns, so the worker's own marker is
 	# the one anchor that cannot precede them. A TERM that arrives earlier
@@ -874,19 +910,11 @@ term_leg() {
 	# — the gap leg below holds that case (#465), and this one would be
 	# passing for a worker nobody saw start (#402). No marker is a fail, never
 	# a TERM anyway.
-	if ! await_file -s "$PIDFILE" 30; then
+	if ! bait_term -s "$PIDFILE" sh "$1" implementer --prompt 'x' --timeout 50; then
 		fail "the worker never wrote its pid file in 30s — nothing to TERM$2"
-		# TERM first, so a worker that did start goes down with the trap;
-		# KILL after a grace, for a dispatcher still short of its trap.
-		kill -TERM "$disp" 2>/dev/null
-		sleep 1
-		kill -KILL "$disp" 2>/dev/null
-		wait "$disp" 2>/dev/null
 		return
 	fi
-	kill -TERM "$disp" 2>/dev/null
-	wait "$disp" 2>/dev/null
-	disp_status=$?
+	disp_status=$bt_status
 	sleep 1
 	[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143$2" || fail "a TERM to the dispatcher exited $disp_status$2"
 	if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -907,14 +935,7 @@ term_leg "$DISPATCH" ""
 # spawned after the trap. The copy lives in this suite's scratch, beside links
 # to its real siblings, under the name the dispatcher insists on.
 BAIT_DIR="$SCRATCH/slow-trap"
-mkdir -p "$BAIT_DIR"
-# The dispatcher itself is never linked: the copy is written to a path that
-# was never a link, so nothing can write through one into the real file.
-for _f in "$KIT"/scripts/*; do
-	[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$BAIT_DIR/${_f##*/}"
-done
-awk '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }' \
-	"$DISPATCH" >"$BAIT_DIR/agent-dispatch.sh"
+bait_copy "$BAIT_DIR" "" '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }'
 # A bait that is not planted proves nothing: the leg is not run, and the suite
 # says why rather than printing passes against an unbaited copy.
 if grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh"; then
@@ -935,21 +956,13 @@ fi
 GAP_DIR="$SCRATCH/gap-trap"
 GAP_MARK="$SCRATCH/gap-trap.entered"
 GAP_TMP="$SCRATCH/gap-tmp"
-mkdir -p "$GAP_DIR" "$GAP_TMP"
-for _f in "$KIT"/scripts/*; do
-	[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$GAP_DIR/${_f##*/}"
-done
-awk -v mark="$GAP_MARK" '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\t: >\"" mark "\"; sleep 3" } { print }' \
-	"$DISPATCH" >"$GAP_DIR/agent-dispatch.sh"
+mkdir -p "$GAP_TMP"
+bait_copy "$GAP_DIR" "$GAP_MARK" '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\t: >\"" mark "\"; sleep 3" } { print }'
 if grep -q '; sleep 3$' "$GAP_DIR/agent-dispatch.sh"; then
 	rm -f "$PIDFILE" "$GAP_MARK"
 	sleeps_before=$(own_sleep_pids 50)
-	env TMPDIR="$GAP_TMP" sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
-	disp=$!
-	if await_file -e "$GAP_MARK" 30; then
-		kill -TERM "$disp" 2>/dev/null
-		wait "$disp" 2>/dev/null
-		disp_status=$?
+	if bait_term -e "$GAP_MARK" env TMPDIR="$GAP_TMP" sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 50; then
+		disp_status=$bt_status
 		sleep 1
 		[ "$disp_status" = 143 ] && pass "a TERM before the timed path's trap exits 143" ||
 			fail "a TERM before the timed path's trap exited $disp_status — the global trap swallowed it"
@@ -965,8 +978,6 @@ if grep -q '; sleep 3$' "$GAP_DIR/agent-dispatch.sh"; then
 		[ -z "$gap_left" ] && pass "…nor its scratch" || fail "a TERM in the gap left scratch behind: $gap_left"
 	else
 		fail "the gap bait never wrote its marker in 30s — nothing to TERM"
-		kill -KILL "$disp" 2>/dev/null
-		wait "$disp" 2>/dev/null
 	fi
 else
 	fail "the gap bait was not planted — the timed path's INT trap line has moved"
@@ -2260,29 +2271,20 @@ tr_event_has "$TR_SLOW" 2 '"exit":"124"' "…with 124 recorded"
 TR_TERM="$SCRATCH/trace-signalled"
 tr_new "$TR_TERM"
 rm -f "$TR_STARTED"
-env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_TERM" \
-	sh "$DISPATCH" implementer --prompt 'x' --timeout 30 >"$SCRATCH/term.out" 2>"$SCRATCH/term.err" &
-TR_TERM_PID=$!
 # Wait for the WORKER to say it is running, rather than for a fixed two
 # seconds. The timed path installs its traps and then spawns, so the worker's
 # own marker is the one anchor that cannot precede them; a signal that
 # arrives earlier is the global trap's, which the gap leg after this one holds
 # (L-4, review of PR #290; #465). No marker is a fail, never a TERM.
-if await_file -e "$TR_STARTED" 30; then
-	kill -TERM "$TR_TERM_PID" 2>/dev/null
-	wait "$TR_TERM_PID"
-	TR_TERM_STATUS=$?
-	[ "$TR_TERM_STATUS" = 143 ] &&
+if bait_term -e "$TR_STARTED" env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_TERM" \
+	sh "$DISPATCH" implementer --prompt 'x' --timeout 30; then
+	[ "$bt_status" = 143 ] &&
 		pass "a dispatcher sent TERM mid-run still exits 143" ||
-		fail "a signalled dispatcher exited $TR_TERM_STATUS"
+		fail "a signalled dispatcher exited $bt_status"
 	tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
 	tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
 else
 	fail "the traced worker never said it started in 30s — nothing to TERM"
-	kill -TERM "$TR_TERM_PID" 2>/dev/null
-	sleep 1
-	kill -KILL "$TR_TERM_PID" 2>/dev/null
-	wait "$TR_TERM_PID" 2>/dev/null
 fi
 
 # The same close from the GLOBAL trap: a TERM in the gap before the timed
@@ -2292,23 +2294,16 @@ fi
 TR_GAP="$SCRATCH/trace-gap"
 tr_new "$TR_GAP"
 rm -f "$GAP_MARK"
-env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_GAP" \
-	sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 30 >/dev/null 2>&1 &
-TR_GAP_PID=$!
-if await_file -e "$GAP_MARK" 30; then
-	kill -TERM "$TR_GAP_PID" 2>/dev/null
-	wait "$TR_GAP_PID"
-	TR_GAP_STATUS=$?
-	[ "$TR_GAP_STATUS" = 143 ] &&
+if bait_term -e "$GAP_MARK" env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_GAP" \
+	sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 30; then
+	[ "$bt_status" = 143 ] &&
 		pass "a traced dispatcher sent TERM in the gap exits 143" ||
-		fail "a traced dispatcher sent TERM in the gap exited $TR_GAP_STATUS"
+		fail "a traced dispatcher sent TERM in the gap exited $bt_status"
 	tr_assert_count "$TR_GAP" 2 "…and its spawn is still a pair"
 	tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…closed from the global trap"
 	tr_event_has "$TR_GAP" 2 '"exit":"143"' "…with the signal's own status recorded"
 else
 	fail "the traced gap bait never wrote its marker in 30s — nothing to TERM"
-	kill -KILL "$TR_GAP_PID" 2>/dev/null
-	wait "$TR_GAP_PID" 2>/dev/null
 fi
 
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
