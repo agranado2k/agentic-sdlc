@@ -25,8 +25,9 @@
 # through. ../README.md says so too.
 #
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
-# common directory: a session started inside a worktree runs the worktree's
-# copy of this hook, and the tree it guards is still the main one.
+# common directory (hook.lib.sh's hook_root): a session started inside a
+# worktree runs the worktree's copy of this hook, and the tree it guards is
+# still the main one.
 #
 # HOW IT ANSWERS — the agent harness's PreToolUse contract: exit 2 blocks the
 # call and stderr is shown to the model, exit 0 lets it through. Nothing is
@@ -41,18 +42,24 @@
 #
 # NOT hook.lib.sh's rule 1. The trace hooks beside this file exit 0 always,
 # because observability must never change a session; this hook exists to
-# change one, and shares nothing with them but the directory.
+# change one. It shares their library for one thing, hook_root, and not its
+# payload reader: hook_field stops at an escaped quote, and a command carries
+# them, so `field` below walks the escapes itself.
 
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd -P) || exit 0
-root=$(
-	unset GIT_DIR GIT_WORK_TREE
-	cd "$here" 2>/dev/null || exit 1
-	common=$(git rev-parse --git-common-dir 2>/dev/null) || exit 1
-	case $common in */.git | .git) ;; *) exit 1 ;; esac
-	cd "$common/.." 2>/dev/null && pwd -P
-) || exit 0
+
+# THE ROOT IS hook.lib.sh's hook_root, the one derivation the adapter's hooks
+# share. The library is tried in a subshell before it is sourced: a `.` that
+# fails — a file missing, or one that does not parse — ends a POSIX shell with
+# a non-zero status, which the agent harness would read as a block on every
+# call. Tried first, a broken library is exit 0 instead.
+lib="$here/hook.lib.sh"
+[ -r "$lib" ] && (. "$lib") >/dev/null 2>&1 </dev/null || exit 0
+. "$lib"
+root=$(hook_root) || exit 0
+root=$(cd "$root" 2>/dev/null && pwd -P) || exit 0
 [ -n "$root" ] || exit 0
 
 json=$(cat 2>/dev/null) || exit 0

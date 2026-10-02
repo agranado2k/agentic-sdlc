@@ -58,6 +58,7 @@ WT="$FIX/worktree/x"
 HOOKDIR="$FIX/adapters/claude-code/hooks"
 mkdir -p "$HOOKDIR"
 [ -f "$GUARD_SRC" ] && cp "$GUARD_SRC" "$HOOKDIR/root-guard.sh"
+cp "$KIT/adapters/claude-code/hooks/hook.lib.sh" "$HOOKDIR/hook.lib.sh"
 GUARD="$HOOKDIR/root-guard.sh"
 
 OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX") || exit 2
@@ -164,6 +165,7 @@ allowed "a tool that does not edit (Read)"
 # common directory — and the worktree's own files are not the root's.
 mkdir -p "$WT/adapters/claude-code/hooks"
 [ -f "$GUARD_SRC" ] && cp "$GUARD_SRC" "$WT/adapters/claude-code/hooks/root-guard.sh"
+cp "$KIT/adapters/claude-code/hooks/hook.lib.sh" "$WT/adapters/claude-code/hooks/hook.lib.sh"
 printf '%s' "$(payload Write file_path "$WT/README.md" "$WT")" >"$SCRATCH/payload.json"
 t_run_split sh "$WT/adapters/claude-code/hooks/root-guard.sh" <"$SCRATCH/payload.json"
 allowed "the worktree's copy of the hook, writing in that worktree"
@@ -357,6 +359,28 @@ ln -s "$OUTSIDE/loop-b" "$OUTSIDE/loop-a"
 ln -s "$OUTSIDE/loop-a" "$OUTSIDE/loop-b"
 guard_on "$(payload Write file_path "$OUTSIDE/loop-a")"
 allowed "a Write to a link loop, which resolves nowhere (bounded, and it fails open)"
+
+# ---------------------------------------------------------------------------
+banner "4f. The root is found the way the trace hooks find it"
+# ---------------------------------------------------------------------------
+# One derivation of the root checkout for the adapter: hook.lib.sh's hook_root
+# (review finding M-3). Its payload reader, hook_field, is not reused: it stops
+# at an escaped quote, and a command carries them (section 4's escaped-quote
+# case). Sourcing the library must not cost the guard its fail-open.
+assert_file_has "$GUARD_SRC" "hook.lib.sh" "the guard sources the adapter's shared library"
+assert_file_has "$GUARD_SRC" "hook_root" "and takes the root from hook_root"
+grep -q 'git-common-dir' "$GUARD_SRC" &&
+	fail "the guard still derives the root itself — a second copy of hook_root" ||
+	pass "and derives no root of its own"
+mv "$HOOKDIR/hook.lib.sh" "$SCRATCH/hook.lib.sh.away"
+guard_on "$(payload Write file_path "$FIX/README.md")"
+allowed "a root Write with hook.lib.sh missing (the guard fails open)"
+printf 'hook_root() {\n  if then\n' >"$HOOKDIR/hook.lib.sh"
+guard_on "$(payload Write file_path "$FIX/README.md")"
+allowed "a root Write with a hook.lib.sh that does not parse (still open, never status 2)"
+mv "$SCRATCH/hook.lib.sh.away" "$HOOKDIR/hook.lib.sh"
+guard_on "$(payload Write file_path "$FIX/README.md")"
+refused "the same Write with the library back"
 
 # ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"
