@@ -417,8 +417,10 @@ EOF
 	esac
 }
 
-# trace_matches <value> <ERE> — the whole value matches the ERE.
-trace_matches() { printf '%s\n' "$1" | grep -Eq -- "^($2)\$"; }
+# trace_matches <value> <ERE> — the whole value matches the ERE, byte by
+# byte: in the C locale, so a bracket range never takes a letter outside
+# ASCII whatever locale the caller runs in.
+trace_matches() { printf '%s\n' "$1" | LC_ALL=C grep -Eq -- "^($2)\$"; }
 
 # trace_check_token <value> — a field or data key: [a-z][a-z0-9_]*. Checked
 # BEFORE any membership test or eval, so a key with a space in it is refused

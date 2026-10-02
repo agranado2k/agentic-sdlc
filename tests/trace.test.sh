@@ -1472,6 +1472,23 @@ ls_writes "pr.iterate with no outcome and no counts writes — the rule reads th
 grep -F '"kind":"pr.iterate"' "$LS/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"applied":"2","rejected":"1","escalated":"0"' &&
 	pass "the counts are written as given" || fail "pr.iterate's counts are not in the trace as given"
 
+# A shape is matched byte by byte, whatever the caller's locale: under a
+# UTF-8 locale a bracket range can take a non-ASCII letter, so a full-width
+# look-alike of a local id under another source wrote, and an id the #420
+# class refused wrote too (review of PR #487, M-1).
+_lc_utf=$(locale -a 2>/dev/null | grep -i -m1 -E '^en_[A-Z][A-Z]\.utf-?8$')
+for _lc_case in "data.source=check data.id=Ｍ-1|data.id 'Ｍ-1'" "data.source=bot data.id=é|data.id 'é'"; do
+	_lc_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	# shellcheck disable=SC2086 # the case's data args, split on purpose
+	t_run_split env LC_ALL="${_lc_utf:-en_US.UTF-8}" TRACE_CONFIG="$LSON" sh "$TRACE" emit $T ${_lc_case%%|*}
+	_lc_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	case $S_STATUS:$S_ERR in
+	2:*"${_lc_case#*|}"*) [ "$_lc_m" = "$_lc_n" ] && pass "${_lc_case%%|*} is refused under LC_ALL=${_lc_utf:-en_US.UTF-8} — a shape is matched in the C locale" ||
+		fail "${_lc_case%%|*} — refused, but a line was written" ;;
+	*) fail "${_lc_case%%|*} under LC_ALL=${_lc_utf:-en_US.UTF-8} — exit $S_STATUS, not refused: $S_ERR" ;;
+	esac
+done
+
 # The rules live in the one kind table, and the record names them.
 grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&
 	pass "the rules are rows of the one TRACE_SHAPES table" || fail "scripts/trace.sh's TRACE_SHAPES does not declare the source vocabulary, the local id and the required counts"
