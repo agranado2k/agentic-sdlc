@@ -1681,7 +1681,10 @@
 # recorded events under a new --resume, hooks/hook.lib.sh forwards it and
 # hooks/session-end.sh passes it, so a multi-model session end killed
 # partway loses nothing; adapters/claude-code/README.md says one anchor per
-# model; tests/trace-hooks.test.sh holds it.
+# model; tests/trace-hooks.test.sh holds it. And the /review-pr change
+# 0.39.0's note announced as landing beside it reached main after that tag,
+# so it ships here: .agents/skills/review-pr/SKILL.md's reuse/DRY lens files
+# an inherited duplication as a candidate ticket (#419, PR #431).
 
 shared-layer: 0.40.0
 
