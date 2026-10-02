@@ -341,9 +341,9 @@ for manual in AGENTS.md constitution/AGENTS.md.template; do
 	cell=$(mech_signal "$manual")
 	[ -n "$cell" ] && pass "$manual has a \`mechanical\` row with a signal cell" ||
 		fail "$manual has no \`mechanical\` row with a signal cell in its tier table"
-	t_text_has "$cell" "names the one command whose exit is its oracle" "condition one, in rubric line 1's words" "$manual's mechanical signal"
-	t_text_has "$cell" "one file or one pattern applied uniformly across many" "condition two, in rubric line 1's words" "$manual's mechanical signal"
-	t_text_has "$cell" "only when both" "the two conditions are both required, not either" "$manual's mechanical signal"
+	t_text_has "$cell" "names the one command whose exit is its oracle" "$manual's mechanical signal carries condition one, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "one file or one pattern applied uniformly across many" "$manual's mechanical signal carries condition two, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "only when both" "$manual's mechanical signal requires both conditions, not either" "$manual's mechanical signal"
 	case $cell in
 	*"the suite is the oracle"*) fail "$manual's mechanical signal still gives the one-condition signal (\"the suite is the oracle\")" ;;
 	*) pass "$manual's mechanical signal no longer gives the one-condition signal" ;;
