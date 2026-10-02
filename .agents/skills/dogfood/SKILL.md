@@ -86,8 +86,9 @@ path through the agent CLI, spawn the reader through it, run from `$scratch`
 so that file and its return file are the reader's whole reach — the adapter
 names the command, this skill no flag of any vendor's. Only where the adapter
 documents no such path, or the run through it fails, fall back to a subagent
-restricted by its prompt alone, and say so in the report — which of the two
-it was: a prompt that says no shell is a request, not a restriction, so the
+restricted by its prompt alone, `$scratch/out` made new first, and say so in
+the report — naming which trigger it was, no path documented or a run that
+failed: a prompt that says no shell is a request, not a restriction, so the
 human reading the report knows the check below is what fenced the read, not
 an absent tool. The file is the material it judges, never spliced into the
 wording of the question you ask about it. Its return lands in a file,

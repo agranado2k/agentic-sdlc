@@ -594,14 +594,23 @@ assert_file_has() {
 	fi
 }
 
-assert_file_lacks() {
-	if grep -qF -- "$2" "$1"; then
-		fail "$1 contains '$2'${3:+ — $3}"
-		grep -nF -- "$2" "$1" | sed 's/^/        | /'
+# _t_file_lacks <grep flags> <file> <literal> [<why>] — the body of the two
+# assertions below: a fixed-string search whose hit is the failure, each
+# hit shown. The flags are the one difference between them.
+_t_file_lacks() {
+	if grep $1 -- "$3" "$2"; then
+		fail "$2 contains '$3'${4:+ — $4}"
+		grep -n${1#-q} -- "$3" "$2" | sed 's/^/        | /'
 	else
-		pass "no '$2' in $1${3:+ ($3)}"
+		pass "no '$3' in $2${4:+ ($4)}"
 	fi
 }
+
+assert_file_lacks() { _t_file_lacks -qF "$@"; }
+
+# assert_file_lacks_any_case <file> <literal> [<why>] — the same, case-blind:
+# a literal planted as `Claude -p` or `--TOOLS` is the literal still.
+assert_file_lacks_any_case() { _t_file_lacks -qiF "$@"; }
 
 t_done() {
 	printf '\n'
@@ -1068,48 +1077,53 @@ t_sh_fence() {
 # are the reader's whole reach. So the step names that path first and the
 # prompt-restricted subagent second, as the fallback — taken where the adapter
 # documents no path, or where the run through it fails (review of PR #440,
-# M-3) — and the fallback keeps the duty the fence has always carried, the
-# <say-so words>, and says which of the two it was. The adapter names the
-# command; the skill names none — skills ship unstamped and name no vendor —
-# so a flag planted in the skill goes red, whatever its case and whether or
-# not a code span wraps it (review of PR #440, M-4). One copy, for the two
-# suites that hold the three skills (review of PR #440, M-1).
+# M-3) — and the fallback clause is held as ONE span: the subagent restricted
+# by its prompt alone, the return directory made new first, the <say-so
+# words>, and which trigger it was, named. One span, because four substring
+# searches over the paragraph's tail tied none of them to the fallback (local
+# review of PR #440, M-3 and M-4). The adapter names the command; the skill
+# names none — skills ship unstamped and name no vendor — so a flag planted
+# in the skill goes red, whatever its case and whether or not a code span
+# wraps it (review of PR #440, M-4). One copy, for the two suites that hold
+# the three skills (review of PR #440, M-1).
 t_hold_reader_step() {
-	_hr_skill=$1 _hr_flat=$2 _hr_duty=$3 _hr_p=${4:-}
+	_hr_skill=$1 _hr_flat=$2 _hr_p=${4:-}
+	_hr_duty=$(printf '%s' "$3" | tr 'A-Z' 'a-z')
 	_hr_reader=$(grep '^\*\*A tool-restricted subagent reads' "$_hr_flat")
 	# Held case-blind, with one spelling of the fallback: a bait that capitalises
 	# "Fall back" or writes "fallback" is the same order, and must go red the same.
 	_hr_reader=$(printf '%s' "$_hr_reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
-	[ -n "$_hr_reader" ] && pass "${_hr_p}the reader step is one paragraph, found by its opening words" ||
+	if [ -n "$_hr_reader" ]; then
+		pass "${_hr_p}the reader step is one paragraph, found by its opening words"
+	else
 		fail "${_hr_p}the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
+		return 1
+	fi
+	_hr_before=${_hr_reader%%fall back*}
 	# One arm for presence and order both: a step that never names the path
 	# fails it the same way as one naming it after the fallback.
-	case ${_hr_reader%%fall back*} in
+	case $_hr_before in
 	*"restricted path"*) pass "${_hr_p}the reader step names the adapter's restricted path, before the fallback" ;;
 	*) fail "${_hr_p}the reader step never names a restricted path, or names it after the fallback — the restricted path is the first spawn, not the alternative" ;;
-	esac
-	case $_hr_reader in
-	*"fall back"*"prompt"*) pass "${_hr_p}…and the prompt-restricted subagent is the fallback, named second" ;;
-	*) fail "${_hr_p}the reader step names no fallback to a prompt-restricted subagent" ;;
 	esac
 	# The fallback's two triggers, both named before it: the adapter documents
 	# no path, or the run through the path fails. A run that fails is not a
 	# path that exists; "where no such path exists" alone left it uncovered.
-	case ${_hr_reader%%fall back*} in
-	*"documents no such path"*) pass "${_hr_p}…taken where the adapter documents no such path" ;;
+	case $_hr_before in
+	*"documents no such path"*) pass "${_hr_p}the fallback is taken where the adapter documents no such path" ;;
 	*) fail "${_hr_p}the fallback's first trigger is unnamed — it is taken where the adapter documents no such path" ;;
 	esac
-	case ${_hr_reader%%fall back*} in
+	case $_hr_before in
 	*"the run through it fails"*) pass "${_hr_p}…or where the run through it fails" ;;
 	*) fail "${_hr_p}the fallback's second trigger is unnamed — a run through the restricted path that fails falls back too" ;;
 	esac
-	case ${_hr_reader#*fall back} in
-	*"$_hr_duty"*) pass "${_hr_p}…which keeps its say-so duty: $_hr_duty" ;;
-	*) fail "${_hr_p}the fallback lost its duty — a prompt-restricted read must $_hr_duty" ;;
-	esac
-	case ${_hr_reader#*fall back} in
-	*"which of the two"*) pass "${_hr_p}…and says which of the two triggers it was" ;;
-	*) fail "${_hr_p}the say-so does not say which trigger was taken — no path documented, or a run that failed" ;;
+	# The fallback clause, one span: what is fallen back to, the return
+	# directory made new before it runs (a failed run's partial output is not
+	# what the check reads), the say-so, and the trigger named in it.
+	_hr_clause="fall back to a subagent restricted by its prompt alone, \`\$scratch/out\` made new first, and $_hr_duty — naming which trigger it was, no path documented or a run that failed"
+	case $_hr_reader in
+	*"$_hr_clause"*) pass "${_hr_p}…to a subagent restricted by its prompt alone, the return directory made new first, and it $_hr_duty naming which trigger it was — one clause" ;;
+	*) fail "${_hr_p}the fallback clause moved — expected, after the triggers: '$_hr_clause'" ;;
 	esac
 	case $_hr_reader in
 	*"the adapter names the command"*) pass "${_hr_p}the adapter names the command; the skill names none" ;;
@@ -1130,11 +1144,6 @@ t_hold_reader_step() {
 	# The named net, whole file, case-blind: a flag planted outside the step,
 	# or spelled `Claude -p`, goes red the same. The one list, here.
 	for _hr_flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
-		if grep -qiF -- "$_hr_flag" "$_hr_skill"; then
-			fail "${_hr_p}$_hr_skill contains '$_hr_flag' — a vendor's flag or command is the adapter's to name, never the skill's"
-			grep -niF -- "$_hr_flag" "$_hr_skill" | sed 's/^/        | /'
-		else
-			pass "${_hr_p}no '$_hr_flag' in $_hr_skill, in any case (a vendor's flag or command is the adapter's to name, never the skill's)"
-		fi
+		assert_file_lacks_any_case "$_hr_skill" "$_hr_flag" "a vendor's flag or command is the adapter's to name, never the skill's"
 	done
 }
