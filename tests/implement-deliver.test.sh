@@ -359,29 +359,25 @@ banner "4b. The stamp is read through the checker: restate on low, stop on refus
 stamp=$(grep -F -- "sh scripts/stamp.sh" "$SKILL_ABS" | head -1)
 [ -n "$stamp" ] && pass "one bullet reads the ticket's stamp through scripts/stamp.sh" ||
 	fail "no line runs sh scripts/stamp.sh — the stamp is read unchecked"
-# stamp_has <fixed string> <why>
-stamp_has() {
-	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
-}
-stamp_has "\`sh scripts/stamp.sh <N>\`, the ticket's number and nothing else" "the call: a number in, never the body's text"
-stamp_has "The lines the script prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
+t_text_has "$stamp" "\`sh scripts/stamp.sh <N>\`, the ticket's number and nothing else" "the call: a number in, never the body's text" "the stamp bullet"
+t_text_has "$stamp" "The lines the script prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command" "the stamp bullet"
 # The four outcomes, one sentence each, in status order — a status the skill
 # never defines is what PR #311's last HIGH was.
-stamp_has "Four outcomes, one exit status each" "the contract is counted, so a fifth cannot slip in unsaid"
-stamp_has "**Exit 0**: the checked lines are on stdout" "outcome 0: the stamp"
-stamp_has "**Exit 2**: a refused value — stdout is empty" "outcome 2: a refusal prints nothing to type"
-stamp_has "names the refused field, never its text" "outcome 2: the refused text stays in the ticket"
-stamp_has "**Exit 3**: no stamp read" "outcome 3: the old ticket, named"
-stamp_has "None is a refusal" "outcome 3: not a stop"
-stamp_has "take the missing-line defaults below" "outcome 3: what it means for the tier"
-stamp_has "**Exit 4**: the fetch failed" "outcome 4: the fetch, named"
-stamp_has "never read it as a missing line" "outcome 4: a failed fetch is never outcome 3"
-stamp_has "A refused value is a stop, reported for \`/to-tickets\` to re-stamp" "outcome 2: every refused value stops — a tier, a confidence with or without its tier, a domain"
-stamp_has "a line names a field this project's policy does not declare" "outcome 3: a line the checker would ignore is never printed"
+t_text_has "$stamp" "Four outcomes, one exit status each" "the contract is counted, so a fifth cannot slip in unsaid" "the stamp bullet"
+t_text_has "$stamp" "**Exit 0**: the checked lines are on stdout" "outcome 0: the stamp" "the stamp bullet"
+t_text_has "$stamp" "**Exit 2**: a refused value — stdout is empty" "outcome 2: a refusal prints nothing to type" "the stamp bullet"
+t_text_has "$stamp" "names the refused field, never its text" "outcome 2: the refused text stays in the ticket" "the stamp bullet"
+t_text_has "$stamp" "**Exit 3**: no stamp read" "outcome 3: the old ticket, named" "the stamp bullet"
+t_text_has "$stamp" "None is a refusal" "outcome 3: not a stop" "the stamp bullet"
+t_text_has "$stamp" "take the missing-line defaults below" "outcome 3: what it means for the tier" "the stamp bullet"
+t_text_has "$stamp" "**Exit 4**: the fetch failed" "outcome 4: the fetch, named" "the stamp bullet"
+t_text_has "$stamp" "never read it as a missing line" "outcome 4: a failed fetch is never outcome 3" "the stamp bullet"
+t_text_has "$stamp" "A refused value is a stop, reported for \`/to-tickets\` to re-stamp" "outcome 2: every refused value stops — a tier, a confidence with or without its tier, a domain" "the stamp bullet"
+t_text_has "$stamp" "a line names a field this project's policy does not declare" "outcome 3: a line the checker would ignore is never printed" "the stamp bullet"
 # A missing script is the shell's status, not the script's: 127, or 2 under a
 # shell that reads an unopenable file as a usage error — which would read as
 # a refusal. The bullet has the agent test for the file first.
-stamp_has "test \`[ -f scripts/stamp.sh ]\` before the call" "no stamp.sh: tested for, never read off the shell's status"
+t_text_has "$stamp" "test \`[ -f scripts/stamp.sh ]\` before the call" "no stamp.sh: tested for, never read off the shell's status" "the stamp bullet"
 # The bullet is the call, its four outcomes and #340's three answers — no
 # more (#331). What the script does is the script's to say; a bullet that
 # restates it grows a second contract to drift.
@@ -395,7 +391,7 @@ order=$(printf '%s\n' "$stamp" | grep -oE '\*\*Exit [0-9]\*\*' | tr -d '*' | tr 
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
 # what refuses a quote, a space or a semicolon before any command carries it.
-stamp_has "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it"
+t_text_has "$stamp" "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it" "the stamp bullet"
 # The pipe is gone, not kept beside the call: an agent offered both runs the
 # one with no defined status for a stampless ticket.
 assert_file_lacks "$SKILL" "| sh scripts/vocab.sh" "the lifted pipe is retired — the script is the one reader"
@@ -403,31 +399,31 @@ assert_file_lacks "$SKILL" "| sh scripts/vocab.sh" "the lifted pipe is retired �
 # how every quoted-argument call starts, whatever field follows.
 assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
 assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
-stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
-stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
+t_text_has "$stamp" "how sure the stamp looked, never how likely it is right" "the PRD's wording" "the stamp bullet"
+t_text_has "$stamp" "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order" "the stamp bullet"
 # The count of answers that change what you do, scoped to what it counts —
 # the tier and its confidence — and held to the sentences that follow it:
 # `low` restates, a refused tier stops, a refused confidence stops. (The
 # refused domain is its own sentence, above, and not in this count.)
-stamp_has "Three answers on the tier and its confidence change what you do" "the count says what it counts, and names the refused confidence as the third"
-stamp_has "back to the restatement step" "restate-on-low: the rule"
-stamp_has "before you spawn" "restate-on-low: when — the cheapest point"
-stamp_has "say so in your report" "restate-on-low: the report names it"
-stamp_has "A tier the checker refuses" "stop-on-refused: the case"
-stamp_has "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is"
+t_text_has "$stamp" "Three answers on the tier and its confidence change what you do" "the count says what it counts, and names the refused confidence as the third" "the stamp bullet"
+t_text_has "$stamp" "back to the restatement step" "restate-on-low: the rule" "the stamp bullet"
+t_text_has "$stamp" "before you spawn" "restate-on-low: when — the cheapest point" "the stamp bullet"
+t_text_has "$stamp" "say so in your report" "restate-on-low: the report names it" "the stamp bullet"
+t_text_has "$stamp" "A tier the checker refuses" "stop-on-refused: the case" "the stamp bullet"
+t_text_has "$stamp" "\`/to-tickets\` to re-stamp" "stop-on-refused: whose finding it is" "the stamp bullet"
 # The refused line is, by definition, text the checker would not pass — and
 # the trace emit one bullet down carries a quoted `reason=`.
-stamp_has "a refused line is never put into a command" "stop-on-refused: the line goes in the report, not in the trace's reason= or any other argument"
-stamp_has "neither guess" "stop-on-refused: no nearest-legal-name repair"
-stamp_has "nor upgrade yourself" "stop-on-refused: no self-sizing"
-stamp_has "no autonomy decision reads it" "a confidence is not a permission"
+t_text_has "$stamp" "a refused line is never put into a command" "stop-on-refused: the line goes in the report, not in the trace's reason= or any other argument" "the stamp bullet"
+t_text_has "$stamp" "neither guess" "stop-on-refused: no nearest-legal-name repair" "the stamp bullet"
+t_text_has "$stamp" "nor upgrade yourself" "stop-on-refused: no self-sizing" "the stamp bullet"
+t_text_has "$stamp" "no autonomy decision reads it" "a confidence is not a permission" "the stamp bullet"
 # A refused CONFIDENCE is a refused stamp (#340 — the ruling on PR #311's
 # confirm-list, item 1). The bullet used to leave the tier standing and read
 # the value as `low`: an undeclared value mapped onto a declared one in
 # silence, which is the one thing the checker exists to refuse. It takes the
 # refused tier's path now — stop, /to-tickets re-stamps — and the MISSING line
 # keeps its own: not a blocker, for a ticket written before the stamp existed.
-stamp_has "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes"
+t_text_has "$stamp" "A refused *confidence* is a refused stamp, on the same path as a refused tier" "stop-on-refused-confidence: the case, and whose path it takes" "the stamp bullet"
 # The headline alone is green on a sentence that goes on to say the opposite
 # (local review of this PR, H-1): the words that carry the ruling are held
 # one by one, inside the sentence that states it — cut from its first word to
@@ -473,13 +469,13 @@ weakened "the tier left standing" 's/does not stand on its own/stands on its own
 weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/'
 weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/'
 assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
-stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
+t_text_has "$stamp" "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases" "the stamp bullet"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
 # session in a project that never took the script.
-stamp_has "or the checker is gone or cannot run here" "checker absent or broken: tolerated — outcome 3, not a refusal"
-stamp_has "the script never prints a line it could not check" "checker absent: it fails closed — the defaults, never an unchecked value"
-stamp_has "never a stamp read by eye" "no stamp.sh at all: the defaults, not the body read unchecked"
+t_text_has "$stamp" "or the checker is gone or cannot run here" "checker absent or broken: tolerated — outcome 3, not a refusal" "the stamp bullet"
+t_text_has "$stamp" "the script never prints a line it could not check" "checker absent: it fails closed — the defaults, never an unchecked value" "the stamp bullet"
+t_text_has "$stamp" "never a stamp read by eye" "no stamp.sh at all: the defaults, not the body read unchecked" "the stamp bullet"
 # The kit wrapper is never named: skills ship unstamped.
 assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
 

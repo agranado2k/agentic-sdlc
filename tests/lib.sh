@@ -1014,6 +1014,16 @@ t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
 # <literal> as a fixed string; empty when none does.
 t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
 
+# t_text_has <text> <fixed string> <why> [<whose>] — one pass/fail per token
+# held in a block of text a suite has already cut out, so a failure names the
+# token that went missing rather than the whole block. <whose>, when given,
+# names the block in the fail line ("the stamp bullet never says …").
+t_text_has() {
+	printf '%s\n' "$1" | grep -qF -- "$2" &&
+		pass "'$2' — $3" ||
+		fail "${4:+$4 }never says '$2' — $3"
+}
+
 # t_fence <file> <holds|opens> <needle> [<language>] — the body of the first
 # fenced block of <file> opened with ```<language> (sh when omitted) that the
 # needle picks, printed verbatim; nothing when none does, which the caller

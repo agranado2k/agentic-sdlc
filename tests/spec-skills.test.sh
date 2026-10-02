@@ -37,14 +37,6 @@ cd "$ROOT" || exit 2
 # suite takes of the engineering article.
 section_of() { sed -n "/^## $2\$/,/^## /p" "$1" | sed '1!{/^## /d;}'; }
 
-# has_in <text> <fixed string> <why> — one pass/fail per token, so a failure
-# names the token that went missing rather than the whole block.
-has_in() {
-	printf '%s\n' "$1" | grep -q -F -- "$2" &&
-		pass "'$2' — $3" ||
-		fail "never says '$2' — $3"
-}
-
 # ---------------------------------------------------------------------------
 banner "0. The files under test"
 # ---------------------------------------------------------------------------
@@ -106,47 +98,47 @@ banner "3. Each PRD rule is carried by its own words, inside its own section"
 # keep by accident — and scoped to the section, so a rule cannot drift into
 # Further Notes and still count.
 obj=$(section_of "$PRD_ABS" "Objective")
-has_in "$obj" "one sentence" "the objective has a length, and it is one sentence"
-has_in "$obj" "line every ticket opens with" "the promise /to-tickets' publish step keeps"
-has_in "$obj" "first line of the PRD" "it is read before the problem is explained"
+t_text_has "$obj" "one sentence" "the objective has a length, and it is one sentence"
+t_text_has "$obj" "line every ticket opens with" "the promise /to-tickets' publish step keeps"
+t_text_has "$obj" "first line of the PRD" "it is read before the problem is explained"
 
 scen=$(section_of "$PRD_ABS" "Scenarios")
-has_in "$scen" "walkthrough" "a scenario is the finished system in use, step by step"
-has_in "$scen" "concrete names" "no placeholders — a walkthrough with <actor> in it is a story, not a scenario"
-has_in "$scen" "One per major story" "coverage, not a sample"
-has_in "$scen" "/to-tickets" "the hand-off: who reads the scenarios"
-has_in "$scen" "not finished thinking about" "a scenario that cannot be walked is the PRD's own finding"
+t_text_has "$scen" "walkthrough" "a scenario is the finished system in use, step by step"
+t_text_has "$scen" "concrete names" "no placeholders — a walkthrough with <actor> in it is a story, not a scenario"
+t_text_has "$scen" "One per major story" "coverage, not a sample"
+t_text_has "$scen" "/to-tickets" "the hand-off: who reads the scenarios"
+t_text_has "$scen" "not finished thinking about" "a scenario that cannot be walked is the PRD's own finding"
 printf '%s\n' "$scen" | sed -n '/<scenario-example>/,/<\/scenario-example>/p' | grep -q '<[a-z]*>' &&
 	fail "the scenario example carries a <placeholder> — the rule it illustrates forbids exactly that" ||
 	pass "the scenario example uses concrete names, as its rule demands"
 
 impl=$(section_of "$PRD_ABS" "Implementation Decisions")
-has_in "$impl" "penalty for being wrong" "the filter on what a PRD pins"
-has_in "$impl" "belongs to the implementing session" "the reversible is left to the session that builds it"
-has_in "$impl" "one consequence of this" "the file-path rule is derived from the filter, not a peer of it"
+t_text_has "$impl" "penalty for being wrong" "the filter on what a PRD pins"
+t_text_has "$impl" "belongs to the implementing session" "the reversible is left to the session that builds it"
+t_text_has "$impl" "one consequence of this" "the file-path rule is derived from the filter, not a peer of it"
 
-has_in "$(section_of "$PRD_ABS" "Testing Decisions")" "a number a test can assert" "every quality word becomes measurable, or goes"
+t_text_has "$(section_of "$PRD_ABS" "Testing Decisions")" "a number a test can assert" "every quality word becomes measurable, or goes"
 
 alt=$(section_of "$PRD_ABS" "Alternatives Considered")
-has_in "$alt" "few brief lines" "the article's length rule — exhaustive rejected-idea logs are overkill"
-has_in "$alt" "plausibly propose again" "the filter on which alternatives are worth recording"
-has_in "$alt" "docs/adr/" "a durable decision is linked from its record, never repeated"
-has_in "$alt" "after a human yes" "the PRD references a record; it never writes one on its own authority"
+t_text_has "$alt" "few brief lines" "the article's length rule — exhaustive rejected-idea logs are overkill"
+t_text_has "$alt" "plausibly propose again" "the filter on which alternatives are worth recording"
+t_text_has "$alt" "docs/adr/" "a durable decision is linked from its record, never repeated"
+t_text_has "$alt" "after a human yes" "the PRD references a record; it never writes one on its own authority"
 
 oos=$(section_of "$PRD_ABS" "Out of Scope")
-has_in "$oos" "with its reason" "a non-goal carries its why"
-has_in "$oos" "*later*" "deferred is marked, and italic so it scans"
-has_in "$oos" "*never*" "rejected is marked, and italic so it scans"
-has_in "$oos" "say what would reopen it" "a deferral names its trigger"
+t_text_has "$oos" "with its reason" "a non-goal carries its why"
+t_text_has "$oos" "*later*" "deferred is marked, and italic so it scans"
+t_text_has "$oos" "*never*" "rejected is marked, and italic so it scans"
+t_text_has "$oos" "say what would reopen it" "a deferral names its trigger"
 
 oi=$(section_of "$PRD_ABS" "Open Issues")
-has_in "$oi" "three lines" "problem / options / next step — the shape, not a free-text note"
-has_in "$oi" "next step" "an open issue is actionable or it is a TODO"
-has_in "$oi" "/prototype" "one route: a spike"
-has_in "$oi" "planner" "one route: a planner ticket"
-has_in "$oi" "no label" "the third route: a question a human answers, unlabelled by rule 4"
-has_in "$oi" "move it out" "a resolved issue leaves the section; the tracker keeps the history"
-has_in "$oi" "open-issue gate" "the back-reference to /to-tickets' rule, by name not by number"
+t_text_has "$oi" "three lines" "problem / options / next step — the shape, not a free-text note"
+t_text_has "$oi" "next step" "an open issue is actionable or it is a TODO"
+t_text_has "$oi" "/prototype" "one route: a spike"
+t_text_has "$oi" "planner" "one route: a planner ticket"
+t_text_has "$oi" "no label" "the third route: a question a human answers, unlabelled by rule 4"
+t_text_has "$oi" "move it out" "a resolved issue leaves the section; the tracker keeps the history"
+t_text_has "$oi" "open-issue gate" "the back-reference to /to-tickets' rule, by name not by number"
 
 # The menu rule, and the stranger reread before publishing.
 assert_file_has "$PRD" "omitted when empty" "an empty section is omitted, never written as N/A"
@@ -182,33 +174,33 @@ untitled=$(printf '%s\n' "$rules" | grep -vc '^[0-9]*\. \*\*')
 rule_n() { printf '%s\n' "$rules" | awk -v k="$1" -F. '$1 == k { print; exit }'; }
 
 rule1=$(rule_n 1)
-has_in "$rule1" "Scenarios are the first list of demos" "the admission test starts from the PRD's scenarios"
-has_in "$rule1" "two exceptions" "prefactoring and the open-issue ticket are the only non-demoable tickets"
-has_in "$rule1" "rule 12" "the second exception is named where the first is"
+t_text_has "$rule1" "Scenarios are the first list of demos" "the admission test starts from the PRD's scenarios"
+t_text_has "$rule1" "two exceptions" "prefactoring and the open-issue ticket are the only non-demoable tickets"
+t_text_has "$rule1" "rule 12" "the second exception is named where the first is"
 
 gate=$(printf '%s\n' "$rules" | grep -i 'open issue' | grep -F 'Blocked by:' | head -1)
 [ -n "$gate" ] && pass "one rule names the open issue and the Blocked by: edge together — the gate is one rule" ||
 	fail "no single rule names open issue + Blocked by: — the open-issue gate is missing or split"
-has_in "$gate" "planner" "one route: a planner ticket"
-has_in "$gate" "/prototype" "one route: a spike"
-has_in "$gate" "no label" "the question route: unlabelled, so a human answers it"
-has_in "$gate" "definition of done is the answer recorded" "what the gate ticket demos — the answer, written down"
-has_in "$gate" "touches no ticket is left where it is" "an open issue that shapes nothing is not a blocker"
+t_text_has "$gate" "planner" "one route: a planner ticket"
+t_text_has "$gate" "/prototype" "one route: a spike"
+t_text_has "$gate" "no label" "the question route: unlabelled, so a human answers it"
+t_text_has "$gate" "definition of done is the answer recorded" "what the gate ticket demos — the answer, written down"
+t_text_has "$gate" "touches no ticket is left where it is" "an open issue that shapes nothing is not a blocker"
 
 order=$(printf '%s\n' "$rules" | grep -F '**Feedback-first ordering.**')
 [ -n "$order" ] && pass "the ordering rule exists under its own title" || fail "no rule titled Feedback-first ordering"
-has_in "$order" "sequence first" "the direction of the rule — first, not last"
-has_in "$order" "most likely to expose a misunderstanding" "the criterion the order is chosen by"
-has_in "$order" "thinnest end-to-end slice" "a vertical slice, never the surface as a layer"
-has_in "$order" "stubbed" "stubbed data is allowed on the way to feedback"
+t_text_has "$order" "sequence first" "the direction of the rule — first, not last"
+t_text_has "$order" "most likely to expose a misunderstanding" "the criterion the order is chosen by"
+t_text_has "$order" "thinnest end-to-end slice" "a vertical slice, never the surface as a layer"
+t_text_has "$order" "stubbed" "stubbed data is allowed on the way to feedback"
 
 step1=$(awk '/^## Procedure/ { on = 1; next } on && /^1\. / { print; exit }' "$TIX_ABS")
-has_in "$step1" "Scenarios are the candidate demos" "step 1 reads the PRD's scenarios as the first draft"
-has_in "$step1" "rule 12" "step 1 also lists the open issues the gate turns into tickets"
+t_text_has "$step1" "Scenarios are the candidate demos" "step 1 reads the PRD's scenarios as the first draft"
+t_text_has "$step1" "rule 12" "step 1 also lists the open issues the gate turns into tickets"
 quiz=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TIX_ABS")
-has_in "$quiz" "the order you chose" "the decomposer's own ordering choice is put up for challenge"
+t_text_has "$quiz" "the order you chose" "the decomposer's own ordering choice is put up for challenge"
 publish=$(awk '/^## Procedure/ { on = 1; next } on && /^4\. / { print; exit }' "$TIX_ABS")
-has_in "$publish" "PRD's Objective" "a published ticket opens with the line /to-prd says every ticket carries"
+t_text_has "$publish" "PRD's Objective" "a published ticket opens with the line /to-prd says every ticket carries"
 # The confidence stamp (PRD #273): three tokens beside every tier and label
 # stamp, described in the PRD's own words; the checker runs on every stamp
 # BEFORE the human sees the list; the quiz is sorted low first; and the sort
@@ -216,14 +208,14 @@ has_in "$publish" "PRD's Objective" "a published ticket opens with the line /to-
 # would be an autonomy decision nobody has measured the right to make.
 conf=$(printf '%s\n' "$rules" | grep -F '**Confidence')
 [ -n "$conf" ] && pass "the confidence rule exists under its own title" || fail "no rule titled Confidence"
-has_in "$conf" '`Confidence: <low|medium|high>`' "the stamp, spelled once with its three tokens in the vocabulary's order"
+t_text_has "$conf" '`Confidence: <low|medium|high>`' "the stamp, spelled once with its three tokens in the vocabulary's order"
 # The stamping clauses themselves, not the words: the rule's own title says
 # "tier" and "label", so a bare-word probe stays green with the sentence gone.
-has_in "$conf" 'Each `Tier:` stamp (rule 9)' "it is stamped beside the tier"
-has_in "$conf" "each autonomy-label decision (rule 4" "and beside the autonomy label — the label or its absence"
-has_in "$conf" "how sure the stamp looked, never how likely it is right" "the PRD's wording — a confidence is not a probability"
-has_in "$conf" "sorts the quiz and never skips it" "the one job a confidence has"
-has_in "$conf" "No autonomy decision reads it" "rule 4 decides the label alone"
+t_text_has "$conf" 'Each `Tier:` stamp (rule 9)' "it is stamped beside the tier"
+t_text_has "$conf" "each autonomy-label decision (rule 4" "and beside the autonomy label — the label or its absence"
+t_text_has "$conf" "how sure the stamp looked, never how likely it is right" "the PRD's wording — a confidence is not a probability"
+t_text_has "$conf" "sorts the quiz and never skips it" "the one job a confidence has"
+t_text_has "$conf" "No autonomy decision reads it" "rule 4 decides the label alone"
 
 # in_order <text> <why> <needle>… — every needle is present, each after the
 # one before it.
@@ -240,20 +232,20 @@ in_order() {
 	done
 	pass "$_io_why"
 }
-has_in "$quiz" "sh scripts/vocab.sh 'Tier: <tier>' 'Confidence: <token>'" "the checker is handed the tier stamp with its confidence — the plain script, skills ship unstamped"
-has_in "$quiz" "sh scripts/vocab.sh 'Label: <ready-for-agent|none>' 'Confidence: <token>'" "and the label stamp with its own"
+t_text_has "$quiz" "sh scripts/vocab.sh 'Tier: <tier>' 'Confidence: <token>'" "the checker is handed the tier stamp with its confidence — the plain script, skills ship unstamped"
+t_text_has "$quiz" "sh scripts/vocab.sh 'Label: <ready-for-agent|none>' 'Confidence: <token>'" "and the label stamp with its own"
 # "Every stamp" includes the task domain where one was stamped (PR #311): an
 # open vocabulary, so the checker holds it to the token shape — which is what
 # refuses a model name with a dot in it, or a capitalised word.
-has_in "$quiz" "'Domain: <token>'" "a stamped domain goes to the checker with the tier it rides on"
+t_text_has "$quiz" "'Domain: <token>'" "a stamped domain goes to the checker with the tier it rides on"
 in_order "$quiz" "the domain is checked before the list is presented, like the other stamps" \
 	"sh scripts/vocab.sh 'Tier: <tier>'" "'Domain: <token>'" "fix what it refuses" "present the draft"
-has_in "$quiz" "fix what it refuses" "a refused stamp is repaired before the human sees the list"
-has_in "$quiz" "is not a refusal — say so at the quiz and carry on" "a checker that cannot run is tolerated and said; it never skips the quiz"
-has_in "$quiz" "low-confidence first" "the sort: the human's attention lands where the draft was unsure"
+t_text_has "$quiz" "fix what it refuses" "a refused stamp is repaired before the human sees the list"
+t_text_has "$quiz" "is not a refusal — say so at the quiz and carry on" "a checker that cannot run is tolerated and said; it never skips the quiz"
+t_text_has "$quiz" "low-confidence first" "the sort: the human's attention lands where the draft was unsure"
 in_order "$quiz" "the check comes before the list is presented, and the list is sorted" \
 	"sh scripts/vocab.sh" "fix what it refuses" "present the draft" "low-confidence first"
-has_in "$publish" '`Confidence: <token>`' "a published body carries the tier's confidence"
+t_text_has "$publish" '`Confidence: <token>`' "a published body carries the tier's confidence"
 in_order "$publish" "the body's decision lines run Tier, Confidence, Domain" \
 	'`Tier: <tier>`' '`Confidence: <token>`' '`Domain: <token>`'
 in_order "$publish" "ticket.write carries the confidence beside the pre-quiz tier, on one event" \
@@ -266,7 +258,7 @@ in_order "$publish" "ticket.write carries the confidence beside the pre-quiz tie
 # can read the label's override as it reads the tier's.
 in_order "$publish" "ticket.write carries the label, the pre-quiz label, then the label's confidence under its own key" \
 	"kind=ticket.write" "data.confidence=" "data.label=" "data.label_proposed=" "data.label_confidence="
-has_in "$publish" "never folded into \`data.confidence\`" "the two keys are told apart in words"
+t_text_has "$publish" "never folded into \`data.confidence\`" "the two keys are told apart in words"
 # docs-demo.sh's three-way merge anchors on this heading; hold it here too.
 assert_file_has "$TIX" "## The tier rubric" "the heading the update recipe's worked example merges around"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
