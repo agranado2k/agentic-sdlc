@@ -147,6 +147,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+banner "1a. Configuration file prose — the wait comment describes reality since PR #434"
+# ---------------------------------------------------------------------------
+# RED TEST: the TRACE_AGENT_WAIT_MS comment should NOT say "never longer" unconditionally (PR #434/#401)
+! grep -qF "and never longer" "$KIT/scripts/trace.config.sh" && pass "the wait comment does not say 'and never longer'" ||
+	fail "the wait comment still says 'and never longer' — since PR #434 the wait may overrun by one whole-second nap"
+# RED TEST: the wait comment should say it may overrun (#401)
+grep -qF "the actual wait may" "$KIT/scripts/trace.config.sh" && grep -qF "overrun by at most one whole-second nap" "$KIT/scripts/trace.config.sh" &&
+	pass "the comment describes that the wait may overrun by at most one whole-second nap (since PR #434)" ||
+	fail "the comment does not describe overruns — the contract changed in PR #434"
+
+# ---------------------------------------------------------------------------
 banner "2. SessionStart: the pointer a later emit reads, and the exported session"
 # ---------------------------------------------------------------------------
 new_trace

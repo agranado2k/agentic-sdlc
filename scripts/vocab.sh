@@ -19,8 +19,8 @@
 # `<Field>: <value>`; the field name is matched without regard to case, with
 # spaces and underscores read as hyphens (`Tier:`, `tier:`, `Command shaped:`
 # and `command_shaped:` all name a field), and a line whose key is not a
-# declared field is not a decision line and is ignored — so a whole ticket
-# body may be piped in. The VALUE is matched exactly, one token whole. A
+# declared field is not a decision line and is ignored. The caller lifts the
+# lines it needs — the checker never reads a body. The VALUE is matched exactly, one token whole. A
 # field that appears twice with two different values is refused — a body
 # with two answers has none, and a line appended to it cannot withdraw a
 # rule — while the same value repeated is one answer.
