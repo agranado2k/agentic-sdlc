@@ -908,9 +908,14 @@ cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
 # signal — the dispatcher ran on without its scratch and failed later with a
 # status that said nothing about why (#465). Once the spawn is on disk the way
 # out is _dispatch_exit, so the pair closes; before it there is no pair.
+# _SPAWNED says which: 1 only from the moment the spawn is on disk until its
+# end is, set and cleared by the two functions that write them. It starts at
+# 0 HERE, never from the environment — a caller's _SPAWNED=1 would otherwise
+# have a signal before the spawn write an end that pairs with nothing.
+_SPAWNED=0
 _on_signal() {
 	cleanup
-	[ "${_SPAWNED:-}" = 1 ] && _dispatch_exit "$1"
+	[ "$_SPAWNED" = 1 ] && _dispatch_exit "$1"
 	exit "$1"
 }
 trap cleanup EXIT
@@ -1175,12 +1180,15 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 # while the unreachable crossing, judged deliberately before the budget, emits
 # its own pair at its own site (H-1, review of PR #290).
 _trace_spawn() {
-	_SPAWNED=1
 	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
 		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	[ "$TRACE_PROMPT" = 1 ] && set -- "$@" --blob "$PROMPT_FILE"
 	_trace "$@"
+	# Only now is there a pair for a signal to close: a signal that lands
+	# while the spawn is being written ends the dispatch with no end at all,
+	# never with an end that pairs with nothing (ADR-0008 clause 5).
+	_SPAWNED=1
 }
 
 # _dispatch_exit <status> [<outcome>] — the one way out once a spawn has been
@@ -1210,6 +1218,9 @@ _dispatch_exit() {
 	set -- kind=spawn.end subject="run:$WORKER_RUN" outcome="$_de_outcome" "data.exit=$_de_status"
 	[ -n "${RUN_RUNG:-}" ] && set -- "$@" "data.rung=$RUN_RUNG"
 	_trace "$@"
+	# The pair is closed. A signal from here on — during the EXIT trap's
+	# cleanup, say — ends the dispatch without writing a second end.
+	_SPAWNED=0
 	exit "$_de_status"
 }
 

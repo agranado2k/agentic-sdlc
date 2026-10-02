@@ -2342,6 +2342,60 @@ else
 	fail "the untimed worker never said it started in 30s — nothing to TERM"
 fi
 
+# A signal BEFORE THE SPAWN IS ON DISK leaves no pair to close: the dispatch
+# ends 143 and writes nothing at all — an end that paired with no spawn would
+# be an event nobody can take back (ADR-0008 clause 5; H-2 and L-2, review of
+# PR #488). The bait sits inside _trace_spawn, the last moment before the spawn
+# is written, so it holds where the flag is set as well as the branch. Run a
+# second time with _SPAWNED=1 in the environment: the flag is the
+# dispatcher's own, never a caller's (L-1).
+PRE_DIR="$SCRATCH/pre-spawn"
+PRE_MARK="$SCRATCH/pre-spawn.entered"
+bait_copy "$PRE_DIR" "$PRE_MARK" 'index(prev, "--blob \"$PROMPT_FILE\"") && $0 == "\t_trace \"$@\"" { print "\t: >\"" mark "\"; sleep 3" } { print; prev = $0 }'
+if grep -q '; sleep 3$' "$PRE_DIR/agent-dispatch.sh"; then
+	for _pre_env in '' _SPAWNED=1; do
+		_pre_label=${_pre_env:+" (with $_pre_env in the environment)"}
+		TR_PRE="$SCRATCH/trace-pre-spawn"
+		tr_new "$TR_PRE"
+		rm -f "$PRE_MARK"
+		if bait_term -e "$PRE_MARK" env $_pre_env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_PRE" \
+			sh "$PRE_DIR/agent-dispatch.sh" implementer --prompt 'x'; then
+			[ "$bt_status" = 143 ] &&
+				pass "a TERM before the spawn is written exits 143$_pre_label" ||
+				fail "a TERM before the spawn is written exited $bt_status$_pre_label"
+			tr_assert_count "$TR_PRE" 0 "…and leaves no event, so nothing unpaired$_pre_label"
+		else
+			fail "the pre-spawn bait never wrote its marker in 30s — nothing to TERM$_pre_label"
+		fi
+	done
+else
+	fail "the pre-spawn bait was not planted — _trace_spawn's write has moved"
+	skip "the TERM-before-the-spawn legs — no bait to run them against"
+fi
+
+# A signal AFTER THE PAIR CLOSED writes no second end. The bait holds the
+# dispatcher in its EXIT trap, past the end of a worker that exited 5, and the
+# TERM lands there: one spawn, one end, and the end still the worker's own
+# (L-3, review of PR #488).
+POST_DIR="$SCRATCH/post-end"
+POST_MARK="$SCRATCH/post-end.entered"
+bait_copy "$POST_DIR" "$POST_MARK" '$0 == "trap cleanup EXIT" { print "trap \047cleanup; : >\"" mark "\"; sleep 3\047 EXIT"; next } { print }'
+if grep -q '; sleep 3. EXIT$' "$POST_DIR/agent-dispatch.sh"; then
+	TR_POST="$SCRATCH/trace-post-end"
+	tr_new "$TR_POST"
+	rm -f "$POST_MARK"
+	if bait_term -e "$POST_MARK" env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_POST" TR_WORKER_EXIT=5 \
+		sh "$POST_DIR/agent-dispatch.sh" implementer --prompt 'x'; then
+		tr_assert_count "$TR_POST" 2 "a TERM after the pair closed writes no second end"
+		tr_event_has "$TR_POST" 2 '"exit":"5"' "…and the one end is still the worker's own"
+	else
+		fail "the post-end bait never wrote its marker in 30s — nothing to TERM"
+	fi
+else
+	fail "the post-end bait was not planted — the global EXIT trap line has moved"
+	skip "the TERM-after-the-end leg — no bait to run it against"
+fi
+
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
 # account has hit its usage limit, or one not installed here, is not a fail:
 # the caller's fallback — a review on its own model family — is a decision the
