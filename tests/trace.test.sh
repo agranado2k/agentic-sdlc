@@ -1338,14 +1338,14 @@ shape_refused "pr.iterate data.iteration='2 of 3' is refused by the shape" itera
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=rejected data.source=check data.id='PRRC_kwDO#12.3-a_b' reason='ADR-0008'
 [ "$S_STATUS" = 0 ] && grep -qF '"id":"PRRC_kwDO#12.3-a_b"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
 	pass "finding.triage data.id='PRRC_kwDO#12.3-a_b' is written — every character class of the shape" || fail "a good data.id was not written (exit $S_STATUS): $S_ERR"
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=12 data.applied=1 reason=converged
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=12 data.applied=1 data.rejected=0 data.escalated=0 reason=converged
 [ "$S_STATUS" = 0 ] && grep -qF '"iteration":"12"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
 	pass "pr.iterate data.iteration=12 is written" || fail "a good data.iteration was not written (exit $S_STATUS): $S_ERR"
 # A missing key is not a violation: the trace stays open in data.*.
 _sh_n=$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=escalated reason='no id given'
 _sh_s1=$S_STATUS
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red reason='no iteration given'
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red data.applied=0 data.rejected=0 data.escalated=0 reason='no iteration given'
 [ "$_sh_s1" = 0 ] && [ "$S_STATUS" = 0 ] && [ "$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')" = $((_sh_n + 2)) ] &&
 	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a missing key is no violation" ||
 	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $S_STATUS): $S_ERR"
@@ -1364,8 +1364,8 @@ sed -n '/Amended 2026-10-01 (#420)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/00
 # list and its open data.* line, and the glossary's Event entry.
 sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a data value its kind.s shape refuses' &&
 	pass "the script header's exit-2 list names a data value its kind's shape refuses" || fail "the script header's exit-2 list does not name the shape refusal"
-sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'keys are OPEN .* except the two shapes the kind table declares' &&
-	pass "and its data.* line says open, except the two shapes the kind table declares" || fail "the script header still says data.* keys are OPEN with no exception for TRACE_SHAPES"
+sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'keys are OPEN .* except the shapes the kind table declares' &&
+	pass "and its data.* line says open, except the shapes the kind table declares" || fail "the script header still says data.* keys are OPEN with no exception for TRACE_SHAPES"
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'TRACE_SHAPES' &&
 	pass "the glossary's Event entry names the two held data keys (TRACE_SHAPES)" || fail "the glossary's Event entry still calls data an open map with no held key"
 
@@ -1386,5 +1386,94 @@ _od_adr=$(ls "$KIT"/docs/adr/0008-*.md)
 sed -n '/Amended 2026-10-02 (#409)/,/^[0-9][0-9]*\. /p' "$_od_adr" | tr '\n' ' ' | grep -q '`tool.use`.*`denied`' &&
 	pass "ADR-0008 carries the dated #409 amendment declaring denied on tool.use" ||
 	fail "ADR-0008 has no 'Amended 2026-10-02 (#409)' clause naming \`tool.use\` and \`denied\`"
+
+# ---------------------------------------------------------------------------
+banner "25. A local finding's triage holds its source and its id; pr.iterate holds its counts (ticket #466)"
+# ---------------------------------------------------------------------------
+# The rest of the retrospective's H3, and its F2 of 2026-10-02: a triage of a
+# finding the local review raised was written with data.source=human, or with
+# data.source=local and an id off the review's INITIAL-N shape (local-M-1,
+# axis2-glossary-readme), so no triage joined its raise; and a pr.iterate was
+# written with no counts. The same kind table holds all of it (ADR-0008,
+# amended 2026-10-02): data.source to check|bot|human|local; a local finding
+# to [CHML]-[0-9]+, and that id to the local source alone; and a pr.iterate
+# whose outcome is green or red to its three counts, digits. A refusal is
+# exit 2 naming the kind, the key, the value and the shape, nothing written.
+LS="$SCRATCH/local-shape"; LSON=$(policy "$LS")
+# ls_refused <label> <stderr needle> <emit args…> — exit 2, the needle on
+# stderr, and nothing written by this emit.
+ls_refused() {
+	_lr_label=$1 _lr_needle=$2; shift 2
+	_lr_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	t_run_split env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
+	_lr_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	case $S_STATUS:$S_ERR in
+	2:*"$_lr_needle"*) [ "$_lr_m" = "$_lr_n" ] && pass "$_lr_label" || fail "$_lr_label — refused, but a line was written" ;;
+	*) fail "$_lr_label — exit $S_STATUS, not the refusal naming '$_lr_needle': $S_ERR" ;;
+	esac
+}
+# ls_writes <label> <emit args…> — exit 0 and one line more.
+ls_writes() {
+	_lw_label=$1; shift
+	_lw_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	t_run_split env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
+	_lw_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	[ "$S_STATUS" = 0 ] && [ "$_lw_m" = $((_lw_n + 1)) ] && pass "$_lw_label" ||
+		fail "$_lw_label — exit $S_STATUS, $_lw_n -> $_lw_m lines: $S_ERR"
+}
+T='kind=finding.triage subject=pr:#1 outcome=accepted'
+# shellcheck disable=SC2086 # $T is the emit's fixed head, split on purpose
+{
+ls_refused "finding.triage data.source=robot is refused — the source is check, bot, human or local" \
+	"finding.triage: data.source 'robot' is not check|bot|human|local" $T data.source=robot data.id=PRRC_1
+ls_refused "finding.triage data.source=local data.id=local-M-1 is refused — a local finding's id is [CHML]-N" \
+	"finding.triage: data.id 'local-M-1' is not [CHML]-[0-9]+ when data.source is local" $T data.source=local data.id=local-M-1
+ls_refused "…and data.id=axis2-glossary-readme on a local source too" \
+	"data.id 'axis2-glossary-readme' is not [CHML]-[0-9]+" $T data.source=local data.id=axis2-glossary-readme
+ls_refused "…and the order does not matter: the id before the source" \
+	"data.id 'local-M-1' is not [CHML]-[0-9]+" kind=finding.triage data.id=local-M-1 data.source=local
+ls_refused "finding.triage data.source=human data.id=M-1 is refused — a local finding's id is the local source's alone" \
+	"finding.triage: data.source 'human' is not local when data.id is [CHML]-[0-9]+" $T data.source=human data.id=M-1
+ls_refused "…and data.source=bot data.id=H-2 likewise" \
+	"data.source 'bot' is not local" $T data.source=bot data.id=H-2
+ls_writes "finding.triage data.source=local data.id=M-1 writes" $T data.source=local data.id=M-1
+ls_writes "…and data.id=C-12" $T data.source=local data.id=C-12
+ls_writes "finding.triage data.source=human with a forge comment id writes" $T data.source=human data.id=PRRC_kwDO12
+ls_writes "finding.triage data.source=check with a collapsed check name writes" $T data.source=check data.id=Kit-CI-self-host
+ls_writes "a missing key stays legal: data.source=local with no data.id" $T data.source=local
+ls_writes "…and data.id=M-1 with no data.source" $T data.id=M-1
+}
+grep -F '"kind":"finding.triage"' "$LS/events/$TODAY.jsonl" 2>/dev/null | grep -F '"source":"local"' | grep -qF '"id":"M-1"' &&
+	pass "a local triage is written as given, source and id" || fail "the local triage M-1 is not in the trace as given"
+
+P='kind=pr.iterate subject=pr:#1 data.iteration=1'
+# shellcheck disable=SC2086
+{
+ls_refused "pr.iterate outcome=green without data.escalated is refused — green or red carries its three counts" \
+	"pr.iterate: data.escalated is missing — required when outcome is green|red" $P outcome=green data.applied=1 data.rejected=0
+ls_refused "pr.iterate outcome=red with no counts at all is refused" \
+	"pr.iterate: data.applied is missing" $P outcome=red
+ls_refused "pr.iterate data.applied=two is refused — a count is digits" \
+	"pr.iterate: data.applied 'two' is not [0-9]+" $P outcome=green data.applied=two data.rejected=0 data.escalated=0
+ls_refused "…and an empty count" \
+	"pr.iterate: data.rejected '' is not [0-9]+" $P outcome=red data.applied=0 data.rejected= data.escalated=0
+ls_refused "…and a present count on a stopped iteration is held too" \
+	"pr.iterate: data.applied 'x' is not [0-9]+" $P outcome=stopped data.applied=x
+ls_writes "pr.iterate outcome=green with three digit counts writes" $P outcome=green data.applied=2 data.rejected=1 data.escalated=0
+ls_writes "pr.iterate outcome=stopped with no counts writes — a stop records the check, not a tally" $P outcome=stopped data.check=self-host
+ls_writes "pr.iterate with no outcome and no counts writes — the rule reads the outcome it is given" $P
+}
+grep -F '"kind":"pr.iterate"' "$LS/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"applied":"2","rejected":"1","escalated":"0"' &&
+	pass "the counts are written as given" || fail "pr.iterate's counts are not in the trace as given"
+
+# The rules live in the one kind table, and the record names them.
+grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&
+	pass "the rules are rows of the one TRACE_SHAPES table" || fail "scripts/trace.sh's TRACE_SHAPES does not declare the source vocabulary, the local id and the required counts"
+_ls_adr=$(sed -n '/Amended 2026-10-02 (#466)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
+for _ls_t in '`[CHML]-[0-9]+`' '`check` `bot` `human` `local`' '`data.applied`' '`stopped`'; do
+	case $_ls_adr in *"$_ls_t"*) pass "ADR-0008's #466 amendment names $_ls_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#466):*' block naming $_ls_t" ;; esac
+done
+sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
+	pass "the glossary's Event entry names a local finding's id shape" || fail "the glossary's Event entry does not name the local id shape [CHML]-[0-9]+"
 
 t_done "trace script"

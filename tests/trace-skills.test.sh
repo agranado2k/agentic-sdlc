@@ -1308,17 +1308,17 @@ triage=$(t_trace_lines "$ROOT/$PI" | grep -F 'kind=finding.triage' || true)
 printf '%s\n' "$triage" | grep -qF "data.id='<" &&
 	pass "/pr-iterate's finding.triage line single-quotes its data.id placeholder" ||
 	fail "/pr-iterate's finding.triage line writes data.id unquoted — a check name is forge data, quote it: data.id='<id>'"
-id_class=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage=id:\([^ ']*\).*/\1/p" "$ROOT/$TRACE")
-[ -n "$id_class" ] && pass "TRACE_SHAPES declares finding.triage's id class ($id_class)" ||
-	fail "TRACE_SHAPES declares no class for finding.triage's id"
-# shape_stated <skill file> <class> — the triage paragraph states [<class>]+.
-shape_stated() { sed -n '/^\*\*Record each triage as you make it\*\*/p' "$1" | grep -qF -- "[$2]+"; }
-[ -n "$id_class" ] && shape_stated "$ROOT/$PI" "$id_class" &&
-	pass "and /pr-iterate's triage paragraph states that shape, [$id_class]+" ||
-	fail "/pr-iterate's triage paragraph does not state the shape TRACE_SHAPES declares, [$id_class]+"
+id_shape=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage=id:\([^ ']*\).*/\1/p" "$ROOT/$TRACE")
+[ -n "$id_shape" ] && pass "TRACE_SHAPES declares finding.triage's id shape ($id_shape)" ||
+	fail "TRACE_SHAPES declares no shape for finding.triage's id"
+# shape_stated <skill file> <shape> — the triage paragraph states the shape.
+shape_stated() { sed -n '/^\*\*Record each triage as you make it\*\*/p' "$1" | grep -qF -- "$2"; }
+[ -n "$id_shape" ] && shape_stated "$ROOT/$PI" "$id_shape" &&
+	pass "and /pr-iterate's triage paragraph states that shape, $id_shape" ||
+	fail "/pr-iterate's triage paragraph does not state the shape TRACE_SHAPES declares, $id_shape"
 # Bait: a skill copy whose stated class drifted from the table goes red.
 sed '/^\*\*Record each triage as you make it\*\*/ s/\[A-Za-z0-9\._#-\]+/[A-Za-z0-9_-]+/' "$ROOT/$PI" >"$SCRATCH/bait-shape.md"
-! shape_stated "$SCRATCH/bait-shape.md" "$id_class" &&
+! shape_stated "$SCRATCH/bait-shape.md" "$id_shape" &&
 	pass "bait: a skill stating [A-Za-z0-9_-]+ against the table goes red" ||
 	fail "bait: a skill whose stated shape drifted from TRACE_SHAPES was not caught"
 
@@ -1374,5 +1374,49 @@ grep -qF 'one `finding.raise` per finding' "$SCRATCH/bait-fb.md" || fail "bait: 
 fallback_branch "$SCRATCH/bait-fb.md" | grep -qF 'one `finding.raise` per finding' &&
 	fail "bait: the raise rule withdrawn from the (b) branch was still found — the holder reads more than the branch" ||
 	pass "bait: the raise rule withdrawn from the (b) branch is gone from what the holder reads, though the header still says it"
+
+# ---------------------------------------------------------------------------
+banner "21. /pr-iterate's triage and iteration lines print what the script holds (#466)"
+# ---------------------------------------------------------------------------
+# The script holds a local finding's id to the review's INITIAL-N shape and
+# that id to the local source alone, data.source to its vocabulary, and a
+# green or red pr.iterate to its three counts. The skill's sentence states
+# the local shape read from TRACE_SHAPES, never copied; its source choice is
+# the table's vocabulary; and both lines, filled, write.
+local_shape=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage\/data\.source~local=id:\([^ ']*\).*/\1/p" "$ROOT/$TRACE")
+[ -n "$local_shape" ] && pass "TRACE_SHAPES declares a local finding's id shape ($local_shape)" ||
+	fail "TRACE_SHAPES declares no id shape for data.source=local"
+[ -n "$local_shape" ] && shape_stated "$ROOT/$PI" "$local_shape" &&
+	pass "/pr-iterate's triage paragraph states the local id shape, $local_shape" ||
+	fail "/pr-iterate's triage paragraph does not state the local id shape TRACE_SHAPES declares, $local_shape"
+sed '/^\*\*Record each triage as you make it\*\*/ s/\[CHML\]-\[0-9\]+/[CHML]-N/g' "$ROOT/$PI" >"$SCRATCH/bait-local.md"
+! shape_stated "$SCRATCH/bait-local.md" "$local_shape" &&
+	pass "bait: a triage paragraph that drops the local shape goes red" ||
+	fail "bait: a triage paragraph without the local shape was not caught"
+src_vocab=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage=source:\([^ ']*\).*/\1/p" "$ROOT/$TRACE")
+printf '%s\n' "$triage" | grep -qF "data.source=$src_vocab " &&
+	pass "/pr-iterate's triage line offers exactly the table's sources, $src_vocab" ||
+	fail "/pr-iterate's triage line does not offer data.source=${src_vocab:-<no row>}"
+# Filled with a local finding, the triage line writes; with a local source
+# and an id off the shape, it is refused.
+tr_span=$(t_trace_spans "$PI" | grep -F 'kind=finding.triage' | head -1)
+tr_run=$(t_trace_runnable "$tr_span" | sed -e 's/data\.source=check/data.source=local/' -e "s/data\.id='x'/data.id='M-1'/")
+LT="$SCRATCH/local-triage"
+( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_run" ) >/dev/null 2>&1 &&
+	pass "the triage line filled with data.source=local data.id=M-1 writes" ||
+	fail "the triage line filled with a local finding M-1 is refused: $tr_run"
+tr_bad=$(printf '%s\n' "$tr_run" | sed "s/data\.id='M-1'/data.id='local-M-1'/")
+( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_bad" ) >/dev/null 2>&1
+[ $? = 2 ] && pass "…and with data.id=local-M-1 it is exit 2" || fail "the triage line with a local source and id local-M-1 was not refused"
+# The iteration line carries the three counts the script requires of green
+# and red, and the skill says so.
+it_line=$(t_trace_spans "$PI" | grep -F 'kind=pr.iterate' | grep -F 'outcome=green|red')
+for k in applied rejected escalated; do
+	printf '%s\n' "$it_line" | grep -qF "data.$k=<" && pass "/pr-iterate's iteration line carries data.$k" ||
+		fail "/pr-iterate's iteration line does not carry data.$k — the script refuses a green or red pr.iterate without it"
+done
+sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$PI" | grep -qF 'each digits' &&
+	pass "and the skill says the counts are digits, required unless stopped" ||
+	fail "/pr-iterate does not say the counts are digits ('each digits') and required unless stopped"
 
 t_done "trace skills contract"
