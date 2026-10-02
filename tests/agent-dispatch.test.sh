@@ -1185,8 +1185,13 @@ kill_leg() {
 	# KILL is uncatchable, so the cleanup trap never runs; the worker is
 	# orphaned and reaped here so it cannot outlive the suite.
 	bt_sig=KILL
-	bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x' ||
+	if ! bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x'; then
+		bt_sig=TERM
 		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
+		LEFTOVER="$2/agent-dispatch.unnamed"
+		mkdir -p "$LEFTOVER"
+		return
+	fi
 	bt_sig=TERM
 	[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
 	LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
