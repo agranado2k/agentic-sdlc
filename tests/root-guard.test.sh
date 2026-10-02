@@ -306,6 +306,34 @@ guard_on "$(payload Bash command 'FOO=bar cat README.md')"
 allowed "a read behind a VAR= assignment"
 
 # ---------------------------------------------------------------------------
+banner "4d. The Bash plan: whole-tree and directory discards at the root"
+# ---------------------------------------------------------------------------
+# The incident #392 came from was a discard of working changes at the root, not
+# one file's write (review finding M-2). Where git acts at the root, each of
+# these is refused; in a worktree, each goes through.
+for c in 'git checkout .' 'git checkout -- .' 'git checkout -- tests' 'git checkout HEAD -- tests/' \
+	'git restore .' 'git restore tests' 'git restore --source=HEAD -- .' \
+	'git stash' 'git stash -u' 'git stash push' 'git stash push -m wip' 'git stash save wip' 'git stash -k' \
+	'git reset --hard' 'git reset --hard HEAD~1' 'git reset -q --hard' \
+	'git clean -f' 'git clean -fd' 'git clean -xdf' 'git clean --force' \
+	'mv tests elsewhere'; do
+	guard_on "$(payload Bash command "$c")"
+	refused "$c at the root"
+	guard_on "$(payload Bash command "$c" "$WT")"
+	allowed "$c from a cwd inside the worktree"
+done
+guard_on "$(payload Bash command "git -C $FIX stash" "$WT")"
+refused "git -C <the root> stash from a cwd inside the worktree"
+guard_on "$(payload Bash command "git -C $WT reset --hard")"
+allowed "git -C <a worktree> reset --hard from the root"
+for c in 'git stash list' 'git stash show' 'git stash drop' 'git reset' 'git reset --soft HEAD~1' \
+	'git clean -n' 'git clean -nd' 'git checkout -b feat/z' 'git restore --staged .' \
+	'mv untracked-a untracked-b' 'mkdir -p scratch-dir && mv scratch-dir other-dir'; do
+	guard_on "$(payload Bash command "$c")"
+	allowed "$c at the root, which discards no working change"
+done
+
+# ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"
 # ---------------------------------------------------------------------------
 # A guard that blocks every tool call on a parse failure bricks the session;

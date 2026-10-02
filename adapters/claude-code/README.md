@@ -684,20 +684,25 @@ where it is the operator's call.
 ### What Bash coverage it does not give
 
 For Bash it is a tripwire, not a proof. It reads the command roughly as a
-shell would — quotes dropped, heredoc bodies skipped, `cd` (and `git -C`)
+shell would — quotes dropped, heredoc bodies skipped, continuation lines
+joined, `env`, `sudo` and `VAR=` prefixes stripped, `cd` (and `git -C`)
 followed between simple commands — and refuses one that redirects into, or
-runs `sed -i`, `tee`, `cp` (onto), `mv`, `git checkout` or `git restore` on, a
-path that resolves to a **tracked** file at the root (`git restore --staged`
-alone touches only the index and passes). Where git acts at the root it also
-refuses the three ways around the commit hook: `git commit --no-verify` (or
-`-n`), `git -c core.hooksPath=…`, and setting or unsetting `core.hooksPath`
-with `git config`. Everything else goes through: a script or an
-interpreter that writes (`sh tests/x.sh`, `node -e …`), `rm`, `git stash` or
-`git reset --hard`, a path spelled through a variable or a glob it never
-expands, a `cd` inside a subshell or a function, and any write to an untracked
-file. The commit hook is what an agent meets next — a change this let
-through is still refused at the commit from the root, for an agent that keeps
-its marker and its hooks.
+runs `sed -i`, `tee`, `cp` (onto) or `mv` on, a path that resolves to a
+**tracked** file at the root. It also refuses `mv`
+of a directory holding tracked files, and `git checkout` or `git restore` on
+a tracked file, a directory holding one, or `.` (`git restore --staged` alone
+touches only the index and passes). Where git acts at the root it refuses the
+discards of working changes — `git stash` (bare, `push` or `save`), `git reset
+--hard` and `git clean -f` — the incident that asked for this guard, and the
+three ways around the commit hook: `git commit --no-verify` (or `-n`, read
+letter by letter, so the `n` of `-uno` is `-u`'s), `git -c
+core.hooksPath=…`, and setting or unsetting `core.hooksPath` with `git
+config`. Everything else goes through: a script or an interpreter that writes
+(`sh tests/x.sh`, `node -e …`), `rm`, a path spelled through a variable or a
+glob it never expands, a `cd` inside a subshell or a function, and any write
+to an untracked file. The commit hook is what an agent meets next — a change
+this let through is still refused at the commit from the root, for an agent
+that keeps its marker and its hooks.
 
 ## What this adapter deliberately does NOT contain
 

@@ -728,9 +728,12 @@ skeleton (K0).
   on stderr, and lets the same write through under `worktree/`, outside the
   repository and under `.trace/` or `.retro/`; for Bash it refuses a redirect,
   `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` onto a tracked
-  root file (following `cd` and `git -C`), and `git commit --no-verify`,
-  `git -c core.hooksPath=…` or a `core.hooksPath` change made at the root, and
-  passes `sh tests/x.sh`. Then `.githooks/pre-commit` refuses a commit from
+  root file (following `cd` and `git -C`, past heredoc bodies, continuation
+  lines and `env`/`sudo`/`VAR=` prefixes), `mv` of a directory of tracked
+  files, `git checkout` or `git restore` of a directory or `.`, the discards
+  `git stash`, `git reset --hard` and `git clean -f`, and `git commit
+  --no-verify`, `git -c core.hooksPath=…` or a `core.hooksPath` change made at
+  the root, and passes `sh tests/x.sh` and `git commit -uno`. Then `.githooks/pre-commit` refuses a commit from
   the main working copy or on the default branch when any agent-harness marker
   is set, each marker alone, without printing its bypass; lets the same commit
   through for a human with none; passes an agent's commit from a linked

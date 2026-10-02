@@ -12,14 +12,17 @@
 # write at the root — `.trace/` and `.retro/` — pass, and so does every path
 # outside the repository (a dispatch's scratch lives under $TMPDIR). For Bash
 # it is a TRIPWIRE, not a proof: a command that redirects into, or runs
-# `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` (not
-# `--staged` alone, which touches only the index) on, a path that resolves to
-# a TRACKED file at the root, `git -C` followed; and, where git acts at the
-# root, the three ways around the commit guard — `git commit --no-verify` (or
-# `-n`), `git -c core.hooksPath=…`, and setting or unsetting
-# `core.hooksPath` with `git config`. Everything else a shell can do — a
-# script, an interpreter, `rm`, a variable or a glob it never expands, a `cd`
-# inside a subshell — goes through. ../README.md says so too.
+# `sed -i`, `tee`, `cp` or `mv` on, a path that resolves to a TRACKED file at
+# the root; `mv` of a directory holding tracked files, and `git checkout` or
+# `git restore` (not `--staged` alone, which touches only the index) on a
+# tracked file, a directory holding one, or `.`, `git -C` followed; and, where
+# git acts at the root, the discards of working changes — `git stash` (bare,
+# push or save), `git reset --hard`, `git clean -f` — and the three ways
+# around the commit guard — `git commit --no-verify` (or `-n`), `git -c
+# core.hooksPath=…`, and setting or unsetting `core.hooksPath` with `git
+# config`. Everything else a shell can do — a script, an interpreter, `rm`, a
+# variable or a glob it never expands, a `cd` inside a subshell — goes
+# through. ../README.md says so too.
 #
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
 # common directory: a session started inside a worktree runs the worktree's
@@ -132,6 +135,16 @@ tracked() {
 	)" = "$_rel" ]
 }
 
+# holds_tracked <absolute path> — status 0 when the root's index holds it, or
+# holds a file under it: a directory, or the root itself, with tracked files.
+holds_tracked() {
+	if [ "$1" = "$root" ]; then _rel=.; else _rel=${1#"$root"/}; fi
+	[ -n "$(
+		unset GIT_DIR GIT_WORK_TREE
+		git --literal-pathspecs -C "$root" ls-files -z -- "$_rel" 2>/dev/null | tr '\0' '\n' | sed -n '1p'
+	)" ]
+}
+
 refuse() {
 	echo "x root-guard: $1 on ${2#"$root"/} — the root checkout is not for in-progress work (hard rule 1, \"Worktree, always\")." >&2
 	echo "  Open a worktree and work there: git worktree add worktree/<slug> -b <type>/<slug>" >&2
@@ -162,10 +175,13 @@ command=$(field command)
 # makes and per path it would write. Heredoc bodies are skipped (they are
 # data), continuation lines joined, quotes dropped, and `&&`, `||`, `;`, `|`,
 # `&`, parentheses and newlines end a simple command. A redirect's target is a
-# write; so are the operands of `sed -i`, `tee`, `mv`, `git checkout` and
-# `git restore`, and the last operand of `cp`. A git write is a `gwrite` line
-# carrying the directory any `-C` moved git to, and a way around the commit
-# guard is an `around` line carrying the same.
+# write; so are the operands of `sed -i` and `tee`, and the last operand of
+# `cp` and `mv`. What `mv` moves away is a `move` line, a directory of tracked
+# files included. A git write — an operand of `git checkout` or `git restore`,
+# a directory or `.` included — is a `gwrite` line carrying the directory any
+# `-C` moved git to; a discard of working changes (`git stash`, `git reset
+# --hard`, `git clean -f`) is a `discard` line carrying the same, and so is a
+# way around the commit guard, an `around` line.
 plan=$(printf '%s\n' "$command" | awk '
 function endseg(   i, j, k, c, s, inplace, last) {
 	i = 1
@@ -188,8 +204,14 @@ function endseg(   i, j, k, c, s, inplace, last) {
 		inplace = 0
 		for (j = i + 1; j <= nw; j++) if (words[j] ~ /^-[A-Za-z]*i/ || words[j] ~ /^--in-place/) inplace = 1
 		if (inplace) for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) print "write " words[j]
-	} else if (c == "tee" || c == "mv") {
+	} else if (c == "tee") {
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) print "write " words[j]
+	} else if (c == "mv") {
+		# What mv moves away is gone from the root, a directory of tracked
+		# files with it; where it lands is a write like any other.
+		last = 0
+		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) last = j
+		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) print (j == last ? "write " : "move ") words[j]
 	} else if (c == "cp") {
 		last = ""
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) last = words[j]
@@ -225,6 +247,18 @@ function endseg(   i, j, k, c, s, inplace, last) {
 						else if (index("uS", ch)) break
 					}
 			}
+		} else if (s == "stash") {
+			# Bare, an option, push or save: the working changes are put away.
+			if (j + 1 > nw || words[j + 1] ~ /^-/ || words[j + 1] == "push" || words[j + 1] == "save") print "discard " gdir
+		} else if (s == "reset") {
+			for (k = j + 1; k <= nw; k++) if (words[k] == "--hard") print "discard " gdir
+		} else if (s == "clean") {
+			force = 0; dry = 0
+			for (k = j + 1; k <= nw; k++) {
+				if (words[k] == "--force" || words[k] ~ /^-[A-Za-z]*f/) force = 1
+				if (words[k] == "--dry-run" || words[k] ~ /^-[A-Za-z]*n/) dry = 1
+			}
+			if (force && !dry) print "discard " gdir
 		} else if (s == "config") {
 			key = 0; setting = 0
 			for (k = j + 1; k <= nw; k++) {
@@ -311,9 +345,21 @@ while IFS= read -r step; do
 		_g=${step#gwrite }
 		_t=${_g#*"$tab"}
 		abs=$(resolve "$_t" "$(resolve "${_g%%"$tab"*}" "$here_cwd")")
-		if guarded "$abs" && tracked "$abs"; then
+		if guarded "$abs" && holds_tracked "$abs"; then
 			refuse "Bash" "$abs"
 		fi
+		;;
+	'move '*)
+		abs=$(resolve "${step#move }" "$here_cwd")
+		if guarded "$abs" && holds_tracked "$abs"; then
+			refuse "Bash" "$abs"
+		fi
+		;;
+	'discard '*)
+		# A discard of working changes where git acts at the root: the
+		# incident this guard was written for (#392).
+		abs=$(resolve "${step#discard }" "$here_cwd")
+		guarded "$abs" && refuse "Bash (a discard of working changes)" "$abs"
 		;;
 	'around '*)
 		# A way around the commit guard — `commit --no-verify`, `-c
