@@ -3762,20 +3762,21 @@ banner "44. The kit's wait bound covers the measured lag of a final message (#47
 # kit's 1000 ms bound and carry no tokens; 234 of them ended on a user line
 # aged 1,029 / 1,137 / 1,471 ms at p10 / p50 / p90. Section 27's bound, sized
 # in #308 on seven stops, is shorter than the lag it waits out. Here the final
-# turn lands about 1.5 s after the hook starts waiting — the measured p90 —
-# and the hook reads the KIT'S OWN policy file, the way its wiring does.
+# turn lands about 2 s after the hook starts waiting — past the measured p90,
+# a whole second clear of the old bound and of the new one — and the hook
+# reads the KIT'S OWN policy file, the way its wiring does.
 #
-# The writer is section 27's late_writer, so the 1.5 s run from the hook's
-# first nap, never from a clock a slow preamble could eat.
+# The writer is section 27's late_writer, so the 2 s run from the hook's first
+# nap, never from a clock a slow preamble could eat.
 unset TRACE_AGENT_WAIT_MS
 # lag479 <policy file> — the hook on a transcript one turn short, whose final
-# turn lands 1.5 s into the wait, under that policy file. Sets S_*, NAPS and
+# turn lands 2 s into the wait, under that policy file. Sets S_*, NAPS and
 # LAG479, the agent.stop it wrote.
 lag479() {
 	new_trace
 	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-lag-479.jsonl"
 	stop_on "$SCRATCH/sub-lag-479.jsonl"
-	late_writer "$SCRATCH/sub-lag-479.jsonl" 1.5
+	late_writer "$SCRATCH/sub-lag-479.jsonl" 2
 	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$1"
 	wait "$LATE_WRITER"
 	LAG479=$(ev_of agent.stop | sed -n '1p')
@@ -3785,15 +3786,28 @@ if [ "$HAVE_NODE" = 1 ]; then
 	lag479 "$KIT/scripts/trace.kit.config.sh"
 	# A priced stop writes no outcome key at all; only a give-up says fail.
 	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" != fail ] && [ "$(num "$LAG479" tok_out)" = 156 ] &&
-		pass "under the kit's policy a final turn 1.5 s late is waited for and priced (waited_ms $(str "$LAG479" waited_ms))" ||
-		fail "under the kit's policy a final turn 1.5 s late was given up on: exit $S_STATUS, event $LAG479"
+		pass "under the kit's policy a final turn 2 s late is waited for and priced (waited_ms $(str "$LAG479" waited_ms))" ||
+		fail "under the kit's policy a final turn 2 s late was given up on: exit $S_STATUS, event $LAG479"
 
-	# THE OLD BOUND LOSES THE SAME RACE — the fixture really is past 1000 ms.
-	printf "TRACE_AGENT_WAIT_MS='1000'\n" >"$SCRATCH/policy-479.sh"
-	lag479 "$SCRATCH/policy-479.sh"
-	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" = fail ] && [ -z "$(num "$LAG479" tok_out)" ] &&
-		pass "under the old 1000 ms bound the same stop gives up, unpriced" ||
-		fail "under a 1000 ms bound the 1.5 s-late turn was read — the fixture no longer exceeds the old bound: $LAG479"
+	# The legs below compare a wait to the old bound, so they need section
+	# 27's millisecond clock: without one the hook counts its naps instead, a
+	# figure that falls short of the time that passed.
+	if [ "$HAVE_MS_CLOCK" = 0 ]; then
+		note "no millisecond clock on this host: the kit-bound legs against 1000 ms did not run"
+	else
+		# THE PRICED STOP REALLY WAITED PAST THE OLD BOUND — a turn that
+		# landed early would price under 1000 ms too, and prove nothing.
+		[ "$(str "$LAG479" waited_ms)" -ge 1000 ] 2>/dev/null &&
+			pass "and it waited past the old 1000 ms bound to price it (waited_ms $(str "$LAG479" waited_ms))" ||
+			fail "the priced stop waited '$(str "$LAG479" waited_ms)' ms — the turn landed inside the old bound"
+
+		# THE OLD BOUND LOSES THE SAME RACE — the fixture really is past 1000 ms.
+		printf "TRACE_AGENT_WAIT_MS='1000'\n" >"$SCRATCH/policy-479.sh"
+		lag479 "$SCRATCH/policy-479.sh"
+		[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" = fail ] && [ -z "$(num "$LAG479" tok_out)" ] &&
+			pass "under the old 1000 ms bound the same stop gives up, unpriced" ||
+			fail "under a 1000 ms bound the 2 s-late turn was read — the fixture no longer exceeds the old bound: $LAG479"
+	fi
 else
 	note "node is not on PATH: the kit-bound lag legs did not run"
 fi
