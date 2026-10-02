@@ -3981,4 +3981,67 @@ done
 [ "$(data_of "$(ev_of session.end)" phantoms)" = 1 ] && pass "tracing on: the end is written, counting the phantom" ||
 	fail "tracing on: the end is '$(ev_of session.end)', not one counting a phantom"
 
+
+# ---------------------------------------------------------------------------
+banner "46. A stop reads its checkout's run through the shared script's stack subcommand (#472)"
+# ---------------------------------------------------------------------------
+# The stack's format was known in two places: the shared script, which owns
+# it, and hook_run_of, which repeated its path, its one-run-per-line layout and
+# its exists-but-unreadable rule. `sh scripts/trace.sh stack <dir>` is the
+# read now, and the adapter keeps no copy: sections 41 and 42 hold what a stop
+# carries, unchanged; this section holds WHO reads the stack.
+R472="$SCRATCH/run-root-472"
+behind_kit "$R472"
+git -C "$R472" worktree add -q -b feat/wt-472 "$R472.wt" 2>/dev/null
+new_trace
+RUN472=$(cd "$R472.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin implement 2>/dev/null)
+# The fixture root's script, wrapped: every `stack` call is logged, then the
+# real script answers it.
+LOG472="$SCRATCH/stack-calls-472.log"
+mv "$R472/scripts/trace.sh" "$R472/scripts/trace.real.sh"
+printf '#!/bin/sh\n[ "${1:-}" = stack ] && printf "%%s\\n" "$*" >>"%s"\nexec sh "$(dirname "$0")/trace.real.sh" "$@"\n' "$LOG472" >"$R472/scripts/trace.sh"
+set_key cwd "$R472.wt" <"$FIX/subagent-stop.payload.json" |
+	set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-472.json"
+t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" \
+	sh "$R472/${HOOKS#"$KIT"/}/subagent-stop.sh" <"$SCRATCH/stop-472.json"
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$RUN472" ] &&
+	pass "a stop from the worktree still carries the worktree's run" ||
+	fail "a stop through the wrapped script: exit $S_STATUS, run '$(str "$STOP" run)', want $RUN472; stderr '$S_ERR'"
+grep -qxF "stack $R472.wt session=$SESSION" "$LOG472" 2>/dev/null &&
+	pass "and the run was read by the shared script's stack subcommand, naming the checkout and the session" ||
+	fail "the hook did not ask 'stack $R472.wt session=$SESSION' of the shared script; calls: '$(cat "$LOG472" 2>/dev/null)'"
+# A RELATIVE payload cwd is resolved against ONE base — the hook's own working
+# directory — before the hook checks it and before it asks the script, which
+# runs from the root checkout: `.` from the worktree is the worktree, in both.
+set_key cwd "." <"$SCRATCH/stop-472.json" >"$SCRATCH/stop-472-dot.json"
+: >"$LOG472"
+t_run_split sh -c 'cd "$1" && shift && exec env "$@"' _ "$R472.wt" TRACE_DIR="$TDIR" \
+	GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$R472/${HOOKS#"$KIT"/}/subagent-stop.sh" <"$SCRATCH/stop-472-dot.json"
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$RUN472" ] &&
+	pass "a payload cwd of '.' from the worktree carries the worktree's run, not the root's" ||
+	fail "cwd '.': exit $S_STATUS, run '$(str "$STOP" run)', want $RUN472; calls '$(cat "$LOG472")'; stderr '$S_ERR'"
+# A payload with NO session id reads the per-toplevel stack even when the hook
+# inherits a TRACE_SESSION (session-start exports one into the agent harness's
+# environment): the hook asks with TRACE_SESSION empty, never the inherited one.
+NOID472=$(cd "$R472.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION= sh scripts/trace.sh begin implement 2>/dev/null)
+OTHER472=$(cd "$R472.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION=other-472 sh scripts/trace.sh begin review-pr 2>/dev/null)
+set_key session_id "" <"$SCRATCH/stop-472.json" >"$SCRATCH/stop-472-noid.json"
+t_run_split env TRACE_DIR="$TDIR" TRACE_SESSION=other-472 GIT_CEILING_DIRECTORIES="$SCRATCH" \
+	sh "$R472/${HOOKS#"$KIT"/}/subagent-stop.sh" <"$SCRATCH/stop-472-noid.json"
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$S_STATUS" = 0 ] && [ -n "$NOID472" ] && [ "$(str "$STOP" run)" = "$NOID472" ] &&
+	pass "a payload with no session id, under an inherited TRACE_SESSION, carries the per-toplevel run" ||
+	fail "no session id, TRACE_SESSION=other-472: run '$(str "$STOP" run)', want $NOID472 (not $OTHER472); stderr '$S_ERR'"
+# THE ADAPTER KEEPS NO COPY of the stack's format: no stack path, no reader.
+LIB472="$HOOKS/hook.lib.sh"
+_ro472=$(awk '/^hook_run_of\(\) \{/,/^\}/' "$LIB472")
+[ -n "$_ro472" ] && pass "hook_run_of is found" || fail "no hook_run_of in $LIB472"
+case $_ro472 in *awk* | *hook_current_of*) fail "hook_run_of still reads the stack itself (awk or hook_current_of)" ;;
+*) pass "and reads no stack file of its own" ;; esac
+grep -n '\.runs' "$LIB472" >/dev/null &&
+	fail "hook.lib.sh still names the stack's path: $(grep -n '\.runs' "$LIB472")" ||
+	pass "hook.lib.sh names no stack path (.runs) anywhere"
+
 t_done "trace hooks"

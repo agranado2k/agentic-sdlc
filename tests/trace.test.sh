@@ -1651,4 +1651,190 @@ esac
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "the glossary's Event entry names a local finding's id shape" || fail "the glossary's Event entry does not name the local id shape [CHML]-[0-9]+"
 
+
+# ---------------------------------------------------------------------------
+banner "27. stack <dir> prints the top of that checkout's run stack and the run below it (ticket #472)"
+# ---------------------------------------------------------------------------
+# The script owns the run stack, and the claude-code adapter's stop hook read
+# it by repeating the script's reader — its path, its one-run-per-line format,
+# its exists-but-unreadable rule. `stack <dir>` is that read, made public: the
+# top of the stack an emit made from <dir>'s checkout would read, then the run
+# below it, one per line; nothing when no run is open. The refusals are the
+# reader's own, exit 2 with nothing on stdout: a stack that exists and cannot
+# be read, a <dir> that is no checkout of this script's repository, a
+# malformed call. It reads a stack, never an event: no chain skill calls it
+# (ADR-0008 clause 7, held by trace-skills §3).
+t_repo
+SK_REPO=$REPO
+mkdir -p "$SK_REPO/scripts"
+cp "$TRACE" "$SK_REPO/scripts/trace.sh"
+t_commit "$SK_REPO" "chore: carry the trace script" >/dev/null
+git -C "$SK_REPO" worktree add -q "$SK_REPO/worktree/sk" -b feat/sk 2>/dev/null || fail "could not add a linked worktree"
+SK_WT="$SK_REPO/worktree/sk"
+SK="$SCRATCH/stack-472"; SKON=$(policy "$SK")
+# sk_run [NAME=value …] <trace.sh stack args…> — the FIXTURE's own copy of the
+# script asked from the fixture's ROOT checkout, the way a hook asks, with the
+# leading assignments in its environment (a session, a pinned git pair).
+sk_run() {
+	(
+		cd "$SK_REPO" || exit 2
+		export TRACE_CONFIG="$SKON"
+		while case ${1:-} in [A-Z]*=*) true ;; *) false ;; esac; do
+			export "$1"
+			shift
+		done
+		exec sh scripts/trace.sh stack "$@"
+	)
+}
+# sk_ask <the same> — sk_run, its exit, stdout and stderr in S_STATUS, S_OUT
+# and S_ERR.
+sk_ask() { t_run_split sk_run "$@"; }
+sk_ask TRACE_SESSION=sk-s "$SK_WT"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "a checkout with no stack at all: exit 0, nothing on stdout" ||
+	fail "stack on a checkout with no stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+SK_OUTER=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION=sk-s sh scripts/trace.sh begin implement 2>/dev/null)
+sk_ask TRACE_SESSION=sk-s "$SK_WT"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_OUTER" ] &&
+	pass "one run open in the worktree: asked from the ROOT checkout, it prints that run, one line" ||
+	fail "one open run: exit $S_STATUS, stdout '$S_OUT', want '$SK_OUTER'; stderr '$S_ERR'"
+SK_INNER=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION=sk-s sh scripts/trace.sh begin review-pr 2>/dev/null)
+sk_ask TRACE_SESSION=sk-s "$SK_WT"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_INNER
+$SK_OUTER" ] && [ -z "$S_ERR" ] &&
+	pass "two nested runs: the top on the first line, the run below it on the second, silent on stderr" ||
+	fail "two nested runs: exit $S_STATUS, stdout '$S_OUT', want '$SK_INNER' then '$SK_OUTER'; stderr '$S_ERR'"
+mkdir -p "$SK_WT/deeper/still"
+sk_ask TRACE_SESSION=sk-s "$SK_WT/deeper/still"
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	pass "a directory deep inside the worktree names the same checkout" ||
+	fail "a deep directory: exit $S_STATUS, stdout '$S_OUT'"
+mkdir -p "$SK_WT/a=b"
+sk_ask TRACE_SESSION=sk-s "$SK_WT/a=b"
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	pass "a directory whose name carries '=' is a directory, not a field" ||
+	fail "a directory named a=b: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+sk_ask TRACE_SESSION=sk-s "$SK_REPO"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
+	fail "the idle root: exit $S_STATUS, stdout '$S_OUT'"
+# The session: a session= on the line names the stack first, as it does for an
+# emit; TRACE_SESSION set to the empty string is a caller with none, and the
+# per-toplevel stack answers.
+sk_ask TRACE_SESSION=someone-else "$SK_WT" session=sk-s
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	pass "session=<id> on the line names the stack, whatever the environment says" ||
+	fail "session= on the line: exit $S_STATUS, stdout '$S_OUT'"
+SK_NOID=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh begin retro 2>/dev/null)
+sk_ask TRACE_SESSION= "$SK_WT"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_NOID" ] &&
+	pass "TRACE_SESSION set to the empty string reads the per-toplevel stack, and only it" ||
+	fail "TRACE_SESSION=: exit $S_STATUS, stdout '$S_OUT', want '$SK_NOID'"
+# No session on the line and none in the environment: the NAMED checkout's
+# pointer file names it — the worktree's, never the root's the caller runs in.
+SK_TOP=$(git -C "$SK_WT" rev-parse --show-toplevel)
+SK_KEY=$(printf '%s' "$SK_TOP" | git hash-object --stdin)
+SK_ROOTKEY=$(printf '%s' "$(git -C "$SK_REPO" rev-parse --show-toplevel)" | git hash-object --stdin)
+printf 'sk-s\n' >"$SK/current/$SK_KEY"
+printf 'someone-else\n' >"$SK/current/$SK_ROOTKEY"
+(unset TRACE_SESSION && sk_ask "$SK_WT" && printf '%s\n%s\n%s\n' "$S_STATUS" "$S_OUT" "$S_ERR") >"$SCRATCH/sk-pointer.out"
+[ "$(sed -n 1p "$SCRATCH/sk-pointer.out")" = 0 ] && [ "$(sed -n 2p "$SCRATCH/sk-pointer.out")" = "$SK_INNER" ] &&
+	pass "with no session given, the named checkout's pointer file names the stack — not the caller's" ||
+	fail "the pointer fallback: '$(cat "$SCRATCH/sk-pointer.out")', want exit 0 and '$SK_INNER' first"
+rm -f "$SK/current/$SK_KEY" "$SK/current/$SK_ROOTKEY"
+# A session= the script would never key on is refused, not read as none.
+for _sk_bad in 'session=a b' 'session=../../x'; do
+	sk_ask TRACE_SESSION= "$SK_WT" "$_sk_bad"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "stack refuses '$_sk_bad' with exit 2 — never the per-toplevel stack in its place" ||
+		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+done
+# A <dir> that reads as an option or a field is refused, as the usage says;
+# ./ in front names the same directory.
+mkdir -p "$SK_WT/-x" "$SK_WT/session=y"
+for _sk_bad in -x session=y; do
+	t_run_split sk_run TRACE_SESSION=sk-s "$_sk_bad"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a <dir> written '$_sk_bad' is a usage error, exit 2" ||
+		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+	sk_ask TRACE_SESSION=sk-s "$SK_WT/$_sk_bad"
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+		pass "and the same directory named by a path is read" ||
+		fail "stack '$SK_WT/$_sk_bad': exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
+# An empty stack — the file is there, every run closed — is no run, exit 0.
+(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end outcome=ok 2>/dev/null)
+sk_ask TRACE_SESSION= "$SK_WT"
+SK_BYTES=$(sk_run TRACE_SESSION= "$SK_WT" 2>/dev/null | wc -c | tr -d ' ')
+[ "$SK_BYTES" = 0 ] && [ -f "$SK/current/$SK_KEY.runs" ] && [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "an empty stack — the file there, every run closed: exit 0, nothing on either stream" ||
+	fail "an empty stack: file $(ls "$SK/current" 2>&1), exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+# It reads; it never writes. The stack it answered from is byte for byte what it was.
+SK_STACK="$SK/current/$SK_KEY.sk-s.runs"
+SK_BEFORE=$(cat "$SK_STACK")
+SK_EVENTS=$(cat "$SK/events/$TODAY.jsonl" | grep -c '')
+sk_ask TRACE_SESSION=sk-s "$SK_WT"
+[ "$(cat "$SK_STACK")" = "$SK_BEFORE" ] && [ "$(grep -c '' "$SK/events/$TODAY.jsonl")" = "$SK_EVENTS" ] &&
+	pass "and a read writes nothing — not the stack, not an event" ||
+	fail "stack changed something: stack '$(cat "$SK_STACK")', events $(grep -c '' "$SK/events/$TODAY.jsonl") (was $SK_EVENTS)"
+# The refusals: exit 2, nothing on stdout, a trace-prefixed reason on stderr.
+if [ "$(id -u)" != 0 ]; then
+	chmod 000 "$SK_STACK"
+	sk_ask TRACE_SESSION=sk-s "$SK_WT"
+	chmod 600 "$SK_STACK"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a stack that exists and cannot be read is refused, exit 2, nothing on stdout" ||
+		fail "an unreadable stack: exit $S_STATUS, stdout '$S_OUT'"
+	case $S_ERR in *"$SK_STACK exists and cannot be read"*) pass "and stderr names the stack it could not read" ;;
+	*) fail "an unreadable stack's stderr does not name it: '$S_ERR'" ;; esac
+	case $S_ERR in *"awk:"* | *"cat:"* | *"sed:"*) fail "a raw tool diagnostic leaked: $S_ERR" ;; *) pass "and no tool's own error text leaks past it" ;; esac
+else
+	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
+fi
+SK_OTHER="$SCRATCH/other-repo-472"
+git init -q "$SK_OTHER"
+sk_ask TRACE_SESSION=sk-s "$SK_OTHER"
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+	pass "a checkout of ANOTHER repository is refused, exit 2, nothing on stdout — its stack would be a stranger's" ||
+	fail "another repository: exit $S_STATUS, stdout '$S_OUT'"
+case $S_ERR in *"trace:"*"not a checkout of"*) pass "and stderr says it is not a checkout of this repository" ;;
+*) fail "another repository's refusal does not say why: '$S_ERR'" ;; esac
+sk_ask TRACE_SESSION=sk-s GIT_DIR="$SK_OTHER/.git" GIT_WORK_TREE="$SK_OTHER" "$SK_WT"
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	pass "an inherited GIT_DIR/GIT_WORK_TREE pinned to another repository moves nothing" ||
+	fail "with GIT_DIR pinned elsewhere: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+sk_ask TRACE_SESSION=sk-s "$SK_REPO/.git"
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+	pass "a directory inside .git — git names no working tree — is refused, exit 2, saying so" ||
+	fail "a .git directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+mkdir -p "$SCRATCH/nowhere-472"
+sk_ask GIT_CEILING_DIRECTORIES="$SCRATCH" "$SCRATCH/nowhere-472"
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+	pass "a directory in no checkout at all is refused, exit 2, saying so" ||
+	fail "a directory in no checkout: exit $S_STATUS, stdout '$S_OUT'"
+sk_ask "$SCRATCH/never-there-472"
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+	pass "a directory that does not exist is refused, exit 2, saying so" ||
+	fail "a missing directory: exit $S_STATUS, stdout '$S_OUT'"
+assert_status 2 "stack with no directory is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack
+assert_status 2 "stack with an argument it does not take is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" --since 2026-01-01
+assert_status 2 "stack with two directories is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" "$KIT"
+# Unconfigured is a working state here too: nothing on stdout, exit 0.
+t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$KIT"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, stack prints nothing and exits 0" ||
+	fail "unconfigured stack: exit $S_STATUS, stdout '$S_OUT'"
+# The interface is recorded where a caller reads it: the usage, the header, the record.
+t_run_split sh "$TRACE"
+case $S_ERR in *'trace.sh stack <dir> [session=<id>]'*) pass "the usage names stack <dir> [session=<id>]" ;; *) fail "the usage does not name 'stack <dir> [session=<id>]': $S_ERR" ;; esac
+case $S_ERR in *'a <dir> beginning with - or session= is refused'*) pass "and says which <dir> it refuses" ;; *) fail "the usage does not say a <dir> beginning with - or session= is refused: $S_ERR" ;; esac
+sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> [session=<id>]' &&
+	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> [session=<id>]"
+_sk_adr=$(sed -n '/Amended 2026-10-02 (#472)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
+for _sk_t in '`stack <dir> [session=<id>]`' 'exit 2' 'never an event' 'hook'; do
+	case $_sk_adr in *"$_sk_t"*) pass "ADR-0008's #472 amendment names $_sk_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#472):*' block naming $_sk_t" ;; esac
+done
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-02 (#472"*) pass "the index row for 0008 carries the #472 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-02 (#472 …' note" ;;
+esac
+
 t_done "trace script"

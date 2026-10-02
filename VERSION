@@ -1862,8 +1862,23 @@
 # policy file is reported once by the session hooks (#463).
 # scripts/guards.config.sh: `^adapters/` joins the agent & process surface, so
 # a changed hook is on the behaviour-delta list (#469).
+# 0.48.0 — the trace script reads a checkout's run stack (ticket #472).
+# NO file joins or leaves the shared layer. ONE shared file changes content:
+# scripts/trace.sh gains a read subcommand, `stack <dir> [session=<id>]`, that
+# prints the open run at the top of the run stack of the checkout <dir> is in
+# and the run below it, one per line, nothing when none is open; exit 2 with
+# nothing on stdout for a stack that cannot be read or a <dir> that is no
+# checkout of this repository, exit 0 and nothing when tracing is off. It uses
+# `git rev-parse --path-format=absolute` (git 2.31 or newer). No skill calls it
+# (ADR-0008 clause 7, amended for #472). UPDATING.md changes content: the
+# arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# The claude-code adapter: hook.lib.sh's subagent-stop run lookup reads
+# through `trace.sh stack` instead of repeating the stack's path, format and
+# unreadable rule; a relative payload cwd is made absolute once; its
+# README.md describes the read.
 
-shared-layer: 0.47.0
+shared-layer: 0.48.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

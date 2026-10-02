@@ -21,7 +21,8 @@
 #   3. Never `show`, `summary` or `export` — the chain does not read its own
 #      history. Held over EVERY skill directory, chain or not, with ONE named
 #      exception: /retro, the sanctioned reader (ADR-0008 clause 7, #254),
-#      which the same rule holds to the opposite — it MUST read.
+#      which the same rule holds to the opposite — it MUST read. And never
+#      `stack`, a hook's read of a run stack (#472), with no exception.
 #   4. Every kind a skill emits is one scripts/trace.sh knows: the vocabulary is
 #      closed, and a skill that emits an unknown kind emits nothing.
 #   5. The decision points themselves: the plan's table of one kind per
@@ -165,6 +166,26 @@ for d in "$SKILLS"/*/; do
 	else
 		fail "/$s reads the trace — ADR-0008 clause 7, shared invariant §4: no skill calls show, summary or export; the trace is read after the fact, by the operator or the retrospective:"
 		printf '%s\n' "$reads" | sed 's/^/        | /'
+	fi
+done
+
+# `stack <dir>` reads a checkout's run stack for a hook, which is the adapter's
+# business and not the chain (ADR-0008, clause 5 amended for #472): no skill
+# calls it — the reader included, whose reading is of events, not of a stack.
+STACKREAD='trace\.sh +stack\b'
+mkdir -p "$SCRATCH/stack-reader-472"
+printf 'Run `sh scripts/trace.sh stack .` to learn the run.\n' >"$SCRATCH/stack-reader-472/SKILL.md"
+grep -rqE "$STACKREAD" "$SCRATCH/stack-reader-472" &&
+	pass "the stack-read pattern catches a skill that calls it" ||
+	fail "the stack-read pattern misses 'sh scripts/trace.sh stack .' — the check below is dead"
+for d in "$SKILLS"/*/; do
+	s=$(basename "$d")
+	stackreads=$(grep -rnE "$STACKREAD" "$d" || true)
+	if [ -z "$stackreads" ]; then
+		pass "/$s never reads a run stack"
+	else
+		fail "/$s calls trace.sh stack — a hook's read, never a skill's (ADR-0008 clause 5, #472):"
+		printf '%s\n' "$stackreads" | sed 's/^/        | /'
 	fi
 done
 

@@ -12,6 +12,7 @@
 #   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
 #   sh scripts/trace.sh dir
+#   sh scripts/trace.sh stack <dir> [session=<id>]
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -23,8 +24,9 @@
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
 # prints the resolved directory, `begin` the run id it just opened, `show` the
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
-# line it would append; a successful `emit` and a successful `end` print
-# nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
+# line it would append, `stack` a checkout's open run and the run below it; a
+# successful `emit` and a successful `end` print nothing. Every diagnostic is
+# on stderr, prefixed `trace:`. Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a data value its kind's shape refuses
 # (TRACE_SHAPES) or a data key a row requires and the line lacks, a malformed
@@ -35,7 +37,9 @@
 # of their own to the 2 — closing a run that is not open, and a run stack that
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
 # for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
-# trace error: an `emit` never fails a caller this way.
+# trace error: an `emit` never fails a caller this way. `stack` refuses with
+# the same 2 and for the same reasons — a stack that cannot be named or read —
+# and for one more, a directory that is no checkout of this repository.
 #   And exit 3 is A TRACE THIS READER CANNOT JUDGE — a SCHEMA naming a version
 # this script does not read. Neither of the two above: nothing failed and the
 # call was well formed, there is simply no verdict to give. It is the docs
@@ -213,6 +217,8 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
+       sh scripts/trace.sh stack <dir> [session=<id>]
+         (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
 }
@@ -251,8 +257,11 @@ trace_glob_on() { [ "$_trace_had_f" = 1 ] || set +f; }
 # make `git -C` answer for the pinned repository — so an anchored lookup that
 # trusted the environment could source a foreign checkout's policy file. The
 # guards loader scrubs the same two for the same reason.
-trace_git() {
-	(unset GIT_DIR GIT_WORK_TREE && git -C "$_trace_here" "$@") 2>/dev/null
+trace_git() { trace_git_at "$_trace_here" "$@"; }
+
+# trace_git_at <dir> <git args…> — the same, asked of the checkout <dir> is in.
+trace_git_at() {
+	(_tga_dir=$1 && shift && unset GIT_DIR GIT_WORK_TREE && git -C "$_tga_dir" "$@") 2>/dev/null
 }
 
 trace_load_config() {
@@ -533,19 +542,22 @@ trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1
 
 # trace_key — sets TRACE_KEY, TRACE_POINTER, TRACE_KEY_SESSION (the session
 # this process belongs to, or empty) and TRACE_STACK, that session's stack in
-# this working tree. A non-empty `session=` on the command line names the
-# session first (trace_arg_session), so an event's run is read from the stack
-# of the session the event itself names — a hook that is told its session id
-# by a payload and passes it explicitly reads that session's runs. Needs
-# TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which leaves
-# identity to the environment alone rather than failing an emit. Answered
+# this working tree — or in the toplevel its one optional argument names, for
+# `stack`, which reads another checkout's. A non-empty `session=` on the
+# command line names the session first (trace_arg_session), so an event's run
+# is read from the stack of the session the event itself names — a hook that
+# is told its session id by a payload and passes it explicitly reads that
+# session's runs. Needs TRACE_ROOT_DIR. Returns 1 when git cannot hash the
+# path, which leaves identity to the environment alone rather than failing an
+# emit. Answered
 # once per process: nothing it reads changes while it runs, and a second
 # pointer read would repeat the pointer's note.
 _trace_keyed=
 _trace_arg_session=
 trace_key() {
 	[ -n "$_trace_keyed" ] && return 0
-	_tk_top=$(trace_git rev-parse --show-toplevel) || _tk_top=
+	_tk_top=${1:-}
+	[ -n "$_tk_top" ] || _tk_top=$(trace_git rev-parse --show-toplevel) || _tk_top=
 	[ -n "$_tk_top" ] || _tk_top=$(cd "$_trace_here/.." && pwd -P)
 	TRACE_KEY=$(printf '%s' "$_tk_top" | trace_hash_stdin)
 	[ -n "$TRACE_KEY" ] || return 1
@@ -557,11 +569,20 @@ trace_key() {
 	else
 		TRACE_KEY_SESSION=$(trace_pointer_session)
 	fi
-	case $TRACE_KEY_SESSION in
-	'' | *[!A-Za-z0-9._-]*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs" ;;
-	*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs" ;;
-	esac
+	if trace_session_ok "$TRACE_KEY_SESSION"; then
+		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs"
+	else
+		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+	fi
 	_trace_keyed=1
+	return 0
+}
+
+# trace_session_ok <id> — 0 for a session a stack can be keyed on: non-empty,
+# and nothing but letters, digits, `.`, `_` and `-`. The one spelling of that
+# class: trace_key keys on it, and `stack` refuses a `session=` outside it.
+trace_session_ok() {
+	case $1 in '' | *[!A-Za-z0-9._-]*) return 1 ;; esac
 	return 0
 }
 
@@ -596,8 +617,10 @@ trace_pointer_session() {
 	return 0
 }
 
-# trace_stack top|below — the run at the top of this working tree's stack, or
-# the one under it, which is the top's parent. Empty when there is none, and
+# trace_stack top|below|pair — the run at the top of this working tree's
+# stack, or the one under it, which is the top's parent, or both from ONE read,
+# the top first (`pair`, for `stack`: two reads could straddle a begin or an
+# end and pair a run with another stack's parent). Empty when there is none, and
 # non-zero when the file cannot be read — ask trace_stack_readable first, which
 # is where that case is reported. The awk's own stderr is closed off for the
 # reason the header gives: every diagnostic here is `trace:`-prefixed, and
@@ -622,7 +645,8 @@ trace_stack() {
 	[ -r "$TRACE_STACK" ] || return 1
 	awk -v want="$1" '{ below = top; top = $0 } END {
 		if (want == "top") print top
-		else if (NR >= 2) print below
+		else if (want == "below") { if (NR >= 2) print below }
+		else { print top; if (NR >= 2) print below }
 	}' "$TRACE_STACK" 2>/dev/null
 	return 0
 }
@@ -1013,6 +1037,57 @@ trace_end() {
 		trace_emit kind=run.end run="$_en_run" "$@"
 	fi
 	trace_pop
+}
+
+# trace_stack_of <dir> [session=<id>] — the run open in the checkout <dir> is
+# in, on the stdout: the top of that checkout's stack on the first line, the
+# run below it (its parent) on the second, nothing when no run is open. The
+# stack is the one an emit made from that checkout would read — the session a
+# `session=` names, then TRACE_SESSION (empty is none), then that checkout's
+# pointer file — so a caller that executes from one checkout can learn the run
+# of another without knowing where a stack lives or what is in it. That caller
+# is an agent harness's hook (the claude-code adapter's subagent stop), which
+# executes from the root checkout while the run it reports on was opened in a
+# linked worktree (#421, #472).
+#
+# It reads a STACK, never an event: no event file is opened, nothing is
+# written, and the environment's TRACE_RUN is not consulted — the answer is the
+# stack's, and what a caller does with an environment that names a run is the
+# caller's precedence to keep. The refusals are the reader's own, exit 2 and
+# nothing on stdout: a stack that exists and cannot be read (as `end` refuses
+# one) or cannot be named, and a <dir> whose git common directory is not this
+# script's — another repository's checkout, or no checkout at all — because
+# its stack, if it had one, would be a stranger's. A malformed call is the
+# usage's 2: a `session=` naming no session the stack could be keyed on, and
+# a <dir> beginning with `-` or `session=`, which reads as an option or a
+# field — `./<dir>` names the same directory. Unconfigured, it prints nothing
+# and exits 0.
+trace_stack_of() {
+	[ $# -ge 1 ] && [ $# -le 2 ] || usage
+	_so_dir=$1
+	shift
+	case $_so_dir in '' | -* | session=*) usage ;; esac
+	case ${1-session=} in
+	session=) ;;
+	session=*) trace_session_ok "${1#session=}" || usage ;;
+	*) usage ;;
+	esac
+	trace_arg_session "$@"
+	trace_dir || { trace_unconfigured_note; return 0; }
+	_so_git=$(trace_git_at "$_so_dir" rev-parse --path-format=absolute \
+		--git-common-dir --show-toplevel) || _so_git=
+	_so_common=${_so_git%%"$_trace_nl"*}
+	_so_top=${_so_git#*"$_trace_nl"}
+	_so_own=$(trace_git rev-parse --path-format=absolute --git-common-dir) || _so_own=
+	# A <dir> git names no working tree for (one inside a .git directory) fails
+	# the whole rev-parse, so _so_git is empty and the refusal below is its own.
+	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] ||
+		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's"
+	trace_key "$_so_top" || die "cannot name the run stack of $_so_dir: git could not hash its path"
+	trace_stack_readable || die "cannot read the run stack of $_so_dir"
+	_so_pair=$(trace_stack pair) || die "cannot read the run stack of $_so_dir"
+	[ -n "$_so_pair" ] && printf '%s\n' "$_so_pair"
+	return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -1854,5 +1929,6 @@ summary) trace_summary "$@" ;;
 export) trace_export "$@"; exit $? ;;
 verify) trace_verify "$@"; exit $? ;;
 dir) trace_dir && printf '%s\n' "$TRACE_ROOT_DIR"; exit 0 ;;
+stack) trace_stack_of "$@" ;;
 *) usage ;;
 esac
