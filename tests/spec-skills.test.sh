@@ -298,26 +298,41 @@ has_in "$rline1" '⇒ `mechanical`' "the first line still answers mechanical —
 in_order "$rline1" "a failed condition is no hit: the rubric goes on to question 2, after the answer and the conditions" \
 	'⇒ `mechanical`' "only when both conditions hold" "many files for different reasons" '"unless"' "no hit" "goes on to question 2"
 case $rline1 in
-*'is `implementer`'*) fail "rubric line 1 sends a failed condition straight to implementer, past the planner and reviewer questions" ;;
-*) pass "rubric line 1 resolves nothing but mechanical — a failed condition is sized by questions 2 to 4" ;;
+*'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "rubric line 1 names a tier other than mechanical — a failed condition must go on to questions 2 to 4, not be sent to one tier" ;;
+*) pass "rubric line 1 names no tier but mechanical — a failed condition is sized by questions 2 to 4" ;;
 esac
 has_in "$rubric" "first hit wins" "the rubric still reads first hit wins — a failed condition is simply not a hit"
 has_in "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
 in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
 	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
+has_in "$publish" "the one command rubric question 1 names" "the publish step's oracle line points back at the rubric question that asks for it"
 has_in "$conf" "A \`mechanical\` stamp with either of the rubric's two conditions in doubt is \`low\`." "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
 tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^  - /) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
 has_in "$tier_entry" "one command whose exit is its oracle" "the glossary's tier entry carries condition one"
-has_in "$tier_entry" "one file or one pattern applied uniformly across many" "and condition two, with its across-many"
-has_in "$tier_entry" "many files for different reasons" "and names the refactor that fails it"
-has_in "$tier_entry" '"unless"' "and the definition of done with an exception in it"
-has_in "$tier_entry" "the rubric's later questions size it" "and says a failure is sized by the rest of the rubric, not sent to one tier"
+has_in "$tier_entry" "one file or one pattern applied uniformly across many" "the glossary's tier entry carries condition two, with its across-many"
+has_in "$tier_entry" "many files for different reasons" "the glossary's tier entry names the many-files refactor that fails it"
+has_in "$tier_entry" '"unless"' "the glossary's tier entry names the definition of done with an exception in it"
+has_in "$tier_entry" "the rubric's later questions size it" "the glossary's tier entry says a failure is sized by the rest of the rubric, not sent to one tier"
+tier_mech=${tier_entry#*A \`mechanical\` stamp}
+case $tier_mech in
+*'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "the glossary's mechanical sentence names a fallback tier — a failure is sized by the rubric's later questions" ;;
+*) pass "the glossary's mechanical sentence names no fallback tier" ;;
+esac
 wf_rubric=$(awk '/^1\. \*\*Is the definition of done checkable/ { on = 1 } on && /^2\. / { exit } on { print }' "$ROOT/constitution/local-workflow.md.template" | tr '\n' ' ' | tr -s ' ')
 [ -n "$wf_rubric" ] && pass "the workflow template still carries rubric line 1" || fail "constitution/local-workflow.md.template lost its rubric line 1"
-has_in "$wf_rubric" "only when both conditions hold" "the workflow template's rubric line 1 carries the two conditions too"
-has_in "$wf_rubric" "one command whose exit is its oracle" "its condition one"
-has_in "$wf_rubric" "one file or one pattern applied uniformly across many" "its condition two"
+has_in "$wf_rubric" "only when both conditions hold" "the workflow template's rubric line 1 requires both mechanical conditions"
+has_in "$wf_rubric" "one command whose exit is its oracle" "the workflow template's condition one: one oracle command"
+has_in "$wf_rubric" "first line of its Acceptance section" "the workflow template says where the oracle is written"
+has_in "$wf_rubric" "one file or one pattern applied uniformly across many" "the workflow template's condition two: one file or one pattern across many"
+has_in "$wf_rubric" "many files for different reasons" "the workflow template names the many-files refactor that fails it"
+has_in "$wf_rubric" '"unless"' "the workflow template names the definition of done with an exception in it"
+in_order "$wf_rubric" "the workflow template sends a failed condition on to question 2, after the conditions" \
+	'⇒ `mechanical`' "only when both conditions hold" "no hit" "question 2"
+case $wf_rubric in
+*'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "the workflow template's rubric line 1 names a tier other than mechanical" ;;
+*) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
+esac
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 
 # ---------------------------------------------------------------------------
