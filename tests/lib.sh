@@ -1123,11 +1123,11 @@ t_check_run() {
 # and never per call:
 #   T_VERDICT_PREFIX  — put before every label (the skill under test, when one
 #                       suite holds several)
-#   T_VERDICT_REFUSED — a command given the bare label after a refusal, for
-#                       a suite that also holds WHAT a refusal printed; unset,
-#                       the refusal itself is the pass
+#   T_VERDICT_REFUSED — a command given the label, prefix and all, after a
+#                       refusal, for a suite that also holds WHAT a refusal
+#                       printed; unset, the refusal itself is the pass
 t_verdict_is() {
-	_vi_want=$1 _vi_bare=$2 _vi_label="${T_VERDICT_PREFIX:-}$2"
+	_vi_want=$1 _vi_label="${T_VERDICT_PREFIX:-}$2"
 	shift 2
 	: >"$SCRATCH/verdict.out"
 	: >"$SCRATCH/verdict.err"
@@ -1147,7 +1147,7 @@ t_verdict_is() {
 	accepted.accepted) pass "$_vi_label" ;;
 	accepted.*) fail "$_vi_label — refused: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" 2>/dev/null | tr '\n' ' ')" ;;
 	refused.refused)
-		if [ -n "${T_VERDICT_REFUSED:-}" ]; then "$T_VERDICT_REFUSED" "$_vi_bare"; else pass "$_vi_label"; fi
+		if [ -n "${T_VERDICT_REFUSED:-}" ]; then "$T_VERDICT_REFUSED" "$_vi_label"; else pass "$_vi_label"; fi
 		;;
 	*) fail "$_vi_label — the documented check accepted it" ;;
 	esac

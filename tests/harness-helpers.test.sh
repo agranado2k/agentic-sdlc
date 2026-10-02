@@ -126,6 +126,9 @@ says "refused, and the check refuses: a pass" ok t_verdict_is refused "l" no
 says "refused, but the check accepts: a fail" FAIL t_verdict_is refused "l" yes
 out=$(T_VERDICT_PREFIX="skill — " printed t_verdict_is accepted "l" yes)
 case $out in *"ok    skill — l") pass "T_VERDICT_PREFIX goes before the label" ;; *) fail "the prefixed label: $out" ;; esac
+on_refusal() { pass "the callback got: $1"; }
+out=$(T_VERDICT_PREFIX="skill — " T_VERDICT_REFUSED=on_refusal printed t_verdict_is refused "l" no)
+case $out in *"ok    the callback got: skill — l") pass "T_VERDICT_REFUSED is handed the full label, and its line is the pass" ;; *) fail "the refusal callback: $out" ;; esac
 
 # The vacuous cases (M-1): each would read as a refusal — a missing function
 # is status 127, a missing directory a failed cd — and pass every `refused`.

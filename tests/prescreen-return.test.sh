@@ -141,11 +141,13 @@ T_VERDICT_REFUSED=named_only
 # named_only <label> — the refusal in verdict.out/.err named the pre-screen
 # unreadable and printed nothing else. Called right after a run of the check:
 # by t_verdict_is on every refusal, and by the never-written return below.
+# The label comes prefix and all, so the skill's name is spelled once, in
+# T_VERDICT_PREFIX.
 named_only() {
 	if [ "$(cat "$SCRATCH/verdict.out")" = "unreadable pre-screen" ] && [ ! -s "$SCRATCH/verdict.err" ]; then
-		pass "$NAME — $1 — named, and no line of it printed"
+		pass "$1 — named, and no line of it printed"
 	else
-		fail "$NAME — $1 — refused, but the check printed: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" | head -2 | tr '\n' '|')"
+		fail "$1 — refused, but the check printed: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" | head -2 | tr '\n' '|')"
 	fi
 }
 with_evidence() { printf 'Command-shaped: no\n%s' "$1"; }
@@ -418,7 +420,7 @@ Evidence: "retry three times"'
 	if (cd "$PROJECT" && sh -c '. "$1"; checked_prescreen "$2" "$3"' _ "$CHECK" "$TEXT" "$SCRATCH/no-such-return") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"; then
 		fail "/$NAME — a return file that does not exist passed the check"
 	else
-		named_only "a return that was never written is refused"
+		named_only "$NAME — a return that was never written is refused"
 	fi
 
 	# Found from the skills root — the nearest .agents/skills/ at or above the
