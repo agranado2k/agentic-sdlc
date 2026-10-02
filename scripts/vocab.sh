@@ -20,9 +20,10 @@
 # spaces and underscores read as hyphens (`Tier:`, `tier:`, `Command shaped:`
 # and `command_shaped:` all name a field), and a line whose key is not a
 # declared field is not a decision line and is ignored. The caller lifts the
-# lines it needs — the checker never reads a body. The VALUE is matched exactly, one token whole. A
-# field that appears twice with two different values is refused — a body
-# with two answers has none, and a line appended to it cannot withdraw a
+# lines it needs and hands over those, a few at a time; a body is the caller's
+# to lift, not this script's input. The VALUE is matched exactly, one token
+# whole. A field that appears twice with two different values is refused — a
+# body with two answers has none, and a line appended to it cannot withdraw a
 # rule — while the same value repeated is one answer.
 #
 # The caller hands it BARE `Field: value` lines. A markdown-wrapped line —
