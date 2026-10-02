@@ -334,6 +334,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fixture-builder suite
         run: sh tests/fixture-builders.test.sh
+  harness-helpers:
+    name: The harness's folded assertion helpers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harness-helper suite
+        run: sh tests/harness-helpers.test.sh
   suite-budget:
     name: Every suite runs inside the worker budget
     runs-on: ubuntu-latest

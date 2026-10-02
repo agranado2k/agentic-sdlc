@@ -129,12 +129,12 @@ banner "2. The recipe's own copies match the module's grammar"
 # release, with only sh and git, where the local scripts/ is the OLD copy. So
 # its parsers are not replaced — they are held equal. Extract the fenced sh
 # block containing each awk, run it over the fixture with `kit show` stubbed,
-# and compare with the module byte for byte. t_lift_fence (tests/lib.sh)
+# and compare with the module byte for byte. t_fence (tests/lib.sh), holds,
 # finds the fence by the awk's own text, as a fixed string.
 kit() { cat "$FIX"; }   # the recipe's `kit show <ref>:VERSION`, stubbed to the fixture
 export FIX
 
-t_lift_fence "$ROOT/UPDATING.md" '^files:' "$SCRATCH/recipe.files.sh"
+t_fence "$ROOT/UPDATING.md" holds '^files:' >"$SCRATCH/recipe.files.sh"
 [ -s "$SCRATCH/recipe.files.sh" ] && pass "found the recipe's files: parser fence" || fail "the recipe's files: parser fence is unfindable"
 # The fence defines manifest() and may run other steps; source only the function.
 awk '/^manifest\(\) \{/,/^\}/' "$SCRATCH/recipe.files.sh" >"$SCRATCH/recipe.manifest.sh"
@@ -145,7 +145,7 @@ module_out=$(manifest_section files <"$FIX")
 [ "$recipe_out" = "$module_out" ] && pass "the recipe's files: parser and the module agree on the fixture" ||
 	{ fail "the recipe's files: parser DIFFERS from the module:"; printf '%s\n' "recipe: $recipe_out" "module: $module_out" | sed 's/^/        | /'; }
 
-t_lift_fence "$ROOT/UPDATING.md" '^skills:' "$SCRATCH/recipe.skills.sh"
+t_fence "$ROOT/UPDATING.md" holds '^skills:' >"$SCRATCH/recipe.skills.sh"
 [ -s "$SCRATCH/recipe.skills.sh" ] && pass "found the recipe's skills: parser fence" || fail "the recipe's skills: parser fence is unfindable"
 # Run only the pipeline that produces the manifest list: from `kit show` to the sort.
 WORK="$SCRATCH/work"; mkdir -p "$WORK"; export WORK; TO_REF=any; export TO_REF
