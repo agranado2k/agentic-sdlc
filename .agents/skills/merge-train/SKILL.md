@@ -161,6 +161,8 @@ words would close the reason's quotes and fail the emit in silence.
 and a reader counts an `unasked` landing as one the question never reached —
 a fact in the trace rather than silence, which no reader can tell from a
 train that forgot to ask.
+A ticket closed as a duplicate records no `feedback`: feedback is a verdict
+on a landed slice, and a twin is none.
 
 **One PR landed by hand is still a landing.** When the operator merges a
 single PR outside a train, its one-PR form is the **landing script** the

@@ -472,7 +472,7 @@ GH
 	(. "$SCRATCH/fence.sh" && PATH="$SCRATCH/bin:$PATH" GH_LOG="$SCRATCH/gh.log" sibling_tickets retro-20261001T190528Z) >/dev/null 2>&1
 	call=$(cat "$SCRATCH/gh.log")
 	t_text_has "$call" "--state all" "the search asks the tracker for open and closed tickets"
-	t_text_has "$call" "retro-20261001T190528Z in:body" "the search term is the sibling's stamp, matched in the body by the tracker"
+	t_text_has "$call" "\"retro-20261001T190528Z\" in:body" "the search term is the sibling's stamp, matched in the body by the tracker"
 	case $call in
 	*body,* | *,body* | *"json body"*) fail "the search fetches a body: '$call'" ;;
 	*number*title*) pass "the search fetches numbers and titles, never a body" ;;
