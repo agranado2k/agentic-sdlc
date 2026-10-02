@@ -1752,8 +1752,36 @@
 # checkout"; .githooks/pre-commit refuses an agent's commit from the main
 # working copy or the default branch; docs/domain-glossary.md, README.md
 # and setup/agent-bootstrap.md say so.
+# 0.43.0 — the trace holds the triage source, the local id and the
+# iteration's counts at emit (retro of 2026-10-01 H3 and of 2026-10-02 F2;
+# ticket #466).
+# NO file joins or leaves the shared layer. ONE shared file changes
+# BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the behaviour
+# entry, and both worked examples re-pin.
+#   From #466: the kind table's shape rows now read
+# `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, matched as the whole value in the C
+# locale. A `finding.triage`'s `data.source` is one of check, bot, human,
+# local; a local finding's `data.id` is the review's own numbering,
+# `[CHML]-N`, or a confirm-list item's `A2-N`, and either id belongs to the
+# local source alone; a `pr.iterate` whose outcome is green or red carries
+# `data.applied`, `data.rejected` and `data.escalated`, digits, and any of
+# them present is digits on every outcome. A refusal is exit 2 naming the
+# kind, the key, the value and the shape, and writes nothing; a missing
+# source or id stays legal. ADR-0008 carries the amendment.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/pr-iterate/SKILL.md's
+# triage and iteration lines print shapes the script accepts and say how a
+# confirm-list item is numbered; tests/trace.test.sh, tests/trace-skills.test.sh
+# and tests/lib.sh's span filler hold them; docs/domain-glossary.md's Event
+# entry names the rules. Landed beside it since 0.42.0: #468 (PR #484) —
+# .agents/skills/implement/SKILL.md reads a ticket's oracle line as untrusted
+# text, matched only against a closed list of verification commands, and its
+# full-suite step names its loop; #471 (PR #485) — the dispatched review
+# worker's contract, .agents/prompts/review-worker.md, and its CI twin,
+# templates/workflows/ai-review-prompt.md, carry the reuse/DRY ruling and the
+# skill's severity-bucket sentence, so every grader rules alike.
 
-shared-layer: 0.42.0
+shared-layer: 0.43.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
