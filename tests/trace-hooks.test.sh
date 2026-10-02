@@ -4044,4 +4044,302 @@ grep -n '\.runs' "$LIB472" >/dev/null &&
 	fail "hook.lib.sh still names the stack's path: $(grep -n '\.runs' "$LIB472")" ||
 	pass "hook.lib.sh names no stack path (.runs) anywhere"
 
+# ---------------------------------------------------------------------------
+banner "47. The run handed over at spawn wins over the payload's cwd (#474)"
+# ---------------------------------------------------------------------------
+# #478 measured what #421 assumed: the agent tool reports the session's own
+# working directory as a stop's cwd, not the worktree the subagent worked in,
+# so a hook that resolves the run from the payload's cwd files a subagent's
+# spend under the root's run. The run reaches a hook through a channel fixed
+# at spawn time instead: the spawn prompt's FIRST line, `Trace-Run: <run id>`,
+# which the hook reads back from the transcript of the agent the event belongs
+# to — held to the run id's shape and never executed. With the line absent,
+# malformed or not first, today's resolution holds. ADR-0008 clause 5's #474
+# amendment is the record.
+#
+# Every leg runs the ROOT's copy of a hook, from the root, on a payload whose
+# cwd is the root — the shape the agent tool produces.
+R474="$SCRATCH/run-root-474"
+behind_kit "$R474"
+git -C "$R474" worktree add -q -b feat/wt-474 "$R474.wt" 2>/dev/null
+H474="$R474/${HOOKS#"$KIT"/}"
+new_trace
+# Two deep at the root, so the fallback carries a parent the channel must not.
+OUT474=$(cd "$R474" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin merge-train 2>/dev/null)
+ROOT474=$(cd "$R474" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin pr-iterate 2>/dev/null)
+WT474=$(cd "$R474.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin implement 2>/dev/null)
+[ -n "$OUT474" ] && [ -n "$ROOT474" ] && [ -n "$WT474" ] &&
+	pass "two nested runs are open at the root and another in a linked worktree" ||
+	fail "the fixture runs did not open: root '$ROOT474', worktree '$WT474'"
+
+# prompt474 <src> <dest> <prompt> — <src> with its first user line's prompt
+# replaced by <prompt>, which is JSON-string text (a newline is spelled \\n).
+prompt474() {
+	sed '/"type":"user"/s|"content":"\[REDACTED text, [0-9]* chars\]"|"content":"'"$3"'"|' "$1" >"$2"
+}
+CH474="Trace-Run: $WT474\\\\nRun the suite and report."
+# The subagent's transcript where the agent harness keeps it: beside the
+# session's own, under <session id>/subagents/ (the #246 spike's layout).
+TR474="$SCRATCH/proj-474"
+mkdir -p "$TR474/$SESSION/subagents"
+prompt474 "$SCRATCH/sub.jsonl" "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" "$CH474"
+prompt474 "$SCRATCH/main.jsonl" "$TR474/$SESSION.jsonl" "$CH474"
+cp "$SCRATCH/main.jsonl" "$TR474/plain-main.jsonl"
+grep -qF "\"content\":\"Trace-Run: $WT474\\nRun the suite" "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" &&
+	pass "the fixture subagent transcript opens on the channel line" ||
+	fail "the fixture subagent transcript does not carry the channel line"
+
+# stop474 <agent transcript> [env…] — the root's stop hook, cwd the root.
+stop474() {
+	_s4_t=$1
+	shift
+	set_key cwd "$R474" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$_s4_t" >"$SCRATCH/stop-474.json"
+	# Counted before and after, as stop_from does: a leg whose hook wrote
+	# nothing must not be judged on the stop an earlier leg left last.
+	_s4_before=$(ev_of agent.stop | grep -c '')
+	t_run_split sh -c 'cd "$1" && shift && exec env "$@"' _ "$R474" TRACE_DIR="$TDIR" \
+		GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" sh "$H474/subagent-stop.sh" <"$SCRATCH/stop-474.json"
+	_s4_added=$(($(ev_of agent.stop | grep -c '') - _s4_before))
+	[ "$_s4_added" = 1 ] ||
+		fail "a stop from '$_s4_t' wrote $_s4_added agent.stop events, want exactly 1"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WT474" ] &&
+	pass "agent.stop carries the run its spawn prompt handed over, not the root's" ||
+	fail "agent.stop with the channel: exit $S_STATUS, run '$(str "$STOP" run)', want $WT474 (root's $ROOT474); stderr '$S_ERR'"
+[ -z "$(str "$STOP" parent)" ] &&
+	pass "and no parent: a run named from elsewhere takes no edge from the root's stack" ||
+	fail "agent.stop with the channel carries parent '$(str "$STOP" parent)', want none"
+stop474 "$SCRATCH/sub.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOT474" ] && [ "$(str "$STOP" parent)" = "$OUT474" ] &&
+	pass "with the channel empty, agent.stop resolves from the payload's cwd, as before" ||
+	fail "agent.stop without the channel: run '$(str "$STOP" run)', want $ROOT474"
+stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" TRACE_RUN=from-the-env-474
+[ "$(str "$STOP" run)" = from-the-env-474 ] &&
+	pass "a TRACE_RUN already in the hook's environment still wins over the channel" ||
+	fail "agent.stop under TRACE_RUN=from-the-env-474 carries run '$(str "$STOP" run)'"
+# The line is held to the run id's shape, whole, on the prompt's first line.
+# H-1, review of PR #524: one leg per rejection in the run id's check — a pid
+# that is not digits, and an id past 64 characters whose every part has the
+# shape (a pid of 50 digits).
+STAMP474=${WT474%%Z-*}Z
+HEX474=${WT474##*-}
+for bad in 'Trace-Run: $(touch pwned-474)' "Trace-Run: $WT474 and more" "trace-run: $WT474" \
+	"Run the suite.\\\\nTrace-Run: $WT474" "Trace-Run: ${WT474%-*}" \
+	"Trace-Run: $STAMP474-12a4-$HEX474" \
+	"Trace-Run: $STAMP474-12345678901234567890123456789012345678901234567890-$HEX474" \
+	"Trace-Run: $WT474 $STAMP474-12a4-$HEX474" "Trace-Run: $WT474 $OUT474 $OUT474" \
+	"Trace-Run: $WT474\\\\tFORGED tail"; do
+	prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/bad-474.jsonl" "$bad"
+	stop474 "$SCRATCH/bad-474.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOT474" ] &&
+		pass "a prompt opening '$bad' hands over nothing: today's resolution holds" ||
+		fail "a prompt opening '$bad' carried run '$(str "$STOP" run)', want $ROOT474"
+done
+[ ! -e "$R474/pwned-474" ] && [ ! -e "$SCRATCH/pwned-474" ] &&
+	pass "and no prompt line was ever executed: the command substitution touched nothing" ||
+	fail "a prompt line was executed: pwned-474 exists"
+
+# The parent rides on the same line, after one space: the run the spawner's
+# own prompt handed it, which its run nests in (ticket #474: TRACE_RUN, with
+# TRACE_PARENT). Held to the same shape; absent, the parent is empty.
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/parent-474.jsonl" "Trace-Run: $WT474 $OUT474\\\\nRun the suite."
+stop474 "$SCRATCH/parent-474.jsonl"
+[ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = "$OUT474" ] &&
+	pass "a channel line naming a parent hands over the run with that parent" ||
+	fail "agent.stop with a parent on the line: run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WT474 / $OUT474"
+stop474 "$SCRATCH/parent-474.jsonl" TRACE_PARENT=kept-474
+[ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = kept-474 ] &&
+	pass "a TRACE_PARENT already in the hook's environment is kept beside the handed run" ||
+	fail "agent.stop under TRACE_PARENT=kept-474: run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" TRACE_PARENT=kept-474
+[ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = kept-474 ] &&
+	pass "and so it is when the line names no parent" ||
+	fail "agent.stop under TRACE_PARENT=kept-474, no parent on the line: parent '$(str "$STOP" parent)'"
+
+# M-3, review of PR #524: the read is bounded — the first user record's first
+# 4096 bytes and no more — so a 200 KB prompt costs one bounded line, and a
+# channel past the bound is no channel. Held by size, not by the clock.
+PAD474=$(awk 'BEGIN { while (n++ < 5000) printf "x" }')
+sed '/"type":"user"/s|"type":"user"|"type":"user","pad":"'"$PAD474"'"|' "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" >"$SCRATCH/far-474.jsonl"
+stop474 "$SCRATCH/far-474.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOT474" ] &&
+	pass "a channel past the first 4096 bytes of the first user record is not read" ||
+	fail "a channel 5000 bytes into the record was read: run '$(str "$STOP" run)', want $ROOT474"
+# Built inside awk: one argument of 200 KB is past what exec will pass.
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/big-mark-474.jsonl" "Trace-Run: $WT474\\\\nBIG474"
+awk 'BEGIN { big = "y"; while (length(big) < 200000) big = big big }
+	!done && /"type":"user"/ { sub(/BIG474/, big); done = 1 } { print }' \
+	"$SCRATCH/big-mark-474.jsonl" >"$SCRATCH/big-474.jsonl"
+[ "$(sed -n '/"type":"user"/{p;q;}' "$SCRATCH/big-474.jsonl" | wc -c)" -gt 200000 ] &&
+	pass "the fixture's first user record is past 200 KB" ||
+	fail "the 200 KB fixture was not built"
+stop474 "$SCRATCH/big-474.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WT474" ] &&
+	pass "a 200 KB prompt still hands its run over from its first line" ||
+	fail "a 200 KB prompt: exit $S_STATUS, run '$(str "$STOP" run)', want $WT474"
+
+# L-12, review of PR #524: the first user record only — one past the first
+# fifty lines is not read, and a later record's line never answers for a first
+# that carried none — and the message's own content, never a nested one.
+awk 'BEGIN { while (n++ < 50) print "{\"type\":\"system\",\"n\":" n "}" } { print }' \
+	"$TR474/$SESSION/subagents/agent-$AGENT.jsonl" >"$SCRATCH/late-474.jsonl"
+stop474 "$SCRATCH/late-474.jsonl"
+[ "$(str "$STOP" run)" = "$ROOT474" ] &&
+	pass "a first user record past the transcript's first fifty lines hands nothing over" ||
+	fail "a user record on line 51 was read: run '$(str "$STOP" run)', want $ROOT474"
+{ cat "$SCRATCH/sub.jsonl"; sed -n '/"type":"user"/{p;q;}' "$TR474/$SESSION/subagents/agent-$AGENT.jsonl"; } >"$SCRATCH/second-474.jsonl"
+stop474 "$SCRATCH/second-474.jsonl"
+[ "$(str "$STOP" run)" = "$ROOT474" ] &&
+	pass "a later user record's Trace-Run line never answers for a first record without one" ||
+	fail "a second user record was read: run '$(str "$STOP" run)', want $ROOT474"
+sed '/"type":"user"/s|"type":"user"|"type":"user","toolUseResult":{"content":"Trace-Run: '"$WT474"'"}|' \
+	"$SCRATCH/sub.jsonl" >"$SCRATCH/nested-474.jsonl"
+stop474 "$SCRATCH/nested-474.jsonl"
+[ "$(str "$STOP" run)" = "$ROOT474" ] &&
+	pass "a nested content field naming a run is not the message's content, and hands nothing over" ||
+	fail "a nested content field was read as the channel: run '$(str "$STOP" run)', want $ROOT474"
+
+# L, review of PR #524: a prompt the agent harness writes as content blocks,
+# not a string, carries the channel in its first text block.
+sed '/"type":"user"/s|"content":"\[REDACTED text, [0-9]* chars\]"|"content":[{"type":"text","text":"Trace-Run: '"$WT474"'\\nRun it."}]|' \
+	"$SCRATCH/sub.jsonl" >"$SCRATCH/blocks-474.jsonl"
+stop474 "$SCRATCH/blocks-474.jsonl"
+[ "$(str "$STOP" run)" = "$WT474" ] &&
+	pass "a prompt written as content blocks hands its run over from the first text block" ||
+	fail "a content-block prompt: run '$(str "$STOP" run)', want $WT474"
+
+# end474 <session transcript> — the root's session-end hook, cwd the root.
+end474() {
+	set_key transcript_path "$1" <"$FIX/session-end.payload.json" |
+		set_key cwd "$R474" >"$SCRATCH/end-474.json"
+	_e4_before=$(events | grep -c '')
+	t_run_split sh -c 'cd "$1" && shift && exec env "$@"' _ "$R474" TRACE_DIR="$TDIR" \
+		GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$H474/session-end.sh" <"$SCRATCH/end-474.json"
+	END474=$(events | sed -n "$((_e4_before + 1)),\$p")
+}
+end474 "$TR474/$SESSION.jsonl"
+_e4_end=$(printf '%s\n' "$END474" | grep -F '"kind":"session.end"')
+_e4_use=$(printf '%s\n' "$END474" | grep -F '"kind":"session.usage"' | sed -n '1p')
+[ "$S_STATUS" = 0 ] && [ "$(str "$_e4_end" run)" = "$WT474" ] &&
+	pass "session.end carries the run its session's own prompt handed over" ||
+	fail "session.end with the channel: exit $S_STATUS, run '$(str "$_e4_end" run)', want $WT474; stderr '$S_ERR'"
+[ "$(str "$_e4_use" run)" = "$WT474" ] &&
+	pass "and so does its session.usage" ||
+	fail "session.usage with the channel carries run '$(str "$_e4_use" run)', want $WT474"
+end474 "$TR474/plain-main.jsonl"
+_e4_end=$(printf '%s\n' "$END474" | grep -F '"kind":"session.end"')
+[ "$S_STATUS" = 0 ] && [ "$(str "$_e4_end" run)" = "$ROOT474" ] &&
+	pass "with the channel empty, session.end carries the run the shared script resolves, as before" ||
+	fail "session.end without the channel: run '$(str "$_e4_end" run)', want $ROOT474"
+# M-4, review of PR #524: the denials the end sweeps are calls of an agent the
+# marker does not name — the session's or any subagent's — so the run handed
+# to the session is not theirs: they resolve as before, while the session's
+# own usage and end beside them carry the handed run.
+mkdir -p "$TDIR/claude-code/$SESSION.pending"
+printf 'Bash\nls\n' >"$TDIR/claude-code/$SESSION.pending/toolu_474"
+end474 "$TR474/$SESSION.jsonl"
+_e4_end=$(printf '%s\n' "$END474" | grep -F '"kind":"session.end"')
+_e4_den=$(printf '%s\n' "$END474" | grep -F '"kind":"tool.use"' | grep -F '"outcome":"denied"')
+[ -n "$_e4_den" ] && [ "$(str "$_e4_den" run)" = "$ROOT474" ] && [ "$(str "$_e4_end" run)" = "$WT474" ] &&
+	pass "a denial swept at the end does not carry the run handed to the session; the end beside it does" ||
+	fail "the swept denial carries run '$(str "$_e4_den" run)' (want $ROOT474), session.end '$(str "$_e4_end" run)' (want $WT474): $_e4_den"
+
+# tool474 <session transcript> [<agent id>] — the root's tool-post hook, cwd
+# the root, tool capture on; the payload names the subagent when given one.
+tool474() {
+	sed -e "s|\"session_id\":\"[^\"]*\"|\"session_id\":\"$SESSION\"${2:+,\"agent_id\":\"$2\",\"agent_type\":\"general-purpose\"}|" \
+		-e "s|\"transcript_path\":\"[^\"]*\"|\"transcript_path\":\"$1\"|" \
+		-e "s|\"cwd\":\"[^\"]*\"|\"cwd\":\"$R474\"|" "$FIX/tool-post.payload.json" >"$SCRATCH/tool-474.json"
+	_t4_before=$(ev_of tool.use | grep -c '')
+	t_run_split sh -c 'cd "$1" && shift && exec env "$@"' _ "$R474" TRACE_DIR="$TDIR" TRACE_TOOLS=1 \
+		GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$H474/tool-post.sh" <"$SCRATCH/tool-474.json"
+	_t4_added=$(($(ev_of tool.use | grep -c '') - _t4_before))
+	[ "$_t4_added" = 1 ] ||
+		fail "a tool call for '$1' wrote $_t4_added tool.use events, want exactly 1"
+	TOOL=$(ev_of tool.use | sed -n '$p')
+}
+if [ "$HAVE_NODE" = 1 ]; then
+	# L-10, review of PR #524: the session's transcript carries a channel here,
+	# so a fallback to it in place of the agent's own would show.
+	tool474 "$TR474/$SESSION.jsonl" c9ff0000aa0000001
+	[ "$S_STATUS" = 0 ] && [ "$(str "$TOOL" run)" = "$ROOT474" ] &&
+		pass "a subagent's tool call with no transcript of its own to read resolves as before, never its session's" ||
+		fail "tool.use, no subagent transcript: exit $S_STATUS, run '$(str "$TOOL" run)', want $ROOT474; stderr '$S_ERR'"
+	tool474 "$TR474/$SESSION.jsonl" "$AGENT"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$TOOL" run)" = "$WT474" ] &&
+		pass "a subagent's tool.use carries the run handed to that subagent, read from its own transcript" ||
+		fail "tool.use for agent $AGENT: exit $S_STATUS, run '$(str "$TOOL" run)', want $WT474; stderr '$S_ERR'"
+	# A second agent, handed nothing, beside the first: the legs stay
+	# independent, and no fixture is overwritten under a later leg.
+	AGENT2=b8ee6236aa8603f17
+	cp "$SCRATCH/sub.jsonl" "$TR474/$SESSION/subagents/agent-$AGENT2.jsonl"
+	tool474 "$TR474/$SESSION.jsonl" "$AGENT2"
+	[ "$(str "$TOOL" run)" = "$ROOT474" ] &&
+		pass "a subagent handed no run does not borrow its session's: the agent's transcript answers, not the session's" ||
+		fail "tool.use for an agent with no channel carries run '$(str "$TOOL" run)', want $ROOT474"
+	tool474 "$TR474/$SESSION.jsonl"
+	[ "$(str "$TOOL" run)" = "$WT474" ] &&
+		pass "the session's own tool.use carries the run its own prompt handed over" ||
+		fail "tool.use for the session: run '$(str "$TOOL" run)', want $WT474"
+	tool474 "$TR474/plain-main.jsonl"
+	[ "$(str "$TOOL" run)" = "$ROOT474" ] &&
+		pass "and with the channel empty, the session's tool.use resolves as before" ||
+		fail "tool.use without the channel: run '$(str "$TOOL" run)', want $ROOT474"
+	tool474 "$TR474/$SESSION.jsonl" '../../etc'
+	[ "$S_STATUS" = 0 ] && [ "$(str "$TOOL" run)" = "$ROOT474" ] &&
+		pass "an agent id outside the identifier class names no transcript" ||
+		fail "tool.use with agent_id '../../etc': exit $S_STATUS, run '$(str "$TOOL" run)', want $ROOT474"
+	# The reader refuses a newline in either new key, as it does in the others:
+	# exit non-zero and no row, never a second row forged.
+	for key474 in agent_id transcript_path; do
+		printf '{"session_id":"%s","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"tool_use_id":"toolu_474","tool_response":{"stdout":"x"},"%s":"a\\nsession b"}' \
+			"$SESSION" "$key474" >"$SCRATCH/nl-474.json"
+		mkdir -p "$SCRATCH/nl-dir-474"
+		t_run_split sh -c 'node "$1" "$2" <"$3"' probe "$TOOLREADER" "$SCRATCH/nl-dir-474" "$SCRATCH/nl-474.json"
+		[ "$S_STATUS" != 0 ] && [ -z "$S_OUT" ] && case $S_ERR in *"'$key474'"*newline*) true ;; *) false ;; esac &&
+			pass "the tool payload reader refuses a newline in $key474, naming it, with no row" ||
+			fail "a newline in $key474: status $S_STATUS, stdout '$S_OUT'"
+	done
+else
+	skip "the tool-post legs need node, which is not on PATH"
+fi
+
+# H-2, review of PR #524: every branch of hook_agent_transcript, one leg each.
+# at474 <session transcript> [<agent id>] — its answer and status.
+at474() {
+	t_run_split sh -c '. "$0"; hook_agent_transcript "$@"' "$HOOKS/hook.lib.sh" "$@"
+}
+at474 ''
+[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] &&
+	pass "no session transcript named: no transcript at all, not an empty one answered as found" ||
+	fail "an empty session transcript: status $S_STATUS, '$S_OUT'"
+at474 "$TR474/$SESSION.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$TR474/$SESSION.jsonl" ] &&
+	pass "no agent named: the session's own transcript" ||
+	fail "no agent: status $S_STATUS, '$S_OUT'"
+at474 "$TR474/$SESSION.jsonl" '../x'
+[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] &&
+	pass "an agent id outside the identifier class: no transcript" ||
+	fail "agent '../x': status $S_STATUS, '$S_OUT'"
+at474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" "$AGENT"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" ] &&
+	pass "a payload already naming the agent's own transcript is taken as given" ||
+	fail "the agent's own file: status $S_STATUS, '$S_OUT'"
+at474 "$TR474/$SESSION.log" "$AGENT"
+[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] &&
+	pass "a session transcript that is not a .jsonl names no subagent directory" ||
+	fail "a .log session transcript: status $S_STATUS, '$S_OUT'"
+at474 "$TR474/$SESSION.jsonl" "$AGENT"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" ] &&
+	pass "an agent named: its transcript under the session transcript's own stem, subagents/" ||
+	fail "agent $AGENT: status $S_STATUS, '$S_OUT'"
+for h474 in subagent-stop session-end tool-post; do
+	_r4=$(grep -F "| \`hooks/$h474.sh\` |" "$KIT/adapters/claude-code/README.md")
+	case $_r4 in *"Trace-Run: <run id>"*"#474"*) pass "the README row for $h474.sh names the run handed over at spawn" ;;
+	*) fail "the README row for $h474.sh does not name the Trace-Run line (#474)" ;; esac
+done
+
 t_done "trace hooks"

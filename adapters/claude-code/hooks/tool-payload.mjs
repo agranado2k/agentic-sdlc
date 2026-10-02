@@ -15,6 +15,8 @@
 //   tool <tool_name>
 //   tool_use_id <tool_use_id>
 //   event <hook_event_name>
+//   agent <agent_id>                  (a call a subagent made)
+//   transcript <transcript_path>      (the session's own transcript)
 //   result_from tool_response|error                        (post-tool payloads only)
 //   error_first_line <the error's first non-empty line>   (failed calls only)
 //
@@ -174,16 +176,23 @@ let out = pre ? "" : `result_from ${from}\n`;
 if (errorFirstLine) {
   out += `error_first_line ${errorFirstLine}\n`;
 }
-for (const key of ["session_id", "tool_name", "tool_use_id", "hook_event_name"]) {
+for (const key of ["session_id", "tool_name", "tool_use_id", "hook_event_name", "agent_id", "transcript_path"]) {
   const value = payload[key];
   if (typeof value !== "string" || value === "") continue;
   // A newline in one of these would forge a second row. Refused rather than
   // trimmed: it cannot happen on a real payload, and if it does, the hook must
   // not be told a plausible lie.
   if (/[\r\n]/u.test(value)) {
-    die(`key '${key}' carries a newline, which no id or event name of this agent harness does`);
+    die(`key '${key}' carries a newline, which no id, event name or transcript path of this agent harness does`);
   }
-  const name = { session_id: "session", tool_name: "tool", tool_use_id: "tool_use_id", hook_event_name: "event" }[key];
+  const name = {
+    session_id: "session",
+    tool_name: "tool",
+    tool_use_id: "tool_use_id",
+    hook_event_name: "event",
+    agent_id: "agent",
+    transcript_path: "transcript",
+  }[key];
   out += `${name} ${value}\n`;
 }
 process.stdout.write(out);

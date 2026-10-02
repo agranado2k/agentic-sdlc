@@ -132,6 +132,16 @@ event=$(field event)
 from=$(field result_from)
 errfirstline=$(field error_first_line)
 
+# THE RUN HANDED OVER AT SPAWN (#474; see hook_run_handed): read from the
+# transcript of the agent this call belongs to — the subagent's own when the
+# payload names one, the session's otherwise — so a subagent's calls carry the
+# run its spawn prompt named, and one handed none never borrows the run handed
+# to its session.
+# With none handed, the shared script resolves the run as it always has.
+if own=$(hook_agent_transcript "$(hook_expand "$(field transcript)")" "$(field agent)"); then
+	hook_run_handed "$own" || :
+fi
+
 # THE CALL RETURNED, so tool-pre.sh's marker for it goes now, before anything
 # below can refuse the event: a refused event is still not a denied call (#409).
 hook_pending_drop "$tdir" "$sid" "$tuid"

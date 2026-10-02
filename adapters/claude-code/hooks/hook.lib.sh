@@ -251,6 +251,124 @@ hook_run_of() {
 	return 0
 }
 
+# --- the run handed over at spawn -------------------------------------------
+
+# hook_run_handed <transcript> — export TRACE_RUN, and TRACE_PARENT unless
+# already set, from the run the spawning session handed this agent; status 0
+# when one was handed (or the environment already names a run), 1 when the
+# channel is empty and the caller's own resolution answers. Ticket #474.
+#
+# WHY A CHANNEL AT ALL. A hook runs in the agent harness's process, never the
+# subagent's, so nothing exported for a subagent reaches it; and the payload's
+# cwd is the SESSION's working directory, not the worktree a subagent worked
+# in — #478 measured it: of 151 subagents whose stop recorded a cwd, 143 named
+# the root checkout. What the spawning session can fix at spawn time is the
+# prompt, and the agent harness writes that prompt, verbatim, as the first user
+# line of the agent's own transcript.
+#
+# THE CHANNEL is the prompt's FIRST line, `Trace-Run: <run id> [<parent run
+# id>]`, and nothing else on it: the run, then — after one space — the run it
+# nests in, the one the spawner's own prompt handed it (the ticket's TRACE_RUN,
+# with TRACE_PARENT). The first line only, so text a spawn prompt quotes
+# further down — a ticket body, a review comment — can never name a run. Each
+# id is held to the shape the shared script mints (stamp, pid, eight hex
+# digits) and is only ever a value on an event: it is never executed, and a
+# line that does not match exactly is no channel at all. With no parent on the
+# line the parent is empty, never read from this checkout's stack: a run named
+# from elsewhere has its lineage elsewhere — the shared script's own rule for an
+# environment that names the run.
+#
+# BOUNDED. Only the first user record among the transcript's first fifty lines
+# is read, and only its first 4096 bytes: the prompt opens the record, and a
+# 200 KB prompt costs one bounded read, never a pattern match over all of it.
+# A channel that does not start inside those bytes is no channel.
+#
+# THE ENVIRONMENT STILL WINS, as in hook_run_of: a TRACE_RUN already set (a
+# dispatched worker told whose trail it joins) is left alone, and a
+# TRACE_PARENT already set is kept.
+hook_run_handed() {
+	[ -n "${TRACE_RUN+set}" ] && return 0
+	[ -n "${1:-}" ] || return 1
+	# Fifty lines: the prompt is written when the agent starts, ahead of
+	# everything it does. 4096 bytes: the record's keys and the prompt's first
+	# line fit many times over, and nothing past them is the channel's.
+	_rh_line=$(head -n 50 "$1" 2>/dev/null |
+		sed -n '/"type"[[:space:]]*:[[:space:]]*"user"/{p;q;}' | cut -b 1-4096)
+	# The message's own content, anchored on its role so no nested content
+	# block answers for it: one string, or content blocks whose first is text.
+	_rh_rest=${_rh_line#*'"role":"user","content":"'}
+	[ "$_rh_rest" != "$_rh_line" ] ||
+		_rh_rest=${_rh_line#*'"role":"user","content":[{"type":"text","text":"'}
+	[ "$_rh_rest" != "$_rh_line" ] || return 1
+	case $_rh_rest in 'Trace-Run: '*) ;; *) return 1 ;; esac
+	_rh_val=${_rh_rest#Trace-Run: }
+	# The line ends where the JSON string's next escape or its close begins,
+	# and that escape must be a newline: a tab or anything else after the ids
+	# is more on the line, and no channel.
+	_rh_run=${_rh_val%%\\*}
+	_rh_run=${_rh_run%%\"*}
+	case ${_rh_val#"$_rh_run"} in '\n'* | '"'*) ;; *) return 1 ;; esac
+	_rh_parent=
+	case $_rh_run in *' '*)
+		_rh_parent=${_rh_run#* }
+		_rh_run=${_rh_run%% *}
+		hook_run_id_ok "$_rh_parent" || return 1
+		;;
+	esac
+	hook_run_id_ok "$_rh_run" || return 1
+	TRACE_RUN=$_rh_run
+	export TRACE_RUN
+	if [ -z "${TRACE_PARENT+set}" ]; then
+		TRACE_PARENT=$_rh_parent
+		export TRACE_PARENT
+	fi
+	return 0
+}
+
+# hook_run_id_ok <value> — is this a run id the shared script could have
+# minted? `<YYYYMMDD>T<HHMMSS>Z-<pid>-<eight hex digits>`, and nothing more;
+# 64 characters at most, past any pid a host hands out, so no line of any
+# length is carried onto an event.
+# DELIBERATE COUPLING: this repeats the shape of the shared script's
+# trace_id, which exposes no check of its own. The leg that catches a drift is
+# `tests/trace-hooks.test.sh` §47's first: the id a real `begin` printed is
+# handed over and carried. One predicate owned by the script is a release,
+# recorded as a candidate ticket (review of PR #524).
+hook_run_id_ok() {
+	case ${1:-} in
+	[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-?*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+	*) return 1 ;;
+	esac
+	_ri_pid=${1#*Z-}
+	_ri_pid=${_ri_pid%-*}
+	case $_ri_pid in '' | *[!0-9]*) return 1 ;; esac
+	[ "${#1}" -le 64 ]
+}
+
+# hook_agent_transcript <session transcript> [<agent id>] — the transcript of
+# the agent an event belongs to: the session's own when no agent is named, else
+# the subagent's, under subagents/ in the directory named by the session
+# transcript's own stem, where the agent harness keeps it (the #246 spike's
+# layout, and the stop payload's agent_transcript_path). Built from the
+# session's file, not its id, so the two can never disagree. A payload already
+# naming the subagent's own file is taken as given. Nothing (status 1) for no
+# session transcript, an agent id outside the identifier class — a path is
+# never built from one — or a session transcript that is not a .jsonl: a
+# subagent that cannot be named never borrows its session's run.
+hook_agent_transcript() {
+	[ -n "${1:-}" ] || return 1
+	if [ -z "${2:-}" ]; then
+		printf '%s' "$1"
+		return 0
+	fi
+	hook_id_ok "$2" || return 1
+	case $1 in
+	*/agent-"$2".jsonl) printf '%s' "$1" ;;
+	*.jsonl) printf '%s/subagents/agent-%s.jsonl' "${1%.jsonl}" "$2" ;;
+	*) return 1 ;;
+	esac
+}
+
 # hook_point_at <trace dir> <session id> — write the pointer, or do nothing at
 # all.
 hook_point_at() {
