@@ -32,16 +32,17 @@ TRACE_NUMBERED_TYPES='ticket pr prd'
 # way TRACE_DIR is turned off.
 TRACE_TOOLS=1
 
-# THE SUBAGENT-STOP WAIT, measured (ticket #308). In seven live stops of a
-# throwaway session wired with a probe hook, the subagent's transcript was
-# always present when SubagentStop ran; in five it already held the final
-# message, and in two that message landed 170 and 223 ms after the hook began.
-# One second is about four times the worst of those: long enough that the race
-# the measurement saw is always won, short enough that a stop whose transcript
-# never completes (a subagent killed mid-turn) holds the session for one second
-# at most. A stop naming a transcript that does not exist is not waited for at
-# all — and the kit's own trace holds hundreds of those.
-TRACE_AGENT_WAIT_MS='1000'
+# THE SUBAGENT-STOP WAIT, measured (retro of 2026-10-02T08:07Z, finding F4;
+# ticket #479). Over that window 235 of 453 agent.stop events (52 %) gave up at
+# the old 1000 ms bound and carry no tokens, so every spend figure the trace
+# gave was a lower bound by about half. 234 of them ended on a user line whose
+# age when the wait ran out was 1,029 / 1,137 / 1,471 ms at p10 / p50 / p90,
+# 2,920 ms at worst — the final message was on its way, later than #308's seven
+# stops (worst 223 ms) had seen. Three seconds is about twice that p90. THE
+# COST: a stop whose transcript never completes (a subagent killed mid-turn)
+# now holds the session up to three seconds, and past it by one poll. A stop
+# naming a transcript that does not exist is still not waited for at all.
+TRACE_AGENT_WAIT_MS='3000'
 
 # THE ROOT CHECKOUT'S LAG (ticket #384). The kit's hooks run from the root
 # checkout, which sat ~140 commits behind main for four hours on 2026-10-01
