@@ -1429,5 +1429,8 @@ sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$P
 	sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$PI" | grep -qF 'required unless the outcome is `stopped`' &&
 	pass "and the skill says the counts are digits, required unless stopped" ||
 	fail "/pr-iterate does not say the counts are digits ('each digits') and required unless stopped"
+sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$PI" | grep -qF 'without them. Then close the run: `sh scripts/trace.sh end' &&
+	pass "and the count clause ends before the run is closed — the end is its own sentence" ||
+	fail "/pr-iterate's count clause runs into the end command — 'refuses … without them and \`sh scripts/trace.sh end\`' reads as part of the refusal"
 
 t_done "trace skills contract"
