@@ -352,7 +352,7 @@ banner "4b. The stamp is read through the checker: restate on low, stop on refus
 # body is untrusted, and a value typed into a quoted shell argument closes the
 # quote with one `'` and runs what follows — so the skill never has the agent
 # type the body's text at all: one script, scripts/stamp.sh, takes the issue
-# number, fetches, lifts and checks, and answers with one of four statuses.
+# number, fetches, lifts and checks, and answers with one of five statuses.
 # The pipe this replaced answered with the checker's status alone, which made a
 # failed fetch and a stampless ticket the same silence; the script's own
 # contract is driven by tests/stamp.test.sh, and 4c below runs it from here.
@@ -361,9 +361,9 @@ stamp=$(grep -F -- "sh scripts/stamp.sh" "$SKILL_ABS" | head -1)
 	fail "no line runs sh scripts/stamp.sh — the stamp is read unchecked"
 t_text_has "$stamp" "\`sh scripts/stamp.sh <N>\`, the ticket's number and nothing else" "the call: a number in, never the body's text" "the stamp bullet"
 t_text_has "$stamp" "The lines the script prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command" "the stamp bullet"
-# The four outcomes, one sentence each, in status order — a status the skill
+# The five outcomes, one sentence each, in status order — a status the skill
 # never defines is what PR #311's last HIGH was.
-t_text_has "$stamp" "Four outcomes, one exit status each" "the contract is counted, so a fifth cannot slip in unsaid" "the stamp bullet"
+t_text_has "$stamp" "Five outcomes, one exit status each" "the contract is counted, so a sixth cannot slip in unsaid" "the stamp bullet"
 t_text_has "$stamp" "**Exit 0**: the checked lines are on stdout" "outcome 0: the stamp" "the stamp bullet"
 t_text_has "$stamp" "**Exit 2**: a refused value — stdout is empty" "outcome 2: a refusal prints nothing to type" "the stamp bullet"
 t_text_has "$stamp" "names the refused field, never its text" "outcome 2: the refused text stays in the ticket" "the stamp bullet"
@@ -372,21 +372,40 @@ t_text_has "$stamp" "None is a refusal" "outcome 3: not a stop" "the stamp bulle
 t_text_has "$stamp" "take the missing-line defaults below" "outcome 3: what it means for the tier" "the stamp bullet"
 t_text_has "$stamp" "**Exit 4**: the fetch failed" "outcome 4: the fetch, named" "the stamp bullet"
 t_text_has "$stamp" "never read it as a missing line" "outcome 4: a failed fetch is never outcome 3" "the stamp bullet"
+# Outcome 5 is the lift's bound (#400): a body with more stamp lines of one
+# key than the script lifts is a stop, reported the way a refusal is.
+t_text_has "$stamp" "**Exit 5**: too many stamp lines" "outcome 5: the lift's bound, named" "the stamp bullet"
+t_text_has "$stamp" "a stop, reported by the key and the count the stderr line names" "outcome 5: never the defaults, never a stamp" "the stamp bullet"
+t_text_has "$stamp" "never a line of the body" "outcome 5: the report carries no hostile line — the stderr line holds none to quote" "the stamp bullet"
 t_text_has "$stamp" "A refused value is a stop, reported for \`/to-tickets\` to re-stamp" "outcome 2: every refused value stops — a tier, a confidence with or without its tier, a domain" "the stamp bullet"
 t_text_has "$stamp" "a line names a field this project's policy does not declare" "outcome 3: a line the checker would ignore is never printed" "the stamp bullet"
 # A missing script is the shell's status, not the script's: 127, or 2 under a
 # shell that reads an unopenable file as a usage error — which would read as
 # a refusal. The bullet has the agent test for the file first.
 t_text_has "$stamp" "test \`[ -f scripts/stamp.sh ]\` before the call" "no stamp.sh: tested for, never read off the shell's status" "the stamp bullet"
-# The bullet is the call, its four outcomes and #340's three answers — no
+# The bullet is the call, its five outcomes and #340's three answers — no
 # more (#331). What the script does is the script's to say; a bullet that
 # restates it grows a second contract to drift.
 assert_file_lacks "$SKILL" "It fetches the body with your tracker's CLI" "the bullet does not restate what the script does"
-assert_file_lacks "$SKILL" "with no \`Tier:\` line qualifies nothing" "the bullet is the call, its four outcomes and #340's three answers — no more"
-# The order is the contract's: 0, 2, 3, 4.
+assert_file_lacks "$SKILL" "with no \`Tier:\` line qualifies nothing" "the bullet is the call, its five outcomes and #340's three answers — no more"
+# The order is the contract's: 0, 2, 3, 4, 5.
 order=$(printf '%s\n' "$stamp" | grep -oE '\*\*Exit [0-9]\*\*' | tr -d '*' | tr '\n' ' ')
-[ "$order" = "Exit 0 Exit 2 Exit 3 Exit 4 " ] && pass "the four outcomes, once each, in status order" ||
-	fail "the outcomes the bullet names are '$order', not 'Exit 0 Exit 2 Exit 3 Exit 4'"
+[ "$order" = "Exit 0 Exit 2 Exit 3 Exit 4 Exit 5 " ] && pass "the five outcomes, once each, in status order" ||
+	fail "the outcomes the bullet names are '$order', not 'Exit 0 Exit 2 Exit 3 Exit 4 Exit 5'"
+# The manual's quick-reference row names every status the bullet does — in
+# the kit's manual and in the template a consumer's is stamped from, which a
+# change to the contract has to move together (#400) — and the README's
+# paragraph on the script's suite counts them.
+for manual in AGENTS.md constitution/AGENTS.md.template; do
+	row=$(grep -F '| Hold a decision line to its vocabulary' "$manual")
+	case $row in
+	*"3 none, 4 fetch failed, 5 too many lines |") pass "$manual's stamp row names all five statuses" ;;
+	*) fail "$manual's stamp row does not end '4 fetch failed, 5 too many lines': $row" ;;
+	esac
+done
+grep -qF 'Five statuses, each driven red first' README.md &&
+	pass "the README counts the script's five statuses" ||
+	fail "the README does not say 'Five statuses, each driven red first'"
 # The domain is the third line the ticket spells and the one this skill goes
 # on to TYPE — it is the resolver's second argument. Unchecked, it is the same
 # injection one bullet over; checked, the open vocabulary's token shape is
@@ -486,7 +505,7 @@ banner "4c. The stamp reader, EXECUTED: nothing unchecked is ever shown as a sta
 # line — whatever the skill tells an agent to run is what runs here — and
 # pointed at a stub tracker CLI on PATH that serves a fixture body, so the
 # bodies below are the ticket and nothing touches the network. The script's
-# full contract (the four statuses, the retry, the locale) is
+# full contract (the five statuses, the retry, the locale, the bound) is
 # tests/stamp.test.sh's; this leg holds the skill's call to it (#331).
 #
 # THE INVARIANT, for every hostile body: never BOTH an exit 0 AND the payload

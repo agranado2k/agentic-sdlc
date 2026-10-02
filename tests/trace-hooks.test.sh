@@ -434,7 +434,9 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
-			PreToolUse) _w_want=tool-pre-guard.sh ;;
+			# Two scripts on PreToolUse: the kill guard (#414) and the
+			# pending marker a denied call leaves behind (#409).
+			PreToolUse) case $_w_cmd in *"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;; *) _w_want=tool-pre-guard.sh ;; esac ;;
 			*)
 				_w_bad=1
 				continue
@@ -476,12 +478,13 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Six events, five scripts: one script serves both post-tool events,
-	# because the only difference between them is the outcome it records; the
-	# sixth is the PreToolUse kill guard (#414).
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 6 ] &&
-		pass "it names a hook script per wired event, six in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 6"
+	# Six events, seven commands, six scripts: one script serves both
+	# post-tool events, because the only difference between them is the
+	# outcome it records; PreToolUse runs two — the kill guard (#414) and the
+	# pending marker a denied call leaves behind (#409).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 7 ] &&
+		pass "it names a hook script per wired command, seven in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 7"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
@@ -1417,15 +1420,16 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "and the end after it still totals the rollup ($R34) — the anchor skipped the failure" ||
 		fail "ok, drift, ok totals '$(model_row "$RMODEL")', the rollup says '$R34'"
 
-	# M-2: more than one model under --after. The message count is per model;
-	# the last id is the whole read's, the same on every row. A third message on
-	# a second model is appended to the fixture for this.
+	# M-2: more than one model under --after. The message count is per model,
+	# and so is the last id since #408 (section 39): each row names its own
+	# model's last message. A third message on a second model is appended to
+	# the fixture for this.
 	sed -n '30,31p' "$RFIX" | sed "s/$RMSG2/msg_three307/; s/$RMODEL/claude-other-307/g" >"$SCRATCH/third-307.jsonl"
 	cat "$RFIX" "$SCRATCH/third-307.jsonl" >"$SCRATCH/two-models-307.jsonl"
 	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/two-models-307.jsonl"
-	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 msg_three307
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 $RMSG2
 claude-other-307 10 31 88 23947 1 msg_three307" ] &&
-		pass "two models after the anchor: one row each, one message each, one last id on both" ||
+		pass "two models after the anchor: one row each, one message each, each its own last id" ||
 		fail "two models after the anchor printed: $S_OUT"
 
 	# A FRESH single-end session is unchanged, apart from saying how far it read.
@@ -1683,15 +1687,70 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "a clock stepping back still ends the wait at the bound ($NAPS naps, waited_ms 300)" ||
 		fail "a backwards clock: exit $S_STATUS, $NAPS naps, event $K"
 
-	# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP still waits at the kit's own
-	# bound: the first check leaves a hair under 1000 ms, and one whole-second
-	# nap within a poll of the bound is taken rather than none.
+	# A SUB-SECOND BOUND IS NOT SERVED BY A WHOLE-SECOND SLEEP: the first
+	# fraction is refused, no whole second fits in 500 ms, and the hook returns
+	# without a nap — one ask, the refused one, and well under a second.
 	new_trace
-	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
-	J=$(ev_of agent.stop | sed -n '1p')
-	[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 950 ] 2>/dev/null &&
-		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
-		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=500
+	U=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 1 ] && [ "$(str "$U" waited_ms)" -lt 1000 ] 2>/dev/null &&
+		pass "a 500 ms bound with a whole-second sleep returns without a nap ($(str "$U" waited_ms) ms, $NAPS ask)" ||
+		fail "a 500 ms bound with a whole-second sleep: exit $S_STATUS, $NAPS asks, event $U"
+
+	# The legs below need a millisecond clock; on a host without one they would
+	# pass or fail on nothing, so they say so instead.
+	case $("$REAL_DATE" +%s%N) in
+	*[!0-9]*) HAVE_MS_CLOCK=0 ;;
+	*) HAVE_MS_CLOCK=1 ;;
+	esac
+	if [ "$HAVE_MS_CLOCK" = 0 ]; then
+		note "no millisecond clock on this host: the real-clock whole-second legs did not run"
+	else
+		# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP waits the kit's own bound
+		# out: one refused fraction, then the whole second.
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		J=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			pass "a real clock and a whole-second sleep wait a 1000 ms bound out ($(str "$J" waited_ms) ms, $NAPS asks)" ||
+			fail "a real clock and a whole-second sleep: exit $S_STATUS, $NAPS asks, event $J"
+
+		# THE READINESS CHECK IS SPENT INSIDE THE BOUND (#403). On a loaded host
+		# the first check alone cost just over 50 ms, and the hook gave up at
+		# waited_ms 51 without one nap. A `tail` that costs 60 ms makes that host
+		# deterministic, and one whose own fractional sleep fails says so rather
+		# than quietly costing nothing.
+		REAL_TAIL=$(command -v tail)
+		mkdir -p "$SCRATCH/slowcheck-403"
+		printf '#!/bin/sh\n"%s" 0.06 || { : >"%s/slowcheck-403.broken"; exit 1; }\nexec "%s" "$@"\n' \
+			"$REAL_SLEEP" "$SCRATCH" "$REAL_TAIL" >"$SCRATCH/slowcheck-403/tail"
+		chmod +x "$SCRATCH/slowcheck-403/tail"
+		rm -f "$SCRATCH/slowcheck-403.broken"
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		W=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$W" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a readiness check costing 60 ms still waits a 1000 ms bound out ($(str "$W" waited_ms) ms, $NAPS asks)" ||
+			fail "a 60 ms readiness check cut the wait short: exit $S_STATUS, $NAPS asks, event $W"
+
+		# THE OVERRUN IS BOUNDED. In whole-second mode the wait reaches the bound
+		# and may pass it by at most one whole-second nap plus a check: a 2500 ms
+		# bound with the same 60 ms check takes two whole seconds and no third,
+		# and reports no more than 2500 + 1000 + the check's cost (60 ms and the
+		# process it runs in, 200 ms in all).
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=2500
+		O=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$NAPS" = 3 ] && [ "$(str "$O" waited_ms)" -le 3700 ] 2>/dev/null &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a 2500 ms bound overruns by at most one nap and a check ($(str "$O" waited_ms) ms, $NAPS asks)" ||
+			fail "a 2500 ms whole-second wait overran its ceiling: exit $S_STATUS, $NAPS asks, event $O"
+	fi
 
 	# THE READINESS RULE, half by half (hook_final's comment calls each one
 	# load-bearing, so each has a leg that fails without it). Built from the
@@ -3036,5 +3095,363 @@ if [ "$HAVE_NODE" = 1 ]; then
 else
 	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
 fi
+
+# ---------------------------------------------------------------------------
+banner "39. A multi-model session end killed partway loses nothing: one anchor per model (#408)"
+# ---------------------------------------------------------------------------
+# Ticket #408 (a known gap of 2026-10-01, origin #307 L-1). The session-end hook
+# writes one session.usage event per model. Until this ticket every one of them
+# carried the SAME resume anchor — the last message of the whole read — so an
+# end killed after the first model's event left the trace saying "read up to
+# here" for a model whose event was never written, and the next end started
+# after messages nobody recorded. Now each model's event carries that model's
+# own last message, and the next end resumes each model from the trace's last
+# anchor FOR THAT MODEL; a model with no anchor is read from the start.
+#
+# The kill is simulated by cutting the trace after the end's first usage event:
+# exactly what a SIGKILL between two emits leaves, and deterministic. The
+# transcript is synthetic — two models, one message each per run, distinct
+# counts — so a message counted twice or not at all moves a total visibly.
+S408=c0ffee00-0408-4000-8000-000000000408
+MA=claude-alpha-408
+MB=claude-beta-408
+
+# asst408 <id> <model> <in> <out> <cache w> <cache r> — one assistant line.
+asst408() {
+	printf '{"type":"assistant","requestId":"req_%s","message":{"id":"%s","model":"%s","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
+		"$1" "$1" "$2" "$3" "$4" "$5" "$6"
+}
+
+# cut_after_first_usage — the trace as a kill after this end's first usage
+# event leaves it: every line after that event, the session.end included, gone.
+# <n> is how many usage events of this session the trace held before the end.
+cut_after_first_usage() {
+	for _f in "$TDIR"/events/*.jsonl; do
+		awk -v n="$1" -v s="\"subject\":\"session:$S408\"" '
+			index($0, "\"kind\":\"session.usage\"") && index($0, s) { u += 1 }
+			{ print } u > n { exit }' "$_f" >"$_f.cut" && mv "$_f.cut" "$_f"
+	done
+}
+
+usage408() { ev_of session.usage | grep -F "\"subject\":\"session:$S408\"" || :; }
+
+{
+	asst408 msg_a1 "$MA" 1 10 100 1000
+	asst408 msg_b1 "$MB" 4 40 400 4000
+} >"$SCRATCH/run1-408.jsonl"
+{
+	cat "$SCRATCH/run1-408.jsonl"
+	asst408 msg_a2 "$MA" 2 20 200 2000
+	asst408 msg_b2 "$MB" 8 80 800 8000
+} >"$SCRATCH/run2-408.jsonl"
+set_key transcript_path "$SCRATCH/t-408.jsonl" <"$FIX/session-end.payload.json" |
+	set_key session_id "$S408" >"$SCRATCH/end-408.json"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR: each row's last id is its own model's last message.
+	t_run_split node "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "the extractor's last-id column is per model: msg_a2 for alpha, msg_b2 for beta" ||
+		fail "a two-model read printed '$S_OUT' (status $S_STATUS)"
+
+	# --resume: the anchors come from the recorded events on stdin, per model.
+	printf '%s\n' \
+		'{"kind":"session.usage","model":"'"$MA"'","tok_in":1,"data":{"msgs":"1","last_msg":"msg_a1"}}' \
+		>"$SCRATCH/rec-a-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-a-408.jsonl"
+	# The rows are compared as a set: their order is not a contract (L-4,
+	# review of PR #447).
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$MA 2 20 200 2000 1 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume reads alpha after its anchor and beta, anchorless, from the start" ||
+		fail "--resume with alpha's anchor only printed '$S_OUT' (status $S_STATUS: $S_ERR)"
+	t_run_split sh -c 'node "$1" --resume "$2" </dev/null' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume with nothing recorded is the whole file" ||
+		fail "--resume with an empty stdin printed '$S_OUT' (status $S_STATUS)"
+	printf '%s\n' '{"kind":"session.usage","model":"'"$MB"'","data":{"msgs":"1","last_msg":"msg_gone"}}' \
+		>"$SCRATCH/rec-gone-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-gone-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *msg_gone*) true ;; *) false ;; esac &&
+		pass "a model's anchor the transcript does not hold is drift: exit 2, no row, the anchor named" ||
+		fail "a lost per-model anchor: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# Under --resume the recorded events ARE the anchors: a line that is not
+	# JSON, or no stdin to read, is exit 2 — never "nothing recorded", which
+	# would be the whole-file read and the double count.
+	t_run_split sh -c 'printf "not json\n" | node "$1" --resume "$2"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a recorded line that is not JSON is exit 2 under --resume, no row" ||
+		fail "a non-JSON recorded line under --resume: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --resume "$SCRATCH/run2-408.jsonl" <"$SCRATCH"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a stdin that cannot be read is exit 2 under --resume, no row" ||
+		fail "an unreadable stdin under --resume: status $S_STATUS, '$S_OUT'"
+	# M-1, review of PR #447: hook_tokens --after WITHOUT --resume is still the
+	# one anchor for every model, never silently a whole-file read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh -c '. "$0"; hook_tokens "$1" agent.stop --after msg_a1 subject=agent:m1-408' \
+		"$HOOKS/hook.lib.sh" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(sum_tok tok_in agent.stop)" = 14 ] &&
+		pass "hook_tokens --after alone still anchors every model: b1, a2, b2 counted (14), a1 not" ||
+		fail "hook_tokens --after alone counted tok_in $(sum_tok tok_in agent.stop): $(ev_of agent.stop)"
+	t_run_split node "$EXTRACTOR" --resume --after msg_a1 "$SCRATCH/run2-408.jsonl" </dev/null
+	[ "$S_STATUS" = 2 ] && pass "--resume and --after together is a usage error: two answers to one question" ||
+		fail "--resume with --after: status $S_STATUS, '$S_OUT'"
+
+	# THE KILL. End 1 over run 1, cut after its first usage event; then a full
+	# end over run 2. Every message counted exactly once, per model.
+	new_trace
+	cp "$SCRATCH/run1-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the two-model first end exits 0" || fail "the first end exited $S_STATUS: $S_ERR"
+	UA=$(usage408 | grep -F "\"model\":\"$MA\"")
+	UB=$(usage408 | grep -F "\"model\":\"$MB\"")
+	[ "$(data_of "$UA" last_msg)" = msg_a1 ] && [ "$(data_of "$UB" last_msg)" = msg_b1 ] &&
+		pass "each model's event carries its own anchor: msg_a1 on alpha, msg_b1 on beta" ||
+		fail "the per-model anchors: alpha '$(data_of "$UA" last_msg)', beta '$(data_of "$UB" last_msg)'"
+	cut_after_first_usage 0
+	[ "$(usage408 | grep -c .)" = 1 ] && [ -z "$(ev_of session.end)" ] &&
+		pass "the kill leaves one usage event and no session.end" ||
+		fail "the cut trace holds: $(events)"
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the full end after the kill exits 0" || fail "exited $S_STATUS: $S_ERR"
+	[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "summary --by model: alpha 3/30/300/3000, beta 12/120/1200/12000 — every message once" ||
+		fail "after the kill alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	[ -z "$(usage408 | grep -F '"outcome":"fail"')" ] &&
+		pass "and no usage event of the two ends is a failure" ||
+		fail "a failure was recorded: $(usage408 | grep -F '"outcome":"fail"')"
+
+	# A THIRD END WITH NOTHING NEW: one event, no tokens, the totals unmoved.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	N3=$(usage408 | sed -n '$p')
+	[ "$S_STATUS" = 0 ] && [ -z "$(num "$N3" tok_in)" ] && [ "$(str "$N3" outcome)" != fail ] &&
+		[ "$(data_of "$N3" msgs)" = 0 ] &&
+		[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a third end with nothing new leaves one tokenless event and moves no total" ||
+		fail "the nothing-new end: '$N3', alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	# AND IT ANCHORS NOBODY (L-3, review of PR #447): it names no model, so a
+	# fourth end with one new message per model counts exactly those two.
+	{
+		asst408 msg_a3 "$MA" 16 160 1600 16000
+		asst408 msg_b3 "$MB" 32 320 3200 32000
+	} >>"$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "19 190 1900 19000" ] &&
+		[ "$(model_row "$MB")" = "44 440 4400 44000" ] &&
+		pass "a fourth end after it counts each model's one new message, no more" ||
+		fail "the fourth end: alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A TRACE THE OLD HOOK WROTE: both events carried the whole read's last id,
+	# and the kill took beta's. Alpha's anchor is a POSITION in the file, so it
+	# still counts alpha's messages after it; beta has none and starts over.
+	new_trace
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject="session:$S408" \
+		session="$S408" model="$MA" tok_in=1 tok_out=10 tok_cache_w=100 tok_cache_r=1000 \
+		data.msgs=1 data.last_msg=msg_b1
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a trace the old hook wrote and a kill cut recovers too: every message once" ||
+		fail "from an old-style anchor alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A SINGLE-MODEL SESSION IS UNCHANGED: section 26's two ends, again.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | sed -n 's/.*"last_msg":"\([^"]*\)".*/\1/p' | paste -sd' ' -)" = "$RMSG1 $RMSG2" ] &&
+		[ "$(model_row "$RMODEL")" = "$R34" ] &&
+		pass "a single-model session: the same two anchors and the same total ($R34)" ||
+		fail "the single-model session: $(ev_of session.usage)"
+else
+	echo "  skip  node is not on PATH — the per-model anchor legs need the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "40. A denied tool call is visible: a pending marker swept at session end (#409)"
+# ---------------------------------------------------------------------------
+# Ticket #409 (a known gap of 2026-10-01, origin #252). A call the operator
+# denies fires PreToolUse and nothing after it, so tool-post.sh never sees it.
+# The pre-tool hook now writes a pending marker in the adapter's own
+# claude-code/ directory, keyed by session and tool-use id; the post-tool hook
+# removes it; the session-end hook sweeps what is left into one
+# `tool.use outcome=denied` each, the tool name and the input head on it.
+# Behind TRACE_TOOLS, the switch tool-post.sh reads: a marker no post hook
+# would ever remove would read every call as denied.
+
+# pre_of <session> <tool_use_id> <command> — the PreToolUse hook on a compact
+# payload, the live shape, with tool capture on.
+pre_of() {
+	printf '{"session_id":"%s","transcript_path":"%s","cwd":"/tmp/spike-proj","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"%s"}' \
+		"$1" "$SCRATCH/main.jsonl" "$3" "$2" >"$SCRATCH/pre-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+}
+
+# post_of <session> <tool_use_id> <command> — the PostToolUse hook for that call.
+post_of() {
+	printf '{"session_id":"%s","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"stdout":"hi"},"tool_use_id":"%s"}' \
+		"$1" "$3" "$2" >"$SCRATCH/post-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" <"$SCRATCH/post-409.json" >/dev/null 2>&1
+}
+
+# denied_of <session> — that session's tool.use events with outcome=denied.
+denied_of() { ev_of tool.use | grep -F "\"subject\":\"session:$1\"" | grep -F '"outcome":"denied"' || :; }
+
+# markers — every pending marker under the trace directory.
+markers() { find "$TDIR" -path '*.pending*' -type f 2>/dev/null; }
+
+if [ -f "$HOOKS/tool-pre.sh" ]; then
+	assert_status 0 "adapters/claude-code/hooks/tool-pre.sh parses under sh -n" -- sh -n "$HOOKS/tool-pre.sh"
+else
+	fail "adapters/claude-code/hooks/tool-pre.sh does not exist"
+fi
+
+if [ "$HAVE_NODE" = 1 ]; then
+	S409=sess-409-a
+	new_trace
+	# THE DENIAL: a pre-tool event with no post-tool event, then the end.
+	t_run_split pre_of "$S409" toolu_409_denied 'rm -rf build'
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		pass "the pre-tool hook exits 0 and says nothing on stdout" ||
+		fail "tool-pre.sh: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	[ -z "$(ev_of tool.use)" ] && pass "and writes no event of its own — the marker is not a record yet" ||
+		fail "the pre-tool hook wrote an event: $(ev_of tool.use)"
+	M=$(markers)
+	[ "$(printf '%s\n' "$M" | grep -c .)" = 1 ] &&
+		case $M in "$TDIR/claude-code/$S409.pending/toolu_409_denied") true ;; *) false ;; esac &&
+		pass "one marker, in the adapter's claude-code/ directory, keyed by session and tool-use id" ||
+		fail "expected claude-code/$S409.pending/toolu_409_denied, found: $M"
+	case $(ls -l "$M" 2>/dev/null) in -rw-------*) pass "and owner-only: it holds the command's head" ;;
+	*) fail "the marker is not mode 600: $(ls -l "$M" 2>/dev/null)" ;; esac
+	end_of "$S409"
+	D=$(denied_of "$S409")
+	[ "$(printf '%s\n' "$D" | grep -c .)" = 1 ] &&
+		pass "a pre-tool event with no post-tool event, then a session end: one tool.use outcome=denied" ||
+		fail "expected one denied tool.use for $S409, got: $D"
+	[ "$(data_of "$D" tool)" = Bash ] && [ "$(data_of "$D" tool_use_id)" = toolu_409_denied ] &&
+		pass "naming the tool and the call's id" || fail "the denial lacks tool or id: $D"
+	# Matched on the line itself: the head is JSON inside a JSON string, so
+	# its quotes are escaped and data_of's plain-string reader stops at one.
+	case $D in *'"input_head":"{\"command\":\"rm -rf build\"}"'*) pass "and carrying the input head the marker kept" ;;
+	*) fail "the denial does not carry the input head: $D" ;; esac
+	[ "$(str "$D" session)" = "$S409" ] && [ "$(str "$D" harness)" = claude-code ] &&
+		pass "filed under the session, from the claude-code agent harness" || fail "the denial's session or harness is wrong: $D"
+	# Inside the session: the denial is written before session.end.
+	_order=$(events | grep -F "session:$S409" | sed -n 's/.*"kind":"\([a-z.]*\)".*/\1/p' | tr '\n' ' ')
+	case $_order in *tool.use*session.end*) pass "and written before the session.end it belongs to" ;;
+	*) fail "the order of $S409's events is: $_order" ;; esac
+	[ -z "$(markers)" ] && pass "the swept marker is gone" || fail "a marker outlived the sweep: $(markers)"
+	t_run_split env TRACE_DIR="$TDIR" sh "$TRACE" show "session:$S409" --kind tool.use
+	case $S_OUT in *denied*toolu_409_denied*) pass "show session:<id> --kind tool.use prints the denial — the ticket's demo" ;;
+	*) fail "show did not print the denial: $S_OUT" ;; esac
+
+	# A MATCHED PAIR: the post-tool hook removes the marker, and the end
+	# sweeps nothing.
+	S409B=sess-409-b
+	pre_of "$S409B" toolu_409_ok 'echo hi' >/dev/null 2>&1
+	post_of "$S409B" toolu_409_ok 'echo hi'
+	[ -z "$(markers)" ] && pass "the post-tool hook removes the call's marker" || fail "a matched call left a marker: $(markers)"
+	end_of "$S409B"
+	[ -z "$(denied_of "$S409B")" ] && pass "a matched pre and post, then a session end: no denied event" ||
+		fail "a call that completed was swept as denied: $(denied_of "$S409B")"
+	ev_of tool.use | grep -F "session:$S409B" | grep -q '"outcome":"ok"' &&
+		pass "and the call's own ok event stands" || fail "the matched call has no ok event: $(ev_of tool.use)"
+
+	# NO END YET: the marker stays on disk, and the next end of the session
+	# sweeps it — once.
+	S409C=sess-409-c
+	pre_of "$S409C" toolu_409_late 'git push --force' >/dev/null 2>&1
+	pre_of "$S409B" toolu_409_other 'make' >/dev/null 2>&1
+	[ "$(markers | grep -c "$S409C.pending/toolu_409_late")" = 1 ] &&
+		pass "a marker with no session end stays on disk" || fail "the marker is not on disk: $(markers)"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "and the next end sweeps it" ||
+		fail "the next end swept: $(denied_of "$S409C")"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "a second end of the same session sweeps nothing again" ||
+		fail "a second end recorded the denial twice: $(denied_of "$S409C")"
+	[ "$(markers | grep -c "$S409B.pending/toolu_409_other")" = 1 ] &&
+		pass "and another session's marker is left alone — its call may still be running" ||
+		fail "a session end swept another session's marker: $(markers)"
+
+	# A REFUSED ID is never a path: a hostile or traversing session or
+	# tool-use id writes no marker anywhere.
+	new_trace
+	pre_of 'abc; touch PWNED-409' toolu_409_x 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '../../escape-409' 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '..' 'ls' >/dev/null 2>&1
+	pre_of '..' toolu_409_y 'ls' >/dev/null 2>&1
+	LEFT=$(
+		find "$TDIR" -path '*.pending*' 2>/dev/null
+		find "$SCRATCH" "$(dirname "$SCRATCH")" -maxdepth 1 \( -name 'escape-409*' -o -name 'PWNED-409*' \) 2>/dev/null
+	)
+	[ -z "$LEFT" ] && pass "a hostile or traversing session or tool-use id leaves no marker anywhere" ||
+		fail "a refused id left files: $LEFT"
+
+	# THE SWITCH: tool capture off, or tracing off — no marker, exit 0, silent.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" TRACE_TOOLS= sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$(markers)" ] &&
+		pass "with tool capture off the pre-tool hook writes no marker and exits 0" ||
+		fail "TRACE_TOOLS off: exit $S_STATUS, stdout '$S_OUT', markers $(markers)"
+	t_run_split env -u TRACE_DIR TRACE_TOOLS=1 TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+		pass "with tracing off it exits 0 and says nothing" ||
+		fail "tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+	# REVIEW OF PR #446. H-1: a post payload the reader refuses still drops
+	# the call's marker — the call returned, so it was not denied.
+	new_trace
+	pre_of sess-409-e toolu_409_drift 'echo hi' >/dev/null 2>&1
+	printf '{"session_id":"sess-409-e","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"tool_use_id":"toolu_409_drift"}' |
+		env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" >/dev/null 2>&1
+	[ -z "$(markers)" ] && ev_of tool.use | grep -q '"outcome":"fail"' &&
+		pass "a post payload the reader refuses records its fail and still drops the marker (review of PR #446, H-1)" ||
+		fail "after a refused post payload: markers '$(markers)', events $(ev_of tool.use)"
+	end_of sess-409-e
+	[ -z "$(denied_of sess-409-e)" ] && pass "and the session end records no denial for it" ||
+		fail "a call whose post payload drifted was swept as denied: $(denied_of sess-409-e)"
+
+	# M-1: a sweep that died after taking the directory aside left
+	# <sid>.pending.<pid>; the next end of that session sweeps it too.
+	new_trace
+	mkdir -p "$TDIR/claude-code/sess-409-f.pending.4242"
+	printf 'Bash\n{"command":"rm -rf x"}\n' >"$TDIR/claude-code/sess-409-f.pending.4242/toolu_409_orphan"
+	mkdir -p "$TDIR/claude-code/sess-409-g.pending.4243"
+	printf 'Bash\n{}\n' >"$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine"
+	end_of sess-409-f
+	[ "$(denied_of sess-409-f | grep -c toolu_409_orphan)" = 1 ] &&
+		pass "a directory an interrupted sweep took aside is swept by the session's next end (review of PR #446, M-1)" ||
+		fail "the orphaned taken-aside directory was not swept: $(denied_of sess-409-f)"
+	[ ! -e "$TDIR/claude-code/sess-409-f.pending.4242" ] && [ -e "$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine" ] &&
+		pass "and it is removed, while another session's is left alone" ||
+		fail "orphans after the end: $(find "$TDIR/claude-code" 2>/dev/null)"
+
+	# L-4: the kill guard refuses a sub-agent's call, the marker hook ran on
+	# the same payload, the session ends: the guard's note AND one denial.
+	new_trace
+	printf '{"session_id":"sess-409-h","hook_event_name":"PreToolUse","agent_type":"general-purpose","tool_name":"Bash","tool_input":{"command":"pkill -f suite"},"tool_use_id":"toolu_409_guard"}' >"$SCRATCH/guard-409.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/tool-pre-guard.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	_g409=$?
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	end_of sess-409-h
+	[ "$_g409" = 2 ] && ev_of note | grep -q 'kill-guard' && [ "$(denied_of sess-409-h | grep -c toolu_409_guard)" = 1 ] &&
+		pass "a call the kill guard refused is the guard's note and one swept tool.use denied (review of PR #446, L-4)" ||
+		fail "guard exit $_g409; note $(ev_of note); denials $(denied_of sess-409-h)"
+else
+	echo "  skip  node is not on PATH — the marker needs the payload reader's input head"
+fi
+
+# THE WIRING AND THE RECORD.
+grep -q 'hooks/tool-pre.sh' "$SETTINGS" && pass "the kit's settings file wires tool-pre.sh" ||
+	fail "the kit's settings file does not wire tool-pre.sh"
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"swept into one \`tool.use\` with \`outcome=denied\`"*) pass "the adapter README records the sweep" ;;
+*) fail "the adapter README does not say a leftover marker is swept into one tool.use with outcome=denied" ;; esac
 
 t_done "trace hooks"

@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-10-01
+## Current state — 2026-10-02
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,10 +20,10 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.40.0 is in flight as the release PR for #409 (PR #446) (a denied tool call is visible: `tool.use` declares `denied`, the Claude Code adapter sweeps a pending marker into it at session end) — untagged until the operator merges it and cuts `v0.40.0`. 0.39.0 tagged 2026-10-02 (#400: `scripts/stamp.sh` bounds what it lifts). 0.38.0 tagged 2026-10-02 at `44b1ccf`, the merge of PR #443 (#418: a `mechanical` stamp names its one oracle and one pattern). 0.37.0 tagged 2026-10-02 at `925b0e7`, the merge of PR #442 (#420: the trace holds `finding.triage`'s `data.id` and `pr.iterate`'s `data.iteration` to a shape). Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `5552683` — merge of PR #393 (#385: `feedback` says who answered, `data.by=operator|train`), untagged past `v0.36.0` with PR #389 (#388: a failed tool call records the error's first line); both moved skills, the adapter, records and suites and no shared file, so they ride the next release. |
+| **Last commit on `main`** | `45b35be` — merge of PR #431 (#419), past the `v0.39.0` tag; nothing past the tag moved a shared file. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
@@ -1918,3 +1918,29 @@ installed; `trace-hooks`'s one-second bound against a 51 ms readiness check; a
 `LIFTED` entry-match assertion with baits for the exemptions; the fence extractors
 with a mode; the verdict runners in two suites with different bodies.
 
+### 2026-10-02 — 0.40.0: a denied tool call is visible
+
+Ticket #409, one of PRD #237's known gaps of 2026-10-01 (origin #252). A tool
+call the permission system or a blocking hook refuses fires the agent
+harness's pre-tool event and nothing after it, so the trace never saw one. The
+Claude Code adapter now leaves a pending marker per call at `PreToolUse`
+(`hooks/tool-pre.sh`, new), under `claude-code/<session id>.pending/` in the
+trace directory — the adapter-owned directory #410 opened for its phantom
+counters — the post-tool hook removes it when the call returns, and the
+session-end hook sweeps each marker left into one `tool.use outcome=denied`
+with the tool's name and the input head, per session and never across, before
+`session.end`. Behind `TRACE_TOOLS`, because only a post-tool hook that runs
+can remove a marker; no marker without node, for the same reason.
+
+The word had no row: `scripts/trace.sh`'s outcome table (#348) declared
+`tool.use` `ok|fail` and left `denied` out because nobody wrote it. So the
+ticket was release-bound — a widening of one kind's vocabulary, ADR-0008
+clause 1 amended 2026-10-02, `/retro`'s question 6 counting the denials per
+session and tool. Main moved from 0.36.0 to a tagged 0.37.0 (#420) while the
+ticket was built, and then to tagged 0.38.0 (#418) and 0.39.0 (#400) while
+its review was iterated, so the bump is 0.40.0; each merge of main kept both sides — both
+ADR amendments, both trace-suite sections, both notes and both recipe
+paragraphs. The 0.40.0 note also
+names, by ticket, the adapter work 0.37.0's note had named by file only
+(#414, #410, #407, #427). The tag `v0.40.0` on the merge commit is the
+operator's action; F3 is red on main until it exists.

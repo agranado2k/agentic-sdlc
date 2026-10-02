@@ -191,13 +191,8 @@ s_assert_err_has "usage"
 #
 # five_checks_ms <checker> <input> — the CPU milliseconds of five checks of
 # <input>, or "unmeasured".
-five_checks_ms() {
-	(
-		for _ in 1 2 3 4 5; do sh "$1" <"$2"; done >/dev/null 2>&1
-		times
-	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
-	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
-}
+five_checks() { for _ in 1 2 3 4 5; do sh "$1" <"$2"; done; }
+five_checks_ms() { t_cpu_ms five_checks "$1" "$2"; }
 # within_budget <checker> <input> <ms for five> <what> — pass or fail it.
 within_budget() {
 	cpu_ms=$(five_checks_ms "$1" "$2")
@@ -266,9 +261,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # removed is named and fails — the baits below prove each of the three. So is
 # an entry no call matches: the inventory holds no more than the tree.
 #
-# stamp.sh lifts by KEY, not by count: a body carrying 2,000 `Tier:` lines
-# would hand over 2,000. That is a degenerate ticket, not a body handed whole,
-# and it is the one unbounded input this inventory admits.
+# stamp.sh lifts by KEY and bounds the count: at most 8 lines of one key reach
+# the checker, and a body with more is its exit 5, nothing checked (#400) — so
+# its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
 scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'

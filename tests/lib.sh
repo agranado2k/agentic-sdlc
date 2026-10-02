@@ -533,6 +533,19 @@ t_run() {
 	return 0
 }
 
+# t_cpu_ms <command...> — the CPU milliseconds the command's children spent,
+# user plus system as the shell's `times` reports them, or "unmeasured". The
+# command runs in a subshell with both streams discarded. CPU time, never the
+# wall clock: a loaded host stretches the second and leaves the first alone,
+# so a bound read from it goes red only when the work grew.
+t_cpu_ms() {
+	(
+		"$@" >/dev/null 2>&1
+		times
+	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
+}
+
 # assert_status <expected> <label> -- <command...>
 assert_status() {
 	_expected=$1
