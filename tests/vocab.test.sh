@@ -573,10 +573,9 @@ s_assert_err_has "a markdown-wrapped line" "…and names the line it does not re
 s_assert_err_has "is not a decision line to it" "…in those words"
 assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
 assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
-# RED TEST: the header should NOT say a whole ticket body may be piped in (PR #400/#401)
-! grep -qF "whole ticket body may be piped in" "$VOCAB" && pass "the header does not say 'whole ticket body may be piped in'" ||
-	fail "the header still says 'whole ticket body may be piped in' — the contract changed in v0.35.0"
-# RED TEST: the header should say the caller lifts lines (#401)
+# The header no longer invites a body (#401): since v0.35.0 every call site
+# lifts first, and the header says whose job that is.
+assert_file_lacks "$VOCAB" "whole ticket body may be piped in" "the contract changed in v0.35.0 — a body is the caller's to lift"
 assert_file_has "$VOCAB" "The caller lifts the" "the header describes lifting as the caller's job (the contract since v0.35.0)"
 printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
 t_run_split sh "$VOCAB" <"$SCRATCH/listed"
