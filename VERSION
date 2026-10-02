@@ -1537,8 +1537,74 @@
 # and `data.lines`, so a retro tells a bound too short from an agent that
 # never finished; hook.lib.sh reads them, adapters/claude-code/README.md
 # says so, tests/trace-hooks.test.sh holds it.
+# 0.37.0 — the trace holds two join keys to a shape (retro of 2026-10-01,
+# finding H3; ticket #420).
+# NO file joins or leaves the shared layer. ONE shared file changes content
+# and BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the
+# behaviour entry, and both worked examples re-pin.
+#   From #420: a reader joins `finding.triage` events by `data.id` and
+# `pr.iterate` events by `data.iteration`, and both were hand-typed out of
+# shape — a commit sha inside an id, an iteration with no number. The kind
+# table now declares a shape for each key beside the kind's outcome words:
+# `data.id` one token (`[A-Za-z0-9._#-]+`), `data.iteration` digits. An
+# emit whose PRESENT key breaks its shape is exit 2 naming the kind, the key
+# and the shape — the vocabulary checker's form — and writes nothing; a
+# missing key is no violation, so `data.*` stays open; the refusal fires
+# before the trace directory resolves, so an unconfigured trace refuses the
+# same line it would have ignored. `verify` is unchanged: lines written
+# before this draw no advisory. ADR-0008 clause 1 carries the amendment.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/pr-iterate/SKILL.md's
+# triage line quotes its id and says how a check's name is spelled as one
+# token; tests/trace.test.sh drives both refusals; tests/trace-skills.test.sh
+# holds the skill's stated class to the table; tests/lib.sh's placeholder
+# filler knows the iteration key; docs/domain-glossary.md's Event entry
+# names both keys. Landed beside it since 0.36.0, from other tickets:
+# .agents/skills/implement/SKILL.md (#422: the merge goes through the train
+# or the by-hand landing path, never a bare forge merge; and the typed
+# return's fallback review path records its raises once, #424),
+# .agents/skills/merge-train/SKILL.md and .agents/skills/retro/SKILL.md with
+# .agents/skills/retro/QUESTIONS.md (the retro's report under .retro/ and
+# the train's feedback verdict, #349 and #361), bootstrap.sh's kit-only list
+# (the suites those tickets added), and the claude-code adapter —
+# adapters/claude-code/README.md (how a typed-return reader is denied its
+# tools, #335) and its hooks hook.lib.sh, session-end.sh, session-start.sh,
+# subagent-stop.sh, tool-payload.mjs, tool-post.sh, tool-pre-guard.sh and
+# transcript-usage.mjs (the lifecycle wave's root-behind marker, the
+# usage extractor's last-block rule, and the wait that spends its readiness
+# check inside the bound).
+# 0.38.0 — a mechanical stamp names its one oracle and one pattern (retro of
+# 2026-10-01, finding H1; ticket #418).
+# NO file joins or leaves the shared layer. ONE shared file changes content:
+# constitution/local-workflow.md.template, the consumer's workflow article,
+# whose tier rubric line 1 gains the same two conditions as the kit's.
+# UPDATING.md changes content: the entry, and both worked examples re-pin.
+#   From #418: over two retro windows, 4 of 7 pull requests from
+# `mechanical` tickets were blocked at their first review and rebuilt on a
+# stronger model; 0 of 8 `implementer` ones were. The rubric's first line
+# had admitted refactors across many files and a glossary-plus-suite change
+# — verifiable by a suite, not producible by the smallest model. A
+# `mechanical` stamp now needs two things: the ticket names the ONE command
+# whose exit is its oracle, as the first line of its Acceptance section,
+# and the change is one file or one pattern applied uniformly; a ticket
+# that fails either is no hit, and the rubric goes on to its later
+# questions. Rule 14 says a mechanical stamp with either in doubt is `low`.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. .agents/skills/to-tickets/SKILL.md
+# carries the rubric line, the drafted oracle line at step 2 (rule 8's one
+# exception to the no-paths rule) and the publish step's Acceptance line;
+# docs/domain-glossary.md's Tier entry echoes it; tests/spec-skills.test.sh
+# holds all of it. Landed beside it since 0.37.0: #406 (PR #440) — the
+# typed-return reader is spawned through the adapter's restricted path
+# first, prompt-only as the fallback, say-so naming which — in
+# .agents/skills/pr-iterate/SKILL.md, .agents/skills/to-tickets/SKILL.md
+# and the dogfood skill's SKILL.md, with adapters/claude-code/README.md
+# naming that path "the restricted path" and quoting the skills' say-so;
+# and #403 (PR #434) — the claude-code adapter's hooks/hook.lib.sh wait
+# naps its whole second whatever its first readiness check cost, reaching
+# the bound and overrunning it by at most one nap.
 
-shared-layer: 0.36.0
+shared-layer: 0.38.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

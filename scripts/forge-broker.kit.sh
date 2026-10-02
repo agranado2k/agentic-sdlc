@@ -75,10 +75,13 @@
 #      as outcome, Axis 2 as /review-pr §5b counts it — each marked
 #      `data.via=broker`, with the model and agent harness when the caller
 #      passed them. The report is untrusted: what reaches an event is lifted
-#      by shape or mapped onto a closed list, never a line of it pasted into
-#      a reason. Never load-bearing (ADR-0008 clause 4). A retry that found
-#      both bodies already landed records one `note` instead: the first run
-#      traced them, and a second set would double-count.
+#      by shape or mapped onto a closed list — a raise's agent is the
+#      finding's `↳ lens:` token when it is on the roster, `unattributed`
+#      when it is not, the title match when there is none (#412) — never a
+#      line of it pasted into a reason. Never load-bearing (ADR-0008 clause
+#      4). A retry that found both bodies already landed records one `note`
+#      instead: the first run traced them, and a second set would
+#      double-count.
 #
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
@@ -632,21 +635,38 @@ trace() {
 	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
 		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
 }
-# agent_token <finding body> — the /review-pr §3 roster token for the one
-# sub-agent the finding names by number or by title, `unattributed` when it
-# names none or more than one. The answer is always a token from the closed
-# list, never the report's spelling, and never a lens guessed from the text.
+# agent_token <finding body> — the /review-pr §3 roster token for the lens
+# the finding names. Its `↳ lens:` line is read first (#412): a roster token
+# is the answer, any other word is `unattributed` — never the title beside
+# it, never the spelling. With no lens line, the one sub-agent the text
+# names by number or by title, `unattributed` when it names none or more
+# than one. The answer is always a token from the closed list, never the
+# report's spelling, and never a lens guessed from the text.
 agent_token() {
 	LC_ALL=C awk '
 		BEGIN {
 			split("security api-crud pattern simplicity reuse-dry test-hygiene", tok, " ")
+			for (k = 1; k <= 6; k++) roster[tok[k]] = 1
 			t[1] = "Security Sentinel"; t[2] = "API & CRUD Contract Manager"; t[3] = "Pattern & Refactor Enforcer"
 			t[4] = "Simplicity Advocate"; t[5] = "Reuse & DRY Auditor"; t[6] = "Test Hygiene Inspector"
+		}
+		# The first lens line decides, present even when empty. The value is
+		# read as a TOKEN: the backticks, asterisks and carriage return a copy
+		# of the contract may carry are stripped, the case folded, and the
+		# rest cut at the first character a token cannot hold — then the
+		# closed list decides, so nothing the report spelled is what prints.
+		!seen && /^[^A-Za-z0-9]*[Ll]ens:/ {
+			seen = 1
+			lens = $0; sub(/^[^A-Za-z0-9]*[Ll]ens:/, "", lens)
+			gsub(/[`*\r]/, "", lens); sub(/^[ \t]+/, "", lens)
+			lens = tolower(lens); sub(/[^a-z0-9-].*$/, "", lens)
+			next
 		}
 		{
 			for (k = 1; k <= 6; k++) if (index($0, t[k]) || $0 ~ ("Agent " k "([^0-9]|$)")) hit[k] = 1
 		}
 		END {
+			if (seen) { print (lens in roster ? lens : "unattributed"); exit }
 			for (k in hit) { n++; a = tok[k] }
 			print (n == 1 ? a : "unattributed")
 		}
