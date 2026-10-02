@@ -1459,6 +1459,13 @@ RX=$(env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" begin implement)
 	pass "a session id with a slash falls back to the per-toplevel stack and creates no directory" || fail "the slashed id went to: $(find "$SS/current")"
 env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" end outcome=ok
 
+# Review L-1 (PR #476): the two header comments this change wrote wrap like
+# the rest of both files — one had run on to 135 bytes. 100 bytes leaves room
+# for the multi-byte dashes the prose uses.
+_ss_wide=$(awk '/^# trace_key — sets/,/^trace_key\(\) \{/' "$TRACE" | awk 'length > 100')
+_ss_wide="$_ss_wide$(awk '/^# hook_run_of <dir>/,/^# Ticket #421/' "$KIT/adapters/claude-code/hooks/hook.lib.sh" | awk 'length > 100')"
+[ -z "$_ss_wide" ] && pass "the trace_key and hook_run_of headers wrap — no comment line past 100 bytes" ||
+	fail "a header comment runs on past 100 bytes: $_ss_wide"
 _ss_adr=$(ls "$KIT"/docs/adr/0008-*.md)
 sed -n '/Amended 2026-10-02 (#453)/,/^[0-9][0-9]*\. \|^## /p' "$_ss_adr" | tr '\n' ' ' | grep -q 'session' &&
 	pass "ADR-0008 carries the dated #453 amendment keying the stack by session" ||

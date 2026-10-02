@@ -179,7 +179,8 @@ hook_current_of() {
 # --- the run of the checkout the work happened in ----------------------------
 
 # hook_run_of <dir> [<session id>] — export TRACE_RUN and TRACE_PARENT from
-# that session's run stack in the checkout <dir> is in, so every emit after it carries that checkout's run.
+# that session's run stack in the checkout <dir> is in, so every emit after
+# it carries that checkout's run.
 # Ticket #421, retro finding H4 (#417).
 #
 # WHY. The shared script reads the stack of the toplevel IT lives in, and the

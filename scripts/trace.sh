@@ -482,10 +482,11 @@ trace_hash_file() { (unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin <"$1
 # this working tree. A non-empty `session=` on the command line names the
 # session first (trace_arg_session), so an event's run is read from the stack
 # of the session the event itself names — a hook that is told its session id
-# by a payload and passes it explicitly reads that session's runs. Needs TRACE_ROOT_DIR. Returns 1 when git cannot hash the
-# path, which leaves identity to the environment alone rather than failing an
-# emit. Answered once per process: nothing it reads changes while it runs, and
-# a second pointer read would repeat the pointer's note.
+# by a payload and passes it explicitly reads that session's runs. Needs
+# TRACE_ROOT_DIR. Returns 1 when git cannot hash the path, which leaves
+# identity to the environment alone rather than failing an emit. Answered
+# once per process: nothing it reads changes while it runs, and a second
+# pointer read would repeat the pointer's note.
 _trace_keyed=
 _trace_arg_session=
 trace_key() {
