@@ -302,8 +302,10 @@ $LINE
 <!-- explain-diff-appendix -->")
 land "STUB_BODY_FILE=$f" 160
 landed_with 160 "the line in the body" '"implement":"yes"' '"implement_tier":"mechanical"'
-grep -q '^ARGV: pr view 160 .*body' "$STUB_LOG" && pass "the body is read from the forge" ||
-	fail "the PR body was never asked of the forge: $(cat "$STUB_LOG")"
+# The stub answers any body request, so the argv is what holds the field:
+# the body, and an empty string for a body the forge leaves null.
+grep -qF 'ARGV: pr view 160 --json body --jq .body // ""' "$STUB_LOG" && pass "the body is read from the forge, --jq '.body // \"\"'" ||
+	fail "the PR body was never asked of the forge as --json body --jq '.body // \"\"': $(grep '^ARGV: pr view 160' "$STUB_LOG")"
 
 land 161
 landed_with 161 "no line in the body" '"implement":"no"'
