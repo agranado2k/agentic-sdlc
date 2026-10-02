@@ -324,7 +324,9 @@ land "STUB_BODY_FILE=$f" 163
 landed_with 163 "a tier off the vocabulary" '"implement":"no"'
 no_tier 163 "a tier off the vocabulary"
 
-# Hostile lines: each is recorded as absent, and none of it runs.
+# Hostile lines: each is recorded as absent, and none of it runs. Each lands
+# a PR of its own, #170 up, so each is read back on its own event.
+_h_pr=169
 for hostile in \
 	"<!-- implement: ticket=#77 tier=\$(touch $SCRATCH/pwned) -->" \
 	"<!-- implement: ticket=#77 tier=\`touch $SCRATCH/pwned\` -->" \
@@ -333,12 +335,11 @@ for hostile in \
 	"<!-- implement: ticket=#77 tier=planner tier=reviewer -->" \
 	"  <!-- implement: ticket=#77 tier=planner -->" \
 	"<!-- implement: ticket=77 tier=planner -->"; do
-	f=$(body hostile "$hostile")
-	land "STUB_BODY_FILE=$f" 164
-	_h_ml=$(show 'pr:#164' --kind merge.land | tail -1)
-	[ "$S_STATUS" = 0 ] && printf '%s\n' "$_h_ml" | grep -qF '"implement":"no"' && ! printf '%s\n' "$_h_ml" | grep -qE '"(implement_)?tier"' &&
-		pass "a malformed line is recorded as absent, and lands: $hostile" ||
-		fail "a malformed line was not recorded as absent (exit $S_STATUS): $hostile — $_h_ml"
+	_h_pr=$((_h_pr + 1))
+	f=$(body "hostile.$_h_pr" "$hostile")
+	land "STUB_BODY_FILE=$f" "$_h_pr"
+	landed_with "$_h_pr" "a malformed line ($hostile)" '"implement":"no"'
+	no_tier "$_h_pr" "a malformed line ($hostile)"
 done
 [ -e "$SCRATCH/pwned" ] && fail "a hostile PR body ran a command" || pass "no hostile body ran anything"
 
