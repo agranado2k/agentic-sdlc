@@ -99,6 +99,20 @@ await_sleep() {
 	done
 	ps -o pgid= -p "$1" 2>/dev/null | tr -d ' '
 }
+# await_file TEST PATH SECONDS — wait, bounded, until `[ TEST PATH ]` holds:
+# what a signal leg waits on before it signals is the worker's own marker,
+# never the clock (#402; L-4, review of PR #290). Exit 0 once it holds, 1 once
+# SECONDS have passed without it — and a 1 is the caller's to FAIL, never to
+# signal on anyway. A 0.1 s nap spends a tenth of a second of the budget; where
+# sleep takes whole seconds only, each one-second nap spends ten tenths.
+await_file() {
+	_af_try=0
+	until [ "$1" "$2" ]; do
+		[ "$_af_try" -ge $(($3 * 10)) ] && return 1
+		_af_try=$((_af_try + 1))
+		sleep 0.1 2>/dev/null || { sleep 1; _af_try=$((_af_try + 9)); }
+	done
+}
 # ---------------------------------------------------------------------------
 banner "The suite counts only the sleeps it started"
 # ---------------------------------------------------------------------------
@@ -142,6 +156,54 @@ await_sleep "$probe" 7337 >/dev/null
 	fail "the leftover count saw [$(new_sleep_pids 7337 "$sleeps_before" | tr '\n' ' ')] as new 'sleep 7337', not only [$probe] — the legs below cannot go red, or count the host's"
 kill "$held" "$probe" "$decoy" 2>/dev/null
 wait "$held" "$probe" "$decoy" 2>/dev/null
+
+# ---------------------------------------------------------------------------
+banner "A signal leg waits on a marker, bounded, and a timeout is a fail"
+# ---------------------------------------------------------------------------
+# await_file is what the signal legs below wait on before they signal: the
+# worker's own marker, never the clock (#402). Its budget has to be real
+# seconds on every sleep — a whole-second-only sleep that refused 0.1 would
+# otherwise spin the budget away at once and send the TERM early — and it has
+# to say when it ran out, so a leg can fail rather than signal a worker
+# nobody saw start.
+AF_MISSING="$SCRATCH/await-file.never"
+rm -f "$AF_MISSING"
+await_file -e "$AF_MISSING" 1
+[ $? = 1 ] && pass "await_file reports a marker that never appeared — exit 1, not 0" ||
+	fail "await_file returned 0 for a marker that never appeared — a leg would signal a worker nobody saw"
+AF_WHOLE="$SCRATCH/whole-second-sleep"
+mkdir -p "$AF_WHOLE"
+AF_HITS="$SCRATCH/whole-second-sleep.hits"
+: >"$AF_HITS"
+cat >"$AF_WHOLE/sleep" <<WHOLE
+#!/bin/sh
+echo "\$1" >>"$AF_HITS"
+case \$1 in *[!0-9]*) echo "sleep: invalid time interval '\$1'" >&2; exit 1 ;; esac
+exec $(command -v sleep) "\$1"
+WHOLE
+chmod +x "$AF_WHOLE/sleep"
+start=$(date +%s)
+(PATH="$AF_WHOLE:$PATH" await_file -e "$AF_MISSING" 3)
+af_status=$?
+took=$(( $(date +%s) - start ))
+# Bounded both ways: under two seconds the wait collapsed; at ten or more a
+# whole-second nap is spending one tenth, and the legs' 30 s would be 300 s.
+# A shell whose sleep is a builtin never calls the stub, and proves nothing.
+if ! grep -qx 1 "$AF_HITS"; then
+	skip "this shell's sleep never reached the whole-second stub — the fallback goes unproven here"
+elif [ "$af_status" = 1 ] && [ "$took" -ge 2 ] && [ "$took" -lt 10 ]; then
+	pass "where sleep takes whole seconds only, the budget is still spent in seconds (${took}s)"
+else
+	fail "under a whole-second-only sleep await_file returned $af_status after ${took}s of a 3s budget — the wait collapsed or overran"
+fi
+AF_LATE="$SCRATCH/await-file.late"
+rm -f "$AF_LATE"
+(sleep 1; echo x >"$AF_LATE") &
+af_writer=$!
+await_file -s "$AF_LATE" 30 &&
+	pass "await_file returns once the marker is written" ||
+	fail "await_file timed out on a marker written a second in"
+wait "$af_writer" 2>/dev/null
 
 
 
@@ -797,23 +859,69 @@ cat >/dev/null
 echo "\$\$" >"$PIDFILE"
 sleep 30
 EOF
-sleeps_before=$(own_sleep_pids 50)
-sh "$DISPATCH" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
-disp=$!
-sleep 2
-kill -TERM "$disp" 2>/dev/null
-wait "$disp" 2>/dev/null
-disp_status=$?
-sleep 1
-[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143" || fail "a TERM to the dispatcher exited $disp_status"
-if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-	fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left"
-	kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+
+# term_leg <dispatcher> <label> — TERM a dispatcher mid-run, then hold it to
+# 143, a dead worker and no watchdog sleep left behind.
+term_leg() {
+	rm -f "$PIDFILE"
+	sleeps_before=$(own_sleep_pids 50)
+	sh "$1" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
+	disp=$!
+	# Wait for the WORKER's pid file, never for a fixed two seconds: the timed
+	# path installs its traps and then spawns, so the worker's own marker is
+	# the one anchor that cannot precede them. A TERM that arrives earlier
+	# takes the global cleanup and reads "exited 127" — a flake on a loaded
+	# host, not a finding (#402). No marker is a fail, never a TERM anyway:
+	# the leg would be passing for a worker nobody saw start.
+	if ! await_file -s "$PIDFILE" 30; then
+		fail "the worker never wrote its pid file in 30s — nothing to TERM$2"
+		# TERM first, so a worker that did start goes down with the trap;
+		# KILL after a grace, for a dispatcher still short of its trap.
+		kill -TERM "$disp" 2>/dev/null
+		sleep 1
+		kill -KILL "$disp" 2>/dev/null
+		wait "$disp" 2>/dev/null
+		return
+	fi
+	kill -TERM "$disp" 2>/dev/null
+	wait "$disp" 2>/dev/null
+	disp_status=$?
+	sleep 1
+	[ "$disp_status" = 143 ] && pass "a TERM to the dispatcher exits 143$2" || fail "a TERM to the dispatcher exited $disp_status$2"
+	if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+		fail "the worker outlived a TERM to the dispatcher — orphaned with no timeout left$2"
+		kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+	else
+		pass "a TERM to the dispatcher takes the worker down with it$2"
+	fi
+	leftover=$(new_sleeps 50 "$sleeps_before")
+	[ "$leftover" = 0 ] && pass "…and the watchdog's sleep$2" || fail "$leftover watchdog sleep(s) outlived the dispatcher$2"
+}
+term_leg "$DISPATCH" ""
+
+# The bait: a copy of the dispatcher that is slow to reach its timed-path trap,
+# as a loaded host makes the real one. A leg that signals on the clock lands
+# its TERM before the trap and reads the global cleanup's status instead; a
+# leg that waits on the worker's own marker cannot, because the worker is
+# spawned after the trap. The copy lives in this suite's scratch, beside links
+# to its real siblings, under the name the dispatcher insists on.
+BAIT_DIR="$SCRATCH/slow-trap"
+mkdir -p "$BAIT_DIR"
+# The dispatcher itself is never linked: the copy is written to a path that
+# was never a link, so nothing can write through one into the real file.
+for _f in "$KIT"/scripts/*; do
+	[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$BAIT_DIR/${_f##*/}"
+done
+awk '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\tsleep 3" } { print }' \
+	"$DISPATCH" >"$BAIT_DIR/agent-dispatch.sh"
+# A bait that is not planted proves nothing: the leg is not run, and the suite
+# says why rather than printing passes against an unbaited copy.
+if grep -q '^	sleep 3$' "$BAIT_DIR/agent-dispatch.sh"; then
+	term_leg "$BAIT_DIR/agent-dispatch.sh" " (a dispatcher slow to reach its trap)"
 else
-	pass "a TERM to the dispatcher takes the worker down with it"
+	fail "the bait was not planted — the timed path's INT trap line has moved"
+	skip "the slow-trap TERM leg — no bait to run it against"
 fi
-leftover=$(new_sleeps 50 "$sleeps_before")
-[ "$leftover" = 0 ] && pass "…and the watchdog's sleep" || fail "$leftover watchdog sleep(s) outlived the dispatcher"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -2110,21 +2218,23 @@ TR_TERM_PID=$!
 # own marker is the one anchor that cannot precede them; on a loaded host a
 # signal that arrives earlier takes the global cleanup path, tears the scratch
 # out from under the dispatch and reports something else entirely — a flake,
-# not a finding (L-4, review of PR #290).
-TR_TERM_WAIT=0
-until [ -f "$TR_STARTED" ]; do
-	TR_TERM_WAIT=$((TR_TERM_WAIT + 1))
-	[ "$TR_TERM_WAIT" -gt 300 ] && break
-	sleep 0.1
-done
-kill -TERM "$TR_TERM_PID" 2>/dev/null
-wait "$TR_TERM_PID"
-TR_TERM_STATUS=$?
-[ "$TR_TERM_STATUS" = 143 ] &&
-	pass "a dispatcher sent TERM mid-run still exits 143" ||
-	fail "a signalled dispatcher exited $TR_TERM_STATUS"
-tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
-tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
+# not a finding (L-4, review of PR #290). No marker is a fail, never a TERM.
+if await_file -e "$TR_STARTED" 30; then
+	kill -TERM "$TR_TERM_PID" 2>/dev/null
+	wait "$TR_TERM_PID"
+	TR_TERM_STATUS=$?
+	[ "$TR_TERM_STATUS" = 143 ] &&
+		pass "a dispatcher sent TERM mid-run still exits 143" ||
+		fail "a signalled dispatcher exited $TR_TERM_STATUS"
+	tr_event_has "$TR_TERM" 2 '"kind":"spawn.end"' "…and the pair is closed from the trap, not left open"
+	tr_event_has "$TR_TERM" 2 '"exit":"143"' "…with the signal's own status recorded"
+else
+	fail "the traced worker never said it started in 30s — nothing to TERM"
+	kill -TERM "$TR_TERM_PID" 2>/dev/null
+	sleep 1
+	kill -KILL "$TR_TERM_PID" 2>/dev/null
+	wait "$TR_TERM_PID" 2>/dev/null
+fi
 
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose
 # account has hit its usage limit, or one not installed here, is not a fail:
