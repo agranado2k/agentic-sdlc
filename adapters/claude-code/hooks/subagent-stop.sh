@@ -48,6 +48,11 @@ set -u
 
 hook_read
 
+# The trace directory, asked for once (hook.lib.sh's hook_dir). Tracing off,
+# everything below is the trace's and nothing of it runs: no git for the run,
+# no wait, no read of the transcript, no phantom counted (#463).
+tdir=$(hook_dir) || exit 0
+
 sid=$(hook_field session_id)
 aid=$(hook_field agent_id)
 atype=$(hook_field agent_type)
@@ -58,7 +63,7 @@ transcript=$(hook_expand "$(hook_field agent_transcript_path)")
 # the root checkout's this hook executes from (#421; see hook_run_of) — and on
 # this session's stack there, not another session's (#453).
 cwd=$(hook_expand "$(hook_field cwd)")
-hook_run_of "${cwd:-$PWD}" "$sid"
+hook_run_of "$tdir" "${cwd:-$PWD}" "$sid"
 
 # The ids are checked before they become a subject or a field: a payload is
 # data (see hook.lib.sh's hook_id_ok), and an id that cannot be queried is one
@@ -80,13 +85,9 @@ fi
 # the hook's own directory, not anything the agent tool reported.
 [ -n "$cwd" ] && set -- "$@" data.cwd="$cwd"
 
+# Tracing is on by here: with it off the bound is moot, and so is a typo in it —
+# a project that traces nothing is not told on every stop.
 hook_wait_bound
-# Nothing to write, nothing to wait for: with tracing off the bound is moot, and
-# so is a typo in it — a project that traces nothing is not told on every stop.
-if [ -n "$hook_wait_ms$hook_wait_bad" ] && ! hook_dir >/dev/null; then
-	hook_wait_ms=
-	hook_wait_bad=
-fi
 if [ -n "$hook_wait_bad" ]; then
 	printf '%s\n' "x trace: TRACE_AGENT_WAIT_MS='$hook_wait_bad' is not a number of milliseconds — give a whole number from 1 to 99999 with no leading zero, or leave it empty for no wait. The subagent-stop hook did not wait." >&2
 	set -- "$@" data.wait_refused="$hook_wait_bad"
@@ -96,7 +97,7 @@ if [ -z "$transcript" ]; then
 	hook_trace emit kind=agent.stop \
 		reason="the payload named no subagent transcript, so no tokens were read" "$@"
 elif [ ! -e "$transcript" ] && [ ! -h "$transcript" ]; then
-	hook_phantom_add "$sid" # a phantom: no event, one more on its session's count (see the header)
+	hook_phantom_add "$tdir" "$sid" # a phantom: no event, one more on its session's count (see the header)
 elif [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; then
 	hook_trace emit kind=agent.stop outcome=fail \
 		reason="the subagent transcript exists but cannot be read as a file, so no tokens were read: $transcript" "$@"

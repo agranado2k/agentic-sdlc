@@ -50,6 +50,11 @@ transcript=$(hook_expand "$(hook_field transcript_path)")
 # into a file the agent harness sources as shell, so a value carrying `;` would
 # be code in the operator's next command, and a value carrying a newline would
 # make the refusal event itself unwritable. Both cases are one event and exit 0.
+# The trace directory, asked for once (hook.lib.sh's hook_dir). Tracing off,
+# the event and the pointer are skipped and spawn nothing; the behind note above
+# and the export below are not the trace's, and stay (#463).
+tdir=$(hook_dir) || tdir=
+
 why=
 if [ -z "$sid" ]; then
 	why='the SessionStart payload named no session_id'
@@ -57,7 +62,7 @@ elif ! hook_id_ok "$sid"; then
 	why='the SessionStart payload named a session_id that is not a plain identifier (letters, digits, dot, dash, underscore), and it is refused rather than written into a file the agent harness sources'
 fi
 if [ -n "$why" ]; then
-	hook_trace emit kind=session.start outcome=fail \
+	[ -z "$tdir" ] || hook_trace emit kind=session.start outcome=fail \
 		reason="$why — this session has no identity in the trace"
 	exit 0
 fi
@@ -67,11 +72,12 @@ fi
 # story 22). `session=` as well as `subject=`, so the event names the session
 # the PAYLOAD gave it rather than whatever the pointer file happens to say —
 # see session-end.sh for the two-sessions-in-one-checkout case that matters.
-hook_trace emit kind=session.start subject="session:$sid" session="$sid" \
-	harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript" \
-	${behind:+"data.behind=$behind"} ${behind:+"data.behind_of=root"}
-
-hook_point_at "$sid"
+if [ -n "$tdir" ]; then
+	hook_trace emit kind=session.start subject="session:$sid" session="$sid" \
+		harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript" \
+		${behind:+"data.behind=$behind"} ${behind:+"data.behind_of=root"}
+	hook_point_at "$tdir" "$sid"
+fi
 
 # Single-quoted, though hook_id_ok has already forbidden everything that would
 # need quoting: the guard is the rule and this is the belt beside it.
