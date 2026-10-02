@@ -3622,4 +3622,48 @@ case $ROW421 in *"the hook's own working directory when the payload names no \`c
 case $ROW421 in *"a \`TRACE_RUN\` already in the environment wins, with its parent; a \`TRACE_PARENT\` alone is kept"*) pass "the README row names the environment's precedence" ;;
 *) fail "the README row for subagent-stop.sh does not say a TRACE_RUN in the environment wins and a TRACE_PARENT alone is kept" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "42. A stop records the payload's cwd as data.cwd (#478)"
+# ---------------------------------------------------------------------------
+# Retro finding F3 (#477): 0 of 453 agent.stop events recorded the cwd the
+# stop payload named, so whether the agent tool reports a subagent's worktree
+# or the root checkout was inferred, never measured (#464). The hook writes the
+# payload's cwd as data.cwd — the value it resolved the run against — and writes
+# no data.cwd when the payload names none. How it resolves the run is #421's
+# section above, and nothing here changes it.
+
+# cwd_stop <cwd or ''> — the hook on the fixture payload with its cwd set to
+# <cwd> (removed when empty), on a fresh trace. Sets S_* and STOP.
+cwd_stop() {
+	if [ -n "$1" ]; then
+		set_key cwd "$1" <"$FIX/subagent-stop.payload.json"
+	else
+		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
+	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-478.json"
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-478.json"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+
+CWD478="$SCRATCH/cwd-478"
+mkdir -p "$CWD478"
+cwd_stop "$CWD478"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -n "$STOP" ] &&
+	pass "a stop whose payload names a cwd exits 0, silent on stdout, and writes its agent.stop" ||
+	fail "a stop naming a cwd: exit $S_STATUS, stdout '$S_OUT', event '$STOP'"
+[ "$(str "$STOP" cwd)" = "$CWD478" ] &&
+	pass "the agent.stop carries the payload's cwd as data.cwd" ||
+	fail "the agent.stop carries cwd '$(str "$STOP" cwd)', want $CWD478: '$STOP'"
+
+cwd_stop ''
+[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] &&
+	pass "a stop whose payload names no cwd still writes its agent.stop" ||
+	fail "a stop naming no cwd: exit $S_STATUS, event '$STOP'"
+case $STOP in *'"cwd":'*) fail "a payload with no cwd wrote a cwd key anyway: '$STOP'" ;;
+*) pass "a payload with no cwd writes no data.cwd" ;; esac
+
+ROW478=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
+case $ROW478 in *'`data.cwd`'*) pass "the README row for the subagent-stop hook names data.cwd" ;;
+*) fail "the README row for subagent-stop.sh does not name data.cwd" ;; esac
+
 t_done "trace hooks"
