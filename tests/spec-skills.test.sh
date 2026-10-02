@@ -331,30 +331,19 @@ case $wf_rubric in
 esac
 # The two tier tables (ticket #467): the kit's manual and the consumer manual
 # template each give a `mechanical` row a signal cell, and #418 left both
-# giving the one-condition signal ("the suite is the oracle"). Each condition
-# is one phrase, held against rubric line 1 first and then against both cells,
-# so a rubric reworded without the tables — or a table without the rubric —
-# is red here rather than a quiet second wording.
-for cond in "names the one command whose exit is its oracle" "one file or one pattern applied uniformly across many"; do
-	case $rline1 in
-	*"$cond"*) pass "rubric line 1 carries the phrase the tables quote: $cond" ;;
-	*) fail "rubric line 1 no longer says \"$cond\" — the tier tables quote it; move them together" ;;
-	esac
-	for manual in AGENTS.md constitution/AGENTS.md.template; do
-		cell=$(awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$manual")
-		[ -n "$cell" ] || fail "$manual has no \`mechanical\` row with a signal cell in its tier table"
-		case $cell in
-		*"$cond"*) pass "$manual's mechanical signal gives the rubric's condition: $cond" ;;
-		*) fail "$manual's mechanical signal lacks the rubric's condition \"$cond\"" ;;
-		esac
-	done
-done
+# giving the one-condition signal ("the suite is the oracle"). Each cell quotes
+# rubric line 1's two conditions in the phrases asserted on it above, and joins
+# them as the rubric does — "only when both": a cell reworded to "when either
+# holds" still carries both phrases, and is red here on the join.
+# mech_signal <manual> — the signal cell of <manual>'s `mechanical` tier row.
+mech_signal() { awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$1"; }
 for manual in AGENTS.md constitution/AGENTS.md.template; do
-	cell=$(awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$manual")
-	case $cell in
-	*"only when both"*) pass "$manual's mechanical signal joins the two conditions — both, not either" ;;
-	*) fail "$manual's mechanical signal does not say both conditions are needed" ;;
-	esac
+	cell=$(mech_signal "$manual")
+	[ -n "$cell" ] && pass "$manual has a \`mechanical\` row with a signal cell" ||
+		fail "$manual has no \`mechanical\` row with a signal cell in its tier table"
+	t_text_has "$cell" "names the one command whose exit is its oracle" "condition one, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "one file or one pattern applied uniformly across many" "condition two, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "only when both" "the two conditions are both required, not either" "$manual's mechanical signal"
 	case $cell in
 	*"the suite is the oracle"*) fail "$manual's mechanical signal still gives the one-condition signal (\"the suite is the oracle\")" ;;
 	*) pass "$manual's mechanical signal no longer gives the one-condition signal" ;;
