@@ -219,6 +219,14 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.46.0 or older, nothing in the shared layer moves.**
+No shared file changes at 0.47.0. Skills, two constitution templates, the
+claude-code hooks and the guards' surface list move — `/to-tickets` names only
+the oracle forms `/implement` runs, states a session cap and merges a retro's
+candidates into a sibling retro's tickets; your stamped
+`constitution/local-workflow.md` gains a **Session cap** line to fill in. The
+history note in `VERSION` lists every file; Part 2 is how you take them.
+
 **Arriving from 0.45.0 or older, `/implement` writes one more line.**
 No shared file changes at 0.46.0. The skill's delivery step now ends its
 PR body with `<!-- implement: ticket=#<N> tier=<tier> -->`, an HTML comment
@@ -815,7 +823,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.46.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.47.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -828,9 +836,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.46.0
+v0.47.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.46.0
+v0.1.0 -> v0.47.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -861,10 +869,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2296 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2304 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2450 insertions(+), 1 deletion(-)
+ 3 files changed, 2458 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -924,7 +932,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.46.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.47.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -968,10 +976,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.46.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.47.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.46.0
-Part 1 complete — shared layer at v0.46.0. The update is not done: go to step 8.
+0.47.0
+Part 1 complete — shared layer at v0.47.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1715,7 +1723,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.46.0 case for this file, and `ADD` is the 0.3.0 → 0.46.0
+`MERGE` is the 0.4.0 → 0.47.0 case for this file, and `ADD` is the 0.3.0 → 0.47.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2029,14 +2037,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.46.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.47.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.46.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.47.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2196,9 +2204,9 @@ $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
  constitution/AGENTS.md.template            |  70 +++++++++++++-
  constitution/local-engineering.md.template |   2 +-
  constitution/local-product.md.template     | 103 ++++++++++++++++++++
- constitution/local-workflow.md.template    |  48 ++++++++++
+ constitution/local-workflow.md.template    |  53 +++++++++++
  constitution/shared-code-craft.md          | 147 +++++++++++++++++++++++++++++
- 5 files changed, 366 insertions(+), 4 deletions(-)
+ 5 files changed, 371 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
@@ -2212,7 +2220,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.46.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.47.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2238,7 +2246,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.46.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.47.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.

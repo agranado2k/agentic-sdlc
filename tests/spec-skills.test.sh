@@ -294,6 +294,66 @@ case $rline1 in
 *) pass "rubric line 1 names no tier but mechanical — a failed condition is sized by questions 2 to 4" ;;
 esac
 t_text_has "$rubric" "first hit wins" "the rubric still reads first hit wins — a failed condition is simply not a hit"
+# The oracle forms the rubric names are the ones /implement runs (ticket #510,
+# from PR #484's review). Since #468 /implement matches a mechanical ticket's
+# oracle line against a closed allow-list in its step 1 and holds anything
+# else to the full suite, so a rubric that still offered "one validator" or
+# "a diff that must come out empty" stamped tickets whose oracle the reader
+# refuses. The list is read from /implement, never a hand copy: each step-1
+# entry's name ("the docs gate", "one suite", "the full suite") and its first
+# command, where a `sh -c` named by reference is step 4's loop as step 4 spells
+# it. The rubric's list — the span between "whose exit is its oracle — " and
+# " — as the first line" — holds exactly those entries, `; `-separated outside
+# backticks, and each one WHOLE: "<name>, <command>" and not a byte more, so a
+# trailing "or make test" is a disagreement, not a passenger.
+IMPL_ABS="$ROOT/.agents/skills/implement/SKILL.md"
+impl_forms=$(sed -n 's/.*one entry of this closed list of verification commands: \*\*\([^*]*\)\*\*.*/\1/p' "$IMPL_ABS")
+impl_loop=$(awk '/^4\. / { print; exit }' "$IMPL_ABS" | sed -n "s/.*\(\`sh -c '[^\`]*'\`\).*/\1/p")
+if [ -z "$impl_forms" ]; then
+	fail "/implement's step 1 lost 'one entry of this closed list of verification commands: **…**' — the allow-list the rubric is held to; the rubric's oracle list cannot be compared"
+elif [ -z "$impl_loop" ]; then
+	fail "/implement's step 4 no longer spells the full suite as a \`sh -c '…'\` loop — the full-suite entry the rubric is held to; the rubric's oracle list cannot be compared"
+else
+	pass "/implement still carries its closed list of oracle forms and step 4's full-suite loop"
+fi
+# oracle_forms_agree <text> <where> — <text>'s oracle list against the one
+# /implement runs, built once as the exact span it must be: each entry
+# "<name>, <command>", "; "-joined, "; or " before the last. The comparison
+# alone waits on the allow-list (which failed once, above, by its own name
+# when missing); the prose assertions after it run either way.
+oracle_forms_agree() {
+	t_text_has "$1" "outside that list is not \`mechanical\`" "$2 says a ticket whose only honest oracle is outside the list is not mechanical"
+	t_text_has "$1" "where the suite is not a \`tests/\` directory of shell scripts, only the docs gate is among them" "$2 says, in one clause, that a project whose suite is not tests/*.sh has only the docs gate"
+	t_text_has "$1" "as the first line of its Acceptance section; and the change" "$2 joins its two conditions with the skill's semicolon"
+	case $1 in
+	*"a diff that must come out empty"* | *"one validator"*) fail "$2 still offers an oracle /implement never matches (a diff, a validator)" ;;
+	*) pass "$2 offers no oracle /implement never matches" ;;
+	esac
+	[ -n "$impl_forms" ] && [ -n "$impl_loop" ] || return 0
+	span=$(printf '%s\n' "$1" | sed -n 's/.*whose exit is its oracle — \(.*\) — as the first line of its Acceptance section.*/\1/p')
+	want=$(IMPL_FORMS=$impl_forms IMPL_LOOP=$impl_loop awk 'BEGIN {
+		s = ENVIRON["IMPL_FORMS"]; n = 0; cur = ""; code = 0
+		# split /implement'"'"'s list on "; " outside backticks
+		for (i = 1; i <= length(s); i++) {
+			c = substr(s, i, 1)
+			if (c == "`") code = !code
+			if (!code && substr(s, i, 2) == "; ") { E[++n] = cur; cur = ""; i++; continue }
+			cur = cur c
+		}
+		E[++n] = cur
+		for (i = 1; i <= n; i++) {
+			lab = E[i]; sub(/, .*/, "", lab)
+			cmd = ""; if (match(E[i], /`[^`]*`/)) cmd = substr(E[i], RSTART, RLENGTH)
+			if (cmd == "`sh -c`") cmd = ENVIRON["IMPL_LOOP"]
+			out = out (i == 1 ? "" : (i == n ? "; or " : "; ")) lab ", " cmd
+		}
+		print out
+	}')
+	[ -n "$span" ] && [ "$span" = "$want" ] &&
+		pass "$2 names exactly the oracle forms /implement runs, each whole" ||
+		fail "$2's oracle list is \"$span\", not exactly /implement's \"$want\""
+}
+oracle_forms_agree "$rline1" "rubric question 1"
 t_text_has "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
 in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
 	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
@@ -329,6 +389,7 @@ case $wf_rubric in
 *'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "the workflow template's rubric line 1 names a tier other than mechanical" ;;
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
+oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
 # The two tier tables (ticket #467): the kit's manual and the consumer manual
 # template each give a `mechanical` row a signal cell, and #418 left both
 # giving the one-condition signal ("the suite is the oracle"). Each cell quotes
