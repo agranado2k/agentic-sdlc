@@ -3481,7 +3481,9 @@ WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin revie
 
 # stop_from <cwd or ''> [env assignments…] — the root's hook on the fixture
 # payload with its cwd field set to <cwd> (removed when empty), run from the
-# kit's own directory. Sets S_* and STOP, the last agent.stop written.
+# kit's own directory. Sets S_* and STOP, the agent.stop this run wrote — and
+# fails the leg unless exactly one was added, so no leg can pass on the event
+# an earlier leg left behind (M-4, local review of PR #449).
 stop_from() {
 	_sf_cwd=$1
 	shift
@@ -3490,8 +3492,12 @@ stop_from() {
 	else
 		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
 	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-421.json"
+	_sf_before=$(ev_of agent.stop | grep -c '')
 	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" \
 		sh "$HOOK421" <"$SCRATCH/stop-421.json"
+	_sf_added=$(($(ev_of agent.stop | grep -c '') - _sf_before))
+	[ "$_sf_added" = 1 ] ||
+		fail "a stop from '$_sf_cwd' wrote $_sf_added agent.stop events, want exactly 1"
 	STOP=$(ev_of agent.stop | sed -n '$p')
 }
 
@@ -3535,12 +3541,21 @@ stop_from "$OTHER421"
 	pass "a cwd in an UNRELATED repository is not a checkout of this one: the root's run" ||
 	fail "a stop from an unrelated repository carries run '$(str "$STOP" run)', want $ROOTRUN"
 
+# A GIT_DIR / GIT_WORK_TREE pair pinned to another repository — git exports
+# them into hooks — answers for nothing here: every lookup scrubs them, and the
+# stop still carries the worktree's run (M-3, local review of PR #449).
+stop_from "$R421.wt" GIT_DIR="$OTHER421/.git" GIT_WORK_TREE="$OTHER421"
+[ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "a pinned GIT_DIR/GIT_WORK_TREE for another repository does not move the run" ||
+	fail "with GIT_DIR pinned elsewhere the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / $WTOUTER"
+
 # No cwd in the payload: the hook's own working directory answers. The hook is
 # run from the worktree in THIS shell, not a subshell, so S_STATUS and S_ERR
 # survive to be asserted on (L, review of PR #449).
 _here421=$PWD
-cd "$R421.wt" && stop_from ''
-cd "$_here421"
+cd "$R421.wt" || fail "cannot enter the fixture worktree $R421.wt"
+stop_from ''
+cd "$_here421" || fail "cannot return to $_here421"
 [ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] &&
 	pass "a payload with no cwd field: the hook's own working directory names the checkout, exit 0" ||
 	fail "with no cwd field, a hook run inside the worktree: exit $S_STATUS, run '$(str "$STOP" run)', want $WTINNER"
@@ -3564,12 +3579,12 @@ stop_from "$R421.wt" TRACE_PARENT=parent-from-env-421
 if [ "$(id -u)" = 0 ]; then
 	echo "  skip  running as root — a mode-000 file is readable, so the unreadable-stack leg cannot be driven"
 else
-	STACK421="$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh dir)/current/$(printf '%s' "$(git -C "$R421.wt" rev-parse --show-toplevel)" | git hash-object --stdin).runs"
+	STACK421=$(grep -lF "$WTINNER" "$TDIR"/current/*.runs 2>/dev/null)
 	[ -f "$STACK421" ] && pass "the worktree's run stack is where the leg looks for it" ||
 		fail "no run stack at $STACK421"
 	chmod 000 "$STACK421"
 	stop_from "$R421.wt"
-	chmod 644 "$STACK421"
+	chmod 600 "$STACK421"
 	[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] && [ -z "$(str "$STOP" run)" ] && [ -z "$(str "$STOP" parent)" ] &&
 		pass "an unreadable worktree stack: exit 0, the stop carries no run and no parent, not the root's" ||
 		fail "an unreadable worktree stack: exit $S_STATUS, run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', event '$STOP'"
