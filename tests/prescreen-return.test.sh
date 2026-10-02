@@ -419,7 +419,11 @@ Evidence: "retry three times"'
 	grep -qxF "${TAB}LC_ALL=C grep -q '[^ -~]' \"\$2\" && return 1" "$CHECK" &&
 		pass "/$NAME — the printable-ASCII test is pinned to the C locale: a byte is a byte, whatever the session's locale" ||
 		fail "/$NAME — the fence should run \"LC_ALL=C grep -q '[^ -~]'\" on the return: unpinned, a multibyte locale decides what is printable"
-	t_verdict_is refused "a return that was never written is refused" '' "$TEXT" "$SCRATCH/no-such-return"
+	# The return text is one the check accepts ("an ordinary text" above), so
+	# the case reads the missing file or goes red: a verdict that dropped its
+	# third argument would check that text instead, and pass it.
+	t_verdict_is refused "a return that was never written is refused" 'Command-shaped: no
+Evidence: "retry three times before it gives up"' "$TEXT" "$SCRATCH/no-such-return"
 
 	# Found from the skills root — the nearest .agents/skills/ at or above the
 	# cwd, within the outermost repository — and it fails closed.
