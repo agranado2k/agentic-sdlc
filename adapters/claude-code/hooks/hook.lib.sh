@@ -165,7 +165,8 @@ hook_pointer() {
 }
 
 # hook_current_of <toplevel> — the per-toplevel path `scripts/trace.sh` keys a
-# working tree's pointer file on; its run stack is the same path plus `.runs`.
+# working tree's pointer file on; its run stack is the same path plus
+# `.<session>.runs` for a session with an id, `.runs` for one without (#453).
 # Nothing (status 1) when tracing is off or git cannot hash the path.
 # DELIBERATE COUPLING: this repeats the shared script's key derivation
 # (trace_key); hook_pointer and hook_run_of both depend on it.
@@ -179,8 +180,9 @@ hook_current_of() {
 
 # --- the run of the checkout the work happened in ----------------------------
 
-# hook_run_of <dir> — export TRACE_RUN and TRACE_PARENT from the run stack of
-# the checkout <dir> is in, so every emit after it carries that checkout's run.
+# hook_run_of <dir> [<session id>] — export TRACE_RUN and TRACE_PARENT from
+# that session's run stack in the checkout <dir> is in, so every emit after
+# it carries that checkout's run.
 # Ticket #421, retro finding H4 (#417).
 #
 # WHY. The shared script reads the stack of the toplevel IT lives in, and the
@@ -205,6 +207,12 @@ hook_current_of() {
 # read from ONE snapshot of the file, so a begin or end that replaces the
 # stack between two reads cannot pair a run with another stack's parent.
 #
+# WHOSE STACK. Since #453 the shared script keys the stack by session as well
+# as by toplevel, so it is read here the same way: <session id> names it when
+# it is one the script would key on, and the per-toplevel stack answers for a
+# payload that names none — another session's run in the same checkout is
+# never this stop's.
+#
 # THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
 # whose trail it joins) is left alone, and with it the parent, exactly as the
 # shared script's own precedence has it; a TRACE_PARENT already set is kept.
@@ -216,7 +224,11 @@ hook_run_of() {
 	[ "$_ro_common" = "$_ro_own" ] || return 0
 	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
 	_ro_stack=$(hook_current_of "$_ro_top") || return 0
-	_ro_stack="$_ro_stack.runs"
+	if hook_id_ok "${2:-}"; then
+		_ro_stack="$_ro_stack.$2.runs"
+	else
+		_ro_stack="$_ro_stack.runs"
+	fi
 	if [ -e "$_ro_stack" ] && [ ! -r "$_ro_stack" ]; then
 		echo "x  trace: the run stack at $_ro_stack exists and cannot be read — this event carries no run." >&2
 		_ro_run= _ro_parent=

@@ -55,9 +55,10 @@ transcript=$(hook_expand "$(hook_field agent_transcript_path)")
 
 # The run is the one open in the checkout the subagent worked in — the
 # payload's cwd, or this process's own when the payload names none — and not
-# the root checkout's this hook executes from (#421; see hook_run_of).
+# the root checkout's this hook executes from (#421; see hook_run_of) — and on
+# this session's stack there, not another session's (#453).
 cwd=$(hook_expand "$(hook_field cwd)")
-hook_run_of "${cwd:-$PWD}"
+hook_run_of "${cwd:-$PWD}" "$sid"
 
 # The ids are checked before they become a subject or a field: a payload is
 # data (see hook.lib.sh's hook_id_ok), and an id that cannot be queried is one
