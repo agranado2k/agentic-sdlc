@@ -400,7 +400,16 @@ you get it wrong:
   last one the trace holds. The events stay a plain sum: `summary`, the export
   and the query below need no rule about which event supersedes which. A
   compaction appends to the same file too, but the call that writes its summary
-  leaves no assistant line, so its tokens are in the rollup and in no event.
+  leaves no assistant line, so its tokens are in the rollup and in no message.
+  The session-end hook therefore reads the rollup beside the messages and
+  records the difference, per model, as one more `session.usage` event with
+  `data.via=rollup` and `data.reason=compaction` and no `data.last_msg` — so
+  the plain sum of the events is the rollup (#407). It judges the rollup only
+  in a file that holds a compact boundary, whose last rollup line follows its
+  last message and that is not a fork; the subagents' own files and any gap an
+  earlier end recorded are taken off first. A rollup smaller than what the
+  events already hold records the messages as usual plus one `outcome=fail`,
+  `data.via=rollup` event saying why no gap was recorded.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
@@ -513,6 +522,23 @@ It errs closed the other way too: a heredoc's body is read as commands, so a
 sub-agent writing a script with a line that starts with `pkill` is refused.
 Without node it fails closed for a sub-agent: a payload naming `pkill`,
 `killall` or `pgrep` anywhere is refused unread.
+**The phantom count survives on `session.end`.** No event per phantom still
+leaves the question of how many there were, and a sudden rise is worth seeing
+(ticket #410). So each phantom stop adds one line to a per-session counter,
+`claude-code/<session id>.phantoms` in the trace directory — a directory this
+adapter owns, never the shared script's `current/` — appended, so two stops
+at once both count without a lock, and keyed by the payload's session id, so
+two sessions never share one. The session-end hook takes that counter and
+records it as `data.phantoms` on `session.end`. **A session with no phantom
+stops records `phantoms=0`** rather than leaving the key out: `0` says the
+count was taken and came to nothing, while an absent key keeps meaning the hook
+could not take one — tracing off, a payload with no usable session id, or a
+`session.end` written before the count existed. Taking the counter removes it,
+so a resumed session's next end counts only the phantoms since the last one —
+the same once-only rule the usage read keeps; `/retro` sums a session's ends.
+A counter left by a session that never fires `SessionEnd` stays where it is
+until an end for that session id takes it — a resumed session's next end
+counts it — and is otherwise harmless.
 
 ### Reading it back: DuckDB and SQLite
 
