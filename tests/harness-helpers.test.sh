@@ -27,7 +27,7 @@ says() {
 	_label=$1 _want=$2
 	shift 2
 	_out=$(printed "$@")
-	_n=$(printf '%s\n' "$_out" | grep -c '^  \(ok  \|FAIL\)  ')
+	_n=$(printf '%s\n' "$_out" | grep -cE '^  (ok  |FAIL)  ')
 	if [ "$_n" -eq 1 ] && printf '%s\n' "$_out" | grep -q "^  $_want "; then
 		pass "$_label"
 	else
