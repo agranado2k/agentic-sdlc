@@ -19,12 +19,10 @@
 # `<Field>: <value>`; the field name is matched without regard to case, with
 # spaces and underscores read as hyphens (`Tier:`, `tier:`, `Command shaped:`
 # and `command_shaped:` all name a field), and a line whose key is not a
-# declared field is not a decision line and is ignored. The caller lifts the
-# lines it needs and hands over those, a few at a time; a body is the caller's
-# to lift, not this script's input. The VALUE is matched exactly, one token
-# whole. A field that appears twice with two different values is refused — a
-# body with two answers has none, and a line appended to it cannot withdraw a
-# rule — while the same value repeated is one answer.
+# declared field is not a decision line and is ignored. The VALUE is matched
+# exactly, one token whole. A field that appears twice with two different
+# values is refused — a body with two answers has none, and a line appended
+# to it cannot withdraw a rule — while the same value repeated is one answer.
 #
 # The caller hands it BARE `Field: value` lines. A markdown-wrapped line —
 # `- Tier: implementer`, `**Tier:** implementer` — is not a decision line to
@@ -476,8 +474,8 @@ vocab_remember() {
 vocab_value_of() { eval "printf '%s' \"\${_vocab_val_$(vocab_var "$1"):-}\""; }
 
 # vocab_check_line <line> — a decision line, or not one. A line with no colon,
-# or whose key is not a declared field, is ignored: the caller may hand over a
-# whole body, and the body's prose is not a judgment.
+# or whose key is not a declared field, is ignored: prose beside a decision
+# line is not a judgment, and a body is the caller's to lift (see the header).
 vocab_check_line() {
 	case $1 in
 	*:*) ;;

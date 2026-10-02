@@ -574,9 +574,12 @@ s_assert_err_has "is not a decision line to it" "…in those words"
 assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
 assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
 # The header no longer invites a body (#401): since v0.35.0 every call site
-# lifts first, and the header says whose job that is.
-assert_file_lacks "$VOCAB" "whole ticket body may be piped in" "the contract changed in v0.35.0 — a body is the caller's to lift"
-assert_file_has "$VOCAB" "The caller lifts the" "the header describes lifting as the caller's job (the contract since v0.35.0)"
+# lifts first (PR #382's audit, above), and the header states the contract
+# once — a calling skill lifts the decision lines and hands them over. The
+# literals below each sit on one line of the file they are held against.
+assert_file_lacks "$VOCAB" "body may be piped in" "the contract changed in v0.35.0 — a body is the caller's to lift"
+assert_file_lacks "$VOCAB" "the caller may hand over a" "nor does a function comment invite one"
+assert_file_has "$VOCAB" "a calling skill lifts the decision" "the header states the contract: lifting is the caller's job"
 printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
 t_run_split sh "$VOCAB" <"$SCRATCH/listed"
 s_assert_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"
