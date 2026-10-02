@@ -269,9 +269,10 @@ finishing output is working-tree changes like any other; commit it, or the
 branch proposes an adoption it does not contain. The run has just wired the
 kit's commit hook, which refuses an agent's commit from the main working copy
 (the manual's worktree rule) — and you are an agent, so your agent harness's
-marker is in this shell and the hook would refuse you. This one adoption
-commit is made on your human's instruction, by this document, so it takes
-that hook's loud bypass:
+marker is in this shell and the hook would refuse you. This one is the
+operator's own adoption commit — your human's — made through the agent they
+just ran, by this document, so it takes that hook's loud bypass, which the
+manual keeps for the operator's own commits:
 
 ```sh
 git add -A && COMMIT_WITHOUT_WORKTREE=1 git commit -m "chore: adopt agentic-sdlc — the finishing run"

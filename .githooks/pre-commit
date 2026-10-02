@@ -36,8 +36,9 @@
 # from, and bootstrapping a project ends in exactly that commit.
 #
 # The bypass is deliberate, LOUD and narrow, in the pre-push hook's shape — the
-# operator's own release or diary commit, made through an agent at the root, is
-# the case it is for. The refusal never prints it: an agent learns it from the
+# operator's own commits are the case it is for: a release or diary commit made
+# through an agent at the root, or the one a document the operator runs makes
+# (the setup document's adoption commit). The refusal never prints it: an agent learns it from the
 # manual's row, where the operator's say-so is the condition.
 #
 #     COMMIT_WITHOUT_WORKTREE=1 git commit …

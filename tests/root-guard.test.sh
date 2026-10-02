@@ -540,6 +540,30 @@ for m in $T_AGENT_MARKERS; do
 	assert_file_has "$KIT/adapters/claude-code/README.md" "\`$m\`" "the adapter README names every marker the guard reads"
 done
 assert_file_has "$KIT/README.md" "| \`.githooks/pre-commit\` |" "the ship table names every hook the kit ships"
+# The refusal points at the manual's row by name, so every manual a project
+# can carry has that row: the kit's own and the one bootstrap stamps for a
+# consumer (review finding M-1).
+TEMPLATE="$KIT/constitution/AGENTS.md.template"
+for manual in "$KIT/AGENTS.md" "$TEMPLATE"; do
+	grep -q '^| Keep work out of the root checkout' "$manual" &&
+		pass "${manual#"$KIT"/} has the row the refusal names" ||
+		fail "${manual#"$KIT"/} has no 'Keep work out of the root checkout' row, and the refusal points at it"
+	row=$(grep '^| Keep work out of the root checkout' "$manual")
+	case $row in
+	*"operator's own commits"*"operator-run document"*) pass "and its bypass is the operator's own commits, an operator-run document's included" ;;
+	*) fail "${manual#"$KIT"/}'s row does not say the bypass is for the operator's own commits: $row" ;;
+	esac
+done
+grep -q 'claude-code/hooks/' "$TEMPLATE" &&
+	fail "the consumer's manual names a path under the adapter's hooks directory" ||
+	pass "the consumer's row names no path under the adapter's hooks directory"
+# The adoption commit's bypass says whose commit it is (operator decision on
+# the review's Axis-2 list).
+e3=$(sed -n '/^### E3\./,/^### E4\./p' "$KIT/setup/agent-bootstrap.md")
+case $e3 in
+*"operator's own adoption commit"*"the agent"*"just ran"*COMMIT_WITHOUT_WORKTREE=1*) pass "E3 says the bypass is the operator's own adoption commit, made through the agent they just ran" ;;
+*) fail "E3 does not say, before its command, whose commit its bypass is for" ;;
+esac
 assert_file_has "$KIT/README.md" "tests/root-guard.test.sh" "a contributor asked to run the suites would miss it"
 assert_file_has "$KIT/.github/workflows/kit-ci.yml" "sh tests/root-guard.test.sh" "CI runs every suite"
 assert_file_has "$KIT/bootstrap.sh" "tests/root-guard.test.sh" "the suite is kit-only"
