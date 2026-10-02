@@ -1607,12 +1607,15 @@ _spawn_run() {
 	# A dispatcher taken down by a signal is a terminal site like any other, and
 	# the pair is closed from the trap so an interrupted spawn does not read
 	# later as one that never ended. These traps add what only the timed path
-	# needs — the worker's tree taken down first; everywhere else past the
-	# spawn the global trap closes the pair, on the untimed path once the
-	# worker it is waiting on finishes, with 128+signal either way (#465).
-	trap '_down; cleanup; _dispatch_exit 130' INT
-	trap '_down; cleanup; _dispatch_exit 143' TERM
-	trap '_down; cleanup; _dispatch_exit 129' HUP
+	# needs — the worker's tree taken down first — and then take the global
+	# trap's own way out, so the pair closes once and only while it is open;
+	# everywhere else past the spawn the global trap closes it, on the untimed
+	# path once the worker it is waiting on finishes, with 128+signal either
+	# way (#465). They stay installed after the worker, which is why they ask
+	# _on_signal rather than writing an end themselves.
+	trap '_down; _on_signal 130' INT
+	trap '_down; _on_signal 143' TERM
+	trap '_down; _on_signal 129' HUP
 	sh -c "$RUN_CMD" </dev/null &
 	_worker=$!
 	(

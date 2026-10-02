@@ -2379,11 +2379,13 @@ fi
 # A signal AFTER THE PAIR CLOSED writes no second end. The bait holds the
 # dispatcher in its EXIT trap, past the end of a worker that exited 5, and the
 # TERM lands there: one spawn, one end, and the end still the worker's own
-# (L-3, review of PR #488).
+# (L-3, review of PR #488). Run untimed and timed: the timed path's traps
+# outlive its worker, so they are held to the same flag (M-1 of the local
+# review of PR #488).
 POST_DIR="$SCRATCH/post-end"
 POST_MARK="$SCRATCH/post-end.entered"
 if bait_copy "$POST_DIR" "$POST_MARK" '$0 == "trap cleanup EXIT" { print "trap \047cleanup; : >\"" mark "\"; sleep 3\047 EXIT"; next } { print }'; then
-	for _post_timeout in ''; do
+	for _post_timeout in '' 30; do
 		_post_label=${_post_timeout:+" (timed)"}
 		TR_POST="$SCRATCH/trace-post-end"
 		tr_new "$TR_POST"
