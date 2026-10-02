@@ -1471,12 +1471,24 @@ HAND474='`Trace-Run: <the run id your begin printed>`'
 hand474() {
 	_h4_para=$(grep -F "$2" "$ROOT/$(skill_md "$1")")
 	[ -n "$_h4_para" ] || { fail "/$1 has no paragraph holding '$2'"; return; }
-	case $_h4_para in *"$HAND474"*"first line"*"printed nothing"*)
-		pass "/$1's spawn step ('$2') hands its run over on the prompt's first line" ;;
-	*) fail "/$1's spawn step ('$2') does not hand the run over: want $HAND474, 'first line' and what to do when begin 'printed nothing'" ;;
+	case $_h4_para in *"$HAND474"*"first line"*"after one space"*"the run yours nests in"*"printed nothing"*)
+		pass "/$1's spawn step ('$2') hands its run and its parent over on the prompt's first line" ;;
+	*) fail "/$1's spawn step ('$2') does not hand the run over: want $HAND474, 'first line', the parent 'after one space' as 'the run yours nests in', and what to do when begin 'printed nothing'" ;;
 	esac
 }
 hand474 implement '**(b) A `/review-pr` subagent in the agent harness — the fallback.**'
+# Not only step 9(b): /implement's general spawn rule hands the run over at
+# every spawn the skill makes.
+hand474 implement '**When you spawn a subagent**'
+grep -F '**When you spawn a subagent**' "$ROOT/$(skill_md implement)" | grep -qF 'any other spawn this skill makes' &&
+	pass "/implement's general spawn rule names every spawn, not only the reviewer's" ||
+	fail "/implement's general spawn rule does not say it hands the run over at every spawn"
+# M, review of PR #524: /review-pr's hand-over follows the sentence about the
+# resolver printing nothing, so "Nothing printed" still reads as the model's.
+grep -F '**Resolve the reviewer tier once, before any agent spawns**' "$ROOT/$(skill_md review-pr)" |
+	grep -qF 'one resolve is what makes the seven records below comparable. Nothing printed is a valid answer' &&
+	pass "/review-pr's 'Nothing printed' still follows the resolve it answers" ||
+	fail "/review-pr's hand-over sentence splits the resolve from 'Nothing printed is a valid answer'"
 hand474 review-pr '**Resolve the reviewer tier once, before any agent spawns**'
 hand474 pr-iterate '**A tool-restricted subagent reads those files, and returns a declared shape.**'
 hand474 pr-iterate '**In the `/pr-iterate` context, bypass the question**'

@@ -253,8 +253,8 @@ hook_run_of() {
 
 # --- the run handed over at spawn -------------------------------------------
 
-# hook_run_handed <transcript> — export TRACE_RUN from the run the spawning
-# session handed this agent, and TRACE_PARENT empty unless already set; status 0
+# hook_run_handed <transcript> — export TRACE_RUN, and TRACE_PARENT unless
+# already set, from the run the spawning session handed this agent; status 0
 # when one was handed (or the environment already names a run), 1 when the
 # channel is empty and the caller's own resolution answers. Ticket #474.
 #
@@ -266,15 +266,17 @@ hook_run_of() {
 # prompt, and the agent harness writes that prompt, verbatim, as the first user
 # line of the agent's own transcript.
 #
-# THE CHANNEL is the prompt's FIRST line, `Trace-Run: <run id>`, and nothing
-# else on it. The first line only, so text a spawn prompt quotes further down
-# — a ticket body, a review comment — can never name a run. The id is held to
-# the shape the shared script mints (stamp, pid, eight hex digits) and is only
-# ever a value on an event: it is never executed, and a line that does not
-# match exactly is no channel at all. The parent is not on the line: a run
-# named from elsewhere has its lineage on its own run.start, and reading this
-# checkout's stack for one would invent an edge — the shared script's own rule
-# for an environment that names the run.
+# THE CHANNEL is the prompt's FIRST line, `Trace-Run: <run id> [<parent run
+# id>]`, and nothing else on it: the run, then — after one space — the run it
+# nests in, the one the spawner's own prompt handed it (the ticket's TRACE_RUN,
+# with TRACE_PARENT). The first line only, so text a spawn prompt quotes
+# further down — a ticket body, a review comment — can never name a run. Each
+# id is held to the shape the shared script mints (stamp, pid, eight hex
+# digits) and is only ever a value on an event: it is never executed, and a
+# line that does not match exactly is no channel at all. With no parent on the
+# line the parent is empty, never read from this checkout's stack: a run named
+# from elsewhere has its lineage elsewhere — the shared script's own rule for an
+# environment that names the run.
 #
 # BOUNDED. Only the first user record among the transcript's first fifty lines
 # is read, and only its first 4096 bytes: the prompt opens the record, and a
@@ -306,11 +308,18 @@ hook_run_handed() {
 	_rh_run=${_rh_val%%\\*}
 	_rh_run=${_rh_run%%\"*}
 	case ${_rh_val#"$_rh_run"} in '\n'* | '"'*) ;; *) return 1 ;; esac
+	_rh_parent=
+	case $_rh_run in *' '*)
+		_rh_parent=${_rh_run#* }
+		_rh_run=${_rh_run%% *}
+		hook_run_id_ok "$_rh_parent" || return 1
+		;;
+	esac
 	hook_run_id_ok "$_rh_run" || return 1
 	TRACE_RUN=$_rh_run
 	export TRACE_RUN
 	if [ -z "${TRACE_PARENT+set}" ]; then
-		TRACE_PARENT=
+		TRACE_PARENT=$_rh_parent
 		export TRACE_PARENT
 	fi
 	return 0

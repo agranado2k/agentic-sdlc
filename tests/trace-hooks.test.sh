@@ -4142,11 +4142,22 @@ done
 	pass "and no prompt line was ever executed: the command substitution touched nothing" ||
 	fail "a prompt line was executed: pwned-474 exists"
 
-# H-4, review of PR #524: a TRACE_PARENT already in the environment is kept.
-stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" TRACE_PARENT=kept-474
+# The parent rides on the same line, after one space: the run the spawner's
+# own prompt handed it, which its run nests in (ticket #474: TRACE_RUN, with
+# TRACE_PARENT). Held to the same shape; absent, the parent is empty.
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/parent-474.jsonl" "Trace-Run: $WT474 $OUT474\\\\nRun the suite."
+stop474 "$SCRATCH/parent-474.jsonl"
+[ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = "$OUT474" ] &&
+	pass "a channel line naming a parent hands over the run with that parent" ||
+	fail "agent.stop with a parent on the line: run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WT474 / $OUT474"
+stop474 "$SCRATCH/parent-474.jsonl" TRACE_PARENT=kept-474
 [ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = kept-474 ] &&
 	pass "a TRACE_PARENT already in the hook's environment is kept beside the handed run" ||
 	fail "agent.stop under TRACE_PARENT=kept-474: run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" TRACE_PARENT=kept-474
+[ "$(str "$STOP" run)" = "$WT474" ] && [ "$(str "$STOP" parent)" = kept-474 ] &&
+	pass "and so it is when the line names no parent" ||
+	fail "agent.stop under TRACE_PARENT=kept-474, no parent on the line: parent '$(str "$STOP" parent)'"
 
 # M-3, review of PR #524: the read is bounded — the first user record's first
 # 4096 bytes and no more — so a 200 KB prompt costs one bounded line, and a
