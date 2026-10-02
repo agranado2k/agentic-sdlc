@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02. Amended 2026-10-02: a subagent's run reaches the Claude Code adapter's hooks through a channel fixed at spawn — the spawn prompt's first line, `Trace-Run: <run id>` — and no longer through the payload's `cwd`, which names the session's directory; see clause 5. Decided for #474, from the retrospective of 2026-10-02, finding F3)
 
 ## Context and problem statement
 
@@ -407,6 +407,53 @@ Chosen: **option 1**.
    Clause 7 stands: the caller is a hook, the adapter's business (clause 8),
    not the chain, and no skill calls `stack` — the skills suite holds every
    skill directory to that, as it does `show`, `summary` and `export`.
+   *Amended 2026-10-02 (#474):* **a subagent's run is handed over at
+   spawn, not read from the payload's `cwd`.** #421 resolved a stop's run
+   from the checkout the payload's `cwd` names, on the premise that the
+   agent tool reports the worktree a subagent worked in. #478 recorded that
+   `cwd` as `data.cwd` and measured the premise false: of 151 subagents whose
+   stop recorded one (2026-10-02, 11:03Z to 14:41Z, 289 events, all of one
+   orchestrating session), 143 named the root checkout and 13 a worktree,
+   and 5 agents named both across their own stops — a subagent does not move
+   between checkouts mid-stop, so the field follows the session's working
+   directory (inferred from that), not the subagent's; and only 11 of the 289
+   events carried a run at all. A hook runs in the agent harness's process, not the
+   subagent's, so nothing exported for the subagent reaches it. Two channels
+   were weighed. **A run marker the spawning session writes into the
+   worktree**, read through `stack`, still needs the hook to know which
+   worktree — the very thing the payload does not say — and with several
+   subagents in several worktrees at once it has no answer; and a spawned
+   `/implement` closes its run before it stops, so the worktree's stack is
+   empty by then anyway. **A line in the spawn prompt** is fixed by the
+   spawner, and the agent harness writes the prompt, verbatim, as the first
+   user line of the subagent's own transcript, which the stop payload names
+   and the tool payload's `agent_id` locates. That is the channel. The
+   prompt's **first line** is `Trace-Run: <run id>`, alone on it; the
+   adapter's hooks read it back and export it as the event's run, with an
+   empty parent — a run named from elsewhere keeps its lineage on its own
+   `run.start`, the rule this script already keeps for an environment that
+   names the run. The line is held to the shape `trace_id` mints and is only
+   ever a value: a line that does not match exactly, or a match anywhere
+   but the first line, is no channel, so text a prompt quotes further down
+   can never name a run. A `TRACE_RUN` already in the hook's environment (a
+   dispatched worker's) still wins. The stop hook reads the subagent's
+   transcript; the tool-post hook reads the transcript of the agent that
+   made the call — the subagent the payload's `agent_id` names, never its
+   session's in its place, or the session's own when the payload names
+   none; the session-end hook reads the session's own, so a session started
+   on such a prompt files its end and its usage under that run. With the
+   channel empty each hook resolves as before: the stop from the payload's
+   `cwd` (#421, kept as the fallback), the other two through the script's
+   own precedence. Which run a skill hands over is the one its own `begin`
+   printed — the run it spawns inside — so a reviewer spawned by
+   `/implement` files its spend under the ticket's run; a skill that opens
+   no run hands none. The skills suite holds each spawn step of `/implement`,
+   `/review-pr` and `/pr-iterate` to the line. The script is unchanged: the
+   channel is the adapter's (clause 8) and the skills', and the line never
+   reaches `emit` as text. Its limit, stated: a session that spawns
+   `/implement` hands over its own run, not the ticket's — that run does not
+   exist until the subagent's `begin` — so the spawned session's own stop
+   joins its ticket only through the spawner's run.
 6. **Cost is computed on read, never on write.** Events carry raw token
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
@@ -496,6 +543,10 @@ Chosen: **option 1**.
 - Amended for ticket #472: the `stack` subcommand, the subagent-stop
   hook's run read through it, and the suite sections that hold them (trace
   §27, trace-hooks §46, trace-skills §3).
+- Amended for ticket #474: the spawn-time run channel, its read in the
+  subagent-stop, session-end and tool-post hooks, the hand-over in
+  `/implement`, `/review-pr` and `/pr-iterate`, and the suite sections that
+  hold them (trace-hooks §47, trace-skills §22).
 - Amended for ticket #466: the conditional and required rows of
   `TRACE_SHAPES`, `/pr-iterate`'s triage and iteration prose, and the
   suite sections that hold them (trace §26, trace-skills §21).
