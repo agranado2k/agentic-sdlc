@@ -32,8 +32,12 @@ why=$(hook_field reason)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
 # The run handed to this session at its start, on its prompt's first line
-# (#474; see hook_run_handed), carried by every event below. With none
-# handed, the shared script resolves the run as it always has.
+# (#474; see hook_run_handed), carried by the session's own usage and end
+# below — and not by the denials the sweep records, which are calls of an agent
+# the marker does not name (M-4, review of PR #524). With none handed, the
+# shared script resolves the run as it always has. What the environment held
+# before the hand is remembered, so the sweep runs on exactly that.
+run_was=${TRACE_RUN+set} parent_was=${TRACE_PARENT+set}
 hook_run_handed "$transcript" || :
 
 # The subject, once, as positional arguments — so that a session with no id
@@ -92,7 +96,13 @@ else
 fi
 
 # The tool calls this session began and never returned from: denied (#409).
-hook_pending_sweep "$tdir" "$sid" "$@"
+# Swept on the environment as it stood before the hand above: the marker names
+# no agent, so the run handed to the session is not known to be theirs.
+(
+	[ -n "$run_was" ] || unset TRACE_RUN
+	[ -n "$parent_was" ] || unset TRACE_PARENT
+	hook_pending_sweep "$tdir" "$sid" "$@"
+)
 
 # How many phantom stops this session had since its last end (#410).
 phantoms=$(hook_phantom_take "$tdir" "$sid") && set -- "$@" data.phantoms="$phantoms"

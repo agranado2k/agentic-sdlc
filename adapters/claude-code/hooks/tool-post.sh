@@ -138,7 +138,7 @@ errfirstline=$(field error_first_line)
 # run its spawn prompt named, and one handed none never borrows the run handed
 # to its session.
 # With none handed, the shared script resolves the run as it always has.
-if own=$(hook_agent_transcript "$(hook_expand "$(field transcript)")" "$sid" "$(field agent)"); then
+if own=$(hook_agent_transcript "$(hook_expand "$(field transcript)")" "$(field agent)"); then
 	hook_run_handed "$own" || :
 fi
 
