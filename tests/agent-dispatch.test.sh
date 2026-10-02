@@ -870,9 +870,10 @@ term_leg() {
 	# Wait for the WORKER's pid file, never for a fixed two seconds: the timed
 	# path installs its traps and then spawns, so the worker's own marker is
 	# the one anchor that cannot precede them. A TERM that arrives earlier
-	# takes the global cleanup and reads "exited 127" — a flake on a loaded
-	# host, not a finding (#402). No marker is a fail, never a TERM anyway:
-	# the leg would be passing for a worker nobody saw start.
+	# lands in the global trap and ends the dispatch before any worker exists
+	# — the gap leg below holds that case (#465), and this one would be
+	# passing for a worker nobody saw start (#402). No marker is a fail, never
+	# a TERM anyway.
 	if ! await_file -s "$PIDFILE" 30; then
 		fail "the worker never wrote its pid file in 30s — nothing to TERM$2"
 		# TERM first, so a worker that did start goes down with the trap;
@@ -2264,10 +2265,9 @@ env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_TERM" \
 TR_TERM_PID=$!
 # Wait for the WORKER to say it is running, rather than for a fixed two
 # seconds. The timed path installs its traps and then spawns, so the worker's
-# own marker is the one anchor that cannot precede them; on a loaded host a
-# signal that arrives earlier takes the global cleanup path, tears the scratch
-# out from under the dispatch and reports something else entirely — a flake,
-# not a finding (L-4, review of PR #290). No marker is a fail, never a TERM.
+# own marker is the one anchor that cannot precede them; a signal that
+# arrives earlier is the global trap's, which the gap leg after this one holds
+# (L-4, review of PR #290; #465). No marker is a fail, never a TERM.
 if await_file -e "$TR_STARTED" 30; then
 	kill -TERM "$TR_TERM_PID" 2>/dev/null
 	wait "$TR_TERM_PID"
@@ -2283,6 +2283,32 @@ else
 	sleep 1
 	kill -KILL "$TR_TERM_PID" 2>/dev/null
 	wait "$TR_TERM_PID" 2>/dev/null
+fi
+
+# The same close from the GLOBAL trap: a TERM in the gap before the timed
+# path's trap — past the spawn, before the worker — still writes the end, with
+# 143, rather than leaving the pair open (#465). The gap bait is the copy the
+# signal legs above planted; its marker, not the clock, places the TERM.
+TR_GAP="$SCRATCH/trace-gap"
+tr_new "$TR_GAP"
+rm -f "$GAP_MARK"
+env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_GAP" \
+	sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 30 >/dev/null 2>&1 &
+TR_GAP_PID=$!
+if await_file -e "$GAP_MARK" 30; then
+	kill -TERM "$TR_GAP_PID" 2>/dev/null
+	wait "$TR_GAP_PID"
+	TR_GAP_STATUS=$?
+	[ "$TR_GAP_STATUS" = 143 ] &&
+		pass "a traced dispatcher sent TERM in the gap exits 143" ||
+		fail "a traced dispatcher sent TERM in the gap exited $TR_GAP_STATUS"
+	tr_assert_count "$TR_GAP" 2 "…and its spawn is still a pair"
+	tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…closed from the global trap"
+	tr_event_has "$TR_GAP" 2 '"exit":"143"' "…with the signal's own status recorded"
+else
+	fail "the traced gap bait never wrote its marker in 30s — nothing to TERM"
+	kill -KILL "$TR_GAP_PID" 2>/dev/null
+	wait "$TR_GAP_PID" 2>/dev/null
 fi
 
 # THE UNREACHABLE CROSSING (#263's own review was this case). A vendor whose

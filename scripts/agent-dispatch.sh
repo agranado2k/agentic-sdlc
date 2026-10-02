@@ -53,6 +53,9 @@
 #      rlimit rung a ceiling hit is not observable, so the worker's own status
 #      passes through. A worker that both timed out and exceeded its budget
 #      exits with whichever fired first; its tree is gone either way.
+# 130 / 143 / 129  the DISPATCHER was sent INT / TERM / HUP — wherever it was,
+#      after its scratch is removed (and, on the timed path, the worker's tree
+#      taken down). Untimed, the signal waits for the worker to finish (#465).
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -119,9 +122,10 @@
 # is the trace policy file's business and not this one's; unconfigured, every
 # emit writes nothing. The one thing that leaves a pair OPEN is a dispatcher
 # that never runs its own way out — a SIGKILL. A trapped signal does not: the
-# timed path's own trap writes the end, and on the untimed path the signal is
-# deferred until the worker this shell is waiting on finishes, after which the
-# ordinary exit closes the pair with that worker's status.
+# timed path's own trap writes the end, and anywhere else past the spawn the
+# global trap does — on the untimed path once the worker this shell is waiting
+# on finishes, since the signal is deferred until then — with the signal's own
+# status (128+signal), never the worker's.
 #
 # WHAT A WORKER MAY NOT DO. Shared invariant §7 puts a human's name on the
 # merge, and nothing here changes that: a dispatched worker writes to the
@@ -899,7 +903,20 @@ fi
 # shell.
 SCRATCH=""
 cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
-trap cleanup EXIT INT TERM HUP
+# A signal ENDS the dispatch, here as on the timed path: cleanup, then the
+# conventional 128+signal status. A handler that only cleaned up swallowed the
+# signal — the dispatcher ran on without its scratch and failed later with a
+# status that said nothing about why (#465). Once the spawn is on disk the way
+# out is _dispatch_exit, so the pair closes; before it there is no pair.
+_on_signal() {
+	cleanup
+	[ "${_SPAWNED:-}" = 1 ] && _dispatch_exit "$1"
+	exit "$1"
+}
+trap cleanup EXIT
+trap '_on_signal 130' INT
+trap '_on_signal 143' TERM
+trap '_on_signal 129' HUP
 
 # The prompt is ALWAYS staged into a file this script created, even when the
 # caller passed one. The caller's path is data — a branch name becomes a
@@ -1158,6 +1175,7 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 # while the unreachable crossing, judged deliberately before the budget, emits
 # its own pair at its own site (H-1, review of PR #290).
 _trace_spawn() {
+	_SPAWNED=1
 	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
 		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
