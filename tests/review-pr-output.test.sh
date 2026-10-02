@@ -448,7 +448,7 @@ banner "9. The reuse/DRY lens tells added duplication from inherited duplication
 # a CANDIDATE TICKET — named as such, LOW, §10 cited, and a fix line that
 # asks this PR for nothing. It is a fix LINE and not an absent one because the
 # broker refuses a whole report over one finding without it
-# (scripts/forge-broker.kit.sh; tests/forge-broker.test.sh section 19 runs the
+# (scripts/forge-broker.kit.sh; tests/forge-broker.test.sh section 20 runs the
 # line this suite pins through it).
 # Scoped to Agent 5's own section: the other lenses' prompts stay as they
 # were, and a rule written into §5's shared anatomy would bind all six.

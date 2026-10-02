@@ -1160,7 +1160,76 @@ STUB_PR=12
 export STUB_PR
 
 # ---------------------------------------------------------------------------
-banner "19. A candidate-ticket LOW asks the PR for nothing, and the broker still lands it (#419)"
+banner "19. A retried run records one note, not a second set of raises and verdicts"
+# ---------------------------------------------------------------------------
+# R4 proves a retry posts nothing; this proves it TRACES nothing it already
+# traced. The first run's raises and verdicts are what /retro question 2
+# counts, so a retry that emitted them again would double every finding. The
+# gate is the marker itself: both bodies found means the first run got past
+# both writes and so reached its emits; the retry says so in one `note`.
+STUB_PR=34
+export STUB_PR
+broker 34 "$RAISE"
+s_assert_status 0 "the first run on pr:#34 posts"
+R_MARK=$(posted_marker pulls/34/reviews)
+printf 'https://forge.invalid/pull/34#pullrequestreview-61\t%s\n' "$R_MARK" >"$SCRATCH/retry-reviews.tsv"
+printf 'https://forge.invalid/pull/34#issuecomment-62\t%s\n' "$R_MARK" >"$SCRATCH/retry-comments.tsv"
+STUB_REVIEWS="$SCRATCH/retry-reviews.tsv" STUB_COMMENTS="$SCRATCH/retry-comments.tsv"
+export STUB_REVIEWS STUB_COMMENTS
+broker 34 "$RAISE"
+unset STUB_REVIEWS STUB_COMMENTS
+s_assert_status 0 "the retried run exits 0"
+assert_mutating 0 "…and posts nothing"
+# retry_count_on <subject> <kind> — how many events of that kind the subject holds.
+retry_count_on() {
+	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "$1" --kind "$2"
+	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$2\""
+}
+retry_count() { retry_count_on 'pr:#34' "$1"; }
+[ "$(retry_count finding.raise)" = 3 ] &&
+	pass "the two runs leave the first run's three raises and no more" ||
+	fail "expected three finding.raise events for pr:#34, saw $(retry_count finding.raise)"
+[ "$(retry_count review.verdict)" = 2 ] &&
+	pass "…and the first run's two verdicts and no more" ||
+	fail "expected two review.verdict events for pr:#34, saw $(retry_count review.verdict)"
+[ "$(retry_count note)" = 1 ] &&
+	pass "…and one note for the retry" ||
+	fail "expected one note for pr:#34, saw $(retry_count note)"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
+printf '%s\n' "$S_OUT" | grep -F '"via":"broker"' | grep -qF 'already landed' &&
+	pass "…marked via=broker, saying the review already landed" ||
+	fail "the retry note lacks via=broker or its reason: $S_OUT"
+
+# The gate is BOTH bodies, not the review alone. A first run that died
+# between its two writes left the review and no trace, so the run that finds
+# only the review posts the comment and emits the only set there will be.
+STUB_PR=35
+export STUB_PR
+# The first run lands untraced, standing in for the one that died before step 7.
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 35 "$RAISE"
+R_MARK=$(posted_marker pulls/35/reviews)
+printf 'https://forge.invalid/pull/35#pullrequestreview-71\t%s\n' "$R_MARK" >"$SCRATCH/half-reviews.tsv"
+STUB_REVIEWS="$SCRATCH/half-reviews.tsv"
+export STUB_REVIEWS
+broker 35 "$RAISE"
+unset STUB_REVIEWS
+s_assert_status 0 "a run that finds only the review exits 0"
+assert_mutating 1 "…and posts the behavior comment, and only that"
+[ "$(retry_count_on 'pr:#35' finding.raise)" = 3 ] &&
+	pass "…and raises the three findings the dead first run never traced" ||
+	fail "expected three finding.raise events for pr:#35, saw $(retry_count_on 'pr:#35' finding.raise)"
+[ "$(retry_count_on 'pr:#35' review.verdict)" = 2 ] &&
+	pass "…and records both verdicts" ||
+	fail "expected two review.verdict events for pr:#35, saw $(retry_count_on 'pr:#35' review.verdict)"
+[ "$(retry_count_on 'pr:#35' note)" = 0 ] &&
+	pass "…and no retry note: nothing was traced before it" ||
+	fail "a half-landed run recorded a retry note for pr:#35"
+STUB_PR=12
+export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "20. A candidate-ticket LOW asks the PR for nothing, and the broker still lands it (#419)"
 # ---------------------------------------------------------------------------
 # /review-pr's reuse/DRY lens files a duplication the diff merely INHERITED as
 # a LOW candidate ticket: shared invariant §10 lands the consolidation on its
