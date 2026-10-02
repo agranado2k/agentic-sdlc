@@ -388,14 +388,11 @@ banner "Exit 5 — too many stamp lines: the lift is bounded, per key"
 # stamp_cpu_ms — the CPU milliseconds of one run of the script on the current
 # fixture, read by tests/lib.sh's t_cpu_ms (CPU time, never the wall clock, so
 # a loaded host cannot redden it), or "unmeasured".
-stamp_cpu_ms() {
-	cd "$SCRATCH" || exit 2
-	t_cpu_ms sh "$STAMP" 331
-	cd "$KIT" || exit 2
-}
+# Called in $(...), so its cd stays there; the run's status was asserted on
+# the run before it, and this one is measured only.
+stamp_cpu_ms() { cd "$SCRATCH" && t_cpu_ms sh "$STAMP" 331; }
 STAMP_BOUND_MS=1500 # one run on 2,000 Tier: lines: bounded ~180, unbounded ~28,000
-awk 'BEGIN { for (i = 0; i < 2000; i++) print "Tier: implementer" }' >"$SCRATCH/body"
-echo 0 >"$SCRATCH/fails-left"
+body "$(awk 'BEGIN { for (i = 0; i < 2000; i++) printf "Tier: implementer\\n" }')"
 stamp 331
 s_assert_status 5 "2,000 Tier: lines: exit 5, too many stamp lines — not a refusal, not a stamp"
 [ -z "$S_OUT" ] && pass "2,000 Tier: lines: nothing on stdout" ||
