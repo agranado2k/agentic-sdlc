@@ -329,6 +329,26 @@ case $wf_rubric in
 *'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "the workflow template's rubric line 1 names a tier other than mechanical" ;;
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
+# The two tier tables (ticket #467): the kit's manual and the consumer manual
+# template each give a `mechanical` row a signal cell, and #418 left both
+# giving the one-condition signal ("the suite is the oracle"). Each cell quotes
+# rubric line 1's two conditions in the phrases asserted on it above, and joins
+# them as the rubric does — "only when both": a cell reworded to "when either
+# holds" still carries both phrases, and is red here on the join.
+# mech_signal <manual> — the signal cell of <manual>'s `mechanical` tier row.
+mech_signal() { awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$1"; }
+for manual in AGENTS.md constitution/AGENTS.md.template; do
+	cell=$(mech_signal "$manual")
+	[ -n "$cell" ] && pass "$manual has a \`mechanical\` row with a signal cell" ||
+		fail "$manual has no \`mechanical\` row with a signal cell in its tier table"
+	t_text_has "$cell" "names the one command whose exit is its oracle" "$manual's mechanical signal carries condition one, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "one file or one pattern applied uniformly across many" "$manual's mechanical signal carries condition two, in rubric line 1's words" "$manual's mechanical signal"
+	t_text_has "$cell" "only when both" "$manual's mechanical signal requires both conditions, not either" "$manual's mechanical signal"
+	case $cell in
+	*"the suite is the oracle"*) fail "$manual's mechanical signal still gives the one-condition signal (\"the suite is the oracle\")" ;;
+	*) pass "$manual's mechanical signal no longer gives the one-condition signal" ;;
+	esac
+done
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 # The session cap (ticket #483, retro F6): every review-bearing /implement
 # session ends at a /review-pr that spawns seven lenses, so two such sessions
