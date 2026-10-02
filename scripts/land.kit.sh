@@ -27,8 +27,10 @@
 #      watched to its end.
 #   4. Emits merge.land (`landed`, the sha, the method, the wait, the
 #      workflows' result) on pr:#<N>, related to the ticket — and whether
-#      /implement opened the PR (data.implement=yes|no, with data.tier when
-#      yes), read from the one line /implement writes in the PR body (#480).
+#      /implement opened the PR (data.implement=yes|no, with
+#      data.implement_tier when yes — a key of its own, never the event's
+#      top-level tier), read from the one line /implement writes in the PR
+#      body (#480).
 #   5. Asks the verdict question when stdin is a terminal and emits feedback
 #      `hit|adjusted|missed`; with no terminal, or --unasked, it emits
 #      `unasked` with the reason — never a verdict nobody gave.
@@ -225,7 +227,7 @@ if [ -n "$IMPL" ]; then
 fi
 set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" data.via=land "reason=$TITLE" \
 	"data.implement=$IMPLEMENT"
-[ -z "$IMPL_TIER" ] || set -- "$@" "data.tier=$IMPL_TIER"
+[ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"
 [ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
 trace loud kind=merge.land "$@"
 

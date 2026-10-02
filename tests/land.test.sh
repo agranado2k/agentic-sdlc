@@ -263,7 +263,7 @@ banner "6. The landing records whether /implement opened the PR, read from its b
 # /implement writes one line into the PR body it opens — the ticket and the
 # tier it read through the stamp checker. The landing reads that line from the
 # forge, never from the trace (ADR-0008 clause 7), and records it on
-# merge.land as data.implement=yes|no and data.tier. The body is untrusted:
+# merge.land as data.implement=yes|no and data.implement_tier. The body is untrusted:
 # only a line of the one fixed shape, whose tier the vocabulary checker
 # passes, counts; anything else is recorded as absent — and never blocks the
 # landing.
@@ -282,9 +282,9 @@ landed_with() {
 			fail "$_lw_label: merge.land lacks $_lw_tok: $_lw_ml"
 	done
 }
-# no_tier <PR> <label> — merge.land carries no tier at all.
+# no_tier <PR> <label> — merge.land carries no tier at all, under either key.
 no_tier() {
-	show "pr:#$1" --kind merge.land | grep -qF '"tier"' && fail "$2: a tier was recorded: $(show "pr:#$1" --kind merge.land)" ||
+	show "pr:#$1" --kind merge.land | grep -qE '"(implement_)?tier"' && fail "$2: a tier was recorded: $(show "pr:#$1" --kind merge.land)" ||
 		pass "$2: no tier is recorded"
 }
 # The line is lifted from /implement's own step 8, placeholders filled, so the
@@ -301,7 +301,7 @@ $LINE
 
 <!-- explain-diff-appendix -->")
 land "STUB_BODY_FILE=$f" 160
-landed_with 160 "the line in the body" '"implement":"yes"' '"tier":"mechanical"'
+landed_with 160 "the line in the body" '"implement":"yes"' '"implement_tier":"mechanical"'
 grep -q '^ARGV: pr view 160 .*body' "$STUB_LOG" && pass "the body is read from the forge" ||
 	fail "the PR body was never asked of the forge: $(cat "$STUB_LOG")"
 
@@ -313,7 +313,7 @@ landed_with 123 "an empty body (section 2's landing)" '"implement":"no"'
 f="$SCRATCH/body.crlf"
 printf 'Closes #77.\r\n%s\r\n' "$LINE" >"$f"
 land "STUB_BODY_FILE=$f" 162
-landed_with 162 "a body with CRLF line ends" '"implement":"yes"' '"tier":"mechanical"'
+landed_with 162 "a body with CRLF line ends" '"implement":"yes"' '"implement_tier":"mechanical"'
 
 f=$(body offvocab "<!-- implement: ticket=#77 tier=implementor -->")
 land "STUB_BODY_FILE=$f" 163
@@ -332,7 +332,7 @@ for hostile in \
 	f=$(body hostile "$hostile")
 	land "STUB_BODY_FILE=$f" 164
 	_h_ml=$(show 'pr:#164' --kind merge.land | tail -1)
-	[ "$S_STATUS" = 0 ] && printf '%s\n' "$_h_ml" | grep -qF '"implement":"no"' && ! printf '%s\n' "$_h_ml" | grep -qF '"tier"' &&
+	[ "$S_STATUS" = 0 ] && printf '%s\n' "$_h_ml" | grep -qF '"implement":"no"' && ! printf '%s\n' "$_h_ml" | grep -qE '"(implement_)?tier"' &&
 		pass "a malformed line is recorded as absent, and lands: $hostile" ||
 		fail "a malformed line was not recorded as absent (exit $S_STATUS): $hostile — $_h_ml"
 done
@@ -351,7 +351,7 @@ no_tier 166 "a line naming another ticket"
 
 f=$(body noticket "<!-- implement: ticket=#999 tier=planner -->")
 land STUB_TICKET= "STUB_BODY_FILE=$f" 167
-landed_with 167 "with no ticket known, the line's own" '"implement":"yes"' '"tier":"planner"'
+landed_with 167 "with no ticket known, the line's own" '"implement":"yes"' '"implement_tier":"planner"'
 
 land STUB_BODY_RC=1 "STUB_BODY_FILE=$f" 168
 landed_with 168 "a body the forge does not answer for" '"implement":"no"'
