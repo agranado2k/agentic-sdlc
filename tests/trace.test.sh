@@ -1544,6 +1544,9 @@ case $S_STATUS:$S_ERR in
 2:*"unknown condition 'outcom~"*) pass "a TRACE_SHAPES row with an unknown condition (outcom~) is exit 2 naming it" ;;
 *) fail "a row with an unknown condition did not die naming it (exit $S_STATUS): $S_ERR" ;;
 esac
+sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a data value its kind.s shape refuses (TRACE_SHAPES) or a data key a row requires and the line lacks' &&
+	pass "the script header's exit-2 list names a required key the line lacks" ||
+	fail "the script header's exit-2 list does not name a required data key the line lacks"
 
 # The rules live in the one kind table, and the record names them.
 grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&

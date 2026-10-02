@@ -27,7 +27,8 @@
 # nothing. Every diagnostic is on stderr, prefixed `trace:`. Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a data value its kind's shape refuses
-# (TRACE_SHAPES), a malformed subject, value or price, or a policy file named
+# (TRACE_SHAPES) or a data key a row requires and the line lacks, a malformed
+# subject, value or price, or a policy file named
 # explicitly and missing; exit 1 is `verify`'s
 # verdict, and an `export` that refuses because verify fails carries that
 # same verdict out. `begin` and `end` add two exits
