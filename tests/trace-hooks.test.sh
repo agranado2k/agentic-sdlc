@@ -1512,6 +1512,27 @@ stop_on() {
 		set_key agent_transcript_path "$1" >"$SCRATCH/stop-308.json"
 }
 
+# late_writer <transcript> [seconds] — in the background, append the final
+# turn to that transcript once the hook has taken its first nap, and that many
+# seconds after it (default none, a fraction allowed). Driven by the nap log, never by a clock, so
+# a slow preamble cannot let the turn land before the hook first looks. Clears
+# the nap log first; sets LATE_WRITER to the writer's pid, for the caller to
+# wait on. Sections 27 and 44 both race the hook with it.
+late_writer() {
+	: >"$SCRATCH/naps-308.log"
+	(
+		_w=0
+		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
+			sleep 0.05 2>/dev/null || sleep 1
+			_w=$((_w + 1))
+		done
+		# A sleep that refuses a fraction rounds it up to the next whole second.
+		[ -z "${2:-}" ] || sleep "$2" 2>/dev/null || sleep "$((${2%%.*} + 1))"
+		cat "$SCRATCH/sub-tail-308.jsonl" >>"$1"
+	) &
+	LATE_WRITER=$!
+}
+
 # THE STUBS. A `sleep` that logs each nap and then really sleeps; one that
 # also refuses a fraction, as a POSIX-only sleep may; and a `date` with no
 # sub-second field, as POSIX date has none. Each is found first on PATH and
@@ -1545,18 +1566,9 @@ if [ "$HAVE_NODE" = 1 ]; then
 	new_trace
 	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-late-308.jsonl"
 	stop_on "$SCRATCH/sub-late-308.jsonl"
-	: >"$SCRATCH/naps-308.log"
-	(
-		_w=0
-		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
-			sleep 0.05 2>/dev/null || sleep 1
-			_w=$((_w + 1))
-		done
-		cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-late-308.jsonl"
-	) &
-	WRITER=$!
+	late_writer "$SCRATCH/sub-late-308.jsonl"
 	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=10000
-	wait "$WRITER"
+	wait "$LATE_WRITER"
 	[ "$S_STATUS" = 0 ] && pass "the hook exits 0 while it waits" || fail "the hook exited $S_STATUS: $S_ERR"
 	[ -z "$S_OUT" ] && pass "and says nothing on stdout" || fail "stdout carried: $S_OUT"
 	W=$(ev_of agent.stop | sed -n '1p')
@@ -3753,8 +3765,8 @@ banner "44. The kit's wait bound covers the measured lag of a final message (#47
 # turn lands about 1.5 s after the hook starts waiting — the measured p90 —
 # and the hook reads the KIT'S OWN policy file, the way its wiring does.
 #
-# The writer is driven by section 27's nap log, so the 1.5 s run from the
-# hook's first nap, never from a clock a slow preamble could eat.
+# The writer is section 27's late_writer, so the 1.5 s run from the hook's
+# first nap, never from a clock a slow preamble could eat.
 unset TRACE_AGENT_WAIT_MS
 # lag479 <policy file> — the hook on a transcript one turn short, whose final
 # turn lands 1.5 s into the wait, under that policy file. Sets S_*, NAPS and
@@ -3763,19 +3775,9 @@ lag479() {
 	new_trace
 	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-lag-479.jsonl"
 	stop_on "$SCRATCH/sub-lag-479.jsonl"
-	: >"$SCRATCH/naps-308.log"
-	(
-		_w=0
-		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
-			sleep 0.05 2>/dev/null || sleep 1
-			_w=$((_w + 1))
-		done
-		sleep 1.5 2>/dev/null || sleep 2
-		cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-lag-479.jsonl"
-	) &
-	_lw=$!
+	late_writer "$SCRATCH/sub-lag-479.jsonl" 1.5
 	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$1"
-	wait "$_lw"
+	wait "$LATE_WRITER"
 	LAG479=$(ev_of agent.stop | sed -n '1p')
 }
 
