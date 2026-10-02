@@ -42,11 +42,12 @@ export LC_ALL
 # session its assertions did not expect, red for the operator and green in CI
 # — a suite whose verdict depends on who ran it is no longer an oracle (#303).
 # Session, run and parent are the identity; TRACE_DIR and TRACE_CONFIG the
-# policy overrides scripts/trace.sh reads before its policy file; TRACE_QUIET
+# policy overrides scripts/trace.sh reads before its policy file, and
+# TRACE_AGENT_WAIT_MS the one the subagent-stop hook reads before it; TRACE_QUIET
 # its unconfigured-note switch. Unset here, above the budget, so the run
 # re-executed inside it starts without them too. A suite that needs one sets
 # it on the command itself, as tests/trace.test.sh does with TRACE_CONFIG.
-unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET
+unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET TRACE_AGENT_WAIT_MS
 
 # The repo root, derived once from the suite that sourced this harness; every
 # helper below anchors on it rather than on the working directory.

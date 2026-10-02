@@ -124,7 +124,7 @@ sizes a command nobody wrote a ticket for.
 | --- | --- | --- |
 | `planner` | Decomposing a wave, designing a gate, triaging an ambiguous failure | Reads broadly, writes little; a wrong answer costs a whole wave downstream |
 | `implementer` | Building one kit ticket test-first — a script, a validator rule, an article | The default for real work here |
-| `mechanical` | Renames across the templates and skills, a manifest bump, a transcript re-capture | A checkable definition of done — the suite is the oracle, not the model |
+| `mechanical` | Renames across the templates and skills, a manifest bump, a transcript re-capture | A checkable definition of done, only when both hold: the ticket names the one command whose exit is its oracle, and the change is one file or one pattern applied uniformly across many |
 | `reviewer` | Adversarial reading of a finished diff in fresh context | Undersize it and review becomes a rubber stamp |
 
 `/to-tickets` stamps a tier on every ticket and shows it at the quiz for
