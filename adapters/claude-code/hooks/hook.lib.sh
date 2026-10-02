@@ -200,12 +200,11 @@ hook_current_of() {
 # shared script's own precedence has it; a TRACE_PARENT already set is kept.
 hook_run_of() {
 	[ -n "${TRACE_RUN+set}" ] && return 0
-	[ -n "$1" ] && [ -d "$1" ] || return 0
+	[ -n "$1" ] || return 0
 	_ro_common=$(hook_common_dir "$1") || return 0
 	_ro_own=$(hook_common_dir "$hook_repo") || return 0
-	[ -n "$_ro_common" ] && [ "$_ro_common" = "$_ro_own" ] || return 0
+	[ "$_ro_common" = "$_ro_own" ] || return 0
 	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
-	[ -n "$_ro_top" ] || return 0
 	_ro_stack=$(hook_current_of "$_ro_top") || return 0
 	_ro_stack="$_ro_stack.runs"
 	if [ -e "$_ro_stack" ] && [ ! -r "$_ro_stack" ]; then
