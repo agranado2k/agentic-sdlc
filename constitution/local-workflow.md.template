@@ -151,6 +151,11 @@ resolver warns once so the gap is visible rather than assumed away.
   `.github/workflows/ai-review.example.yml` holds two advisory reviewers from
   two vendors, asked one identical prompt. It is **inert** until you rename it
   and add a provider secret; record here which providers you actually wired.
+- **Session cap**: the host's concurrent-subagent limit is {{CONCURRENT_SUBAGENT_LIMIT}}, or `unstated`.
+  <!-- The most subagents the agent tool you run can hold at once — the tool's
+       limit, not the machine's memory or cores. `/to-tickets` divides it by
+       the seven lenses one `/review-pr` spawns to say how many review-bearing
+       sessions may run together; `unstated` reads as one at a time. -->
 - **Fresh context per phase** (shared invariant §4): the reviewer must not see
   the implementation history. A reviewer who has read the author's narrative
   reviews the narrative instead of the diff.
