@@ -382,8 +382,10 @@ case $S_ERR in *"trace:"*) pass "and the reason is on stderr, trace-prefixed" ;;
 printf 'sess-from-pointer\n' >"$R/current/$KEY"
 
 banner "12. Only begin and end rewrite the run stack, and both by rename"
-STACK="$R/current/$KEY.runs"
-[ -f "$STACK" ] && pass "the stack is a file at the key the pointer shares" || fail "no stack file at $STACK"
+# The pointer names sess-from-pointer, so since #453 the stack this section
+# drives is that session's, under the key the pointer shares (section 25).
+STACK="$R/current/$KEY.sess-from-pointer.runs"
+[ -f "$STACK" ] && pass "the stack is a file at the key the pointer shares, then the pointer's session" || fail "no stack file at $STACK"
 INODE=$(ls -i "$STACK" | awk '{ print $1 }')
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='an emit only appends'
 [ "$(ls -i "$STACK" | awk '{ print $1 }')" = "$INODE" ] && pass "an emit leaves the stack file exactly as it was — same inode" || fail "an emit rewrote the run stack"
@@ -1386,5 +1388,87 @@ _od_adr=$(ls "$KIT"/docs/adr/0008-*.md)
 sed -n '/Amended 2026-10-02 (#409)/,/^[0-9][0-9]*\. /p' "$_od_adr" | tr '\n' ' ' | grep -q '`tool.use`.*`denied`' &&
 	pass "ADR-0008 carries the dated #409 amendment declaring denied on tool.use" ||
 	fail "ADR-0008 has no 'Amended 2026-10-02 (#409)' clause naming \`tool.use\` and \`denied\`"
+
+# ---------------------------------------------------------------------------
+banner "25. The run stack is keyed by session as well as by toplevel (ticket #453)"
+# ---------------------------------------------------------------------------
+# Retro finding R1 (2026-10-01): two sessions in the root checkout shared one
+# per-toplevel stack, so each read — and popped — the other's open runs. The
+# stack now sits at current/<toplevel key>.<session>.runs when a session id is
+# known (TRACE_SESSION, then the pointer file), and at current/<toplevel
+# key>.runs, as before, when none is.
+SS="$SCRATCH/sessions"; SSON=$(policy "$SS")
+SSFILE="$SS/events/$TODAY.jsonl"
+RA=$(env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" begin implement subject='ticket:#453')
+RB=$(env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" begin review-pr subject='pr:#453')
+[ -n "$RA" ] && [ -n "$RB" ] && [ "$RA" != "$RB" ] && pass "two sessions in one toplevel each open a run" || fail "the begins printed '$RA' and '$RB'"
+case $(tail -n 1 "$SSFILE") in *'"parent"'*) fail "session B's run nested inside session A's: $(tail -n 1 "$SSFILE")" ;; *) pass "and B's run.start names no parent — A's open run is not B's to nest inside" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason='said in session A'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RA"'"'*) pass "an emit in session A carries A's run, though B opened one after it" ;; *) fail "the emit in A carried: $(tail -n 1 "$SSFILE")" ;; esac
+case $(tail -n 1 "$SSFILE") in *'"parent"'*) fail "and it was given a parent from the other session: $(tail -n 1 "$SSFILE")" ;; *) pass "and no parent borrowed from B's stack" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" emit kind=note reason='said in session B'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RB"'"'*) pass "an emit in session B carries B's run" ;; *) fail "the emit in B carried: $(tail -n 1 "$SSFILE")" ;; esac
+SSKEY=$(printf '%s' "$(git -C "$KIT" rev-parse --show-toplevel)" | git hash-object --stdin)
+[ -f "$SS/current/$SSKEY.sess-a.runs" ] && [ -f "$SS/current/$SSKEY.sess-b.runs" ] &&
+	pass "each session's stack sits at current/<toplevel key>.<session>.runs" || fail "no per-session stacks: $(ls "$SS/current" 2>&1)"
+[ ! -e "$SS/current/$SSKEY.runs" ] && pass "and the per-toplevel stack is not written when a session is known" || fail "a per-toplevel stack was written: $(cat "$SS/current/$SSKEY.runs")"
+t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end outcome=ok reason='B closes'
+[ "$S_STATUS" = 0 ] && pass "end in session B exits 0" || fail "end in B exited $S_STATUS: $S_ERR"
+case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RB"'"'*) pass "and closes B's run, the one it opened" ;; *) fail "end in B closed: $(tail -n 1 "$SSFILE")" ;; esac
+[ "$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)" = "$RA" ] && pass "and A's stack still holds A's run — end pops only its own session's stack" || fail "A's stack after B's end: '$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)'"
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason='A after B closed'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RA"'"'*) pass "so the next emit in A still carries A's run" ;; *) fail "A after B's end carried: $(tail -n 1 "$SSFILE")" ;; esac
+# An explicit session= names the stack too: an event's run is read from the
+# stack of the session the event itself names, whatever the environment says
+# — how a hook told its session by a payload joins that session's run.
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" emit kind=note session=sess-a reason='A named on the line'
+case $(tail -n 1 "$SSFILE") in *'"session":"sess-a","run":"'"$RA"'"'*) pass "an emit naming session=sess-a carries A's run, though the environment names B" ;; *) fail "the explicit session= carried: $(tail -n 1 "$SSFILE")" ;; esac
+assert_status 2 "a second end in B is exit 2 — B has nothing open, whatever A holds" -- env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end outcome=ok
+t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" show "run:$RA"
+case $S_OUT in *'said in session B'*) fail "show run:<A> holds B's emit: $S_OUT" ;; *'said in session A'*'A after B closed'*'A named on the line'*) pass "show run:<A> holds A's emits and none of B's" ;; *) fail "show run:<A> missed A's emits: $S_OUT" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" end outcome=ok reason='A closes'
+case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RA"'"'*) pass "and A's end closes A's run" ;; *) fail "end in A closed: $(tail -n 1 "$SSFILE")" ;; esac
+
+# The pointer file answers when the environment does not, and names the same
+# stack the environment would.
+printf 'sess-p\n' >"$SS/current/$SSKEY"
+RP=$(env TRACE_CONFIG="$SSON" sh "$TRACE" begin implement)
+[ "$(cat "$SS/current/$SSKEY.sess-p.runs" 2>/dev/null)" = "$RP" ] && pass "with no TRACE_SESSION, the pointer's session keys the stack" || fail "the pointer did not key the stack: $(ls "$SS/current")"
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-p sh "$TRACE" emit kind=note reason='the same session through the environment'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RP"'"'*) pass "and the same session named in the environment reads that stack" ;; *) fail "the env-named session missed the pointer's stack: $(tail -n 1 "$SSFILE")" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-p sh "$TRACE" end outcome=ok
+rm -f "$SS/current/$SSKEY"
+
+# A session with no id behaves as today: the per-toplevel stack.
+RN=$(env TRACE_CONFIG="$SSON" sh "$TRACE" begin implement)
+[ "$(cat "$SS/current/$SSKEY.runs" 2>/dev/null)" = "$RN" ] && pass "with no session id at all, the run is pushed on current/<toplevel key>.runs, as before" || fail "no session id, and the stack is: $(ls "$SS/current")"
+env TRACE_CONFIG="$SSON" sh "$TRACE" emit kind=note reason='no session'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) pass "and an emit with no session id carries that run" ;; *) fail "the no-session emit carried: $(tail -n 1 "$SSFILE")" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason='a session beside an id-less run'
+case $(tail -n 1 "$SSFILE") in *'"run"'*) fail "a session with an id borrowed the id-less stack's run: $(tail -n 1 "$SSFILE")" ;; *) pass "while a session with an id does not see it" ;; esac
+env TRACE_CONFIG="$SSON" TRACE_SESSION= sh "$TRACE" emit kind=note reason='no session, said explicitly'
+case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) pass "and TRACE_SESSION set to the empty string reads the per-toplevel stack too" ;; *) fail "TRACE_SESSION= carried: $(tail -n 1 "$SSFILE")" ;; esac
+t_run_split env TRACE_CONFIG="$SSON" sh "$TRACE" end outcome=ok
+[ "$S_STATUS" = 0 ] && case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) true ;; *) false ;; esac &&
+	pass "and end with no session id closes it" || fail "the id-less end exited $S_STATUS: $(tail -n 1 "$SSFILE")"
+
+# A session id that is not one path segment keys nothing: the per-toplevel
+# stack answers, rather than a file under a directory the id invented.
+RX=$(env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" begin implement)
+[ "$(cat "$SS/current/$SSKEY.runs" 2>/dev/null)" = "$RX" ] && [ -z "$(find "$SS/current" -type d -name "$SSKEY*")" ] &&
+	pass "a session id with a slash falls back to the per-toplevel stack and creates no directory" || fail "the slashed id went to: $(find "$SS/current")"
+env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" end outcome=ok
+
+# Review L-1 (PR #476): the two header comments this change wrote wrap like
+# the rest of both files — one had run on to 135 bytes. 100 bytes leaves room
+# for the multi-byte dashes the prose uses.
+_ss_wide=$(awk '/^# trace_key — sets/,/^trace_key\(\) \{/' "$TRACE" | awk 'length > 100')
+_ss_wide="$_ss_wide$(awk '/^# hook_run_of <dir>/,/^# Ticket #421/' "$KIT/adapters/claude-code/hooks/hook.lib.sh" | awk 'length > 100')"
+[ -z "$_ss_wide" ] && pass "the trace_key and hook_run_of headers wrap — no comment line past 100 bytes" ||
+	fail "a header comment runs on past 100 bytes: $_ss_wide"
+_ss_adr=$(ls "$KIT"/docs/adr/0008-*.md)
+sed -n '/Amended 2026-10-02 (#453)/,/^[0-9][0-9]*\. \|^## /p' "$_ss_adr" | tr '\n' ' ' | grep -q 'session' &&
+	pass "ADR-0008 carries the dated #453 amendment keying the stack by session" ||
+	fail "ADR-0008 has no 'Amended 2026-10-02 (#453)' block naming the session-keyed stack"
 
 t_done "trace script"
