@@ -1470,8 +1470,13 @@ env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" end outcome=ok
 # Review L-1 (PR #476): the two header comments this change wrote wrap like
 # the rest of both files — one had run on to 135 bytes. 100 bytes leaves room
 # for the multi-byte dashes the prose uses.
-_ss_wide=$(awk '/^# trace_key — sets/,/^trace_key\(\) \{/' "$TRACE" | awk 'length > 100')
-_ss_wide="$_ss_wide$(awk '/^# hook_run_of </,/^# Ticket #421/' "$KIT/adapters/claude-code/hooks/hook.lib.sh" | awk 'length > 100')"
+# Each range must find its header: a pattern that matches nothing extracts no
+# lines, and no lines are never too wide (review of PR #518).
+_ss_tk=$(awk '/^# trace_key — sets/,/^trace_key\(\) \{/' "$TRACE")
+_ss_ro=$(awk '/^# hook_run_of </,/^# Ticket #421/' "$KIT/adapters/claude-code/hooks/hook.lib.sh")
+[ -n "$_ss_tk" ] && [ -n "$_ss_ro" ] && pass "the trace_key and hook_run_of headers are both found" ||
+	fail "a header range matched nothing — trace_key: ${#_ss_tk} bytes, hook_run_of: ${#_ss_ro} bytes"
+_ss_wide=$(printf '%s\n%s\n' "$_ss_tk" "$_ss_ro" | awk 'length > 100')
 [ -z "$_ss_wide" ] && pass "the trace_key and hook_run_of headers wrap — no comment line past 100 bytes" ||
 	fail "a header comment runs on past 100 bytes: $_ss_wide"
 _ss_adr=$(ls "$KIT"/docs/adr/0008-*.md)
