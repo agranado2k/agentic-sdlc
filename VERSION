@@ -1707,8 +1707,53 @@
 # says who records a review's raises on the fallback path — the reviewer on
 # the spawn prompt's instruction, else the relay, exactly once, never a
 # second raise — and the broker's raises carry data.posted=yes.
+# 0.42.0 — the run stack is keyed by session (retro of 2026-10-01, finding
+# R1; ticket #453).
+# NO file joins or leaves the shared layer. ONE shared file changes content
+# and BEHAVIOUR: scripts/trace.sh. UPDATING.md changes content: the
+# arriving-from paragraph, the behaviour entry, and both worked examples
+# re-pin.
+#   From #453: `begin` and `end` kept one run stack per working tree, so two
+# sessions in the root checkout read each other's open run onto their events
+# and an `end` in one could pop the other's — 290 events in one window
+# carried another session's run. The stack is now
+# current/<toplevel key>.<session>.runs when a session id is known — a
+# `session=` on the line, then TRACE_SESSION, then the pointer file, the
+# precedence an event's `session` takes — and an event's `run` and `parent`
+# are read from it; `end` pops only it. With no session id, or one that is
+# not a single path segment of [A-Za-z0-9._-], the stack is
+# current/<toplevel key>.runs exactly as before: a consumer with no session
+# id sees no change. A run opened on the per-toplevel stack before the
+# update stays there; `TRACE_SESSION= sh scripts/trace.sh end` closes it.
+# No argument, exit status or stdout changes. ADR-0008 clause 5 carries the
+# dated amendment.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. In 9e, the claude-code adapter:
+# hooks/hook.lib.sh's hook_run_of takes the session id and reads that
+# session's stack, the per-toplevel one when the payload names none;
+# hooks/subagent-stop.sh passes the payload's session_id; README.md's
+# subagent-stop row says so. Take them with this release: the hook repeats
+# the stack's path, and the 0.41.0 copy reads a stack no session writes any
+# more. docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md
+# and docs/adr/INDEX.md carry the amendment. KIT-ONLY: tests/trace.test.sh
+# section 25 and tests/trace-hooks.test.sh section 42 hold it. Landed beside
+# it since 0.41.0, from #421 (PR #449), the same adapter: hooks/hook.lib.sh's
+# hook_run_of and hooks/subagent-stop.sh record on `agent.stop` the run open
+# in the checkout the payload's cwd names — a linked worktree's, not the
+# root's — with README.md's row saying so; and, kit-only, #450's fold of the
+# suites' assertion helpers into tests/lib.sh. From #461 (PR #475), in 9a:
+# .agents/skills/retro/SKILL.md and .agents/skills/retro/QUESTIONS.md learn
+# from the retro's own runs — a closed window, an open sibling run, the new
+# keys, the tracker. From #392 (PR #395), the root guard: in 9e, the
+# claude-code adapter's hooks/root-guard.sh, a pre-tool hook refusing an
+# agent's edit in the root checkout, with its hooks/hook.lib.sh, its
+# README.md and adapters/README.md naming it — rewire if you wired the adapter; in 9b,
+# constitution/AGENTS.md.template's row "Keep work out of the root
+# checkout"; .githooks/pre-commit refuses an agent's commit from the main
+# working copy or the default branch; docs/domain-glossary.md, README.md
+# and setup/agent-bootstrap.md say so.
 
-shared-layer: 0.41.0
+shared-layer: 0.42.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
