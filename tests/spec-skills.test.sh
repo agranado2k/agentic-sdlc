@@ -368,6 +368,11 @@ wf_cap=$(grep -F 'concurrent-subagent limit' "$ROOT/constitution/local-workflow.
 t_text_has "$wf_cap" "$(t_mark CONCURRENT_SUBAGENT_LIMIT)" "the workflow template states the host's concurrent-subagent limit as a mark the project fills"
 t_text_has "$wf_cap" "unstated" "the workflow template names 'unstated' as the answer when the limit is not known"
 t_text_has "$handoff" "constitution/local-workflow.md" "the hand-off reads the limit from the workflow article that carries its line"
+# The glossary names the concept the hand-off introduces (#483).
+cap_entry=$(awk '/^- \*\*Session cap\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
+[ -n "$cap_entry" ] && pass "the glossary carries a **Session cap** entry" || fail "docs/domain-glossary.md has no **Session cap** entry"
+t_text_has "$cap_entry" "concurrent-subagent limit" "the glossary's session-cap entry derives it from the concurrent-subagent limit"
+t_text_has "$cap_entry" "/to-tickets" "the glossary's session-cap entry names the skill that states it"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
