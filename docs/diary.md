@@ -1944,3 +1944,90 @@ paragraphs. The 0.40.0 note also
 names, by ticket, the adapter work 0.37.0's note had named by file only
 (#414, #410, #407, #427). The tag `v0.40.0` on the merge commit is the
 operator's action; F3 is red on main until it exists.
+
+### 2026-10-02 — The candidates and the retro's findings land: fourteen tickets, five releases, and the train traced
+
+The operator asked for three things in one instruction: file PRD #273's
+leftover candidates through `/to-tickets`, run `/retro` and file what it
+found, then build, iterate and land all of it without stopping. Done on
+2026-10-01 and 2026-10-02: seven candidates (#400–#406, umbrella #399), the
+retro of 2026-10-01T19:05Z (eight findings; seven became #418–#424, umbrella
+#417; the eighth — no human verdict and no human quiz in the window — is the
+delegation itself and stays the operator's), fourteen PRs, five releases.
+
+| Ticket | What | PR | Release |
+| --- | --- | --- | --- |
+| #420 | `scripts/trace.sh` holds `data.id` and `data.iteration` to a shape | #442 | **0.37.0** |
+| #418 | a `mechanical` stamp names its one oracle and one pattern | #443 | **0.38.0** |
+| #400 | `scripts/stamp.sh` bounds its lift — exit 5 past 8 lines of a key | #439 | **0.39.0** |
+| #401 | the checker's header says it takes bare lifted lines | #451 | **0.41.0** |
+| #402 | the dispatch suite's TERM leg waits on the worker's marker | #425 | — |
+| #403 | the hook's wait naps its whole second whatever the check cost | #434 | — |
+| #404 | the call-site audit holds its inventory and baits its exemptions | #437 | — |
+| #405 | the last duplicated test runners fold into `tests/lib.sh` | #450 | — |
+| #406 | the reader is spawned through the adapter's restricted path first | #440 | — |
+| #419 | the reuse/DRY lens files an inherited duplication as a candidate | #431 | — |
+| #421 | the stop hook records the run of the checkout the subagent worked in | #449 | — |
+| #422 | `/implement`'s delivery names the landing path; self-host holds the row | #436 | — |
+| #423 | the reviewer mapping names two in-vendor complements until the CLI authenticates | #426 | — |
+| #424 | every review path records its raises with `data.posted` and the roster agent | #441 | — |
+
+(0.40.0 between them is another wave's.)
+
+**Rulings that reversed a first answer.** The fence's checker anchor first
+required `.agents/skills/`; `VERSION`'s 0.14.0 note promises the older
+`.claude/skills/`-only layout stays legal, so it accepts either. An 8-byte
+evidence floor refused `LGTM`; a span shorter than the floor passes when it
+is the whole text. `vocab.sh` exits 2 for a refused value and for a broken
+policy file alike, so `stamp.sh` and `/dogfood`'s outcome fence ask `fields`
+first and call an unusable checker "unchecked", never "refused". The
+reviewer mapping was first set the same as the implementer's model with the
+suite's rule loosened to fit; the rule stayed and the mapping flipped. A
+failed `mechanical` condition first jumped to `implementer`; it continues
+down the rubric instead. A candidate-ticket finding was first given no
+`↳ fix:` line, which the broker refuses; it keeps the line, reading "none
+on this PR".
+
+**Defects the reviews caught before landing.** `stamp.sh` printed a line in
+a field the policy did not declare, unchecked (`Domain: x;touch PWN` at exit
+0). `/dogfood`'s per-step return file was never cleared, so a stale return
+passed a later step. A test helper passed vacuously when the function it
+wrapped was undefined.
+
+**The train, traced.** The previous retro found three landings the trace
+never saw; the orchestrator's lander merged with the forge CLI directly.
+Every landing in this wave went through `scripts/land.kit.sh` with
+`--unasked`, so each left a `merge.land` and a `feedback` event. Two more
+things the script taught: the forge reports mergeability `UNKNOWN` for the
+first minute after a push, and the script refuses until it is computed; and
+a bump's merge turns main red until its tag exists, which the script reports
+as a failed post-merge workflow — the tag is cut on the merge commit and the
+job re-run, four times this wave. A release note may not name the optional
+skill by its command, since a declined consumer still receives `VERSION`;
+self-host F5 names it "the dogfood skill" since PR #443.
+
+**Running it.** The process orchestrating this wave exited once and hit the
+usage limit three times; every session was resumed from its transcript and
+nothing was lost, because each had committed early. Eleven full suites ran
+at once on one host (load average 37), which is where the known timing
+flakes came from — fixed by #402 and #403 inside the same wave. Mechanical
+tickets on the smallest model under-delivered again (#423's mapping backwards
+with a loosened test, #401 thin): #418 is the rubric's answer, and the next
+retro's question 1 will say whether it held. Every review again shared the
+author's vendor; #423 made the mapping say so until the credential exists.
+
+**Candidates recorded, none filed:** the dispatcher's global cleanup trap
+swallows an early TERM (shared, a bump); the KILL/SWEEP_TMP leg's fixed
+`sleep 2`; `session-end.sh` and `tool-post.sh` reading the worked-in
+checkout's stack; a read subcommand for the run stack in `scripts/trace.sh`;
+`hook_run_of` spawning git with tracing off; the retro's H3 remainder
+(`source=human` on local findings, counts on `pr.iterate`); the manual's and
+template's tier tables still giving the one-condition `mechanical` signal;
+`/implement` not reading the oracle line, and treating it as untrusted text
+when it does; the adapter invisible to the behaviour-delta inventory; the
+dispatched worker contract never receiving the reuse/DRY ruling (answered in
+part by #412's lens line); the prescreen suite's never-written-return case
+still inlining its frame. If the agent tool reports the root as a subagent's
+`cwd`, #421's fix carries the root's run and H4 needs a spawn-time channel —
+the next retro can read whether the 28 events had a worktree `cwd`.
+
