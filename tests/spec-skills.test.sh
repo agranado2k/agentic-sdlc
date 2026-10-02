@@ -330,6 +330,32 @@ case $wf_rubric in
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
+# The session cap (ticket #483, retro F6): every review-bearing /implement
+# session ends at a /review-pr that spawns seven lenses, so two such sessions
+# at once ran past the host's concurrent-subagent limit — on #439 and #440
+# lenses were refused at it and 13 Agent calls failed. The hand-off says how
+# many of the frontier may run at once: the host's limit over the seven,
+# rounded down, never below one; the limit is a value the project states,
+# never a number the skill bakes in, and a project that states none gets one
+# session at a time. A frontier larger than the cap is sequenced, and the quiz
+# shows the cap beside the frontier.
+handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
+t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
+t_text_has "$handoff" "concurrent-subagent limit" "the cap is derived from the host's concurrent-subagent limit"
+t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
+in_order "$handoff" "the cap is the limit divided by the seven lenses, rounded down, never below one" \
+	"concurrent-subagent limit" "divided by seven" "rounded down" "never below one"
+t_text_has "$handoff" "as the project states it" "the limit is the project's stated value, read where it is written"
+t_text_has "$handoff" "never a number this skill names" "no host's number is baked into a skill that ships to every host"
+in_order "$handoff" "a project that states no limit is told so, and runs one session at a time" \
+	"states no limit" "say so" "one session at a time"
+in_order "$handoff" "a frontier larger than the cap is sequenced, the rest waiting on sessions that end" \
+	"larger than the cap" "sequence" "as sessions end"
+case ${handoff#5. } in
+*[0-9]*) fail "the hand-off carries a digit — the limit is the project's value, and the divisor is spelled 'seven'" ;;
+*) pass "the hand-off carries no digit: no limit is baked in" ;;
+esac
+t_text_has "$quiz" "the session cap beside the frontier" "the quiz shows the cap where the human reads the frontier"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
