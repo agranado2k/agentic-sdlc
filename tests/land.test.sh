@@ -207,8 +207,9 @@ traced_out=$S_OUT
 t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 STUB_WATCH_SLEEP=2 sh "$LAND" 140 </dev/null
 s_assert_status 0 "unconfigured, a green PR still lands with exit 0"
 [ "$(merges)" = 1 ] && pass "unconfigured, the merge call is the same one call" || fail "unconfigured: $(merges) merge calls"
-[ "$(printf '%s\n' "$S_OUT" | sed 's/#140/#N/g; s/waited [0-9]*s/waited Ns/')" = \
-	"$(printf '%s\n' "$traced_out" | sed 's/#123/#N/g; s/waited [0-9]*s/waited Ns/')" ] &&
+# norm <PR> — stdout with the PR number and the waited seconds masked.
+norm() { sed "s/#$1/#N/g; s/waited [0-9]*s/waited Ns/"; }
+[ "$(printf '%s\n' "$S_OUT" | norm 140)" = "$(printf '%s\n' "$traced_out" | norm 123)" ] &&
 	pass "and stdout is what a traced run prints" || fail "unconfigured stdout differs: '$S_OUT' vs '$traced_out'"
 [ "$(show 'pr:#140' | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "and nothing reached the trace" ||
 	fail "an unconfigured run wrote to the trace"
