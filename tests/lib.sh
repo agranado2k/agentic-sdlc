@@ -1102,9 +1102,16 @@ t_check_run() {
 
 # t_verdict_is <accepted|refused> <label> <verdict arg>... — runs the suite's
 # own `verdict` (over t_check_run) with the arguments given, and asserts the
-# check's answer. No lifted check ($CHECK empty or missing) is a fail either
-# way: an absent check accepts nothing and refuses nothing. Two knobs carry
-# what the suites differ in:
+# check's answer. A frame that cannot run the check is a fail either way, and
+# says which part is missing: no `verdict` function, no lifted check ($CHECK
+# empty or missing), or no $PROJECT directory to run it in. Each would
+# otherwise read as a refusal — a missing function is status 127, a failed cd
+# a non-zero subshell — and pass every `refused` assertion vacuously (review
+# of PR #450, M-1). The streams are emptied before the run, so a fail line
+# never quotes an earlier call's.
+# Two knobs carry what the suites differ in. They are globals, not arguments,
+# because a suite sets each once — at its top, or once per skill it holds —
+# and never per call:
 #   T_VERDICT_PREFIX  — put before every label (the skill under test, when one
 #                       suite holds several)
 #   T_VERDICT_REFUSED — a command given the bare label after a refusal, for
@@ -1113,7 +1120,17 @@ t_check_run() {
 t_verdict_is() {
 	_vi_want=$1 _vi_bare=$2 _vi_label="${T_VERDICT_PREFIX:-}$2"
 	shift 2
-	if [ ! -s "${CHECK:-}" ]; then _vi_got=absent
+	: >"$SCRATCH/verdict.out"
+	: >"$SCRATCH/verdict.err"
+	if ! command -v verdict >/dev/null 2>&1; then
+		fail "$_vi_label — no verdict function defined: the suite never ran its check"
+		return
+	elif [ ! -s "${CHECK:-}" ]; then
+		fail "$_vi_label — no lifted check at '${CHECK:-}': an absent check accepts nothing and refuses nothing"
+		return
+	elif [ -z "${PROJECT:-}" ] || [ ! -d "$PROJECT/${WHERE:-}" ]; then
+		fail "$_vi_label — no project directory at '${PROJECT:-}/${WHERE:-}' to run the check in"
+		return
 	elif verdict "$@"; then _vi_got=accepted
 	else _vi_got=refused
 	fi
