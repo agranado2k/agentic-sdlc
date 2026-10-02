@@ -44,7 +44,9 @@
 #      word for word as Agent 5's prompt says them, read from the skill; the
 #      exception keeps its direction; the anatomy declares the `↳ cites:`
 #      line and defines the what/where line the ruling names — each proved by
-#      a mutant that cuts exactly the text it holds.
+#      a mutant that cuts exactly the text it holds. Its twin, the CI review
+#      prompt, carries the same ruling in the same words, and both define the
+#      buckets the added case is graded by in the skill's own sentence.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -372,9 +374,12 @@ wline() { grep -nF -- "$1" "$WORKER_ABS" | head -1 | cut -d: -f1; }
 # way scripts/agent-dispatch.sh strips it (a `<!--` first line through the
 # first line that IS `-->`). "Opens by" means the first line of THAT, not the
 # first line of the file.
-body=$(awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
-            inhdr { if ($0 == "-->") inhdr = 0; next }
-            { print }' "$WORKER_ABS")
+body_of() {
+	awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
+	     inhdr { if ($0 == "-->") inhdr = 0; next }
+	     { print }' "$1"
+}
+body=$(body_of "$WORKER_ABS")
 first=$(printf '%s\n' "$body" | grep -m1 .)
 case "$first" in
 *"no network"*) pass "the contract's first line to the worker says it has no network" ;;
@@ -566,7 +571,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "10. The dispatched worker carries the reuse/DRY ruling in the skill's words (#471)"
+banner "10. The dispatched worker and its CI twin carry the reuse/DRY ruling in the skill's words (#471)"
 # ---------------------------------------------------------------------------
 # Section 9's ruling reached the in-session lens only: a dispatched worker
 # still filed an inherited duplication as a finding against the PR, because
@@ -578,18 +583,33 @@ banner "10. The dispatched worker carries the reuse/DRY ruling in the skill's wo
 # 80-column prose and the skill is not, and both models read sentences.
 w_sentences=$(printf '%s\n' "$body" | sentences)
 a5_sentences=$(sentences_of "$SKILL_ABS")
+# The CI review prompt is the worker's twin — "same two axes, same standard",
+# its header says — so it rules duplication in the same words, or the two
+# reviewers of one diff disagree on whose duplication it is. Both are held
+# below, each to the skill. And "the buckets" the added case grades by are
+# defined in each: the skill's own sentence giving the four their meanings.
+TWIN="templates/workflows/ai-review-prompt.md"
+buckets=$(sentences <"$SKILL_ABS" | grep -F 'The severity buckets keep their meanings' | head -n 1)
 # skill_sentence <needle> — the first sentence of Agent 5's prompt holding the
 # needle; empty when none does. carries <sentences> <sentence> — the sentence
 # is a whole sentence of the given text.
 skill_sentence() { printf '%s\n' "$a5_sentences" | grep -F -- "$1" | head -n 1; }
 carries() { [ -n "$2" ] && printf '%s\n' "$1" | grep -qxF -- "$2"; }
-for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
-	want=$(skill_sentence "$needle")
-	[ -n "$want" ] ||
-		fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold the worker to"
-	carries "$w_sentences" "$want" &&
-		pass "$WORKER says Agent 5's '$needle' sentence word for word" ||
-		fail "$WORKER does not say Agent 5's '$needle' sentence word for word — the dispatched worker rules duplication differently from the lens"
+[ -n "$buckets" ] ||
+	fail "the skill no longer says which meanings the severity buckets keep — nothing to define 'the buckets' by"
+for f in "$WORKER" "$TWIN"; do
+	f_sentences=$(body_of "$ROOT/$f" | sentences)
+	for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
+		want=$(skill_sentence "$needle")
+		[ -n "$want" ] ||
+			fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold $f to"
+		carries "$f_sentences" "$want" &&
+			pass "$f says Agent 5's '$needle' sentence word for word" ||
+			fail "$f does not say Agent 5's '$needle' sentence word for word — it rules duplication differently from the lens"
+	done
+	carries "$f_sentences" "$buckets" &&
+		pass "$f defines the buckets in the skill's sentence: which meanings the four severities keep" ||
+		fail "$f grades the added case by 'the buckets' and never says what they mean — carry the skill's sentence: $buckets"
 done
 # The exception, held by its direction and not by two words in one sentence:
 # the sentence naming the divergent-behavior copy ends in the skill's own
@@ -606,9 +626,11 @@ keeps_exception() {
 		printf '%s\n' "$e" | grep -qiE "(^|[^a-z])(not|never|no|longer)([^a-z]|\$)|n't" || echo kept
 	done | grep -q kept
 }
-[ -n "$verdict" ] && keeps_exception "$w_sentences" &&
-	pass "…and keeps the exception: a divergent-behavior copy $verdict" ||
-	fail "$WORKER never keeps a divergent-behavior copy a finding in the skill's verdict — the ruling would defer a latent bug"
+for f in "$WORKER" "$TWIN"; do
+	[ -n "$verdict" ] && keeps_exception "$(body_of "$ROOT/$f" | sentences)" &&
+		pass "$f keeps the exception: a divergent-behavior copy $verdict" ||
+		fail "$f never keeps a divergent-behavior copy a finding in the skill's verdict — the ruling would defer a latent bug"
+done
 for flip in 's/and stays a finding/and no longer stays a finding/' 's/The one exception is a/There is no exception for a/'; do
 	keeps_exception "$(printf '%s\n' "$w_sentences" | sed "$flip")" &&
 		fail "bait: the exception reversed ($flip) still reads as kept" ||
@@ -634,6 +656,10 @@ held "$WORKER" "↳ cites: <the decision record, audit item or craft rule — on
 	"the ruling cites §10 on a line the worker's anatomy declares"
 held "$WORKER" "The first line is the finding's what/where line." \
 	"the ruling's what/where line is a term the worker's anatomy defines"
+held "$TWIN" 'one line readable in isolation — the finding'"'"'s what/where line' \
+	"the ruling's what/where line is a term the CI prompt's anatomy defines"
+held "$TWIN" 'a "↳ cites:" line naming the decision record, audit item or craft rule' \
+	"the ruling cites §10 on a line the CI prompt's anatomy declares"
 # Bait: the worker's fix line reworded — the exact comparison is what goes red.
 bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
 carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&

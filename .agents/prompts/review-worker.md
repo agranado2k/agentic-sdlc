@@ -76,6 +76,13 @@ speculative code, test hygiene, mechanical correctness. Each gets a severity
 (CRITICAL / HIGH / MEDIUM / LOW), a `file:line`, and a concrete suggested
 change. These are addressed to an agent, which may act on them without asking.
 
+The severity buckets keep their meanings: CRITICAL is vulnerabilities, data
+leaks, broken functionality, divergent duplicate logic already drifted into a
+latent bug; HIGH is missing tests, broken contracts, major pattern violations, a
+reimplemented helper duplicating an existing export; MEDIUM is redundant tests,
+unnecessary complexity, copy-paste blocks worth extracting once; LOW is minor
+simplifications and style.
+
 **Then ask which case the duplication is, because the two leave the report
 differently.** A duplication **the diff ADDS** — a new copy of something that
 already exists, or the same logic pasted twice within this diff — is the
