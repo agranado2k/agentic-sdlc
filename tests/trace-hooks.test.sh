@@ -3171,6 +3171,46 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
 		pass "with tracing off it exits 0 and says nothing" ||
 		fail "tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+	# REVIEW OF PR #446. H-1: a post payload the reader refuses still drops
+	# the call's marker — the call returned, so it was not denied.
+	new_trace
+	pre_of sess-409-e toolu_409_drift 'echo hi' >/dev/null 2>&1
+	printf '{"session_id":"sess-409-e","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"tool_use_id":"toolu_409_drift"}' |
+		env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" >/dev/null 2>&1
+	[ -z "$(markers)" ] && ev_of tool.use | grep -q '"outcome":"fail"' &&
+		pass "a post payload the reader refuses records its fail and still drops the marker (review of PR #446, H-1)" ||
+		fail "after a refused post payload: markers '$(markers)', events $(ev_of tool.use)"
+	end_of sess-409-e
+	[ -z "$(denied_of sess-409-e)" ] && pass "and the session end records no denial for it" ||
+		fail "a call whose post payload drifted was swept as denied: $(denied_of sess-409-e)"
+
+	# M-1: a sweep that died after taking the directory aside left
+	# <sid>.pending.<pid>; the next end of that session sweeps it too.
+	new_trace
+	mkdir -p "$TDIR/claude-code/sess-409-f.pending.4242"
+	printf 'Bash\n{"command":"rm -rf x"}\n' >"$TDIR/claude-code/sess-409-f.pending.4242/toolu_409_orphan"
+	mkdir -p "$TDIR/claude-code/sess-409-g.pending.4243"
+	printf 'Bash\n{}\n' >"$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine"
+	end_of sess-409-f
+	[ "$(denied_of sess-409-f | grep -c toolu_409_orphan)" = 1 ] &&
+		pass "a directory an interrupted sweep took aside is swept by the session's next end (review of PR #446, M-1)" ||
+		fail "the orphaned taken-aside directory was not swept: $(denied_of sess-409-f)"
+	[ ! -e "$TDIR/claude-code/sess-409-f.pending.4242" ] && [ -e "$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine" ] &&
+		pass "and it is removed, while another session's is left alone" ||
+		fail "orphans after the end: $(find "$TDIR/claude-code" 2>/dev/null)"
+
+	# L-4: the kill guard refuses a sub-agent's call, the marker hook ran on
+	# the same payload, the session ends: the guard's note AND one denial.
+	new_trace
+	printf '{"session_id":"sess-409-h","hook_event_name":"PreToolUse","agent_type":"general-purpose","tool_name":"Bash","tool_input":{"command":"pkill -f suite"},"tool_use_id":"toolu_409_guard"}' >"$SCRATCH/guard-409.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/tool-pre-guard.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	_g409=$?
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	end_of sess-409-h
+	[ "$_g409" = 2 ] && ev_of note | grep -q 'kill-guard' && [ "$(denied_of sess-409-h | grep -c toolu_409_guard)" = 1 ] &&
+		pass "a call the kill guard refused is the guard's note and one swept tool.use denied (review of PR #446, L-4)" ||
+		fail "guard exit $_g409; note $(ev_of note); denials $(denied_of sess-409-h)"
 else
 	echo "  skip  node is not on PATH — the marker needs the payload reader's input head"
 fi

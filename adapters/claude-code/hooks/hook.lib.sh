@@ -790,13 +790,30 @@ hook_pending_drop() {
 # TAKEN, the way hook_phantom_take takes its counter: the directory is renamed
 # aside first, so a resumed session's next end sweeps only what came after this
 # one, and a marker landing during the end waits for that next end.
+#
+# AND WHAT AN EARLIER END TOOK ASIDE AND NEVER FINISHED. The sweep spawns one
+# emit per marker, so an end killed mid-loop leaves <sid>.pending.<pid>
+# behind; every directory of that shape for this session is swept here too,
+# so no denial is lost to an interrupted end (review of PR #446, M-1).
 hook_pending_sweep() {
 	hook_pending_ok "${1:-}" || return 0
 	_ps_root=$(hook_dir) || return 0
 	_ps_d="$_ps_root/claude-code/$1.pending"
 	shift
-	[ -d "$_ps_d" ] && mv "$_ps_d" "$_ps_d.$$" 2>/dev/null || return 0
-	for _ps_f in "$_ps_d.$$"/*; do
+	[ -d "$_ps_d" ] && { mv "$_ps_d" "$_ps_d.$$" 2>/dev/null || :; }
+	for _ps_t in "$_ps_d".*; do
+		[ -d "$_ps_t" ] || continue
+		hook_pending_take "$_ps_t" "$@"
+	done
+	return 0
+}
+
+# hook_pending_take <taken directory> [<field>=<value> …] — one denial per
+# marker in a directory the sweep took aside, then the directory gone.
+hook_pending_take() {
+	_pt_d=$1
+	shift
+	for _ps_f in "$_pt_d"/*; do
 		[ -f "$_ps_f" ] || continue
 		_ps_id=${_ps_f##*/}
 		hook_pending_ok "$_ps_id" || continue
@@ -807,6 +824,6 @@ hook_pending_sweep() {
 			data.input_head="$(sed -n '2p' "$_ps_f" 2>/dev/null)" \
 			reason='the call fired its pre-tool hook and no post-tool hook before the session ended: the permission system or a blocking hook refused it' "$@"
 	done
-	rm -rf "$_ps_d.$$" 2>/dev/null || :
+	rm -rf "$_pt_d" 2>/dev/null || :
 	return 0
 }
