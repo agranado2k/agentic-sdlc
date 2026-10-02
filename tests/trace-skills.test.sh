@@ -1405,6 +1405,13 @@ LT="$SCRATCH/local-triage"
 ( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_run" ) >/dev/null 2>&1 &&
 	pass "the triage line filled with data.source=local data.id=M-1 writes" ||
 	fail "the triage line filled with a local finding M-1 is refused: $tr_run"
+tr_a2=$(printf '%s\n' "$tr_run" | sed "s/data\.id='M-1'/data.id='A2-1'/")
+( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_a2" ) >/dev/null 2>&1 &&
+	pass "…and filled with a confirm-list item, data.id=A2-1, it writes" ||
+	fail "the triage line filled with a confirm-list item A2-1 is refused: $tr_a2"
+sed -n '/^\*\*Record each triage as you make it\*\*/p' "$ROOT/$PI" | grep -q 'confirm-list item.*`A2-N`.*in the list.s order' &&
+	pass "/pr-iterate says a confirm-list item's id is A2-N, numbered in the list's order" ||
+	fail "/pr-iterate's triage paragraph does not say how a confirm-list item is numbered (A2-N, in the list's order)"
 tr_bad=$(printf '%s\n' "$tr_run" | sed "s/data\.id='M-1'/data.id='local-M-1'/")
 ( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_bad" ) >/dev/null 2>&1
 [ $? = 2 ] && pass "…and with data.id=local-M-1 it is exit 2" || fail "the triage line with a local source and id local-M-1 was not refused"

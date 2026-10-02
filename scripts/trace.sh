@@ -193,9 +193,10 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # `/<when>~<ERE>` applies the row only to a line whose `<when>` — `outcome`,
 # or `data.<key>` — matches; a `!` after the key makes the key required on
 # such a line. So: a triage's source is check, bot, human or local; a local
-# finding's id is the review's INITIAL-N, and that id is the local source's
-# alone; and a green or red iteration carries its three counts, digits.
-TRACE_SHAPES='finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
+# finding's id is the review's INITIAL-N, or A2-N for a confirm-list item
+# (numbered in the list's order, 2026-10-02 at PR #487), and that id is the
+# local source's alone; and a green or red iteration carries its three counts, digits.
+TRACE_SHAPES='finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 

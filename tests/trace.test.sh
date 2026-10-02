@@ -1433,16 +1433,26 @@ T='kind=finding.triage subject=pr:#1 outcome=accepted'
 ls_refused "finding.triage data.source=robot is refused — the source is check, bot, human or local" \
 	"finding.triage: data.source 'robot' is not check|bot|human|local" $T data.source=robot data.id=PRRC_1
 ls_refused "finding.triage data.source=local data.id=local-M-1 is refused — a local finding's id is [CHML]-N" \
-	"finding.triage: data.id 'local-M-1' is not [CHML]-[0-9]+ when data.source is local" $T data.source=local data.id=local-M-1
+	"finding.triage: data.id 'local-M-1' is not [CHML]-[0-9]+|A2-[0-9]+ when data.source is local" $T data.source=local data.id=local-M-1
 ls_refused "…and data.id=axis2-glossary-readme on a local source too" \
 	"data.id 'axis2-glossary-readme' is not [CHML]-[0-9]+" $T data.source=local data.id=axis2-glossary-readme
 ls_refused "…and the order does not matter: the id before the source" \
 	"data.id 'local-M-1' is not [CHML]-[0-9]+" kind=finding.triage data.id=local-M-1 data.source=local
 ls_refused "finding.triage data.source=human data.id=M-1 is refused — a local finding's id is the local source's alone" \
-	"finding.triage: data.source 'human' is not local when data.id is [CHML]-[0-9]+" $T data.source=human data.id=M-1
+	"finding.triage: data.source 'human' is not local when data.id is [CHML]-[0-9]+|A2-[0-9]+" $T data.source=human data.id=M-1
 ls_refused "…and data.source=bot data.id=H-2 likewise" \
 	"data.source 'bot' is not local" $T data.source=bot data.id=H-2
 ls_writes "finding.triage data.source=local data.id=M-1 writes" $T data.source=local data.id=M-1
+# A confirm-list item is triaged too, and has no INITIAL-N: its id is A2-N,
+# numbered in the list's order — legal beside [CHML]-N under the local
+# source, and the local source's alone (review of #487, H-1).
+ls_writes "finding.triage data.source=local data.id=A2-1 writes — a confirm-list item's id" $T data.source=local data.id=A2-1
+ls_refused "…and data.id=A2-x is refused — the item's number is digits" \
+	"data.id 'A2-x' is not" $T data.source=local data.id=A2-x
+ls_refused "…and data.id=A3-1 is refused — A2 is the confirm-list's axis, and no other" \
+	"data.id 'A3-1' is not" $T data.source=local data.id=A3-1
+ls_refused "…and data.source=human data.id=A2-1 is refused — that id is the local source's alone" \
+	"data.source 'human' is not local" $T data.source=human data.id=A2-1
 ls_writes "…and data.id=C-12" $T data.source=local data.id=C-12
 ls_writes "finding.triage data.source=human with a forge comment id writes" $T data.source=human data.id=PRRC_kwDO12
 ls_writes "finding.triage data.source=check with a collapsed check name writes" $T data.source=check data.id=Kit-CI-self-host
@@ -1493,7 +1503,7 @@ done
 grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&
 	pass "the rules are rows of the one TRACE_SHAPES table" || fail "scripts/trace.sh's TRACE_SHAPES does not declare the source vocabulary, the local id and the required counts"
 _ls_adr=$(sed -n '/Amended 2026-10-02 (#466)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
-for _ls_t in '`[CHML]-[0-9]+`' '`check` `bot` `human` `local`' '`data.applied`' '`stopped`'; do
+for _ls_t in '`[CHML]-[0-9]+`' '`A2-[0-9]+`' '`check` `bot` `human` `local`' '`data.applied`' '`stopped`'; do
 	case $_ls_adr in *"$_ls_t"*) pass "ADR-0008's #466 amendment names $_ls_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#466):*' block naming $_ls_t" ;; esac
 done
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
