@@ -39,7 +39,15 @@
 #      citing shared invariant §10, with a fix line that asks this PR for
 #      nothing — in one sentence of Agent 5's prompt, the exception kept, the
 #      report's shape and the roster unchanged. Proved by two baits.
-#  10. Every planned lens is accounted for (#482, retro F6): each of the seven
+#  10. The dispatched worker carries that ruling (#471): the added case, the
+#      inherited case and the ruling are sentences of the worker's contract
+#      word for word as Agent 5's prompt says them, read from the skill; the
+#      exception keeps its direction; the anatomy declares the `↳ cites:`
+#      line and defines the what/where line the ruling names — each proved by
+#      a mutant that cuts exactly the text it holds. Its twin, the CI review
+#      prompt, carries the same ruling in the same words, and both define the
+#      buckets the added case is graded by in the skill's own sentence.
+#  11. Every planned lens is accounted for (#482, retro F6): each of the seven
 #      ends in exactly one `spawn.end`, `fail` with its cause named when it
 #      could not start or returned no report — the host's concurrent limit, a
 #      usage limit, no report — recorded before the verdict; and the summary
@@ -373,9 +381,12 @@ wline() { grep -nF -- "$1" "$WORKER_ABS" | head -1 | cut -d: -f1; }
 # way scripts/agent-dispatch.sh strips it (a `<!--` first line through the
 # first line that IS `-->`). "Opens by" means the first line of THAT, not the
 # first line of the file.
-body=$(awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
-            inhdr { if ($0 == "-->") inhdr = 0; next }
-            { print }' "$WORKER_ABS")
+body_of() {
+	awk 'NR == 1 && $0 == "<!--" { inhdr = 1; next }
+	     inhdr { if ($0 == "-->") inhdr = 0; next }
+	     { print }' "$1"
+}
+body=$(body_of "$WORKER_ABS")
 first=$(printf '%s\n' "$body" | grep -m1 .)
 case "$first" in
 *"no network"*) pass "the contract's first line to the worker says it has no network" ;;
@@ -487,9 +498,12 @@ fi
 # prose and a sentence may break between the case and its ruling, and the
 # reviewer reads sentences, not lines. The one pair of readers for the skill
 # and for the baits below, so a bait runs the assertion and never a retyped
-# copy of it.
+# copy of it. sentences — the splitter itself, on stdin: lines joined, spaces
+# squeezed, one sentence per line with its edges trimmed, so a skill paragraph
+# and a contract wrapped at 80 columns split alike (section 10 compares them).
 agent5_of() { sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1"; }
-sentences_of() { agent5_of "$1" | tr '\n' ' ' | tr '.' '\n'; }
+sentences() { tr '\n' ' ' | tr -s ' ' | tr '.' '\n' | sed 's/^ //; s/ $//'; }
+sentences_of() { agent5_of "$1" | sentences; }
 agent5=$(agent5_of "$SKILL_ABS")
 agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
 a5_has() {
@@ -564,7 +578,104 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "10. Every planned lens ends in one spawn.end, and a missing lens is named (#482)"
+banner "10. The dispatched worker and its CI twin carry the reuse/DRY ruling in the skill's words (#471)"
+# ---------------------------------------------------------------------------
+# Section 9's ruling reached the in-session lens only: a dispatched worker
+# still filed an inherited duplication as a finding against the PR, because
+# its contract (section 8's file) never heard of the two cases. So the
+# contract carries them — the added case, the inherited case and the ruling,
+# as the SAME sentences Agent 5's prompt says, read from the skill here and
+# never retyped, so a reword on either side is red. Compared sentence by
+# sentence over prose unwrapped and spaces squeezed: the contract is
+# 80-column prose and the skill is not, and both models read sentences.
+w_sentences=$(printf '%s\n' "$body" | sentences)
+a5_sentences=$(sentences_of "$SKILL_ABS")
+# The CI review prompt is the worker's twin — "same two axes, same standard",
+# its header says — so it rules duplication in the same words, or the two
+# reviewers of one diff disagree on whose duplication it is. Both are held
+# below, each to the skill. And "the buckets" the added case grades by are
+# defined in each: the skill's own sentence giving the four their meanings.
+TWIN="templates/workflows/ai-review-prompt.md"
+buckets=$(sentences <"$SKILL_ABS" | grep -F 'The severity buckets keep their meanings' | head -n 1)
+# skill_sentence <needle> — the first sentence of Agent 5's prompt holding the
+# needle; empty when none does. carries <sentences> <sentence> — the sentence
+# is a whole sentence of the given text.
+skill_sentence() { printf '%s\n' "$a5_sentences" | grep -F -- "$1" | head -n 1; }
+carries() { [ -n "$2" ] && printf '%s\n' "$1" | grep -qxF -- "$2"; }
+[ -n "$buckets" ] ||
+	fail "the skill no longer says which meanings the severity buckets keep — nothing to define 'the buckets' by"
+t_sentences=$(body_of "$ROOT/$TWIN" | sentences)
+# sentences_for <file> — that file's sentences, split once above.
+sentences_for() { case $1 in "$TWIN") printf '%s\n' "$t_sentences" ;; *) printf '%s\n' "$w_sentences" ;; esac; }
+for f in "$WORKER" "$TWIN"; do
+	f_sentences=$(sentences_for "$f")
+	for needle in '**Then ask which case' '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
+		want=$(skill_sentence "$needle")
+		[ -n "$want" ] ||
+			fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold $f to"
+		carries "$f_sentences" "$want" &&
+			pass "$f says Agent 5's '$needle' sentence word for word" ||
+			fail "$f does not say Agent 5's '$needle' sentence word for word — it rules duplication differently from the lens"
+	done
+	carries "$f_sentences" "$buckets" &&
+		pass "$f defines the buckets in the skill's sentence: which meanings the four severities keep" ||
+		fail "$f grades the added case by 'the buckets' and never says what they mean — carry the skill's sentence: $buckets"
+done
+# The exception, held by its direction and not by two words in one sentence:
+# the sentence naming the divergent-behavior copy ends in the skill's own
+# verdict — read from the skill — and carries no negation, so an exception
+# reversed ("no longer stays a finding", "there is no exception") is red.
+verdict=$(skill_sentence 'divergent-behavior' | sed -n 's/.*, which \(is a latent bug.*stays a finding\)$/\1/p')
+[ -n "$verdict" ] ||
+	fail "Agent 5's prompt no longer ends its divergent-behavior sentence in a verdict that keeps the copy a finding — nothing to hold the worker to"
+# keeps_exception <sentences> — exit 0 when one sentence naming the
+# divergent-behavior copy ends in that verdict and negates nothing before
+# naming it (the verdict after it is the skill's own words, held above).
+keeps_exception() {
+	printf '%s\n' "$1" | grep -F 'divergent-behavior' | while IFS= read -r e; do
+		case $e in *"$verdict") ;; *) continue ;; esac
+		printf '%s\n' "${e%%divergent-behavior*}" | grep -qiE "(^|[^a-z])(not|never|no|nothing|none)([^a-z]|\$)|n't" || echo kept
+	done | grep -q kept
+}
+for f in "$WORKER" "$TWIN"; do
+	[ -n "$verdict" ] && keeps_exception "$(sentences_for "$f")" &&
+		pass "$f keeps the exception: a divergent-behavior copy $verdict" ||
+		fail "$f never keeps a divergent-behavior copy a finding in the skill's verdict — the ruling would defer a latent bug"
+done
+for flip in 's/and stays a finding/and no longer stays a finding/' 's/The one exception is a/There is no exception for a/' 's/The one exception is a/Nothing is excepted for a/'; do
+	keeps_exception "$(printf '%s\n' "$w_sentences" | sed "$flip")" &&
+		fail "bait: the exception reversed ($flip) still reads as kept" ||
+		pass "bait: the exception reversed ($flip) goes red"
+done
+# says_once <file> <text> <why> — the text is said in the file (prose
+# unwrapped, spaces squeezed), and said exactly once: cut once, it is gone. A
+# text said twice — once by the paragraph that needs it — would survive the
+# cut, so the assertion reads the one line it claims to hold (each was also
+# run red against the real file with that line deleted, #485).
+unwrap() { tr '\n' ' ' <"$1" | tr -s ' '; }
+says_once() {
+	t_text_has "$(unwrap "$1")" "$2" "$3" "$1"
+	unwrap "$1" | awk -v n="$2" '{ i = index($0, n); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(n)) } 1' >"$SCRATCH/says_once.cut"
+	grep -qF -- "$2" "$SCRATCH/says_once.cut" &&
+		fail "$1 says '$2' more than once — cut once, it is still said, so another line satisfies the assertion" ||
+		pass "…and says it exactly once: cut once from $1, it is gone"
+}
+# The ruling names a `↳ cites:` line and a what/where line: the worker's
+# anatomy declares the one and defines the other, each on its own line.
+says_once "$WORKER" "↳ cites: <the decision record, audit item or craft rule — only when there is one>" \
+	"the ruling cites §10 on a line the worker's anatomy declares"
+says_once "$WORKER" "The first line is the finding's what/where line." \
+	"the ruling's what/where line is a term the worker's anatomy defines"
+says_once "$TWIN" 'one line readable in isolation — the finding'"'"'s what/where line' \
+	"the ruling's what/where line is a term the CI prompt's anatomy defines"
+says_once "$TWIN" 'a "↳ cites:" line naming the decision record, audit item or craft rule' \
+	"the ruling cites §10 on a line the CI prompt's anatomy declares"
+# Bait: the worker's fix line reworded — the exact comparison is what goes red.
+bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
+carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
+	fail "bait: the worker's fix line reworded still reads as the skill's ruling" ||
+	pass "bait: the worker's fix line reworded goes red"
+banner "11. Every planned lens ends in one spawn.end, and a missing lens is named (#482)"
 # ---------------------------------------------------------------------------
 # lens_rules_missing <skill file> — the rules of #482 the file does not hold,
 # space-joined. The spawn rules are read inside §3 only (its heading to the

@@ -45,6 +45,31 @@ test hygiene, mechanical correctness. Give each finding a severity and
 a concrete suggested change. These are addressed to an agent, which may
 act on them autonomously.
 
+The severity buckets keep their meanings: CRITICAL is vulnerabilities,
+data leaks, broken functionality, divergent duplicate logic already
+drifted into a latent bug; HIGH is missing tests, broken contracts,
+major pattern violations, a reimplemented helper duplicating an existing
+export; MEDIUM is redundant tests, unnecessary complexity, copy-paste
+blocks worth extracting once; LOW is minor simplifications and style.
+
+**Then ask which case the duplication is, because the two leave the
+report differently.** A duplication **the diff ADDS** — a new copy of
+something that already exists, or the same logic pasted twice within
+this diff — is the author's, and a finding at the severity the buckets
+give it. A duplication the diff merely **touches or extends** — copies
+that pre-date the branch, which the diff edits in place, mirrors into
+one more call site, or leaves beside a helper it added — is not the
+author's to consolidate: moving those copies into a shared file is a
+behaviour-preserving refactor, and shared invariant §10 lands one on its
+own ticket, never as a passenger on a feature diff. Report that case as
+a **candidate ticket** — a LOW whose what/where line opens `candidate
+ticket:`, whose `↳ cites:` line names shared invariant §10, and whose
+`↳ fix:` line reads `none on this PR — candidate ticket (shared
+invariant §10)`, so the PR is asked for nothing. The one exception is a
+divergent-behavior copy — two copies meant to behave identically that
+have already drifted — which is a latent bug whichever branch introduced
+it and stays a finding.
+
 When the diff touches agent-facing surfaces — skills, prompts, hooks,
 AGENTS.md/constitution, agent settings or tool config — audit the
 changed instruction text itself against the OWASP Agentic Skills Top 10
@@ -78,9 +103,11 @@ sections in that order; an empty one carries the single line
 "— none found." so absence is stated, never inferred. List findings in
 the review body, beneath the table, in this anatomy: a bold ID
 (C-1/H-1/M-1/L-1, numbering resets per category) plus a code-span
-file:line anchor and one line readable in isolation; a "↳ fix:" line
-when the change is clear; evidence longer than a couple of lines folded
-into <details>. Markdown only — never ANSI, tables no wider than three
+file:line anchor and one line readable in isolation — the finding's
+what/where line; a "↳ cites:" line naming the decision record, audit
+item or craft rule, only when there is one; a "↳ fix:" line when the
+change is clear; evidence longer than a couple of lines folded into
+<details>. Markdown only — never ANSI, tables no wider than three
 columns. The confirm-list keeps glyph-first lines using exactly the
 shared tags — 🔀 MIXED COMMIT, ⚠️ UNSPECIFIED, ✅ SPECIFIED, ❌ MISSING —
 one item per line, never table cells, and no severity badge ever
