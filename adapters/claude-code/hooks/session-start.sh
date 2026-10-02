@@ -47,7 +47,8 @@ transcript=$(hook_expand "$(hook_field transcript_path)")
 
 # The trace directory, asked for once (hook.lib.sh's hook_dir). Tracing off,
 # the event and the pointer are skipped and spawn nothing; the behind note above
-# and the export below are not the trace's, and stay (#463).
+# and the export below are not the trace's, and stay (#463). A policy file the
+# shared script refuses is said on stderr by the ask, and is off from here on.
 tdir=$(hook_dir) || tdir=
 
 # THE PAYLOAD IS DATA. An unusable id is refused BEFORE it reaches either of

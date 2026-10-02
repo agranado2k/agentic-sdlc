@@ -60,7 +60,7 @@ hook_tools_on || {
 # AND THEN THE DIRECTORY. Tracing off is not a failure to record — it is the
 # documented no-op, and the note about it belongs to the operator typing a
 # command, not to a session start (TRACE_QUIET, rule 3).
-tdir=$(hook_dir) || {
+tdir=$(hook_dir 2>/dev/null) || {
 	cat >/dev/null 2>&1
 	exit 0
 }

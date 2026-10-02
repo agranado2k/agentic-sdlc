@@ -50,7 +50,8 @@ hook_read
 
 # The trace directory, asked for once (hook.lib.sh's hook_dir). Tracing off,
 # everything below is the trace's and nothing of it runs: no git for the run,
-# no wait, no read of the transcript, no phantom counted (#463).
+# no wait, no read of the transcript, no phantom counted (#463). A policy file
+# the shared script refuses stops it here too, after the ask has said so.
 tdir=$(hook_dir) || exit 0
 
 sid=$(hook_field session_id)

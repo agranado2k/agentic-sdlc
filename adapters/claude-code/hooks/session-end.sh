@@ -23,7 +23,8 @@ hook_read
 
 # The trace directory, asked for once (hook.lib.sh's hook_dir). Everything this
 # hook does is the trace's, so with tracing off it stops here and spawns
-# nothing more (#463).
+# nothing more (#463); a policy file the shared script refuses stops it here
+# too, after the ask has said so on stderr.
 tdir=$(hook_dir) || exit 0
 
 sid=$(hook_field session_id)

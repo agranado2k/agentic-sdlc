@@ -36,7 +36,7 @@ hook_tools_on || {
 	cat >/dev/null 2>&1
 	exit 0
 }
-tdir=$(hook_dir) || {
+tdir=$(hook_dir 2>/dev/null) || {
 	cat >/dev/null 2>&1
 	exit 0
 }

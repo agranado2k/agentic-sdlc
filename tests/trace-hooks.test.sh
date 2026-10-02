@@ -3863,6 +3863,20 @@ guard_off463 stop subagent-stop.sh stop-463 's/^tdir=$(hook_dir) || exit 0$/tdir
 guard_off463 start session-start.sh start-463 's/^if \[ -n "\$tdir" \]; then$/if :; then/'
 guard_off463 refusal session-start.sh refused-463 's/\[ -z "\$tdir" \] || hook_trace emit/hook_trace emit/'
 
+# A BROKEN POLICY IS NOT TRACING OFF. Off is the ask answering nothing, and the
+# hook stops quietly; a policy file the shared script refuses is an error, and
+# the hook still exits 0 — it never fails its agent harness — but says the
+# shared script's own line on stderr, once, as the emit it no longer reaches
+# used to (H-1, review of PR #518).
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='Not-a-type'\n" "$SCRATCH/broken-463" >"$SCRATCH/broken-463.sh"
+for leg463 in "session-start.sh|start-463" "subagent-stop.sh|stop-463" "session-end.sh|end-463"; do
+	spawned "${leg463%|*}" "$SCRATCH/${leg463#*|}.json" TRACE_CONFIG="$SCRATCH/broken-463.sh"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		[ "$(printf '%s\n' "$S_ERR" | grep -c "^x trace: TRACE_NUMBERED_TYPES word 'Not-a-type'")" = 1 ] &&
+		pass "a broken policy: ${leg463%|*} exits 0, silent on stdout, and says the shared script's line once" ||
+		fail "a broken policy: ${leg463%|*} exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
+
 # TRACING ON: the same hooks, one ask each, and what they write unchanged.
 new_trace
 for leg463 in "session-start.sh|start-463" "subagent-stop.sh|stop-463" "subagent-stop.sh|phantom-463" "session-end.sh|end-463"; do

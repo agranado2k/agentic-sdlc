@@ -466,9 +466,17 @@ hook_tools_on() {
 	[ -n "$_ht_want" ]
 }
 
-# hook_dir — the resolved trace directory, or nothing (status 1) when tracing is
-# off. Asked of the shared script itself, which is the only thing that knows how
-# a relative policy value resolves against the root checkout.
+# hook_dir — the resolved trace directory; nothing, status 1, when tracing is
+# off; nothing, status 2, when the shared script refuses the policy file. Asked
+# of the shared script itself, which is the only thing that knows how a relative
+# policy value resolves against the root checkout.
+#
+# OFF IS NOT AN ERROR, AND AN ERROR IS NOT OFF. Off is the documented no-op and
+# is said nowhere (rule 3). A refused policy file is the shared script's error,
+# and its own line reaches the hook's stderr untouched, the way an emit's would
+# (rule 1 keeps the exit 0, ADR-0008 clause 4 keeps it loud) — so a session
+# hook that stops at the ask still says why (H-1, review of PR #518). The tool
+# hooks, which run on every tool call, discard it at their own call site.
 #
 # ASK IT ONCE. There is no cache here on purpose: a caller reads this through a
 # command substitution, so anything remembered inside would be remembered in a
@@ -476,10 +484,11 @@ hook_tools_on() {
 # call (M-4, review of PR #295). So each hook asks once, before anything else
 # that would spawn a process for the trace, and hands the answer to every
 # helper that needs it as that helper's first argument; no helper here asks
-# again (#463). With tracing off the hook has its answer and stops: the trace
-# work after it spawns nothing, git included.
+# again (#463). With tracing off the hook has its answer, and the trace work
+# after it spawns nothing, git included: the end and the stop hooks stop there,
+# and the start hook skips its event and pointer and carries on to the export.
 hook_dir() {
-	_hd_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hd_dir=
+	_hd_dir=$(cd "$hook_repo" && sh scripts/trace.sh dir) || return 2
 	[ -n "$_hd_dir" ] || return 1
 	printf '%s' "$_hd_dir"
 }
