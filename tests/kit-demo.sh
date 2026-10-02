@@ -37,6 +37,12 @@
 # suite's own, so nothing else of the harness is used.
 . "$(dirname "$0")/lib.sh"
 
+# THE CONSUMER HERE IS A HUMAN COMMITTING ON main FROM ITS MAIN WORKING COPY,
+# which the shipped .githooks/pre-commit lets through: it refuses an agent's
+# commit only (hard rule 1, #392). An agent may be the one running this suite,
+# so its markers are cleared first; tests/root-guard.test.sh holds the refusal.
+t_as_human
+
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
