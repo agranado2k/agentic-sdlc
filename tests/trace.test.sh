@@ -1555,6 +1555,10 @@ _ls_adr=$(sed -n '/Amended 2026-10-02 (#466)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/d
 for _ls_t in '`[CHML]-[0-9]+`' '`A2-[0-9]+`' '`check` `bot` `human` `local`' '`data.applied`' '`stopped`'; do
 	case $_ls_adr in *"$_ls_t"*) pass "ADR-0008's #466 amendment names $_ls_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#466):*' block naming $_ls_t" ;; esac
 done
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-02 (#466"*'`[CHML]-[0-9]+`'*'`A2-[0-9]+`'*) pass "the index row for 0008 carries the #466 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-02 (#466 …' note naming [CHML]-[0-9]+ and A2-[0-9]+" ;;
+esac
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "the glossary's Event entry names a local finding's id shape" || fail "the glossary's Event entry does not name the local id shape [CHML]-[0-9]+"
 
