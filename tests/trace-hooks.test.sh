@@ -3585,4 +3585,13 @@ stop_from "$R421.wt"
 	pass "a worktree with no open run: the stop carries no run, not the root's" ||
 	fail "a worktree with no open run: exit $S_STATUS, run '$(str "$STOP" run)', event '$STOP'"
 
+# THE RECORD: the adapter README's row for the hook says all of it — the
+# parent from the same stack, and an idle checkout's stop carrying no run
+# (M, review of PR #449).
+ROW421=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
+case $ROW421 in *"parent from the same checkout's stack"*) pass "the README row says the parent comes from the same checkout's stack" ;;
+*) fail "the README row for subagent-stop.sh does not say the parent comes from the same checkout's stack" ;; esac
+case $ROW421 in *"a checkout with no run open makes a stop that carries no run, never the root's"*) pass "the README row says an idle checkout's stop carries no run" ;;
+*) fail "the README row for subagent-stop.sh does not say a checkout with no run open makes a stop that carries no run" ;; esac
+
 t_done "trace hooks"
