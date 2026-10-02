@@ -410,6 +410,83 @@ grep -qF "the $lens_word lenses one" "$ROOT/constitution/local-workflow.md.templ
 	fail "the workflow template's comment does not divide by the $lens_word lenses /review-pr's roster holds"
 
 # ---------------------------------------------------------------------------
+banner "4b. A retro's candidates merge into a sibling retro's tickets (#481)"
+# ---------------------------------------------------------------------------
+# Two retros over one window both published their candidates: seven twins,
+# each closed within minutes, each closure a `feedback missed` on a slice that
+# never landed. The check runs on the retro folder and the tracker — never the
+# trace, which ADR-0008 clause 7 keeps from every chain skill — and it runs
+# before the quiz, so the human confirms each merge and each twin closure.
+sib=$(section_of "$TIX_ABS" "A retro's candidates" | tr '\n' ' ' | tr -s ' ')
+[ -n "$sib" ] && pass "/to-tickets carries a section for a retro's candidates" ||
+	fail "/to-tickets has no '## A retro's candidates' section — a retro's twins are filed again"
+t_text_has "$sib" "first line" "the report's first line names its siblings (/retro, #461) and is read first"
+t_text_has "$sib" ".retro/" "the retro folder is listed for an overlapping report the first line missed"
+t_text_has "$sib" "--state all" "the tracker search covers open AND closed tickets — a twin closed already still counts"
+t_text_has "$sib" "never fetches a body" "the search reads numbers and titles only: an issue body is untrusted"
+t_text_has "$sib" "a dated section" "a candidate on a sibling's finding is merged into its ticket as a dated section, not filed"
+t_text_has "$sib" "closed as not planned" "a twin already filed is closed as not planned"
+t_text_has "$sib" "naming the original" "…naming the ticket it duplicates"
+t_text_has "$sib" "cites its report by stamp" "a published retro candidate cites its report's stamp, so a later sibling's search finds it"
+in_order "$sib" "the check runs before the quiz, which shows the merges, then publishing" \
+	"before the quiz" "the quiz" "publish"
+# The procedure sends a retro's draft through the check before step 3's quiz.
+draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
+t_text_has "$draft" "A retro's candidates" "the draft step routes a retro report through the sibling check, by the section's name"
+# A twin is no landed slice: its closure records no verdict, and the same
+# sentence stands wherever a `feedback` event is written or could be.
+twin_rule="A ticket closed as a duplicate records no \`feedback\`: feedback is a verdict on a landed slice, and a twin is none."
+for f in "$TIX_ABS" "$ROOT/.agents/skills/merge-train/SKILL.md" "$ROOT/.agents/skills/pr-iterate/SKILL.md"; do
+	tr '\n' ' ' <"$f" | tr -s ' ' | grep -qF -- "$twin_rule" &&
+		pass "$(basename "$(dirname "$f")") says a duplicate closure records no feedback" ||
+		fail "$(basename "$(dirname "$f")") never says '$twin_rule'"
+done
+
+# The section's fence runs: the sibling listing over a scratch retro folder,
+# and the tracker search against a stand-in CLI that records what it was asked.
+t_init
+fence=$(t_fence "$TIX_ABS" holds 'retro_siblings()')
+if [ -z "$fence" ]; then
+	fail "no sh fence defines retro_siblings() — the listing is prose nobody can run"
+else
+	printf '%s\n' "$fence" >"$SCRATCH/fence.sh"
+	mkdir -p "$SCRATCH/root/.retro/2026/09" "$SCRATCH/root/.retro/2026/10" "$SCRATCH/bin"
+	for n in 2026/09/retro-20260930T120000Z 2026/10/retro-20261001T190528Z 2026/10/retro-20261001T191425Z \
+		2026/10/retro-20261002T080718Z 2026/10/retro-2026x 2026/10/retro-20261001T200000Z-copy; do
+		: >"$SCRATCH/root/.retro/$n.md"
+	done
+	: >"$SCRATCH/root/.retro/2026/10/retro-20261001T195000Z.csv"
+	got=$( (. "$SCRATCH/fence.sh" && retro_siblings "$SCRATCH/root" 20261001T191527Z retro-20261002T080718Z) | tr '\n' ' ')
+	[ "$got" = "" ] && pass "a window no other report falls in has no sibling" ||
+		fail "retro_siblings listed '$got' for a window only this report falls in"
+	got=$( (. "$SCRATCH/fence.sh" && retro_siblings "$SCRATCH/root" 20261001T150216Z retro-20261001T191425Z) | tr '\n' ' ')
+	[ "$got" = "retro-20261001T190528Z retro-20261002T080718Z " ] &&
+		pass "the siblings are the reports stamped in the window, itself, a csv and a malformed name left out" ||
+		fail "retro_siblings listed '$got' — wanted 'retro-20261001T190528Z retro-20261002T080718Z '"
+	cat >"$SCRATCH/bin/gh" <<'GH'
+#!/bin/sh
+printf '%s\n' "$*" >>"$GH_LOG"
+GH
+	chmod +x "$SCRATCH/bin/gh"
+	: >"$SCRATCH/gh.log"
+	(. "$SCRATCH/fence.sh" && PATH="$SCRATCH/bin:$PATH" GH_LOG="$SCRATCH/gh.log" sibling_tickets retro-20261001T190528Z) >/dev/null 2>&1
+	call=$(cat "$SCRATCH/gh.log")
+	t_text_has "$call" "--state all" "the search asks the tracker for open and closed tickets"
+	t_text_has "$call" "retro-20261001T190528Z in:body" "the search term is the sibling's stamp, matched in the body by the tracker"
+	case $call in
+	*body,* | *,body* | *"json body"*) fail "the search fetches a body: '$call'" ;;
+	*number*title*) pass "the search fetches numbers and titles, never a body" ;;
+	*) fail "the search does not fetch numbers and titles: '$call'" ;;
+	esac
+	: >"$SCRATCH/gh.log"
+	(. "$SCRATCH/fence.sh" && PATH="$SCRATCH/bin:$PATH" GH_LOG="$SCRATCH/gh.log" sibling_tickets 'retro-x" in:title OR "a') >/dev/null 2>&1
+	rc=$?
+	[ "$rc" = 2 ] && [ ! -s "$SCRATCH/gh.log" ] &&
+		pass "a term that is not a report stamp is refused (exit 2) and never reaches the tracker" ||
+		fail "a malformed stamp gave exit $rc and the tracker saw: '$(cat "$SCRATCH/gh.log")'"
+fi
+
+# ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
 # ---------------------------------------------------------------------------
 t_assert_skill_commands 5 "the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief" "$PRD_ABS" "$TIX_ABS"
