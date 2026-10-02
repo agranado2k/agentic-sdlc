@@ -52,7 +52,7 @@ Agents 1–6 are **Axis 1 — Standards** ("is it built right?"). Agent 7 is **A
 
 All agents MUST only analyze code within the branch scope defined in step 0.
 
-**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. **For each of the seven agents**, record its spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=pr:#<N> tier=reviewer model=$model outcome=in-session skill=review-pr data.agent=<roster-token> reason='<what this agent audits, one line>' || :`. Then, when that agent completes or fails, record its end immediately: `sh scripts/trace.sh emit kind=spawn.end subject=pr:#<N> outcome=ok|fail reason='<the agent result or the reason for the failure>' || :`. This pair (spawn + spawn.end) repeats for each of the seven agents.
+**Resolve the reviewer tier once, before any agent spawns** — `model=$(sh scripts/agents.lib.sh reviewer)` — and hand every one of the seven the same answer: the model is the tier's, not the agent's, and one resolve is what makes the seven records below comparable. Nothing printed is a valid answer — the spawns inherit this session's model, and the record says so by carrying no `model`. **For each of the seven agents**, record its spawn as you make it: `sh scripts/trace.sh emit kind=spawn subject=pr:#<N> tier=reviewer model=$model outcome=in-session skill=review-pr data.agent=<roster-token> reason='<what this agent audits, one line>' || :`. Then, when that agent completes or fails, record its end immediately: `sh scripts/trace.sh emit kind=spawn.end subject=pr:#<N> outcome=ok|fail data.agent=<roster-token> reason='<the agent result or the reason for the failure>' || :`. This pair (spawn + spawn.end) repeats for each of the seven agents. **Every lens this review planned ends in exactly one `spawn.end`, whether it ran or not** — `ok` when it returned its report, `fail` when it could not start or ended with no report, its reason naming which: the spawn refused at the host's concurrent-subagent limit, a usage limit reached, or no report returned. A lens that could not start is still a planned lens: its spawn is recorded as the call is made, and its `fail` follows at once. Every one of the seven is recorded before the verdict (§5), so a review whose lenses never ran never reads as a review that ran. If you then audit a failed lens in this context instead, its `fail` stands — the sub-agent did not run — and the summary says the lens ran here.
 
 **The sub-agent roster.** Every `data.agent` this skill writes — on the spawn above, on each `finding.raise` in §6, its own or a relayed one — is one token from this list and nothing else. The list is this skill's, and it is the only one: an agent's title, its number, and a name as a report spelled it never reach the trace, so the retrospective's count per sub-agent (`/retro`, question 2) reads one row per lens instead of one per spelling.
 
@@ -212,6 +212,7 @@ After all agents complete, you MUST present the **Axis 1 (standards)** findings 
 
 **Verdict:** <one line — blocking or not, and what to fix first; "no findings" is a valid verdict>
 Clean audits: <the lenses that found nothing, comma-separated — one line, never sections of nothing>
+Lenses not run: <"none", or each lens whose spawn ended in fail, by roster token and cause — marked "run in this context instead" when this session audited it itself>
 
 | | Severity | Count |
 |---|----------|-------|
@@ -220,6 +221,8 @@ Clean audits: <the lenses that found nothing, comma-separated — one line, neve
 | 🟡 | MEDIUM | X |
 | 🔵 | LOW | X |
 ```
+
+A lens on the `Lenses not run:` line is never a clean audit: one that did not run found nothing because it looked at nothing, and a review missing a lens says so here rather than passing on six.
 
 The badge is **redundant** encoding: the text label always accompanies it, because color is never the only channel a reader has. The count table is the exhaustive record — all four buckets always appear, zeros included. The severity buckets keep their meanings: CRITICAL is vulnerabilities, data leaks, broken functionality, divergent duplicate logic already drifted into a latent bug; HIGH is missing tests, broken contracts, major pattern violations, a reimplemented helper duplicating an existing export; MEDIUM is redundant tests, unnecessary complexity, copy-paste blocks worth extracting once; LOW is minor simplifications and style.
 
