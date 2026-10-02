@@ -180,7 +180,7 @@ banner "4. The documented check, executed — PRD scenario 5"
 # the shipped policy file, and no kit wrapper anywhere.
 CHECK="$SCRATCH/check.sh"
 t_fence "$SKILL" holds "typed_return_ok()" >"$CHECK"
-if [ -s "$SCRATCH/check.sh" ]; then
+if [ -s "$CHECK" ]; then
 	pass "the skill prints the check as a runnable fence"
 else
 	fail "the skill has no sh fence defining typed_return_ok()"
