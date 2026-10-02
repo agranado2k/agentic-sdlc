@@ -2297,12 +2297,16 @@ if [ "$GAP_PLANTED" = 1 ]; then
 	rm -f "$GAP_MARK"
 	if bait_term -e "$GAP_MARK" env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_GAP" \
 		sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 30; then
+		# The two assertions that name the fix are the 143s: before #465 the
+		# global trap swallowed the TERM and the dispatch ran on to an end of
+		# some later status, so a closed pair alone proves nothing about it
+		# (L-7, review of PR #488).
 		[ "$bt_status" = 143 ] &&
-			pass "a traced dispatcher sent TERM in the gap exits 143" ||
-			fail "a traced dispatcher sent TERM in the gap exited $bt_status"
-		tr_assert_count "$TR_GAP" 2 "…and its spawn is still a pair"
-		tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…closed from the global trap"
-		tr_event_has "$TR_GAP" 2 '"exit":"143"' "…with the signal's own status recorded"
+			pass "a traced dispatcher sent TERM in the gap is ended by it: exit 143" ||
+			fail "a traced dispatcher sent TERM in the gap exited $bt_status, not 143"
+		tr_assert_count "$TR_GAP" 2 "…its spawn and one end, no more"
+		tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…the second being the spawn.end that closes the pair"
+		tr_event_has "$TR_GAP" 2 '"exit":"143"' "…and the end records the signal's 143, not a later failure's status"
 		# No worker ever started, so no rung ran one; the signal that ended the
 		# dispatch is a field of its own (L-4, review of PR #488).
 		tr_event_has "$TR_GAP" 2 '"signal":"TERM"' "…and names the signal"
