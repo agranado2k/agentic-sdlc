@@ -367,10 +367,26 @@ in_order "$handoff" "a project that states no limit is told so, and runs one ses
 	"states no limit" "say so" "one session at a time"
 in_order "$handoff" "a frontier larger than the cap is sequenced, the rest waiting on sessions that end" \
 	"larger than the cap" "sequence" "as sessions end"
-case ${handoff#5. } in
-*[0-9]*) fail "the hand-off carries a digit — the limit is the project's value, and the divisor is spelled 'seven'" ;;
-*) pass "the hand-off carries no digit: no limit is baked in" ;;
-esac
+# No limit is baked in, held on the session-cap sentences alone — the rest of
+# the step may cite a rule by number — and in words as well as digits: the
+# only numbers those sentences may spell are one and the roster's count
+# (#514, L-3).
+cap_text=$(printf '%s\n' "$handoff" | sed -n 's/.*\(how many of that frontier.*as sessions end\.\).*/\1/p')
+if [ -z "$cap_text" ]; then
+	fail "the hand-off's session-cap sentences ('how many of that frontier' … 'as sessions end.') were not found"
+else
+	case $cap_text in
+	*[0-9]*) fail "the session-cap sentences carry a digit — the limit is the project's value, and the divisor is a word" ;;
+	*) pass "the session-cap sentences carry no digit: no limit is baked in" ;;
+	esac
+	words=$(printf '%s\n' two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen \
+		sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty hundred | grep -vx "$lens_word" | paste -sd'|' -)
+	if printf '%s\n' "$cap_text" | grep -Eiqw "$words"; then
+		fail "the session-cap sentences spell a number other than one and $lens_word — a limit baked in as a word"
+	else
+		pass "the session-cap sentences spell no number but one and $lens_word"
+	fi
+fi
 t_text_has "$quiz" "the session cap beside the frontier" "the quiz shows the cap where the human reads the frontier"
 # The place the hand-off reads the limit from exists: the consumer's workflow
 # article carries a line for it, a mark the project fills in — or answers
