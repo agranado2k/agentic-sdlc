@@ -1454,4 +1454,39 @@ sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$P
 	pass "and the count clause ends before the run is closed — the end is its own sentence" ||
 	fail "/pr-iterate's count clause runs into the end command — 'refuses … without them and \`sh scripts/trace.sh end\`' reads as part of the refusal"
 
+# ---------------------------------------------------------------------------
+banner "22. A skill that spawns inside its run hands the run over, on the spawn prompt's first line (#474)"
+# ---------------------------------------------------------------------------
+# A hook runs in the agent harness's process, so nothing a skill exports for a
+# subagent reaches it, and the payload's cwd names the session's directory,
+# not the subagent's (#478). The run reaches the stop and tool hooks through
+# the spawn prompt's first line, `Trace-Run: <run id>` (ADR-0008 clause 5,
+# #474 amendment). Every skill that opens a run and spawns inside it says so
+# at each spawn step, in the same words, so the line an agent types is the
+# line the hook reads.
+HAND474='`Trace-Run: <the run id your begin printed>`'
+# hand474 <skill> <a fixed phrase of the spawn step's paragraph> — that
+# paragraph hands the run over, says it is the first line, and says what to do
+# when begin printed nothing.
+hand474() {
+	_h4_para=$(grep -F "$2" "$ROOT/$(skill_md "$1")")
+	[ -n "$_h4_para" ] || { fail "/$1 has no paragraph holding '$2'"; return; }
+	case $_h4_para in *"$HAND474"*"first line"*"printed nothing"*)
+		pass "/$1's spawn step ('$2') hands its run over on the prompt's first line" ;;
+	*) fail "/$1's spawn step ('$2') does not hand the run over: want $HAND474, 'first line' and what to do when begin 'printed nothing'" ;;
+	esac
+}
+hand474 implement '**(b) A `/review-pr` subagent in the agent harness — the fallback.**'
+hand474 review-pr '**Resolve the reviewer tier once, before any agent spawns**'
+hand474 pr-iterate '**A tool-restricted subagent reads those files, and returns a declared shape.**'
+hand474 pr-iterate '**In the `/pr-iterate` context, bypass the question**'
+# The skills that open no run have none to hand over, and say nothing of it.
+for sk in design-brief dogfood housekeeping improve-codebase-architecture to-tickets; do
+	if grep -qF 'Trace-Run:' "$ROOT/$(skill_md "$sk")"; then
+		fail "/$sk opens no run and still names a Trace-Run line"
+	else
+		pass "/$sk opens no run and names no Trace-Run line"
+	fi
+done
+
 t_done "trace skills contract"
