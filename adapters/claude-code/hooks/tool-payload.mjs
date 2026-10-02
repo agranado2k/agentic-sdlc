@@ -134,7 +134,9 @@ head = head.replace(/[\u0000-\u001f\u007f]/gu, " ");
 // A mode is masked, never added to, so 0600 cannot widen anything.
 const PRIVATE = 0o600;
 try {
-  writeFileSync(`${dir}/input`, input, { mode: PRIVATE });
+  // The pre-tool hook reads the head alone, so a PreToolUse payload stages
+  // no full input either (review of PR #446, L-3).
+  if (!pre) writeFileSync(`${dir}/input`, input, { mode: PRIVATE });
   if (!pre) writeFileSync(`${dir}/result`, result, { mode: PRIVATE });
   writeFileSync(`${dir}/head`, head, { mode: PRIVATE });
 } catch (error) {
