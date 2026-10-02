@@ -177,20 +177,21 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [--rollup] [--after <message id>] [<field>=<value> …] —
+# hook_tokens <transcript> <kind> [--rollup] [--resume [--after <message id>]] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
 # token counts, and at least one event whatever happens. Seven shapes, all of
 # them exit 0:
 #
 #   the numbers      one event per model, tokens on it, and how far the read
-#                    went: data.msgs (that model's messages) and data.last_msg
+#                    went FOR THAT MODEL: data.msgs (its messages) and
+#                    data.last_msg (its last one), its own resume anchor (#408)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
 #                    an --after anchor the transcript no longer holds is one
 #   nothing to read  one event, outcome=fail, saying the transcript had no
 #                    assistant message with a usage block yet
-#   nothing new      with --after only: one event, no tokens and no failure,
-#                    carrying the anchor forward as data.last_msg
+#   nothing new      with --after only: one event, no tokens, no model and no
+#                    failure, carrying that id forward as data.last_msg
 #   the rollup gap   with --rollup only, beside the numbers: one more event per
 #                    model the rollup counts beyond them, data.via=rollup and
 #                    data.reason=compaction, with no data.last_msg — it counts
@@ -198,13 +199,19 @@ hook_point_at() {
 #   rollup refused   with --rollup only: the numbers as usual, then one event,
 #                    outcome=fail and data.via=rollup, the extractor's reason
 #
-# --rollup reads the trace's own earlier events for this session on stdin —
-# session-end.sh pipes them in — so a gap already recorded is not recorded
-# again; transcript-usage.mjs says when a rollup is judged at all.
+# --rollup and --resume read the trace's own earlier events for this session
+# on stdin — session-end.sh pipes them in. Under --rollup a gap already
+# recorded is not recorded again; transcript-usage.mjs says when a rollup is
+# judged at all. Under --resume each model is counted only after the last
+# data.last_msg the trace holds for THAT model (#307, #408), so an end killed
+# between two models' events loses neither: see transcript-usage.mjs for why a
+# resumed session needs it and session-end.sh for where the events come from.
 #
-# --after is the previous read's data.last_msg, and with it only the messages
-# after it are counted (#307): see transcript-usage.mjs for why a resumed
-# session needs it and session-end.sh for where the anchor comes from.
+# --after is the last data.last_msg the trace holds for this session, of any
+# model, and it decides one thing only: that an earlier read exists, so an
+# empty read is "nothing new" rather than "nothing to read", and which id that
+# event carries forward. It is never the extractor's anchor — one id for every
+# model is the shape a kill partway turned into lost messages (#408).
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -220,9 +227,11 @@ hook_tokens() {
 	shift 2
 	_ht_after=
 	_ht_rollup=
+	_ht_resume=
 	while :; do
 		case ${1:-} in
 		--rollup) _ht_rollup=--rollup; shift ;;
+		--resume) _ht_resume=--resume; shift ;;
 		--after)
 			_ht_after=${2:-}
 			# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
@@ -253,7 +262,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -264,7 +273,7 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup ${_ht_after:+--after "$_ht_after"} "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi
