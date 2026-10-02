@@ -93,7 +93,10 @@ GUARD_TEST_RE='(\.|_|/)(test|tests|spec|specs)(\.|_|/)|(^|/)(test|tests|spec|spe
 # policy, a standing instruction that shapes every future agent session.
 #
 # The two defaults below hold for any project built from this kit. Everything
-# else is yours to add.
+# else is yours to add. adapters/ is on the first because bootstrap leaves it in
+# every project and a wired adapter hook runs on every agent tool call: a
+# changed hook changes how each session behaves, so it belongs on the review's
+# inventory. A project that deletes adapters/ loses nothing by the pattern.
 #
 # -------- TEMPLATE BLOCK: copy a line down, edit it, uncomment it -------------
 #   API surface (OpenAPI / GraphQL / protobuf)|^docs/api/openapi\.yaml$|\.proto$
@@ -104,7 +107,7 @@ GUARD_TEST_RE='(\.|_|/)(test|tests|spec|specs)(\.|_|/)|(^|/)(test|tests|spec|spe
 #   Error semantics (the shared error model)|^lib/errors/
 #   Agent-facing prompt surfaces|^prompts/|^skills/
 # -----------------------------------------------------------------------------
-BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^AGENTS\.md$|/AGENTS\.md$|^CLAUDE\.md$|^GEMINI\.md$|^constitution/|^\.agents/|^\.claude/|^\.githooks/|^scripts/|^bootstrap\.sh$|^SETUP\.md$|^setup/
+BEHAVIOR_DELTA_SURFACES='Agent & process surfaces (the constitution, skills, hooks, guards)|^AGENTS\.md$|/AGENTS\.md$|^CLAUDE\.md$|^GEMINI\.md$|^constitution/|^\.agents/|^\.claude/|^\.githooks/|^scripts/|^bootstrap\.sh$|^SETUP\.md$|^setup/|^adapters/
 Architecture decisions|^docs/adr/'
 
 # Executable specification files. behavior-delta flags these when EDITED inside a
