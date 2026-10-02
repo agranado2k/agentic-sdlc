@@ -3503,7 +3503,9 @@ WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scr
 # payload with its cwd field set to <cwd> (removed when empty), run from the
 # kit's own directory. Sets S_* and STOP, the agent.stop this run wrote — and
 # fails the leg unless exactly one was added, so no leg can pass on the event
-# an earlier leg left behind (M-4, local review of PR #449).
+# an earlier leg left behind (M-4, local review of PR #449). The payload's
+# subagent transcript is STOP_TRANSCRIPT when that is set (empty names none),
+# the fixture's otherwise — so section 42 can drive every branch through it.
 stop_from() {
 	_sf_cwd=$1
 	shift
@@ -3511,7 +3513,7 @@ stop_from() {
 		set_key cwd "$_sf_cwd" <"$FIX/subagent-stop.payload.json"
 	else
 		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
-	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-421.json"
+	fi | set_key agent_transcript_path "${STOP_TRANSCRIPT-$SCRATCH/sub.jsonl}" >"$SCRATCH/stop-421.json"
 	_sf_before=$(ev_of agent.stop | grep -c '')
 	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" \
 		sh "$HOOK421" <"$SCRATCH/stop-421.json"
@@ -3671,5 +3673,72 @@ stop453 no-session
 ROW453=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
 case $ROW453 in *"that session's stack"*) pass "the README row says the stack read is the payload session's" ;;
 *) fail "the README row for subagent-stop.sh does not say it reads that session's stack" ;; esac
+
+# ---------------------------------------------------------------------------
+banner "43. A stop records the payload's cwd as data.cwd (#478)"
+# ---------------------------------------------------------------------------
+# Retro finding F3 (#477): 0 of 453 agent.stop events recorded the cwd the
+# stop payload named, so whether the agent tool reports a subagent's worktree
+# or the root checkout was inferred, never measured (#464). The hook writes the
+# payload's cwd as data.cwd — the value it resolved the run against — and writes
+# no data.cwd when the payload names none. How it resolves the run is #421's
+# section above, and nothing here changes it.
+
+# Every leg goes through section 41's stop_from — the root's hook, one
+# agent.stop per leg, git bounded by GIT_CEILING_DIRECTORIES (M-1, review of
+# PR #486) — on a fresh trace.
+new_trace
+
+CWD478="$SCRATCH/cwd-478"
+mkdir -p "$CWD478"
+stop_from "$CWD478"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && [ -n "$STOP" ] &&
+	pass "a stop whose payload names a cwd exits 0, silent on stdout and stderr, and writes its agent.stop" ||
+	fail "a stop naming a cwd: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR', event '$STOP'"
+[ "$(str "$STOP" cwd)" = "$CWD478" ] &&
+	pass "the agent.stop carries the payload's cwd as data.cwd" ||
+	fail "the agent.stop carries cwd '$(str "$STOP" cwd)', want $CWD478: '$STOP'"
+
+# The value recorded is the EXPANDED one the run was resolved against: a cwd
+# the payload writes as ~/… is recorded under the home directory, not as the
+# raw ~/… session.start keeps (M-2, review of PR #486).
+HOME478="$SCRATCH/home-478"
+mkdir -p "$HOME478/work"
+stop_from '~/work' HOME="$HOME478"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" cwd)" = "$HOME478/work" ] &&
+	pass "a ~-prefixed payload cwd is recorded expanded, as $HOME478/work" ||
+	fail "a ~/work payload cwd: exit $S_STATUS, data.cwd '$(str "$STOP" cwd)', want $HOME478/work"
+
+stop_from ''
+[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] &&
+	pass "a stop whose payload names no cwd still writes its agent.stop" ||
+	fail "a stop naming no cwd: exit $S_STATUS, event '$STOP'"
+case $STOP in *'"cwd":'*) fail "a payload with no cwd wrote a cwd key anyway: '$STOP'" ;;
+*) pass "a payload with no cwd writes no data.cwd — the hook's own directory is not recorded" ;; esac
+
+# EVERY BRANCH that writes an agent.stop carries it (L, review of PR #486): no
+# transcript named, a transcript that is not a readable file, a bounded wait
+# that ends on a final message, and one that runs out. The plain read is the
+# first leg above; a phantom writes no event at all (section 29).
+mkdir -p "$SCRATCH/dir-478"
+for leg478 in "no-transcript||" "unreadable|$SCRATCH/dir-478|" \
+	"wait-final|$SCRATCH/sub.jsonl|2000" "wait-ran-out|$SCRATCH/sub-head-308.jsonl|1"; do
+	name478=${leg478%%|*}
+	rest478=${leg478#*|}
+	STOP_TRANSCRIPT=${rest478%|*}
+	stop_from "$CWD478" TRACE_AGENT_WAIT_MS="${rest478#*|}"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" cwd)" = "$CWD478" ] &&
+		pass "the $name478 branch's agent.stop carries data.cwd" ||
+		fail "the $name478 branch: exit $S_STATUS, data.cwd '$(str "$STOP" cwd)', want $CWD478: '$STOP'"
+done
+unset STOP_TRANSCRIPT
+
+# The README row, read once by section 41 as ROW421, names the field and says
+# which value it is.
+case $ROW421 in *'`data.cwd`'*) pass "the README row for the subagent-stop hook names data.cwd" ;;
+*) fail "the README row for subagent-stop.sh does not name data.cwd" ;; esac
+case $ROW421 in *'`data.cwd`, the expanded value'*'`session.start` records the raw one'*)
+	pass "the README row says data.cwd is the expanded value, and session.start's the raw one" ;;
+*) fail "the README row for subagent-stop.sh does not say data.cwd is the expanded value and session.start records the raw one" ;; esac
 
 t_done "trace hooks"
