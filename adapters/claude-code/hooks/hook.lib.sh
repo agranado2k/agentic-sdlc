@@ -1,6 +1,6 @@
 #!/bin/sh
 # hook.lib.sh — what the hooks beside this file share: the trace hooks and the
-# kill guard.
+# kill guard, and hook_root for the root guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
@@ -27,7 +27,9 @@
 #      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
 #      exits 2 — the agent harness's block status — when, and only when, it
 #      refuses a spawned sub-agent's call (#414). Every other path in it is
-#      exit 0 like everything else here.
+#      exit 0 like everything else here. root-guard.sh sources this file for
+#      hook_root alone, and keeps a rule of its own: it exits 2 to refuse an
+#      edit at the root checkout (#392), and 0 on every path it cannot read.
 #   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
 #      reaches the agent harness's own parser. The trace's answers go to a
 #      file; nothing about the trace is ever said there. STDERR is a different
