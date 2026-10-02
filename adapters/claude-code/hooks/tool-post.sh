@@ -20,20 +20,19 @@
 # (ADR-0008 clause 8). With the switch empty this hook starts, exits 0 and
 # writes nothing — the whole cost a project that did not ask for it pays.
 #
-# TWO OUTCOMES, NOT THREE. `denied` has no payload to read: a tool call the
-# permission system refuses fires PreToolUse ONLY — no PostToolUse, no
-# PostToolUseFailure — and the PreToolUse payload is emitted BEFORE the decision,
-# so it carries no denial marker. Reproduced on claude 2.1.278 with a deny rule
-# in a throwaway project. So a denied call is invisible here, deliberately and
-# not silently: recording it needs a pending marker written at PreToolUse and
-# swept by something that knows the call never completed, which is a mechanism
-# of its own and a ticket rather than a line. An INTERRUPTED call does reach
-# PostToolUseFailure (`is_interrupt` on the payload) and reads as fail.
+# TWO OUTCOMES HERE; THE THIRD IS SWEPT. `denied` has no payload to read: a
+# tool call the permission system refuses fires PreToolUse ONLY — no
+# PostToolUse, no PostToolUseFailure — and the PreToolUse payload is emitted
+# BEFORE the decision, so it carries no denial marker. Reproduced on claude
+# 2.1.278 with a deny rule in a throwaway project. So tool-pre.sh leaves a
+# pending marker per call, this hook removes the call's marker when it returns,
+# and session-end.sh sweeps what is left into one `tool.use outcome=denied`
+# each (#409). An INTERRUPTED call does reach PostToolUseFailure (`is_interrupt`
+# on the payload) and reads as fail.
 #
-# THERE IS NO PreToolUse HOOK BESIDE THIS ONE, for one measured reason: both post
-# payloads carry the full `tool_input` themselves, so a pre hook would have
-# nothing to add to the event and nothing of its own to emit — an extra process
-# per tool call for no line. See the ticket's report and ../README.md.
+# THE PRE HOOK WRITES NO EVENT: both post payloads carry the full `tool_input`
+# themselves, so the event is still written here, once, and the marker is only
+# the evidence that a call began.
 #
 # EVERY FAILURE IS ONE EVENT AND EXIT 0. A hook is on the agent harness's
 # critical path (hook.lib.sh's rule 1), so a payload this hook cannot read, an
@@ -110,6 +109,9 @@ else
 fi
 
 if [ "$status" != 0 ]; then
+	# The call returned, so it was not denied: its marker goes even though
+	# the reader refused the payload, on the plain field reader's ids (#409).
+	hook_pending_drop "$tdir" "$(hook_field session_id)" "$(hook_field tool_use_id)"
 	hook_trace emit kind=tool.use outcome=fail \
 		reason="${why:-the tool payload reader failed and said nothing}"
 	rm -rf "$stage" 2>/dev/null || :
@@ -127,6 +129,10 @@ sid=$(field session)
 event=$(field event)
 from=$(field result_from)
 errfirstline=$(field error_first_line)
+
+# THE CALL RETURNED, so tool-pre.sh's marker for it goes now, before anything
+# below can refuse the event: a refused event is still not a denied call (#409).
+hook_pending_drop "$tdir" "$sid" "$tuid"
 
 # THE PAYLOAD IS DATA (the root manual's trust boundary). The two values that
 # become join columns are checked against this adapter's identifier class before

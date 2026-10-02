@@ -757,3 +757,95 @@ hook_phantom_take() {
 	fi
 	printf '%s' "$_hp_n"
 }
+
+# --- the pending marker: a denied tool call -----------------------------------
+# A tool call the permission system or a blocking hook refuses fires PreToolUse
+# and nothing after it, so tool-post.sh never sees it (ticket #409; reproduced
+# on claude 2.1.278, see tool-post.sh). The pre-tool hook therefore leaves a
+# marker per call, the post-tool hook removes it, and the session-end hook
+# sweeps what is left into one `tool.use outcome=denied` each. The markers live
+# in the directory this adapter owns under the trace, beside the phantom
+# counters: claude-code/<session id>.pending/<tool-use id>, holding the tool's
+# name on its first line and the input head on its second. Per session, so an
+# end never sweeps a call another session still has running.
+
+# hook_pending_ok <id> — may this id name a marker's directory or file? The
+# identifier class, the line's length bound tool-post.sh holds a join column
+# to, and no leading dot: `.` and `..` are in the class and are not names.
+hook_pending_ok() {
+	hook_id_ok "${1:-}" || return 1
+	[ "${#1}" -le 256 ] || return 1
+	case $1 in .*) return 1 ;; esac
+	return 0
+}
+
+# hook_pending_add <trace dir> <session id> <tool-use id> <tool> <head file> —
+# leave the call's marker, owner-only (the head is the command's own text, the
+# reason tool-payload.mjs stages owner-only). Nothing at all for an id or a
+# tool name that is refused: a marker keyed by a refused id would be a path
+# built from payload data.
+hook_pending_add() {
+	hook_pending_ok "${2:-}" && hook_pending_ok "${3:-}" && hook_id_ok "${4:-}" || return 0
+	mkdir -p "$1/claude-code/$2.pending" 2>/dev/null || return 0
+	(
+		umask 077
+		{
+			printf '%s\n' "$4"
+			cat "$5" 2>/dev/null
+			printf '\n'
+		} >"$1/claude-code/$2.pending/$3"
+	) 2>/dev/null || :
+	return 0
+}
+
+# hook_pending_drop <trace dir> <session id> <tool-use id> — the call returned,
+# so it was not denied: remove its marker, if it has one.
+hook_pending_drop() {
+	hook_pending_ok "${2:-}" && hook_pending_ok "${3:-}" || return 0
+	rm -f "$1/claude-code/$2.pending/$3" 2>/dev/null || :
+	return 0
+}
+
+# hook_pending_sweep <session id> [<field>=<value> …] — one `tool.use
+# outcome=denied` per marker that session left, each carrying the fields after
+# the id (the session-end hook's subject and session), then the markers gone.
+# TAKEN, the way hook_phantom_take takes its counter: the directory is renamed
+# aside first, so a resumed session's next end sweeps only what came after this
+# one, and a marker landing during the end waits for that next end.
+#
+# AND WHAT AN EARLIER END TOOK ASIDE AND NEVER FINISHED. The sweep spawns one
+# emit per marker, so an end killed mid-loop leaves <sid>.pending.<pid>
+# behind; every directory of that shape for this session is swept here too,
+# so no denial is lost to an interrupted end (review of PR #446, M-1).
+hook_pending_sweep() {
+	hook_pending_ok "${1:-}" || return 0
+	_ps_root=$(hook_dir) || return 0
+	_ps_d="$_ps_root/claude-code/$1.pending"
+	shift
+	[ -d "$_ps_d" ] && { mv "$_ps_d" "$_ps_d.$$" 2>/dev/null || :; }
+	for _ps_t in "$_ps_d".*; do
+		[ -d "$_ps_t" ] || continue
+		hook_pending_take "$_ps_t" "$@"
+	done
+	return 0
+}
+
+# hook_pending_take <taken directory> [<field>=<value> …] — one denial per
+# marker in a directory the sweep took aside, then the directory gone.
+hook_pending_take() {
+	_pt_d=$1
+	shift
+	for _ps_f in "$_pt_d"/*; do
+		[ -f "$_ps_f" ] || continue
+		_ps_id=${_ps_f##*/}
+		hook_pending_ok "$_ps_id" || continue
+		_ps_tool=$(sed -n '1p' "$_ps_f" 2>/dev/null)
+		hook_id_ok "$_ps_tool" || _ps_tool=unknown
+		hook_trace emit kind=tool.use harness=claude-code outcome=denied \
+			data.tool="$_ps_tool" data.tool_use_id="$_ps_id" \
+			data.input_head="$(sed -n '2p' "$_ps_f" 2>/dev/null)" \
+			reason='the call fired its pre-tool hook and no post-tool hook before the session ended: the permission system or a blocking hook refused it' "$@"
+	done
+	rm -rf "$_pt_d" 2>/dev/null || :
+	return 0
+}
