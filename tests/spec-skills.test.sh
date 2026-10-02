@@ -352,7 +352,7 @@ done
 for manual in AGENTS.md constitution/AGENTS.md.template; do
 	cell=$(awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$manual")
 	case $cell in
-	*"only when both"* | *"both conditions"* | *"and the change is"*) pass "$manual's mechanical signal joins the two conditions — both, not either" ;;
+	*"only when both"*) pass "$manual's mechanical signal joins the two conditions — both, not either" ;;
 	*) fail "$manual's mechanical signal does not say both conditions are needed" ;;
 	esac
 	case $cell in
