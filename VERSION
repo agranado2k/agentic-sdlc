@@ -1685,8 +1685,30 @@
 # 0.39.0's note announced as landing beside it reached main after that tag,
 # so it ships here: .agents/skills/review-pr/SKILL.md's reuse/DRY lens files
 # an inherited duplication as a candidate ticket (#419, PR #431).
+# 0.41.0 — the checker's header says what its contract is (PRD #273's
+# follow-ups, ticket #401).
+# NO file joins or leaves the shared layer. ONE shared file changes
+# content, prose only: scripts/vocab.sh — its header no longer says a whole
+# ticket body may be piped in. The contract has been the same since 0.35.0:
+# the caller lifts the decision lines it needs — scripts/stamp.sh for a
+# ticket, the typed-return fences for a comment or a product output — and
+# hands the checker bare lines, a few at a time; tests/vocab.test.sh's
+# call-site audit holds every kit caller to that. Behaviour unchanged: the
+# suite is the proof. UPDATING.md changes content: this entry, and both
+# worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. scripts/trace.config.sh, the trace's
+# policy file (yours, not shared), says in its TRACE_AGENT_WAIT_MS comment
+# the bound the claude-code adapter's hook actually keeps since #434 — past
+# the bound by at most one poll, or one whole-second nap and a check where
+# sleep refuses fractions — where it said "never longer"; tests/vocab.test.sh
+# and tests/trace-hooks.test.sh hold both headers. Landed beside it since
+# 0.40.0, from #424 (PR #441): .agents/skills/implement/SKILL.md's step 9(b)
+# says who records a review's raises on the fallback path — the reviewer on
+# the spawn prompt's instruction, else the relay, exactly once, never a
+# second raise — and the broker's raises carry data.posted=yes.
 
-shared-layer: 0.40.0
+shared-layer: 0.41.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
