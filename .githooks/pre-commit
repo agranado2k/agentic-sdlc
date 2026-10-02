@@ -1,0 +1,85 @@
+#!/bin/sh
+# Pre-commit guard — agentic-sdlc.
+#
+# Wired by the same `git config core.hooksPath .githooks` that wires pre-push,
+# so a clone that set it once has both.
+#
+# One check: the manual's hard rule 1, "Worktree, always", held against an
+# AGENT's commit. A commit is refused when an agent-harness marker (below) is
+# in the environment and it comes
+#   - from the MAIN working copy (git's own directory is its common directory:
+#     a linked worktree's is a subdirectory of it), whatever the branch, or
+#   - on the repository's default branch, from anywhere: the branch
+#     `origin/HEAD` names, or `main` where there is none.
+# Work happens in `worktree/<slug>` on a `<type>/<slug>` branch. A human with
+# no marker set commits as before, so a consumer following the update recipe
+# by hand on main is let through. Git has no hook for an edit; the agent
+# harness's pre-tool hook in the adapter refuses that half where one is wired,
+# and it is also what refuses the ways around this hook (`--no-verify`,
+# `core.hooksPath`). This hook is a guard a cooperative agent meets, not a
+# wall: git lets any committer skip it.
+#
+# THE AGENT MARKERS: a variable set to a non-empty value means an agent
+# harness is running the commit.
+#   CLAUDECODE, CLAUDE_CODE_SESSION_ID  verified: exported into its shell by
+#                                       the agent harness, seen on a live host
+#   TRACE_SESSION                       verified: the kit's own trace layer
+#                                       sets it while a session is traced
+#   GEMINI_CLI                          documented only: set to 1 in every
+#                                       shell command its CLI runs
+#   CODEX_SANDBOX,                      documented only: set by its CLI in the
+#   CODEX_SANDBOX_NETWORK_DISABLED,     commands it runs sandboxed; the thread
+#   CODEX_THREAD_ID                     id is in the CLI's own binary, unverified
+# The adapters' README section on the root checkout says whose each one is.
+#
+# A repository's FIRST commit passes: nothing exists yet to cut a worktree
+# from, and bootstrapping a project ends in exactly that commit.
+#
+# The bypass is deliberate, LOUD and narrow, in the pre-push hook's shape — the
+# operator's own commits are the case it is for: a release or diary commit made
+# through an agent at the root, or the one a document the operator runs makes
+# (the setup document's adoption commit). The refusal never prints it: an agent learns it from the
+# manual's row, where the operator's say-so is the condition.
+#
+#     COMMIT_WITHOUT_WORKTREE=1 git commit …
+
+agent_markers='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
+
+if [ "${COMMIT_WITHOUT_WORKTREE:-}" = "1" ]; then
+	echo "WARNING  COMMIT_WITHOUT_WORKTREE=1 — worktree rule BYPASSED for this commit." >&2
+	exit 0
+fi
+
+# No marker: a human, let through.
+marker=
+for m in $agent_markers; do
+	eval "v=\${$m:-}"
+	if [ -n "$v" ]; then
+		marker=$m
+		break
+	fi
+done
+[ -n "$marker" ] || exit 0
+
+# No HEAD yet: the root commit.
+git rev-parse -q --verify HEAD >/dev/null 2>&1 || exit 0
+
+git_dir=$(cd "$(git rev-parse --git-dir)" && pwd -P) || exit 1
+common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd -P) || exit 1
+branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || :)
+default=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || :)
+default=${default#origin/}
+[ -n "$default" ] || default=main
+
+why=
+if [ "$git_dir" = "$common_dir" ]; then
+	why="this is the main working copy, not a worktree"
+elif [ "$branch" = "$default" ]; then
+	why="the branch is $default, the default branch"
+fi
+[ -z "$why" ] && exit 0
+
+echo "x pre-commit: refused — $why, and $marker says an agent is committing (hard rule 1, \"Worktree, always\")." >&2
+echo "  Commit from a worktree on a feature branch: git worktree add worktree/<slug> -b <type>/<slug>" >&2
+echo "  A commit from here is your operator's call: AGENTS.md, hard rule 1 and the row \"Keep work out of the root checkout\"." >&2
+exit 1

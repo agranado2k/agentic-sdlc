@@ -106,7 +106,10 @@ Grouped by the seam each term belongs to. Entry shape:
     each other, not that code is formatted.
 - **Guard** — a rule about a *diff* rather than about the tree: the pairing
   guard, the behavior-delta guard. Guards read git history and produce a
-  verdict about a range.
+  verdict about a range. The **root guard** is the one about *where* a change
+  is made rather than what it holds: `.githooks/pre-commit` refuses an agent's
+  commit from the root checkout, and the adapter's pre-tool hook refuses an
+  agent's edit there (hard rule 1).
 - **Docs harness** — `scripts/docs-conformance/`, the Node implementation of the
   docs gate's reference checks. Dependency-free ESM. When node is absent,
   `scripts/check.sh` runs a **reduced POSIX fallback** and prints a notice

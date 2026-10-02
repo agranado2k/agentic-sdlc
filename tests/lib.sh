@@ -495,6 +495,19 @@ fail() {
 	failures=$((failures + 1))
 }
 
+# T_AGENT_MARKERS — the environment variables `.githooks/pre-commit` reads as
+# "an agent harness is committing" (#392). tests/root-guard.test.sh holds this
+# list equal to the hook's own `agent_markers`, word for word.
+T_AGENT_MARKERS='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
+
+# t_as_human — unset every agent-harness marker in the calling shell, so what
+# it runs next commits as a human would. A suite that models a consumer
+# committing on main by hand calls it once, instead of taking the commit
+# guard's bypass; an agent running that suite would otherwise be refused.
+t_as_human() {
+	for _ah_m in $T_AGENT_MARKERS; do unset "$_ah_m"; done
+}
+
 # t_repo — a fresh repo on `main` with one empty root commit.
 #
 # Sets the global REPO rather than echoing the path: a fixture builder that has
