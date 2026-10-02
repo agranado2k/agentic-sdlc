@@ -4011,12 +4011,21 @@ STOP=$(ev_of agent.stop | sed -n '$p')
 grep -qxF "stack $R472.wt session=$SESSION" "$LOG472" 2>/dev/null &&
 	pass "and the run was read by the shared script's stack subcommand, naming the checkout and the session" ||
 	fail "the hook did not ask 'stack $R472.wt session=$SESSION' of the shared script; calls: '$(cat "$LOG472" 2>/dev/null)'"
+# A RELATIVE payload cwd is resolved against ONE base — the hook's own working
+# directory — before the hook checks it and before it asks the script, which
+# runs from the root checkout: `.` from the worktree is the worktree, in both.
+set_key cwd "." <"$SCRATCH/stop-472.json" >"$SCRATCH/stop-472-dot.json"
+: >"$LOG472"
+t_run_split sh -c 'cd "$1" && shift && exec env "$@"' _ "$R472.wt" TRACE_DIR="$TDIR" \
+	GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$R472/${HOOKS#"$KIT"/}/subagent-stop.sh" <"$SCRATCH/stop-472-dot.json"
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$RUN472" ] &&
+	pass "a payload cwd of '.' from the worktree carries the worktree's run, not the root's" ||
+	fail "cwd '.': exit $S_STATUS, run '$(str "$STOP" run)', want $RUN472; calls '$(cat "$LOG472")'; stderr '$S_ERR'"
 # THE ADAPTER KEEPS NO COPY of the stack's format: no stack path, no reader.
 LIB472="$HOOKS/hook.lib.sh"
 _ro472=$(awk '/^hook_run_of\(\) \{/,/^\}/' "$LIB472")
 [ -n "$_ro472" ] && pass "hook_run_of is found" || fail "no hook_run_of in $LIB472"
-case $_ro472 in *"scripts/trace.sh stack "*) pass "hook_run_of asks the shared script's stack subcommand" ;;
-*) fail "hook_run_of never names the stack subcommand" ;; esac
 case $_ro472 in *awk* | *hook_current_of*) fail "hook_run_of still reads the stack itself (awk or hook_current_of)" ;;
 *) pass "and reads no stack file of its own" ;; esac
 grep -n '\.runs' "$LIB472" >/dev/null &&

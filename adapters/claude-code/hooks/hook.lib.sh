@@ -195,9 +195,12 @@ hook_current_of() {
 # subagent's spend joined the ticket it was spent on: 0 of 28 priced agent.stop
 # events carried an implement or review run.
 #
-# WHICH CHECKOUT. <dir>'s, when git answers for it AND its common directory is
-# this repository's — a cwd in an unrelated repository is not a checkout of
-# this one, and its stack would be a stranger's. Otherwise nothing is exported
+# WHICH CHECKOUT. <dir>'s — a relative <dir> is taken from this process's
+# working directory, once, so the check below and the script, which runs from
+# the root checkout, ask about the same directory — when git answers for it
+# AND its common directory is this repository's — a cwd in an unrelated
+# repository is not a checkout of this one, and its stack would be a
+# stranger's. Otherwise nothing is exported
 # and the shared script answers with the root's stack, as before. A checkout
 # whose stack holds no run exports TRACE_RUN='' — the shared script's spelling
 # of "no run" — so an idle worktree never borrows the root's run. The hook
@@ -210,12 +213,13 @@ hook_current_of() {
 # from one read of the file, and refuses — exit 2, saying why on stderr — a
 # stack that exists and cannot be read. A refusal is a stop that carries no
 # run, never the root's. The adapter keeps no copy of where a stack lives or
-# what is in it (#472; it did, from #421 until then).
+# what is in it (#472).
 #
 # WHOSE STACK. Since #453 the stack is keyed by session as well as by
 # toplevel: <session id> is passed as `session=` when it is one the script
-# would key on, and a payload that names none asks with TRACE_SESSION empty,
-# the script's spelling of "no session", so the per-toplevel stack answers —
+# would key on, and the ask is made with TRACE_SESSION empty, the script's
+# spelling of "no session", so a payload that names none reads the
+# per-toplevel stack —
 # another session's run in the same checkout is never this stop's.
 #
 # THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
@@ -226,14 +230,14 @@ hook_run_of() {
 	[ -n "${1:-}" ] || return 0
 	shift
 	[ -n "${1:-}" ] || return 0
-	_ro_common=$(hook_common_dir "$1") || return 0
+	case $1 in /*) _ro_dir=$1 ;; *) _ro_dir=$PWD/$1 ;; esac
+	_ro_common=$(hook_common_dir "$_ro_dir") || return 0
 	_ro_own=$(hook_common_dir "$hook_repo") || return 0
 	[ "$_ro_common" = "$_ro_own" ] || return 0
-	if hook_id_ok "${2:-}"; then
-		_ro_pair=$( (cd "$hook_repo" && sh scripts/trace.sh stack "$1" session="$2") ) || _ro_pair=
-	else
-		_ro_pair=$( (cd "$hook_repo" && TRACE_SESSION= sh scripts/trace.sh stack "$1") ) || _ro_pair=
-	fi
+	_ro_sess=
+	hook_id_ok "${2:-}" && _ro_sess=session=$2
+	_ro_pair=$( (cd "$hook_repo" &&
+		TRACE_SESSION= sh scripts/trace.sh stack "$_ro_dir" ${_ro_sess:+"$_ro_sess"}) ) || _ro_pair=
 	_ro_nl='
 '
 	_ro_run=${_ro_pair%%"$_ro_nl"*}
