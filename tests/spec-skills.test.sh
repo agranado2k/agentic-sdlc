@@ -519,6 +519,12 @@ else
 	[ "$rc" != 0 ] && [ -z "$got" ] && pass "…and a report whose first line does not open with it has no start (a stop)" ||
 		fail "window_start read '$got' (exit $rc) from a report whose first line names no start"
 
+	for bad in 'window-start 2026T1Z' 'window-start 1T12345678901234Z' 'window-start 20261001T150216Zab'; do
+		printf '%s\n' "$bad" >"$SCRATCH/report3.md"
+		got=$( (. "$SCRATCH/fence.sh" && window_start "$SCRATCH/report3.md")); rc=$?
+		[ "$rc" != 0 ] && [ -z "$got" ] && pass "…nor a first line '$bad', not a stamp's shape" ||
+			fail "window_start read '$got' (exit $rc) from a first line '$bad'"
+	done
 	mkdir -p "$SCRATCH/root/.retro/2026/09" "$SCRATCH/root/.retro/2026/10" "$SCRATCH/bin"
 	for n in 2026/09/retro-20260930T120000Z 2026/10/retro-20261001T150216Z 2026/10/retro-20261001T190528Z \
 		2026/10/retro-20261001T191425Z 2026/10/retro-20261002T080718Z 2026/10/retro-2026x \
@@ -539,38 +545,52 @@ else
 	[ "$got" = "" ] && pass "a retro's csv export in the window, alone in the folder, is no sibling" ||
 		fail "retro_siblings listed '$got' from a folder holding only a csv export"
 
-	# The stamp check holds the whole value (M-1).
+	# The stamp check holds the whole value (M-1), anchored at both ends.
 	(. "$SCRATCH/fence.sh" && stamp_ok retro-20261001T190528Z) && pass "stamp_ok takes a report stamp" ||
 		fail "stamp_ok refused a report stamp"
 	nl='
 '
-	(. "$SCRATCH/fence.sh" && stamp_ok "retro-20261001T190528Z${nl}\" in:title OR \"a") &&
-		fail "stamp_ok took a value whose FIRST line is a stamp — the rest rides into the search" ||
-		pass "stamp_ok refuses a value with a newline after a valid stamp"
+	for bad in "retro-20261001T190528Z${nl}\" in:title OR \"a" xretro-20261001T190528Z retro-20261001T190528Zab; do
+		(. "$SCRATCH/fence.sh" && stamp_ok "$bad") &&
+			fail "stamp_ok took '$bad' — a stamp with something around it rides into the search" ||
+			pass "stamp_ok refuses a stamp with something before, after or under it"
+	done
 
 	# The stand-in forge CLI: every call logged; `api user` answers the login;
-	# `issue view` answers a body (or fails); `issue edit` copies the body file
-	# it is handed; anything else prints the listing fixture.
+	# `issue view` answers an author from GH_AUTHORS (number=login …) or a body;
+	# `issue edit` copies the body file it is handed; `issue list` prints the
+	# listing fixture. Each GH_*_FAIL makes its call fail.
 	cat >"$SCRATCH/gh.prelude" <<'GH'
 printf '%s\n' "$*" >>"$GH_LOG"
 case "$1 $2" in
-"api user") printf '%s\n' "$GH_LOGIN"; exit 0 ;;
-"issue view") [ -n "${GH_VIEW_FAIL:-}" ] && exit 1; printf '%s' "${GH_VIEW_BODY-old body}"; exit 0 ;;
-"issue edit") while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cp "$2" "$GH_EDITED"; shift; done; exit 0 ;;
+"api user") [ -n "${GH_API_FAIL:-}" ] && exit 1; printf '%s\n' "$GH_LOGIN"; exit 0 ;;
+"issue view")
+	case "$*" in
+	*"--json author"*) for p in ${GH_AUTHORS:-}; do [ "${p%%=*}" = "$3" ] && printf '%s\n' "${p#*=}"; done; exit 0 ;;
+	esac
+	[ -n "${GH_VIEW_FAIL:-}" ] && { printf 'partial'; exit 1; }
+	printf '%s\n' "${GH_VIEW_BODY-old body}"; exit 0 ;;
+"issue edit") [ -n "${GH_EDIT_FAIL:-}" ] && exit 1
+	while [ $# -gt 0 ]; do [ "$1" = --body-file ] && cp "$2" "$GH_EDITED"; shift; done; exit 0 ;;
 "issue close") exit 0 ;;
+"issue list") [ -n "${GH_LIST_FAIL:-}" ] && exit 1; [ -n "${GH_LIST_EMPTY:-}" ] && exit 0 ;;
 esac
 GH
-	printf '#5\tOPEN\t\tagranado2k\tretro: tier calibration\n#7\tOPEN\t\tmallory\tretro: tier calibration\n' >"$SCRATCH/gh.list"
+	printf '5\tOPEN\t\tkit-bot\tretro: tier calibration\n7\tOPEN\t\tmallory\tretro: tier calibration\n' >"$SCRATCH/gh.list"
 	t_stub_gh "$SCRATCH/bin" "$SCRATCH/gh.list" "$SCRATCH/gh.prelude"
 	# ghrun <login> <function> <arg>… — one fence call against the stand-in,
 	# its environment exported (an assignment before a function call is not).
+	# The fence's scratch files land in $SCRATCH/tmp, which must end empty.
+	mkdir -p "$SCRATCH/tmp"
 	ghrun() {
 		_l=$1; shift
 		: >"$SCRATCH/gh.log"
 		(. "$SCRATCH/fence.sh" && export PATH="$SCRATCH/bin:$PATH" GH_LOG="$SCRATCH/gh.log" GH_LOGIN="$_l" \
-			GH_EDITED="$SCRATCH/edited" && "$@")
+			GH_EDITED="$SCRATCH/edited" GH_AUTHORS="${GH_AUTHORS-5=kit-bot 9=kit-bot 7=mallory}" TMPDIR="$SCRATCH/tmp" && "$@")
 	}
-	out=$(ghrun agranado2k sibling_tickets retro-20261001T190528Z 2>/dev/null)
+	# rc_is <want> <got> <why> — the exact exit status the fence documents.
+	rc_is() { [ "$2" = "$1" ] && pass "$3 (exit $1)" || fail "$3 — exit $2, wanted $1; the tracker saw: '$(tr '\n' ';' <"$SCRATCH/gh.log")'"; }
+	out=$(ghrun kit-bot sibling_tickets retro-20261001T190528Z 2>/dev/null)
 	call=$(grep '^issue list' "$SCRATCH/gh.log")
 	t_text_has "$call" "--state all" "the search asks the tracker for open and closed tickets"
 	t_text_has "$call" "\"retro-20261001T190528Z\" in:body" "the search term is the sibling's stamp, matched in the body by the tracker"
@@ -579,53 +599,76 @@ GH
 	[ "$fields" = "author,number,state,stateReason,title," ] &&
 		pass "the search asks for number, state, state reason, author and title — never a body" ||
 		fail "the search asks for --json fields '$fields' — wanted exactly author,number,state,stateReason,title"
+	# The stand-in prints the projection's rows, so the projection is held as written.
+	t_text_has "$call" '"\(.number)\t\(.state)\t\(.stateReason)\t\(.author.login)\t\(.title)"' \
+		"the projection is number, state, state reason, author, title — the author in the column the classifier reads"
 	# A sibling ticket is the session account's; anyone else's is an outsider (H-1).
-	printf '%s\n' "$out" | grep -q "^#5	OPEN		sibling	" &&
-		pass "a ticket filed by the session's own account is a sibling" ||
+	printf '%s\n' "$out" | grep -q "^5	OPEN		sibling	" &&
+		pass "a ticket filed by the session's own account is a sibling, its number bare for the calls that take it" ||
 		fail "the session's own ticket is not marked sibling: '$out'"
-	printf '%s\n' "$out" | grep -q "^#7	OPEN		outsider	" &&
+	printf '%s\n' "$out" | grep -q "^7	OPEN		outsider	" &&
 		pass "an issue citing the stamp but filed by another account is an outsider, shown and never merged into" ||
 		fail "an outsider's issue is not marked outsider: '$out'"
-	ghrun 'bad login' sibling_tickets retro-20261001T190528Z >/dev/null 2>&1
+	for bad in 'bad login' '' '-flag'; do
+		ghrun "$bad" sibling_tickets retro-20261001T190528Z >/dev/null 2>&1
+		rc=$?
+		! grep -q '^issue list' "$SCRATCH/gh.log" && rc_is 3 "$rc" "a session login '$bad' is a stop: the tracker is never searched" ||
+			fail "a session login '$bad' still reached the search"
+	done
+	(export GH_API_FAIL=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) >/dev/null 2>&1
+	rc_is 3 $? "a login read that fails is a stop, never searched"
+	got=$( (export GH_LIST_FAIL=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) 2>/dev/null); rc=$?
+	[ -z "$got" ] && rc_is 4 "$rc" "a search that fails is exit 4, never an empty answer" || fail "a failed search printed '$got'"
+	got=$( (export GH_LIST_EMPTY=1 && ghrun kit-bot sibling_tickets retro-20261001T190528Z) 2>/dev/null); rc=$?
+	[ -z "$got" ] && rc_is 0 "$rc" "a search that finds nothing prints nothing — no phantom row" || fail "an empty search printed '$got'"
+	ghrun kit-bot sibling_tickets 'retro-x" in:title OR "a' >/dev/null 2>&1
 	rc=$?
-	[ "$rc" != 0 ] && ! grep -q '^issue list' "$SCRATCH/gh.log" &&
-		pass "a session login of no fixed shape is a stop: the tracker is never searched" ||
-		fail "a malformed session login gave exit $rc and the tracker saw: '$(cat "$SCRATCH/gh.log")'"
-	ghrun agranado2k sibling_tickets 'retro-x" in:title OR "a' >/dev/null 2>&1
-	rc=$?
-	[ "$rc" = 2 ] && [ ! -s "$SCRATCH/gh.log" ] &&
-		pass "a term that is not a report stamp is refused (exit 2) and never reaches the tracker" ||
-		fail "a malformed stamp gave exit $rc and the tracker saw: '$(cat "$SCRATCH/gh.log")'"
+	[ ! -s "$SCRATCH/gh.log" ] && rc_is 2 "$rc" "a term that is not a report stamp is refused and never reaches the tracker" ||
+		fail "a malformed stamp reached the tracker: '$(cat "$SCRATCH/gh.log")'"
 
 	# The merge appends the dated section to the body it read, and a failed or
-	# empty read is a stop, never an edit (M-2).
+	# empty read is a stop, never an edit (M-2) — as is a target another
+	# account filed, whichever list named it.
 	printf '## From retro-20261002T080718Z (2026-10-02)\nthe evidence\n' >"$SCRATCH/section"
 	rm -f "$SCRATCH/edited"
-	ghrun agranado2k merge_section 5 "$SCRATCH/section" >/dev/null 2>&1
+	ghrun kit-bot merge_section 5 "$SCRATCH/section" >/dev/null 2>&1
+	rc_is 0 $? "merge_section succeeds on the session's own ticket"
 	grep -q '^old body' "$SCRATCH/edited" 2>/dev/null && grep -q '^## From retro-20261002T080718Z' "$SCRATCH/edited" &&
 		pass "merge_section edits the ticket to its body plus the dated section" ||
 		fail "merge_section did not hand the edit the old body and the section"
-	for mode in fail empty; do
+	for mode in fail empty edit outsider number; do
 		rm -f "$SCRATCH/edited"
 		case $mode in
-		fail) (export GH_VIEW_FAIL=1 && ghrun agranado2k merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
-		empty) (export GH_VIEW_BODY='' && ghrun agranado2k merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		fail) want=1; (export GH_VIEW_FAIL=1 && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		empty) want=1; (export GH_VIEW_BODY='' && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		edit) want=1; (export GH_EDIT_FAIL=1 && ghrun kit-bot merge_section 5 "$SCRATCH/section") >/dev/null 2>&1 ;;
+		outsider) want=5; ghrun kit-bot merge_section 7 "$SCRATCH/section" >/dev/null 2>&1 ;;
+		number) want=2; ghrun kit-bot merge_section 5x "$SCRATCH/section" >/dev/null 2>&1 ;;
 		esac
 		rc=$?
-		[ "$rc" != 0 ] && [ "$rc" != 127 ] && ! grep -q '^issue edit' "$SCRATCH/gh.log" &&
-			pass "a body read that came back $mode is a stop (exit $rc): no edit is made" ||
-			fail "a body read that came back $mode gave exit $rc and the tracker saw: '$(cat "$SCRATCH/gh.log")'"
+		rc_is "$want" "$rc" "merge_section stops on a $mode case"
+		[ "$mode" = edit ] || ! grep -q '^issue edit' "$SCRATCH/gh.log" ||
+			fail "merge_section's $mode case still edited the ticket"
 	done
+	[ -z "$(ls -A "$SCRATCH/tmp")" ] && pass "merge_section leaves no scratch file behind, whichever way it ends" ||
+		fail "merge_section left '$(ls -A "$SCRATCH/tmp" | tr '\n' ' ')' behind"
 
 	# The twin is the later number, closed as not planned naming the original (H-3).
-	ghrun agranado2k close_twin 9 5 >/dev/null 2>&1
+	ghrun kit-bot close_twin 9 5 >/dev/null 2>&1
+	rc_is 0 $? "close_twin closes a twin of the session's own"
 	t_text_has "$(cat "$SCRATCH/gh.log")" 'issue close 9 --reason not planned --comment Duplicate of #5' \
 		"close_twin closes the later number as not planned, naming the original"
-	ghrun agranado2k close_twin 5 9 >/dev/null 2>&1
+	for args in '5 9' '5 5' '9x 5'; do
+		# shellcheck disable=SC2086 # the pair splits on purpose
+		ghrun kit-bot close_twin $args >/dev/null 2>&1
+		rc=$?
+		! grep -q '^issue close' "$SCRATCH/gh.log" && rc_is 2 "$rc" "close_twin refuses '$args' — the twin must be the later number" ||
+			fail "close_twin '$args' reached the close"
+	done
+	ghrun kit-bot close_twin 9 7 >/dev/null 2>&1
 	rc=$?
-	[ "$rc" = 2 ] && [ ! -s "$SCRATCH/gh.log" ] &&
-		pass "close_twin refuses to close the earlier number (exit 2), the tracker never asked" ||
-		fail "close_twin 5 9 gave exit $rc and the tracker saw: '$(cat "$SCRATCH/gh.log")'"
+	! grep -q '^issue close' "$SCRATCH/gh.log" && rc_is 5 "$rc" "close_twin refuses an original another account filed" ||
+		fail "close_twin closed a ticket as a duplicate of an outsider's"
 fi
 
 # ---------------------------------------------------------------------------
