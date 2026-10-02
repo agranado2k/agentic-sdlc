@@ -45,16 +45,16 @@ src=$(hook_field source)
 cwd=$(hook_field cwd)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
-# THE PAYLOAD IS DATA. An unusable id is refused BEFORE it reaches either of
-# the two files below, and the reason never quotes the value: the export goes
-# into a file the agent harness sources as shell, so a value carrying `;` would
-# be code in the operator's next command, and a value carrying a newline would
-# make the refusal event itself unwritable. Both cases are one event and exit 0.
 # The trace directory, asked for once (hook.lib.sh's hook_dir). Tracing off,
 # the event and the pointer are skipped and spawn nothing; the behind note above
 # and the export below are not the trace's, and stay (#463).
 tdir=$(hook_dir) || tdir=
 
+# THE PAYLOAD IS DATA. An unusable id is refused BEFORE it reaches either of
+# the two files below, and the reason never quotes the value: the export goes
+# into a file the agent harness sources as shell, so a value carrying `;` would
+# be code in the operator's next command, and a value carrying a newline would
+# make the refusal event itself unwritable. Both cases are one event and exit 0.
 why=
 if [ -z "$sid" ]; then
 	why='the SessionStart payload named no session_id'

@@ -842,11 +842,12 @@ hook_phantom_add() {
 
 # hook_phantom_take <trace dir> <session id> — print that session's count, 0
 # when it had none, and remove its counter; print nothing (status 1) when
-# <trace dir> is empty (tracing is off) or the id is refused. TAKEN, not read: a resumed session keeps its id and ends
-# again, and its next end must count only the stops after this one — the same
-# reason session-end.sh anchors its usage read (#307). The counter is RENAMED
-# aside before it is counted, so a stop landing during the end starts a fresh
-# counter for the next end rather than being counted and then deleted.
+# <trace dir> is empty (tracing is off) or the id is refused. TAKEN, not read:
+# a resumed session keeps its id and ends again, and its next end must count
+# only the stops after this one — the same reason session-end.sh anchors its
+# usage read (#307). The counter is RENAMED aside before it is counted, so a
+# stop landing during the end starts a fresh counter for the next end rather
+# than being counted and then deleted.
 hook_phantom_take() {
 	[ -n "${1:-}" ] && hook_id_ok "${2:-}" || return 1
 	_hp_file="$1/claude-code/$2.phantoms"
