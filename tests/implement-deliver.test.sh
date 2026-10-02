@@ -161,20 +161,11 @@ banner "3a. The PR body carries the one line the landing reads (#480)"
 # the line from this skill and lands a PR carrying it, so the two cannot drift.
 step8=$(awk '/^8\. \*\*Open the pull request/ { on = 1 } /^9\. / { on = 0 } on' "$SKILL_ABS")
 IMPL_LINE='`<!-- implement: ticket=#<N> tier=<tier> -->`'
-case $step8 in
-*"$IMPL_LINE"*) pass "step 8 writes the landing's line, $IMPL_LINE" ;;
-*) fail "step 8 does not write the line the landing reads: $IMPL_LINE" ;;
-esac
+t_text_has "$step8" "$IMPL_LINE" "step 8 writes the line the landing reads" "step 8"
 [ "$(grep -cF -- '<!-- implement:' "$SKILL_ABS")" = 1 ] && pass "the skill spells the line once — one shape, no second variant" ||
 	fail "the skill spells '<!-- implement:' $(grep -cF -- '<!-- implement:' "$SKILL_ABS") times"
-case $step8 in
-*"scripts/stamp.sh"*) pass "the line's tier is the one read through scripts/stamp.sh" ;;
-*) fail "step 8 does not say the line's tier is the one scripts/stamp.sh read" ;;
-esac
-case $step8 in
-*"line of its own"*) pass "the line sits on a line of its own, the landing's match being whole-line" ;;
-*) fail "step 8 does not put the line on a line of its own" ;;
-esac
+t_text_has "$step8" "scripts/stamp.sh" "the line's tier is the one read through the stamp checker" "step 8"
+t_text_has "$step8" "line of its own" "the line sits on a line of its own, the landing's match being whole-line" "step 8"
 
 # ---------------------------------------------------------------------------
 banner "3b. The review is INVOKED by name, and lands on the PR"
