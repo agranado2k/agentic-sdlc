@@ -80,6 +80,9 @@ else
 		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"
 fi
 
+# The tool calls this session began and never returned from: denied (#409).
+hook_pending_sweep "$sid" "$@"
+
 # How many phantom stops this session had since its last end (#410).
 phantoms=$(hook_phantom_take "$sid") && set -- "$@" data.phantoms="$phantoms"
 

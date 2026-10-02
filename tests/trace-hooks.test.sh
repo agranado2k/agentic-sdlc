@@ -434,7 +434,9 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
-			PreToolUse) _w_want=tool-pre-guard.sh ;;
+			# Two scripts on PreToolUse: the kill guard (#414) and the
+			# pending marker a denied call leaves behind (#409).
+			PreToolUse) case $_w_cmd in *"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;; *) _w_want=tool-pre-guard.sh ;; esac ;;
 			*)
 				_w_bad=1
 				continue
@@ -476,12 +478,13 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Six events, five scripts: one script serves both post-tool events,
-	# because the only difference between them is the outcome it records; the
-	# sixth is the PreToolUse kill guard (#414).
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 6 ] &&
-		pass "it names a hook script per wired event, six in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 6"
+	# Six events, seven commands, six scripts: one script serves both
+	# post-tool events, because the only difference between them is the
+	# outcome it records; PreToolUse runs two — the kill guard (#414) and the
+	# pending marker a denied call leaves behind (#409).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 7 ] &&
+		pass "it names a hook script per wired command, seven in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 7"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
@@ -3268,5 +3271,187 @@ $MB 12 120 1200 12000 2 msg_b2" ] &&
 else
 	echo "  skip  node is not on PATH — the per-model anchor legs need the extractor"
 fi
+
+# ---------------------------------------------------------------------------
+banner "40. A denied tool call is visible: a pending marker swept at session end (#409)"
+# ---------------------------------------------------------------------------
+# Ticket #409 (a known gap of 2026-10-01, origin #252). A call the operator
+# denies fires PreToolUse and nothing after it, so tool-post.sh never sees it.
+# The pre-tool hook now writes a pending marker in the adapter's own
+# claude-code/ directory, keyed by session and tool-use id; the post-tool hook
+# removes it; the session-end hook sweeps what is left into one
+# `tool.use outcome=denied` each, the tool name and the input head on it.
+# Behind TRACE_TOOLS, the switch tool-post.sh reads: a marker no post hook
+# would ever remove would read every call as denied.
+
+# pre_of <session> <tool_use_id> <command> — the PreToolUse hook on a compact
+# payload, the live shape, with tool capture on.
+pre_of() {
+	printf '{"session_id":"%s","transcript_path":"%s","cwd":"/tmp/spike-proj","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"%s"}' \
+		"$1" "$SCRATCH/main.jsonl" "$3" "$2" >"$SCRATCH/pre-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+}
+
+# post_of <session> <tool_use_id> <command> — the PostToolUse hook for that call.
+post_of() {
+	printf '{"session_id":"%s","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"stdout":"hi"},"tool_use_id":"%s"}' \
+		"$1" "$3" "$2" >"$SCRATCH/post-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" <"$SCRATCH/post-409.json" >/dev/null 2>&1
+}
+
+# denied_of <session> — that session's tool.use events with outcome=denied.
+denied_of() { ev_of tool.use | grep -F "\"subject\":\"session:$1\"" | grep -F '"outcome":"denied"' || :; }
+
+# markers — every pending marker under the trace directory.
+markers() { find "$TDIR" -path '*.pending*' -type f 2>/dev/null; }
+
+if [ -f "$HOOKS/tool-pre.sh" ]; then
+	assert_status 0 "adapters/claude-code/hooks/tool-pre.sh parses under sh -n" -- sh -n "$HOOKS/tool-pre.sh"
+else
+	fail "adapters/claude-code/hooks/tool-pre.sh does not exist"
+fi
+
+if [ "$HAVE_NODE" = 1 ]; then
+	S409=sess-409-a
+	new_trace
+	# THE DENIAL: a pre-tool event with no post-tool event, then the end.
+	t_run_split pre_of "$S409" toolu_409_denied 'rm -rf build'
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		pass "the pre-tool hook exits 0 and says nothing on stdout" ||
+		fail "tool-pre.sh: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	[ -z "$(ev_of tool.use)" ] && pass "and writes no event of its own — the marker is not a record yet" ||
+		fail "the pre-tool hook wrote an event: $(ev_of tool.use)"
+	M=$(markers)
+	[ "$(printf '%s\n' "$M" | grep -c .)" = 1 ] &&
+		case $M in "$TDIR/claude-code/$S409.pending/toolu_409_denied") true ;; *) false ;; esac &&
+		pass "one marker, in the adapter's claude-code/ directory, keyed by session and tool-use id" ||
+		fail "expected claude-code/$S409.pending/toolu_409_denied, found: $M"
+	case $(ls -l "$M" 2>/dev/null) in -rw-------*) pass "and owner-only: it holds the command's head" ;;
+	*) fail "the marker is not mode 600: $(ls -l "$M" 2>/dev/null)" ;; esac
+	end_of "$S409"
+	D=$(denied_of "$S409")
+	[ "$(printf '%s\n' "$D" | grep -c .)" = 1 ] &&
+		pass "a pre-tool event with no post-tool event, then a session end: one tool.use outcome=denied" ||
+		fail "expected one denied tool.use for $S409, got: $D"
+	[ "$(data_of "$D" tool)" = Bash ] && [ "$(data_of "$D" tool_use_id)" = toolu_409_denied ] &&
+		pass "naming the tool and the call's id" || fail "the denial lacks tool or id: $D"
+	# Matched on the line itself: the head is JSON inside a JSON string, so
+	# its quotes are escaped and data_of's plain-string reader stops at one.
+	case $D in *'"input_head":"{\"command\":\"rm -rf build\"}"'*) pass "and carrying the input head the marker kept" ;;
+	*) fail "the denial does not carry the input head: $D" ;; esac
+	[ "$(str "$D" session)" = "$S409" ] && [ "$(str "$D" harness)" = claude-code ] &&
+		pass "filed under the session, from the claude-code agent harness" || fail "the denial's session or harness is wrong: $D"
+	# Inside the session: the denial is written before session.end.
+	_order=$(events | grep -F "session:$S409" | sed -n 's/.*"kind":"\([a-z.]*\)".*/\1/p' | tr '\n' ' ')
+	case $_order in *tool.use*session.end*) pass "and written before the session.end it belongs to" ;;
+	*) fail "the order of $S409's events is: $_order" ;; esac
+	[ -z "$(markers)" ] && pass "the swept marker is gone" || fail "a marker outlived the sweep: $(markers)"
+	t_run_split env TRACE_DIR="$TDIR" sh "$TRACE" show "session:$S409" --kind tool.use
+	case $S_OUT in *denied*toolu_409_denied*) pass "show session:<id> --kind tool.use prints the denial — the ticket's demo" ;;
+	*) fail "show did not print the denial: $S_OUT" ;; esac
+
+	# A MATCHED PAIR: the post-tool hook removes the marker, and the end
+	# sweeps nothing.
+	S409B=sess-409-b
+	pre_of "$S409B" toolu_409_ok 'echo hi' >/dev/null 2>&1
+	post_of "$S409B" toolu_409_ok 'echo hi'
+	[ -z "$(markers)" ] && pass "the post-tool hook removes the call's marker" || fail "a matched call left a marker: $(markers)"
+	end_of "$S409B"
+	[ -z "$(denied_of "$S409B")" ] && pass "a matched pre and post, then a session end: no denied event" ||
+		fail "a call that completed was swept as denied: $(denied_of "$S409B")"
+	ev_of tool.use | grep -F "session:$S409B" | grep -q '"outcome":"ok"' &&
+		pass "and the call's own ok event stands" || fail "the matched call has no ok event: $(ev_of tool.use)"
+
+	# NO END YET: the marker stays on disk, and the next end of the session
+	# sweeps it — once.
+	S409C=sess-409-c
+	pre_of "$S409C" toolu_409_late 'git push --force' >/dev/null 2>&1
+	pre_of "$S409B" toolu_409_other 'make' >/dev/null 2>&1
+	[ "$(markers | grep -c "$S409C.pending/toolu_409_late")" = 1 ] &&
+		pass "a marker with no session end stays on disk" || fail "the marker is not on disk: $(markers)"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "and the next end sweeps it" ||
+		fail "the next end swept: $(denied_of "$S409C")"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "a second end of the same session sweeps nothing again" ||
+		fail "a second end recorded the denial twice: $(denied_of "$S409C")"
+	[ "$(markers | grep -c "$S409B.pending/toolu_409_other")" = 1 ] &&
+		pass "and another session's marker is left alone — its call may still be running" ||
+		fail "a session end swept another session's marker: $(markers)"
+
+	# A REFUSED ID is never a path: a hostile or traversing session or
+	# tool-use id writes no marker anywhere.
+	new_trace
+	pre_of 'abc; touch PWNED-409' toolu_409_x 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '../../escape-409' 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '..' 'ls' >/dev/null 2>&1
+	pre_of '..' toolu_409_y 'ls' >/dev/null 2>&1
+	LEFT=$(
+		find "$TDIR" -path '*.pending*' 2>/dev/null
+		find "$SCRATCH" "$(dirname "$SCRATCH")" -maxdepth 1 \( -name 'escape-409*' -o -name 'PWNED-409*' \) 2>/dev/null
+	)
+	[ -z "$LEFT" ] && pass "a hostile or traversing session or tool-use id leaves no marker anywhere" ||
+		fail "a refused id left files: $LEFT"
+
+	# THE SWITCH: tool capture off, or tracing off — no marker, exit 0, silent.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" TRACE_TOOLS= sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$(markers)" ] &&
+		pass "with tool capture off the pre-tool hook writes no marker and exits 0" ||
+		fail "TRACE_TOOLS off: exit $S_STATUS, stdout '$S_OUT', markers $(markers)"
+	t_run_split env -u TRACE_DIR TRACE_TOOLS=1 TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+		pass "with tracing off it exits 0 and says nothing" ||
+		fail "tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+	# REVIEW OF PR #446. H-1: a post payload the reader refuses still drops
+	# the call's marker — the call returned, so it was not denied.
+	new_trace
+	pre_of sess-409-e toolu_409_drift 'echo hi' >/dev/null 2>&1
+	printf '{"session_id":"sess-409-e","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"tool_use_id":"toolu_409_drift"}' |
+		env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" >/dev/null 2>&1
+	[ -z "$(markers)" ] && ev_of tool.use | grep -q '"outcome":"fail"' &&
+		pass "a post payload the reader refuses records its fail and still drops the marker (review of PR #446, H-1)" ||
+		fail "after a refused post payload: markers '$(markers)', events $(ev_of tool.use)"
+	end_of sess-409-e
+	[ -z "$(denied_of sess-409-e)" ] && pass "and the session end records no denial for it" ||
+		fail "a call whose post payload drifted was swept as denied: $(denied_of sess-409-e)"
+
+	# M-1: a sweep that died after taking the directory aside left
+	# <sid>.pending.<pid>; the next end of that session sweeps it too.
+	new_trace
+	mkdir -p "$TDIR/claude-code/sess-409-f.pending.4242"
+	printf 'Bash\n{"command":"rm -rf x"}\n' >"$TDIR/claude-code/sess-409-f.pending.4242/toolu_409_orphan"
+	mkdir -p "$TDIR/claude-code/sess-409-g.pending.4243"
+	printf 'Bash\n{}\n' >"$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine"
+	end_of sess-409-f
+	[ "$(denied_of sess-409-f | grep -c toolu_409_orphan)" = 1 ] &&
+		pass "a directory an interrupted sweep took aside is swept by the session's next end (review of PR #446, M-1)" ||
+		fail "the orphaned taken-aside directory was not swept: $(denied_of sess-409-f)"
+	[ ! -e "$TDIR/claude-code/sess-409-f.pending.4242" ] && [ -e "$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine" ] &&
+		pass "and it is removed, while another session's is left alone" ||
+		fail "orphans after the end: $(find "$TDIR/claude-code" 2>/dev/null)"
+
+	# L-4: the kill guard refuses a sub-agent's call, the marker hook ran on
+	# the same payload, the session ends: the guard's note AND one denial.
+	new_trace
+	printf '{"session_id":"sess-409-h","hook_event_name":"PreToolUse","agent_type":"general-purpose","tool_name":"Bash","tool_input":{"command":"pkill -f suite"},"tool_use_id":"toolu_409_guard"}' >"$SCRATCH/guard-409.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/tool-pre-guard.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	_g409=$?
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	end_of sess-409-h
+	[ "$_g409" = 2 ] && ev_of note | grep -q 'kill-guard' && [ "$(denied_of sess-409-h | grep -c toolu_409_guard)" = 1 ] &&
+		pass "a call the kill guard refused is the guard's note and one swept tool.use denied (review of PR #446, L-4)" ||
+		fail "guard exit $_g409; note $(ev_of note); denials $(denied_of sess-409-h)"
+else
+	echo "  skip  node is not on PATH — the marker needs the payload reader's input head"
+fi
+
+# THE WIRING AND THE RECORD.
+grep -q 'hooks/tool-pre.sh' "$SETTINGS" && pass "the kit's settings file wires tool-pre.sh" ||
+	fail "the kit's settings file does not wire tool-pre.sh"
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"swept into one \`tool.use\` with \`outcome=denied\`"*) pass "the adapter README records the sweep" ;;
+*) fail "the adapter README does not say a leftover marker is swept into one tool.use with outcome=denied" ;; esac
 
 t_done "trace hooks"

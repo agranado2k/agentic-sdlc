@@ -1177,4 +1177,34 @@ case "$q7_line" in
 *) fail "SKILL.md's question 7 does not count a \`train\` verdict apart from the operator's as no human verdict" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "12. Question 6 counts the denied tool calls (ticket #409)"
+# ---------------------------------------------------------------------------
+# A tool call the operator or a blocking hook refused is now a `tool.use` with
+# `outcome=denied`, swept at session end from the pre-tool hook's marker (the
+# Claude Code adapter, #409). Question 6 reads them: per session and per tool,
+# a denial that recurs is a skill asking for what its agent may not do. Held
+# to the sixth section's prose, its Reads paragraph and SKILL.md's line, the
+# way section 10 holds question 7.
+sec6() { awk '/^## 6\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+sec6_prose=$(sec6 | awk '/^\*Reads:/ { r = 1 } /^Route:/ { x = 1 } (r || x) && /^$/ { r = x = 0; next } !r && !x' | flat)
+sec6_reads=$(sec6 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat)
+case "$sec6_reads" in
+*'`tool.use`'*'`denied`'*) pass "question 6's Reads paragraph lists tool.use with outcome denied" ;;
+*) fail "question 6's Reads paragraph does not list \`tool.use\` (\`denied\`)" ;;
+esac
+case "$sec6_prose" in
+*'**Denied tool calls**'*'`data.tool`'*) pass "question 6 counts the denied tool calls per data.tool" ;;
+*) fail "question 6 has no **Denied tool calls** bullet counting per \`data.tool\`" ;;
+esac
+case "$sec6_prose" in
+*'recurs'*) pass "…and names a recurring denial as the finding" ;;
+*) fail "question 6 does not say which denial is a finding" ;;
+esac
+q6_line=$(awk '/^6\. \*\*Chain health\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat)
+case "$q6_line" in
+*'denied'*) pass "SKILL.md's question 6 names the denied tool calls" ;;
+*) fail "SKILL.md's question 6 does not name the denied tool calls" ;;
+esac
+
 t_done "/retro contract"

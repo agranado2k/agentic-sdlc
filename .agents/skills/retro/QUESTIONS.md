@@ -142,7 +142,8 @@ decomposition.
 
 *Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
 `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
-`run.start`, `run.end`.*
+`run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
+`data.input_head`).*
 
 - **Tickets with no PR**: a `ticket.write` with no later `ticket.start`, or a
   `ticket.start` with no `pr.open`, inside the window and older than the
@@ -163,6 +164,13 @@ decomposition.
   hole, not a finding per event that should have had it.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
+- **Denied tool calls**: each `tool.use` with `outcome=denied` — a call that
+  fired its pre-tool hook and never returned, swept at the session's end —
+  counted per session and per `data.tool`, with the input head of each. A
+  denial that recurs — the same tool, the same command shape, across
+  sessions — is a skill asking its agent for what the permission policy or a
+  guard will not give it: one finding per shape, never one per call. A
+  window with tool capture off holds none, and that is no finding.
 - **Missing emits**: a skill that ran — its PR exists, its worktree was
   pruned — with no events of its own. The chain's contract is one emit per
   decision point; a hole is a fact the retro reads as one.

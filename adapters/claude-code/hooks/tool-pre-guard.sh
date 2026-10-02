@@ -37,9 +37,10 @@
 # naming pkill, killall or pgrep anywhere is refused unread.
 #
 # THE RECORD. One `note` with outcome=denied on the session, naming the rule
-# and the call, until the denied-call marker (#409) gives a refused call a
-# `tool.use` of its own. Tracing off still blocks; the note is the record, the
-# exit status is the guard.
+# and the call; with tool capture on, the call's pending marker (tool-pre.sh,
+# #409) is also swept at session end into a `tool.use` with outcome=denied.
+# Tracing off still blocks; the note is the record, the exit status is the
+# guard.
 
 set -u
 

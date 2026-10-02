@@ -162,7 +162,8 @@ Chosen: **option 1**.
    which the script carries beside its kind list and the trace suite
    holds row for row to it:
    - `session.start` `fail` · `session.end` none · `session.usage` `ok`
-     `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail`
+     `fail` · `agent.stop` `ok` `fail` · `tool.use` `ok` `fail` (and
+     `denied` since the #409 amendment below)
    - `run.start` none · `run.end` `ok` `stopped`
    - `spawn` `dispatched` `in-session` `refused` · `spawn.end` `ok` `fail`
      `timeout` `budget` `unreachable`
@@ -262,6 +263,22 @@ Chosen: **option 1**.
    the kind's, not the key's — `data.id` on `finding.raise` is not held.
    `verify` is unchanged: lines written before this amendment stay as
    history and draw no advisory.
+   *Amended 2026-10-02 (#409):* **`tool.use` declares `denied`.** The #348
+   amendment left the word out because nobody wrote it: a tool call the
+   permission system or a blocking hook refuses fires the agent harness's
+   pre-tool event and nothing after it, so the adapter had no payload that
+   said "denied". The Claude Code adapter now leaves a pending marker at the
+   pre-tool event, removes it when the call returns, and sweeps each marker
+   left at the session's end into one `tool.use` with `outcome=denied`,
+   carrying the tool's name and the input head. The word has a writer, so
+   the table declares it: `tool.use` `ok` `fail` `denied`. It is
+   `tool.use`'s alone — a widening of one kind's vocabulary, and every
+   other kind still refuses it. `denied` is a conclusion from an absence,
+   not a refusal the agent harness reported, and a reader says so: a session
+   killed between a call's start and its return reads the same way. The
+   kill guard's `note` with `outcome=denied` stays, naming the rule; with
+   tool capture on, the call it refused is swept too. The retrospective's
+   question 6 counts the denials per session and per tool.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
