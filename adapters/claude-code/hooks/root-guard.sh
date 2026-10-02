@@ -171,8 +171,12 @@ function endseg(   i, j, k, c, s, inplace, last) {
 	i = 1
 	while (i <= nw && words[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
 	while (i <= nw && (words[i] == "env" || words[i] == "sudo" || words[i] == "command" || words[i] == "nohup" || words[i] == "exec" || words[i] == "time")) {
-		i++
-		while (i <= nw && words[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
+		p = words[i]; i++
+		# The options of the prefix, and the ones that take a word with them.
+		while (i <= nw && (words[i] ~ /^-/ || words[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/)) {
+			if ((p == "env" && words[i] ~ /^-[uCS]$/) || (p == "sudo" && words[i] ~ /^-[ugCDhprtUT]$/)) i++
+			i++
+		}
 	}
 	if (i > nw) { nw = 0; return }
 	c = words[i]; sub(/.*\//, "", c)

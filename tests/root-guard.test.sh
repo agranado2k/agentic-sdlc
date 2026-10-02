@@ -63,7 +63,12 @@ GUARD="$HOOKDIR/root-guard.sh"
 OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX") || exit 2
 
 # json_str <text> — <text> as a JSON string body: backslash and quote escaped.
-json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+# Newlines and tabs are written as their escapes, so a multi-line command
+# (a heredoc, a continuation line) arrives on one line, as it does live.
+json_str() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' |
+		awk '{ gsub(/\t/, "\\t"); printf "%s%s", (NR > 1 ? "\\n" : ""), $0 }'
+}
 
 # payload <tool> <key> <value> [<cwd>] — one compact PreToolUse payload, the
 # shape a live hook receives: the whole object on one line.
@@ -249,6 +254,46 @@ guard_on "$(payload Bash command 'cd worktree/x && git commit --no-verify -m x')
 allowed "git commit --no-verify after cd into a worktree"
 guard_on "$(payload Bash command "git -C $WT commit --no-verify -m x")"
 allowed "git -C <a worktree> commit --no-verify from the root"
+
+# ---------------------------------------------------------------------------
+banner "4c. The Bash plan: heredocs, continuation lines and command prefixes"
+# ---------------------------------------------------------------------------
+# The plan reads a command roughly as a shell would. Each of these is a branch
+# of it that review finding H-1 found untested.
+guard_on "$(payload Bash command "cat <<EOF >/tmp/rg-note.txt
+echo hi > README.md
+EOF")"
+allowed "a heredoc whose BODY names a redirect into README.md (the body is data)"
+guard_on "$(payload Bash command "cat <<'EOF' >/tmp/rg-note.txt
+echo hi > README.md
+EOF
+echo done > README.md")"
+refused "a redirect into README.md on the line after a quoted heredoc ends"
+guard_on "$(payload Bash command "cat <<-EOF >/tmp/rg-note.txt
+	sed -i s/a/b/ README.md
+	EOF
+echo done > README.md")"
+refused "a redirect after a <<- heredoc whose tab-indented terminator ends it"
+guard_on "$(payload Bash command "cat <<-EOF >/tmp/rg-note.txt
+	sed -i s/a/b/ README.md
+	EOF")"
+allowed "the same <<- heredoc alone, its body data"
+guard_on "$(payload Bash command 'echo hi \
+  > README.md')"
+refused "a redirect split across a backslash-newline"
+guard_on "$(payload Bash command 'sed -i s/readme/x/ \
+  README.md')"
+refused "sed -i whose operand is on a continuation line"
+guard_on "$(payload Bash command 'env FOO=1 sed -i s/readme/x/ README.md')"
+refused "sed -i behind env VAR=…"
+guard_on "$(payload Bash command 'sudo tee README.md </dev/null')"
+refused "tee behind sudo"
+guard_on "$(payload Bash command 'FOO=bar git checkout -- README.md')"
+refused "git checkout behind a VAR= assignment"
+guard_on "$(payload Bash command 'env -u X GIT_TRACE=1 git commit --no-verify -m x')"
+refused "git commit --no-verify behind env with an option and an assignment"
+guard_on "$(payload Bash command 'FOO=bar cat README.md')"
+allowed "a read behind a VAR= assignment"
 
 # ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"
