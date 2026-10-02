@@ -1184,34 +1184,34 @@ kill_leg() {
 	# KILL is uncatchable, so the cleanup trap never runs; the worker is
 	# orphaned and reaped here so it cannot outlive the suite.
 	bt_sig=KILL
-	if ! bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x'; then
-		bt_sig=TERM
-		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
-		LEFTOVER="$2/agent-dispatch.unnamed"
-		mkdir -p "$LEFTOVER"
-		return
-	fi
+	bait_term -s "$PIDFILE" env TMPDIR="$2" sh "$1" implementer --prompt 'x'
+	_kl_marked=$?
 	bt_sig=TERM
-	[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
-	# The reap takes the worker's sleep with it: the pid file names the sleep
-	# itself, not a shell that would leave it orphaned for thirty seconds.
-	# Bounded: about two seconds for the signal to land.
-	_kl_try=0
-	until [ "$(new_sleeps 30 "$sleeps_before")" = 0 ] || [ "$_kl_try" -ge 20 ]; do
-		_kl_try=$((_kl_try + 1))
-		sleep 0.1 2>/dev/null || { sleep 1; _kl_try=$((_kl_try + 9)); }
-	done
-	_kl_left=$(new_sleeps 30 "$sleeps_before")
-	[ "$_kl_left" = 0 ] && pass "…and the reaped worker leaves no sleep behind$3" ||
-		fail "$_kl_left worker sleep(s) outlived the reap$3"
-	LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
-	if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
-		pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
+	LEFTOVER=
+	if [ "$_kl_marked" != 0 ]; then
+		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
 	else
-		fail "the leftover scratch is not recognisable by name$3: $(ls "$2" | tr '\n' ' ')"
-		LEFTOVER="$2/agent-dispatch.unnamed"
-		mkdir -p "$LEFTOVER"
+		[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+		# The reap takes the worker's sleep with it: the pid file names the sleep
+		# itself, not a shell that would leave it orphaned for thirty seconds.
+		# Bounded: about two seconds for the signal to land.
+		_kl_try=0
+		until [ "$(new_sleeps 30 "$sleeps_before")" = 0 ] || [ "$_kl_try" -ge 20 ]; do
+			_kl_try=$((_kl_try + 1))
+			sleep 0.1 2>/dev/null || { sleep 1; _kl_try=$((_kl_try + 9)); }
+		done
+		_kl_left=$(new_sleeps 30 "$sleeps_before")
+		[ "$_kl_left" = 0 ] && pass "…and the reaped worker leaves no sleep behind$3" ||
+			fail "$_kl_left worker sleep(s) outlived the reap$3"
+		LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
+		if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
+			pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
+		else
+			fail "the leftover scratch is not recognisable by name$3: $(ls "$2" | tr '\n' ' ')"
+			LEFTOVER=
+		fi
 	fi
+	[ -n "$LEFTOVER" ] || { LEFTOVER="$2/agent-dispatch.unnamed"; mkdir -p "$LEFTOVER"; }
 }
 # The bait first, under a temp location of its own so the sweep legs below see
 # only the real dispatcher's leftover: a copy slow to create its scratch, as a
