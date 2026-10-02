@@ -924,6 +924,8 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # one is; and the trailing `|| :` goes.
 # A numbered reference `#<N>` becomes `#1`: a project that holds ticket, pr
 # and prd to `<type>:#<digits>` refuses anything else (ticket #305).
+# An iteration `data.iteration=<i>` becomes `1`: the script holds it to
+# digits (ticket #420), and `x` would be the suite's fault, not the skill's.
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
@@ -931,6 +933,7 @@ t_trace_runnable() {
 		-e 's/<type:ref>/pr:#1/g' \
 		-e 's/ \[[^][]*\]//g' \
 		-e 's/#<[^<>]*>/#1/g' \
+		-e 's/data\.iteration=<[^<>]*>/data.iteration=1/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
