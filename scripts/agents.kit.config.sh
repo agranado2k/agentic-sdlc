@@ -97,10 +97,10 @@
 # ---------------------------------------------------------------------------
 # THE OTHER AGENT HARNESS. Declaring it is what makes `<harness>:<model>` a
 # crossing rather than a malformed model id (ADR-0005), and the CMD/MODEL_FLAG
-# pair is what scripts/agent-dispatch.sh runs when a tier names it. Both the
-# reviewer and the tests agent below cross over, which is the point: the
+# pair is what scripts/agent-dispatch.sh runs when a tier names it. The tests
+# agent below crosses over, and the reviewer did until #423 and will again: the
 # cross-vendor review the kit calls its highest-leverage property is reachable
-# locally here, not only in CI.
+# locally here, not only in CI, once that CLI authenticates from this host.
 # ---------------------------------------------------------------------------
 # VERIFIED against the installed CLI on 2026-09-22, not guessed: `codex exec`
 # is the non-interactive form, `-m, --model <MODEL>` is its model flag, and
@@ -136,30 +136,48 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #    reviewer sharing the implementer's model is one editorial pass wearing a
 #    second hat.
 # ---------------------------------------------------------------------------
-#    Here that is taken literally: the reviewer is a DIFFERENT VENDOR, not
-#    just a different model. A reviewer that shares the author's training
-#    shares the author's blind spots, and the kit's own docs call the
-#    cross-provider leg the highest-leverage wiring available. The dispatcher
-#    makes it reachable from a local session, so it no longer has to wait for
-#    CI to hold the secrets.
-AGENT_TIER_REVIEWER='codex:gpt-5.6-sol'
+#    The kit's answer to that is a DIFFERENT VENDOR, not just a different
+#    model: a reviewer that shares the author's training shares the author's
+#    blind spots. It is suspended, not abandoned. On 2026-10-01 every reviewer
+#    crossing this host attempted returned 401 — 4 of 4 in the third retro
+#    window — so a reviewer mapped to the other vendor answered nothing and the
+#    review fell to whatever the session happened to run on. Until that CLI
+#    authenticates the reviewer is local, and its two answers are the two
+#    models the reviewer rule cares about — claude-fable-5-1 (planner, content)
+#    and claude-opus-5-5 (implementer) — each other's complement:
+#
+#      plain `reviewer`, no session named
+#        -> claude-fable-5-1, never the implementer's claude-opus-5-5
+#      `reviewer self-implemented`, session claude-fable-5-1
+#        -> claude-opus-5-5
+#      `reviewer self-implemented`, session claude-opus-5-5
+#        -> that is the session's own model, so ADR-0007's refusal falls
+#           back to the plain reviewer: claude-fable-5-1
+#      `reviewer self-implemented`, session claude-opus-5 (mechanical)
+#        -> claude-opus-5-5, which is not the session's
+#
+#    So whichever model wrote the diff, a different one reads it — provided
+#    the session that wrote it asks the `self-implemented` form and says what
+#    it runs on (AGENT_SESSION_MODEL; nothing sets it for you). The plain
+#    form has no second answer: a claude-fable-5-1 session asking plain
+#    `reviewer` is refused its own model and gets NOTHING, with a warning —
+#    ask `reviewer self-implemented` instead. tests/agents-tiers.test.sh pins
+#    every answer above. The cross-vendor ids (codex:gpt-5.6-sol for the
+#    reviewer, codex:gpt-6-astra for self-implemented) come back when that CLI
+#    authenticates — ask the operator again on 2026-10-08.
+AGENT_TIER_REVIEWER='claude-fable-5-1'
 #
 #    The case the plain lookup cannot see: the session ITSELF implemented, on
-#    the model this tier maps to — a planner-tier session writing a ticket's
-#    diff is exactly that, and this wave met it on every PR. Then the
-#    reviewer above IS the implementer, and the rule needs a second answer.
-#    It is resolved through the domain axis below, as
-#    `sh scripts/agents.kit.sh reviewer self-implemented` — a domain that
-#    names a situation rather than a medium, which the open vocabulary
-#    allows and the glossary's "Task domain" entry records — and
-#    tests/agents-tiers.test.sh holds it to differing from the reviewer.
-#    With the reviewer on another vendor this is close to vestigial — a
-#    Claude session cannot be running gpt-5.6-sol — but it stays mapped, and
-#    to a SECOND model rather than the same one: if the reviewer is ever
-#    localised again, the rule still has an answer, and ADR-0007's refusal —
-#    in scripts/agents.lib.sh since 0.22.0, so every project has it — is the
-#    net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='codex:gpt-6-astra'
+#    the model the plain reviewer maps to — a content-domain session writing a
+#    ticket's prose on fable is exactly that. It is resolved through the domain
+#    axis below, as `sh scripts/agents.kit.sh reviewer self-implemented` — a
+#    domain that names a situation rather than a medium, which the open
+#    vocabulary allows and the glossary's "Task domain" entry records — and
+#    tests/agents-tiers.test.sh holds it to differing from the reviewer. When
+#    the session is the code model instead, this answer is the session's own,
+#    and ADR-0007's refusal — in scripts/agents.lib.sh since 0.22.0, so every
+#    project has it — falls back to the plain reviewer above.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-opus-5-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
@@ -192,7 +210,7 @@ AGENT_TIER_IMPLEMENTER_CONTENT='claude-fable-5-1'
 # behaviour, test-first, through a seam — but the medium changes the answer:
 # a test is a specification, and the model that wrote the code is the worst
 # reader of whether its test actually constrains anything. So it crosses to
-# the other vendor, for the same reason the reviewer does.
+# the other vendor, for the reason the reviewer did until #423 and will again.
 AGENT_TIER_IMPLEMENTER_TESTS='codex:gpt-5.6-sol'
 
 # The third domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,

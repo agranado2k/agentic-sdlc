@@ -430,4 +430,19 @@ esac
 # holds the same line; repeated here because this suite owns the contract).
 assert_file_has "$WORKER" "do not push"
 
+
+# Each finding names the lens that raised it (#412): one `↳ lens:` line in
+# the finding anatomy, its token lifted from /review-pr §3's Axis-1 roster and
+# spelled exactly as the skill spells it, so the broker's raise reads one row
+# per lens instead of `unattributed`. The tokens are read from the skill, not
+# typed here: a rename on either side is red.
+assert_file_has "$WORKER" "↳ lens:" "a finding with no lens line is an unattributed raise"
+n_tok=0
+for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$ROOT/$SKILL"); do
+	n_tok=$((n_tok + 1))
+	assert_file_has "$WORKER" "\`$tok\`" "the contract spells the roster token the skill does"
+done
+[ "$n_tok" = 6 ] && pass "six Axis-1 roster tokens were read from the skill" ||
+	fail "expected six Axis-1 roster tokens in $SKILL, read $n_tok"
+
 t_done "/review-pr output contract"
