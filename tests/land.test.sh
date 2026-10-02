@@ -349,6 +349,13 @@ land "STUB_BODY_FILE=$f" 165
 landed_with 165 "two lines in one body" '"implement":"no"'
 no_tier 165 "two lines in one body"
 
+# Prose that quotes the marker mid-line is not a second line: only a line
+# opening with it counts, so the good line beside it is still read.
+f=$(body quoted "$LINE
+The landing reads \`<!-- implement: ticket=#1 tier=planner -->\` from the body.")
+land "STUB_BODY_FILE=$f" 169
+landed_with 169 "a good line beside prose quoting the marker" '"implement":"yes"' '"implement_tier":"mechanical"'
+
 f=$(body other "<!-- implement: ticket=#999 tier=planner -->")
 land "STUB_BODY_FILE=$f" 166
 landed_with 166 "a line naming another ticket" '"implement":"no"'
