@@ -467,7 +467,8 @@ hook_tools_on() {
 }
 
 # hook_dir — the resolved trace directory; nothing, status 1, when tracing is
-# off; nothing, status 2, when the shared script refuses the policy file. Asked
+# off; nothing, status 2, when the ask itself fails — a policy file the shared
+# script refuses, or a shared script that could not run at all. Asked
 # of the shared script itself, which is the only thing that knows how a relative
 # policy value resolves against the root checkout.
 #
