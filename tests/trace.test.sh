@@ -1764,8 +1764,8 @@ done
 # An empty stack — the file is there, every run closed — is no run, exit 0.
 (cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end outcome=ok 2>/dev/null)
 sk_ask TRACE_SESSION= "$SK_WT"
-SK_KEY=$(printf '%s' "$(git -C "$SK_WT" rev-parse --show-toplevel)" | git hash-object --stdin)
-[ -f "$SK/current/$SK_KEY.runs" ] && [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+SK_BYTES=$(sk_run TRACE_SESSION= "$SK_WT" 2>/dev/null | wc -c | tr -d ' ')
+[ "$SK_BYTES" = 0 ] && [ -f "$SK/current/$SK_KEY.runs" ] && [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
 	pass "an empty stack — the file there, every run closed: exit 0, nothing on either stream" ||
 	fail "an empty stack: file $(ls "$SK/current" 2>&1), exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 # It reads; it never writes. The stack it answered from is byte for byte what it was.
@@ -1802,6 +1802,10 @@ sk_ask TRACE_SESSION=sk-s GIT_DIR="$SK_OTHER/.git" GIT_WORK_TREE="$SK_OTHER" "$S
 [ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "an inherited GIT_DIR/GIT_WORK_TREE pinned to another repository moves nothing" ||
 	fail "with GIT_DIR pinned elsewhere: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+sk_ask TRACE_SESSION=sk-s "$SK_REPO/.git"
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+	pass "a directory inside .git — git names no working tree — is refused, exit 2, saying so" ||
+	fail "a .git directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 mkdir -p "$SCRATCH/nowhere-472"
 sk_ask GIT_CEILING_DIRECTORIES="$SCRATCH" "$SCRATCH/nowhere-472"
 [ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&

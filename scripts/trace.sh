@@ -569,11 +569,20 @@ trace_key() {
 	else
 		TRACE_KEY_SESSION=$(trace_pointer_session)
 	fi
-	case $TRACE_KEY_SESSION in
-	'' | *[!A-Za-z0-9._-]*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs" ;;
-	*) TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs" ;;
-	esac
+	if trace_session_ok "$TRACE_KEY_SESSION"; then
+		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs"
+	else
+		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+	fi
 	_trace_keyed=1
+	return 0
+}
+
+# trace_session_ok <id> — 0 for a session a stack can be keyed on: non-empty,
+# and nothing but letters, digits, `.`, `_` and `-`. The one spelling of that
+# class: trace_key keys on it, and `stack` refuses a `session=` outside it.
+trace_session_ok() {
+	case $1 in '' | *[!A-Za-z0-9._-]*) return 1 ;; esac
 	return 0
 }
 
@@ -1058,8 +1067,11 @@ trace_stack_of() {
 	_so_dir=$1
 	shift
 	case $_so_dir in '' | -* | session=*) usage ;; esac
-	case ${1-session=} in session=*) ;; *) usage ;; esac
-	case ${1-session=} in session=*[!A-Za-z0-9._-]*) usage ;; esac
+	case ${1-session=} in
+	session=) ;;
+	session=*) trace_session_ok "${1#session=}" || usage ;;
+	*) usage ;;
+	esac
 	trace_arg_session "$@"
 	trace_dir || { trace_unconfigured_note; return 0; }
 	_so_git=$(trace_git_at "$_so_dir" rev-parse --path-format=absolute \
@@ -1067,7 +1079,9 @@ trace_stack_of() {
 	_so_common=${_so_git%%"$_trace_nl"*}
 	_so_top=${_so_git#*"$_trace_nl"}
 	_so_own=$(trace_git rev-parse --path-format=absolute --git-common-dir) || _so_own=
-	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] && [ "$_so_top" != "$_so_git" ] ||
+	# A <dir> git names no working tree for (one inside a .git directory) fails
+	# the whole rev-parse, so _so_git is empty and the refusal below is its own.
+	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] ||
 		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's"
 	trace_key "$_so_top" || die "cannot name the run stack of $_so_dir: git could not hash its path"
 	trace_stack_readable || die "cannot read the run stack of $_so_dir"
