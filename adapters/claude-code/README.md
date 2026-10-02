@@ -219,14 +219,14 @@ network" written into the prompt is a **request, not a restriction**: a
 reader that honours it is well behaved, and a line injected into the file it
 reads can ask it to do otherwise with a shell to hand.
 
-So the recommended in-session path is the CLI one: **spawn the reader with the
-CLI from inside the session.** A session holds a shell, the `-p` line above
-runs under it, and the restriction is then real whichever path the skill
+So the recommended in-session path is the restricted path: **spawn the reader
+with the CLI from inside the session.** A session holds a shell, the `-p` line
+above runs under it, and the restriction is then real whichever path the skill
 started on — the same three flags, from `$scratch`, with the return in the
 file the skill names. The **prompt-only spawn is the fallback**, for a
 session that cannot run the CLI — no `claude` on the path, or a shell it was
-not given — and it keeps the duty the three skills already provide for: where
-yours cannot, say so at the quiz (`/to-tickets`) or say so in the report
+not given — and it keeps the duty the three skills already provide for:
+say so at the quiz (`/to-tickets`) or say so in the report
 (`/pr-iterate` and the dogfood skill). Say what fenced the read — for
 example, that the reader was tool-restricted by prompt alone — so the human
 reading the quiz or the report knows: the return's shape check and the
