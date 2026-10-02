@@ -381,6 +381,84 @@ case $wf_rubric in
 esac
 oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
+# The session cap (ticket #483, retro F6): every review-bearing /implement
+# session ends at a /review-pr that spawns seven lenses, so two such sessions
+# at once ran past the host's concurrent-subagent limit — on #439 and #440
+# lenses were refused at it and 13 Agent calls failed. The hand-off says how
+# many of the frontier may run at once: the host's limit over the seven,
+# rounded down, never below one; the limit is a value the project states,
+# never a number the skill bakes in, and a project that states none gets one
+# session at a time. A frontier larger than the cap is sequenced, and the quiz
+# shows the cap beside the frontier.
+handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
+t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
+t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
+# Rule 3 is where an agent first reads that the frontier runs in parallel;
+# unqualified, it promises what the hand-off's cap withholds (#514, M-2).
+t_text_has "$(rule_n 3)" "up to the session cap the hand-off states (step 5)" "rule 3's parallel frontier is bounded by the session cap"
+# The divisor is /review-pr's roster, read from that skill and never a hand
+# copy: a lens added or dropped there must move every place this cap spells
+# its count, or the formula goes stale under a green suite (#514, L-1).
+lenses=$(t_roster_of "$ROOT/.agents/skills/review-pr/SKILL.md" | grep -cvx unattributed)
+case $lenses in
+5) lens_word=five ;; 6) lens_word=six ;; 7) lens_word=seven ;; 8) lens_word=eight ;; 9) lens_word=nine ;;
+*) lens_word="" ;;
+esac
+[ -n "$lens_word" ] && pass "/review-pr's roster holds $lens_word lenses" ||
+	fail "/review-pr's roster holds $lenses lenses — extend the number words in this check"
+t_text_has "$handoff" "spawns $lens_word subagents" "the hand-off's lens count is /review-pr's roster"
+# The formula is held on its own sentence: across the whole step, the
+# rationale sentence's "concurrent-subagent limit" would satisfy the first
+# anchor for a formula that divides something else by seven.
+formula=$(printf '%s\n' "$handoff" | grep -o 'The cap is [^.]*\.')
+in_order "$formula" "the cap is the limit divided by the roster's lenses, rounded down, never below one — in one 'The cap is …' sentence" \
+	"concurrent-subagent limit" "divided by $lens_word" "rounded down" "never below one"
+t_text_has "$formula" "rounded down and never below one." "the floor ends the formula sentence — nothing qualifies it after"
+t_text_has "$handoff" "as the project states it" "the limit is the project's stated value, read where it is written"
+t_text_has "$handoff" "never a number this skill names" "no host's number is baked into a skill that ships to every host"
+in_order "$handoff" "a project that states no limit is told so" "states no limit" "say so"
+t_text_has "$handoff" "name one session at a time as the safe reading" "with no limit stated, one session at a time is the reading named"
+t_text_has "$handoff" "is not opened at once: sequence it" "a frontier larger than the cap is sequenced, not opened at once"
+in_order "$handoff" "the tickets up to the cap start now, the rest as sessions end" \
+	"larger than the cap" "up to the cap" "as sessions end"
+# No limit is baked in, held on the session-cap sentences alone — the rest of
+# the step may cite a rule by number — and in words as well as digits: the
+# only numbers those sentences may spell are one and the roster's count
+# (#514, L-3).
+cap_text=$(printf '%s\n' "$handoff" | sed -n 's/.*\(how many of that frontier.*as sessions end\.\).*/\1/p')
+if [ -z "$cap_text" ]; then
+	fail "the hand-off's session-cap sentences ('how many of that frontier' … 'as sessions end.') were not found"
+else
+	case $cap_text in
+	*[0-9]*) fail "the session-cap sentences carry a digit — the limit is the project's value, and the divisor is a word" ;;
+	*) pass "the session-cap sentences carry no digit: no limit is baked in" ;;
+	esac
+	words=$(printf '%s\n' two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen \
+		sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty hundred | grep -vx "$lens_word" | paste -sd'|' -)
+	if printf '%s\n' "$cap_text" | grep -Eiqw "$words"; then
+		fail "the session-cap sentences spell a number other than one and $lens_word — a limit baked in as a word"
+	else
+		pass "the session-cap sentences spell no number but one and $lens_word"
+	fi
+fi
+in_order "$quiz" "the quiz shows the cap beside the DAG, before the human is asked to challenge it" \
+	"the DAG" "the session cap beside the frontier" "ask the user to challenge"
+# The place the hand-off reads the limit from exists: the consumer's workflow
+# article carries a line for it, a mark the project fills in — or answers
+# "unstated", the reading that runs one session at a time.
+wf_cap=$(grep -F 'concurrent-subagent limit' "$ROOT/constitution/local-workflow.md.template" | head -n 1)
+t_text_has "$wf_cap" "$(t_mark CONCURRENT_SUBAGENT_LIMIT)" "the workflow template states the host's concurrent-subagent limit as a mark the project fills"
+t_text_has "$wf_cap" "unstated" "the workflow template names 'unstated' as the answer when the limit is not known"
+t_text_has "$handoff" "constitution/local-workflow.md" "the hand-off reads the limit from the workflow article that carries its line"
+# The glossary names the concept the hand-off introduces (#483).
+cap_entry=$(awk '/^- \*\*Session cap\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^#/ || /^$/) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
+[ -n "$cap_entry" ] && pass "the glossary carries a **Session cap** entry" || fail "docs/domain-glossary.md has no **Session cap** entry"
+t_text_has "$cap_entry" "concurrent-subagent limit" "the glossary's session-cap entry derives it from the concurrent-subagent limit"
+t_text_has "$cap_entry" "/to-tickets" "the glossary's session-cap entry names the skill that states it"
+t_text_has "$cap_entry" "the $lens_word lenses" "the glossary's divisor is /review-pr's roster"
+grep -qF "the $lens_word lenses one" "$ROOT/constitution/local-workflow.md.template" &&
+	pass "the workflow template's divisor is /review-pr's roster" ||
+	fail "the workflow template's comment does not divide by the $lens_word lenses /review-pr's roster holds"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
