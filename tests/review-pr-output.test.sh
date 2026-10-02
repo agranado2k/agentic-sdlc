@@ -483,9 +483,12 @@ fi
 # prose and a sentence may break between the case and its ruling, and the
 # reviewer reads sentences, not lines. The one pair of readers for the skill
 # and for the baits below, so a bait runs the assertion and never a retyped
-# copy of it.
+# copy of it. sentences — the splitter itself, on stdin: lines joined, spaces
+# squeezed, one sentence per line with its edges trimmed, so a skill paragraph
+# and a contract wrapped at 80 columns split alike (section 10 compares them).
 agent5_of() { sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1"; }
-sentences_of() { agent5_of "$1" | tr '\n' ' ' | tr '.' '\n'; }
+sentences() { tr '\n' ' ' | tr -s ' ' | tr '.' '\n' | sed 's/^ //; s/ $//'; }
+sentences_of() { agent5_of "$1" | sentences; }
 agent5=$(agent5_of "$SKILL_ABS")
 agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
 a5_has() {
@@ -570,19 +573,18 @@ banner "10. The dispatched worker carries the reuse/DRY ruling in the skill's wo
 # never retyped, so a reword on either side is red. Compared sentence by
 # sentence over prose unwrapped and spaces squeezed: the contract is
 # 80-column prose and the skill is not, and both models read sentences.
-flat_sentences() { tr '\n' ' ' | tr -s ' ' | tr '.' '\n' | sed 's/^ //; s/ $//'; }
-w_sentences=$(printf '%s\n' "$body" | flat_sentences)
-a5_sentences=$(agent5_of "$SKILL_ABS" | flat_sentences)
-# carries <sentences> <needle> — the skill sentence holding the needle is a
-# whole sentence of the given text.
-carries() {
-	want=$(printf '%s\n' "$a5_sentences" | grep -F -- "$2" | head -n 1)
-	[ -n "$want" ] && printf '%s\n' "$1" | grep -qxF -- "$want"
-}
+w_sentences=$(printf '%s\n' "$body" | sentences)
+a5_sentences=$(sentences_of "$SKILL_ABS")
+# skill_sentence <needle> — the first sentence of Agent 5's prompt holding the
+# needle; empty when none does. carries <sentences> <sentence> — the sentence
+# is a whole sentence of the given text.
+skill_sentence() { printf '%s\n' "$a5_sentences" | grep -F -- "$1" | head -n 1; }
+carries() { [ -n "$2" ] && printf '%s\n' "$1" | grep -qxF -- "$2"; }
 for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
-	printf '%s\n' "$a5_sentences" | grep -qF -- "$needle" ||
+	want=$(skill_sentence "$needle")
+	[ -n "$want" ] ||
 		fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold the worker to"
-	carries "$w_sentences" "$needle" &&
+	carries "$w_sentences" "$want" &&
 		pass "$WORKER says Agent 5's '$needle' sentence word for word" ||
 		fail "$WORKER does not say Agent 5's '$needle' sentence word for word — the dispatched worker rules duplication differently from the lens"
 done
@@ -593,7 +595,7 @@ printf '%s\n' "$w_sentences" | grep -F "divergent-behavior" | grep -qF "stays a 
 assert_file_has "$WORKER" "↳ cites:" "the ruling cites §10 on a line the worker's anatomy declares"
 # Bait: the worker's fix line reworded — the exact comparison is what goes red.
 bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
-carries "$bait_w" '**candidate ticket**' &&
+carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 	fail "bait: the worker's fix line reworded still reads as the skill's ruling" ||
 	pass "bait: the worker's fix line reworded goes red"
 
