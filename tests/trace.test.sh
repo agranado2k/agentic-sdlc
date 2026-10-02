@@ -1534,6 +1534,17 @@ for _lc_case in "data.source=check data.id=Ｍ-1|data.id 'Ｍ-1'" "data.source=b
 	esac
 done
 
+# A row whose condition names neither the outcome nor a data key is a
+# table error, refused loudly — never a row that silently stops applying
+# (review of #487).
+mkdir -p "$SCRATCH/ls-cond"
+sed 's|pr\.iterate/outcome~green|pr.iterate/outcom~green|' "$TRACE" >"$SCRATCH/ls-cond/trace.sh"
+t_run_split env TRACE_CONFIG="$LSON" sh "$SCRATCH/ls-cond/trace.sh" emit kind=pr.iterate subject=pr:#1 outcome=green data.iteration=1
+case $S_STATUS:$S_ERR in
+2:*"unknown condition 'outcom~"*) pass "a TRACE_SHAPES row with an unknown condition (outcom~) is exit 2 naming it" ;;
+*) fail "a row with an unknown condition did not die naming it (exit $S_STATUS): $S_ERR" ;;
+esac
+
 # The rules live in the one kind table, and the record names them.
 grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&
 	pass "the rules are rows of the one TRACE_SHAPES table" || fail "scripts/trace.sh's TRACE_SHAPES does not declare the source vocabulary, the local id and the required counts"

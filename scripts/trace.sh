@@ -400,6 +400,8 @@ EOF
 
 # trace_shape_holds <when>~<ERE> <outcome> <key=value lines> — a row's
 # condition: the outcome, or any occurrence of the data key, matches whole.
+# A condition naming neither is a table error, and dies (exit 2): a row
+# that silently stopped applying would fail open.
 trace_shape_holds() {
 	_sk_re=${1#*~}
 	case ${1%%~*} in
@@ -414,7 +416,7 @@ $3
 EOF
 		return 1
 		;;
-	*) return 1 ;;
+	*) die "TRACE_SHAPES: unknown condition '$1' — a row's condition is outcome~ or data.<key>~" ;;
 	esac
 }
 
