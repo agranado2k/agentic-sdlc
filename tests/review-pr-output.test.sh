@@ -718,6 +718,11 @@ th=$(t_line_of "$SKILL_ABS" "| | Severity | Count |")
 	pass "the summary's 'Lenses not run:' line sits between Clean audits ($c) and the count table ($th)" ||
 	fail "'Lenses not run:' is not between Clean audits ($c) and the count table ($th) — got '$ln'"
 assert_file_has "$SKILL" "never a clean audit"
+# The roster says where every `data.agent` is written; `spawn.end` now writes
+# one too, so the roster's list of places names it (review of #512).
+grep '^\*\*The sub-agent roster\.\*\*' "$SKILL_ABS" | grep -qF 'on the spawn and its `spawn.end` above' &&
+	pass "the roster names the spawn.end among the places data.agent is written" ||
+	fail "the roster's list of places that write data.agent omits the spawn.end, which now writes one"
 # Baits: one per rule the reader holds, so no rule survives its own deletion.
 for b in \
 	's/\(kind=spawn\.end[^`]*\)outcome=ok|fail/\1outcome=ok/' \
