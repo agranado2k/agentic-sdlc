@@ -157,14 +157,81 @@ hook_expand() {
 # for. GIT_DIR and GIT_WORK_TREE are scrubbed because git exports them into
 # hooks and a pinned pair would answer for another repository.
 hook_pointer() {
-	_hp_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hp_dir=
-	[ -n "$_hp_dir" ] || return 1
 	_hp_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" rev-parse --show-toplevel) 2>/dev/null ) || _hp_top=
 	[ -n "$_hp_top" ] || _hp_top=$hook_repo
-	_hp_key=$(printf '%s' "$_hp_top" |
-		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hp_key=
-	[ -n "$_hp_key" ] || return 1
-	printf '%s/current/%s' "$_hp_dir" "$_hp_key"
+	hook_current_of "$_hp_top"
+}
+
+# hook_current_of <toplevel> — the per-toplevel path `scripts/trace.sh` keys a
+# working tree's pointer file on; its run stack is the same path plus `.runs`.
+# Nothing (status 1) when tracing is off or git cannot hash the path.
+# DELIBERATE COUPLING: this repeats the shared script's key derivation
+# (trace_key); hook_pointer and hook_run_of both depend on it.
+hook_current_of() {
+	_hc_dir=$(hook_dir) || return 1
+	_hc_key=$(printf '%s' "$1" |
+		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hc_key=
+	[ -n "$_hc_key" ] || return 1
+	printf '%s/current/%s' "$_hc_dir" "$_hc_key"
+}
+
+# --- the run of the checkout the work happened in ----------------------------
+
+# hook_run_of <dir> — export TRACE_RUN and TRACE_PARENT from the run stack of
+# the checkout <dir> is in, so every emit after it carries that checkout's run.
+# Ticket #421, retro finding H4 (#417).
+#
+# WHY. The shared script reads the stack of the toplevel IT lives in, and the
+# kit's hooks execute from the ROOT checkout — while a session's `begin` ran
+# in a linked worktree, whose stack is keyed on the worktree's toplevel. Read
+# the shared script's way, every stop carried the root's run (or none), and no
+# subagent's spend joined the ticket it was spent on: 0 of 28 priced agent.stop
+# events carried an implement or review run.
+#
+# WHICH CHECKOUT. <dir>'s, when git answers for it AND its common directory is
+# this repository's — a cwd in an unrelated repository is not a checkout of
+# this one, and its stack would be a stranger's. Otherwise nothing is exported
+# and the shared script answers with the root's stack, as before. A checkout
+# whose stack holds no run exports TRACE_RUN='' — the shared script's spelling
+# of "no run" — so an idle worktree never borrows the root's run.
+#
+# DELIBERATE COUPLING, the second one. The stack is read here, not by running
+# the shared script: this runs on every subagent stop, and the script exposes
+# no read of a stack (its trace_stack and trace_stack_readable are internal).
+# So the adapter repeats the stack's format — one run per line, the top last,
+# its parent the line below — and its exists-but-unreadable rule. Both are
+# read from ONE snapshot of the file, so a begin or end that replaces the
+# stack between two reads cannot pair a run with another stack's parent.
+#
+# THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
+# whose trail it joins) is left alone, and with it the parent, exactly as the
+# shared script's own precedence has it; a TRACE_PARENT already set is kept.
+hook_run_of() {
+	[ -n "${TRACE_RUN+set}" ] && return 0
+	[ -n "$1" ] || return 0
+	_ro_common=$(hook_common_dir "$1") || return 0
+	_ro_own=$(hook_common_dir "$hook_repo") || return 0
+	[ "$_ro_common" = "$_ro_own" ] || return 0
+	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
+	_ro_stack=$(hook_current_of "$_ro_top") || return 0
+	_ro_stack="$_ro_stack.runs"
+	if [ -e "$_ro_stack" ] && [ ! -r "$_ro_stack" ]; then
+		echo "x  trace: the run stack at $_ro_stack exists and cannot be read — this event carries no run." >&2
+		_ro_run= _ro_parent=
+	else
+		_ro_nl='
+'
+		_ro_pair=$(awk '{ below = top; top = $0 } END { print top; if (NR >= 2) print below }' "$_ro_stack" 2>/dev/null) || _ro_pair=
+		_ro_run=${_ro_pair%%"$_ro_nl"*}
+		case $_ro_pair in *"$_ro_nl"*) _ro_parent=${_ro_pair#*"$_ro_nl"} ;; *) _ro_parent= ;; esac
+	fi
+	TRACE_RUN=$_ro_run
+	export TRACE_RUN
+	if [ -z "${TRACE_PARENT+set}" ]; then
+		TRACE_PARENT=$_ro_parent
+		export TRACE_PARENT
+	fi
+	return 0
 }
 
 # hook_point_at <session id> — write the pointer, or do nothing at all.
@@ -639,10 +706,20 @@ hook_tail_facts() {
 # where being behind main is normal and says nothing about the code the hooks
 # run (review of PR #390, Axis 2 item 3).
 hook_root() {
-	_hr=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$hook_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
-	[ -n "$_hr" ] || return 1
+	_hr=$(hook_common_dir "$hook_repo") || return 1
 	dirname "$_hr"
+}
+
+# hook_common_dir <dir> — the absolute path of git's common directory for the
+# checkout <dir> is in, or nothing (status 1) when git does not answer. The ONE
+# spelling of that lookup: hook_root derives the root checkout from it, and
+# hook_run_of compares two checkouts' answers to tell one repository from
+# another. GIT_DIR and GIT_WORK_TREE are scrubbed for hook_pointer's reason.
+hook_common_dir() {
+	_hcd=$( (unset GIT_DIR GIT_WORK_TREE &&
+		git -C "$1" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
+	[ -n "$_hcd" ] || return 1
+	printf '%s' "$_hcd"
 }
 
 # hook_behind <root> — how many commits the last FETCHED origin/main holds that

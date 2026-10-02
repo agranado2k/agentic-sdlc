@@ -53,6 +53,12 @@ aid=$(hook_field agent_id)
 atype=$(hook_field agent_type)
 transcript=$(hook_expand "$(hook_field agent_transcript_path)")
 
+# The run is the one open in the checkout the subagent worked in — the
+# payload's cwd, or this process's own when the payload names none — and not
+# the root checkout's this hook executes from (#421; see hook_run_of).
+cwd=$(hook_expand "$(hook_field cwd)")
+hook_run_of "${cwd:-$PWD}"
+
 # The ids are checked before they become a subject or a field: a payload is
 # data (see hook.lib.sh's hook_id_ok), and an id that cannot be queried is one
 # `show` could never match. `session=` is set explicitly for the reason

@@ -3463,4 +3463,163 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"swept into one \`tool.use\` with \`outcome=denied\`"*) pass "the adapter README records the sweep" ;;
 *) fail "the adapter README does not say a leftover marker is swept into one tool.use with outcome=denied" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "41. A stop carries the run of the checkout the subagent worked in (#421)"
+# ---------------------------------------------------------------------------
+# Retro finding H4 (#417): 0 of 28 priced agent.stop events carried an
+# implement or review run. The hooks execute from the ROOT checkout, so the
+# shared script keyed the run stack on the root's toplevel — while the session
+# whose spend it was had run `begin` in a linked worktree, whose stack is keyed
+# on the worktree's toplevel. The hook now reads the stack of the checkout the
+# payload's cwd names (the process's own cwd when the payload names none),
+# provided it is a checkout of the same repository, and the root's otherwise.
+#
+# Each leg runs the ROOT's copy of the hook, the way the kit's wiring does.
+
+R421="$SCRATCH/run-root-421"
+behind_kit "$R421"
+git -C "$R421" worktree add -q -b feat/wt-421 "$R421.wt" 2>/dev/null
+HOOK421="$R421/${HOOKS#"$KIT"/}/subagent-stop.sh"
+new_trace
+ROOTRUN=$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTOUTER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin review-pr 2>/dev/null)
+[ -n "$ROOTRUN" ] && [ -n "$WTOUTER" ] && [ -n "$WTINNER" ] &&
+	pass "a run is open at the root and two nested runs are open in its linked worktree" ||
+	fail "the fixture runs did not open: root '$ROOTRUN', worktree '$WTOUTER' / '$WTINNER'"
+
+# stop_from <cwd or ''> [env assignments…] — the root's hook on the fixture
+# payload with its cwd field set to <cwd> (removed when empty), run from the
+# kit's own directory. Sets S_* and STOP, the agent.stop this run wrote — and
+# fails the leg unless exactly one was added, so no leg can pass on the event
+# an earlier leg left behind (M-4, local review of PR #449).
+stop_from() {
+	_sf_cwd=$1
+	shift
+	if [ -n "$_sf_cwd" ]; then
+		set_key cwd "$_sf_cwd" <"$FIX/subagent-stop.payload.json"
+	else
+		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
+	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-421.json"
+	_sf_before=$(ev_of agent.stop | grep -c '')
+	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" \
+		sh "$HOOK421" <"$SCRATCH/stop-421.json"
+	_sf_added=$(($(ev_of agent.stop | grep -c '') - _sf_before))
+	[ "$_sf_added" = 1 ] ||
+		fail "a stop from '$_sf_cwd' wrote $_sf_added agent.stop events, want exactly 1"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && pass "a stop from the linked worktree exits 0, silent on stdout and stderr" ||
+	fail "a stop from the worktree: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "it carries the worktree's open run, not the root's" ||
+	fail "a stop from the worktree carries run '$(str "$STOP" run)', want $WTINNER (root's is $ROOTRUN)"
+[ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "and that run's parent, the run below it on the worktree's stack" ||
+	fail "a stop from the worktree carries parent '$(str "$STOP" parent)', want $WTOUTER"
+
+mkdir -p "$R421.wt/scripts/deeper"
+stop_from "$R421.wt/scripts/deeper"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a cwd deep inside the worktree names the same checkout" ||
+	fail "a stop from below the worktree's top carries run '$(str "$STOP" run)', want $WTINNER"
+
+stop_from "$R421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a stop from the root carries the root's run" ||
+	fail "a stop from the root carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $ROOTRUN"
+
+mkdir -p "$SCRATCH/nowhere-421"
+stop_from "$SCRATCH/nowhere-421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a stop from outside any checkout falls back to the root's run" ||
+	fail "a stop from outside a checkout carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+stop_from "$SCRATCH/never-there-421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd that does not exist falls back to the root's run, exit 0" ||
+	fail "a missing cwd: exit $S_STATUS, run '$(str "$STOP" run)', want $ROOTRUN"
+
+OTHER421="$SCRATCH/other-repo-421"
+mkdir -p "$OTHER421"
+git init -q "$OTHER421"
+stop_from "$OTHER421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd in an UNRELATED repository is not a checkout of this one: the root's run" ||
+	fail "a stop from an unrelated repository carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+# A GIT_DIR / GIT_WORK_TREE pair pinned to another repository — git exports
+# them into hooks — answers for nothing here: every lookup scrubs them, and the
+# stop still carries the worktree's run (M-3, local review of PR #449).
+stop_from "$R421.wt" GIT_DIR="$OTHER421/.git" GIT_WORK_TREE="$OTHER421"
+[ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "a pinned GIT_DIR/GIT_WORK_TREE for another repository does not move the run" ||
+	fail "with GIT_DIR pinned elsewhere the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / $WTOUTER"
+
+# No cwd in the payload: the hook's own working directory answers. The hook is
+# run from the worktree in THIS shell, not a subshell, so S_STATUS and S_ERR
+# survive to be asserted on (L, review of PR #449).
+_here421=$PWD
+cd "$R421.wt" || fail "cannot enter the fixture worktree $R421.wt"
+stop_from ''
+cd "$_here421" || fail "cannot return to $_here421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a payload with no cwd field: the hook's own working directory names the checkout, exit 0" ||
+	fail "with no cwd field, a hook run inside the worktree: exit $S_STATUS, run '$(str "$STOP" run)', want $WTINNER"
+
+# The environment still beats every stack, as it does for the shared script.
+stop_from "$R421.wt" TRACE_RUN=run-from-env-421
+[ "$(str "$STOP" run)" = run-from-env-421 ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a TRACE_RUN in the environment still wins over the worktree's stack" ||
+	fail "with TRACE_RUN set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+
+# A TRACE_PARENT alone is kept, and the run still comes from the worktree's
+# stack: the parent is the caller's to say, the run is not (M, review of PR #449).
+stop_from "$R421.wt" TRACE_PARENT=parent-from-env-421
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = parent-from-env-421 ] &&
+	pass "a TRACE_PARENT with no TRACE_RUN: the worktree's run, the environment's parent" ||
+	fail "with only TRACE_PARENT set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / parent-from-env-421"
+
+# A stack that EXISTS and cannot be read is said, on stderr, and the stop
+# carries no run — never the root's (H-1, review of PR #449). Root reads a
+# mode-000 file, so the leg cannot be driven there and says so.
+if [ "$(id -u)" = 0 ]; then
+	echo "  skip  running as root — a mode-000 file is readable, so the unreadable-stack leg cannot be driven"
+else
+	STACK421=$(grep -lF "$WTINNER" "$TDIR"/current/*.runs 2>/dev/null)
+	[ -f "$STACK421" ] && pass "the worktree's run stack is where the leg looks for it" ||
+		fail "no run stack at $STACK421"
+	chmod 000 "$STACK421"
+	stop_from "$R421.wt"
+	chmod 600 "$STACK421"
+	[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] && [ -z "$(str "$STOP" run)" ] && [ -z "$(str "$STOP" parent)" ] &&
+		pass "an unreadable worktree stack: exit 0, the stop carries no run and no parent, not the root's" ||
+		fail "an unreadable worktree stack: exit $S_STATUS, run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', event '$STOP'"
+	case $S_ERR in *"$STACK421 exists and cannot be read"*) pass "and stderr names the stack that could not be read" ;;
+	*) fail "an unreadable worktree stack says nothing on stderr naming it: '$S_ERR'" ;; esac
+fi
+
+# A worktree with NO run open says so: it never borrows the root's.
+(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1 &&
+	env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1)
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$(str "$STOP" run)" ] && [ -n "$STOP" ] &&
+	pass "a worktree with no open run: the stop carries no run, not the root's" ||
+	fail "a worktree with no open run: exit $S_STATUS, run '$(str "$STOP" run)', event '$STOP'"
+
+# THE RECORD: the adapter README's row for the hook says all of it — the
+# parent from the same stack, and an idle checkout's stop carrying no run
+# (M, review of PR #449).
+ROW421=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
+case $ROW421 in *"parent from the same checkout's stack"*) pass "the README row says the parent comes from the same checkout's stack" ;;
+*) fail "the README row for subagent-stop.sh does not say the parent comes from the same checkout's stack" ;; esac
+case $ROW421 in *"a checkout with no run open makes a stop that carries no run, never the root's"*) pass "the README row says an idle checkout's stop carries no run" ;;
+*) fail "the README row for subagent-stop.sh does not say a checkout with no run open makes a stop that carries no run" ;; esac
+case $ROW421 in *"the hook's own working directory when the payload names no \`cwd\`"*) pass "the README row names the no-cwd fallback" ;;
+*) fail "the README row for subagent-stop.sh does not name the hook's own working directory as the no-cwd fallback" ;; esac
+case $ROW421 in *"a \`TRACE_RUN\` already in the environment wins, with its parent; a \`TRACE_PARENT\` alone is kept"*) pass "the README row names the environment's precedence" ;;
+*) fail "the README row for subagent-stop.sh does not say a TRACE_RUN in the environment wins and a TRACE_PARENT alone is kept" ;; esac
+
 t_done "trace hooks"
