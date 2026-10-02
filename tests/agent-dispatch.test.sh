@@ -1176,10 +1176,8 @@ EOF
 # TMPDIR=TMP mid-run, then hold TMP to ONE leftover named agent-dispatch.*
 # carrying its staged prompt; LEFTOVER names it (a placeholder on a fail, so
 # the sweep legs below still have one to age). The KILL waits on the worker's
-# pid file, never on a fixed two seconds (#473, the class #402 removed from
-# the TERM leg): the worker is spawned after the prompt is staged, so its
-# marker is the one anchor that cannot precede the scratch. No marker is a
-# fail, never a KILL anyway.
+# pid file — why is beside the bait below. No marker is one fail, never a
+# KILL anyway.
 kill_leg() {
 	rm -f "$PIDFILE"
 	# KILL is uncatchable, so the cleanup trap never runs; the worker is
@@ -1207,7 +1205,9 @@ kill_leg() {
 # only the real dispatcher's leftover: a copy slow to create its scratch, as a
 # loaded host makes the real one. A KILL sent on the clock lands before the
 # scratch exists and leaves nothing to name; one sent on the worker's own pid
-# file cannot, because the worker is spawned after its prompt is staged.
+# file cannot, because the worker is spawned after its prompt is staged — the
+# one anchor that cannot precede the scratch (#473, the class #402 removed
+# from the TERM leg).
 KILL_BAIT_DIR="$SCRATCH/slow-scratch"
 KILL_BAIT_TMP="$SCRATCH/sweep-tmp-bait"
 mkdir -p "$KILL_BAIT_TMP"
