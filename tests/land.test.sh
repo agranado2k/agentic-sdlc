@@ -43,6 +43,12 @@ printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
 case " $* " in
 *" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
+*" pr view "*"body"*)
+	# The PR body is a file the case wrote — free text, quotes and all, so it
+	# never passes through the knob file's quoting.
+	[ "${STUB_BODY_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_BODY_RC"; }
+	[ -z "${STUB_BODY_FILE:-}" ] || cat "$STUB_BODY_FILE"
+	;;
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
 	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
@@ -252,7 +258,106 @@ printf '%s\n' "$ml" | grep -qF '"merge_sha"' && fail "an empty merge_sha was rec
 printf '%s\n' "$S_ERR" | grep -qi 'merge commit' && pass "stderr says the merge commit is unknown" || fail "stderr: $S_ERR"
 
 # ---------------------------------------------------------------------------
-banner "6. Kit-only: on bootstrap's deletion list, named by the root manual"
+banner "6. The landing records whether /implement opened the PR, read from its body (#480)"
+# ---------------------------------------------------------------------------
+# /implement writes one line into the PR body it opens — the ticket and the
+# tier it read through the stamp checker. The landing reads that line from the
+# forge, never from the trace (ADR-0008 clause 7), and records it on
+# merge.land as data.implement=yes|no and data.tier. The body is untrusted:
+# only a line of the one fixed shape, whose tier the vocabulary checker
+# passes, counts; anything else is recorded as absent — and never blocks the
+# landing.
+# body <name> <text> — write a PR body for one case; prints its path.
+body() { printf '%s\n' "$2" >"$SCRATCH/body.$1"; printf '%s' "$SCRATCH/body.$1"; }
+# landed_with <PR> <label> <token>… — the PR landed, exit 0, and its
+# merge.land carries every token.
+landed_with() {
+	_lw_pr=$1
+	_lw_label=$2
+	shift 2
+	s_assert_status 0 "$_lw_label: the PR lands, exit 0"
+	_lw_ml=$(show "pr:#$_lw_pr" --kind merge.land)
+	for _lw_tok in "$@"; do
+		printf '%s\n' "$_lw_ml" | grep -qF -- "$_lw_tok" && pass "$_lw_label: merge.land carries $_lw_tok" ||
+			fail "$_lw_label: merge.land lacks $_lw_tok: $_lw_ml"
+	done
+}
+# no_tier <PR> <label> — merge.land carries no tier at all.
+no_tier() {
+	show "pr:#$1" --kind merge.land | grep -qF '"tier"' && fail "$2: a tier was recorded: $(show "pr:#$1" --kind merge.land)" ||
+		pass "$2: no tier is recorded"
+}
+# The line is lifted from /implement's own step 8, placeholders filled, so the
+# skill that writes it and the script that reads it are held to one shape.
+LINE=$(grep -oE '<!-- implement: [^`]*-->' "$KIT/.agents/skills/implement/SKILL.md" | head -1 |
+	sed 's/<N>/77/; s/<tier>/mechanical/')
+[ "$LINE" = '<!-- implement: ticket=#77 tier=mechanical -->' ] && pass "the line, lifted from /implement's step 8: $LINE" ||
+	fail "/implement's step 8 does not spell the line this suite expects: '$LINE'"
+f=$(body yes "## What & why
+
+Closes #77.
+
+$LINE
+
+<!-- explain-diff-appendix -->")
+land "STUB_BODY_FILE=$f" 160
+landed_with 160 "the line in the body" '"implement":"yes"' '"tier":"mechanical"'
+grep -q '^ARGV: pr view 160 .*body' "$STUB_LOG" && pass "the body is read from the forge" ||
+	fail "the PR body was never asked of the forge: $(cat "$STUB_LOG")"
+
+land 161
+landed_with 161 "no line in the body" '"implement":"no"'
+no_tier 161 "no line in the body"
+landed_with 123 "an empty body (section 2's landing)" '"implement":"no"'
+
+f="$SCRATCH/body.crlf"
+printf 'Closes #77.\r\n%s\r\n' "$LINE" >"$f"
+land "STUB_BODY_FILE=$f" 162
+landed_with 162 "a body with CRLF line ends" '"implement":"yes"' '"tier":"mechanical"'
+
+f=$(body offvocab "<!-- implement: ticket=#77 tier=implementor -->")
+land "STUB_BODY_FILE=$f" 163
+landed_with 163 "a tier off the vocabulary" '"implement":"no"'
+no_tier 163 "a tier off the vocabulary"
+
+# Hostile lines: each is recorded as absent, and none of it runs.
+for hostile in \
+	"<!-- implement: ticket=#77 tier=\$(touch $SCRATCH/pwned) -->" \
+	"<!-- implement: ticket=#77 tier=\`touch $SCRATCH/pwned\` -->" \
+	"<!-- implement: ticket=#77 tier=planner -->; touch $SCRATCH/pwned" \
+	"<!-- implement: ticket=#77 tier=planner' data.implement=yes reason='x -->" \
+	"<!-- implement: ticket=#77 tier=planner tier=reviewer -->" \
+	"  <!-- implement: ticket=#77 tier=planner -->" \
+	"<!-- implement: ticket=77 tier=planner -->"; do
+	f=$(body hostile "$hostile")
+	land "STUB_BODY_FILE=$f" 164
+	_h_ml=$(show 'pr:#164' --kind merge.land | tail -1)
+	[ "$S_STATUS" = 0 ] && printf '%s\n' "$_h_ml" | grep -qF '"implement":"no"' && ! printf '%s\n' "$_h_ml" | grep -qF '"tier"' &&
+		pass "a malformed line is recorded as absent, and lands: $hostile" ||
+		fail "a malformed line was not recorded as absent (exit $S_STATUS): $hostile — $_h_ml"
+done
+[ -e "$SCRATCH/pwned" ] && fail "a hostile PR body ran a command" || pass "no hostile body ran anything"
+
+f=$(body two "$LINE
+<!-- implement: ticket=#77 tier=planner -->")
+land "STUB_BODY_FILE=$f" 165
+landed_with 165 "two lines in one body" '"implement":"no"'
+no_tier 165 "two lines in one body"
+
+f=$(body other "<!-- implement: ticket=#999 tier=planner -->")
+land "STUB_BODY_FILE=$f" 166
+landed_with 166 "a line naming another ticket" '"implement":"no"'
+no_tier 166 "a line naming another ticket"
+
+f=$(body noticket "<!-- implement: ticket=#999 tier=planner -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 167
+landed_with 167 "with no ticket known, the line's own" '"implement":"yes"' '"tier":"planner"'
+
+land STUB_BODY_RC=1 "STUB_BODY_FILE=$f" 168
+landed_with 168 "a body the forge does not answer for" '"implement":"no"'
+
+# ---------------------------------------------------------------------------
+banner "7. Kit-only: on bootstrap's deletion list, named by the root manual"
 # ---------------------------------------------------------------------------
 kit_only=$(sed -n 's/^KIT_ONLY="\(.*\)"$/\1/p' "$KIT/bootstrap.sh")
 for f in scripts/land.kit.sh tests/land.test.sh; do
