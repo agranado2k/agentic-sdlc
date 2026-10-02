@@ -1598,7 +1598,7 @@
 # typed-return reader is spawned through the adapter's restricted path
 # first, prompt-only as the fallback, say-so naming which — in
 # .agents/skills/pr-iterate/SKILL.md, .agents/skills/to-tickets/SKILL.md
-# and .agents/skills/dogfood/SKILL.md, with adapters/claude-code/README.md
+# and the dogfood skill's SKILL.md, with adapters/claude-code/README.md
 # naming that path "the restricted path" and quoting the skills' say-so.
 
 shared-layer: 0.38.0
