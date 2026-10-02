@@ -2403,6 +2403,9 @@ if bait_copy "$POST_DIR" "$POST_MARK" '$0 == "trap cleanup EXIT" { print "trap \
 		rm -f "$POST_MARK"
 		if bait_term -e "$POST_MARK" env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_POST" TR_WORKER_EXIT=5 \
 			sh "$POST_DIR/agent-dispatch.sh" implementer --prompt 'x' ${_post_timeout:+--timeout "$_post_timeout"}; then
+			[ "$bt_status" = 143 ] &&
+				pass "a TERM after the pair closed still ends the dispatch 143$_post_label" ||
+				fail "a TERM after the pair closed exited $bt_status, not 143 — did the handler run?$_post_label"
 			tr_assert_count "$TR_POST" 2 "a TERM after the pair closed writes no second end$_post_label"
 			tr_event_has "$TR_POST" 2 '"exit":"5"' "…and the one end is still the worker's own$_post_label"
 		else
