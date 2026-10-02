@@ -34,6 +34,11 @@
 #      opens by telling the worker it is offline, forbids a fetch and a forge
 #      call, and makes `REVIEWED: <full sha>` the report's first line — the
 #      sha pinned before the diff is read against it.
+#   9. The reuse/DRY lens's two cases (#419): a duplication the diff ADDS is a
+#      finding; one it merely touches or extends is a LOW candidate ticket
+#      citing shared invariant §10, with a fix line that asks this PR for
+#      nothing — in one sentence of Agent 5's prompt, the exception kept, the
+#      report's shape and the roster unchanged. Proved by two baits.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -429,5 +434,126 @@ esac
 # Shared invariant §7 stays in the worker's own words (tests/agent-dispatch
 # holds the same line; repeated here because this suite owns the contract).
 assert_file_has "$WORKER" "do not push"
+
+
+# Each finding names the lens that raised it (#412): one `↳ lens:` line in
+# the finding anatomy, its token lifted from /review-pr §3's Axis-1 roster and
+# spelled exactly as the skill spells it, so the broker's raise reads one row
+# per lens instead of `unattributed`. The tokens are read from the skill, not
+# typed here: a rename on either side is red.
+assert_file_has "$WORKER" "↳ lens:" "a finding with no lens line is an unattributed raise"
+n_tok=0
+for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$ROOT/$SKILL"); do
+	n_tok=$((n_tok + 1))
+	assert_file_has "$WORKER" "\`$tok\`" "the contract spells the roster token the skill does"
+done
+[ "$n_tok" = 6 ] && pass "six Axis-1 roster tokens were read from the skill" ||
+	fail "expected six Axis-1 roster tokens in $SKILL, read $n_tok"
+
+# ---------------------------------------------------------------------------
+banner "9. The reuse/DRY lens tells added duplication from inherited duplication (#419)"
+# ---------------------------------------------------------------------------
+# Retro H2 (2026-10-01): Agent 5's findings were accepted once and rejected
+# four times with a citation over three PRs — each time it asked a feature PR
+# to move copies that pre-date the branch into a shared file. That move is a
+# behaviour-preserving refactor, and shared invariant §10 lands one on its own
+# ticket, never as a passenger on a feature diff. So the prompt names two
+# cases, and the suite holds it to both: a duplication the diff ADDS is a
+# finding at its severity; a duplication the diff merely touches or extends is
+# a CANDIDATE TICKET — named as such, LOW, §10 cited, and a fix line that
+# asks this PR for nothing. It is a fix LINE and not an absent one because the
+# broker refuses a whole report over one finding without it
+# (scripts/forge-broker.kit.sh; tests/forge-broker.test.sh section 21 runs the
+# line this suite pins through it).
+# Scoped to Agent 5's own section: the other lenses' prompts stay as they
+# were, and a rule written into §5's shared anatomy would bind all six.
+a5=$(t_line_of "$SKILL_ABS" "#### Agent 5 ")
+a6=$(t_line_of "$SKILL_ABS" "#### Agent 6 ")
+if [ -n "$a5" ] && [ -n "$a6" ] && [ "$a5" -lt "$a6" ]; then
+	pass "Agent 5's section is extractable (lines $a5-$a6)"
+else
+	fail "Agent 5's section is not extractable — a5='$a5' a6='$a6'"
+fi
+# agent5_of <a copy of the skill> — the body between the two headings; the
+# headings themselves are §3's, not Agent 5's. sentences_of <a copy> — that
+# body unwrapped and split one sentence per line: the prompt is 80-column
+# prose and a sentence may break between the case and its ruling, and the
+# reviewer reads sentences, not lines. The one pair of readers for the skill
+# and for the baits below, so a bait runs the assertion and never a retyped
+# copy of it.
+agent5_of() { sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1"; }
+sentences_of() { agent5_of "$1" | tr '\n' ' ' | tr '.' '\n'; }
+agent5=$(agent5_of "$SKILL_ABS")
+agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
+a5_has() {
+	if printf '%s\n' "$agent5_flat" | grep -qF -- "$1"; then
+		pass "Agent 5's prompt says '$1'${2:+ ($2)}"
+	else
+		fail "Agent 5's prompt never says '$1'${2:+ — $2}"
+	fi
+}
+# The two cases, each by name.
+a5_has "the diff ADDS" "the first case: a new copy is the author's, and a finding"
+a5_has "pre-date the branch" "the second case: copies the diff inherited are not the author's to consolidate"
+# ruling_of <a copy of the skill> — the ONE sentence of Agent 5's section that
+# names the candidate ticket, puts it at LOW and cites §10; empty when no
+# sentence carries all three.
+ruling_of() { sentences_of "$1" | grep -F "candidate ticket" | grep -F "LOW" | grep -F "§10"; }
+# The fix line a candidate ticket carries, as the prompt spells it: the PR is
+# asked for nothing, and the line says so in words the broker accepts.
+# spells_fix <a ruling sentence> — exit 0 when the sentence spells that line.
+CT_FIX='none on this PR — candidate ticket (shared invariant §10)'
+spells_fix() { printf '%s\n' "$1" | grep -qF -- "\`↳ fix:\` line reads \`$CT_FIX\`"; }
+# The ruling on the second case: named, LOW, §10 cited, the fix line spelled —
+# all in ONE sentence, so the four cannot be met by a word each, scattered
+# across the section. (A later sentence that re-asks for the move is a
+# reviewer's catch, not this check's: it holds the ruling, not the whole prose.)
+ruling=$(ruling_of "$SKILL_ABS")
+[ -n "$ruling" ] &&
+	pass "one sentence rules the inherited case: a candidate ticket, LOW, citing invariant §10" ||
+	fail "no single sentence of Agent 5's prompt names the inherited duplication a candidate ticket AND puts it at LOW AND cites invariant §10"
+spells_fix "$ruling" &&
+	pass "…and that sentence spells the fix line — \`$CT_FIX\` — which asks this PR for nothing" ||
+	fail "…and that sentence does not spell the candidate ticket's fix line \`↳ fix: $CT_FIX\` — the reviewer will still ask for the move, or omit the line and the broker will refuse the report"
+# The citation reaches the report: a candidate ticket cites §10 on its
+# `↳ cites:` line, where /pr-iterate reads the reason for a LOW it may skip.
+a5_has "↳ cites:" "the citation is on the finding's own line, not only in the prompt's reasoning"
+# The one exception stays, and is held in one sentence with its verdict: a
+# divergent-behavior copy is a latent bug whichever branch introduced it, so
+# the candidate-ticket ruling never defers it.
+exception=$(sentences_of "$SKILL_ABS" | grep -F "divergent-behavior" | grep -F "stays a finding")
+[ -n "$exception" ] &&
+	pass "the exception is pinned: a divergent-behavior copy stays a finding whichever branch introduced it" ||
+	fail "no sentence of Agent 5's prompt keeps the divergent-behavior copy a finding — the candidate-ticket ruling would defer a latent bug"
+# The report's shape is unchanged — the candidate ticket is a LOW with the §5
+# anatomy, not a new section at any heading depth. (The count table is held
+# by sections 1 and 7 already.)
+printf '%s\n' "$agent5" | grep -qE '^#{1,6} ' &&
+	fail "Agent 5's section grew a heading — the report's shape is §5's and does not change here" ||
+	pass "Agent 5's section adds no heading: the report's shape is unchanged"
+# The roster is unchanged: still seven lenses and the unattributed token.
+roster=$(region '^\*\*The sub-agent roster\.\*\*' '^#### Agent 1 ' | grep -c '^- `')
+[ "$roster" = 8 ] &&
+	pass "the roster still names seven lenses and the unattributed token" ||
+	fail "the roster names $roster tokens, not 8 — this ticket does not change the roster"
+# Bait 1: the ruling withdrawn from a copy of the skill — ruling_of must be
+# what catches it, so it is known to read the prompt and not a word that
+# happens to be elsewhere in the file.
+sed "$((a5 + 1)),$((a6 - 1))s/candidate ticket/follow-up/g" "$SKILL_ABS" >"$SCRATCH/bait5.md"
+b5=$(ruling_of "$SCRATCH/bait5.md")
+[ -z "$b5" ] && ! cmp -s "$SCRATCH/bait5.md" "$SKILL_ABS" &&
+	pass "bait: the ruling renamed away from 'candidate ticket' goes red" ||
+	fail "bait: with 'candidate ticket' withdrawn from Agent 5's section the ruling still reads '$b5'"
+# Bait 2: the fix line replaced by a request for the move, in the same
+# sentence — the ruling still reads, and the fix assertion is what goes red.
+# This is the check that carries retro H2: a lens that names the ticket and
+# still asks for the consolidation.
+sed "$((a5 + 1)),$((a6 - 1))s/none on this PR[^\`]*/extract the copies into one helper and call it from both sites/" "$SKILL_ABS" >"$SCRATCH/bait5-fix.md"
+b5f=$(ruling_of "$SCRATCH/bait5-fix.md")
+if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! spells_fix "$b5f"; then
+	pass "bait: the fix line swapped for a request to move the copies goes red at the fix assertion"
+else
+	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"
+fi
 
 t_done "/review-pr output contract"

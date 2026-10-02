@@ -71,12 +71,19 @@
 #      when the review was anchored behind the head.
 #   7. Record what landed in the trace, subject `pr:#<N>`: one
 #      `finding.raise` per finding posted inline (withheld ones are not
-#      raised), then one `review.verdict` per axis — Axis 1 with the verdict
+#      raised), each saying so — `data.posted=yes`, the key /retro's dismissal
+#      denominator counts, and `data.agent` a /review-pr roster token — then
+#      one `review.verdict` per axis — Axis 1 with the verdict
 #      as outcome, Axis 2 as /review-pr §5b counts it — each marked
 #      `data.via=broker`, with the model and agent harness when the caller
 #      passed them. The report is untrusted: what reaches an event is lifted
-#      by shape or mapped onto a closed list, never a line of it pasted into
-#      a reason. Never load-bearing (ADR-0008 clause 4).
+#      by shape or mapped onto a closed list — a raise's agent is the
+#      finding's `↳ lens:` token when it is on the roster, `unattributed`
+#      when it is not, the title match when there is none (#412) — never a
+#      line of it pasted into a reason. Never load-bearing (ADR-0008 clause
+#      4). A retry that found both bodies already landed records one `note`
+#      instead: the first run traced them, and a second set would
+#      double-count.
 #
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
@@ -588,6 +595,9 @@ COMMENT_URL=$(existing "$COMMENT_EP") || {
 }
 
 # --- 6. the two operations ---------------------------------------------------------------------
+# Both bodies already carry the marker: a retry of a run that reached step 7.
+RETRY=
+[ -n "$REVIEW_URL" ] && [ -n "$COMMENT_URL" ] && RETRY=1
 if [ -n "$REVIEW_URL" ]; then
 	note "the review for this report already landed: $REVIEW_URL"
 else
@@ -627,26 +637,54 @@ trace() {
 	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
 		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
 }
-# agent_token <finding body> — the /review-pr §3 roster token for the one
-# sub-agent the finding names by number or by title, `unattributed` when it
-# names none or more than one. The answer is always a token from the closed
-# list, never the report's spelling, and never a lens guessed from the text.
+# agent_token <finding body> — the /review-pr §3 roster token for the lens
+# the finding names. Its `↳ lens:` line is read first (#412): a roster token
+# is the answer, any other word is `unattributed` — never the title beside
+# it, never the spelling. With no lens line, the one sub-agent the text
+# names by number or by title, `unattributed` when it names none or more
+# than one. The answer is always a token from the closed list, never the
+# report's spelling, and never a lens guessed from the text.
 agent_token() {
 	LC_ALL=C awk '
 		BEGIN {
 			split("security api-crud pattern simplicity reuse-dry test-hygiene", tok, " ")
+			for (k = 1; k <= 6; k++) roster[tok[k]] = 1
 			t[1] = "Security Sentinel"; t[2] = "API & CRUD Contract Manager"; t[3] = "Pattern & Refactor Enforcer"
 			t[4] = "Simplicity Advocate"; t[5] = "Reuse & DRY Auditor"; t[6] = "Test Hygiene Inspector"
+		}
+		# The first lens line decides, present even when empty. The value is
+		# read as a TOKEN: the backticks, asterisks and carriage return a copy
+		# of the contract may carry are stripped, the case folded, and the
+		# rest cut at the first character a token cannot hold — then the
+		# closed list decides, so nothing the report spelled is what prints.
+		!seen && /^[^A-Za-z0-9]*[Ll]ens:/ {
+			seen = 1
+			lens = $0; sub(/^[^A-Za-z0-9]*[Ll]ens:/, "", lens)
+			gsub(/[`*\r]/, "", lens); sub(/^[ \t]+/, "", lens)
+			lens = tolower(lens); sub(/[^a-z0-9-].*$/, "", lens)
+			next
 		}
 		{
 			for (k = 1; k <= 6; k++) if (index($0, t[k]) || $0 ~ ("Agent " k "([^0-9]|$)")) hit[k] = 1
 		}
 		END {
+			if (seen) { print (lens in roster ? lens : "unattributed"); exit }
 			for (k in hit) { n++; a = tok[k] }
 			print (n == 1 ? a : "unattributed")
 		}
 	' "$1"
 }
+# A retry traces nothing the first run traced. Both bodies carrying the
+# marker means the first run got past both writes, and so reached the emits
+# below — this section never exits early — so a second set would double-count
+# every finding /retro reads. One note says the retry happened. A run that
+# found only the review posted the comment itself: the first run died before
+# the trace, and this run's emits are the only ones.
+if [ -n "$RETRY" ]; then
+	trace loud kind=note "subject=pr:#$PR" outcome=retry data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" \
+		"reason=the review already landed with this report's marker; its raises and verdicts are the first run's"
+	exit 0
+fi
 # One raise per finding that landed inline, before the verdicts (/review-pr
 # §6: record, then verdict). The unconfigured note is said once, by the
 # Axis-1 verdict below, not once per finding.
@@ -659,7 +697,7 @@ if [ -s "$TMP/posted" ]; then
 		[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
 		trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
 			"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
-			"data.where=$f_where" data.via=broker "reason=$f_note"
+			"data.where=$f_where" data.via=broker data.posted=yes "reason=$f_note"
 	done <"$TMP/posted"
 fi
 # The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),

@@ -546,6 +546,19 @@ t_run() {
 	return 0
 }
 
+# t_cpu_ms <command...> — the CPU milliseconds the command's children spent,
+# user plus system as the shell's `times` reports them, or "unmeasured". The
+# command runs in a subshell with both streams discarded. CPU time, never the
+# wall clock: a loaded host stretches the second and leaves the first alone,
+# so a bound read from it goes red only when the work grew.
+t_cpu_ms() {
+	(
+		"$@" >/dev/null 2>&1
+		times
+	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
+	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
+}
+
 # assert_status <expected> <label> -- <command...>
 assert_status() {
 	_expected=$1
@@ -607,14 +620,23 @@ assert_file_has() {
 	fi
 }
 
-assert_file_lacks() {
-	if grep -qF -- "$2" "$1"; then
-		fail "$1 contains '$2'${3:+ — $3}"
-		grep -nF -- "$2" "$1" | sed 's/^/        | /'
+# _t_file_lacks <grep flags> <file> <literal> [<why>] — the body of the two
+# assertions below: a fixed-string search whose hit is the failure, each
+# hit shown. The flags are the one difference between them.
+_t_file_lacks() {
+	if grep $1 -- "$3" "$2"; then
+		fail "$2 contains '$3'${4:+ — $4}"
+		grep -n${1#-q} -- "$3" "$2" | sed 's/^/        | /'
 	else
-		pass "no '$2' in $1${3:+ ($3)}"
+		pass "no '$3' in $2${4:+ ($4)}"
 	fi
 }
+
+assert_file_lacks() { _t_file_lacks -qF "$@"; }
+
+# assert_file_lacks_any_case <file> <literal> [<why>] — the same, case-blind:
+# a literal planted as `Claude -p` or `--TOOLS` is the literal still.
+assert_file_lacks_any_case() { _t_file_lacks -qiF "$@"; }
 
 t_done() {
 	printf '\n'
@@ -804,6 +826,14 @@ t_ignored_commands() {
 # t_is_ignored_command <cmd> — true when the policy file exempts it.
 t_is_ignored_command() { t_ignored_commands | grep -qx -- "$1"; }
 
+# /review-pr's sub-agent roster — the one list every `data.agent` the chain
+# writes is held to. Read from the skill file, never mirrored: two suites had
+# each carried a copy of this reader (review of PR #441, M-1).
+# t_roster_rows <skill file> — the rows of the one list, in file order.
+t_roster_rows() { awk '/^\*\*The sub-agent roster\.\*\*/ { on = 1; next } on && /^- `/ { print } on && /^#/ { exit }' "$1"; }
+# t_roster_of <skill file> — the rows' tokens, one per line.
+t_roster_of() { t_roster_rows "$1" | sed -n 's/^- `\([^`]*\)` — .*/\1/p'; }
+
 # The skill-suite scaffold (#223): four suites had each carried a hand copy of
 # the tokeniser, the command and path resolution and the model-id ban, and the
 # copies had drifted — one verdict weaker than the rest, one root list missing
@@ -937,6 +967,8 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # one is; and the trailing `|| :` goes.
 # A numbered reference `#<N>` becomes `#1`: a project that holds ticket, pr
 # and prd to `<type>:#<digits>` refuses anything else (ticket #305).
+# An iteration `data.iteration=<i>` becomes `1`: the script holds it to
+# digits (ticket #420), and `x` would be the suite's fault, not the skill's.
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
@@ -944,6 +976,7 @@ t_trace_runnable() {
 		-e 's/<type:ref>/pr:#1/g' \
 		-e 's/ \[[^][]*\]//g' \
 		-e 's/#<[^<>]*>/#1/g' \
+		-e 's/data\.iteration=<[^<>]*>/data.iteration=1/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \
@@ -1015,16 +1048,48 @@ t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
 # <literal> as a fixed string; empty when none does.
 t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
 
-# t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
-# <file> opened with ```<language> (sh when omitted) whose body holds <literal>
-# as a fixed string, written whole to <out>, to be sourced and run. The
-# literal is usually a function's `name()`, so the fence that defines it is
-# the one lifted; a document's executable text is run, never a mirror of it.
-# <out> is empty when no such fence exists, which the caller asserts on.
-t_lift_fence() {
-	awk -v lit="$2" -v lang="${4:-sh}" '$0 == "```" lang { buf = ""; on = 1; next }
-		on && /^```$/ { if (index(buf, lit)) { printf "%s", buf; exit } on = 0; next }
-		on { buf = buf $0 "\n" }' "$1" >"$3"
+# t_text_has <text> <fixed string> <why> [<whose>] — one pass/fail per token
+# held in a block of text a suite has already cut out, so a failure names the
+# token that went missing rather than the whole block. <whose>, when given,
+# names the block in the fail line ("the stamp bullet never says …").
+t_text_has() {
+	printf '%s\n' "$1" | grep -qF -- "$2" &&
+		pass "'$2' — $3" ||
+		fail "${4:+$4 }never says '$2' — $3"
+}
+
+# t_fence <file> <holds|opens> <needle> [<language>] — the body of the first
+# fenced block of <file> opened with ```<language> (sh when omitted) that the
+# needle picks, printed verbatim; nothing when none does, which the caller
+# asserts on — it refuses to be vacuous. The two modes are the two ways a
+# suite names the fence it runs:
+#   holds — the body holds <needle> as a fixed string, anywhere. The needle is
+#           usually a function's `name()`, so the fence that defines it is the
+#           one lifted, to be sourced and run.
+#   opens — the body's FIRST line matches <needle>, an ERE. The suites that run
+#           a document's own fenced steps (UPDATING.md's recipe, SETUP.md's
+#           spine, the adoption arm) name each step by how it opens.
+# Either way a document's executable text is run, never a mirror of it, so an
+# edit that breaks a fence breaks the suite instead of the next consumer.
+# Any other mode is refused — status 2, a line on stderr, nothing printed —
+# so a misspelt mode reads as a broken call, not as a missing fence.
+t_fence() {
+	case $2 in
+	holds | opens) ;;
+	*)
+		echo "t_fence: mode '$2' is not holds|opens" >&2
+		return 2
+		;;
+	esac
+	awk -v mode="$2" -v needle="$3" -v lang="${4:-sh}" '
+		$0 == "```" lang { on = 1; n = 0; buf = ""; hit = 0; next }
+		on && /^```$/    { on = 0; if (hit || (mode == "holds" && index(buf, needle))) { printf "%s", buf; exit } next }
+		on {
+			n++
+			if (mode == "opens" && n == 1 && $0 ~ needle) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$1"
 }
 
 # t_lift_shape <file> <first-line ERE> <out> — a declared return shape: the
@@ -1052,21 +1117,140 @@ t_stub_gh() {
 	chmod +x "$1/gh"
 }
 
-# t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
-# <file> whose FIRST line matches, printed verbatim. The suites that run a
-# document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the
-# adoption arm) run its text, never a mirror of it, so an edit that breaks a
-# fence breaks the suite instead of the next consumer. Prints nothing when no
-# fence matches; the caller refuses to be vacuous on that.
-t_sh_fence() {
-	awk -v pat="$2" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$1"
+# t_check_run <check file> <function> <arg>... — one call of a check lifted
+# out of a skill's fence (t_fence, holds), run where a consumer runs it: from
+# $PROJECT/$WHERE (a project of the suite's own, holding scripts/vocab.sh and
+# the shipped policy file), VOCAB_CONFIG unset unless POLICY_FOR names a
+# policy file. Its streams land in $SCRATCH/verdict.out and verdict.err, for
+# the assertions that read what a check printed; the status is the
+# function's. A suite's `verdict` maps its own arguments onto this — the one
+# frame both typed-return suites run their checks in.
+t_check_run() {
+	(cd "$PROJECT/${WHERE:-}" && unset VOCAB_CONFIG && { [ -z "${POLICY_FOR:-}" ] || export VOCAB_CONFIG="$POLICY_FOR"; } &&
+		sh -c '. "$1"; shift; "$@"' _ "$@") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"
 }
 
+# t_verdict_is <accepted|refused> <label> <verdict arg>... — runs the suite's
+# own `verdict` (over t_check_run) with the arguments given, and asserts the
+# check's answer. A frame that cannot run the check is a fail either way, and
+# says which part is missing: no `verdict` function, no lifted check ($CHECK
+# empty or missing), or no $PROJECT directory to run it in. Each would
+# otherwise read as a refusal — a missing function is status 127, a failed cd
+# a non-zero subshell — and pass every `refused` assertion vacuously (review
+# of PR #450, M-1). The streams are emptied before the run, so a fail line
+# never quotes an earlier call's.
+# Two knobs carry what the suites differ in. They are globals, not arguments,
+# because a suite sets each once — at its top, or once per skill it holds —
+# and never per call:
+#   T_VERDICT_PREFIX  — put before every label (the skill under test, when one
+#                       suite holds several)
+#   T_VERDICT_REFUSED — a command given the label, prefix and all, after a
+#                       refusal, for a suite that also holds WHAT a refusal
+#                       printed; unset, the refusal itself is the pass
+t_verdict_is() {
+	_vi_want=$1 _vi_label="${T_VERDICT_PREFIX:-}$2"
+	shift 2
+	: >"$SCRATCH/verdict.out"
+	: >"$SCRATCH/verdict.err"
+	if ! command -v verdict >/dev/null 2>&1; then
+		fail "$_vi_label — no verdict function defined: the suite never ran its check"
+		return
+	elif [ ! -s "${CHECK:-}" ]; then
+		fail "$_vi_label — no lifted check at '${CHECK:-}': an absent check accepts nothing and refuses nothing"
+		return
+	elif [ -z "${PROJECT:-}" ] || [ ! -d "$PROJECT/${WHERE:-}" ]; then
+		fail "$_vi_label — no project directory at '${PROJECT:-}/${WHERE:-}' to run the check in"
+		return
+	elif verdict "$@"; then _vi_got=accepted
+	else _vi_got=refused
+	fi
+	case $_vi_want.$_vi_got in
+	accepted.accepted) pass "$_vi_label" ;;
+	accepted.*) fail "$_vi_label — refused: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" 2>/dev/null | tr '\n' ' ')" ;;
+	refused.refused)
+		if [ -n "${T_VERDICT_REFUSED:-}" ]; then "$T_VERDICT_REFUSED" "$_vi_label"; else pass "$_vi_label"; fi
+		;;
+	*) fail "$_vi_label — the documented check accepted it" ;;
+	esac
+}
+
+# t_hold_reader_step <skill> <flat> <say-so words> [<label prefix>] — the
+# reader step of a typed-return fence, held to one spawn order (ticket #406).
+# <flat> is <skill> flattened one paragraph per line; the step is the
+# paragraph opening '**A tool-restricted subagent reads'. The adapter says an
+# in-session spawn withholds nothing — "no shell" in a prompt is a request,
+# not a restriction — and documents a path through the agent CLI that does
+# withhold, run from the scratch directory so the text and the return file
+# are the reader's whole reach. So the step names that path first and the
+# prompt-restricted subagent second, as the fallback — taken where the adapter
+# documents no path, or where the run through it fails (review of PR #440,
+# M-3) — and the fallback clause is held as ONE span: the subagent restricted
+# by its prompt alone, the return directory made new first, the <say-so
+# words>, and which trigger it was, named. One span, because four substring
+# searches over the paragraph's tail tied none of them to the fallback (local
+# review of PR #440, M-3 and M-4). The adapter names the command; the skill
+# names none — skills ship unstamped and name no vendor — so a flag planted
+# in the skill goes red, whatever its case and whether or not a code span
+# wraps it (review of PR #440, M-4). One copy, for the two suites that hold
+# the three skills (review of PR #440, M-1).
+t_hold_reader_step() {
+	_hr_skill=$1 _hr_flat=$2 _hr_p=${4:-}
+	_hr_duty=$(printf '%s' "$3" | tr 'A-Z' 'a-z')
+	_hr_reader=$(grep '^\*\*A tool-restricted subagent reads' "$_hr_flat")
+	# Held case-blind, with one spelling of the fallback: a bait that capitalises
+	# "Fall back" or writes "fallback" is the same order, and must go red the same.
+	_hr_reader=$(printf '%s' "$_hr_reader" | tr 'A-Z' 'a-z' | sed 's/fallback/fall back/g')
+	if [ -n "$_hr_reader" ]; then
+		pass "${_hr_p}the reader step is one paragraph, found by its opening words"
+	else
+		fail "${_hr_p}the reader step no longer opens '**A tool-restricted subagent reads' — nothing below can find it"
+		return 1
+	fi
+	_hr_before=${_hr_reader%%fall back*}
+	# One arm for presence and order both: a step that never names the path
+	# fails it the same way as one naming it after the fallback.
+	case $_hr_before in
+	*"restricted path"*) pass "${_hr_p}the reader step names the adapter's restricted path, before the fallback" ;;
+	*) fail "${_hr_p}the reader step never names a restricted path, or names it after the fallback — the restricted path is the first spawn, not the alternative" ;;
+	esac
+	# The fallback's two triggers, both named before it: the adapter documents
+	# no path, or the run through the path fails. A run that fails is not a
+	# path that exists; "where no such path exists" alone left it uncovered.
+	case $_hr_before in
+	*"documents no such path"*) pass "${_hr_p}the fallback is taken where the adapter documents no such path" ;;
+	*) fail "${_hr_p}the fallback's first trigger is unnamed — it is taken where the adapter documents no such path" ;;
+	esac
+	case $_hr_before in
+	*"the run through it fails"*) pass "${_hr_p}…or where the run through it fails" ;;
+	*) fail "${_hr_p}the fallback's second trigger is unnamed — a run through the restricted path that fails falls back too" ;;
+	esac
+	# The fallback clause, one span: what is fallen back to, the return
+	# directory made new before it runs (a failed run's partial output is not
+	# what the check reads), the say-so, and the trigger named in it.
+	_hr_clause="fall back to a subagent restricted by its prompt alone, \`\$scratch/out\` made new first, and $_hr_duty — naming which trigger it was, no path documented or a run that failed"
+	case $_hr_reader in
+	*"$_hr_clause"*) pass "${_hr_p}…to a subagent restricted by its prompt alone, the return directory made new first, and it $_hr_duty naming which trigger it was — one clause" ;;
+	*) fail "${_hr_p}the fallback clause moved — expected, after the triggers: '$_hr_clause'" ;;
+	esac
+	case $_hr_reader in
+	*"the adapter names the command"*) pass "${_hr_p}the adapter names the command; the skill names none" ;;
+	*) fail "${_hr_p}the reader step should say the adapter names the command — a skill ships unstamped and names no vendor's" ;;
+	esac
+	case $_hr_reader in
+	*'run from `$scratch`'*) pass "${_hr_p}…run from the scratch directory, the one directory the reader reaches" ;;
+	*) fail "${_hr_p}the reader step should run the restricted path from \`\$scratch\` — from anywhere else, the caller's tree is in reach" ;;
+	esac
+	# The generic net: a flag after a space, a backtick or a paren — a code
+	# span or a parenthesis hides nothing — on the lower-cased step, so a
+	# capitalised flag is caught too.
+	if printf '%s' "$_hr_reader" | grep -q '[ `(]--[a-z]'; then
+		fail "${_hr_p}the reader step carries a flag ($(printf '%s' "$_hr_reader" | sed 's/.*[ `(]\(--[a-z-]*\).*/\1/')) — the adapter names the command, the skill names no vendor's flag"
+	else
+		pass "${_hr_p}the reader step carries no flag of any name"
+	fi
+	# The named net, whole file, case-blind: a flag planted outside the step,
+	# or spelled `Claude -p`, goes red the same. The one list, here.
+	for _hr_flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
+		assert_file_lacks_any_case "$_hr_skill" "$_hr_flag" "a vendor's flag or command is the adapter's to name, never the skill's"
+	done
+}

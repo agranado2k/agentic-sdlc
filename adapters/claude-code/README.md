@@ -109,7 +109,7 @@ the answer, for the two ways a Claude Code session can spawn that reader. They
 are not the same kind of thing, and the one job of this section is to say
 which is which: **the CLI withholds; the in-session tool is asked.**
 
-### The CLI path — a restriction
+### The restricted path — a restriction
 
 Headless, `claude -p` takes three flags that together leave a reader with one
 tool, confined to one directory, and no tool server. From `claude --help` on
@@ -221,14 +221,14 @@ network" written into the prompt is a **request, not a restriction**: a
 reader that honours it is well behaved, and a line injected into the file it
 reads can ask it to do otherwise with a shell to hand.
 
-So the recommended in-session path is the CLI one: **spawn the reader with the
-CLI from inside the session.** A session holds a shell, the `-p` line above
-runs under it, and the restriction is then real whichever path the skill
+So the recommended in-session path is the restricted path: **spawn the reader
+with the CLI from inside the session.** A session holds a shell, the `-p` line
+above runs under it, and the restriction is then real whichever path the skill
 started on — the same three flags, from `$scratch`, with the return in the
 file the skill names. The **prompt-only spawn is the fallback**, for a
 session that cannot run the CLI — no `claude` on the path, or a shell it was
-not given — and it keeps the duty the three skills already provide for: where
-yours cannot, say so at the quiz (`/to-tickets`) or say so in the report
+not given — and it keeps the duty the three skills already provide for:
+say so at the quiz (`/to-tickets`) or say so in the report
 (`/pr-iterate` and the dogfood skill). Say what fenced the read — for
 example, that the reader was tool-restricted by prompt alone — so the human
 reading the quiz or the report knows: the return's shape check and the
@@ -252,15 +252,17 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on — with `data.behind`, how far the root checkout is behind `origin/main` |
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end` |
-| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens |
+| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below |
+| `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
+| `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
-| `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` splits a payload with |
-| `hooks/hook.lib.sh` | not a hook either: what the four share |
+| `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` and `tool-pre.sh` split a payload with |
+| `hooks/hook.lib.sh` | not a hook either: what the six share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
-them writes to stdout, and each sets the trace's quiet variable so a project
+them writes to stdout but the behind note's one object, and each sets the trace's quiet variable so a project
 that never turned tracing on hears nothing. Observability that can fail a
 session is worse than none.
 
@@ -332,13 +334,16 @@ Every tool call can be captured too, as one `tool.use` event carrying the tool's
 name, the call's id, the first 512 bytes of its input on the line, and the FULL
 input and FULL result in the blob store with the result's size — each stored
 by `sh scripts/trace.sh blob`, which prints the name the event carries, so the
-adapter keeps no store of its own. Two more events
-wire it, both to the same script — the only difference between them is the
-outcome it records:
+adapter keeps no store of its own. Three more events
+wire it: the two post-tool events to the same script — the only difference
+between them is the outcome it records — and `PreToolUse` to the marker a
+denied call leaves behind (below):
 
 ```json
 {
   "hooks": {
+    "PreToolUse": [ { "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre.sh\"" } ] } ],
     "PostToolUse": [ { "hooks": [ { "type": "command",
       "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-post.sh\"" } ] } ],
     "PostToolUseFailure": [ { "hooks": [ { "type": "command",
@@ -353,20 +358,36 @@ That is a decision, not a formality — a tool call is the least decision-bearin
 line in the trace and there are hundreds per session, and a tool *result* is the
 contents of whatever was read. Turn it on for a wave you want to study.
 
-Three things this hook deliberately does not do:
+**A denied call is swept, not seen.** A tool call the permission system
+refuses — or a blocking `PreToolUse` hook such as the kill guard below — fires
+`PreToolUse` **only**: no `PostToolUse` and no `PostToolUseFailure`, and that
+payload is handed to the hook *before* the decision, so nothing on it says the
+call was denied. So `hooks/tool-pre.sh` leaves a pending marker per call,
+`claude-code/<session id>.pending/<tool-use id>` in the trace directory — the
+directory the phantom counters live in, each marker owner-only, holding the
+tool's name and the input head — and writes no event; `tool-post.sh` removes the call's
+marker when it returns, whatever it then records. At the session's end, **each
+marker left is swept into one `tool.use` with `outcome=denied`**, the tool's
+name and the input head on it, before `session.end` (ticket #409). Swept per
+session, never across: another session's marker may be a call still running.
+A marker whose session never fires `SessionEnd` stays on disk until an end for
+that session id sweeps it. An *interrupted* call is not a denial: it reaches
+`PostToolUseFailure` and reads as `fail`. The marker is behind `TRACE_TOOLS`
+as well, because only a post-tool hook that runs can remove it — with capture
+off, every call would read as denied — and without node there is no marker,
+because the post-tool hook could not read the id that removes it.
 
-- **It records `ok` and `fail`, never `denied`.** A tool call the permission
-  system refuses fires `PreToolUse` **only** — no `PostToolUse` and no
-  `PostToolUseFailure` — and that payload is handed to the hook *before* the
-  decision, so nothing on it says the call was denied. A denied call is
-  therefore invisible here. An *interrupted* one is not: it reaches
-  `PostToolUseFailure` and reads as `fail`.
-- **There is no `PreToolUse` capture hook.** Both post payloads carry the whole
-  `tool_input` themselves, so a pre hook would have nothing to add to the event
-  and nothing of its own to emit — one more process per tool call for no line.
-  (The one `PreToolUse` hook here is the root guard below, which records
-  nothing.)
-- **It never uses `hook_field` on a tool payload.** Every live payload arrives
+Two things the post-tool hook deliberately does not do:
+
+- **It writes no event at `PreToolUse`.** Both post payloads carry the whole
+  `tool_input` themselves, so the pre hook has nothing to add to the event;
+  its marker is only the evidence that a call began. (The root guard below is
+  one more `PreToolUse` hook, and records nothing.)
+- **It never reads an event's fields with `hook_field` on a tool payload.**
+  One best-effort use is not a field of the event: when the reader refuses a
+  post payload, the call still returned, so its pending marker is dropped by
+  the ids `hook_field` finds — held to the marker's identifier class, so a
+  wrong answer leaves a marker behind and is never a path. Every live payload arrives
   compact, as one line of JSON, so a key-name search finds the LAST occurrence
   — harmless for the session payloads, whose keys occur once, but a tool
   payload nests arbitrary objects, and a tool result can carry `"session_id"`
@@ -398,12 +419,24 @@ you get it wrong:
   `--continue` keep the session id and append to the same transcript, and
   `SessionEnd` fires at the end of every run — so an end that re-read the whole
   file would count every earlier response again. Each `session.usage` event
-  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
-  model), and the next end of that session counts only what came after the
-  last one the trace holds. The events stay a plain sum: `summary`, the export
+  therefore says how far it read for its model (`data.last_msg`, that model's
+  last message, and `data.msgs`, its message count), and the next end of that
+  session counts each model only after the last anchor the trace holds for
+  that model — a model with none is read from the start. One anchor per model
+  because the events are written one per model: an end killed after the first
+  of them leaves the others to the next end rather than skipping them (#408). The events stay a plain sum: `summary`, the export
   and the query below need no rule about which event supersedes which. A
   compaction appends to the same file too, but the call that writes its summary
-  leaves no assistant line, so its tokens are in the rollup and in no event.
+  leaves no assistant line, so its tokens are in the rollup and in no message.
+  The session-end hook therefore reads the rollup beside the messages and
+  records the difference, per model, as one more `session.usage` event with
+  `data.via=rollup` and `data.reason=compaction` and no `data.last_msg` — so
+  the plain sum of the events is the rollup (#407). It judges the rollup only
+  in a file that holds a compact boundary, whose last rollup line follows its
+  last message and that is not a fork; the subagents' own files and any gap an
+  earlier end recorded are taken off first. A rollup smaller than what the
+  events already hold records the messages as usual plus one `outcome=fail`,
+  `data.via=rollup` event saying why no gap was recorded.
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
@@ -438,10 +471,29 @@ worktree measures the root, never its own feature branch, and says so with
 `data.behind_of=root` — counted with plain git and never a fetch of its own,
 `0` when level. A checkout with
 no `origin/main`, or no repository, records no field and still exits 0.
-`TRACE_BEHIND_WARN` in your trace policy file adds one line on stderr when the
-count is more than it; the policy file ships it empty, which records the count
-and says nothing. A malformed value is refused on stderr and otherwise
-ignored.
+`TRACE_BEHIND_WARN` in your trace policy file adds a note when the count is
+more than it; the policy file ships it empty, which records the count and says
+nothing. A malformed value is refused on stderr and otherwise ignored.
+
+**The note leaves by stdout, as one JSON object, because stderr reaches nobody**
+(ticket #427). The note began as a stderr line, and a live probe of the agent
+harness at 2.1.285 found a `SessionStart` hook's stderr on exit 0 kept in the
+transcript's own records and shown nowhere — not in an interactive terminal,
+not on a non-interactive run's stdout or stderr. The hooks reference documents
+three other routes; the probe settled which reaches a reader:
+
+| Route | Who reads it | Chosen |
+| --- | --- | --- |
+| a top-level `systemMessage` in a JSON object on stdout | the operator: documented as shown to the user, and an interactive session prints it under its banner | yes |
+| `hookSpecificOutput.additionalContext` in the same object | the model, which relays it — the one route into a non-interactive run's output | yes, beside it |
+| plain stdout | the model only, and it would make the object unparseable | no |
+| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (ADR-0008 clause 4) | no |
+
+So past the threshold the hook prints exactly one object carrying the note in
+both fields, still exits 0, and still writes the stderr line for a reader of the
+agent harness's records. Under the threshold, and on every other path, stdout
+stays empty: nothing about the trace ever takes this route, and `hook.lib.sh`'s
+rule 2 names this one object as its only exception.
 
 **A phantom stop writes no event.** Most `SubagentStop` payloads in a long
 session name a subagent transcript that does not exist and never appears:
@@ -457,6 +509,64 @@ cannot be read** is a real stop whose usage is lost, recorded at once as
 `agent.stop outcome=fail` with a reason saying so and naming the path — never
 polled, since a file the hook cannot open never ends on a final message. A
 payload that names no transcript at all is still recorded, as before.
+
+### The kill guard: a sub-agent signals only what it started
+
+Parallel sessions run the same suites on one machine, so a process matched by
+name is as likely a sibling's run as one's own — during PR #393's review a
+sub-agent ran `pkill -f` on two suite names (#414). `hooks/tool-pre-guard.sh`
+is a PreToolUse hook that refuses, for a **spawned sub-agent** only, a Bash
+command that signals by name: `pkill`, `killall`, `kill` alongside `pgrep`, or
+`kill` handed a word that is not a pid, a job or an expansion. `kill %1`,
+`kill $!` and `kill <pid>` pass, and so does everything the operator's own
+session runs. A refusal exits 2 — the agent harness's block status, the one
+non-zero exit any hook here makes — with the rule, `kill-guard`, named on
+stderr, and records one `note` with `outcome=denied` on the session, naming
+the rule. With tool capture on, the refused call is also swept at the
+session's end into a `tool.use` with `outcome=denied` of its own (#409).
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre-guard.sh\"" } ] } ]
+  }
+}
+```
+
+**The marker is `agent_type` on the payload**, which the agent harness sets on
+a sub-agent's tool calls and never on the main session's. It is wider than
+"a review", deliberately: a review's agents are spawned through the Agent tool
+with a general type, so no payload field names a review; an environment
+variable cannot be set per in-session sub-agent, because they share the
+session's process; and a prompt marker would mean reading the sub-agent's
+transcript on every Bash call. Every spawned sub-agent shares the hazard, so
+every one is held to it.
+
+**A scan, not a sandbox.** It reads the command's words outside quotes, so
+`sh -c '…'`, `eval`, a script written and then run, or a pid list built from
+`ps` walks past it; negative pids and process groups are not read either.
+It errs closed the other way too: a heredoc's body is read as commands, so a
+sub-agent writing a script with a line that starts with `pkill` is refused.
+Without node it fails closed for a sub-agent: a payload naming `pkill`,
+`killall` or `pgrep` anywhere is refused unread.
+**The phantom count survives on `session.end`.** No event per phantom still
+leaves the question of how many there were, and a sudden rise is worth seeing
+(ticket #410). So each phantom stop adds one line to a per-session counter,
+`claude-code/<session id>.phantoms` in the trace directory — a directory this
+adapter owns, never the shared script's `current/` — appended, so two stops
+at once both count without a lock, and keyed by the payload's session id, so
+two sessions never share one. The session-end hook takes that counter and
+records it as `data.phantoms` on `session.end`. **A session with no phantom
+stops records `phantoms=0`** rather than leaving the key out: `0` says the
+count was taken and came to nothing, while an absent key keeps meaning the hook
+could not take one — tracing off, a payload with no usable session id, or a
+`session.end` written before the count existed. Taking the counter removes it,
+so a resumed session's next end counts only the phantoms since the last one —
+the same once-only rule the usage read keeps; `/retro` sums a session's ends.
+A counter left by a session that never fires `SessionEnd` stays where it is
+until an end for that session id takes it — a resumed session's next end
+counts it — and is otherwise harmless.
 
 ### Reading it back: DuckDB and SQLite
 

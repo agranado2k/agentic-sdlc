@@ -1086,6 +1086,23 @@ raise_has M-1 '"agent":"unattributed"'
 raise_has L-1 '"agent":"simplicity"'
 raise_has L-1 '"where":"unsafe-path"'
 raise_has L-1 '"outcome":"raised"'
+# Retro H7 (#424): the broker's raises carried no data.posted, and /retro's
+# dismissal denominator counts only a raise that says whether it was posted —
+# so every finding the broker posted went unmeasured, and `unattributed` was
+# the agent on every one. The broker raises only what it posted inline, so
+# every raise says so — data.posted=yes — and names its agent by a token on
+# /review-pr's roster, `unattributed` included: the two keys the relay's line
+# carries, so the three review paths read alike. One line per raise: each
+# localises its own failure, and the raise count is held above.
+raise_has H-1 '"posted":"yes"'
+raise_has M-1 '"posted":"yes"'
+raise_has L-1 '"posted":"yes"'
+n_tok=0
+for tok in $(t_roster_of "$KIT/.agents/skills/review-pr/SKILL.md"); do
+	n_tok=$((n_tok + $(printf '%s\n' "$RAISES" | grep -c "\"agent\":\"$tok\"")))
+done
+[ "$n_tok" = 3 ] && pass "every raise's data.agent is a token on /review-pr's roster ($n_tok of 3)" ||
+	fail "a broker raise's data.agent is off /review-pr's roster: $n_tok of 3 on it"
 printf '%s\n' "$RAISES" | grep -qF '"id":"L-2"' &&
 	fail "the withheld L-2 was raised — only a finding that landed is" ||
 	pass "the withheld L-2 is not raised: the trace records what was posted"
@@ -1156,7 +1173,226 @@ for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
 	raise_has "L-$n" "\"agent\":\"$tok\""
 	n=$((n + 1))
 done
+[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"')" = 6 ] && pass "and all six carry data.posted=yes" ||
+	fail "not every roster raise carries data.posted=yes: $(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"') of 6"
 STUB_PR=12
 export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "19. A retried run records one note, not a second set of raises and verdicts"
+# ---------------------------------------------------------------------------
+# R4 proves a retry posts nothing; this proves it TRACES nothing it already
+# traced. The first run's raises and verdicts are what /retro question 2
+# counts, so a retry that emitted them again would double every finding. The
+# gate is the marker itself: both bodies found means the first run got past
+# both writes and so reached its emits; the retry says so in one `note`.
+STUB_PR=34
+export STUB_PR
+broker 34 "$RAISE"
+s_assert_status 0 "the first run on pr:#34 posts"
+R_MARK=$(posted_marker pulls/34/reviews)
+printf 'https://forge.invalid/pull/34#pullrequestreview-61\t%s\n' "$R_MARK" >"$SCRATCH/retry-reviews.tsv"
+printf 'https://forge.invalid/pull/34#issuecomment-62\t%s\n' "$R_MARK" >"$SCRATCH/retry-comments.tsv"
+STUB_REVIEWS="$SCRATCH/retry-reviews.tsv" STUB_COMMENTS="$SCRATCH/retry-comments.tsv"
+export STUB_REVIEWS STUB_COMMENTS
+broker 34 "$RAISE"
+unset STUB_REVIEWS STUB_COMMENTS
+s_assert_status 0 "the retried run exits 0"
+assert_mutating 0 "…and posts nothing"
+# retry_count_on <subject> <kind> — how many events of that kind the subject holds.
+retry_count_on() {
+	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "$1" --kind "$2"
+	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$2\""
+}
+retry_count() { retry_count_on 'pr:#34' "$1"; }
+[ "$(retry_count finding.raise)" = 3 ] &&
+	pass "the two runs leave the first run's three raises and no more" ||
+	fail "expected three finding.raise events for pr:#34, saw $(retry_count finding.raise)"
+[ "$(retry_count review.verdict)" = 2 ] &&
+	pass "…and the first run's two verdicts and no more" ||
+	fail "expected two review.verdict events for pr:#34, saw $(retry_count review.verdict)"
+[ "$(retry_count note)" = 1 ] &&
+	pass "…and one note for the retry" ||
+	fail "expected one note for pr:#34, saw $(retry_count note)"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
+printf '%s\n' "$S_OUT" | grep -F '"via":"broker"' | grep -qF 'already landed' &&
+	pass "…marked via=broker, saying the review already landed" ||
+	fail "the retry note lacks via=broker or its reason: $S_OUT"
+
+# The gate is BOTH bodies, not the review alone. A first run that died
+# between its two writes left the review and no trace, so the run that finds
+# only the review posts the comment and emits the only set there will be.
+STUB_PR=35
+export STUB_PR
+# The first run lands untraced, standing in for the one that died before step 7.
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 35 "$RAISE"
+R_MARK=$(posted_marker pulls/35/reviews)
+printf 'https://forge.invalid/pull/35#pullrequestreview-71\t%s\n' "$R_MARK" >"$SCRATCH/half-reviews.tsv"
+STUB_REVIEWS="$SCRATCH/half-reviews.tsv"
+export STUB_REVIEWS
+broker 35 "$RAISE"
+unset STUB_REVIEWS
+s_assert_status 0 "a run that finds only the review exits 0"
+assert_mutating 1 "…and posts the behavior comment, and only that"
+[ "$(retry_count_on 'pr:#35' finding.raise)" = 3 ] &&
+	pass "…and raises the three findings the dead first run never traced" ||
+	fail "expected three finding.raise events for pr:#35, saw $(retry_count_on 'pr:#35' finding.raise)"
+[ "$(retry_count_on 'pr:#35' review.verdict)" = 2 ] &&
+	pass "…and records both verdicts" ||
+	fail "expected two review.verdict events for pr:#35, saw $(retry_count_on 'pr:#35' review.verdict)"
+[ "$(retry_count_on 'pr:#35' note)" = 0 ] &&
+	pass "…and no retry note: nothing was traced before it" ||
+	fail "a half-landed run recorded a retry note for pr:#35"
+STUB_PR=12
+export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "20. A finding's lens line names its agent; the title match is the fallback (#412)"
+# ---------------------------------------------------------------------------
+# Most broker raises read `unattributed`: a worker's finding seldom names its
+# lens by title or number, and the broker never guesses one from the text. So
+# the contract asks for one line per finding — `↳ lens: <token>`, from
+# /review-pr §3's Axis-1 roster — and the broker reads it FIRST: a roster
+# token is the agent; a token outside the roster is `unattributed`, never the
+# title beside it and never the spelling the report used; and a finding with
+# no lens line still takes the title-or-number match above. One report, the
+# three cases, one raise each.
+LENS="$SCRATCH/lens.md"
+cat >"$LENS" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — three findings, three ways to name the lens
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+**H-1** \`scripts/a.sh:3\` — Security Sentinel would say so too, but the field decides.
+↳ lens: test-hygiene
+↳ fix: assert the failure path.
+
+#### MEDIUM
+**M-1** \`docs/b.md:10\` — Agent 1 — Security Sentinel: no lens line, so the title is read.
+↳ fix: delete the line.
+
+#### LOW
+**L-1** \`scripts/a.sh:3\` — Simplicity Advocate, says the title; the field says otherwise.
+↳ lens: vibes
+↳ fix: drop it.
+**L-2** \`scripts/a.sh:3\` — Simplicity Advocate, says the title; the field is there and empty.
+↳ lens:
+↳ fix: drop it.
+**L-3** \`scripts/a.sh:3\` — two lens lines; the first decides.
+↳ lens: pattern
+↳ lens: security
+↳ fix: drop it.
+**L-4** \`scripts/a.sh:3\` — the token as a model copying the contract's list writes it.
+↳ lens: \`reuse-dry\`
+↳ fix: drop it.
+**L-5** \`scripts/a.sh:3\` — capitalised, and with a remark after it.
+↳ lens: Api-crud (the contract artifact)
+↳ fix: drop it.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    the lens field.
+EOF
+STUB_PR=36
+export STUB_PR
+broker 36 "$LENS"
+s_assert_status 0 "a report whose findings carry a lens line lands"
+assert_mutating 2 "…with the same two operations as ever"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#36' --kind finding.raise
+RAISES=$S_OUT
+raise_has H-1 '"agent":"test-hygiene"'
+raise_has M-1 '"agent":"security"'
+raise_has L-1 '"agent":"unattributed"'
+printf '%s\n' "$RAISES" | grep -qF vibes &&
+	fail "a lens outside the roster reached the trace as the report spelled it" ||
+	pass "a lens outside the roster never reaches the trace as spelled"
+# A present field decides, even empty: the title beside it is not consulted.
+raise_has L-2 '"agent":"unattributed"'
+# The first lens line decides; a second is ignored.
+raise_has L-3 '"agent":"pattern"'
+# The token is read as a token: backticks, case and a trailing remark are
+# presentation around it, so the closed list is still what decides — and
+# nothing of the spelling reaches the trace.
+raise_has L-4 '"agent":"reuse-dry"'
+raise_has L-5 '"agent":"api-crud"'
+printf '%s\n' "$RAISES" | grep -qF 'Api-crud' &&
+	fail "the report's own capitalisation reached the trace" ||
+	pass "the report's capitalisation never reaches the trace"
+
+# The roster the broker maps onto is /review-pr §3's, and that skill calls its
+# list the only one. Lift the six Axis-1 tokens from the skill, write each on
+# a finding's lens line with no title beside it, and each raise must carry
+# that token — so a token renamed in the skill is red here, not a silent
+# drift to `unattributed` on every correctly spelled lens.
+TOKENS="$SCRATCH/tokens.md"
+{
+	printf 'REVIEWED: %s\nVERDICT: six tokens\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	n=1
+	for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
+		printf '**L-%s** `scripts/a.sh:3` — one finding.\n↳ lens: %s\n↳ fix: none.\n' "$n" "$tok"
+		n=$((n + 1))
+	done
+	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six tokens.\n'
+} >"$TOKENS"
+[ "$(grep -c '^↳ lens: ' "$TOKENS")" = 6 ] && pass "six Axis-1 tokens were read from the skill" ||
+	fail "expected six Axis-1 roster tokens in the skill, read $(grep -c '^↳ lens: ' "$TOKENS")"
+STUB_PR=37
+export STUB_PR
+broker 37 "$TOKENS"
+s_assert_status 0 "a report naming each of the six tokens lands"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#37' --kind finding.raise
+RAISES=$S_OUT
+n=1
+for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
+	raise_has "L-$n" "\"agent\":\"$tok\""
+	n=$((n + 1))
+done
+STUB_PR=12
+export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still lands it (#419)"
+# ---------------------------------------------------------------------------
+# /review-pr's reuse/DRY lens files a duplication the diff merely INHERITED as
+# a LOW candidate ticket: shared invariant §10 lands the consolidation on its
+# own ticket, so the PR is asked for nothing. Section 15 holds that a finding
+# with NO fix line costs the whole report — so the candidate ticket carries a
+# fix line that says so, and that line must be one the contract accepts. The
+# line is read from the skill's own prompt, never retyped here, so the
+# wording the lens is told to write and the wording the broker lets through
+# cannot drift apart unseen (#431 H-1).
+CT_FIX=$(grep -o '↳ fix:` line reads `[^`]*`' "$KIT/.agents/skills/review-pr/SKILL.md" | head -n 1 | sed 's/^.*reads `//; s/`$//')
+[ -n "$CT_FIX" ] && pass "the reuse/DRY prompt spells the candidate ticket's fix line: $CT_FIX" ||
+	fail "the reuse/DRY prompt no longer spells the candidate ticket's fix line (a code span after: fix: line reads) — nothing to run through the broker"
+awk -v fix="$CT_FIX" '
+	/^#### LOW$/ {
+		print
+		print "**L-1** `docs/b.md:11` — candidate ticket: line eleven mirrors a line that pre-dates the branch, in a pair this diff only extends."
+		print "↳ cites: shared invariant §10"
+		print "↳ fix: " fix
+		skip = 1
+		next
+	}
+	skip && /^— none found\.$/ { skip = 0; next }
+	{ print }
+' "$GOOD" >"$SCRATCH/candidate.md"
+grep -qF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" &&
+	pass "the fixture's L-1 carries the fix line the prompt spells, asking this PR for nothing" ||
+	fail "the fixture's L-1 lost its fix line — \$GOOD's LOW section moved under the awk"
+broker 12 "$SCRATCH/candidate.md" --dry-run
+s_assert_status 0 "a report carrying a candidate-ticket LOW passes the contract"
+assert_mutating 0 "…dry run: nothing posted"
+s_assert_out_has 'candidate ticket:' "…and the candidate ticket is among the inline comments"
+s_assert_out_has '"line":11' "…anchored on its own line of the diff"
+# The fix line is what carries it: the same report with that one line
+# withdrawn is the half-finding section 15 names, and costs the report.
+grep -vF -- "↳ fix: $CT_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
+bad "$SCRATCH/candidate-no-fix.md" "…and the same candidate ticket with its fix line withdrawn is exit 65" 'L-1'
 
 t_done "tests/forge-broker.test.sh"

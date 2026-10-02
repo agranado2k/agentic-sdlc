@@ -3,21 +3,10 @@
     "THE KIT'S OWN agent-harness wiring, kit-authoring only and never shipped: bootstrap.sh's KIT_ONLY list deletes this file, the same as tests/ and scripts/trace.kit.config.sh (ADR-0008 clause 8).",
     "It is the one file in this repository that wires the dormant hooks under adapters/claude-code/hooks/ to real session events. A consumer gets the hooks — adapters/ arrives intact and inert — and no settings file, so nothing runs until they write one of their own. tests/adapters-demo.sh asserts that; tests/self-host.test.sh asserts this file never leaks.",
     "TRACE_CONFIG reaches the kit's own never-shipped trace policy, which is AGENTS.md hard rule 10's substitution made durable: typed without it the hooks would read the shipped scripts/trace.config.sh, which is empty by principle, and write nothing. The hooks themselves name only the plain shared script, because they ship.",
-    "The hooks cd to the repository root before calling it, so the relative policy path resolves against the repository rather than against wherever the agent harness stood. Every one of them exits 0 whatever happens: tests/trace-hooks.test.sh is where that is held.",
-    "One hook here is not a trace hook: PreToolUse runs the root guard, which refuses an edit, or a Bash write to a tracked file, at the root checkout (AGENTS.md hard rule 1) by exiting 2. It reads no trace policy, so it carries no TRACE_CONFIG; tests/root-guard.test.sh holds it."
+    "The hooks cd to the repository root before calling it, so the relative policy path resolves against the repository rather than against wherever the agent harness stood. Every one of them exits 0 whatever happens but the two PreToolUse guards, which exit 2 — the agent harness's block status: tool-pre-guard.sh when a spawned sub-agent signals processes by name (#414), held by tests/trace-hooks.test.sh. PreToolUse also runs tool-pre.sh on every tool, the pending marker a denied call leaves for the session end to sweep (#409): tests/trace-hooks.test.sh is where all of that is held.",
+    "One PreToolUse hook here is not a trace hook: root-guard.sh refuses an edit, or a Bash write to a tracked file, at the root checkout (AGENTS.md hard rule 1) by exiting 2. It reads no trace policy, so it carries no TRACE_CONFIG; tests/root-guard.test.sh holds it."
   ],
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/root-guard.sh\""
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [
@@ -44,6 +33,34 @@
           {
             "type": "command",
             "command": "env TRACE_CONFIG=scripts/trace.kit.config.sh sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/subagent-stop.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env TRACE_CONFIG=scripts/trace.kit.config.sh sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre-guard.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/root-guard.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env TRACE_CONFIG=scripts/trace.kit.config.sh sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/tool-pre.sh\""
           }
         ]
       }

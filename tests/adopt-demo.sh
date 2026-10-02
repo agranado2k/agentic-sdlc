@@ -574,7 +574,7 @@ assert_file_has "$PAYLOAD" "the finishing run" "E3's output gets committed, not 
 # take_g <first-line awk pattern> <dest> — first fenced sh block whose first
 # line matches; extraction to a fresh file, then refuse-to-be-vacuous.
 take_g() {
-	t_sh_fence "$PAYLOAD" "$1" >"$SCRATCH/take_g.$$"
+	t_fence "$PAYLOAD" opens "$1" >"$SCRATCH/take_g.$$"
 	if [ -s "$SCRATCH/take_g.$$" ]; then
 		cat "$SCRATCH/take_g.$$" >"$2"
 		pass "extracted the arm's fence: $1"

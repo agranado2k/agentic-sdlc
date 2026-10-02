@@ -293,6 +293,11 @@ cc_says 'one evidence span' \
 # it cannot: "say so at the quiz" (/to-tickets) and "say so in the report"
 # (/pr-iterate, /dogfood) — the fallback's own words, not a bare "in the
 # report" any later prose could carry.
+# One name per concept (review of PR #440, M-2): the skills say "a restricted
+# path through the agent CLI", so the adapter names its path the same way.
+cc_says 'the restricted path' \
+	"…and names the path by the skills' name: the restricted path" \
+	"…but never names the restricted path — the skills' name for it, one name per concept"
 cc_says 'request, not a restriction' \
 	"…and says the in-session prompt is a request, not a restriction" \
 	"…but never says plainly that the in-session prompt is a request, not a restriction"
@@ -417,7 +422,7 @@ done
 	fail ".claude/settings.json reached the project — the kit's own agent-harness wiring leaked, and the adapter is not dormant" ||
 	pass "no .claude/settings.json in the project — the trace hooks arrived unwired"
 for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh tool-post.sh \
-	transcript-usage.mjs tool-payload.mjs; do
+	tool-pre-guard.sh tool-pre.sh transcript-usage.mjs tool-payload.mjs; do
 	[ -f "adapters/claude-code/hooks/$h" ] &&
 		pass "adapters/claude-code/hooks/$h survived bootstrap (reference material, dormant)" ||
 		fail "adapters/claude-code/hooks/$h is missing after bootstrap"

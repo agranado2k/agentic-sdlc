@@ -191,13 +191,8 @@ s_assert_err_has "usage"
 #
 # five_checks_ms <checker> <input> — the CPU milliseconds of five checks of
 # <input>, or "unmeasured".
-five_checks_ms() {
-	(
-		for _ in 1 2 3 4 5; do sh "$1" <"$2"; done >/dev/null 2>&1
-		times
-	) | awk 'NR == 2 { for (i = 1; i <= 2; i++) { split($i, a, "m"); sub(/s$/, "", a[2]); sub(/,/, ".", a[2]); t += a[1] * 60 + a[2] }
-	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
-}
+five_checks() { for _ in 1 2 3 4 5; do sh "$1" <"$2"; done; }
+five_checks_ms() { t_cpu_ms five_checks "$1" "$2"; }
 # within_budget <checker> <input> <ms for five> <what> — pass or fail it.
 within_budget() {
 	cpu_ms=$(five_checks_ms "$1" "$2")
@@ -241,76 +236,130 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # That last number is never paid, because no caller hands it a body: each
 # lifts the lines it owes before the check. This section holds the kit's
 # callers to that. Every invocation of the checker in a shipped file is found
-# — `sh` on scripts/vocab.sh, on "$checker", on "$vocab" — and must be one of:
+# — `sh` or `bash`, after any single-dash options (`sh -e`), on a word ending
+# in vocab.sh (quoted, bare, or a quoted prefix: "$ROOT"/scripts/vocab.sh) or
+# on $checker or $vocab (quoted or bare, braced or not), however spaced, a
+# backslash-continued line read as one. Those forms and no others: a call
+# through `.` or `source`, a shell named by its path (`/bin/sh`), as `dash`
+# or by a variable, an option that takes an argument (`sh -o errexit`), or
+# `env`, `exec` or `xargs` running the checker with no `sh` before it is not
+# found. Each one found must be one of (each exemption tagged in the audit,
+# and baited below):
 #   - `fields`, which reads no input;
-#   - a prose mention of the command, closed by a backtick;
+#   - a prose mention of the command, closed by a backtick, in Markdown;
 #   - the argument form with the caller's own placeholder tokens,
 #     'Field: <token>', which nothing untrusted fills;
 #   - the argument form with one positional token, "Field: $2" — one
 #     argument, one line, the token the caller stamped itself;
-#   - or a site in LIFTED below: the input it reads (a fixed string on the
-#     call's line or the one before it — a pipe's head) and the lift stage
-#     that bounds that input, a fixed string on an uncommented line earlier
-#     in the same function.
+#   - or a site in LIFTED below: the input it reads, spelled with the call
+#     itself so nothing can stand between them (a fixed string in the
+#     call's own command — its line cut at `;`, `&&`, `||` and a lone `&`,
+#     joined to the head of a pipe the line before ends with), and the lift
+#     stage that bounds that input, a fixed string on an uncommented line
+#     earlier in the same function.
 # A new call site, a site whose input changed, or a site whose lift stage was
-# removed is named and fails — the baits below prove each of the three.
+# removed is named and fails — the baits below prove each of the three. So is
+# an entry no call matches: the inventory holds no more than the tree.
 #
-# stamp.sh lifts by KEY, not by count: a body carrying 2,000 `Tier:` lines
-# would hand over 2,000. That is a degenerate ticket, not a body handed whole,
-# and it is the one unbounded input this inventory admits.
+# stamp.sh lifts by KEY and bounds the count: at most 8 lines of one key reach
+# the checker, and a body with more is its exit 5, nothing checked (#400) — so
+# its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@<"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
 scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
-.agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" |@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
+.agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 EOLIFT
 )
 
-# checker_calls <root> — one record per invocation of the checker in the
-# shipped files under <root> that is not exempt above:
-# <file>\t<line>\t<function's first line>\t<function>\t<line before> <line>
+# checker_calls <root> [awk program] — one record per invocation of the
+# checker in the shipped files under <root> that is not exempt above, found
+# by <awk program> (CALLS_AWK by default):
+# <file>\t<line>\t<function's first line>\t<function>\t<the call's command>
+# The command is the call's own: the line cut at `;`, `&&` and `||` around
+# the call, joined to the line before only when that line ends in a pipe.
 CALLS_AWK=$(
 	cat <<'EOAWK'
-FNR == 1 { fn = "-"; start = 1; prev = "" }
-/^[ \t]*#/ { prev = $0; next }
+# scan <line> <file> — print a record for each call on one logical line
+function scan(line, file,    cut, i, s, off, from, to, tail, before, after, command) {
+	# cut: the line with each &&, || and lone & spelled as ; — the same
+	# length, so a command is the span between two ; at line's offsets
+	cut = line; gsub(/&&|\|\|/, ";;", cut)
+	for (i = 1; i <= length(cut); i++)
+		if (substr(cut, i, 1) == "&" && substr(cut, i - 1, 1) !~ /[<>]/ && substr(cut, i + 1, 1) != ">")
+			cut = substr(cut, 1, i - 1) ";" substr(cut, i + 1)
+	s = line; off = 0
+	while (match(s, /(^|[ \t(|`;&])(ba)?sh([ \t]+-[A-Za-z]+)*[ \t]+("[^"]*vocab\.sh"|[^ \t`]*vocab\.sh"?|"?\$\{?(checker|vocab)\}?"?)/)) {
+		from = off + RSTART; to = off + RSTART + RLENGTH
+		tail = substr(s, RSTART + RLENGTH); s = tail; off = to - 1
+		if (tail ~ /^[A-Za-z0-9_]/) continue # a longer name, not the checker
+		if (tail ~ /^`/ && file ~ /\.md(\.template)?$/) continue # exempt:prose
+		if (tail ~ /^[ \t]+fields/) continue # exempt:fields
+		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue # exempt:quiz-tokens
+		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue # exempt:positional
+		# before keeps the character the match opened on: it may be the ;
+		before = substr(cut, 1, from); sub(/.*;/, "", before)
+		after = substr(cut, to); sub(/;.*/, "", after)
+		command = before substr(line, from + 1, to - from - 1) after
+		if (before ~ /^[ \t{(]*$/ && pipe_head != "") command = pipe_head " " command
+		gsub(/[ \t]+/, " ", command); sub(/^ /, "", command); sub(/ $/, "", command)
+		printf "%s\t%d\t%d\t%s\t%s\n", file, at, start, fn, command
+	}
+	pipe_head = cut; sub(/.*;/, "", pipe_head)
+	if (pipe_head !~ /\|[ \t]*$/) pipe_head = ""
+}
+# a continued line still open when its file ends is a call all the same
+FNR == 1 && cont != "" { scan(cont, cont_file) }
+FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
+/^[ \t]*#/ { pipe_head = ""; next }
 /^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ {
 	fn = $1; sub(/\(\).*/, "", fn); start = FNR
 	one = ($0 ~ /\}[ \t]*$/)
 }
+/\\$/ {
+	if (cont == "") at = FNR
+	cont = cont substr($0, 1, length($0) - 1) " "; cont_file = FILENAME
+	next
+}
 {
-	s = $0
-	while (match(s, /(^|[ \t(|`;&])sh ("[^"]*vocab\.sh"|[^ "`]*vocab\.sh|"\$checker"|"\$vocab")/)) {
-		tail = substr(s, RSTART + RLENGTH); s = tail
-		if (tail ~ /^`/ || tail ~ /^ fields/) continue
-		if (tail ~ /^( '<?[A-Za-z-]+>?: <[^>']*>')+( …)?($|[`.,;)])/) continue
-		if (tail ~ /^ "[A-Za-z-]+: \$[0-9]"([ \t]|$)/) continue
-		printf "%s\t%d\t%d\t%s\t%s %s\n", FILENAME, FNR, start, fn, prev, $0
-	}
-	prev = $0
+	if (cont == "") at = FNR
+	line = cont $0; cont = ""
+	scan(line, FILENAME)
 }
 /^}/ || one { fn = "-"; start = 1; one = 0 }
+END { if (cont != "") scan(cont, cont_file) }
 EOAWK
 )
 checker_calls() (
+	awk_prog=${2:-$CALLS_AWK}
 	cd "$1" || exit 2
 	find scripts .agents/skills .githooks adapters constitution templates -type f \
 		\( -name '*.sh' -o -name '*.md' -o -name '*.template' -o -name 'pre-*' \) \
-		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$CALLS_AWK"
+		! -path scripts/vocab.sh 2>/dev/null | sort | xargs awk "$awk_prog"
 )
 
-# unlifted <root> — every call record no LIFTED entry accounts for, one per
-# line; nothing when every site lifts.
+# entry_matches <LIFTED entry> <file> <function> <call text> — exit 0 when
+# the entry names this call: its file, its function, and its input in the
+# call's text. The one reading of an entry, so `unlifted` and `stale` cannot
+# disagree on what an entry matches; sets e_guard, the entry's lift stage.
+entry_matches() {
+	e_file=${1%%@@*} rest=${1#*@@}
+	e_fn=${rest%%@@*} rest=${rest#*@@}
+	e_input=${rest%%@@*} e_guard=${rest#*@@}
+	[ "$2" = "$e_file" ] && [ "$3" = "$e_fn" ] || return 1
+	case $4 in *"$e_input"*) return 0 ;; esac
+	return 1
+}
+
+# unlifted <root> [awk program] — every call record no LIFTED entry accounts
+# for, one per line; nothing when every site lifts.
 unlifted() {
-	checker_calls "$1" | while IFS="$(printf '\t')" read -r file line start fn text; do
+	checker_calls "$1" "${2:-}" | while IFS="$(printf '\t')" read -r file line start fn text; do
 		ok=0
 		while IFS= read -r entry; do
-			e_file=${entry%%@@*} rest=${entry#*@@}
-			e_fn=${rest%%@@*} rest=${rest#*@@}
-			e_input=${rest%%@@*} e_guard=${rest#*@@}
-			[ "$e_file" = "$file" ] && [ "$e_fn" = "$fn" ] || continue
-			case $text in *"$e_input"*) ;; *) continue ;; esac
+			entry_matches "$entry" "$file" "$fn" "$text" || continue
 			sed -n "${start},$((line - 1))p" "$1/$file" | grep -v '^[[:space:]]*#' | grep -qF -- "$e_guard" || continue
 			ok=1 && break
 		done <<EOENTRIES
@@ -318,6 +367,25 @@ $LIFTED
 EOENTRIES
 		[ "$ok" = 1 ] || printf '%s:%s (%s)\n' "$file" "$line" "$fn"
 	done
+}
+
+# stale <root> [inventory] — every inventory entry (LIFTED by default) that
+# matches no call record under <root>, one per line; nothing when each does.
+# Its second argument is the inventory, not `unlifted`'s awk program: stale
+# always reads the calls through CALLS_AWK, since no mutant of it is baited.
+stale() {
+	records=$(checker_calls "$1")
+	while IFS= read -r entry; do
+		found=0
+		while IFS="$(printf '\t')" read -r file line start fn text; do
+			entry_matches "$entry" "$file" "$fn" "$text" && found=1 && break
+		done <<EORECORDS
+$records
+EORECORDS
+		[ "$found" = 1 ] || printf '%s\n' "$entry"
+	done <<EOENTRIES
+${2:-$LIFTED}
+EOENTRIES
 }
 
 calls=$(checker_calls "$KIT" | grep -c '')
@@ -362,6 +430,124 @@ bait_reset
 printf '\tsh scripts/vocab.sh <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
 bait_named .agents/skills/to-tickets/SKILL.md "a new call site hands a body"
 
+# The call's spelling: each form the audit claims above is found — two
+# spaces, braces on the variable, `bash` for `sh`, the call split over a
+# backslash-continued line, a quoted prefix of the path, an option before the
+# checker, the variable bare. Each planted in a copy of a skill must be named.
+# planted <how it is spelled> <printf format of the call> — plant the call in
+# a copy of a skill; the audit must name it.
+planted() {
+	bait_reset
+	# shellcheck disable=SC2059 # the format is the call itself, by design
+	printf "$2" >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+	bait_named .agents/skills/to-tickets/SKILL.md "a call $1 hands a body"
+}
+planted "with two spaces after \`sh\`" '\tsh  "$checker" <"$body"\n'
+planted "with braces on the variable" '\tsh "${checker}" <"$body"\n'
+planted "run by \`bash\`" '\tbash "$checker" <"$body"\n'
+planted "split over a backslash-continued line" '\tsh \\\n\t\t"$checker" <"$body"\n'
+planted "on a quoted prefix of the path" '\tsh "$ROOT"/scripts/vocab.sh <"$body"\n'
+planted "with an option before the checker" '\tsh -e "$checker" <"$body"\n'
+planted "on the variable unquoted" '\tsh $checker <"$body"\n'
+planted "with braces on \$vocab" '\tsh "${vocab}" <"$body"\n'
+planted "continued on the file's last line" '\tsh "$checker" <"$body" \\\n'
+# … and on the last file the audit reads, where only the end of input is left
+bait_reset
+printf '\tsh "$vocab" <"$body" \\\n' >>"$BAIT/scripts/stamp.sh"
+bait_named scripts/stamp.sh "a call continued on the last file's last line hands a body"
+# A continued call is named at its first line, where a reader would look.
+bait_reset
+first=$(($(grep -c '' "$BAIT/.agents/skills/to-tickets/SKILL.md") + 1))
+printf '\tsh \\\n\t\t"$checker" <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+case $(unlifted "$BAIT") in
+*".agents/skills/to-tickets/SKILL.md:$first "*) pass "a continued call is named at its first line ($first)" ;;
+*) fail "a continued call is not named at its first line ($first): $(unlifted "$BAIT")" ;;
+esac
+# A backtick closes a prose mention only in prose: in a script it opens a
+# command substitution, and the call inside it is a call.
+bait_reset
+printf '%s\n' 'out=`printf x | sh "$vocab"`' >>"$BAIT/scripts/stamp.sh"
+bait_named scripts/stamp.sh "a call in a backtick substitution hands a body"
+# A longer name is not the checker: `$checker_x` is somebody else's variable.
+bait_reset
+printf '\tsh "$checker_x" <"$body"\n' >>"$BAIT/.agents/skills/to-tickets/SKILL.md"
+[ -z "$(unlifted "$BAIT")" ] && pass "a call on a longer name than \$checker is not taken for the checker" ||
+	fail "a call on \$checker_x is taken for the checker: $(unlifted "$BAIT")"
+
+# The inventory holds no more than the tree: every LIFTED entry matches a
+# call the audit found, so a site removed or rewritten leaves no entry behind
+# vouching for nothing.
+bad=$(stale "$KIT")
+[ -z "$bad" ] && pass "every LIFTED entry matches a checker call the audit found" ||
+	fail "a LIFTED entry matches no checker call: $(printf '%s' "$bad" | tr '\n' ' ')"
+bait_reset
+STALE_ENTRY='.agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$body"@@return 1'
+bad=$(stale "$BAIT" "$LIFTED
+$STALE_ENTRY")
+[ "$bad" = "$STALE_ENTRY" ] && pass "an inventory entry no call matches is named stale, and only it" ||
+	fail "a stale inventory entry is not named alone: '$bad'"
+bait_edit .agents/skills/dogfood/SKILL.md '/sh "$checker" <"$2"/d'
+case $(stale "$BAIT") in
+.agents/skills/dogfood/SKILL.md@@prescreen_ok@@*) pass "a call site removed leaves its entry named stale" ;;
+*) fail "a call site removed leaves its entry vouching for nothing" ;;
+esac
+
+# The input an entry names is the call's own: on the call's command, or at
+# the head of a pipe the line before ends with — never merely nearby. The
+# old input left on the line before, or beside the call in another command
+# on its line, vouches for nothing: the rewritten call is named, and so is
+# the entry it no longer matches.
+# rewritten <file> <how> <sed script> — the site in <file> rewritten <how>;
+# the audit names it, and the entry is stale.
+rewritten() {
+	bait_reset
+	bait_edit "$1" "$3"
+	bait_named "$1" "a call is rewritten $2"
+	case $(stale "$BAIT") in
+	*"$1@@"*) pass "the entry left behind by a call rewritten $2 is named stale" ;;
+	*) fail "a call rewritten $2 leaves its entry vouching for it in $1" ;;
+	esac
+}
+rewritten .agents/skills/dogfood/SKILL.md "under a comment carrying the old input" 's|sh "$checker" <"$2"|# sh "$checker" <"$2"\
+	sh "$checker" <"$body"|'
+rewritten .agents/skills/dogfood/SKILL.md "under a line quoting the old input" "s|sh \"\$checker\" <\"\$2\"|: 'sh \"\$checker\" <\"\$2\"'\\
+	sh \"\$checker\" <\"\$body\"|"
+rewritten scripts/stamp.sh "beside the old input in another command" 's|{ sh "$vocab" <"$_stamp_tmp/lines"|{ : <"$_stamp_tmp/lines"; sh "$vocab" <"$_stamp_tmp/body"|'
+# beside <file> <how> <sed script> — a second call planted beside the lifted
+# one in <file>, sharing its line but not its command; the audit names it.
+beside() {
+	bait_reset
+	bait_edit "$1" "$3"
+	bait_named "$1" "a call is planted $2"
+}
+beside .agents/skills/dogfood/SKILL.md "glued to the lifted call by a bare \`;\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2";sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "after the lifted call and a lone \`&\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2" \& sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "after the lifted call and \`&&\`" 's|sh "$checker" <"$2"|sh "$checker" <"$2" \&\& sh "$checker" <"$body"|'
+beside .agents/skills/dogfood/SKILL.md "before the lifted call and \`;\`" 's|sh "$checker" <"$2"|sh "$checker" <"$body"; sh "$checker" <"$2"|'
+rewritten scripts/stamp.sh "behind a pipe from the old input" 's|{ sh "$vocab" <"$_stamp_tmp/lines"|{ : <"$_stamp_tmp/lines" \| sh "$vocab" <"$_stamp_tmp/body"|'
+# A comment between a pipe's head and the call ends the join: the audit
+# reads no further back than the line before, and names the call.
+bait_reset
+bait_edit .agents/skills/pr-iterate/SKILL.md 's|^\([[:space:]]*\)sh "$checker" >/dev/null|\1# a comment\
+\1sh "$checker" >/dev/null|'
+bait_named .agents/skills/pr-iterate/SKILL.md "a comment parts the pipe's head from the call"
+
+# Every exemption is load-bearing: the audit with one exemption cut out of it
+# names the real site that exemption admits. An exemption no site needs is
+# one nobody would notice turning into a hole.
+# exemption_bait <tag> <file the mutant must name> <the form>
+exemption_bait() {
+	mutant=$(printf '%s\n' "$CALLS_AWK" | grep -v "exempt:$1")
+	case $(unlifted "$KIT" "$mutant") in
+	*"$2:"*) pass "without the $3 exemption the audit names $2 — the exemption is load-bearing" ;;
+	*) fail "without the $3 exemption the audit still passes $2 — the exemption admits nothing, or is not cut out by its tag" ;;
+	esac
+}
+exemption_bait fields scripts/stamp.sh "\`fields\`"
+exemption_bait positional .agents/skills/dogfood/SKILL.md "one-positional-token"
+exemption_bait quiz-tokens .agents/skills/to-tickets/SKILL.md "quiz's own tokens"
+exemption_bait prose .agents/skills/to-tickets/SKILL.md "prose mention"
+
 # ---------------------------------------------------------------------------
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
 # ---------------------------------------------------------------------------
@@ -387,6 +573,13 @@ s_assert_err_has "a markdown-wrapped line" "…and names the line it does not re
 s_assert_err_has "is not a decision line to it" "…in those words"
 assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
 assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
+# The header no longer invites a body (#401): since v0.35.0 every call site
+# lifts first (PR #382's audit, above), and the header states the contract
+# once — a calling skill lifts the decision lines and hands them over. The
+# literals below each sit on one line of the file they are held against.
+assert_file_lacks "$VOCAB" "body may be piped in" "the contract changed in v0.35.0 — a body is the caller's to lift"
+assert_file_lacks "$VOCAB" "the caller may hand over a" "nor does a function comment invite one"
+assert_file_has "$VOCAB" "a calling skill lifts the decision" "the header states the contract: lifting is the caller's job"
 printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
 t_run_split sh "$VOCAB" <"$SCRATCH/listed"
 s_assert_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"

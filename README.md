@@ -243,7 +243,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.36.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.41.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -470,7 +470,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.36.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.41.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -647,13 +647,15 @@ skeleton (K0).
 - `sh tests/stamp.test.sh` holds `scripts/stamp.sh`, the one way `/implement`
   reads its ticket's `Tier:`, `Confidence:` and `Domain:` lines (#331): the
   issue number in, the body fetched through a stub tracker CLI, the bare
-  lines lifted and checked. Four statuses, each driven red first — 0 with the
+  lines lifted and checked. Five statuses, each driven red first — 0 with the
   checked lines and nothing else on stdout; 2 for a refused value, nothing on
   stdout and the field named, never the text; 3 for a ticket with no stamp
   lines, a checker that is gone or cannot run (its policy missing or
   malformed), or a line of a field the policy does not declare with no tier
   left — never a refusal and never an unchecked line; 4 for a fetch that
-  failed on its one retry; and a signal exits, never a verdict. The bodies
+  failed on its one retry; 5 for more than 8 lines of one key, a stop with
+  nothing checked and stderr naming the key and the count, never a line, in
+  bounded CPU time; and a signal exits, never a verdict. The bodies
   are hostile: a quote that closes its own argument, a no-break, em or
   zero-width space in a value or a key — the em space under a caller's
   C.UTF-8, so the script's own locale pin is what decides it — a NUL,
@@ -757,6 +759,11 @@ skeleton (K0).
   command, usage errors and a non-kit tree refused with exit 2, the exit code
   propagated, a dropped executable bit handed back without touching content,
   and Stryker's backup kept after a failed run.
+- `sh tests/harness-helpers.test.sh` drives the folded assertion helpers in
+  `tests/lib.sh` — `t_text_has`, `t_fence`, `t_check_run` and `t_verdict_is` —
+  through each branch, the failing ones included: a refusal assertion with no
+  `verdict` function, no lifted check or no project to run in fails loudly
+  instead of passing vacuously.
 - `sh tests/fixture-builders.test.sh` pins the four fixture builders in
   `tests/lib.sh` that every demo suite makes its throwaway kits and consumers
   with: a `.git`-free kit copy with nested worktrees stripped, a repo with a
@@ -914,6 +921,7 @@ sh tests/root-guard.test.sh                            # the root checkout refus
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
+sh tests/harness-helpers.test.sh                       # the test harness's folded assertion helpers
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/retro-skill.test.sh                           # the /retro contract

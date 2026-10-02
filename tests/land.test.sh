@@ -55,7 +55,11 @@ case " $* " in
 	printf '%s\n' ${STUB_RUNS-901}
 	[ "$(grep -c '^ARGV: run list' "$STUB_LOG")" -lt 2 ] || printf '%s\n' ${STUB_RUNS_LATE:-}
 	;;
-*" run watch "*) exit "${STUB_WATCH_RC:-0}" ;;
+*" run watch "*)
+	# A workflow that takes wall-clock time: the waited figure moves with it.
+	[ -z "${STUB_WATCH_SLEEP:-}" ] || sleep "$STUB_WATCH_SLEEP"
+	exit "${STUB_WATCH_RC:-0}"
+	;;
 esac
 EOF
 chmod +x "$STUBDIR/gh"
@@ -198,10 +202,14 @@ banner "4. The trace unconfigured leaves the merge unchanged"
 land 123
 traced_out=$S_OUT
 : >"$STUB_LOG"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 140 </dev/null
+# The second run's workflow takes seconds the first one's did not: the waited
+# figure is the clock's, so it differs, and the comparison is not about it.
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 STUB_WATCH_SLEEP=2 sh "$LAND" 140 </dev/null
 s_assert_status 0 "unconfigured, a green PR still lands with exit 0"
 [ "$(merges)" = 1 ] && pass "unconfigured, the merge call is the same one call" || fail "unconfigured: $(merges) merge calls"
-[ "$(printf '%s\n' "$S_OUT" | sed 's/#140/#N/g')" = "$(printf '%s\n' "$traced_out" | sed 's/#123/#N/g')" ] &&
+# norm <PR> — stdout with the PR number and the waited seconds masked.
+norm() { sed "s/#$1/#N/g; s/waited [0-9]*s/waited Ns/"; }
+[ "$(printf '%s\n' "$S_OUT" | norm 140)" = "$(printf '%s\n' "$traced_out" | norm 123)" ] &&
 	pass "and stdout is what a traced run prints" || fail "unconfigured stdout differs: '$S_OUT' vs '$traced_out'"
 [ "$(show 'pr:#140' | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "and nothing reached the trace" ||
 	fail "an unconfigured run wrote to the trace"
@@ -253,8 +261,7 @@ for f in scripts/land.kit.sh tests/land.test.sh; do
 	*) fail "$f is not on bootstrap.sh's KIT_ONLY list — it would ship to a consumer" ;;
 	esac
 done
-grep -F '/merge-train' "$KIT/AGENTS.md" | grep -qF 'scripts/land.kit.sh' &&
-	pass "the root manual's /merge-train row names scripts/land.kit.sh as the one-PR form" ||
-	fail "the root manual's /merge-train row does not name scripts/land.kit.sh"
+# The /merge-train row's naming of the script is held by tests/self-host.test.sh
+# F7 alone — by path, by the name "landing script", with baits (#422).
 
 t_done "land one PR by hand"

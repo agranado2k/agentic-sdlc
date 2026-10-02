@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis — see the end of this record)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #412: clause 10 reads the finding's lens line first — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the end of this record)
 
 ## Context and problem statement
 
@@ -262,7 +262,9 @@ on subject `pr:#<N>` and all marked `data.via=broker`:
   the path leaves the plain set), and `data.agent`: the `/review-pr` §3
   roster token for the one sub-agent the finding names by number or title,
   `unattributed` when it names none or several. A finding withheld for its
-  location is not raised: the trace records what landed.
+  location is not raised: the trace records what landed. *(Amended
+  2026-10-01, #424 — each raise also says it was posted; see the amendment at
+  the end of this record.)*
 - **one `review.verdict` per axis** — Axis 1 as clause 10 always said, now
   carrying `data.axis=1`; Axis 2 as `/review-pr` §5b counts it, `confirm` or
   `pass` with the tag counts.
@@ -271,3 +273,56 @@ The report is untrusted content: nothing of its text reaches a raise — each
 field is lifted by its shape or mapped onto a closed list, and each reason is
 the broker's own words. Unconfigured, the posting is unchanged and the trace
 says so once on stderr.
+
+### Amendment, 2026-10-01 — a retry records a note, not a second set (#411)
+
+Amends clause 10 as #375 left it; it changes no posting, no exit status and
+no option, so the record is amended in place. Clause 8's marker stops a
+retried run from posting twice, but the emits above ran regardless, so each
+retry doubled the raises and verdicts `/retro`'s second question counts. The
+emits are gated on the same marker:
+
+- **both bodies carry the marker** — the first run got past both writes and
+  so reached its emits. The retry records one `note` on subject `pr:#<N>`,
+  `outcome=retry`, `data.via=broker`, with the two URLs that already landed,
+  and no raise and no verdict.
+- **only the review carries it** — the first run died between its two
+  writes, before any emit. The run posts the comment and emits the full set,
+  which is the only one there will be.
+
+### Amendment, 2026-10-01 — a finding names its lens (#412)
+
+Amends clause 10 as #375 left it; it changes no posting, no exit status and
+no option, so the record is amended in place. Most raises the broker recorded
+read `data.agent=unattributed`: the worker contract never asked a finding to
+say which lens raised it, and a title or an agent number in the finding's
+text — all #375's mapping could read — is what a worker seldom writes. So the
+contract gains one line per finding, `↳ lens: <token>`, the token from
+`/review-pr` §3's Axis-1 roster, and the broker reads it first:
+
+- **a roster token** — `data.agent` is that token, whatever title the text
+  beside it names.
+- **a token outside the roster** — `unattributed`, never the title match and
+  never the spelling the report used: a present field decides, and a field
+  the roster cannot read is one the trace does not guess at.
+- **no lens line** — the title-or-number match #375 recorded, unchanged.
+
+The field is read as data by its shape, the same as the id, the severity and
+the location: the value is folded to a token first — backticks, asterisks
+and case are presentation a copy of the contract may carry, and the rest is
+cut at the first character a token cannot hold — and then the closed list
+decides, so the closed list is the only thing a raise can carry.
+
+### Amendment, 2026-10-01 — every raise says it was posted (#424)
+
+Amends the raise #375 added to clause 10; it changes no posting, no exit
+status and no option, so the record is amended in place. `/retro`'s eighth
+question — the dismissal rate per severity — counts only a raise that says
+whether it was posted (`/retro` §8), and the broker's raises carried no
+`data.posted` at all: every finding the broker posted was left out of the
+denominator, and a human dismissing one was a dismissal of nothing the
+retrospective could count (retro H7). The broker raises only what it posted
+inline, so each raise carries `data.posted=yes` — the same key, with the
+same meaning, as the raise `/review-pr` records in session and the one its
+relay path records — and `data.agent` stays a token on `/review-pr`'s roster,
+`unattributed` included, so the three review paths read alike.

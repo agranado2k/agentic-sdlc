@@ -434,12 +434,17 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
-			# The root guard (#392) is no trace hook: it reads no trace
-			# policy, so it is held to its script alone, and its own suite,
+			# Three scripts on PreToolUse: the kill guard (#414), the pending
+			# marker a denied call leaves behind (#409), and the root guard
+			# (#392). The root guard is no trace hook: it reads no trace policy,
+			# so it is held to its script alone, and its own suite,
 			# tests/root-guard.test.sh, holds the rest.
 			PreToolUse)
-				case $_w_cmd in *"/hooks/root-guard.sh"*) ;; *) _w_bad=1 ;; esac
-				continue
+				case $_w_cmd in
+				*"/hooks/root-guard.sh"*) continue ;;
+				*"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;;
+				*) _w_want=tool-pre-guard.sh ;;
+				esac
 				;;
 			*)
 				_w_bad=1
@@ -455,7 +460,7 @@ if [ -f "$SETTINGS" ]; then
 		wiring_ok "$SETTINGS" &&
 			pass "every wired event runs its own hook script through the kit's trace policy" ||
 			fail "a wired event names the wrong script or reads the shipped empty policy: $(cat "$wiring_rows")"
-		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+		for ev in SessionStart SessionEnd SubagentStop PreToolUse PostToolUse PostToolUseFailure; do
 			grep -q "^$ev " "$wiring_rows" && pass "it wires $ev" || fail "it does not wire $ev"
 		done
 		sed '/tool-post.sh/s|TRACE_CONFIG=scripts/trace.kit.config.sh ||' "$SETTINGS" \
@@ -468,7 +473,7 @@ if [ -f "$SETTINGS" ]; then
 			fail "the wiring check passes a file whose post-tool commands read the shipped OFF policy" ||
 			pass "and the check FAILS on that copy — it is load-bearing"
 	else
-		for ev in SessionStart SessionEnd SubagentStop PostToolUse PostToolUseFailure; do
+		for ev in SessionStart SessionEnd SubagentStop PreToolUse PostToolUse PostToolUseFailure; do
 			grep -q "\"$ev\"" "$SETTINGS" && pass "it wires $ev" || fail "it does not wire $ev"
 		done
 		echo "  skip  node is not on PATH — the per-event wiring check needs a JSON parser"
@@ -482,12 +487,13 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Six events, five scripts: one script serves both post-tool events,
-	# because the only difference between them is the outcome it records, and
-	# the sixth is the root guard on PreToolUse (#392).
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 6 ] &&
-		pass "it names a hook script per wired event, six in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 6"
+	# Six events, eight commands, seven scripts: one script serves both
+	# post-tool events, because the only difference between them is the
+	# outcome it records; PreToolUse runs three — the kill guard (#414), the
+	# pending marker a denied call leaves behind (#409), and the root guard (#392).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 8 ] &&
+		pass "it names a hook script per wired command, eight in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 8"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
@@ -1423,15 +1429,16 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "and the end after it still totals the rollup ($R34) — the anchor skipped the failure" ||
 		fail "ok, drift, ok totals '$(model_row "$RMODEL")', the rollup says '$R34'"
 
-	# M-2: more than one model under --after. The message count is per model;
-	# the last id is the whole read's, the same on every row. A third message on
-	# a second model is appended to the fixture for this.
+	# M-2: more than one model under --after. The message count is per model,
+	# and so is the last id since #408 (section 39): each row names its own
+	# model's last message. A third message on a second model is appended to
+	# the fixture for this.
 	sed -n '30,31p' "$RFIX" | sed "s/$RMSG2/msg_three307/; s/$RMODEL/claude-other-307/g" >"$SCRATCH/third-307.jsonl"
 	cat "$RFIX" "$SCRATCH/third-307.jsonl" >"$SCRATCH/two-models-307.jsonl"
 	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/two-models-307.jsonl"
-	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 msg_three307
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 $RMSG2
 claude-other-307 10 31 88 23947 1 msg_three307" ] &&
-		pass "two models after the anchor: one row each, one message each, one last id on both" ||
+		pass "two models after the anchor: one row each, one message each, each its own last id" ||
 		fail "two models after the anchor printed: $S_OUT"
 
 	# A FRESH single-end session is unchanged, apart from saying how far it read.
@@ -1451,6 +1458,15 @@ fi
 # ---------------------------------------------------------------------------
 banner "27. SubagentStop waits, within a bound, for the subagent's final message"
 # ---------------------------------------------------------------------------
+# The policy file's own comment on the bound is held here, beside the behaviour
+# it describes (#401).
+# Since PR #434 the wait may run past its bound by one poll (hook_wait_final,
+# below), so the shipped policy file may not promise "never longer".
+WAIT_CONFIG="$KIT/scripts/trace.config.sh"
+assert_file_lacks "$WAIT_CONFIG" "and never longer" "the wait may run past the bound by one poll"
+assert_file_has "$WAIT_CONFIG" "the actual wait may" "the comment admits the overrun"
+assert_file_has "$WAIT_CONFIG" "one whole-second nap and a check" "and names the hook's own bound on it, a nap AND a check"
+
 # Ticket #308. Live, SubagentStop can run BEFORE the subagent's transcript holds
 # its final assistant line: two of seven stops in the ticket's own measurement
 # found the file present and the last line 170 and 223 ms away. Read then, the
@@ -1689,15 +1705,70 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "a clock stepping back still ends the wait at the bound ($NAPS naps, waited_ms 300)" ||
 		fail "a backwards clock: exit $S_STATUS, $NAPS naps, event $K"
 
-	# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP still waits at the kit's own
-	# bound: the first check leaves a hair under 1000 ms, and one whole-second
-	# nap within a poll of the bound is taken rather than none.
+	# A SUB-SECOND BOUND IS NOT SERVED BY A WHOLE-SECOND SLEEP: the first
+	# fraction is refused, no whole second fits in 500 ms, and the hook returns
+	# without a nap — one ask, the refused one, and well under a second.
 	new_trace
-	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
-	J=$(ev_of agent.stop | sed -n '1p')
-	[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 950 ] 2>/dev/null &&
-		pass "a real clock and a whole-second sleep still wait at a 1000 ms bound ($(str "$J" waited_ms) ms)" ||
-		fail "a real clock and a whole-second sleep: exit $S_STATUS, event $J"
+	stop_on "$SCRATCH/sub-head-308.jsonl"
+	STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=500
+	U=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$NAPS" = 1 ] && [ "$(str "$U" waited_ms)" -lt 1000 ] 2>/dev/null &&
+		pass "a 500 ms bound with a whole-second sleep returns without a nap ($(str "$U" waited_ms) ms, $NAPS ask)" ||
+		fail "a 500 ms bound with a whole-second sleep: exit $S_STATUS, $NAPS asks, event $U"
+
+	# The legs below need a millisecond clock; on a host without one they would
+	# pass or fail on nothing, so they say so instead.
+	case $("$REAL_DATE" +%s%N) in
+	*[!0-9]*) HAVE_MS_CLOCK=0 ;;
+	*) HAVE_MS_CLOCK=1 ;;
+	esac
+	if [ "$HAVE_MS_CLOCK" = 0 ]; then
+		note "no millisecond clock on this host: the real-clock whole-second legs did not run"
+	else
+		# A MILLISECOND CLOCK WITH A WHOLE-SECOND SLEEP waits the kit's own bound
+		# out: one refused fraction, then the whole second.
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		J=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$J" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			pass "a real clock and a whole-second sleep wait a 1000 ms bound out ($(str "$J" waited_ms) ms, $NAPS asks)" ||
+			fail "a real clock and a whole-second sleep: exit $S_STATUS, $NAPS asks, event $J"
+
+		# THE READINESS CHECK IS SPENT INSIDE THE BOUND (#403). On a loaded host
+		# the first check alone cost just over 50 ms, and the hook gave up at
+		# waited_ms 51 without one nap. A `tail` that costs 60 ms makes that host
+		# deterministic, and one whose own fractional sleep fails says so rather
+		# than quietly costing nothing.
+		REAL_TAIL=$(command -v tail)
+		mkdir -p "$SCRATCH/slowcheck-403"
+		printf '#!/bin/sh\n"%s" 0.06 || { : >"%s/slowcheck-403.broken"; exit 1; }\nexec "%s" "$@"\n' \
+			"$REAL_SLEEP" "$SCRATCH" "$REAL_TAIL" >"$SCRATCH/slowcheck-403/tail"
+		chmod +x "$SCRATCH/slowcheck-403/tail"
+		rm -f "$SCRATCH/slowcheck-403.broken"
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=1000
+		W=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$(str "$W" waited_ms)" -ge 1000 ] 2>/dev/null && [ "$NAPS" = 2 ] &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a readiness check costing 60 ms still waits a 1000 ms bound out ($(str "$W" waited_ms) ms, $NAPS asks)" ||
+			fail "a 60 ms readiness check cut the wait short: exit $S_STATUS, $NAPS asks, event $W"
+
+		# THE OVERRUN IS BOUNDED. In whole-second mode the wait reaches the bound
+		# and may pass it by at most one whole-second nap plus a check: a 2500 ms
+		# bound with the same 60 ms check takes two whole seconds and no third,
+		# and reports no more than 2500 + 1000 + the check's cost (60 ms and the
+		# process it runs in, 200 ms in all).
+		new_trace
+		stop_on "$SCRATCH/sub-head-308.jsonl"
+		STUBS="$SCRATCH/slowcheck-403:$SCRATCH/whole-308" timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=2500
+		O=$(ev_of agent.stop | sed -n '1p')
+		[ "$S_STATUS" = 0 ] && [ "$NAPS" = 3 ] && [ "$(str "$O" waited_ms)" -le 3700 ] 2>/dev/null &&
+			[ ! -e "$SCRATCH/slowcheck-403.broken" ] &&
+			pass "a 2500 ms bound overruns by at most one nap and a check ($(str "$O" waited_ms) ms, $NAPS asks)" ||
+			fail "a 2500 ms whole-second wait overran its ceiling: exit $S_STATUS, $NAPS asks, event $O"
+	fi
 
 	# THE READINESS RULE, half by half (hook_final's comment calls each one
 	# load-bearing, so each has a leg that fails without it). Built from the
@@ -2134,8 +2205,8 @@ start_in "$B2"
 	pass "with no threshold set, nothing is said on stderr — the shipped default is silence" ||
 	fail "with no threshold the hook still said: $S_ERR"
 start_in "$B2" TRACE_BEHIND_WARN=1
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ "$(str "$START" behind)" = 2 ] &&
-	pass "past a threshold of 1: still exit 0, silent on stdout, still data.behind=2" ||
+[ "$S_STATUS" = 0 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "past a threshold of 1: still exit 0, still data.behind=2 (stdout's object is section 35's)" ||
 	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT', event $START"
 [ "$(behind_notes)" = 1 ] &&
 	pass "and stderr says so exactly once" ||
@@ -2525,5 +2596,1039 @@ if [ "$HAVE_NODE" = 1 ]; then
 else
 	echo "  skip  node is not on PATH — the tool failure reason legs need the payload reader"
 fi
+
+# ---------------------------------------------------------------------------
+banner "35. PreToolUse: a spawned sub-agent cannot signal processes by name"
+# ---------------------------------------------------------------------------
+# Ticket #414 (retro 20261001T150216Z, the reviewer that killed suites). During
+# PR #393's review a sub-agent ran `pkill -f` on two suite names and may have
+# killed sibling sessions' runs. tool-pre-guard.sh refuses a Bash command that
+# signals by NAME — pkill, killall, kill fed by pgrep, kill given a name — when
+# the payload carries `agent_type`, which the agent harness sets on a spawned
+# sub-agent's calls only. It exits 2, the agent harness's block status, with
+# the rule named on stderr, and records one `note` (outcome=denied) on the
+# session. The operator's own session (no agent_type) and a signal to a job or
+# a pid pass through, exit 0 and silent.
+GUARD="$HOOKS/tool-pre-guard.sh"
+# guard_payload <agent_type or empty> <command> — a compact PreToolUse payload
+# for a Bash call, the command JSON-escaped (backslash, then double quote).
+guard_payload() {
+	_gp_cmd=$(printf '%s' "$2" | sed 's/\\/\\\\/g; s/"/\\"/g')
+	_gp_at=
+	[ -n "$1" ] && _gp_at=",\"agent_id\":\"a1b2c3d4e5f60718\",\"agent_type\":\"$1\""
+	printf '{"session_id":"%s","cwd":"/tmp/x","permission_mode":"default","hook_event_name":"PreToolUse"%s,"tool_name":"Bash","tool_input":{"command":"%s","description":"d"},"tool_use_id":"%s"}' \
+		"$TSESSION" "$_gp_at" "$_gp_cmd" "$TUSE"
+}
+# guard <agent_type or empty> <command> [env…] — run the hook on that payload.
+guard() {
+	_g_at=$1
+	_g_cmd=$2
+	shift 2
+	guard_payload "$_g_at" "$_g_cmd" >"$SCRATCH/guard-414.json"
+	t_run_split env TRACE_DIR="$TDIR" "$@" sh "$GUARD" <"$SCRATCH/guard-414.json"
+}
+if [ -f "$GUARD" ]; then
+	assert_status 0 "adapters/claude-code/hooks/tool-pre-guard.sh parses under sh -n" -- sh -n "$GUARD"
+else
+	fail "adapters/claude-code/hooks/tool-pre-guard.sh does not exist"
+fi
+
+new_trace
+guard general-purpose 'pkill -f tests/x'
+[ "$S_STATUS" = 2 ] && pass "a spawned sub-agent's 'pkill -f tests/x' is blocked with exit 2" ||
+	fail "a spawned sub-agent's pkill exited $S_STATUS, not 2: $S_ERR"
+# Anchored at the start: this very worktree's path holds the rule's name, and
+# a "No such file" error quoting it must not read as the rule named.
+case $S_ERR in kill-guard:*) pass "and stderr names the rule, kill-guard" ;;
+*) fail "stderr does not name the rule: $S_ERR" ;; esac
+[ -z "$S_OUT" ] && pass "and says nothing on stdout" || fail "the guard printed on stdout: $S_OUT"
+[ "$(events | grep -c '')" = 1 ] && [ "$(ev_of note | grep -c '')" = 1 ] &&
+	pass "the refusal is recorded as exactly one note" ||
+	fail "the refusal wrote $(events | grep -c '') line(s): $(events)"
+GN=$(ev_of note | sed -n '1p')
+[ "$(str "$GN" outcome)" = denied ] && [ "$(str "$GN" subject)" = "session:$TSESSION" ] &&
+	[ "$(str "$GN" rule)" = kill-guard ] && [ "$(str "$GN" tool_use_id)" = "$TUSE" ] &&
+	pass "the note is outcome=denied on the session, naming the rule and the call" ||
+	fail "the note is not denied/session/rule/call: $GN"
+
+# The operator's own session carries no agent_type and is never refused.
+new_trace
+guard '' 'pkill -f tests/x'
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$(events)" ] &&
+	pass "the operator's own 'pkill -f tests/x' passes through, exit 0, nothing recorded" ||
+	fail "the operator's own pkill exited $S_STATUS or wrote: $S_OUT $(events)"
+
+# Signalling a job or a pid the sub-agent holds passes through.
+for c in 'kill %1' 'kill 12345' 'kill -9 12345' 'kill -s TERM 12345' 'sleep 30 & kill $!' \
+	'grep -n pkill adapters/claude-code/hooks/tool-pre-guard.sh' "rg 'pkill|killall' ." \
+	'git log --grep=killall' 'kill $pid 2>/dev/null' 'kill 123 >/dev/null 2>&1' 'kill 123 > /dev/null' \
+	'kill $! # stop it' 'xargs kill < pids'; do
+	new_trace
+	guard general-purpose "$c"
+	[ "$S_STATUS" = 0 ] && [ -z "$(events)" ] &&
+		pass "a spawned sub-agent's '$c' passes through" ||
+		fail "a spawned sub-agent's '$c' exited $S_STATUS: $S_ERR"
+done
+
+# Signalling by name, in each shape, is blocked.
+for c in 'killall node' '/usr/bin/pkill -f vitest' 'cd tests && pkill -f x' 'sudo pkill x' \
+	'kill -9 $(pgrep -f tests/x)' 'pgrep -f tests/x | xargs kill' 'kill -TERM vitest' \
+	'timeout 5 killall sh' 'true; pkill x' 'sudo -u nobody pkill x' \
+	'echo "a'"'"'b"; pkill -f x; echo "'"'"'"'; do
+	new_trace
+	guard general-purpose "$c"
+	[ "$S_STATUS" = 2 ] && pass "a spawned sub-agent's '$c' is blocked" ||
+		fail "a spawned sub-agent's '$c' exited $S_STATUS, not 2: $S_ERR"
+done
+
+# A tool that is not Bash is not the guard's business, whatever its input says.
+new_trace
+guard_payload general-purpose 'pkill x' | sed 's/"tool_name":"Bash"/"tool_name":"Grep"/' >"$SCRATCH/guard-grep-414.json"
+t_run_split env TRACE_DIR="$TDIR" sh "$GUARD" <"$SCRATCH/guard-grep-414.json"
+[ "$S_STATUS" = 0 ] && pass "a Grep call whose input names pkill passes through" ||
+	fail "a non-Bash call exited $S_STATUS"
+
+# Tracing off still blocks: the refusal is the guard, the note is a record.
+new_trace
+guard_payload general-purpose 'pkill -f tests/x' >"$SCRATCH/guard-414.json"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$GUARD" <"$SCRATCH/guard-414.json"
+[ "$S_STATUS" = 2 ] && [ -z "$(events)" ] && pass "with tracing off the pkill is still blocked, and nothing is written" ||
+	fail "with tracing off the guard exited $S_STATUS"
+
+# WITHOUT NODE it fails CLOSED for a sub-agent: a payload naming a kill-by-name
+# word is blocked rather than waved through unread.
+new_trace
+guard general-purpose 'pkill -f tests/x' PATH="$(no_node_path)"
+[ "$S_STATUS" = 2 ] && pass "with node off PATH a sub-agent's pkill is still blocked" ||
+	fail "with node off PATH the guard exited $S_STATUS: $S_ERR"
+new_trace
+guard general-purpose 'kill %1' PATH="$(no_node_path)"
+[ "$S_STATUS" = 0 ] && pass "and its 'kill %1' still passes" ||
+	fail "with node off PATH 'kill %1' exited $S_STATUS: $S_ERR"
+
+# THE WIRING: the kit's settings file runs the guard on PreToolUse for Bash.
+if [ "$HAVE_NODE" = 1 ]; then
+	PRE=$(node -e 'const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+		for (const g of (s.hooks.PreToolUse || [])) for (const h of g.hooks || []) console.log(g.matcher + " " + h.command);' "$SETTINGS")
+	case $PRE in Bash\ *tool-pre-guard.sh*) pass "the settings file wires tool-pre-guard.sh on PreToolUse, matcher Bash" ;;
+	*) fail "the settings file does not wire the guard on PreToolUse for Bash: $PRE" ;; esac
+else
+	echo "  skip  node is not on PATH — the PreToolUse wiring check needs a JSON parser"
+fi
+
+# ---------------------------------------------------------------------------
+banner "36. The behind note reaches the operator: one JSON object on stdout (#427)"
+# ---------------------------------------------------------------------------
+# Ticket #427, from the live check of #384. On the agent harness as it is, a
+# SessionStart hook's stderr on exit 0 reaches nobody: the note of section 32
+# landed only in the transcript's own records. Two channels do reach a reader,
+# and the adapter README records the probe that chose them: a top-level
+# `systemMessage`, which the agent harness documents as shown to the user and
+# an interactive session prints under its banner, and
+# `hookSpecificOutput.additionalContext`, which the model reads and relays —
+# the one that reaches a non-interactive run's output. So past the threshold
+# the hook prints exactly one JSON object carrying both, still exits 0, and
+# still says the line on stderr. Under the threshold stdout stays empty.
+
+# behind_json_ok <stdout> <needle> — node parses the object: systemMessage and
+# additionalContext both hold <needle>, the event name is SessionStart. Status 0
+# for yes. Without node the caller skips the leg.
+behind_json_ok() {
+	printf '%s' "$1" | node -e '
+		let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+			const o = JSON.parse(s), n = process.argv[1], h = o.hookSpecificOutput || {};
+			const ok = typeof o.systemMessage === "string" && o.systemMessage.includes(n) &&
+				h.hookEventName === "SessionStart" &&
+				typeof h.additionalContext === "string" && h.additionalContext.includes(n);
+			process.exit(ok ? 0 : 1);
+		});' "$2" 2>/dev/null
+}
+
+J2="$SCRATCH/behind-json-427"
+behind_kit "$J2"
+behind_remote "$J2" 2
+start_in "$J2" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] &&
+	case $S_OUT in '{'*'}') true ;; *) false ;; esac &&
+	pass "past the threshold: exit 0, and stdout is exactly one line holding one JSON object" ||
+	fail "past the threshold: exit $S_STATUS, stdout '$S_OUT'"
+case $S_OUT in *'"systemMessage":"'*'is 2 commits behind origin/main'*'"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"'*'is 2 commits behind origin/main'*)
+	pass "the object carries the note as systemMessage and as SessionStart additionalContext" ;;
+*) fail "the object does not carry the note in both fields: $S_OUT" ;; esac
+[ "$(behind_notes)" = 1 ] && [ "$(str "$START" behind)" = 2 ] &&
+	pass "and the stderr line and data.behind=2 are both still there" ||
+	fail "stderr said it $(behind_notes) times, event $START"
+if [ "$HAVE_NODE" = 1 ]; then
+	behind_json_ok "$S_OUT" 'is 2 commits behind origin/main' &&
+		pass "the object parses as JSON, both fields holding the note" ||
+		fail "the object does not parse or lacks the note: $S_OUT"
+else
+	echo "  skip  node is not on PATH — the JSON parse leg needs it"
+fi
+
+start_in "$J2" TRACE_BEHIND_WARN=2
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "AT the threshold stdout stays empty — no object when there is nothing to say" ||
+	fail "at the threshold stdout held: '$S_OUT'"
+start_in "$J2"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "with no threshold stdout stays empty" ||
+	fail "with no threshold stdout held: '$S_OUT'"
+start_in "$J2" TRACE_BEHIND_WARN=ten
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a malformed threshold is refused on stderr only — stdout stays empty" ||
+	fail "a malformed threshold put on stdout: '$S_OUT'"
+
+# A ROOT PATH THAT NEEDS ESCAPING: a quote and a backslash in the directory
+# name still make one valid object — the path is data, not JSON.
+JQ="$SCRATCH/behind \"q\\427"
+behind_kit "$JQ"
+behind_remote "$JQ" 3
+start_in "$JQ" TRACE_BEHIND_WARN=1
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] &&
+	pass "a root path holding a quote and a backslash: exit 0, one line on stdout" ||
+	fail "an escaping root path: exit $S_STATUS, stdout '$S_OUT'"
+if [ "$HAVE_NODE" = 1 ]; then
+	behind_json_ok "$S_OUT" "$JQ is 3 commits behind origin/main" &&
+		pass "and it parses, the path read back exactly as written" ||
+		fail "the escaping root path broke the object: $S_OUT"
+fi
+
+# THE RECORD. The adapter README says which channel and why.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ')
+case $d in *'#427'*'systemMessage'*'additionalContext'*'rule 1'*) pass "the adapter README records the channel: systemMessage, additionalContext, and the ticket" ;;
+*) fail "the adapter README does not record the behind note's channel" ;; esac
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+banner "37. The phantom-stop count survives on session.end (#410)"
+# ---------------------------------------------------------------------------
+# Ticket #410 (a known gap of 2026-10-01, origin #344). A phantom stop still
+# writes no event (section 31), but it now adds one line to a per-session
+# counter in the adapter's own claude-code/ directory under the trace, and the
+# session-end hook
+# records the count as data.phantoms on session.end — 0 when there were none —
+# and takes the counter with it, so a resumed session's next end counts only
+# what came after. None of these legs needs node: a phantom never reaches the
+# extractor, and session.end is written whether the usage read worked or not.
+
+# phantom_of <session id> — a SubagentStop payload for that session, naming a
+# subagent transcript that does not exist.
+phantom_of() {
+	set_key session_id "$1" <"$FIX/subagent-stop.payload.json" |
+		set_key transcript_path "$SCRATCH/main.jsonl" |
+		set_key agent_transcript_path "$SCRATCH/never-there-410.jsonl" >"$SCRATCH/phantom-410.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-410.json" >/dev/null 2>&1
+}
+
+# end_of <session id> — the SessionEnd hook for that session.
+end_of() {
+	set_key session_id "$1" <"$FIX/session-end.payload.json" |
+		set_key transcript_path "$SCRATCH/main.jsonl" >"$SCRATCH/end-410.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-410.json" >/dev/null 2>&1
+}
+
+# end_line <session id> — that session's session.end lines.
+end_line() { ev_of session.end | grep -F "\"subject\":\"session:$1\"" || :; }
+
+S410A=sess-410-a
+S410B=sess-410-b
+new_trace
+phantom_of "$S410A"
+phantom_of "$S410A"
+phantom_of "$S410B"
+phantom_of "$S410A"
+[ -z "$(ev_of agent.stop)" ] && pass "four phantom stops still write no agent.stop event" ||
+	fail "a phantom stop was recorded: $(ev_of agent.stop)"
+[ "$(find "$TDIR/claude-code" -name '*.phantoms' 2>/dev/null | wc -l | tr -d ' ')" = 2 ] &&
+	pass "the stops are counted in the adapter's own claude-code/ directory, one counter per session" ||
+	fail "expected two counters under claude-code/, found: $(find "$TDIR" -type f ! -path '*/events/*' 2>/dev/null)"
+[ -z "$(find "$TDIR/current" -name '*.phantoms*' 2>/dev/null)" ] &&
+	pass "and none in current/, whose layout the shared trace script owns" ||
+	fail "a counter landed in current/: $(find "$TDIR/current" -name '*.phantoms*')"
+end_of "$S410A"
+EA=$(end_line "$S410A")
+[ "$(data_of "$EA" phantoms)" = 3 ] &&
+	pass "three phantoms then a session end: session.end carries phantoms=3" ||
+	fail "session.end for $S410A carries phantoms='$(data_of "$EA" phantoms)': $EA"
+end_of "$S410B"
+EB=$(end_line "$S410B")
+[ "$(data_of "$EB" phantoms)" = 1 ] &&
+	pass "the counter is per session: the other session reads its own one" ||
+	fail "session.end for $S410B carries phantoms='$(data_of "$EB" phantoms)': $EB"
+
+# NONE, and a resumed session's second end: 0, written rather than left out.
+end_of "$S410A"
+EA2=$(end_line "$S410A" | sed -n '2p')
+[ "$(data_of "$EA2" phantoms)" = 0 ] &&
+	pass "a second end of the same session counts only what came after it: phantoms=0" ||
+	fail "the second session.end for $S410A carries phantoms='$(data_of "$EA2" phantoms)': $EA2"
+end_of sess-410-none
+[ "$(data_of "$(end_line sess-410-none)" phantoms)" = 0 ] &&
+	pass "a session with no phantom stops records phantoms=0" ||
+	fail "a session with none recorded: $(end_line sess-410-none)"
+[ -z "$(find "$TDIR" -name '*.phantoms*' 2>/dev/null)" ] &&
+	pass "and every ended session's counter is gone from the trace directory" ||
+	fail "a counter outlived its session's end: $(find "$TDIR" -name '*.phantoms*')"
+
+# A REFUSED ID — hostile, traversing, or absent — is never a path: no counter
+# lands anywhere, and that session's end carries no phantoms key at all.
+new_trace
+for bad in 'abc; touch PWNED-410' '../../escape-410'; do
+	phantom_of "$bad"
+	end_of "$bad"
+done
+set_key agent_transcript_path "$SCRATCH/never-there-410.jsonl" <"$FIX/subagent-stop.payload.json" |
+	grep -v '"session_id"' >"$SCRATCH/phantom-noid-410.json"
+env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-noid-410.json" >/dev/null 2>&1
+grep -v '"session_id"' <"$FIX/session-end.payload.json" >"$SCRATCH/end-noid-410.json"
+env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-noid-410.json" >/dev/null 2>&1
+LEFT=$(
+	find "$TDIR" -name '*.phantoms*' 2>/dev/null
+	find "$SCRATCH" "$(dirname "$SCRATCH")" -maxdepth 1 \( -name 'escape-410*' -o -name 'PWNED-410*' \) 2>/dev/null
+)
+[ -z "$LEFT" ] &&
+	pass "a hostile, traversing or missing session id leaves no counter anywhere" ||
+	fail "a refused id left files: $LEFT"
+case $(ev_of session.end) in *'"phantoms"'*) fail "a session end with a refused or missing id carried a phantoms key: $(ev_of session.end)" ;;
+*) [ -n "$(ev_of session.end)" ] && pass "and its session.end carries no phantoms key" ||
+	fail "no session.end was written for the refused ids" ;; esac
+
+# TRACING OFF — no TRACE_DIR and the shipped, empty policy file: the counter
+# has nowhere to go, and the hook still exits 0 and says nothing.
+t_run_split env -u TRACE_DIR TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-410.json"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "with tracing off a phantom stop exits 0 and says nothing" ||
+	fail "with tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+# THE RECORD. The adapter README says what a session with none writes.
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"a session with no phantom stops records \`phantoms=0\`"*) pass "the adapter README records that a session with none writes 0" ;;
+*) fail "the adapter README does not say what a session with no phantom stops records" ;; esac
+
+# ---------------------------------------------------------------------------
+banner "38. A compaction's summary call is counted: the rollup gap becomes an event (#407)"
+# ---------------------------------------------------------------------------
+# The call that writes a compaction summary leaves NO assistant line, so its
+# tokens reach the agent harness's own rollup and no message-by-message sum
+# (tests/fixtures/claude-code/README.md, "The fifth capture"). The session-end
+# hook now reads the rollup beside the sums and records the difference, per
+# model, as one more `session.usage` event with data.via=rollup and
+# data.reason=compaction — so the plain sum of the events IS the rollup. The
+# compacted fixture is the #307 session in full: three runs, a /compact, two
+# more answers; its first 34 lines are the resumed fixture's session.
+CFIX="$FIX/compacted-transcript.redacted.jsonl"
+KFIX="$FIX/forked-transcript.redacted.jsonl"
+CLAST=msg_011CfZUqmQSnMv2oo8z5oPGf
+CGAP="$RMODEL 1473 453 38 24035 rollup compaction"
+
+# crollup <line> — the four rollup numbers of that cost-state line, in event order.
+crollup() {
+	_cr=$(sed -n "$1p" "$CFIX" | sed -n 's/.*"'"$RMODEL"'":{\([^}]*\)}.*/\1/p')
+	for _k in inputTokens outputTokens cacheCreationInputTokens cacheReadInputTokens; do
+		printf '%s\n' "$_cr" | sed -n 's/.*"'"$_k"'":\([0-9]*\).*/\1/p'
+	done | paste -sd' ' -
+}
+R85=$(crollup 85)
+[ "$R85" = "1521 744 17305 128201" ] && [ "$(crollup 58)" = "1503 556 10354 85813" ] &&
+	pass "the compacted fixture's rollups are the ones its README records" ||
+	fail "the compacted fixture's rollups moved: line 58 '$(crollup 58)', line 85 '$R85'"
+grep -q '"subtype":"compact_boundary"' "$CFIX" && pass "and it holds the compact boundary" ||
+	fail "the compacted fixture holds no compact boundary"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR, asked to judge the rollup. Without the flag nothing moves:
+	# the subagent-stop hook reads a subagent's file, which carries no rollup.
+	t_run_split node "$EXTRACTOR" "$CFIX"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "without --rollup the compacted file is its five messages, as before" ||
+		fail "the plain read printed '$S_OUT' (status $S_STATUS)"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && pass "the extractor takes --rollup" ||
+		fail "--rollup exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '1p')" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "the message row is unchanged under --rollup" ||
+		fail "the message row under --rollup: $(printf '%s\n' "$S_OUT" | sed -n '1p')"
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '2p')" = "$CGAP" ] &&
+		pass "and one more row is the gap: line 85's rollup less the messages ($CGAP)" ||
+		fail "the gap row is '$(printf '%s\n' "$S_OUT" | sed -n '2p')', expected '$CGAP'"
+	[ "$(printf '%s\n' "$S_OUT" | grep -c '')" = 2 ] && pass "and nothing else" ||
+		fail "--rollup printed: $S_OUT"
+	t_run_split node "$EXTRACTOR" --rollup --after "$RMSG2" "$CFIX" </dev/null
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "the gap is the whole file's, whatever the anchor: an anchor counts messages, not the gap" ||
+		fail "--rollup --after $RMSG2 printed '$S_OUT'"
+
+	# EQUAL IS NO EVENT. The resumed session's rollup is its messages exactly.
+	t_run_split node "$EXTRACTOR" --rollup "$RFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 20 72 10239 37743 2 $RMSG2" ] &&
+		pass "a rollup equal to the sum adds no row" ||
+		fail "the resumed fixture under --rollup: status $S_STATUS, '$S_OUT'"
+	# NO BOUNDARY, NO GAP. The first capture's rollup also counts its subagent,
+	# whose events the subagent-stop hook writes: a gap here would count it twice.
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/main.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c ' rollup ')" = 0 ] &&
+		pass "a transcript with no compact boundary is never judged against its rollup" ||
+		fail "the uncompacted transcript under --rollup: status $S_STATUS, '$S_OUT'"
+	# A FORK carries the parent's rollup and the parent's messages with their
+	# usage zeroed, so its gap would be the parent's whole spend a second time.
+	t_run_split node "$EXTRACTOR" --rollup "$KFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 10 39 6725 17813 2 msg_011CfZUgBT2SxFuAbdAdifgs" ] &&
+		pass "a forked transcript (copied messages, usage zeroed) records no gap" ||
+		fail "the forked fixture under --rollup: status $S_STATUS, '$S_OUT'"
+	# A STALE ROLLUP: messages after the last cost-state line mean the rollup
+	# does not describe this end, so nothing is judged against it.
+	head -83 "$CFIX" >"$SCRATCH/compacted-stale-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-stale-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c ' rollup ')" = 0 ] &&
+		pass "a rollup older than the last message is never judged" ||
+		fail "the stale rollup: status $S_STATUS, '$S_OUT'"
+
+	# A GAP ALREADY RECORDED is read back from the trace on stdin, so a later
+	# end of the same session never records it twice.
+	printf '%s\n' '{"kind":"session.usage","model":"'"$RMODEL"'","tok_in":1473,"tok_out":453,"tok_cache_w":38,"tok_cache_r":24035,"data":{"via":"rollup","reason":"compaction"}}' \
+		>"$SCRATCH/recorded-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" <"$SCRATCH/recorded-407.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "a gap the trace already holds is not a gap again" ||
+		fail "with the gap recorded: status $S_STATUS, '$S_OUT'"
+
+	# THE SUBAGENTS' FILES are what the rollup counts beside the session's
+	# lines, so they are taken off before the gap is judged.
+	mkdir -p "$SCRATCH/compacted-sub-407/subagents"
+	cp "$FIX/thinking-subagent-transcript.redacted.jsonl" "$SCRATCH/compacted-sub-407/subagents/agent-a1.jsonl"
+	sed '$s/"inputTokens":1521,"outputTokens":744,"thinkingTokens":599,"cacheReadInputTokens":128201,"cacheCreationInputTokens":17305/"inputTokens":1539,"outputTokens":902,"thinkingTokens":599,"cacheReadInputTokens":142093,"cacheCreationInputTokens":32905/' \
+		"$CFIX" >"$SCRATCH/compacted-sub-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-sub-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "a subagent's tokens in the rollup are its own events', never the gap's" ||
+		fail "with a subagent: status $S_STATUS, '$S_OUT' ($S_ERR)"
+
+	# SMALLER THAN THE SUM is drift — but the message rows are facts the
+	# rollup cannot unmake, so they are still printed, and the exit is 3.
+	sed '$s/"inputTokens":1521,/"inputTokens":21,/' "$CFIX" >"$SCRATCH/compacted-short-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-short-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a rollup smaller than the sum exits 3" ||
+		fail "a short rollup exited $S_STATUS: $S_OUT"
+	[ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "and still prints the message rows, with no gap row" ||
+		fail "a short rollup printed '$S_OUT'"
+	case $S_ERR in *"x transcript-usage:"*tok_in*) pass "and names the field that came up short" ;;
+	*) fail "a short rollup's stderr: $S_ERR" ;; esac
+
+	# THROUGH THE HOOK, end by end as the session ran: three runs, the
+	# /compact run, then the last — the files as each end found them.
+	new_trace
+	set_key transcript_path "$SCRATCH/compacted-407.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$RSESSION" >"$SCRATCH/end-compacted-407.json"
+	for n in 25 34 42 58 85; do
+		head -"$n" "$CFIX" >"$SCRATCH/compacted-407.jsonl"
+		t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+		[ "$S_STATUS" = 0 ] || fail "the end at line $n exited $S_STATUS: $S_ERR"
+	done
+	[ "$(model_row "$RMODEL")" = "$R85" ] &&
+		pass "five ends later, summary --by model totals the session at line 85's rollup ($R85)" ||
+		fail "summary --by model totals '$(model_row "$RMODEL")', the rollup says '$R85'"
+	GAPS=$(ev_of session.usage | grep -F '"via":"rollup"')
+	[ "$(printf '%s\n' "$GAPS" | grep -c .)" = 1 ] && pass "with exactly one rollup-gap event" ||
+		fail "rollup-gap events: $GAPS"
+	[ "$(num "$GAPS" tok_in) $(num "$GAPS" tok_out) $(num "$GAPS" tok_cache_w) $(num "$GAPS" tok_cache_r)" = "1473 453 38 24035" ] &&
+		[ "$(str "$GAPS" model)" = "$RMODEL" ] && [ "$(data_of "$GAPS" reason)" = compaction ] &&
+		pass "on the model, with the compaction's counts and data.reason=compaction" ||
+		fail "the rollup-gap event: $GAPS"
+	[ -z "$(data_of "$GAPS" last_msg)" ] && [ -z "$(data_of "$GAPS" msgs)" ] &&
+		pass "and no last_msg or msgs: it counts no message, so it never anchors a read" ||
+		fail "the gap event carries an anchor: $GAPS"
+	ULAST=$(ev_of session.usage | grep -F '"last_msg"' | sed -n '$p')
+	[ "$(data_of "$ULAST" last_msg)" = "$CLAST" ] && [ "$(data_of "$ULAST" msgs)" = 2 ] &&
+		pass "the last end's anchor is still the last message it counted: $CLAST, two messages" ||
+		fail "the anchor after the last end: $ULAST"
+	[ -z "$(ev_of session.usage | grep -F '"outcome":"fail"')" ] && pass "and no end recorded a failure" ||
+		fail "an end failed: $(ev_of session.usage | grep -F '"outcome":"fail"')"
+	# One more end with nothing new adds nothing.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$(model_row "$RMODEL")" = "$R85" ] && pass "a sixth end with nothing new leaves the total at the rollup" ||
+		fail "a sixth end moved the total to '$(model_row "$RMODEL")'"
+
+	# One end over the whole file: the same total, from one read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$(model_row "$RMODEL")" = "$R85" ] && pass "a single end over the whole file totals the rollup too" ||
+		fail "a single end totals '$(model_row "$RMODEL")'"
+
+	# Through the hook, a short rollup: the messages are recorded and the
+	# refusal is its own failure event, and the hook still exits 0.
+	new_trace
+	cp "$SCRATCH/compacted-short-407.jsonl" "$SCRATCH/compacted-407.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$S_STATUS" = 0 ] && pass "a short rollup through the hook exits 0" || fail "the hook exited $S_STATUS"
+	[ "$(model_row "$RMODEL")" = "48 291 17267 104166" ] && pass "and the messages are still recorded" ||
+		fail "with a short rollup the total is '$(model_row "$RMODEL")'"
+	SHORT=$(ev_of session.usage | grep -F '"outcome":"fail"')
+	[ "$(printf '%s\n' "$SHORT" | grep -c .)" = 1 ] && [ "$(data_of "$SHORT" via)" = rollup ] &&
+		pass "beside one failure event, data.via=rollup, that says why no gap was recorded" ||
+		fail "the short-rollup failure: $SHORT"
+
+	# FROM THE REVIEW OF PR #438 — each a regression now.
+	# H-1: a rollup key's context-window suffix names the same model.
+	sed '$s/"'"$RMODEL"'":{"inputTokens"/"'"$RMODEL"'[1m]":{"inputTokens"/' "$CFIX" >"$SCRATCH/compacted-suffix-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-suffix-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "a rollup key with a context-window suffix ([1m]) is the message's model" ||
+		fail "the suffixed rollup key: status $S_STATUS, '$S_OUT'"
+	# H-1: drift in a subagent file refuses the rollup, names the file, keeps the rows.
+	mkdir -p "$SCRATCH/compacted-subdrift-407/subagents"
+	sed 's/"output_tokens":/"output_tokenz":/g' "$FIX/thinking-subagent-transcript.redacted.jsonl" \
+		>"$SCRATCH/compacted-subdrift-407/subagents/agent-x.jsonl"
+	cp "$CFIX" "$SCRATCH/compacted-subdrift-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-subdrift-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		case $S_ERR in *"subagents/agent-x.jsonl: "*) true ;; *) false ;; esac &&
+		pass "a subagent file's drift refuses the rollup (exit 3), names the file and keeps the rows" ||
+		fail "subagent drift: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# H-1: a modelUsage that is not an object, and a recorded line that is not JSON.
+	sed '$s/"modelUsage":{/"modelUsage":[{/; $s/}},"hasUnknownModelCost"/}}],"hasUnknownModelCost"/' "$CFIX" >"$SCRATCH/compacted-arr-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-arr-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a modelUsage that is not an object is refused (exit 3)" ||
+		fail "an array modelUsage: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	t_run_split sh -c 'printf "not json\n" | node "$1" --rollup "$2"' rollup-case "$EXTRACTOR" "$CFIX"
+	[ "$S_STATUS" = 3 ] && pass "a recorded event that is not JSON is refused (exit 3)" ||
+		fail "a non-JSON recorded line: status $S_STATUS, '$S_OUT'"
+	# H-2: a rollup key an event cannot record unambiguously is refused, never a shifted row.
+	sed '$s/"modelUsage":{/"modelUsage":{"bad model":{"inputTokens":900,"outputTokens":10,"cacheReadInputTokens":0,"cacheCreationInputTokens":0},/' \
+		"$CFIX" >"$SCRATCH/compacted-space-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-space-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "a rollup key with whitespace is refused (exit 3), never a row with shifted columns" ||
+		fail "a rollup key with a space: status $S_STATUS, '$S_OUT'"
+	# M-1: an unreadable subagents directory or stdin is a refusal, never "nothing there".
+	cp "$CFIX" "$SCRATCH/compacted-notdir-407.jsonl"
+	: >"$SCRATCH/compacted-notdir-407"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-notdir-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a subagents path that cannot be listed is refused (exit 3)" ||
+		fail "an unlistable subagents path: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" <"$SCRATCH"
+	[ "$S_STATUS" = 3 ] && pass "a stdin that cannot be read is refused (exit 3), not read as no gap recorded" ||
+		fail "an unreadable stdin: status $S_STATUS, '$S_OUT'"
+else
+	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "39. A multi-model session end killed partway loses nothing: one anchor per model (#408)"
+# ---------------------------------------------------------------------------
+# Ticket #408 (a known gap of 2026-10-01, origin #307 L-1). The session-end hook
+# writes one session.usage event per model. Until this ticket every one of them
+# carried the SAME resume anchor — the last message of the whole read — so an
+# end killed after the first model's event left the trace saying "read up to
+# here" for a model whose event was never written, and the next end started
+# after messages nobody recorded. Now each model's event carries that model's
+# own last message, and the next end resumes each model from the trace's last
+# anchor FOR THAT MODEL; a model with no anchor is read from the start.
+#
+# The kill is simulated by cutting the trace after the end's first usage event:
+# exactly what a SIGKILL between two emits leaves, and deterministic. The
+# transcript is synthetic — two models, one message each per run, distinct
+# counts — so a message counted twice or not at all moves a total visibly.
+S408=c0ffee00-0408-4000-8000-000000000408
+MA=claude-alpha-408
+MB=claude-beta-408
+
+# asst408 <id> <model> <in> <out> <cache w> <cache r> — one assistant line.
+asst408() {
+	printf '{"type":"assistant","requestId":"req_%s","message":{"id":"%s","model":"%s","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
+		"$1" "$1" "$2" "$3" "$4" "$5" "$6"
+}
+
+# cut_after_first_usage — the trace as a kill after this end's first usage
+# event leaves it: every line after that event, the session.end included, gone.
+# <n> is how many usage events of this session the trace held before the end.
+cut_after_first_usage() {
+	for _f in "$TDIR"/events/*.jsonl; do
+		awk -v n="$1" -v s="\"subject\":\"session:$S408\"" '
+			index($0, "\"kind\":\"session.usage\"") && index($0, s) { u += 1 }
+			{ print } u > n { exit }' "$_f" >"$_f.cut" && mv "$_f.cut" "$_f"
+	done
+}
+
+usage408() { ev_of session.usage | grep -F "\"subject\":\"session:$S408\"" || :; }
+
+{
+	asst408 msg_a1 "$MA" 1 10 100 1000
+	asst408 msg_b1 "$MB" 4 40 400 4000
+} >"$SCRATCH/run1-408.jsonl"
+{
+	cat "$SCRATCH/run1-408.jsonl"
+	asst408 msg_a2 "$MA" 2 20 200 2000
+	asst408 msg_b2 "$MB" 8 80 800 8000
+} >"$SCRATCH/run2-408.jsonl"
+set_key transcript_path "$SCRATCH/t-408.jsonl" <"$FIX/session-end.payload.json" |
+	set_key session_id "$S408" >"$SCRATCH/end-408.json"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR: each row's last id is its own model's last message.
+	t_run_split node "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "the extractor's last-id column is per model: msg_a2 for alpha, msg_b2 for beta" ||
+		fail "a two-model read printed '$S_OUT' (status $S_STATUS)"
+
+	# --resume: the anchors come from the recorded events on stdin, per model.
+	printf '%s\n' \
+		'{"kind":"session.usage","model":"'"$MA"'","tok_in":1,"data":{"msgs":"1","last_msg":"msg_a1"}}' \
+		>"$SCRATCH/rec-a-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-a-408.jsonl"
+	# The rows are compared as a set: their order is not a contract (L-4,
+	# review of PR #447).
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$MA 2 20 200 2000 1 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume reads alpha after its anchor and beta, anchorless, from the start" ||
+		fail "--resume with alpha's anchor only printed '$S_OUT' (status $S_STATUS: $S_ERR)"
+	t_run_split sh -c 'node "$1" --resume "$2" </dev/null' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume with nothing recorded is the whole file" ||
+		fail "--resume with an empty stdin printed '$S_OUT' (status $S_STATUS)"
+	printf '%s\n' '{"kind":"session.usage","model":"'"$MB"'","data":{"msgs":"1","last_msg":"msg_gone"}}' \
+		>"$SCRATCH/rec-gone-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-gone-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *msg_gone*) true ;; *) false ;; esac &&
+		pass "a model's anchor the transcript does not hold is drift: exit 2, no row, the anchor named" ||
+		fail "a lost per-model anchor: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# Under --resume the recorded events ARE the anchors: a line that is not
+	# JSON, or no stdin to read, is exit 2 — never "nothing recorded", which
+	# would be the whole-file read and the double count.
+	t_run_split sh -c 'printf "not json\n" | node "$1" --resume "$2"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a recorded line that is not JSON is exit 2 under --resume, no row" ||
+		fail "a non-JSON recorded line under --resume: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --resume "$SCRATCH/run2-408.jsonl" <"$SCRATCH"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a stdin that cannot be read is exit 2 under --resume, no row" ||
+		fail "an unreadable stdin under --resume: status $S_STATUS, '$S_OUT'"
+	# M-1, review of PR #447: hook_tokens --after WITHOUT --resume is still the
+	# one anchor for every model, never silently a whole-file read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh -c '. "$0"; hook_tokens "$1" agent.stop --after msg_a1 subject=agent:m1-408' \
+		"$HOOKS/hook.lib.sh" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(sum_tok tok_in agent.stop)" = 14 ] &&
+		pass "hook_tokens --after alone still anchors every model: b1, a2, b2 counted (14), a1 not" ||
+		fail "hook_tokens --after alone counted tok_in $(sum_tok tok_in agent.stop): $(ev_of agent.stop)"
+	t_run_split node "$EXTRACTOR" --resume --after msg_a1 "$SCRATCH/run2-408.jsonl" </dev/null
+	[ "$S_STATUS" = 2 ] && pass "--resume and --after together is a usage error: two answers to one question" ||
+		fail "--resume with --after: status $S_STATUS, '$S_OUT'"
+
+	# THE KILL. End 1 over run 1, cut after its first usage event; then a full
+	# end over run 2. Every message counted exactly once, per model.
+	new_trace
+	cp "$SCRATCH/run1-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the two-model first end exits 0" || fail "the first end exited $S_STATUS: $S_ERR"
+	UA=$(usage408 | grep -F "\"model\":\"$MA\"")
+	UB=$(usage408 | grep -F "\"model\":\"$MB\"")
+	[ "$(data_of "$UA" last_msg)" = msg_a1 ] && [ "$(data_of "$UB" last_msg)" = msg_b1 ] &&
+		pass "each model's event carries its own anchor: msg_a1 on alpha, msg_b1 on beta" ||
+		fail "the per-model anchors: alpha '$(data_of "$UA" last_msg)', beta '$(data_of "$UB" last_msg)'"
+	cut_after_first_usage 0
+	[ "$(usage408 | grep -c .)" = 1 ] && [ -z "$(ev_of session.end)" ] &&
+		pass "the kill leaves one usage event and no session.end" ||
+		fail "the cut trace holds: $(events)"
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the full end after the kill exits 0" || fail "exited $S_STATUS: $S_ERR"
+	[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "summary --by model: alpha 3/30/300/3000, beta 12/120/1200/12000 — every message once" ||
+		fail "after the kill alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	[ -z "$(usage408 | grep -F '"outcome":"fail"')" ] &&
+		pass "and no usage event of the two ends is a failure" ||
+		fail "a failure was recorded: $(usage408 | grep -F '"outcome":"fail"')"
+
+	# A THIRD END WITH NOTHING NEW: one event, no tokens, the totals unmoved.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	N3=$(usage408 | sed -n '$p')
+	[ "$S_STATUS" = 0 ] && [ -z "$(num "$N3" tok_in)" ] && [ "$(str "$N3" outcome)" != fail ] &&
+		[ "$(data_of "$N3" msgs)" = 0 ] &&
+		[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a third end with nothing new leaves one tokenless event and moves no total" ||
+		fail "the nothing-new end: '$N3', alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	# AND IT ANCHORS NOBODY (L-3, review of PR #447): it names no model, so a
+	# fourth end with one new message per model counts exactly those two.
+	{
+		asst408 msg_a3 "$MA" 16 160 1600 16000
+		asst408 msg_b3 "$MB" 32 320 3200 32000
+	} >>"$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "19 190 1900 19000" ] &&
+		[ "$(model_row "$MB")" = "44 440 4400 44000" ] &&
+		pass "a fourth end after it counts each model's one new message, no more" ||
+		fail "the fourth end: alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A TRACE THE OLD HOOK WROTE: both events carried the whole read's last id,
+	# and the kill took beta's. Alpha's anchor is a POSITION in the file, so it
+	# still counts alpha's messages after it; beta has none and starts over.
+	new_trace
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject="session:$S408" \
+		session="$S408" model="$MA" tok_in=1 tok_out=10 tok_cache_w=100 tok_cache_r=1000 \
+		data.msgs=1 data.last_msg=msg_b1
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a trace the old hook wrote and a kill cut recovers too: every message once" ||
+		fail "from an old-style anchor alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A SINGLE-MODEL SESSION IS UNCHANGED: section 26's two ends, again.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | sed -n 's/.*"last_msg":"\([^"]*\)".*/\1/p' | paste -sd' ' -)" = "$RMSG1 $RMSG2" ] &&
+		[ "$(model_row "$RMODEL")" = "$R34" ] &&
+		pass "a single-model session: the same two anchors and the same total ($R34)" ||
+		fail "the single-model session: $(ev_of session.usage)"
+else
+	echo "  skip  node is not on PATH — the per-model anchor legs need the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "40. A denied tool call is visible: a pending marker swept at session end (#409)"
+# ---------------------------------------------------------------------------
+# Ticket #409 (a known gap of 2026-10-01, origin #252). A call the operator
+# denies fires PreToolUse and nothing after it, so tool-post.sh never sees it.
+# The pre-tool hook now writes a pending marker in the adapter's own
+# claude-code/ directory, keyed by session and tool-use id; the post-tool hook
+# removes it; the session-end hook sweeps what is left into one
+# `tool.use outcome=denied` each, the tool name and the input head on it.
+# Behind TRACE_TOOLS, the switch tool-post.sh reads: a marker no post hook
+# would ever remove would read every call as denied.
+
+# pre_of <session> <tool_use_id> <command> — the PreToolUse hook on a compact
+# payload, the live shape, with tool capture on.
+pre_of() {
+	printf '{"session_id":"%s","transcript_path":"%s","cwd":"/tmp/spike-proj","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_use_id":"%s"}' \
+		"$1" "$SCRATCH/main.jsonl" "$3" "$2" >"$SCRATCH/pre-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+}
+
+# post_of <session> <tool_use_id> <command> — the PostToolUse hook for that call.
+post_of() {
+	printf '{"session_id":"%s","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"stdout":"hi"},"tool_use_id":"%s"}' \
+		"$1" "$3" "$2" >"$SCRATCH/post-409.json"
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" <"$SCRATCH/post-409.json" >/dev/null 2>&1
+}
+
+# denied_of <session> — that session's tool.use events with outcome=denied.
+denied_of() { ev_of tool.use | grep -F "\"subject\":\"session:$1\"" | grep -F '"outcome":"denied"' || :; }
+
+# markers — every pending marker under the trace directory.
+markers() { find "$TDIR" -path '*.pending*' -type f 2>/dev/null; }
+
+if [ -f "$HOOKS/tool-pre.sh" ]; then
+	assert_status 0 "adapters/claude-code/hooks/tool-pre.sh parses under sh -n" -- sh -n "$HOOKS/tool-pre.sh"
+else
+	fail "adapters/claude-code/hooks/tool-pre.sh does not exist"
+fi
+
+if [ "$HAVE_NODE" = 1 ]; then
+	S409=sess-409-a
+	new_trace
+	# THE DENIAL: a pre-tool event with no post-tool event, then the end.
+	t_run_split pre_of "$S409" toolu_409_denied 'rm -rf build'
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+		pass "the pre-tool hook exits 0 and says nothing on stdout" ||
+		fail "tool-pre.sh: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	[ -z "$(ev_of tool.use)" ] && pass "and writes no event of its own — the marker is not a record yet" ||
+		fail "the pre-tool hook wrote an event: $(ev_of tool.use)"
+	M=$(markers)
+	[ "$(printf '%s\n' "$M" | grep -c .)" = 1 ] &&
+		case $M in "$TDIR/claude-code/$S409.pending/toolu_409_denied") true ;; *) false ;; esac &&
+		pass "one marker, in the adapter's claude-code/ directory, keyed by session and tool-use id" ||
+		fail "expected claude-code/$S409.pending/toolu_409_denied, found: $M"
+	case $(ls -l "$M" 2>/dev/null) in -rw-------*) pass "and owner-only: it holds the command's head" ;;
+	*) fail "the marker is not mode 600: $(ls -l "$M" 2>/dev/null)" ;; esac
+	end_of "$S409"
+	D=$(denied_of "$S409")
+	[ "$(printf '%s\n' "$D" | grep -c .)" = 1 ] &&
+		pass "a pre-tool event with no post-tool event, then a session end: one tool.use outcome=denied" ||
+		fail "expected one denied tool.use for $S409, got: $D"
+	[ "$(data_of "$D" tool)" = Bash ] && [ "$(data_of "$D" tool_use_id)" = toolu_409_denied ] &&
+		pass "naming the tool and the call's id" || fail "the denial lacks tool or id: $D"
+	# Matched on the line itself: the head is JSON inside a JSON string, so
+	# its quotes are escaped and data_of's plain-string reader stops at one.
+	case $D in *'"input_head":"{\"command\":\"rm -rf build\"}"'*) pass "and carrying the input head the marker kept" ;;
+	*) fail "the denial does not carry the input head: $D" ;; esac
+	[ "$(str "$D" session)" = "$S409" ] && [ "$(str "$D" harness)" = claude-code ] &&
+		pass "filed under the session, from the claude-code agent harness" || fail "the denial's session or harness is wrong: $D"
+	# Inside the session: the denial is written before session.end.
+	_order=$(events | grep -F "session:$S409" | sed -n 's/.*"kind":"\([a-z.]*\)".*/\1/p' | tr '\n' ' ')
+	case $_order in *tool.use*session.end*) pass "and written before the session.end it belongs to" ;;
+	*) fail "the order of $S409's events is: $_order" ;; esac
+	[ -z "$(markers)" ] && pass "the swept marker is gone" || fail "a marker outlived the sweep: $(markers)"
+	t_run_split env TRACE_DIR="$TDIR" sh "$TRACE" show "session:$S409" --kind tool.use
+	case $S_OUT in *denied*toolu_409_denied*) pass "show session:<id> --kind tool.use prints the denial — the ticket's demo" ;;
+	*) fail "show did not print the denial: $S_OUT" ;; esac
+
+	# A MATCHED PAIR: the post-tool hook removes the marker, and the end
+	# sweeps nothing.
+	S409B=sess-409-b
+	pre_of "$S409B" toolu_409_ok 'echo hi' >/dev/null 2>&1
+	post_of "$S409B" toolu_409_ok 'echo hi'
+	[ -z "$(markers)" ] && pass "the post-tool hook removes the call's marker" || fail "a matched call left a marker: $(markers)"
+	end_of "$S409B"
+	[ -z "$(denied_of "$S409B")" ] && pass "a matched pre and post, then a session end: no denied event" ||
+		fail "a call that completed was swept as denied: $(denied_of "$S409B")"
+	ev_of tool.use | grep -F "session:$S409B" | grep -q '"outcome":"ok"' &&
+		pass "and the call's own ok event stands" || fail "the matched call has no ok event: $(ev_of tool.use)"
+
+	# NO END YET: the marker stays on disk, and the next end of the session
+	# sweeps it — once.
+	S409C=sess-409-c
+	pre_of "$S409C" toolu_409_late 'git push --force' >/dev/null 2>&1
+	pre_of "$S409B" toolu_409_other 'make' >/dev/null 2>&1
+	[ "$(markers | grep -c "$S409C.pending/toolu_409_late")" = 1 ] &&
+		pass "a marker with no session end stays on disk" || fail "the marker is not on disk: $(markers)"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "and the next end sweeps it" ||
+		fail "the next end swept: $(denied_of "$S409C")"
+	end_of "$S409C"
+	[ "$(denied_of "$S409C" | grep -c .)" = 1 ] && pass "a second end of the same session sweeps nothing again" ||
+		fail "a second end recorded the denial twice: $(denied_of "$S409C")"
+	[ "$(markers | grep -c "$S409B.pending/toolu_409_other")" = 1 ] &&
+		pass "and another session's marker is left alone — its call may still be running" ||
+		fail "a session end swept another session's marker: $(markers)"
+
+	# A REFUSED ID is never a path: a hostile or traversing session or
+	# tool-use id writes no marker anywhere.
+	new_trace
+	pre_of 'abc; touch PWNED-409' toolu_409_x 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '../../escape-409' 'ls' >/dev/null 2>&1
+	pre_of sess-409-d '..' 'ls' >/dev/null 2>&1
+	pre_of '..' toolu_409_y 'ls' >/dev/null 2>&1
+	LEFT=$(
+		find "$TDIR" -path '*.pending*' 2>/dev/null
+		find "$SCRATCH" "$(dirname "$SCRATCH")" -maxdepth 1 \( -name 'escape-409*' -o -name 'PWNED-409*' \) 2>/dev/null
+	)
+	[ -z "$LEFT" ] && pass "a hostile or traversing session or tool-use id leaves no marker anywhere" ||
+		fail "a refused id left files: $LEFT"
+
+	# THE SWITCH: tool capture off, or tracing off — no marker, exit 0, silent.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" TRACE_TOOLS= sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$(markers)" ] &&
+		pass "with tool capture off the pre-tool hook writes no marker and exits 0" ||
+		fail "TRACE_TOOLS off: exit $S_STATUS, stdout '$S_OUT', markers $(markers)"
+	t_run_split env -u TRACE_DIR TRACE_TOOLS=1 TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$HOOKS/tool-pre.sh" <"$SCRATCH/pre-409.json"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+		pass "with tracing off it exits 0 and says nothing" ||
+		fail "tracing off: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+
+	# REVIEW OF PR #446. H-1: a post payload the reader refuses still drops
+	# the call's marker — the call returned, so it was not denied.
+	new_trace
+	pre_of sess-409-e toolu_409_drift 'echo hi' >/dev/null 2>&1
+	printf '{"session_id":"sess-409-e","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"echo hi"},"tool_use_id":"toolu_409_drift"}' |
+		env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-post.sh" >/dev/null 2>&1
+	[ -z "$(markers)" ] && ev_of tool.use | grep -q '"outcome":"fail"' &&
+		pass "a post payload the reader refuses records its fail and still drops the marker (review of PR #446, H-1)" ||
+		fail "after a refused post payload: markers '$(markers)', events $(ev_of tool.use)"
+	end_of sess-409-e
+	[ -z "$(denied_of sess-409-e)" ] && pass "and the session end records no denial for it" ||
+		fail "a call whose post payload drifted was swept as denied: $(denied_of sess-409-e)"
+
+	# M-1: a sweep that died after taking the directory aside left
+	# <sid>.pending.<pid>; the next end of that session sweeps it too.
+	new_trace
+	mkdir -p "$TDIR/claude-code/sess-409-f.pending.4242"
+	printf 'Bash\n{"command":"rm -rf x"}\n' >"$TDIR/claude-code/sess-409-f.pending.4242/toolu_409_orphan"
+	mkdir -p "$TDIR/claude-code/sess-409-g.pending.4243"
+	printf 'Bash\n{}\n' >"$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine"
+	end_of sess-409-f
+	[ "$(denied_of sess-409-f | grep -c toolu_409_orphan)" = 1 ] &&
+		pass "a directory an interrupted sweep took aside is swept by the session's next end (review of PR #446, M-1)" ||
+		fail "the orphaned taken-aside directory was not swept: $(denied_of sess-409-f)"
+	[ ! -e "$TDIR/claude-code/sess-409-f.pending.4242" ] && [ -e "$TDIR/claude-code/sess-409-g.pending.4243/toolu_409_notmine" ] &&
+		pass "and it is removed, while another session's is left alone" ||
+		fail "orphans after the end: $(find "$TDIR/claude-code" 2>/dev/null)"
+
+	# L-4: the kill guard refuses a sub-agent's call, the marker hook ran on
+	# the same payload, the session ends: the guard's note AND one denial.
+	new_trace
+	printf '{"session_id":"sess-409-h","hook_event_name":"PreToolUse","agent_type":"general-purpose","tool_name":"Bash","tool_input":{"command":"pkill -f suite"},"tool_use_id":"toolu_409_guard"}' >"$SCRATCH/guard-409.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/tool-pre-guard.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	_g409=$?
+	env TRACE_DIR="$TDIR" TRACE_TOOLS=1 sh "$HOOKS/tool-pre.sh" <"$SCRATCH/guard-409.json" >/dev/null 2>&1
+	end_of sess-409-h
+	[ "$_g409" = 2 ] && ev_of note | grep -q 'kill-guard' && [ "$(denied_of sess-409-h | grep -c toolu_409_guard)" = 1 ] &&
+		pass "a call the kill guard refused is the guard's note and one swept tool.use denied (review of PR #446, L-4)" ||
+		fail "guard exit $_g409; note $(ev_of note); denials $(denied_of sess-409-h)"
+else
+	echo "  skip  node is not on PATH — the marker needs the payload reader's input head"
+fi
+
+# THE WIRING AND THE RECORD.
+grep -q 'hooks/tool-pre.sh' "$SETTINGS" && pass "the kit's settings file wires tool-pre.sh" ||
+	fail "the kit's settings file does not wire tool-pre.sh"
+d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper:]' '[:lower:]')
+case $d in *"swept into one \`tool.use\` with \`outcome=denied\`"*) pass "the adapter README records the sweep" ;;
+*) fail "the adapter README does not say a leftover marker is swept into one tool.use with outcome=denied" ;; esac
+
+# ---------------------------------------------------------------------------
+banner "41. A stop carries the run of the checkout the subagent worked in (#421)"
+# ---------------------------------------------------------------------------
+# Retro finding H4 (#417): 0 of 28 priced agent.stop events carried an
+# implement or review run. The hooks execute from the ROOT checkout, so the
+# shared script keyed the run stack on the root's toplevel — while the session
+# whose spend it was had run `begin` in a linked worktree, whose stack is keyed
+# on the worktree's toplevel. The hook now reads the stack of the checkout the
+# payload's cwd names (the process's own cwd when the payload names none),
+# provided it is a checkout of the same repository, and the root's otherwise.
+#
+# Each leg runs the ROOT's copy of the hook, the way the kit's wiring does.
+
+R421="$SCRATCH/run-root-421"
+behind_kit "$R421"
+git -C "$R421" worktree add -q -b feat/wt-421 "$R421.wt" 2>/dev/null
+HOOK421="$R421/${HOOKS#"$KIT"/}/subagent-stop.sh"
+new_trace
+ROOTRUN=$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTOUTER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin review-pr 2>/dev/null)
+[ -n "$ROOTRUN" ] && [ -n "$WTOUTER" ] && [ -n "$WTINNER" ] &&
+	pass "a run is open at the root and two nested runs are open in its linked worktree" ||
+	fail "the fixture runs did not open: root '$ROOTRUN', worktree '$WTOUTER' / '$WTINNER'"
+
+# stop_from <cwd or ''> [env assignments…] — the root's hook on the fixture
+# payload with its cwd field set to <cwd> (removed when empty), run from the
+# kit's own directory. Sets S_* and STOP, the agent.stop this run wrote — and
+# fails the leg unless exactly one was added, so no leg can pass on the event
+# an earlier leg left behind (M-4, local review of PR #449).
+stop_from() {
+	_sf_cwd=$1
+	shift
+	if [ -n "$_sf_cwd" ]; then
+		set_key cwd "$_sf_cwd" <"$FIX/subagent-stop.payload.json"
+	else
+		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
+	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-421.json"
+	_sf_before=$(ev_of agent.stop | grep -c '')
+	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" \
+		sh "$HOOK421" <"$SCRATCH/stop-421.json"
+	_sf_added=$(($(ev_of agent.stop | grep -c '') - _sf_before))
+	[ "$_sf_added" = 1 ] ||
+		fail "a stop from '$_sf_cwd' wrote $_sf_added agent.stop events, want exactly 1"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && pass "a stop from the linked worktree exits 0, silent on stdout and stderr" ||
+	fail "a stop from the worktree: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "it carries the worktree's open run, not the root's" ||
+	fail "a stop from the worktree carries run '$(str "$STOP" run)', want $WTINNER (root's is $ROOTRUN)"
+[ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "and that run's parent, the run below it on the worktree's stack" ||
+	fail "a stop from the worktree carries parent '$(str "$STOP" parent)', want $WTOUTER"
+
+mkdir -p "$R421.wt/scripts/deeper"
+stop_from "$R421.wt/scripts/deeper"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a cwd deep inside the worktree names the same checkout" ||
+	fail "a stop from below the worktree's top carries run '$(str "$STOP" run)', want $WTINNER"
+
+stop_from "$R421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a stop from the root carries the root's run" ||
+	fail "a stop from the root carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $ROOTRUN"
+
+mkdir -p "$SCRATCH/nowhere-421"
+stop_from "$SCRATCH/nowhere-421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a stop from outside any checkout falls back to the root's run" ||
+	fail "a stop from outside a checkout carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+stop_from "$SCRATCH/never-there-421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd that does not exist falls back to the root's run, exit 0" ||
+	fail "a missing cwd: exit $S_STATUS, run '$(str "$STOP" run)', want $ROOTRUN"
+
+OTHER421="$SCRATCH/other-repo-421"
+mkdir -p "$OTHER421"
+git init -q "$OTHER421"
+stop_from "$OTHER421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd in an UNRELATED repository is not a checkout of this one: the root's run" ||
+	fail "a stop from an unrelated repository carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+# A GIT_DIR / GIT_WORK_TREE pair pinned to another repository — git exports
+# them into hooks — answers for nothing here: every lookup scrubs them, and the
+# stop still carries the worktree's run (M-3, local review of PR #449).
+stop_from "$R421.wt" GIT_DIR="$OTHER421/.git" GIT_WORK_TREE="$OTHER421"
+[ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "a pinned GIT_DIR/GIT_WORK_TREE for another repository does not move the run" ||
+	fail "with GIT_DIR pinned elsewhere the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / $WTOUTER"
+
+# No cwd in the payload: the hook's own working directory answers. The hook is
+# run from the worktree in THIS shell, not a subshell, so S_STATUS and S_ERR
+# survive to be asserted on (L, review of PR #449).
+_here421=$PWD
+cd "$R421.wt" || fail "cannot enter the fixture worktree $R421.wt"
+stop_from ''
+cd "$_here421" || fail "cannot return to $_here421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a payload with no cwd field: the hook's own working directory names the checkout, exit 0" ||
+	fail "with no cwd field, a hook run inside the worktree: exit $S_STATUS, run '$(str "$STOP" run)', want $WTINNER"
+
+# The environment still beats every stack, as it does for the shared script.
+stop_from "$R421.wt" TRACE_RUN=run-from-env-421
+[ "$(str "$STOP" run)" = run-from-env-421 ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a TRACE_RUN in the environment still wins over the worktree's stack" ||
+	fail "with TRACE_RUN set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+
+# A TRACE_PARENT alone is kept, and the run still comes from the worktree's
+# stack: the parent is the caller's to say, the run is not (M, review of PR #449).
+stop_from "$R421.wt" TRACE_PARENT=parent-from-env-421
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$WTINNER" ] && [ "$(str "$STOP" parent)" = parent-from-env-421 ] &&
+	pass "a TRACE_PARENT with no TRACE_RUN: the worktree's run, the environment's parent" ||
+	fail "with only TRACE_PARENT set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $WTINNER / parent-from-env-421"
+
+# A stack that EXISTS and cannot be read is said, on stderr, and the stop
+# carries no run — never the root's (H-1, review of PR #449). Root reads a
+# mode-000 file, so the leg cannot be driven there and says so.
+if [ "$(id -u)" = 0 ]; then
+	echo "  skip  running as root — a mode-000 file is readable, so the unreadable-stack leg cannot be driven"
+else
+	STACK421=$(grep -lF "$WTINNER" "$TDIR"/current/*.runs 2>/dev/null)
+	[ -f "$STACK421" ] && pass "the worktree's run stack is where the leg looks for it" ||
+		fail "no run stack at $STACK421"
+	chmod 000 "$STACK421"
+	stop_from "$R421.wt"
+	chmod 600 "$STACK421"
+	[ "$S_STATUS" = 0 ] && [ -n "$STOP" ] && [ -z "$(str "$STOP" run)" ] && [ -z "$(str "$STOP" parent)" ] &&
+		pass "an unreadable worktree stack: exit 0, the stop carries no run and no parent, not the root's" ||
+		fail "an unreadable worktree stack: exit $S_STATUS, run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', event '$STOP'"
+	case $S_ERR in *"$STACK421 exists and cannot be read"*) pass "and stderr names the stack that could not be read" ;;
+	*) fail "an unreadable worktree stack says nothing on stderr naming it: '$S_ERR'" ;; esac
+fi
+
+# A worktree with NO run open says so: it never borrows the root's.
+(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1 &&
+	env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1)
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$(str "$STOP" run)" ] && [ -n "$STOP" ] &&
+	pass "a worktree with no open run: the stop carries no run, not the root's" ||
+	fail "a worktree with no open run: exit $S_STATUS, run '$(str "$STOP" run)', event '$STOP'"
+
+# THE RECORD: the adapter README's row for the hook says all of it — the
+# parent from the same stack, and an idle checkout's stop carrying no run
+# (M, review of PR #449).
+ROW421=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
+case $ROW421 in *"parent from the same checkout's stack"*) pass "the README row says the parent comes from the same checkout's stack" ;;
+*) fail "the README row for subagent-stop.sh does not say the parent comes from the same checkout's stack" ;; esac
+case $ROW421 in *"a checkout with no run open makes a stop that carries no run, never the root's"*) pass "the README row says an idle checkout's stop carries no run" ;;
+*) fail "the README row for subagent-stop.sh does not say a checkout with no run open makes a stop that carries no run" ;; esac
+case $ROW421 in *"the hook's own working directory when the payload names no \`cwd\`"*) pass "the README row names the no-cwd fallback" ;;
+*) fail "the README row for subagent-stop.sh does not name the hook's own working directory as the no-cwd fallback" ;; esac
+case $ROW421 in *"a \`TRACE_RUN\` already in the environment wins, with its parent; a \`TRACE_PARENT\` alone is kept"*) pass "the README row names the environment's precedence" ;;
+*) fail "the README row for subagent-stop.sh does not say a TRACE_RUN in the environment wins and a TRACE_PARENT alone is kept" ;; esac
 
 t_done "trace hooks"

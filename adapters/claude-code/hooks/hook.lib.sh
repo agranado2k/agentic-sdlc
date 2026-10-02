@@ -1,5 +1,6 @@
 #!/bin/sh
-# hook.lib.sh — what the three trace hooks beside this file share.
+# hook.lib.sh — what the hooks beside this file share: the trace hooks and the
+# kill guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
@@ -13,7 +14,7 @@
 # execution path; a hook runs only once a settings file wires it (see
 # ../README.md, "Wiring the session hooks"). In THIS kit that file is
 # `.claude/settings.json`, which is kit-authoring only and never shipped. In
-# your project it is yours to write, and until you write it these five files
+# your project it is yours to write, and until you write it the files here
 # are reference material you can read.
 #
 # THE THREE RULES A HOOK HERE KEEPS, and why each one is not negotiable:
@@ -22,12 +23,20 @@
 #      non-zero exit is a signal to the agent harness about the SESSION, and
 #      observability that can fail a session is worse than none (PRD #237,
 #      story 15; ADR-0008 clause 4). Every call into the trace ends in `|| :`
-#      and every hook ends in `exit 0`.
-#   2. SILENT ON STDOUT. What a hook prints on stdout can reach the agent
-#      harness's own parser. The trace's answers go to a file; nothing here
-#      has anything to say. STDERR is a different stream and is deliberately
-#      loud — ADR-0008 clause 4 wants a trace error visible, and the operator
-#      is the reader.
+#      and every hook ends in `exit 0`. ONE SANCTIONED EXCEPTION: the kill
+#      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
+#      exits 2 — the agent harness's block status — when, and only when, it
+#      refuses a spawned sub-agent's call (#414). Every other path in it is
+#      exit 0 like everything else here.
+#   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
+#      reaches the agent harness's own parser. The trace's answers go to a
+#      file; nothing about the trace is ever said there. STDERR is a different
+#      stream and is deliberately loud — ADR-0008 clause 4 wants a trace error
+#      visible. The one exception is session-start's behind note, which is
+#      about the code the hooks run, not the trace: stderr on exit 0 reaches
+#      no reader on this agent harness, so past its threshold the note is also
+#      one JSON object on stdout, written by hook_say_session and nothing else
+#      (ticket #427). A trace error never takes that route.
 #   3. TRACE_QUIET=1. An unconfigured trace prints one note per process, which
 #      is the right nudge for an operator typing a command and pure noise on
 #      every session start of a project that has decided not to trace.
@@ -148,14 +157,81 @@ hook_expand() {
 # for. GIT_DIR and GIT_WORK_TREE are scrubbed because git exports them into
 # hooks and a pinned pair would answer for another repository.
 hook_pointer() {
-	_hp_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hp_dir=
-	[ -n "$_hp_dir" ] || return 1
 	_hp_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$hook_repo" rev-parse --show-toplevel) 2>/dev/null ) || _hp_top=
 	[ -n "$_hp_top" ] || _hp_top=$hook_repo
-	_hp_key=$(printf '%s' "$_hp_top" |
-		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hp_key=
-	[ -n "$_hp_key" ] || return 1
-	printf '%s/current/%s' "$_hp_dir" "$_hp_key"
+	hook_current_of "$_hp_top"
+}
+
+# hook_current_of <toplevel> — the per-toplevel path `scripts/trace.sh` keys a
+# working tree's pointer file on; its run stack is the same path plus `.runs`.
+# Nothing (status 1) when tracing is off or git cannot hash the path.
+# DELIBERATE COUPLING: this repeats the shared script's key derivation
+# (trace_key); hook_pointer and hook_run_of both depend on it.
+hook_current_of() {
+	_hc_dir=$(hook_dir) || return 1
+	_hc_key=$(printf '%s' "$1" |
+		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hc_key=
+	[ -n "$_hc_key" ] || return 1
+	printf '%s/current/%s' "$_hc_dir" "$_hc_key"
+}
+
+# --- the run of the checkout the work happened in ----------------------------
+
+# hook_run_of <dir> — export TRACE_RUN and TRACE_PARENT from the run stack of
+# the checkout <dir> is in, so every emit after it carries that checkout's run.
+# Ticket #421, retro finding H4 (#417).
+#
+# WHY. The shared script reads the stack of the toplevel IT lives in, and the
+# kit's hooks execute from the ROOT checkout — while a session's `begin` ran
+# in a linked worktree, whose stack is keyed on the worktree's toplevel. Read
+# the shared script's way, every stop carried the root's run (or none), and no
+# subagent's spend joined the ticket it was spent on: 0 of 28 priced agent.stop
+# events carried an implement or review run.
+#
+# WHICH CHECKOUT. <dir>'s, when git answers for it AND its common directory is
+# this repository's — a cwd in an unrelated repository is not a checkout of
+# this one, and its stack would be a stranger's. Otherwise nothing is exported
+# and the shared script answers with the root's stack, as before. A checkout
+# whose stack holds no run exports TRACE_RUN='' — the shared script's spelling
+# of "no run" — so an idle worktree never borrows the root's run.
+#
+# DELIBERATE COUPLING, the second one. The stack is read here, not by running
+# the shared script: this runs on every subagent stop, and the script exposes
+# no read of a stack (its trace_stack and trace_stack_readable are internal).
+# So the adapter repeats the stack's format — one run per line, the top last,
+# its parent the line below — and its exists-but-unreadable rule. Both are
+# read from ONE snapshot of the file, so a begin or end that replaces the
+# stack between two reads cannot pair a run with another stack's parent.
+#
+# THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
+# whose trail it joins) is left alone, and with it the parent, exactly as the
+# shared script's own precedence has it; a TRACE_PARENT already set is kept.
+hook_run_of() {
+	[ -n "${TRACE_RUN+set}" ] && return 0
+	[ -n "$1" ] || return 0
+	_ro_common=$(hook_common_dir "$1") || return 0
+	_ro_own=$(hook_common_dir "$hook_repo") || return 0
+	[ "$_ro_common" = "$_ro_own" ] || return 0
+	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
+	_ro_stack=$(hook_current_of "$_ro_top") || return 0
+	_ro_stack="$_ro_stack.runs"
+	if [ -e "$_ro_stack" ] && [ ! -r "$_ro_stack" ]; then
+		echo "x  trace: the run stack at $_ro_stack exists and cannot be read — this event carries no run." >&2
+		_ro_run= _ro_parent=
+	else
+		_ro_nl='
+'
+		_ro_pair=$(awk '{ below = top; top = $0 } END { print top; if (NR >= 2) print below }' "$_ro_stack" 2>/dev/null) || _ro_pair=
+		_ro_run=${_ro_pair%%"$_ro_nl"*}
+		case $_ro_pair in *"$_ro_nl"*) _ro_parent=${_ro_pair#*"$_ro_nl"} ;; *) _ro_parent= ;; esac
+	fi
+	TRACE_RUN=$_ro_run
+	export TRACE_RUN
+	if [ -z "${TRACE_PARENT+set}" ]; then
+		TRACE_PARENT=$_ro_parent
+		export TRACE_PARENT
+	fi
+	return 0
 }
 
 # hook_point_at <session id> — write the pointer, or do nothing at all.
@@ -168,24 +244,42 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
-# hook_tokens <transcript> <kind> [--after <message id>] [<field>=<value> …] —
+# hook_tokens <transcript> <kind> [--rollup] [--resume] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
-# token counts, and at least one event whatever happens. Five shapes, all of
+# token counts, and at least one event whatever happens. Seven shapes, all of
 # them exit 0:
 #
 #   the numbers      one event per model, tokens on it, and how far the read
-#                    went: data.msgs (that model's messages) and data.last_msg
+#                    went FOR THAT MODEL: data.msgs (its messages) and
+#                    data.last_msg (its last one), its own resume anchor (#408)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
-#                    an --after anchor the transcript no longer holds is one
+#                    a resume anchor the transcript no longer holds is one
 #   nothing to read  one event, outcome=fail, saying the transcript had no
 #                    assistant message with a usage block yet
-#   nothing new      with --after only: one event, no tokens and no failure,
-#                    carrying the anchor forward as data.last_msg
+#   nothing new      with --after only: one event, no tokens, no model and no
+#                    failure, carrying that id forward as data.last_msg
+#   the rollup gap   with --rollup only, beside the numbers: one more event per
+#                    model the rollup counts beyond them, data.via=rollup and
+#                    data.reason=compaction, with no data.last_msg — it counts
+#                    no message, so it never anchors a later read (#407)
+#   rollup refused   with --rollup only: the numbers as usual, then one event,
+#                    outcome=fail and data.via=rollup, the extractor's reason
 #
-# --after is the previous read's data.last_msg, and with it only the messages
-# after it are counted (#307): see transcript-usage.mjs for why a resumed
-# session needs it and session-end.sh for where the anchor comes from.
+# --rollup and --resume read the trace's own earlier events for this session
+# on stdin — session-end.sh pipes them in. Under --rollup a gap already
+# recorded is not recorded again; transcript-usage.mjs says when a rollup is
+# judged at all. Under --resume each model is counted only after the last
+# data.last_msg the trace holds for THAT model (#307, #408), so an end killed
+# between two models' events loses neither: see transcript-usage.mjs for why a
+# resumed session needs it and session-end.sh for where the events come from.
+#
+# --after is an earlier read's data.last_msg: an empty read is then "nothing
+# new" rather than "nothing to read", carrying that id forward. Alone, it is
+# also the extractor's one anchor for every model (#307). Beside --resume it
+# is only that signal and never the anchor — one id for every model is the
+# shape a kill partway turned into lost messages (#408) — and session-end.sh
+# passes the last data.last_msg the trace holds, of any model.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -200,11 +294,22 @@ hook_tokens() {
 	_ht_kind=$2
 	shift 2
 	_ht_after=
-	if [ "${1:-}" = --after ]; then
-		_ht_after=${2:-}
-		# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
-		if [ $# -ge 2 ]; then shift 2; else shift; fi
-	fi
+	_ht_rollup=
+	_ht_resume=
+	while :; do
+		case ${1:-} in
+		--rollup) _ht_rollup=--rollup; shift ;;
+		--resume) _ht_resume=--resume; shift ;;
+		--after)
+			_ht_after=${2:-}
+			# Never a shift past $#: some shells abort on it, and rule 1 is exit 0.
+			if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+		*) break ;;
+		esac
+	done
+	# The extractor's anchor: --resume's per-model anchors, or else the one id.
+	_ht_one=
+	[ -n "$_ht_resume" ] || _ht_one=$_ht_after
 	# THE REASON NAMES THE FIX, not only the gap. A node managed per user
 	# (a version manager under the home directory) is on the operator's shell
 	# PATH and on none of the agent harness's, and every usage event of every
@@ -228,7 +333,7 @@ hook_tokens() {
 	# node's own stderr reach the operator instead of guessing.
 	_ht_err=$(mktemp "${TMPDIR:-/tmp}/cc-hook.XXXXXX" 2>/dev/null) || _ht_err=
 	if [ -n "$_ht_err" ]; then
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file" 2>"$_ht_err")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume ${_ht_one:+--after "$_ht_one"} "$_ht_file" 2>"$_ht_err")
 		_ht_st=$?
 		# THE EXTRACTOR'S OWN LINE, by its prefix, and only then the first
 		# line: a runtime warning arrives BEFORE the refusal it precedes, so
@@ -239,15 +344,30 @@ hook_tokens() {
 		[ -n "$_ht_why" ] || _ht_why=$(sed -n '1p' "$_ht_err" 2>/dev/null | cut -c1-300)
 		rm -f "$_ht_err"
 	else
-		_ht_out=$(node "$hook_here/transcript-usage.mjs" ${_ht_after:+--after "$_ht_after"} "$_ht_file")
+		_ht_out=$(node "$hook_here/transcript-usage.mjs" $_ht_rollup $_ht_resume ${_ht_one:+--after "$_ht_one"} "$_ht_file")
 		_ht_st=$?
 		_ht_why=
 	fi
-	if [ "$_ht_st" != 0 ]; then
+	# EXIT 3 is --rollup's own: the message rows are good and the rollup was
+	# refused. The rows are recorded as usual and the refusal after them.
+	if [ "$_ht_st" != 0 ] && [ "$_ht_st" != 3 ]; then
 		hook_trace emit kind="$_ht_kind" outcome=fail \
 			reason="${_ht_why:-the transcript usage extractor failed and said nothing}" "$@"
 		return 0
 	fi
+	if [ "$_ht_st" = 3 ]; then
+		hook_trace emit kind="$_ht_kind" outcome=fail data.via=rollup \
+			reason="${_ht_why:-the rollup was refused and the extractor said nothing}" "$@"
+	fi
+	_ht_gap=$(printf '%s\n' "$_ht_out" | awk '$6 == "rollup"')
+	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF && $6 != "rollup"')
+	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c; do
+		[ -n "$_ht_m" ] || continue
+		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
+			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
+			data.via="$_ht_v" data.reason="$_ht_c" \
+			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
+	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
 		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \
 			reason="nothing new in the transcript since $_ht_after, which an earlier usage event counted" "$@"
@@ -345,7 +465,8 @@ hook_dir() {
 # landing 170 and 223 ms after the hook began, in two of seven live stops), and
 # a transcript read then either has no usage at all or — worse — holds the turns
 # before the last one, whose sum is a confident undercount. So the hook may
-# wait, for as long as the policy says and never longer.
+# wait, for as long as the policy says — and past it by at most one poll, which
+# under a `sleep` that refuses fractions is one whole-second nap (see below).
 
 # hook_wait_bound — set hook_wait_ms to the bound TRACE_AGENT_WAIT_MS names, in
 # milliseconds, or to nothing for no wait; set hook_wait_bad to a refused value.
@@ -438,7 +559,9 @@ hook_now_ms() {
 # session and a loaded machine makes every poll slower than its nap: counting
 # only the naps, a 2000 ms bound reported 2000 on a machine at load average 29
 # while the hook ran six seconds end to end. So on a clock with milliseconds the wait is measured, the
-# check comes last before giving up, and the overshoot is at most one poll.
+# check comes last before giving up, and the overshoot is at most one poll —
+# 50 ms and a check, or one whole-second nap and a check where `sleep` refuses
+# fractions.
 # Without one (POSIX `date` stops at seconds) the figure is the sum of the naps
 # taken — honest about what it is, and the best a portable shell can say.
 #
@@ -450,10 +573,15 @@ hook_now_ms() {
 #
 # A nap is 50 ms, trimmed so the next check lands on the bound. A `sleep` that
 # refuses a fraction (POSIX promises only whole seconds) is answered with
-# whole-second naps while about a whole second remains — within one poll of
-# it, so a bound of exactly 1000 still gets its nap after the first check has
-# spent a few milliseconds — and the wait otherwise ends early rather than
-# overrun. Never a busy loop; past the bound by at most one poll.
+# whole-second naps while the naps already taken leave a whole second of the
+# bound unspent. THE NAPS ARE WEIGHED AGAINST THE BOUND, THE CHECKS ARE NOT:
+# whether a whole second fits is decided on the naps already taken, never on
+# what a check cost, so a 1000 ms bound naps its second whatever the first
+# check cost. In whole-second mode the wait therefore reaches the bound and may
+# overrun it by at most one whole-second nap and a check — a `sleep` that
+# refuses fractions cannot trim a nap to what is left. A bound under 1000 ms
+# cannot be served by a whole-second sleep at all, and returns without a nap.
+# The clock still ends the wait once the bound has passed. Never a busy loop.
 hook_wait_final() {
 	_hw_t0=$(hook_now_ms) || _hw_t0=
 	_hw_waited=0
@@ -479,7 +607,8 @@ hook_wait_final() {
 		[ "$_hw_left" -lt "$_hw_step" ] && _hw_nap=$_hw_left || _hw_nap=$_hw_step
 		if [ "$_hw_step" = 1000 ] || ! sleep "0.$(printf '%03d' "$_hw_nap")" 2>/dev/null; then
 			_hw_step=1000
-			[ "$_hw_left" -ge 950 ] || break
+			_hw_unspent=$(($2 - _hw_count))
+			[ "$_hw_unspent" -ge 1000 ] || break
 			sleep 1
 			_hw_nap=1000
 		fi
@@ -577,10 +706,20 @@ hook_tail_facts() {
 # where being behind main is normal and says nothing about the code the hooks
 # run (review of PR #390, Axis 2 item 3).
 hook_root() {
-	_hr=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$hook_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
-	[ -n "$_hr" ] || return 1
+	_hr=$(hook_common_dir "$hook_repo") || return 1
 	dirname "$_hr"
+}
+
+# hook_common_dir <dir> — the absolute path of git's common directory for the
+# checkout <dir> is in, or nothing (status 1) when git does not answer. The ONE
+# spelling of that lookup: hook_root derives the root checkout from it, and
+# hook_run_of compares two checkouts' answers to tell one repository from
+# another. GIT_DIR and GIT_WORK_TREE are scrubbed for hook_pointer's reason.
+hook_common_dir() {
+	_hcd=$( (unset GIT_DIR GIT_WORK_TREE &&
+		git -C "$1" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
+	[ -n "$_hcd" ] || return 1
+	printf '%s' "$_hcd"
 }
 
 # hook_behind <root> — how many commits the last FETCHED origin/main holds that
@@ -629,6 +768,161 @@ hook_behind_warn() {
 		;;
 	esac
 	[ "$1" -gt "$_bw" ] || return 0
-	printf '! session-start: %s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it\n' \
-		"$2" "$1" "$_bw" >&2
+	_bw_note=$(printf '%s is %s commits behind origin/main as last fetched (TRACE_BEHIND_WARN=%s) — the hooks run the code it holds; sync it' \
+		"$2" "$1" "$_bw")
+	printf '! session-start: %s\n' "$_bw_note" >&2
+	hook_say_session "$_bw_note"
+}
+
+# hook_json_str <text> — <text> as the inside of a JSON string: backslash and
+# double quote escaped, every control character dropped. A root path is data
+# and may hold any of them; one that broke the object would silence the note.
+hook_json_str() {
+	printf '%s' "$1" | tr -d '\000-\037\177' | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+# hook_say_session <note> — the ONE thing a hook here prints on stdout (rule 2's
+# exception, ticket #427): a single JSON object the agent harness parses on exit
+# 0, carrying <note> twice. `systemMessage` is the field the hooks reference
+# documents as shown to the user — an interactive session prints it under its
+# banner; `hookSpecificOutput.additionalContext` goes to the model, which relays
+# it — the only route that reaches a non-interactive run's output. stderr on
+# exit 0 reaches neither (the live probe of 2.1.285, adapter README).
+hook_say_session() {
+	_hs=$(hook_json_str "$1")
+	printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s Tell the operator this in your first reply."}}\n' \
+		"$_hs" "$_hs"
+}
+
+# --- the phantom-stop count ---------------------------------------------------
+# A phantom stop writes no event (subagent-stop.sh, ticket #344), but how many
+# there were is still worth knowing (ticket #410): the subagent-stop hook adds
+# one line to a per-session counter, and the session-end hook records the count
+# as data.phantoms on session.end. The counter lives in a directory this
+# adapter owns under the trace, claude-code/<session id>.phantoms, so two
+# sessions never share one — and never in current/, whose layout the shared
+# script keeps to itself (review of PR #432, M-1).
+
+# hook_phantom_add <session id> — one more phantom for that session. APPEND,
+# one short line per stop: an O_APPEND write of a few bytes lands whole, so two
+# stops at once both count and neither needs a lock. Nothing when tracing is
+# off or the id is not one hook_id_ok accepts — a counter keyed by a refused
+# id would be a path built from payload data.
+hook_phantom_add() {
+	hook_id_ok "${1:-}" || return 0
+	_hp_dir=$(hook_dir) || return 0
+	mkdir -p "$_hp_dir/claude-code" 2>/dev/null || return 0
+	echo . >>"$_hp_dir/claude-code/$1.phantoms" 2>/dev/null || :
+}
+
+# hook_phantom_take <session id> — print that session's count, 0 when it had
+# none, and remove its counter; print nothing (status 1) when tracing is off or
+# the id is refused. TAKEN, not read: a resumed session keeps its id and ends
+# again, and its next end must count only the stops after this one — the same
+# reason session-end.sh anchors its usage read (#307). The counter is RENAMED
+# aside before it is counted, so a stop landing during the end starts a fresh
+# counter for the next end rather than being counted and then deleted.
+hook_phantom_take() {
+	hook_id_ok "${1:-}" || return 1
+	_hp_dir=$(hook_dir) || return 1
+	_hp_file="$_hp_dir/claude-code/$1.phantoms"
+	_hp_n=0
+	if [ -f "$_hp_file" ] && mv "$_hp_file" "$_hp_file.$$" 2>/dev/null; then
+		_hp_n=$(wc -l <"$_hp_file.$$" | tr -d ' ')
+		rm -f "$_hp_file.$$"
+		case $_hp_n in '' | *[!0-9]*) _hp_n=0 ;; esac
+	fi
+	printf '%s' "$_hp_n"
+}
+
+# --- the pending marker: a denied tool call -----------------------------------
+# A tool call the permission system or a blocking hook refuses fires PreToolUse
+# and nothing after it, so tool-post.sh never sees it (ticket #409; reproduced
+# on claude 2.1.278, see tool-post.sh). The pre-tool hook therefore leaves a
+# marker per call, the post-tool hook removes it, and the session-end hook
+# sweeps what is left into one `tool.use outcome=denied` each. The markers live
+# in the directory this adapter owns under the trace, beside the phantom
+# counters: claude-code/<session id>.pending/<tool-use id>, holding the tool's
+# name on its first line and the input head on its second. Per session, so an
+# end never sweeps a call another session still has running.
+
+# hook_pending_ok <id> — may this id name a marker's directory or file? The
+# identifier class, the line's length bound tool-post.sh holds a join column
+# to, and no leading dot: `.` and `..` are in the class and are not names.
+hook_pending_ok() {
+	hook_id_ok "${1:-}" || return 1
+	[ "${#1}" -le 256 ] || return 1
+	case $1 in .*) return 1 ;; esac
+	return 0
+}
+
+# hook_pending_add <trace dir> <session id> <tool-use id> <tool> <head file> —
+# leave the call's marker, owner-only (the head is the command's own text, the
+# reason tool-payload.mjs stages owner-only). Nothing at all for an id or a
+# tool name that is refused: a marker keyed by a refused id would be a path
+# built from payload data.
+hook_pending_add() {
+	hook_pending_ok "${2:-}" && hook_pending_ok "${3:-}" && hook_id_ok "${4:-}" || return 0
+	mkdir -p "$1/claude-code/$2.pending" 2>/dev/null || return 0
+	(
+		umask 077
+		{
+			printf '%s\n' "$4"
+			cat "$5" 2>/dev/null
+			printf '\n'
+		} >"$1/claude-code/$2.pending/$3"
+	) 2>/dev/null || :
+	return 0
+}
+
+# hook_pending_drop <trace dir> <session id> <tool-use id> — the call returned,
+# so it was not denied: remove its marker, if it has one.
+hook_pending_drop() {
+	hook_pending_ok "${2:-}" && hook_pending_ok "${3:-}" || return 0
+	rm -f "$1/claude-code/$2.pending/$3" 2>/dev/null || :
+	return 0
+}
+
+# hook_pending_sweep <session id> [<field>=<value> …] — one `tool.use
+# outcome=denied` per marker that session left, each carrying the fields after
+# the id (the session-end hook's subject and session), then the markers gone.
+# TAKEN, the way hook_phantom_take takes its counter: the directory is renamed
+# aside first, so a resumed session's next end sweeps only what came after this
+# one, and a marker landing during the end waits for that next end.
+#
+# AND WHAT AN EARLIER END TOOK ASIDE AND NEVER FINISHED. The sweep spawns one
+# emit per marker, so an end killed mid-loop leaves <sid>.pending.<pid>
+# behind; every directory of that shape for this session is swept here too,
+# so no denial is lost to an interrupted end (review of PR #446, M-1).
+hook_pending_sweep() {
+	hook_pending_ok "${1:-}" || return 0
+	_ps_root=$(hook_dir) || return 0
+	_ps_d="$_ps_root/claude-code/$1.pending"
+	shift
+	[ -d "$_ps_d" ] && { mv "$_ps_d" "$_ps_d.$$" 2>/dev/null || :; }
+	for _ps_t in "$_ps_d".*; do
+		[ -d "$_ps_t" ] || continue
+		hook_pending_take "$_ps_t" "$@"
+	done
+	return 0
+}
+
+# hook_pending_take <taken directory> [<field>=<value> …] — one denial per
+# marker in a directory the sweep took aside, then the directory gone.
+hook_pending_take() {
+	_pt_d=$1
+	shift
+	for _ps_f in "$_pt_d"/*; do
+		[ -f "$_ps_f" ] || continue
+		_ps_id=${_ps_f##*/}
+		hook_pending_ok "$_ps_id" || continue
+		_ps_tool=$(sed -n '1p' "$_ps_f" 2>/dev/null)
+		hook_id_ok "$_ps_tool" || _ps_tool=unknown
+		hook_trace emit kind=tool.use harness=claude-code outcome=denied \
+			data.tool="$_ps_tool" data.tool_use_id="$_ps_id" \
+			data.input_head="$(sed -n '2p' "$_ps_f" 2>/dev/null)" \
+			reason='the call fired its pre-tool hook and no post-tool hook before the session ended: the permission system or a blocking hook refused it' "$@"
+	done
+	rm -rf "$_pt_d" 2>/dev/null || :
+	return 0
 }

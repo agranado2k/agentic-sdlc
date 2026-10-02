@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-10-01
+## Current state — 2026-10-02
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,10 +20,10 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.40.0 is in flight as the release PR for #409 (PR #446) (a denied tool call is visible: `tool.use` declares `denied`, the Claude Code adapter sweeps a pending marker into it at session end) — untagged until the operator merges it and cuts `v0.40.0`. 0.39.0 tagged 2026-10-02 (#400: `scripts/stamp.sh` bounds what it lifts). 0.38.0 tagged 2026-10-02 at `44b1ccf`, the merge of PR #443 (#418: a `mechanical` stamp names its one oracle and one pattern). 0.37.0 tagged 2026-10-02 at `925b0e7`, the merge of PR #442 (#420: the trace holds `finding.triage`'s `data.id` and `pr.iterate`'s `data.iteration` to a shape). Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `5552683` — merge of PR #393 (#385: `feedback` says who answered, `data.by=operator|train`), untagged past `v0.36.0` with PR #389 (#388: a failed tool call records the error's first line); both moved skills, the adapter, records and suites and no shared file, so they ride the next release. |
+| **Last commit on `main`** | `45b35be` — merge of PR #431 (#419), past the `v0.39.0` tag; nothing past the tag moved a shared file. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
 | **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-09-02 — first pass: 17 findings, none fixed (root manual baseline 334 lines); the one that matters: the docs gate's two engines disagree on their path roots (`scripts/check.sh` admits all of `.agents`/`.claude`, `config.mjs` only four subtrees) and nothing holds the pair together. Report: `housekeeping-20260902T134521Z.md` in the OS temp directory. Disposition, 2026-09-04: all 17 routed through PRD #124 and landed; the path-roots finding closed by #127 (the lists are equal and `tests/gate-path-roots.test.sh` holds them). |
@@ -1917,4 +1917,117 @@ wording (both a bump); the dispatch suite's TERM leg signalling before the trap 
 installed; `trace-hooks`'s one-second bound against a 51 ms readiness check; a
 `LIFTED` entry-match assertion with baits for the exemptions; the fence extractors
 with a mode; the verdict runners in two suites with different bodies.
+
+### 2026-10-02 — 0.40.0: a denied tool call is visible
+
+Ticket #409, one of PRD #237's known gaps of 2026-10-01 (origin #252). A tool
+call the permission system or a blocking hook refuses fires the agent
+harness's pre-tool event and nothing after it, so the trace never saw one. The
+Claude Code adapter now leaves a pending marker per call at `PreToolUse`
+(`hooks/tool-pre.sh`, new), under `claude-code/<session id>.pending/` in the
+trace directory — the adapter-owned directory #410 opened for its phantom
+counters — the post-tool hook removes it when the call returns, and the
+session-end hook sweeps each marker left into one `tool.use outcome=denied`
+with the tool's name and the input head, per session and never across, before
+`session.end`. Behind `TRACE_TOOLS`, because only a post-tool hook that runs
+can remove a marker; no marker without node, for the same reason.
+
+The word had no row: `scripts/trace.sh`'s outcome table (#348) declared
+`tool.use` `ok|fail` and left `denied` out because nobody wrote it. So the
+ticket was release-bound — a widening of one kind's vocabulary, ADR-0008
+clause 1 amended 2026-10-02, `/retro`'s question 6 counting the denials per
+session and tool. Main moved from 0.36.0 to a tagged 0.37.0 (#420) while the
+ticket was built, and then to tagged 0.38.0 (#418) and 0.39.0 (#400) while
+its review was iterated, so the bump is 0.40.0; each merge of main kept both sides — both
+ADR amendments, both trace-suite sections, both notes and both recipe
+paragraphs. The 0.40.0 note also
+names, by ticket, the adapter work 0.37.0's note had named by file only
+(#414, #410, #407, #427). The tag `v0.40.0` on the merge commit is the
+operator's action; F3 is red on main until it exists.
+
+### 2026-10-02 — The candidates and the retro's findings land: fourteen tickets, five releases, and the train traced
+
+The operator asked for three things in one instruction: file PRD #273's
+leftover candidates through `/to-tickets`, run `/retro` and file what it
+found, then build, iterate and land all of it without stopping. Done on
+2026-10-01 and 2026-10-02: seven candidates (#400–#406, umbrella #399), the
+retro of 2026-10-01T19:05Z (eight findings; seven became #418–#424, umbrella
+#417; the eighth — no human verdict and no human quiz in the window — is the
+delegation itself and stays the operator's), fourteen PRs, five releases.
+
+| Ticket | What | PR | Release |
+| --- | --- | --- | --- |
+| #420 | `scripts/trace.sh` holds `data.id` and `data.iteration` to a shape | #442 | **0.37.0** |
+| #418 | a `mechanical` stamp names its one oracle and one pattern | #443 | **0.38.0** |
+| #400 | `scripts/stamp.sh` bounds its lift — exit 5 past 8 lines of a key | #439 | **0.39.0** |
+| #401 | the checker's header says it takes bare lifted lines | #451 | **0.41.0** |
+| #402 | the dispatch suite's TERM leg waits on the worker's marker | #425 | — |
+| #403 | the hook's wait naps its whole second whatever the check cost | #434 | — |
+| #404 | the call-site audit holds its inventory and baits its exemptions | #437 | — |
+| #405 | the last duplicated test runners fold into `tests/lib.sh` | #450 | — |
+| #406 | the reader is spawned through the adapter's restricted path first | #440 | — |
+| #419 | the reuse/DRY lens files an inherited duplication as a candidate | #431 | — |
+| #421 | the stop hook records the run of the checkout the subagent worked in | #449 | — |
+| #422 | `/implement`'s delivery names the landing path; self-host holds the row | #436 | — |
+| #423 | the reviewer mapping names two in-vendor complements until the CLI authenticates | #426 | — |
+| #424 | every review path records its raises with `data.posted` and the roster agent | #441 | — |
+
+(0.40.0 between them is another wave's.)
+
+**Rulings that reversed a first answer.** The fence's checker anchor first
+required `.agents/skills/`; `VERSION`'s 0.14.0 note promises the older
+`.claude/skills/`-only layout stays legal, so it accepts either. An 8-byte
+evidence floor refused `LGTM`; a span shorter than the floor passes when it
+is the whole text. `vocab.sh` exits 2 for a refused value and for a broken
+policy file alike, so `stamp.sh` and `/dogfood`'s outcome fence ask `fields`
+first and call an unusable checker "unchecked", never "refused". The
+reviewer mapping was first set the same as the implementer's model with the
+suite's rule loosened to fit; the rule stayed and the mapping flipped. A
+failed `mechanical` condition first jumped to `implementer`; it continues
+down the rubric instead. A candidate-ticket finding was first given no
+`↳ fix:` line, which the broker refuses; it keeps the line, reading "none
+on this PR".
+
+**Defects the reviews caught before landing.** `stamp.sh` printed a line in
+a field the policy did not declare, unchecked (`Domain: x;touch PWN` at exit
+0). `/dogfood`'s per-step return file was never cleared, so a stale return
+passed a later step. A test helper passed vacuously when the function it
+wrapped was undefined.
+
+**The train, traced.** The previous retro found three landings the trace
+never saw; the orchestrator's lander merged with the forge CLI directly.
+Every landing in this wave went through `scripts/land.kit.sh` with
+`--unasked`, so each left a `merge.land` and a `feedback` event. Two more
+things the script taught: the forge reports mergeability `UNKNOWN` for the
+first minute after a push, and the script refuses until it is computed; and
+a bump's merge turns main red until its tag exists, which the script reports
+as a failed post-merge workflow — the tag is cut on the merge commit and the
+job re-run, four times this wave. A release note may not name the optional
+skill by its command, since a declined consumer still receives `VERSION`;
+self-host F5 names it "the dogfood skill" since PR #443.
+
+**Running it.** The process orchestrating this wave exited once and hit the
+usage limit three times; every session was resumed from its transcript and
+nothing was lost, because each had committed early. Eleven full suites ran
+at once on one host (load average 37), which is where the known timing
+flakes came from — fixed by #402 and #403 inside the same wave. Mechanical
+tickets on the smallest model under-delivered again (#423's mapping backwards
+with a loosened test, #401 thin): #418 is the rubric's answer, and the next
+retro's question 1 will say whether it held. Every review again shared the
+author's vendor; #423 made the mapping say so until the credential exists.
+
+**Candidates recorded, none filed:** the dispatcher's global cleanup trap
+swallows an early TERM (shared, a bump); the KILL/SWEEP_TMP leg's fixed
+`sleep 2`; `session-end.sh` and `tool-post.sh` reading the worked-in
+checkout's stack; a read subcommand for the run stack in `scripts/trace.sh`;
+`hook_run_of` spawning git with tracing off; the retro's H3 remainder
+(`source=human` on local findings, counts on `pr.iterate`); the manual's and
+template's tier tables still giving the one-condition `mechanical` signal;
+`/implement` not reading the oracle line, and treating it as untrusted text
+when it does; the adapter invisible to the behaviour-delta inventory; the
+dispatched worker contract never receiving the reuse/DRY ruling (answered in
+part by #412's lens line); the prescreen suite's never-written-return case
+still inlining its frame. If the agent tool reports the root as a subagent's
+`cwd`, #421's fix carries the root's run and H4 needs a spawn-time channel —
+the next retro can read whether the 28 events had a worktree `cwd`.
 

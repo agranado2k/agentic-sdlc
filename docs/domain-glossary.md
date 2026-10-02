@@ -174,7 +174,12 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Tier** — the capability size stamped on a ticket when it is *written*:
   `planner`, `implementer`, `mechanical`, `reviewer`. Resolved to a model at
   spawn time by `scripts/agents.lib.sh` from the mapping in
-  `scripts/agents.config.sh`. The kit names no model anywhere.
+  `scripts/agents.config.sh`. The kit names no model anywhere. A `mechanical`
+  stamp needs both of the rubric's conditions — the ticket names the one
+  command whose exit is its oracle, and the change is one file or one pattern
+  applied uniformly across many — so a refactor that touches many files for
+  different reasons, or a definition of done with an "unless" in it, is not
+  `mechanical`, and the rubric's later questions size it.
   - _Avoid_: "model", "agent size" — the tier is a decision about the *work*,
     deliberately made before anyone knows which model will run it.
 - **Task domain** — the resolver's optional *second* axis: what the work is made
@@ -302,7 +307,10 @@ Grouped by the seam each term belongs to. Entry shape:
   id, a **kind** from a closed vocabulary (unknown is a usage error, like an
   unknown tier), the resolver's words where they apply, an outcome
   (every kind has an outcome vocabulary of its own and refuses a word it
-  does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings.
+  does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings —
+  open except two keys a reader joins on, held at emit to the shape
+  `TRACE_SHAPES` declares: `finding.triage`'s `data.id`, one token, and
+  `pr.iterate`'s `data.iteration`, digits (ADR-0008, amended 2026-10-01).
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
   rewrites one — a correction is a new event. A finding has three kinds:
   `finding.raise` when a review reports it, `finding.triage` for the
