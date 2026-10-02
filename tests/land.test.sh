@@ -308,7 +308,11 @@ grep -q '^ARGV: pr view 160 .*body' "$STUB_LOG" && pass "the body is read from t
 land 161
 landed_with 161 "no line in the body" '"implement":"no"'
 no_tier 161 "no line in the body"
-landed_with 123 "an empty body (section 2's landing)" '"implement":"no"'
+# Section 2's landing, read back without its exit status: S_STATUS is the
+# last run's, #161's, and a pass line here must report on #123 alone.
+show 'pr:#123' --kind merge.land | grep -qF '"implement":"no"' &&
+	pass "an empty body (section 2's landing): merge.land carries \"implement\":\"no\"" ||
+	fail "an empty body (section 2's landing): merge.land lacks \"implement\":\"no\": $(show 'pr:#123' --kind merge.land)"
 
 f="$SCRATCH/body.crlf"
 printf 'Closes #77.\r\n%s\r\n' "$LINE" >"$f"
