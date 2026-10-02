@@ -1300,4 +1300,28 @@ ME='' dismiss_iteration "$D18/trace.nologin" "$D18/threads"
 	pass "an empty login records no dismissal, and the fence exits non-zero with a message" ||
 	fail "an empty login should refuse (non-zero, a message, no rows); exit $FENCE_RC, recorded '$(pairs "$D18/trace.nologin" | tr '\n' '|')'"
 
+banner "19. /pr-iterate's triage line quotes data.id, and its stated shape is the script's own (#420)"
+# A check name is forge data: the skill collapses it to one token first, and
+# the placeholder is single-quoted besides — the quotes are defensive. And the shape the skill
+# states is read from TRACE_SHAPES, never copied: the script's table is the
+# one source, and the skill's sentence is held to it.
+PI=$(skill_md pr-iterate)
+triage=$(t_trace_lines "$ROOT/$PI" | grep -F 'kind=finding.triage' || true)
+printf '%s\n' "$triage" | grep -qF "data.id='<" &&
+	pass "/pr-iterate's finding.triage line single-quotes its data.id placeholder" ||
+	fail "/pr-iterate's finding.triage line writes data.id unquoted — a check name is forge data, quote it: data.id='<id>'"
+id_class=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage=id:\([^ ']*\).*/\1/p" "$ROOT/$TRACE")
+[ -n "$id_class" ] && pass "TRACE_SHAPES declares finding.triage's id class ($id_class)" ||
+	fail "TRACE_SHAPES declares no class for finding.triage's id"
+# shape_stated <skill file> <class> — the triage paragraph states [<class>]+.
+shape_stated() { sed -n '/^\*\*Record each triage as you make it\*\*/p' "$1" | grep -qF -- "[$2]+"; }
+[ -n "$id_class" ] && shape_stated "$ROOT/$PI" "$id_class" &&
+	pass "and /pr-iterate's triage paragraph states that shape, [$id_class]+" ||
+	fail "/pr-iterate's triage paragraph does not state the shape TRACE_SHAPES declares, [$id_class]+"
+# Bait: a skill copy whose stated class drifted from the table goes red.
+sed '/^\*\*Record each triage as you make it\*\*/ s/\[A-Za-z0-9\._#-\]+/[A-Za-z0-9_-]+/' "$ROOT/$PI" >"$SCRATCH/bait-shape.md"
+! shape_stated "$SCRATCH/bait-shape.md" "$id_class" &&
+	pass "bait: a skill stating [A-Za-z0-9_-]+ against the table goes red" ||
+	fail "bait: a skill whose stated shape drifted from TRACE_SHAPES was not caught"
+
 t_done "trace skills contract"
