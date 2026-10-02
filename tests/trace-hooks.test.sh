@@ -4022,6 +4022,18 @@ STOP=$(ev_of agent.stop | sed -n '$p')
 [ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$RUN472" ] &&
 	pass "a payload cwd of '.' from the worktree carries the worktree's run, not the root's" ||
 	fail "cwd '.': exit $S_STATUS, run '$(str "$STOP" run)', want $RUN472; calls '$(cat "$LOG472")'; stderr '$S_ERR'"
+# A payload with NO session id reads the per-toplevel stack even when the hook
+# inherits a TRACE_SESSION (session-start exports one into the agent harness's
+# environment): the hook asks with TRACE_SESSION empty, never the inherited one.
+NOID472=$(cd "$R472.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION= sh scripts/trace.sh begin implement 2>/dev/null)
+OTHER472=$(cd "$R472.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION=other-472 sh scripts/trace.sh begin review-pr 2>/dev/null)
+set_key session_id "" <"$SCRATCH/stop-472.json" >"$SCRATCH/stop-472-noid.json"
+t_run_split env TRACE_DIR="$TDIR" TRACE_SESSION=other-472 GIT_CEILING_DIRECTORIES="$SCRATCH" \
+	sh "$R472/${HOOKS#"$KIT"/}/subagent-stop.sh" <"$SCRATCH/stop-472-noid.json"
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$S_STATUS" = 0 ] && [ -n "$NOID472" ] && [ "$(str "$STOP" run)" = "$NOID472" ] &&
+	pass "a payload with no session id, under an inherited TRACE_SESSION, carries the per-toplevel run" ||
+	fail "no session id, TRACE_SESSION=other-472: run '$(str "$STOP" run)', want $NOID472 (not $OTHER472); stderr '$S_ERR'"
 # THE ADAPTER KEEPS NO COPY of the stack's format: no stack path, no reader.
 LIB472="$HOOKS/hook.lib.sh"
 _ro472=$(awk '/^hook_run_of\(\) \{/,/^\}/' "$LIB472")
