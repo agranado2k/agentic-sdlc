@@ -1171,7 +1171,9 @@ _ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
 # ov_held <kind> — the data a kind's TRACE_SHAPES rows require beside an
 # outcome (ticket #466: a green or red pr.iterate carries its three counts),
 # so this check asks about the outcome word and nothing else.
-ov_held() { [ "$1" = pr.iterate ] && printf '%s\n' data.applied=0 data.rejected=0 data.escalated=0; }
+# Read from the table's `!` rows, never copied, so a new required row moves
+# this with it.
+ov_held() { sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|data.\1=0|p" | sort -u; }
 _ov_bad=
 _ov_rows=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d')
 _ov_ifs=$IFS
@@ -1353,7 +1355,7 @@ t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subjec
 _sh_s1=$S_STATUS
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red data.applied=0 data.rejected=0 data.escalated=0 reason='no iteration given'
 [ "$_sh_s1" = 0 ] && [ "$S_STATUS" = 0 ] && [ "$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')" = $((_sh_n + 2)) ] &&
-	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a missing key is no violation" ||
+	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a key no row requires is no violation when missing" ||
 	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $S_STATUS): $S_ERR"
 # The shape is the kind's, not the key's: another kind's data.id stays open.
 t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.raise subject='pr:#1' data.id='a b'
@@ -1373,7 +1375,7 @@ sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a dat
 sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'keys are OPEN .* except the shapes the kind table declares' &&
 	pass "and its data.* line says open, except the shapes the kind table declares" || fail "the script header still says data.* keys are OPEN with no exception for TRACE_SHAPES"
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'TRACE_SHAPES' &&
-	pass "the glossary's Event entry names the two held data keys (TRACE_SHAPES)" || fail "the glossary's Event entry still calls data an open map with no held key"
+	pass "the glossary's Event entry names the held data keys (TRACE_SHAPES)" || fail "the glossary's Event entry still calls data an open map with no held key"
 
 # ---------------------------------------------------------------------------
 banner "24. A denied tool call has a word: tool.use declares denied (ticket #409)"
@@ -1434,7 +1436,7 @@ ls_refused "finding.triage data.source=robot is refused — the source is check,
 	"finding.triage: data.source 'robot' is not check|bot|human|local" $T data.source=robot data.id=PRRC_1
 ls_refused "finding.triage data.source=local data.id=local-M-1 is refused — a local finding's id is [CHML]-N" \
 	"finding.triage: data.id 'local-M-1' is not [CHML]-[0-9]+|A2-[0-9]+ when data.source is local" $T data.source=local data.id=local-M-1
-ls_refused "…and data.id=axis2-glossary-readme on a local source too" \
+ls_refused "…and data.id=axis2-glossary-readme on a local source too (a form the retrospective found written)" \
 	"data.id 'axis2-glossary-readme' is not [CHML]-[0-9]+" $T data.source=local data.id=axis2-glossary-readme
 ls_refused "…and the order does not matter: the id before the source" \
 	"data.id 'local-M-1' is not [CHML]-[0-9]+" kind=finding.triage data.id=local-M-1 data.source=local
@@ -1442,6 +1444,17 @@ ls_refused "finding.triage data.source=human data.id=M-1 is refused — a local 
 	"finding.triage: data.source 'human' is not local when data.id is [CHML]-[0-9]+|A2-[0-9]+" $T data.source=human data.id=M-1
 ls_refused "…and data.source=bot data.id=H-2 likewise" \
 	"data.source 'bot' is not local" $T data.source=bot data.id=H-2
+ls_refused "…and data.source=check data.id=C-1, the source a C-N would most likely collide with" \
+	"data.source 'check' is not local" $T data.source=check data.id=C-1
+ls_refused "…and data.source=local data.id=X-1 — the letter is a severity, C, H, M or L" \
+	"data.id 'X-1' is not" $T data.source=local data.id=X-1
+# A row's condition holds on ANY occurrence of its key: a second
+# data.source=local still binds the id, and a second id M-1 still binds the
+# source (review of #487).
+ls_refused "…a second data.source=local still binds the id" \
+	"data.id 'local-M-1' is not" $T data.source=human data.source=local data.id=local-M-1
+ls_refused "…and a second data.id=M-1 still binds the source" \
+	"data.source 'human' is not local" $T data.id=PRRC_1 data.id=M-1 data.source=human
 ls_writes "finding.triage data.source=local data.id=M-1 writes" $T data.source=local data.id=M-1
 # A confirm-list item is triaged too, and has no INITIAL-N: its id is A2-N,
 # numbered in the list's order — legal beside [CHML]-N under the local
@@ -1454,6 +1467,7 @@ ls_refused "…and data.id=A3-1 is refused — A2 is the confirm-list's axis, an
 ls_refused "…and data.source=human data.id=A2-1 is refused — that id is the local source's alone" \
 	"data.source 'human' is not local" $T data.source=human data.id=A2-1
 ls_writes "…and data.id=C-12" $T data.source=local data.id=C-12
+ls_writes "…and data.id=L-3" $T data.source=local data.id=L-3
 ls_writes "finding.triage data.source=human with a forge comment id writes" $T data.source=human data.id=PRRC_kwDO12
 ls_writes "finding.triage data.source=check with a collapsed check name writes" $T data.source=check data.id=Kit-CI-self-host
 ls_writes "a missing key stays legal: data.source=local with no data.id" $T data.source=local
@@ -1467,6 +1481,14 @@ P='kind=pr.iterate subject=pr:#1 data.iteration=1'
 {
 ls_refused "pr.iterate outcome=green without data.escalated is refused — green or red carries its three counts" \
 	"pr.iterate: data.escalated is missing — required when outcome is green|red" $P outcome=green data.applied=1 data.rejected=0
+# One case per required count, the other two present: deleting any one
+# key's required row turns its case red (review of #487, M-6).
+for _ls_k in applied rejected escalated; do
+	_ls_rest=
+	for _ls_o in applied rejected escalated; do [ "$_ls_o" = "$_ls_k" ] || _ls_rest="$_ls_rest data.$_ls_o=0"; done
+	ls_refused "pr.iterate outcome=red without data.$_ls_k alone is refused" \
+		"pr.iterate: data.$_ls_k is missing — required when outcome is green|red" $P outcome=red $_ls_rest
+done
 ls_refused "pr.iterate outcome=red with no counts at all is refused" \
 	"pr.iterate: data.applied is missing" $P outcome=red
 ls_refused "pr.iterate data.applied=two is refused — a count is digits" \
@@ -1475,10 +1497,23 @@ ls_refused "…and an empty count" \
 	"pr.iterate: data.rejected '' is not [0-9]+" $P outcome=red data.applied=0 data.rejected= data.escalated=0
 ls_refused "…and a present count on a stopped iteration is held too" \
 	"pr.iterate: data.applied 'x' is not [0-9]+" $P outcome=stopped data.applied=x
+ls_refused "…and data.rejected=x on a stopped iteration" \
+	"pr.iterate: data.rejected 'x' is not [0-9]+" $P outcome=stopped data.rejected=x
+ls_refused "…and data.escalated=x on a stopped iteration" \
+	"pr.iterate: data.escalated 'x' is not [0-9]+" $P outcome=stopped data.escalated=x
 ls_writes "pr.iterate outcome=green with three digit counts writes" $P outcome=green data.applied=2 data.rejected=1 data.escalated=0
 ls_writes "pr.iterate outcome=stopped with no counts writes — a stop records the check, not a tally" $P outcome=stopped data.check=self-host
 ls_writes "pr.iterate with no outcome and no counts writes — the rule reads the outcome it is given" $P
 }
+# A row is an ERE with brackets: the check reads the table with globbing
+# off, so a file in the caller's directory named like a row is never
+# expanded into the shape (review of #487).
+mkdir -p "$SCRATCH/ls-glob" && : >"$SCRATCH/ls-glob/pr.iterate=iteration:5+"
+_lg_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+t_run_split env TRACE_CONFIG="$LSON" sh -c "cd '$SCRATCH/ls-glob' && sh '$TRACE' emit kind=pr.iterate subject=pr:#1 outcome=stopped data.iteration=12"
+[ "$S_STATUS" = 0 ] && [ "$(wc -l <"$LS/events/$TODAY.jsonl" | tr -d ' ')" = $((_lg_n + 1)) ] &&
+	pass "a file named like a row in the caller's directory does not become the shape — data.iteration=12 writes" ||
+	fail "a file named pr.iterate=iteration:5+ in the cwd changed the shape (exit $S_STATUS): $S_ERR"
 grep -F '"kind":"pr.iterate"' "$LS/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"applied":"2","rejected":"1","escalated":"0"' &&
 	pass "the counts are written as given" || fail "pr.iterate's counts are not in the trace as given"
 

@@ -1413,8 +1413,11 @@ sed -n '/^\*\*Record each triage as you make it\*\*/p' "$ROOT/$PI" | grep -q 'co
 	pass "/pr-iterate says a confirm-list item's id is A2-N, numbered in the list's order" ||
 	fail "/pr-iterate's triage paragraph does not say how a confirm-list item is numbered (A2-N, in the list's order)"
 tr_bad=$(printf '%s\n' "$tr_run" | sed "s/data\.id='M-1'/data.id='local-M-1'/")
-( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_bad" ) >/dev/null 2>&1
-[ $? = 2 ] && pass "…and with data.id=local-M-1 it is exit 2" || fail "the triage line with a local source and id local-M-1 was not refused"
+tr_err=$( cd "$ROOT" && TRACE_DIR="$LT" TRACE_QUIET=1 sh -c "$tr_bad" 2>&1 >/dev/null )
+tr_st=$?
+[ "$tr_st" = 2 ] && case $tr_err in *"data.id 'local-M-1' is not $local_shape"*) true ;; *) false ;; esac &&
+	pass "…and with data.id=local-M-1 it is exit 2, refused by the local id shape" ||
+	fail "the triage line with a local source and id local-M-1 was not refused by the local shape (exit $tr_st): $tr_err"
 # The iteration line carries the three counts the script requires of green
 # and red, and the skill says so.
 it_line=$(t_trace_spans "$PI" | grep -F 'kind=pr.iterate' | grep -F 'outcome=green|red')
@@ -1423,6 +1426,7 @@ for k in applied rejected escalated; do
 		fail "/pr-iterate's iteration line does not carry data.$k — the script refuses a green or red pr.iterate without it"
 done
 sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$PI" | grep -qF 'each digits' &&
+	sed -n '/kind=pr\.iterate subject=pr:#<N> outcome=green|red|stopped/p' "$ROOT/$PI" | grep -qF 'required unless the outcome is `stopped`' &&
 	pass "and the skill says the counts are digits, required unless stopped" ||
 	fail "/pr-iterate does not say the counts are digits ('each digits') and required unless stopped"
 
