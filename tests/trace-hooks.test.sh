@@ -3481,9 +3481,11 @@ behind_kit "$R421"
 git -C "$R421" worktree add -q -b feat/wt-421 "$R421.wt" 2>/dev/null
 HOOK421="$R421/${HOOKS#"$KIT"/}/subagent-stop.sh"
 new_trace
-ROOTRUN=$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
-WTOUTER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
-WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin review-pr 2>/dev/null)
+# The runs are the payload's session's, as a session's own begins are since
+# #453 keyed the stack by session (section 42).
+ROOTRUN=$(cd "$R421" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin implement 2>/dev/null)
+WTOUTER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin implement 2>/dev/null)
+WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin review-pr 2>/dev/null)
 [ -n "$ROOTRUN" ] && [ -n "$WTOUTER" ] && [ -n "$WTINNER" ] &&
 	pass "a run is open at the root and two nested runs are open in its linked worktree" ||
 	fail "the fixture runs did not open: root '$ROOTRUN', worktree '$WTOUTER' / '$WTINNER'"
@@ -3602,8 +3604,8 @@ else
 fi
 
 # A worktree with NO run open says so: it never borrows the root's.
-(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1 &&
-	env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1)
+(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end >/dev/null 2>&1 &&
+	env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end >/dev/null 2>&1)
 stop_from "$R421.wt"
 [ "$S_STATUS" = 0 ] && [ -z "$(str "$STOP" run)" ] && [ -n "$STOP" ] &&
 	pass "a worktree with no open run: the stop carries no run, not the root's" ||
@@ -3621,5 +3623,44 @@ case $ROW421 in *"the hook's own working directory when the payload names no \`c
 *) fail "the README row for subagent-stop.sh does not name the hook's own working directory as the no-cwd fallback" ;; esac
 case $ROW421 in *"a \`TRACE_RUN\` already in the environment wins, with its parent; a \`TRACE_PARENT\` alone is kept"*) pass "the README row names the environment's precedence" ;;
 *) fail "the README row for subagent-stop.sh does not say a TRACE_RUN in the environment wins and a TRACE_PARENT alone is kept" ;; esac
+
+# ---------------------------------------------------------------------------
+banner "42. A stop reads its own session's stack in that checkout (#453)"
+# ---------------------------------------------------------------------------
+# Since #453 the shared script keys the run stack by session as well as by
+# toplevel, so two sessions in one checkout never read each other's runs. The
+# stop hook repeats the stack's path (hook_current_of), so it keys it the same
+# way: the payload's session_id names the stack; a payload with none reads the
+# per-toplevel one, as the script does for a session with no id.
+R453="$SCRATCH/run-root-453"
+behind_kit "$R453"
+git -C "$R453" worktree add -q -b feat/wt-453 "$R453.wt" 2>/dev/null
+HOOK453="$R453/${HOOKS#"$KIT"/}/subagent-stop.sh"
+new_trace
+OWN453=$(cd "$R453.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin implement 2>/dev/null)
+NOID453=$(cd "$R453.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin retro 2>/dev/null)
+OTHER453=$(cd "$R453.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION=other-session-453 sh scripts/trace.sh begin merge-train 2>/dev/null)
+[ -n "$OWN453" ] && [ -n "$NOID453" ] && [ -n "$OTHER453" ] &&
+	pass "this session, an id-less caller and another session each have a run open in one worktree" ||
+	fail "the fixture runs did not open: '$OWN453' / '$NOID453' / '$OTHER453'"
+stop453() {
+	set_key cwd "$R453.wt" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-453.json"
+	[ "${1:-}" = no-session ] && grep -v '"session_id":' "$SCRATCH/stop-453.json" >"$SCRATCH/stop-453.nosid.json" &&
+		mv "$SCRATCH/stop-453.nosid.json" "$SCRATCH/stop-453.json"
+	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$HOOK453" <"$SCRATCH/stop-453.json"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+stop453
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$OWN453" ] &&
+	pass "a stop carries its own session's run, though another session opened one after it in the same worktree" ||
+	fail "a stop for session $SESSION carries run '$(str "$STOP" run)', want $OWN453 (the other session's is $OTHER453, the id-less one $NOID453)"
+stop453 no-session
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$NOID453" ] &&
+	pass "a payload with no session id reads the per-toplevel stack, as before" ||
+	fail "a stop with no session id carries run '$(str "$STOP" run)', want $NOID453"
+ROW453=$(grep -F '| `hooks/subagent-stop.sh` |' "$KIT/adapters/claude-code/README.md")
+case $ROW453 in *"that session's stack"*) pass "the README row says the stack read is the payload session's" ;;
+*) fail "the README row for subagent-stop.sh does not say it reads that session's stack" ;; esac
 
 t_done "trace hooks"
