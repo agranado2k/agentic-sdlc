@@ -1599,7 +1599,10 @@
 # first, prompt-only as the fallback, say-so naming which — in
 # .agents/skills/pr-iterate/SKILL.md, .agents/skills/to-tickets/SKILL.md
 # and the dogfood skill's SKILL.md, with adapters/claude-code/README.md
-# naming that path "the restricted path" and quoting the skills' say-so.
+# naming that path "the restricted path" and quoting the skills' say-so;
+# and #403 (PR #434) — the claude-code adapter's hooks/hook.lib.sh wait
+# naps its whole second whatever its first readiness check cost, reaching
+# the bound and overrunning it by at most one nap.
 
 shared-layer: 0.38.0
 
