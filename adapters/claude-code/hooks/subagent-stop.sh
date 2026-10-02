@@ -72,6 +72,13 @@ if [ -n "$sid" ] && hook_id_ok "$sid"; then
 fi
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
+# The payload's cwd, recorded so a retro can read what the agent tool reports
+# for a subagent — its worktree or the root — rather than infer it (#478). It
+# is the EXPANDED value, the one the run was resolved against when the payload
+# names one; session-start.sh records its payload's raw. When the payload names
+# none, nothing is recorded: the $PWD fallback above resolves the run but is
+# the hook's own directory, not anything the agent tool reported.
+[ -n "$cwd" ] && set -- "$@" data.cwd="$cwd"
 
 hook_wait_bound
 # Nothing to write, nothing to wait for: with tracing off the bound is moot, and
