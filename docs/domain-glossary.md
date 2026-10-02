@@ -293,6 +293,14 @@ Grouped by the seam each term belongs to. Entry shape:
   never opens a fresh one. Every suite runs inside one too, applied by the
   shared test harness through the dispatcher's own derivation; `AGENT_SUITE_BUDGET=off`
   is the off switch. Ref: ADR-0006, and its #209 amendment.
+- **Session cap** — how many tickets of a frontier may run as sessions at
+  once, stated by `/to-tickets` at its hand-off: the host's
+  concurrent-subagent limit divided by the seven lenses one `/review-pr`
+  spawns, rounded down and never below one. The limit is the agent tool's,
+  read as the project states it in its workflow article; unstated, the cap
+  is one session at a time. Not the **Budget**: that bounds one worker's
+  process tree by the host's memory and tasks, this bounds how many sessions
+  share the tool's subagent slots. Ref: #483.
 - **Trace** — the append-only record of the chain's decisions: one event per
   line, per-day files under a trace directory the policy file names, written
   by `scripts/trace.sh` and read only after the fact — by the operator, a
