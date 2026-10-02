@@ -1370,10 +1370,20 @@ banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still
 CT_FIX=$(grep -o '↳ fix:` line reads `[^`]*`' "$KIT/.agents/skills/review-pr/SKILL.md" | head -n 1 | sed 's/^.*reads `//; s/`$//')
 [ -n "$CT_FIX" ] && pass "the reuse/DRY prompt spells the candidate ticket's fix line: $CT_FIX" ||
 	fail "the reuse/DRY prompt no longer spells the candidate ticket's fix line (a code span after: fix: line reads) — nothing to run through the broker"
+# The dispatched worker is told the same line (#471): its contract spells it
+# as the skill does — read from the contract unwrapped, since it is 80-column
+# prose — so a worker following it writes a line this broker accepts.
+W_FIX=$(tr '\n' ' ' <"$KIT/.agents/prompts/review-worker.md" | tr -s ' ' | grep -o '↳ fix:` line reads `[^`]*`' | head -n 1 | sed 's/^.*reads `//; s/`$//')
+[ -n "$CT_FIX" ] && [ "$W_FIX" = "$CT_FIX" ] &&
+	pass "the worker contract spells the same candidate-ticket fix line as the skill" ||
+	fail "the worker contract's candidate-ticket fix line '$W_FIX' is not the skill's '$CT_FIX'"
+# The fixture is the worker's shape: the lens line its contract requires
+# first, then the citation, then the fix.
 awk -v fix="$CT_FIX" '
 	/^#### LOW$/ {
 		print
 		print "**L-1** `docs/b.md:11` — candidate ticket: line eleven mirrors a line that pre-dates the branch, in a pair this diff only extends."
+		print "↳ lens: reuse-dry"
 		print "↳ cites: shared invariant §10"
 		print "↳ fix: " fix
 		skip = 1

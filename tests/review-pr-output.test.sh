@@ -39,6 +39,9 @@
 #      citing shared invariant §10, with a fix line that asks this PR for
 #      nothing — in one sentence of Agent 5's prompt, the exception kept, the
 #      report's shape and the roster unchanged. Proved by two baits.
+#  10. The dispatched worker carries that ruling (#471): the added case, the
+#      inherited case and the ruling are sentences of the worker's contract
+#      word for word as Agent 5's prompt says them, read from the skill.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -555,5 +558,43 @@ if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! spells_fi
 else
 	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"
 fi
+
+# ---------------------------------------------------------------------------
+banner "10. The dispatched worker carries the reuse/DRY ruling in the skill's words (#471)"
+# ---------------------------------------------------------------------------
+# Section 9's ruling reached the in-session lens only: a dispatched worker
+# still filed an inherited duplication as a finding against the PR, because
+# its contract (section 8's file) never heard of the two cases. So the
+# contract carries them — the added case, the inherited case and the ruling,
+# as the SAME sentences Agent 5's prompt says, read from the skill here and
+# never retyped, so a reword on either side is red. Compared sentence by
+# sentence over prose unwrapped and spaces squeezed: the contract is
+# 80-column prose and the skill is not, and both models read sentences.
+flat_sentences() { tr '\n' ' ' | tr -s ' ' | tr '.' '\n' | sed 's/^ //; s/ $//'; }
+w_sentences=$(printf '%s\n' "$body" | flat_sentences)
+a5_sentences=$(agent5_of "$SKILL_ABS" | flat_sentences)
+# carries <sentences> <needle> — the skill sentence holding the needle is a
+# whole sentence of the given text.
+carries() {
+	want=$(printf '%s\n' "$a5_sentences" | grep -F -- "$2" | head -n 1)
+	[ -n "$want" ] && printf '%s\n' "$1" | grep -qxF -- "$want"
+}
+for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
+	printf '%s\n' "$a5_sentences" | grep -qF -- "$needle" ||
+		fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold the worker to"
+	carries "$w_sentences" "$needle" &&
+		pass "$WORKER says Agent 5's '$needle' sentence word for word" ||
+		fail "$WORKER does not say Agent 5's '$needle' sentence word for word — the dispatched worker rules duplication differently from the lens"
+done
+printf '%s\n' "$w_sentences" | grep -F "divergent-behavior" | grep -qF "stays a finding" &&
+	pass "…and keeps the exception: a divergent-behavior copy stays a finding" ||
+	fail "$WORKER never keeps a divergent-behavior copy a finding — the ruling would defer a latent bug"
+# The ruling names a `↳ cites:` line, so the worker's anatomy must have one.
+assert_file_has "$WORKER" "↳ cites:" "the ruling cites §10 on a line the worker's anatomy declares"
+# Bait: the worker's fix line reworded — the exact comparison is what goes red.
+bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
+carries "$bait_w" '**candidate ticket**' &&
+	fail "bait: the worker's fix line reworded still reads as the skill's ruling" ||
+	pass "bait: the worker's fix line reworded goes red"
 
 t_done "/review-pr output contract"
