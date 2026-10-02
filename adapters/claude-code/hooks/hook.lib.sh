@@ -187,7 +187,7 @@ hook_point_at() {
 #                    data.last_msg (its last one), its own resume anchor (#408)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
-#                    an --after anchor the transcript no longer holds is one
+#                    a resume anchor the transcript no longer holds is one
 #   nothing to read  one event, outcome=fail, saying the transcript had no
 #                    assistant message with a usage block yet
 #   nothing new      with --after only: one event, no tokens, no model and no
