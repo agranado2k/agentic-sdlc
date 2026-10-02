@@ -84,6 +84,11 @@ second() { :; }" ] && pass "opens: the first sh fence whose first line matches" 
 [ -z "$(t_fence "$DOC" holds "no such needle")" ] &&
 	pass "no fence holds the needle: nothing printed, for the caller to assert on" ||
 	fail "a needle no fence holds lifted text"
+out=$(t_fence "$DOC" hold "second()" 2>"$SCRATCH/fence.err")
+st=$?
+[ "$st" -ne 0 ] && [ -z "$out" ] && grep -q 'holds|opens' "$SCRATCH/fence.err" &&
+	pass "an unknown mode is refused, naming the two it takes" ||
+	fail "an unknown mode: status $st, printed '$out', said '$(cat "$SCRATCH/fence.err")'"
 
 # ---------------------------------------------------------------------------
 banner "3. t_check_run — the frame a lifted check runs in"

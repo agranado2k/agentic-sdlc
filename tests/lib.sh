@@ -1050,7 +1050,16 @@ t_text_has() {
 #           spine, the adoption arm) name each step by how it opens.
 # Either way a document's executable text is run, never a mirror of it, so an
 # edit that breaks a fence breaks the suite instead of the next consumer.
+# Any other mode is refused — status 2, a line on stderr, nothing printed —
+# so a misspelt mode reads as a broken call, not as a missing fence.
 t_fence() {
+	case $2 in
+	holds | opens) ;;
+	*)
+		echo "t_fence: mode '$2' is not holds|opens" >&2
+		return 2
+		;;
+	esac
 	awk -v mode="$2" -v needle="$3" -v lang="${4:-sh}" '
 		$0 == "```" lang { on = 1; n = 0; buf = ""; hit = 0; next }
 		on && /^```$/    { on = 0; if (hit || (mode == "holds" && index(buf, needle))) { printf "%s", buf; exit } next }
