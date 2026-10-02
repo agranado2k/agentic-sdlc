@@ -1122,7 +1122,7 @@ session.start fail
 session.end -
 session.usage ok fail
 agent.stop ok fail
-tool.use ok fail
+tool.use ok fail denied
 run.start -
 run.end ok stopped
 spawn dispatched in-session refused
@@ -1300,5 +1300,23 @@ IFS=$_ov_ifs
 [ -n "$_ov_amend" ] && [ -z "$_ov_miss" ] && pass "ADR-0008's #348 amendment spells every kind and every word of the table" || fail "ADR-0008's #348 amendment is missing:${_ov_miss:- the amendment itself}"
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'outcome vocabulary of its own' &&
 	pass "the glossary's Event entry says every kind has an outcome vocabulary of its own" || fail "the glossary's Event entry does not name the per-kind outcome vocabulary"
+
+# ---------------------------------------------------------------------------
+banner "23. A denied tool call has a word: tool.use declares denied (ticket #409)"
+# ---------------------------------------------------------------------------
+# The Claude Code adapter now sweeps a tool call that fired its pre-tool hook
+# and never a post-tool one into `tool.use outcome=denied` at session end. The
+# word is tool.use's alone — ADR-0008 clause 1, amended 2026-10-02.
+OD="$SCRATCH/outcome-denied"; ODON=$(policy "$OD")
+t_run_split env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind=tool.use subject=session:od-409 outcome=denied data.tool=Bash
+[ "$S_STATUS" = 0 ] && grep -q '"kind":"tool.use".*"outcome":"denied"' "$OD/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "tool.use outcome=denied is exit 0 and written" || fail "tool.use outcome=denied exited $S_STATUS: $S_ERR"
+for _od_k in agent.stop session.usage spawn.end; do
+	assert_status 2 "$_od_k outcome=denied is exit 2 — denied is tool.use's word alone" -- env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind="$_od_k" outcome=denied
+done
+_od_adr=$(ls "$KIT"/docs/adr/0008-*.md)
+sed -n '/Amended 2026-10-02 (#409)/,/^[0-9][0-9]*\. /p' "$_od_adr" | tr '\n' ' ' | grep -q '`tool.use`.*`denied`' &&
+	pass "ADR-0008 carries the dated #409 amendment declaring denied on tool.use" ||
+	fail "ADR-0008 has no 'Amended 2026-10-02 (#409)' clause naming \`tool.use\` and \`denied\`"
 
 t_done "trace script"

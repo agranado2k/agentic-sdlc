@@ -6,6 +6,7 @@
 //
 //   input    the payload's `tool_input`, as compact JSON
 //   result   the payload's `tool_response`, or its `error` when the call failed
+//            (not on a PreToolUse payload, which has no result yet)
 //   head     the first 512 bytes of `input`, safe to put on one trace line
 //
 // — and prints the scalars the hook puts on the event, one per line, `key value`:
@@ -14,7 +15,7 @@
 //   tool <tool_name>
 //   tool_use_id <tool_use_id>
 //   event <hook_event_name>
-//   result_from tool_response|error
+//   result_from tool_response|error                        (post-tool payloads only)
 //   error_first_line <the error's first non-empty line>   (failed calls only)
 //
 // A key the payload does not carry is simply not printed; the hook decides what
@@ -89,10 +90,15 @@ const input = JSON.stringify(payload.tool_input);
 // `tool_response`; PostToolUseFailure carries no `tool_response` at all and puts
 // the failure in `error`. Neither key is a payload with nothing to store: an
 // empty blob would read as "the tool returned nothing", which is a fact about a
-// tool and not about a reader.
+// tool and not about a reader. PreToolUse is the one event that HAS no result
+// yet — tool-pre.sh reads it for the head alone (#409) — so on it no `result`
+// file is written and no `result_from` is printed.
 let result;
 let from;
-if ("tool_response" in payload) {
+const pre = payload.hook_event_name === "PreToolUse";
+if (pre) {
+  // nothing to store until the call returns
+} else if ("tool_response" in payload) {
   result = JSON.stringify(payload.tool_response);
   from = "tool_response";
 } else if ("error" in payload) {
@@ -129,7 +135,7 @@ head = head.replace(/[\u0000-\u001f\u007f]/gu, " ");
 const PRIVATE = 0o600;
 try {
   writeFileSync(`${dir}/input`, input, { mode: PRIVATE });
-  writeFileSync(`${dir}/result`, result, { mode: PRIVATE });
+  if (!pre) writeFileSync(`${dir}/result`, result, { mode: PRIVATE });
   writeFileSync(`${dir}/head`, head, { mode: PRIVATE });
 } catch (error) {
   die(`cannot write the staged payload under ${dir}: ${error.code ?? error.message}`);
@@ -162,7 +168,7 @@ if (from === "error" && typeof payload.error === "string") {
 // column. One per line, `key value`, which a POSIX `sed` consumes without a
 // parser; the values that become ids are checked against this adapter's own
 // identifier class by the hook (hook_id_ok), not here.
-let out = `result_from ${from}\n`;
+let out = pre ? "" : `result_from ${from}\n`;
 if (errorFirstLine) {
   out += `error_first_line ${errorFirstLine}\n`;
 }
