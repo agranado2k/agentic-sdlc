@@ -897,6 +897,41 @@ gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
 [ -z "$gaps" ] &&
 	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
 	fail "the kit's own mapping breaks the reviewer rule — $(printf '%s' "$gaps" | tr '\n' ';')"
+# The three answers the kit's Claude Code policy has to give (#423). Its two
+# local models are each other's complement: the content model's session asking
+# for a review of its own diff gets the code model, and the code model's
+# session asking the same is refused its own model and falls back to the plain
+# reviewer, the content model. Plain, with no session named, the reviewer is
+# the content model, never the implementer's.
+_k_imp=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer 2>/dev/null)
+_k_con=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer content 2>/dev/null)
+_k_rev=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" reviewer 2>/dev/null)
+[ -n "$_k_rev" ] && [ "$_k_rev" = "$_k_con" ] && [ "$_k_rev" != "$_k_imp" ] &&
+	pass "the kit's plain reviewer is the content model '$_k_con', not the implementer's '$_k_imp'" ||
+	fail "the kit's plain reviewer is '$_k_rev' — expected the content model '$_k_con', differing from the implementer '$_k_imp'"
+_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_con" sh "$LIB" reviewer self-implemented 2>/dev/null)
+[ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_imp" ] &&
+	pass "on a '$_k_con' session, 'reviewer self-implemented' is the code model '$_k_imp'" ||
+	fail "on a '$_k_con' session, 'reviewer self-implemented' gave '$_k_ans' — expected the code model '$_k_imp'"
+_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_imp" sh "$LIB" reviewer self-implemented 2>/dev/null)
+[ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_con" ] &&
+	pass "on a '$_k_imp' session, 'reviewer self-implemented' falls back to the plain reviewer '$_k_con'" ||
+	fail "on a '$_k_imp' session, 'reviewer self-implemented' gave '$_k_ans' — expected the fallback to '$_k_con'"
+# Every model the policy maps can be a session's, so every one is asked: the
+# self-implemented form never answers the session's own model, and the plain
+# form either answers another model or nothing at all — never the session's.
+for _k_tier in planner implementer mechanical; do
+	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" "$_k_tier" 2>/dev/null)
+	[ -n "$_k_ses" ] || continue
+	_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer self-implemented 2>/dev/null)
+	[ -n "$_k_ans" ] && [ "$_k_ans" != "$_k_ses" ] &&
+		pass "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' answers '$_k_ans', not the session's own" ||
+		fail "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' gave '$_k_ans' — the review shares the author's model, or names none"
+	_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer 2>/dev/null)
+	[ "$_k_ans" != "$_k_ses" ] &&
+		pass "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answers '${_k_ans:-nothing}', never the session's own" ||
+		fail "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answered the session's own model '$_k_ans'"
+done
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
@@ -1146,12 +1181,19 @@ for f in "$CC_CONFIG" "$CX_CONFIG"; do
 	done
 	[ "$_undeclared" = 0 ] && pass "$_label: every agent harness a tier names is declared in AGENT_HARNESSES" ||
 		fail "$_label: $_undeclared tier(s) name an agent harness AGENT_HARNESSES does not declare"
-	# And the reviewer crosses vendors in both — the property the kit calls its
-	# highest-leverage wiring, here asserted rather than hoped for.
-	t_run_split env AGENTS_CONFIG="$f" sh "$LIB" --harness reviewer
-	[ -n "$S_OUT" ] && pass "$_label: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
-		fail "$_label: the reviewer names no agent harness — the review shares the author's vendor"
 done
+# The reviewer crosses vendors in the Codex policy — the property the kit calls
+# its highest-leverage wiring, here asserted rather than hoped for. The Claude
+# Code policy's reviewer is local until the cross-vendor CLI authenticates from
+# this host (#423); the reviewer rule above holds it to a model that is not the
+# implementer's, which is what a local reviewer can still promise.
+t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" --harness reviewer
+[ -n "$S_OUT" ] && pass "agents.kit.codex.config.sh: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
+	fail "agents.kit.codex.config.sh: the reviewer names no agent harness — the review shares the author's vendor"
+t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" --harness reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "agents.kit.config.sh: the reviewer is local — no agent harness while the crossing cannot authenticate" ||
+	fail "agents.kit.config.sh: the reviewer names agent harness '$S_OUT' (status $S_STATUS) — #423 maps it local"
 # The two policies are different documents, not a copy with one word changed:
 # what is local in one is the crossing in the other.
 t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" planner
@@ -1168,8 +1210,8 @@ banner "The SHARED resolver refuses a review by the session's own model (#226)"
 # the resolver is shared layer and that fix was not a release. This is the
 # release: the rule lives in scripts/agents.lib.sh now, so every consumer's
 # `self-implemented` mapping stops having the blind spot the kit found in its
-# own. Asserted against a THROWAWAY policy, never the kit's — the kit's
-# reviewer crosses vendors, where there is nothing to refuse.
+# own. Asserted against a THROWAWAY policy, never the kit's — a throwaway can
+# break each half on purpose, and the kit's own answers are pinned above.
 LOCALREV="$SCRATCH/local-reviewer.config.sh"
 cat >"$LOCALREV" <<'LOCALREV_CFG'
 AGENT_TIER_PLANNER='vendor-strong-9'
@@ -1401,12 +1443,17 @@ t_run_split sh "$KIT_WRAPPER" --alias mechanical
 	fail "--alias mechanical gave '$S_OUT'"
 t_run_split sh "$KIT_WRAPPER" --alias implementer content
 [ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
+# The reviewer is local since #423, on the content model, so it has a spawn word.
+t_run_split sh "$KIT_WRAPPER" --alias reviewer
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = fable ] &&
+	pass "--alias reviewer is 'fable' — the local reviewer is spawnable in session" ||
+	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS), expected 'fable'"
 # A value that is not an Anthropic id has no spawn word: it belongs to another
 # agent harness, and printing a guess would be worse than printing nothing.
-t_run_split sh "$KIT_WRAPPER" --alias reviewer
+t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" --alias reviewer
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	pass "--alias prints nothing for a tier that crosses agent harnesses — it is not spawnable in session" ||
-	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS); the reviewer crosses vendors and has no in-session spawn word"
+	fail "--alias reviewer (Codex policy) printed '$S_OUT' (status $S_STATUS); a crossing has no in-session spawn word"
 # Every alias it does print must be one the spawn parameter actually accepts.
 for tier in planner implementer mechanical; do
 	t_run_split sh "$KIT_WRAPPER" --alias "$tier"

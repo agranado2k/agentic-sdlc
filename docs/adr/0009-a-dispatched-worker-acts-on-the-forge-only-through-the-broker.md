@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #412: clause 10 reads the finding's lens line first — see the end of this record)
 
 ## Context and problem statement
 
@@ -287,3 +287,26 @@ emits are gated on the same marker:
 - **only the review carries it** — the first run died between its two
   writes, before any emit. The run posts the comment and emits the full set,
   which is the only one there will be.
+
+### Amendment, 2026-10-01 — a finding names its lens (#412)
+
+Amends clause 10 as #375 left it; it changes no posting, no exit status and
+no option, so the record is amended in place. Most raises the broker recorded
+read `data.agent=unattributed`: the worker contract never asked a finding to
+say which lens raised it, and a title or an agent number in the finding's
+text — all #375's mapping could read — is what a worker seldom writes. So the
+contract gains one line per finding, `↳ lens: <token>`, the token from
+`/review-pr` §3's Axis-1 roster, and the broker reads it first:
+
+- **a roster token** — `data.agent` is that token, whatever title the text
+  beside it names.
+- **a token outside the roster** — `unattributed`, never the title match and
+  never the spelling the report used: a present field decides, and a field
+  the roster cannot read is one the trace does not guess at.
+- **no lens line** — the title-or-number match #375 recorded, unchanged.
+
+The field is read as data by its shape, the same as the id, the severity and
+the location: the value is folded to a token first — backticks, asterisks
+and case are presentation a copy of the contract may carry, and the rest is
+cut at the first character a token cannot hold — and then the closed list
+decides, so the closed list is the only thing a raise can carry.
