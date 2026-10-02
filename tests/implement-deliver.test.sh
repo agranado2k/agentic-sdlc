@@ -74,6 +74,28 @@ assert_file_has "$SKILL" "one click away"
 assert_file_has "$SKILL" "gh pr create"
 assert_file_has "$SKILL" "git push -u origin HEAD"
 
+# #422 (retro H5, fourth recurrence): three landings in one window were merged
+# by a session's own forge call, each leaving no `merge.land` for the
+# retrospective to read, after a by-hand landing path existed. The boundary
+# paragraph says where the merge goes once the session has stopped — the
+# project's train, or its by-hand landing path where the root manual names
+# one, never a bare forge merge — in words a consumer's manual can carry: the
+# skill ships unstamped and names no kit file (3c holds that), and a consumer's
+# manual may name no by-hand path at all, so the path is conditional, named by
+# role, and left to the manual. ("never a bare forge merge" is held by the
+# placement check below, which fails when the sentence is absent.)
+assert_file_has "$SKILL" "the by-hand landing path where the root manual names one"
+# …and in the boundary paragraph, not buried in a step: after §7's sentence,
+# before the Boundaries section.
+_b7=$(offset_of "autonomy never includes merge")
+_bare=$(offset_of "never a bare forge merge")
+_bnd=$(offset_of "## Boundaries")
+if [ -n "$_b7" ] && [ -n "$_bare" ] && [ -n "$_bnd" ] && [ "$_b7" -lt "$_bare" ] && [ "$_bare" -lt "$_bnd" ]; then
+	pass "the landing-path sentence sits in the §7 boundary paragraph"
+else
+	fail "the landing-path sentence is not in the §7 boundary paragraph (§7 at ${_b7:-none}, sentence at ${_bare:-none}, Boundaries at ${_bnd:-none})"
+fi
+
 # ---------------------------------------------------------------------------
 banner "2. Delivery stops short of landing — no merge verb is reachable"
 # ---------------------------------------------------------------------------
