@@ -166,12 +166,11 @@ hook_pointer() {
 }
 
 # hook_current_of <trace dir> <toplevel> — the per-toplevel path
-# `scripts/trace.sh` keys a working tree's pointer file on; its run stack is
-# the same path plus `.<session>.runs` for a session with an id, `.runs` for one
-# without (#453). Nothing (status 1) when <trace dir> is empty (tracing is off)
-# or git cannot hash the path.
+# `scripts/trace.sh` keys a working tree's pointer file on. Nothing (status 1)
+# when <trace dir> is empty (tracing is off) or git cannot hash the path.
 # DELIBERATE COUPLING: this repeats the shared script's key derivation
-# (trace_key); hook_pointer and hook_run_of both depend on it.
+# (trace_key) for the pointer, which hook_pointer writes. The run stack beside
+# it is never derived here: hook_run_of asks the shared script for it (#472).
 hook_current_of() {
 	_hc_dir=${1:-}
 	[ -n "$_hc_dir" ] || return 1
@@ -201,21 +200,23 @@ hook_current_of() {
 # this one, and its stack would be a stranger's. Otherwise nothing is exported
 # and the shared script answers with the root's stack, as before. A checkout
 # whose stack holds no run exports TRACE_RUN='' — the shared script's spelling
-# of "no run" — so an idle worktree never borrows the root's run.
+# of "no run" — so an idle worktree never borrows the root's run. The hook
+# asks git this itself, before the script: the fallback to the root's run is the
+# hook's own, and the script refuses another repository's checkout with the
+# same exit 2 as an unreadable stack, which calls for no run instead.
 #
-# DELIBERATE COUPLING, the second one. The stack is read here, not by running
-# the shared script: this runs on every subagent stop, and the script exposes
-# no read of a stack (its trace_stack and trace_stack_readable are internal).
-# So the adapter repeats the stack's format — one run per line, the top last,
-# its parent the line below — and its exists-but-unreadable rule. Both are
-# read from ONE snapshot of the file, so a begin or end that replaces the
-# stack between two reads cannot pair a run with another stack's parent.
+# THE STACK IS THE SHARED SCRIPT'S. It is read by `sh scripts/trace.sh stack
+# <dir>`, which prints the top of that checkout's stack and the run below it,
+# from one read of the file, and refuses — exit 2, saying why on stderr — a
+# stack that exists and cannot be read. A refusal is a stop that carries no
+# run, never the root's. The adapter keeps no copy of where a stack lives or
+# what is in it (#472; it did, from #421 until then).
 #
-# WHOSE STACK. Since #453 the shared script keys the stack by session as well
-# as by toplevel, so it is read here the same way: <session id> names it when
-# it is one the script would key on, and the per-toplevel stack answers for a
-# payload that names none — another session's run in the same checkout is
-# never this stop's.
+# WHOSE STACK. Since #453 the stack is keyed by session as well as by
+# toplevel: <session id> is passed as `session=` when it is one the script
+# would key on, and a payload that names none asks with TRACE_SESSION empty,
+# the script's spelling of "no session", so the per-toplevel stack answers —
+# another session's run in the same checkout is never this stop's.
 #
 # THE ENVIRONMENT STILL WINS. A TRACE_RUN already set (a dispatched worker told
 # whose trail it joins) is left alone, and with it the parent, exactly as the
@@ -223,29 +224,20 @@ hook_current_of() {
 hook_run_of() {
 	[ -n "${TRACE_RUN+set}" ] && return 0
 	[ -n "${1:-}" ] || return 0
-	_ro_tdir=$1
 	shift
 	[ -n "${1:-}" ] || return 0
 	_ro_common=$(hook_common_dir "$1") || return 0
 	_ro_own=$(hook_common_dir "$hook_repo") || return 0
 	[ "$_ro_common" = "$_ro_own" ] || return 0
-	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
-	_ro_stack=$(hook_current_of "$_ro_tdir" "$_ro_top") || return 0
 	if hook_id_ok "${2:-}"; then
-		_ro_stack="$_ro_stack.$2.runs"
+		_ro_pair=$( (cd "$hook_repo" && sh scripts/trace.sh stack "$1" session="$2") ) || _ro_pair=
 	else
-		_ro_stack="$_ro_stack.runs"
+		_ro_pair=$( (cd "$hook_repo" && TRACE_SESSION= sh scripts/trace.sh stack "$1") ) || _ro_pair=
 	fi
-	if [ -e "$_ro_stack" ] && [ ! -r "$_ro_stack" ]; then
-		echo "x  trace: the run stack at $_ro_stack exists and cannot be read — this event carries no run." >&2
-		_ro_run= _ro_parent=
-	else
-		_ro_nl='
+	_ro_nl='
 '
-		_ro_pair=$(awk '{ below = top; top = $0 } END { print top; if (NR >= 2) print below }' "$_ro_stack" 2>/dev/null) || _ro_pair=
-		_ro_run=${_ro_pair%%"$_ro_nl"*}
-		case $_ro_pair in *"$_ro_nl"*) _ro_parent=${_ro_pair#*"$_ro_nl"} ;; *) _ro_parent= ;; esac
-	fi
+	_ro_run=${_ro_pair%%"$_ro_nl"*}
+	case $_ro_pair in *"$_ro_nl"*) _ro_parent=${_ro_pair#*"$_ro_nl"} ;; *) _ro_parent= ;; esac
 	TRACE_RUN=$_ro_run
 	export TRACE_RUN
 	if [ -z "${TRACE_PARENT+set}" ]; then
