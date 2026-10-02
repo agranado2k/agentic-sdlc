@@ -361,6 +361,13 @@ case ${handoff#5. } in
 *) pass "the hand-off carries no digit: no limit is baked in" ;;
 esac
 t_text_has "$quiz" "the session cap beside the frontier" "the quiz shows the cap where the human reads the frontier"
+# The place the hand-off reads the limit from exists: the consumer's workflow
+# article carries a line for it, a mark the project fills in — or answers
+# "unstated", the reading that runs one session at a time.
+wf_cap=$(grep -F 'concurrent-subagent limit' "$ROOT/constitution/local-workflow.md.template" | head -n 1)
+t_text_has "$wf_cap" "$(t_mark CONCURRENT_SUBAGENT_LIMIT)" "the workflow template states the host's concurrent-subagent limit as a mark the project fills"
+t_text_has "$wf_cap" "unstated" "the workflow template names 'unstated' as the answer when the limit is not known"
+t_text_has "$handoff" "constitution/local-workflow.md" "the hand-off reads the limit from the workflow article that carries its line"
 
 # ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
