@@ -13,7 +13,8 @@
 #   2  a refused value: NOTHING on stdout, the reason on stderr, and the
 #      refused line never printed anywhere — it is the ticket's text;
 #   3  no stamp lines: an old ticket, not a refusal — stdout empty;
-#   4  the fetch failed, after one retry — never read as a missing line.
+#   4  the fetch failed, after one retry — never read as a missing line;
+#   5  too many stamp lines — more than 8 of one key: a stop, stdout empty.
 #
 # The tracker's CLI is a STUB `gh` on PATH, so every body here is a fixture
 # and nothing touches the network. What is asserted is the verdict through
@@ -372,6 +373,93 @@ s_assert_status 3 "a policy that declares no tier: the Tier: line is never check
 	fail "…stdout should be empty, got '$S_OUT'"
 s_assert_err_has "the tier line names a field this project's policy does not declare"
 s_assert_err_lacks "touch PWN"
+
+# ---------------------------------------------------------------------------
+banner "Exit 5 — too many stamp lines: the lift is bounded, per key"
+# ---------------------------------------------------------------------------
+# The lift reads by KEY, and the checker's work is linear in the lines it is
+# handed: a body carrying 2,000 `Tier:` lines cost about 30 CPU-seconds and
+# came back at exit 0 with all 2,000 printed (PR #382). The script lifts at
+# most 8 lines of any one key — enough that a field written twice with two
+# values still reaches the checker and is refused — and a body with more is a
+# stop of its own: exit 5, nothing printed, stderr naming the key and the
+# count, never the lines.
+#
+# stamp_cpu_ms — the CPU milliseconds of one run of the script on the current
+# fixture, read by tests/lib.sh's t_cpu_ms (CPU time, never the wall clock, so
+# a loaded host cannot redden it), or "unmeasured".
+# Called in $(...), so its cd stays there; the run's status was asserted on
+# the run before it, and this one is measured only.
+stamp_cpu_ms() { cd "$SCRATCH" && t_cpu_ms sh "$STAMP" 331; }
+STAMP_BOUND_MS=1500 # one run on 2,000 Tier: lines: bounded ~180, unbounded ~28,000
+body "$(awk 'BEGIN { for (i = 0; i < 2000; i++) printf "Tier: implementer\\n" }')"
+stamp 331
+s_assert_status 5 "2,000 Tier: lines: exit 5, too many stamp lines — not a refusal, not a stamp"
+[ -z "$S_OUT" ] && pass "2,000 Tier: lines: nothing on stdout" ||
+	fail "2,000 Tier: lines: stdout should be empty, got $(printf '%s' "$S_OUT" | grep -c '') line(s)"
+s_assert_err_has "too many stamp lines"
+s_assert_err_has "2000 tier lines"
+s_assert_err_lacks "implementer"
+s_assert_err_lacks "refused"
+cpu_ms=$(stamp_cpu_ms)
+case $cpu_ms in
+*[!0-9]* | "") fail "2,000 Tier: lines — the shell's \`times\` gave no children's CPU time to read ('$cpu_ms')" ;;
+*)
+	[ "$cpu_ms" -le "$STAMP_BOUND_MS" ] && pass "2,000 Tier: lines cost ${cpu_ms}ms of CPU — within ${STAMP_BOUND_MS}ms" ||
+		fail "2,000 Tier: lines cost ${cpu_ms}ms of CPU — over the ${STAMP_BOUND_MS}ms budget"
+	;;
+esac
+
+# The bound is per key, whatever its case: nine lines of one key spelled
+# three ways are nine lines of that key.
+body 'Tier: implementer\ntier: implementer\nTIER: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\n  Tier: implementer\n'
+stamp 331
+s_assert_status 5 "nine Tier: lines in three cases: exit 5"
+s_assert_err_has "9 tier lines"
+[ -z "$S_OUT" ] && pass "nine Tier: lines: nothing on stdout" || fail "nine Tier: lines: stdout should be empty, got '$S_OUT'"
+
+# Eight of one key is within the bound, and reaches the checker: eight equal
+# lines pass, and eight carrying two values are refused together, exit 2.
+body 'Tier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nConfidence: high\nDomain: code\n'
+stamp 331
+s_assert_status 0 "eight Tier: lines, one value: within the bound, checked, exit 0"
+body 'Tier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: implementer\nTier: planner\n'
+stamp 331
+s_assert_status 2 "eight Tier: lines, two values: within the bound, so the checker refuses them, exit 2"
+s_assert_err_has "the stamp lines are refused together"
+
+# Eight of each of the three keys is twenty-four lines, and within the bound:
+# it is per key, never a total.
+body "$(awk 'BEGIN { for (i = 0; i < 8; i++) printf "Tier: implementer\\nConfidence: high\\nDomain: code\\n" }')"
+stamp 331
+s_assert_status 0 "eight lines of each key: the bound is per key, never a total — exit 0"
+
+# Two keys past the bound: both named, each with its count, in one line —
+# in key order, so the message is the same whatever order awk counted in.
+body "$(awk 'BEGIN { for (i = 0; i < 9; i++) printf "Tier: implementer\\nConfidence: high\\n" }')"
+stamp 331
+s_assert_status 5 "nine Tier: and nine Confidence: lines: exit 5"
+s_assert_err_has "9 confidence lines, 9 tier lines"
+
+# The bound counts what is LIFTED, before the policy is asked which fields it
+# declares: nine lines of a field this project does not declare are still
+# nine lines the script read, and still exit 5 — never dropped one by one.
+body "$(awk 'BEGIN { printf "Tier: implementer\\n"; for (i = 0; i < 9; i++) printf "Domain: x;touch PWN\\n" }')"
+stamp_under "$SCRATCH/nodomain.config.sh"
+s_assert_status 5 "nine lines of an undeclared Domain: they count toward the bound, exit 5"
+s_assert_err_has "9 domain lines"
+[ -z "$S_OUT" ] && pass "…nothing on stdout, not even the Tier: line" || fail "…stdout should be empty, got '$S_OUT'"
+s_assert_err_lacks "touch PWN"
+no_pwn "nine undeclared lines"
+
+# Exit 5 comes before the check: nine Tier: lines that the checker WOULD
+# refuse are a stop of the bound, never a refusal — nothing reaches it.
+body "$(awk 'BEGIN { for (i = 0; i < 9; i++) printf "Tier: x;touch PWN\\n" }')"
+stamp 331
+s_assert_status 5 "nine illegal Tier: lines: exit 5 wins over the refusal (2)"
+s_assert_err_lacks "refused"
+s_assert_err_lacks "touch PWN"
+no_pwn "nine illegal lines"
 
 # ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"

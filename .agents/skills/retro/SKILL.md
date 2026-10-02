@@ -70,7 +70,8 @@ The full form — what to read, what counts as a finding, where it goes — is i
    dwarfs their outcome; models the price table cannot price.
 6. **Chain health** — tickets with no PR, PRs with no landing, spawns that
    failed, timed out, hit budget or could not reach their vendor, runs never
-   closed, and skills whose emits are missing from where they should be.
+   closed, tool calls denied (per session and tool), and skills whose emits
+   are missing from where they should be.
 7. **Aim calibration** — of the slices landed in the window, how many were
    followed by a re-cut of what came after them, and which tier or skill
    produced the misses. The `feedback` events are the loop's own
