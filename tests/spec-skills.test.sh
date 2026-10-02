@@ -306,6 +306,10 @@ has_in "$publish" 'the oracle: `<command>`' "the publish step writes a mechanica
 in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
 	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
 has_in "$publish" "the one command rubric question 1 names" "the publish step's oracle line points back at the rubric question that asks for it"
+draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
+has_in "$draft" 'the oracle: `<command>`' "step 2 drafts a mechanical ticket's oracle line, so the quiz sees it before the human confirms the tier"
+rule8=$(printf '%s\n' "$rules" | grep -F '**No file paths')
+has_in "$rule8" "oracle line" "rule 8 makes the one exception for a mechanical ticket's oracle line, which names a command and may name its path"
 has_in "$conf" "A \`mechanical\` stamp with either of the rubric's two conditions in doubt is \`low\`." "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
 tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^  - /) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
