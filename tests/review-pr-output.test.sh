@@ -597,9 +597,12 @@ skill_sentence() { printf '%s\n' "$a5_sentences" | grep -F -- "$1" | head -n 1; 
 carries() { [ -n "$2" ] && printf '%s\n' "$1" | grep -qxF -- "$2"; }
 [ -n "$buckets" ] ||
 	fail "the skill no longer says which meanings the severity buckets keep — nothing to define 'the buckets' by"
+t_sentences=$(body_of "$ROOT/$TWIN" | sentences)
+# sentences_for <file> — that file's sentences, split once above.
+sentences_for() { case $1 in "$TWIN") printf '%s\n' "$t_sentences" ;; *) printf '%s\n' "$w_sentences" ;; esac; }
 for f in "$WORKER" "$TWIN"; do
-	f_sentences=$(body_of "$ROOT/$f" | sentences)
-	for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
+	f_sentences=$(sentences_for "$f")
+	for needle in '**Then ask which case' '**the diff ADDS**' '**touches or extends**' '**candidate ticket**'; do
 		want=$(skill_sentence "$needle")
 		[ -n "$want" ] ||
 			fail "Agent 5's prompt no longer holds a sentence with '$needle' — nothing to hold $f to"
@@ -619,46 +622,46 @@ verdict=$(skill_sentence 'divergent-behavior' | sed -n 's/.*, which \(is a laten
 [ -n "$verdict" ] ||
 	fail "Agent 5's prompt no longer ends its divergent-behavior sentence in a verdict that keeps the copy a finding — nothing to hold the worker to"
 # keeps_exception <sentences> — exit 0 when one sentence naming the
-# divergent-behavior copy ends in that verdict and negates nothing.
+# divergent-behavior copy ends in that verdict and negates nothing before
+# naming it (the verdict after it is the skill's own words, held above).
 keeps_exception() {
 	printf '%s\n' "$1" | grep -F 'divergent-behavior' | while IFS= read -r e; do
 		case $e in *"$verdict") ;; *) continue ;; esac
-		printf '%s\n' "$e" | grep -qiE "(^|[^a-z])(not|never|no|longer)([^a-z]|\$)|n't" || echo kept
+		printf '%s\n' "${e%%divergent-behavior*}" | grep -qiE "(^|[^a-z])(not|never|no|nothing|none)([^a-z]|\$)|n't" || echo kept
 	done | grep -q kept
 }
 for f in "$WORKER" "$TWIN"; do
-	[ -n "$verdict" ] && keeps_exception "$(body_of "$ROOT/$f" | sentences)" &&
+	[ -n "$verdict" ] && keeps_exception "$(sentences_for "$f")" &&
 		pass "$f keeps the exception: a divergent-behavior copy $verdict" ||
 		fail "$f never keeps a divergent-behavior copy a finding in the skill's verdict — the ruling would defer a latent bug"
 done
-for flip in 's/and stays a finding/and no longer stays a finding/' 's/The one exception is a/There is no exception for a/'; do
+for flip in 's/and stays a finding/and no longer stays a finding/' 's/The one exception is a/There is no exception for a/' 's/The one exception is a/Nothing is excepted for a/'; do
 	keeps_exception "$(printf '%s\n' "$w_sentences" | sed "$flip")" &&
 		fail "bait: the exception reversed ($flip) still reads as kept" ||
 		pass "bait: the exception reversed ($flip) goes red"
 done
-# held <file> <text> <why> — the text is said in the file (prose unwrapped,
-# spaces squeezed), and the mutant that cuts exactly that text once is red:
-# a text said twice — once by the paragraph that needs it — would pass the
-# mutant, so the assertion is proved to read the line it claims to hold.
+# says_once <file> <text> <why> — the text is said in the file (prose
+# unwrapped, spaces squeezed), and said exactly once: cut once, it is gone. A
+# text said twice — once by the paragraph that needs it — would survive the
+# cut, so the assertion reads the one line it claims to hold (each was also
+# run red against the real file with that line deleted, #485).
 unwrap() { tr '\n' ' ' <"$1" | tr -s ' '; }
-held() {
-	unwrap "$1" | grep -qF -- "$2" &&
-		pass "$1 says '$2' ($3)" ||
-		fail "$1 never says '$2' — $3"
-	unwrap "$1" | awk -v n="$2" '{ i = index($0, n); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(n)) } 1' >"$SCRATCH/held.cut"
-	grep -qF -- "$2" "$SCRATCH/held.cut" &&
-		fail "bait: with '$2' cut once from $1 it is still said — the assertion is satisfied by another line" ||
-		pass "bait: '$2' cut once from $1 goes red"
+says_once() {
+	t_text_has "$(unwrap "$1")" "$2" "$3" "$1"
+	unwrap "$1" | awk -v n="$2" '{ i = index($0, n); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(n)) } 1' >"$SCRATCH/says_once.cut"
+	grep -qF -- "$2" "$SCRATCH/says_once.cut" &&
+		fail "$1 says '$2' more than once — cut once, it is still said, so another line satisfies the assertion" ||
+		pass "…and says it exactly once: cut once from $1, it is gone"
 }
 # The ruling names a `↳ cites:` line and a what/where line: the worker's
 # anatomy declares the one and defines the other, each on its own line.
-held "$WORKER" "↳ cites: <the decision record, audit item or craft rule — only when there is one>" \
+says_once "$WORKER" "↳ cites: <the decision record, audit item or craft rule — only when there is one>" \
 	"the ruling cites §10 on a line the worker's anatomy declares"
-held "$WORKER" "The first line is the finding's what/where line." \
+says_once "$WORKER" "The first line is the finding's what/where line." \
 	"the ruling's what/where line is a term the worker's anatomy defines"
-held "$TWIN" 'one line readable in isolation — the finding'"'"'s what/where line' \
+says_once "$TWIN" 'one line readable in isolation — the finding'"'"'s what/where line' \
 	"the ruling's what/where line is a term the CI prompt's anatomy defines"
-held "$TWIN" 'a "↳ cites:" line naming the decision record, audit item or craft rule' \
+says_once "$TWIN" 'a "↳ cites:" line naming the decision record, audit item or craft rule' \
 	"the ruling cites §10 on a line the CI prompt's anatomy declares"
 # Bait: the worker's fix line reworded — the exact comparison is what goes red.
 bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
