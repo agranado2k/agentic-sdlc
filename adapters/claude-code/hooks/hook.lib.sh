@@ -168,8 +168,7 @@ hook_pointer() {
 # place this adapter repeats the shared script's derivation — hook_pointer's
 # coupling, now also hook_run_of's.
 hook_current_of() {
-	_hc_dir=$( (cd "$hook_repo" && sh scripts/trace.sh dir) 2>/dev/null ) || _hc_dir=
-	[ -n "$_hc_dir" ] || return 1
+	_hc_dir=$(hook_dir) || return 1
 	_hc_key=$(printf '%s' "$1" |
 		(unset GIT_DIR GIT_WORK_TREE && git hash-object --stdin) 2>/dev/null) || _hc_key=
 	[ -n "$_hc_key" ] || return 1
@@ -202,10 +201,8 @@ hook_current_of() {
 hook_run_of() {
 	[ -n "${TRACE_RUN+set}" ] && return 0
 	[ -n "$1" ] && [ -d "$1" ] || return 0
-	_ro_common=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$1" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 0
-	_ro_own=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$hook_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 0
+	_ro_common=$(hook_common_dir "$1") || return 0
+	_ro_own=$(hook_common_dir "$hook_repo") || return 0
 	[ -n "$_ro_common" ] && [ "$_ro_common" = "$_ro_own" ] || return 0
 	_ro_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse --show-toplevel) 2>/dev/null ) || return 0
 	[ -n "$_ro_top" ] || return 0
@@ -699,10 +696,20 @@ hook_tail_facts() {
 # where being behind main is normal and says nothing about the code the hooks
 # run (review of PR #390, Axis 2 item 3).
 hook_root() {
-	_hr=$( (unset GIT_DIR GIT_WORK_TREE &&
-		git -C "$hook_repo" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
-	[ -n "$_hr" ] || return 1
+	_hr=$(hook_common_dir "$hook_repo") || return 1
 	dirname "$_hr"
+}
+
+# hook_common_dir <dir> — the absolute path of git's common directory for the
+# checkout <dir> is in, or nothing (status 1) when git does not answer. The ONE
+# spelling of that lookup: hook_root derives the root checkout from it, and
+# hook_run_of compares two checkouts' answers to tell one repository from
+# another. GIT_DIR and GIT_WORK_TREE are scrubbed for hook_pointer's reason.
+hook_common_dir() {
+	_hcd=$( (unset GIT_DIR GIT_WORK_TREE &&
+		git -C "$1" rev-parse --path-format=absolute --git-common-dir) 2>/dev/null ) || return 1
+	[ -n "$_hcd" ] || return 1
+	printf '%s' "$_hcd"
 }
 
 # hook_behind <root> — how many commits the last FETCHED origin/main holds that
