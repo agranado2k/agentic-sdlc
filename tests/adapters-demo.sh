@@ -417,7 +417,7 @@ done
 	fail ".claude/settings.json reached the project — the kit's own agent-harness wiring leaked, and the adapter is not dormant" ||
 	pass "no .claude/settings.json in the project — the trace hooks arrived unwired"
 for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh tool-post.sh \
-	tool-pre-guard.sh transcript-usage.mjs tool-payload.mjs; do
+	tool-pre-guard.sh tool-pre.sh transcript-usage.mjs tool-payload.mjs; do
 	[ -f "adapters/claude-code/hooks/$h" ] &&
 		pass "adapters/claude-code/hooks/$h survived bootstrap (reference material, dormant)" ||
 		fail "adapters/claude-code/hooks/$h is missing after bootstrap"
