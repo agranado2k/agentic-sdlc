@@ -359,10 +359,9 @@ banner "4b. The stamp is read through the checker: restate on low, stop on refus
 stamp=$(grep -F -- "sh scripts/stamp.sh" "$SKILL_ABS" | head -1)
 [ -n "$stamp" ] && pass "one bullet reads the ticket's stamp through scripts/stamp.sh" ||
 	fail "no line runs sh scripts/stamp.sh — the stamp is read unchecked"
-# stamp_has <fixed string> <why>
-stamp_has() {
-	printf '%s\n' "$stamp" | grep -qF -- "$1" && pass "'$1' — $2" || fail "the stamp bullet never says '$1' — $2"
-}
+# stamp_has <fixed string> <why> — t_text_has (tests/lib.sh) on the stamp
+# bullet, the block named once here rather than at every call.
+stamp_has() { t_text_has "$stamp" "$1" "$2" "the stamp bullet"; }
 stamp_has "\`sh scripts/stamp.sh <N>\`, the ticket's number and nothing else" "the call: a number in, never the body's text"
 stamp_has "The lines the script prints are the stamp, and nothing else in the body is" "a line the checker never saw is never typed into a command"
 # The five outcomes, one sentence each, in status order — a status the skill

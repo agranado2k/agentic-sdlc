@@ -108,7 +108,7 @@ step6_check() {
 	done <"$3"
 }
 
-# t_sh_fence "$KIT/UPDATING.md" <awk-pattern> (tests/lib.sh) — the body of the
+# t_fence "$KIT/UPDATING.md" opens <awk-pattern> (tests/lib.sh) — the body of the
 # ```sh fence in UPDATING.md whose FIRST line matches, printed verbatim.
 #
 # The two data-loss cases below run the recipe's OWN TEXT rather than a copy of
@@ -125,7 +125,7 @@ step6_check() {
 # empty script. That is the same vacuity 9d's own key-set diff falls into, so it
 # gets the same treatment: no match is a failure, loudly.
 assert_block() {
-	t_sh_fence "$KIT/UPDATING.md" "$1" >"$2"
+	t_fence "$KIT/UPDATING.md" opens "$1" >"$2"
 	if [ -s "$2" ]; then
 		pass "$3"
 	else
@@ -1086,7 +1086,7 @@ kit() { git --git-dir="$WORK1/kit.git" "\$@"; }
 FROM_REF=v0.3.0
 TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 EOF
-	t_sh_fence "$KIT/UPDATING.md" '^kit_take\(\)' >>"$1"
+	t_fence "$KIT/UPDATING.md" opens '^kit_take\(\)' >>"$1"
 }
 
 banner "C4c. 9d does not destroy a config the kit ships only as a .template"

@@ -1035,16 +1035,48 @@ t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
 # <literal> as a fixed string; empty when none does.
 t_line_of() { grep -n -F -- "$2" "$1" | head -1 | cut -d: -f1; }
 
-# t_lift_fence <file> <literal> <out> [<language>] — the first fenced block of
-# <file> opened with ```<language> (sh when omitted) whose body holds <literal>
-# as a fixed string, written whole to <out>, to be sourced and run. The
-# literal is usually a function's `name()`, so the fence that defines it is
-# the one lifted; a document's executable text is run, never a mirror of it.
-# <out> is empty when no such fence exists, which the caller asserts on.
-t_lift_fence() {
-	awk -v lit="$2" -v lang="${4:-sh}" '$0 == "```" lang { buf = ""; on = 1; next }
-		on && /^```$/ { if (index(buf, lit)) { printf "%s", buf; exit } on = 0; next }
-		on { buf = buf $0 "\n" }' "$1" >"$3"
+# t_text_has <text> <fixed string> <why> [<whose>] — one pass/fail per token
+# held in a block of text a suite has already cut out, so a failure names the
+# token that went missing rather than the whole block. <whose>, when given,
+# names the block in the fail line ("the stamp bullet never says …").
+t_text_has() {
+	printf '%s\n' "$1" | grep -qF -- "$2" &&
+		pass "'$2' — $3" ||
+		fail "${4:+$4 }never says '$2' — $3"
+}
+
+# t_fence <file> <holds|opens> <needle> [<language>] — the body of the first
+# fenced block of <file> opened with ```<language> (sh when omitted) that the
+# needle picks, printed verbatim; nothing when none does, which the caller
+# asserts on — it refuses to be vacuous. The two modes are the two ways a
+# suite names the fence it runs:
+#   holds — the body holds <needle> as a fixed string, anywhere. The needle is
+#           usually a function's `name()`, so the fence that defines it is the
+#           one lifted, to be sourced and run.
+#   opens — the body's FIRST line matches <needle>, an ERE. The suites that run
+#           a document's own fenced steps (UPDATING.md's recipe, SETUP.md's
+#           spine, the adoption arm) name each step by how it opens.
+# Either way a document's executable text is run, never a mirror of it, so an
+# edit that breaks a fence breaks the suite instead of the next consumer.
+# Any other mode is refused — status 2, a line on stderr, nothing printed —
+# so a misspelt mode reads as a broken call, not as a missing fence.
+t_fence() {
+	case $2 in
+	holds | opens) ;;
+	*)
+		echo "t_fence: mode '$2' is not holds|opens" >&2
+		return 2
+		;;
+	esac
+	awk -v mode="$2" -v needle="$3" -v lang="${4:-sh}" '
+		$0 == "```" lang { on = 1; n = 0; buf = ""; hit = 0; next }
+		on && /^```$/    { on = 0; if (hit || (mode == "holds" && index(buf, needle))) { printf "%s", buf; exit } next }
+		on {
+			n++
+			if (mode == "opens" && n == 1 && $0 ~ needle) hit = 1
+			buf = buf $0 "\n"
+		}
+	' "$1"
 }
 
 # t_lift_shape <file> <first-line ERE> <out> — a declared return shape: the
@@ -1072,24 +1104,62 @@ t_stub_gh() {
 	chmod +x "$1/gh"
 }
 
-# t_sh_fence <file> <first-line ERE> — the body of the first ```sh fence of
-# <file> whose FIRST line matches, printed verbatim. The suites that run a
-# document's own fenced steps (UPDATING.md's recipe, SETUP.md's spine, the
-# adoption arm) run its text, never a mirror of it, so an edit that breaks a
-# fence breaks the suite instead of the next consumer. Prints nothing when no
-# fence matches; the caller refuses to be vacuous on that.
-t_sh_fence() {
-	awk -v pat="$2" '
-		/^```sh$/       { grab = 1; n = 0; buf = ""; hit = 0; next }
-		grab && /^```$/ { grab = 0; if (hit) { printf "%s", buf; exit } next }
-		grab {
-			n++
-			if (n == 1 && $0 ~ pat) hit = 1
-			buf = buf $0 "\n"
-		}
-	' "$1"
+# t_check_run <check file> <function> <arg>... — one call of a check lifted
+# out of a skill's fence (t_fence, holds), run where a consumer runs it: from
+# $PROJECT/$WHERE (a project of the suite's own, holding scripts/vocab.sh and
+# the shipped policy file), VOCAB_CONFIG unset unless POLICY_FOR names a
+# policy file. Its streams land in $SCRATCH/verdict.out and verdict.err, for
+# the assertions that read what a check printed; the status is the
+# function's. A suite's `verdict` maps its own arguments onto this — the one
+# frame both typed-return suites run their checks in.
+t_check_run() {
+	(cd "$PROJECT/${WHERE:-}" && unset VOCAB_CONFIG && { [ -z "${POLICY_FOR:-}" ] || export VOCAB_CONFIG="$POLICY_FOR"; } &&
+		sh -c '. "$1"; shift; "$@"' _ "$@") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"
 }
 
+# t_verdict_is <accepted|refused> <label> <verdict arg>... — runs the suite's
+# own `verdict` (over t_check_run) with the arguments given, and asserts the
+# check's answer. A frame that cannot run the check is a fail either way, and
+# says which part is missing: no `verdict` function, no lifted check ($CHECK
+# empty or missing), or no $PROJECT directory to run it in. Each would
+# otherwise read as a refusal — a missing function is status 127, a failed cd
+# a non-zero subshell — and pass every `refused` assertion vacuously (review
+# of PR #450, M-1). The streams are emptied before the run, so a fail line
+# never quotes an earlier call's.
+# Two knobs carry what the suites differ in. They are globals, not arguments,
+# because a suite sets each once — at its top, or once per skill it holds —
+# and never per call:
+#   T_VERDICT_PREFIX  — put before every label (the skill under test, when one
+#                       suite holds several)
+#   T_VERDICT_REFUSED — a command given the label, prefix and all, after a
+#                       refusal, for a suite that also holds WHAT a refusal
+#                       printed; unset, the refusal itself is the pass
+t_verdict_is() {
+	_vi_want=$1 _vi_label="${T_VERDICT_PREFIX:-}$2"
+	shift 2
+	: >"$SCRATCH/verdict.out"
+	: >"$SCRATCH/verdict.err"
+	if ! command -v verdict >/dev/null 2>&1; then
+		fail "$_vi_label — no verdict function defined: the suite never ran its check"
+		return
+	elif [ ! -s "${CHECK:-}" ]; then
+		fail "$_vi_label — no lifted check at '${CHECK:-}': an absent check accepts nothing and refuses nothing"
+		return
+	elif [ -z "${PROJECT:-}" ] || [ ! -d "$PROJECT/${WHERE:-}" ]; then
+		fail "$_vi_label — no project directory at '${PROJECT:-}/${WHERE:-}' to run the check in"
+		return
+	elif verdict "$@"; then _vi_got=accepted
+	else _vi_got=refused
+	fi
+	case $_vi_want.$_vi_got in
+	accepted.accepted) pass "$_vi_label" ;;
+	accepted.*) fail "$_vi_label — refused: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" 2>/dev/null | tr '\n' ' ')" ;;
+	refused.refused)
+		if [ -n "${T_VERDICT_REFUSED:-}" ]; then "$T_VERDICT_REFUSED" "$_vi_label"; else pass "$_vi_label"; fi
+		;;
+	*) fail "$_vi_label — the documented check accepted it" ;;
+	esac
+}
 
 # t_hold_reader_step <skill> <flat> <say-so words> [<label prefix>] — the
 # reader step of a typed-return fence, held to one spawn order (ticket #406).

@@ -242,7 +242,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.40.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.41.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -469,7 +469,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.39.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.41.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -742,6 +742,11 @@ skeleton (K0).
   command, usage errors and a non-kit tree refused with exit 2, the exit code
   propagated, a dropped executable bit handed back without touching content,
   and Stryker's backup kept after a failed run.
+- `sh tests/harness-helpers.test.sh` drives the folded assertion helpers in
+  `tests/lib.sh` — `t_text_has`, `t_fence`, `t_check_run` and `t_verdict_is` —
+  through each branch, the failing ones included: a refusal assertion with no
+  `verdict` function, no lifted check or no project to run in fails loudly
+  instead of passing vacuously.
 - `sh tests/fixture-builders.test.sh` pins the four fixture builders in
   `tests/lib.sh` that every demo suite makes its throwaway kits and consumers
   with: a `.git`-free kit copy with nested worktrees stripped, a repo with a
@@ -898,6 +903,7 @@ sh tests/trace-hooks.test.sh                           # the Claude Code adapter
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
+sh tests/harness-helpers.test.sh                       # the test harness's folded assertion helpers
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/retro-skill.test.sh                           # the /retro contract

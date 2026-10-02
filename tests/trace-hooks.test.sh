@@ -1449,6 +1449,15 @@ fi
 # ---------------------------------------------------------------------------
 banner "27. SubagentStop waits, within a bound, for the subagent's final message"
 # ---------------------------------------------------------------------------
+# The policy file's own comment on the bound is held here, beside the behaviour
+# it describes (#401).
+# Since PR #434 the wait may run past its bound by one poll (hook_wait_final,
+# below), so the shipped policy file may not promise "never longer".
+WAIT_CONFIG="$KIT/scripts/trace.config.sh"
+assert_file_lacks "$WAIT_CONFIG" "and never longer" "the wait may run past the bound by one poll"
+assert_file_has "$WAIT_CONFIG" "the actual wait may" "the comment admits the overrun"
+assert_file_has "$WAIT_CONFIG" "one whole-second nap and a check" "and names the hook's own bound on it, a nap AND a check"
+
 # Ticket #308. Live, SubagentStop can run BEFORE the subagent's transcript holds
 # its final assistant line: two of seven stops in the ticket's own measurement
 # found the file present and the last line 170 and 223 ms away. Read then, the
