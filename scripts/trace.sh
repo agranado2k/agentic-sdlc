@@ -75,8 +75,9 @@
 #   blob · data
 # `kind` is a CLOSED vocabulary (an unknown one is exit 2, like an unknown
 # tier), and so is each kind's `outcome` (TRACE_OUTCOMES below); `data.*`
-# keys are OPEN (like task domains), string values only, except the two shapes
-# the kind table declares (TRACE_SHAPES below), which hold a present key. A subject is
+# keys are OPEN (like task domains), string values only, except the shapes
+# the kind table declares (TRACE_SHAPES below), which hold a present key, and
+# a key a row requires of a line its condition matches. A subject is
 # `<type>:<reference>` — lowercase type, then anything without a space, a
 # quote or a backslash — so a PRD, a ticket, a PR, a branch, a session and a
 # run all join on one column. The types a project's policy
@@ -185,12 +186,16 @@ TRACE_EVENT_CAP=4000
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (ADR-0008 clause 1, as amended
-# 2026-10-01 for #420): a data key a reader joins on, held at emit to a
-# shape. Each entry is `<kind>=<key>:<class>`, the class a bracket
-# expression's inside, so a value is `[<class>]+` — one or more of it and
-# nothing else. Only a PRESENT key is held: data.* stays open, and an emit
-# missing the key writes as before.
-TRACE_SHAPES='finding.triage=id:A-Za-z0-9._#- pr.iterate=iteration:0-9'
+# 2026-10-01 for #420 and 2026-10-02 for #466): a data key a reader joins on,
+# held at emit to a shape. Each row is `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`,
+# and a value matches an ERE only whole. `<kind>=<key>:<ERE>` holds a PRESENT
+# key: data.* stays open, and an emit missing the key writes as before. A
+# `/<when>~<ERE>` applies the row only to a line whose `<when>` — `outcome`,
+# or `data.<key>` — matches; a `!` after the key makes the key required on
+# such a line. So: a triage's source is check, bot, human or local; a local
+# finding's id is the review's INITIAL-N, and that id is the local source's
+# alone; and a green or red iteration carries its three counts, digits.
+TRACE_SHAPES='finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -344,33 +349,76 @@ trace_check_outcome() {
 	return 1
 }
 
-# trace_check_shapes <kind> <key=value lines> — every data value the kind's
-# TRACE_SHAPES rows name, held to its class. The lines are the emit's data
-# arguments in order, one per line (a value never holds a newline: the
-# escaper refuses control characters first), so a second occurrence of a key
-# is checked too. Returns 1 with TRACE_SHAPE_WHY set in the vocabulary
-# checker's shape: the kind, the key, the value, then the shape.
+# trace_check_shapes <kind> <outcome> <key=value lines> — every row of
+# TRACE_SHAPES for the kind, read in order, the first refusal the answer. The
+# lines are the emit's data arguments in order, one per line (a value never
+# holds a newline: the escaper refuses control characters first), so a second
+# occurrence of a key is held too, and a row's condition holds when any
+# occurrence of its key matches. Returns 1 with TRACE_SHAPE_WHY set in the
+# vocabulary checker's shape: the kind, the key, the value, then the shape.
+# Globbing is off for the loop: a row is an ERE, and its brackets are not a
+# pattern for the shell to expand against the working directory.
 trace_check_shapes() {
+	trace_glob_off
 	for _cs_e in $TRACE_SHAPES; do
-		case $_cs_e in "$1="*) ;; *) continue ;; esac
+		_cs_head=${_cs_e%%=*}
+		case $_cs_head in "$1" | "$1/"*) ;; *) continue ;; esac
 		_cs_e=${_cs_e#*=}
 		_cs_key=${_cs_e%%:*}
-		_cs_class=${_cs_e#*:}
+		_cs_re=${_cs_e#*:}
+		_cs_when=
+		case $_cs_head in */*)
+			_cs_when=${_cs_head#*/}
+			trace_shape_holds "$_cs_when" "$2" "$3" || continue
+			_cs_when=" when ${_cs_when%%~*} is ${_cs_when#*~}"
+			;;
+		esac
+		_cs_req=0
+		case $_cs_key in *!) _cs_req=1 _cs_key=${_cs_key%!} ;; esac
+		_cs_seen=0
 		while IFS= read -r _cs_l; do
 			case $_cs_l in "$_cs_key="*) ;; *) continue ;; esac
+			_cs_seen=1
 			_cs_v=${_cs_l#*=}
-			case $_cs_v in
-			'' | *[!$_cs_class]*)
-				TRACE_SHAPE_WHY="$1: data.$_cs_key '$_cs_v' is not [$_cs_class]+"
-				return 1
-				;;
-			esac
+			trace_matches "$_cs_v" "$_cs_re" && continue
+			TRACE_SHAPE_WHY="$1: data.$_cs_key '$_cs_v' is not $_cs_re$_cs_when"
+			trace_glob_on
+			return 1
 		done <<EOF
-$2
+$3
 EOF
+		[ "$_cs_req" = 1 ] && [ "$_cs_seen" = 0 ] && {
+			TRACE_SHAPE_WHY="$1: data.$_cs_key is missing — required$_cs_when, $_cs_re"
+			trace_glob_on
+			return 1
+		}
 	done
+	trace_glob_on
 	return 0
 }
+
+# trace_shape_holds <when>~<ERE> <outcome> <key=value lines> — a row's
+# condition: the outcome, or any occurrence of the data key, matches whole.
+trace_shape_holds() {
+	_sk_re=${1#*~}
+	case ${1%%~*} in
+	outcome) [ -n "$2" ] && trace_matches "$2" "$_sk_re" ;;
+	data.*)
+		_sk_k=${1%%~*}
+		_sk_k=${_sk_k#data.}
+		while IFS= read -r _sk_l; do
+			case $_sk_l in "$_sk_k="*) trace_matches "${_sk_l#*=}" "$_sk_re" && return 0 ;; esac
+		done <<EOF
+$3
+EOF
+		return 1
+		;;
+	*) return 1 ;;
+	esac
+}
+
+# trace_matches <value> <ERE> — the whole value matches the ERE.
+trace_matches() { printf '%s\n' "$1" | grep -Eq -- "^($2)\$"; }
 
 # trace_check_token <value> — a field or data key: [a-z][a-z0-9_]*. Checked
 # BEFORE any membership test or eval, so a key with a space in it is refused
@@ -777,7 +825,7 @@ trace_emit() {
 	# Checked once the kind is known, which may be after the outcome on the
 	# command line. An empty value is no outcome: the line omits it.
 	[ -z "$_em_outcome" ] || trace_check_outcome "$_em_kind" "$_em_outcome" || die "$TRACE_OUTCOME_WHY"
-	trace_check_shapes "$_em_kind" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+	trace_check_shapes "$_em_kind" "$_em_outcome" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
 
 	# The directory first: identity's fallbacks and the blob store both live in
 	# it, and whether it resolves at all is what makes this emit a no-op.

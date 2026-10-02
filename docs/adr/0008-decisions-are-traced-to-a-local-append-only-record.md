@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2)
 
 ## Context and problem statement
 
@@ -279,6 +279,42 @@ Chosen: **option 1**.
    kill guard's `note` with `outcome=denied` stays, naming the rule; with
    tool capture on, the call it refused is swept too. The retrospective's
    question 6 counts the denials per session and per tool.
+   *Amended 2026-10-02 (#466):* **a local finding's triage and an
+   iteration's counts are held at emit, by rows of the same table.** The
+   rest of the retrospective's H3, and its F2 of 2026-10-02: a triage of a
+   finding the local review raised was written with `data.source=human`,
+   or with `data.source=local` and an id off the review's numbering
+   (`local-C-1`, `axis2-glossary-readme`) — one token each, so the #420
+   shape passed them, and the raise-to-triage join lost every one; and a
+   `pr.iterate` was written with no counts. `TRACE_SHAPES` stays the one
+   mechanism, its row grown to `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`: the
+   shape is an ERE the whole value matches (the #420 shapes unchanged in
+   meaning), an optional condition on `outcome` or a `data.<key>` applies
+   the row only to a line that matches it, and a `!` makes the key
+   required on such a line. The rows this amendment adds:
+   - `finding.triage` `data.source` — one of `check` `bot` `human` `local`.
+   - `finding.triage` `data.id` when `data.source` is `local` —
+     `[CHML]-[0-9]+`, the review's own numbering (a severity letter, a
+     dash, digits), the id `finding.raise` carries.
+   - `finding.triage` `data.source` when `data.id` is `[CHML]-[0-9]+` —
+     `local`, and nothing else. **This is the rule that tells a local
+     finding from a human one**, the question the ticket left open: the id
+     shape. A forge's comment id never takes that shape, and a check's name
+     collapsed to one token would have to be a severity letter and a number
+     to collide, so a `[CHML]-N` id under any other source — `human`, and
+     `bot` and `check` with it — is a local finding mislabelled, and is
+     refused rather than left for the reader to guess at.
+   - `pr.iterate` `data.applied`, `data.rejected`, `data.escalated` —
+     `[0-9]+` whenever present, and **required** when the outcome is
+     `green` or `red`. A `stopped` iteration records the check or the
+     escalation that stopped it, not a tally, and may carry none; an emit
+     with no outcome at all is not held to them either.
+   A refusal is exit 2, naming the kind, the key, the value and the shape
+   (for a missing key, the condition that required it), and nothing is
+   written. A missing key is still no violation except where a row's `!`
+   says so: `data.source` and `data.id` both stay optional. `verify` is
+   unchanged — lines written before this amendment are history and draw no
+   advisory. The trace script is shared layer, so this is a release.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -410,6 +446,9 @@ Chosen: **option 1**.
 - Amended for ticket #385: `data.by=operator|train` on `feedback`, its emit
   in `/merge-train` and `/pr-iterate`, `/retro` question 7's count, and the
   suite sections that hold it (trace-skills §17, retro-skill §11).
+- Amended for ticket #466: the conditional and required rows of
+  `TRACE_SHAPES`, `/pr-iterate`'s triage and iteration prose, and the
+  suite sections that hold them (trace §25, trace-skills §21).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

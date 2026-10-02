@@ -1168,6 +1168,10 @@ _ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
 
 # Every row, both ways: each declared word writes, no outcome at all writes,
 # and a word from another kind's vocabulary is refused naming the kind.
+# ov_held <kind> — the data a kind's TRACE_SHAPES rows require beside an
+# outcome (ticket #466: a green or red pr.iterate carries its three counts),
+# so this check asks about the outcome word and nothing else.
+ov_held() { [ "$1" = pr.iterate ] && printf '%s\n' data.applied=0 data.rejected=0 data.escalated=0; }
 _ov_bad=
 _ov_rows=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d')
 _ov_ifs=$IFS
@@ -1191,7 +1195,8 @@ for _ov_row in $_ov_rows; do
 		;;
 	*)
 		for _ov_w in "$@"; do
-			env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k $_ov_w refused]"
+			# shellcheck disable=SC2046 # one data argument per line
+			env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k $_ov_w refused]"
 		done
 		# `landed` belongs to merge.land, `opened` to pr.open — a word no other
 		# row declares, so its refusal is the per-kind check and not a global one.
@@ -1240,7 +1245,8 @@ for _ov_p in $_ov_pairs; do
 	IFS=$_ov_ifs
 	_ov_k=${_ov_p%% *}
 	for _ov_w in $(printf '%s' "${_ov_p#* }" | tr '|' ' '); do
-		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" >/dev/null 2>&1 || _ov_emit_bad="$_ov_emit_bad [$_ov_k $_ov_w]"
+		# shellcheck disable=SC2046 # one data argument per line
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_emit_bad="$_ov_emit_bad [$_ov_k $_ov_w]"
 	done
 	IFS='
 '
