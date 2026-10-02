@@ -923,6 +923,55 @@ else
 	skip "the slow-trap TERM leg — no bait to run it against"
 fi
 
+# The same bait, signalled IN its gap rather than past it (#465, M-5 of PR
+# #425's review). The global trap that holds the dispatcher before the timed
+# path installs its own used to clean up and never exit: a TERM in the gap
+# was swallowed, the dispatcher ran on without its scratch, and a later step
+# failed with an unrelated status. Here the copy writes a marker as it enters
+# the gap, so the TERM lands inside it by the marker, never by the clock, and
+# the leg holds the dispatcher to 143, no worker, no watchdog sleep and no
+# scratch left under its own temp location.
+GAP_DIR="$SCRATCH/gap-trap"
+GAP_MARK="$SCRATCH/gap-trap.entered"
+GAP_TMP="$SCRATCH/gap-tmp"
+mkdir -p "$GAP_DIR" "$GAP_TMP"
+for _f in "$KIT"/scripts/*; do
+	[ "${_f##*/}" = agent-dispatch.sh ] || ln -s "$_f" "$GAP_DIR/${_f##*/}"
+done
+awk -v mark="$GAP_MARK" '/^\ttrap .*_dispatch_exit 130. INT$/ { print "\t: >\"" mark "\"; sleep 3" } { print }' \
+	"$DISPATCH" >"$GAP_DIR/agent-dispatch.sh"
+if grep -q '; sleep 3$' "$GAP_DIR/agent-dispatch.sh"; then
+	rm -f "$PIDFILE" "$GAP_MARK"
+	sleeps_before=$(own_sleep_pids 50)
+	env TMPDIR="$GAP_TMP" sh "$GAP_DIR/agent-dispatch.sh" implementer --prompt 'x' --timeout 50 >/dev/null 2>&1 &
+	disp=$!
+	if await_file -e "$GAP_MARK" 30; then
+		kill -TERM "$disp" 2>/dev/null
+		wait "$disp" 2>/dev/null
+		disp_status=$?
+		sleep 1
+		[ "$disp_status" = 143 ] && pass "a TERM before the timed path's trap exits 143" ||
+			fail "a TERM before the timed path's trap exited $disp_status — the global trap swallowed it"
+		if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+			fail "a worker is running after a TERM that arrived before it was spawned"
+			kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+		else
+			pass "…and no worker outlives it"
+		fi
+		leftover=$(new_sleeps 50 "$sleeps_before")
+		[ "$leftover" = 0 ] && pass "…nor a watchdog sleep" || fail "$leftover watchdog sleep(s) outlived a TERM in the gap"
+		gap_left=$(ls -d "$GAP_TMP"/agent-dispatch.* 2>/dev/null)
+		[ -z "$gap_left" ] && pass "…nor its scratch" || fail "a TERM in the gap left scratch behind: $gap_left"
+	else
+		fail "the gap bait never wrote its marker in 30s — nothing to TERM"
+		kill -KILL "$disp" 2>/dev/null
+		wait "$disp" 2>/dev/null
+	fi
+else
+	fail "the gap bait was not planted — the timed path's INT trap line has moved"
+	skip "the TERM-in-the-gap leg — no bait to run it against"
+fi
+
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
