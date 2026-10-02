@@ -1606,9 +1606,10 @@ _spawn_run() {
 	rm -f "$TIMED_OUT"
 	# A dispatcher taken down by a signal is a terminal site like any other, and
 	# the pair is closed from the trap so an interrupted spawn does not read
-	# later as one that never ended. Only the timed path has a trap to write
-	# from; on the untimed one the signal waits for the worker, and the
-	# ordinary exit closes the pair, as the header says.
+	# later as one that never ended. These traps add what only the timed path
+	# needs — the worker's tree taken down first; everywhere else past the
+	# spawn the global trap closes the pair, on the untimed path once the
+	# worker it is waiting on finishes, with 128+signal either way (#465).
 	trap '_down; cleanup; _dispatch_exit 130' INT
 	trap '_down; cleanup; _dispatch_exit 143' TERM
 	trap '_down; cleanup; _dispatch_exit 129' HUP
