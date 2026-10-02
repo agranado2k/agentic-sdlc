@@ -2884,4 +2884,212 @@ d=$(tr '\n' ' ' <"$KIT/adapters/claude-code/README.md" | tr -s ' ' | tr '[:upper
 case $d in *"a session with no phantom stops records \`phantoms=0\`"*) pass "the adapter README records that a session with none writes 0" ;;
 *) fail "the adapter README does not say what a session with no phantom stops records" ;; esac
 
+# ---------------------------------------------------------------------------
+banner "38. A compaction's summary call is counted: the rollup gap becomes an event (#407)"
+# ---------------------------------------------------------------------------
+# The call that writes a compaction summary leaves NO assistant line, so its
+# tokens reach the agent harness's own rollup and no message-by-message sum
+# (tests/fixtures/claude-code/README.md, "The fifth capture"). The session-end
+# hook now reads the rollup beside the sums and records the difference, per
+# model, as one more `session.usage` event with data.via=rollup and
+# data.reason=compaction — so the plain sum of the events IS the rollup. The
+# compacted fixture is the #307 session in full: three runs, a /compact, two
+# more answers; its first 34 lines are the resumed fixture's session.
+CFIX="$FIX/compacted-transcript.redacted.jsonl"
+KFIX="$FIX/forked-transcript.redacted.jsonl"
+CLAST=msg_011CfZUqmQSnMv2oo8z5oPGf
+CGAP="$RMODEL 1473 453 38 24035 rollup compaction"
+
+# crollup <line> — the four rollup numbers of that cost-state line, in event order.
+crollup() {
+	_cr=$(sed -n "$1p" "$CFIX" | sed -n 's/.*"'"$RMODEL"'":{\([^}]*\)}.*/\1/p')
+	for _k in inputTokens outputTokens cacheCreationInputTokens cacheReadInputTokens; do
+		printf '%s\n' "$_cr" | sed -n 's/.*"'"$_k"'":\([0-9]*\).*/\1/p'
+	done | paste -sd' ' -
+}
+R85=$(crollup 85)
+[ "$R85" = "1521 744 17305 128201" ] && [ "$(crollup 58)" = "1503 556 10354 85813" ] &&
+	pass "the compacted fixture's rollups are the ones its README records" ||
+	fail "the compacted fixture's rollups moved: line 58 '$(crollup 58)', line 85 '$R85'"
+grep -q '"subtype":"compact_boundary"' "$CFIX" && pass "and it holds the compact boundary" ||
+	fail "the compacted fixture holds no compact boundary"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR, asked to judge the rollup. Without the flag nothing moves:
+	# the subagent-stop hook reads a subagent's file, which carries no rollup.
+	t_run_split node "$EXTRACTOR" "$CFIX"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "without --rollup the compacted file is its five messages, as before" ||
+		fail "the plain read printed '$S_OUT' (status $S_STATUS)"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && pass "the extractor takes --rollup" ||
+		fail "--rollup exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '1p')" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "the message row is unchanged under --rollup" ||
+		fail "the message row under --rollup: $(printf '%s\n' "$S_OUT" | sed -n '1p')"
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '2p')" = "$CGAP" ] &&
+		pass "and one more row is the gap: line 85's rollup less the messages ($CGAP)" ||
+		fail "the gap row is '$(printf '%s\n' "$S_OUT" | sed -n '2p')', expected '$CGAP'"
+	[ "$(printf '%s\n' "$S_OUT" | grep -c '')" = 2 ] && pass "and nothing else" ||
+		fail "--rollup printed: $S_OUT"
+	t_run_split node "$EXTRACTOR" --rollup --after "$RMSG2" "$CFIX" </dev/null
+	[ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "the gap is the whole file's, whatever the anchor: an anchor counts messages, not the gap" ||
+		fail "--rollup --after $RMSG2 printed '$S_OUT'"
+
+	# EQUAL IS NO EVENT. The resumed session's rollup is its messages exactly.
+	t_run_split node "$EXTRACTOR" --rollup "$RFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 20 72 10239 37743 2 $RMSG2" ] &&
+		pass "a rollup equal to the sum adds no row" ||
+		fail "the resumed fixture under --rollup: status $S_STATUS, '$S_OUT'"
+	# NO BOUNDARY, NO GAP. The first capture's rollup also counts its subagent,
+	# whose events the subagent-stop hook writes: a gap here would count it twice.
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/main.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c ' rollup ')" = 0 ] &&
+		pass "a transcript with no compact boundary is never judged against its rollup" ||
+		fail "the uncompacted transcript under --rollup: status $S_STATUS, '$S_OUT'"
+	# A FORK carries the parent's rollup and the parent's messages with their
+	# usage zeroed, so its gap would be the parent's whole spend a second time.
+	t_run_split node "$EXTRACTOR" --rollup "$KFIX" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 10 39 6725 17813 2 msg_011CfZUgBT2SxFuAbdAdifgs" ] &&
+		pass "a forked transcript (copied messages, usage zeroed) records no gap" ||
+		fail "the forked fixture under --rollup: status $S_STATUS, '$S_OUT'"
+	# A STALE ROLLUP: messages after the last cost-state line mean the rollup
+	# does not describe this end, so nothing is judged against it.
+	head -83 "$CFIX" >"$SCRATCH/compacted-stale-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-stale-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c ' rollup ')" = 0 ] &&
+		pass "a rollup older than the last message is never judged" ||
+		fail "the stale rollup: status $S_STATUS, '$S_OUT'"
+
+	# A GAP ALREADY RECORDED is read back from the trace on stdin, so a later
+	# end of the same session never records it twice.
+	printf '%s\n' '{"kind":"session.usage","model":"'"$RMODEL"'","tok_in":1473,"tok_out":453,"tok_cache_w":38,"tok_cache_r":24035,"data":{"via":"rollup","reason":"compaction"}}' \
+		>"$SCRATCH/recorded-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" <"$SCRATCH/recorded-407.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "a gap the trace already holds is not a gap again" ||
+		fail "with the gap recorded: status $S_STATUS, '$S_OUT'"
+
+	# THE SUBAGENTS' FILES are what the rollup counts beside the session's
+	# lines, so they are taken off before the gap is judged.
+	mkdir -p "$SCRATCH/compacted-sub-407/subagents"
+	cp "$FIX/thinking-subagent-transcript.redacted.jsonl" "$SCRATCH/compacted-sub-407/subagents/agent-a1.jsonl"
+	sed '$s/"inputTokens":1521,"outputTokens":744,"thinkingTokens":599,"cacheReadInputTokens":128201,"cacheCreationInputTokens":17305/"inputTokens":1539,"outputTokens":902,"thinkingTokens":599,"cacheReadInputTokens":142093,"cacheCreationInputTokens":32905/' \
+		"$CFIX" >"$SCRATCH/compacted-sub-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-sub-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "a subagent's tokens in the rollup are its own events', never the gap's" ||
+		fail "with a subagent: status $S_STATUS, '$S_OUT' ($S_ERR)"
+
+	# SMALLER THAN THE SUM is drift — but the message rows are facts the
+	# rollup cannot unmake, so they are still printed, and the exit is 3.
+	sed '$s/"inputTokens":1521,/"inputTokens":21,/' "$CFIX" >"$SCRATCH/compacted-short-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-short-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a rollup smaller than the sum exits 3" ||
+		fail "a short rollup exited $S_STATUS: $S_OUT"
+	[ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "and still prints the message rows, with no gap row" ||
+		fail "a short rollup printed '$S_OUT'"
+	case $S_ERR in *"x transcript-usage:"*tok_in*) pass "and names the field that came up short" ;;
+	*) fail "a short rollup's stderr: $S_ERR" ;; esac
+
+	# THROUGH THE HOOK, end by end as the session ran: three runs, the
+	# /compact run, then the last — the files as each end found them.
+	new_trace
+	set_key transcript_path "$SCRATCH/compacted-407.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$RSESSION" >"$SCRATCH/end-compacted-407.json"
+	for n in 25 34 42 58 85; do
+		head -"$n" "$CFIX" >"$SCRATCH/compacted-407.jsonl"
+		t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+		[ "$S_STATUS" = 0 ] || fail "the end at line $n exited $S_STATUS: $S_ERR"
+	done
+	[ "$(model_row "$RMODEL")" = "$R85" ] &&
+		pass "five ends later, summary --by model totals the session at line 85's rollup ($R85)" ||
+		fail "summary --by model totals '$(model_row "$RMODEL")', the rollup says '$R85'"
+	GAPS=$(ev_of session.usage | grep -F '"via":"rollup"')
+	[ "$(printf '%s\n' "$GAPS" | grep -c .)" = 1 ] && pass "with exactly one rollup-gap event" ||
+		fail "rollup-gap events: $GAPS"
+	[ "$(num "$GAPS" tok_in) $(num "$GAPS" tok_out) $(num "$GAPS" tok_cache_w) $(num "$GAPS" tok_cache_r)" = "1473 453 38 24035" ] &&
+		[ "$(str "$GAPS" model)" = "$RMODEL" ] && [ "$(data_of "$GAPS" reason)" = compaction ] &&
+		pass "on the model, with the compaction's counts and data.reason=compaction" ||
+		fail "the rollup-gap event: $GAPS"
+	[ -z "$(data_of "$GAPS" last_msg)" ] && [ -z "$(data_of "$GAPS" msgs)" ] &&
+		pass "and no last_msg or msgs: it counts no message, so it never anchors a read" ||
+		fail "the gap event carries an anchor: $GAPS"
+	ULAST=$(ev_of session.usage | grep -F '"last_msg"' | sed -n '$p')
+	[ "$(data_of "$ULAST" last_msg)" = "$CLAST" ] && [ "$(data_of "$ULAST" msgs)" = 2 ] &&
+		pass "the last end's anchor is still the last message it counted: $CLAST, two messages" ||
+		fail "the anchor after the last end: $ULAST"
+	[ -z "$(ev_of session.usage | grep -F '"outcome":"fail"')" ] && pass "and no end recorded a failure" ||
+		fail "an end failed: $(ev_of session.usage | grep -F '"outcome":"fail"')"
+	# One more end with nothing new adds nothing.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$(model_row "$RMODEL")" = "$R85" ] && pass "a sixth end with nothing new leaves the total at the rollup" ||
+		fail "a sixth end moved the total to '$(model_row "$RMODEL")'"
+
+	# One end over the whole file: the same total, from one read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$(model_row "$RMODEL")" = "$R85" ] && pass "a single end over the whole file totals the rollup too" ||
+		fail "a single end totals '$(model_row "$RMODEL")'"
+
+	# Through the hook, a short rollup: the messages are recorded and the
+	# refusal is its own failure event, and the hook still exits 0.
+	new_trace
+	cp "$SCRATCH/compacted-short-407.jsonl" "$SCRATCH/compacted-407.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-compacted-407.json"
+	[ "$S_STATUS" = 0 ] && pass "a short rollup through the hook exits 0" || fail "the hook exited $S_STATUS"
+	[ "$(model_row "$RMODEL")" = "48 291 17267 104166" ] && pass "and the messages are still recorded" ||
+		fail "with a short rollup the total is '$(model_row "$RMODEL")'"
+	SHORT=$(ev_of session.usage | grep -F '"outcome":"fail"')
+	[ "$(printf '%s\n' "$SHORT" | grep -c .)" = 1 ] && [ "$(data_of "$SHORT" via)" = rollup ] &&
+		pass "beside one failure event, data.via=rollup, that says why no gap was recorded" ||
+		fail "the short-rollup failure: $SHORT"
+
+	# FROM THE REVIEW OF PR #438 — each a regression now.
+	# H-1: a rollup key's context-window suffix names the same model.
+	sed '$s/"'"$RMODEL"'":{"inputTokens"/"'"$RMODEL"'[1m]":{"inputTokens"/' "$CFIX" >"$SCRATCH/compacted-suffix-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-suffix-407.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP" ] &&
+		pass "a rollup key with a context-window suffix ([1m]) is the message's model" ||
+		fail "the suffixed rollup key: status $S_STATUS, '$S_OUT'"
+	# H-1: drift in a subagent file refuses the rollup, names the file, keeps the rows.
+	mkdir -p "$SCRATCH/compacted-subdrift-407/subagents"
+	sed 's/"output_tokens":/"output_tokenz":/g' "$FIX/thinking-subagent-transcript.redacted.jsonl" \
+		>"$SCRATCH/compacted-subdrift-407/subagents/agent-x.jsonl"
+	cp "$CFIX" "$SCRATCH/compacted-subdrift-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-subdrift-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		case $S_ERR in *"subagents/agent-x.jsonl: "*) true ;; *) false ;; esac &&
+		pass "a subagent file's drift refuses the rollup (exit 3), names the file and keeps the rows" ||
+		fail "subagent drift: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# H-1: a modelUsage that is not an object, and a recorded line that is not JSON.
+	sed '$s/"modelUsage":{/"modelUsage":[{/; $s/}},"hasUnknownModelCost"/}}],"hasUnknownModelCost"/' "$CFIX" >"$SCRATCH/compacted-arr-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-arr-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a modelUsage that is not an object is refused (exit 3)" ||
+		fail "an array modelUsage: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	t_run_split sh -c 'printf "not json\n" | node "$1" --rollup "$2"' rollup-case "$EXTRACTOR" "$CFIX"
+	[ "$S_STATUS" = 3 ] && pass "a recorded event that is not JSON is refused (exit 3)" ||
+		fail "a non-JSON recorded line: status $S_STATUS, '$S_OUT'"
+	# H-2: a rollup key an event cannot record unambiguously is refused, never a shifted row.
+	sed '$s/"modelUsage":{/"modelUsage":{"bad model":{"inputTokens":900,"outputTokens":10,"cacheReadInputTokens":0,"cacheCreationInputTokens":0},/' \
+		"$CFIX" >"$SCRATCH/compacted-space-407.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-space-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && [ "$S_OUT" = "$RMODEL 48 291 17267 104166 5 $CLAST" ] &&
+		pass "a rollup key with whitespace is refused (exit 3), never a row with shifted columns" ||
+		fail "a rollup key with a space: status $S_STATUS, '$S_OUT'"
+	# M-1: an unreadable subagents directory or stdin is a refusal, never "nothing there".
+	cp "$CFIX" "$SCRATCH/compacted-notdir-407.jsonl"
+	: >"$SCRATCH/compacted-notdir-407"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-notdir-407.jsonl" </dev/null
+	[ "$S_STATUS" = 3 ] && pass "a subagents path that cannot be listed is refused (exit 3)" ||
+		fail "an unlistable subagents path: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --rollup "$CFIX" <"$SCRATCH"
+	[ "$S_STATUS" = 3 ] && pass "a stdin that cannot be read is refused (exit 3), not read as no gap recorded" ||
+		fail "an unreadable stdin: status $S_STATUS, '$S_OUT'"
+else
+	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
+fi
+
 t_done "trace hooks"
