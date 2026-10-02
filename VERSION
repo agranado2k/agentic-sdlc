@@ -1833,8 +1833,37 @@
 # against the vocabulary and records `data.implement` and
 # `data.implement_tier` on `merge.land`; a missing, malformed or hostile
 # line records `no`, and the record never blocks a landing.
+# 0.47.0 — the wave of 2026-10-02's retro: oracle forms that agree, a session
+# cap, retro siblings merged, quiet hooks with tracing off (tickets #510,
+# #483, #481, #467, #463, #469).
+# NO file joins or leaves the shared layer, and NO shared file changes
+# content. UPDATING.md changes content: the arriving-from paragraph, and
+# both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/to-tickets/SKILL.md: rubric question 1 names exactly the
+# oracle forms /implement runs (the docs gate, one existing suite, the
+# full-suite loop) and says a ticket whose only oracle lies outside them is
+# not `mechanical` (#510); the hand-off states a session cap, the host's
+# concurrent-subagent limit over the review's lenses, one at a time where the
+# project states none (#483); and a section, "A retro's candidates", finds a
+# sibling retro's tickets, merges into them and closes a twin after the yes,
+# a published candidate carrying a `Retro:` line (#481).
+# .agents/skills/retro/SKILL.md: a report's first line opens with its
+# `window-start` (#481).
+# .agents/skills/merge-train/SKILL.md and .agents/skills/pr-iterate/SKILL.md:
+# a ticket closed as a duplicate records no `feedback` (#481).
+# constitution/local-workflow.md.template: rubric line 1 moves with the skill,
+# and a Session cap line carries the stated limit or `unstated` (#510, #483).
+# constitution/AGENTS.md.template: the `mechanical` row's signal is "only when
+# both hold" — a named oracle command and one file or one pattern (#467).
+# adapters/claude-code/hooks/ (hook.lib.sh, session-start.sh, session-end.sh,
+# subagent-stop.sh, tool-pre.sh, tool-post.sh): each hook asks for the trace
+# directory once and spawns nothing for the trace with tracing off; a broken
+# policy file is reported once by the session hooks (#463).
+# scripts/guards.config.sh: `^adapters/` joins the agent & process surface, so
+# a changed hook is on the behaviour-delta list (#469).
 
-shared-layer: 0.46.0
+shared-layer: 0.47.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
