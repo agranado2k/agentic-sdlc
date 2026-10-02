@@ -44,6 +44,10 @@
 #   4e. The caller fetches each body by id into its own scratch file, unseen,
 #      and the reader is given those files and nothing else — no shell, no
 #      forge CLI, no network. The scratch files go when the iteration ends.
+#      The reader is spawned through the adapter's restricted path first —
+#      the adapter names the command, the skill no vendor's flag — and the
+#      prompt-restricted subagent is the fallback, named second, keeping
+#      its say-so duty: say so in the report (ticket #406).
 #   4c. Returns are tied to comments by ORDER, so a count of returns that is
 #      not the count of comments ties none of them: every return is
 #      unreadable (review of PR #318, M-2: the rule had no test). The fence's
@@ -450,6 +454,7 @@ assert_file_has "$FLAT" "nothing printed to the session, exit status only" "…u
 assert_file_has "$FLAT" "with read access to those files and nothing else" "what the reader is given"
 assert_file_has "$FLAT" "no shell, no forge CLI, no network" "what the reader is not given, in those words"
 assert_file_has "$FLAT" "the adapter's, not this skill's" "how an agent harness withholds them is the adapter's detail"
+t_hold_reader_step "$SKILL" "$FLAT" "say so in the report"
 assert_file_has "$FLAT" "against the same scratch file" "the evidence match reads the file the reader read"
 # One home, with a name that says whose it is, and a removal that every way
 # out of the iteration reaches — a bare `mktemp -d` leaves a `tmp.*` nobody
