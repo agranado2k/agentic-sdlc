@@ -3692,8 +3692,12 @@ for leg478 in "no-transcript||" "unreadable|$SCRATCH/dir-478|" \
 done
 unset STOP_TRANSCRIPT
 
-# The README row, read once by section 41 as ROW421, names the field.
+# The README row, read once by section 41 as ROW421, names the field and says
+# which value it is.
 case $ROW421 in *'`data.cwd`'*) pass "the README row for the subagent-stop hook names data.cwd" ;;
 *) fail "the README row for subagent-stop.sh does not name data.cwd" ;; esac
+case $ROW421 in *'`data.cwd`, the expanded value'*'`session.start` records the raw one'*)
+	pass "the README row says data.cwd is the expanded value, and session.start's the raw one" ;;
+*) fail "the README row for subagent-stop.sh does not say data.cwd is the expanded value and session.start records the raw one" ;; esac
 
 t_done "trace hooks"
