@@ -41,7 +41,10 @@
 #      report's shape and the roster unchanged. Proved by two baits.
 #  10. The dispatched worker carries that ruling (#471): the added case, the
 #      inherited case and the ruling are sentences of the worker's contract
-#      word for word as Agent 5's prompt says them, read from the skill.
+#      word for word as Agent 5's prompt says them, read from the skill; the
+#      exception keeps its direction; the anatomy declares the `↳ cites:`
+#      line and defines the what/where line the ruling names — each proved by
+#      a mutant that cuts exactly the text it holds.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -588,11 +591,49 @@ for needle in '**the diff ADDS**' '**touches or extends**' '**candidate ticket**
 		pass "$WORKER says Agent 5's '$needle' sentence word for word" ||
 		fail "$WORKER does not say Agent 5's '$needle' sentence word for word — the dispatched worker rules duplication differently from the lens"
 done
-printf '%s\n' "$w_sentences" | grep -F "divergent-behavior" | grep -qF "stays a finding" &&
-	pass "…and keeps the exception: a divergent-behavior copy stays a finding" ||
-	fail "$WORKER never keeps a divergent-behavior copy a finding — the ruling would defer a latent bug"
-# The ruling names a `↳ cites:` line, so the worker's anatomy must have one.
-assert_file_has "$WORKER" "↳ cites:" "the ruling cites §10 on a line the worker's anatomy declares"
+# The exception, held by its direction and not by two words in one sentence:
+# the sentence naming the divergent-behavior copy ends in the skill's own
+# verdict — read from the skill — and carries no negation, so an exception
+# reversed ("no longer stays a finding", "there is no exception") is red.
+verdict=$(skill_sentence 'divergent-behavior' | sed -n 's/.*, which \(is a latent bug.*stays a finding\)$/\1/p')
+[ -n "$verdict" ] ||
+	fail "Agent 5's prompt no longer ends its divergent-behavior sentence in a verdict that keeps the copy a finding — nothing to hold the worker to"
+# keeps_exception <sentences> — exit 0 when one sentence naming the
+# divergent-behavior copy ends in that verdict and negates nothing.
+keeps_exception() {
+	printf '%s\n' "$1" | grep -F 'divergent-behavior' | while IFS= read -r e; do
+		case $e in *"$verdict") ;; *) continue ;; esac
+		printf '%s\n' "$e" | grep -qiE "(^|[^a-z])(not|never|no|longer)([^a-z]|\$)|n't" || echo kept
+	done | grep -q kept
+}
+[ -n "$verdict" ] && keeps_exception "$w_sentences" &&
+	pass "…and keeps the exception: a divergent-behavior copy $verdict" ||
+	fail "$WORKER never keeps a divergent-behavior copy a finding in the skill's verdict — the ruling would defer a latent bug"
+for flip in 's/and stays a finding/and no longer stays a finding/' 's/The one exception is a/There is no exception for a/'; do
+	keeps_exception "$(printf '%s\n' "$w_sentences" | sed "$flip")" &&
+		fail "bait: the exception reversed ($flip) still reads as kept" ||
+		pass "bait: the exception reversed ($flip) goes red"
+done
+# held <file> <text> <why> — the text is said in the file (prose unwrapped,
+# spaces squeezed), and the mutant that cuts exactly that text once is red:
+# a text said twice — once by the paragraph that needs it — would pass the
+# mutant, so the assertion is proved to read the line it claims to hold.
+unwrap() { tr '\n' ' ' <"$1" | tr -s ' '; }
+held() {
+	unwrap "$1" | grep -qF -- "$2" &&
+		pass "$1 says '$2' ($3)" ||
+		fail "$1 never says '$2' — $3"
+	unwrap "$1" | awk -v n="$2" '{ i = index($0, n); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(n)) } 1' >"$SCRATCH/held.cut"
+	grep -qF -- "$2" "$SCRATCH/held.cut" &&
+		fail "bait: with '$2' cut once from $1 it is still said — the assertion is satisfied by another line" ||
+		pass "bait: '$2' cut once from $1 goes red"
+}
+# The ruling names a `↳ cites:` line and a what/where line: the worker's
+# anatomy declares the one and defines the other, each on its own line.
+held "$WORKER" "↳ cites: <the decision record, audit item or craft rule — only when there is one>" \
+	"the ruling cites §10 on a line the worker's anatomy declares"
+held "$WORKER" "The first line is the finding's what/where line." \
+	"the ruling's what/where line is a term the worker's anatomy defines"
 # Bait: the worker's fix line reworded — the exact comparison is what goes red.
 bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copies on this PR/')
 carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
