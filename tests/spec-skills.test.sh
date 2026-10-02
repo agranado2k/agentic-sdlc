@@ -294,6 +294,56 @@ case $rline1 in
 *) pass "rubric line 1 names no tier but mechanical — a failed condition is sized by questions 2 to 4" ;;
 esac
 t_text_has "$rubric" "first hit wins" "the rubric still reads first hit wins — a failed condition is simply not a hit"
+# The oracle forms the rubric names are the ones /implement runs (ticket #510,
+# from PR #484's review). Since #468 /implement matches a mechanical ticket's
+# oracle line against a closed allow-list in its step 1 and holds anything
+# else to the full suite, so a rubric that still offered "one validator" or
+# "a diff that must come out empty" stamped tickets whose oracle the reader
+# refuses. The list is read from /implement's step 1, never a hand copy: each
+# entry's name ("the docs gate", "one suite", "the full suite") and its first
+# command. The rubric's list — the span between "whose exit is its oracle — "
+# and " — as the first line" — holds exactly those entries, `; `-separated,
+# each by its name and that command, and nothing else; a form outside the
+# list makes the ticket no hit.
+IMPL_ABS="$ROOT/.agents/skills/implement/SKILL.md"
+impl_forms=$(sed -n 's/.*one entry of this closed list of verification commands: \*\*\([^*]*\)\*\*.*/\1/p' "$IMPL_ABS")
+[ -n "$impl_forms" ] && pass "/implement's step 1 still carries its closed list of oracle forms" ||
+	fail "/implement's step 1 lost 'one entry of this closed list of verification commands: **…**' — nothing to hold the rubric to"
+# oracle_forms_agree <text> <where> — the verdict on <text>'s oracle list
+# against /implement's: "ok", or the first disagreement.
+oracle_forms_agree() {
+	span=$(printf '%s\n' "$1" | sed -n 's/.*whose exit is its oracle — \(.*\) — as the first line of its Acceptance section.*/\1/p')
+	if [ -z "$span" ]; then
+		fail "$2 names no oracle list between 'whose exit is its oracle — ' and ' — as the first line of its Acceptance section'"
+		return
+	fi
+	verdict=$(awk -v impl="$impl_forms" -v rub="$span" 'BEGIN {
+		n = split(impl, I, "; ")
+		for (i = 1; i <= n; i++) {
+			lab = I[i]; sub(/, .*/, "", lab)
+			cmd = I[i]; if (match(cmd, /`[^`]*`/)) cmd = substr(cmd, RSTART, RLENGTH); else cmd = ""
+			L[lab] = cmd
+		}
+		m = split(rub, R, "; ")
+		for (j = 1; j <= m; j++) {
+			s = R[j]; sub(/^or /, "", s)
+			lab = s; sub(/, .*/, "", lab)
+			if (!(lab in L)) { print "it names a form /implement refuses: \"" s "\""; exit }
+			if (L[lab] == "" || index(s, L[lab]) == 0) { print "its \"" lab "\" does not carry /implement'"'"'s command " L[lab]; exit }
+			if (seen[lab]++) { print "it names \"" lab "\" twice"; exit }
+		}
+		if (m != n) { print "it names " m " forms, /implement accepts " n; exit }
+		print "ok"
+	}')
+	[ "$verdict" = ok ] && pass "$2 names exactly the oracle forms /implement's step 1 runs" ||
+		fail "$2 disagrees with /implement's step 1: $verdict"
+	case $1 in
+	*"a diff that must come out empty"* | *"one validator"*) fail "$2 still offers an oracle /implement never matches (a diff, a validator)" ;;
+	*) pass "$2 offers no oracle /implement never matches" ;;
+	esac
+	t_text_has "$1" "outside that list is not \`mechanical\`" "$2 says a ticket whose only honest oracle is outside the list is not mechanical"
+}
+oracle_forms_agree "$rline1" "rubric question 1"
 t_text_has "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
 in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
 	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
@@ -329,6 +379,7 @@ case $wf_rubric in
 *'`implementer`'* | *'`planner`'* | *'`reviewer`'*) fail "the workflow template's rubric line 1 names a tier other than mechanical" ;;
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
+oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
 assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate it points at"
 
 # ---------------------------------------------------------------------------
