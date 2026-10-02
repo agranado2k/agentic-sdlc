@@ -367,6 +367,17 @@ f=$(body noticket "<!-- implement: ticket=#999 tier=planner -->")
 land STUB_TICKET= "STUB_BODY_FILE=$f" 167
 landed_with 167 "with no ticket known, the line's own" '"implement":"yes"' '"implement_tier":"planner"'
 
+# The ticket's bound, with no ticket known so no mismatch hides it: an empty
+# number or a tenth digit is not the shape, and the line is absent.
+f=$(body noticket.empty "<!-- implement: ticket=# tier=planner -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 177
+landed_with 177 "an empty ticket number, no ticket known" '"implement":"no"'
+no_tier 177 "an empty ticket number, no ticket known"
+f=$(body noticket.long "<!-- implement: ticket=#1234567890 tier=planner -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 178
+landed_with 178 "a ten-digit ticket number, no ticket known" '"implement":"no"'
+no_tier 178 "a ten-digit ticket number, no ticket known"
+
 # The body the forge fails on is one that would otherwise count — #160's, a
 # good line naming the landing's own ticket — so only the failed read can
 # leave it absent.
