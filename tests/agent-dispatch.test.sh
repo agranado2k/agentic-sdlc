@@ -1192,6 +1192,13 @@ kill_leg() {
 		fail "the worker never wrote its pid file in 30s — nothing to KILL$3"
 	else
 		[ -s "$PIDFILE" ] && kill -KILL "$(cat "$PIDFILE")" 2>/dev/null
+		LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
+		if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
+			pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
+		else
+			fail "the leftover scratch is not recognisable by name$3: $(ls "$2" | tr '\n' ' ')"
+			LEFTOVER=
+		fi
 		# The reap takes the worker's sleep with it: the pid file names the sleep
 		# itself, not a shell that would leave it orphaned for thirty seconds.
 		# Bounded: about two seconds for the signal to land.
@@ -1201,15 +1208,8 @@ kill_leg() {
 			sleep 0.1 2>/dev/null || { sleep 1; _kl_try=$((_kl_try + 9)); }
 		done
 		_kl_left=$(new_sleeps 30 "$sleeps_before")
-		[ "$_kl_left" = 0 ] && pass "…and the reaped worker leaves no sleep behind$3" ||
+		[ "$_kl_left" = 0 ] && pass "…and the suite's own reap leaves no worker sleep behind$3" ||
 			fail "$_kl_left worker sleep(s) outlived the reap$3"
-		LEFTOVER=$(ls -d "$2"/agent-dispatch.* 2>/dev/null)
-		if [ -n "$LEFTOVER" ] && [ "$(printf '%s\n' "$LEFTOVER" | wc -l | tr -d ' ')" = 1 ] && [ -f "$LEFTOVER/prompt.md" ]; then
-			pass "a dispatch killed with KILL leaves ONE directory named agent-dispatch.* — dispatch scratch by name alone$3"
-		else
-			fail "the leftover scratch is not recognisable by name$3: $(ls "$2" | tr '\n' ' ')"
-			LEFTOVER=
-		fi
 	fi
 	[ -n "$LEFTOVER" ] || { LEFTOVER="$2/agent-dispatch.unnamed"; mkdir -p "$LEFTOVER"; }
 }
