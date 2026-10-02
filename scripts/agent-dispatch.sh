@@ -53,6 +53,9 @@
 #      rlimit rung a ceiling hit is not observable, so the worker's own status
 #      passes through. A worker that both timed out and exceeded its budget
 #      exits with whichever fired first; its tree is gone either way.
+# 130 / 143 / 129  the DISPATCHER was sent INT / TERM / HUP — wherever it was,
+#      after its scratch is removed (and, on the timed path, the worker's tree
+#      taken down). Untimed, the signal waits for the worker to finish (#465).
 #   *  the worker's own exit status, passed through untouched
 #
 # CONFIGURATION lives in scripts/agents.config.sh beside the tier mapping:
@@ -119,9 +122,10 @@
 # is the trace policy file's business and not this one's; unconfigured, every
 # emit writes nothing. The one thing that leaves a pair OPEN is a dispatcher
 # that never runs its own way out — a SIGKILL. A trapped signal does not: the
-# timed path's own trap writes the end, and on the untimed path the signal is
-# deferred until the worker this shell is waiting on finishes, after which the
-# ordinary exit closes the pair with that worker's status.
+# timed path's own trap writes the end, and anywhere else past the spawn the
+# global trap does — on the untimed path once the worker this shell is waiting
+# on finishes, since the signal is deferred until then — with the signal's own
+# status (128+signal), never the worker's.
 #
 # WHAT A WORKER MAY NOT DO. Shared invariant §7 puts a human's name on the
 # merge, and nothing here changes that: a dispatched worker writes to the
@@ -899,7 +903,32 @@ fi
 # shell.
 SCRATCH=""
 cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
-trap cleanup EXIT INT TERM HUP
+# A signal ENDS the dispatch, here as on the timed path: cleanup, then the
+# conventional 128+signal status. A handler that only cleaned up swallowed the
+# signal — the dispatcher ran on without its scratch and failed later with a
+# status that said nothing about why (#465). Once the spawn is on disk the way
+# out is _dispatch_exit, so the pair closes; before it there is no pair.
+# _SPAWNED says which: 1 only from the moment the spawn is on disk until its
+# end is, set and cleared by the two functions that write them. It starts at
+# 0 HERE, never from the environment — a caller's _SPAWNED=1 would otherwise
+# have a signal before the spawn write an end that pairs with nothing.
+# Accepted window: a signal held during an event's write can still mis-pair it.
+_SPAWNED=0
+# _WORKER_STARTED and _SIGNAL are what the end a signal writes says about it:
+# a rung only once a worker has started under one, and the signal by name.
+_WORKER_STARTED=0
+_SIGNAL=""
+_on_signal() {
+	cleanup
+	case $1 in 130) _SIGNAL=INT ;; 143) _SIGNAL=TERM ;; 129) _SIGNAL=HUP ;; esac
+	[ "$_WORKER_STARTED" = 1 ] || RUN_RUNG=""
+	[ "$_SPAWNED" = 1 ] && _dispatch_exit "$1"
+	exit "$1"
+}
+trap cleanup EXIT
+trap '_on_signal 130' INT
+trap '_on_signal 143' TERM
+trap '_on_signal 129' HUP
 
 # The prompt is ALWAYS staged into a file this script created, even when the
 # caller passed one. The caller's path is data — a branch name becomes a
@@ -1151,18 +1180,24 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 # content-addressed blob, only when the policy switch above asked for it.
 #
 # WHERE IT IS CALLED FROM MATTERS, and it is why this is a function rather than
-# a line: an event cannot be taken back (ADR-0008 clause 5), so a spawn must
-# not be on disk before the last thing that can end this dispatch WITHOUT a
-# spawn.end has had its say. Deriving the budget is that thing — half an
-# inherited budget is a usage error — so the ordinary path emits after it,
-# while the unreachable crossing, judged deliberately before the budget, emits
-# its own pair at its own site (H-1, review of PR #290).
+# a line: an event cannot be taken back (ADR-0008: the record is
+# append-only), so a spawn must not be on disk before the last thing that can
+# end this dispatch WITHOUT a spawn.end has had its say. Deriving the budget
+# is that thing — half an inherited budget is a usage error — so the ordinary
+# path emits after it, while the unreachable crossing, judged deliberately
+# before the budget, emits its own pair at its own site (H-1, review of PR
+# #290).
 _trace_spawn() {
 	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
 		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
 	[ "$TRACE_PROMPT" = 1 ] && set -- "$@" --blob "$PROMPT_FILE"
 	_trace "$@"
+	# Only now is there a pair for a signal to close: a signal that lands
+	# while the spawn is being written ends the dispatch with no end at all,
+	# never with an end that pairs with nothing (ADR-0008: the record is
+	# append-only).
+	_SPAWNED=1
 }
 
 # _dispatch_exit <status> [<outcome>] — the one way out once a spawn has been
@@ -1183,6 +1218,9 @@ _trace_spawn() {
 #
 # The RUNG rides the end rather than the spawn: which mechanism the worker
 # actually ran under is not settled until the scope preflight has had its say.
+# An end written by _on_signal names the rung only when a worker has started —
+# a signal in the gap before the spawn ran nothing under any rung — and adds
+# data.signal=INT|TERM|HUP, the signal that ended the dispatch.
 _dispatch_exit() {
 	_de_status=$1
 	_de_outcome=${2:-}
@@ -1191,7 +1229,11 @@ _dispatch_exit() {
 	fi
 	set -- kind=spawn.end subject="run:$WORKER_RUN" outcome="$_de_outcome" "data.exit=$_de_status"
 	[ -n "${RUN_RUNG:-}" ] && set -- "$@" "data.rung=$RUN_RUNG"
+	[ -n "$_SIGNAL" ] && set -- "$@" "data.signal=$_SIGNAL"
 	_trace "$@"
+	# The pair is closed. A signal from here on — during the EXIT trap's
+	# cleanup, say — ends the dispatch without writing a second end.
+	_SPAWNED=0
 	exit "$_de_status"
 }
 
@@ -1562,6 +1604,7 @@ _spawn_run() {
 	# own inherited pipe. The prompt reaches the worker by {prompt_file}; a
 	# template that redirects `< {prompt_file}` still wins over this </dev/null.
 	if [ -z "$TIMEOUT" ]; then
+		_WORKER_STARTED=1
 		if [ "$RUN_RUNG" = rlimit ]; then
 			sh -c "$RUN_CMD" </dev/null
 		else
@@ -1577,12 +1620,17 @@ _spawn_run() {
 	rm -f "$TIMED_OUT"
 	# A dispatcher taken down by a signal is a terminal site like any other, and
 	# the pair is closed from the trap so an interrupted spawn does not read
-	# later as one that never ended. Only the timed path has a trap to write
-	# from; on the untimed one the signal waits for the worker, and the
-	# ordinary exit closes the pair, as the header says.
-	trap '_down; cleanup; _dispatch_exit 130' INT
-	trap '_down; cleanup; _dispatch_exit 143' TERM
-	trap '_down; cleanup; _dispatch_exit 129' HUP
+	# later as one that never ended. These traps add what only the timed path
+	# needs — the worker's tree taken down first — and then take the global
+	# trap's own way out, so the pair closes once and only while it is open;
+	# everywhere else past the spawn the global trap closes it, on the untimed
+	# path once the worker it is waiting on finishes, with 128+signal either
+	# way (#465). They stay installed after the worker, which is why they ask
+	# _on_signal rather than writing an end themselves.
+	trap '_down; _on_signal 130' INT
+	trap '_down; _on_signal 143' TERM
+	trap '_down; _on_signal 129' HUP
+	_WORKER_STARTED=1
 	sh -c "$RUN_CMD" </dev/null &
 	_worker=$!
 	(

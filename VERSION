@@ -1780,8 +1780,47 @@
 # worker's contract, .agents/prompts/review-worker.md, and its CI twin,
 # templates/workflows/ai-review-prompt.md, carry the reuse/DRY ruling and the
 # skill's severity-bucket sentence, so every grader rules alike.
+# 0.44.0 — the dispatcher ends on a signal at any point of a dispatch
+# (ticket #465, from PR #425's review).
+# NO file joins or leaves the shared layer. ONE shared file changes
+# BEHAVIOUR: scripts/agent-dispatch.sh. UPDATING.md changes content: the
+# behaviour entry, and both worked examples re-pin.
+#   From #465: the global cleanup trap removed the scratch and did not
+# exit, so an INT, TERM or HUP that arrived before the timed path installed
+# its own trap let the dispatcher run on and exit 127. Every signal now ends
+# the dispatch with 128+signal (130, 143, 129), on the timed and the untimed
+# path alike — the untimed path used to let the worker's status through.
+# Once the spawn event is written the end closes the trace pair with that
+# status, carrying `data.signal` and leaving out `data.rung` unless a worker
+# had started; a signal before the spawn is written leaves no event. The
+# header's exit table gains the row.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers,
+# none of it in the files: list above. tests/agent-dispatch.test.sh drives
+# the gap with a planted delay before the trap, on TERM and HUP, timed and
+# untimed, before the spawn and after the end. Landed beside it since
+# 0.43.0, from #478 (PR #486): the claude-code adapter's
+# hooks/subagent-stop.sh records the stop payload's cwd as `data.cwd`, and
+# adapters/claude-code/README.md says so — the measurement whether a
+# subagent's stop names its worktree.
+# 0.45.0 — a review accounts for every lens it planned (retro of
+# 2026-10-02, finding F6; ticket #482).
+# NO file joins or leaves the shared layer, and NO shared file changes
+# content. UPDATING.md changes content: the arriving-from paragraph, and
+# both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/review-pr/SKILL.md: a lens the host refused to start
+# records its `spawn` with `outcome=refused` and no end; a lens that started
+# and returned no report, or hit a usage limit, records `spawn.end
+# outcome=fail` with the cause; `spawn.end` carries the lens's roster token;
+# the Axis-1 summary gains a `Lenses not run:` line between `Clean audits:`
+# and the count table — `none` on a full review, and a lens the session
+# audited itself marked "run in this context instead". A missing lens is
+# made visible and does not by itself block a verdict.
+# .agents/skills/retro/QUESTIONS.md: question 6 reads a refused spawn as its
+# own row, never as a worker nobody waited for. tests/review-pr-output.test.sh
+# and tests/retro-skill.test.sh hold both.
 
-shared-layer: 0.43.0
+shared-layer: 0.45.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
