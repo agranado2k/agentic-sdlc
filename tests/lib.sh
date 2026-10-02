@@ -1064,6 +1064,46 @@ t_stub_gh() {
 	chmod +x "$1/gh"
 }
 
+# t_check_run <check file> <function> <arg>... — one call of a check lifted
+# out of a skill's fence (t_fence, holds), run where a consumer runs it: from
+# $PROJECT/$WHERE (a project of the suite's own, holding scripts/vocab.sh and
+# the shipped policy file), VOCAB_CONFIG unset unless POLICY_FOR names a
+# policy file. Its streams land in $SCRATCH/verdict.out and verdict.err, for
+# the assertions that read what a check printed; the status is the
+# function's. A suite's `verdict` maps its own arguments onto this — the one
+# frame both typed-return suites run their checks in.
+t_check_run() {
+	(cd "$PROJECT/${WHERE:-}" && unset VOCAB_CONFIG && { [ -z "${POLICY_FOR:-}" ] || export VOCAB_CONFIG="$POLICY_FOR"; } &&
+		sh -c '. "$1"; shift; "$@"' _ "$@") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"
+}
+
+# t_verdict_is <accepted|refused> <label> <verdict arg>... — runs the suite's
+# own `verdict` (over t_check_run) with the arguments given, and asserts the
+# check's answer. No lifted check ($CHECK empty or missing) is a fail either
+# way: an absent check accepts nothing and refuses nothing. Two knobs carry
+# what the suites differ in:
+#   T_VERDICT_PREFIX  — put before every label (the skill under test, when one
+#                       suite holds several)
+#   T_VERDICT_REFUSED — a command given the bare label after a refusal, for
+#                       a suite that also holds WHAT a refusal printed; unset,
+#                       the refusal itself is the pass
+t_verdict_is() {
+	_vi_want=$1 _vi_bare=$2 _vi_label="${T_VERDICT_PREFIX:-}$2"
+	shift 2
+	if [ ! -s "${CHECK:-}" ]; then _vi_got=absent
+	elif verdict "$@"; then _vi_got=accepted
+	else _vi_got=refused
+	fi
+	case $_vi_want.$_vi_got in
+	accepted.accepted) pass "$_vi_label" ;;
+	accepted.*) fail "$_vi_label — refused: $(cat "$SCRATCH/verdict.out" "$SCRATCH/verdict.err" 2>/dev/null | tr '\n' ' ')" ;;
+	refused.refused)
+		if [ -n "${T_VERDICT_REFUSED:-}" ]; then "$T_VERDICT_REFUSED" "$_vi_bare"; else pass "$_vi_label"; fi
+		;;
+	*) fail "$_vi_label — the documented check accepted it" ;;
+	esac
+}
+
 # t_hold_reader_step <skill> <flat> <say-so words> [<label prefix>] — the
 # reader step of a typed-return fence, held to one spawn order (ticket #406).
 # <flat> is <skill> flattened one paragraph per line; the step is the
