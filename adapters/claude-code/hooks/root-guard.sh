@@ -83,9 +83,24 @@ field() {
 }
 
 # resolve <path> <base> — <path> made absolute against <base>, `.` and `..`
-# folded, symlinks resolved for the part that exists. A file not yet written
-# is resolved through its nearest existing parent.
+# folded, symlinks resolved for the part that exists — the last component
+# too, link after link, at most eight, so a link anywhere that names a root
+# file is that file. A file not yet written is resolved through its nearest
+# existing parent. Without readlink, or past eight links (a loop), the path
+# stays the link's own.
 resolve() {
+	_r=$(resolve1 "$1" "$2")
+	_hops=0
+	while [ -L "$_r" ] && [ "$_hops" -lt 8 ]; do
+		_l=$(readlink "$_r" 2>/dev/null) || break
+		_r=$(resolve1 "$_l" "${_r%/*}")
+		_hops=$((_hops + 1))
+	done
+	printf '%s' "$_r"
+}
+
+# resolve1 <path> <base> — one step of resolve: every component but the last.
+resolve1() {
 	_p=$1
 	case $_p in
 	'~') _p=${HOME:-/} ;;

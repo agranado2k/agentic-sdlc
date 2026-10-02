@@ -334,6 +334,31 @@ for c in 'git stash list' 'git stash show' 'git stash drop' 'git reset' 'git res
 done
 
 # ---------------------------------------------------------------------------
+banner "4e. A symlink whose final component points at the root"
+# ---------------------------------------------------------------------------
+# The path is resolved through its last component too (review finding L-2): a
+# link outside the root, or inside a worktree, that names a root file is that
+# file.
+ln -s "$FIX/README.md" "$OUTSIDE/link-to-readme"
+guard_on "$(payload Write file_path "$OUTSIDE/link-to-readme")"
+refused "a Write to a link outside the repository that names README.md at the root"
+guard_on "$(payload Bash command "echo hi > $OUTSIDE/link-to-readme")"
+refused "a Bash redirect through the same link"
+ln -s "$FIX/AGENTS.md" "$WT/link-to-root-manual"
+guard_on "$(payload Edit file_path "$WT/link-to-root-manual")"
+refused "an Edit through a link inside a worktree that names the root's AGENTS.md"
+ln -s "$OUTSIDE/link-to-readme" "$OUTSIDE/link-to-link"
+guard_on "$(payload Write file_path "$OUTSIDE/link-to-link")"
+refused "a Write through a chain of two links"
+ln -s "$WT/README.md" "$OUTSIDE/link-to-worktree"
+guard_on "$(payload Write file_path "$OUTSIDE/link-to-worktree")"
+allowed "a Write through a link that names a worktree file"
+ln -s "$OUTSIDE/loop-b" "$OUTSIDE/loop-a"
+ln -s "$OUTSIDE/loop-a" "$OUTSIDE/loop-b"
+guard_on "$(payload Write file_path "$OUTSIDE/loop-a")"
+allowed "a Write to a link loop, which resolves nowhere (bounded, and it fails open)"
+
+# ---------------------------------------------------------------------------
 banner "5. The agent harness layer fails open on a payload it cannot read"
 # ---------------------------------------------------------------------------
 # A guard that blocks every tool call on a parse failure bricks the session;

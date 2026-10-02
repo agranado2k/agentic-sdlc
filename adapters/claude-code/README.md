@@ -688,7 +688,7 @@ shell would — quotes dropped, heredoc bodies skipped, continuation lines
 joined, `env`, `sudo` and `VAR=` prefixes stripped, `cd` (and `git -C`)
 followed between simple commands — and refuses one that redirects into, or
 runs `sed -i`, `tee`, `cp` (onto) or `mv` on, a path that resolves to a
-**tracked** file at the root. It also refuses `mv`
+**tracked** file at the root, a symlink to one included. It also refuses `mv`
 of a directory holding tracked files, and `git checkout` or `git restore` on
 a tracked file, a directory holding one, or `.` (`git restore --staged` alone
 touches only the index and passes). Where git acts at the root it refuses the
