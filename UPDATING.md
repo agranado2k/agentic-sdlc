@@ -219,6 +219,31 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.38.0 or older, the stamp reader bounds its lift.**
+`scripts/stamp.sh` (shared, changed at 0.39.0) lifts at most 8 lines of any
+one stamp key from a ticket body; past that it is exit 5, "too many stamp
+lines", with nothing printed and nothing checked — a stop `/implement`
+reports like a refusal. No real ticket meets the bound; a hostile one no
+longer costs thirty CPU-seconds. Your manual's vocab.sh row may gain the
+fifth exit the template's now names — Part 2 is how you take it.
+
+**Arriving from 0.37.0 or older, the workflow article's rubric tightens one
+line.** `constitution/local-workflow.md.template` (shared, changed at 0.38.0)
+asks two more things before a ticket is stamped `mechanical`: it names the
+one command that is its oracle, and it is one file or one pattern applied
+uniformly; a ticket that fails either goes on to the rubric's later
+questions. Your stamped copy of the article is yours — Part 2 is how you
+take the line if you want it; nothing else in the layer changes.
+
+**Arriving from 0.36.0 or older, two trace keys gain a shape.**
+`scripts/trace.sh` (shared, changed at 0.37.0) refuses a `finding.triage`
+whose `data.id` is not one token, and a `pr.iterate` whose `data.iteration`
+is not digits — exit 2 naming the kind, the key and the shape — where it
+used to write them. A missing key still writes; only a present key of the
+wrong shape is refused, and an unconfigured trace refuses the same line it
+would have ignored. Your existing trace files need nothing: `verify` draws
+no advisory on lines written before.
+
 **Arriving from 0.35.0 or older, no shared file changes; a task contract is
 admitted before an ordinary request's first edit.** Nothing in Part 1 moves
 at 0.36.0 but this file, and Part 2 is how you take the rest. Fresh bootstraps
@@ -693,7 +718,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.36.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.39.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -706,9 +731,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.36.0
+v0.39.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.36.0
+v0.1.0 -> v0.39.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -739,10 +764,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2174 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2199 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2328 insertions(+), 1 deletion(-)
+ 3 files changed, 2353 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -802,7 +827,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.36.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.39.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -846,10 +871,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.36.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.39.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.36.0
-Part 1 complete — shared layer at v0.36.0. The update is not done: go to step 8.
+0.39.0
+Part 1 complete — shared layer at v0.39.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1593,7 +1618,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.36.0 case for this file, and `ADD` is the 0.3.0 → 0.36.0
+`MERGE` is the 0.4.0 → 0.39.0 case for this file, and `ADD` is the 0.3.0 → 0.39.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1907,14 +1932,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.36.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.39.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.36.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.39.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2074,9 +2099,9 @@ $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
  constitution/AGENTS.md.template            |  70 +++++++++++++-
  constitution/local-engineering.md.template |   2 +-
  constitution/local-product.md.template     | 103 ++++++++++++++++++++
- constitution/local-workflow.md.template    |  43 +++++++++
+ constitution/local-workflow.md.template    |  48 ++++++++++
  constitution/shared-code-craft.md          | 147 +++++++++++++++++++++++++++++
- 5 files changed, 361 insertions(+), 4 deletions(-)
+ 5 files changed, 366 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
@@ -2090,7 +2115,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.36.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.39.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2116,7 +2141,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.36.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.39.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
