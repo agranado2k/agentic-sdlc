@@ -147,15 +147,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "1a. Configuration file prose — the wait comment describes reality since PR #434"
+banner "1a. Policy file prose — the wait comment states the bound the hook keeps"
 # ---------------------------------------------------------------------------
-# RED TEST: the TRACE_AGENT_WAIT_MS comment should NOT say "never longer" unconditionally (PR #434/#401)
-! grep -qF "and never longer" "$KIT/scripts/trace.config.sh" && pass "the wait comment does not say 'and never longer'" ||
-	fail "the wait comment still says 'and never longer' — since PR #434 the wait may overrun by one whole-second nap"
-# RED TEST: the wait comment should say it may overrun (#401)
-grep -qF "the actual wait may" "$KIT/scripts/trace.config.sh" && grep -qF "overrun by at most one whole-second nap" "$KIT/scripts/trace.config.sh" &&
-	pass "the comment describes that the wait may overrun by at most one whole-second nap (since PR #434)" ||
-	fail "the comment does not describe overruns — the contract changed in PR #434"
+# Since PR #434 the wait may run past its bound by one poll (hook.lib.sh,
+# hook_wait_final), so the shipped policy file may not promise "never longer".
+WAIT_CONFIG="$KIT/scripts/trace.config.sh"
+assert_file_lacks "$WAIT_CONFIG" "and never longer" "the wait may run past the bound by one poll"
+assert_file_has "$WAIT_CONFIG" "the actual wait may" "the comment admits the overrun"
+assert_file_has "$WAIT_CONFIG" "one whole-second nap and a check" "and names the hook's own bound on it, a nap AND a check"
 
 # ---------------------------------------------------------------------------
 banner "2. SessionStart: the pointer a later emit reads, and the exported session"

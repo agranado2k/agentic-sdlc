@@ -97,7 +97,8 @@ TRACE_TOOLS=''
 #   ''       no wait (the shipped default): the transcript is read the moment
 #            the hook runs, exactly as before this line existed
 #   <1-99999>  wait up to that many milliseconds, polling; the actual wait may
-#            overrun by at most one whole-second nap (since PR #434)
+#            run past the bound by at most one poll — 50 ms and a check, or
+#            one whole-second nap and a check where `sleep` refuses fractions
 #
 # WHY A HOOK WOULD WAIT AT ALL. An agent harness can run its subagent-stop hook
 # a moment BEFORE the subagent's final turn reaches its transcript. Read then,
