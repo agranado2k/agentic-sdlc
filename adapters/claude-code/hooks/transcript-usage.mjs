@@ -133,9 +133,13 @@ let after = null;
 let rollup = false;
 let resume = false;
 while (args[0] === "--after" || args[0] === "--rollup" || args[0] === "--resume") {
-  if (args[0] === "--rollup" || args[0] === "--resume") {
-    if (args[0] === "--rollup") rollup = true;
-    else resume = true;
+  if (args[0] === "--rollup") {
+    rollup = true;
+    args.splice(0, 1);
+    continue;
+  }
+  if (args[0] === "--resume") {
+    resume = true;
     args.splice(0, 1);
     continue;
   }
@@ -164,21 +168,22 @@ if (rollup || resume) {
   }
 }
 
-/** The recorded lines, each parsed, with its line number; `fail` on one that is not JSON. */
-function recordedEvents(fail) {
-  const events = [];
-  let n = 0;
-  for (const line of recorded.split("\n")) {
-    n += 1;
-    if (line.trim() === "") continue;
-    try {
-      events.push([n, JSON.parse(line)]);
-    } catch {
-      fail(`line ${n} of the recorded events on stdin is not JSON`);
-    }
+/**
+ * The recorded lines, each parsed with its line number — parsed ONCE, here, for
+ * both readers (L-1, review of PR #447); the first line that is not JSON is
+ * kept as `bad`, and each reader fails on it its own way.
+ */
+const recordedEvents = [];
+let bad = 0;
+for (const [i, line] of recorded.split("\n").entries()) {
+  if (bad !== 0 || line.trim() === "") continue;
+  try {
+    recordedEvents.push([i + 1, JSON.parse(line)]);
+  } catch {
+    bad = i + 1;
   }
-  return events;
 }
+const notJson = () => `line ${bad} of the recorded events on stdin is not JSON`;
 
 /** model -> the last recorded data.last_msg for it, a failure passed over (--resume). */
 const anchors = new Map();
@@ -186,7 +191,8 @@ if (resume) {
   if (recordedError !== null) {
     die(`cannot read the recorded events on stdin: ${recordedError.code ?? recordedError.message} — where each model's last read stopped cannot be told`);
   }
-  for (const [, event] of recordedEvents((m) => die(`${m}, so where each model's last read stopped cannot be told`))) {
+  if (bad !== 0) die(`${notJson()}, so where each model's last read stopped cannot be told`);
+  for (const [, event] of recordedEvents) {
     if (event?.outcome === "fail") continue;
     const id = event?.data?.last_msg;
     if (typeof event?.model !== "string" || event.model === "" || typeof id !== "string" || id === "") continue;
@@ -469,7 +475,8 @@ function judgeRollup() {
   if (recordedError !== null) {
     refuse(`cannot read the recorded events on stdin: ${recordedError.code ?? recordedError.message}`);
   }
-  for (const [n, event] of recordedEvents(refuse)) {
+  if (bad !== 0) refuse(notJson());
+  for (const [n, event] of recordedEvents) {
     if (event?.data?.via !== "rollup" || event.outcome === "fail") continue;
     const counts = {};
     for (const [field] of FIELDS) {
