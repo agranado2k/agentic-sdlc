@@ -341,7 +341,6 @@ assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate i
 # shows the cap beside the frontier.
 handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
 t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
-t_text_has "$handoff" "concurrent-subagent limit" "the cap is derived from the host's concurrent-subagent limit"
 t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
 # The divisor is /review-pr's roster, read from that skill and never a hand
 # copy: a lens added or dropped there must move every place this cap spells
@@ -358,15 +357,16 @@ t_text_has "$handoff" "spawns $lens_word subagents" "the hand-off's lens count i
 # rationale sentence's "concurrent-subagent limit" would satisfy the first
 # anchor for a formula that divides something else by seven.
 formula=$(printf '%s\n' "$handoff" | grep -o 'The cap is [^.]*\.')
-[ -n "$formula" ] && pass "the hand-off states the cap in a sentence of its own" || fail "the hand-off has no 'The cap is …' sentence"
-in_order "$formula" "the cap is the limit divided by the roster's lenses, rounded down, never below one — in one sentence" \
+in_order "$formula" "the cap is the limit divided by the roster's lenses, rounded down, never below one — in one 'The cap is …' sentence" \
 	"concurrent-subagent limit" "divided by $lens_word" "rounded down" "never below one"
+t_text_has "$formula" "rounded down and never below one." "the floor ends the formula sentence — nothing qualifies it after"
 t_text_has "$handoff" "as the project states it" "the limit is the project's stated value, read where it is written"
 t_text_has "$handoff" "never a number this skill names" "no host's number is baked into a skill that ships to every host"
-in_order "$handoff" "a project that states no limit is told so, and runs one session at a time" \
-	"states no limit" "say so" "one session at a time"
-in_order "$handoff" "a frontier larger than the cap is sequenced, the rest waiting on sessions that end" \
-	"larger than the cap" "sequence" "as sessions end"
+in_order "$handoff" "a project that states no limit is told so" "states no limit" "say so"
+t_text_has "$handoff" "name one session at a time as the safe reading" "with no limit stated, one session at a time is the reading named"
+t_text_has "$handoff" "is not opened at once: sequence it" "a frontier larger than the cap is sequenced, not opened at once"
+in_order "$handoff" "the tickets up to the cap start now, the rest as sessions end" \
+	"larger than the cap" "up to the cap" "as sessions end"
 # No limit is baked in, held on the session-cap sentences alone — the rest of
 # the step may cite a rule by number — and in words as well as digits: the
 # only numbers those sentences may spell are one and the roster's count
@@ -387,7 +387,8 @@ else
 		pass "the session-cap sentences spell no number but one and $lens_word"
 	fi
 fi
-t_text_has "$quiz" "the session cap beside the frontier" "the quiz shows the cap where the human reads the frontier"
+in_order "$quiz" "the quiz shows the cap beside the DAG, before the human is asked to challenge it" \
+	"the DAG" "the session cap beside the frontier" "ask the user to challenge"
 # The place the hand-off reads the limit from exists: the consumer's workflow
 # article carries a line for it, a mark the project fills in — or answers
 # "unstated", the reading that runs one session at a time.
@@ -396,7 +397,7 @@ t_text_has "$wf_cap" "$(t_mark CONCURRENT_SUBAGENT_LIMIT)" "the workflow templat
 t_text_has "$wf_cap" "unstated" "the workflow template names 'unstated' as the answer when the limit is not known"
 t_text_has "$handoff" "constitution/local-workflow.md" "the hand-off reads the limit from the workflow article that carries its line"
 # The glossary names the concept the hand-off introduces (#483).
-cap_entry=$(awk '/^- \*\*Session cap\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
+cap_entry=$(awk '/^- \*\*Session cap\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^#/ || /^$/) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$cap_entry" ] && pass "the glossary carries a **Session cap** entry" || fail "docs/domain-glossary.md has no **Session cap** entry"
 t_text_has "$cap_entry" "concurrent-subagent limit" "the glossary's session-cap entry derives it from the concurrent-subagent limit"
 t_text_has "$cap_entry" "/to-tickets" "the glossary's session-cap entry names the skill that states it"
