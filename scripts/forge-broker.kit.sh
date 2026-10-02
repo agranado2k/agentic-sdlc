@@ -650,17 +650,23 @@ agent_token() {
 			t[1] = "Security Sentinel"; t[2] = "API & CRUD Contract Manager"; t[3] = "Pattern & Refactor Enforcer"
 			t[4] = "Simplicity Advocate"; t[5] = "Reuse & DRY Auditor"; t[6] = "Test Hygiene Inspector"
 		}
-		# The first lens line decides, and an empty one still counts as present.
-		!lens && /^[^A-Za-z0-9]*[Ll]ens:/ {
-			lens = $0; sub(/^[^A-Za-z0-9]*[Ll]ens:[ \t]*/, "", lens); sub(/[ \t]+$/, "", lens)
-			if (lens == "") lens = "-"
+		# The first lens line decides, present even when empty. The value is
+		# read as a TOKEN: the backticks, asterisks and carriage return a copy
+		# of the contract may carry are stripped, the case folded, and the
+		# rest cut at the first character a token cannot hold — then the
+		# closed list decides, so nothing the report spelled is what prints.
+		!seen && /^[^A-Za-z0-9]*[Ll]ens:/ {
+			seen = 1
+			lens = $0; sub(/^[^A-Za-z0-9]*[Ll]ens:/, "", lens)
+			gsub(/[`*\r]/, "", lens); sub(/^[ \t]+/, "", lens)
+			lens = tolower(lens); sub(/[^a-z0-9-].*$/, "", lens)
 			next
 		}
 		{
 			for (k = 1; k <= 6; k++) if (index($0, t[k]) || $0 ~ ("Agent " k "([^0-9]|$)")) hit[k] = 1
 		}
 		END {
-			if (lens != "") { print (lens in roster ? lens : "unattributed"); exit }
+			if (seen) { print (lens in roster ? lens : "unattributed"); exit }
 			for (k in hit) { n++; a = tok[k] }
 			print (n == 1 ? a : "unattributed")
 		}

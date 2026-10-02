@@ -306,4 +306,7 @@ contract gains one line per finding, `↳ lens: <token>`, the token from
 - **no lens line** — the title-or-number match #375 recorded, unchanged.
 
 The field is read as data by its shape, the same as the id, the severity and
-the location: the closed list is the only thing a raise can carry.
+the location: the value is folded to a token first — backticks, asterisks
+and case are presentation a copy of the contract may carry, and the rest is
+cut at the first character a token cannot hold — and then the closed list
+decides, so the closed list is the only thing a raise can carry.

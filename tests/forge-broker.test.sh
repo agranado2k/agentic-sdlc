@@ -1262,6 +1262,19 @@ VERDICT: not blocking — three findings, three ways to name the lens
 **L-1** \`scripts/a.sh:3\` — Simplicity Advocate, says the title; the field says otherwise.
 ↳ lens: vibes
 ↳ fix: drop it.
+**L-2** \`scripts/a.sh:3\` — Simplicity Advocate, says the title; the field is there and empty.
+↳ lens:
+↳ fix: drop it.
+**L-3** \`scripts/a.sh:3\` — two lens lines; the first decides.
+↳ lens: pattern
+↳ lens: security
+↳ fix: drop it.
+**L-4** \`scripts/a.sh:3\` — the token as a model copying the contract's list writes it.
+↳ lens: \`reuse-dry\`
+↳ fix: drop it.
+**L-5** \`scripts/a.sh:3\` — capitalised, and with a remark after it.
+↳ lens: Api-crud (the contract artifact)
+↳ fix: drop it.
 
 ## Axis 2 — Behavior (for a human)
 
@@ -1280,6 +1293,47 @@ raise_has L-1 '"agent":"unattributed"'
 printf '%s\n' "$RAISES" | grep -qF vibes &&
 	fail "a lens outside the roster reached the trace as the report spelled it" ||
 	pass "a lens outside the roster never reaches the trace as spelled"
+# A present field decides, even empty: the title beside it is not consulted.
+raise_has L-2 '"agent":"unattributed"'
+# The first lens line decides; a second is ignored.
+raise_has L-3 '"agent":"pattern"'
+# The token is read as a token: backticks, case and a trailing remark are
+# presentation around it, so the closed list is still what decides — and
+# nothing of the spelling reaches the trace.
+raise_has L-4 '"agent":"reuse-dry"'
+raise_has L-5 '"agent":"api-crud"'
+printf '%s\n' "$RAISES" | grep -qF 'Api-crud' &&
+	fail "the report's own capitalisation reached the trace" ||
+	pass "the report's capitalisation never reaches the trace"
+
+# The roster the broker maps onto is /review-pr §3's, and that skill calls its
+# list the only one. Lift the six Axis-1 tokens from the skill, write each on
+# a finding's lens line with no title beside it, and each raise must carry
+# that token — so a token renamed in the skill is red here, not a silent
+# drift to `unattributed` on every correctly spelled lens.
+TOKENS="$SCRATCH/tokens.md"
+{
+	printf 'REVIEWED: %s\nVERDICT: six tokens\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	n=1
+	for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
+		printf '**L-%s** `scripts/a.sh:3` — one finding.\n↳ lens: %s\n↳ fix: none.\n' "$n" "$tok"
+		n=$((n + 1))
+	done
+	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six tokens.\n'
+} >"$TOKENS"
+[ "$(grep -c '^↳ lens: ' "$TOKENS")" = 6 ] && pass "six Axis-1 tokens were read from the skill" ||
+	fail "expected six Axis-1 roster tokens in the skill, read $(grep -c '^↳ lens: ' "$TOKENS")"
+STUB_PR=37
+export STUB_PR
+broker 37 "$TOKENS"
+s_assert_status 0 "a report naming each of the six tokens lands"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#37' --kind finding.raise
+RAISES=$S_OUT
+n=1
+for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
+	raise_has "L-$n" "\"agent\":\"$tok\""
+	n=$((n + 1))
+done
 STUB_PR=12
 export STUB_PR
 
