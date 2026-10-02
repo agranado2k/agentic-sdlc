@@ -310,63 +310,48 @@ IMPL_ABS="$ROOT/.agents/skills/implement/SKILL.md"
 impl_forms=$(sed -n 's/.*one entry of this closed list of verification commands: \*\*\([^*]*\)\*\*.*/\1/p' "$IMPL_ABS")
 impl_loop=$(awk '/^4\. / { print; exit }' "$IMPL_ABS" | sed -n "s/.*\(\`sh -c '[^\`]*'\`\).*/\1/p")
 if [ -z "$impl_forms" ]; then
-	fail "/implement's step 1 lost 'one entry of this closed list of verification commands: **…**' — the allow-list the rubric is held to; no rubric check below can run"
+	fail "/implement's step 1 lost 'one entry of this closed list of verification commands: **…**' — the allow-list the rubric is held to; the rubric's oracle list cannot be compared"
 elif [ -z "$impl_loop" ]; then
-	fail "/implement's step 4 no longer spells the full suite as a \`sh -c '…'\` loop — the full-suite entry the rubric is held to; no rubric check below can run"
+	fail "/implement's step 4 no longer spells the full suite as a \`sh -c '…'\` loop — the full-suite entry the rubric is held to; the rubric's oracle list cannot be compared"
 else
 	pass "/implement still carries its closed list of oracle forms and step 4's full-suite loop"
 fi
-# oracle_forms_agree <text> <where> — the verdict on <text>'s oracle list
-# against /implement's: "ok", or the first disagreement. Silent when the
-# allow-list itself is missing: that failed once, above, by its own name.
+# oracle_forms_agree <text> <where> — <text>'s oracle list against the one
+# /implement runs, built once as the exact span it must be: each entry
+# "<name>, <command>", "; "-joined, "; or " before the last. The comparison
+# alone waits on the allow-list (which failed once, above, by its own name
+# when missing); the prose assertions after it run either way.
 oracle_forms_agree() {
-	[ -n "$impl_forms" ] && [ -n "$impl_loop" ] || return 0
-	span=$(printf '%s\n' "$1" | sed -n 's/.*whose exit is its oracle — \(.*\) — as the first line of its Acceptance section.*/\1/p')
-	if [ -z "$span" ]; then
-		fail "$2 names no oracle list between 'whose exit is its oracle — ' and ' — as the first line of its Acceptance section'"
-		return
-	fi
-	verdict=$(awk -v impl="$impl_forms" -v loop="$impl_loop" -v rub="$span" '
-	# entries(s, A) — split s on "; " outside backticks; returns the count.
-	function entries(s, A,   n, cur, i, c, code) {
-		n = 0; cur = ""; code = 0
-		for (i = 1; i <= length(s); i++) {
-			c = substr(s, i, 1)
-			if (c == "`") code = !code
-			if (!code && substr(s, i, 2) == "; ") { A[++n] = cur; cur = ""; i++; continue }
-			cur = cur c
-		}
-		A[++n] = cur
-		return n
-	}
-	BEGIN {
-		n = entries(impl, I)
-		for (i = 1; i <= n; i++) {
-			lab = I[i]; sub(/, .*/, "", lab)
-			cmd = ""; if (match(I[i], /`[^`]*`/)) cmd = substr(I[i], RSTART, RLENGTH)
-			if (cmd == "`sh -c`") cmd = loop
-			E[lab] = lab ", " cmd
-		}
-		m = entries(rub, R)
-		for (j = 1; j <= m; j++) {
-			s = R[j]; sub(/^or /, "", s)
-			lab = s; sub(/, .*/, "", lab)
-			if (!(lab in E)) { print "it names a form /implement refuses: \"" s "\""; exit }
-			if (s != E[lab]) { print "its \"" lab "\" entry is \"" s "\", not exactly \"" E[lab] "\""; exit }
-			if (seen[lab]++) { print "it names \"" lab "\" twice"; exit }
-		}
-		if (m != n) { print "it names " m " forms, /implement accepts " n; exit }
-		print "ok"
-	}')
-	[ "$verdict" = ok ] && pass "$2 names exactly the oracle forms /implement runs, each whole" ||
-		fail "$2 disagrees with /implement: $verdict"
+	t_text_has "$1" "outside that list is not \`mechanical\`" "$2 says a ticket whose only honest oracle is outside the list is not mechanical"
+	t_text_has "$1" "where the suite is not a \`tests/\` directory of shell scripts, only the docs gate is among them" "$2 says, in one clause, that a project whose suite is not tests/*.sh has only the docs gate"
+	t_text_has "$1" "as the first line of its Acceptance section; and the change" "$2 joins its two conditions with the skill's semicolon"
 	case $1 in
 	*"a diff that must come out empty"* | *"one validator"*) fail "$2 still offers an oracle /implement never matches (a diff, a validator)" ;;
 	*) pass "$2 offers no oracle /implement never matches" ;;
 	esac
-	t_text_has "$1" "outside that list is not \`mechanical\`" "$2 says a ticket whose only honest oracle is outside the list is not mechanical"
-	t_text_has "$1" "where the suite is not a \`tests/\` directory of shell scripts, only the docs gate is among them" "$2 says, in one clause, that a project whose suite is not tests/*.sh has only the docs gate"
-	t_text_has "$1" "as the first line of its Acceptance section; and the change" "$2 joins its two conditions with the skill's semicolon"
+	[ -n "$impl_forms" ] && [ -n "$impl_loop" ] || return 0
+	span=$(printf '%s\n' "$1" | sed -n 's/.*whose exit is its oracle — \(.*\) — as the first line of its Acceptance section.*/\1/p')
+	want=$(IMPL_FORMS=$impl_forms IMPL_LOOP=$impl_loop awk 'BEGIN {
+		s = ENVIRON["IMPL_FORMS"]; n = 0; cur = ""; code = 0
+		# split /implement'"'"'s list on "; " outside backticks
+		for (i = 1; i <= length(s); i++) {
+			c = substr(s, i, 1)
+			if (c == "`") code = !code
+			if (!code && substr(s, i, 2) == "; ") { E[++n] = cur; cur = ""; i++; continue }
+			cur = cur c
+		}
+		E[++n] = cur
+		for (i = 1; i <= n; i++) {
+			lab = E[i]; sub(/, .*/, "", lab)
+			cmd = ""; if (match(E[i], /`[^`]*`/)) cmd = substr(E[i], RSTART, RLENGTH)
+			if (cmd == "`sh -c`") cmd = ENVIRON["IMPL_LOOP"]
+			out = out (i == 1 ? "" : (i == n ? "; or " : "; ")) lab ", " cmd
+		}
+		print out
+	}')
+	[ -n "$span" ] && [ "$span" = "$want" ] &&
+		pass "$2 names exactly the oracle forms /implement runs, each whole" ||
+		fail "$2's oracle list is \"$span\", not exactly /implement's \"$want\""
 }
 oracle_forms_agree "$rline1" "rubric question 1"
 t_text_has "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
