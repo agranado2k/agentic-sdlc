@@ -1428,15 +1428,16 @@ if [ "$HAVE_NODE" = 1 ]; then
 		pass "and the end after it still totals the rollup ($R34) — the anchor skipped the failure" ||
 		fail "ok, drift, ok totals '$(model_row "$RMODEL")', the rollup says '$R34'"
 
-	# M-2: more than one model under --after. The message count is per model;
-	# the last id is the whole read's, the same on every row. A third message on
-	# a second model is appended to the fixture for this.
+	# M-2: more than one model under --after. The message count is per model,
+	# and so is the last id since #408 (section 39): each row names its own
+	# model's last message. A third message on a second model is appended to
+	# the fixture for this.
 	sed -n '30,31p' "$RFIX" | sed "s/$RMSG2/msg_three307/; s/$RMODEL/claude-other-307/g" >"$SCRATCH/third-307.jsonl"
 	cat "$RFIX" "$SCRATCH/third-307.jsonl" >"$SCRATCH/two-models-307.jsonl"
 	t_run_split node "$EXTRACTOR" --after "$RMSG1" "$SCRATCH/two-models-307.jsonl"
-	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 msg_three307
+	[ "$S_OUT" = "$RMODEL 10 31 88 23947 1 $RMSG2
 claude-other-307 10 31 88 23947 1 msg_three307" ] &&
-		pass "two models after the anchor: one row each, one message each, one last id on both" ||
+		pass "two models after the anchor: one row each, one message each, each its own last id" ||
 		fail "two models after the anchor printed: $S_OUT"
 
 	# A FRESH single-end session is unchanged, apart from saying how far it read.
@@ -3101,6 +3102,182 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "an unreadable stdin: status $S_STATUS, '$S_OUT'"
 else
 	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
+fi
+
+# ---------------------------------------------------------------------------
+banner "39. A multi-model session end killed partway loses nothing: one anchor per model (#408)"
+# ---------------------------------------------------------------------------
+# Ticket #408 (a known gap of 2026-10-01, origin #307 L-1). The session-end hook
+# writes one session.usage event per model. Until this ticket every one of them
+# carried the SAME resume anchor — the last message of the whole read — so an
+# end killed after the first model's event left the trace saying "read up to
+# here" for a model whose event was never written, and the next end started
+# after messages nobody recorded. Now each model's event carries that model's
+# own last message, and the next end resumes each model from the trace's last
+# anchor FOR THAT MODEL; a model with no anchor is read from the start.
+#
+# The kill is simulated by cutting the trace after the end's first usage event:
+# exactly what a SIGKILL between two emits leaves, and deterministic. The
+# transcript is synthetic — two models, one message each per run, distinct
+# counts — so a message counted twice or not at all moves a total visibly.
+S408=c0ffee00-0408-4000-8000-000000000408
+MA=claude-alpha-408
+MB=claude-beta-408
+
+# asst408 <id> <model> <in> <out> <cache w> <cache r> — one assistant line.
+asst408() {
+	printf '{"type":"assistant","requestId":"req_%s","message":{"id":"%s","model":"%s","usage":{"input_tokens":%s,"output_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s}}}\n' \
+		"$1" "$1" "$2" "$3" "$4" "$5" "$6"
+}
+
+# cut_after_first_usage — the trace as a kill after this end's first usage
+# event leaves it: every line after that event, the session.end included, gone.
+# <n> is how many usage events of this session the trace held before the end.
+cut_after_first_usage() {
+	for _f in "$TDIR"/events/*.jsonl; do
+		awk -v n="$1" -v s="\"subject\":\"session:$S408\"" '
+			index($0, "\"kind\":\"session.usage\"") && index($0, s) { u += 1 }
+			{ print } u > n { exit }' "$_f" >"$_f.cut" && mv "$_f.cut" "$_f"
+	done
+}
+
+usage408() { ev_of session.usage | grep -F "\"subject\":\"session:$S408\"" || :; }
+
+{
+	asst408 msg_a1 "$MA" 1 10 100 1000
+	asst408 msg_b1 "$MB" 4 40 400 4000
+} >"$SCRATCH/run1-408.jsonl"
+{
+	cat "$SCRATCH/run1-408.jsonl"
+	asst408 msg_a2 "$MA" 2 20 200 2000
+	asst408 msg_b2 "$MB" 8 80 800 8000
+} >"$SCRATCH/run2-408.jsonl"
+set_key transcript_path "$SCRATCH/t-408.jsonl" <"$FIX/session-end.payload.json" |
+	set_key session_id "$S408" >"$SCRATCH/end-408.json"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR: each row's last id is its own model's last message.
+	t_run_split node "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "the extractor's last-id column is per model: msg_a2 for alpha, msg_b2 for beta" ||
+		fail "a two-model read printed '$S_OUT' (status $S_STATUS)"
+
+	# --resume: the anchors come from the recorded events on stdin, per model.
+	printf '%s\n' \
+		'{"kind":"session.usage","model":"'"$MA"'","tok_in":1,"data":{"msgs":"1","last_msg":"msg_a1"}}' \
+		>"$SCRATCH/rec-a-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-a-408.jsonl"
+	# The rows are compared as a set: their order is not a contract (L-4,
+	# review of PR #447).
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$MA 2 20 200 2000 1 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume reads alpha after its anchor and beta, anchorless, from the start" ||
+		fail "--resume with alpha's anchor only printed '$S_OUT' (status $S_STATUS: $S_ERR)"
+	t_run_split sh -c 'node "$1" --resume "$2" </dev/null' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$MA 3 30 300 3000 2 msg_a2
+$MB 12 120 1200 12000 2 msg_b2" ] &&
+		pass "--resume with nothing recorded is the whole file" ||
+		fail "--resume with an empty stdin printed '$S_OUT' (status $S_STATUS)"
+	printf '%s\n' '{"kind":"session.usage","model":"'"$MB"'","data":{"msgs":"1","last_msg":"msg_gone"}}' \
+		>"$SCRATCH/rec-gone-408.jsonl"
+	t_run_split sh -c 'node "$1" --resume "$2" <"$3"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl" "$SCRATCH/rec-gone-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *msg_gone*) true ;; *) false ;; esac &&
+		pass "a model's anchor the transcript does not hold is drift: exit 2, no row, the anchor named" ||
+		fail "a lost per-model anchor: status $S_STATUS, '$S_OUT', '$S_ERR'"
+	# Under --resume the recorded events ARE the anchors: a line that is not
+	# JSON, or no stdin to read, is exit 2 — never "nothing recorded", which
+	# would be the whole-file read and the double count.
+	t_run_split sh -c 'printf "not json\n" | node "$1" --resume "$2"' resume-case "$EXTRACTOR" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a recorded line that is not JSON is exit 2 under --resume, no row" ||
+		fail "a non-JSON recorded line under --resume: status $S_STATUS, '$S_OUT'"
+	t_run_split node "$EXTRACTOR" --resume "$SCRATCH/run2-408.jsonl" <"$SCRATCH"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+		pass "a stdin that cannot be read is exit 2 under --resume, no row" ||
+		fail "an unreadable stdin under --resume: status $S_STATUS, '$S_OUT'"
+	# M-1, review of PR #447: hook_tokens --after WITHOUT --resume is still the
+	# one anchor for every model, never silently a whole-file read.
+	new_trace
+	t_run_split env TRACE_DIR="$TDIR" sh -c '. "$0"; hook_tokens "$1" agent.stop --after msg_a1 subject=agent:m1-408' \
+		"$HOOKS/hook.lib.sh" "$SCRATCH/run2-408.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(sum_tok tok_in agent.stop)" = 14 ] &&
+		pass "hook_tokens --after alone still anchors every model: b1, a2, b2 counted (14), a1 not" ||
+		fail "hook_tokens --after alone counted tok_in $(sum_tok tok_in agent.stop): $(ev_of agent.stop)"
+	t_run_split node "$EXTRACTOR" --resume --after msg_a1 "$SCRATCH/run2-408.jsonl" </dev/null
+	[ "$S_STATUS" = 2 ] && pass "--resume and --after together is a usage error: two answers to one question" ||
+		fail "--resume with --after: status $S_STATUS, '$S_OUT'"
+
+	# THE KILL. End 1 over run 1, cut after its first usage event; then a full
+	# end over run 2. Every message counted exactly once, per model.
+	new_trace
+	cp "$SCRATCH/run1-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the two-model first end exits 0" || fail "the first end exited $S_STATUS: $S_ERR"
+	UA=$(usage408 | grep -F "\"model\":\"$MA\"")
+	UB=$(usage408 | grep -F "\"model\":\"$MB\"")
+	[ "$(data_of "$UA" last_msg)" = msg_a1 ] && [ "$(data_of "$UB" last_msg)" = msg_b1 ] &&
+		pass "each model's event carries its own anchor: msg_a1 on alpha, msg_b1 on beta" ||
+		fail "the per-model anchors: alpha '$(data_of "$UA" last_msg)', beta '$(data_of "$UB" last_msg)'"
+	cut_after_first_usage 0
+	[ "$(usage408 | grep -c .)" = 1 ] && [ -z "$(ev_of session.end)" ] &&
+		pass "the kill leaves one usage event and no session.end" ||
+		fail "the cut trace holds: $(events)"
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && pass "the full end after the kill exits 0" || fail "exited $S_STATUS: $S_ERR"
+	[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "summary --by model: alpha 3/30/300/3000, beta 12/120/1200/12000 — every message once" ||
+		fail "after the kill alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	[ -z "$(usage408 | grep -F '"outcome":"fail"')" ] &&
+		pass "and no usage event of the two ends is a failure" ||
+		fail "a failure was recorded: $(usage408 | grep -F '"outcome":"fail"')"
+
+	# A THIRD END WITH NOTHING NEW: one event, no tokens, the totals unmoved.
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	N3=$(usage408 | sed -n '$p')
+	[ "$S_STATUS" = 0 ] && [ -z "$(num "$N3" tok_in)" ] && [ "$(str "$N3" outcome)" != fail ] &&
+		[ "$(data_of "$N3" msgs)" = 0 ] &&
+		[ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a third end with nothing new leaves one tokenless event and moves no total" ||
+		fail "the nothing-new end: '$N3', alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+	# AND IT ANCHORS NOBODY (L-3, review of PR #447): it names no model, so a
+	# fourth end with one new message per model counts exactly those two.
+	{
+		asst408 msg_a3 "$MA" 16 160 1600 16000
+		asst408 msg_b3 "$MB" 32 320 3200 32000
+	} >>"$SCRATCH/t-408.jsonl"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "19 190 1900 19000" ] &&
+		[ "$(model_row "$MB")" = "44 440 4400 44000" ] &&
+		pass "a fourth end after it counts each model's one new message, no more" ||
+		fail "the fourth end: alpha '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A TRACE THE OLD HOOK WROTE: both events carried the whole read's last id,
+	# and the kill took beta's. Alpha's anchor is a POSITION in the file, so it
+	# still counts alpha's messages after it; beta has none and starts over.
+	new_trace
+	cp "$SCRATCH/run2-408.jsonl" "$SCRATCH/t-408.jsonl"
+	env TRACE_DIR="$TDIR" TRACE_QUIET=1 sh "$TRACE" emit kind=session.usage subject="session:$S408" \
+		session="$S408" model="$MA" tok_in=1 tok_out=10 tok_cache_w=100 tok_cache_r=1000 \
+		data.msgs=1 data.last_msg=msg_b1
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-408.json"
+	[ "$S_STATUS" = 0 ] && [ "$(model_row "$MA")" = "3 30 300 3000" ] && [ "$(model_row "$MB")" = "12 120 1200 12000" ] &&
+		pass "a trace the old hook wrote and a kill cut recovers too: every message once" ||
+		fail "from an old-style anchor alpha totals '$(model_row "$MA")', beta '$(model_row "$MB")'"
+
+	# A SINGLE-MODEL SESSION IS UNCHANGED: section 26's two ends, again.
+	new_trace
+	head -25 "$RFIX" >"$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	cp "$RFIX" "$SCRATCH/resumed-307.jsonl"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-resumed-307.json" >/dev/null 2>&1
+	[ "$(ev_of session.usage | sed -n 's/.*"last_msg":"\([^"]*\)".*/\1/p' | paste -sd' ' -)" = "$RMSG1 $RMSG2" ] &&
+		[ "$(model_row "$RMODEL")" = "$R34" ] &&
+		pass "a single-model session: the same two anchors and the same total ($R34)" ||
+		fail "the single-model session: $(ev_of session.usage)"
+else
+	echo "  skip  node is not on PATH — the per-model anchor legs need the extractor"
 fi
 
 t_done "trace hooks"
