@@ -3741,4 +3741,57 @@ case $ROW421 in *'`data.cwd`, the expanded value'*'`session.start` records the r
 	pass "the README row says data.cwd is the expanded value, and session.start's the raw one" ;;
 *) fail "the README row for subagent-stop.sh does not say data.cwd is the expanded value and session.start records the raw one" ;; esac
 
+
+# ---------------------------------------------------------------------------
+banner "44. The kit's wait bound covers the measured lag of a final message (#479)"
+# ---------------------------------------------------------------------------
+# Retro finding F4 (#477): 235 of 453 agent.stop events (52 %) gave up at the
+# kit's 1000 ms bound and carry no tokens; 234 of them ended on a user line
+# aged 1,029 / 1,137 / 1,471 ms at p10 / p50 / p90. Section 27's bound, sized
+# in #308 on seven stops, is shorter than the lag it waits out. Here the final
+# turn lands about 1.5 s after the hook starts waiting — the measured p90 —
+# and the hook reads the KIT'S OWN policy file, the way its wiring does.
+#
+# The writer is driven by section 27's nap log, so the 1.5 s run from the
+# hook's first nap, never from a clock a slow preamble could eat.
+unset TRACE_AGENT_WAIT_MS
+# lag479 <policy file> — the hook on a transcript one turn short, whose final
+# turn lands 1.5 s into the wait, under that policy file. Sets S_*, NAPS and
+# LAG479, the agent.stop it wrote.
+lag479() {
+	new_trace
+	cp "$SCRATCH/sub-head-308.jsonl" "$SCRATCH/sub-lag-479.jsonl"
+	stop_on "$SCRATCH/sub-lag-479.jsonl"
+	: >"$SCRATCH/naps-308.log"
+	(
+		_w=0
+		while [ ! -s "$SCRATCH/naps-308.log" ] && [ "$_w" -lt 600 ]; do
+			sleep 0.05 2>/dev/null || sleep 1
+			_w=$((_w + 1))
+		done
+		sleep 1.5 2>/dev/null || sleep 2
+		cat "$SCRATCH/sub-tail-308.jsonl" >>"$SCRATCH/sub-lag-479.jsonl"
+	) &
+	_lw=$!
+	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$1"
+	wait "$_lw"
+	LAG479=$(ev_of agent.stop | sed -n '1p')
+}
+
+if [ "$HAVE_NODE" = 1 ]; then
+	lag479 "$KIT/scripts/trace.kit.config.sh"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" = ok ] && [ "$(num "$LAG479" tok_out)" = 156 ] &&
+		pass "under the kit's policy a final turn 1.5 s late is waited for and priced (waited_ms $(str "$LAG479" waited_ms))" ||
+		fail "under the kit's policy a final turn 1.5 s late was given up on: exit $S_STATUS, event $LAG479"
+
+	# THE OLD BOUND LOSES THE SAME RACE — the fixture really is past 1000 ms.
+	printf "TRACE_AGENT_WAIT_MS='1000'\n" >"$SCRATCH/policy-479.sh"
+	lag479 "$SCRATCH/policy-479.sh"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$LAG479" outcome)" = fail ] && [ -z "$(num "$LAG479" tok_out)" ] &&
+		pass "under the old 1000 ms bound the same stop gives up, unpriced" ||
+		fail "under a 1000 ms bound the 1.5 s-late turn was read — the fixture no longer exceeds the old bound: $LAG479"
+else
+	note "node is not on PATH: the kit-bound lag legs did not run"
+fi
+
 t_done "trace hooks"
