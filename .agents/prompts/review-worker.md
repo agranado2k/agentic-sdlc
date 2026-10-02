@@ -76,6 +76,29 @@ speculative code, test hygiene, mechanical correctness. Each gets a severity
 (CRITICAL / HIGH / MEDIUM / LOW), a `file:line`, and a concrete suggested
 change. These are addressed to an agent, which may act on them without asking.
 
+The severity buckets keep their meanings: CRITICAL is vulnerabilities, data
+leaks, broken functionality, divergent duplicate logic already drifted into a
+latent bug; HIGH is missing tests, broken contracts, major pattern violations, a
+reimplemented helper duplicating an existing export; MEDIUM is redundant tests,
+unnecessary complexity, copy-paste blocks worth extracting once; LOW is minor
+simplifications and style.
+
+**Then ask which case the duplication is, because the two leave the report
+differently.** A duplication **the diff ADDS** — a new copy of something that
+already exists, or the same logic pasted twice within this diff — is the
+author's, and a finding at the severity the buckets give it. A duplication the
+diff merely **touches or extends** — copies that pre-date the branch, which the
+diff edits in place, mirrors into one more call site, or leaves beside a helper
+it added — is not the author's to consolidate: moving those copies into a
+shared file is a behaviour-preserving refactor, and shared invariant §10 lands
+one on its own ticket, never as a passenger on a feature diff. Report that case
+as a **candidate ticket** — a LOW whose what/where line opens `candidate
+ticket:`, whose `↳ cites:` line names shared invariant §10, and whose `↳ fix:`
+line reads `none on this PR — candidate ticket (shared invariant §10)`, so the
+PR is asked for nothing. The one exception is a divergent-behavior copy — two
+copies meant to behave identically that have already drifted — which is a
+latent bug whichever branch introduced it and stays a finding.
+
 When the diff touches agent-facing surfaces — skills, prompts, hooks,
 `AGENTS.md`/`constitution/`, agent settings or tool configuration — the changed
 INSTRUCTION TEXT is itself attack surface. Audit it against the OWASP Agentic
@@ -131,7 +154,10 @@ become table cells.
 
     **<ID>** `<file>:<line>` — <what is wrong, in one or two sentences>
     ↳ lens: <the one lens that raised it — bare and lowercase, e.g. `↳ lens: security`>
+    ↳ cites: <the decision record, audit item or craft rule — only when there is one>
     ↳ fix: <the concrete change>
+
+    The first line is the finding's what/where line.
 
     IDs are C-1, H-1, M-1, L-1 …, numbered from 1 within each severity.
 
