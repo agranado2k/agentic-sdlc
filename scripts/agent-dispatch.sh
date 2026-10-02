@@ -912,6 +912,7 @@ cleanup() { [ -n "$SCRATCH" ] && rm -rf "$SCRATCH"; }
 # end is, set and cleared by the two functions that write them. It starts at
 # 0 HERE, never from the environment — a caller's _SPAWNED=1 would otherwise
 # have a signal before the spawn write an end that pairs with nothing.
+# Accepted window: a signal held during an event's write can still mis-pair it.
 _SPAWNED=0
 # _WORKER_STARTED and _SIGNAL are what the end a signal writes says about it:
 # a rung only once a worker has started under one, and the signal by name.
