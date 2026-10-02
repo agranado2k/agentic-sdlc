@@ -208,6 +208,9 @@ implement_line() {
 		awk 'index($0, "<!-- implement:") == 1 { n++; line = $0 } END { if (n == 1) print line }' |
 		sed -n 's/^<!-- implement: ticket=#\([0-9]\{1,9\}\) tier=\([a-z][a-z0-9-]\{0,31\}\) -->$/\1 \2/p'
 }
+# legal_tier <token> — the vocabulary checker's verdict on one token the
+# shape above already bounded: one argument, one line, never the body.
+legal_tier() { sh "$ROOT/scripts/vocab.sh" "Tier: $1" >/dev/null 2>&1; }
 # Exactly one line opening with the marker, and it of the one shape: a second
 # one, or a malformed one, leaves nothing to read.
 IMPL=$(implement_line)
@@ -215,7 +218,7 @@ if [ -n "$IMPL" ]; then
 	_il_ticket=${IMPL%% *}
 	_il_tier=${IMPL#* }
 	if { [ -z "$TICKET" ] || [ "$_il_ticket" = "$TICKET" ]; } &&
-		sh "$ROOT/scripts/vocab.sh" check "Tier: $_il_tier" >/dev/null 2>&1; then
+		legal_tier "$_il_tier"; then
 		IMPLEMENT=yes
 		IMPL_TIER=$_il_tier
 	fi
