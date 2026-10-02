@@ -266,10 +266,16 @@ remains is what is still pending. When it exits 0 the run finishes the job —
 manual stamped, shims written, hook wired — and retires the scratch clone's
 bootstrap. Nothing is left to re-run: the clone can be deleted. That
 finishing output is working-tree changes like any other; commit it, or the
-branch proposes an adoption it does not contain:
+branch proposes an adoption it does not contain. The run has just wired the
+kit's commit hook, which refuses an agent's commit from the main working copy
+(the manual's worktree rule) — and you are an agent, so your agent harness's
+marker is in this shell and the hook would refuse you. This one is the
+operator's own adoption commit — your human's — made through the agent they
+just ran, by this document, so it takes that hook's loud bypass, which the
+manual keeps for the operator's own commits:
 
 ```sh
-git add -A && git commit -m "chore: adopt agentic-sdlc — the finishing run"
+git add -A && COMMIT_WITHOUT_WORKTREE=1 git commit -m "chore: adopt agentic-sdlc — the finishing run"
 ```
 
 ### E4. Prove it, then hand the keyboard back
