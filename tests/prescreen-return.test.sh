@@ -420,7 +420,7 @@ Evidence: "retry three times"'
 	if (cd "$PROJECT" && sh -c '. "$1"; checked_prescreen "$2" "$3"' _ "$CHECK" "$TEXT" "$SCRATCH/no-such-return") >"$SCRATCH/verdict.out" 2>"$SCRATCH/verdict.err"; then
 		fail "/$NAME — a return file that does not exist passed the check"
 	else
-		named_only "$NAME — a return that was never written is refused"
+		named_only "${T_VERDICT_PREFIX}a return that was never written is refused"
 	fi
 
 	# Found from the skills root — the nearest .agents/skills/ at or above the
