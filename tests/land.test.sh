@@ -253,8 +253,7 @@ for f in scripts/land.kit.sh tests/land.test.sh; do
 	*) fail "$f is not on bootstrap.sh's KIT_ONLY list — it would ship to a consumer" ;;
 	esac
 done
-grep -F '/merge-train' "$KIT/AGENTS.md" | grep -qF 'scripts/land.kit.sh' &&
-	pass "the root manual's /merge-train row names scripts/land.kit.sh as the one-PR form" ||
-	fail "the root manual's /merge-train row does not name scripts/land.kit.sh"
+# The /merge-train row's naming of the script is held by tests/self-host.test.sh
+# F7 alone — by path, by the name "landing script", with baits (#422).
 
 t_done "land one PR by hand"
