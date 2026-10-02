@@ -5,7 +5,9 @@ harness's own: **where does a resolved capability tier go at spawn time**,
 **how is a typed-return reader denied a shell, a forge CLI and the network**,
 and **how does a session's token usage reach the decision trace**. The first
 two are prose about a mechanism; the third ("Wiring the session hooks") points
-at real files under `hooks/`, which ship and arrive inert.
+at real files under `hooks/`, which ship and arrive inert. One more file there
+answers no question of the core's but a rule of the manual's: "Refusing an
+edit at the root checkout" wires the guard that holds hard rule 1 for an agent.
 
 The kit resolves a **capability tier** — and optionally a **task domain** — to a
 model identifier and stops there:
@@ -379,7 +381,8 @@ Two things the post-tool hook deliberately does not do:
 
 - **It writes no event at `PreToolUse`.** Both post payloads carry the whole
   `tool_input` themselves, so the pre hook has nothing to add to the event;
-  its marker is only the evidence that a call began.
+  its marker is only the evidence that a call began. (The root guard below is
+  one more `PreToolUse` hook, and records nothing.)
 - **It never reads an event's fields with `hook_field` on a tool payload.**
   One best-effort use is not a field of the event: when the reader refuses a
   post payload, the call still returned, so its pending marker is dropped by
@@ -610,6 +613,96 @@ when `verify` fails on the selection, so a half-import is not a shape you can
 reach by accident. And `cost_usd` reads the literal `unpriced` — never 0 — for
 a token-bearing event whose model has no price in your table, which is why the
 `CASE` above exists rather than a bare `CAST`.
+
+## Refusing an edit at the root checkout
+
+The manual's first hard rule is "Worktree, always": the root checkout is never
+where in-progress work is edited. Git has no hook for an edit, so the rule is
+held twice. `.githooks/pre-commit` refuses an agent's commit from the main
+working copy or on the default branch; `hooks/root-guard.sh` refuses the edit
+itself, before the tool runs. Of the two, the pre-tool hook is the one that
+refuses: git lets any committer skip a hook, so the commit hook is a guard a
+cooperative agent meets, and the pre-tool hook is what refuses the ways around
+it. Wire it to `PreToolUse` in your own `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [ { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash", "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/root-guard.sh\"" } ] } ]
+  }
+}
+```
+
+It reads the tool payload, resolves the target path against the repository's
+**main** working tree — found through git's common directory, so a session
+started inside a worktree still guards the right tree — and answers in the
+agent harness's own terms: exit 2 blocks the call and its one-line reason,
+naming hard rule 1 and the `git worktree add` line to run instead, reaches the
+model on stderr; exit 0 lets the call through. Nothing goes to stdout.
+
+- **Refused:** an Edit, Write, MultiEdit or notebook edit whose path is inside
+  the main working tree and not under `worktree/` — a new file as much as an
+  existing one, a relative path resolved against the session's directory, a
+  `..` that climbs out of a worktree.
+- **Let through:** paths under `worktree/`, paths outside the repository (a
+  dispatch's scratch lives under `$TMPDIR`), and the two runtime directories a
+  session legitimately writes at the root, `.trace/` and `.retro/`.
+- **It fails open.** A payload it cannot read, a tool it does not know or a
+  root it cannot resolve lets the call through: a guard that blocked every
+  call on a parse failure would end the session. The commit hook is no
+  fail-closed backstop for that — a cooperative agent meets it, and nothing
+  more. Unlike the trace hooks above it does exit non-zero — changing the
+  session is its whole purpose — and records nothing.
+
+### Which commits the commit hook refuses
+
+`.githooks/pre-commit` refuses agents only. A commit is refused when one of
+these variables is set, non-empty, in the committing environment, and the
+commit comes from the main working copy or lands on the default branch (the
+branch `origin/HEAD` names, or `main` where there is none). With none set, a
+human commits as before — so a consumer following `UPDATING.md` by hand on
+`main` is let through.
+
+| Variable | Set by | Status |
+| --- | --- | --- |
+| `CLAUDECODE` | Claude Code, in the shell it runs commands in | verified on a live host |
+| `CLAUDE_CODE_SESSION_ID` | Claude Code, the same shell | verified on a live host |
+| `TRACE_SESSION` | the kit's trace layer, while a session is traced | verified on a live host |
+| `GEMINI_CLI` | Gemini CLI, `1` in every shell command its tool runs | documented only — the CLI's own shell-tool documentation |
+| `CODEX_SANDBOX` | Codex, in a command it runs sandboxed | documented only |
+| `CODEX_SANDBOX_NETWORK_DISABLED` | Codex, in a sandboxed command with the network off | documented only |
+| `CODEX_THREAD_ID` | Codex | found in the 0.159.0 CLI binary, not verified live |
+
+A documented-only marker is the agent harness's own claim, not a run watched
+here; an agent harness that sets none of them commits as a human would, and
+only the pre-tool hook — where one is wired — still stands between it and the
+root. The refusal names hard rule 1 and the manual's quick-reference row, and
+never prints its own bypass: that lives in the hook's source and in the row,
+where it is the operator's call.
+
+### What Bash coverage it does not give
+
+For Bash it is a tripwire, not a proof. It reads the command roughly as a
+shell would — quotes dropped, heredoc bodies skipped, continuation lines
+joined, `env`, `sudo` and `VAR=` prefixes stripped, `cd` (and `git -C`)
+followed between simple commands — and refuses one that redirects into, or
+runs `sed -i`, `tee`, `cp` (onto) or `mv` on, a path that resolves to a
+**tracked** file at the root, a symlink to one included. It also refuses `mv`
+of a directory holding tracked files, and `git checkout` or `git restore` on
+a tracked file, a directory holding one, or `.` (`git restore --staged` alone
+touches only the index and passes). Where git acts at the root it refuses the
+discards of working changes — `git stash` (bare, `push` or `save`), `git reset
+--hard` and `git clean -f` — the incident that asked for this guard, and the
+three ways around the commit hook: `git commit --no-verify` (or `-n`, read
+letter by letter, so the `n` of `-uno` is `-u`'s), `git -c
+core.hooksPath=…`, and setting or unsetting `core.hooksPath` with `git
+config`. Everything else goes through: a script or an interpreter that writes
+(`sh tests/x.sh`, `node -e …`), `rm`, a path spelled through a variable or a
+glob it never expands, a `cd` inside a subshell or a function, and any write
+to an untracked file. The commit hook is what an agent meets next — a change
+this let through is still refused at the commit from the root, for an agent
+that keeps its marker and its hooks.
 
 ## What this adapter deliberately does NOT contain
 
