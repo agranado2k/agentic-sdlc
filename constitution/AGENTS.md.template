@@ -286,6 +286,7 @@ reading anyone had of it. Its personas and surfaces are declared in
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
+| Keep work out of the root checkout  | hard rule 1, held at the commit: `.githooks/pre-commit` refuses an agent's commit (an agent-harness marker set) from the main working copy or on the default branch, and lets a human's through. The loud bypass, `COMMIT_WITHOUT_WORKTREE=1 git commit`, is for the operator's own commits only — one an operator-run document makes included — and an agent takes it on the operator's say-so, never its own. Git has no hook for an edit: `adapters/README.md` names the agent harness adapter whose pre-tool hook refuses one, once you wire it |
 | Run the docs gate                   | `scripts/check.sh` — also runs on every push     |
 | See what the gate actually checks   | `scripts/docs-conformance/` — one validator per rule |
 | Change what the gate enforces       | `scripts/docs-conformance/config.mjs` — all policy is data there |

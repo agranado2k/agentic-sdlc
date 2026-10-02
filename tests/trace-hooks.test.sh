@@ -434,9 +434,18 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
-			# Two scripts on PreToolUse: the kill guard (#414) and the
-			# pending marker a denied call leaves behind (#409).
-			PreToolUse) case $_w_cmd in *"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;; *) _w_want=tool-pre-guard.sh ;; esac ;;
+			# Three scripts on PreToolUse: the kill guard (#414), the pending
+			# marker a denied call leaves behind (#409), and the root guard
+			# (#392). The root guard is no trace hook: it reads no trace policy,
+			# so it is held to its script alone, and its own suite,
+			# tests/root-guard.test.sh, holds the rest.
+			PreToolUse)
+				case $_w_cmd in
+				*"/hooks/root-guard.sh"*) continue ;;
+				*"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;;
+				*) _w_want=tool-pre-guard.sh ;;
+				esac
+				;;
 			*)
 				_w_bad=1
 				continue
@@ -478,13 +487,13 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Six events, seven commands, six scripts: one script serves both
+	# Six events, eight commands, seven scripts: one script serves both
 	# post-tool events, because the only difference between them is the
-	# outcome it records; PreToolUse runs two — the kill guard (#414) and the
-	# pending marker a denied call leaves behind (#409).
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 7 ] &&
-		pass "it names a hook script per wired command, seven in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 7"
+	# outcome it records; PreToolUse runs three — the kill guard (#414), the
+	# pending marker a denied call leaves behind (#409), and the root guard (#392).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 8 ] &&
+		pass "it names a hook script per wired command, eight in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 8"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
