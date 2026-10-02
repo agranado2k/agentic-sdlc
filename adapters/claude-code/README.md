@@ -416,9 +416,12 @@ you get it wrong:
   `--continue` keep the session id and append to the same transcript, and
   `SessionEnd` fires at the end of every run — so an end that re-read the whole
   file would count every earlier response again. Each `session.usage` event
-  therefore says how far it read (`data.last_msg`, and `data.msgs` for its
-  model), and the next end of that session counts only what came after the
-  last one the trace holds. The events stay a plain sum: `summary`, the export
+  therefore says how far it read for its model (`data.last_msg`, that model's
+  last message, and `data.msgs`, its message count), and the next end of that
+  session counts each model only after the last anchor the trace holds for
+  that model — a model with none is read from the start. One anchor per model
+  because the events are written one per model: an end killed after the first
+  of them leaves the others to the next end rather than skipping them (#408). The events stay a plain sum: `summary`, the export
   and the query below need no rule about which event supersedes which. A
   compaction appends to the same file too, but the call that writes its summary
   leaves no assistant line, so its tokens are in the rollup and in no message.

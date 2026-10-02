@@ -1676,6 +1676,12 @@
 # file only, for a consumer reading this note to take the adapter: the kill guard hooks/tool-pre-guard.sh (#414), the
 # phantom-stop count on `session.end` (#410), a compaction's rollup gap as
 # a `session.usage` event (#407) and the behind note on stdout (#427).
+# Landed beside it since 0.39.0, from #408 (PR #447), the same adapter:
+# hooks/transcript-usage.mjs reads each model's resume anchor from the
+# recorded events under a new --resume, hooks/hook.lib.sh forwards it and
+# hooks/session-end.sh passes it, so a multi-model session end killed
+# partway loses nothing; adapters/claude-code/README.md says one anchor per
+# model; tests/trace-hooks.test.sh holds it.
 
 shared-layer: 0.40.0
 
