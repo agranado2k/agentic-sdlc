@@ -44,6 +44,11 @@
 #      window), the trace-skills suite's named exclusion, bootstrap's KIT_ONLY
 #      list and a kit CI job for this suite. Every surface that counts the
 #      questions counts eight.
+#   9. It learns from its own runs (ticket #461, section 13): the window is
+#      the last CLOSED retro, a retro open beside it is named and never
+#      closed, sibling reports in the same window are named, questions 5 and
+#      6 read the compaction gap, the phantom stops and the wait-bound keys,
+#      and a finding is searched for in the tracker before it is recorded.
 #
 # NOT HELD here, on purpose: question 8's "what counts as a finding"
 # criteria and the rubric version its tier oracle names. Both are on the
@@ -79,6 +84,10 @@ cd "$ROOT" || exit 2
 # The span tokeniser and the placeholder filler are tests/lib.sh's
 # (t_trace_lines, t_trace_spans, t_trace_runnable), shared with
 # tests/trace-skills.test.sh (M-4, review of PR #293).
+
+# window_section — SKILL.md's "The window" section: the window span is the
+# first trace span in it (ticket #461).
+window_section() { awk '/^## The window/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
 
 # flat — stdin as one line, runs of spaces squeezed: a rule that wraps across
 # two lines is still the rule, and a needle is matched against the sentence.
@@ -937,11 +946,13 @@ if [ -d "$dir" ]; then
 	# L-2 (review of PR #293): the window span is a pipeline ending in tail,
 	# which exits 0 on empty input, so its exit status proves nothing. Run it
 	# again now that a retro run is seeded and hold its OUTPUT to that run.
-	wspan=$(t_trace_spans "$SKILL_ABS" | grep -F '"kind":"run.start"' | head -1)
+	# The window span is the first in the window section (ticket #461): it
+	# prints the closed retro's run.end, whose ts is the window's since.
+	wspan=$(window_section | grep -o '`sh scripts/trace\.sh[^`]*`' | tr -d '`' | head -1)
 	wout=$( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$wspan")" 2>/dev/null )
-	printf '%s\n' "$wout" | grep -F '"kind":"run.start"' | grep -qF '"skill":"retro"' &&
-		pass "the window span's output is the seeded retro run.start — the pipeline selects, not just exits 0" ||
-		fail "the window span printed no retro run.start over a trace that holds one: $wspan"
+	printf '%s\n' "$wout" | grep -qF '"kind":"run.end"' &&
+		pass "the window span's output is the seeded retro's run.end — the pipeline selects, not just exits 0" ||
+		fail "the window span printed no run.end over a trace that holds a closed retro: $wspan"
 fi
 
 # ---------------------------------------------------------------------------
@@ -1206,5 +1217,122 @@ case "$q6_line" in
 *'denied'*) pass "SKILL.md's question 6 names the denied tool calls" ;;
 *) fail "SKILL.md's question 6 does not name the denied tool calls" ;;
 esac
+
+# ---------------------------------------------------------------------------
+banner "13. The retro learns from its own runs: a closed window, an open sibling, the new keys, the tracker (ticket #461)"
+# ---------------------------------------------------------------------------
+# Three retros of 2026-10-01 ran at once. The window span's `tail -1` named
+# a run.start, and the latest one was a sibling's still open, so a retro read
+# from a run that had not ended; two retros over one window filed six
+# duplicate tickets between them. Each lesson is held here.
+#
+# 13a. The window is the last CLOSED retro. A scratch trace holds retro A,
+# begun and ended, then retro B, begun and never ended: the window span must
+# print A's run.end and nothing of B.
+lw="$SCRATCH/learn.retro"
+lw_trace() { ( cd "$ROOT" && TRACE_DIR="$lw" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+run_a=$(lw_trace begin retro); lw_trace end outcome=ok data.findings=1 >/dev/null
+run_b=$(lw_trace begin retro)
+wspan=$(window_section | grep -o '`sh scripts/trace\.sh[^`]*`' | tr -d '`' | head -1)
+wout=$( cd "$ROOT" && TRACE_DIR="$lw" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$wspan")" 2>/dev/null )
+case "$wout" in
+*'"kind":"run.end"'*"$run_a"*) pass "the window span prints the closed retro's run.end" ;;
+*) fail "the window span does not print the closed retro's run.end: $wspan" ;;
+esac
+case "$wout" in
+*"$run_b"*) fail "the window span names the open retro $run_b — a run that has not ended is no window" ;;
+*) pass "…and never the retro still open" ;;
+esac
+[ "$(printf '%s\n' "$wout" | grep -c .)" = 1 ] && pass "…as one line" || fail "the window span printed $(printf '%s\n' "$wout" | grep -c .) lines, not one"
+
+# 13b. A retro open beside this one is named in the report's first line and
+# left open. The procedure carries the span that lists them; over the same
+# scratch trace it prints B and not A.
+proc() { awk '/^## Procedure/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS"; }
+ospan=$(proc | grep -o '`sh scripts/trace\.sh export[^`]*`' | tr -d '`' | grep -F '"kind":"run.end"' | head -1)
+if [ -n "$ospan" ]; then
+	oout=$( cd "$ROOT" && TRACE_DIR="$lw" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$ospan")" 2>/dev/null )
+	case "$oout" in *"$run_b"*) pass "the open-run span lists the retro still open" ;; *) fail "the open-run span does not list the open retro: $ospan" ;; esac
+	case "$oout" in *"$run_a"*) fail "the open-run span lists the closed retro $run_a" ;; *) pass "…and not the closed one" ;; esac
+else
+	fail "the procedure carries no span listing the retro runs still open"
+fi
+# Each needle is held to its own numbered step, not the whole procedure: step
+# 5 also says "report's first line", and a needle it satisfies would survive
+# step 2's rule being deleted (L-1, review of PR #475).
+step() { proc | awk -v n="$1" '$0 ~ "^" n "\\. \\*\\*" { on = 1; print; next } /^[0-9]+\. \*\*/ { on = 0 } on' | flat; }
+step_has() { case "$(step "$1")" in *"$2"*) pass "$3" ;; *) fail "$3 — step $1 does not say: $2" ;; esac; }
+step_has 2 'another retro is open' "step 2 names the case of another retro open"
+step_has 2 'report'"'"'s first line' "…says so in the report's first line"
+step_has 2 'never closes it' "…and never closes the other run"
+step_has 2 'below yours' "…and says where a sibling in this working tree sits: below this pass's run (L-5)"
+
+# 13c. Question 5 reads the compaction gap and the phantom stops; question 6
+# the wait-bound keys of a failed agent.stop. Each key is held to the
+# sixth/fifth section's Reads paragraph and to the adapter that writes it,
+# so a misspelled key is red here before it is a question nobody can answer.
+reads_of() { awk -v n="$1" '$0 ~ "^## " n "\\. " { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat; }
+sec5_reads=$(reads_of 5)
+sec6_reads=$(reads_of 6)
+for k in 'data.via=rollup' 'data.phantoms'; do
+	case "$sec5_reads" in *"\`$k\`"*) pass "question 5's Reads paragraph names $k" ;; *) fail "question 5's Reads paragraph does not name \`$k\`" ;; esac
+	grep -qF "\`$k" "$ROOT/adapters/claude-code/README.md" && pass "…a key the adapter documents writing" || fail "$k is no key adapters/claude-code/README.md documents"
+done
+for k in 'data.last_kind' 'data.last_age_ms'; do
+	case "$sec6_reads" in *"\`$k\`"*) pass "question 6's Reads paragraph names $k" ;; *) fail "question 6's Reads paragraph does not name \`$k\`" ;; esac
+	grep -qF "\`$k\`" "$ROOT/adapters/claude-code/README.md" && pass "…a key the adapter documents writing" || fail "$k is no key adapters/claude-code/README.md documents"
+done
+case "$sec6_reads" in *'`agent.stop`'*) pass "question 6 reads agent.stop" ;; *) fail "question 6's Reads paragraph does not name \`agent.stop\`" ;; esac
+sec5_prose=$(awk '/^## 5\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS" | flat)
+case "$sec5_prose" in *'**Phantom stops**'*) pass "question 5 has a phantom-stops bullet" ;; *) fail "question 5 has no **Phantom stops** bullet" ;; esac
+case "$sec5_prose" in *'**The compaction gap**'*) pass "question 5 has a compaction-gap bullet" ;; *) fail "question 5 has no **The compaction gap** bullet" ;; esac
+case "$sec6_prose" in *'**Stops read too early**'*) pass "question 6 has a bullet for the stops the wait bound passed" ;; *) fail "question 6 has no **Stops read too early** bullet" ;; esac
+# Questions 7 and 8 already read data.by (#385) and data.label_proposed
+# (#354): sections 11 and 2b hold them; one needle each here keeps the
+# ticket's list whole in one place.
+assert_file_has "$SIDECAR" '`data.by`' "question 7 reads data.by"
+assert_file_has "$SIDECAR" '`data.label_proposed`' "question 8 reads data.label_proposed"
+
+# 13d. The report's first line names the sibling reports written in the same
+# window, so /to-tickets deduplicates two retros' findings.
+step_has 5 'sibling report' "the report step names the sibling reports"
+step_has 5 'same window' "…the ones written in the same window"
+# The rule RUNS (M-2, review of PR #475): step 5's listing over a scratch
+# .retro/ holding a report from before the window, one inside it and this
+# pass's own prints only the one inside it.
+lspan=$(step 5 | grep -o '`ls "$root"/.retro/[^`]*`' | tr -d '`' | head -1)
+if [ -n "$lspan" ]; then
+	sr="$SCRATCH/sibling.root"; mkdir -p "$sr/.retro/2026/09" "$sr/.retro/2026/10"
+	: >"$sr/.retro/2026/09/retro-20260930T120000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261001T080000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261001T120000Z.md"
+	: >"$sr/.retro/2026/10/retro-20261002T090000Z.md"
+	lcmd=$(printf '%s\n' "$lspan" | sed -e 's/<the window start as YYYYMMDDTHHMMSSZ>/20261001T100000Z/' -e 's/<the file name of this report>/retro-20261002T090000Z.md/')
+	lout=$(root="$sr" sh -c "$lcmd" 2>&1)
+	case "$lout" in *retro-20261001T120000Z.md*) pass "step 5's listing prints the report inside the window" ;; *) fail "step 5's listing missed the sibling inside the window: $lcmd → $lout" ;; esac
+	case "$lout" in *retro-20260930T*|*retro-20261001T080000Z*) fail "step 5's listing prints a report from before the window: $lout" ;; *) pass "…and none from before it, the previous retro's own included" ;; esac
+	case "$lout" in *retro-20261002T090000Z.md*) fail "step 5's listing prints this pass's own report" ;; *) pass "…and not this pass's own" ;; esac
+else
+	fail "step 5 carries no runnable listing of the sibling reports (\`ls \"\$root\"/.retro/…\`)"
+fi
+
+# 13e. Before a finding is recorded, the tracker is searched for it since the
+# window start; a match is named in the findings table and the note's
+# related, and a finding with a landed ticket is reported closed.
+step_has 6 'gh issue list --state all --search' "the routing step searches the tracker, open and closed"
+step_has 6 'created:>=<YYYY-MM-DD>' "…since the window start"
+step_has 6 'findings table' "…names a match in the findings table"
+step_has 6 'reported closed' "…reports a finding with a landed ticket closed"
+step_has 6 'not as a candidate' "…not as a candidate"
+# The fix-not-holding exception needs the landing's date, so the search asks
+# for it (M-1, L-2, review of PR #475).
+step_has 6 'closedAt' "the search returns each match's closing date"
+step_has 6 'postdates the landing' "…which a finding's evidence is compared with: a fix that did not hold is a candidate again"
+# Step 8 and the never-fix paragraph say every CANDIDATE leaves for
+# /to-tickets — a finding reported closed is not one (L-4).
+step_has 8 'Every candidate is a ticket' "step 8 routes the candidates, not every finding"
+assert_file_has "$SKILL" 'reported closed is named and routed nowhere' "…and says what happens to a finding reported closed"
+note_span=$(proc | grep -o '`sh scripts/trace\.sh emit kind=note[^`]*`' | head -1)
+case "$note_span" in *'outcome=candidate|closed'*) pass "the note records closed beside candidate" ;; *) fail "the note's outcome is not candidate|closed: $note_span" ;; esac
 
 t_done "/retro contract"
