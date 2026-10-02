@@ -47,6 +47,15 @@
 #      a mutant that cuts exactly the text it holds. Its twin, the CI review
 #      prompt, carries the same ruling in the same words, and both define the
 #      buckets the added case is graded by in the skill's own sentence.
+#  11. Every planned lens is accounted for (#482, retro F6): a lens the host
+#      refused to start records its spawn with `outcome=refused` and no
+#      `spawn.end` — nothing started, so nothing ends; a lens that started
+#      ends in exactly one `spawn.end`, `fail` with its cause when it returned
+#      no report or hit a usage limit — all recorded before the verdict; and
+#      the summary carries a `Lenses not run:` line naming both kinds and
+#      whether this session audited the lens in its own context instead, so a
+#      review that ran six lenses never reads as one that ran seven. Every
+#      rule proved by its own bait.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -65,7 +74,7 @@ cd "$ROOT" || exit 2
 # region <start-re> <end-re> — the lines from the first match of start to the
 # first match of end (exclusive of nothing; sed range). Used to hold the two
 # axes' sections to DISJOINT glyph vocabularies.
-region() { sed -n "/$1/,/$2/p" "$SKILL_ABS"; }
+region() { sed -n "/$1/,/$2/p" "${3:-$SKILL_ABS}"; }
 
 # ---------------------------------------------------------------------------
 banner "0. The file under test"
@@ -668,5 +677,85 @@ bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copie
 carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 	fail "bait: the worker's fix line reworded still reads as the skill's ruling" ||
 	pass "bait: the worker's fix line reworded goes red"
+
+# ---------------------------------------------------------------------------
+banner "11. Every planned lens is accounted for, and a missing lens is named (#482)"
+# ---------------------------------------------------------------------------
+# lens_rules_missing <skill file> — the rules of #482 the file does not hold,
+# space-joined. The spawn rules are read inside §3 only (its heading to the
+# first agent's), the report line inside the summary template only, so a
+# phrase that wanders elsewhere does not count. A lens the host refused to
+# start records `spawn outcome=refused` and no `spawn.end` — nothing started,
+# so nothing ends; a lens that started ends in exactly one `spawn.end`.
+lens_rules_missing() {
+	_lr_s3=$(region '^### 3\. ' '^#### Agent 1 ' "$1")
+	# One sentence per line: split at a full stop followed by a space, so
+	# `spawn.end` and `§5` stay whole (awk, not sed: a `\n` in a sed
+	# replacement is GNU's alone).
+	_lr_sen=$(printf '%s\n' "$_lr_s3" | tr '\n' ' ' | awk '{ gsub(/\. /, ".\n"); print }')
+	_lr_end=$(printf '%s\n' "$_lr_s3" | grep -o '`sh scripts/trace\.sh emit kind=spawn\.end[^`]*`' || true)
+	_lr_out=''
+	[ "$(printf '%s\n' "$_lr_end" | grep -c .)" = 1 ] || _lr_out="$_lr_out one-spawn.end-emit-in-§3"
+	printf '%s\n' "$_lr_end" | grep -qF 'outcome=ok|fail' || _lr_out="$_lr_out outcome=ok|fail"
+	printf '%s\n' "$_lr_end" | grep -qF 'data.agent=<roster-token>' || _lr_out="$_lr_out spawn.end-data.agent"
+	printf '%s\n' "$_lr_sen" | grep -F 'Every lens this review planned' | grep -qF 'before the verdict' ||
+		_lr_out="$_lr_out every-lens-before-the-verdict"
+	printf '%s\n' "$_lr_sen" | grep -F 'outcome=refused' | grep -F 'no `spawn.end`' | grep -qF 'concurrent' ||
+		_lr_out="$_lr_out refused-lens:outcome=refused-and-no-spawn.end"
+	# One sentence binds each outcome to its cause: `ok` to a returned report,
+	# `fail` to a usage limit or no report.
+	printf '%s\n' "$_lr_sen" | grep -F 'started' | grep -F 'ends in exactly one `spawn.end`' |
+		grep -F '`ok` when it returned its report' | grep -F '`fail` when it hit a usage limit' |
+		grep -qF 'no report' || _lr_out="$_lr_out started-lens:one-spawn.end-ok-and-fail-with-cause"
+	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -qF 'its record stands' ||
+		_lr_out="$_lr_out audited-here:record-stands"
+	_lr_line=$(region '^### Review Summary$' '^| | Severity | Count |$' "$1" | grep '^Lenses not run: ')
+	for _lr_p in 'refused' 'ended in fail' 'in this context instead'; do
+		printf '%s\n' "$_lr_line" | grep -qF -- "$_lr_p" || _lr_out="$_lr_out summary-line:'$_lr_p'"
+	done
+	grep -qF 'line is never a clean audit' "$1" || _lr_out="$_lr_out never-a-clean-audit"
+	# The roster says where every `data.agent` is written; `spawn.end` writes
+	# one too, so the roster's list of places names it (review of #512).
+	grep '^\*\*The sub-agent roster\.\*\*' "$1" | grep -qF 'on the spawn and its `spawn.end` above' ||
+		_lr_out="$_lr_out roster-names-spawn.end"
+	printf '%s' "$_lr_out" | sed 's/^ //'
+}
+miss=$(lens_rules_missing "$SKILL_ABS")
+[ -z "$miss" ] && pass "/review-pr records a refused lens as refused with no spawn.end, ends a started one in one spawn.end with each outcome bound to its cause, before the verdict, and names a lens not run in its summary" ||
+	fail "/review-pr's lens accounting is missing: $miss — a review whose lenses never ran reads as one that ran (retro F6)"
+# The line sits between Clean audits and the count table.
+c=$(t_line_of "$SKILL_ABS" "Clean audits:")
+ln=$(t_line_of "$SKILL_ABS" "Lenses not run: ")
+th=$(t_line_of "$SKILL_ABS" "| | Severity | Count |")
+[ -n "$ln" ] && [ "$c" -lt "$ln" ] && [ "$ln" -lt "$th" ] &&
+	pass "the summary's 'Lenses not run:' line sits between Clean audits ($c) and the count table ($th)" ||
+	fail "'Lenses not run:' is not between Clean audits ($c) and the count table ($th) — got '$ln'"
+# Baits: one per rule the reader holds, so no rule survives its own deletion.
+for b in \
+	's/\(kind=spawn\.end[^`]*\)outcome=ok|fail/\1outcome=ok/' \
+	's/\(kind=spawn\.end[^`]*\) data\.agent=<roster-token>/\1/' \
+	's/\(`sh scripts\/trace\.sh emit kind=spawn\.end[^`]*`\)/\1 and \1/' \
+	's/outcome=refused/outcome=fail/g' \
+	's/no `spawn\.end`/a `spawn.end`/g' \
+	's/ends in exactly one `spawn\.end`/ends in a `spawn.end`/g' \
+	's/`fail` when it hit/`ok` when it hit/' \
+	's/`ok` when it returned its report/`fail` when it returned its report/' \
+	's/usage limit/limit/g' \
+	's/no report/a short report/g' \
+	's/before the verdict/after the verdict/g' \
+	's/its record stands/its record is replaced/' \
+	's/^Lenses not run: .*$//' \
+	'/^Lenses not run: /s/refused/stopped/g' \
+	'/^Lenses not run: /s/ended in fail/ended badly/' \
+	'/^Lenses not run: /s/in this context instead/elsewhere/' \
+	's/line is never a clean audit/line is a clean audit/' \
+	's/on the spawn and its `spawn\.end` above/on the spawn above/'; do
+	sed "$b" "$SKILL_ABS" >"$SCRATCH/bait482.md"
+	if ! cmp -s "$SCRATCH/bait482.md" "$SKILL_ABS" && [ -n "$(lens_rules_missing "$SCRATCH/bait482.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
 
 t_done "/review-pr output contract"
