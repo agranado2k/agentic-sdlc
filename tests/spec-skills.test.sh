@@ -342,6 +342,9 @@ assert_file_has "$TIX" "across an open issue" "the anti-pattern names the gate i
 handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
 t_text_has "$handoff" "**session cap**" "the hand-off names the session cap under its own bold name"
 t_text_has "$handoff" "/review-pr" "the divisor is the review every such session ends at"
+# Rule 3 is where an agent first reads that the frontier runs in parallel;
+# unqualified, it promises what the hand-off's cap withholds (#514, M-2).
+t_text_has "$(rule_n 3)" "up to the session cap the hand-off states (step 5)" "rule 3's parallel frontier is bounded by the session cap"
 # The divisor is /review-pr's roster, read from that skill and never a hand
 # copy: a lens added or dropped there must move every place this cap spells
 # its count, or the formula goes stale under a green suite (#514, L-1).
