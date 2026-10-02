@@ -3092,4 +3092,106 @@ else
 	echo "  skip  node is not on PATH — the rollup-gap legs need the extractor"
 fi
 
+# ---------------------------------------------------------------------------
+banner "39. A stop carries the run of the checkout the subagent worked in (#421)"
+# ---------------------------------------------------------------------------
+# Retro finding H4 (#417): 0 of 28 priced agent.stop events carried an
+# implement or review run. The hooks execute from the ROOT checkout, so the
+# shared script keyed the run stack on the root's toplevel — while the session
+# whose spend it was had run `begin` in a linked worktree, whose stack is keyed
+# on the worktree's toplevel. The hook now reads the stack of the checkout the
+# payload's cwd names (the process's own cwd when the payload names none),
+# provided it is a checkout of the same repository, and the root's otherwise.
+#
+# Each leg runs the ROOT's copy of the hook, the way the kit's wiring does.
+
+R421="$SCRATCH/run-root-421"
+behind_kit "$R421"
+git -C "$R421" worktree add -q -b feat/wt-421 "$R421.wt" 2>/dev/null
+HOOK421="$R421/${HOOKS#"$KIT"/}/subagent-stop.sh"
+new_trace
+ROOTRUN=$(cd "$R421" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTOUTER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin implement 2>/dev/null)
+WTINNER=$(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh begin review-pr 2>/dev/null)
+[ -n "$ROOTRUN" ] && [ -n "$WTOUTER" ] && [ -n "$WTINNER" ] &&
+	pass "a run is open at the root and two nested runs are open in its linked worktree" ||
+	fail "the fixture runs did not open: root '$ROOTRUN', worktree '$WTOUTER' / '$WTINNER'"
+
+# stop_from <cwd or ''> [env assignments…] — the root's hook on the fixture
+# payload with its cwd field set to <cwd> (removed when empty), run from the
+# kit's own directory. Sets S_* and STOP, the last agent.stop written.
+stop_from() {
+	_sf_cwd=$1
+	shift
+	if [ -n "$_sf_cwd" ]; then
+		set_key cwd "$_sf_cwd" <"$FIX/subagent-stop.payload.json"
+	else
+		grep -v '"cwd":' "$FIX/subagent-stop.payload.json"
+	fi | set_key agent_transcript_path "$SCRATCH/sub.jsonl" >"$SCRATCH/stop-421.json"
+	t_run_split env TRACE_DIR="$TDIR" GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" \
+		sh "$HOOK421" <"$SCRATCH/stop-421.json"
+	STOP=$(ev_of agent.stop | sed -n '$p')
+}
+
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "a stop from the linked worktree exits 0, silent on stdout" ||
+	fail "a stop from the worktree: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "it carries the worktree's open run, not the root's" ||
+	fail "a stop from the worktree carries run '$(str "$STOP" run)', want $WTINNER (root's is $ROOTRUN)"
+[ "$(str "$STOP" parent)" = "$WTOUTER" ] &&
+	pass "and that run's parent, the run below it on the worktree's stack" ||
+	fail "a stop from the worktree carries parent '$(str "$STOP" parent)', want $WTOUTER"
+
+mkdir -p "$R421.wt/scripts/deeper"
+stop_from "$R421.wt/scripts/deeper"
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a cwd deep inside the worktree names the same checkout" ||
+	fail "a stop from below the worktree's top carries run '$(str "$STOP" run)', want $WTINNER"
+
+stop_from "$R421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a stop from the root carries the root's run" ||
+	fail "a stop from the root carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)', want $ROOTRUN"
+
+mkdir -p "$SCRATCH/nowhere-421"
+stop_from "$SCRATCH/nowhere-421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a stop from outside any checkout falls back to the root's run" ||
+	fail "a stop from outside a checkout carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+stop_from "$SCRATCH/never-there-421"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd that does not exist falls back to the root's run, exit 0" ||
+	fail "a missing cwd: exit $S_STATUS, run '$(str "$STOP" run)', want $ROOTRUN"
+
+OTHER421="$SCRATCH/other-repo-421"
+mkdir -p "$OTHER421"
+git init -q "$OTHER421"
+stop_from "$OTHER421"
+[ "$(str "$STOP" run)" = "$ROOTRUN" ] &&
+	pass "a cwd in an UNRELATED repository is not a checkout of this one: the root's run" ||
+	fail "a stop from an unrelated repository carries run '$(str "$STOP" run)', want $ROOTRUN"
+
+# No cwd in the payload: the hook's own working directory answers.
+(cd "$R421.wt" && stop_from '')
+STOP=$(ev_of agent.stop | sed -n '$p')
+[ "$(str "$STOP" run)" = "$WTINNER" ] &&
+	pass "a payload with no cwd field: the hook's own working directory names the checkout" ||
+	fail "with no cwd field, a hook run inside the worktree carries run '$(str "$STOP" run)', want $WTINNER"
+
+# The environment still beats every stack, as it does for the shared script.
+stop_from "$R421.wt" TRACE_RUN=run-from-env-421
+[ "$(str "$STOP" run)" = run-from-env-421 ] && [ -z "$(str "$STOP" parent)" ] &&
+	pass "a TRACE_RUN in the environment still wins over the worktree's stack" ||
+	fail "with TRACE_RUN set the stop carries run '$(str "$STOP" run)' parent '$(str "$STOP" parent)'"
+
+# A worktree with NO run open says so: it never borrows the root's.
+(cd "$R421.wt" && env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1 &&
+	env TRACE_DIR="$TDIR" sh scripts/trace.sh end >/dev/null 2>&1)
+stop_from "$R421.wt"
+[ "$S_STATUS" = 0 ] && [ -z "$(str "$STOP" run)" ] && [ -n "$STOP" ] &&
+	pass "a worktree with no open run: the stop carries no run, not the root's" ||
+	fail "a worktree with no open run: exit $S_STATUS, run '$(str "$STOP" run)', event '$STOP'"
+
 t_done "trace hooks"
