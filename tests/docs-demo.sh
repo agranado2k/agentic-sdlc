@@ -264,6 +264,27 @@ assert_out_lacks "ledger/R1 is named by no test"
 assert_out_has "ledger/R2 is named by no test"
 printf '# ledger/R2\n' >>tests/ledger.sh
 assert_status 0 "green once a test names every requirement" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+# The rest of the grammar, the same shapes the harness's fixture tests drive
+# through the node engine (#537 review, M-1), so the two engines are held to
+# one grammar: only a line that OPENS with `R<n>.` and a blank (or its end) is
+# a requirement, and CRLF line endings still read one.
+printf 'Prose citing R4. in passing.\n  R5. indented is prose.\nRx. not an id.\nR6.no space is not one either\n' >docs/specs/prose.md
+assert_status 0 "prose, an indented R5., Rx. and R6.no-space are no requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_lacks "prose/R"
+printf '# Journal\r\n\r\nR1. One.\r\nR3.\r\n' >docs/specs/journal.md
+assert_status 1 "CRLF line endings still read the requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "journal/R1 is named by no test"
+assert_out_has "journal/R3 is named by no test"
+# The trailing boundary (#537 review, L-1): an id followed by a letter, a
+# digit, `_`, or `.` and a digit is another token; a sentence's full stop and
+# a hyphen are not.
+printf '# journal/R1abc journal/R1_retry journal/R1.5 journal/R3x\n' >tests/journal.sh
+assert_status 1 "journal/R1abc, R1_retry and R1.5 do not cite journal/R1 without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "journal/R1 is named by no test"
+assert_out_has "journal/R3 is named by no test"
+printf '# holds journal/R1.\n# journal/R3-and-more\n' >>tests/journal.sh
+assert_status 0 "a full stop or a hyphen after the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+rm -f docs/specs/prose.md docs/specs/journal.md tests/journal.sh
 # The globs are the docs gate's policy, read by the twin from config.mjs.
 cp scripts/docs-conformance/config.mjs "$SCRATCH/config.mjs.good"
 sed 's|^    "tests/\*",$|    "checks/*",|' "$SCRATCH/config.mjs.good" >scripts/docs-conformance/config.mjs

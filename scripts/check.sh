@@ -268,6 +268,9 @@ if [ "$engine" = "fallback" ]; then
 		# The cited names, from every file a glob matches. `set -f` keeps the
 		# unquoted glob list from expanding against the tree: each one is a
 		# `case` pattern, where `*` crosses `/` exactly as the harness reads it.
+		# The trailing boundary is the harness's too: the match swallows one
+		# letter, digit, `_`, or `.` and a digit after the id, and the second
+		# grep drops it — `ledger/R1abc` and `ledger/R1.5` cite nothing.
 		list_files | {
 			set -f
 			_ifs=$IFS
@@ -279,14 +282,14 @@ if [ "$engine" = "fallback" ]; then
 					# shellcheck disable=SC2254  # the glob is a pattern on purpose
 					case "$f" in
 					$g)
-						LC_ALL=C grep -o -h -I -E '[a-z][a-z0-9-]*/R[0-9]+' "$f" 2>/dev/null
+						LC_ALL=C grep -o -h -I -E '[a-z][a-z0-9-]*/R[0-9]+([A-Za-z0-9_]|\.[0-9])?' "$f" 2>/dev/null
 						break
 						;;
 					esac
 				done
 			done
 			IFS=$_ifs
-		} | sort -u >"$vfile.cited"
+		} | LC_ALL=C grep -E '/R[0-9]+$' | sort -u >"$vfile.cited"
 		while IFS='	' read -r spec name; do
 			grep -qxF -- "$name" "$vfile.cited" && continue
 			report "living-spec-untested" "$spec" \

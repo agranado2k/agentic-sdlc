@@ -20,7 +20,8 @@
 // TEXT — which is why `testGlobs` must stay a literal list, one quoted glob
 // per line. The grammar below (area, requirement line, cited name, glob) is
 // spelled identically in both; tests/docs-demo.sh drives the twin red and
-// green on a bootstrapped project.
+// green on a bootstrapped project, over the same grammar shapes as the
+// fixture tests here.
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, realpathSync } from "node:fs";
@@ -33,8 +34,14 @@ const REQUIREMENT_RE = /^R([0-9]+)\.(?:[ \t\r]|$)/;
 const FENCE_RE = /^[ \t]*(```|~~~)/;
 // Leftmost-longest is the same answer as JS's greedy match for this pattern,
 // so `subprocess/R1` is one name (not `process/R1`) and `process/R10` is never
-// `process/R1` — in both engines.
-const CITED_RE = /[a-z][a-z0-9-]*\/R[0-9]+/g;
+// `process/R1` — in both engines. The TRAILING boundary: an id followed by a
+// letter, a digit, `_`, or `.` and a digit is another token, so `billing/R1abc`,
+// `billing/R1_retry` and `billing/R1.5` cite nothing, while `billing/R1.` at a
+// sentence's end and `billing/R1-x` cite R1. The pattern swallows the one
+// offending character and the match is then dropped (CITED_NAME) — a lookahead
+// the twin's `grep -o -E` cannot spell, so both engines tokenize the same way.
+const CITED_RE = /[a-z][a-z0-9-]*\/R[0-9]+(?:[A-Za-z0-9_]|\.[0-9])?/g;
+const CITED_NAME = /\/R[0-9]+$/;
 
 /**
  * A glob as a shell `case` pattern reads it: `*` is any run of characters,
@@ -133,7 +140,9 @@ export function run(ctx) {
   if (globs.length > 0) {
     for (const rel of surface(ctx.repoRoot)) {
       if (!globs.some((re) => re.test(rel)) || ctx.kind(rel) !== "file") continue;
-      for (const name of (ctx.read(rel) ?? "").match(CITED_RE) ?? []) cited.add(name);
+      for (const name of (ctx.read(rel) ?? "").match(CITED_RE) ?? []) {
+        if (CITED_NAME.test(name)) cited.add(name);
+      }
     }
   }
 

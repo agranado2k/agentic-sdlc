@@ -70,6 +70,24 @@ test("R12: the name is a whole token — R1 is not R10, and process is not subpr
   cleanup(ctx);
 });
 
+test("R12: the name ends where the id ends — R1abc, R1_x and R1.5 are not R1", () => {
+  // The trailing boundary (#537 review, L-1): a cited id followed by a letter,
+  // a digit, `_`, or `.` and a digit is a different token, not a citation.
+  // A sentence's full stop after the id still cites it.
+  const ctx = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "tests/a.test.sh": "# billing/R1abc billing/R1_retry billing/R1.5 billing/R2x\n",
+  });
+  assert.equal(untested(run(ctx)).length, 2);
+  cleanup(ctx);
+  const ok = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "tests/a.test.sh": "# holds billing/R1.\n# (billing/R2)\n",
+  });
+  assert.deepEqual(run(ok), []);
+  cleanup(ok);
+});
+
 test("R12: a requirement line inside a fence is quoted material, not a requirement", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": "# Billing\n\n```md\nR9. An example line.\n```\n\nR1. Real.\n",
