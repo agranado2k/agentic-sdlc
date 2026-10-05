@@ -285,6 +285,15 @@ assert_out_has "journal/R1 is named by no test"
 assert_out_has "journal/R3 is named by no test"
 printf '# holds journal/R1.\n# journal/R3-and-more\n' >>tests/journal.sh
 assert_status 0 "a full stop or a hyphen after the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+# The leading boundary (#544): an id preceded by a letter, a digit, `_`, `-`
+# or `/` is the tail of a longer token; a parenthesis, a blank and the start
+# of a line are not.
+printf '# Xjournal/R1 sub-journal/R1 9journal/R1 _journal/R1\n# -journal/R3 specs/journal/R3\n' >tests/journal.sh
+assert_status 1 "Xjournal/R1, sub-journal/R1, -journal/R3 and specs/journal/R3 cite nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "journal/R1 is named by no test"
+assert_out_has "journal/R3 is named by no test"
+printf '# (journal/R1)\njournal/R3\n' >>tests/journal.sh
+assert_status 0 "a parenthesis or the start of a line before the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 rm -f docs/specs/prose.md docs/specs/journal.md tests/journal.sh
 # The globs are the docs gate's policy, read by the twin from config.mjs.
 cp scripts/docs-conformance/config.mjs "$SCRATCH/config.mjs.good"
