@@ -467,6 +467,28 @@ Chosen: **option 1**.
    `/implement` hands over its own run, not the ticket's — that run does not
    exist until the subagent's `begin` — so the spawned session's own stop
    joins its ticket only through the spawner's run.
+   *Amended 2026-10-05 (#543):* **`end <run>` closes the run it names, or
+   nothing.** A subagent shares its session's id — the agent harness
+   sources the session's environment for every tool call, subagents
+   included — so in the session's checkout it shares the session's stack,
+   and nesting there is correct as long as each caller ends only what it
+   began. On 2026-10-05 one did not: the `/review-pr` subagent of the #529
+   session skipped its own `begin`, recorded its verdicts and raises under
+   the implementer's run, and its bare `end` popped that run — a `run.end`
+   with no outcome, six minutes in — so the implementer's own `end` found
+   nothing open. The stack did what it was told; the caller was wrong, and
+   a bare `end` cannot tell whose run it closes. So `end` takes the run id
+   `begin` printed as an optional first argument: named, it closes that run
+   when it is the top of this session's stack in this checkout, and
+   otherwise is exit 2 naming the run that is open, nothing written and
+   nothing popped — a caller that never began has no id of its own to name,
+   and a parent ending under a child still open is refused rather than
+   closing the child. The id is held to one path segment of
+   `[A-Za-z0-9._-]`, the class `begin` mints; outside it is a usage error.
+   A bare `end` keeps today's meaning, so a consumer's skill written before
+   the change still closes its run; every shipped skill that closes a run
+   now names it, `end <the run id your begin printed>`, and leaves the id
+   out when its `begin` printed nothing.
 6. **Cost is computed on read, never on write.** Events carry raw token
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
@@ -560,6 +582,9 @@ Chosen: **option 1**.
   subagent-stop, session-end and tool-post hooks, the hand-over in
   `/implement`, `/review-pr` and `/pr-iterate`, and the suite sections that
   hold them (trace-hooks §47, trace-skills §22).
+- Amended for ticket #543: `end <run>`, the run-naming close, the skills
+  that name their run at `end`, and the suite sections that hold them
+  (trace §28, trace-skills §23).
 - Amended for ticket #466: the conditional and required rows of
   `TRACE_SHAPES`, `/pr-iterate`'s triage and iteration prose, and the
   suite sections that hold them (trace §26, trace-skills §21).

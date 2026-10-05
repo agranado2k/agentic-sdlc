@@ -121,7 +121,7 @@ Required before declaring done:
 - [ ] All `[DEBUG-...]` instrumentation removed (`grep` the prefix)
 - [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
 - [ ] The hypothesis that turned out correct is stated in the commit / PR message — so the next debugger learns
-- [ ] The run is closed: `sh scripts/trace.sh end outcome=ok|stopped reason='<the confirmed hypothesis, or why the diagnosis stopped, one line>' || :`
+- [ ] The run is closed: `sh scripts/trace.sh end <the run id your begin printed> outcome=ok|stopped reason='<the confirmed hypothesis, or why the diagnosis stopped, one line>' || :` (the id left out when your `begin` printed nothing, and never a `Trace-Run:` id: a run you did not begin is not yours to end)
 
 **Then ask: what would have prevented this bug?** If the answer is architectural — no good test seam, tangled callers, hidden coupling — that is a decision, not a chore. Hand it to `/improve-codebase-architecture`, which turns "there was no correct seam" into a designed deepening; the specifics this diagnosis produced (which seam was missing, which callers the bug needed) are exactly the input that skill's exploration phase otherwise has to guess at. What comes out is a record under `docs/adr/` or a ticket via `/to-tickets` — never a drive-by refactor on top of the fix (shared invariant §10). Make the recommendation **after** the fix is in, not before: you have more information now than when you started.
 

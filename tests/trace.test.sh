@@ -1837,4 +1837,63 @@ case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
 *) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-02 (#472 …' note" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "28. end names the run its caller began, and closes only that one (ticket #543)"
+# ---------------------------------------------------------------------------
+# The #529 session's `end` answered "no run is open": its /review-pr subagent
+# shared the session id (an agent harness's subagent sources the session's
+# environment) and the worktree, so it shared the stack — and, having skipped
+# its own `begin`, its bare `end` popped the implementer's run. A bare `end`
+# closes the top of the stack, whoever began it; `end <run>` closes the run it
+# names and nothing else: a top that is any other run is exit 2, nothing
+# written and nothing popped. Each call below is a separate `sh` process, as a
+# parent and its subagent are.
+OW="$SCRATCH/own-543"; OWON=$(policy "$OW")
+OWFILE="$OW/events/$TODAY.jsonl"
+ow() { env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" "$@"; }
+ow_lines() { wc -l <"$OWFILE" | tr -d ' '; }
+OWP=$(ow begin implement subject='ticket:#543')
+OWC=$(ow begin review-pr subject='pr:#543')
+[ -n "$OWP" ] && [ -n "$OWC" ] && pass "a parent and a subagent sharing one session and one checkout each open a run" ||
+	fail "the begins printed '$OWP' and '$OWC'"
+# The parent closing its own run while the subagent's is still open on top of it.
+_ow_n=$(ow_lines)
+t_run_split ow end "$OWP" outcome=ok reason='the parent, too early'
+[ "$S_STATUS" = 2 ] && pass "the parent's end naming its run, under the subagent's open run, is exit 2" ||
+	fail "end <parent> under an open child exited $S_STATUS: $S_ERR"
+case $S_ERR in *"$OWC"*) pass "and the refusal names the run that is open instead" ;; *) fail "the refusal did not name the open run $OWC: $S_ERR" ;; esac
+[ "$(ow_lines)" = "$_ow_n" ] && pass "and writes no run.end" || fail "a refused end wrote: $(tail -n 1 "$OWFILE")"
+# A subagent that never began — the #529 case — naming a run that is not open.
+t_run_split ow end 20261005T111906Z-1-deadbeef outcome=ok
+[ "$S_STATUS" = 2 ] && [ "$(ow_lines)" = "$_ow_n" ] &&
+	pass "an end naming a run nobody opened here is exit 2 and writes nothing" ||
+	fail "end <a run never begun> exited $S_STATUS, the file grew to $(ow_lines)"
+t_run_split ow end "$OWC" outcome=ok reason='the subagent'
+[ "$S_STATUS" = 0 ] && pass "the subagent's end naming its own run exits 0" || fail "end <child> exited $S_STATUS: $S_ERR"
+case $(tail -n 1 "$OWFILE") in *'"kind":"run.end"'*'"run":"'"$OWC"'","parent":"'"$OWP"'"'*'"reason":"the subagent"'*) pass "and closes the subagent's run" ;;
+*) fail "end <child> wrote: $(tail -n 1 "$OWFILE")" ;; esac
+t_run_split ow end "$OWP" outcome=ok reason='the parent'
+[ "$S_STATUS" = 0 ] && pass "then the parent's end naming its own run exits 0" || fail "end <parent> exited $S_STATUS: $S_ERR"
+case $(tail -n 1 "$OWFILE") in *'"kind":"run.end"'*'"run":"'"$OWP"'"'*'"reason":"the parent"'*) pass "and closes the parent's run — each closed by its own end" ;;
+*) fail "end <parent> wrote: $(tail -n 1 "$OWFILE")" ;; esac
+[ "$(grep -c '"kind":"run.end"' "$OWFILE")" = 2 ] && pass "two runs, two run.end lines" || fail "run.end lines: $(grep -c '"kind":"run.end"' "$OWFILE")"
+# Nothing open: a named end is the same refusal a bare one is.
+t_run_split ow end "$OWP" outcome=ok
+[ "$S_STATUS" = 2 ] && case $S_ERR in *begin*) true ;; *) false ;; esac &&
+	pass "a named end with no run open is exit 2, saying what opens one" || fail "a named end on an empty stack exited $S_STATUS: $S_ERR"
+# The run is held to the shape begin mints, and is never a field.
+assert_status 2 "an end naming a run that is not one path segment is exit 2" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end 'x/y' outcome=ok
+# The interface is recorded where a caller reads it.
+t_run_split sh "$TRACE"
+case $S_ERR in *'trace.sh end [<run>] [outcome='*) pass "the usage names end [<run>]" ;; *) fail "the usage does not name 'end [<run>]': $S_ERR" ;; esac
+sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh end [<run>] [outcome=' &&
+	pass "and so does the script's header" || fail "the header's command list does not name end [<run>]"
+_ow_adr=$(sed -n '/Amended 2026-10-05 (#543)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
+case $_ow_adr in *'`end <run>`'*'exit 2'*) pass "ADR-0008 carries the dated #543 amendment: end <run>, exit 2" ;;
+*) fail "ADR-0008 has no '*Amended 2026-10-05 (#543):*' block naming \`end <run>\` and exit 2" ;; esac
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-05 (#543"*) pass "the index row for 0008 carries the #543 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-05 (#543 …' note" ;;
+esac
+
 t_done "trace script"
