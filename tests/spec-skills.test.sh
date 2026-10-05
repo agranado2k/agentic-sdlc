@@ -821,6 +821,41 @@ GH
 fi
 
 # ---------------------------------------------------------------------------
+banner "4c. Covers: on every ticket, and the coverage check before the quiz (ADR-0012 clauses 3 and 4, R5 R6)"
+# ---------------------------------------------------------------------------
+# A ticket names the requirement ids it delivers; the three exempt kinds say
+# which they are, on a line the coverage check can tell from a gap. The check
+# itself is a script (tests/coverage.test.sh holds its verdicts); what is
+# held here is that the skill stamps the line, runs the script by its plain
+# name before the human sees the draft, shows both lists, and publishes the
+# line the quiz confirmed.
+covers=$(printf '%s\n' "$rules" | grep -F '**Covers')
+[ -n "$covers" ] && pass "R5: a ticket rule titled Covers exists" || fail "R5: no ticket rule titled Covers — the stamp has no rule"
+w="the Covers rule"
+t_text_has "$covers" '`Covers: <id>, <id>`' "R5: the line's shape, spelled once" "$w"
+t_text_has "$covers" '`<area>/R<n>`' "R5: an area-qualified id is a legal entry" "$w"
+t_text_has "$covers" '`Covers: none (prefactor)`' "R5: the prefactor exemption, spelled as the check reads it" "$w"
+t_text_has "$covers" '`Covers: none (open-issue)`' "R5: the open-issue exemption" "$w"
+t_text_has "$covers" '`Covers: none (release)`' "R5: the release exemption" "$w"
+t_text_has "$covers" "orphan" "R5: a ticket that covers nothing unexempt is named for what it is" "$w"
+t_text_has "$covers" "no requirement lines" "R5: a PRD written before requirements gets no Covers: lines" "$w"
+draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
+t_text_has "$draft" "a \`Covers:\` line (rule" "R5: the draft step stamps the line, citing its rule" "step 2"
+t_text_has "$draft" "named by its draft number" "R6: each drafted ticket goes to a file the check can label" "step 2"
+t_text_has "$quiz" 'sh scripts/coverage.sh "$scratch/body" "$draft"/' "R6: the check runs on the screened copy and the drafts, by the plain script name" "the quiz step"
+t_text_has "$quiz" "reads ids only" "R7: the check reads ids only — why its output may enter the session" "the quiz step"
+t_text_has "$quiz" '`uncovered: <id>`' "R6: the uncovered list, as the script prints it" "the quiz step"
+t_text_has "$quiz" '`orphan: <n>`' "R6: the orphan list, as the script prints it" "the quiz step"
+t_text_has "$quiz" "shows both lists" "R6: the quiz shows both lists" "the quiz step"
+t_text_has "$quiz" "runs again" "R6: the check runs again after a Covers: line changes" "the quiz step"
+t_text_has "$quiz" "Exit 3" "R6: a PRD with no requirement lines is its own answer, not a pass" "the quiz step"
+in_order "$quiz" "R6: the coverage check runs before the draft is presented" \
+	"sh scripts/coverage.sh" "shows both lists" "present the draft"
+t_text_has "$publish" "a \`Covers:\` line" "R5: the published body carries the Covers: line" "the publish step"
+handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
+t_text_has "$handoff" 'rm -rf "${draft:?}"' "the draft files go when the decomposition ends" "step 5"
+
+# ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
 # ---------------------------------------------------------------------------
 t_assert_skill_commands 5 "the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief" "$PRD_ABS" "$TIX_ABS"
