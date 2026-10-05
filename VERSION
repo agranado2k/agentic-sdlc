@@ -1982,8 +1982,8 @@
 # the id plainly. UPDATING.md changes content: the arriving-from paragraph,
 # and both worked examples re-pin.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# adapters/claude-code/hooks/root-guard.sh draws the commit hook's line for an
-# edit: a linked worktree of the repository off the default branch is open
+# The claude-code adapter's hooks/root-guard.sh draws the commit hook's line
+# for an edit: a linked worktree of the repository off the default branch is open
 # wherever it lives, so an agent harness's own isolated worktrees are no
 # longer refused; the main working copy, a linked worktree on the default
 # branch and a directory under worktree/ that no worktree checks out are
