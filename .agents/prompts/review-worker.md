@@ -187,5 +187,18 @@ become table cells.
 
     Exhaustive by design. Do not answer these and do not resolve them.
 
+    **Where the spec carries requirement ids** — `R<n>` lines in a PRD's
+    Requirements section, `<area>/R<n>` for a living spec's, and a ticket's
+    `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites
+    the id of the requirement it delivers, and every id on the ticket's
+    `Covers:` line that the diff does not deliver is a ❌ MISSING item naming
+    that id, so a covered requirement left undone reaches the human on the
+    confirm-list rather than passing in silence. **With no requirement ids
+    in the spec**, both read as they always have: a ✅ SPECIFIED item cites
+    the PRD, ticket or decision-record line it answers, and a ❌ MISSING item
+    names the spec line the diff does not deliver. The id goes on the item's
+    own line, right after its tag: the session that lands this report keeps
+    the tagged line and drops any line beneath it.
+
 Do not modify any file. Do not commit, do not push, and do not open or merge a
 pull request. A review that edits the code it is reviewing is not a review.
