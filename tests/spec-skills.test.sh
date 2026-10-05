@@ -61,6 +61,51 @@ t_assert_skill_in_roster "to-prd"
 t_assert_skill_in_roster "to-tickets"
 
 # ---------------------------------------------------------------------------
+banner "1b. /to-prd asks once before writing an ungrilled PRD (ADR-0012 clause 5, R3 R4)"
+# ---------------------------------------------------------------------------
+# The question lives in "Before you start", so it is asked before any step of
+# the process runs — and it is one question, not an interview: beyond it the
+# skill still synthesizes. The check reads the conversation only; a skill that
+# read the trace to decide would break ADR-0008.
+grill=$(section_of "$PRD_ABS" "Before you start" | awk '/^- \*\*An ungrilled conversation\.\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on')
+[ -n "$grill" ] && pass "\"Before you start\" carries the ungrilled-conversation bullet" ||
+	fail "\"Before you start\" has no '- **An ungrilled conversation.**' bullet — R3's question has no home"
+w="the grilling bullet"
+t_text_has "$grill" "holds no grilling session" "R3: the trigger — what the conversation lacks" "$w"
+t_text_has "$grill" "one question" "R3: one question, not an interview" "$w"
+t_text_has "$grill" "run \`/grill-me\` first?" "R3: the question itself" "$w"
+t_text_has "$grill" "\`/grill-with-docs\` instead" "R3: the substitution" "$w"
+t_text_has "$grill" "glossary" "R3: the substitution's condition names the glossary" "$w"
+t_text_has "$grill" "decision records" "R3: … and the decision records" "$w"
+t_text_has "$grill" "**Yes**" "R3: the accept path" "$w"
+t_text_has "$grill" "hand back" "R3: yes returns to this skill's synthesis" "$w"
+t_text_has "$grill" "**No**" "R4: the decline path" "$w"
+t_text_has "$grill" "under Open Issues" "R4: the decline path lists its guesses where a later session reads them" "$w"
+t_text_has "$grill" "would otherwise have guessed" "R4: what goes there — the guesses, not a summary" "$w"
+t_text_has "$grill" "nobody to answer" "R4: a spawned or unattended run, with nobody to answer, takes the decline path" "$w"
+t_text_has "$grill" "counts as grilled" "R3: only a grilling skill's run counts — a hand-run interview does not" "$w"
+t_text_has "$grill" "reads the conversation only" "R3: the check's one input" "$w"
+t_text_has "$grill" "never the trace" "R3: the input it never reads" "$w"
+t_text_has "$grill" "ADR-0008" "R3: why — no skill reads the trace" "$w"
+t_text_has "$grill" "still never interviews" "ADR-0012 clause 11: no clarify loop beyond the one question" "$w"
+# The intro's no-interview rule names its one exception, or the two contradict.
+intro=$(awk '/^---$/ { n++; next } n == 2 && /^## / { exit } n == 2' "$PRD_ABS")
+t_text_has "$intro" "Do NOT interview the user" "the intro keeps its rule" "the intro"
+t_text_has "$intro" "one question" "… and names the one question as its exception" "the intro"
+# Asked before the process runs: the bullet precedes step 1.
+q_line=$(t_line_of "$PRD_ABS" "**An ungrilled conversation.**")
+s1_line=$(grep -n '^1\. ' "$PRD_ABS" | head -1 | cut -d: -f1)
+[ -n "$q_line" ] && [ -n "$s1_line" ] && [ "$q_line" -lt "$s1_line" ] &&
+	pass "the question (line $q_line) is asked before process step 1 (line $s1_line)" ||
+	fail "the question does not precede process step 1 — question='$q_line' step1='$s1_line'"
+# Never a trace read in the skill: no reader verb of the trace script appears.
+for verb in show summary export; do
+	grep -qE "trace(\.kit)?\.sh $verb" "$PRD_ABS" &&
+		fail "/to-prd names 'trace.sh $verb' — a skill that reads the trace breaks ADR-0008" ||
+		pass "/to-prd never reads the trace with '$verb'"
+done
+
+# ---------------------------------------------------------------------------
 banner "2. The PRD template's sections, in the order a fresh session reads them"
 # ---------------------------------------------------------------------------
 # The objective is first because it is the line every ticket opens with; open
