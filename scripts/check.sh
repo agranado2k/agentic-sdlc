@@ -34,7 +34,9 @@
 #   portability deny-list on the shared article.
 #
 #   NO NODE? A reduced POSIX fallback runs instead: repo paths named in code
-#   spans of the root manual and the articles must exist. It prints a NOTICE
+#   spans of the root manual and the articles must exist, and every living
+#   requirement must be named by a test (the living-spec rule's twin, which
+#   reads its policy from the harness's config.mjs). It prints a NOTICE
 #   saying exactly what it is NOT checking, because a gate that quietly
 #   downgrades itself is how a project ends up believing in coverage it lost.
 #
@@ -64,7 +66,7 @@ advisory_header="WARN  docs conformance"
 # set inside it is lost when the loop ends. The file is the one channel that
 # survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
-trap 'rm -f "$vfile"' EXIT INT TERM HUP
+trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited"' EXIT INT TERM HUP
 
 # report <rule> <file> <message> <hint>
 report() {
@@ -228,6 +230,70 @@ if [ "$engine" = "fallback" ]; then
 		esac
 		scan_manual "$article"
 	done
+
+	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
+	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
+	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
+	# test globs match. Vacuous with no living spec. The grammar is the
+	# validator's, spelled the same; the POLICY is not copied here at all: the
+	# specs directory and the globs are read BY TEXT from config.mjs's
+	# `livingSpec` block, which is why that block keeps them literal. No block
+	# (a config older than the rule) is no globs, so a requirement fails with
+	# the hint that names the policy — the harness's answer too.
+	ls_cfg="scripts/docs-conformance/config.mjs"
+	specs_dir="" spec_globs=""
+	if [ -f "$ls_cfg" ]; then
+		specs_dir=$(sed -n 's/^[[:space:]]*specsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)
+		spec_globs=$(awk '/^[[:space:]]*testGlobs:[[:space:]]*\[/ { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' "$ls_cfg" |
+			sed -n 's/^[[:space:]]*"\([^"]*\)",\{0,1\}[[:space:]]*$/\1/p')
+	fi
+	[ -n "$specs_dir" ] || specs_dir="docs/specs"
+	: >"$vfile.specs"
+	for spec in "$specs_dir"/*.md; do
+		[ -f "$spec" ] || continue
+		ids=$(awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence && /^R[0-9]+\.([ \t\r]|$)/ { sub(/\..*/, ""); if (!seen[$0]++) print }' "$spec")
+		[ -n "$ids" ] || continue
+		area=$(basename "$spec" .md)
+		if ! printf '%s\n' "$area" | LC_ALL=C grep -Eqx '[a-z][a-z0-9-]*'; then
+			report "living-spec-area-invalid" "$spec" \
+				"holds requirements, but \"$area\" is not an area name — one lowercase token, [a-z][a-z0-9-]*" \
+				"Rename the file to its area (docs/specs/<area>.md); its requirements are cited as <area>/R<n>, so an area that cannot be cited cannot be held to a test."
+			continue
+		fi
+		for rid in $ids; do
+			printf '%s\t%s/%s\n' "$spec" "$area" "$rid" >>"$vfile.specs"
+		done
+	done
+	if [ -s "$vfile.specs" ]; then
+		# The cited names, from every file a glob matches. `set -f` keeps the
+		# unquoted glob list from expanding against the tree: each one is a
+		# `case` pattern, where `*` crosses `/` exactly as the harness reads it.
+		list_files | {
+			set -f
+			_ifs=$IFS
+			IFS='
+'
+			while read -r f; do
+				[ -f "$f" ] || continue
+				for g in $spec_globs; do
+					# shellcheck disable=SC2254  # the glob is a pattern on purpose
+					case "$f" in
+					$g)
+						LC_ALL=C grep -o -h -I -E '[a-z][a-z0-9-]*/R[0-9]+' "$f" 2>/dev/null
+						break
+						;;
+					esac
+				done
+			done
+			IFS=$_ifs
+		} | sort -u >"$vfile.cited"
+		while IFS='	' read -r spec name; do
+			grep -qxF -- "$name" "$vfile.cited" && continue
+			report "living-spec-untested" "$spec" \
+				"$name is named by no test" \
+				"Name \`$name\` in a test (its name, or a comment beside it) in a file livingSpec.testGlobs in scripts/docs-conformance/config.mjs matches, or retire the requirement with a REMOVED delta. A living requirement no test names is a claim (shared invariant §8)."
+		done <"$vfile.specs"
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -235,7 +301,8 @@ fi
 # ---------------------------------------------------------------------------
 if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
-	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer." >&2
+	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer," >&2
+	echo "        and living specs against the test globs (the living-spec rule, its POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2

@@ -581,6 +581,29 @@ assert_out_lacks "portability-leak"
 restore_good
 
 # ---------------------------------------------------------------------------
+banner "12b. RED then GREEN — a living requirement no test names (PRD #527, R14)"
+# ---------------------------------------------------------------------------
+# A fresh bootstrap carries the living-spec check and no living spec of the
+# kit's, so the gate above was green on a project with no docs/specs/. The
+# first requirement the project writes is held to its suite from that moment:
+# the full gate runs the harness's validator, the forced fallback its twin.
+assert_no_file "docs/specs"
+mkdir -p docs/specs
+printf '# Signup\n\nR1. WHEN a visitor signs up, the system SHALL send one confirmation.\n' >docs/specs/signup.md
+assert_status 1 "check.sh rejects a living requirement no test names" -- sh scripts/check.sh
+assert_out_has "living-spec-untested"
+assert_out_has "docs/specs/signup.md"
+assert_out_has "signup/R1"
+assert_status 1 "so does the fallback, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "signup/R1 is named by no test"
+mkdir -p tests
+printf '#!/bin/sh\n# signup/R1: one confirmation per signup\n' >tests/signup.test.sh
+assert_status 0 "check.sh passes once a test names it" -- sh scripts/check.sh
+assert_status 0 "and so does the fallback" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+rm -rf docs/specs tests/signup.test.sh
+rmdir tests 2>/dev/null || :
+
+# ---------------------------------------------------------------------------
 banner "13. The bypass is real, and loud"
 # ---------------------------------------------------------------------------
 printf '\nOwner: %s\n' "$(mark PROJECT_OWNER)" >>AGENTS.md

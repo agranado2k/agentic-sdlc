@@ -240,6 +240,43 @@ case "$LAST_OUT" in
 *) fail "gate did not report shared-layer $KITV: $LAST_OUT" ;;
 esac
 
+banner "A5b. The living-spec check holds without node — PRD #527's R12 and R13"
+# ADR-0012 clause 10, on the reduced path: a project with no node still has
+# every living requirement held to the suite. The harness's fixture tests
+# drive the node engine; this drives its POSIX twin, forced, on the project
+# bootstrap just stamped — which arrives with no living spec of the kit's.
+assert_no_file "docs/specs"
+mkdir -p docs/specs
+assert_status 0 "an empty docs/specs/ passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "living specs"
+printf '# Ledger\n\nR1. The ledger SHALL balance.\n\n```md\nR7. A quoted example, not a requirement.\n```\n\nR2. WHEN a posting is reversed, the ledger SHALL keep both entries.\n' >docs/specs/ledger.md
+assert_status 1 "a living requirement no test names fails without node (R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "living-spec-untested"
+assert_out_has "docs/specs/ledger.md"
+assert_out_has "ledger/R1 is named by no test"
+assert_out_has "ledger/R2 is named by no test"
+assert_out_lacks "ledger/R7"
+mkdir -p tests
+printf '#!/bin/sh\n# ledger/R1, and ledger/R20 — a longer id, not the second\n' >tests/ledger.sh
+printf '# ledger/R2, in a file no test glob matches\n' >docs/ledger-notes.md
+assert_status 1 "only a whole name, in a file the test globs match, counts" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_lacks "ledger/R1 is named by no test"
+assert_out_has "ledger/R2 is named by no test"
+printf '# ledger/R2\n' >>tests/ledger.sh
+assert_status 0 "green once a test names every requirement" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+# The globs are the docs gate's policy, read by the twin from config.mjs.
+cp scripts/docs-conformance/config.mjs "$SCRATCH/config.mjs.good"
+sed 's|^    "tests/\*",$|    "checks/*",|' "$SCRATCH/config.mjs.good" >scripts/docs-conformance/config.mjs
+assert_status 1 "a policy that drops tests/* moves what counts as a test" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "ledger/R1 is named by no test"
+cp "$SCRATCH/config.mjs.good" scripts/docs-conformance/config.mjs
+printf 'R1. An area that cannot be cited.\n' >docs/specs/Ledger_Book.md
+assert_status 1 "a spec file whose name is no area fails without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "living-spec-area-invalid"
+assert_out_has "docs/specs/Ledger_Book.md"
+rm -rf docs/specs docs/ledger-notes.md tests/ledger.sh && rmdir tests
+assert_status 0 "no docs/specs/ at all passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+
 banner "A6. The gate is NOT vacuous over the new docs"
 # If an unstamped mark could survive in docs/, "personalized" would be unchecked.
 printf '\n- **Owner** — %s\n' "$(t_mark PROJECT_OWNER)" >>docs/domain-glossary.md
