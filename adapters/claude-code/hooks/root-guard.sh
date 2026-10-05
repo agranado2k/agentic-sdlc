@@ -8,8 +8,12 @@
 #
 # WHAT IT REFUSES. A call to an editing tool (Edit, Write, MultiEdit,
 # NotebookEdit) whose target resolves inside the repository's MAIN working tree
-# but not under `worktree/`. The runtime directories sessions legitimately
-# write at the root — `.trace/` and `.retro/` — pass, and so does every path
+# and not inside a linked worktree off the default branch — the line the commit
+# hook draws, with its test (open_worktree below), so any linked worktree is
+# open, `worktree/<slug>` or one an agent harness cuts for its own isolated
+# sessions, and the default branch is closed in either. The runtime
+# directories sessions legitimately write at the root — `.trace/` and
+# `.retro/` — pass, and so does every path
 # outside the repository (a dispatch's scratch lives under $TMPDIR). For Bash
 # it is a TRIPWIRE, not a proof: a command that redirects into, or runs
 # `sed -i`, `tee`, `cp` or `mv` on, a path that resolves to a TRACKED file at
@@ -141,11 +145,38 @@ resolve1() {
 # place this rule forbids an edit.
 guarded() {
 	case $1 in
-	"$root"/worktree | "$root"/worktree/*) return 1 ;;
 	"$root"/.trace | "$root"/.trace/* | "$root"/.retro | "$root"/.retro/*) return 1 ;;
-	"$root" | "$root"/*) return 0 ;;
+	"$root" | "$root"/*) ;;
+	*) return 1 ;;
 	esac
-	return 1
+	! open_worktree "$1"
+}
+
+# open_worktree <absolute path> — status 0 when the checkout holding the path
+# is one an agent may work in: the line `.githooks/pre-commit` draws for a
+# commit, drawn here for an edit, with the same test. A linked worktree (git's
+# own directory is not its common directory) on any branch but the default —
+# the branch `origin/HEAD` names, or `main` where there is none — is open,
+# wherever it lives: `worktree/<slug>` or one an agent harness cuts for its own
+# isolated sessions. The main working copy is closed whatever its branch, and
+# so is a directory under it that no worktree checks out, or a worktree of
+# another repository nested in it. The checkout is
+# asked of the path's nearest existing directory, so a file not yet written
+# answers for where it will be. Git not answering is the fail-open case: open.
+open_worktree() {
+	_d=$1
+	while [ ! -d "$_d" ]; do _d=${_d%/*}; done
+	_gd=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_d" rev-parse --absolute-git-dir) 2>/dev/null) || return 0
+	_cd=$(hook_common_dir "$_d") || return 0
+	_gd=$(cd "$_gd" 2>/dev/null && pwd -P) || return 0
+	_cd=$(cd "$_cd" 2>/dev/null && pwd -P) || return 0
+	[ "$_gd" != "$_cd" ] || return 1
+	[ "${_cd%/*}" = "$root" ] || return 1
+	_branch=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_d" symbolic-ref -q --short HEAD) 2>/dev/null) || _branch=
+	_default=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_d" symbolic-ref -q --short refs/remotes/origin/HEAD) 2>/dev/null) || _default=
+	_default=${_default#origin/}
+	[ -n "$_default" ] || _default=main
+	[ "$_branch" != "$_default" ]
 }
 
 # tracked <absolute path> — status 0 when the root's index holds exactly it.
