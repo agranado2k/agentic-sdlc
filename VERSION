@@ -2024,6 +2024,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/requirement.lib.sh
   scripts/trace.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh

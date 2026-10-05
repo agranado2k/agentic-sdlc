@@ -231,7 +231,7 @@ delta_ex=$(printf '%s\n' "$req" | sed -n '/<requirement-delta-example>/,/<\/requ
 [ -n "$delta_ex" ] && pass "R10: the Requirements section carries a delta example" ||
 	fail "R10: no <requirement-delta-example> in the Requirements section"
 for h in ADDED MODIFIED REMOVED; do
-	printf '%s\n' "$delta_ex" | awk -v h="### $h" '$0 == h { getline; print; exit }' | grep -Eq '^[a-z][a-z0-9-]*/R[1-9][0-9]*\. ' &&
+	printf '%s\n' "$delta_ex" | awk -v h="### $h" '$0 == h { getline; print; exit }' | grep -Eq "^$REQ_AREA_ERE/$REQ_PRD_ID_ERE[.] " &&
 		pass "R10: the example's ### $h is followed by an area-qualified requirement line" ||
 		fail "R10: the example's ### $h is not followed by a '<area>/R<n>. ' line"
 done
@@ -240,7 +240,7 @@ printf '%s\n' "$delta_ex" >"$ex_dir/prd"
 printf 'Covers: none (prefactor)\n' >"$ex_dir/1"
 ex_out=$(sh scripts/coverage.sh "$ex_dir/prd" "$ex_dir/1" 2>/dev/null)
 rm -rf "$ex_dir"
-[ "$(printf '%s\n' "$ex_out" | grep -Ec '^uncovered: [a-z][a-z0-9-]*/R[1-9][0-9]*$')" -eq 3 ] &&
+[ "$(printf '%s\n' "$ex_out" | grep -Ec "^uncovered: $REQ_AREA_ERE/$REQ_PRD_ID_ERE\$")" -eq 3 ] &&
 	pass "R10: the coverage check reads the delta example as three area-qualified requirements" ||
 	fail "R10: the coverage check read the delta example as '$ex_out' — the template and the check disagree"
 

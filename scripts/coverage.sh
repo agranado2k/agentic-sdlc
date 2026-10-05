@@ -45,6 +45,10 @@
 #   3  the PRD body carries no requirement lines (a PRD written before them):
 #      nothing to check, stderr says so, stdout empty.
 #
+# THE GRAMMAR is not spelled here: the PRD's requirement line, the bounds and
+# the bounded id are scripts/requirement.lib.sh's, sourced from beside this
+# script, and without it the check refuses (exit 2) rather than read nothing.
+#
 # Shipped to every consumer beside scripts/vocab.sh: /to-tickets ships
 # unstamped and calls it by this name.
 set -u
@@ -58,11 +62,18 @@ usage() {
 	exit 2
 }
 
-# The id shape, one ERE: an optional area of at most AREA_MAX characters,
-# then R and a number from 1 of at most NUM_MAX digits.
-AREA_MAX=32
-NUM_MAX=6
-ID="([a-z][a-z0-9-]{0,$((AREA_MAX - 1))}/)?R[1-9][0-9]{0,$((NUM_MAX - 1))}"
+# The id shape and the requirement line: the grammar's one home.
+grammar="$(dirname "$0")/requirement.lib.sh"
+[ -r "$grammar" ] || {
+	cov_say "scripts/requirement.lib.sh, the requirement grammar, is missing beside this script — restore it from the kit"
+	exit 2
+}
+# shellcheck disable=SC1090
+. "$grammar"
+command -v req_prd_ids >/dev/null 2>&1 || {
+	cov_say "scripts/requirement.lib.sh defines no req_prd_ids — restore it from the kit"
+	exit 2
+}
 
 [ $# -ge 2 ] || usage
 prd=$1
@@ -72,18 +83,8 @@ shift
 	exit 2
 }
 
-# The requirement ids, in the PRD's order, each once. The bounds are checked
-# by length, not by an interval in the pattern: not every awk reads one.
-reqs=$(awk -v id="^([a-z][a-z0-9-]*/)?R[1-9][0-9]*\\\\." -v amax="$AREA_MAX" -v nmax="$NUM_MAX" '
-	{ sub(/\r$/, "") }
-	$0 ~ id "$" || $0 ~ id " " {
-		r = $0; sub(/\..*/, "", r)
-		a = r; if (!sub(/\/.*/, "", a)) a = ""
-		n = r; sub(/^.*R/, "", n)
-		if (length(a) > amax || length(n) > nmax) next
-		if (!seen[r]++) print r
-	}
-' "$prd") || {
+# The requirement ids, in the PRD's order, each once, bounded.
+reqs=$(req_prd_ids "$prd") || {
 	cov_say "the PRD body could not be read"
 	exit 2
 }
@@ -126,7 +127,7 @@ for t; do
 	if printf '%s\n' "$value" | grep -Eqx 'none \((prefactor|open-issue|release)\)'; then
 		continue
 	fi
-	printf '%s\n' "$value" | grep -Eqx "$ID( *, *$ID)*" || {
+	printf '%s\n' "$value" | grep -Eqx "$REQ_BOUNDED_ID_ERE( *, *$REQ_BOUNDED_ID_ERE)*" || {
 		cov_say "ticket $label: its Covers: line is neither a list of requirement ids nor none (prefactor|open-issue|release)"
 		exit 2
 	}

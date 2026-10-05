@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -289,6 +290,39 @@ test("the shipped policy names the specs directory and a non-empty list of test 
 test("the kit's own tree is silent — it ships the check and no living spec", () => {
   const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
   assert.deepEqual(run(ctx), []);
+});
+
+// The grammar has one home (#545): scripts/requirement.lib.sh, which the
+// gate's POSIX twin, the coverage check and the suites source. The validator
+// keeps its own literals — a fixture-tree run must not depend on a shell file
+// — so this test holds every one of them to the home, byte for byte.
+const GRAMMAR = ["REQ_AREA_ERE", "REQ_FENCE_ERE", "REQ_LINE_ERE", "REQ_CITED_NAME_ERE", "REQ_CITED_TOKEN_ERE"];
+
+function homeValues(lib) {
+  const script = `. "$1" && for v in ${GRAMMAR.join(" ")}; do eval "printf '%s\\n' \\"\\$$v\\""; done`;
+  const res = spawnSync("sh", ["-c", script, "sh", lib], { encoding: "utf8" });
+  assert.equal(res.status, 0, `sourcing ${lib} failed: ${res.stderr}`);
+  return res.stdout.split("\n").slice(0, GRAMMAR.length);
+}
+const HOME = join(here, "..", "..", "requirement.lib.sh");
+
+test("the validator's grammar is the shell home's, byte for byte", async () => {
+  const mod = await import("../validators/living-spec.mjs");
+  const home = homeValues(HOME);
+  GRAMMAR.forEach((name, i) => {
+    assert.equal(typeof mod[name], "string", `living-spec.mjs exports no ${name}`);
+    assert.equal(mod[name], home[i], `${name} diverges from scripts/requirement.lib.sh`);
+  });
+});
+
+test("the comparison can go red — a home whose requirement line moves diverges", async () => {
+  const mod = await import("../validators/living-spec.mjs");
+  const root = makeFixture({
+    "requirement.lib.sh": `${readFileSync(HOME, "utf8")}\nREQ_LINE_ERE='^R[1-9][0-9]*[.]([ \\t\\r]|$)'\n`,
+  });
+  const moved = homeValues(join(root, "requirement.lib.sh"));
+  assert.notEqual(moved[GRAMMAR.indexOf("REQ_LINE_ERE")], mod.REQ_LINE_ERE);
+  assert.equal(moved[GRAMMAR.indexOf("REQ_AREA_ERE")], mod.REQ_AREA_ERE);
 });
 
 test("end to end: an untested requirement fails the harness, naming the file and the id", () => {

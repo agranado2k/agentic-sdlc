@@ -799,6 +799,13 @@ t_uid_tasks() { ps -u "$(id -u)" -o nlwp= 2>/dev/null | awk '{ s += $1 } END { p
 . "$T_ROOT/scripts/manifest.lib.sh"
 command -v manifest_section >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/manifest.lib.sh did not define manifest_section" >&2; exit 2; }
 
+# The requirement-line grammar, shared with the gate's twin and the coverage
+# check (#545): a suite that asks "is this a requirement line?" asks the home,
+# never a pattern of its own — tests/requirement-grammar.test.sh holds that.
+# shellcheck disable=SC1091
+. "$T_ROOT/scripts/requirement.lib.sh"
+command -v req_spec_lines >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/requirement.lib.sh did not define req_spec_lines" >&2; exit 2; }
+
 # t_assert_skill_in_roster <name> — the three roster surfaces every shipped
 # skill must appear on: VERSION's skills: manifest, the consumer manual
 # template's quick-reference table, and the provenance file.

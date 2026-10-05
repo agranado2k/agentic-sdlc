@@ -462,6 +462,14 @@ jobs:
       - name: Manifest parser suite
         run: sh tests/manifest.test.sh
 
+  requirement-grammar:
+    name: The requirement-line grammar, once
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Requirement grammar suite
+        run: sh tests/requirement-grammar.test.sh
+
   trace-hooks:
     name: The adapter's session hooks and usage extractor
     runs-on: ubuntu-latest
