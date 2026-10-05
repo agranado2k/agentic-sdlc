@@ -8,8 +8,10 @@
 #      Code adapter reads the tool payload, resolves the target path against
 #      the repository's MAIN working tree (found through git's common
 #      directory, so a session started inside a worktree still knows which
-#      tree is the root), and blocks a path inside that tree but not under
-#      `worktree/` — the runtime directories `.trace/` and `.retro/` excepted.
+#      tree is the root), and blocks a path inside that tree but not inside a
+#      linked worktree off the default branch — the commit hook's line, any
+#      linked worktree open wherever it lives (#542) — the runtime
+#      directories `.trace/` and `.retro/` excepted.
 #      For Bash it is a tripwire: a redirect into, or `sed -i`, `tee`, `cp`,
 #      `mv`, `git checkout` / `git restore` on, a TRACKED file at the root, and
 #      the three ways around the git layer (`--no-verify`, `-c
@@ -517,6 +519,86 @@ t_run_split as_agent CLAUDECODE git -C "$FRESH" commit -q -m "chore: bootstrap"
 s_assert_status 0 "a repository's root commit goes through — there is nothing to cut a worktree from yet"
 
 # ---------------------------------------------------------------------------
+banner "7b. The agent harness layer draws the git layer's line (#542)"
+# ---------------------------------------------------------------------------
+# A linked worktree is a worktree wherever it lives: `worktree/<slug>`, or one
+# an agent harness cuts for its own isolated sessions under a directory of its
+# choosing (here `.claude/worktrees/agent-x`, the one that bit the spec-anchored
+# wave). The edit guard refuses exactly where the commit hook refuses: the main
+# working copy, whatever its branch, and a linked worktree on the default
+# branch. Everything here was driven RED against the old path rule, which
+# exempted `worktree/` by name and nothing else.
+git -C "$FIX" worktree add -q "$FIX/.claude/worktrees/agent-x" -b worktree-agent-x 2>/dev/null
+HW="$FIX/.claude/worktrees/agent-x"
+
+guard_on "$(payload Write file_path "$HW/README.md")"
+allowed "a Write inside a harness-isolated linked worktree"
+guard_on "$(payload Edit file_path "$HW/AGENTS.md")"
+allowed "an Edit inside a harness-isolated linked worktree"
+guard_on "$(payload Write file_path "$HW/brand/new/file.md")"
+allowed "a Write that creates new directories inside a harness-isolated worktree"
+guard_on "$(payload Write file_path "README.md" "$HW")"
+allowed "a relative path from a cwd inside a harness-isolated worktree"
+guard_on "$(payload Bash command 'git stash' "$HW")"
+allowed "git stash from a cwd inside a harness-isolated worktree"
+guard_on "$(payload Bash command 'git commit --no-verify -m x' "$HW")"
+allowed "git commit --no-verify from a cwd inside a harness-isolated worktree"
+
+# The directory that holds those worktrees is the main working copy's own.
+guard_on "$(payload Write file_path "$FIX/.claude/worktrees/stray.md")"
+refused "a Write beside the harness's worktrees, in no worktree"
+guard_on "$(payload Write file_path "$FIX/.claude/settings.json")"
+refused "a Write to the harness's settings at the root"
+# So is a directory under worktree/ that no worktree checks out: the line is
+# git's answer, never the path's name.
+guard_on "$(payload Write file_path "$FIX/worktree/loose/file.md")"
+refused "a Write under worktree/ in no linked worktree"
+# A linked worktree of ANOTHER repository nested in the root is still the
+# root's tree: the worktree must be this repository's.
+t_repo
+OTHER=$(cd "$REPO" && pwd -P)
+git -C "$OTHER" worktree add -q "$FIX/worktree/foreign" -b feat/foreign 2>/dev/null
+guard_on "$(payload Write file_path "$FIX/worktree/foreign/file.md")"
+refused "a Write in another repository's linked worktree nested in the root"
+# The main working copy is refused off the default branch too (it is on
+# feat/on-root since section 6).
+guard_on "$(payload Write file_path "$FIX/README.md")"
+refused "a Write in the main working copy on a feature branch"
+
+# A linked worktree on the default branch is still the default branch.
+guard_on "$(payload Write file_path "$FIX/worktree/m/README.md")"
+refused "a Write in a linked worktree on main, the default branch"
+guard_on "$(payload Bash command 'git stash' "$FIX/worktree/m")"
+refused "git stash from a cwd inside a linked worktree on main"
+guard_on "$(payload Write file_path "$FIX/worktree/t/README.md")"
+allowed "a Write in a linked worktree on trunk, with no origin/HEAD naming it"
+git -C "$FIX" update-ref refs/remotes/origin/trunk HEAD
+git -C "$FIX" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+guard_on "$(payload Write file_path "$FIX/worktree/t/README.md")"
+refused "a Write in a linked worktree on trunk, the default origin/HEAD names"
+guard_on "$(payload Write file_path "$FIX/worktree/m/README.md")"
+allowed "with trunk the default, a linked worktree on main is a branch like any other"
+git -C "$FIX" symbolic-ref --delete refs/remotes/origin/HEAD
+
+# One line, two layers: wherever the commit hook refuses an agent's commit,
+# the edit guard refuses an agent's Write, and wherever one lets it through,
+# so does the other.
+for d in "$FIX" "$WT" "$HW" "$FIX/worktree/m" "$FIX/worktree/t"; do
+	(cd "$d" && as_agent CLAUDECODE sh "$PRECOMMIT_SRC") >/dev/null 2>&1
+	commit_rc=$?
+	guard_on "$(payload Write file_path "$d/README.md")"
+	where=${d#"$FIX"}
+	where=${where#/}
+	[ -n "$where" ] || where="the main working copy"
+	if [ "$commit_rc" -eq 0 ] && [ "$S_STATUS" -eq 0 ] ||
+		{ [ "$commit_rc" -ne 0 ] && [ "$S_STATUS" -eq 2 ]; }; then
+		pass "the guard and the commit hook agree on $where"
+	else
+		fail "the guard ($S_STATUS) and the commit hook ($commit_rc) disagree on $where"
+	fi
+done
+
+# ---------------------------------------------------------------------------
 banner "8. Wiring, docs and what ships"
 # ---------------------------------------------------------------------------
 SETTINGS="$KIT/.claude/settings.json"
@@ -570,6 +652,8 @@ assert_file_has "$KIT/bootstrap.sh" "tests/root-guard.test.sh" "the suite is kit
 assert_file_has "$KIT/adapters/claude-code/README.md" "hooks/root-guard.sh" "a consumer wires it from there"
 assert_file_has "$KIT/adapters/claude-code/README.md" "## Refusing an edit at the root checkout" "the section a consumer wires it from"
 assert_file_has "$KIT/adapters/claude-code/README.md" "What Bash coverage it does not give" "a tripwire says where it stops"
+assert_file_has "$KIT/adapters/claude-code/README.md" "the line the commit hook draws" "the README says where the edit guard's line is (#542)"
+assert_file_has "$KIT/adapters/claude-code/README.md" "an agent may edit in any linked" "an agent harness's own isolated worktrees included (#542)"
 grep -q 'root-guard' "$KIT/AGENTS.md" && pass "the manual's quick reference names the guard" ||
 	fail "AGENTS.md has no row for the root guard"
 lines=$(wc -l <"$KIT/AGENTS.md")
