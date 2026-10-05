@@ -777,9 +777,10 @@ weakened "R11: the Area: value left unbounded" 's/ only when its value is of the
 weakened "R11: a malformed Area: value read anyway" 's/any other value is not read, no file is created/any other value is read as written/' "$step4" "$DELTA_WORDS"
 weakened "R11: the removed id freed for reuse" 's/ so the id is never reused/ until the id is reused/' "$step4" "$DELTA_WORDS"
 # The tombstone, filled in, is no requirement line in the gate's grammar — the
-# line both engines read as a requirement opens `R<n>.` at its first column.
+# line both engines read as a requirement opens `R<n>.` at its first column,
+# and req_spec_lines is that grammar's one home (scripts/requirement.lib.sh).
 tomb=$(printf '%s\n' "$step4" | grep -o '`~~R<n>\.~~ Removed by #<PRD>: <why>`' | head -1 | tr -d '`' | sed 's/<n>/7/; s/<PRD>/12/; s/<why>/superseded/')
-[ -n "$tomb" ] && ! printf '%s\n' "$tomb" | grep -Eq '^R[0-9]+\.([ 	]|$)' &&
+[ -n "$tomb" ] && [ -z "$(printf '%s\n' "$tomb" | req_spec_lines)" ] &&
 	pass "R11: the filled tombstone '$tomb' is no requirement line in the living-spec grammar" ||
 	fail "R11: the tombstone '$tomb' reads as a requirement line — the gate would demand a test for a removed id"
 # One spelling of the tombstone across the producer of the delta, the step that

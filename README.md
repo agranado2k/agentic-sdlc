@@ -246,7 +246,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.53.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.54.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -473,7 +473,7 @@ skeleton (K0).
 - `sh tests/docs-demo.sh` proves the bootstrapped docs set is personalized (and
   that the gate catches an unstamped mark inside `docs/`), then runs **both
   halves** of the `UPDATING.md` recipe. Part 1 — the shared layer — on a fake
-  0.1.0 consumer updating to 0.53.0, including a local edit to a shared file,
+  0.1.0 consumer updating to 0.54.0, including a local edit to a shared file,
   moving it out, and the byte-for-byte verbatim check afterwards. Part 2 —
   everything else — on a consumer bootstrapped at 0.3.0: it first holds that
   consumer to the *inert half-update* Part 1 alone produces (the capability-tier
@@ -678,6 +678,14 @@ skeleton (K0).
   requirement never counts, area-qualified ids (`<area>/R<n>`) compare as
   written, CRLF bodies read, and hostile prose in either file reaches neither
   output stream.
+- `sh tests/requirement-grammar.test.sh` holds `scripts/requirement.lib.sh`,
+  the requirement-line grammar's one home (#545), which the gate's POSIX twin,
+  the coverage check and the suites source: the living spec's line, area and
+  cited name with both boundaries, the PRD's bounded id, the four ways the two
+  grammars differ (pinned as two, never unified by a refactor), that no shell
+  script outside the home spells an id pattern, and that the reduced gate and
+  the coverage check refuse without it. The docs harness's fixture tests hold
+  the validator's copies of the living-spec patterns equal to it byte for byte.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
   over a PRD issue body and `/dogfood` over product output it can capture
@@ -938,6 +946,7 @@ sh tests/task.test.sh                                  # task scope, baseline id
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/coverage.test.sh                              # the coverage check names uncovered requirements and orphan tickets, ids only
+sh tests/requirement-grammar.test.sh                   # the requirement-line grammar has one home, and no copy survives
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return

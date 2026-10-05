@@ -18,10 +18,15 @@
 // TWO ENGINES. scripts/check.sh carries this rule's POSIX twin for a project
 // without node, and it reads the same two policy values from config.mjs BY
 // TEXT — which is why `testGlobs` must stay a literal list, one quoted glob
-// per line. The grammar below (area, requirement line, cited name, glob) is
-// spelled identically in both; tests/docs-demo.sh drives the twin red and
-// green on a bootstrapped project, over the same grammar shapes as the
-// fixture tests here.
+// per line. The GRAMMAR (area, fence, requirement line, cited name and token)
+// has one home, scripts/requirement.lib.sh, which the twin sources (#545).
+// This module keeps its own copies of those five patterns — a fixture-tree
+// run must not depend on a shell file — exported under the home's names, and
+// the fixture tests hold each one equal to the home byte for byte. Each is an
+// ERE in the dialect awk, `grep -E` and RegExp read alike: a literal full stop
+// is `[.]`, and `\t` and `\r` are the only backslashes. tests/docs-demo.sh
+// drives the twin red and green on a bootstrapped project, over the same
+// grammar shapes as the fixture tests here.
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, realpathSync } from "node:fs";
@@ -29,9 +34,15 @@ import { join } from "node:path";
 
 export const id = "living-spec";
 
-const AREA_RE = /^[a-z][a-z0-9-]*$/;
-const REQUIREMENT_RE = /^R([0-9]+)\.(?:[ \t\r]|$)/;
-const FENCE_RE = /^[ \t]*(```|~~~)/;
+export const REQ_AREA_ERE = "[a-z][a-z0-9-]*";
+export const REQ_FENCE_ERE = "^[ \\t]*(```|~~~)";
+export const REQ_LINE_ERE = "^R[0-9]+[.]([ \\t\\r]|$)";
+export const REQ_CITED_NAME_ERE = `${REQ_AREA_ERE}/R[0-9]+`;
+export const REQ_CITED_TOKEN_ERE = `[A-Za-z0-9_/-]?${REQ_CITED_NAME_ERE}([A-Za-z0-9_]|[.][0-9])?`;
+
+const AREA_RE = new RegExp(`^${REQ_AREA_ERE}$`);
+const REQUIREMENT_RE = new RegExp(REQ_LINE_ERE);
+const FENCE_RE = new RegExp(REQ_FENCE_ERE);
 // Leftmost-longest is the same answer as JS's greedy match for this pattern,
 // so `subprocess/R1` is one name (not `process/R1`) and `process/R10` is never
 // `process/R1` — in both engines. The TRAILING boundary: an id followed by a
@@ -47,8 +58,8 @@ const FENCE_RE = /^[ \t]*(```|~~~)/;
 // is then dropped (CITED_NAME, anchored at both ends)
 // — a lookaround the twin's `grep -o -E` cannot spell, so both engines
 // tokenize the same way.
-const CITED_RE = /[A-Za-z0-9_/-]?[a-z][a-z0-9-]*\/R[0-9]+(?:[A-Za-z0-9_]|\.[0-9])?/g;
-const CITED_NAME = /^[a-z][a-z0-9-]*\/R[0-9]+$/;
+const CITED_RE = new RegExp(REQ_CITED_TOKEN_ERE, "g");
+const CITED_NAME = new RegExp(`^${REQ_CITED_NAME_ERE}$`);
 
 /**
  * A glob as a shell `case` pattern reads it: `*` is any run of characters,
@@ -74,8 +85,9 @@ function requirementIds(raw) {
       continue;
     }
     if (fence) continue;
-    const m = REQUIREMENT_RE.exec(line);
-    if (m && !ids.includes(`R${m[1]}`)) ids.push(`R${m[1]}`);
+    if (!REQUIREMENT_RE.test(line)) continue;
+    const rid = line.slice(0, line.indexOf("."));
+    if (!ids.includes(rid)) ids.push(rid);
   }
   return ids;
 }
@@ -134,7 +146,7 @@ export function run(ctx) {
         validator: id,
         file,
         rule: "living-spec-area-invalid",
-        message: `holds requirements, but "${area}" is not an area name — one lowercase token, [a-z][a-z0-9-]*`,
+        message: `holds requirements, but "${area}" is not an area name — one lowercase token, ${REQ_AREA_ERE}`,
         hint: "Rename the file to its area (docs/specs/<area>.md); its requirements are cited as <area>/R<n>, so an area that cannot be cited cannot be held to a test.",
       });
       continue;

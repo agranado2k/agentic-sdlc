@@ -219,6 +219,20 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.53.0 or older, one grammar file joins and nothing changes behavior.**
+`scripts/requirement.lib.sh` joins the shared layer at 0.54.0 — see "When a
+file joins the shared layer" below. It is the requirement-line grammar's one
+home: `scripts/check.sh` sources it for the living-spec rule's POSIX twin and
+`scripts/coverage.sh` sources it from beside itself, so take all three in the
+same step 5. Without it the reduced gate reports `shared-layer-missing` and
+the coverage check refuses with exit 2 — neither reads nothing and passes.
+`validators/living-spec.mjs` now exports its five patterns under the file's
+names; no verdict of either engine or of the coverage check changes. Part 2
+has one optional take: `scripts/docs-conformance/test/living-spec.test.mjs`
+(yours) gains the test that holds the validator's patterns equal to the new
+file — copy its two new tests and the `readFileSync` import if you run the
+fixture tests.
+
 **Arriving from 0.52.0 or older, the reviewer gains an ordered fallback.**
 `scripts/agents.lib.sh` changes content at 0.53.0; take it as step 5 says.
 Nothing else in the layer moves, and nothing changes for you until you opt
@@ -888,7 +902,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.53.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.54.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -901,9 +915,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.53.0
+v0.54.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.53.0
+v0.1.0 -> v0.54.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -927,6 +941,7 @@ scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
 scripts/manifest.lib.sh
+scripts/requirement.lib.sh
 scripts/stamp.sh
 scripts/tdd-pairing-guard-ci.sh
 scripts/tdd-pairing-guard.sh
@@ -936,10 +951,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2375 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2392 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2529 insertions(+), 1 deletion(-)
+ 3 files changed, 2546 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -996,12 +1011,13 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
   updated scripts/manifest.lib.sh
+  updated scripts/requirement.lib.sh
   updated scripts/stamp.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.53.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.54.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1026,6 +1042,7 @@ verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
 verbatim  scripts/manifest.lib.sh
+verbatim  scripts/requirement.lib.sh
 verbatim  scripts/stamp.sh
 verbatim  scripts/tdd-pairing-guard-ci.sh
 verbatim  scripts/tdd-pairing-guard.sh
@@ -1047,10 +1064,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.53.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.54.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.53.0
-Part 1 complete — shared layer at v0.53.0. The update is not done: go to step 8.
+0.54.0
+Part 1 complete — shared layer at v0.54.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1794,7 +1811,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.53.0 case for this file, and `ADD` is the 0.3.0 → 0.53.0
+`MERGE` is the 0.4.0 → 0.54.0 case for this file, and `ADD` is the 0.3.0 → 0.54.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2108,14 +2125,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.53.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.54.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.53.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.54.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2291,7 +2308,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.53.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.54.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2317,7 +2334,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.53.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.54.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.

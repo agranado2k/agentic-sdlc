@@ -234,12 +234,28 @@ if [ "$engine" = "fallback" ]; then
 	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
 	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
-	# test globs match. Vacuous with no living spec. The grammar is the
-	# validator's, spelled the same; the POLICY is not copied here at all: the
-	# specs directory and the globs are read BY TEXT from config.mjs's
-	# `livingSpec` block, which is why that block keeps them literal. No block
-	# (a config older than the rule) is no globs, so a requirement fails with
-	# the hint that names the policy — the harness's answer too.
+	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced
+	# from scripts/requirement.lib.sh, its one home, which the validator's
+	# fixture tests hold the harness's patterns equal to (#545) — and the twin
+	# fails CLOSED without it, the same footing as the manifest parser above.
+	# The POLICY is not copied here at all: the specs directory and the globs
+	# are read BY TEXT from config.mjs's `livingSpec` block, which is why that
+	# block keeps them literal. No block (a config older than the rule) is no
+	# globs, so a requirement fails with the hint that names the policy — the
+	# harness's answer too.
+	req_lib="$repo_root/scripts/requirement.lib.sh"
+	if [ ! -r "$req_lib" ]; then
+		report "shared-layer-missing" "scripts/requirement.lib.sh" \
+			"the requirement grammar is missing, so the living-spec check cannot run" \
+			"Restore scripts/requirement.lib.sh from the kit at the pinned version; scripts/check.sh sources it."
+	else
+		# shellcheck disable=SC1090
+		. "$req_lib"
+		command -v req_spec_ids >/dev/null 2>&1 || {
+			echo "check.sh: scripts/requirement.lib.sh did not define req_spec_ids — the gate cannot run" >&2
+			exit 2
+		}
+	fi
 	ls_cfg="scripts/docs-conformance/config.mjs"
 	specs_dir="" spec_globs=""
 	if [ -f "$ls_cfg" ]; then
@@ -249,14 +265,14 @@ if [ "$engine" = "fallback" ]; then
 	fi
 	[ -n "$specs_dir" ] || specs_dir="docs/specs"
 	: >"$vfile.specs"
-	for spec in "$specs_dir"/*.md; do
+	command -v req_spec_ids >/dev/null 2>&1 && for spec in "$specs_dir"/*.md; do
 		[ -f "$spec" ] || continue
-		ids=$(awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence && /^R[0-9]+\.([ \t\r]|$)/ { sub(/\..*/, ""); if (!seen[$0]++) print }' "$spec")
+		ids=$(req_spec_ids "$spec")
 		[ -n "$ids" ] || continue
 		area=$(basename "$spec" .md)
-		if ! printf '%s\n' "$area" | LC_ALL=C grep -Eqx '[a-z][a-z0-9-]*'; then
+		if ! printf '%s\n' "$area" | LC_ALL=C grep -Eqx "$REQ_AREA_ERE"; then
 			report "living-spec-area-invalid" "$spec" \
-				"holds requirements, but \"$area\" is not an area name — one lowercase token, [a-z][a-z0-9-]*" \
+				"holds requirements, but \"$area\" is not an area name — one lowercase token, $REQ_AREA_ERE" \
 				"Rename the file to its area (docs/specs/<area>.md); its requirements are cited as <area>/R<n>, so an area that cannot be cited cannot be held to a test."
 			continue
 		fi
@@ -284,14 +300,14 @@ if [ "$engine" = "fallback" ]; then
 					# shellcheck disable=SC2254  # the glob is a pattern on purpose
 					case "$f" in
 					$g)
-						LC_ALL=C grep -o -h -I -E '[A-Za-z0-9_/-]?[a-z][a-z0-9-]*/R[0-9]+([A-Za-z0-9_]|\.[0-9])?' "$f" 2>/dev/null
+						LC_ALL=C grep -o -h -I -E "$REQ_CITED_TOKEN_ERE" "$f" 2>/dev/null
 						break
 						;;
 					esac
 				done
 			done
 			IFS=$_ifs
-		} | LC_ALL=C grep -x -E '[a-z][a-z0-9-]*/R[0-9]+' | sort -u >"$vfile.cited"
+		} | LC_ALL=C grep -x -E "$REQ_CITED_NAME_ERE" | sort -u >"$vfile.cited"
 		while IFS='	' read -r spec name; do
 			grep -qxF -- "$name" "$vfile.cited" && continue
 			report "living-spec-untested" "$spec" \

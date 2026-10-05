@@ -2057,7 +2057,37 @@
 # the kit glossary's Task domain entry; tests/agents-tiers.test.sh's
 # fallback, bridge and kit-mapping sections.
 
-shared-layer: 0.53.0
+# 0.54.0 — the requirement-line grammar has one home (ticket #545, findings
+# L-6 and L-7 of #540's review; ADR-0012 clauses 4 and 10).
+# ONE file JOINS the shared layer: scripts/requirement.lib.sh — sourceable,
+# it holds the living spec's grammar (the area, the fence, the requirement
+# line, the cited name and the token the gate cuts with both boundaries) and
+# the PRD's (the requirement line and the bounded id, area at most 32
+# characters and number at most 6 digits) side by side, with three readers:
+# req_spec_lines, req_spec_ids and req_prd_ids. The two grammars still
+# differ in four ways — R0, a tab after the full stop, an area prefix on the
+# line, the bounds — and the file says so rather than unify them. Every
+# pattern is written once in the dialect awk, grep -E and RegExp read alike.
+# NO file leaves. Shared files that change content, none in behavior:
+# scripts/check.sh's living-spec twin sources the grammar and fails closed
+# without it (shared-layer-missing; exit 2 when it defines nothing);
+# scripts/coverage.sh sources it from beside itself and refuses with exit 2
+# without it; validators/living-spec.mjs exports its five patterns under the
+# grammar file's names and builds its regexes from them. UPDATING.md changes
+# content: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# scripts/docs-conformance/test/living-spec.test.mjs (yours, shipped): two
+# tests hold the validator's five patterns equal to scripts/requirement.lib.sh
+# byte for byte, and prove the comparison can go red; copy them by hand if
+# you run the fixture tests (#545). bootstrap.sh's kit-own deletion list gains
+# tests/requirement-grammar.test.sh, which a consumer never receives —
+# nothing to take.
+# Kit-only, never shipped: tests/requirement-grammar.test.sh and its kit-ci.yml
+# job; tests/lib.sh sources the grammar, and tests/self-host.test.sh,
+# tests/implement-deliver.test.sh and tests/spec-skills.test.sh read it
+# instead of their own patterns; README's suite entries.
+
+shared-layer: 0.54.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2083,6 +2113,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/requirement.lib.sh
   scripts/trace.sh
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
