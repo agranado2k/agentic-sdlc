@@ -979,9 +979,13 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # digits (ticket #420), and `x` would be the suite's fault, not the skill's;
 # so do pr.iterate's counts, `data.applied=<count>` and its two siblings
 # (ticket #466).
+# The run an end names, `<the run id your begin printed>`, becomes the top of
+# the stack the span runs against, read with `stack .` — the id the begin
+# earlier in the document printed, as an agent would type it (ticket #543).
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
+		-e 's/<the run id your begin printed>/"$(sh scripts\/trace.sh stack . | sed -n 1p)"/g' \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \
 		-e 's/ \[[^][]*\]//g' \
