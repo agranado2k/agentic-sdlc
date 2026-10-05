@@ -221,10 +221,22 @@ done
 # PRD #527's R14: the consumer gets the living-spec check, in both engines,
 # and no living spec of the kit's — its requirements would be held to tests
 # the strip has already deleted, and the consumer's gate would open red.
-leaked_specs=$(ls "$PROJ"/docs/specs/*.md 2>/dev/null)
+# The one file bootstrap lays there is the starter README (#533), which holds
+# no requirement line outside a fence — the grammar both engines read.
+leaked_specs=$(ls "$PROJ"/docs/specs/*.md 2>/dev/null | grep -v '/docs/specs/README\.md$')
 [ -z "$leaked_specs" ] &&
 	pass "no kit living spec leaked into the project (R14)" ||
 	fail "a kit living spec leaked into the project: $leaked_specs"
+[ -f "$PROJ/docs/specs/README.md" ] &&
+	pass "the project has the docs/specs/ starter README (#533)" ||
+	fail "the project has no docs/specs/README.md starter"
+starter_reqs=$(awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence && /^R[0-9]+\.([ \t\r]|$)/' "$PROJ/docs/specs/README.md" 2>/dev/null)
+[ -z "$starter_reqs" ] &&
+	pass "the starter README holds no requirement line outside a fence (#533)" ||
+	fail "the starter README holds a requirement line: $starter_reqs"
+[ ! -e "$PROJ/templates" ] &&
+	pass "the starter's source left with templates/ (#533)" ||
+	fail "templates/ survived bootstrap"
 [ -f "$PROJ/scripts/docs-conformance/validators/living-spec.mjs" ] &&
 	grep -q 'livingSpec' "$PROJ/scripts/docs-conformance/runner.mjs" &&
 	pass "the project's harness carries the living-spec check (R14)" ||

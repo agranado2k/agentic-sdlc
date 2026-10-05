@@ -172,6 +172,45 @@ test("R13: an empty docs/specs passes, and so does a spec with no requirement ye
   cleanup(prose);
 });
 
+test("R11: a REMOVED id's tombstone is no requirement — no test need name it", () => {
+  // `/implement` step 4 replaces a removed line with `~~R<n>.~~ Removed by
+  // #<PRD>: <why>`: struck through, so it does not open `R<n>.`, and kept, so
+  // the id is never reused.
+  const ctx = ctxFor({
+    "docs/specs/billing.md": "# Billing\n\nR1. One.\n~~R2.~~ Removed by #12: folded into billing/R1.\n",
+    "tests/billing.test.sh": "# billing/R1\n",
+  });
+  assert.deepEqual(run(ctx), []);
+  cleanup(ctx);
+});
+
+test("#533: the docs/specs README starter is no area file — its fenced examples are silent", () => {
+  // Bootstrap lays `docs/specs/README.md`, which explains the format with
+  // examples in fences and holds no requirement: neither engine reads one from
+  // it. Its name is no area token, so a README that grew a requirement line
+  // outside a fence is reported — a requirement there could never be cited.
+  const starter = [
+    "# Living specs",
+    "",
+    "```md",
+    "R1. The invoice SHALL carry the customer's legal name.",
+    "~~R2.~~ Removed by #12: folded into billing/R1.",
+    "```",
+    "",
+    "```md",
+    "### ADDED",
+    "billing/R3. The invoice SHALL carry its date.",
+    "```",
+    "",
+  ].join("\n");
+  const silent = ctxFor({ "docs/specs/README.md": starter });
+  assert.deepEqual(run(silent), []);
+  cleanup(silent);
+  const grown = ctxFor({ "docs/specs/README.md": `${starter}R1. A requirement outside a fence.\n` });
+  assert.ok(hasRule(run(grown), "living-spec-area-invalid"));
+  cleanup(grown);
+});
+
 test("a glob's * crosses directories and ? is one character, as in a shell case pattern", () => {
   assert.ok(globToRegExp("tests/*").test("tests/a/b.sh"));
   assert.ok(globToRegExp("*.test.*").test("src/a/b.test.ts"));

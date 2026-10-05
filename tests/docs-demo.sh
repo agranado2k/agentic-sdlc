@@ -244,10 +244,11 @@ banner "A5b. The living-spec check holds without node — PRD #527's R12 and R13
 # ADR-0012 clause 10, on the reduced path: a project with no node still has
 # every living requirement held to the suite. The harness's fixture tests
 # drive the node engine; this drives its POSIX twin, forced, on the project
-# bootstrap just stamped — which arrives with no living spec of the kit's.
-assert_no_file "docs/specs"
-mkdir -p docs/specs
-assert_status 0 "an empty docs/specs/ passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+# bootstrap just stamped — which arrives with no living spec of the kit's,
+# only the starter README that holds no requirement (#533).
+[ "$(ls docs/specs)" = "README.md" ] && pass "docs/specs/ holds the starter README alone (#533)" ||
+	fail "docs/specs/ is not the starter README alone: $(ls docs/specs 2>&1)"
+assert_status 0 "docs/specs/ with no living spec passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 assert_out_has "living specs"
 printf '# Ledger\n\nR1. The ledger SHALL balance.\n\n```md\nR7. A quoted example, not a requirement.\n```\n\nR2. WHEN a posting is reversed, the ledger SHALL keep both entries.\n' >docs/specs/ledger.md
 assert_status 1 "a living requirement no test names fails without node (R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh

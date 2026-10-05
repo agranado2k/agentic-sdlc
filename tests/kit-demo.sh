@@ -584,11 +584,20 @@ restore_good
 banner "12b. RED then GREEN — a living requirement no test names (PRD #527, R14)"
 # ---------------------------------------------------------------------------
 # A fresh bootstrap carries the living-spec check and no living spec of the
-# kit's, so the gate above was green on a project with no docs/specs/. The
-# first requirement the project writes is held to its suite from that moment:
-# the full gate runs the harness's validator, the forced fallback its twin.
-assert_no_file "docs/specs"
-mkdir -p docs/specs
+# kit's — only the docs/specs/ starter, a README that explains the format and
+# holds no requirement (#533), so the gate above was green on it in both
+# engines. The README is no area file: its examples sit in fences and its name
+# is no area token, so neither engine reads a requirement from it. The first
+# requirement the project writes is held to its suite from that moment: the
+# full gate runs the harness's validator, the forced fallback its twin.
+assert_file "docs/specs/README.md"
+for w in '### ADDED' '### MODIFIED' '### REMOVED' '~~R<n>.~~ Removed by #<PRD>: <why>' 'docs/specs/<area>.md' '<area>/R<n>'; do
+	assert_file_has docs/specs/README.md "$w" "the starter explains the living spec (#533)"
+done
+specs_now=$(ls docs/specs)
+[ "$specs_now" = "README.md" ] && pass "the starter is the README alone — no living spec of the kit's (R14)" ||
+	fail "docs/specs holds more than the starter README: $specs_now"
+assert_status 0 "the starter alone passes the forced fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 printf '# Signup\n\nR1. WHEN a visitor signs up, the system SHALL send one confirmation.\n' >docs/specs/signup.md
 assert_status 1 "check.sh rejects a living requirement no test names" -- sh scripts/check.sh
 assert_out_has "living-spec-untested"
@@ -600,7 +609,13 @@ mkdir -p tests
 printf '#!/bin/sh\n# signup/R1: one confirmation per signup\n' >tests/signup.test.sh
 assert_status 0 "check.sh passes once a test names it" -- sh scripts/check.sh
 assert_status 0 "and so does the fallback" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-rm -rf docs/specs tests/signup.test.sh
+# A REMOVED delta leaves a tombstone in place of the line (PRD #527 R11): it
+# keeps the id from reuse and is no requirement line, so neither engine asks a
+# test to name it.
+printf '~~R2.~~ Removed by #12: folded into signup/R1.\n' >>docs/specs/signup.md
+assert_status 0 "a tombstone needs no test — check.sh (#533)" -- sh scripts/check.sh
+assert_status 0 "a tombstone needs no test — the fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+rm -f docs/specs/signup.md tests/signup.test.sh
 rmdir tests 2>/dev/null || :
 
 # ---------------------------------------------------------------------------

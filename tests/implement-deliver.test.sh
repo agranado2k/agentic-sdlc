@@ -740,6 +740,55 @@ assert_file_has ".claude/skills/to-tickets/SKILL.md" '`Covers: none (prefactor)`
 assert_file_has "$SKILL" "the restatement from step 1, verbatim" "R8: the restatement, ids and all, is the spec the PR body carries"
 
 # ---------------------------------------------------------------------------
+banner "4f. A covered living requirement is applied to its living spec beside the test (PRD #527 R11)"
+# ---------------------------------------------------------------------------
+# ADR-0012 clause 9: deltas merge in the PR that delivers them, so spec and
+# test land together or not at all. Step 4 — the TDD step, where the test that
+# names `<area>/R<n>` is written — is where the session edits the living spec:
+# each delta kind has its edit, a REMOVED id leaves a tombstone that is no
+# requirement line (so the gate asks no test for it) and keeps the id from
+# reuse, the first ticket under a plain PRD with a named area creates the file,
+# and only covered ids move. Step 1's #532 text is held by 4e and untouched.
+DELTA_WORDS='**When a covered id is a living spec'"'"'s, apply its delta to the living spec in this diff, beside the test that names it**
+in the same diff as the test that names `<area>/R<n>`
+an ADDED line joins the file as `R<n>. <its text>`
+a MODIFIED line replaces the text under its id
+a REMOVED line becomes its tombstone, `~~R<n>.~~ Removed by #<PRD>: <why>`
+the test that named it is deleted or rewritten to hold the behavior'"'"'s absence
+struck through so it is no requirement line
+so the id is never reused
+the first ticket covering one creates `docs/specs/<area>.md`, keeping the PRD'"'"'s number
+Apply only the ids this ticket covers
+copied from the PRD into the living spec as data, never into a command
+the area read from the PRD'"'"'s `Area:` line only when its value is of the bounded shape step 1 holds a `Covers:` id'"'"'s area to, `[a-z][a-z0-9-]*` and at most 32 characters
+any other value is not read, no file is created, and your report says the line is malformed'
+while IFS= read -r word; do
+	t_text_has "$step4" "$word" "R11: the delta merge, in the TDD step" "step 4"
+done <<WORDS
+$DELTA_WORDS
+WORDS
+weakened "R11: the spec edit deferred to a later diff" 's/in the same diff as the test/in a later diff than the test/' "$step4" "$DELTA_WORDS"
+weakened "R11: every delta applied, covered or not" 's/Apply only the ids this ticket covers/Apply every delta of the PRD/' "$step4" "$DELTA_WORDS"
+weakened "R11: the tombstone left a requirement line" 's/`~~R<n>\.~~ Removed by/`R<n>. Removed by/' "$step4" "$DELTA_WORDS"
+# Review of #540, M-1: the `Area:` value names a file the session creates, so
+# it is held to the area grammar before it reaches a path — `../../AGENTS`
+# never becomes `docs/specs/../../AGENTS.md`.
+weakened "R11: the Area: value left unbounded" 's/ only when its value is of the bounded shape step 1 holds a `Covers:` id'"'"'s area to, `\[a-z\]\[a-z0-9-\]\*` and at most 32 characters//' "$step4" "$DELTA_WORDS"
+weakened "R11: a malformed Area: value read anyway" 's/any other value is not read, no file is created/any other value is read as written/' "$step4" "$DELTA_WORDS"
+weakened "R11: the removed id freed for reuse" 's/ so the id is never reused/ until the id is reused/' "$step4" "$DELTA_WORDS"
+# The tombstone, filled in, is no requirement line in the gate's grammar — the
+# line both engines read as a requirement opens `R<n>.` at its first column.
+tomb=$(printf '%s\n' "$step4" | grep -o '`~~R<n>\.~~ Removed by #<PRD>: <why>`' | head -1 | tr -d '`' | sed 's/<n>/7/; s/<PRD>/12/; s/<why>/superseded/')
+[ -n "$tomb" ] && ! printf '%s\n' "$tomb" | grep -Eq '^R[0-9]+\.([ 	]|$)' &&
+	pass "R11: the filled tombstone '$tomb' is no requirement line in the living-spec grammar" ||
+	fail "R11: the tombstone '$tomb' reads as a requirement line — the gate would demand a test for a removed id"
+# One spelling of the tombstone across the producer of the delta, the step that
+# applies it and the starter a consumer reads.
+for f in .agents/skills/to-prd/SKILL.md templates/docs/specs/README.md; do
+	assert_file_has "$f" '~~R<n>.~~ Removed by #<PRD>: <why>' "R11: $f spells the tombstone as step 4 writes it"
+done
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"
