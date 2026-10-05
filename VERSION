@@ -1967,7 +1967,26 @@
 # orphan, the delta spelling, tombstone, the starter), AGENTS.md's vocab.sh
 # row sentence and README's suite entries and starter line.
 
-shared-layer: 0.50.0
+# 0.51.0 — a cited living-spec id is bounded on its left as well as its
+# right (ticket #544, a finding of #537's iteration; ADR-0012 clause 10).
+# NO file joins and NO file leaves the shared layer. Shared files that change
+# content: scripts/docs-conformance/validators/living-spec.mjs and its POSIX
+# twin in scripts/check.sh — a cited `<area>/R<n>` preceded by a letter, a
+# digit, `_`, `-` or `/` is the tail of a longer token and cites nothing, so
+# `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1` no longer
+# satisfy billing/R1, while `(billing/R1)`, ` billing/R1` and a line-initial
+# `billing/R1` still do. Both engines tokenize alike: one ERE that swallows
+# the offending character on either side, then a post-filter anchored at both
+# ends. A test that relied on one of those spellings goes red until it names
+# the id plainly. UPDATING.md changes content: the arriving-from paragraph,
+# and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — none. Nothing outside the files: list
+# changed since v0.50.0 but docs/diary.md, which is kit-only. Kit-only, never
+# shipped: the leading-boundary fixture in
+# scripts/docs-conformance/test/living-spec.test.mjs and tests/docs-demo.sh's
+# A5b leg (#544).
+
+shared-layer: 0.51.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
