@@ -641,13 +641,23 @@ agent harness's own terms: exit 2 blocks the call and its one-line reason,
 naming hard rule 1 and the `git worktree add` line to run instead, reaches the
 model on stderr; exit 0 lets the call through. Nothing goes to stdout.
 
+- **Where the line is:** the line the commit hook draws, by the same test. Git
+  answers for the checkout that holds the path: a linked worktree (its own git
+  directory is not the common one) on any branch but the default — the branch
+  `origin/HEAD` names, or `main` where there is none — is open, and the main
+  working copy is not, whatever its branch. So an agent may edit in any linked
+  worktree, `worktree/<slug>` or one the agent harness cut for its own
+  isolated sessions (this one cuts them under `.claude/worktrees/`), and the
+  name of a directory never decides it.
 - **Refused:** an Edit, Write, MultiEdit or notebook edit whose path is inside
-  the main working tree and not under `worktree/` — a new file as much as an
-  existing one, a relative path resolved against the session's directory, a
-  `..` that climbs out of a worktree.
-- **Let through:** paths under `worktree/`, paths outside the repository (a
-  dispatch's scratch lives under `$TMPDIR`), and the two runtime directories a
-  session legitimately writes at the root, `.trace/` and `.retro/`.
+  the main working copy — a directory under `worktree/` that no worktree
+  checks out included — or inside a linked worktree on the default branch: a
+  new file as much as an existing one, a relative path resolved against the
+  session's directory, a `..` that climbs out of a worktree.
+- **Let through:** paths in a linked worktree off the default branch, paths
+  outside the repository (a dispatch's scratch lives under `$TMPDIR`), and the
+  two runtime directories a session legitimately writes at the root, `.trace/`
+  and `.retro/`.
 - **It fails open.** A payload it cannot read, a tool it does not know or a
   root it cannot resolve lets the call through: a guard that blocked every
   call on a parse failure would end the session. The commit hook is no
@@ -691,7 +701,9 @@ runs `sed -i`, `tee`, `cp` (onto) or `mv` on, a path that resolves to a
 **tracked** file at the root, a symlink to one included. It also refuses `mv`
 of a directory holding tracked files, and `git checkout` or `git restore` on
 a tracked file, a directory holding one, or `.` (`git restore --staged` alone
-touches only the index and passes). Where git acts at the root it refuses the
+touches only the index and passes). Where git acts at the root — the main
+working copy, or a linked worktree on the default branch, the edit's line
+above — it refuses the
 discards of working changes — `git stash` (bare, `push` or `save`), `git reset
 --hard` and `git clean -f` — the incident that asked for this guard, and the
 three ways around the commit hook: `git commit --no-verify` (or `-n`, read
