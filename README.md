@@ -742,8 +742,11 @@ skeleton (K0).
   places it can be held. The Claude Code adapter's pre-tool hook, fed fixture
   payloads against a throwaway repository with a linked worktree, refuses a
   Write, Edit, MultiEdit or notebook edit at the root with exit 2 and the rule
-  on stderr, and lets the same write through under `worktree/`, outside the
-  repository and under `.trace/` or `.retro/`; for Bash it refuses a redirect,
+  on stderr, and lets the same write through in any linked worktree off the
+  default branch — `worktree/<slug>` or an agent harness's own isolated one —
+  outside the repository and under `.trace/` or `.retro/`, refusing it in a
+  linked worktree on the default branch, exactly where the commit hook refuses
+  a commit (#542); for Bash it refuses a redirect,
   `sed -i`, `tee`, `cp`, `mv`, `git checkout` or `git restore` onto a tracked
   root file (following `cd` and `git -C`, past heredoc bodies, continuation
   lines and `env`/`sudo`/`VAR=` prefixes), `mv` of a directory of tracked
