@@ -27,6 +27,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0009](0009-a-dispatched-worker-acts-on-the-forge-only-through-the-broker.md) | A dispatched worker never holds network or credentials, and acts on the forge only through the broker | Accepted 2026-09-28 — builds on ADR-0005's non-goal 12 (the dispatcher does not enforce what a worker may do); the broker is where that enforcement lives; amended 2026-09-30 (#268): a review behind the head is posted anchored to the commit it reviewed, one whose commit left the PR is exit 75; amended 2026-10-01 (PR #320): on drift `--commit` is mandatory, its absence exit 65; amended 2026-10-01 (#375): the trace records one `finding.raise` per posted finding and a `review.verdict` per axis; amended 2026-10-01 (#424): each raise carries `data.posted=yes` |
 | [0010](0010-a-typed-judge-is-a-task-domain-named-by-its-contract.md) | A typed judge is a task domain named by its contract, in two shapes | Accepted 2026-09-28 — stands under ADR-0003's closed tier vocabulary |
 | [0011](0011-task-local-contracts-bound-the-lifecycle.md) | Task-local contracts bound the lifecycle | Accepted 2026-09-30 |
+| [0012](0012-requirements-are-numbered-traced-and-anchored-in-living-specs.md) | Requirements are numbered, traced to tickets and tests, and anchored in living specs | Accepted 2026-10-05 — builds on ADR-0008: nothing here reads the trace |
 
 ## Conventions
 
