@@ -1501,4 +1501,30 @@ for sk in design-brief dogfood housekeeping improve-codebase-architecture to-tic
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "23. A skill that closes a run names it: end <the run id your begin printed> (#543)"
+# ---------------------------------------------------------------------------
+# A subagent shares its session's stack in its session's checkout, so a bare
+# `end` from one that skipped its `begin` popped its parent's run (#529's
+# reviewer). `end <run>` closes only the run it names (ADR-0008 clause 5,
+# #543 amendment); every end a skill types names the run its begin printed,
+# and says what to do when begin printed nothing.
+END543='trace.sh end <the run id your begin printed> '
+_e5_skills=0
+for d in "$SKILLS"/*/; do
+	sk=$(basename "$d")
+	f=$(skill_md "$sk")
+	[ -f "$f" ] || continue
+	grep -qF 'trace.sh end' "$f" || continue
+	_e5_skills=$((_e5_skills + 1))
+	_e5_bare=$(grep -oE 'trace\.sh end [^`]*' "$f" | grep -vF "$END543" || :)
+	[ -z "$_e5_bare" ] && pass "/$sk names its run at every end" ||
+		fail "/$sk has an end that does not name its run — want '$END543…': $_e5_bare"
+	tr '\n' ' ' <"$f" | grep -qE 'trace\.sh end <the run id your begin printed>[^`]*`[^.]*(printed nothing|leave the id out|without it)' &&
+		pass "/$sk says what to do with the id when begin printed nothing" ||
+		fail "/$sk does not say, beside its end, what to do when begin printed nothing"
+done
+[ "$_e5_skills" -ge 6 ] && pass "the six skills that close a run were all read ($_e5_skills)" ||
+	fail "only $_e5_skills skill(s) close a run — the walk lost diagnose, implement, merge-train, pr-iterate, retro or review-pr"
+
 t_done "trace skills contract"
