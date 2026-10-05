@@ -195,9 +195,10 @@ Grouped by the seam each term belongs to. Entry shape:
   variable name `AGENT_TIER_<TIER>_<DOMAIN>`. A situation domain's answer is
   also compared against the **session's own model** when the caller names it
   (`AGENT_SESSION_MODEL`, in the policy file's own word): a reviewer answer equal
-  to it is refused, falling back to the plain tier or to nothing with a
-  warning — the reviewer is a relation between two models, and only the caller
-  holds the second. One domain the kit names itself: `judge`, on the
+  to it is refused, walking on to the plain tier and then the policy's ordered
+  `AGENT_TIER_REVIEWER_FALLBACK`, skipping too every model the caller names in
+  `AGENT_UNREACHABLE_MODELS`, or to nothing with a warning — the reviewer is a
+  relation between two models, and only the caller holds the second. One domain the kit names itself: `judge`, on the
   `mechanical` tier — a typed judge specified by its contract (state and typed
   questions in, typed answers with per-option probabilities out), in two
   shapes, **decide** among supplied options and **rank-or-verify** over
