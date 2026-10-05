@@ -930,6 +930,7 @@ sh tests/land.test.sh                                  # one PR landed by hand r
 sh tests/task.test.sh                                  # task scope, baseline identity, proportional endpoint
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
+sh tests/coverage.test.sh                              # the coverage check names uncovered requirements and orphan tickets, ids only
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
