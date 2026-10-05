@@ -345,4 +345,39 @@ const bannedWords = {
   // exclude: ["constitution/shared-invariants.md", "constitution/shared-code-craft.md"],
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, mutationDecision, skillPaths };
+/**
+ * Policy for the living-spec rule (ADR-0012): every requirement in a living
+ * spec — a line opening `R<n>.` in `<specsDir>/<area>.md` — must be named, as
+ * `<area>/R<n>`, by at least one file these globs match. With no living spec
+ * the rule is silent. A requirement no test names FAILS the gate.
+ *
+ * A glob reads as a shell `case` pattern over the repo-relative path: `*` is
+ * any run of characters, `/` included, `?` exactly one; use no brackets. Name
+ * the trees your test runner actually runs — a file matched here that no
+ * runner executes would let a requirement pass on a name nothing checks.
+ *
+ * KEEP BOTH VALUES LITERAL — `specsDir` on one line, `testGlobs` one quoted
+ * glob per line. The gate's POSIX twin in scripts/check.sh runs where there
+ * is no node to import this file with, so it reads these two values by text.
+ * A computed list here is one the twin cannot see.
+ */
+const livingSpec = {
+  specsDir: "docs/specs",
+  testGlobs: [
+    "tests/*",
+    "test/*",
+    "spec/*",
+    "*/tests/*",
+    "*/test/*",
+    "*/spec/*",
+    "*/__tests__/*",
+    "*.test.*",
+    "*.spec.*",
+    "*_test.*",
+    "*_spec.*",
+    "test_*",
+    "*/test_*",
+  ],
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillPaths };
