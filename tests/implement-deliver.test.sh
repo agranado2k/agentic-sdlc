@@ -759,7 +759,9 @@ struck through so it is no requirement line
 so the id is never reused
 the first ticket covering one creates `docs/specs/<area>.md`, keeping the PRD'"'"'s number
 Apply only the ids this ticket covers
-copied from the PRD into the living spec as data, never into a command'
+copied from the PRD into the living spec as data, never into a command
+the area read from the PRD'"'"'s `Area:` line only when its value is of the bounded shape step 1 holds a `Covers:` id'"'"'s area to, `[a-z][a-z0-9-]*` and at most 32 characters
+any other value is not read, no file is created, and your report says the line is malformed'
 while IFS= read -r word; do
 	t_text_has "$step4" "$word" "R11: the delta merge, in the TDD step" "step 4"
 done <<WORDS
@@ -768,6 +770,11 @@ WORDS
 weakened "R11: the spec edit deferred to a later diff" 's/in the same diff as the test/in a later diff than the test/' "$step4" "$DELTA_WORDS"
 weakened "R11: every delta applied, covered or not" 's/Apply only the ids this ticket covers/Apply every delta of the PRD/' "$step4" "$DELTA_WORDS"
 weakened "R11: the tombstone left a requirement line" 's/`~~R<n>\.~~ Removed by/`R<n>. Removed by/' "$step4" "$DELTA_WORDS"
+# Review of #540, M-1: the `Area:` value names a file the session creates, so
+# it is held to the area grammar before it reaches a path — `../../AGENTS`
+# never becomes `docs/specs/../../AGENTS.md`.
+weakened "R11: the Area: value left unbounded" 's/ only when its value is of the bounded shape step 1 holds a `Covers:` id'"'"'s area to, `\[a-z\]\[a-z0-9-\]\*` and at most 32 characters//' "$step4" "$DELTA_WORDS"
+weakened "R11: a malformed Area: value read anyway" 's/any other value is not read, no file is created/any other value is read as written/' "$step4" "$DELTA_WORDS"
 weakened "R11: the removed id freed for reuse" 's/ so the id is never reused/ until the id is reused/' "$step4" "$DELTA_WORDS"
 # The tombstone, filled in, is no requirement line in the gate's grammar — the
 # line both engines read as a requirement opens `R<n>.` at its first column.
