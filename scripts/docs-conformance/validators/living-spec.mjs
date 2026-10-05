@@ -37,11 +37,18 @@ const FENCE_RE = /^[ \t]*(```|~~~)/;
 // `process/R1` — in both engines. The TRAILING boundary: an id followed by a
 // letter, a digit, `_`, or `.` and a digit is another token, so `billing/R1abc`,
 // `billing/R1_retry` and `billing/R1.5` cite nothing, while `billing/R1.` at a
-// sentence's end and `billing/R1-x` cite R1. The pattern swallows the one
-// offending character and the match is then dropped (CITED_NAME) — a lookahead
-// the twin's `grep -o -E` cannot spell, so both engines tokenize the same way.
-const CITED_RE = /[a-z][a-z0-9-]*\/R[0-9]+(?:[A-Za-z0-9_]|\.[0-9])?/g;
-const CITED_NAME = /\/R[0-9]+$/;
+// sentence's end and `billing/R1-x` cite R1. The LEADING boundary (#544): an
+// id preceded by a letter, a digit, `_`, `-` or `/` is the tail of a longer
+// token, so `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1`
+// cite nothing, while `(billing/R1)`, ` billing/R1` and a line-initial
+// `billing/R1` cite R1. Its one cost: two ids joined by `-` or `/`, as in
+// `billing/R1-billing/R2`, cite the first alone — name each on its own. On
+// either side the pattern swallows the one offending character and the match
+// is then dropped (CITED_NAME, anchored at both ends)
+// — a lookaround the twin's `grep -o -E` cannot spell, so both engines
+// tokenize the same way.
+const CITED_RE = /[A-Za-z0-9_/-]?[a-z][a-z0-9-]*\/R[0-9]+(?:[A-Za-z0-9_]|\.[0-9])?/g;
+const CITED_NAME = /^[a-z][a-z0-9-]*\/R[0-9]+$/;
 
 /**
  * A glob as a shell `case` pattern reads it: `*` is any run of characters,
