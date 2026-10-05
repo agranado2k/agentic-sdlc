@@ -486,6 +486,21 @@ Grouped by the seam each term belongs to. Entry shape:
   major story; `/to-tickets` reads them as the first list of tracer bullets.
   - _Avoid_: the Gherkin sense — a feature file's `Scenario:` is executable
     spec, held by the guards; say "feature file" for that.
+- **Requirement** — in a PRD or a living spec, one observable behavior a test
+  can fail, written in EARS-lite (`The <system> SHALL …`, `WHEN …`, `WHILE …`,
+  `IF … THEN …`, `WHERE …`) and carrying a **requirement id**: `R<n>` within its
+  PRD or living spec, `<area>/R<n>` when cited from outside a living spec. A
+  ticket's `Covers:` line names the ids it delivers, and the **coverage check**
+  in `/to-tickets` names every requirement no ticket covers. Ref: ADR-0012.
+  - _Avoid_: "acceptance criterion" for the PRD's lines — a ticket's acceptance
+    criteria restate the requirements it covers; the requirement is the source.
+- **Living spec** — `docs/specs/<area>.md`: an area's current requirements,
+  each id stable for the file's life and never reused. A PRD changes it by
+  **deltas** (`### ADDED`, `### MODIFIED`, `### REMOVED`), merged by the PR that
+  delivers them, and the docs gate fails a requirement no test names.
+  Ref: ADR-0012.
+  - _Avoid_: "the spec" on its own — the PRD, a ticket and a living spec are all
+    specs; say which.
 - **Open issue** — a PRD question the conversation left unresolved, written as
   problem / options / next step. One whose answer would shape tickets is the
   **open-issue gate**: `/to-tickets` writes its resolution as the first ticket
