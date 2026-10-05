@@ -6,7 +6,8 @@
 # in the order a fresh session reads them; the phrases that carry each rule
 # the design-doc lessons added (a one-sentence objective, scenarios as demo
 # scripts, numbered EARS-lite requirements and goal-sized stories — each
-# assertion naming the PRD #527 requirement it holds, the penalty-for-being-wrong filter, later/never on every non-goal,
+# assertion naming the PRD #527 requirement it holds — the
+# penalty-for-being-wrong filter, later/never on every non-goal,
 # open issues with a next step, the stranger reread before publishing); the
 # hand-off from the PRD's scenarios to the tickets' admission test; the
 # open-issue gate, the feedback-first ordering and the confidence stamp (its
@@ -167,6 +168,8 @@ stories=$(section_of "$PRD_ABS" "User Stories")
 t_text_has "$stories" "one story per distinct actor goal" "R2: the stories' size rule, one per goal rather than a long list"
 t_text_has "$stories" "the *why*" "R2: what a story is kept for"
 t_text_has "$stories" "every requirement serves at least one" "R2: the back-reference that keeps stories and requirements joined"
+t_text_has "$stories" "are one story" "R2: two stories with the same actor and goal merge"
+t_text_has "$stories" "a requirement nobody asked for" "R2: a requirement serving no story is flagged"
 for gone in "LONG" "extremely extensive" "cover all aspects"; do
 	printf '%s\n' "$stories" | grep -qF -- "$gone" &&
 		fail "R2: the User Stories guidance still says '$gone' — the exhaustive list is the requirements' job now" ||
@@ -184,7 +187,15 @@ for form in "The <system> SHALL" "WHEN <trigger>, the <system> SHALL" "WHILE <st
 done
 t_text_has "$req" '`R<n>`' "R1: the id's shape"
 t_text_has "$req" "numbered from 1 within the PRD" "R1: where the numbering starts and what it is scoped to"
-t_text_has "$req" "exhaustive list" "R2: the requirements, not the stories, are the exhaustive list"
+t_text_has "$req" "exhaustive list" "R1: the requirements, not the stories, are the exhaustive list"
+t_text_has "$req" "is not renumbered" "R1: a published id is never renumbered — tickets and tests cite it"
+t_text_has "$req" "bundles two behaviors is two requirements" "R1: one behavior per line, the bundling rule"
+t_text_has "$req" "a number, or dropped" "R1: a line no test could fail falls under the quality-word rule"
+for n in 1 2 3; do
+	printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq "^R$n\. .* SHALL " &&
+		pass "R1: the example's R$n is an EARS-lite SHALL line" ||
+		fail "R1: the requirement example has no 'R$n. … SHALL' line — the example drifted from its own forms"
+done
 printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq '^R1\. ' &&
 	pass "R1: the requirement example opens at R1, as its rule demands" ||
 	fail "R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
