@@ -88,6 +88,67 @@ test("R12: the name ends where the id ends — R1abc, R1_x and R1.5 are not R1",
   cleanup(ok);
 });
 
+test("R12: the name begins where the area begins — Xbilling/R1 and sub-billing/R1 are not billing/R1", () => {
+  // The leading boundary (#544): a cited id preceded by a letter, a digit,
+  // `_`, `-` or `/` is part of a longer token, not a citation of the area it
+  // happens to end with. An opening parenthesis, a blank or the start of the
+  // line still cites it.
+  for (const near of ["Xbilling/R1", "sub-billing/R1", "9billing/R1", "_billing/R1", "-billing/R1", "specs/billing/R1"]) {
+    const ctx = ctxFor({
+      "docs/specs/billing.md": BILLING,
+      "tests/a.test.sh": `# ${near}\n# billing/R2\n`,
+    });
+    const out = untested(run(ctx));
+    assert.equal(out.length, 1, `${near} cited billing/R1`);
+    assert.match(out[0].message, /billing\/R1\b/);
+    cleanup(ctx);
+  }
+  for (const line of ["# (billing/R1)", "# billing/R1", "billing/R1"]) {
+    const ok = ctxFor({
+      "docs/specs/billing.md": BILLING,
+      "tests/a.test.sh": `${line}\n# billing/R2\n`,
+    });
+    assert.deepEqual(run(ok), [], `${line} did not cite billing/R1`);
+    cleanup(ok);
+  }
+});
+
+test("R12: sub-billing/R1 cites its own area, never billing/R1", () => {
+  // The positive half of the leading boundary (#550 review, M-2): a hyphenated
+  // area is one token, so it satisfies its own requirement and not the area
+  // its tail happens to spell.
+  const ctx = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "docs/specs/sub-billing.md": "R1. The sub-ledger SHALL roll up.\n",
+    "tests/a.test.sh": "# sub-billing/R1\n# billing/R2\n",
+  });
+  const out = untested(run(ctx));
+  assert.deepEqual(
+    out.map((f) => f.message),
+    ["billing/R1 is named by no test"],
+  );
+  cleanup(ctx);
+});
+
+test("R12: two ids joined by - or / cite the first alone — the leading boundary's documented cost", () => {
+  // #550 review, M-1: the second id's match swallows the joining `-` or `/`
+  // and is dropped, as any id after `-` or `/` is. Pinned so the cost is a
+  // decision, not an accident: name each id on its own.
+  for (const joined of ["billing/R1-billing/R2", "billing/R1/billing/R2"]) {
+    const ctx = ctxFor({
+      "docs/specs/billing.md": BILLING,
+      "tests/a.test.sh": `# ${joined}\n`,
+    });
+    const out = untested(run(ctx));
+    assert.deepEqual(
+      out.map((f) => f.message),
+      ["billing/R2 is named by no test"],
+      joined,
+    );
+    cleanup(ctx);
+  }
+});
+
 test("R12: a requirement line inside a fence is quoted material, not a requirement", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": "# Billing\n\n```md\nR9. An example line.\n```\n\nR1. Real.\n",

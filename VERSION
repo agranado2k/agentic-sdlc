@@ -1967,7 +1967,38 @@
 # orphan, the delta spelling, tombstone, the starter), AGENTS.md's vocab.sh
 # row sentence and README's suite entries and starter line.
 
-shared-layer: 0.50.0
+# 0.51.0 — a cited living-spec id is bounded on its left as well as its
+# right (ticket #544, a finding of #537's iteration; ADR-0012 clause 10).
+# NO file joins and NO file leaves the shared layer. Shared files that change
+# content: scripts/docs-conformance/validators/living-spec.mjs and its POSIX
+# twin in scripts/check.sh — a cited `<area>/R<n>` preceded by a letter, a
+# digit, `_`, `-` or `/` is the tail of a longer token and cites nothing, so
+# `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1` no longer
+# satisfy billing/R1, while `(billing/R1)`, ` billing/R1` and a line-initial
+# `billing/R1` still do. The cost, accepted: two ids joined by `-` or `/`
+# (`billing/R1-billing/R2`) cite the first alone. Both engines tokenize alike: one ERE that swallows
+# the offending character on either side, then a post-filter anchored at both
+# ends. A test that relied on one of those spellings goes red until it names
+# the id plainly. UPDATING.md changes content: the arriving-from paragraph,
+# and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# The claude-code adapter's hooks/root-guard.sh draws the commit hook's line
+# for an edit: a linked worktree of the repository off the default branch is open
+# wherever it lives, so an agent harness's own isolated worktrees are no
+# longer refused; the main working copy, a linked worktree on the default
+# branch and a directory under worktree/ that no worktree checks out are
+# refused, and the Bash discards and the ways around the commit hook follow
+# the same line; its README.md says so (#542). Take it like any adapter file.
+# bootstrap.sh's kit-own deletion list gains ADR-0013, which a consumer never
+# receives — nothing to take.
+# Kit-only, never shipped: the leading-boundary fixtures in
+# scripts/docs-conformance/test/living-spec.test.mjs and tests/docs-demo.sh's
+# A5b legs (#544, #550 review); tests/root-guard.test.sh's cases (#542);
+# ADR-0013 and ADR-0007's amendment with scripts/agents.kit.config.sh's
+# ordered reviewer fallback and tests/agents-tiers.test.sh (#546);
+# docs/diary.md and README's root-guard lines.
+
+shared-layer: 0.51.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
