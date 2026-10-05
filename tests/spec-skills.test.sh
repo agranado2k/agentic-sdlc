@@ -5,7 +5,9 @@
 # rather than two prompts is machine-checkable: the PRD template's sections,
 # in the order a fresh session reads them; the phrases that carry each rule
 # the design-doc lessons added (a one-sentence objective, scenarios as demo
-# scripts, the penalty-for-being-wrong filter, later/never on every non-goal,
+# scripts, numbered EARS-lite requirements and goal-sized stories — each
+# assertion naming the PRD #527 requirement it holds — the
+# penalty-for-being-wrong filter, later/never on every non-goal,
 # open issues with a next step, the stranger reread before publishing); the
 # hand-off from the PRD's scenarios to the tickets' admission test; the
 # open-issue gate, the feedback-first ordering and the confidence stamp (its
@@ -110,12 +112,15 @@ banner "2. The PRD template's sections, in the order a fresh session reads them"
 # ---------------------------------------------------------------------------
 # The objective is first because it is the line every ticket opens with; open
 # issues sit after out-of-scope because a reader decides what the feature is
-# before learning what is still undecided about it.
+# before learning what is still undecided about it. Requirements sit between
+# the scenarios that walk the system and the decisions that shape its build
+# (PRD #527 R1, ADR-0012 clause 1).
 want="Objective
 Problem Statement
 Solution
 User Stories
 Scenarios
+Requirements
 Implementation Decisions
 Testing Decisions
 Alternatives Considered
@@ -124,9 +129,9 @@ Open Issues
 Further Notes"
 got=$(awk '/^<prd-template>/ { on = 1; next } /^<\/prd-template>/ { on = 0 } on && /^## / { sub(/^## /, ""); print }' "$PRD_ABS")
 if [ "$got" = "$want" ]; then
-	pass "the PRD template carries the eleven sections in order"
+	pass "the PRD template carries the twelve sections in order, Requirements between Scenarios and Implementation Decisions (R1)"
 else
-	fail "the PRD template's sections are not the eleven expected, in order — got: $(printf '%s' "$got" | tr '\n' '|')"
+	fail "the PRD template's sections are not the twelve expected, in order (R1) — got: $(printf '%s' "$got" | tr '\n' '|')"
 fi
 # The PRD process is numbered without a gap too — a step inserted by hand is
 # how the reread could end up after the publish it is meant to precede.
@@ -156,6 +161,44 @@ t_text_has "$scen" "not finished thinking about" "a scenario that cannot be walk
 printf '%s\n' "$scen" | sed -n '/<scenario-example>/,/<\/scenario-example>/p' | grep -q '<[a-z]*>' &&
 	fail "the scenario example carries a <placeholder> — the rule it illustrates forbids exactly that" ||
 	pass "the scenario example uses concrete names, as its rule demands"
+
+# The user stories are the why, not the exhaustive list: the requirements are
+# that list now (PRD #527 R2, ADR-0012 clause 2).
+stories=$(section_of "$PRD_ABS" "User Stories")
+t_text_has "$stories" "one story per distinct actor goal" "R2: the stories' size rule, one per goal rather than a long list"
+t_text_has "$stories" "the *why*" "R2: what a story is kept for"
+t_text_has "$stories" "every requirement serves at least one" "R2: the back-reference that keeps stories and requirements joined"
+t_text_has "$stories" "are one story" "R2: two stories with the same actor and goal merge"
+t_text_has "$stories" "a requirement nobody asked for" "R2: a requirement serving no story is flagged"
+for gone in "LONG" "extremely extensive" "cover all aspects"; do
+	printf '%s\n' "$stories" | grep -qF -- "$gone" &&
+		fail "R2: the User Stories guidance still says '$gone' — the exhaustive list is the requirements' job now" ||
+		pass "R2: the User Stories guidance no longer says '$gone'"
+done
+
+# Each requirement is one observable behavior in EARS-lite, with an id
+# numbered from 1 within the PRD (PRD #527 R1, ADR-0012 clause 1).
+req=$(section_of "$PRD_ABS" "Requirements")
+t_text_has "$req" "one observable behavior" "R1: a requirement line holds one behavior"
+t_text_has "$req" "a test can fail" "R1: observable means a test can fail it"
+t_text_has "$req" "EARS-lite" "R1: the notation is named"
+for form in "The <system> SHALL" "WHEN <trigger>, the <system> SHALL" "WHILE <state>," "IF <condition>, THEN" "WHERE <feature>,"; do
+	t_text_has "$req" "$form" "R1: one of the five EARS-lite forms"
+done
+t_text_has "$req" '`R<n>`' "R1: the id's shape"
+t_text_has "$req" "numbered from 1 within the PRD" "R1: where the numbering starts and what it is scoped to"
+t_text_has "$req" "exhaustive list" "R1: the requirements, not the stories, are the exhaustive list"
+t_text_has "$req" "is not renumbered" "R1: a published id is never renumbered — tickets and tests cite it"
+t_text_has "$req" "bundles two behaviors is two requirements" "R1: one behavior per line, the bundling rule"
+t_text_has "$req" "a number, or dropped" "R1: a line no test could fail falls under the quality-word rule"
+for n in 1 2 3; do
+	printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq "^R$n\. .* SHALL " &&
+		pass "R1: the example's R$n is an EARS-lite SHALL line" ||
+		fail "R1: the requirement example has no 'R$n. … SHALL' line — the example drifted from its own forms"
+done
+printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq '^R1\. ' &&
+	pass "R1: the requirement example opens at R1, as its rule demands" ||
+	fail "R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
 
 impl=$(section_of "$PRD_ABS" "Implementation Decisions")
 t_text_has "$impl" "penalty for being wrong" "the filter on what a PRD pins"

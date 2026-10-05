@@ -41,7 +41,7 @@ The solution to the problem, from the user's perspective.
 
 ## User Stories
 
-A LONG, numbered list of user stories. Each user story should be in the format of:
+A numbered list of user stories, one story per distinct actor goal. Each user story should be in the format of:
 
 1. As an <actor>, I want a <feature>, so that <benefit>
 
@@ -49,7 +49,7 @@ A LONG, numbered list of user stories. Each user story should be in the format o
 1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
 </user-story-example>
 
-This list of user stories should be extremely extensive and cover all aspects of the feature.
+A story is kept as the *why* — who wants this and what it buys them — not as the list of everything the feature does: that list is the Requirements section's job. Two stories with the same actor and the same goal are one story; every requirement serves at least one story, and a requirement that serves none is either a missing story or a requirement nobody asked for.
 
 ## Scenarios
 
@@ -63,6 +63,24 @@ A numbered walkthrough of the finished system in use — actor, action, what the
 </scenario-example>
 
 Each scenario is a walkthrough a session can replay: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
+
+## Requirements
+
+The exhaustive list of what the finished feature does: one observable behavior per line — a behavior a test can fail — each carrying an id `R<n>`, numbered from 1 within the PRD. Tickets, tests and the review cite a requirement by its id, so an id once published is not renumbered. Write each line in EARS-lite, one of five forms:
+
+- `The <system> SHALL <behavior>` — always true.
+- `WHEN <trigger>, the <system> SHALL <behavior>` — an event.
+- `WHILE <state>, the <system> SHALL <behavior>` — a state that holds.
+- `IF <condition>, THEN the <system> SHALL <behavior>` — an unwanted case and its handling.
+- `WHERE <feature>, the <system> SHALL <behavior>` — an optional feature present.
+
+<requirement-example>
+R1. The account screen SHALL show the balance of every account the customer holds.
+R2. WHEN a transfer settles, the account screen SHALL show the new balance within 5 seconds.
+R3. IF the balance service does not answer, THEN the account screen SHALL show the last known balance with the time it was read.
+</requirement-example>
+
+A line that bundles two behaviors is two requirements; a line no test could fail — "the screen SHALL be intuitive" — is a quality word, and the Testing Decisions rule applies to it: a number, or dropped.
 
 ## Implementation Decisions
 
