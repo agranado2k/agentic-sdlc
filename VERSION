@@ -1981,11 +1981,22 @@
 # ends. A test that relied on one of those spellings goes red until it names
 # the id plainly. UPDATING.md changes content: the arriving-from paragraph,
 # and both worked examples re-pin.
-#   NON-MANIFEST HALF, enumerated — none. Nothing outside the files: list
-# changed since v0.50.0 but docs/diary.md, which is kit-only. Kit-only, never
-# shipped: the leading-boundary fixture in
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# adapters/claude-code/hooks/root-guard.sh draws the commit hook's line for an
+# edit: a linked worktree of the repository off the default branch is open
+# wherever it lives, so an agent harness's own isolated worktrees are no
+# longer refused; the main working copy, a linked worktree on the default
+# branch and a directory under worktree/ that no worktree checks out are
+# refused, and the Bash discards and the ways around the commit hook follow
+# the same line; its README.md says so (#542). Take it like any adapter file.
+# bootstrap.sh's kit-own deletion list gains ADR-0013, which a consumer never
+# receives — nothing to take.
+# Kit-only, never shipped: the leading-boundary fixtures in
 # scripts/docs-conformance/test/living-spec.test.mjs and tests/docs-demo.sh's
-# A5b leg (#544).
+# A5b legs (#544, #550 review); tests/root-guard.test.sh's cases (#542);
+# ADR-0013 and ADR-0007's amendment with scripts/agents.kit.config.sh's
+# ordered reviewer fallback and tests/agents-tiers.test.sh (#546);
+# docs/diary.md and README's root-guard lines.
 
 shared-layer: 0.51.0
 
