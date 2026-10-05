@@ -490,8 +490,11 @@ Grouped by the seam each term belongs to. Entry shape:
   can fail, written in EARS-lite (`The <system> SHALL …`, `WHEN …`, `WHILE …`,
   `IF … THEN …`, `WHERE …`) and carrying a **requirement id**: `R<n>` within its
   PRD or living spec, `<area>/R<n>` when cited from outside a living spec. A
-  ticket's `Covers:` line names the ids it delivers, and the **coverage check**
-  in `/to-tickets` names every requirement no ticket covers. Ref: ADR-0012.
+  ticket's `Covers:` line names the ids it delivers — or `none (prefactor)`,
+  `none (open-issue)` or `none (release)` for the three kinds that deliver
+  none — and the **coverage check** (`scripts/coverage.sh`, run by
+  `/to-tickets` before its quiz) names every requirement no ticket covers and
+  every **orphan**, a ticket that covers nothing unexempt. Ref: ADR-0012.
   - _Avoid_: "acceptance criterion" for the PRD's lines — a ticket's acceptance
     criteria restate the requirements it covers; the requirement is the source.
 - **Living spec** — `docs/specs/<area>.md`: an area's current requirements,

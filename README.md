@@ -661,6 +661,19 @@ skeleton (K0).
   C.UTF-8, so the script's own locale pin is what decides it — a NUL,
   markdown-wrapped lines, and a foreign clone's checker under the caller's
   cwd.
+- `sh tests/coverage.test.sh` holds `scripts/coverage.sh`, the coverage check
+  `/to-tickets` runs before its quiz (PRD #527, ADR-0012 clause 4): a PRD body
+  and one file per drafted ticket in, every requirement no ticket's
+  `Covers:` line lists and every ticket that lists none without an
+  exemption (`Covers: none (prefactor|open-issue|release)`) out. Four
+  statuses, each driven red first — 0 with nothing printed; 1 with the
+  `uncovered:` and `orphan:` lists, ids and labels only; 2 for a usage error,
+  an unreadable file or a malformed `Covers:` line, naming the ticket, never
+  the line; 3 for a PRD with no requirement lines. It reads ids only: an id
+  in prose, a heading, a bullet, an indented line or a ticket's own copy of a
+  requirement never counts, area-qualified ids (`<area>/R<n>`) compare as
+  written, CRLF bodies read, and hostile prose in either file reaches neither
+  output stream.
 - `sh tests/prescreen-return.test.sh` holds the other two untrusted reads to
   the same form (ticket #280), where the return is smaller. `/to-tickets`
   over a PRD issue body and `/dogfood` over product output it can capture
