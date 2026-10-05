@@ -1966,8 +1966,33 @@
 # the kit glossary's Requirement and Living spec entries (the coverage check,
 # orphan, the delta spelling, tombstone, the starter), AGENTS.md's vocab.sh
 # row sentence and README's suite entries and starter line.
+# 0.51.0 — an `end` closes only the run its caller began (ticket #543,
+# ADR-0008 clause 5 as amended 2026-10-05).
+# ONE shared file changes content: scripts/trace.sh. `end` takes the run id
+# `begin` printed as an optional first argument — `sh scripts/trace.sh end
+# <run> [outcome=…] [reason=…]` — and closes that run when it is the top of
+# this session's stack in this checkout; any other top is exit 2 naming the
+# run that is open, nothing written and nothing popped, and an id outside one
+# path segment of [A-Za-z0-9._-] is a usage error. A bare `end` keeps its
+# meaning. From #543: a subagent shares its session's id, so in the session's
+# checkout it shares the run stack, and the #529 session's /review-pr
+# subagent, which skipped its own `begin`, closed the implementer's run with
+# a bare `end`. NO file joins or leaves. UPDATING.md changes content: the
+# arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/diagnose/SKILL.md, implement/SKILL.md, merge-train/SKILL.md,
+# pr-iterate/SKILL.md, retro/SKILL.md and review-pr/SKILL.md: every `end` a
+# skill types names its run, `sh scripts/trace.sh end <the run id your begin
+# printed> …`, leaves the id out when its `begin` printed nothing, and never
+# passes a `Trace-Run:` id — a run the skill did not begin is not its to end.
+# A consumer still on the old skill text keeps working: its bare `end`
+# closes the top of the stack, as before.
+# Kit-only, never shipped: tests/trace.test.sh §28, tests/trace-skills.test.sh
+# §23, tests/lib.sh's span filler reading a named run from `stack .`, the
+# ADR-0008 amendment and its index note, AGENTS.md's trace row and README's
+# trace suite entry.
 
-shared-layer: 0.50.0
+shared-layer: 0.51.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
