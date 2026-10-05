@@ -142,42 +142,51 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #    crossing this host attempted returned 401 — 4 of 4 in the third retro
 #    window — so a reviewer mapped to the other vendor answered nothing and the
 #    review fell to whatever the session happened to run on. Until that CLI
-#    authenticates the reviewer is local, and its two answers are the two
-#    models the reviewer rule cares about — claude-fable-5-1 (planner, content)
-#    and claude-opus-5-5 (implementer) — each other's complement:
+#    authenticates the reviewer is local:
 #
 #      plain `reviewer`, no session named
 #        -> claude-fable-5-1, never the implementer's claude-opus-5-5
-#      `reviewer self-implemented`, session claude-fable-5-1
-#        -> claude-opus-5-5
-#      `reviewer self-implemented`, session claude-opus-5-5
-#        -> that is the session's own model, so ADR-0007's refusal falls
-#           back to the plain reviewer: claude-fable-5-1
-#      `reviewer self-implemented`, session claude-opus-5 (mechanical)
-#        -> claude-opus-5-5, which is not the session's
+#      `reviewer self-implemented`, any session this policy maps
+#        -> claude-sonnet-5-5, the model no session tier runs on
 #
-#    So whichever model wrote the diff, a different one reads it — provided
-#    the session that wrote it asks the `self-implemented` form and says what
-#    it runs on (AGENT_SESSION_MODEL; nothing sets it for you). The plain
-#    form has no second answer: a claude-fable-5-1 session asking plain
-#    `reviewer` is refused its own model and gets NOTHING, with a warning —
-#    ask `reviewer self-implemented` instead. tests/agents-tiers.test.sh pins
-#    every answer above. The cross-vendor ids (codex:gpt-5.6-sol for the
-#    reviewer, codex:gpt-6-astra for self-implemented) come back when that CLI
-#    authenticates — ask the operator again on 2026-10-08.
+#    tests/agents-tiers.test.sh pins both. The plain form still has no second
+#    answer: a claude-fable-5-1 session asking plain `reviewer` is refused its
+#    own model and gets NOTHING, with a warning — a session that wrote the
+#    diff asks `reviewer self-implemented`. The cross-vendor ids
+#    (codex:gpt-5.6-sol for the reviewer, codex:gpt-6-astra for
+#    self-implemented) come back when that CLI authenticates — ask the
+#    operator again on 2026-10-08.
 AGENT_TIER_REVIEWER='claude-fable-5-1'
 #
-#    The case the plain lookup cannot see: the session ITSELF implemented, on
-#    the model the plain reviewer maps to — a content-domain session writing a
-#    ticket's prose on fable is exactly that. It is resolved through the domain
-#    axis below, as `sh scripts/agents.kit.sh reviewer self-implemented` — a
-#    domain that names a situation rather than a medium, which the open
-#    vocabulary allows and the glossary's "Task domain" entry records — and
-#    tests/agents-tiers.test.sh holds it to differing from the reviewer. When
-#    the session is the code model instead, this answer is the session's own,
-#    and ADR-0007's refusal — in scripts/agents.lib.sh since 0.22.0, so every
-#    project has it — falls back to the plain reviewer above.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-opus-5-5'
+#    The case the plain lookup cannot see: the session ITSELF implemented the
+#    diff — every /implement session that writes its own code or prose. It is
+#    resolved through the domain axis below, as `sh scripts/agents.kit.sh
+#    reviewer self-implemented` — a domain that names a situation rather than
+#    a medium, which the open vocabulary allows and the glossary's "Task
+#    domain" entry records.
+#
+#    2026-10-05 (#546, ADR-0007 amended): moved off claude-opus-5-5 to a THIRD
+#    model. The session models are two — claude-opus-5-5 (implementer) and
+#    claude-fable-5-1 (planner, content) — and one fixed answer can differ
+#    from both only if it is neither. While it named claude-opus-5-5 it was
+#    right only for a fable session: every implementer session that day got
+#    its own model back, was saved by ADR-0007's refusal ONLY when it named
+#    itself by this file's pinned id (`opus`, the spawn word, matches
+#    nothing), and fell back to claude-fable-5-1 — which was out of usage
+#    credits all day, so every session overrode the reviewer by hand with
+#    sonnet. This value is that override, recorded: right for every session
+#    this file maps, whether or not it says what it runs on. The cost is
+#    strength — a mid-tier read where a fable session used to get opus —
+#    chosen over a stronger review that does not run. The refusal
+#    (scripts/agents.lib.sh since 0.22.0) stays as the net, now for a
+#    session on this model itself. Verified 2026-10-05: claude-sonnet-5-5 is
+#    the model the Claude Code harness's `sonnet` spawn word ran that day,
+#    and `--alias` prints `sonnet` for it.
+#
+#    An ORDERED fallback — a next answer when this one is refused or
+#    unreachable, never the session's own — is the shared resolver's to
+#    carry, not this file's: decided in ADR-0013, built by its follow-up.
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-sonnet-5-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
