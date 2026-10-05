@@ -272,7 +272,7 @@ if [ "$engine" = "fallback" ]; then
 		# digit, `_`, `-` or `/` before the id and one letter, digit, `_`, or
 		# `.` and a digit after it, and the second grep, anchored at both ends,
 		# drops it — `Xledger/R1`, `sub/ledger/R1`, `ledger/R1abc` and
-		# `ledger/R1.5` cite nothing.
+		# `ledger/R1.5` cite nothing, and `ledger/R1-ledger/R2` cites R1 alone.
 		list_files | {
 			set -f
 			_ifs=$IFS

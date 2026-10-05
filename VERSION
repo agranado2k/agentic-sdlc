@@ -1975,7 +1975,8 @@
 # digit, `_`, `-` or `/` is the tail of a longer token and cites nothing, so
 # `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1` no longer
 # satisfy billing/R1, while `(billing/R1)`, ` billing/R1` and a line-initial
-# `billing/R1` still do. Both engines tokenize alike: one ERE that swallows
+# `billing/R1` still do. The cost, accepted: two ids joined by `-` or `/`
+# (`billing/R1-billing/R2`) cite the first alone. Both engines tokenize alike: one ERE that swallows
 # the offending character on either side, then a post-filter anchored at both
 # ends. A test that relied on one of those spellings goes red until it names
 # the id plainly. UPDATING.md changes content: the arriving-from paragraph,

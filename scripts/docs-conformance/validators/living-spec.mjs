@@ -41,8 +41,10 @@ const FENCE_RE = /^[ \t]*(```|~~~)/;
 // id preceded by a letter, a digit, `_`, `-` or `/` is the tail of a longer
 // token, so `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1`
 // cite nothing, while `(billing/R1)`, ` billing/R1` and a line-initial
-// `billing/R1` cite R1. On either side the pattern swallows the one offending
-// character and the match is then dropped (CITED_NAME, anchored at both ends)
+// `billing/R1` cite R1. Its one cost: two ids joined by `-` or `/`, as in
+// `billing/R1-billing/R2`, cite the first alone — name each on its own. On
+// either side the pattern swallows the one offending character and the match
+// is then dropped (CITED_NAME, anchored at both ends)
 // — a lookaround the twin's `grep -o -E` cannot spell, so both engines
 // tokenize the same way.
 const CITED_RE = /[A-Za-z0-9_/-]?[a-z][a-z0-9-]*\/R[0-9]+(?:[A-Za-z0-9_]|\.[0-9])?/g;

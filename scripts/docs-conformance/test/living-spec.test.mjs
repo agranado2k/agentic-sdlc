@@ -113,6 +113,42 @@ test("R12: the name begins where the area begins — Xbilling/R1 and sub-billing
   }
 });
 
+test("R12: sub-billing/R1 cites its own area, never billing/R1", () => {
+  // The positive half of the leading boundary (#550 review, M-2): a hyphenated
+  // area is one token, so it satisfies its own requirement and not the area
+  // its tail happens to spell.
+  const ctx = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "docs/specs/sub-billing.md": "R1. The sub-ledger SHALL roll up.\n",
+    "tests/a.test.sh": "# sub-billing/R1\n# billing/R2\n",
+  });
+  const out = untested(run(ctx));
+  assert.deepEqual(
+    out.map((f) => f.message),
+    ["billing/R1 is named by no test"],
+  );
+  cleanup(ctx);
+});
+
+test("R12: two ids joined by - or / cite the first alone — the leading boundary's documented cost", () => {
+  // #550 review, M-1: the second id's match swallows the joining `-` or `/`
+  // and is dropped, as any id after `-` or `/` is. Pinned so the cost is a
+  // decision, not an accident: name each id on its own.
+  for (const joined of ["billing/R1-billing/R2", "billing/R1/billing/R2"]) {
+    const ctx = ctxFor({
+      "docs/specs/billing.md": BILLING,
+      "tests/a.test.sh": `# ${joined}\n`,
+    });
+    const out = untested(run(ctx));
+    assert.deepEqual(
+      out.map((f) => f.message),
+      ["billing/R2 is named by no test"],
+      joined,
+    );
+    cleanup(ctx);
+  }
+});
+
 test("R12: a requirement line inside a fence is quoted material, not a requirement", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": "# Billing\n\n```md\nR9. An example line.\n```\n\nR1. Real.\n",
