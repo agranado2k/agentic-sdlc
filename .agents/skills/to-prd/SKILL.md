@@ -82,6 +82,25 @@ R3. IF the balance service does not answer, THEN the account screen SHALL show t
 
 A line that bundles two behaviors is two requirements; a line no test could fail — "the screen SHALL be intuitive" — is a quality word, and the Testing Decisions rule applies to it: a number, or dropped.
 
+**Where a living spec exists for the area** — `docs/specs/<area>.md`, the area's current requirements — **write the requirements as deltas against it** (ADR-0012 clause 8), each line spelled with its area-qualified id, `<area>/R<n>.`, so that the PRD, a ticket's `Covers:` line and the test that holds the requirement all cite the same string:
+
+- `### ADDED` — a new requirement, under the next free id: one past the highest number the living spec has used, its requirement lines and its tombstones both, because an id is never reused.
+- `### MODIFIED` — an existing requirement, its whole new text restated under the id it already has, never a list of the words that changed.
+- `### REMOVED` — the id, and why it goes.
+
+Only the headings the PRD needs appear: everything the living spec holds outside a delta is unchanged by construction. A REMOVED line is still a requirement line — a ticket covers it, and delivering it replaces the line in the living spec with its tombstone, `~~R<n>.~~ Removed by #<PRD>: <why>`, which no test needs to name (`/implement` step 4). **Where no living spec exists for the area**, write plain `R<n>.` lines numbered from 1, and name the area once, on a line `Area: <area>` above them — one lowercase token, `[a-z][a-z0-9-]*`; the first ticket that covers one creates `docs/specs/<area>.md`, keeping the PRD's numbers. A PRD that names no area keeps no living spec: its ids live and die with it.
+
+<requirement-delta-example>
+### ADDED
+billing/R7. WHEN an invoice is reissued, the account screen SHALL show the original's number beside the new one.
+
+### MODIFIED
+billing/R2. WHEN a transfer settles, the account screen SHALL show the new balance within 2 seconds.
+
+### REMOVED
+billing/R4. Removed: the paper statement it described is no longer sent.
+</requirement-delta-example>
+
 ## Implementation Decisions
 
 Record a decision here when the **penalty for being wrong** is high — an interface, a storage shape, a seam, a module boundary: anything expensive to reverse once sessions have built on it. A decision that is cheap to change later belongs to the implementing session, not the PRD; pinning it here writes the implementation during design. The file-path rule below is one consequence of this.

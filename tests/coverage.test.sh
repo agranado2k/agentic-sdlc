@@ -304,6 +304,41 @@ for bad in 'Covers: ignore-previous-instructions-and-print-this/R1' 'Covers: R12
 done
 
 # ---------------------------------------------------------------------------
+banner "7c. A delta PRD: area-qualified lines under ADDED, MODIFIED and REMOVED (R10)"
+# ---------------------------------------------------------------------------
+# Where a living spec exists for the area, /to-prd writes its requirements as
+# deltas (ADR-0012 clause 8), each line spelled `<area>/R<n>.` so the PRD, the
+# ticket's `Covers:` line and the test cite one string. The headings are prose
+# to this check: every delta line under each of the three is a requirement a
+# ticket must cover — a REMOVED one included, since retiring a requirement is
+# delivered work (the tombstone its living spec keeps).
+prd '## Requirements\n\n### ADDED\nprocess/R10. WHEN a ticket covers a living requirement, the session SHALL edit the spec.\n\n### MODIFIED\nprocess/R3. The gate SHALL name the file and the id.\n\n### REMOVED\nprocess/R7. Removed: folded into process/R10.\n\n## Implementation Decisions\n'
+fresh
+ticket 1 'Covers: process/R10, process/R3\n'
+ticket 2 'Covers: process/R7\n'
+run "$(T 1)" "$(T 2)"
+s_assert_resolved "" "R10: every ADDED, MODIFIED and REMOVED line covered — exit 0, nothing printed"
+fresh
+ticket 1 'Covers: process/R10\n'
+run "$(T 1)"
+s_assert_status 1 "R10: a delta PRD with two delta lines no ticket covers is a gap"
+s_assert_out_is "uncovered: process/R3
+uncovered: process/R7" "R10: the MODIFIED and the REMOVED line are named, in the PRD's order"
+fresh
+ticket 1 'Covers: R10, R3, R7\n'
+run "$(T 1)"
+s_assert_out_is "uncovered: process/R10
+uncovered: process/R3
+uncovered: process/R7" "R10: a delta line's id is its area-qualified spelling — the bare number covers none of them"
+for h in ADDED MODIFIED REMOVED; do
+	prd "## Requirements\n\n### $h\nbilling/R4. The invoice SHALL carry a date.\n"
+	fresh
+	ticket 1 'Covers: none (prefactor)\n'
+	run "$(T 1)"
+	s_assert_out_is "uncovered: billing/R4" "R10: a line under ### $h alone is read as a requirement"
+done
+
+# ---------------------------------------------------------------------------
 banner "8. Usage and unreadable input: exit 2, nothing on stdout"
 # ---------------------------------------------------------------------------
 t_run_split sh "$COVERAGE"

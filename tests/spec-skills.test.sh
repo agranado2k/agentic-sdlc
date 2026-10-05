@@ -200,6 +200,50 @@ printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/
 	pass "R1: the requirement example opens at R1, as its rule demands" ||
 	fail "R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
 
+# Where a living spec exists for the PRD's area, the requirements are deltas
+# against it (PRD #527 R10, ADR-0012 clause 8): three headings, each with its
+# rule; the area-qualified spelling that lets the PRD, the Covers: line and the
+# test cite one string; the next free id counted over tombstones too, so an id
+# is never reused; and the plain form, with its area named, for an area that
+# has no living spec yet.
+t_text_has "$req" "**Where a living spec exists for the area" "R10: the delta form has its condition"
+t_text_has "$req" '`docs/specs/<area>.md`' "R10: the living spec is named by its path"
+for h in ADDED MODIFIED REMOVED; do
+	t_text_has "$req" "\`### $h\`" "R10: the $h heading is named"
+done
+t_text_has "$req" "spelled with its area-qualified id, \`<area>/R<n>.\`" "R10: a delta line carries the area-qualified id"
+t_text_has "$req" "all cite the same string" "R10: one spelling from PRD to Covers: to test"
+t_text_has "$req" "under the next free id" "R10: ADDED takes the next free id"
+t_text_has "$req" "its requirement lines and its tombstones both" "R10: the next free id counts the tombstones — ids are never reused"
+t_text_has "$req" "its whole new text restated under the id it already has" "R10: MODIFIED restates the whole text under the same id"
+t_text_has "$req" "the id, and why it goes" "R10: REMOVED names the id and why"
+t_text_has "$req" "A REMOVED line is still a requirement line" "R10: a removal is covered by a ticket like any other requirement"
+t_text_has "$req" "**Where no living spec exists for the area**" "R10: the plain form has its condition"
+t_text_has "$req" "write plain \`R<n>.\` lines" "R10: with no living spec, plain ids"
+t_text_has "$req" '`Area: <area>`' "R10: a plain PRD names its area, so the first ticket knows which file to create"
+t_text_has "$req" "the first ticket that covers one creates \`docs/specs/<area>.md\`" "R10: who creates the living spec"
+t_text_has "$req" "keeping the PRD's numbers" "R10: the created file keeps the PRD's ids, so citations stay true"
+
+# The delta example: one area-qualified line under each heading, and the
+# coverage check reads the example as three requirements — the template and
+# the script that consumes its output agree on the grammar.
+delta_ex=$(printf '%s\n' "$req" | sed -n '/<requirement-delta-example>/,/<\/requirement-delta-example>/p')
+[ -n "$delta_ex" ] && pass "R10: the Requirements section carries a delta example" ||
+	fail "R10: no <requirement-delta-example> in the Requirements section"
+for h in ADDED MODIFIED REMOVED; do
+	printf '%s\n' "$delta_ex" | awk -v h="### $h" '$0 == h { getline; print; exit }' | grep -Eq '^[a-z][a-z0-9-]*/R[1-9][0-9]*\. ' &&
+		pass "R10: the example's ### $h is followed by an area-qualified requirement line" ||
+		fail "R10: the example's ### $h is not followed by a '<area>/R<n>. ' line"
+done
+ex_dir=$(mktemp -d "${TMPDIR:-/tmp}/spec-skills-delta.XXXXXX")
+printf '%s\n' "$delta_ex" >"$ex_dir/prd"
+printf 'Covers: none (prefactor)\n' >"$ex_dir/1"
+ex_out=$(sh scripts/coverage.sh "$ex_dir/prd" "$ex_dir/1" 2>/dev/null)
+rm -rf "$ex_dir"
+[ "$(printf '%s\n' "$ex_out" | grep -Ec '^uncovered: [a-z][a-z0-9-]*/R[1-9][0-9]*$')" -eq 3 ] &&
+	pass "R10: the coverage check reads the delta example as three area-qualified requirements" ||
+	fail "R10: the coverage check read the delta example as '$ex_out' — the template and the check disagree"
+
 impl=$(section_of "$PRD_ABS" "Implementation Decisions")
 t_text_has "$impl" "penalty for being wrong" "the filter on what a PRD pins"
 t_text_has "$impl" "belongs to the implementing session" "the reversible is left to the session that builds it"
