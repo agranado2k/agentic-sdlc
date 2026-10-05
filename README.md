@@ -569,8 +569,9 @@ skeleton (K0).
   what they should, `show` matches a subject exactly, `verify` names a bad line
   by file and line, and an emit from inside a linked worktree lands under the
   root checkout and survives the worktree's removal. Then a run has an
-  identity: `begin` hands one out and `end` closes it, a nested `begin`
-  records its parent, the environment outranks the run stack, only `begin` and
+  identity: `begin` hands one out and `end` closes it — `end <run>` that run
+  or nothing, so a subagent sharing the stack never closes its parent's —
+  a nested `begin` records its parent, the environment outranks the run stack, only `begin` and
   `end` rewrite that stack and both by rename, fifty parallel emits all land
   and all verify while the stack stays untouched, an event whose write would
   exceed 4000 bytes is refused with the refusal pointing at `--blob`, a payload

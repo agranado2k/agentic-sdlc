@@ -186,7 +186,7 @@ Tagging is part of landing the bump, and it carries the operator's name
 exactly like the merge did.
 
 Close the train's run, with the tag when one was cut:
-`sh scripts/trace.sh end outcome=ok|stopped data.landed=<count> data.skipped=<count> [data.tag=v<version>] reason='<the Landed line, or what stopped the train>' || :`.
+`sh scripts/trace.sh end <the run id your begin printed> outcome=ok|stopped data.landed=<count> data.skipped=<count> [data.tag=v<version>] reason='<the Landed line, or what stopped the train>' || :` (the id left out when your `begin` printed nothing, and never a `Trace-Run:` id: a run you did not begin is not yours to end).
 
 ## Output format
 

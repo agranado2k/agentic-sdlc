@@ -219,18 +219,17 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
-**Arriving from 0.51.0 or older, the reviewer gains an ordered fallback.**
-`scripts/agents.lib.sh` changes content at 0.52.0; take it as step 5 says.
-Nothing else in the layer moves, and nothing changes for you until you opt
-in: for the reviewer tier only, the resolver now walks the answer, the plain
-reviewer, then `AGENT_TIER_REVIEWER_FALLBACK` from your policy file —
-space-separated, in order — skipping the caller's `AGENT_SESSION_MODEL` and
-every model a caller names in `AGENT_UNREACHABLE_MODELS` after a spawn failed
-on its first call, both in your policy file's own words. Unset, it answers
-exactly as before. Part 2: in 9d, add the variable to your
-`scripts/agents.config.sh` by hand if you want a next answer; in 9b, tell your
-sessions to re-resolve with the dead model named rather than override the
-reviewer by hand.
+**Arriving from 0.51.0 or older, `end` can name the run it closes.**
+`scripts/trace.sh end` takes the run id `begin` printed as an optional first
+argument at 0.52.0: named, it closes that run or nothing — exit 2 naming the
+run that is open, nothing written — so a subagent that shares its session's
+stack in the same checkout and skipped its own `begin` cannot close its
+parent's run with a bare `end`. A bare `end` keeps its meaning, so step 5
+breaks nothing your skills already type. Part 2 is how you take the rest: in
+9a, the six skills that close a run (`/diagnose`, `/implement`,
+`/merge-train`, `/pr-iterate`, `/retro`, `/review-pr`) name it at `end`, `end
+<the run id your begin printed>`; a skill of your own that opens a run can do
+the same.
 
 **Arriving from 0.50.0 or older, a test may stop citing a requirement.**
 No file joins or leaves at 0.51.0. `validators/living-spec.mjs` and its twin in
@@ -924,10 +923,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2363 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2362 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2517 insertions(+), 1 deletion(-)
+ 3 files changed, 2516 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

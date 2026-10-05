@@ -1997,38 +1997,33 @@
 # ADR-0013 and ADR-0007's amendment with scripts/agents.kit.config.sh's
 # ordered reviewer fallback and tests/agents-tiers.test.sh (#546);
 # docs/diary.md and README's root-guard lines.
-# 0.52.0 — the reviewer walks an ordered fallback, past what the caller names
-# unreachable (ticket #548, ADR-0013, ADR-0007 as amended 2026-10-05).
-# ONE shared file changes content: scripts/agents.lib.sh, the capability-tier
-# resolver. For the reviewer tier only it walks the answer the lookup gave
-# (the domain's, when mapped), then the plain reviewer, then each value of a
-# new policy variable, AGENT_TIER_REVIEWER_FALLBACK — space-separated, each a
-# model or `<harness>:<model>` — and prints the first candidate that is
-# neither the caller's AGENT_SESSION_MODEL nor named in a new caller-held
-# variable, AGENT_UNREACHABLE_MODELS: what a spawn found dead on its first
-# call (a rate limit, a logged-out CLI), in the policy file's own words,
-# compared exactly on the model half, as the session model is. Both halves
-# move together, so a fallback that crosses agent harnesses carries its
-# own. A spent list prints nothing with ADR-0007's warning, never the
-# session's own model; every skip is named on stderr with its reason; an
-# unreachable name that matches no candidate is warned about by name rather
-# than ignored. Other tiers ignore both variables. With the list unset or
-# empty and nothing named unreachable, the resolver answers exactly as it
-# did, stderr included. The resolver still never probes, retries or records
-# an outage. NO file joins or leaves. UPDATING.md changes content: the
-# arriving-from paragraph, and both worked examples re-pin.
+# 0.52.0 — an `end` closes only the run its caller began (ticket #543,
+# ADR-0008 clause 5 as amended 2026-10-05).
+# ONE shared file changes content: scripts/trace.sh. `end` takes the run id
+# `begin` printed as an optional first argument — `sh scripts/trace.sh end
+# <run> [outcome=…] [reason=…]` — and closes that run when it is the top of
+# this session's stack in this checkout; any other top is exit 2 naming the
+# run that is open, nothing written and nothing popped. An empty id is exit
+# 2 too, never read as a bare `end`, and an id outside one token of
+# [A-Za-z0-9._-] is a usage error; unconfigured, a named `end` is the silent
+# no-op every call is. A bare `end` keeps its meaning. From #543: a subagent
+# shares its session's id, so in the session's checkout it shares the run
+# stack, and the #529 session's /review-pr subagent, which skipped its own
+# `begin`, closed the implementer's run with a bare `end`. NO file joins or
+# leaves. UPDATING.md changes content: the arriving-from paragraph, and both
+# worked examples re-pin.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# scripts/agents.config.sh, the policy file (yours, never overwritten): a
-# commented AGENT_TIER_REVIEWER_FALLBACK example under the reviewer tier; an
-# existing consumer adds the variable by hand if it wants a next answer —
-# unset, nothing changes (#548). Nothing else landed on main since v0.51.0.
-# Kit-only, never shipped: scripts/agents.kit.sh maps a spawn word named in
-# AGENT_UNREACHABLE_MODELS back to every pinned id it folds from before
-# delegating (one _kit_fold shared with --alias); scripts/agents.kit.config.sh
-# sets AGENT_TIER_REVIEWER_FALLBACK to claude-sonnet-5-5; the root manual's
-# reviewer paragraph says what a session sets after a reviewer spawn fails;
-# the kit glossary's Task domain entry; tests/agents-tiers.test.sh's
-# fallback, bridge and kit-mapping sections.
+# .agents/skills/diagnose/SKILL.md, implement/SKILL.md, merge-train/SKILL.md,
+# pr-iterate/SKILL.md, retro/SKILL.md and review-pr/SKILL.md: every `end` a
+# skill types names its run, `sh scripts/trace.sh end <the run id your begin
+# printed> …`, leaves the id out when its `begin` printed nothing, and never
+# passes a `Trace-Run:` id — a run the skill did not begin is not its to end.
+# A consumer still on the old skill text keeps working: its bare `end`
+# closes the top of the stack, as before.
+# Kit-only, never shipped: tests/trace.test.sh §28, tests/trace-skills.test.sh
+# §23, tests/lib.sh's span filler reading a named run from `stack .`, the
+# ADR-0008 amendment, its header ledger entry and its index note, AGENTS.md's
+# trace row and README's trace suite entry.
 
 shared-layer: 0.52.0
 
