@@ -124,22 +124,39 @@ assert_status 0 "check.sh passes at the kit root without node" -- \
 # validator added to the registration list and not to the notice is the
 # drift this probe exists for (#129). The notice is read from a real
 # no-node run's stderr, not from the wrapper's source, and only from
-# "NOT checked:" on: an id that moved into the "Checked:" line is the
-# over-claim the probe must refuse, not a pass.
+# "NOT checked:" on. An id on the "Checked:" lines instead is an over-claim
+# the probe refuses — unless the reduced form really runs that scan: a
+# validator with a POSIX twin (living-spec, ADR-0012 clause 10) may sit there
+# only when the wrapper reports every rule the validator emits. A twin is
+# held to the rules it reports, never to a sentence about it.
 #
 # registered_symbols <harness dir> — the symbols on the runner's VALIDATORS line.
 registered_symbols() {
 	sed -n 's/^export const VALIDATORS = \[\(.*\)\];$/\1/p' "$1/runner.mjs" | tr ',' '\n' | tr -d ' ' | grep .
 }
-# notice_gaps <notice text file> <harness dir> — one id per registered
-# validator the notice's NOT-checked list does not name; empty means current.
+# twinned <validator file> <check.sh> — true when the validator emits at least
+# one rule and the wrapper reports every one of them.
+twinned() {
+	_tw_rules=$(sed -n 's/.*rule: "\([^"]*\)".*/\1/p' "$1" | sort -u)
+	[ -n "$_tw_rules" ] || return 1
+	for _tw_r in $_tw_rules; do
+		grep -q -F -- "report \"$_tw_r\"" "$2" || return 1
+	done
+}
+# notice_gaps <notice text file> <harness dir> [<check.sh>] — one id per
+# registered validator the notice neither lists as NOT checked nor claims,
+# with a real twin, as checked; empty means current.
 notice_gaps() {
 	_ng_not=$(sed -n '/NOT checked:/,$p' "$1")
+	_ng_chk=$(sed -n '/Checked:/,/NOT checked:/p' "$1" | sed '$d')
+	_ng_wrapper=${3:-$KIT/scripts/check.sh}
 	for _ng_sym in $(registered_symbols "$2"); do
 		_ng_file=$(sed -n "s|^import \* as $_ng_sym from \"\./\(.*\)\";$|\1|p" "$2/runner.mjs")
 		_ng_id=$(sed -n 's/^export const id = "\(.*\)";$/\1/p' "$2/$_ng_file" 2>/dev/null)
 		[ -n "$_ng_id" ] || { echo "(unreadable id for $_ng_sym)"; continue; }
-		printf '%s\n' "$_ng_not" | grep -q -F -- "$_ng_id" || echo "$_ng_id"
+		printf '%s\n' "$_ng_not" | grep -q -F -- "$_ng_id" && continue
+		printf '%s\n' "$_ng_chk" | grep -q -F -- "$_ng_id" && twinned "$2/$_ng_file" "$_ng_wrapper" && continue
+		echo "$_ng_id"
 	done
 }
 NOTICE="$SCRATCH/notice.txt"
@@ -153,7 +170,7 @@ n_files=$(ls "$KIT"/scripts/docs-conformance/validators/*.mjs | wc -l | tr -d ' 
 	pass "the runner registers every validator file the harness ships ($n_reg)" ||
 	fail "the runner registers $n_reg validators but the harness ships $n_files files"
 gaps=$(notice_gaps "$NOTICE" "$KIT/scripts/docs-conformance")
-[ -z "$gaps" ] && pass "the no-node NOTICE's NOT-checked list names every scan the runner registers" ||
+[ -z "$gaps" ] && pass "the no-node NOTICE accounts for every scan the runner registers — NOT checked, or checked by a real twin" ||
 	fail "the no-node NOTICE is stale — registered but not named: $(printf '%s' "$gaps" | tr '\n' ' ')"
 # Bait: a stub validator registered in a scratch copy of the harness, and the
 # notice untouched — the probe must name exactly it.
@@ -165,6 +182,19 @@ export const VALIDATORS = [\1, stubScan];|' "$STUBH/runner.mjs" >"$STUBH/runner.
 [ "$(notice_gaps "$NOTICE" "$STUBH")" = "stub-scan" ] &&
 	pass "a validator registered in the runner alone is the one id reported as missing from the notice" ||
 	fail "the probe did not report exactly the stub validator: '$(notice_gaps "$NOTICE" "$STUBH" | tr '\n' ' ')'"
+# Bait for the twin arm: the stub now emits a rule and the notice claims it on
+# the Checked line. With no wrapper reporting that rule the claim is refused;
+# with one that does, it stands.
+printf 'export const id = "stub-scan";\nexport function run() { return [{ rule: "stub-rule" }]; }\n' >"$STUBH/validators/stub-scan.mjs"
+sed 's|^\( *Checked:.*\)$|\1 stub-scan,|' "$NOTICE" >"$SCRATCH/notice.claimed"
+grep -q 'Checked:.*stub-scan' "$SCRATCH/notice.claimed" || fail "the twin bait could not plant its claim on the Checked line"
+[ "$(notice_gaps "$SCRATCH/notice.claimed" "$STUBH")" = "stub-scan" ] &&
+	pass "a Checked-line claim with no wrapper reporting the validator's rules is refused" ||
+	fail "the probe accepted a Checked-line claim no wrapper backs: '$(notice_gaps "$SCRATCH/notice.claimed" "$STUBH" | tr '\n' ' ')'"
+{ cat "$KIT/scripts/check.sh"; printf '\treport "stub-rule" x y z\n'; } >"$SCRATCH/check.twinned"
+[ -z "$(notice_gaps "$SCRATCH/notice.claimed" "$STUBH" "$SCRATCH/check.twinned")" ] &&
+	pass "a Checked-line claim stands when the wrapper reports every rule the validator emits" ||
+	fail "the probe refused a claim the wrapper backs: '$(notice_gaps "$SCRATCH/notice.claimed" "$STUBH" "$SCRATCH/check.twinned" | tr '\n' ' ')'"
 
 # ---------------------------------------------------------------------------
 banner "C. Bootstrap strips the kit's own files, and stamps a clean project"
@@ -188,6 +218,21 @@ done
 [ -e "$PROJ/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
 	fail "the kit's own ADR-0001 leaked into the project" ||
 	pass "no kit ADR leaked into the project"
+# PRD #527's R14: the consumer gets the living-spec check, in both engines,
+# and no living spec of the kit's — its requirements would be held to tests
+# the strip has already deleted, and the consumer's gate would open red.
+leaked_specs=$(ls "$PROJ"/docs/specs/*.md 2>/dev/null)
+[ -z "$leaked_specs" ] &&
+	pass "no kit living spec leaked into the project (R14)" ||
+	fail "a kit living spec leaked into the project: $leaked_specs"
+[ -f "$PROJ/scripts/docs-conformance/validators/living-spec.mjs" ] &&
+	grep -q 'livingSpec' "$PROJ/scripts/docs-conformance/runner.mjs" &&
+	pass "the project's harness carries the living-spec check (R14)" ||
+	fail "the project's harness lacks the living-spec check"
+grep -q 'report "living-spec-untested"' "$PROJ/scripts/check.sh" &&
+	grep -q 'testGlobs' "$PROJ/scripts/docs-conformance/config.mjs" &&
+	pass "the project's gate carries the twin, and its policy the test globs the twin reads (R14)" ||
+	fail "the project's gate lacks the living-spec twin or its policy"
 grep -q "$PROJECT_NAME" "$PROJ/docs/diary.md" &&
 	pass "docs/diary.md is the stamped starter, not the kit's diary" ||
 	fail "docs/diary.md was not stamped — the kit's diary survived"
@@ -394,9 +439,11 @@ done
 # Naming files instead of a directory buys the safety above and owes one debt:
 # a kit ADR added later has to join the list. This is that debt's check.
 kit_own_line=$(grep '^KIT_OWN=' "$KIT/bootstrap.sh")
-for a in "$KIT"/docs/adr/*; do
+# The kit's living specs, when it keeps any (PRD #527 defers them), owe the
+# same debt as its records: each one named, so none rides into a consumer.
+for a in "$KIT"/docs/adr/* "$KIT"/docs/specs/*; do
 	[ -f "$a" ] || continue
-	rel="docs/adr/$(basename "$a")"
+	rel="${a#"$KIT"/}"
 	case "$kit_own_line" in
 	*"$rel"*) pass "bootstrap names $rel explicitly" ;;
 	*) fail "$rel is one of the kit's own but is not on bootstrap's KIT_OWN list — it would ride into every consumer's tree" ;;
