@@ -1667,6 +1667,25 @@ t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS=stron
 [ "$S_OUT" = third ] &&
 	pass "--alias with the word 'strong' unreachable folds the answer past it, to 'third'" ||
 	fail "--alias with 'strong' unreachable gave '$S_OUT', expected 'third'"
+# A value that crosses to a DECLARED agent harness has no spawn word, so no
+# word covers it — even when its model half folds to that word. Bridged, it
+# would reach the resolver as 'other:vendor-strong-5', a name no candidate's
+# model half equals, and draw a false "matches no" warning (PR #553 M-1).
+cat >"$PROBE/scripts/agents.kit.fbx.config.sh" <<'PROBE_FBX_CFG'
+AGENT_HARNESSES='other'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4-20260101'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_FALLBACK='other:vendor-strong-5 vendor-third-3'
+PROBE_FBX_CFG
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fbx AGENT_UNREACHABLE_MODELS=strong sh scripts/agents.kit.sh reviewer
+case "$S_OUT|$S_ERR" in
+*"matches no"*) fail "a crossing value was bridged as an id the word covers — stdout '$S_OUT', stderr '$S_ERR'" ;;
+vendor-strong-5\|*) pass "a crossing value is no id a spawn word covers: the walk reaches 'other:vendor-strong-5', with no match warning" ;;
+*) fail "the word 'strong' with a crossing fallback resolved '$S_OUT' — expected vendor-strong-5 (stderr '$S_ERR')" ;;
+esac
+
 # A pinned id and an unknown word pass the bridge untouched: the id still
 # matches, and the unknown word reaches the resolver to be warned about.
 t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS='vendor-mid-4-20260101 nosuchword' sh scripts/agents.kit.sh reviewer self-implemented
