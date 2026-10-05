@@ -1410,4 +1410,60 @@ s_assert_out_has '"line":11' "…anchored on its own line of the diff"
 grep -vF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
 bad "$SCRATCH/candidate-no-fix.md" "…and the same candidate ticket with its fix line withdrawn is exit 65" 'L-1'
 
+# ---------------------------------------------------------------------------
+banner "22. An Axis 2 whose items cite requirement ids lands, and its MISSING is counted (#532)"
+# ---------------------------------------------------------------------------
+# PRD #527 R9: where the spec carries requirement ids, a ✅ cites the id and a
+# covered requirement the diff does not deliver is a ❌ MISSING naming it. The
+# id rides after the tag, on the item's own line — the broker lifts one line
+# per item and drops the rest — so the line shape it reads is unchanged —
+# and this proves the broker agrees: the report lands, the comment carries the
+# id-citing items verbatim, and the axis-2 verdict counts the MISSING as a
+# confirm. An id is never mistaken for a tag, and a tag never for an id.
+IDS="$SCRATCH/ids.md"
+cat >"$IDS" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — R9 is not delivered; confirm it
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+#### HIGH
+— none found.
+#### MEDIUM
+— none found.
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+❌ MISSING      R9: the review names no requirement id for a SPECIFIED item.
+✅ SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.
+EOF
+STUB_PR=35
+export STUB_PR
+broker 35 "$IDS"
+s_assert_status 0 "R9: a report whose Axis 2 items cite requirement ids passes the contract"
+assert_mutating 2 "…and lands both operations"
+COMMENT=$(payload issues/35/comments)
+case "$COMMENT" in
+*'MISSING      R9: the review names no requirement id'*) pass "R9: the comment carries the id-naming MISSING item verbatim" ;;
+*) fail "R9: the comment lost the MISSING item that names R9"; printf '%s\n' "$COMMENT" | sed 's/^/        | /' ;;
+esac
+case "$COMMENT" in
+*'SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.'*) pass "R9: …and the SPECIFIED item's id citation, on the item's own line" ;;
+*) fail "R9: the comment lost the SPECIFIED item's R8 citation"; printf '%s\n' "$COMMENT" | sed 's/^/        | /' ;;
+esac
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#35' --kind review.verdict
+AX2=$(printf '%s\n' "$S_OUT" | grep -F '"axis":"2"')
+for want in '"outcome":"confirm"' '"missing":"1"' '"unspecified":"0"' '"mixed":"0"'; do
+	case "$AX2" in
+	*"$want"*) pass "R9: the axis-2 verdict carries $want — the undelivered requirement is a confirm item" ;;
+	*) fail "R9: the axis-2 verdict lacks $want: $AX2" ;;
+	esac
+done
+STUB_PR=12
+export STUB_PR
+
 t_done "tests/forge-broker.test.sh"

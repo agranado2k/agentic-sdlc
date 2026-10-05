@@ -758,4 +758,55 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "12. Axis 2 cites requirement ids where the spec carries them (PRD #527 R9)"
+# ---------------------------------------------------------------------------
+# #532, ADR-0012 clause 6. Agent 7 cited "a PRD acceptance criterion" the PRD
+# template never had, so a SPECIFIED citation was free text, and a requirement
+# a ticket promised on its `Covers:` line could go undelivered with nothing on
+# the confirm-list to say so. Where the spec carries ids, a ✅ cites the id and
+# every covered id the diff leaves undone is a ❌ MISSING naming it; with no ids,
+# both read as before. Two sentences in Agent 7's procedure rule it, and the
+# offline worker and its CI twin say them word for word — the same two axes,
+# the same standard — so the three reviewers of one diff cite alike. The tags
+# are the existing ones, so the line shape the broker reads does not move
+# (tests/forge-broker.test.sh section 22 lands such a report).
+R9_IDS='**Where the spec carries requirement ids** — `R<n>` lines in a PRD'"'"'s Requirements section, `<area>/R<n>` for a living spec'"'"'s, and a ticket'"'"'s `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites the id of the requirement it delivers, and every id on the ticket'"'"'s `Covers:` line that the diff does not deliver is a ❌ MISSING item naming that id, so a covered requirement left undone reaches the human on the confirm-list rather than passing in silence'
+R9_NONE='**With no requirement ids in the spec**, both read as they always have: a ✅ SPECIFIED item cites the PRD, ticket or decision-record line it answers, and a ❌ MISSING item names the spec line the diff does not deliver'
+a7_sentences=$(region '^#### Agent 7 ' '^### 4\. ' | sentences)
+[ -n "$a7_sentences" ] && pass "Agent 7's procedure is extractable" ||
+	fail "Agent 7's region is empty — its heading or §4's moved and this section lost them"
+for want in "$R9_IDS" "$R9_NONE"; do
+	carries "$a7_sentences" "$want" &&
+		pass "R9: Agent 7 says it, word for word: ${want%%,*}" ||
+		fail "R9: Agent 7's procedure does not say, word for word: $want"
+done
+for f in "$WORKER" "$TWIN"; do
+	f_sentences=$(sentences_for "$f")
+	for want in "$R9_IDS" "$R9_NONE"; do
+		carries "$f_sentences" "$want" &&
+			pass "R9: $f says Agent 7's sentence word for word: ${want%%,*}" ||
+			fail "R9: $f does not say Agent 7's requirement-id sentence word for word — its reviewer would cite differently: $want"
+	done
+done
+# The worker's items are one line each, and the broker lifts that line and
+# drops any other — so the dispatched form puts the id on the item's own line,
+# where §5b's two-line ✅ would lose it.
+t_text_has "$(unwrap "$WORKER")" "The id goes on the item's own line, right after its tag: the session that lands this report keeps the tagged line and drops any line beneath it" "R9: a dispatched item's id survives the broker's one-line lift" "$WORKER"
+# The template the report prints carries the id in the citation slot of a ✅
+# and in the body of a ❌ — after the tag, so the tag still opens the line.
+t_text_has "$axis2" "→ <the requirement id it delivers, where the spec carries ids; else the PRD/ticket/decision-record citation>" "R9: the ✅ template's citation is the id where there is one" "the §5b template"
+t_text_has "$axis2" "❌ MISSING      <the requirement id the ticket covers, where the spec carries ids; else the spec line the diff does not deliver>" "R9: the ❌ template names the covered id where there is one" "the §5b template"
+# Baits: each weakening of the ruling, in the skill, goes red.
+for b in \
+	's/a ✅ SPECIFIED item cites the id/a ✅ SPECIFIED item may cite the id/' \
+	's/is a ❌ MISSING item naming that id/is left off the list/' \
+	's/reaches the human on the confirm-list/is noted for the author/' \
+	's/both read as they always have/both cite a requirement id anyway/'; do
+	carries "$(printf '%s\n' "$a7_sentences" | sed "$b")" "$R9_IDS" &&
+		carries "$(printf '%s\n' "$a7_sentences" | sed "$b")" "$R9_NONE" &&
+		fail "bait: '$b' still reads as the ruling" ||
+		pass "bait: '$b' goes red"
+done
+
 t_done "/review-pr output contract"

@@ -189,6 +189,8 @@ It must **NOT** receive the other six agents' findings, the implementation conve
 
 Missing requirements (spec asked, diff doesn't deliver) are also Axis-2 findings, tagged ❌ **MISSING**.
 
+**Where the spec carries requirement ids** — `R<n>` lines in a PRD's Requirements section, `<area>/R<n>` for a living spec's, and a ticket's `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites the id of the requirement it delivers, and every id on the ticket's `Covers:` line that the diff does not deliver is a ❌ MISSING item naming that id, so a covered requirement left undone reaches the human on the confirm-list rather than passing in silence. **With no requirement ids in the spec**, both read as they always have: a ✅ SPECIFIED item cites the PRD, ticket or decision-record line it answers, and a ❌ MISSING item names the spec line the diff does not deliver. (ADR-0012 clause 6.)
+
 **Commit separation** (shared invariant §10 — refactoring and behavior never share a commit) is the one Axis-2 finding class that is *about the history rather than the diff*, so it is classified per commit, not per surface. `scripts/behavior-delta.sh` emits it as its own **Commit separation** section: commits whose Conventional Commit type claims structure-only work (`refactor`, `style`) while that commit's own diff touches a contract artifact. Each listed commit is a confirm-list item tagged 🔀 **MIXED COMMIT**. The script has already established the fact — do not re-derive it and do not resolve it yourself; report the commit, the artifacts it touches, and let the human choose between splitting the commit and relabelling it. An empty section is the normal result and needs no mention.
 
 **The mutation delta, if this repo has one**, closes the list with the one thing the other tags cannot state: whether the behavior above is actually *enforced* (shared invariant §9). Emit it as exactly **one** 🧬 **MUTATION** line — including the skip, because "no mutated source changed" is itself information the human wants confirmed. It is **not** a classification and takes no ✅/⚠️: it is a measurement of the list, so it goes last, after the tagged items it qualifies. Never assign it a severity, never let a score decide anything, and do not restate the individual mutants here — Agent 6 owns those as Axis-1 findings (a surviving mutant is a *standards* problem: the tests are not load-bearing). Axis 2's use of the number is narrower and specific: a ⚠️ UNSPECIFIED behavior change in a file that also carries survivors is unrequested behavior that nothing is checking, and the human should see those two facts on the same screen. **If no mutation adapter is wired, omit the 🧬 line entirely** rather than printing a hollow one.
@@ -267,9 +269,9 @@ Immediately after the severity report — **separated by a horizontal rule and u
                 → no spec reference found. Desired?
 
 ✅ SPECIFIED    <surface>: <what changed, one line>
-                → <PRD/ticket/decision-record citation>; <artifact updated>
+                → <the requirement id it delivers, where the spec carries ids; else the PRD/ticket/decision-record citation>; <artifact updated>
 
-❌ MISSING      <spec line the diff does not deliver>
+❌ MISSING      <the requirement id the ticket covers, where the spec carries ids; else the spec line the diff does not deliver>
 
 🧬 MUTATION     <score> over <N> changed source file(s) — <M> surviving mutant(s)
                 → the branch's behavior, as enforced by its tests
