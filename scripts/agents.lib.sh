@@ -21,6 +21,10 @@
 # caller's cwd; a sourcing caller that set neither variable gets nothing.
 # Variable resolution, first NON-EMPTY wins: AGENT_TIER_<TIER>_<DOMAIN> (only
 # with a domain) · AGENT_TIER_<TIER>.
+# Reviewer tier only: a walk past that answer — the plain tier, then the
+# policy's ordered AGENT_TIER_REVIEWER_FALLBACK — skipping the caller's
+# $AGENT_SESSION_MODEL and every name in $AGENT_UNREACHABLE_MODELS (ADR-0007,
+# ADR-0013; described where resolve_tier does it).
 #
 # Exit: 0 resolved (a value, or deliberately nothing — an unmapped tier warns
 # once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
@@ -388,9 +392,10 @@ resolve_tier() {
 	# pointing at one fixed model is right only for a session running some
 	# other one; a session running THAT model is handed itself to review with,
 	# silently. $AGENT_SESSION_MODEL is the caller saying what it runs on, in
-	# the word this policy file uses, and it is the only new input. Unset,
-	# everything below is skipped and this file behaves exactly as it did —
-	# which is what every caller written before this release expects.
+	# the word this policy file uses. Unset, and with nothing named
+	# unreachable, everything below is skipped and this file behaves exactly
+	# as it did — which is what every caller written before either input
+	# expects.
 	#
 	# The comparison is EXACT, never a family guess. Folding an id to a family
 	# word would mean knowing each vendor's ORDER — one puts the family second
@@ -399,31 +404,111 @@ resolve_tier() {
 	# so it compares what the policy file says. A caller that knows its session
 	# by another spelling names it in the spelling its own policy uses.
 	#
+	# THE WALK (ADR-0013). One refusal had one next answer, the plain tier, and
+	# on a day that answer's vendor was out of credits there was none past it.
+	# So the reviewer tier walks an ordered list: the answer looked up above
+	# (the domain's, when one is mapped), then the plain reviewer, then each
+	# value of AGENT_TIER_REVIEWER_FALLBACK — the policy's, in order. The first
+	# candidate that is neither the session's model nor named in
+	# $AGENT_UNREACHABLE_MODELS is the answer. That second list is the caller's,
+	# like the session model: the resolver is offline and holds no credentials,
+	# so it never probes; a session that saw a spawn fail on its first call
+	# names that model and asks again. Both lists compare on the MODEL half
+	# only. A spent list prints nothing — never the session's own model.
+	#
 	# The substitution happens HERE, before the value is split, so BOTH halves
-	# move together: a fallback that crosses agent harnesses must carry its own
-	# harness, or the dispatcher would launch the fallback's model wherever the
-	# refused mapping happened to point.
-	if [ "$_rt_tier" = reviewer ] && [ -n "${AGENT_SESSION_MODEL:-}" ]; then
-		agents_split_harness "$_rt_value"
-		if [ "$_ah_model" = "$AGENT_SESSION_MODEL" ]; then
-			eval "_rt_fallback=\${AGENT_TIER_REVIEWER:-}"
-			agents_split_harness "$_rt_fallback"
-			if [ -n "$_ah_model" ] && [ "$_ah_model" != "$AGENT_SESSION_MODEL" ]; then
-				[ "${AGENTS_TIER_QUIET:-}" = 1 ] || {
+	# move together: a candidate that crosses agent harnesses carries its own
+	# harness, or the dispatcher would launch its model wherever the refused
+	# mapping happened to point.
+	#
+	# Lists are walked by peeling words off a string, never `for c in $list`:
+	# zsh does not word-split an unquoted expansion, and the tier check below
+	# documents being bitten by exactly that.
+	if [ "$_rt_tier" = reviewer ] &&
+		{ [ -n "${AGENT_SESSION_MODEL:-}" ] || [ -n "${AGENT_UNREACHABLE_MODELS:-}" ]; }; then
+		_rt_fb=$(printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}" | tr '\t\n' '  ')
+		_rt_unr=$(printf '%s' "${AGENT_UNREACHABLE_MODELS:-}" | tr '\t\n' '  ')
+		_rt_rest="$_rt_value ${AGENT_TIER_REVIEWER:-} $_rt_fb"
+		_rt_tried=' ' _rt_seen=' ' _rt_skips= _rt_nskips=0 _rt_pick= _rt_pickpos=0 _rt_pos=0
+		while :; do
+			while :; do case $_rt_rest in ' '*) _rt_rest=${_rt_rest# } ;; *) break ;; esac; done
+			[ -n "$_rt_rest" ] || break
+			_rt_c=${_rt_rest%% *}
+			_rt_rest=${_rt_rest#"$_rt_c"}
+			# A value listed twice (the domain's equal to the plain tier's, or
+			# repeated in the list) is one candidate, asked about once.
+			case $_rt_tried in *" $_rt_c "*) continue ;; esac
+			_rt_tried="$_rt_tried$_rt_c "
+			_rt_pos=$((_rt_pos + 1))
+			agents_split_harness "$_rt_c"
+			_rt_seen="$_rt_seen$_ah_model "
+			if [ -n "$_rt_pick" ]; then
+				# Picked already: the rest is read only to know which unreachable
+				# names match a candidate at all, for the warning below.
+				[ -n "$_rt_unr" ] || break
+				continue
+			fi
+			if [ -n "${AGENT_SESSION_MODEL:-}" ] && [ "$_ah_model" = "$AGENT_SESSION_MODEL" ]; then
+				_rt_why="the session's own model"
+			else
+				case " $_rt_unr " in
+				*" $_ah_model "*) _rt_why="named unreachable" ;;
+				*) _rt_why= ;;
+				esac
+			fi
+			if [ -n "$_rt_why" ]; then
+				_rt_skips="${_rt_skips:+$_rt_skips, }$_rt_c ($_rt_why)"
+				_rt_nskips=$((_rt_nskips + 1))
+			else
+				_rt_pick=$_rt_c
+				_rt_pickpos=$_rt_pos
+			fi
+		done
+
+		if [ "${AGENTS_TIER_QUIET:-}" != 1 ]; then
+			# A name that matches no candidate skipped nothing — the miss ADR-0007's
+			# 2026-10-05 amendment shows for a session named by its spawn word.
+			# Silent, it would hand back the very model the caller found dead.
+			_rt_rest=$_rt_unr
+			while :; do
+				while :; do case $_rt_rest in ' '*) _rt_rest=${_rt_rest# } ;; *) break ;; esac; done
+				[ -n "$_rt_rest" ] || break
+				_rt_c=${_rt_rest%% *}
+				_rt_rest=${_rt_rest#"$_rt_c"}
+				case $_rt_seen in
+				*" $_rt_c "*) ;;
+				*)
+					echo "!  agents: AGENT_UNREACHABLE_MODELS names '$_rt_c', which matches no reviewer" >&2
+					echo "   candidate, so it skips nothing. Name the model in the policy file's own" >&2
+					echo "   words — compared exactly, on the model half." >&2
+					;;
+				esac
+			done
+
+			if [ -z "$_rt_fb" ] && [ -z "$_rt_unr" ]; then
+				# No list and nothing named unreachable: ADR-0007's two outcomes,
+				# worded as they always were, so a caller that predates the walk
+				# reads exactly what it read before.
+				if [ -n "$_rt_pick" ] && [ "$_rt_nskips" -gt 0 ]; then
 					echo "!  agents: reviewer${_rt_domain:+ $_rt_domain} resolves to the session's own model" >&2
 					echo "   ($AGENT_SESSION_MODEL); falling back to the reviewer tier. A review by the" >&2
 					echo "   model that wrote the diff is an editorial pass wearing a second hat." >&2
-				}
-				_rt_value=$_rt_fallback
-			else
-				[ "${AGENTS_TIER_QUIET:-}" = 1 ] || {
+				elif [ -z "$_rt_pick" ]; then
 					echo "!  agents: no reviewer model differs from the session's own" >&2
 					echo "   ($AGENT_SESSION_MODEL) — the review will share the author's model. Nothing" >&2
 					echo "   is printed, so the spawn inherits the session; say so in your report." >&2
-				}
-				return 0
+				fi
+			elif [ -n "$_rt_pick" ] && [ "$_rt_nskips" -gt 0 ]; then
+				echo "!  agents: reviewer${_rt_domain:+ $_rt_domain} skipped $_rt_skips;" >&2
+				echo "   answering $_rt_pick, candidate $_rt_pickpos on the walk." >&2
+			elif [ -z "$_rt_pick" ]; then
+				echo "!  agents: every reviewer candidate was skipped${_rt_skips:+ — $_rt_skips}." >&2
+				echo "   Nothing is printed, so the spawn inherits the session and the review will" >&2
+				echo "   share the author's model; say so in your report." >&2
 			fi
 		fi
+		[ -n "$_rt_pick" ] || return 0
+		_rt_value=$_rt_pick
 	fi
 
 	agents_split_harness "$_rt_value"

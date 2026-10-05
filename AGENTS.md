@@ -181,11 +181,11 @@ answers with per-option probabilities out, in two shapes — **decide** and
 review verdict (§5, ADR-0010).
 
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
-word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`. The
-mapping's `self-implemented` answer is one model, so on a session running that
-model it is the implementer's own; the resolver compares its answer to yours,
-falls back to the plain reviewer tier when they are equal, and prints nothing
-with a warning when nothing differs — which your report says (ADR-0007).
+word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`: the
+resolver walks the answer, the plain tier, then the policy's ordered fallback,
+skipping yours. **A reviewer spawn that fails on its first call** (rate limit,
+login): re-resolve with `AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added.
+A spent walk prints nothing, with a warning your report quotes (ADR-0013).
 
 ## Agent trust boundary
 
