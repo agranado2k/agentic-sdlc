@@ -93,7 +93,7 @@ second time rather than overwriting a manual you have since edited.
 | `.githooks/pre-commit` | Refuses an agent's commit from the main working copy or on the default branch (hard rule 1, "Worktree, always"); a human with no agent-harness marker set commits as before. One loud bypass, documented in the hook. |
 | `templates/workflows/` | CI workflow templates, copied into `.github/workflows/` by bootstrap. Two ship live (the docs gate, the TDD pairing gate); two ship as `.example` — commit linting, and the AI review below. |
 | `templates/workflows/ai-review.example.yml` | The cross-provider review workflow: two advisory reviewers from two vendors, one identical prompt, firing on PR open. This is what `/implement` requests when it delivers. **Inert on arrival** — rename it once a provider secret exists. |
-| `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md` and `.github/PULL_REQUEST_TEMPLATE.md`, then removed. |
+| `templates/docs/` | The documentation skeletons. Stamped into `README.md`, `docs/diary.md`, `docs/domain-glossary.md`, `docs/adr/INDEX.md`, `docs/adr/NNNN-template.md`, `.github/PULL_REQUEST_TEMPLATE.md` and `docs/specs/README.md`, then removed. |
 | `adapters/` | Worked reference wirings, one directory per stack — **copy only if your stack matches**. Not shared layer, not stamped, not copied in: it arrives in your project intact and dormant. See below. |
 | `UPDATING.md` | The shared-layer update recipe — how to diff your copy against a newer kit release and adopt it. **Shared layer.** |
 | `EXCLUSIONS.md` | What the kit deliberately does **not** ship, and why — one entry per considered-and-rejected skill or mechanism, plus the standing rule that keeps it current. Kit-repo meta: removed by bootstrap, not shared layer. |
@@ -135,7 +135,7 @@ them to a second command format is explicitly out of scope here.
 
 ### The documentation set
 
-Bootstrap leaves a project with the four documents an agent-run project needs on
+Bootstrap leaves a project with the five documents an agent-run project needs on
 day one, personalized with your project name and the bootstrap date:
 
 - **`docs/diary.md`** — the development diary. A **Current state** block that is
@@ -149,9 +149,12 @@ day one, personalized with your project name and the bootstrap date:
   forget: the words the project deliberately does *not* use.
 - **`.github/PULL_REQUEST_TEMPLATE.md`** — the PR checklist, with a separate
   section for the behavior findings a human must confirm (shared invariant §5).
+- **`docs/specs/README.md`** — the starter for living specs: one file per area,
+  `docs/specs/<area>.md`, changed by a PRD's ADDED / MODIFIED / REMOVED deltas,
+  and held to the suite by the docs gate. It holds no requirement itself.
 
-All four are **yours** the moment they land. They are stamped from templates, not
-copied verbatim, and nothing updates them afterwards.
+All five are **yours** the moment they land. Most are stamped from templates, the
+rest copied verbatim, and nothing updates them afterwards.
 
 ### The skills
 
