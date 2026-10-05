@@ -897,26 +897,48 @@ gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
 [ -z "$gaps" ] &&
 	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
 	fail "the kit's own mapping breaks the reviewer rule — $(printf '%s' "$gaps" | tr '\n' ';')"
-# The three answers the kit's Claude Code policy has to give (#423). Its two
-# local models are each other's complement: the content model's session asking
-# for a review of its own diff gets the code model, and the code model's
-# session asking the same is refused its own model and falls back to the plain
-# reviewer, the content model. Plain, with no session named, the reviewer is
-# the content model, never the implementer's.
+# The answers the kit's Claude Code policy has to give (#423, #546). Plain,
+# with no session named, the reviewer is the content model, never the
+# implementer's. The `self-implemented` answer is a model NO session tier
+# runs on (ADR-0007, amended 2026-10-05): with two session models — the code
+# model and the content model — one fixed answer can differ from both only if
+# it is a third, and only then is it right for a session that never says what
+# it runs on, or says it in a word the policy does not use. ADR-0007's
+# refusal stays the net; it is no longer the route the common case takes.
 _k_imp=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer 2>/dev/null)
 _k_con=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer content 2>/dev/null)
 _k_rev=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" reviewer 2>/dev/null)
+_k_self=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" reviewer self-implemented 2>/dev/null)
 [ -n "$_k_rev" ] && [ "$_k_rev" = "$_k_con" ] && [ "$_k_rev" != "$_k_imp" ] &&
 	pass "the kit's plain reviewer is the content model '$_k_con', not the implementer's '$_k_imp'" ||
 	fail "the kit's plain reviewer is '$_k_rev' — expected the content model '$_k_con', differing from the implementer '$_k_imp'"
-_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_con" sh "$LIB" reviewer self-implemented 2>/dev/null)
-[ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_imp" ] &&
-	pass "on a '$_k_con' session, 'reviewer self-implemented' is the code model '$_k_imp'" ||
-	fail "on a '$_k_con' session, 'reviewer self-implemented' gave '$_k_ans' — expected the code model '$_k_imp'"
-_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_imp" sh "$LIB" reviewer self-implemented 2>/dev/null)
-[ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_con" ] &&
-	pass "on a '$_k_imp' session, 'reviewer self-implemented' falls back to the plain reviewer '$_k_con'" ||
-	fail "on a '$_k_imp' session, 'reviewer self-implemented' gave '$_k_ans' — expected the fallback to '$_k_con'"
+_k_clash=
+for _k_spec in planner implementer mechanical 'implementer content'; do
+	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+	[ -n "$_k_ses" ] && [ "$_k_ses" = "$_k_self" ] && _k_clash="$_k_clash '$_k_spec'"
+done
+[ -n "$_k_self" ] && [ -z "$_k_clash" ] &&
+	pass "with no session named, 'reviewer self-implemented' is '$_k_self' — a model no session tier runs on" ||
+	fail "with no session named, 'reviewer self-implemented' is '${_k_self:-nothing}' — the model of a session tier:${_k_clash:- none, it is unmapped}"
+# The two session models the reviewer rule is about each get that answer as it
+# stands: nothing to refuse, so nothing to fall back from, and nothing on stderr.
+for _k_ses in "$_k_con" "$_k_imp"; do
+	_k_out=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer self-implemented 2>/dev/null)
+	_k_err=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer self-implemented 2>&1 >/dev/null)
+	[ -n "$_k_out" ] && [ "$_k_out" = "$_k_self" ] && [ -z "$_k_err" ] &&
+		pass "on a '$_k_ses' session, 'reviewer self-implemented' is '$_k_self' with no refusal to fall back from" ||
+		fail "on a '$_k_ses' session, 'reviewer self-implemented' gave '$_k_out' (stderr: '$_k_err') — expected '$_k_self', unrefused"
+done
+# A session that names itself by its spawn word rather than the policy's
+# pinned id matches nothing in ADR-0007's exact comparison, so the refusal
+# cannot catch it — and it must still not be handed its own model. That is
+# the case a third model exists for (#546).
+_k_word=$(env -u AGENT_HARNESS_SELF -u AGENTS_CONFIG -C "$KIT" sh scripts/agents.kit.sh --alias implementer 2>/dev/null)
+_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_word" sh "$LIB" reviewer self-implemented 2>/dev/null)
+[ -n "$_k_word" ] && [ "$_k_word" != "$_k_imp" ] && [ -n "$_k_ans" ] && [ "$_k_ans" != "$_k_imp" ] &&
+	pass "a session named by its spawn word '$_k_word' still gets '$_k_ans', not the implementer's '$_k_imp'" ||
+	fail "a session named by its spawn word '$_k_word' got '${_k_ans:-nothing}' — the implementer's own model '$_k_imp', or nothing"
 # Every model the policy maps can be a session's, so every one is asked: the
 # self-implemented form never answers the session's own model, and the plain
 # form either answers another model or nothing at all — never the session's.
