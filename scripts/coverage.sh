@@ -14,7 +14,11 @@
 # WHAT IT READS — ids, and nothing else. Of the PRD body, the REQUIREMENT
 # LINES only: a line that opens, at its first column, with a requirement id
 # and a full stop — `R<n>.` or `<area>/R<n>.`, the area `[a-z][a-z0-9-]*`,
-# n from 1 — followed by a space or the line's end. Of a ticket, its one
+# n from 1 — followed by a space or the line's end. An id is BOUNDED: the
+# area at most 32 characters, the number at most 6 digits. A would-be id past
+# either bound is not an id — its line is not a requirement line, and a
+# `Covers:` line holding one is malformed (exit 2) — so no id can carry prose
+# to an output stream. Of a ticket, its one
 # bare `Covers:` line only, which is either a comma-separated list of those
 # ids or an exemption, `Covers: none (prefactor)`, `none (open-issue)` or
 # `none (release)`. An id anywhere else — prose, a heading, a bullet, an
@@ -23,7 +27,7 @@
 # `process/R10`.
 #
 # WHAT IT PRINTS — ids and labels, and nothing else. A requirement id it
-# prints matched the id shape; a label it prints is a file name the caller
+# prints matched the bounded id shape; a label it prints is a file name the caller
 # chose and held to `[A-Za-z0-9._-]`. No line of either file ever reaches
 # stdout or stderr, so the check is safe to run on an untrusted body without
 # reading its prose into the session (PRD #527 R7).
@@ -54,8 +58,11 @@ usage() {
 	exit 2
 }
 
-# The id shape, one ERE: an optional area, then R and a number from 1.
-ID='([a-z][a-z0-9-]*/)?R[1-9][0-9]*'
+# The id shape, one ERE: an optional area of at most AREA_MAX characters,
+# then R and a number from 1 of at most NUM_MAX digits.
+AREA_MAX=32
+NUM_MAX=6
+ID="([a-z][a-z0-9-]{0,$((AREA_MAX - 1))}/)?R[1-9][0-9]{0,$((NUM_MAX - 1))}"
 
 [ $# -ge 2 ] || usage
 prd=$1
@@ -65,10 +72,17 @@ shift
 	exit 2
 }
 
-# The requirement ids, in the PRD's order, each once.
-reqs=$(awk -v id="^$ID\\\\." '
+# The requirement ids, in the PRD's order, each once. The bounds are checked
+# by length, not by an interval in the pattern: not every awk reads one.
+reqs=$(awk -v id="^([a-z][a-z0-9-]*/)?R[1-9][0-9]*\\\\." -v amax="$AREA_MAX" -v nmax="$NUM_MAX" '
 	{ sub(/\r$/, "") }
-	$0 ~ id "$" || $0 ~ id " " { r = $0; sub(/\..*/, "", r); if (!seen[r]++) print r }
+	$0 ~ id "$" || $0 ~ id " " {
+		r = $0; sub(/\..*/, "", r)
+		a = r; if (!sub(/\/.*/, "", a)) a = ""
+		n = r; sub(/^.*R/, "", n)
+		if (length(a) > amax || length(n) > nmax) next
+		if (!seen[r]++) print r
+	}
 ' "$prd") || {
 	cov_say "the PRD body could not be read"
 	exit 2
