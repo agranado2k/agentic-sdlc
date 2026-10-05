@@ -4,7 +4,7 @@
 - **Date**: 2026-09-21
 - **Deciders**: Arthur Granado (operator), at the `/implement` stop for #224
 - **Supersedes / amends**: amends ADR-0003 in one respect — the kit's mapping is no longer the whole answer for the reviewer tier; the caller's model is the third input
-- **Superseded by**: — (amended 2026-09-23: what is compared is the MODEL half only, not the harness prefix as this record's More-information line first said; the substitution is of the whole mapping, so a fallback that crosses agent harnesses carries its own, which is why harness mode refuses on the same comparison rather than skipping it. Amended 2026-09-22: the shared-resolver step was written as 0.21.0's; 0.21.0 shipped without it, so the step is #226's whenever that lands — the decision is unchanged, only its schedule)
+- **Superseded by**: — (amended 2026-09-23: what is compared is the MODEL half only, not the harness prefix as this record's More-information line first said; the substitution is of the whole mapping, so a fallback that crosses agent harnesses carries its own, which is why harness mode refuses on the same comparison rather than skipping it. Amended 2026-09-22: the shared-resolver step was written as 0.21.0's; 0.21.0 shipped without it, so the step is #226's whenever that lands — the decision is unchanged, only its schedule. Amended 2026-10-05, #546: a `self-implemented` mapping names a model no session tier runs on, so the refusal is the net and not the route — see the end of this record; the ordered fallback past it is ADR-0013's)
 
 ## Context and problem statement
 
@@ -97,3 +97,62 @@ fact it holds that the policy file does not.
   the fallback this record makes automatic.
 - ADR-0003 (the mapping), ADR-0005 (the agent-harness axis — a third axis this
   record does not touch).
+
+### Amendment, 2026-10-05 — the `self-implemented` answer is a model no session runs on (#546)
+
+Narrows how a policy file fills the domain this record polices; the refusal,
+its input and its fallback are unchanged, so the record is amended in place.
+Decided by the planner session for #546, on the operator's standing
+delegation of rulings.
+
+**What happened.** The kit's mapping gave `self-implemented` the
+implementer's model, chosen when the reviewer and the content domain shared
+one model and the implementer had another. On 2026-10-05 every session of the
+spec-anchored wave ran on the implementer's model, so the domain answered
+each one its own model. The refusal caught that only for a session that set
+`AGENT_SESSION_MODEL` in the policy file's pinned id — the spawn word a
+session knows itself by matches nothing under the exact comparison above —
+and then fell back to the plain reviewer, whose model was out of usage
+credits all day. With no next answer, every session overrode the reviewer by
+hand with a third model, and two failed outright on the first spawn before
+doing so.
+
+**The rule.** A policy that maps `self-implemented` maps it to a model **no
+session tier of that policy runs on** — not the planner's, the
+implementer's, the mechanical tier's, nor any implementer domain's. A
+session's model is one of those; one fixed answer can differ from all of
+them only by being none of them; and only then is the answer right for a
+session that never says what it runs on, or says it in a word the policy
+does not use — the two cases the refusal cannot see. The refusal stays, as
+the net for a session that does run on that model.
+
+**The kit's answer**, in `scripts/agents.kit.config.sh`: `claude-sonnet-5-5`
+until the cross-vendor reviewer authenticates again, when the other vendor's
+model — disjoint from every local session by construction — returns.
+`tests/agents-tiers.test.sh` pins the rule against the kit's mapping, not the
+id: the answer is no session tier's model, both session models get it with
+no refusal, and a session named by its spawn word still gets a model other
+than its own.
+
+**Rejected.**
+
+- *Keep the implementer's model and rely on the refusal* — what failed: the
+  refusal needs an input nothing sets, in a spelling a session does not
+  naturally use, and its only fallback is the plain reviewer, so one
+  outage leaves no answer.
+- *Map it to the mechanical tier's model* (`claude-opus-5`) — a session
+  tier, so a mechanical session would be refused into the plain reviewer
+  again; and its in-session spawn word is `opus`, which the harness resolves
+  to the implementer's model, so the "different" reviewer would run on the
+  author's.
+- *Map it to the content model and the plain reviewer to a third* — moves
+  the outage onto the plain path without removing it, and undersizes the
+  plain reviewer, which no session-model collision forces.
+- *Make the mapping relative to the session* (this record's option 2) —
+  still rejected for the reason it was: a matrix per session model, and it
+  needs the same input the refusal lacks.
+
+**Cost.** The answer is a mid-tier model where a content session used to
+get the implementer's; a weaker read, chosen over a stronger one that did
+not run. A further answer when this one is refused or unreachable is not a
+mapping question: ADR-0013 places it in the shared resolver.
