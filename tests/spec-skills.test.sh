@@ -849,6 +849,7 @@ t_text_has "$quiz" '`orphan: <n>`' "R6: the orphan list, as the script prints it
 t_text_has "$quiz" "shows both lists" "R6: the quiz shows both lists" "the quiz step"
 t_text_has "$quiz" "runs again" "R6: the check runs again after a Covers: line changes" "the quiz step"
 t_text_has "$quiz" "Exit 3" "R6: a PRD with no requirement lines is its own answer, not a pass" "the quiz step"
+t_text_has "$quiz" "A retro's candidates have no PRD and so no requirements" "R5: a retro's candidates, which have no PRD, are outside the check and the line" "the quiz step"
 in_order "$quiz" "R6: the coverage check runs before the draft is presented" \
 	"sh scripts/coverage.sh" "shows both lists" "present the draft"
 t_text_has "$publish" "a \`Covers:\` line" "R5: the published body carries the Covers: line" "the publish step"
