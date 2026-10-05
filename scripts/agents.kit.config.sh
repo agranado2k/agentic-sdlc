@@ -149,10 +149,11 @@ AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest mod
 #      `reviewer self-implemented`, any session this policy maps
 #        -> claude-sonnet-5-5, the model no session tier runs on
 #
-#    tests/agents-tiers.test.sh pins both. The plain form still has no second
-#    answer: a claude-fable-5-1 session asking plain `reviewer` is refused its
-#    own model and gets NOTHING, with a warning — a session that wrote the
-#    diff asks `reviewer self-implemented`. The cross-vendor ids
+#    tests/agents-tiers.test.sh pins both. Past either answer the resolver
+#    walks AGENT_TIER_REVIEWER_FALLBACK, below (ADR-0013): a claude-fable-5-1
+#    session asking plain `reviewer` is refused its own model and gets the
+#    first fallback — a session that wrote the diff still asks `reviewer
+#    self-implemented`. The cross-vendor ids
 #    (codex:gpt-5.6-sol for the reviewer, codex:gpt-6-astra for
 #    self-implemented) come back when that CLI authenticates — ask the
 #    operator again on 2026-10-08.
@@ -183,10 +184,33 @@ AGENT_TIER_REVIEWER='claude-fable-5-1'
 #    the model the Claude Code harness's `sonnet` spawn word ran that day,
 #    and `--alias` prints `sonnet` for it.
 #
-#    An ORDERED fallback — a next answer when this one is refused or
-#    unreachable, never the session's own — is the shared resolver's to
-#    carry, not this file's: decided in ADR-0013, built by its follow-up.
 AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-sonnet-5-5'
+#
+#    THE ORDERED FALLBACK (ADR-0013, #548) — the next answers when the two
+#    above are refused (the session's own model) or named unreachable by the
+#    caller in AGENT_UNREACHABLE_MODELS (a spawn that failed on its first
+#    call: a rate limit, a logged-out CLI). The walk is the domain answer,
+#    the plain reviewer, then this list in order; a spent list prints
+#    nothing, never the session's own model.
+#
+#      claude-sonnet-5-5   no session tier runs on it and its spawn word,
+#                          `sonnet`, is no session tier's — so a plain
+#                          `reviewer` whose fable is out of credits, or a
+#                          fable session refused its own, lands where the
+#                          2026-10-05 wave landed by hand.
+#
+#    The cross-vendor reviewer (codex:gpt-5.6-sol) is deliberately NOT on the
+#    list yet. It is logged out until 2026-10-07, and an entry that crosses
+#    agent harnesses has no in-session spawn word: `--alias` prints nothing
+#    for it, and an in-session spawn given nothing inherits the session — the
+#    self-review the walk exists to prevent. It joins when it authenticates
+#    and the caller's dispatch path is the one that reads it.
+#
+#    tests/agents-tiers.test.sh pins the list against the rule, not the ids:
+#    walked to its end for every session tier, no answer is the session's
+#    own model, and no in-session entry is a session tier's model or spawn
+#    word.
+AGENT_TIER_REVIEWER_FALLBACK='claude-sonnet-5-5'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN

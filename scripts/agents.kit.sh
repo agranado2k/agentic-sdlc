@@ -47,6 +47,7 @@
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
 #   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
+#   AGENT_UNREACHABLE_MODELS='<id or spawn word> …' sh scripts/agents.kit.sh reviewer [domain]
 #   AGENT_HARNESS_SELF=codex sh scripts/agents.kit.sh <tier> [domain]
 #   sh scripts/agents.kit.sh --policy        # which policy file this session uses
 #   sh scripts/agents.kit.sh --alias <tier> [domain]   # the in-session spawn word
@@ -93,6 +94,65 @@ fi
 # path resolves through that resolver like any other caller, so the answer it
 # folds is already the refused-and-fallen-back one — one implementation, and
 # the fold is applied to whatever it decided.
+# _kit_fold <id> — the spawn word for a pinned id: the family segment, second
+# of three or more (`claude-sonnet-5-5` -> `sonnet`); an id with fewer
+# segments is its own word. One definition, read by `--alias` below and by the
+# bridge that runs it backwards.
+_kit_fold() {
+	case "$1" in
+	*-*-*)
+		_kit_word=${1#*-}
+		printf '%s\n' "${_kit_word%%-*}"
+		;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# THE BRIDGE, BACKWARDS (ADR-0013 clause 2). A session that saw a reviewer
+# spawn fail saw it under the spawn WORD it passed, while the resolver
+# compares $AGENT_UNREACHABLE_MODELS to this policy's pinned ids, exactly —
+# so a word named there would skip nothing. This wrapper owns the
+# id-to-word fold, so it maps each such word back to EVERY pinned id it
+# covers before delegating: all of them, the safe side, because the caller
+# cannot say which one ran. A name that is itself a pinned id, or that folds
+# from none, passes untouched — the resolver warns about the second kind.
+# A value that crosses to a declared agent harness has no spawn word, so it
+# is no id a word can cover.
+if [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] && [ -f "$AGENTS_CONFIG" ]; then
+	_kit_pinned=$(
+		set -a
+		. "$AGENTS_CONFIG" >/dev/null 2>&1
+		printf '%s\n' "${AGENT_HARNESSES:-}" | tr '\t\n' '  '
+		echo
+		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p'
+	)
+	_kit_harnesses=" $(printf '%s\n' "$_kit_pinned" | sed -n 1p) "
+	_kit_ids=' '
+	for _kit_v in $(printf '%s\n' "$_kit_pinned" | sed 1d); do
+		case $_kit_v in
+		*:*) case $_kit_harnesses in *" ${_kit_v%%:*} "*) continue ;; esac ;;
+		esac
+		_kit_ids="$_kit_ids$_kit_v "
+	done
+	_kit_unr=
+	for _kit_n in $AGENT_UNREACHABLE_MODELS; do
+		_kit_cover=
+		case $_kit_ids in
+		*" $_kit_n "*) ;;
+		*)
+			for _kit_v in $_kit_ids; do
+				if [ "$(_kit_fold "$_kit_v")" = "$_kit_n" ]; then
+					_kit_cover="$_kit_cover $_kit_v"
+				fi
+			done
+			;;
+		esac
+		_kit_unr="$_kit_unr ${_kit_cover:-$_kit_n}"
+	done
+	AGENT_UNREACHABLE_MODELS=$_kit_unr
+	export AGENT_UNREACHABLE_MODELS
+fi
+
 if [ "${1:-}" = --alias ]; then
 	shift
 	[ $# -gt 0 ] || { echo "agents.kit.sh: --alias needs a tier" >&2; exit 2; }
@@ -104,14 +164,7 @@ if [ "${1:-}" = --alias ]; then
 	}
 	[ -z "$_alias_harness" ] || exit 0
 	_alias_value=$(sh scripts/agents.lib.sh "$@") || exit $?
-	case "$_alias_value" in
-	'') ;;
-	*-*-*)
-		_alias_word=${_alias_value#*-}
-		printf '%s\n' "${_alias_word%%-*}"
-		;;
-	*) printf '%s\n' "$_alias_value" ;;
-	esac
+	[ -z "$_alias_value" ] || _kit_fold "$_alias_value"
 	exit 0
 fi
 # Everything else is the resolver's, verbatim — including the reviewer rule

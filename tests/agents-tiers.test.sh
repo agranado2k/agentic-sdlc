@@ -954,6 +954,54 @@ for _k_tier in planner implementer mechanical; do
 		pass "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answers '${_k_ans:-nothing}', never the session's own" ||
 		fail "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answered the session's own model '$_k_ans'"
 done
+# THE KIT'S FALLBACK (#548, ADR-0013 clause 5). The mapping names one, and no
+# answer on the walk is ever a session's own model: for every session tier,
+# each answer the walk gives is named unreachable in turn until the list is
+# spent, and not one of those answers is the session's model. And every
+# in-session entry on the list — one with no agent harness — is no session
+# tier's model and shares no session tier's spawn word, so a session named by
+# its spawn word, or not named at all, is never handed itself from the list.
+_k_fb=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
+[ -n "$_k_fb" ] &&
+	pass "the kit's mapping names a reviewer fallback ('$_k_fb')" ||
+	fail "the kit's mapping names no AGENT_TIER_REVIEWER_FALLBACK — one outage still ends in a hand-picked reviewer"
+_k_walk_bad=
+for _k_spec in planner implementer mechanical 'implementer content'; do
+	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+	[ -n "$_k_ses" ] || continue
+	for _k_dom in '' self-implemented; do
+		_k_dead= _k_n=0
+		while [ "$_k_n" -lt 12 ]; do
+			# shellcheck disable=SC2086 # the optional domain, absent when empty
+			_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" AGENT_UNREACHABLE_MODELS="$_k_dead" AGENTS_TIER_QUIET=1 sh "$LIB" reviewer $_k_dom)
+			[ -n "$_k_ans" ] || break
+			[ "$_k_ans" = "$_k_ses" ] && _k_walk_bad="$_k_walk_bad '$_k_spec' reviewer${_k_dom:+ $_k_dom} -> $_k_ans;"
+			_k_dead="$_k_dead $_k_ans"
+			_k_n=$((_k_n + 1))
+		done
+		[ "$_k_n" -lt 12 ] || _k_walk_bad="$_k_walk_bad '$_k_spec' reviewer${_k_dom:+ $_k_dom} never spent;"
+	done
+done
+[ -z "$_k_walk_bad" ] &&
+	pass "walked to the end for every session tier, no answer is the session's own model" ||
+	fail "the kit's walk answered a session its own model:$_k_walk_bad"
+_k_fb_bad=
+_k_fb_rest=$_k_fb
+for _k_c in $_k_fb_rest; do
+	case $_k_c in *:*) continue ;; esac
+	_k_cw=$(printf '%s' "$_k_c" | sed 's/^[^-]*-//; s/-.*//')
+	for _k_spec in planner implementer mechanical 'implementer content'; do
+		# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+		_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+		_k_sw=$(printf '%s' "$_k_ses" | sed 's/^[^-]*-//; s/-.*//')
+		[ "$_k_c" = "$_k_ses" ] && _k_fb_bad="$_k_fb_bad $_k_c is the '$_k_spec' model;"
+		[ "$_k_cw" = "$_k_sw" ] && _k_fb_bad="$_k_fb_bad $_k_c shares the '$_k_spec' spawn word '$_k_sw';"
+	done
+done
+[ -z "$_k_fb_bad" ] &&
+	pass "every in-session fallback is no session tier's model, by id or by spawn word" ||
+	fail "the kit's fallback can hand a session itself:$_k_fb_bad"
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
@@ -1089,14 +1137,18 @@ case "$W_ERR_TEXT" in
 *) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
 esac
 
-# (2) The session runs on the plain reviewer's model and asks for the plain reviewer: nothing differs — print nothing, say why.
+# (2) The session runs on the plain reviewer's model and asks for the plain
+# reviewer. Before #548 nothing differed and nothing was printed; the kit's
+# mapping now names an ordered fallback (ADR-0013), so the walk answers its
+# first entry — never the session's own model — and says what it skipped.
+# The spent-list case is pinned against a throwaway policy further down.
 wrap "$K_REV" reviewer
-[ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
-	pass "on a '$K_REV' session, 'reviewer' prints nothing rather than the session's own model" ||
-	fail "on a '$K_REV' session, 'reviewer' printed '$W_OUT' (status $W_STATUS) — that is the implementer's own model"
+[ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ] && [ "$W_OUT" != "$K_REV" ] &&
+	pass "on a '$K_REV' session, 'reviewer' walks to the kit's fallback '$W_OUT', not the session's own model" ||
+	fail "on a '$K_REV' session, 'reviewer' printed '${W_OUT:-nothing}' (status $W_STATUS) — the session's own model, or no next answer"
 case "$W_ERR_TEXT" in
-*"share the author's model"*) pass "…and warns that the review will share the author's model" ;;
-*) fail "…but did not say the review shares the author's model — stderr: '$W_ERR_TEXT'" ;;
+*"$K_REV"*"session's own model"*) pass "…and warns that it skipped the session's own model" ;;
+*) fail "…but did not name the skip — stderr: '$W_ERR_TEXT'" ;;
 esac
 
 # (3) The session runs on a model the reviewer answer does NOT equal: unchanged.
@@ -1362,6 +1414,141 @@ t_run_split env AGENTS_CONFIG="$SHIPPED" AGENT_SESSION_MODEL=anything sh "$LIB" 
 	fail "the shipped mapping resolved '$S_OUT' with a session named"
 
 # ---------------------------------------------------------------------------
+banner "The reviewer's ordered fallback, past what the caller names unreachable (#548, ADR-0013)"
+# ---------------------------------------------------------------------------
+# ADR-0007 gave the reviewer one next answer: the plain tier. When that one is
+# the session's own, or its vendor is out of credits, there was nothing past
+# it. ADR-0013 adds an ordered list in the policy, AGENT_TIER_REVIEWER_FALLBACK,
+# and a caller-held fact, AGENT_UNREACHABLE_MODELS: what a spawn found dead.
+# The walk is the domain answer, the plain reviewer, then each fallback; the
+# first candidate that is neither the session's model nor named unreachable is
+# printed. Asserted against a throwaway policy whose every candidate is a
+# different word, so each skip is visible in the answer.
+FBCFG="$SCRATCH/fallback.config.sh"
+cat >"$FBCFG" <<'FB_CFG'
+AGENT_HARNESSES='other'
+AGENT_HARNESS_OTHER_CMD='true {model_flag} < {prompt_file}'
+AGENT_HARNESS_OTHER_MODEL_FLAG='--model {model}'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-third-7'
+AGENT_TIER_REVIEWER_FALLBACK='vendor-small-2 other:remote-B vendor-last-1'
+FB_CFG
+fb() { # <session model or ''> <unreachable or ''> <args...>
+	_fb_ses=$1 _fb_unr=$2
+	shift 2
+	t_run_split env AGENTS_CONFIG="$FBCFG" AGENT_SESSION_MODEL="$_fb_ses" AGENT_UNREACHABLE_MODELS="$_fb_unr" sh "$LIB" "$@"
+}
+# (1) UNSET OR EMPTY, TODAY'S BEHAVIOUR. The LOCALREV cases above run with no
+# fallback at all; an empty one must be indistinguishable from it, stderr too.
+t_run_split env AGENTS_CONFIG="$LOCALREV" AGENT_SESSION_MODEL=vendor-strong-9 sh "$LIB" reviewer
+_fb_base="$S_STATUS|$S_OUT|$S_ERR"
+EMPTYFB="$SCRATCH/empty-fallback.config.sh"
+{ cat "$LOCALREV"; echo "AGENT_TIER_REVIEWER_FALLBACK=''"; } >"$EMPTYFB"
+t_run_split env AGENTS_CONFIG="$EMPTYFB" AGENT_SESSION_MODEL=vendor-strong-9 sh "$LIB" reviewer
+[ "$S_STATUS|$S_OUT|$S_ERR" = "$_fb_base" ] &&
+	pass "an empty AGENT_TIER_REVIEWER_FALLBACK answers exactly as an unset one, stderr and all" ||
+	fail "an empty fallback changed the answer: '$S_STATUS|$S_OUT|$S_ERR' against '$_fb_base'"
+# (2) A refused answer walks on, past the plain tier, to the first fallback.
+fb vendor-strong-9 '' reviewer
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = vendor-small-2 ] &&
+	pass "a reviewer equal to the session walks to the first fallback 'vendor-small-2'" ||
+	fail "a refused reviewer resolved '$S_OUT' (status $S_STATUS) — expected the first fallback"
+case "$S_ERR" in
+*vendor-strong-9*"session's own model"*) pass "…and the warning names what it skipped, and why" ;;
+*) fail "…without naming the skip — stderr: '$S_ERR'" ;;
+esac
+# (3) The order: the domain answer, then the plain reviewer, then the list.
+fb '' vendor-third-7 reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "an unreachable domain answer falls to the plain reviewer before any fallback" ||
+	fail "an unreachable domain answer resolved '$S_OUT' — expected the plain reviewer 'vendor-strong-9'"
+case "$S_ERR" in
+*vendor-third-7*unreachable*) pass "…and says the domain answer was named unreachable" ;;
+*) fail "…without naming the unreachable skip — stderr: '$S_ERR'" ;;
+esac
+# (4) An unreachable answer is skipped with no session named at all.
+fb '' 'vendor-third-7 vendor-strong-9' reviewer self-implemented
+[ "$S_OUT" = vendor-small-2 ] &&
+	pass "two unreachable answers walk to the first fallback, with no session named" ||
+	fail "resolved '$S_OUT' past two unreachable answers — expected 'vendor-small-2'"
+# (5) A candidate equal to the session is skipped even INSIDE the list, and a
+# `<harness>:<model>` fallback carries its own agent harness — both halves
+# answer from the one candidate, as ADR-0007's substitution does.
+fb vendor-small-2 vendor-strong-9 reviewer
+_fb_model=$S_OUT
+fb vendor-small-2 vendor-strong-9 --harness reviewer
+[ "$_fb_model" = remote-B ] && [ "$S_OUT" = other ] &&
+	pass "a fallback equal to the session is skipped, and 'other:remote-B' answers both halves" ||
+	fail "past the session inside the list: model '$_fb_model', agent harness '$S_OUT' — expected remote-B on other"
+# A harness-prefixed candidate is compared on its MODEL half only.
+fb remote-B 'vendor-strong-9 vendor-small-2' reviewer
+[ "$S_OUT" = vendor-last-1 ] &&
+	pass "a session on 'remote-B' skips 'other:remote-B' — the comparison is on the model half" ||
+	fail "a 'remote-B' session resolved '$S_OUT' — the harness prefix hid its own model"
+fb '' 'vendor-strong-9 vendor-small-2 remote-B' reviewer
+[ "$S_OUT" = vendor-last-1 ] &&
+	pass "an unreachable name matches a harness-prefixed candidate on its model half" ||
+	fail "naming 'remote-B' unreachable resolved '$S_OUT' — expected 'vendor-last-1'"
+# (6) A spent list prints nothing, with ADR-0007's warning — never the session.
+fb vendor-last-1 'vendor-strong-9 vendor-small-2 remote-B' reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "a spent list prints nothing rather than the session's own model" ||
+	fail "a spent list printed '$S_OUT' (status $S_STATUS)"
+case "$S_ERR" in
+*"share the author's model"*) pass "…and warns the review would share the author's model" ;;
+*) fail "…without ADR-0007's warning — stderr: '$S_ERR'" ;;
+esac
+fb '' 'vendor-strong-9 vendor-small-2 remote-B vendor-last-1' reviewer
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	case "$S_ERR" in *"share the author's model"*) true ;; *) false ;; esac &&
+	pass "a list spent on unreachable names alone prints nothing, with the same warning" ||
+	fail "every candidate unreachable: stdout '$S_OUT', stderr '$S_ERR'"
+# (7) Other tiers ignore both variables — answer, and stderr.
+fb vendor-mid-4 vendor-mid-4 implementer
+[ "$S_OUT" = vendor-mid-4 ] && [ -z "$S_ERR" ] &&
+	pass "a non-reviewer tier ignores AGENT_UNREACHABLE_MODELS and the fallback, warning about neither" ||
+	fail "the implementer resolved '$S_OUT' (stderr '$S_ERR') — the walk leaked past the reviewer tier"
+# (8) A name that matches no candidate is warned about, never ignored in
+# silence: a spawn word against a pinned id would hand back the dead model.
+fb '' strong reviewer
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "an unreachable name matching nothing changes no answer" ||
+	fail "an unmatched name changed the answer to '$S_OUT'"
+case "$S_ERR" in
+*"'strong'"*"matches no"*) pass "…and is warned about by name" ;;
+*) fail "…silently — stderr: '$S_ERR'" ;;
+esac
+fb '' vendor-strong-9 reviewer
+case "$S_ERR" in
+*"matches no"*) fail "a name that matched a candidate was warned about as matching none: '$S_ERR'" ;;
+*) pass "a name that matched a candidate draws no match warning" ;;
+esac
+# (9) --model reaches the walk, as every spelling of the question must.
+fb '' vendor-strong-9 --model reviewer
+[ "$S_OUT" = vendor-small-2 ] &&
+	pass "'--model reviewer' walks past an unreachable answer like the bare form" ||
+	fail "'--model reviewer' resolved '$S_OUT' — the flagged spelling skips the walk"
+# (10) The quiet switch keeps the walk and drops its warnings.
+t_run_split env AGENTS_CONFIG="$FBCFG" AGENT_UNREACHABLE_MODELS='vendor-strong-9 nothing-at-all' AGENTS_TIER_QUIET=1 sh "$LIB" reviewer
+[ "$S_OUT" = vendor-small-2 ] && [ -z "$S_ERR" ] &&
+	pass "AGENTS_TIER_QUIET=1 keeps the walk and drops its warnings" ||
+	fail "quiet walk: stdout '$S_OUT', stderr '$S_ERR'"
+# (11) zsh does not word-split an unquoted expansion; a walk written as
+# `for c in $list` would see one candidate there. The sourced function is what
+# a zsh caller runs, so it is the one driven.
+if command -v zsh >/dev/null 2>&1; then
+	t_run_split env AGENTS_CONFIG="$FBCFG" AGENT_UNREACHABLE_MODELS='vendor-strong-9 vendor-small-2' zsh -c ". '$LIB'; resolve_tier reviewer"
+	[ "$S_OUT" = remote-B ] &&
+		pass "zsh: the walk splits the fallback and the unreachable list as sh does" ||
+		fail "zsh: the walk resolved '$S_OUT', expected 'remote-B'"
+else
+	note "zsh is not installed here — the zsh walk case did not run"
+fi
+
+# ---------------------------------------------------------------------------
 banner "The wrapper picks the policy for the session it runs in"
 # ---------------------------------------------------------------------------
 # $AGENT_HARNESS_SELF names the session's own agent harness. Unset, the
@@ -1449,6 +1636,44 @@ printf "AGENT_TIER_MECHANICAL='plainword'\n" >>"$PROBE/scripts/agents.kit.probe.
 t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=probe sh scripts/agents.kit.sh --alias mechanical
 [ "$S_OUT" = plainword ] && pass "an id with no vendor prefix folds to itself" ||
 	fail "an unprefixed id gave '$S_OUT'"
+
+# THE WALK REACHES --alias, AND THE BRIDGE RUNS BACKWARDS (#548, ADR-0013).
+# A session that saw a spawn fail saw it under the spawn WORD, and the
+# resolver compares the policy's ids exactly — so the wrapper, which owns the
+# id-to-word fold, maps a word named unreachable back to every pinned id it
+# covers before delegating. Every one, the safe side: the caller cannot say
+# which of them ran.
+cat >"$PROBE/scripts/agents.kit.fb.config.sh" <<'PROBE_FB_CFG'
+AGENT_TIER_PLANNER='vendor-strong-9'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4-20260101'
+AGENT_TIER_MECHANICAL='vendor-small-2'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-mid-4-20260101'
+AGENT_TIER_REVIEWER_FALLBACK='vendor-strong-8 vendor-third-3 vendor-small-2'
+PROBE_FB_CFG
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS=vendor-strong-9 sh scripts/agents.kit.sh --alias reviewer
+[ "$S_OUT" = strong ] &&
+	pass "--alias reaches the walk: an unreachable pinned id falls to the next candidate's word" ||
+	fail "--alias with 'vendor-strong-9' unreachable gave '$S_OUT', expected 'strong' (vendor-strong-8)"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS=strong sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-third-3 ] &&
+	pass "the spawn word 'strong' named unreachable skips both ids it covers, vendor-strong-9 and vendor-strong-8" ||
+	fail "AGENT_UNREACHABLE_MODELS=strong through the wrapper resolved '$S_OUT' — expected 'vendor-third-3'"
+case "$S_ERR" in
+*"matches no"*) fail "…but the bridged word was still warned about as matching nothing: '$S_ERR'" ;;
+*) pass "…and the bridged word draws no match warning" ;;
+esac
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS=strong sh scripts/agents.kit.sh --alias reviewer
+[ "$S_OUT" = third ] &&
+	pass "--alias with the word 'strong' unreachable folds the answer past it, to 'third'" ||
+	fail "--alias with 'strong' unreachable gave '$S_OUT', expected 'third'"
+# A pinned id and an unknown word pass the bridge untouched: the id still
+# matches, and the unknown word reaches the resolver to be warned about.
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS='vendor-mid-4-20260101 nosuchword' sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	case "$S_ERR" in *"'nosuchword'"*"matches no"*) true ;; *) false ;; esac &&
+	pass "a pinned id passes the bridge and matches; an unknown word reaches the resolver's warning" ||
+	fail "id and unknown word through the bridge: stdout '$S_OUT', stderr '$S_ERR'"
 
 # --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
 # the full id; the in-session spawn parameter takes the family word. Pinning

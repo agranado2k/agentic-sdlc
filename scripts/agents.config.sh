@@ -284,3 +284,11 @@ AGENT_TIER_MECHANICAL=''
 # 4. REVIEWER — adversarial reading of a finished diff, in fresh context
 # ---------------------------------------------------------------------------
 AGENT_TIER_REVIEWER=''
+#
+# Its ordered FALLBACK: the next answers, tried in order, when the one above
+# is the session's own model (the caller names that in AGENT_SESSION_MODEL)
+# or a session names it unreachable after a spawn failed on its first call
+# (AGENT_UNREACHABLE_MODELS='<model> …', in this file's own words). Space-
+# separated, each a model or `<token>:<model>`; empty means no next answer, and
+# a spent list prints nothing — never the session's own model. ADR-0013 records why.
+#   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'
