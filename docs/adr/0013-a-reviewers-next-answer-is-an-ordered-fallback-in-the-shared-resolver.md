@@ -78,7 +78,16 @@ its own ticket (#548); this record decides its contract.
    words — the same contract as `AGENT_SESSION_MODEL`: a fact only the
    caller holds, compared exactly, on the model half only. A session that
    saw a spawn fail on its first call (rate limit, authentication, an
-   unknown model) re-resolves with that model named.
+   unknown model) re-resolves with that model named. **A name that matches
+   no candidate on the walk is warned about, never ignored in silence**:
+   the 2026-10-05 amendment to ADR-0007 shows the exact comparison missing
+   a session named by its spawn word, and here the miss would hand back the
+   dead model. A session that saw the failure under a spawn word (an
+   in-session spawn takes one) names the policy's id; where the policy's
+   project has a bridge from ids to spawn words — the kit's is
+   `scripts/agents.kit.sh --alias`, kit-only — that bridge also maps a spawn
+   word back to every id it covers before delegating, skipping all of them,
+   the safe side, since the caller cannot say which one ran.
 3. **The walk, reviewer tier only:** the domain answer, then the plain
    reviewer, then each fallback in order; the first candidate that is
    neither the session's model nor named unreachable is the answer, with a
