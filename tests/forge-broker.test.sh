@@ -1440,6 +1440,7 @@ VERDICT: not blocking — R9 is not delivered; confirm it
 
 ❌ MISSING      R9: the review names no requirement id for a SPECIFIED item.
 ✅ SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.
+                → R7-continuation; a citation on the line beneath the item.
 EOF
 STUB_PR=35
 export STUB_PR
@@ -1454,6 +1455,13 @@ esac
 case "$COMMENT" in
 *'SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.'*) pass "R9: …and the SPECIFIED item's id citation, on the item's own line" ;;
 *) fail "R9: the comment lost the SPECIFIED item's R8 citation"; printf '%s\n' "$COMMENT" | sed 's/^/        | /' ;;
+esac
+# Review of #539, M-5: the reason the worker contract puts the id on the
+# item's own line, proved — a citation on the line beneath an item never
+# reaches the comment.
+case "$COMMENT" in
+*'R7-continuation'*) fail "R9: a continuation line reached the comment — the worker contract's one-line rule rests on the broker dropping it" ;;
+*) pass "R9: a citation on the line beneath an item is dropped — only the tagged line lands" ;;
 esac
 t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#35' --kind review.verdict
 AX2=$(printf '%s\n' "$S_OUT" | grep -F '"axis":"2"')
