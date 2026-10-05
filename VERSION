@@ -2057,7 +2057,6 @@
 # the kit glossary's Task domain entry; tests/agents-tiers.test.sh's
 # fallback, bridge and kit-mapping sections.
 
-
 # 0.54.0 — the requirement-line grammar has one home (ticket #545, findings
 # L-6 and L-7 of #540's review; ADR-0012 clauses 4 and 10).
 # ONE file JOINS the shared layer: scripts/requirement.lib.sh — sourceable,
