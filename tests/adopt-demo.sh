@@ -128,7 +128,7 @@ assert_out_lacks "COLLISION memory"
 # The safe set landed.
 for f in VERSION scripts/guards.lib.sh constitution/shared-invariants.md \
 	constitution/shared-code-craft.md .claude/skills/implement/SKILL.md \
-	docs/domain-glossary.md docs/adr/INDEX.md docs/adr/NNNN-template.md \
+	docs/domain-glossary.md docs/adr/INDEX.md docs/adr/NNNN-template.md docs/specs/README.md \
 	.github/PULL_REQUEST_TEMPLATE.md .github/workflows/tdd-pairing.yml \
 	scripts/docs-conformance/config.mjs scripts/agents.config.sh \
 	scripts/guards.config.sh scripts/vocab.config.sh scripts/docs-conformance/local-vocabulary.mjs \

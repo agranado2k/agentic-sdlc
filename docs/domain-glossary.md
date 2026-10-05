@@ -499,9 +499,13 @@ Grouped by the seam each term belongs to. Entry shape:
     criteria restate the requirements it covers; the requirement is the source.
 - **Living spec** — `docs/specs/<area>.md`: an area's current requirements,
   each id stable for the file's life and never reused. A PRD changes it by
-  **deltas** (`### ADDED`, `### MODIFIED`, `### REMOVED`), merged by the PR that
-  delivers them, and the docs gate fails a requirement no test names.
-  Ref: ADR-0012.
+  **deltas** (`### ADDED`, `### MODIFIED`, `### REMOVED`), each line spelled
+  `<area>/R<n>.`, merged by the PR that delivers them, and the docs gate fails
+  a requirement no test names. A removed requirement leaves a **tombstone**,
+  `~~R<n>.~~ Removed by #<PRD>: <why>` — no requirement line, so no test names
+  it, and kept so the id is never reused. Bootstrap lays a starter README in
+  `docs/specs/` that holds no requirement; the kit keeps no living spec of its
+  own. Ref: ADR-0012.
   - _Avoid_: "the spec" on its own — the PRD, a ticket and a living spec are all
     specs; say which.
 - **Open issue** — a PRD question the conversation left unresolved, written as

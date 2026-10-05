@@ -766,6 +766,7 @@ if [ "$ADOPT" = 1 ]; then
 	a_exists "docs/adr/INDEX.md" && a_keep "docs/adr/INDEX.md" || a_stamp "templates/docs/adr/INDEX.md.template" "docs/adr/INDEX.md"
 	a_exists "docs/adr/NNNN-template.md" && a_keep "docs/adr/NNNN-template.md" || a_copy "templates/docs/adr/NNNN-template.md" "docs/adr/NNNN-template.md"
 	a_exists ".github/PULL_REQUEST_TEMPLATE.md" && a_keep ".github/PULL_REQUEST_TEMPLATE.md" || a_copy "templates/docs/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST_TEMPLATE.md"
+	a_exists "docs/specs/README.md" && a_keep "docs/specs/README.md" || a_copy "templates/docs/specs/README.md" "docs/specs/README.md"
 	# Their README is their front page; an adopted repo keeps it, always.
 	a_exists "README.md" && a_keep "README.md" || a_stamp "templates/docs/README.md.template" "README.md"
 
@@ -1279,6 +1280,9 @@ if [ -d "$DOCS_TEMPLATES" ]; then
 	# .github/ by name.
 	copy "$DOCS_TEMPLATES/adr/NNNN-template.md" "docs/adr/NNNN-template.md"
 	copy "$DOCS_TEMPLATES/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST_TEMPLATE.md"
+	# The living specs' starter: a README that explains the format and holds
+	# no requirement, so the gate's living-spec check passes on it (#533).
+	copy "$DOCS_TEMPLATES/specs/README.md" "docs/specs/README.md"
 
 	rm -rf "$DOCS_TEMPLATES"
 	rmdir templates 2>/dev/null || true
