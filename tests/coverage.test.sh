@@ -80,6 +80,22 @@ s_assert_status 1 "R6: a requirement no ticket covers exits 1"
 s_assert_out_is "uncovered: R2
 uncovered: R4" "R6: each uncovered requirement on its own line, in the PRD's order, and nothing else"
 
+# A PRD that repeats a requirement id names it once: the list is of
+# requirements, not of lines.
+prd 'R1. The tool SHALL a.\nR2. The tool SHALL b.\nR1. The tool SHALL a, said again.\n'
+fresh
+ticket 1 'Covers: R2\n'
+run "$(T 1)"
+s_assert_status 1 "R6: a repeated, uncovered requirement id exits 1"
+s_assert_out_is "uncovered: R1" "R6: a requirement id the PRD repeats is named once, at its first line"
+
+# Trailing whitespace on a Covers: line is not part of the last id.
+prd 'R1. The tool SHALL a.\nR2. The tool SHALL b.\n'
+fresh
+ticket 1 'Covers: R1, R2 \t \n'
+run "$(T 1)"
+s_assert_resolved "" "R5: trailing spaces and a tab after the last id still cover it"
+
 # ---------------------------------------------------------------------------
 banner "3. An orphan ticket is named, exit 1 (R5 R6)"
 # ---------------------------------------------------------------------------
@@ -148,9 +164,18 @@ for bad in 'Covers: R1, SECRET-PROSE' 'Covers:' 'Covers: R1,' 'Covers: r1' 'Cove
 done
 # Two Covers: lines are one too many: which one counts would be a guess.
 fresh
-ticket 7 'Covers: R1\nCovers: R2\n'
+ticket 7 'Covers: leaky-area/R1\nCovers: R2\n'
 run "$(T 7)"
 s_assert_status 2 "R5: a ticket with two Covers: lines is refused, exit 2"
+s_assert_out_is "" "R5: … nothing on stdout"
+case "$S_ERR" in
+*7*) pass "R5: … stderr names the ticket's label" ;;
+*) fail "R5: … stderr should name the ticket's label 7 — got '$S_ERR'" ;;
+esac
+case "$S_OUT$S_ERR" in
+*leaky* | *R1* | *R2*) fail "R7: … a stream echoed a Covers: line's text: '$S_OUT' / '$S_ERR'" ;;
+*) pass "R7: … neither stream carries either line's text" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "6. Only requirement lines and Covers: lines are read (R7)"
@@ -219,6 +244,27 @@ ticket 1 'Covers: R2\n'
 run "$(T 1)"
 s_assert_resolved "" "an area outside [a-z][a-z0-9-]* does not make a requirement line"
 
+# Whole ids, both ways: R1 is not a prefix of R10, and an area is part of
+# the id, never stripped.
+prd 'R1. The tool SHALL a.\nR10. The tool SHALL j.\n'
+fresh
+ticket 1 'Covers: R10\n'
+run "$(T 1)"
+s_assert_out_is "uncovered: R1" "whole ids: R10 does not cover R1"
+fresh
+ticket 1 'Covers: R1\n'
+run "$(T 1)"
+s_assert_out_is "uncovered: R10" "whole ids: R1 does not cover R10"
+prd 'process/R1. The gate SHALL a.\nR1. The tool SHALL a.\n'
+fresh
+ticket 1 'Covers: R1\n'
+run "$(T 1)"
+s_assert_out_is "uncovered: process/R1" "whole ids: R1 does not cover process/R1"
+fresh
+ticket 1 'Covers: process/R1\n'
+run "$(T 1)"
+s_assert_out_is "uncovered: R1" "whole ids: process/R1 does not cover R1"
+
 # ---------------------------------------------------------------------------
 banner "8. Usage and unreadable input: exit 2, nothing on stdout"
 # ---------------------------------------------------------------------------
@@ -229,6 +275,20 @@ s_assert_status 2 "a PRD and no ticket is a usage error — a decomposition has 
 t_run_split sh "$COVERAGE" "$SCRATCH/absent" "$(T 1)"
 s_assert_status 2 "an unreadable PRD body is exit 2"
 s_assert_out_is "" "… nothing on stdout"
+# A directory is no PRD body: refused as unreadable, never read as one that
+# carries no requirement lines.
+mkdir -p "$SCRATCH/prd-dir"
+t_run_split sh "$COVERAGE" "$SCRATCH/prd-dir" "$(T 1)"
+s_assert_status 2 "a directory in place of the PRD body is exit 2, not 3"
+s_assert_out_is "" "… nothing on stdout"
+if [ "$(id -u)" -ne 0 ]; then
+	printf 'R1. The tool SHALL a.\n' >"$SCRATCH/prd-locked"
+	chmod 000 "$SCRATCH/prd-locked"
+	t_run_split sh "$COVERAGE" "$SCRATCH/prd-locked" "$(T 1)"
+	s_assert_status 2 "a PRD body without read permission is exit 2"
+	s_assert_out_is "" "… nothing on stdout"
+	chmod 600 "$SCRATCH/prd-locked"
+fi
 t_run_split sh "$COVERAGE" "$SCRATCH/prd" "$SCRATCH/draft/absent"
 s_assert_status 2 "an unreadable ticket is exit 2"
 prd 'R1. The tool SHALL a.\n'
