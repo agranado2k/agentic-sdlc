@@ -430,6 +430,14 @@ jobs:
       - name: Stamp reader suite
         run: sh tests/stamp.test.sh
 
+  coverage:
+    name: /to-tickets' coverage check names uncovered requirements and orphan tickets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Coverage check suite
+        run: sh tests/coverage.test.sh
+
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest
