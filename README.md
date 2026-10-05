@@ -823,8 +823,9 @@ skeleton (K0).
   exclusion for the one skill allowed to read.
 
 - `sh tests/spec-skills.test.sh` pins the `/to-prd` and `/to-tickets` contracts
-  as text: the PRD template's eleven sections in reading order, the phrase
+  as text: the PRD template's twelve sections in reading order, the phrase
   that carries each rule (one-sentence objective, scenarios as demo scripts,
+  numbered EARS-lite requirements and one story per actor goal,
   the penalty-for-being-wrong filter, later/never on every non-goal, open
   issues with a next step, the stranger reread before publishing), the
   hand-off from scenarios to the admission test, the open-issue gate and
