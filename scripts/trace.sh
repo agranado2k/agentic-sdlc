@@ -1027,19 +1027,31 @@ trace_begin() {
 # parent's run that way — so a caller that holds its run id names it.
 trace_end() {
 	_en_want=
-	case ${1:-} in
-	'' | -* | *=*) ;;
-	*)
-		# One segment of [A-Za-z0-9._-], the class every id `begin` mints is
-		# in: anything else can never be on the stack, so it is a usage error.
-		trace_session_ok "$1" || usage
-		_en_want=$1
-		shift
-		;;
-	esac
+	_en_named=
+	if [ $# -ge 1 ]; then
+		case $1 in
+		-* | ?*=*) ;;
+		*)
+			_en_named=1
+			_en_want=$1
+			shift
+			;;
+		esac
+	fi
 	trace_reject_owned end "$@"
 	trace_arg_session "$@"
+	# Unconfigured, every call is the silent no-op — a named end included, so
+	# the checks on the name below are the configured trace's alone.
 	trace_dir || { trace_unconfigured_note; return 0; }
+	# An EMPTY first argument is a caller that meant to name a run and lost
+	# it (`end "$RUN"`, RUN unset); read as a bare end it would pop the top,
+	# the parent-closing case #543 shuts (review M-2, PR #551). Otherwise one
+	# token of [A-Za-z0-9._-], the class every id `begin` mints is in:
+	# anything else can never be on the stack, so it is a usage error.
+	if [ -n "$_en_named" ]; then
+		[ -n "$_en_want" ] || die "end was handed an empty run id — name the run your begin printed, or pass none"
+		trace_session_ok "$_en_want" || usage
+	fi
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	trace_stack_readable || die "cannot close a run this working tree's stack will not answer for"
 	_en_run=$(trace_stack top)
