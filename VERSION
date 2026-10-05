@@ -1877,8 +1877,46 @@
 # through `trace.sh stack` instead of repeating the stack's path, format and
 # unreadable rule; a relative payload cwd is made absolute once; its
 # README.md describes the read.
+# 0.49.0 — the living spec is held to the suite (ticket #530, PRD #527,
+# ADR-0012), with the /to-prd requirements and the spawn's run hand-over that
+# landed beside it (tickets #528, #529, #474).
+# ONE file JOINS the shared layer:
+# scripts/docs-conformance/validators/living-spec.mjs — a VIOLATION, not an
+# advisory: every requirement in a living spec, a line opening `R<n>.` outside
+# a fence in `<specsDir>/<area>.md`, must be named as `<area>/R<n>` by a file
+# the policy's test globs match. A cited id ends at its digits: one followed by
+# a letter, a digit, `_`, or `.` and a digit cites nothing. A spec file whose
+# name is no area (`[a-z][a-z0-9-]*`) is reported. Vacuous with no living spec
+# — no directory, an empty one, or no requirement line yet. NO file leaves.
+# Shared files that change content: scripts/check.sh carries the rule's POSIX
+# twin on the reduced path, reading `specsDir` and `testGlobs` from config.mjs
+# BY TEXT, and its no-node NOTICE names the scan; runner.mjs registers the
+# validator. UPDATING.md changes content: the arriving-from paragraph, and both
+# worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# scripts/docs-conformance/config.mjs (yours, step 9d) gains a `livingSpec`
+# block — `specsDir` and a literal `testGlobs` list, one quoted glob per line,
+# which the twin reads by text. An existing consumer MERGES that block by hand
+# and adds `livingSpec` to the default export; without it both engines read
+# no globs, so a living spec fails every requirement until the block names the
+# trees the project's runner runs (#530).
+# .agents/skills/to-prd/SKILL.md: the PRD template gains a Requirements
+# section of numbered EARS-lite requirements and one story per actor goal,
+# twelve sections in all (#528); it asks once to run /grill-me when the
+# conversation was never grilled, an unattended run takes the No path, and
+# only a grilling skill's run counts as one (#529).
+# .agents/skills/implement/SKILL.md, .agents/skills/pr-iterate/SKILL.md and
+# .agents/skills/review-pr/SKILL.md: every subagent a skill spawns inside its
+# run is handed that run as its spawn prompt's first line, `Trace-Run: <run
+# id> [<parent run id>]`, left out when `begin` printed nothing (#474).
+# The claude-code adapter's hooks (hook.lib.sh, subagent-stop.sh,
+# session-end.sh, tool-post.sh, tool-payload.mjs): the stop, session-end and
+# tool-post hooks read the run and its parent from that line, bounded to the
+# transcript's first user record and held to the run id's shape, before the
+# payload's cwd; the tool-post hook finds a subagent's transcript from the
+# payload's agent_id; its README.md says so (#474).
 
-shared-layer: 0.48.0
+shared-layer: 0.49.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
