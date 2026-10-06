@@ -262,7 +262,7 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
 # PR #284).
 REAL=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#272')
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason=real-id-inside
-env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason=real-id-done
+env TRACE_CONFIG=$RON sh "$TRACE" end "$REAL" outcome=ok reason=real-id-done
 t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
 [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $S_OUT"
 # The type is what switches the run field on: a ticket subject must not start
@@ -308,22 +308,22 @@ RUN2=$S_OUT
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "and records the run it nests inside as parent" ;; *) fail "the nested run.start: $(tail -n 1 "$RFILE")" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason='it passes'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "an emit inside the nested run carries both" ;; *) fail "the nested emit: $(tail -n 1 "$RFILE")" ;; esac
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason='the cycle is done'
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN2" outcome=ok reason='the cycle is done'
 [ "$S_STATUS" = 0 ] && pass "end exits 0" || fail "end exited $S_STATUS: $S_ERR"
 case $(tail -n 1 "$RFILE") in *'"kind":"run.end"'*'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*'"outcome":"ok"'*) pass "and emits run.end for the run it popped" ;; *) fail "run.end wrong: $(tail -n 1 "$RFILE")" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='after the pop'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN1"'"'*) pass "the next emit is back on the outer run — end popped, it did not clear" ;; *) fail "after the pop: $(tail -n 1 "$RFILE")" ;; esac
 case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "the outer run acquired a parent" ;; *) pass "and has no parent again" ;; esac
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1" outcome=ok
 [ "$S_STATUS" = 0 ] && pass "the outer run closes too" || fail "the second end exited $S_STATUS: $S_ERR"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1"
 [ "$S_STATUS" = 2 ] && pass "end with no run open is exit 2 — there is nothing to close" || fail "end on an empty stack exited $S_STATUS"
 case $S_ERR in *begin*) pass "and the refusal says what opens one" ;; *) fail "the refusal did not name begin: $S_ERR" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='no run open'
 case $(tail -n 1 "$RFILE") in *'"run"'*) fail "an emit outside any run still carried one: $(tail -n 1 "$RFILE")" ;; *) pass "with no run open the run field is omitted" ;; esac
 assert_status 2 "begin being told its kind is exit 2 — the subcommand owns it" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement kind=note
 assert_out_has "begin sets kind itself"
-assert_status 2 "end being told which run it closes is exit 2 — the stack says which" -- env TRACE_CONFIG="$RON" sh "$TRACE" end run=made-up
+assert_status 2 "end being told which run it closes is exit 2 — the stack says which" -- env TRACE_CONFIG="$RON" sh "$TRACE" end "$RUN1" run=made-up
 assert_out_has "end sets run itself"
 assert_status 2 "begin with no skill is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin
 # Review C-1..L-7 (PR #263): begin owns `skill` through its positional argument
@@ -336,12 +336,12 @@ assert_out_has "begin sets skill itself"
 RUN_A=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement)
 RUN_B=$(env TRACE_CONFIG=$RON sh "$TRACE" begin tdd)
 OVER=$(awk 'BEGIN { while (i++ < 4100) printf "x" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason="$OVER"
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason="$OVER"
 [ "$S_STATUS" = 2 ] && pass "an end whose own event is refused is exit 2" || fail "the refused end exited $S_STATUS"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason='the retry'
+t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason='the retry'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN_B"'"'*) pass "and the retry closes the run that was still open, not the one outside it" ;; *) fail "the refused end popped anyway — the retry closed: $(tail -n 1 "$RFILE")" ;; esac
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN_A"'"'*) fail "the retry closed the OUTER run — the stack lost an entry to a refusal" ;; *) pass "and the outer run is untouched by either" ;; esac
-env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok reason='and the outer one'
+env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_A" outcome=ok reason='and the outer one'
 
 banner "11. Identity precedence: the environment first, then the pointer file and the stack, then omitted"
 STACK=$(ls "$R"/current/*.runs 2>/dev/null | head -n 1)
@@ -389,10 +389,10 @@ STACK="$R/current/$KEY.sess-from-pointer.runs"
 INODE=$(ls -i "$STACK" | awk '{ print $1 }')
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='an emit only appends'
 [ "$(ls -i "$STACK" | awk '{ print $1 }')" = "$INODE" ] && pass "an emit leaves the stack file exactly as it was — same inode" || fail "an emit rewrote the run stack"
-env TRACE_CONFIG=$RON sh "$TRACE" begin tdd >/dev/null
+RUN12=$(env TRACE_CONFIG=$RON sh "$TRACE" begin tdd)
 PUSHED=$(ls -i "$STACK" | awk '{ print $1 }')
 [ "$PUSHED" != "$INODE" ] && pass "begin replaces the file by rename — a parallel reader sees the old stack or the new one, never half of one" || fail "begin wrote the stack in place"
-env TRACE_CONFIG=$RON sh "$TRACE" end outcome=ok
+env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN12" outcome=ok
 [ "$(ls -i "$STACK" | awk '{ print $1 }')" != "$PUSHED" ] && pass "and so does end" || fail "end wrote the stack in place"
 [ -z "$(find "$R/current" -name '*.runs.*' 2>/dev/null)" ] && pass "and neither leaves its staging file behind" || fail "a staging file survives under $R/current"
 # H-2 (review, PR #263): the push staged through a command group whose exit
@@ -1217,7 +1217,10 @@ IFS=$_ov_ifs
 assert_status 2 "a kind that carries no outcome refuses one — session.end outcome=ok" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=session.end outcome=ok
 assert_out_has "session.end"
 assert_status 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
-assert_status 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" sh "$TRACE" end outcome=delivered
+OVR=$(env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement)
+assert_status 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=delivered
+assert_out_has "delivered"
+env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=ok
 # The skills print every vocabulary as `pass|blocked`, so the alternation
 # copied whole is the likeliest typo there is — and each word in it is
 # declared, so a substring test lets it through (H-1, review of PR #380).
@@ -1420,7 +1423,7 @@ SSKEY=$(printf '%s' "$(git -C "$KIT" rev-parse --show-toplevel)" | git hash-obje
 [ -f "$SS/current/$SSKEY.sess-a.runs" ] && [ -f "$SS/current/$SSKEY.sess-b.runs" ] &&
 	pass "each session's stack sits at current/<toplevel key>.<session>.runs" || fail "no per-session stacks: $(ls "$SS/current" 2>&1)"
 [ ! -e "$SS/current/$SSKEY.runs" ] && pass "and the per-toplevel stack is not written when a session is known" || fail "a per-toplevel stack was written: $(cat "$SS/current/$SSKEY.runs")"
-t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end outcome=ok reason='B closes'
+t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok reason='B closes'
 [ "$S_STATUS" = 0 ] && pass "end in session B exits 0" || fail "end in B exited $S_STATUS: $S_ERR"
 case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RB"'"'*) pass "and closes B's run, the one it opened" ;; *) fail "end in B closed: $(tail -n 1 "$SSFILE")" ;; esac
 [ "$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)" = "$RA" ] && pass "and A's stack still holds A's run — end pops only its own session's stack" || fail "A's stack after B's end: '$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)'"
@@ -1431,10 +1434,10 @@ case $(tail -n 1 "$SSFILE") in *'"run":"'"$RA"'"'*) pass "so the next emit in A 
 # — how a hook told its session by a payload joins that session's run.
 env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" emit kind=note session=sess-a reason='A named on the line'
 case $(tail -n 1 "$SSFILE") in *'"session":"sess-a","run":"'"$RA"'"'*) pass "an emit naming session=sess-a carries A's run, though the environment names B" ;; *) fail "the explicit session= carried: $(tail -n 1 "$SSFILE")" ;; esac
-assert_status 2 "a second end in B is exit 2 — B has nothing open, whatever A holds" -- env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end outcome=ok
+assert_status 2 "a second end in B is exit 2 — B has nothing open, whatever A holds" -- env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok
 t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" show "run:$RA"
 case $S_OUT in *'said in session B'*) fail "show run:<A> holds B's emit: $S_OUT" ;; *'said in session A'*'A after B closed'*'A named on the line'*) pass "show run:<A> holds A's emits and none of B's" ;; *) fail "show run:<A> missed A's emits: $S_OUT" ;; esac
-env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" end outcome=ok reason='A closes'
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" end "$RA" outcome=ok reason='A closes'
 case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RA"'"'*) pass "and A's end closes A's run" ;; *) fail "end in A closed: $(tail -n 1 "$SSFILE")" ;; esac
 
 # The pointer file answers when the environment does not, and names the same
@@ -1444,7 +1447,7 @@ RP=$(env TRACE_CONFIG="$SSON" sh "$TRACE" begin implement)
 [ "$(cat "$SS/current/$SSKEY.sess-p.runs" 2>/dev/null)" = "$RP" ] && pass "with no TRACE_SESSION, the pointer's session keys the stack" || fail "the pointer did not key the stack: $(ls "$SS/current")"
 env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-p sh "$TRACE" emit kind=note reason='the same session through the environment'
 case $(tail -n 1 "$SSFILE") in *'"run":"'"$RP"'"'*) pass "and the same session named in the environment reads that stack" ;; *) fail "the env-named session missed the pointer's stack: $(tail -n 1 "$SSFILE")" ;; esac
-env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-p sh "$TRACE" end outcome=ok
+env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-p sh "$TRACE" end "$RP" outcome=ok
 rm -f "$SS/current/$SSKEY"
 
 # A session with no id behaves as today: the per-toplevel stack.
@@ -1456,7 +1459,7 @@ env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason=
 case $(tail -n 1 "$SSFILE") in *'"run"'*) fail "a session with an id borrowed the id-less stack's run: $(tail -n 1 "$SSFILE")" ;; *) pass "while a session with an id does not see it" ;; esac
 env TRACE_CONFIG="$SSON" TRACE_SESSION= sh "$TRACE" emit kind=note reason='no session, said explicitly'
 case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) pass "and TRACE_SESSION set to the empty string reads the per-toplevel stack too" ;; *) fail "TRACE_SESSION= carried: $(tail -n 1 "$SSFILE")" ;; esac
-t_run_split env TRACE_CONFIG="$SSON" sh "$TRACE" end outcome=ok
+t_run_split env TRACE_CONFIG="$SSON" sh "$TRACE" end "$RN" outcome=ok
 [ "$S_STATUS" = 0 ] && case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) true ;; *) false ;; esac &&
 	pass "and end with no session id closes it" || fail "the id-less end exited $S_STATUS: $(tail -n 1 "$SSFILE")"
 
@@ -1465,7 +1468,7 @@ t_run_split env TRACE_CONFIG="$SSON" sh "$TRACE" end outcome=ok
 RX=$(env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" begin implement)
 [ "$(cat "$SS/current/$SSKEY.runs" 2>/dev/null)" = "$RX" ] && [ -z "$(find "$SS/current" -type d -name "$SSKEY*")" ] &&
 	pass "a session id with a slash falls back to the per-toplevel stack and creates no directory" || fail "the slashed id went to: $(find "$SS/current")"
-env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" end outcome=ok
+env TRACE_CONFIG="$SSON" TRACE_SESSION='x/y' sh "$TRACE" end "$RX" outcome=ok
 
 # Review L-1 (PR #476): the two header comments this change wrote wrap like
 # the rest of both files — one had run on to 135 bytes. 100 bytes leaves room
@@ -1762,7 +1765,7 @@ for _sk_bad in -x session=y; do
 		fail "stack '$SK_WT/$_sk_bad': exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 done
 # An empty stack — the file is there, every run closed — is no run, exit 0.
-(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end outcome=ok 2>/dev/null)
+(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end "$SK_NOID" outcome=ok 2>/dev/null)
 sk_ask TRACE_SESSION= "$SK_WT"
 SK_BYTES=$(sk_run TRACE_SESSION= "$SK_WT" 2>/dev/null | wc -c | tr -d ' ')
 [ "$SK_BYTES" = 0 ] && [ -f "$SK/current/$SK_KEY.runs" ] && [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
@@ -1892,14 +1895,14 @@ assert_status 2 "an end handed an empty run id is exit 2, not a bare end" -- env
 assert_out_has "empty run id"
 # Review M-3 (PR #551): an option and a field are never read as a run id.
 assert_status 2 "end -x is a usage error" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end -x
-t_run_split ow end id=1
+t_run_split ow end id=1 # bare end: a field is never read as a run id
 case $S_ERR in *'end <run> closes only'*) fail "end id=1 was read as a run id: $S_ERR" ;; *) pass "end id=1 is a field, never read as a run id" ;; esac
 [ "$(ow_lines)" = "$_ow_n" ] &&
 	pass "and none of the refused ends wrote a line or popped the run" || fail "a refused end wrote or popped: $(tail -n 1 "$OWFILE")"
 [ "$(env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" stack "$KIT" | sed -n 1p)" = "$OWX" ] &&
 	pass "the open run is still the one begin opened" || fail "the stack top moved after refused ends"
 # Back-compat: a bare end still closes the top, whoever began it.
-t_run_split ow end outcome=ok reason='bare'
+t_run_split ow end outcome=ok reason='bare' # bare end: the back-compat case #560 keeps
 [ "$S_STATUS" = 0 ] && case $(tail -n 1 "$OWFILE") in *'"run":"'"$OWX"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
 	pass "a bare end still closes the top of the stack" || fail "the bare end exited $S_STATUS: $(tail -n 1 "$OWFILE")"
 # Unconfigured, a named end is the no-op every call is — even a malformed one.
@@ -1919,5 +1922,84 @@ case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
 *"amended 2026-10-05 (#543"*) pass "the index row for 0008 carries the #543 amendment's dated note" ;;
 *) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-05 (#543 …' note" ;;
 esac
+
+# ---------------------------------------------------------------------------
+banner "29. A bare end is deprecated: it still closes the top, and says so (ticket #560)"
+# ---------------------------------------------------------------------------
+# #543 made `end <run>` close only the run it names, but left a bare `end`
+# meaning what it always meant, so the guarantee was opt-in: a caller that
+# skipped its `begin` and typed a bare `end` still closed its parent's run.
+# A later release makes the id mandatory (ADR-0008, #560 amendment); until
+# then a bare `end` keeps working and says, in one line on stderr, which run
+# it closed and the named form that would have closed it.
+DP="$SCRATCH/deprecate-560"; DPON=$(policy "$DP")
+DPFILE="$DP/events/$TODAY.jsonl"
+dp() { env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 sh "$TRACE" "$@"; }
+DPR=$(dp begin implement subject='ticket:#560')
+t_run_split dp end outcome=ok reason='bare' # bare end: the deprecated form, driven on purpose
+[ "$S_STATUS" = 0 ] && case $(tail -n 1 "$DPFILE") in *'"kind":"run.end"'*'"run":"'"$DPR"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
+	pass "a bare end still closes the top of the stack, exit 0" || fail "the bare end exited $S_STATUS: $(tail -n 1 "$DPFILE")"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "a bare end printed on stdout: $S_OUT"
+[ "$(printf '%s\n' "$S_ERR" | grep -c .)" = 1 ] && pass "and exactly one line on stderr" || fail "a bare end said, on stderr: $S_ERR"
+case $S_ERR in *'trace:'*deprecated*) pass "a trace-prefixed line saying a bare end is deprecated" ;; *) fail "the stderr line does not say deprecated: $S_ERR" ;; esac
+case $S_ERR in *"$DPR"*) pass "naming the run it closed" ;; *) fail "the stderr line does not name the run it closed, $DPR: $S_ERR" ;; esac
+case $S_ERR in *"trace.sh end $DPR"*) pass "and the named form that closes it: trace.sh end <that run>" ;; *) fail "the stderr line does not give 'trace.sh end $DPR': $S_ERR" ;; esac
+case $S_ERR in *mandatory*) pass "and that a later release makes the id mandatory" ;; *) fail "the stderr line does not say the id becomes mandatory: $S_ERR" ;; esac
+# The named form prints nothing new — on either stream.
+DPR=$(dp begin implement subject='ticket:#560')
+t_run_split dp end "$DPR" outcome=ok reason='named'
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "a named end closes its run and prints nothing on either stream" || fail "the named end: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+# A note, like every other note the script says: TRACE_QUIET=1 silences it.
+DPR=$(dp begin implement subject='ticket:#560')
+t_run_split env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: TRACE_QUIET over the deprecated form
+[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && case $(tail -n 1 "$DPFILE") in *'"run":"'"$DPR"'"'*) true ;; *) false ;; esac &&
+	pass "TRACE_QUIET=1 silences the notice, and the bare end still closes the run" || fail "a quiet bare end: exit $S_STATUS, stderr '$S_ERR'"
+# Closing nothing, it names nothing: the refusals are what they were.
+t_run_split dp end outcome=ok # bare end: nothing open, so nothing to name
+[ "$S_STATUS" = 2 ] && case $S_ERR in *deprecated*) false ;; *) true ;; esac &&
+	pass "a bare end with nothing open is exit 2 and carries no notice — it closed nothing" || fail "a bare end on an empty stack: exit $S_STATUS, stderr '$S_ERR'"
+t_run_split env TRACE_CONFIG="$OFF" sh "$TRACE" end outcome=ok # bare end: unconfigured, the no-op
+[ "$S_STATUS" = 0 ] && case $S_ERR in *deprecated*) false ;; *) true ;; esac &&
+	pass "unconfigured, a bare end is the no-op it was, with no notice" || fail "an unconfigured bare end: exit $S_STATUS, stderr '$S_ERR'"
+# The interface is recorded where a caller reads it.
+sed -n '2,32p' "$TRACE" | sed 's/^# *//' | tr '\n' ' ' | grep -q 'bare `end`[^.]*deprecated' &&
+	pass "the script's header says a bare end is deprecated" || fail "the header does not say a bare \`end\` is deprecated"
+grep -F '| Record a decision, or read the trail |' "$KIT/AGENTS.md" | grep -qF 'a bare `end` is deprecated' &&
+	pass "and so does the manual's trace row" || fail "AGENTS.md's trace row does not say a bare \`end\` is deprecated"
+_dp_adr=$(sed -n '/Amended 2026-10-06 (#560)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
+for _dp_t in 'deprecat' 'mandatory' 'reopen' 'stderr'; do
+	case $_dp_adr in *"$_dp_t"*) pass "ADR-0008's #560 amendment names $_dp_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-06 (#560):*' block naming $_dp_t" ;; esac
+done
+grep -m1 '^- \*\*Superseded by\*\*' "$(ls "$KIT"/docs/adr/0008-*.md)" | grep -qF 'Decided for #560' &&
+	pass "ADR-0008's header ledger records the #560 amendment" || fail "ADR-0008's Superseded-by ledger stops short of #560"
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-06 (#560"*) pass "the index row for 0008 carries the #560 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-06 (#560 …' note" ;;
+esac
+
+# No bare end is left in what the kit runs: its skills, hooks, scripts, suites,
+# adapters and stamped sources. A bare end is the trace script — by path, by a
+# variable, or by a suite's wrapper — followed by `end` and then a field, a
+# redirect, a pipe, a separator or the end of the line, never a run id. Only
+# this suite may keep one, on a line marked `# bare end:`, because driving the
+# deprecated form is what this section and section 28's back-compat case are
+# for.
+bare_ends() {
+	grep -nE '(trace(\.kit)?\.sh|\$\{?TRACE(_SH)?\}?|[A-Za-z]*_trace|(^|[[:space:]])ow)["'"'"']?[[:space:]]+end([[:space:]]+([A-Za-z_][A-Za-z0-9_.]*=|[>|;&)`]|2>)|[[:space:]]*$)' "$@" /dev/null |
+		grep -vE '^([^:]*/)?tests/trace\.test\.sh:[0-9]+:.*# bare end: '
+}
+# The scan can fail: a planted bare end is found, a named one is not.
+printf '%s\n' 'sh "$TRACE" end outcome=ok' 'sh scripts/trace.sh end' 'fx_trace end >/dev/null' >"$SCRATCH/dp-bait.sh" # bare end: the scan's bait
+printf '%s\n' 'sh "$TRACE" end "$RUN" outcome=ok' 'sh scripts/trace.sh end <the run id your begin printed> outcome=ok' >"$SCRATCH/dp-named.sh"
+[ "$(bare_ends "$SCRATCH/dp-bait.sh" | grep -c .)" = 3 ] && pass "bait: the scan finds three planted bare ends" ||
+	fail "bait: the scan found $(bare_ends "$SCRATCH/dp-bait.sh" | grep -c .) of three planted bare ends"
+[ -z "$(bare_ends "$SCRATCH/dp-named.sh")" ] && pass "and passes the named form, a run id or a skill's placeholder" ||
+	fail "the scan flagged a named end: $(bare_ends "$SCRATCH/dp-named.sh")"
+_dp_files=$(cd "$KIT" && git ls-files -- .agents adapters .githooks scripts tests templates constitution setup bootstrap.sh SETUP.md)
+_dp_hits=$(cd "$KIT" && printf '%s\n' "$_dp_files" | while IFS= read -r _f; do [ -f "$_f" ] && bare_ends "$_f"; done)
+[ -n "$_dp_files" ] && [ -z "$_dp_hits" ] && pass "no bare end in the kit's skills, hooks, scripts, suites, adapters or stamped sources" ||
+	fail "a bare end is left (or nothing was scanned):
+$_dp_hits"
 
 t_done "trace script"
