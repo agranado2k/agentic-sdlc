@@ -1694,6 +1694,17 @@ case "$S_OUT|$S_ERR" in
 vendor-strong-5\|*) pass "a crossing value is no id a spawn word covers: the walk reaches 'other:vendor-strong-5', with no match warning" ;;
 *) fail "the word 'strong' with a crossing fallback resolved '$S_OUT' — expected vendor-strong-5 (stderr '$S_ERR')" ;;
 esac
+# ONE membership test (#559). The probe above catches the bridge and the
+# resolver disagreeing; this catches the second copy that could disagree.
+# Whether a value crosses to a declared agent harness is the resolver's
+# agents_split_harness's answer, so the wrapper reads no AGENT_HARNESSES of
+# its own and asks that function instead. Comment lines are not code.
+_kit_code=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER")
+case "$_kit_code" in
+*AGENT_HARNESSES*) fail "the kit wrapper reads AGENT_HARNESSES itself — a second copy of the resolver's membership test" ;;
+*agents_split_harness*) pass "the kit wrapper holds no copy of the membership test: it asks the resolver's agents_split_harness" ;;
+*) fail "the kit wrapper's bridge no longer asks the resolver's agents_split_harness whether a value crosses" ;;
+esac
 
 # A pinned id and an unknown word pass the bridge untouched: the id still
 # matches, and the unknown word reaches the resolver to be warned about.
