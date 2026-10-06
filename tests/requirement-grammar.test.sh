@@ -235,7 +235,9 @@ grep -q 'requirement\.lib\.sh' "$ROOT/scripts/coverage.sh" && pass "scripts/cove
 # template — only INSIDE its fences, which is where a skill's commands are,
 # while its prose may name a pattern freely. A `.template` or `.example`
 # suffix is read through to the kind beneath it. An id pattern is any of
-# `R[0-9]`, `R[1-9]`, `R\d` or `R[[:digit:]]`; a fence pattern is the ``` and
+# `R[0-9]`, `R[1-9]`, `R\d` (or `R\\d`, its spelling inside a JavaScript
+# string handed to RegExp, as living-spec.mjs builds its patterns) or
+# `R[[:digit:]]`; a fence pattern is the ``` and
 # ~~~ alternation in either order, or a three-of-a-kind repetition.
 #
 # Allowed, and nothing else: the home; the docs harness's validator
@@ -245,6 +247,7 @@ grep -q 'requirement\.lib\.sh' "$ROOT/scripts/coverage.sh" && pass "scripts/cove
 ID_SPELLINGS='R[0-9]
 R[1-9]
 R\d
+R\\d
 R[[:digit:]]'
 FENCE_SPELLINGS='```|~~~
 ~~~|```
@@ -354,7 +357,8 @@ mkdir -p "$PLANT/scripts/docs-conformance/validators" "$PLANT/.agents/skills/x" 
 printf '%s\n' '# a comment may say R[0-9] and ```|~~~' "ids=\$(awk '/^R[0-9]+[.]/' \"\$spec\")" \
 	"awk '/^[ \\t]*(\`\`\`|~~~)/ { f = !f }' \"\$x\"" >"$PLANT/scripts/plant.sh"
 printf '%s\n' '# R[1-9] in a comment' '/^R[1-9][0-9]*[.]/ { print }' '/^[ \t]*(~~~|```)/ { f = !f; next }' >"$PLANT/scripts/plant.awk"
-printf '%s\n' '// R\d in a comment' ' * ```|~~~ in a block comment' 'const ID = /^R\d+\./;' 'const FENCE = /^\s*[`~]{3}/;' >"$PLANT/scripts/plant.mjs"
+printf '%s\n' '// R\d in a comment' ' * ```|~~~ in a block comment' 'const ID = /^R\d+\./;' 'const FENCE = /^\s*[`~]{3}/;' \
+	'const ID_STRING = new RegExp("^R\\d+[.]");' >"$PLANT/scripts/plant.mjs"
 printf '%s\n' 'Prose may name `R[[:digit:]]` and ```|~~~ freely.' '' '```sh' "grep -E '^R[[:digit:]]+[.]' spec.md" \
 	"awk '/^ *(\`\`\`|~~~)/' x.md" '```' >"$PLANT/.agents/skills/x/SKILL.md"
 printf '%s\n' '#!/bin/sh' "grep -E '^R[0-9]+' \"\$1\"" >"$PLANT/.githooks/pre-push"
@@ -364,7 +368,7 @@ printf '%s\n' '```' 'grep "R[1-9]" x' '```' >"$PLANT/templates/doc.md.template"
 printf '%s\n' "$FENCE_DIFFERENT_RULES" | grep 'banned-words' | cut -f2- >"$PLANT/scripts/other.mjs"
 printf '%s\n' 'const F = /^[ \t]*(```|~~~)/;' >"$PLANT/scripts/docs-conformance/validators/banned-words.mjs"
 got=$(id_copies "$PLANT" | sort | tr '\n' ' ')
-want='.agents/skills/x/SKILL.md:4 .githooks/pre-push:2 scripts/plant.awk:2 scripts/plant.mjs:3 scripts/plant.sh:2 templates/doc.md.template:2 '
+want='.agents/skills/x/SKILL.md:4 .githooks/pre-push:2 scripts/plant.awk:2 scripts/plant.mjs:3 scripts/plant.mjs:5 scripts/plant.sh:2 templates/doc.md.template:2 '
 [ "$got" = "$want" ] && pass "the id scan flags a planted copy in a script, an awk program, a module, a hook, a template and a skill's fenced command — and no comment or prose" ||
 	fail "the id scan read the planted tree as '$got', expected '$want'"
 got=$(fence_copies "$PLANT" | sort | tr '\n' ' ')
