@@ -29,6 +29,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0011](0011-task-local-contracts-bound-the-lifecycle.md) | Task-local contracts bound the lifecycle | Accepted 2026-09-30 |
 | [0012](0012-requirements-are-numbered-traced-and-anchored-in-living-specs.md) | Requirements are numbered, traced to tickets and tests, and anchored in living specs | Accepted 2026-10-05 — builds on ADR-0008: nothing here reads the trace |
 | [0013](0013-a-reviewers-next-answer-is-an-ordered-fallback-in-the-shared-resolver.md) | A reviewer's next answer is an ordered fallback in the shared resolver, past what the caller names unreachable | Accepted 2026-10-05 — builds on ADR-0007; built by #548 |
+| [0014](0014-a-release-is-tagged-by-its-landing-before-main-is-judged.md) | A release is tagged by its landing, before main is judged | Accepted 2026-10-06 — gives hard rule 3's landed release its mechanism; built by #509 |
 
 ## Conventions
 

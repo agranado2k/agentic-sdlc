@@ -23,8 +23,18 @@
 #      one /merge-train's hard rule 3 reads from the local workflow article
 #      (in this repo, the root AGENTS.md). A merge the forge rejects
 #      records merge.land `stopped` and exits 1; no verdict is asked.
+#   2b. When the merge moves VERSION's shared-layer line it is a release:
+#      tags the merge commit v<version> (`git tag -a`, the operator's own
+#      signing config) and pushes the tag BEFORE waiting — a release is not
+#      landed until that tag exists (hard rule 3), and the kit's CI holds
+#      main red until it does (ADR-0014, #509). A tag origin already holds
+#      on the merge commit is kept; one naming any other commit is never
+#      moved, and the release is reported not landed.
 #   3. Waits for the base branch's workflows on the merge commit, each one
-#      watched to its end.
+#      watched to its end. For a tagged release, each run that failed —
+#      started on the merge push, before the tag could exist — is re-run
+#      once (`gh run rerun <id> --failed`) and only its second result is
+#      judged. An untagged merge's red is never re-run.
 #   4. Emits merge.land (`landed`, the sha, the method, the wait, the
 #      workflows' result) on pr:#<N>, related to the ticket — and whether
 #      /implement opened the PR (data.implement=yes|no, with
@@ -36,7 +46,9 @@
 #      `unasked` with the reason — never a verdict nobody gave.
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
-#   merge commit the forge never names (data.workflows=unknown, no sha).
+#   merge commit the forge never names (data.workflows=unknown, no sha), and
+#   so does a release whose tag is not on origin: merged, not landed. A
+#   release's merge.land carries data.release, data.tagged and data.reruns.
 #
 # THE TICKET is the PR's first closing reference, or --ticket. With neither,
 # the feedback sits on the PR itself.
@@ -47,9 +59,10 @@
 # scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
 # TRACE_CONFIG still wins (the broker's arrangement).
 #
-# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, or no merge commit named · 2 usage, or the PR refused · 69 no forge CLI
+# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 #
-# tests/land.test.sh drives this file against a stub `gh` on PATH.
+# tests/land.test.sh drives this file against a stub `gh` on PATH, and a stub
+# `git` that answers the release questions and passes everything else through.
 set -u
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -65,7 +78,7 @@ usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
-exit: 0 landed · 1 merge rejected, a post-merge workflow failed, or no merge commit named · 2 usage, or the PR refused · 69 no forge CLI
+exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 EOF
 	exit 2
 }
@@ -161,12 +174,62 @@ while [ "$i" -lt "$POLL_TRIES" ]; do
 	[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 done
 
+# --- 2b. a release lands tagged (#509, ADR-0014) ------------------------------
+# A merge that moves VERSION's shared-layer line is a release, and a release is
+# not landed until its merge commit carries v<version> (hard rule 3). The CI
+# that holds that line (self-host F3) starts on the merge push, before any tag
+# could exist — so the tag is cut here, before the wait, and step 3 re-runs
+# once what failed without it. An existing tag is never moved.
+RELEASE=
+TAGGED=
+# layer_version <VERSION text> — the shared-layer value, only when it is a
+# version: anything else is no release and is never typed into a tag.
+layer_version() {
+	printf '%s\n' "$1" | sed -n 's/^shared-layer: *\([0-9]\{1,6\}\.[0-9]\{1,6\}\.[0-9]\{1,6\}\) *$/\1/p' | head -1
+}
+if [ -n "$SHA" ]; then
+	if git -C "$ROOT" fetch -q origin "$BASE" >/dev/null 2>&1 &&
+		_ver_after=$(git -C "$ROOT" show "$SHA:VERSION" 2>/dev/null) &&
+		_ver_before=$(git -C "$ROOT" show "$SHA^1:VERSION" 2>/dev/null); then
+		_v=$(layer_version "$_ver_after")
+		if [ -n "$_v" ] && [ "$_v" != "$(layer_version "$_ver_before")" ]; then
+			RELEASE=v$_v
+		elif [ -z "$_v" ] && printf '%s\n' "$_ver_after" | grep -q '^shared-layer:'; then
+			note "VERSION's shared-layer line at $SHA is not a version — nothing tagged"
+		fi
+	else
+		note "could not read VERSION at $SHA and its parent — if the merge bumped the shared layer, tag it by hand: git tag -a v<version> $SHA && git push origin v<version>"
+	fi
+fi
+if [ -n "$RELEASE" ]; then
+	# The commit the forge's tag already names, peeled when it is annotated.
+	_held=$(git -C "$ROOT" ls-remote --tags origin "refs/tags/$RELEASE" "refs/tags/$RELEASE^{}" 2>/dev/null |
+		awk '$2 ~ /\^\{\}$/ { p = $1 } $2 !~ /\^\{\}$/ && q == "" { q = $1 } END { print (p != "" ? p : q) }')
+	if [ "$_held" = "$SHA" ]; then
+		TAGGED=yes
+		note "$RELEASE already names $SHA on origin — nothing to cut"
+	elif [ -n "$_held" ]; then
+		TAGGED=no
+		note "$RELEASE already names $_held on origin, not the merge commit $SHA — a tag is never moved; this release is not landed"
+	elif ! git -C "$ROOT" tag -a "$RELEASE" -m "$RELEASE — $TITLE" "$SHA" >&2; then
+		TAGGED=no
+		note "the tag $RELEASE could not be cut — cut it by hand: git tag -a $RELEASE $SHA && git push origin $RELEASE"
+	elif ! git -C "$ROOT" push origin "refs/tags/$RELEASE" >&2; then
+		TAGGED=no
+		note "the tag $RELEASE was cut here (git tag -a $RELEASE $SHA) but origin refused it — push it by hand: git push origin $RELEASE"
+	else
+		TAGGED=yes
+		note "tagged the merge commit $SHA $RELEASE and pushed it"
+	fi
+fi
+
 # --- 3. the base branch's workflows on the merge commit -----------------------
 # Listed until nothing new appears: a workflow the forge registers a beat
 # after the first is watched too. With no sha there is nothing to list.
 START=$(date +%s)
 WORKFLOWS=success
 WATCHED=
+FAILED=
 if [ -z "$SHA" ]; then
 	WORKFLOWS=unknown
 	note "the forge never reported the merge commit of PR #$PR — it merged; its workflows were not watched"
@@ -179,7 +242,7 @@ else
 		done
 		if [ -n "$NEW" ]; then
 			for id in $NEW; do
-				gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+				gh run watch "$id" --exit-status >&2 || { WORKFLOWS=failure; FAILED="$FAILED $id"; }
 			done
 			WATCHED="$WATCHED$NEW"
 		elif [ -n "$WATCHED" ]; then
@@ -193,6 +256,27 @@ else
 		WORKFLOWS=none
 		note "no workflow ran on $BASE at $SHA within the wait — nothing to watch"
 	fi
+fi
+# A tagged release re-runs, once, each run that failed — its failed jobs only:
+# a run on the merge push may have started before the tag existed, and its
+# second attempt alone is judged. With no tag on origin a re-run would fail
+# the same way, so nothing is re-run, and an untagged merge is never re-run.
+RERUNS=0
+if [ "$TAGGED" = yes ] && [ -n "$FAILED" ]; then
+	note "re-running, once, what failed before $RELEASE was on origin:$FAILED"
+	WORKFLOWS=success
+	for id in $FAILED; do
+		RERUNS=$((RERUNS + 1))
+		gh run rerun "$id" --failed >&2 || { WORKFLOWS=failure; continue; }
+		# The new attempt leaves `completed` a beat after the re-run is asked.
+		i=0
+		while [ "$i" -lt "$POLL_TRIES" ] &&
+			[ "$(gh run view "$id" --json status --jq .status 2>/dev/null)" = completed ]; do
+			i=$((i + 1))
+			[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
+		done
+		gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+	done
 fi
 WAITED=$(($(date +%s) - START))
 
@@ -229,6 +313,7 @@ set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAI
 	"data.implement=$IMPLEMENT"
 [ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"
 [ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
+[ -z "$RELEASE" ] || set -- "$@" "data.release=$RELEASE" "data.tagged=$TAGGED" "data.reruns=$RERUNS"
 trace loud kind=merge.land "$@"
 
 # --- 5. the verdict ---------------------------------------------------------------
@@ -261,7 +346,12 @@ set -- "subject=$FB_SUBJECT" "outcome=$VERDICT"
 [ -z "$WHY" ] || set -- "$@" "reason=$WHY"
 trace quiet kind=feedback "$@"
 
-printf 'landed #%s %s (merge) · workflows %s · waited %ss\n' "$PR" "${SHA:-<merge commit unknown>}" "$WORKFLOWS" "$WAITED"
+TAGNOTE=
+case $TAGGED in
+yes) TAGNOTE=" · tagged $RELEASE" ;;
+no) TAGNOTE=" · $RELEASE NOT tagged" ;;
+esac
+printf 'landed #%s %s (merge) · workflows %s · waited %ss%s\n' "$PR" "${SHA:-<merge commit unknown>}" "$WORKFLOWS" "$WAITED" "$TAGNOTE"
 printf 'feedback: %s\n' "$VERDICT"
 case $WORKFLOWS in
 failure)
@@ -273,4 +363,9 @@ unknown)
 	exit 1
 	;;
 esac
+# An untagged release is not landed (hard rule 3), whatever main says.
+if [ "$TAGGED" = no ]; then
+	note "$RELEASE merged but is not on origin as a tag naming $SHA — the release is not landed until it is; land nothing else"
+	exit 1
+fi
 exit 0
