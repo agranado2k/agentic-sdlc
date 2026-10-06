@@ -802,9 +802,13 @@ command -v manifest_section >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/man
 # The requirement-line grammar, shared with the gate's twin and the coverage
 # check (#545): a suite that asks "is this a requirement line?" asks the home,
 # never a pattern of its own — tests/requirement-grammar.test.sh holds that.
+# The same home holds the fence rule (#557): a suite that asks "is this line
+# inside a fence?" calls fence_strip.
 # shellcheck disable=SC1091
 . "$T_ROOT/scripts/requirement.lib.sh"
-command -v req_spec_lines >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/requirement.lib.sh did not define req_spec_lines" >&2; exit 2; }
+for _rl_fn in req_spec_lines fence_strip; do
+	command -v "$_rl_fn" >/dev/null 2>&1 || { echo "tests/lib.sh: scripts/requirement.lib.sh did not define $_rl_fn" >&2; exit 2; }
+done
 
 # t_assert_skill_in_roster <name> — the three roster surfaces every shipped
 # skill must appear on: VERSION's skills: manifest, the consumer manual
@@ -863,7 +867,7 @@ t_skill_label() {
 t_skill_spans() {
 	for _ss_f; do
 		[ -f "$_ss_f" ] || continue
-		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$_ss_f"
+		fence_strip "$_ss_f"
 	done | grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n'
 }
 
