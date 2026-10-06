@@ -3628,8 +3628,8 @@ else
 fi
 
 # A worktree with NO run open says so: it never borrows the root's.
-(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end >/dev/null 2>&1 &&
-	env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end >/dev/null 2>&1)
+(cd "$R421.wt" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end "$WTINNER" >/dev/null 2>&1 &&
+	env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh end "$WTOUTER" >/dev/null 2>&1)
 stop_from "$R421.wt"
 [ "$S_STATUS" = 0 ] && [ -z "$(str "$STOP" run)" ] && [ -n "$STOP" ] &&
 	pass "a worktree with no open run: the stop carries no run, not the root's" ||
