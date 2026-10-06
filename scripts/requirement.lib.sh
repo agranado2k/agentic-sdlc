@@ -1,5 +1,22 @@
 #!/bin/sh
-# scripts/requirement.lib.sh — the one grammar for requirement lines and ids.
+# scripts/requirement.lib.sh — the one grammar for requirement lines and ids,
+# and for the fences that hide a markdown line from every reader of one.
+#
+# THE FENCE (#557) — a line whose first non-blank characters are ``` or ~~~
+# toggles a fence, and the lines between two such lines are quoted material.
+# The requirement reader below skips them, and so does every code-span reader
+# of the shell side: the gate's reduced path check (scripts/check.sh), the
+# suites' skill spans (tests/lib.sh) and the kit demo's manual commands. They
+# all read REQ_FENCE_ERE, the first three through fence_strip. The fence lives
+# HERE rather than in a module of its own because the requirement grammar was
+# its first home and a 0.54.0 consumer's fixture test already holds
+# REQ_FENCE_ERE to this file: a move would turn that test red for nothing.
+# The rule TOGGLES on either marker, so a ``` line inside a ~~~ block closes
+# it. The docs harness reads fences two other ways — claude-md-refs.mjs's
+# stripFences pairs a marker with its own kind, and banned-words.mjs's leftover
+# pass opens on any whitespace — and unifying the engines is a behavior
+# change, its own ticket; only validators/living-spec.mjs keeps this pattern,
+# held equal to it byte for byte.
 #
 # A requirement is a numbered line (ADR-0012). Two readers read it, and they
 # read DIFFERENT shapes on purpose, so this file holds two grammars side by
@@ -39,9 +56,12 @@
 #   req_spec_lines [<file>]   the living-spec requirement lines, fences skipped
 #   req_spec_ids [<file>]     their ids, `R<n>`, in file order, each once
 #   req_prd_ids [<file>]      a PRD body's bounded ids, in order, each once
+#   fence_strip [<file>]      the lines outside every fence, fence lines dropped
 #
 # Each reads stdin when given no file, prints nothing but what it names, and
-# exits with awk's status.
+# exits with awk's status. Fence state lasts one call, so a caller with
+# several files calls once per file: a fence left open hides the rest of its
+# own file and no more.
 #
 # Shared layer: this file is manifest-listed and copied verbatim into a
 # consumer, where scripts/check.sh (its reduced engine) and scripts/coverage.sh
@@ -77,6 +97,13 @@ req_spec_lines() {
 	awk -v fence="$REQ_FENCE_ERE" -v line="$REQ_LINE_ERE" '
 		$0 ~ fence { infence = !infence; next }
 		!infence && $0 ~ line
+	' "$@"
+}
+
+fence_strip() {
+	awk -v fence="$REQ_FENCE_ERE" '
+		$0 ~ fence { infence = !infence; next }
+		!infence
 	' "$@"
 }
 

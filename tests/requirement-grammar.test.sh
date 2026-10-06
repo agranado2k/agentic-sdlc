@@ -12,7 +12,10 @@
 # This suite pins the grammar's behavior through the module's surface, pins
 # the TWO grammars it holds as two — the living spec's and the PRD's differ,
 # and a refactor is not the place to unify them — and proves no copy of an id
-# pattern survives outside the home.
+# pattern survives outside the home. The home also holds the fence rule
+# (#557), which the gate's reduced path check, tests/lib.sh and the kit demo
+# read through fence_strip; this suite pins it and proves no copy of the
+# fence pattern survives either.
 #
 # Usage: sh tests/requirement-grammar.test.sh
 
@@ -33,7 +36,7 @@ banner "0. The module exists, is sourceable, and is shared layer"
 }
 # shellcheck disable=SC1090
 . "$ROOT/$MODULE"
-for fn in req_spec_lines req_spec_ids req_prd_ids; do
+for fn in req_spec_lines req_spec_ids req_prd_ids fence_strip; do
 	command -v "$fn" >/dev/null 2>&1 && pass "sourcing defines $fn" ||
 		fail "sourcing $MODULE does not define $fn"
 done
@@ -96,6 +99,44 @@ got=$(printf '%s\n' "$CITED" | LC_ALL=C grep -o -E "$REQ_CITED_TOKEN_ERE" | LC_A
 [ "$got" = "billing/R1 billing/R9 billing/R10 billing/R11 " ] &&
 	pass "cited names: only billing/R1, R9, R10 and R11 survive both boundaries" ||
 	fail "cited names read '$got', expected 'billing/R1 billing/R9 billing/R10 billing/R11 '"
+
+# ---------------------------------------------------------------------------
+banner "1b. Fence detection — one rule, for every reader of a markdown line"
+# ---------------------------------------------------------------------------
+# A line whose first non-blank characters are ``` or ~~~ toggles a fence, and
+# every line from one such line to the next is quoted material: the living
+# spec's reader skips it, and so do the code-span readers — the gate's reduced
+# path check, the suites' skill spans and the kit demo's manual commands
+# (#557). fence_strip is that rule as a reader. It TOGGLES on either marker,
+# so a ``` line inside a ~~~ block closes it: pinned as the behavior the
+# readers had, not endorsed — unifying it with the docs harness's paired
+# reading is a behavior change, its own ticket.
+DOC="$SCRATCH/fenced.md"
+{
+	printf 'before `a`\n'
+	printf '```sh\nin backtick fence\n```\n'
+	printf 'between\n'
+	printf '  ~~~\nin indented tilde fence\n  ~~~\n'
+	printf '%s```\nin tab-indented fence\n```\n' "$TAB"
+	printf '~~~md\n'
+	printf '```\n'
+	printf 'after a backtick line inside a tilde block\n'
+	printf '```\n'
+	printf '~~~\n'
+	printf 'x```not a fence\n'
+	printf 'after\n'
+} >"$DOC"
+got=$(fence_strip "$DOC" | tr '\n' '|')
+[ "$got" = 'before `a`|between|after a backtick line inside a tilde block|x```not a fence|after|' ] &&
+	pass "fence_strip keeps the lines outside every fence, toggling on either marker at any indent" ||
+	fail "fence_strip printed '$got'"
+got=$(printf '```\nhidden\n```\nshown\n' | fence_strip)
+[ "$got" = "shown" ] && pass "fence_strip reads stdin when given no file" || fail "fence_strip on stdin printed '$got'"
+printf '```\nunclosed\n' >"$SCRATCH/open.md"
+printf 'next file\n' >"$SCRATCH/next.md"
+got=$(fence_strip "$SCRATCH/open.md"; fence_strip "$SCRATCH/next.md")
+[ "$got" = "next file" ] && pass "an unclosed fence hides the rest of its file and no more — one call per file" ||
+	fail "an unclosed fence leaked across calls: '$got'"
 
 # ---------------------------------------------------------------------------
 banner "2. The PRD's grammar (the coverage check), bounded"
@@ -175,6 +216,30 @@ done)
 { cat "$ROOT/scripts/check.sh"; printf '%s\n' "ids=\$(awk '!fence && /^R[0-9]+[.]/' \"\$spec\")"; } >"$SCRATCH/check.copy"
 [ -n "$(copies "$SCRATCH/check.copy")" ] && pass "the scan flags a gate that spells the requirement line inline" ||
 	fail "the scan passed a gate with an inline id pattern — the check is vacuous"
+# Fence detection is one rule in every reader (#557): the gate's reduced path
+# check, tests/lib.sh's skill spans and the kit demo's manual commands call
+# fence_strip, and a fence pattern — the ``` and ~~~ alternation — on a line
+# that is not a comment, in any shell script of the kit but the home and this
+# suite, is a copy.
+for f in scripts/check.sh tests/lib.sh tests/kit-demo.sh; do
+	grep -q 'fence_strip' "$ROOT/$f" && pass "$f reads fence_strip" || fail "$f does not read fence_strip from $MODULE"
+done
+fence_copies() { # <file>... — prints file:line of every fence pattern outside a comment
+	for f; do
+		awk -v f="$f" '/^[ \t]*#/ { next } index($0, "```|~~~") { print f ":" FNR }' "$f"
+	done
+}
+stray=$(cd "$ROOT" && for f in scripts/*.sh scripts/*/*.sh tests/*.sh bootstrap.sh .githooks/*; do
+	[ -f "$f" ] || continue
+	case "$f" in "$MODULE" | tests/requirement-grammar.test.sh) continue ;; esac
+	fence_copies "$f"
+done)
+[ -z "$stray" ] && pass "no shell script outside the home spells a fence pattern" ||
+	fail "a fence pattern is spelled outside $MODULE: $(printf '%s' "$stray" | tr '\n' ' ')"
+# …and the scan can go red: a harness that strips fences inline is caught.
+{ cat "$ROOT/tests/lib.sh"; printf '%s\n' 'awk '\''/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }'\'' "$f"'; } >"$SCRATCH/lib.copy"
+[ -n "$(fence_copies "$SCRATCH/lib.copy")" ] && pass "the scan flags a harness that spells the fence rule inline" ||
+	fail "the scan passed a harness with an inline fence pattern — the check is vacuous"
 
 # ---------------------------------------------------------------------------
 banner "5. The readers fail CLOSED without the home"
@@ -194,6 +259,10 @@ git -C "$PROJ" config core.hooksPath .git/no-such-hooks
 [ "$(cat "$SCRATCH/emptygrammar.rc")" = 2 ] && grep -q "req_spec_ids" "$SCRATCH/emptygrammar.out" &&
 	pass "a grammar that defines nothing stops the reduced gate with exit 2, naming the function" ||
 	{ fail "with an empty grammar the reduced gate exited $(cat "$SCRATCH/emptygrammar.rc") — expected 2"; sed 's/^/        | /' "$SCRATCH/emptygrammar.out" | head -8; }
+(cd "$PROJ" && printf '#!/bin/sh\nreq_spec_ids() { :; }\n' >"$MODULE" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh >"$SCRATCH/nofence.out" 2>&1; echo $? >"$SCRATCH/nofence.rc")
+[ "$(cat "$SCRATCH/nofence.rc")" = 2 ] && grep -q "fence_strip" "$SCRATCH/nofence.out" &&
+	pass "a grammar without the fence rule stops the reduced gate with exit 2, naming fence_strip" ||
+	{ fail "with no fence_strip the reduced gate exited $(cat "$SCRATCH/nofence.rc") — expected 2"; sed 's/^/        | /' "$SCRATCH/nofence.out" | head -8; }
 printf 'R1. one\n' >"$SCRATCH/cov.prd"
 printf 'Covers: R1\n' >"$SCRATCH/1"
 rm -f "$PROJ/$MODULE"
