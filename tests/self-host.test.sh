@@ -36,7 +36,7 @@ PROJECT_DESC="A throwaway project proving the kit strips its own files."
 # The kit's own files — the ones bootstrap has to take out of a consumer's way.
 # Kept here rather than derived from bootstrap.sh so the two lists can disagree
 # and something notices.
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md .github/PULL_REQUEST_TEMPLATE.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
 
 # t_kit_copy <dest> — "Use this template", as tests/kit-demo.sh simulates it:
 # the whole tree minus the .git dir and minus any nested worktree, which `cp -R`
@@ -218,6 +218,11 @@ done
 [ -e "$PROJ/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
 	fail "the kit's own ADR-0001 leaked into the project" ||
 	pass "no kit ADR leaked into the project"
+# ADR-0014: the root manual's read-on-demand elaboration is a kit-own
+# article, and a kit-own file never reaches a consumer.
+[ -e "$PROJ/docs/capability-tiers.md" ] &&
+	fail "the kit's own capability-tiers article leaked into the project" ||
+	pass "the kit's own capability-tiers article did not leak into the project"
 # process/R14: the consumer gets the living-spec check, in both engines,
 # and no living spec of the kit's — its requirements would be held to tests
 # the strip has already deleted, and the consumer's gate would open red.
@@ -617,6 +622,27 @@ awk -v n="$((${ROOT_BUDGET:-0} + 1))" 'BEGIN { for (i = 0; i < n; i++) print "li
 root_over_budget "$SCRATCH/root.bait" &&
 	pass "the root-budget probe rejects a manual over the budget" ||
 	fail "the root-budget probe passed a manual over the budget — the check is vacuous"
+# ADR-0014: the elaboration that left the root lives in one kit-own article,
+# and the root names it — an article nothing points at is never loaded.
+assert_file_has "$KIT/AGENTS.md" "docs/capability-tiers.md" \
+	"the root manual points at the kit-own article its elaboration moved to"
+# The budget is held HERE and nowhere else (#489): a second suite counting the
+# root's lines against its own copy of the number is the decision known in two
+# places, and the copy rots the day the record names a new one. Comments may
+# point here; code may not re-measure.
+counts_root() { grep -v '^[[:space:]]*#' "$1" | grep -qE "wc -l[^|]*AGENTS\.md|${ROOT_BUDGET:-0}-line budget"; }
+other_counters=""
+for t in "$KIT"/tests/*.sh; do
+	[ "$t" = "$KIT/tests/self-host.test.sh" ] && continue
+	counts_root "$t" && other_counters="$other_counters ${t#"$KIT"/}"
+done
+[ -z "$other_counters" ] &&
+	pass "no other suite re-measures the root manual against its budget" ||
+	fail "the root budget is asserted outside this suite:$other_counters — read the number here, assert it once"
+printf 'lines=$(wc -l <"$KIT/AGENTS.md")\n[ "$lines" -le %s ]\n' "${ROOT_BUDGET:-0}" >"$SCRATCH/counter.bait"
+counts_root "$SCRATCH/counter.bait" &&
+	pass "the one-home probe flags a suite that re-measures the root" ||
+	fail "the one-home probe missed a suite that re-measures the root — the check is vacuous"
 
 # --- F2b: the manuals' craft-rule count tracks the article -----------------
 # The manual template and the kit's own manual both say how many portable
