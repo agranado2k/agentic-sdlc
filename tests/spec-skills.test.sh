@@ -522,7 +522,8 @@ case $wf_rubric in
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
 oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
-# The two tier tables (ticket #467): the kit's manual and the consumer manual
+# The two tier tables (ticket #467): the kit's (in its kit-own tiers article
+# since ADR-0014) and the consumer manual
 # template each give a `mechanical` row a signal cell, and #418 left both
 # giving the one-condition signal ("the suite is the oracle"). Each cell quotes
 # rubric line 1's two conditions in the phrases asserted on it above, and joins
@@ -530,7 +531,7 @@ oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
 # holds" still carries both phrases, and is red here on the join.
 # mech_signal <manual> — the signal cell of <manual>'s `mechanical` tier row.
 mech_signal() { awk -F'|' '/^\| `mechanical` \|/ { print $4; exit }' "$ROOT/$1"; }
-for manual in AGENTS.md constitution/AGENTS.md.template; do
+for manual in docs/capability-tiers.md constitution/AGENTS.md.template; do
 	cell=$(mech_signal "$manual")
 	[ -n "$cell" ] && pass "$manual has a \`mechanical\` row with a signal cell" ||
 		fail "$manual has no \`mechanical\` row with a signal cell in its tier table"

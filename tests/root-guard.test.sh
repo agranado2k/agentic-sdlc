@@ -656,9 +656,8 @@ assert_file_has "$KIT/adapters/claude-code/README.md" "the line the commit hook 
 assert_file_has "$KIT/adapters/claude-code/README.md" "an agent may edit in any linked" "an agent harness's own isolated worktrees included (#542)"
 grep -q 'root-guard' "$KIT/AGENTS.md" && pass "the manual's quick reference names the guard" ||
 	fail "AGENTS.md has no row for the root guard"
-lines=$(wc -l <"$KIT/AGENTS.md")
-[ "$lines" -le 350 ] && pass "AGENTS.md stays within its 350-line budget ($lines)" ||
-	fail "AGENTS.md is $lines lines, over its 350-line budget (ADR-0004)"
+# The root manual's line budget (ADR-0004) is tests/self-host.test.sh's to
+# hold, and only its (#489): the row is paid for there, not re-measured here.
 
 # Neither hook names a model, a vendor or a kit-only file: both ship. The one
 # exception is the commit guard's agent markers, which are environment variable
