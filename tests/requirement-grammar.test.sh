@@ -170,6 +170,35 @@ for id in R0 R01 R1234567 "$A33/R1" Billing/R1 billing/ "R1 "; do
 done
 [ "$REQ_ID_AREA_MAX" = 32 ] && [ "$REQ_ID_NUM_MAX" = 6 ] && pass "the bounds are 32 area characters and 6 digits" ||
 	fail "the bounds moved: area $REQ_ID_AREA_MAX, number $REQ_ID_NUM_MAX"
+# The bounds are spelled ONCE: req_prd_ids checks them by length (not every
+# awk reads an interval) and REQ_BOUNDED_ID_ERE by interval, and both read
+# REQ_ID_AREA_MAX and REQ_ID_NUM_MAX. A home whose two values are moved —
+# here to 4 and 2 — must move both mechanisms with them; a third spelling
+# anywhere in the home stays put and turns this red.
+bounds_follow() { # <home> — exit 0 when both mechanisms honor an area of 4 and a number of 2
+	sed -e 's/^REQ_ID_AREA_MAX=32$/REQ_ID_AREA_MAX=4/' -e 's/^REQ_ID_NUM_MAX=6$/REQ_ID_NUM_MAX=2/' "$1" >"$SCRATCH/home.moved"
+	printf 'abcd/R12. at both\nabcde/R1. past the area\nR123. past the number\n' >"$SCRATCH/bounds.prd"
+	(
+		# shellcheck disable=SC1091
+		. "$SCRATCH/home.moved"
+		[ "$(req_prd_ids "$SCRATCH/bounds.prd" | tr '\n' ' ')" = "abcd/R12 " ] || exit 1
+		printf 'abcd/R12\n' | grep -Eqx "$REQ_BOUNDED_ID_ERE" || exit 1
+		printf 'abcde/R1\n' | grep -Eqx "$REQ_BOUNDED_ID_ERE" && exit 1
+		printf 'R123\n' | grep -Eqx "$REQ_BOUNDED_ID_ERE" && exit 1
+		exit 0
+	)
+}
+bounds_follow "$ROOT/$MODULE" && pass "the bounds are spelled once: moving the two values moves both the length check and the intervals" ||
+	fail "moving REQ_ID_AREA_MAX and REQ_ID_NUM_MAX left a bound behind — the home spells one twice"
+# …and the check can go red: a home with a literal interval, or a literal
+# length in its awk, keeps a bound the two values no longer say.
+sed 's/{0,\$((REQ_ID_AREA_MAX - 1))}/{0,31}/' "$ROOT/$MODULE" >"$SCRATCH/home.interval"
+sed 's/-v amax="\$REQ_ID_AREA_MAX"/-v amax=32/' "$ROOT/$MODULE" >"$SCRATCH/home.length"
+for h in interval length; do
+	! cmp -s "$ROOT/$MODULE" "$SCRATCH/home.$h" && ! bounds_follow "$SCRATCH/home.$h" &&
+		pass "the check flags a home that spells the area bound a second time, as a literal $h" ||
+		fail "the check passed a home with a literal $h bound — it is vacuous"
+done
 
 # ---------------------------------------------------------------------------
 banner "3. Two grammars, held as two — the difference is recorded, not unified"
@@ -198,48 +227,150 @@ grep -q 'requirement\.lib\.sh' "$ROOT/scripts/check.sh" && pass "scripts/check.s
 	fail "scripts/check.sh does not source $MODULE"
 grep -q 'requirement\.lib\.sh' "$ROOT/scripts/coverage.sh" && pass "scripts/coverage.sh sources the home" ||
 	fail "scripts/coverage.sh does not source $MODULE"
-# An id pattern — `R[0-9]` or `R[1-9]` — on a line that is not a comment, in
-# any shell script of the kit but the home and this suite, is a copy.
-copies() { # <file>... — prints file:line of every id pattern outside a comment
-	for f; do
-		awk -v f="$f" '/^[ \t]*#/ { next } index($0, "R[0-9]") || index($0, "R[1-9]") { print f ":" FNR }' "$f"
+# A COPY is the grammar spelled anywhere but its home. The scans read every
+# file kind a pattern could be copied into, each by its own notion of where
+# code lives (scan_kind, scan_hits): a shell script, a hook, a workflow or an
+# awk program outside its `#` comments; a JavaScript module outside its `//`
+# and `*` comment lines; and a markdown file — a skill, an article, a
+# template — only INSIDE its fences, which is where a skill's commands are,
+# while its prose may name a pattern freely. A `.template` or `.example`
+# suffix is read through to the kind beneath it. An id pattern is any of
+# `R[0-9]`, `R[1-9]`, `R\d` or `R[[:digit:]]`; a fence pattern is the ``` and
+# ~~~ alternation in either order, or a three-of-a-kind repetition.
+#
+# Allowed, and nothing else: the home; the docs harness's validator
+# (validators/living-spec.mjs), whose literals living-spec.test.mjs holds
+# equal to the home byte for byte; that fixture test, which plants a drifted
+# copy to prove it fires; and this suite, which plants copies of its own.
+ID_SPELLINGS='R[0-9]
+R[1-9]
+R\d
+R[[:digit:]]'
+FENCE_SPELLINGS='```|~~~
+~~~|```
+`{3}
+~{3}
+[`~]{3}
+[~`]{3}'
+GRAMMAR_ALLOWED="$MODULE
+scripts/docs-conformance/validators/living-spec.mjs
+scripts/docs-conformance/test/living-spec.test.mjs
+tests/requirement-grammar.test.sh"
+# The docs harness reads fences two OTHER ways (#571): claude-md-refs.mjs's
+# stripFences pairs a marker with its own kind through a backreference, and
+# banned-words.mjs's leftover pass opens on any whitespace (`\s`, which holds
+# a CR, a form feed and a vertical tab the home's `[ \t]` does not). Neither
+# is a copy of the home's rule — each is a different rule, kept apart until
+# #571 decides between them — so each is declared here by its file and its
+# line, byte for byte, and passes the fence scan on that line only. Telling
+# them apart is a check, not a say-so: a declared line must still be in its
+# file exactly (so neither reader changes unseen), and must DIFFER from the
+# home's rule — it lacks the home's `^[ \t]*(```|~~~)` opening, or it closes
+# on a `\1` backreference the home's toggle never takes. A declared line that
+# became a copy of the home's rule fails here; any other fence pattern, in
+# these two files or elsewhere, is flagged like any copy.
+FENCE_DIFFERENT_RULES='scripts/docs-conformance/validators/claude-md-refs.mjs	  return raw.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[ \t]*$/gm, "");
+scripts/docs-conformance/validators/banned-words.mjs	    if (/^\s*(```|~~~)/.test(line)) {'
+TABC=$(printf '\t')
+
+scan_kind() { # <path> — the kind of code the file holds: sh, js, md, or nothing
+	p=$1
+	case $p in *.template) p=${p%.template} ;; *.example) p=${p%.example} ;; esac
+	case $p in
+	*.md) echo md ;;
+	*.mjs | *.js | *.cjs) echo js ;;
+	*.sh | *.awk | *.yml | *.yaml | .githooks/*) echo sh ;;
+	esac
+}
+scan_hits() { # <spellings> <dir> <file> — <file><TAB><line><TAB><text> per line of code spelling one
+	kind=$(scan_kind "$3")
+	[ -n "$kind" ] || return 0
+	SPELL="$1" awk -v f="$3" -v kind="$kind" -v fence="$REQ_FENCE_ERE" '
+		BEGIN { n = split(ENVIRON["SPELL"], s, "\n") }
+		kind == "md" { if ($0 ~ fence) { infence = !infence; next } if (!infence) next }
+		kind == "sh" && /^[ \t]*#/ { next }
+		kind == "js" && /^[ \t]*(\/\/|\/?\*)/ { next }
+		{ for (i = 1; i <= n; i++) if (index($0, s[i])) { print f "\t" FNR "\t" $0; next } }
+	' "$2/$3"
+}
+scan_files() { # <dir> — every file of a scanned kind under it, relative, the allowed ones left out
+	(cd "$1" && { git ls-files --cached --others --exclude-standard 2>/dev/null ||
+		find . \( -name .git -o -name worktree -o -name node_modules -o -path ./.claude/worktrees \) -prune -o -type f -print |
+		sed 's|^\./||'; }) | while IFS= read -r f; do
+		[ -f "$1/$f" ] && [ -n "$(scan_kind "$f")" ] || continue
+		printf '%s\n' "$GRAMMAR_ALLOWED" | grep -Fqx -- "$f" || printf '%s\n' "$f"
 	done
 }
-stray=$(cd "$ROOT" && for f in scripts/*.sh scripts/*/*.sh tests/*.sh bootstrap.sh .githooks/*; do
-	[ -f "$f" ] || continue
-	case "$f" in "$MODULE" | tests/requirement-grammar.test.sh) continue ;; esac
-	copies "$f"
-done)
-[ -z "$stray" ] && pass "no shell script outside the home spells an id pattern" ||
+id_copies() { # <dir> — <file>:<line> of every id pattern spelled outside the home
+	scan_files "$1" | while IFS= read -r f; do
+		scan_hits "$ID_SPELLINGS" "$1" "$f"
+	done | cut -f1,2 | tr '\t' ':'
+}
+fence_copies() { # <dir> — <file>:<line> of every fence pattern outside the home and the declared different rules
+	scan_files "$1" | while IFS= read -r f; do
+		scan_hits "$FENCE_SPELLINGS" "$1" "$f"
+	done | while IFS= read -r hit; do
+		file=${hit%%"$TABC"*}
+		line=${hit#*"$TABC"}
+		text=${line#*"$TABC"}
+		line=${line%%"$TABC"*}
+		printf '%s\n' "$FENCE_DIFFERENT_RULES" | grep -Fqx -- "$file$TABC$text" && continue
+		printf '%s:%s\n' "$file" "$line"
+	done
+}
+
+kinds=$(scan_files "$ROOT" | while IFS= read -r f; do scan_kind "$f"; done | sort -u | tr '\n' ' ')
+[ "$kinds" = "js md sh " ] && pass "the scans read the kit's shell, JavaScript and markdown files" ||
+	fail "the scans read the kinds '$kinds', expected 'js md sh '"
+stray=$(id_copies "$ROOT")
+[ -z "$stray" ] && pass "no file of any kind outside the home spells an id pattern" ||
 	fail "an id pattern is spelled outside $MODULE: $(printf '%s' "$stray" | tr '\n' ' ')"
-# …and the scan can go red: a gate with an inline requirement-line pattern is caught.
-{ cat "$ROOT/scripts/check.sh"; printf '%s\n' "ids=\$(awk '!fence && /^R[0-9]+[.]/' \"\$spec\")"; } >"$SCRATCH/check.copy"
-[ -n "$(copies "$SCRATCH/check.copy")" ] && pass "the scan flags a gate that spells the requirement line inline" ||
-	fail "the scan passed a gate with an inline id pattern — the check is vacuous"
 # Fence detection is one rule in every reader (#557): the gate's reduced path
 # check, tests/lib.sh's skill spans and the kit demo's manual commands call
-# fence_strip, and a fence pattern — the ``` and ~~~ alternation — on a line
-# that is not a comment, in any shell script of the kit but the home and this
-# suite, is a copy.
+# fence_strip.
 for f in scripts/check.sh tests/lib.sh tests/kit-demo.sh; do
 	grep -q 'fence_strip' "$ROOT/$f" && pass "$f reads fence_strip" || fail "$f does not read fence_strip from $MODULE"
 done
-fence_copies() { # <file>... — prints file:line of every fence pattern outside a comment
-	for f; do
-		awk -v f="$f" '/^[ \t]*#/ { next } index($0, "```|~~~") { print f ":" FNR }' "$f"
-	done
-}
-stray=$(cd "$ROOT" && for f in scripts/*.sh scripts/*/*.sh tests/*.sh bootstrap.sh .githooks/*; do
-	[ -f "$f" ] || continue
-	case "$f" in "$MODULE" | tests/requirement-grammar.test.sh) continue ;; esac
-	fence_copies "$f"
-done)
-[ -z "$stray" ] && pass "no shell script outside the home spells a fence pattern" ||
+stray=$(fence_copies "$ROOT")
+[ -z "$stray" ] && pass "no file of any kind outside the home spells a fence pattern" ||
 	fail "a fence pattern is spelled outside $MODULE: $(printf '%s' "$stray" | tr '\n' ' ')"
-# …and the scan can go red: a harness that strips fences inline is caught.
-{ cat "$ROOT/tests/lib.sh"; printf '%s\n' 'awk '\''/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }'\'' "$f"'; } >"$SCRATCH/lib.copy"
-[ -n "$(fence_copies "$SCRATCH/lib.copy")" ] && pass "the scan flags a harness that spells the fence rule inline" ||
-	fail "the scan passed a harness with an inline fence pattern — the check is vacuous"
+printf '%s\n' "$FENCE_DIFFERENT_RULES" | while IFS="$TABC" read -r file text; do
+	grep -Fqx -- "$text" "$ROOT/$file" || echo "absent $file"
+	case $text in
+	*'^[ \t]*(```|~~~)'*) case $text in *'\1'*) ;; *) echo "same $file" ;; esac ;;
+	esac
+done >"$SCRATCH/rules.out"
+grep -q '^absent' "$SCRATCH/rules.out" &&
+	fail "a declared different fence rule is no longer in its file, byte for byte: $(sed -n 's/^absent //p' "$SCRATCH/rules.out" | tr '\n' ' ')— re-read it against the home" ||
+	pass "both declared different fence rules (#571) are still in their files, byte for byte"
+grep -q '^same' "$SCRATCH/rules.out" &&
+	fail "a declared different fence rule reads the home's rule — it is a copy: $(sed -n 's/^same //p' "$SCRATCH/rules.out" | tr '\n' ' ')" ||
+	pass "both declared fence rules differ from the home's — one pairs by backreference, one opens on any whitespace"
+
+# …and each scan can go red, in every kind: a tree holding one planted copy
+# per kind, beside a comment or prose mention per kind that is no copy.
+PLANT="$SCRATCH/plant"
+mkdir -p "$PLANT/scripts/docs-conformance/validators" "$PLANT/.agents/skills/x" "$PLANT/.githooks" "$PLANT/templates"
+printf '%s\n' '# a comment may say R[0-9] and ```|~~~' "ids=\$(awk '/^R[0-9]+[.]/' \"\$spec\")" \
+	"awk '/^[ \\t]*(\`\`\`|~~~)/ { f = !f }' \"\$x\"" >"$PLANT/scripts/plant.sh"
+printf '%s\n' '# R[1-9] in a comment' '/^R[1-9][0-9]*[.]/ { print }' '/^[ \t]*(~~~|```)/ { f = !f; next }' >"$PLANT/scripts/plant.awk"
+printf '%s\n' '// R\d in a comment' ' * ```|~~~ in a block comment' 'const ID = /^R\d+\./;' 'const FENCE = /^\s*[`~]{3}/;' >"$PLANT/scripts/plant.mjs"
+printf '%s\n' 'Prose may name `R[[:digit:]]` and ```|~~~ freely.' '' '```sh' "grep -E '^R[[:digit:]]+[.]' spec.md" \
+	"awk '/^ *(\`\`\`|~~~)/' x.md" '```' >"$PLANT/.agents/skills/x/SKILL.md"
+printf '%s\n' '#!/bin/sh' "grep -E '^R[0-9]+' \"\$1\"" >"$PLANT/.githooks/pre-push"
+printf '%s\n' '```' 'grep "R[1-9]" x' '```' >"$PLANT/templates/doc.md.template"
+# A declared different rule passes on its own line in its own file only: the
+# same line elsewhere, or another fence pattern in that file, is flagged.
+printf '%s\n' "$FENCE_DIFFERENT_RULES" | grep 'banned-words' | cut -f2- >"$PLANT/scripts/other.mjs"
+printf '%s\n' 'const F = /^[ \t]*(```|~~~)/;' >"$PLANT/scripts/docs-conformance/validators/banned-words.mjs"
+got=$(id_copies "$PLANT" | sort | tr '\n' ' ')
+want='.agents/skills/x/SKILL.md:4 .githooks/pre-push:2 scripts/plant.awk:2 scripts/plant.mjs:3 scripts/plant.sh:2 templates/doc.md.template:2 '
+[ "$got" = "$want" ] && pass "the id scan flags a planted copy in a script, an awk program, a module, a hook, a template and a skill's fenced command — and no comment or prose" ||
+	fail "the id scan read the planted tree as '$got', expected '$want'"
+got=$(fence_copies "$PLANT" | sort | tr '\n' ' ')
+want='.agents/skills/x/SKILL.md:5 scripts/docs-conformance/validators/banned-words.mjs:1 scripts/other.mjs:1 scripts/plant.awk:3 scripts/plant.mjs:4 scripts/plant.sh:3 '
+[ "$got" = "$want" ] && pass "the fence scan flags a planted copy of every kind, and a declared different rule anywhere but its own line" ||
+	fail "the fence scan read the planted tree as '$got', expected '$want'"
 
 # ---------------------------------------------------------------------------
 banner "5. The readers fail CLOSED without the home"
