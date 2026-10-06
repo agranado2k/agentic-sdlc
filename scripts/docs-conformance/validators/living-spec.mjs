@@ -11,6 +11,19 @@
 // A test can cite `<area>/R3` and check nothing about it; the review's
 // behavior axis and the human reading it remain the check on that.
 //
+// THE HARNESS CITES NOTHING (#561). A name in a file under the harness's own
+// tree, `scripts/docs-conformance/` at the repo root, never counts, whatever
+// the test globs match: its fixture tests are about the gate, never about the
+// project, and a shipped fixture that spelled `<area>/R<n>` once let a
+// consumer's first living spec pass with no test of its own. The exclusion
+// lives in the ENGINE, both engines, not in the policy's globs, because the
+// policy file is the project's own and is never overwritten — a default glob
+// change would never reach a project already bootstrapped. Belt and braces:
+// no shipped harness file spells a citable id either (its fixtures build
+// every id at runtime), and the fixture tests scan the tree to hold that.
+// The cost, accepted: a project cannot cite its requirements from a test it
+// adds under the harness's tree — put product tests where the globs look.
+//
 // VACUOUS without a living spec — no directory, an empty one, or files with no
 // requirement line yet all pass, so a project that never adopts the mechanism
 // never meets it.
@@ -43,23 +56,27 @@ export const REQ_CITED_TOKEN_ERE = `[A-Za-z0-9_/-]?${REQ_CITED_NAME_ERE}([A-Za-z
 const AREA_RE = new RegExp(`^${REQ_AREA_ERE}$`);
 const REQUIREMENT_RE = new RegExp(REQ_LINE_ERE);
 const FENCE_RE = new RegExp(REQ_FENCE_ERE);
-// Leftmost-longest is the same answer as JS's greedy match for this pattern,
-// so `subprocess/R1` is one name (not `process/R1`) and `process/R10` is never
-// `process/R1` — in both engines. The TRAILING boundary: an id followed by a
-// letter, a digit, `_`, or `.` and a digit is another token, so `billing/R1abc`,
-// `billing/R1_retry` and `billing/R1.5` cite nothing, while `billing/R1.` at a
-// sentence's end and `billing/R1-x` cite R1. The LEADING boundary (#544): an
+// Writing `<a>` for any area (no harness file spells a citable id, #561):
+// leftmost-longest is the same answer as JS's greedy match for this pattern,
+// so `sub<a>/R1` is one name (not `<a>/R1`) and `<a>/R10` is never
+// `<a>/R1` — in both engines. The TRAILING boundary: an id followed by a
+// letter, a digit, `_`, or `.` and a digit is another token, so `<a>/R1abc`,
+// `<a>/R1_retry` and `<a>/R1.5` cite nothing, while `<a>/R1.` at a
+// sentence's end and `<a>/R1-x` cite R1. The LEADING boundary (#544): an
 // id preceded by a letter, a digit, `_`, `-` or `/` is the tail of a longer
-// token, so `Xbilling/R1`, `9billing/R1`, `-billing/R1` and `specs/billing/R1`
-// cite nothing, while `(billing/R1)`, ` billing/R1` and a line-initial
-// `billing/R1` cite R1. Its one cost: two ids joined by `-` or `/`, as in
-// `billing/R1-billing/R2`, cite the first alone — name each on its own. On
+// token, so `X<a>/R1`, `9<a>/R1`, `-<a>/R1` and `specs/<a>/R1`
+// cite nothing, while `(<a>/R1)`, ` <a>/R1` and a line-initial
+// `<a>/R1` cite R1. Its one cost: two ids joined by `-` or `/`, as in
+// `<a>/R1-<a>/R2`, cite the first alone — name each on its own. On
 // either side the pattern swallows the one offending character and the match
 // is then dropped (CITED_NAME, anchored at both ends)
 // — a lookaround the twin's `grep -o -E` cannot spell, so both engines
 // tokenize the same way.
 const CITED_RE = new RegExp(REQ_CITED_TOKEN_ERE, "g");
 const CITED_NAME = new RegExp(`^${REQ_CITED_NAME_ERE}$`);
+// The docs harness's own tree, at the repo root, is never a citing file —
+// whatever the test globs say (#561). See the header.
+const HARNESS_TREE = "scripts/docs-conformance/";
 
 /**
  * A glob as a shell `case` pattern reads it: `*` is any run of characters,
@@ -158,6 +175,7 @@ export function run(ctx) {
   const cited = new Set();
   if (globs.length > 0) {
     for (const rel of surface(ctx.repoRoot)) {
+      if (rel.startsWith(HARNESS_TREE)) continue;
       if (!globs.some((re) => re.test(rel)) || ctx.kind(rel) !== "file") continue;
       for (const name of (ctx.read(rel) ?? "").match(CITED_RE) ?? []) {
         if (CITED_NAME.test(name)) cited.add(name);

@@ -1,19 +1,30 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import defaultConfig from "../config.mjs";
 import { makeContext } from "../context.mjs";
-import { globToRegExp, run } from "../validators/living-spec.mjs";
+import { REQ_CITED_NAME_ERE, globToRegExp, run } from "../validators/living-spec.mjs";
 import { cleanup, ctxFor, hasRule, makeFixture } from "./helpers.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+// No citable id is spelled in this file (#561). It sits where a project's
+// test globs look, so a literal `<area>/R<n>` here would satisfy a project's
+// living spec of that area with no test of its own: every id is built at
+// runtime by `cite`, and the last tests scan the harness to hold that. A test
+// you add here builds its ids the same way.
+const cite = (area, n) => `${area}/R${n}`;
+const named = (name) => `${name} is named by no test`;
+const B1 = cite("billing", 1);
+const B2 = cite("billing", 2);
+const B3 = cite("billing", 3);
+
 // The living spec of one area (ADR-0012 clause 7): requirement lines carry an
-// id `R<n>` at the start of the line; everything else is prose. The kit has no
-// living spec of its own yet, so these tests cite PRD #527's ids bare.
+// id `R<n>` at the start of the line; everything else is prose. The test
+// titles cite PRD #527's ids bare.
 const BILLING = [
   "# Billing",
   "",
@@ -25,17 +36,18 @@ const BILLING = [
 ].join("\n");
 
 const untested = (out) => out.filter((f) => f.rule === "living-spec-untested");
+const messages = (out) => untested(out).map((f) => f.message);
 
 test("R12: a requirement no test names fails, naming the file and the id", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": BILLING,
-    "tests/billing.test.sh": "# holds billing/R1\n",
+    "tests/billing.test.sh": `# holds ${B1}\n`,
   });
   const out = run(ctx);
   assert.equal(out.length, 1);
   assert.equal(out[0].rule, "living-spec-untested");
   assert.equal(out[0].file, "docs/specs/billing.md");
-  assert.match(out[0].message, /billing\/R2/);
+  assert.equal(out[0].message, named(B2));
   assert.notEqual(out[0].severity, "warning");
   cleanup(ctx);
 });
@@ -43,8 +55,8 @@ test("R12: a requirement no test names fails, naming the file and the id", () =>
 test("R12: every requirement named by a test is silent", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": BILLING,
-    "tests/billing.test.sh": "# billing/R1\n",
-    "src/pay/retry.test.ts": "it('billing/R2 retries once', () => {});\n",
+    "tests/billing.test.sh": `# ${B1}\n`,
+    "src/pay/retry.test.ts": `it('${B2} retries once', () => {});\n`,
   });
   assert.deepEqual(run(ctx), []);
   cleanup(ctx);
@@ -53,8 +65,8 @@ test("R12: every requirement named by a test is silent", () => {
 test("R12: a name in a file the test globs do not match counts for nothing", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": BILLING,
-    "src/billing.ts": "// billing/R1 billing/R2\n",
-    "docs/notes.md": "billing/R1 billing/R2\n",
+    "src/billing.ts": `// ${B1} ${B2}\n`,
+    "docs/notes.md": `${B1} ${B2}\n`,
   });
   assert.equal(untested(run(ctx)).length, 2);
   cleanup(ctx);
@@ -63,11 +75,9 @@ test("R12: a name in a file the test globs do not match counts for nothing", () 
 test("R12: the name is a whole token — R1 is not R10, and process is not subprocess", () => {
   const ctx = ctxFor({
     "docs/specs/process.md": "R1. The process SHALL start.\n",
-    "tests/a.test.sh": "# process/R10 and subprocess/R1\n",
+    "tests/a.test.sh": `# ${cite("process", 10)} and ${cite("subprocess", 1)}\n`,
   });
-  const out = untested(run(ctx));
-  assert.equal(out.length, 1);
-  assert.match(out[0].message, /process\/R1\b/);
+  assert.deepEqual(messages(run(ctx)), [named(cite("process", 1))]);
   cleanup(ctx);
 });
 
@@ -77,57 +87,51 @@ test("R12: the name ends where the id ends — R1abc, R1_x and R1.5 are not R1",
   // A sentence's full stop after the id still cites it.
   const ctx = ctxFor({
     "docs/specs/billing.md": BILLING,
-    "tests/a.test.sh": "# billing/R1abc billing/R1_retry billing/R1.5 billing/R2x\n",
+    "tests/a.test.sh": `# ${B1}abc ${B1}_retry ${B1}.5 ${B2}x\n`,
   });
   assert.equal(untested(run(ctx)).length, 2);
   cleanup(ctx);
   const ok = ctxFor({
     "docs/specs/billing.md": BILLING,
-    "tests/a.test.sh": "# holds billing/R1.\n# (billing/R2)\n",
+    "tests/a.test.sh": `# holds ${B1}.\n# (${B2})\n`,
   });
   assert.deepEqual(run(ok), []);
   cleanup(ok);
 });
 
-test("R12: the name begins where the area begins — Xbilling/R1 and sub-billing/R1 are not billing/R1", () => {
+test("R12: the name begins where the area begins — X-, sub- and specs/-prefixed ids are not the billing id", () => {
   // The leading boundary (#544): a cited id preceded by a letter, a digit,
   // `_`, `-` or `/` is part of a longer token, not a citation of the area it
   // happens to end with. An opening parenthesis, a blank or the start of the
   // line still cites it.
-  for (const near of ["Xbilling/R1", "sub-billing/R1", "9billing/R1", "_billing/R1", "-billing/R1", "specs/billing/R1"]) {
+  for (const near of [`X${B1}`, `sub-${B1}`, `9${B1}`, `_${B1}`, `-${B1}`, `specs/${B1}`]) {
     const ctx = ctxFor({
       "docs/specs/billing.md": BILLING,
-      "tests/a.test.sh": `# ${near}\n# billing/R2\n`,
+      "tests/a.test.sh": `# ${near}\n# ${B2}\n`,
     });
-    const out = untested(run(ctx));
-    assert.equal(out.length, 1, `${near} cited billing/R1`);
-    assert.match(out[0].message, /billing\/R1\b/);
+    assert.deepEqual(messages(run(ctx)), [named(B1)], `${near} cited ${B1}`);
     cleanup(ctx);
   }
-  for (const line of ["# (billing/R1)", "# billing/R1", "billing/R1"]) {
+  for (const line of [`# (${B1})`, `# ${B1}`, B1]) {
     const ok = ctxFor({
       "docs/specs/billing.md": BILLING,
-      "tests/a.test.sh": `${line}\n# billing/R2\n`,
+      "tests/a.test.sh": `${line}\n# ${B2}\n`,
     });
-    assert.deepEqual(run(ok), [], `${line} did not cite billing/R1`);
+    assert.deepEqual(run(ok), [], `${line} did not cite ${B1}`);
     cleanup(ok);
   }
 });
 
-test("R12: sub-billing/R1 cites its own area, never billing/R1", () => {
+test("R12: a hyphenated area's id cites its own area, never the area its tail spells", () => {
   // The positive half of the leading boundary (#550 review, M-2): a hyphenated
   // area is one token, so it satisfies its own requirement and not the area
   // its tail happens to spell.
   const ctx = ctxFor({
     "docs/specs/billing.md": BILLING,
     "docs/specs/sub-billing.md": "R1. The sub-ledger SHALL roll up.\n",
-    "tests/a.test.sh": "# sub-billing/R1\n# billing/R2\n",
+    "tests/a.test.sh": `# ${cite("sub-billing", 1)}\n# ${B2}\n`,
   });
-  const out = untested(run(ctx));
-  assert.deepEqual(
-    out.map((f) => f.message),
-    ["billing/R1 is named by no test"],
-  );
+  assert.deepEqual(messages(run(ctx)), [named(B1)]);
   cleanup(ctx);
 });
 
@@ -135,17 +139,12 @@ test("R12: two ids joined by - or / cite the first alone — the leading boundar
   // #550 review, M-1: the second id's match swallows the joining `-` or `/`
   // and is dropped, as any id after `-` or `/` is. Pinned so the cost is a
   // decision, not an accident: name each id on its own.
-  for (const joined of ["billing/R1-billing/R2", "billing/R1/billing/R2"]) {
+  for (const joined of [`${B1}-${B2}`, `${B1}/${B2}`]) {
     const ctx = ctxFor({
       "docs/specs/billing.md": BILLING,
       "tests/a.test.sh": `# ${joined}\n`,
     });
-    const out = untested(run(ctx));
-    assert.deepEqual(
-      out.map((f) => f.message),
-      ["billing/R2 is named by no test"],
-      joined,
-    );
+    assert.deepEqual(messages(run(ctx)), [named(B2)], joined);
     cleanup(ctx);
   }
 });
@@ -153,7 +152,7 @@ test("R12: two ids joined by - or / cite the first alone — the leading boundar
 test("R12: a requirement line inside a fence is quoted material, not a requirement", () => {
   const ctx = ctxFor({
     "docs/specs/billing.md": "# Billing\n\n```md\nR9. An example line.\n```\n\nR1. Real.\n",
-    "tests/b.test.sh": "# billing/R1\n",
+    "tests/b.test.sh": `# ${B1}\n`,
   });
   assert.deepEqual(run(ctx), []);
   cleanup(ctx);
@@ -185,17 +184,17 @@ test("R12: a spec file whose name is no area is reported, not skipped", () => {
 
 test("R12: the test globs are policy — an override moves what counts as a test", () => {
   const cfg = { ...defaultConfig, livingSpec: { ...defaultConfig.livingSpec, testGlobs: ["checks/*"] } };
-  const red = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "tests/billing.test.sh": "# billing/R1\n" }, cfg);
+  const red = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "tests/billing.test.sh": `# ${B1}\n` }, cfg);
   assert.equal(untested(run(red)).length, 1);
   cleanup(red);
-  const green = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "checks/one.sh": "# billing/R1\n" }, cfg);
+  const green = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "checks/one.sh": `# ${B1}\n` }, cfg);
   assert.deepEqual(run(green), []);
   cleanup(green);
 });
 
 test("R12: no test globs configured — every requirement fails, and the hint names the policy", () => {
   const cfg = { ...defaultConfig, livingSpec: undefined };
-  const ctx = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "tests/x.test.sh": "# billing/R1\n" }, cfg);
+  const ctx = ctxFor({ "docs/specs/billing.md": "R1. One.\n", "tests/x.test.sh": `# ${B1}\n` }, cfg);
   const out = untested(run(ctx));
   assert.equal(out.length, 1);
   assert.match(out[0].hint, /testGlobs/);
@@ -206,16 +205,12 @@ test("R12: in a git work tree the surface is git's — an ignored file's name co
   const ctx = ctxFor({
     ".gitignore": "build/\n",
     "docs/specs/billing.md": "R1. One.\nR2. Two.\n",
-    "build/tests/out.test.sh": "# billing/R1 billing/R2\n",
-    "tests/billing.test.sh": "# billing/R1\n",
+    "build/tests/out.test.sh": `# ${B1} ${B2}\n`,
+    "tests/billing.test.sh": `# ${B1}\n`,
   });
   const init = spawnSync("git", ["-C", ctx.repoRoot, "init", "-q"], { encoding: "utf8" });
   assert.equal(init.status, 0, init.stderr);
-  const out = untested(run(ctx));
-  assert.deepEqual(
-    out.map((f) => f.message),
-    ["billing/R2 is named by no test"],
-  );
+  assert.deepEqual(messages(run(ctx)), [named(B2)]);
   cleanup(ctx);
 });
 
@@ -239,8 +234,8 @@ test("R11: a REMOVED id's tombstone is no requirement — no test need name it",
   // #<PRD>: <why>`: struck through, so it does not open `R<n>.`, and kept, so
   // the id is never reused.
   const ctx = ctxFor({
-    "docs/specs/billing.md": "# Billing\n\nR1. One.\n~~R2.~~ Removed by #12: folded into billing/R1.\n",
-    "tests/billing.test.sh": "# billing/R1\n",
+    "docs/specs/billing.md": `# Billing\n\nR1. One.\n~~R2.~~ Removed by #12: folded into ${B1}.\n`,
+    "tests/billing.test.sh": `# ${B1}\n`,
   });
   assert.deepEqual(run(ctx), []);
   cleanup(ctx);
@@ -256,12 +251,12 @@ test("#533: the docs/specs README starter is no area file — its fenced example
     "",
     "```md",
     "R1. The invoice SHALL carry the customer's legal name.",
-    "~~R2.~~ Removed by #12: folded into billing/R1.",
+    `~~R2.~~ Removed by #12: folded into ${B1}.`,
     "```",
     "",
     "```md",
     "### ADDED",
-    "billing/R3. The invoice SHALL carry its date.",
+    `${B3}. The invoice SHALL carry its date.`,
     "```",
     "",
   ].join("\n");
@@ -287,7 +282,7 @@ test("the shipped policy names the specs directory and a non-empty list of test 
   for (const g of defaultConfig.livingSpec.testGlobs) assert.equal(typeof g, "string");
 });
 
-test("the kit's own tree is silent — it ships the check and no living spec", () => {
+test("this repo's own tree is silent — every living requirement it holds is named by a test", () => {
   const ctx = makeContext({ repoRoot: join(here, "..", "..", ".."), config: defaultConfig });
   assert.deepEqual(run(ctx), []);
 });
@@ -332,11 +327,81 @@ test("end to end: an untested requirement fails the harness, naming the file and
     "CLAUDE.md": SHIM,
     "GEMINI.md": SHIM,
     "docs/specs/billing.md": BILLING,
-    "tests/billing.test.sh": "# billing/R1\n",
+    "tests/billing.test.sh": `# ${B1}\n`,
   });
   const res = spawnSync(process.execPath, [join(here, "..", "index.mjs"), root], { encoding: "utf8" });
   assert.equal(res.status, 1, `expected exit 1, got ${res.status}\n${res.stdout}${res.stderr}`);
   assert.match(res.stderr, /living-spec-untested/);
   assert.match(res.stderr, /docs\/specs\/billing\.md/);
-  assert.match(res.stderr, /billing\/R2/);
+  assert.ok(res.stderr.includes(named(B2)), res.stderr);
+});
+
+// #561, found by a real upgrade: these fixtures once spelled the very ids a
+// project's first living spec holds, from a path the default test globs
+// match, so a consumer's `docs/specs/billing.md` passed with no test of its
+// own. Two answers, each enough alone: the ENGINE never reads a name from
+// the harness's own tree, `scripts/docs-conformance/` at the repo root, and
+// no shipped harness file spells a citable id at all.
+
+test("#561: a name inside the docs harness's own tree cites nothing — its tests are the gate's, not the project's", () => {
+  const ctx = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "scripts/docs-conformance/test/living-spec.test.mjs": `// ${B1} ${B2}\n`,
+    "scripts/docs-conformance/test/mine.test.mjs": `// ${B1}\n`,
+    "tests/billing.test.sh": `# ${B2}\n`,
+  });
+  assert.deepEqual(messages(run(ctx)), [named(B1)]);
+  cleanup(ctx);
+  // Anchored at the repo root: a nested tree of the same name is a project's.
+  const nested = ctxFor({
+    "docs/specs/billing.md": BILLING,
+    "vendor/scripts/docs-conformance/test/a.test.mjs": `// ${B1} ${B2}\n`,
+  });
+  assert.deepEqual(run(nested), []);
+  cleanup(nested);
+});
+
+// The scan: every file of the harness tree, and the gate's two shell files
+// beside it, held to spelling no `<area>/R<n>` — the cited name's pattern
+// as a substring, stricter than a citation, so no boundary rule can let one
+// back in.
+const SCRIPTS = join(here, "..", "..");
+
+function spelledIds(root, rels) {
+  const re = new RegExp(REQ_CITED_NAME_ERE, "g");
+  const found = [];
+  const visit = (rel) => {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) return;
+    if (statSync(abs).isDirectory()) {
+      for (const name of readdirSync(abs)) {
+        if (name === "node_modules" || name.startsWith(".")) continue;
+        visit(`${rel}/${name}`);
+      }
+      return;
+    }
+    for (const m of readFileSync(abs, "utf8").match(re) ?? []) found.push(`${rel}: ${m}`);
+  };
+  rels.forEach(visit);
+  return found;
+}
+const HARNESS_FILES = ["docs-conformance", "check.sh", "requirement.lib.sh"];
+
+test("#561: no shipped harness file spells a citable id", () => {
+  assert.deepEqual(spelledIds(SCRIPTS, HARNESS_FILES), []);
+});
+
+test("#561: the scan can go red — a fixture or a comment that spells an id is found", () => {
+  const root = makeFixture({
+    "docs-conformance/test/a.test.mjs": `// ${cite("billing", 1)}\n`,
+    "docs-conformance/validators/v.mjs": `// X${cite("ledger", 20)}abc\n`,
+    "docs-conformance/clean.mjs": "// <area>/R<n> and ${area}/R${n} spell none\n",
+    "check.sh": `# ${cite("journal", 3)}\n`,
+  });
+  assert.deepEqual(spelledIds(root, HARNESS_FILES).sort(), [
+    `check.sh: ${cite("journal", 3)}`,
+    `docs-conformance/test/a.test.mjs: ${cite("billing", 1)}`,
+    `docs-conformance/validators/v.mjs: ${cite("ledger", 20)}`,
+  ]);
+  rmSync(root, { recursive: true, force: true });
 });
