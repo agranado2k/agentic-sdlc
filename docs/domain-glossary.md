@@ -125,7 +125,9 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Article** — an on-demand layer of the constitution under `constitution/`,
   loaded when relevant and binding while loaded. Every article must be reachable
   from the root manual (`article-unreferenced`), because an article nothing
-  points at binds nobody and rots unseen.
+  points at binds nobody and rots unseen. The kit's one **kit-own article**,
+  `docs/capability-tiers.md`, sits outside that directory on purpose: kit-own,
+  never shipped, reached from the root manual by name. Ref: ADR-0014.
 - **Advisory** — a gate finding on the warning channel: printed to stderr by
   the docs harness and relayed by `scripts/check.sh` on a green run, never failing
   the push. The decision-anchor advisories name a promotion path in their
