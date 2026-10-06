@@ -1011,8 +1011,11 @@ fi
 # and an uncommitted one would be gone for good. Deleting only the names the kit
 # itself ships means a consumer's `docs/adr/0002-….md` is never in reach of this
 # block at all. `tests/self-host.test.sh` section E holds that, and also holds
-# that every file in the kit's own `docs/adr/` is named here — a kit ADR added
-# later and forgotten shows up as a failing assertion rather than as a leak.
+# that every file in the kit's own `docs/adr/` and `docs/specs/` is named here —
+# a kit ADR or living spec added later and forgotten shows up as a failing
+# assertion rather than as a leak. The kit's living spec goes for a sharper
+# reason too: its requirements are held to the kit's suites, which the strip
+# deletes, so a consumer that kept it would open on a red gate.
 #
 # THREE CONDITIONS, all required, because this deletes files without asking:
 #   1. constitution/AGENTS.md.template is still here — i.e. this tree has not
@@ -1041,7 +1044,7 @@ fi
 # consumer's first run. A protection whose failure mode is worse than the bug is
 # not worth the maintenance.
 KIT_OWN_SENTINEL="agentic-sdlc:kit-own"
-KIT_OWN="docs/adr/0013-a-reviewers-next-answer-is-an-ordered-fallback-in-the-shared-resolver.md docs/adr/0012-requirements-are-numbered-traced-and-anchored-in-living-specs.md docs/adr/0011-task-local-contracts-bound-the-lifecycle.md AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/0002-strategic-means-ousterhout.md docs/adr/0003-the-kit-maps-its-own-tiers.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md docs/adr/0004-the-root-manual-is-the-kits-local-article.md docs/adr/0005-the-agent-harness-axis.md docs/adr/0006-the-worker-budget-is-derived-from-the-host.md docs/adr/0007-a-review-never-resolves-to-the-sessions-own-model.md docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md docs/adr/0009-a-dispatched-worker-acts-on-the-forge-only-through-the-broker.md docs/adr/0010-a-typed-judge-is-a-task-domain-named-by-its-contract.md"
+KIT_OWN="docs/specs/process.md docs/adr/0013-a-reviewers-next-answer-is-an-ordered-fallback-in-the-shared-resolver.md docs/adr/0012-requirements-are-numbered-traced-and-anchored-in-living-specs.md docs/adr/0011-task-local-contracts-bound-the-lifecycle.md AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/adr/0001-the-kit-self-hosts-its-own-constitution.md docs/adr/0002-strategic-means-ousterhout.md docs/adr/0003-the-kit-maps-its-own-tiers.md docs/adr/NNNN-template.md .github/PULL_REQUEST_TEMPLATE.md docs/adr/0004-the-root-manual-is-the-kits-local-article.md docs/adr/0005-the-agent-harness-axis.md docs/adr/0006-the-worker-budget-is-derived-from-the-host.md docs/adr/0007-a-review-never-resolves-to-the-sessions-own-model.md docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md docs/adr/0009-a-dispatched-worker-acts-on-the-forge-only-through-the-broker.md docs/adr/0010-a-typed-judge-is-a-task-domain-named-by-its-contract.md"
 
 if git rev-parse --verify -q HEAD >/dev/null 2>&1; then
 	have_head=1
@@ -1076,10 +1079,12 @@ if [ -f "$TEMPLATE" ] && [ -f "$MANUAL" ] && grep -q "$KIT_OWN_SENTINEL" "$MANUA
 			echo "  removed $f (the kit's own; yours is stamped below)"
 		fi
 	done
-	# Only if now empty. K4 re-creates both, and a directory still holding
-	# something is holding a consumer's file — `rmdir` refuses, which is the
-	# behavior we want and the reason this is not `rm -rf`.
+	# Only if now empty. K4 re-creates all three (docs/specs/ with its
+	# starter), and a directory still holding something is holding a
+	# consumer's file — `rmdir` refuses, which is the behavior we want and
+	# the reason this is not `rm -rf`.
 	rmdir docs/adr 2>/dev/null || true
+	rmdir docs/specs 2>/dev/null || true
 	rmdir docs 2>/dev/null || true
 fi
 # F12 END
