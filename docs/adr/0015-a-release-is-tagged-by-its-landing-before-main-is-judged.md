@@ -1,4 +1,4 @@
-# ADR-0014: A release is tagged by its landing, before main is judged
+# ADR-0015: A release is tagged by its landing, before main is judged
 
 - **Status**: Accepted
 - **Date**: 2026-10-06

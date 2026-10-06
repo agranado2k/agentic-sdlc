@@ -114,71 +114,15 @@ pushes straight past both gates.
 
 ## Capability tiers
 
-Work in this repo is sized to one of **four tiers**, a cost/benefit decision
-made when the ticket is written — not when the agent is spawned, and never by
-the agent about itself. A **skill** also declares the phase of work it is
-(`metadata.phase`), and where both exist the ticket wins: the phase is what
-sizes a command nobody wrote a ticket for.
-
-| Tier | The work | The signal |
-| --- | --- | --- |
-| `planner` | Decomposing a wave, designing a gate, triaging an ambiguous failure | Reads broadly, writes little; a wrong answer costs a whole wave downstream |
-| `implementer` | Building one kit ticket test-first — a script, a validator rule, an article | The default for real work here |
-| `mechanical` | Renames across the templates and skills, a manifest bump, a transcript re-capture | A checkable definition of done, only when both hold: the ticket names the one command whose exit is its oracle, and the change is one file or one pattern applied uniformly across many |
-| `reviewer` | Adversarial reading of a finished diff in fresh context | Undersize it and review becomes a rubber stamp |
-
-`/to-tickets` stamps a tier on every ticket and shows it at the quiz for
-override; `/implement` reads it when it spawns.
-
-**This manual names no model, and neither does any other file the kit ships.**
-Model identifiers rot on a vendor's schedule, so the tier → model mapping is
-data in `scripts/agents.config.sh` and the resolver is `scripts/agents.lib.sh`
-(`sh scripts/agents.lib.sh implementer` prints the id). An unmapped tier is a
-working state: the resolver warns once, prints nothing, and the spawn inherits
-the session's model — `adapters/claude-code/README.md` is one worked example.
-
-`scripts/agents.config.sh` ships EMPTY to every consumer, by principle. But
-this repo is itself a consumer of the mechanism it ships: an unmapped resolver
-would let the kit's own agents inherit the session model whatever tier their
-ticket was stamped — so the kit carries a second, kit-only mapping,
-`scripts/agents.kit.config.sh`, never shipped (it is on `bootstrap.sh`'s
-kit-authoring deletion list, the same as `tests/`).
-
-Every SKILL.md that spawns a subagent says, verbatim, `sh scripts/agents.lib.sh
-<tier>` — correct for a consumer, and it has to stay that way: skills ship
-unstamped, so none may name a kit-only file (see "The chain" below). Typed
-literally in THIS repo, that command reads the empty shipped policy file and
-prints nothing. **Hard rule 10** is the fix, every time a skill says to spawn.
-The wrapper sets the resolver's existing `$AGENTS_CONFIG` seam and delegates —
-
-```sh
-AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
-```
-
-— one name to substitute, not an environment prefix to type right every time.
-
-The policy behind the mapping: plan on the strongest model available; execute
-spawned per tier, and per **domain** where the medium changes the answer; the
-reviewer is never the model that implemented — a review from the implementer's
-own model is an editorial pass wearing a second hat, not an adversarial read.
-
-The domain is the resolver's optional second argument: `sh
-scripts/agents.kit.sh implementer content` prefers
-`AGENT_TIER_IMPLEMENTER_CONTENT`, falling back to `AGENT_TIER_IMPLEMENTER`.
-The two vocabularies are opposite: the four tier names are **closed** (an
-unknown one is exit 2), while domains are **open local policy**, so an unmapped
-one falls back to the tier in silence. This repo maps `content`, for the prose
-that is most of the kit's product — `implementer` work by tier, not code by
-medium — and `self-implemented` on the reviewer tier, for a diff the session
-wrote on the reviewer's model, a situation, not a medium, chosen at spawn time.
-`code` is unmapped: the plain tier is its answer. `/to-tickets` stamps an
-optional `Domain:` line when the medium would change the model, and `/implement`
-passes it as the second argument; a situation domain is never stamped on a
-ticket. One more the kit names and maps for nobody — **`judge`** on
-`mechanical`, by contract not by vendor: state and typed questions in, typed
-answers with per-option probabilities out, in two shapes — **decide** and
-**rank-or-verify**. A decider is never handed a verification, nor any judge the
-review verdict (§5, ADR-0010).
+Work here is sized to one of **four tiers** — `planner`, `implementer`,
+`mechanical`, `reviewer` — when the ticket is written, never by the agent about
+itself; where a skill's `metadata.phase` and a ticket's stamp both exist, the
+ticket wins. **This manual names no model, and neither does any other file the
+kit ships**: the tier → model mapping is data, the kit's own is the kit-only
+`scripts/agents.kit.config.sh`, and hard rule 10 is how a session reaches it.
+What each tier is for, the shipped-empty mapping and its kit twin, the policy
+behind it and the domain axis (`content`, `self-implemented`, `judge`) are
+`docs/capability-tiers.md` — read it when you size a ticket or spawn.
 
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
 word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`: the
@@ -227,6 +171,10 @@ they are also the files a change here has to earn.
 The kit has no `local-*` article of its own: the three under `constitution/` are
 `.template` sources shipped for consumers to fill in, and the kit's equivalent
 of a consumer's pointers is the "What this repo is" section above.
+
+One kit-own article sits outside that layer: `docs/capability-tiers.md`, the
+tier practice moved out of this file to keep it under budget (ADR-0015). It is
+neither shared nor shipped — bootstrap strips it like the kit's records.
 
 ## Project documentation
 
@@ -308,7 +256,7 @@ answers produce a clean project.
 | Review a branch before it lands     | `/review-pr` — two axes: standards to agents, behavior to you |
 | Walk a product's personas through its surface | `/dogfood` — optional at bootstrap; the kit has no surface of its own |
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
-| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does. Its one-PR form, the **landing script**, is `sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']`: refuses a PR not green and mergeable (exit 2, nothing recorded), merges, tags a release's merge commit before it waits (ADR-0014), waits for main's workflows — re-running a release's failures once — records `merge.land` and `feedback` (kit-only, never shipped) |
+| Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does. Its one-PR form, the **landing script**, is `sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']`: refuses a PR not green and mergeable (exit 2, nothing recorded), merges, tags a release's merge commit before it waits (ADR-0015), waits for main's workflows — re-running a release's failures once — records `merge.land` and `feedback` (kit-only, never shipped) |
 | Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |

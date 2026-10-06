@@ -690,13 +690,16 @@ fi
 # ---------------------------------------------------------------------------
 banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
 # ---------------------------------------------------------------------------
-# The kit follows its own rule (root AGENTS.md, "Capability tiers"): the
+# The kit follows its own rule (docs/capability-tiers.md, ADR-0014): the
 # resolver's existing $AGENTS_CONFIG seam, pointed at the kit-only mapping,
 # resolves all four tiers to a real value with no UNMAPPED warning. This is
 # the seam a kit session actually types:
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
 [ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
+# Its vocabulary header points where the tier words are defined for the kit:
+# the kit-own article they moved to (ADR-0014), not the root's section.
+assert_file_has "$KIT_CONFIG" "docs/capability-tiers.md" "the kit config's vocabulary header points at the kit's tiers article"
 
 AGENTS_CONFIG="$KIT_CONFIG"
 export AGENTS_CONFIG
@@ -828,8 +831,14 @@ says() { # <folded text> <phrase> <what the text is, for the label>
 	*) fail "$3 does not say $2" ;;
 	esac
 }
-for manual in AGENTS.md constitution/AGENTS.md.template; do
-	tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ')
+# The kit's tier practice left its root for the kit-own article the root points
+# at (ADR-0014), so for the kit that article is the tiers text; a consumer's
+# stays in its manual's section.
+for manual in docs/capability-tiers.md constitution/AGENTS.md.template; do
+	case $manual in
+	docs/*) tiers=$(tr '\n' ' ' <"$KIT/$manual") ;;
+	*) tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ') ;;
+	esac
 	for phrase in '`judge`' 'decide' 'rank-or-verify' 'per-option probabilities' 'never handed a verification' 'review verdict'; do
 		says "$tiers" "$phrase" "$manual's tiers section"
 	done

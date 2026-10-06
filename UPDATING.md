@@ -2236,7 +2236,7 @@ constitution/local-engineering.md.template
 constitution/local-product.md.template
 constitution/local-workflow.md.template
 docs/adr/0011-task-local-contracts-bound-the-lifecycle.md
-docs/adr/0014-a-release-is-tagged-by-its-landing-before-main-is-judged.md
+docs/adr/0015-a-release-is-tagged-by-its-landing-before-main-is-judged.md
 docs/diary.md
 docs/domain-glossary.md
 scripts/agents.config.sh

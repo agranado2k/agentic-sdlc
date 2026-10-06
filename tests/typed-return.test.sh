@@ -741,7 +741,7 @@ done
 for doc in "$MANUAL" "$TEMPLATE"; do
 	assert_file_lacks "$doc" "no channel" "the paragraph claims what the mechanism does, no stronger"
 done
-# The root manual's 350-line budget (ADR-0004) is tests/self-host.test.sh's to
+# The root manual's line budget (ADR-0004) is tests/self-host.test.sh's to
 # hold, and it does; the paragraph is paid for there, not re-measured here.
 
 # ---------------------------------------------------------------------------

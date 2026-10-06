@@ -456,7 +456,7 @@ done
 # F7 alone — by path, by the name "landing script", with baits (#422).
 
 # ---------------------------------------------------------------------------
-banner "8. A release's merge lands tagged, and main is judged after the tag (#509, ADR-0014)"
+banner "8. A release's merge lands tagged, and main is judged after the tag (#509, ADR-0015)"
 # ---------------------------------------------------------------------------
 # A merge that moves VERSION's shared-layer line is a release, and the kit's
 # own CI holds main red until its tag exists (self-host F3) — a run that
@@ -582,7 +582,7 @@ land STUB_VER_BEFORE=0.1.0 'STUB_VER_AFTER=0.2.0; touch pwned' 198
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a malformed version line was tagged" ||
 	pass "a shared-layer value that is not a version is never tagged"
 
-# /merge-train agrees (ADR-0014 clause 7): its step 4 tags a release between
+# /merge-train agrees (ADR-0015 clause 7): its step 4 tags a release between
 # the merge and the wait, and judges main after one re-run of what failed.
 MT="$KIT/.agents/skills/merge-train/SKILL.md"
 # mt_order <file> — exit 0 when the merge, the tag and the watch appear in

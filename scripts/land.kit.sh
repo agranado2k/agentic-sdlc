@@ -27,7 +27,7 @@
 #      tags the merge commit v<version> (`git tag -a`, the operator's own
 #      signing config) and pushes the tag BEFORE waiting — a release is not
 #      landed until that tag exists (hard rule 3), and the kit's CI holds
-#      main red until it does (ADR-0014, #509). A tag origin already holds
+#      main red until it does (ADR-0015, #509). A tag origin already holds
 #      on the merge commit is kept; one naming any other commit is never
 #      moved, and the release is reported not landed.
 #   3. Waits for the base branch's workflows on the merge commit, each one
@@ -174,7 +174,7 @@ while [ "$i" -lt "$POLL_TRIES" ]; do
 	[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 done
 
-# --- 2b. a release lands tagged (#509, ADR-0014) ------------------------------
+# --- 2b. a release lands tagged (#509, ADR-0015) ------------------------------
 # A merge that moves VERSION's shared-layer line is a release, and a release is
 # not landed until its merge commit carries v<version> (hard rule 3). The CI
 # that holds that line (self-host F3) starts on the merge push, before any tag

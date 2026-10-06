@@ -19,7 +19,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0001](0001-the-kit-self-hosts-its-own-constitution.md) | The kit self-hosts its own constitution | Accepted 2026-08-27 |
 | [0002](0002-strategic-means-ousterhout.md) | "Strategic" means Ousterhout's strategic programming; Evans's work is the context map | Accepted 2026-09-02 |
 | [0003](0003-the-kit-maps-its-own-tiers.md) | The kit carries its own tier-to-model mapping, and never ships it | Accepted 2026-09-02 — supersedes the diary-recorded decision of 2026-08-27 below; amended 2026-09-17 to state the arrangement as general, with the guard policy as its second instance; amended 2026-09-28: a policy file the kit can fill ships filled, with no twin — the vocabulary checker's |
-| [0004](0004-the-root-manual-is-the-kits-local-article.md) | The kit's root manual is also its local article, budgeted at 350 lines | Accepted 2026-09-02 |
+| [0004](0004-the-root-manual-is-the-kits-local-article.md) | The kit's root manual is also its local article, budgeted at 350 lines | Accepted 2026-09-02 — clauses 1 and 4 amended by ADR-0014 (2026-10-06): the tier practice lives in one kit-own article the root points at; the budget stands |
 | [0005](0005-the-agent-harness-axis.md) | A capability tier may name the agent harness it runs on, and the kit ships the dispatcher | Accepted 2026-09-09 — amends ADR-0003 |
 | [0006](0006-the-worker-budget-is-derived-from-the-host.md) | A dispatched worker runs inside a budget derived from the host at dispatch time | Accepted 2026-09-19 — amends ADR-0005; amended 2026-09-19 with what building #208 refined in clauses 5, 6 and 8, and again with what #209 settled for the suite |
 | [0007](0007-a-review-never-resolves-to-the-sessions-own-model.md) | A reviewer resolves against the session that asks, and never to its own model | Accepted 2026-09-21 — amends ADR-0003; amended 2026-10-05 (#546): a `self-implemented` mapping names a model no session tier runs on, so the refusal is the net and not the route |
@@ -29,7 +29,8 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0011](0011-task-local-contracts-bound-the-lifecycle.md) | Task-local contracts bound the lifecycle | Accepted 2026-09-30 |
 | [0012](0012-requirements-are-numbered-traced-and-anchored-in-living-specs.md) | Requirements are numbered, traced to tickets and tests, and anchored in living specs | Accepted 2026-10-05 — builds on ADR-0008: nothing here reads the trace |
 | [0013](0013-a-reviewers-next-answer-is-an-ordered-fallback-in-the-shared-resolver.md) | A reviewer's next answer is an ordered fallback in the shared resolver, past what the caller names unreachable | Accepted 2026-10-05 — builds on ADR-0007; built by #548 |
-| [0014](0014-a-release-is-tagged-by-its-landing-before-main-is-judged.md) | A release is tagged by its landing, before main is judged | Accepted 2026-10-06 — gives hard rule 3's landed release its mechanism; built by #509 |
+| [0014](0014-the-root-manual-points-at-one-kit-own-article.md) | The root manual's read-on-demand elaboration moves to one kit-own article it points at | Accepted 2026-10-06 — amends ADR-0004 clauses 1 and 4; built by #489 |
+| [0015](0015-a-release-is-tagged-by-its-landing-before-main-is-judged.md) | A release is tagged by its landing, before main is judged | Accepted 2026-10-06 — gives hard rule 3's landed release its mechanism; built by #509 |
 
 ## Conventions
 

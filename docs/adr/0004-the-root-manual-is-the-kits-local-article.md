@@ -4,7 +4,7 @@
 - **Date**: 2026-09-02
 - **Deciders**: Arthur Granado (operator), via PRD #124's quiz
 - **Supersedes / amends**: amends ADR-0001 §4 in one respect — the records directory holds one more kit-own record, which bootstrap's kit-own list strips
-- **Superseded by**: —
+- **Superseded by**: — (clauses 1 and 4 amended by ADR-0014, 2026-10-06: the tier practice moved to one kit-own article; the budget stands)
 
 ## Context and problem statement
 
