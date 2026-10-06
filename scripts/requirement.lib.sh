@@ -15,8 +15,8 @@
 # it. The docs harness reads fences two other ways — claude-md-refs.mjs's
 # stripFences pairs a marker with its own kind, and banned-words.mjs's leftover
 # pass opens on any whitespace — and unifying the engines is a behavior
-# change, its own ticket; only validators/living-spec.mjs keeps this pattern,
-# held equal to it byte for byte.
+# change, its own ticket (#571); only validators/living-spec.mjs keeps this
+# pattern, held equal to it byte for byte.
 #
 # A requirement is a numbered line (ADR-0012). Two readers read it, and they
 # read DIFFERENT shapes on purpose, so this file holds two grammars side by

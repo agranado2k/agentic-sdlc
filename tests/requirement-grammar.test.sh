@@ -110,7 +110,7 @@ banner "1b. Fence detection — one rule, for every reader of a markdown line"
 # (#557). fence_strip is that rule as a reader. It TOGGLES on either marker,
 # so a ``` line inside a ~~~ block closes it: pinned as the behavior the
 # readers had, not endorsed — unifying it with the docs harness's paired
-# reading is a behavior change, its own ticket.
+# reading is a behavior change, its own ticket (#571).
 DOC="$SCRATCH/fenced.md"
 {
 	printf 'before `a`\n'
