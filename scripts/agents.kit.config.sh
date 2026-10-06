@@ -78,7 +78,7 @@
 # ---------------------------------------------------------------------------
 # THE VOCABULARY (same shape as scripts/agents.config.sh; repeated here only as
 # the shape of the decision each variable encodes — the words are defined in
-# the root AGENTS.md's "Capability tiers" section):
+# docs/capability-tiers.md, the kit-own article the root AGENTS.md points at):
 #
 #   planner      Judgement over breadth. Decomposition, design, architecture,
 #                triage of an ambiguous bug. Reads a lot, writes little, and a

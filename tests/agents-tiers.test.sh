@@ -690,13 +690,16 @@ fi
 # ---------------------------------------------------------------------------
 banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
 # ---------------------------------------------------------------------------
-# The kit follows its own rule (root AGENTS.md, "Capability tiers"): the
+# The kit follows its own rule (docs/capability-tiers.md, ADR-0014): the
 # resolver's existing $AGENTS_CONFIG seam, pointed at the kit-only mapping,
 # resolves all four tiers to a real value with no UNMAPPED warning. This is
 # the seam a kit session actually types:
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
 [ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
+# Its vocabulary header points where the tier words are defined for the kit:
+# the kit-own article they moved to (ADR-0014), not the root's section.
+assert_file_has "$KIT_CONFIG" "docs/capability-tiers.md" "the kit config's vocabulary header points at the kit's tiers article"
 
 AGENTS_CONFIG="$KIT_CONFIG"
 export AGENTS_CONFIG
