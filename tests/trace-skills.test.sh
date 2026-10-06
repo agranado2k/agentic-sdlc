@@ -337,7 +337,7 @@ for b in \
 	"the question on (b) only|s/On path (b) only/On every path/" \
 	"end after the raises|s/never before them/whenever/" \
 	"one own raise line|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Also \`sh scripts\/trace.sh emit kind=finding.raise subject=pr:#<N> data.posted=yes || :\`./" \
-	"no end above the raise|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Then \`sh scripts\/trace.sh end outcome=ok || :\`./"; do
+	"no end above the raise|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Then \`sh scripts\/trace.sh end <the run id your begin printed> outcome=ok || :\`./"; do
 	bait_post "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done

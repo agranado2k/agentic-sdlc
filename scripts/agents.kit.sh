@@ -117,21 +117,24 @@ _kit_fold() {
 # cannot say which one ran. A name that is itself a pinned id, or that folds
 # from none, passes untouched — the resolver warns about the second kind.
 # A value that crosses to a declared agent harness has no spawn word, so it
-# is no id a word can cover.
+# is no id a word can cover — and whether it crosses is the resolver's
+# answer, not this wrapper's: the subshell sources scripts/agents.lib.sh and
+# asks its agents_split_harness, the one membership test (#559), rather than
+# keeping a second copy here that could drift from it.
 if [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] && [ -f "$AGENTS_CONFIG" ]; then
 	_kit_pinned=$(
+		. scripts/agents.lib.sh
 		set -a
 		. "$AGENTS_CONFIG" >/dev/null 2>&1
-		printf '%s\n' "${AGENT_HARNESSES:-}" | tr '\t\n' '  '
-		echo
-		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p'
+		set +a
+		AGENTS_TIER_QUIET=1
+		for _kit_v in $(env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p'); do
+			agents_split_harness "$_kit_v"
+			[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
+		done
 	)
-	_kit_harnesses=" $(printf '%s\n' "$_kit_pinned" | sed -n 1p) "
 	_kit_ids=' '
-	for _kit_v in $(printf '%s\n' "$_kit_pinned" | sed 1d); do
-		case $_kit_v in
-		*:*) case $_kit_harnesses in *" ${_kit_v%%:*} "*) continue ;; esac ;;
-		esac
+	for _kit_v in $_kit_pinned; do
 		_kit_ids="$_kit_ids$_kit_v "
 	done
 	_kit_unr=
