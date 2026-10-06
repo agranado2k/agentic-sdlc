@@ -63,7 +63,7 @@ t_assert_skill_in_roster "to-prd"
 t_assert_skill_in_roster "to-tickets"
 
 # ---------------------------------------------------------------------------
-banner "1b. /to-prd asks once before writing an ungrilled PRD (ADR-0012 clause 5, R3 R4)"
+banner "1b. /to-prd asks once before writing an ungrilled PRD (ADR-0012 clause 5, process/R3 process/R4)"
 # ---------------------------------------------------------------------------
 # The question lives in "Before you start", so it is asked before any step of
 # the process runs — and it is one question, not an interview: beyond it the
@@ -71,24 +71,24 @@ banner "1b. /to-prd asks once before writing an ungrilled PRD (ADR-0012 clause 5
 # read the trace to decide would break ADR-0008.
 grill=$(section_of "$PRD_ABS" "Before you start" | awk '/^- \*\*An ungrilled conversation\.\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on')
 [ -n "$grill" ] && pass "\"Before you start\" carries the ungrilled-conversation bullet" ||
-	fail "\"Before you start\" has no '- **An ungrilled conversation.**' bullet — R3's question has no home"
+	fail "\"Before you start\" has no '- **An ungrilled conversation.**' bullet — process/R3's question has no home"
 w="the grilling bullet"
-t_text_has "$grill" "holds no grilling session" "R3: the trigger — what the conversation lacks" "$w"
-t_text_has "$grill" "one question" "R3: one question, not an interview" "$w"
-t_text_has "$grill" "run \`/grill-me\` first?" "R3: the question itself" "$w"
-t_text_has "$grill" "\`/grill-with-docs\` instead" "R3: the substitution" "$w"
-t_text_has "$grill" "glossary" "R3: the substitution's condition names the glossary" "$w"
-t_text_has "$grill" "decision records" "R3: … and the decision records" "$w"
-t_text_has "$grill" "**Yes**" "R3: the accept path" "$w"
-t_text_has "$grill" "hand back" "R3: yes returns to this skill's synthesis" "$w"
-t_text_has "$grill" "**No**" "R4: the decline path" "$w"
-t_text_has "$grill" "under Open Issues" "R4: the decline path lists its guesses where a later session reads them" "$w"
-t_text_has "$grill" "would otherwise have guessed" "R4: what goes there — the guesses, not a summary" "$w"
-t_text_has "$grill" "nobody to answer" "R4: a spawned or unattended run, with nobody to answer, takes the decline path" "$w"
-t_text_has "$grill" "counts as grilled" "R3: only a grilling skill's run counts — a hand-run interview does not" "$w"
-t_text_has "$grill" "reads the conversation only" "R3: the check's one input" "$w"
-t_text_has "$grill" "never the trace" "R3: the input it never reads" "$w"
-t_text_has "$grill" "ADR-0008" "R3: why — no skill reads the trace" "$w"
+t_text_has "$grill" "holds no grilling session" "process/R3: the trigger — what the conversation lacks" "$w"
+t_text_has "$grill" "one question" "process/R3: one question, not an interview" "$w"
+t_text_has "$grill" "run \`/grill-me\` first?" "process/R3: the question itself" "$w"
+t_text_has "$grill" "\`/grill-with-docs\` instead" "process/R3: the substitution" "$w"
+t_text_has "$grill" "glossary" "process/R3: the substitution's condition names the glossary" "$w"
+t_text_has "$grill" "decision records" "process/R3: … and the decision records" "$w"
+t_text_has "$grill" "**Yes**" "process/R3: the accept path" "$w"
+t_text_has "$grill" "hand back" "process/R3: yes returns to this skill's synthesis" "$w"
+t_text_has "$grill" "**No**" "process/R4: the decline path" "$w"
+t_text_has "$grill" "under Open Issues" "process/R4: the decline path lists its guesses where a later session reads them" "$w"
+t_text_has "$grill" "would otherwise have guessed" "process/R4: what goes there — the guesses, not a summary" "$w"
+t_text_has "$grill" "nobody to answer" "process/R4: a spawned or unattended run, with nobody to answer, takes the decline path" "$w"
+t_text_has "$grill" "counts as grilled" "process/R3: only a grilling skill's run counts — a hand-run interview does not" "$w"
+t_text_has "$grill" "reads the conversation only" "process/R3: the check's one input" "$w"
+t_text_has "$grill" "never the trace" "process/R3: the input it never reads" "$w"
+t_text_has "$grill" "ADR-0008" "process/R3: why — no skill reads the trace" "$w"
 t_text_has "$grill" "still never interviews" "ADR-0012 clause 11: no clarify loop beyond the one question" "$w"
 # The intro's no-interview rule names its one exception, or the two contradict.
 intro=$(awk '/^---$/ { n++; next } n == 2 && /^## / { exit } n == 2' "$PRD_ABS")
@@ -114,7 +114,7 @@ banner "2. The PRD template's sections, in the order a fresh session reads them"
 # issues sit after out-of-scope because a reader decides what the feature is
 # before learning what is still undecided about it. Requirements sit between
 # the scenarios that walk the system and the decisions that shape its build
-# (PRD #527 R1, ADR-0012 clause 1).
+# (process/R1, ADR-0012 clause 1).
 want="Objective
 Problem Statement
 Solution
@@ -129,9 +129,9 @@ Open Issues
 Further Notes"
 got=$(awk '/^<prd-template>/ { on = 1; next } /^<\/prd-template>/ { on = 0 } on && /^## / { sub(/^## /, ""); print }' "$PRD_ABS")
 if [ "$got" = "$want" ]; then
-	pass "the PRD template carries the twelve sections in order, Requirements between Scenarios and Implementation Decisions (R1)"
+	pass "the PRD template carries the twelve sections in order, Requirements between Scenarios and Implementation Decisions (process/R1)"
 else
-	fail "the PRD template's sections are not the twelve expected, in order (R1) — got: $(printf '%s' "$got" | tr '\n' '|')"
+	fail "the PRD template's sections are not the twelve expected, in order (process/R1) — got: $(printf '%s' "$got" | tr '\n' '|')"
 fi
 # The PRD process is numbered without a gap too — a step inserted by hand is
 # how the reread could end up after the publish it is meant to precede.
@@ -163,77 +163,77 @@ printf '%s\n' "$scen" | sed -n '/<scenario-example>/,/<\/scenario-example>/p' | 
 	pass "the scenario example uses concrete names, as its rule demands"
 
 # The user stories are the why, not the exhaustive list: the requirements are
-# that list now (PRD #527 R2, ADR-0012 clause 2).
+# that list now (process/R2, ADR-0012 clause 2).
 stories=$(section_of "$PRD_ABS" "User Stories")
-t_text_has "$stories" "one story per distinct actor goal" "R2: the stories' size rule, one per goal rather than a long list"
-t_text_has "$stories" "the *why*" "R2: what a story is kept for"
-t_text_has "$stories" "every requirement serves at least one" "R2: the back-reference that keeps stories and requirements joined"
-t_text_has "$stories" "are one story" "R2: two stories with the same actor and goal merge"
-t_text_has "$stories" "a requirement nobody asked for" "R2: a requirement serving no story is flagged"
+t_text_has "$stories" "one story per distinct actor goal" "process/R2: the stories' size rule, one per goal rather than a long list"
+t_text_has "$stories" "the *why*" "process/R2: what a story is kept for"
+t_text_has "$stories" "every requirement serves at least one" "process/R2: the back-reference that keeps stories and requirements joined"
+t_text_has "$stories" "are one story" "process/R2: two stories with the same actor and goal merge"
+t_text_has "$stories" "a requirement nobody asked for" "process/R2: a requirement serving no story is flagged"
 for gone in "LONG" "extremely extensive" "cover all aspects"; do
 	printf '%s\n' "$stories" | grep -qF -- "$gone" &&
-		fail "R2: the User Stories guidance still says '$gone' — the exhaustive list is the requirements' job now" ||
-		pass "R2: the User Stories guidance no longer says '$gone'"
+		fail "process/R2: the User Stories guidance still says '$gone' — the exhaustive list is the requirements' job now" ||
+		pass "process/R2: the User Stories guidance no longer says '$gone'"
 done
 
 # Each requirement is one observable behavior in EARS-lite, with an id
-# numbered from 1 within the PRD (PRD #527 R1, ADR-0012 clause 1).
+# numbered from 1 within the PRD (process/R1, ADR-0012 clause 1).
 req=$(section_of "$PRD_ABS" "Requirements")
-t_text_has "$req" "one observable behavior" "R1: a requirement line holds one behavior"
-t_text_has "$req" "a test can fail" "R1: observable means a test can fail it"
-t_text_has "$req" "EARS-lite" "R1: the notation is named"
+t_text_has "$req" "one observable behavior" "process/R1: a requirement line holds one behavior"
+t_text_has "$req" "a test can fail" "process/R1: observable means a test can fail it"
+t_text_has "$req" "EARS-lite" "process/R1: the notation is named"
 for form in "The <system> SHALL" "WHEN <trigger>, the <system> SHALL" "WHILE <state>," "IF <condition>, THEN" "WHERE <feature>,"; do
-	t_text_has "$req" "$form" "R1: one of the five EARS-lite forms"
+	t_text_has "$req" "$form" "process/R1: one of the five EARS-lite forms"
 done
-t_text_has "$req" '`R<n>`' "R1: the id's shape"
-t_text_has "$req" "numbered from 1 within the PRD" "R1: where the numbering starts and what it is scoped to"
-t_text_has "$req" "exhaustive list" "R1: the requirements, not the stories, are the exhaustive list"
-t_text_has "$req" "is not renumbered" "R1: a published id is never renumbered — tickets and tests cite it"
-t_text_has "$req" "bundles two behaviors is two requirements" "R1: one behavior per line, the bundling rule"
-t_text_has "$req" "a number, or dropped" "R1: a line no test could fail falls under the quality-word rule"
+t_text_has "$req" '`R<n>`' "process/R1: the id's shape"
+t_text_has "$req" "numbered from 1 within the PRD" "process/R1: where the numbering starts and what it is scoped to"
+t_text_has "$req" "exhaustive list" "process/R1: the requirements, not the stories, are the exhaustive list"
+t_text_has "$req" "is not renumbered" "process/R1: a published id is never renumbered — tickets and tests cite it"
+t_text_has "$req" "bundles two behaviors is two requirements" "process/R1: one behavior per line, the bundling rule"
+t_text_has "$req" "a number, or dropped" "process/R1: a line no test could fail falls under the quality-word rule"
 for n in 1 2 3; do
 	printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq "^R$n\. .* SHALL " &&
-		pass "R1: the example's R$n is an EARS-lite SHALL line" ||
-		fail "R1: the requirement example has no 'R$n. … SHALL' line — the example drifted from its own forms"
+		pass "process/R1: the example's R$n is an EARS-lite SHALL line" ||
+		fail "process/R1: the requirement example has no 'R$n. … SHALL' line — the example drifted from its own forms"
 done
 printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq '^R1\. ' &&
-	pass "R1: the requirement example opens at R1, as its rule demands" ||
-	fail "R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
+	pass "process/R1: the requirement example opens at R1, as its rule demands" ||
+	fail "process/R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
 
 # Where a living spec exists for the PRD's area, the requirements are deltas
-# against it (PRD #527 R10, ADR-0012 clause 8): three headings, each with its
+# against it (process/R10, ADR-0012 clause 8): three headings, each with its
 # rule; the area-qualified spelling that lets the PRD, the Covers: line and the
 # test cite one string; the next free id counted over tombstones too, so an id
 # is never reused; and the plain form, with its area named, for an area that
 # has no living spec yet.
-t_text_has "$req" "**Where a living spec exists for the area" "R10: the delta form has its condition"
-t_text_has "$req" '`docs/specs/<area>.md`' "R10: the living spec is named by its path"
+t_text_has "$req" "**Where a living spec exists for the area" "process/R10: the delta form has its condition"
+t_text_has "$req" '`docs/specs/<area>.md`' "process/R10: the living spec is named by its path"
 for h in ADDED MODIFIED REMOVED; do
-	t_text_has "$req" "\`### $h\`" "R10: the $h heading is named"
+	t_text_has "$req" "\`### $h\`" "process/R10: the $h heading is named"
 done
-t_text_has "$req" "spelled with its area-qualified id, \`<area>/R<n>.\`" "R10: a delta line carries the area-qualified id"
-t_text_has "$req" "all cite the same string" "R10: one spelling from PRD to Covers: to test"
-t_text_has "$req" "under the next free id" "R10: ADDED takes the next free id"
-t_text_has "$req" "its requirement lines and its tombstones both" "R10: the next free id counts the tombstones — ids are never reused"
-t_text_has "$req" "its whole new text restated under the id it already has" "R10: MODIFIED restates the whole text under the same id"
-t_text_has "$req" "the id, and why it goes" "R10: REMOVED names the id and why"
-t_text_has "$req" "A REMOVED line is still a requirement line" "R10: a removal is covered by a ticket like any other requirement"
-t_text_has "$req" "**Where no living spec exists for the area**" "R10: the plain form has its condition"
-t_text_has "$req" "write plain \`R<n>.\` lines" "R10: with no living spec, plain ids"
-t_text_has "$req" '`Area: <area>`' "R10: a plain PRD names its area, so the first ticket knows which file to create"
-t_text_has "$req" "the first ticket that covers one creates \`docs/specs/<area>.md\`" "R10: who creates the living spec"
-t_text_has "$req" "keeping the PRD's numbers" "R10: the created file keeps the PRD's ids, so citations stay true"
+t_text_has "$req" "spelled with its area-qualified id, \`<area>/R<n>.\`" "process/R10: a delta line carries the area-qualified id"
+t_text_has "$req" "all cite the same string" "process/R10: one spelling from PRD to Covers: to test"
+t_text_has "$req" "under the next free id" "process/R10: ADDED takes the next free id"
+t_text_has "$req" "its requirement lines and its tombstones both" "process/R10: the next free id counts the tombstones — ids are never reused"
+t_text_has "$req" "its whole new text restated under the id it already has" "process/R10: MODIFIED restates the whole text under the same id"
+t_text_has "$req" "the id, and why it goes" "process/R10: REMOVED names the id and why"
+t_text_has "$req" "A REMOVED line is still a requirement line" "process/R10: a removal is covered by a ticket like any other requirement"
+t_text_has "$req" "**Where no living spec exists for the area**" "process/R10: the plain form has its condition"
+t_text_has "$req" "write plain \`R<n>.\` lines" "process/R10: with no living spec, plain ids"
+t_text_has "$req" '`Area: <area>`' "process/R10: a plain PRD names its area, so the first ticket knows which file to create"
+t_text_has "$req" "the first ticket that covers one creates \`docs/specs/<area>.md\`" "process/R10: who creates the living spec"
+t_text_has "$req" "keeping the PRD's numbers" "process/R10: the created file keeps the PRD's ids, so citations stay true"
 
 # The delta example: one area-qualified line under each heading, and the
 # coverage check reads the example as three requirements — the template and
 # the script that consumes its output agree on the grammar.
 delta_ex=$(printf '%s\n' "$req" | sed -n '/<requirement-delta-example>/,/<\/requirement-delta-example>/p')
-[ -n "$delta_ex" ] && pass "R10: the Requirements section carries a delta example" ||
-	fail "R10: no <requirement-delta-example> in the Requirements section"
+[ -n "$delta_ex" ] && pass "process/R10: the Requirements section carries a delta example" ||
+	fail "process/R10: no <requirement-delta-example> in the Requirements section"
 for h in ADDED MODIFIED REMOVED; do
 	printf '%s\n' "$delta_ex" | awk -v h="### $h" '$0 == h { getline; print; exit }' | grep -Eq "^$REQ_AREA_ERE/$REQ_PRD_ID_ERE[.] " &&
-		pass "R10: the example's ### $h is followed by an area-qualified requirement line" ||
-		fail "R10: the example's ### $h is not followed by a '<area>/R<n>. ' line"
+		pass "process/R10: the example's ### $h is followed by an area-qualified requirement line" ||
+		fail "process/R10: the example's ### $h is not followed by a '<area>/R<n>. ' line"
 done
 ex_dir=$(mktemp -d "${TMPDIR:-/tmp}/spec-skills-delta.XXXXXX")
 printf '%s\n' "$delta_ex" >"$ex_dir/prd"
@@ -241,8 +241,8 @@ printf 'Covers: none (prefactor)\n' >"$ex_dir/1"
 ex_out=$(sh scripts/coverage.sh "$ex_dir/prd" "$ex_dir/1" 2>/dev/null)
 rm -rf "$ex_dir"
 [ "$(printf '%s\n' "$ex_out" | grep -Ec "^uncovered: $REQ_AREA_ERE/$REQ_PRD_ID_ERE\$")" -eq 3 ] &&
-	pass "R10: the coverage check reads the delta example as three area-qualified requirements" ||
-	fail "R10: the coverage check read the delta example as '$ex_out' — the template and the check disagree"
+	pass "process/R10: the coverage check reads the delta example as three area-qualified requirements" ||
+	fail "process/R10: the coverage check read the delta example as '$ex_out' — the template and the check disagree"
 
 impl=$(section_of "$PRD_ABS" "Implementation Decisions")
 t_text_has "$impl" "penalty for being wrong" "the filter on what a PRD pins"
@@ -866,7 +866,7 @@ GH
 fi
 
 # ---------------------------------------------------------------------------
-banner "4c. Covers: on every ticket, and the coverage check before the quiz (ADR-0012 clauses 3 and 4, R5 R6)"
+banner "4c. Covers: on every ticket, and the coverage check before the quiz (ADR-0012 clauses 3 and 4, process/R5 process/R6)"
 # ---------------------------------------------------------------------------
 # A ticket names the requirement ids it delivers; the three exempt kinds say
 # which they are, on a line the coverage check can tell from a gap. The check
@@ -875,29 +875,29 @@ banner "4c. Covers: on every ticket, and the coverage check before the quiz (ADR
 # name before the human sees the draft, shows both lists, and publishes the
 # line the quiz confirmed.
 covers=$(printf '%s\n' "$rules" | grep -F '**Covers')
-[ -n "$covers" ] && pass "R5: a ticket rule titled Covers exists" || fail "R5: no ticket rule titled Covers — the stamp has no rule"
+[ -n "$covers" ] && pass "process/R5: a ticket rule titled Covers exists" || fail "process/R5: no ticket rule titled Covers — the stamp has no rule"
 w="the Covers rule"
-t_text_has "$covers" '`Covers: <id>, <id>`' "R5: the line's shape, spelled once" "$w"
-t_text_has "$covers" '`<area>/R<n>`' "R5: an area-qualified id is a legal entry" "$w"
-t_text_has "$covers" '`Covers: none (prefactor)`' "R5: the prefactor exemption, spelled as the check reads it" "$w"
-t_text_has "$covers" '`Covers: none (open-issue)`' "R5: the open-issue exemption" "$w"
-t_text_has "$covers" '`Covers: none (release)`' "R5: the release exemption" "$w"
-t_text_has "$covers" "orphan" "R5: a ticket that covers nothing unexempt is named for what it is" "$w"
-t_text_has "$covers" "no requirement lines" "R5: a PRD written before requirements gets no Covers: lines" "$w"
+t_text_has "$covers" '`Covers: <id>, <id>`' "process/R5: the line's shape, spelled once" "$w"
+t_text_has "$covers" '`<area>/R<n>`' "process/R5: an area-qualified id is a legal entry" "$w"
+t_text_has "$covers" '`Covers: none (prefactor)`' "process/R5: the prefactor exemption, spelled as the check reads it" "$w"
+t_text_has "$covers" '`Covers: none (open-issue)`' "process/R5: the open-issue exemption" "$w"
+t_text_has "$covers" '`Covers: none (release)`' "process/R5: the release exemption" "$w"
+t_text_has "$covers" "orphan" "process/R5: a ticket that covers nothing unexempt is named for what it is" "$w"
+t_text_has "$covers" "no requirement lines" "process/R5: a PRD written before requirements gets no Covers: lines" "$w"
 draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
-t_text_has "$draft" "a \`Covers:\` line (rule" "R5: the draft step stamps the line, citing its rule" "step 2"
-t_text_has "$draft" "named by its draft number" "R6: each drafted ticket goes to a file the check can label" "step 2"
-t_text_has "$quiz" 'sh scripts/coverage.sh "$scratch/body" "$draft"/' "R6: the check runs on the screened copy and the drafts, by the plain script name" "the quiz step"
-t_text_has "$quiz" "reads ids only" "R7: the check reads ids only — why its output may enter the session" "the quiz step"
-t_text_has "$quiz" '`uncovered: <id>`' "R6: the uncovered list, as the script prints it" "the quiz step"
-t_text_has "$quiz" '`orphan: <n>`' "R6: the orphan list, as the script prints it" "the quiz step"
-t_text_has "$quiz" "shows both lists" "R6: the quiz shows both lists" "the quiz step"
-t_text_has "$quiz" "runs again" "R6: the check runs again after a Covers: line changes" "the quiz step"
-t_text_has "$quiz" "Exit 3" "R6: a PRD with no requirement lines is its own answer, not a pass" "the quiz step"
-t_text_has "$quiz" "A retro's candidates have no PRD and so no requirements" "R5: a retro's candidates, which have no PRD, are outside the check and the line" "the quiz step"
-in_order "$quiz" "R6: the coverage check runs before the draft is presented" \
+t_text_has "$draft" "a \`Covers:\` line (rule" "process/R5: the draft step stamps the line, citing its rule" "step 2"
+t_text_has "$draft" "named by its draft number" "process/R6: each drafted ticket goes to a file the check can label" "step 2"
+t_text_has "$quiz" 'sh scripts/coverage.sh "$scratch/body" "$draft"/' "process/R6: the check runs on the screened copy and the drafts, by the plain script name" "the quiz step"
+t_text_has "$quiz" "reads ids only" "process/R7: the check reads ids only — why its output may enter the session" "the quiz step"
+t_text_has "$quiz" '`uncovered: <id>`' "process/R6: the uncovered list, as the script prints it" "the quiz step"
+t_text_has "$quiz" '`orphan: <n>`' "process/R6: the orphan list, as the script prints it" "the quiz step"
+t_text_has "$quiz" "shows both lists" "process/R6: the quiz shows both lists" "the quiz step"
+t_text_has "$quiz" "runs again" "process/R6: the check runs again after a Covers: line changes" "the quiz step"
+t_text_has "$quiz" "Exit 3" "process/R6: a PRD with no requirement lines is its own answer, not a pass" "the quiz step"
+t_text_has "$quiz" "A retro's candidates have no PRD and so no requirements" "process/R5: a retro's candidates, which have no PRD, are outside the check and the line" "the quiz step"
+in_order "$quiz" "process/R6: the coverage check runs before the draft is presented" \
 	"sh scripts/coverage.sh" "shows both lists" "present the draft"
-t_text_has "$publish" "a \`Covers:\` line" "R5: the published body carries the Covers: line" "the publish step"
+t_text_has "$publish" "a \`Covers:\` line" "process/R5: the published body carries the Covers: line" "the publish step"
 handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
 t_text_has "$handoff" 'rm -rf "${draft:?}"' "the draft files go when the decomposition ends" "step 5"
 

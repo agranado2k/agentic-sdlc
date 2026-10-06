@@ -36,7 +36,7 @@ PROJECT_DESC="A throwaway project proving the kit strips its own files."
 # The kit's own files — the ones bootstrap has to take out of a consumer's way.
 # Kept here rather than derived from bootstrap.sh so the two lists can disagree
 # and something notices.
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
 
 # t_kit_copy <dest> — "Use this template", as tests/kit-demo.sh simulates it:
 # the whole tree minus the .git dir and minus any nested worktree, which `cp -R`
@@ -223,7 +223,7 @@ done
 [ -e "$PROJ/docs/capability-tiers.md" ] &&
 	fail "the kit's own capability-tiers article leaked into the project" ||
 	pass "the kit's own capability-tiers article did not leak into the project"
-# PRD #527's R14: the consumer gets the living-spec check, in both engines,
+# process/R14: the consumer gets the living-spec check, in both engines,
 # and no living spec of the kit's — its requirements would be held to tests
 # the strip has already deleted, and the consumer's gate would open red.
 # The one file bootstrap lays there is the starter README (#533), which holds
@@ -231,7 +231,7 @@ done
 # sourced from its one home (scripts/requirement.lib.sh, via tests/lib.sh).
 leaked_specs=$(ls "$PROJ"/docs/specs/*.md 2>/dev/null | grep -v '/docs/specs/README\.md$')
 [ -z "$leaked_specs" ] &&
-	pass "no kit living spec leaked into the project (R14)" ||
+	pass "no kit living spec leaked into the project (process/R14)" ||
 	fail "a kit living spec leaked into the project: $leaked_specs"
 [ -f "$PROJ/docs/specs/README.md" ] &&
 	pass "the project has the docs/specs/ starter README (#533)" ||
@@ -245,11 +245,11 @@ starter_reqs=$(req_spec_lines "$PROJ/docs/specs/README.md" 2>/dev/null)
 	fail "templates/ survived bootstrap"
 [ -f "$PROJ/scripts/docs-conformance/validators/living-spec.mjs" ] &&
 	grep -q 'livingSpec' "$PROJ/scripts/docs-conformance/runner.mjs" &&
-	pass "the project's harness carries the living-spec check (R14)" ||
+	pass "the project's harness carries the living-spec check (process/R14)" ||
 	fail "the project's harness lacks the living-spec check"
 grep -q 'report "living-spec-untested"' "$PROJ/scripts/check.sh" &&
 	grep -q 'testGlobs' "$PROJ/scripts/docs-conformance/config.mjs" &&
-	pass "the project's gate carries the twin, and its policy the test globs the twin reads (R14)" ||
+	pass "the project's gate carries the twin, and its policy the test globs the twin reads (process/R14)" ||
 	fail "the project's gate lacks the living-spec twin or its policy"
 grep -q "$PROJECT_NAME" "$PROJ/docs/diary.md" &&
 	pass "docs/diary.md is the stamped starter, not the kit's diary" ||
@@ -457,8 +457,8 @@ done
 # Naming files instead of a directory buys the safety above and owes one debt:
 # a kit ADR added later has to join the list. This is that debt's check.
 kit_own_line=$(grep '^KIT_OWN=' "$KIT/bootstrap.sh")
-# The kit's living specs, when it keeps any (PRD #527 defers them), owe the
-# same debt as its records: each one named, so none rides into a consumer.
+# The kit's living specs (docs/specs/process.md since #556) owe the same
+# debt as its records: each one named, so none rides into a consumer.
 for a in "$KIT"/docs/adr/* "$KIT"/docs/specs/*; do
 	[ -f "$a" ] || continue
 	rel="${a#"$KIT"/}"
