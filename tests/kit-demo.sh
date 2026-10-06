@@ -374,9 +374,10 @@ else
 fi
 
 # Commands as the harness reads them: code spans outside fences, split into
-# words, keeping the tokens that OPEN with a slash command.
+# words, keeping the tokens that OPEN with a slash command. The fence rule is
+# scripts/requirement.lib.sh's, which tests/lib.sh sources (#557).
 manual_commands() {
-	awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' AGENTS.md |
+	fence_strip AGENTS.md |
 		grep -o '`[^`]*`' | tr -d '`' | tr ' \t' '\n\n' |
 		grep '^[([{"]*/[a-z]' | grep -o '/[a-z][a-z0-9-]*' | sort -u
 }

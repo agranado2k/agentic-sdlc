@@ -173,6 +173,27 @@ if [ "${DOCS_CHECK_NO_NODE:-}" != "1" ] && [ -f "$HARNESS" ] && command -v node 
 fi
 
 if [ "$engine" = "fallback" ]; then
+	# The requirement grammar and the fence rule: scripts/requirement.lib.sh,
+	# their one home (#545, #557), read by the path check (fence_strip) and the
+	# living-spec twin below. The reduced form fails CLOSED without it, the
+	# same footing as the manifest parser above: a missing file is a missing
+	# shared file, and a file that defines nothing is a broken gate.
+	req_lib="$repo_root/scripts/requirement.lib.sh"
+	if [ ! -r "$req_lib" ]; then
+		report "shared-layer-missing" "scripts/requirement.lib.sh" \
+			"the requirement grammar is missing, so neither the path check nor the living-spec check can run" \
+			"Restore scripts/requirement.lib.sh from the kit at the pinned version; scripts/check.sh sources it."
+	else
+		# shellcheck disable=SC1090
+		. "$req_lib"
+		for fn in req_spec_ids fence_strip; do
+			command -v "$fn" >/dev/null 2>&1 || {
+				echo "check.sh: scripts/requirement.lib.sh did not define $fn — the gate cannot run" >&2
+				exit 2
+			}
+		done
+	fi
+
 	# Reduced form. Path roots: the trees a manual is allowed to point into. A
 	# backticked token that starts with one of these roots followed by `/` is
 	# a repo path and must resolve; anything else is left alone. A root may
@@ -187,10 +208,11 @@ if [ "$engine" = "fallback" ]; then
 	scan_manual() {
 		manual=$1
 		[ -f "$manual" ] || return 0
+		command -v fence_strip >/dev/null 2>&1 || return 0 # no grammar: reported above
 		# Strip fenced blocks (their ``` markers would be read as span
 		# delimiters), pull out every `code span`, then split spans into words so
 		# a span like `sh scripts/check.sh` still yields the path.
-		awk '/^[ \t]*(```|~~~)/ { fence = !fence; next } !fence { print }' "$manual" |
+		fence_strip "$manual" |
 			grep -o '`[^`]*`' |
 			tr -d '`' |
 			tr ' \t' '\n\n' |
@@ -236,8 +258,8 @@ if [ "$engine" = "fallback" ]; then
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
 	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced
 	# from scripts/requirement.lib.sh, its one home, which the validator's
-	# fixture tests hold the harness's patterns equal to (#545) — and the twin
-	# fails CLOSED without it, the same footing as the manifest parser above.
+	# fixture tests hold the harness's patterns equal to (#545) — sourced at
+	# the top of this reduced form, and failing CLOSED without it.
 	# The POLICY is not copied here at all: the specs directory and the globs
 	# are read BY TEXT from config.mjs's `livingSpec` block, which is why that
 	# block keeps them literal. No block (a config older than the rule) is no
@@ -245,19 +267,6 @@ if [ "$engine" = "fallback" ]; then
 	# harness's answer too. One exclusion is the engine's, not the policy's: a
 	# file under the harness's own tree, scripts/docs-conformance/, never
 	# cites, in both engines (#561).
-	req_lib="$repo_root/scripts/requirement.lib.sh"
-	if [ ! -r "$req_lib" ]; then
-		report "shared-layer-missing" "scripts/requirement.lib.sh" \
-			"the requirement grammar is missing, so the living-spec check cannot run" \
-			"Restore scripts/requirement.lib.sh from the kit at the pinned version; scripts/check.sh sources it."
-	else
-		# shellcheck disable=SC1090
-		. "$req_lib"
-		command -v req_spec_ids >/dev/null 2>&1 || {
-			echo "check.sh: scripts/requirement.lib.sh did not define req_spec_ids — the gate cannot run" >&2
-			exit 2
-		}
-	fi
 	ls_cfg="scripts/docs-conformance/config.mjs"
 	specs_dir="" spec_globs=""
 	if [ -f "$ls_cfg" ]; then

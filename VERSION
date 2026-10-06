@@ -2087,7 +2087,28 @@
 # tests/implement-deliver.test.sh and tests/spec-skills.test.sh read it
 # instead of their own patterns; README's suite entries.
 
-# 0.55.0 — the docs harness cites nothing of a project's (ticket #561, found
+# 0.55.0 — fence detection has one home (ticket #557, finding L-5 of #554's
+# review). NO file joins or leaves. Shared files that change content, none in
+# behavior on a project that has both: scripts/requirement.lib.sh gains
+# fence_strip, the lines outside every ``` or ~~~ fence, built on its
+# REQ_FENCE_ERE — the home stays this file rather than a module of its own
+# because a 0.54.0 consumer's fixture test already holds REQ_FENCE_ERE to it;
+# scripts/check.sh sources the grammar at the top of its reduced form, its
+# path check calls fence_strip instead of an inline pattern, and it fails
+# closed without it (shared-layer-missing, the path check skipped; exit 2
+# when fence_strip is undefined). The docs harness keeps two other fence
+# readings — claude-md-refs.mjs's stripFences pairs a marker with its own
+# kind, banned-words.mjs's leftover pass opens on any whitespace — and the
+# file says so rather than unify the engines. UPDATING.md changes content:
+# the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Nothing a consumer receives moves outside the manifest.
+# Kit-only, never shipped: tests/lib.sh's t_skill_spans and tests/kit-demo.sh's
+# manual_commands call fence_strip; tests/requirement-grammar.test.sh pins the
+# rule's toggle semantics, scans every shell script for a copy of the fence
+# pattern and plants one to drive that scan red.
+
+# 0.56.0 — the docs harness cites nothing of a project's (ticket #561, found
 # by a real 0.48.0 -> 0.54.0 upgrade; ADR-0012 clause 10).
 # NO file joins and NO file leaves the shared layer. Shared files that change
 # content: scripts/docs-conformance/validators/living-spec.mjs and its POSIX
@@ -2115,7 +2136,7 @@
 # Kit-only, never shipped: tests/docs-demo.sh's A5c, the consumer case in
 # both engines with the shipped fixtures present.
 
-shared-layer: 0.55.0
+shared-layer: 0.56.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
