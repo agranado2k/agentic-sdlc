@@ -2271,3 +2271,31 @@ Haiku 4.5 Explore spawn.
   `/to-tickets` to dedupe.
 
 Evidence is in the trace as the `spike.verdict` blob on `prd:#580`.
+
+## 2026-10-06 — spike: a typed judge cannot size the review fan-out here (PRD #580)
+
+Question, from PRD #580: can a typed judge, given only a PR's changed paths,
+keep ≥95% of `/review-pr`'s findings while skipping ≥30% of its standards-lens
+spawns? Verdict: **false**. Probed TypeSafe's Jev (`jev-latest`, answered as
+`jev-1.13.0`) over 81 kit PRs with an axis-1 review in the trace. Their 872
+`finding.raise` events are labelled by lens. Only the changed paths were sent,
+and the repository is public.
+
+- **Jev has no signal on paths.** Per lens, the AUC of its yes-probability
+  against "this lens raised a finding" was 0.38–0.54. On security it was below
+  chance. At a threshold of 0.5 it skipped 45% of spawns and lost 37.5% of the
+  findings. At 0.3 it skipped 4% and lost api-crud findings on four PRs.
+- **There is little to skip here anyway.** Each lens raised something on
+  46–88% of PRs (test hygiene 88%, reuse/DRY 77%, security 46%). Only 1 of the
+  81 PRs was Markdown-only, so path rules alone skip 0.6% of lens spawns.
+- **The service itself works.** Calls took 0.26 s at p50 and 0.30 s at p95,
+  and all 81 calls used 43,794 input tokens ($0.0018). A noul question needs
+  an `instructions` string (or a `criteria` object).
+
+What it changes: the review's spend is reduced by making each lens cheaper
+(a diff slice, a split skill, a smaller prefix), not by running fewer lenses.
+PRD #580 drops its fan-out-sizing requirements, and the `judge` domain's
+recorded decline in the kit's policy file stands, now with a measurement
+behind it. What stays untested: whether a judge given the diff's content
+rather than its paths does better. That would send code to a vendor whose data
+retention is not documented, and it is a separate decision.
