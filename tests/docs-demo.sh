@@ -358,6 +358,12 @@ if command -v node >/dev/null 2>&1; then
 	assert_out_has "subprocess/R1 is named by no test"
 fi
 rm -f scripts/docs-conformance/test/mine.test.mjs
+# …and the exclusion is that tree exactly (#578 review, M-3): a directory
+# whose name merely begins the same way is the project's, and cites.
+mkdir -p scripts/docs-conformance-extra/test
+printf '// billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >scripts/docs-conformance-extra/test/mine.test.mjs
+assert_status 0 "scripts/docs-conformance-extra/ is the project's, and cites, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+rm -rf scripts/docs-conformance-extra
 mkdir -p tests
 printf '#!/bin/sh\n# billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >tests/specs.sh
 assert_status 0 "green once the project's own test names every id, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh

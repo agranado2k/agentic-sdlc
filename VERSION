@@ -2128,9 +2128,10 @@
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # scripts/docs-conformance/test/living-spec.test.mjs (yours, shipped): no
 # citable id is spelled in it — every id is built at runtime by `cite` — and
-# three tests join: the engine's exclusion, a scan that fails when any file
-# of the harness tree, scripts/check.sh or scripts/requirement.lib.sh spells
-# one, and the proof that scan can go red; replace your copy with the kit's
+# four tests join: the engine's exclusion, its exact reach (a nested tree
+# or a longer name is the project's), a scan that fails when any file of the
+# harness tree, scripts/check.sh or scripts/requirement.lib.sh spells one,
+# and the proof that scan can go red; replace your copy with the kit's
 # (#561). scripts/docs-conformance/README.md (yours, shipped) says so in the
 # living-spec paragraph.
 # Kit-only, never shipped: tests/docs-demo.sh's A5c, the consumer case in

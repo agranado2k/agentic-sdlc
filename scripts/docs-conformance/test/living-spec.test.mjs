@@ -352,13 +352,20 @@ test("#561: a name inside the docs harness's own tree cites nothing — its test
   });
   assert.deepEqual(messages(run(ctx)), [named(B1)]);
   cleanup(ctx);
-  // Anchored at the repo root: a nested tree of the same name is a project's.
-  const nested = ctxFor({
-    "docs/specs/billing.md": BILLING,
-    "vendor/scripts/docs-conformance/test/a.test.mjs": `// ${B1} ${B2}\n`,
-  });
-  assert.deepEqual(run(nested), []);
-  cleanup(nested);
+});
+
+test("#561: the exclusion is the harness tree exactly — a nested tree or a longer name is the project's", () => {
+  // Anchored at the repo root and ending at the directory's slash (#578
+  // review, M-2): only `scripts/docs-conformance/` itself is excluded.
+  for (const near of [
+    "vendor/scripts/docs-conformance/test/a.test.mjs",
+    "docs/scripts/docs-conformance/test/a.test.mjs",
+    "scripts/docs-conformance-extra/test/a.test.mjs",
+  ]) {
+    const ctx = ctxFor({ "docs/specs/billing.md": BILLING, [near]: `// ${B1} ${B2}\n` });
+    assert.deepEqual(run(ctx), [], `${near} did not cite`);
+    cleanup(ctx);
+  }
 });
 
 // The scan: every file of the harness tree, and the gate's two shell files
