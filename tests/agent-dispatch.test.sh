@@ -2522,7 +2522,7 @@ printf '%s\n' "$S_OUT" | grep -q "^worker TRACE_PARENT=$TR_STACK_RUN\$" &&
 	pass "the worker's parent is the run the stack holds, not an empty field" ||
 	fail "the worker was handed '$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_PARENT=//p')' for a stack run of $TR_STACK_RUN"
 tr_event_has "$TR_STACK" 2 "\"run\":\"$TR_STACK_RUN\"" "…and the spawn belongs to that same run"
-env TRACE_DIR="$TR_STACK" sh "$TRACE" end outcome=green >/dev/null
+env TRACE_DIR="$TR_STACK" sh "$TRACE" end "$TR_STACK_RUN" outcome=green >/dev/null
 
 # --- the trace is never load-bearing (ADR-0008 clause 4) --------------------
 # A trace policy file named and missing is a usage error for the trace script,
