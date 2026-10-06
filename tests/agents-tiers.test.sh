@@ -828,8 +828,14 @@ says() { # <folded text> <phrase> <what the text is, for the label>
 	*) fail "$3 does not say $2" ;;
 	esac
 }
-for manual in AGENTS.md constitution/AGENTS.md.template; do
-	tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ')
+# The kit's tier practice left its root for the kit-own article the root points
+# at (ADR-0014), so for the kit that article is the tiers text; a consumer's
+# stays in its manual's section.
+for manual in docs/capability-tiers.md constitution/AGENTS.md.template; do
+	case $manual in
+	docs/*) tiers=$(tr '\n' ' ' <"$KIT/$manual") ;;
+	*) tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/$manual" | tr '\n' ' ') ;;
+	esac
 	for phrase in '`judge`' 'decide' 'rank-or-verify' 'per-option probabilities' 'never handed a verification' 'review verdict'; do
 		says "$tiers" "$phrase" "$manual's tiers section"
 	done
