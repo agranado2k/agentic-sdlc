@@ -2087,7 +2087,33 @@
 # tests/implement-deliver.test.sh and tests/spec-skills.test.sh read it
 # instead of their own patterns; README's suite entries.
 
-shared-layer: 0.54.0
+# 0.55.0 — a release is tagged by its landing, before main is judged (ticket
+# #509, ADR-0014). Five releases in a row, 0.49.0 to 0.54.0, turned main red
+# on their own merge: the kit's CI checks for the bump's tag on the merge
+# push, before the tag could exist, and each was repaired by hand — tag the
+# merge commit, re-run the failed run. The landing now does both, in the
+# order that makes the repair unnecessary. NO file joins or leaves the
+# shared layer, and no manifest-listed file changes behavior. UPDATING.md
+# changes content: the arriving-from paragraph, and both worked examples
+# re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/merge-train/SKILL.md (9a): step 4 gains c2 — a merge that
+# bumps VERSION's release line is tagged at the merge, before the post-merge
+# wait; once the tag is on the remote each run that failed is re-run once,
+# failed jobs only (`gh run rerun <id> --failed`), and only that second
+# result is judged; a merge that bumps nothing is never re-run, and a tag
+# naming another commit is never moved. Step 5 now confirms the tag is on
+# the remote instead of cutting it after cleanup (#509). bootstrap.sh's
+# kit-own deletion list gains docs/adr/0014, which a consumer never
+# receives — nothing to take.
+# Kit-only, never shipped: scripts/land.kit.sh, the landing script, tags a
+# release's merge commit before it waits, re-runs once what failed, records
+# data.release, data.tagged and data.reruns on merge.land, and exits 1 on a
+# release left untagged; tests/land.test.sh section 8 holds the order with a
+# stub git beside the stub gh; ADR-0014 and its INDEX row; the root manual's
+# landing-script row.
+
+shared-layer: 0.55.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
