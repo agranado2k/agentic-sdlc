@@ -64,11 +64,64 @@ case " $* " in
 *" run watch "*)
 	# A workflow that takes wall-clock time: the waited figure moves with it.
 	[ -z "${STUB_WATCH_SLEEP:-}" ] || sleep "$STUB_WATCH_SLEEP"
+	# A run re-run after the tag answers with its second attempt's result.
+	grep -q '^ARGV: run rerun' "$STUB_LOG" && exit "${STUB_WATCH_RC_AFTER:-0}"
 	exit "${STUB_WATCH_RC:-0}"
+	;;
+*" run rerun "*) exit "${STUB_RERUN_RC:-0}" ;;
+*" run view "*)
+	# A re-run's new attempt shows `completed` (the old attempt) for the first
+	# STUB_COMPLETED_VIEWS asks, then queued.
+	if [ "$(grep -c '^ARGV: run view' "$STUB_LOG")" -le "${STUB_COMPLETED_VIEWS:-0}" ]; then
+		echo completed
+	else
+		echo queued
+	fi
 	;;
 esac
 EOF
 chmod +x "$STUBDIR/gh"
+# The stub git answers the landing's release questions and passes everything
+# else to the real one: whether the merge bumped VERSION's shared-layer line
+# (the merge commit against its first parent), whether the tag already exists
+# on the forge, and the tag and its push — each logged beside the forge's
+# calls, so one log holds the order. With no knobs the merge bumps nothing.
+REAL_GIT=$(command -v git)
+export REAL_GIT
+cat >"$STUBDIR/git" <<'EOF'
+#!/bin/sh
+[ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+_c=
+[ "${1:-}" = -C ] && { _c=$2; shift 2; }
+case ${1:-} in
+fetch | show | ls-remote | tag | push) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
+*) if [ -n "$_c" ]; then exec "$REAL_GIT" -C "$_c" "$@"; else exec "$REAL_GIT" "$@"; fi ;;
+esac
+case $1 in
+fetch) exit "${STUB_FETCH_RC:-0}" ;;
+show)
+	case $2 in
+	*'^1:VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_BEFORE:-0.1.0}" ;;
+	*':VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_AFTER:-0.1.0}" ;;
+	*) exit 128 ;;
+	esac
+	;;
+ls-remote)
+	# An annotated tag lists its tag object, then the commit it peels to; a
+	# lightweight one lists the commit alone.
+	[ -n "${STUB_REMOTE_TAG:-}" ] || exit 0
+	if [ "${STUB_REMOTE_TAG_KIND:-annotated}" = annotated ]; then
+		printf '%s\trefs/tags/v%s\n' 2222222222222222222222222222222222222222 "${STUB_VER_AFTER:-0.1.0}"
+		printf '%s\trefs/tags/v%s^{}\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}"
+	else
+		printf '%s\trefs/tags/v%s\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}"
+	fi
+	;;
+tag) exit "${STUB_TAG_RC:-0}" ;;
+push) exit "${STUB_PUSH_RC:-0}" ;;
+esac
+EOF
+chmod +x "$STUBDIR/git"
 PATH="$STUBDIR:$PATH"
 STUB_LOG="$SCRATCH/gh.log"
 STUB_KNOBS="$SCRATCH/gh.knobs"
@@ -235,6 +288,10 @@ show 'pr:#151' --kind merge.land | grep -qF '"workflows":"failure"' && pass "the
 	fail "a failed post-merge workflow was not recorded on merge.land: $(show 'pr:#151')"
 [ "$(events 151 feedback)" = 1 ] && pass "and the landing still gets its feedback" || fail "no feedback after a failed workflow"
 printf '%s\n' "$S_ERR" | grep -qi 'escalate' && pass "stderr says to escalate" || fail "stderr does not say escalate: $S_ERR"
+grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a merge that bumps nothing had a failed run re-run" ||
+	pass "a merge that bumps nothing re-runs no failed workflow — its red is the verdict"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a merge that bumps nothing was tagged: $(grep '^ARGV: git' "$STUB_LOG")" ||
+	pass "and is not tagged"
 
 land STUB_RUNS= 152
 s_assert_status 0 "no workflow on the merge commit: still a landing, exit 0"
@@ -397,5 +454,155 @@ for f in scripts/land.kit.sh tests/land.test.sh; do
 done
 # The /merge-train row's naming of the script is held by tests/self-host.test.sh
 # F7 alone — by path, by the name "landing script", with baits (#422).
+
+# ---------------------------------------------------------------------------
+banner "8. A release's merge lands tagged, and main is judged after the tag (#509, ADR-0015)"
+# ---------------------------------------------------------------------------
+# A merge that moves VERSION's shared-layer line is a release, and the kit's
+# own CI holds main red until its tag exists (self-host F3) — a run that
+# started on the merge push, before any tag could. So the landing tags the
+# merge commit itself, right after the merge and before it waits; re-runs,
+# once, every run that failed; and only then judges main. The log holds the
+# forge's calls and the tag's in one order, which is what proves it.
+REL="STUB_VER_BEFORE=0.1.0 STUB_VER_AFTER=0.2.0"
+# line_of <pattern> — the first log line matching, by number; 0 for none.
+line_of() { grep -n -m1 -- "$1" "$STUB_LOG" | cut -d: -f1 | grep . || echo 0; }
+
+# shellcheck disable=SC2086 # REL is two knob words, split on purpose
+land $REL STUB_WATCH_RC=1 STUB_WATCH_RC_AFTER=0 190
+s_assert_status 0 "a release whose first run failed untagged, green on its re-run, lands with exit 0"
+grep -qF "ARGV: git tag -a v0.2.0" "$STUB_LOG" && grep -F "ARGV: git tag -a v0.2.0" "$STUB_LOG" | grep -qF "$STUB_SHA" &&
+	pass "it tags the merge commit v0.2.0 (git tag -a v0.2.0 … $STUB_SHA)" ||
+	fail "the merge commit was not tagged v0.2.0: $(grep '^ARGV: git' "$STUB_LOG")"
+grep -qE "^ARGV: git push origin (refs/tags/)?v0\.2\.0$" "$STUB_LOG" && pass "and pushes the tag to origin" ||
+	fail "the tag was never pushed: $(grep '^ARGV: git' "$STUB_LOG")"
+_merge=$(line_of '^ARGV: pr merge')
+_push=$(line_of '^ARGV: git push')
+_watch=$(line_of '^ARGV: run watch')
+[ "$_merge" -gt 0 ] && [ "$_push" -gt "$_merge" ] && [ "$_watch" -gt "$_push" ] &&
+	pass "the order is merge, tag pushed, then the wait (lines $_merge < $_push < $_watch)" ||
+	fail "the order is not merge < tag push < watch: merge $_merge, push $_push, watch $_watch"
+[ "$(grep -c '^ARGV: run rerun 901 --failed' "$STUB_LOG")" = 1 ] && pass "the failed run is re-run once, its failed jobs only (gh run rerun 901 --failed)" ||
+	fail "the failed run was not re-run exactly once with --failed: $(grep 'run rerun' "$STUB_LOG")"
+[ "$(line_of '^ARGV: run rerun')" -gt "$_push" ] && pass "and the re-run comes after the tag is pushed" ||
+	fail "the re-run came before the tag was pushed"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 2 ] && pass "and the re-run is watched to its end" ||
+	fail "run 901 was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times, not twice"
+ml=$(show 'pr:#190' --kind merge.land)
+for tok in '"workflows":"success"' '"release":"v0.2.0"' '"tagged":"yes"' '"reruns":"1"'; do
+	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "merge.land carries $tok" || fail "merge.land lacks $tok: $ml"
+done
+s_assert_out_has "tagged v0.2.0" "stdout says the release was tagged"
+s_assert_err_lacks "land nothing else" "and stderr raises no failure"
+
+# shellcheck disable=SC2086
+land $REL 191
+s_assert_status 0 "a release green on its first runs lands with exit 0"
+grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a green release was re-run" || pass "and nothing is re-run"
+grep -qE "^ARGV: git push origin (refs/tags/)?v0\.2\.0$" "$STUB_LOG" && pass "and it is still tagged" || fail "a green release was not tagged"
+
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 STUB_WATCH_RC_AFTER=1 192
+s_assert_status 1 "a release still red after its one re-run is exit 1"
+[ "$(grep -c '^ARGV: run rerun' "$STUB_LOG")" = 1 ] && pass "re-run once, never twice" ||
+	fail "re-run $(grep -c '^ARGV: run rerun' "$STUB_LOG") times"
+show 'pr:#192' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
+	fail "a release red after its re-run was not recorded as failure: $(show 'pr:#192' --kind merge.land)"
+s_assert_err_has "land nothing else" "stderr says to land nothing else"
+
+# shellcheck disable=SC2086
+land $REL STUB_PUSH_RC=1 STUB_WATCH_RC=1 193
+s_assert_status 1 "a release whose tag the forge refused is exit 1"
+grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a run was re-run with no tag on the forge" ||
+	pass "and nothing is re-run — a re-run with no tag fails the same way"
+s_assert_err_has "git tag -a v0.2.0 $STUB_SHA" "stderr names the tag command to run by hand"
+show 'pr:#193' --kind merge.land | grep -qF '"tagged":"no"' && pass "and merge.land records tagged=no" ||
+	fail "a refused tag was not recorded: $(show 'pr:#193' --kind merge.land)"
+
+# shellcheck disable=SC2086
+land $REL STUB_PUSH_RC=1 194
+s_assert_status 1 "an untagged release is exit 1 even with main green — it is not landed (hard rule 3)"
+
+# shellcheck disable=SC2086
+land $REL "STUB_REMOTE_TAG=$STUB_SHA" STUB_WATCH_RC=1 195
+s_assert_status 0 "a release already tagged at its merge commit lands with exit 0"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "an existing tag was cut again" || pass "and the tag is not cut again"
+[ "$(grep -c '^ARGV: run rerun' "$STUB_LOG")" = 1 ] && pass "but a run that failed is still re-run once" || fail "the failed run was not re-run"
+
+# shellcheck disable=SC2086
+land $REL STUB_REMOTE_TAG=1111111111111111111111111111111111111111 196
+s_assert_status 1 "a release whose tag already names another commit is exit 1"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a tag naming another commit was moved or re-cut" ||
+	pass "and the tag is never moved"
+s_assert_err_has "1111111111111111111111111111111111111111" "stderr names the commit the tag already holds"
+s_assert_err_lacks "2222222222222222222222222222222222222222" "and reads the commit an annotated tag peels to, never its tag object"
+
+# A lightweight tag lists the commit alone, with no peeled line (M-2 of the
+# review of PR #577).
+# shellcheck disable=SC2086
+land $REL "STUB_REMOTE_TAG=$STUB_SHA" STUB_REMOTE_TAG_KIND=lightweight 199
+s_assert_status 0 "a lightweight tag already on the merge commit is the release's tag: exit 0"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag on the merge commit was cut again" ||
+	pass "and is not cut again"
+# shellcheck disable=SC2086
+land $REL STUB_REMOTE_TAG=1111111111111111111111111111111111111111 STUB_REMOTE_TAG_KIND=lightweight 200
+s_assert_status 1 "a lightweight tag naming another commit is exit 1"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag naming another commit was moved" ||
+	pass "and is never moved"
+
+# The re-run waits for its new attempt to leave `completed` before watching
+# it: a watch on the old attempt would report the old failure (M-1).
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 STUB_COMPLETED_VIEWS=2 201
+s_assert_status 0 "a re-run whose new attempt shows completed twice first still lands green"
+[ "$(grep -c '^ARGV: run view 901' "$STUB_LOG")" = 3 ] &&
+	pass "it asked the run's status until it left completed (three asks)" ||
+	fail "it asked the run's status $(grep -c '^ARGV: run view 901' "$STUB_LOG") times, not 3"
+_last_view=$(grep -n '^ARGV: run view' "$STUB_LOG" | tail -1 | cut -d: -f1)
+_second_watch=$(grep -n '^ARGV: run watch 901' "$STUB_LOG" | sed -n 2p | cut -d: -f1)
+[ -n "$_second_watch" ] && [ "$_second_watch" -gt "$_last_view" ] &&
+	pass "and watched the re-run only after it left completed (line $_last_view < $_second_watch)" ||
+	fail "the re-run was watched before its status left completed: view $_last_view, watch ${_second_watch:-none}"
+
+# A re-run the forge refuses is a failure, not a pass (M-3).
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 STUB_RERUN_RC=1 202
+s_assert_status 1 "a re-run the forge refuses is exit 1"
+show 'pr:#202' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
+	fail "a refused re-run was not recorded as failure: $(show 'pr:#202' --kind merge.land)"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and a refused re-run is not watched" ||
+	fail "a refused re-run was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
+
+land STUB_FETCH_RC=1 STUB_WATCH_RC=1 197
+s_assert_status 1 "with the merge commit unreadable, the landing is judged as before (a red run is exit 1)"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "an unreadable merge was tagged" || pass "and nothing is tagged"
+s_assert_err_has "VERSION" "stderr says it could not read whether the merge bumped VERSION"
+
+land STUB_VER_BEFORE=0.1.0 'STUB_VER_AFTER=0.2.0; touch pwned' 198
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a malformed version line was tagged" ||
+	pass "a shared-layer value that is not a version is never tagged"
+
+# /merge-train agrees (ADR-0015 clause 7): its step 4 tags a release between
+# the merge and the wait, and judges main after one re-run of what failed.
+MT="$KIT/.agents/skills/merge-train/SKILL.md"
+# mt_order <file> — exit 0 when the merge, the tag and the watch appear in
+# that order in the file; the tag's line is the one the skill spells.
+mt_order() {
+	awk '
+		/gh pr merge "\$PR" --merge/ && !m { m = NR }
+		/git tag -a v<version> <merge sha>/ && !t { t = NR }
+		/gh run watch/ && !w { w = NR }
+		END { exit !(m && t && w && m < t && t < w) }
+	' "$1"
+}
+mt_order "$MT" && pass "/merge-train's step 4 tags a release between the merge and the wait" ||
+	fail "/merge-train's step 4 does not cut the release tag between 'gh pr merge' and 'gh run watch'"
+grep -qF 'gh run rerun <id> --failed' "$MT" && tr '\n' ' ' <"$MT" | grep -qiE 'rerun <id> --failed[^.]*once|once[^.]*rerun <id> --failed' &&
+	pass "/merge-train re-runs a tagged release's failed runs once (gh run rerun <id> --failed)" ||
+	fail "/merge-train does not say a tagged release's failed runs are re-run once with gh run rerun <id> --failed"
+# The probe can go red: the same skill with the tag moved after the wait.
+awk '/git tag -a v<version> <merge sha>/ { held = $0; next } { print } END { print held }' "$MT" >"$SCRATCH/mt.late"
+mt_order "$SCRATCH/mt.late" && fail "the order probe passed a skill that tags after the wait — the check is vacuous" ||
+	pass "the order probe rejects a skill that tags after the wait"
 
 t_done "land one PR by hand"
