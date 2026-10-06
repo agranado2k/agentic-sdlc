@@ -1694,17 +1694,56 @@ case "$S_OUT|$S_ERR" in
 vendor-strong-5\|*) pass "a crossing value is no id a spawn word covers: the walk reaches 'other:vendor-strong-5', with no match warning" ;;
 *) fail "the word 'strong' with a crossing fallback resolved '$S_OUT' — expected vendor-strong-5 (stderr '$S_ERR')" ;;
 esac
-# ONE membership test (#559). The probe above catches the bridge and the
-# resolver disagreeing; this catches the second copy that could disagree.
+# A prefix the resolver will not split — one whose SHAPE is wrong, here an
+# upper-case 'Other' even though it is declared — is no agent harness to the
+# resolver, so the value is one model id, and a word that folds from it covers
+# it. The bridge follows the resolver's answer, not the bare declaration
+# (#559, the one delta PR #582 names).
+cat >"$PROBE/scripts/agents.kit.fbm.config.sh" <<'PROBE_FBM_CFG'
+AGENT_HARNESSES='Other'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_FALLBACK='Other:vendor-strong-5 vendor-third-3'
+PROBE_FBM_CFG
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fbm AGENT_UNREACHABLE_MODELS=strong sh scripts/agents.kit.sh reviewer
+case "$S_OUT|$S_ERR" in
+*"matches no"*) fail "a malformed-prefix value was not bridged as the id the resolver reads — stderr '$S_ERR'" ;;
+vendor-third-3\|*) pass "a value whose prefix the resolver will not split is an id the word covers: the walk skips it to 'vendor-third-3'" ;;
+*) fail "the word 'strong' with a malformed-prefix fallback resolved '$S_OUT' — expected vendor-third-3 (stderr '$S_ERR')" ;;
+esac
+# ONE membership test (#559). The probes above catch the bridge and the
+# resolver disagreeing; these catch the second copy that could disagree.
 # Whether a value crosses to a declared agent harness is the resolver's
-# agents_split_harness's answer, so the wrapper reads no AGENT_HARNESSES of
-# its own and asks that function instead. Comment lines are not code.
+# agents_split_harness's answer. So the wrapper reads no AGENT_HARNESSES of
+# its own (comment lines are not code)…
 _kit_code=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER")
 case "$_kit_code" in
 *AGENT_HARNESSES*) fail "the kit wrapper reads AGENT_HARNESSES itself — a second copy of the resolver's membership test" ;;
-*agents_split_harness*) pass "the kit wrapper holds no copy of the membership test: it asks the resolver's agents_split_harness" ;;
-*) fail "the kit wrapper's bridge no longer asks the resolver's agents_split_harness whether a value crosses" ;;
+*) pass "the kit wrapper holds no copy of the membership test: it reads no AGENT_HARNESSES" ;;
 esac
+# …and the answer it bridges by IS that function's, observed rather than
+# grepped: a library copy whose sourced agents_split_harness says one bare
+# value crosses (the override follows the direct-execution block, so the
+# resolver executed by the wrapper still runs the real one). A wrapper that
+# asks the library leaves that value unbridged, and the walk answers it; one
+# that decided for itself would skip it too.
+PROBE_ASK="$SCRATCH/probe-ask"
+mkdir -p "$PROBE_ASK/scripts"
+cp "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.lib.sh" "$PROBE_ASK/scripts/"
+cat >>"$PROBE_ASK/scripts/agents.lib.sh" <<'PROBE_ASK_LIB'
+agents_split_harness() {
+	_ah_harness= _ah_model=$1
+	[ "$1" = vendor-strong-5 ] && _ah_harness=probe
+	return 0
+}
+PROBE_ASK_LIB
+cat >"$PROBE_ASK/scripts/agents.kit.ask.config.sh" <<'PROBE_ASK_CFG'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_FALLBACK='vendor-strong-5 vendor-third-3'
+PROBE_ASK_CFG
+t_run_split env -C "$PROBE_ASK" AGENT_HARNESS_SELF=ask AGENT_UNREACHABLE_MODELS=strong sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-strong-5 ] &&
+	pass "the bridge asks the resolver's agents_split_harness: the value it says crosses is left unbridged" ||
+	fail "the bridge did not take agents_split_harness's answer: resolved '$S_OUT', expected vendor-strong-5 (stderr '$S_ERR')"
 
 # A pinned id and an unknown word pass the bridge untouched: the id still
 # matches, and the unknown word reaches the resolver to be warned about.
