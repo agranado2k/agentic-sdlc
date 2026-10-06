@@ -505,8 +505,9 @@ Grouped by the seam each term belongs to. Entry shape:
   a requirement no test names. A removed requirement leaves a **tombstone**,
   `~~R<n>.~~ Removed by #<PRD>: <why>` — no requirement line, so no test names
   it, and kept so the id is never reused. Bootstrap lays a starter README in
-  `docs/specs/` that holds no requirement; the kit keeps no living spec of its
-  own. Ref: ADR-0012.
+  `docs/specs/` that holds no requirement. The kit keeps one of its own,
+  `docs/specs/process.md` for the Process context, cited by its suites as
+  `process/R<n>` and stripped by bootstrap. Ref: ADR-0012, #556.
   - _Avoid_: "the spec" on its own — the PRD, a ticket and a living spec are all
     specs; say which.
 - **Open issue** — a PRD question the conversation left unresolved, written as
