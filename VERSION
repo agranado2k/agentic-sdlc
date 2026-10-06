@@ -2087,7 +2087,26 @@
 # tests/implement-deliver.test.sh and tests/spec-skills.test.sh read it
 # instead of their own patterns; README's suite entries.
 
-shared-layer: 0.54.0
+# 0.55.0 — no kit-only file survives bootstrap (ticket #562, found by a real
+# consumer upgrade on 2026-10-06).
+# NO file joins and NO file leaves the shared layer. ONE shared file changes
+# content: UPDATING.md — the arriving-from paragraph, which tells an existing
+# consumer to delete scripts/agents.kit.codex.config.sh, and both worked
+# examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# bootstrap.sh's kit-only deletion list gains scripts/agents.kit.codex.config.sh,
+# the kit's own tier -> model mapping for a codex session: it was missing from
+# the list, though its own header said bootstrap deletes it, so every project
+# bootstrapped since it arrived carries the kit's model ids. An existing
+# consumer deletes the file by hand — nothing reads it outside the kit, so
+# the delete changes no behavior. No other kit-only file leaked.
+# Kit-only, never shipped: tests/lib.sh's t_kit_residue sweep (any `*.kit.*`
+# name, any file carrying the kit-own sentinel, any kit ADR or living spec)
+# and its assertions in tests/self-host.test.sh (a fresh bootstrap) and
+# tests/adopt-demo.sh (both adoptions), driven red per kind by
+# tests/harness-helpers.test.sh.
+
+shared-layer: 0.55.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
