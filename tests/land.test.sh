@@ -69,7 +69,15 @@ case " $* " in
 	exit "${STUB_WATCH_RC:-0}"
 	;;
 *" run rerun "*) exit "${STUB_RERUN_RC:-0}" ;;
-*" run view "*) printf '%s\n' "${STUB_RUN_STATUS:-queued}" ;;
+*" run view "*)
+	# A re-run's new attempt shows `completed` (the old attempt) for the first
+	# STUB_COMPLETED_VIEWS asks, then queued.
+	if [ "$(grep -c '^ARGV: run view' "$STUB_LOG")" -le "${STUB_COMPLETED_VIEWS:-0}" ]; then
+		echo completed
+	else
+		echo queued
+	fi
+	;;
 esac
 EOF
 chmod +x "$STUBDIR/gh"
@@ -98,7 +106,17 @@ show)
 	*) exit 128 ;;
 	esac
 	;;
-ls-remote) [ -z "${STUB_REMOTE_TAG:-}" ] || printf '%s\trefs/tags/v%s^{}\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}" ;;
+ls-remote)
+	# An annotated tag lists its tag object, then the commit it peels to; a
+	# lightweight one lists the commit alone.
+	[ -n "${STUB_REMOTE_TAG:-}" ] || exit 0
+	if [ "${STUB_REMOTE_TAG_KIND:-annotated}" = annotated ]; then
+		printf '%s\trefs/tags/v%s\n' 2222222222222222222222222222222222222222 "${STUB_VER_AFTER:-0.1.0}"
+		printf '%s\trefs/tags/v%s^{}\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}"
+	else
+		printf '%s\trefs/tags/v%s\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}"
+	fi
+	;;
 tag) exit "${STUB_TAG_RC:-0}" ;;
 push) exit "${STUB_PUSH_RC:-0}" ;;
 esac
@@ -517,6 +535,43 @@ s_assert_status 1 "a release whose tag already names another commit is exit 1"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a tag naming another commit was moved or re-cut" ||
 	pass "and the tag is never moved"
 s_assert_err_has "1111111111111111111111111111111111111111" "stderr names the commit the tag already holds"
+s_assert_err_lacks "2222222222222222222222222222222222222222" "and reads the commit an annotated tag peels to, never its tag object"
+
+# A lightweight tag lists the commit alone, with no peeled line (M-2 of the
+# review of PR #577).
+# shellcheck disable=SC2086
+land $REL "STUB_REMOTE_TAG=$STUB_SHA" STUB_REMOTE_TAG_KIND=lightweight 199
+s_assert_status 0 "a lightweight tag already on the merge commit is the release's tag: exit 0"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag on the merge commit was cut again" ||
+	pass "and is not cut again"
+# shellcheck disable=SC2086
+land $REL STUB_REMOTE_TAG=1111111111111111111111111111111111111111 STUB_REMOTE_TAG_KIND=lightweight 200
+s_assert_status 1 "a lightweight tag naming another commit is exit 1"
+grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag naming another commit was moved" ||
+	pass "and is never moved"
+
+# The re-run waits for its new attempt to leave `completed` before watching
+# it: a watch on the old attempt would report the old failure (M-1).
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 STUB_COMPLETED_VIEWS=2 201
+s_assert_status 0 "a re-run whose new attempt shows completed twice first still lands green"
+[ "$(grep -c '^ARGV: run view 901' "$STUB_LOG")" = 3 ] &&
+	pass "it asked the run's status until it left completed (three asks)" ||
+	fail "it asked the run's status $(grep -c '^ARGV: run view 901' "$STUB_LOG") times, not 3"
+_last_view=$(grep -n '^ARGV: run view' "$STUB_LOG" | tail -1 | cut -d: -f1)
+_second_watch=$(grep -n '^ARGV: run watch 901' "$STUB_LOG" | sed -n 2p | cut -d: -f1)
+[ -n "$_second_watch" ] && [ "$_second_watch" -gt "$_last_view" ] &&
+	pass "and watched the re-run only after it left completed (line $_last_view < $_second_watch)" ||
+	fail "the re-run was watched before its status left completed: view $_last_view, watch ${_second_watch:-none}"
+
+# A re-run the forge refuses is a failure, not a pass (M-3).
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 STUB_RERUN_RC=1 202
+s_assert_status 1 "a re-run the forge refuses is exit 1"
+show 'pr:#202' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
+	fail "a refused re-run was not recorded as failure: $(show 'pr:#202' --kind merge.land)"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and a refused re-run is not watched" ||
+	fail "a refused re-run was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
 
 land STUB_FETCH_RC=1 STUB_WATCH_RC=1 197
 s_assert_status 1 "with the merge commit unreadable, the landing is judged as before (a red run is exit 1)"
