@@ -240,7 +240,7 @@ case "$LAST_OUT" in
 *) fail "gate did not report shared-layer $KITV: $LAST_OUT" ;;
 esac
 
-banner "A5b. The living-spec check holds without node — PRD #527's R12 and R13"
+banner "A5b. The living-spec check holds without node — process/R12 and process/R13"
 # ADR-0012 clause 10, on the reduced path: a project with no node still has
 # every living requirement held to the suite. The harness's fixture tests
 # drive the node engine; this drives its POSIX twin, forced, on the project
@@ -248,10 +248,10 @@ banner "A5b. The living-spec check holds without node — PRD #527's R12 and R13
 # only the starter README that holds no requirement (#533).
 [ "$(ls docs/specs)" = "README.md" ] && pass "docs/specs/ holds the starter README alone (#533)" ||
 	fail "docs/specs/ is not the starter README alone: $(ls docs/specs 2>&1)"
-assert_status 0 "docs/specs/ with no living spec passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_status 0 "docs/specs/ with no living spec passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 assert_out_has "living specs"
 printf '# Ledger\n\nR1. The ledger SHALL balance.\n\n```md\nR7. A quoted example, not a requirement.\n```\n\nR2. WHEN a posting is reversed, the ledger SHALL keep both entries.\n' >docs/specs/ledger.md
-assert_status 1 "a living requirement no test names fails without node (R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_status 1 "a living requirement no test names fails without node (process/R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 assert_out_has "living-spec-untested"
 assert_out_has "docs/specs/ledger.md"
 assert_out_has "ledger/R1 is named by no test"
@@ -322,7 +322,7 @@ assert_status 1 "a spec file whose name is no area fails without node" -- env DO
 assert_out_has "living-spec-area-invalid"
 assert_out_has "docs/specs/Ledger_Book.md"
 rm -rf docs/specs docs/ledger-notes.md tests/ledger.sh && rmdir tests
-assert_status 0 "no docs/specs/ at all passes without node (R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_status 0 "no docs/specs/ at all passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 
 banner "A6. The gate is NOT vacuous over the new docs"
 # If an unstamped mark could survive in docs/, "personalized" would be unchecked.

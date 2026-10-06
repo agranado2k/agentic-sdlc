@@ -581,7 +581,7 @@ assert_out_lacks "portability-leak"
 restore_good
 
 # ---------------------------------------------------------------------------
-banner "12b. RED then GREEN — a living requirement no test names (PRD #527, R14)"
+banner "12b. RED then GREEN — a living requirement no test names (process/R14)"
 # ---------------------------------------------------------------------------
 # A fresh bootstrap carries the living-spec check and no living spec of the
 # kit's — only the docs/specs/ starter, a README that explains the format and
@@ -595,7 +595,7 @@ for w in '### ADDED' '### MODIFIED' '### REMOVED' '~~R<n>.~~ Removed by #<PRD>: 
 	assert_file_has docs/specs/README.md "$w" "the starter explains the living spec (#533)"
 done
 specs_now=$(ls docs/specs)
-[ "$specs_now" = "README.md" ] && pass "the starter is the README alone — no living spec of the kit's (R14)" ||
+[ "$specs_now" = "README.md" ] && pass "the starter is the README alone — no living spec of the kit's (process/R14)" ||
 	fail "docs/specs holds more than the starter README: $specs_now"
 assert_status 0 "the starter alone passes the forced fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 printf '# Signup\n\nR1. WHEN a visitor signs up, the system SHALL send one confirmation.\n' >docs/specs/signup.md
@@ -609,7 +609,7 @@ mkdir -p tests
 printf '#!/bin/sh\n# signup/R1: one confirmation per signup\n' >tests/signup.test.sh
 assert_status 0 "check.sh passes once a test names it" -- sh scripts/check.sh
 assert_status 0 "and so does the fallback" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-# A REMOVED delta leaves a tombstone in place of the line (PRD #527 R11): it
+# A REMOVED delta leaves a tombstone in place of the line (process/R11): it
 # keeps the id from reuse and is no requirement line, so neither engine asks a
 # test to name it.
 printf '~~R2.~~ Removed by #12: folded into signup/R1.\n' >>docs/specs/signup.md

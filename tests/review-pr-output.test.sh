@@ -759,7 +759,7 @@ for b in \
 done
 
 # ---------------------------------------------------------------------------
-banner "12. Axis 2 cites requirement ids where the spec carries them (PRD #527 R9)"
+banner "12. Axis 2 cites requirement ids where the spec carries them (process/R9)"
 # ---------------------------------------------------------------------------
 # #532, ADR-0012 clause 6. Agent 7 cited "a PRD acceptance criterion" the PRD
 # template never had, so a SPECIFIED citation was free text, and a requirement
@@ -778,25 +778,25 @@ a7_sentences=$(region '^#### Agent 7 ' '^### 4\. ' | sentences)
 	fail "Agent 7's region is empty — its heading or §4's moved and this section lost them"
 for want in "$R9_IDS" "$R9_NONE"; do
 	carries "$a7_sentences" "$want" &&
-		pass "R9: Agent 7 says it, word for word: ${want%%,*}" ||
-		fail "R9: Agent 7's procedure does not say, word for word: $want"
+		pass "process/R9: Agent 7 says it, word for word: ${want%%,*}" ||
+		fail "process/R9: Agent 7's procedure does not say, word for word: $want"
 done
 for f in "$WORKER" "$TWIN"; do
 	f_sentences=$(sentences_for "$f")
 	for want in "$R9_IDS" "$R9_NONE"; do
 		carries "$f_sentences" "$want" &&
-			pass "R9: $f says Agent 7's sentence word for word: ${want%%,*}" ||
-			fail "R9: $f does not say Agent 7's requirement-id sentence word for word — its reviewer would cite differently: $want"
+			pass "process/R9: $f says Agent 7's sentence word for word: ${want%%,*}" ||
+			fail "process/R9: $f does not say Agent 7's requirement-id sentence word for word — its reviewer would cite differently: $want"
 	done
 done
 # The worker's items are one line each, and the broker lifts that line and
 # drops any other — so the dispatched form puts the id on the item's own line,
 # where §5b's two-line ✅ would lose it.
-t_text_has "$(unwrap "$WORKER")" "The id goes on the item's own line, right after its tag: the session that lands this report keeps the tagged line and drops any line beneath it" "R9: a dispatched item's id survives the broker's one-line lift" "$WORKER"
+t_text_has "$(unwrap "$WORKER")" "The id goes on the item's own line, right after its tag: the session that lands this report keeps the tagged line and drops any line beneath it" "process/R9: a dispatched item's id survives the broker's one-line lift" "$WORKER"
 # The template the report prints carries the id in the citation slot of a ✅
 # and in the body of a ❌ — after the tag, so the tag still opens the line.
-t_text_has "$axis2" "→ <the requirement id it delivers, where the spec carries ids; else the PRD/ticket/decision-record citation>" "R9: the ✅ template's citation is the id where there is one" "the §5b template"
-t_text_has "$axis2" "❌ MISSING      <the requirement id the ticket covers, where the spec carries ids; else the spec line the diff does not deliver>" "R9: the ❌ template names the covered id where there is one" "the §5b template"
+t_text_has "$axis2" "→ <the requirement id it delivers, where the spec carries ids; else the PRD/ticket/decision-record citation>" "process/R9: the ✅ template's citation is the id where there is one" "the §5b template"
+t_text_has "$axis2" "❌ MISSING      <the requirement id the ticket covers, where the spec carries ids; else the spec line the diff does not deliver>" "process/R9: the ❌ template names the covered id where there is one" "the §5b template"
 # Baits: each weakening of the ruling, in the skill, goes red.
 for b in \
 	's/a ✅ SPECIFIED item cites the id/a ✅ SPECIFIED item may cite the id/' \
