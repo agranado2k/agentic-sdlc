@@ -2245,3 +2245,29 @@ scan matches only `R[0-9]` in `.sh` files; the length bound is encoded twice
 in the coverage reader; the wrapper duplicates the resolver's harness
 membership test; making a named `end` mandatory once consumers have moved.
 
+
+## 2026-10-06 — spike: a spawn can carry its tier to the stop event (PRD #580)
+
+Question, from PRD #580's open issues: can a chain skill's spawn carry its
+tier, domain, skill and ticket to the `agent.stop` event? Verdict: **true, and
+no new hook is needed.** Probed on Claude Code with an Opus 5.5 session and a
+Haiku 4.5 Explore spawn.
+
+- The channel already exists. `hook_run_handed` (#474) reads `Trace-Run:
+  <run> [<parent>]` from the spawn prompt's first line, inside one bounded read
+  of the subagent transcript's first user record (4096 bytes). A live spawn
+  whose prompt opened with that line had its `agent.stop` recorded under the
+  run. A second line, `Trace-Spawn: tier=… domain=… skill=… ticket=…`, sat
+  verbatim in the same record, inside the same read.
+- Skill and ticket are mostly attributable already: 91 of the last 100 stops
+  carry a run, and every `run.start` names its skill and subject. Tier is not.
+  797 `spawn` events carry a tier, but nothing joins one to its stop, and 13 of
+  45 runs with stops mix tiers, so a join by run is ambiguous. The PRD's R1
+  becomes: one `Trace-Spawn:` line on the spawn prompt, read with the run line.
+- Surprise: the spike agent's stop was recorded twice, both `outcome=fail`
+  with no tokens. The transcript ended on a `user` record, and the 3000 ms
+  wait bound passed. A stop that ends on a user record loses its usage. That
+  is a separate defect from attribution, and the spike leaves it for
+  `/to-tickets` to dedupe.
+
+Evidence is in the trace as the `spike.verdict` blob on `prd:#580`.
