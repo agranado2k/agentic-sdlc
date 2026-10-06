@@ -4342,4 +4342,81 @@ for h474 in subagent-stop session-end tool-post; do
 	*) fail "the README row for $h474.sh does not name the Trace-Run line (#474)" ;; esac
 done
 
+# ---------------------------------------------------------------------------
+banner "48. The spawn's attribution rides on the prompt's second line (#583)"
+# ---------------------------------------------------------------------------
+# Under the Trace-Run first line, a spawn prompt's SECOND line,
+# `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>`,
+# names what the spawn served; the subagent-stop hook writes it into the
+# trace's tier, domain and skill columns and relates the ticket. Read in the
+# same bounded read that finds the run, held to an exact shape, never executed.
+# A stop with no such line, or one that does not match exactly, is tier
+# `unattributed` — a row the summary shows, never one it drops.
+new_trace
+SP583="Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it."
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-583.jsonl" "$SP583"
+stop474 "$SCRATCH/spawn-583.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = implementer ] && [ "$(str "$STOP" domain)" = content ] &&
+	[ "$(str "$STOP" skill)" = implement ] && [ "$(str "$STOP" run)" = "$WT474" ] &&
+	pass "agent.stop carries the tier, domain and skill its spawn prompt's second line named, beside the handed run" ||
+	fail "agent.stop with a Trace-Spawn line: exit $S_STATUS, '$STOP', stderr '$S_ERR'"
+case " $(str "$STOP" related) " in
+*" ticket:#583 "*) case " $(str "$STOP" related) " in *" session:$SESSION "*) pass "the ticket is a related subject, beside the session" ;;
+	*) fail "the session left related: '$(str "$STOP" related)'" ;; esac ;;
+*) fail "agent.stop's related is '$(str "$STOP" related)', want ticket:#583 among it" ;;
+esac
+EXP583=$(env TRACE_DIR="$TDIR" sh "$TRACE" export --csv 2>/dev/null | sed -n '1p;$p')
+case $EXP583 in *tier*domain*implementer*content*) pass "export carries the tier and domain columns the line filled" ;;
+*) fail "export did not carry the attribution: '$EXP583'" ;; esac
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-583n.jsonl" "Trace-Run: $WT474\\\\nTrace-Spawn: tier=reviewer domain=none skill=review-pr ticket=none\\\\nReview it."
+stop474 "$SCRATCH/spawn-583n.jsonl"
+[ "$(str "$STOP" tier)" = reviewer ] && [ -z "$(str "$STOP" domain)" ] && [ "$(str "$STOP" skill)" = review-pr ] &&
+	[ "$(str "$STOP" related)" = "session:$SESSION" ] &&
+	pass "domain=none and ticket=none leave the domain absent and relate no ticket" ||
+	fail "a none/none line: '$STOP'"
+# Not an exact match: no attribution, tier unattributed.
+for bad583 in "Trace-Run: $WT474\\\\nBuild it." \
+	"Trace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it." \
+	"Trace-Run: $WT474\\\\nBuild it.\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583 extra=1" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement\\\\tticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\tx" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer  domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: domain=content tier=implementer skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=wizard domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=Content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=\$(touch pwned-583) ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#0583" \
+	"Trace-Run: not-a-run\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583"; do
+	prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/bad-583.jsonl" "$bad583"
+	stop474 "$SCRATCH/bad-583.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = unattributed ] && [ -z "$(str "$STOP" domain)" ] &&
+		[ -z "$(str "$STOP" skill)" ] && [ "$(str "$STOP" related)" = "session:$SESSION" ] &&
+		pass "a prompt '$bad583' attributes nothing: tier unattributed" ||
+		fail "a prompt '$bad583' gave tier '$(str "$STOP" tier)' domain '$(str "$STOP" domain)' skill '$(str "$STOP" skill)' related '$(str "$STOP" related)'"
+done
+[ ! -e "$R474/pwned-583" ] && [ ! -e "$SCRATCH/pwned-583" ] &&
+	pass "and no Trace-Spawn value was ever executed" || fail "a Trace-Spawn value was executed: pwned-583 exists"
+# The summary prices each tier, and shows the unattributed row.
+if [ "$HAVE_NODE" = 1 ]; then
+	P583="$SCRATCH/policy-583.sh"
+	{ printf "TRACE_DIR='%s'\n" "$TDIR"; printf "TRACE_PRICE_CLAUDE_FABLE_5_1='3,15,3.75,0.30'\n"; } >"$P583"
+	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by tier
+	ROW583=$(printf '%s\n' "$S_OUT" | awk '$1 == "implementer" { print $2, $7 }')
+	UN583=$(printf '%s\n' "$S_OUT" | awk '$1 == "unattributed" { print $2, $7 }')
+	case $ROW583 in "1 "[0-9]*.[0-9]*) pass "summary --by tier prices the attributed stop under its tier ($ROW583)" ;;
+	*) fail "summary --by tier implementer row '$ROW583'; stdout '$S_OUT'" ;; esac
+	case $UN583 in "14 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
+	*) fail "summary --by tier unattributed row '$UN583'; stdout '$S_OUT'" ;; esac
+	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by domain
+	case $(printf '%s\n' "$S_OUT" | awk '$1 == "content" { print $2 }') in 1) pass "summary --by domain groups the stop under its domain" ;;
+	*) fail "summary --by domain: '$S_OUT'" ;; esac
+else
+	skip "summary --by tier pricing (node is not on PATH, so no stop carried tokens)"
+fi
+case $(grep -F "| \`hooks/subagent-stop.sh\` |" "$KIT/adapters/claude-code/README.md") in
+*"Trace-Spawn: tier=<tier>"*"#583"*) pass "the README row for subagent-stop.sh names the Trace-Spawn line (#583)" ;;
+*) fail "the README row for subagent-stop.sh does not name the Trace-Spawn line (#583)" ;; esac
+
 t_done "trace hooks"

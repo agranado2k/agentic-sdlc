@@ -8,7 +8,7 @@
 #   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
-#   sh scripts/trace.sh summary [--by kind|skill|model|session] [--since YYYY-MM-DD]
+#   sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
 #   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
 #   sh scripts/trace.sh dir
@@ -217,7 +217,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
-       sh scripts/trace.sh summary [--by kind|skill|model|session] [--since YYYY-MM-DD]
+       sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
        sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
@@ -1710,8 +1710,8 @@ trace_summary() {
 		--by)
 			[ $# -ge 2 ] || usage
 			case $2 in
-			kind | skill | model | session) _su_by=$2 ;;
-			*) die "--by '$2' is not an axis — the axes are kind, skill, model, session" ;;
+			kind | skill | model | session | tier | domain) _su_by=$2 ;;
+			*) die "--by '$2' is not an axis — the axes are kind, skill, model, session, tier, domain" ;;
 			esac
 			shift 2
 			;;
