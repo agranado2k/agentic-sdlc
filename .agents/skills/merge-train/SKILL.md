@@ -111,6 +111,11 @@ gh pr checks "$PR" --watch
 # c. Merge, with the method the local workflow article mandates.
 gh pr merge "$PR" --merge
 
+# c2. Did this merge bump VERSION's release line? Then it is a release: tag the
+#     merge commit NOW, before the wait — CI that checks for the tag started
+#     on this very merge.
+git tag -a v<version> <merge sha> && git push origin v<version>
+
 # d. Wait for the post-merge workflows before the next merge — the train should
 #    observe each result, not outrun it, even when their concurrency groups
 #    would queue anyway.
@@ -118,13 +123,25 @@ gh run list --branch <base> --limit 5 --json name,status,conclusion,databaseId
 gh run watch <databaseId>
 ```
 
+**A release is tagged at its merge (4c2), not after the batch.** A release is not landed until its merge commit carries the tag, and a
+repo whose CI enforces that (the kit's own does, in its self-host suite's
+F3) starts that check on the merge push, before any tag could exist. So:
+tag right after the merge; never move a tag that already names another
+commit — stop and report instead; and once the tag is on the remote,
+re-run each post-merge run that failed, **once**, failed jobs only
+(`gh run rerun <id> --failed`), then watch it again. Only that second
+result is the one 4d judges. A merge that bumps nothing is never re-run: its red is the
+verdict.
+
 **If checks go red after update-branch (4b)**: that is a real cross-PR
 interaction surfaced early — skip the PR, record it as a `/pr-iterate`
 candidate, continue the train.
 **If the merge itself is rejected**: re-read state; if it is not a transient
 (e.g. checks re-queued), stop and report.
 **If a post-merge workflow fails (4d)**: hard rule 6 — stop the train, escalate
-with the run log.
+with the run log. For a release, that is the result after its one re-run;
+a release whose tag could not be pushed stops the train too — merged, not
+landed.
 
 **Record each PR's fate as the train decides it**, one event per PR (`<ticket>`
 is the ticket it implemented):
@@ -168,7 +185,8 @@ on a landed slice, and a twin is none.
 single PR outside a train, its one-PR form is the **landing script** the
 root `AGENTS.md` names, where it names one: it does this step for that PR —
 refuses a PR that is not green and mergeable, merges with the mandated
-method, waits for the base branch's workflows, then records the same
+method, tags a release at its merge as 4c2 says, waits for the base
+branch's workflows — re-running a release's failures once — then records the same
 `merge.land` and `feedback` — so a by-hand landing is not a hole in the
 trace. It is the operator's command, exactly as a train is.
 
@@ -177,13 +195,12 @@ trace. It is the operator's command, exactly as a train is.
 Run **`/worktree-cleanup`** — the merged PRs' worktrees are now prunable, and
 the root checkout's base branch should fast-forward to include the batch.
 
-If the batch bumped `VERSION`, the train is not over at cleanup: cut and push
-the release tag (`git tag -a v<version> <merge sha> && git push origin
+If the batch bumped `VERSION`, confirm the release tag 4c2 cut is on the
+remote and names the bump's merge commit (`git ls-remote --tags origin
 v<version>`) — an untagged bump is a release no consumer can reach, and a
-repo whose CI enforces release integrity (the kit's own does, in its
-self-host suite's F3) stays red on main by design until the tag exists.
-Tagging is part of landing the bump, and it carries the operator's name
-exactly like the merge did.
+repo whose CI enforces release integrity stays red on main by design until
+the tag exists. Tagging is part of landing the bump, and it carries the
+operator's name exactly like the merge did.
 
 Close the train's run, with the tag when one was cut:
 `sh scripts/trace.sh end <the run id your begin printed> outcome=ok|stopped data.landed=<count> data.skipped=<count> [data.tag=v<version>] reason='<the Landed line, or what stopped the train>' || :` (the id left out when your `begin` printed nothing, and never a `Trace-Run:` id: a run you did not begin is not yours to end).
