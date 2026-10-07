@@ -497,7 +497,7 @@ banner "9. The reuse/DRY lens tells added duplication from inherited duplication
 LENS5="$ROOT/.agents/skills/review-pr/lens-reuse-dry.md"
 a5=$(t_line_of "$LENS5" "#### Agent 5 ")
 a6=$(($(wc -l <"$LENS5") + 1))
-if [ -n "$a5" ] && [ -n "$a6" ] && [ "$a5" -lt "$a6" ]; then
+if [ -n "$a5" ]; then
 	pass "Agent 5's section is extractable (lines $a5-$a6)"
 else
 	fail "Agent 5's section is not extractable — a5='$a5' a6='$a6'"
@@ -933,8 +933,12 @@ lens_gaps() {
 	done
 	grep -qE '^#### Agent [1-6] ' "$1/SKILL.md" && printf '%s\n' 'SKILL.md: a lens body is still in the coordinator'
 	grep -qE '^#### Agent 7 — ' "$1/SKILL.md" || printf '%s\n' 'SKILL.md: Agent 7 left the coordinator'
-	tr '\n' ' ' <"$1/SKILL.md" | tr -s ' ' | grep -qF 'A lens agent reads its own file, never this one' ||
+	_lg_flat=$(tr '\n' ' ' <"$1/SKILL.md" | tr -s ' ')
+	printf '%s\n' "$_lg_flat" | grep -qF "A lens agent reads its own file and this skill's §4 and §5, never the rest of it" ||
 		printf '%s\n' 'SKILL.md: no rule that a lens agent reads only its own file'
+	for _lg_w in 'for Agent 5, step 1'"'"'s reuse catalog' 'for Agent 6, the mutation delta' '§5 (the severity buckets and the finding anatomy)'; do
+		printf '%s\n' "$_lg_flat" | grep -qF -- "$_lg_w" || printf 'SKILL.md: the lens hand-off lost "%s"\n' "$_lg_w"
+	done
 	for _lg_f in "$1"/lens-*.md; do
 		[ -f "$_lg_f" ] || continue
 		_lg_tok=$(basename "$_lg_f" .md)
@@ -953,9 +957,31 @@ cp "$LENS_DIR"/*.md "$SCRATCH/lens-bait/"
 rm -f "$SCRATCH/lens-bait/lens-simplicity.md"
 lens_gaps "$SCRATCH/lens-bait" | grep -qF 'lens-simplicity.md: no file' &&
 	pass "bait: a lens file removed is named" || fail "bait: a lens file removed was not caught"
-cp "$LENS_DIR/lens-simplicity.md" "$SCRATCH/lens-bait/" 2>/dev/null
-cat "$SCRATCH/lens-bait/lens-simplicity.md" >>"$SCRATCH/lens-bait/SKILL.md" 2>/dev/null
+cp "$LENS_DIR/lens-simplicity.md" "$SCRATCH/lens-bait/"
+cat "$SCRATCH/lens-bait/lens-simplicity.md" >>"$SCRATCH/lens-bait/SKILL.md"
 lens_gaps "$SCRATCH/lens-bait" | grep -qF 'a lens body is still in the coordinator' &&
 	pass "bait: a lens body back in the coordinator is named" || fail "bait: a lens body back in the coordinator was not caught"
+
+# One bait per remaining rule (#621 review M-3): each mutant of a fresh copy
+# must be named by the gap it plants.
+lens_bait() {
+	rm -rf "$SCRATCH/lens-bait" && mkdir -p "$SCRATCH/lens-bait" && cp "$LENS_DIR"/*.md "$SCRATCH/lens-bait/" &&
+		sed -i "$2" "$SCRATCH/lens-bait/$1" &&
+		lens_gaps "$SCRATCH/lens-bait" | grep -qF -- "$3"
+}
+for b in \
+	'lens-pattern.md|s/^#### Agent 3 — .*/#### Agent 3 — Something Else/|lens-pattern.md: no Agent 3 heading' \
+	'SKILL.md|s/lens-api-crud\.md/lens-api.md/g|SKILL.md: lens-api-crud.md not named' \
+	'SKILL.md|s/^#### Agent 7 — /#### Axis 2 — /|Agent 7 left the coordinator' \
+	'SKILL.md|s/never the rest of it/and whatever else it likes/|no rule that a lens agent reads only its own file' \
+	'SKILL.md|s/for Agent 6, the mutation delta/for Agent 6, nothing/|lost "for Agent 6, the mutation delta"' \
+	'SKILL.md|/^- `pattern` — /d|six Axis-1 roster rows'; do
+	f=${b%%|*}; r=${b#*|}; e=${r%%|*}; w=${r#*|}
+	lens_bait "$f" "$e" "$w" && pass "bait: '$w' is named" || fail "bait: '$w' was not caught"
+done
+rm -rf "$SCRATCH/lens-bait" && mkdir -p "$SCRATCH/lens-bait" && cp "$LENS_DIR"/*.md "$SCRATCH/lens-bait/" &&
+	cp "$LENS_DIR/lens-pattern.md" "$SCRATCH/lens-bait/lens-orphan.md"
+lens_gaps "$SCRATCH/lens-bait" | grep -qF 'lens-orphan: no roster row' &&
+	pass "bait: a lens file with no roster row is named" || fail "bait: an orphan lens file was not caught"
 
 t_done "/review-pr output contract"

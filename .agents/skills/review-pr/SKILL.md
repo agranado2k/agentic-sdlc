@@ -79,7 +79,7 @@ Each Axis-1 lens's instructions live in a file of their own beside this one, nam
 - Agent 5, Reuse & DRY Auditor — [`lens-reuse-dry.md`](lens-reuse-dry.md)
 - Agent 6, Test Hygiene Inspector — [`lens-test-hygiene.md`](lens-test-hygiene.md)
 
-**A lens agent reads its own file, never this one.** Spawn each of the six on its lens file's path, beside the step-0 diff and — for Agent 5 — step 1's reuse catalog: the file is that lens's whole instructions, and this skill's protocol stays with the coordinator. A context auditing a lens itself (the single-reviewer pass above) reads that lens's file the same way.
+**A lens agent reads its own file and this skill's §4 and §5, never the rest of it.** Spawn each of the six on its lens file's path, beside the step-0 diff — for Agent 5, step 1's reuse catalog; for Agent 6, the mutation delta when one is wired — and point it at §4 (High-Signal Filtering) and §5 (the severity buckets and the finding anatomy) below, the two sections its report is written to: the lens file is what that lens audits, those two sections how it reports, and the rest of this skill's protocol stays with the coordinator. A context auditing a lens itself (the single-reviewer pass above) reads that lens's file the same way.
 
 #### Agent 7 — Spec & Behavior Reviewer (Axis 2 — fresh context)
 
