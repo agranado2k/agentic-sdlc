@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02. Amended 2026-10-02: a subagent's run reaches the Claude Code adapter's hooks through a channel fixed at spawn — the spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]` — and no longer through the payload's `cwd`, which names the session's directory; see clause 5. Decided for #474, from the retrospective of 2026-10-02, finding F3. Amended 2026-10-05: `end <run>` closes the run it names or nothing, so a subagent sharing its session and checkout cannot close its parent's run; see clause 5. Decided for #543, from the wave of 2026-10-05. Amended 2026-10-06: a bare `end` is deprecated — it still closes the top, then says so in one stderr line naming the run it closed and the named form — and a later release makes the run id mandatory; see clause 5. Decided for #560, from #551's confirm-list. Amended 2026-10-07: `finding.raise` holds a present `data.id` to the review's severity id, `[CHML]-[0-9]+`, refused at emit and advised on by `verify`; see clause 1. Decided for #567, from the retrospective of 2026-10-06, question 3)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02. Amended 2026-10-02: a subagent's run reaches the Claude Code adapter's hooks through a channel fixed at spawn — the spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]` — and no longer through the payload's `cwd`, which names the session's directory; see clause 5. Decided for #474, from the retrospective of 2026-10-02, finding F3. Amended 2026-10-05: `end <run>` closes the run it names or nothing, so a subagent sharing its session and checkout cannot close its parent's run; see clause 5. Decided for #543, from the wave of 2026-10-05. Amended 2026-10-06: a bare `end` is deprecated — it still closes the top, then says so in one stderr line naming the run it closed and the named form — and a later release makes the run id mandatory; see clause 5. Decided for #560, from #551's confirm-list. Amended 2026-10-07: `finding.raise` holds a present `data.id` to the review's severity id, `[CHML]-[0-9]+`, refused at emit and advised on by `verify`; see clause 1. Decided for #567, from the retrospective of 2026-10-06, question 3. Amended 2026-10-07: a `spawn`'s present `model` is held to the model ids the shipped resolver lists for its agents policy, `agents.lib.sh --ids` — never the in-session spawn word — refused at emit and advised on by `verify`; see clause 1. Decided for #569, from the retrospective of 2026-10-06, question 5)
 
 ## Context and problem statement
 
@@ -353,6 +353,54 @@ Chosen: **option 1**.
    matches nothing. The review's two raise lines name the shape in place of the
    `INITIAL-N` placeholder that was copied whole. The trace script is
    shared layer, so this is a release.
+
+   *Amended 2026-10-07 (#569):* **a spawn's model is recorded in one form,
+   the policy id.** The retrospective of 2026-10-06 (question 5) found two
+   models recorded five ways — `opus` 118 and `claude-opus-5-5` 106;
+   `sonnet` 40, `claude-sonnet` 5 and `claude-sonnet-5-5` 10 — because a
+   session recorded whichever spelling it held: the policy id the resolver
+   printed, or the family word the agent harness's in-session spawn
+   parameter took (the kit's `--alias` bridge prints that word). Spend and
+   calibration by model split one model into several rows. The rule:
+   - **`emit kind=spawn` holds a present `model` to the ids the agents
+     policy maps**, read from the shipped resolver beside the script with
+     a new mode, `sh scripts/agents.lib.sh --ids` — every `AGENT_TIER_*`
+     value, a fallback list word by word, a declared agent harness's prefix
+     taken off: exactly the form `--model` prints, which is the form the
+     dispatcher already records beside `harness`. Anything else — the spawn
+     word, a half-spelled id, an id with the harness prefix left on — is
+     exit 2 naming the value and the ids, and nothing is written.
+   - **No vendor knowledge, and no policy read by the trace.** The rule is
+     membership in the resolver's own list, so it names no model and no
+     alias, and the shared trace never names a kit-only file: the resolver
+     already knows where the policy is (`$AGENTS_CONFIG`, then the
+     project's `scripts/agents.config.sh`), and the kit's trace wrapper
+     hands it the policy the kit's agents wrapper chose, as `--policy`
+     prints it. A closed list of known aliases was rejected — vendor
+     words, rotting on a vendor's schedule, in a shared file — and so was
+     a structural test (a bare word, no `-`), which `claude-sonnet` passes.
+   - **The spawn word is not rewritten to an id.** `opus`, the dominant
+     case, folds from two pinned ids in the kit's own policy (the
+     implementer's and the mechanical tier's), so a bridge run backwards
+     cannot say which one ran; a path that rewrote only some words would be
+     a second spelling source. The caller records the resolver's answer it
+     already holds; the skills that record a spawn say so.
+   - **An empty policy refuses every model**: the resolver printed nothing,
+     so the spawn inherited its session's model, and an inherited spawn
+     carries no `model` — the skills' `model=$model` is then empty, which is
+     absent, and writes. A resolver that fails (a named policy missing) is a
+     refusal too, never a silent pass. A script with no resolver beside it
+     has no ids to hold a model to, and the rule is off.
+   - Other kinds' `model` stays open: `session.usage` carries what the
+     agent harness reported, a fact this rule does not own.
+   **`verify` reads the same list**, as an advisory: a spawn already written
+   with a model off it is history — one stderr line naming the file, the
+   line and the value — never a bad line and never the verdict; `summary`
+   and `export` say the count once and point at `verify`, as they do for
+   the #305, #348 and #567 advisories. Judged against the policy as it is
+   now, so a model a roster move retired is advised on too, which an
+   advisory may be. The resolver and the trace script are shared layer, so
+   this is a release.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -643,6 +691,10 @@ Chosen: **option 1**.
 - Amended for ticket #567: the `finding.raise` id row of `TRACE_SHAPES`,
   `verify`'s advisory on an old raise, `/review-pr`'s raise lines, and the
   suite section that holds them (trace §30).
+- Amended for ticket #569: the resolver's `--ids`, the spawn-model check
+  and `verify`'s advisory in the trace script, the kit trace wrapper's
+  agents policy, `/implement`'s and `/review-pr`'s spawn lines, and the
+  suite sections that hold them (trace §31, agents-tiers `--ids`).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

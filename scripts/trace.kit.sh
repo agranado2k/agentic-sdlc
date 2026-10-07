@@ -12,4 +12,13 @@
 # place of scripts/trace.sh with the same arguments, which AGENTS.md hard rule
 # 10 makes the one this repo's sessions actually make. `"$@"`, so the script's
 # whole signature reaches it.
+#
+# The AGENTS policy too (#569): a spawn's model is held to the ids the shipped
+# resolver lists, and the resolver alone would read the shipped empty
+# scripts/agents.config.sh and refuse every model. So the wrapper hands it the
+# policy this session's agents wrapper chose — the one `sh scripts/agents.kit.sh
+# <tier>` resolved the model from — overriding any inherited AGENTS_CONFIG,
+# exactly as that wrapper does.
+AGENTS_CONFIG=$(sh scripts/agents.kit.sh --policy) || exit 2
+export AGENTS_CONFIG
 TRACE_CONFIG=scripts/trace.kit.config.sh exec sh scripts/trace.sh "$@"

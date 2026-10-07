@@ -7,6 +7,9 @@
 #       --model (the default) -> the mapped model id, or nothing when unmapped
 #       --harness             -> the agent harness that runs it, or nothing,
 #                                which means the caller's own
+#   sh scripts/agents.lib.sh --ids
+#       -> every model id the policy maps, one per line, sorted, in --model's
+#          form — the one form a spawn records (scripts/trace.sh holds it)
 #   . scripts/agents.lib.sh; resolve_tier …    -> the same, as a shell function;
 #      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
 #      own line (bash and zsh drop a prefix assignment on `.`)
@@ -89,12 +92,47 @@ _agents_dropped_warned=0
 
 agents_usage() {
 	echo "usage: agents.lib.sh [--model|--harness] <tier> [domain]" >&2
+	echo "       agents.lib.sh --ids" >&2
 	echo "  tier is one of: planner implementer mechanical reviewer" >&2
 	echo "  domain is an optional $AGENT_DOMAIN_SHAPE token naming the medium of the work." >&2
 	echo "  --model    print the model id. The default, and what every caller got" >&2
 	echo "             before the agent-harness axis existed." >&2
 	echo "  --harness  print the agent harness token instead, or nothing when the" >&2
 	echo "             tier is mapped to a bare model id — which means the caller's own." >&2
+	echo "  --ids      print every model id the policy maps, one per line, in --model's form." >&2
+}
+
+# agents_ids — every model id the policy maps, one per line, sorted, once
+# each: every AGENT_TIER_* value, a fallback list word by word, a declared
+# agent harness's prefix taken off, exactly the form `--model` prints. It is
+# the closed list a spawn's recorded model is held to (scripts/trace.sh,
+# ADR-0008 as amended for #569): the trace may not read a policy file itself,
+# because in the kit the policy it should read is kit-only, so it asks the
+# resolver, which already knows where the policy is. No policy, or one that
+# maps nothing, prints nothing and exits 0; a named policy that is missing is
+# exit 2, as it is for a tier. The values are read back through `env` from a
+# subshell that sourced the policy under `set -a`, the way the kit wrapper
+# reads them, so a sourcing caller's variables are untouched; the split is a
+# pipe, never an unquoted expansion, which zsh would not split.
+agents_ids() {
+	[ $# -eq 0 ] || {
+		agents_usage
+		return 2
+	}
+	(
+		set -a
+		agents_load_config
+		_ai_rc=$?
+		set +a
+		[ "$_ai_rc" = 2 ] && exit 2
+		AGENTS_TIER_QUIET=1
+		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p' | tr ' \t' '\n\n' |
+			while IFS= read -r _ai_v; do
+				[ -n "$_ai_v" ] || continue
+				agents_split_harness "$_ai_v"
+				[ -n "$_ah_model" ] && printf '%s\n' "$_ah_model"
+			done | LC_ALL=C sort -u
+	)
 }
 
 # agents_load_config — source the mapping, once per process.
@@ -577,6 +615,11 @@ if [ "$_agents_sourced" = 0 ]; then
 	case "$0" in
 	*/agents.lib.sh | agents.lib.sh)
 		_agents_here=$(dirname "$0")
+		if [ "${1:-}" = --ids ]; then
+			shift
+			agents_ids "$@"
+			exit $?
+		fi
 		resolve_tier "$@"
 		exit $?
 		;;
