@@ -326,6 +326,12 @@ grep -q "^TRACE_NUMBERED_TYPES=''" "$PROJ/scripts/trace.config.sh" &&
 assert_status 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
+# The sweep the spot-checks above cannot be (#562): any `*.kit.*` name, any
+# file carrying the kit-own sentinel, any kit ADR or living spec. The codex
+# twin of the kit's tier mapping leaked past a header that
+# said bootstrap deleted it, because no assertion named it.
+t_assert_no_kit_residue "$KIT" "$PROJ" "a fresh bootstrap"
+
 # Nothing kit-authoring survived either. `tests/` is the whole set: every suite
 # is on bootstrap's KIT_ONLY list, so the directory itself must be gone — which
 # is the assertion that catches a NEW suite somebody forgot to add to that list.
