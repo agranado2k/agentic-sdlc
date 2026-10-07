@@ -387,6 +387,9 @@ hook_spawn_handed() {
 	_hs_s=${_hs_r%% *}
 	_hs_k=${_hs_r#* }
 	case $_hs_k in *' '*) return 1 ;; esac
+	# DELIBERATE COUPLING, like hook_run_id_ok's: the four tiers are the kit's
+	# fixed vocabulary (docs/capability-tiers.md), spelled here too so a hook
+	# reads no policy file to size a stop; a typo never mints a summary row.
 	case $_hs_t in tier=planner | tier=implementer | tier=mechanical | tier=reviewer) ;; *) return 1 ;; esac
 	case $_hs_d in domain=*) ;; *) return 1 ;; esac
 	case $_hs_s in skill=*) ;; *) return 1 ;; esac
