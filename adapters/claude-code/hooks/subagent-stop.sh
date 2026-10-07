@@ -83,9 +83,21 @@ hook_run_handed "$transcript" || hook_run_of "$tdir" "${cwd:-$PWD}" "$sid"
 # for this one.
 set --
 [ -n "$aid" ] && hook_id_ok "$aid" && set -- subject="agent:$aid"
+# What the spawn served, from its prompt's second line (#583; see
+# hook_spawn_handed): the tier, the domain and the skill fill the trace's own
+# columns, and the ticket is a related subject. No such line, or one that does
+# not match exactly, is tier `unattributed` — a stop is never left unsized.
+hook_spawn_handed "$transcript" || :
+set -- "$@" tier="$hook_spawn_tier"
+[ -n "$hook_spawn_domain" ] && set -- "$@" domain="$hook_spawn_domain"
+[ -n "$hook_spawn_skill" ] && set -- "$@" skill="$hook_spawn_skill"
+related=
 if [ -n "$sid" ] && hook_id_ok "$sid"; then
-	set -- "$@" related="session:$sid" session="$sid"
+	related="session:$sid"
+	set -- "$@" session="$sid"
 fi
+[ -n "$hook_spawn_ticket" ] && related="${related:+$related }ticket:$hook_spawn_ticket"
+[ -n "$related" ] && set -- "$@" related="$related"
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"
 # The payload's cwd, recorded so a retro can read what the agent tool reports
