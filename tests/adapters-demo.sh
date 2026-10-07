@@ -442,15 +442,14 @@ banner "A8. The chain's spawns take their tier's agent type (spend/R6, spend/R7)
 # model beside it (none: the spawn inherits); the dispatcher's dry run says it
 # too (tests/skill-phase.test.sh, 4e). A harness that offers no such type
 # spawns as before, which is why each sentence is conditioned on the offer.
-# The /review-pr coordinator /implement spawns is the one spawn not on its
-# tier's type: it runs a skill, fans out its lenses and posts, which the
-# reviewer type's read-only envelope cannot, so it takes the planner type on
-# the reviewer tier's model — recorded in the adapter's README.
+# The one spawn not on its tier's type, the review coordinator, is the
+# adapter README's "One spawn is not on its tier's type".
 flat() { tr '\n' ' ' <"$KIT/.agents/skills/$1/SKILL.md" | tr -s ' '; }
 for spec in \
 	'implement|as the agent type named for its tier' \
 	'implement|the `planner` agent type' \
-	'review-pr|as the `reviewer` agent type'; do
+	'review-pr|as the `reviewer` agent type' \
+	'review-pr|the coordinator runs `scripts/behavior-delta.sh`'; do
 	s=${spec%%|*} want=${spec#*|}
 	case "$(flat "$s")" in
 	*"$want"*) pass "/$s's spawn instruction names it: '$want' (spend/R6)" ;;
@@ -482,6 +481,9 @@ mkdir -p "$PROJ"
 cp -R "$KIT/." "$PROJ/"
 rm -rf "$PROJ/.git"
 cd "$PROJ" || exit 2
+# A project's own agent type, beside the kit's links: bootstrap strips the
+# kit's four and must leave this one (B2, PR #618 review M-3).
+printf -- '---\nname: own\n---\n' >.claude/agents/own.md
 
 git init -q -b main
 git config user.name "Adapters Demo"
@@ -554,9 +556,14 @@ done
 [ -e ".claude/settings.json" ] &&
 	fail ".claude/settings.json reached the project — the kit's own agent-harness wiring leaked, and the adapter is not dormant" ||
 	pass "no .claude/settings.json in the project — the trace hooks arrived unwired"
-[ -e ".claude/agents" ] &&
-	fail ".claude/agents reached the project — the kit's own agent-type wiring leaked, and the adapter is not dormant" ||
-	pass "no .claude/agents in the project — the agent types arrived unwired"
+for tier in planner implementer mechanical reviewer; do
+	[ -e ".claude/agents/$tier.md" ] || [ -L ".claude/agents/$tier.md" ] &&
+		fail ".claude/agents/$tier.md reached the project — the kit's own agent-type wiring leaked, and the adapter is not dormant" ||
+		pass "no .claude/agents/$tier.md in the project — the agent types arrived unwired"
+done
+[ -f .claude/agents/own.md ] &&
+	pass "…and the project's own .claude/agents/own.md survived the strip" ||
+	fail "bootstrap removed the project's own .claude/agents/own.md — the strip took more than the kit's links"
 for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh tool-post.sh \
 	tool-pre-guard.sh tool-pre.sh transcript-usage.mjs tool-payload.mjs; do
 	[ -f "adapters/claude-code/hooks/$h" ] &&
