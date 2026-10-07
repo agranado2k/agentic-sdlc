@@ -562,7 +562,9 @@ t_text_has "$(rule_n 3)" "up to the session cap the hand-off states (step 5)" "r
 # The divisor is /review-pr's roster, read from that skill and never a hand
 # copy: a lens added or dropped there must move every place this cap spells
 # its count, or the formula goes stale under a green suite (#514, L-1).
-lenses=$(t_roster_of "$ROOT/.agents/skills/review-pr/SKILL.md" | grep -cvx unattributed)
+# A lens is a roster row naming its Agent number: `unattributed` and
+# `single-reviewer` are tokens, not spawns (#568).
+lenses=$(t_roster_rows "$ROOT/.agents/skills/review-pr/SKILL.md" | grep -c ' — Agent [0-9]')
 case $lenses in
 5) lens_word=five ;; 6) lens_word=six ;; 7) lens_word=seven ;; 8) lens_word=eight ;; 9) lens_word=nine ;;
 *) lens_word="" ;;
