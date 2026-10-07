@@ -106,7 +106,7 @@ agents_usage() {
 # each: every AGENT_TIER_* value, a fallback list word by word, a declared
 # agent harness's prefix taken off, exactly the form `--model` prints. It is
 # the closed list a spawn's recorded model is held to (scripts/trace.sh,
-# ADR-0008 as amended for #569): the trace may not read a policy file itself,
+# the kit's ADR-0008 as amended for #569): the trace may not read a policy file itself,
 # because in the kit the policy it should read is kit-only, so it asks the
 # resolver, which already knows where the policy is. No policy, or one that
 # maps nothing, prints nothing and exits 0; a named policy that is missing is

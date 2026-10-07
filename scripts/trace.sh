@@ -446,7 +446,7 @@ EOF
 # ASCII whatever locale the caller runs in.
 trace_matches() { printf '%s\n' "$1" | LC_ALL=C grep -Eq -- "^($2)\$"; }
 
-# trace_model_ids — the model ids a spawn's `model` may be (#569, ADR-0008
+# trace_model_ids — the model ids a spawn's `model` may be (#569, the kit's ADR-0008
 # clause 1 as amended 2026-10-07): the ones the shipped resolver beside this
 # script prints for `--ids`, every id its agents policy maps, in the form
 # `--model` prints. The trace reads no agents policy of its own — in the kit
