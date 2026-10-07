@@ -559,8 +559,8 @@ Chosen: **option 1**.
    and no assistant line after it, ever. The run ends there; the flag is the
    harness's own word that it does (1,024 such lines across 1,113 subagent
    transcripts, 1,023 of them right after a hand-back call, every one
-   followed by nothing or by the prompt that resumed the agent). Three hypotheses fell:
-   **the wrong file** — every give-up named the subagent's own transcript
+   followed by nothing or by the prompt that resumed the agent). Three
+   hypotheses fell: **the wrong file** — every give-up named the subagent's own transcript
    under `subagents/`, its id the payload's; **a final message written past
    the bound** — for those 222 none was ever written, the line the wait
    waited for does not exist, which is why its age always matched the wait;
@@ -582,9 +582,9 @@ Chosen: **option 1**.
    final at once. **The residue, stated:** 33 of the other 35 are stops
    whose transcript, by the stop, had a harness prompt (`isMeta`) after the
    run's end — the agent was being prompted again, its next stop counts
-   those messages, and the give-up is recorded as before; the next retro
-   measures the failure rate per agent as well as per stop to tell the two
-   apart. The bound itself is unchanged: it still covers the measured lag of
+   those messages, and the give-up is recorded as before; `/retro`'s
+   question 6 counts give-ups per agent as well as per stop to tell the two
+   apart (review of PR #606, M-2). The bound itself is unchanged: it still covers the measured lag of
    a final message that IS written (#308, #479).
 9. **Explicit non-goal**: the trace is not a memory and not a context store.
    ADR-0005's non-goal stands; nothing here moves a transcript or feeds a
@@ -651,8 +651,9 @@ Chosen: **option 1**.
   (trace §28, trace-skills §23).
 - Amended for ticket #565: the subagent-stop hook's readiness rule (a
   turn-ending tool's result is final), `data.final`, its per-agent resume
-  anchor, the hand-back fixture, and the suite section that holds them
-  (trace-hooks §48).
+  anchor, the hand-back fixture, `/retro` question 6's per-agent count,
+  and the suite sections that hold them
+  (trace-hooks §48, retro-skill §13c).
 - Amended for ticket #466: the conditional and required rows of
   `TRACE_SHAPES`, `/pr-iterate`'s triage and iteration prose, and the
   suite sections that hold them (trace §26, trace-skills §21).

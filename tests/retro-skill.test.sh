@@ -1291,6 +1291,14 @@ sec5_prose=$(awk '/^## 5\. / { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_AB
 case "$sec5_prose" in *'**Phantom stops**'*) pass "question 5 has a phantom-stops bullet" ;; *) fail "question 5 has no **Phantom stops** bullet" ;; esac
 case "$sec5_prose" in *'**The compaction gap**'*) pass "question 5 has a compaction-gap bullet" ;; *) fail "question 5 has no **The compaction gap** bullet" ;; esac
 case "$sec6_prose" in *'**Stops read too early**'*) pass "question 6 has a bullet for the stops the wait bound passed" ;; *) fail "question 6 has no **Stops read too early** bullet" ;; esac
+# #565 (review of PR #606, M-2): a give-up leaves no anchor, so the agent's
+# next stop counts what it could not — a give-up's tokens are lost only when
+# no later stop of that agent was priced. The bullet counts per agent as well
+# as per stop, and reads data.final, the key the adapter writes on a priced stop.
+case "$sec6_reads" in *'`data.final`'*) pass "question 6's Reads paragraph names data.final" ;; *) fail "question 6's Reads paragraph does not name \`data.final\`" ;; esac
+grep -qF '`data.final`' "$ROOT/adapters/claude-code/README.md" && pass "…a key the adapter documents writing" || fail "data.final is no key adapters/claude-code/README.md documents"
+case "$sec6_prose" in *'its tokens are in no event'*) fail "question 6 still says a give-up's tokens are in no event — a later stop of the agent counts them (#565)" ;; *) pass "question 6 no longer says a give-up's tokens are in no event" ;; esac
+case "$sec6_prose" in *'per agent as well as per stop'*) pass "question 6 counts the give-ups per agent as well as per stop" ;; *) fail "question 6 does not count the give-ups per agent as well as per stop" ;; esac
 # Questions 7 and 8 already read data.by (#385) and data.label_proposed
 # (#354): sections 11 and 2b hold them; one needle each here keeps the
 # ticket's list whole in one place.
