@@ -129,6 +129,13 @@ AGENT_TIER_IMPLEMENTER='claude-opus-5-5'   # the builder
 #    past "can follow the pattern" buys nothing here.
 # ---------------------------------------------------------------------------
 AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest model — three of three mechanical tickets that day (#352, #354, #388) reviewed themselves or shipped untested rules and needed a rescue session (retro 20261001T150216Z); the operator chose Opus 5 for the tier, Opus 5.5 stays the implementer
+#
+# The cascade's cheap rung (#586, PRD #580): operator decision 2026-10-06.
+# Sonnet 5.5 runs a mechanical ticket first; the oracle and the pairing guard
+# decide whether Opus 5 above runs it again. Bare, as written, it names no
+# agent harness, so the skill dispatcher refuses the cascade and says so: the
+# rung runs only once it names one the dispatcher can cross to.
+AGENT_CASCADE_MECHANICAL='claude-sonnet-5-5'
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — strongest reasoning, in fresh context, and DIFFERENT from

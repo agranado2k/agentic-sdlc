@@ -866,6 +866,13 @@ skeleton (K0).
   is used by something, and that `scripts/skill-dispatch.kit.sh` turns a skill
   name into the tier its phase means and dispatches there.
 
+- `sh tests/skill-cascade.test.sh` holds the mechanical tier's cascade: a
+  ticket runs first on the policy's cascade model, its oracle and the pairing
+  guard judge the rung by exit code alone, a red rung is reset to the ticket's
+  base in its linked worktree and runs again on the mapped model, a ticket
+  with no closed-list oracle is refused the cascade, and each rung is a spawn
+  under one run.
+
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs
   gate is green at the kit root on both engines — and then the half that could
@@ -961,6 +968,7 @@ sh tests/housekeeping-skill.test.sh                    # the /housekeeping contr
 sh tests/retro-skill.test.sh                           # the /retro contract
 sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
 sh tests/skill-phase.test.sh                           # every skill declares its phase of work
+sh tests/skill-cascade.test.sh                         # a mechanical ticket runs cheap-first, escalating on a red oracle
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots
