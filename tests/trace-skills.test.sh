@@ -1527,4 +1527,33 @@ done
 [ "$_e5_skills" -ge 6 ] && pass "the six skills that close a run were all read ($_e5_skills)" ||
 	fail "only $_e5_skills skill(s) close a run — the walk lost diagnose, implement, merge-train, pr-iterate, retro or review-pr"
 
+# ---------------------------------------------------------------------------
+banner "24. A single-reviewer review files under its own token and records both verdicts (#568)"
+# ---------------------------------------------------------------------------
+# Retro 20261006T080718Z: reviews run by ONE reviewer auditing every lens
+# filed raises under lens tokens no lens agent produced, and two recorded no
+# review.verdict at all. The roster carries the pass's own token, so section
+# 15's holder accepts it on every line and its demo runs the relayed raise
+# with it; here the two verdict lines run as a single-reviewer pass writes
+# them — each with data.agent=single-reviewer — and the trace holds one
+# verdict per axis, both naming the pass.
+RP=$(skill_md review-pr)
+printf '%s\n' "$(t_roster_of "$RP")" | grep -qx single-reviewer &&
+	pass "the roster holds 'single-reviewer' for one context auditing the lenses itself" ||
+	fail "the roster has no 'single-reviewer' token — a one-reviewer review has nothing legal to file its raises under but a lens it did not run"
+dir="$SCRATCH/run.single"
+n_v=0
+for ax in 1 2; do
+	cmd=$(t_trace_spans "$RP" | grep -F 'kind=review.verdict' | grep -F "data.axis=$ax" | head -1)
+	[ -n "$cmd" ] || { fail "/review-pr has no review.verdict line for axis $ax"; continue; }
+	cmd=$(t_trace_runnable "$(printf '%s\n' "$cmd" | sed 's/ reason=/ data.agent=single-reviewer reason=/')")
+	if ( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ); then n_v=$((n_v + 1)); else fail "the axis-$ax verdict does not run with data.agent=single-reviewer: $cmd"; fi
+done
+[ "$n_v" = 2 ] && pass "both verdict lines run as a single-reviewer pass writes them" || true
+[ -d "$dir" ] && ( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+	pass "and what they wrote verifies" || fail "the single-reviewer verdicts ran but the trace they wrote does not verify"
+v=$(cat "$dir"/events/*.jsonl 2>/dev/null | grep -F '"kind":"review.verdict"' | grep -cF '"agent":"single-reviewer"')
+[ "$v" = 2 ] && pass "the trace holds one review.verdict per axis, both naming the single-reviewer pass" ||
+	fail "expected two review.verdict events naming single-reviewer, found $v"
+
 t_done "trace skills contract"
