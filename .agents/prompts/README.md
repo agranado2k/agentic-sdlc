@@ -38,3 +38,10 @@ layer, and no update overwrites them. The one thing worth preserving if you
 rewrite them wholesale is the **output contract** each ends with: the
 coordinating session reads that output, and a worker that answers in its own
 shape is a worker whose answer has to be re-read by a human every time.
+
+## The one reference that is not a task kind
+
+`cheap-reads.md` is no worker contract: it carries no markers and is never
+dispatched. It names the reads that return the smallest exact answer, and every
+spawn site in the skills and both worker contracts point a worker at it by this
+stable path — `tests/cheap-reads.test.sh` holds them to that.

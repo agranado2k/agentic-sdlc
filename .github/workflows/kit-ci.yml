@@ -454,6 +454,14 @@ jobs:
       - name: Skill phase suite
         run: sh tests/skill-phase.test.sh
 
+  cheap-reads:
+    name: Every spawned worker is pointed at the cheap-reads reference
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cheap reads suite
+        run: sh tests/cheap-reads.test.sh
+
   skill-cascade:
     name: A mechanical ticket runs cheap-first, escalating on a red oracle
     runs-on: ubuntu-latest
