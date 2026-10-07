@@ -56,8 +56,7 @@ command below names, because %%BRANCH%% is a moving ref: the session that
 started you shares this checkout and may commit to it while you read.
 
 Read cheaply: `.agents/prompts/cheap-reads.md` names the reads that return the
-smallest exact answer — `git diff --stat` before the full diff, a file by line
-range rather than whole. Widen only when the narrow read was not enough.
+smallest exact answer. Widen only when the narrow read was not enough.
 
 Then read the diff yourself, against the sha you pinned:
 

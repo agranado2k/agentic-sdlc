@@ -455,7 +455,7 @@ jobs:
         run: sh tests/skill-phase.test.sh
 
   cheap-reads:
-    name: Every spawned worker is pointed at the cheap-reads reference
+    name: Every spawning skill and worker contract points at the cheap-reads reference
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
