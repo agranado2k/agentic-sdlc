@@ -4448,6 +4448,64 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the quoted-key fixture was not built"
 	sed 's/"toolEndsTurn":true/"toolEndsTurn" : true/' "$HB" >"$SCRATCH/hb-spaced-565.jsonl"
 	final "a turn-ending result serialised with spaces around the colon" "$SCRATCH/hb-spaced-565.jsonl" final
+
+	# THE NO-WAIT PATH READS THE SAME WAY (M-3, review of PR #606): with no
+	# bound the hook reads at once, and still says how the run ended and
+	# still reads past the agent's own anchor.
+	new_trace
+	stop_on "$SCRATCH/hb-head-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	N1=$(ev_of agent.stop | sed -n '1p')
+	N2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(str "$N1" final)" = message ] && [ "$(str "$N2" final)" = tool ] && [ -z "$(str "$N2" waited_ms)" ] &&
+		[ "$(num "$N2" tok_out)" = 2 ] && [ "$(str "$N2" msgs)" = 1 ] &&
+		pass "with no wait bound a stop still records data.final and reads past the agent's anchor" ||
+		fail "the no-wait path: first $N1, second $N2"
+	# Read at once, a transcript that has not ended is priced without the key:
+	# data.final is said only of a run that ended.
+	new_trace
+	stop_on "$SCRATCH/hb-meta-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	N3=$(ev_of agent.stop | sed -n '1p')
+	[ -n "$(num "$N3" tok_out)" ] && [ -z "$(str "$N3" final)" ] &&
+		pass "with no wait bound a run that has not ended carries no data.final" ||
+		fail "the no-wait read of an unended run: $N3"
+
+	# NO USABLE AGENT ID, NO ANCHOR (M-4): a payload whose agent id is empty
+	# or outside the identifier class names no subject to read anchors from,
+	# so each stop reads the whole file — never another agent's anchors.
+	for bad565 in '' '../x'; do
+		new_trace
+		stop_on "$SCRATCH/hb-head-565.jsonl"
+		sed 's|"agent_id": "[^"]*"|"agent_id": "'"$bad565"'"|' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-bad-565.json"
+		t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-bad-565.json"
+		stop_on "$HB"
+		sed 's|"agent_id": "[^"]*"|"agent_id": "'"$bad565"'"|' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-bad-565.json"
+		t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-bad-565.json"
+		B2=$(ev_of agent.stop | sed -n '2p')
+		[ "$S_STATUS" = 0 ] && [ "$(num "$B2" tok_out)" = 301 ] &&
+			pass "an agent id of '$bad565' reads no anchor: the second stop counts the whole file" ||
+			fail "an agent id of '$bad565': status $S_STATUS, second stop $B2"
+	done
+
+	# A STALE ANCHOR IS A NAMED FAILURE, NEVER A RE-COUNT (M-5): an earlier
+	# event of this agent naming a message the transcript does not hold is
+	# refused by the extractor as drift — no tokens. One whose value is not an
+	# identifier at all never reaches the command line as --after.
+	for anchor565 in msg_011CfknNOTHERE000000000 'msg x;y'; do
+		new_trace
+		(cd "$KIT" && TRACE_DIR="$TDIR" sh scripts/trace.sh emit kind=agent.stop subject="agent:$AGENT" \
+			model=claude-haiku-4-5-20251001 tok_in=1 tok_out=1 tok_cache_w=0 tok_cache_r=0 \
+			data.msgs=1 data.last_msg="$anchor565" reason='a seeded earlier stop') >/dev/null 2>&1
+		stop_on "$HB"
+		timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+		A2=$(ev_of agent.stop | sed -n '2p')
+		[ "$S_STATUS" = 0 ] && [ -n "$A2" ] && [ "$(str "$A2" outcome)" = fail ] && [ -z "$(num "$A2" tok_out)" ] &&
+			pass "an earlier anchor of '$anchor565' the transcript does not hold is a failure, no tokens" ||
+			fail "an anchor of '$anchor565': status $S_STATUS, event $A2, stderr $S_ERR"
+	done
 else
 	skip "the handback legs read tokens with the extractor, which needs node"
 fi
