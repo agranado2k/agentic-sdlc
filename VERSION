@@ -2238,7 +2238,32 @@
 # Kit-only, never shipped: tests/docs-demo.sh's A5c, the consumer case in
 # both engines with the shipped fixtures present.
 
-shared-layer: 0.60.0
+# 0.61.0 — a finding raise's id is held at emit to the review's severity id
+# (ticket #567, ADR-0008 clause 1 as amended 2026-10-07). ONE shared file
+# changes content: scripts/trace.sh. TRACE_SHAPES gains the row
+# finding.raise=id:[CHML]-[0-9]+, so an emit whose present data.id is off
+# that shape — the literal INITIAL-N placeholder two raises took on #535 and
+# #541, a confirm-list A2-N, anything else — is exit 2 naming the kind, the
+# key, the value and the shape, and writes nothing; a raise with no id still
+# writes. verify reads the same row and advises on a raise already written
+# off it — stderr, file and line — never a bad line, never the verdict — and
+# summary and export say the count once, pointing at verify. From
+# the retrospective of 2026-10-06, question 3: the triage side was held
+# (#466), the raise side was not, and the join lost its link. NO file joins
+# or leaves. UPDATING.md changes content: the arriving-from paragraph, and
+# both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/review-pr/SKILL.md: its two finding.raise lines (§6 step 3
+# and the relay path) spell data.id as '<its id, [CHML]-[0-9]+>' in place
+# of the INITIAL-N placeholder, and §6 says the script refuses any other
+# shape.
+# Kit-only, never shipped: tests/trace.test.sh §30 (the refusal, the
+# advisory, the record and the skill lines, driven red first) and §23's
+# open-key case moved to finding.dismiss; tests/lib.sh's t_trace_runnable
+# fills a raise's id as H-1; the ADR-0008 amendment, its header ledger entry
+# and its index note; the glossary's Event entry.
+
+shared-layer: 0.61.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
