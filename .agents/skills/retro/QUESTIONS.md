@@ -247,9 +247,10 @@ answerer's words — emitted by `/merge-train` at landing and by
   unattributed`, never as the operator's.
 - **Retired while the project accepts train-only verdicts.** A project
   that delegates its landings may decide that a train's verdict is enough,
-  and records so in a binding decision record —
-  `grep -il 'accepts train-only verdicts' docs/adr/*.md` lists the
-  candidates, and the decision index says which still binds. Count the window's operator
+  and records so in a binding decision record: one whose text says it
+  accepts train-only verdicts and whose status is Accepted —
+  `for f in docs/adr/[0-9]*.md; do grep -qi 'accepts train-only verdicts' "$f" && grep -q '^- \*\*Status\*\*: Accepted' "$f" && echo "$f"; done`
+  lists it, never the index, a proposed record or a superseded one. Count the window's operator
   verdicts: `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk '/"kind":"feedback"/ && /"by":"operator"/ { n++ } END { print n + 0 }'`,
   skipping, as everywhere, the events before the window's start. With
   that record binding and that count 0, the question answers

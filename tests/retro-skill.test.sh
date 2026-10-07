@@ -1390,6 +1390,17 @@ vcount() { # <trace dir> <span>
 }
 tw="$SCRATCH/train-only.retro"
 tw_trace() { ( cd "$ROOT" && TRACE_DIR="$tw" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+# Before the window (H-1, review of PR #601): an operator verdict, a human
+# dismissal and a quiz override, all on a day before the window's start — the
+# day file renamed to one the --since day excludes. A span that dropped its
+# --since would count them.
+tw_trace emit kind=feedback subject='ticket:#9' related='pr:#19' outcome=missed data.by=operator reason=fixture
+tw_trace emit kind=finding.dismiss subject='pr:#19' outcome=dismissed data.via=thread data.where=b.sh:1 data.thread=T9 reason=fixture
+tw_trace emit kind=ticket.write subject='ticket:#9' tier=planner data.tier_proposed=implementer data.confidence=low
+for f in "$tw"/events/*.jsonl; do mv "$f" "$tw/events/2025-12-31.jsonl"; done
+# A ticket written before the proposed keys existed is no override (H-2): the
+# span's guards read a missing key as nothing to compare.
+tw_trace emit kind=ticket.write subject='ticket:#5' tier=implementer data.label=ready-for-agent data.confidence=high data.label_confidence=high
 tw_trace emit kind=feedback subject='ticket:#1' related='pr:#11' outcome=hit data.by=train reason=fixture
 tw_trace emit kind=feedback subject='ticket:#2' related='pr:#12' outcome=unasked data.by=train reason=fixture
 tw_trace emit kind=ticket.write subject='ticket:#3' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=high data.label_confidence=high
@@ -1434,8 +1445,12 @@ for n in 7 8; do
 	q_has 'is no finding' "…says the retired line is no finding"
 	q_has 'records no note' "…and records no note for it"
 	q_has 'resumes by itself' "…resumes by itself the first window holding an operator verdict"
-	q_has 'raised as before' "…and a project with no such record has the absence raised as before"
+	q_has 'A project with no such record has the absence raised as before' "…and a project with no such record has the absence raised as before"
 done
+# H-3 (review of PR #601): the retired line swallows no missing emit.
+n=7 prose=$(sec_of 7 | flat)
+q_has 'is still counted on the row' "question 7 still counts a landing with no feedback event on its row"
+q_has 'question 6'"'"'s to raise' "…as a missing emit, question 6's to raise"
 case "$sec7_route" in
 *'retired'*) pass "question 7's route says a retired answer goes nowhere" ;;
 *) fail "question 7's Route line does not say where a retired answer goes" ;;
@@ -1450,16 +1465,29 @@ for line in "$q7_line" "$q8_line"; do
 	*) fail "SKILL.md's question does not say it retires while the project accepts train-only verdicts: ${line%%—*}" ;;
 	esac
 done
-rspan=$(sec_of 7 | grep -o '`grep [^`]*docs/adr/[^`]*`' | tr -d '`' | head -1)
+# The record span (M-1, review of PR #601) lists a record only when it says
+# the project accepts train-only verdicts AND its status is Accepted — never
+# the index, a proposed record or a superseded one. Run over a fixture
+# decision directory first, then over this repo.
+rspan=$(sec_of 7 | grep -o '`for f in docs/adr/[^`]*`' | tr -d '`' | head -1)
 if [ -n "$rspan" ]; then
-	rec=$( cd "$ROOT" && sh -c "$rspan" 2>/dev/null | grep -v 'INDEX\.md$' )
+	ra="$SCRATCH/records"
+	mkdir -p "$ra/docs/adr"
+	printf '# ADR-0001: The project accepts train-only verdicts\n\n- **Status**: Accepted\n' >"$ra/docs/adr/0001-yes.md"
+	printf '# ADR-0002: The project accepts train-only verdicts\n\n- **Status**: Proposed\n' >"$ra/docs/adr/0002-proposed.md"
+	printf '# ADR-0003: The project accepts train-only verdicts\n\n- **Status**: Superseded by 0004\n' >"$ra/docs/adr/0003-superseded.md"
+	printf '# ADR-0004: Something else\n\n- **Status**: Accepted\n' >"$ra/docs/adr/0004-other.md"
+	printf '| [0001](0001-yes.md) | The project accepts train-only verdicts | Accepted |\n' >"$ra/docs/adr/INDEX.md"
+	fx_rec=$( cd "$ra" && sh -c "$rspan" 2>/dev/null )
+	[ "$fx_rec" = docs/adr/0001-yes.md ] && pass "the record span lists only the accepted record that accepts train-only verdicts — not the index, a proposed or a superseded one" ||
+		fail "over a fixture decision directory the record span listed '$fx_rec', not docs/adr/0001-yes.md: $rspan"
+	rec=$( cd "$ROOT" && sh -c "$rspan" 2>/dev/null )
 	[ "$(printf '%s\n' "$rec" | grep -c .)" = 1 ] && pass "the record span lists exactly one record in this repo: $rec" ||
 		fail "the record span lists '$rec' in this repo, not one record: $rspan"
-	[ -n "$rec" ] && grep -q '^- \*\*Status\*\*: Accepted' "$ROOT/$rec" && pass "…accepted" || fail "the kit's train-only record is not Accepted: $rec"
 	[ -n "$rec" ] && grep -qF '#570' "$ROOT/$rec" && pass "…citing the operator's ruling, #570" || fail "the kit's train-only record does not cite #570"
 	[ -n "$rec" ] && grep -qF "($(basename "$rec"))" "$ROOT/docs/adr/INDEX.md" && pass "…and indexed" || fail "docs/adr/INDEX.md has no row for $rec"
 else
-	fail "question 7 carries no \`grep … docs/adr/…\` span that finds the record"
+	fail "question 7 carries no \`for f in docs/adr/…\` span that finds an accepted record"
 fi
 
 t_done "/retro contract"
