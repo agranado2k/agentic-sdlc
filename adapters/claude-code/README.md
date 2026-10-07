@@ -258,7 +258,7 @@ live here rather than in the shared script (ADR-0008 clause 8).
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on — with `data.behind`, how far the root checkout is behind `origin/main` |
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end`, each carrying the run handed over at spawn when the session's own prompt opens on a `Trace-Run: <run id> [<parent run id>]` line (#474), with that parent, the run the shared script resolves otherwise; the denials it sweeps (`tool.use` `outcome=denied`) never carry the handed run — their marker names no agent — and resolve as the shared script does. Precedence, as in every row here: a `TRACE_RUN` already in the environment, then the run handed over, then the fallback |
-| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478) |
+| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565) |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below — carrying the run handed over at spawn (`Trace-Run: <run id> [<parent run id>]`, with that parent) to the agent that made the call: the subagent the payload's `agent_id` names, read from its own transcript, or the session itself (#474); the run the shared script resolves when none was handed, never the run handed to its session for a subagent handed none — once the payload is read: a `tool.use` `outcome=fail` written before then (no scratch, no node, a payload the reader refuses) resolves as the shared script does |
 | `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
@@ -460,12 +460,25 @@ When the bound passes first, it records `outcome=fail` with no counts and the
 wait it gave, plus what the file can say of why: `data.last_kind` (the last
 line's `type`), `data.last_age_ms` (that line's age when the bound passed) and
 `data.lines`. A young last line means the bound is too short for an agent still
-writing; an old one, an agent that never wrote a final message. A malformed value is refused on stderr and as
+writing; an old one, a run that ended in a shape the hook does not read as final (see below). A malformed value is refused on stderr and as
 `data.wait_refused`, and is never waited. The policy file ships the value
 empty, which means no wait and the read-at-once behaviour, partial sum
 included. A session's own
 `session.usage` is unaffected either way, and the "usage plus agent.stop equals
 the rollup" identity holds only for the stops whose file was ready.
+
+**A run ends on a final message or on a turn-ending tool** (ticket #565).
+Most subagent runs end on the agent harness's hand-back tool: its result is a
+user line carrying `"toolEndsTurn":true`, and no assistant line follows it,
+ever — so a wait for one gave up at any bound, 222 of 257 give-ups in the
+window #565 measured. The hook reads that line as final, and every priced stop
+says how the run ended in `data.final`: `message`, or `tool` — whose last
+message was written mid-stream, so its usage block is the streamed snapshot.
+**An agent can stop more than once** (an end, a prompt from the harness, a
+hand-back), and every stop reads the same file: so a stop counts each model
+only after the last `data.last_msg` this agent's own earlier `agent.stop`
+events hold, exactly as `session.usage` reads a resumed session. A stop that
+gave up holds no anchor, so the next one counts what it could not.
 
 **The session-start hook says how stale its own code is.** A hook runs the
 code of the checkout it lives in, so a checkout that has fallen behind main
