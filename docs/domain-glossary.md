@@ -320,7 +320,8 @@ Grouped by the seam each term belongs to. Entry shape:
   (every kind has an outcome vocabulary of its own and refuses a word it
   does not declare; `note` alone takes any one word), a one-line reason, raw token counts, and an open `data` map of strings —
   open except the keys a reader joins on, held at emit to the shapes
-  `TRACE_SHAPES` declares: `finding.triage`'s `data.id`, one token, its
+  `TRACE_SHAPES` declares: `finding.raise`'s `data.id`, the review's
+  severity id `[CHML]-[0-9]+` (2026-10-07); `finding.triage`'s `data.id`, one token, its
   `data.source`, one of check, bot, human or local, and a local finding's
   id, `[CHML]-[0-9]+` — or `A2-[0-9]+` for a confirm-list item, numbered in
   the list's order — which no other source may carry; `pr.iterate`'s

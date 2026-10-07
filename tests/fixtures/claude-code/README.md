@@ -48,6 +48,7 @@ The transcripts are the files the agent harness itself wrote under
 | `thinking-subagent-transcript.redacted.jsonl` | that subagent's transcript: 21 lines, one message id carrying two different usage blocks |
 | `compacted-transcript.redacted.jsonl` | the resumed session in full: five runs, a `/compact` among them, 85 lines |
 | `forked-transcript.redacted.jsonl` | a `--fork-session` of it after the compaction: 39 lines, two copied lines with usage zeroed |
+| `handback-subagent-transcript.redacted.jsonl` | a subagent run that ends on the hand-back tool: 19 lines, the last a user line carrying `"toolEndsTurn":true` |
 
 ## The second capture: the two tool payloads
 
@@ -180,6 +181,32 @@ capture established, and what the suite leans on:
 Redacted with the fourth capture's mechanical rule, keeping three more
 structural strings: `subtype` (so `compact_boundary` survives), `trigger` and
 `level`, and the compact boundary's uuids.
+
+## The sixth capture: a run that ends on the hand-back
+
+`handback-subagent-transcript.redacted.jsonl` was cut for ticket #565 on
+**2026-10-07** from a real subagent transcript of the kit's own sessions,
+written on **2026-10-06** by the `claude` CLI at **2.1.287**
+(`claude-haiku-4-5-20251001`). Its stop gave up at the kit's 3000 ms bound
+twice, and it was chosen as the smallest of the 222 give-ups of that shape.
+What it establishes, and what the suite leans on:
+
+- **The run ends on a tool's result, not on a message.** Line 18 is an
+  assistant line calling the agent harness's hand-back tool, `stop_reason`
+  null; line 19 is that call's result, a user line carrying
+  `"toolEndsTurn":true`. No assistant line follows it, ever.
+- **One agent, two stops.** Lines 13–14 are an `end_turn` (the first stop),
+  line 16 a harness prompt (`isMeta`) that set the agent going again, and the
+  hand-back ended the run (the second stop). Lines 1–14 alone end on a final
+  message; lines 1–16 end on that prompt.
+- **The sums.** The whole file is `20 / 301 / 10929 / 10582` over two
+  messages; lines 1–14, `10 / 299 / 10582 / 0`; so the hand-back's message
+  alone is `10 / 2 / 347 / 10582` — its `output_tokens` the streamed
+  snapshot, since its line was written mid-stream.
+
+Redacted with the fourth capture's mechanical rule, keeping `name` (so the
+tool's name survives); the project path became `/tmp/spike-proj`, and every
+`gitBranch` and `serverClassifier*` body was replaced whole.
 
 ## What was redacted
 

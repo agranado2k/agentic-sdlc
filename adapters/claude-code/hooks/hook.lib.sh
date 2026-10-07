@@ -380,6 +380,22 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
+# hook_anchors <subject> <kind> — how far earlier reads of one subject already
+# went: sets hook_recorded to that subject's <kind> events, as `show` prints
+# them, and hook_after to the last data.last_msg among them, held to the
+# identifier class (empty when none, or when it is not an id). A read hands
+# hook_recorded to hook_tokens on stdin under --resume, and hook_after as
+# --after. Only the subject is asked, so another subject's read never anchors
+# this one; a fail event carries no last_msg, so it never anchors either.
+# session-end.sh reads its session's (#307, #408), subagent-stop.sh its
+# agent's (#565).
+hook_anchors() {
+	hook_recorded=$(hook_trace show "$1" --kind "$2")
+	hook_after=$(printf '%s\n' "$hook_recorded" |
+		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
+	hook_id_ok "$hook_after" || hook_after=
+}
+
 # hook_tokens <transcript> <kind> [--rollup] [--resume] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
 # token counts, and at least one event whatever happens. Seven shapes, all of
@@ -402,20 +418,21 @@ hook_point_at() {
 #   rollup refused   with --rollup only: the numbers as usual, then one event,
 #                    outcome=fail and data.via=rollup, the extractor's reason
 #
-# --rollup and --resume read the trace's own earlier events for this session
-# on stdin — session-end.sh pipes them in. Under --rollup a gap already
+# --rollup and --resume read the trace's own earlier events for this subject
+# on stdin — hook_anchors reads them, for session-end.sh (a session's) and
+# subagent-stop.sh (an agent's, #565). Under --rollup a gap already
 # recorded is not recorded again; transcript-usage.mjs says when a rollup is
 # judged at all. Under --resume each model is counted only after the last
 # data.last_msg the trace holds for THAT model (#307, #408), so an end killed
 # between two models' events loses neither: see transcript-usage.mjs for why a
-# resumed session needs it and session-end.sh for where the events come from.
+# resumed session needs it and hook_anchors for where the events come from.
 #
 # --after is an earlier read's data.last_msg: an empty read is then "nothing
 # new" rather than "nothing to read", carrying that id forward. Alone, it is
 # also the extractor's one anchor for every model (#307). Beside --resume it
 # is only that signal and never the anchor — one id for every model is the
-# shape a kill partway turned into lost messages (#408) — and session-end.sh
-# passes the last data.last_msg the trace holds, of any model.
+# shape a kill partway turned into lost messages (#408) — and hook_anchors
+# gives the last data.last_msg the trace holds for the subject, of any model.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
@@ -658,10 +675,19 @@ hook_wait_bound() {
 }
 
 # hook_final <transcript> — does the transcript end on a final message? Status
-# 0 for yes.
+# 0 for yes, with hook_final_by set to how it ended: `message` or `tool`.
 #
 # FINAL means: its last user-or-assistant line is an ASSISTANT line whose
-# stop_reason is set and is not tool_use. Each half is load-bearing. "Last user
+# stop_reason is set and is not tool_use (by `message`) — or a USER line the
+# agent harness marks `"toolEndsTurn":true` (by `tool`, #565). The second is
+# how most subagent runs end: the run's last act is a call to a tool that ends
+# it (the agent harness's hand-back), the harness writes that call's result as
+# a user line carrying the flag, and NO assistant line follows, ever — so a
+# wait for one ran out at any bound (the kit's ADR-0008, the #565 amendment). The tool
+# call's own line is written mid-stream, stop_reason null, so its usage block
+# is the streamed snapshot; `data.final=tool` on the event says so. A flag
+# followed by the prompt that resumed the agent is not final, by the rule
+# below. Each half of the first rule is load-bearing. "Last user
 # or assistant line", because a subagent resumed after an earlier stop already
 # holds an end_turn from that stop, and the user line that resumed it comes
 # after — so an old final message never reads as this stop's. "Not tool_use and
@@ -675,13 +701,22 @@ hook_wait_bound() {
 # line, not on its top-level object. Text inside a message is an escaped string
 # and cannot match, but a tool's STRUCTURED result is written as a JSON object,
 # so a user line whose result object itself holds a `"type":"assistant"` and a
-# `stop_reason` would read as final. Nothing observed writes such a result; if
-# one ever does, the cost is one early read, which the extractor then sums.
+# `stop_reason` — or a `"toolEndsTurn":true` — would read as final. Nothing
+# observed writes such a result; if one ever does, the cost is one early read,
+# which the extractor then sums. A result's TEXT quoting the flag is escaped,
+# `\"toolEndsTurn\"`, and cannot match.
 hook_final() {
+	hook_final_by=
 	_hf_last=$(grep -E '"type"[[:space:]]*:[[:space:]]*"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
+	if printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"user"'; then
+		printf '%s\n' "$_hf_last" | grep -Eq '"toolEndsTurn"[[:space:]]*:[[:space:]]*true' || return 1
+		hook_final_by=tool
+		return 0
+	fi
 	printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"assistant"' || return 1
 	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"' || return 1
 	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"tool_use"' && return 1
+	hook_final_by=message
 	return 0
 }
 
