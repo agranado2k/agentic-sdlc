@@ -2279,7 +2279,9 @@
 # tests/self-host.test.sh, VERSION exempt as the kit's ledger, driven red per
 # case by tests/harness-helpers.test.sh; tests/coverage.test.sh runs both of
 # the starter's Covers: examples through the check; tests/agents-tiers.test.sh
-# holds the template's sentence. Landed on main after v0.60.0, kit-only:
+# holds the template's sentence. ADR-0017 records the rule and its index
+# row lists it; bootstrap.sh's kit-own deletion list gains it, so no
+# consumer receives it. Landed on main after v0.60.0, kit-only:
 # tests/agents-tiers.test.sh and tests/skill-phase.test.sh (#604).
 
 shared-layer: 0.61.0

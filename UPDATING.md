@@ -223,7 +223,8 @@ sections, and anything after it is annotation.
 No file joins or leaves at 0.61.0, and nothing changes behavior: eight
 shared files change comments, and two stderr lines their wording, so that
 every decision record they cite reads "the kit's ADR-NNNN" — the kit's
-records never reach you, and your own ADR-0008 is a different decision.
+records never reach you, and a record of yours under the same number is
+a different decision.
 Part 2 takes the rest: in 9a the same spelling in sixteen skills, which
 you may take or leave; in 9b, `constitution/AGENTS.md.template`'s tiers
 section gains the reviewer sentence the 0.53.0 paragraph below told you to
