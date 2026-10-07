@@ -435,6 +435,47 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+banner "A8. The chain's spawns take their tier's agent type (spend/R6, spend/R7)"
+# ---------------------------------------------------------------------------
+# The types above are worth nothing until a spawn names one. /implement and
+# /review-pr say so in their spawn instructions, by tier, with the resolver's
+# model beside it (none: the spawn inherits); the dispatcher's dry run says it
+# too (tests/skill-phase.test.sh, 4e). A harness that offers no such type
+# spawns as before, which is why each sentence is conditioned on the offer.
+# The /review-pr coordinator /implement spawns is the one spawn not on its
+# tier's type: it runs a skill, fans out its lenses and posts, which the
+# reviewer type's read-only envelope cannot, so it takes the planner type on
+# the reviewer tier's model — recorded in the adapter's README.
+flat() { tr '\n' ' ' <"$KIT/.agents/skills/$1/SKILL.md" | tr -s ' '; }
+for spec in \
+	'implement|as the agent type named for its tier' \
+	'implement|the `planner` agent type' \
+	'review-pr|as the `reviewer` agent type'; do
+	s=${spec%%|*} want=${spec#*|}
+	case "$(flat "$s")" in
+	*"$want"*) pass "/$s's spawn instruction names it: '$want' (spend/R6)" ;;
+	*) fail "/$s's spawn instruction no longer says '$want' — its spawns fall back to the catch-all type (spend/R6)" ;;
+	esac
+done
+case "$(flat review-pr)" in
+*"as files to read"*) pass "/review-pr hands its read-only lenses the diff as files to read" ;;
+*) fail "/review-pr no longer says its lenses get the diff as files to read — a reviewer-type lens has no shell to fetch it" ;;
+esac
+
+# THIS repo's own sessions spawn by type, so its .claude/agents links each
+# tier's type in from the adapter — one source, never a copy that drifts.
+# Kit-only: bootstrap strips the links (B2 below), so a consumer's adapter
+# still arrives dormant.
+for tier in planner implementer mechanical reviewer; do
+	l="$KIT/.claude/agents/$tier.md"
+	if [ -L "$l" ] && [ "$(readlink "$l")" = "../../adapters/claude-code/agents/$tier.md" ] && [ -f "$l" ]; then
+		pass ".claude/agents/$tier.md links the adapter's $tier type"
+	else
+		fail ".claude/agents/$tier.md is not a resolving link to ../../adapters/claude-code/agents/$tier.md"
+	fi
+done
+
+# ---------------------------------------------------------------------------
 banner "B. Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------
 mkdir -p "$PROJ"
@@ -513,6 +554,9 @@ done
 [ -e ".claude/settings.json" ] &&
 	fail ".claude/settings.json reached the project — the kit's own agent-harness wiring leaked, and the adapter is not dormant" ||
 	pass "no .claude/settings.json in the project — the trace hooks arrived unwired"
+[ -e ".claude/agents" ] &&
+	fail ".claude/agents reached the project — the kit's own agent-type wiring leaked, and the adapter is not dormant" ||
+	pass "no .claude/agents in the project — the agent types arrived unwired"
 for h in hook.lib.sh session-start.sh session-end.sh subagent-stop.sh tool-post.sh \
 	tool-pre-guard.sh tool-pre.sh transcript-usage.mjs tool-payload.mjs; do
 	[ -f "adapters/claude-code/hooks/$h" ] &&

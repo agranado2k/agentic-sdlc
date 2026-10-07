@@ -85,9 +85,21 @@ fails one that carries a model line or anything shaped like a model id
 Two consequences worth knowing before you wire them:
 
 - **They arrive dormant.** Claude Code reads agent types from `.claude/agents/`;
-  nothing the kit stamps puts them there. Link or copy the four files in when
-  your skills start spawning by type — the chain's own spawns move onto them in
-  a later release.
+  nothing the kit stamps puts them there. Link or copy the four files in to
+  wire them — the kit links its own (`.claude/agents/<tier>.md ->
+  ../../adapters/claude-code/agents/<tier>.md`, kit-only, stripped by
+  bootstrap). Once wired, the chain spawns by type: `/implement` and
+  `/review-pr` name the type by tier where the agent harness offers one, and the
+  skill dispatcher's `--dry-run` prints the type and the resolver's model (or
+  "no model", the spawn inheriting the session's). Unwired, a spawn uses the
+  catch-all type as before.
+- **One spawn is not on its tier's type: the review coordinator.** The
+  `/review-pr` run that `/implement` spawns is sized `reviewer` and runs on
+  the reviewer tier's model, but it runs a skill, spawns seven lenses and
+  posts to the forge — none of which the read-only `reviewer` type can do. It
+  takes the `planner` type (#588's ruling): the type is the tool envelope, the
+  tier the model and the trace's attribution. Its seven lenses are the
+  `reviewer`-type spawns, handed the diff as files to read.
 - **A tool list is the whole list.** A type with no `tools:` line inherits
   every tool, which is the catch-all again; and a tool server's tools are only
   reachable when listed by name, which is why none of these lists one.
@@ -789,7 +801,7 @@ that keeps its marker and its hooks.
   because the kit ships no `.claude/agents/` definition that would make it a
   restriction, and it will not: a file there names a tool set in a consumer's
   own tree. The tier types above are reference files under `agents/`, wired
-  only by you. The CLI flag is the one restriction this adapter can name
+  only by you (the kit's own links are stripped at bootstrap). The CLI flag is the one restriction this adapter can name
   without owning a file in your tree.
 - **No workflow, and no check on tier selection.** Tier selection is a
   spawn-time decision inside a session. There is nothing for CI to enforce, and
