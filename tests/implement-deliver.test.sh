@@ -56,8 +56,18 @@ cd "$ROOT" || exit 2
 # assert_file_has / assert_file_lacks come from tests/lib.sh — same shape, one
 # implementation, used here and by the AI review template suite.
 
+# lacks_all <literal> [<why>] — assert_file_lacks on SKILL.md and on every
+# file beside it (#593): a forbidden phrase moved into a branch file is still
+# in the skill, so no guard reads the entry point alone.
+lacks_all() {
+	for _la in "$SKILL" .claude/skills/implement/*.md; do
+		[ "$_la" = .claude/skills/implement/SKILL.md ] && continue
+		assert_file_lacks "$_la" "$@"
+	done
+}
+
 # offset_of <literal> — where the literal first starts, counted in characters
-# from the top of the file, or empty. Order WITHIN a line: the skill's steps
+# from the top of the file (SKILL.md, or the file named second), or empty. Order WITHIN a line: the skill's steps
 # are single long lines, so two phrases of one step share a line number.
 offset_of() {
 	LIT=$1 awk 'BEGIN { lit = ENVIRON["LIT"] }
@@ -82,6 +92,12 @@ for f in "$ROOT"/.claude/skills/implement/*.md; do
 	grep -qF "($b)" "$SKILL_ABS" && pass "SKILL.md names $b by relative path" ||
 		fail "SKILL.md does not name $b — a moved branch no entry point opens"
 done
+# ... and names it at the point its branch is taken, not anywhere.
+_ptr() { grep -F -- "$1" "$SKILL_ABS" | grep -qF "($2)" && pass "SKILL.md opens $2 from $3" || fail "SKILL.md does not open $2 from $3"; }
+_ptr "**Read the \`Tier:\`, \`Confidence:\` and \`Domain:\` lines with one call" STAMP.md "the stamp bullet"
+_ptr "1. **Open by restating the ticket**" COVERS.md "step 1"
+_ptr "4. **Drive \`/tdd\` through each seam**" COVERS.md "step 4"
+_ptr "**(b) A \`/review-pr\` subagent in the agent harness" DISPATCHED-REVIEW.md "step 9(b)"
 
 # ---------------------------------------------------------------------------
 banner "1. The Deliver phase exists, and ends where shared invariant §7 says"
@@ -121,12 +137,12 @@ banner "2. Delivery stops short of landing — no merge verb is reachable"
 # ---------------------------------------------------------------------------
 # Each of these would be a way to land, approve, or force a change from inside
 # the session. A skill that names one has quietly renegotiated §7.
-assert_file_lacks "$SKILL" "gh pr merge" "merging is the human's action (shared invariant §7)"
-assert_file_lacks "$SKILL" "--auto" "auto-merge is a merge with a delay, not a non-merge"
-assert_file_lacks "$SKILL" "--admin" "an admin override bypasses the very gate §7 protects"
-assert_file_lacks "$SKILL" "--force" "delivery never rewrites a pushed branch"
-assert_file_lacks "$SKILL" "--no-verify" "the pre-push hook is the gate, not an obstacle"
-assert_file_lacks "$SKILL" "pr review --approve" "an author approving its own PR is not review"
+lacks_all "gh pr merge" "merging is the human's action (shared invariant §7)"
+lacks_all "--auto" "auto-merge is a merge with a delay, not a non-merge"
+lacks_all "--admin" "an admin override bypasses the very gate §7 protects"
+lacks_all "--force" "delivery never rewrites a pushed branch"
+lacks_all "--no-verify" "the pre-push hook is the gate, not an obstacle"
+lacks_all "pr review --approve" "an author approving its own PR is not review"
 
 # ---------------------------------------------------------------------------
 banner "3. The review request is mechanism-ORDERED: forge workflows first"
@@ -244,8 +260,7 @@ assert_file_has "$DISPATCH" "a model id"
 assert_file_has "$DISPATCH" "no dispatched review ran"
 # `rc`, never `status`: zsh holds `status` read-only, and the first real run of
 # this composition died on the assignment with the exit status lost.
-assert_file_lacks "$SKILL" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
-assert_file_lacks "$DISPATCH" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
+lacks_all '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
 _status=$(offset_of '; rc=$?;' "$DISPATCH_ABS")
 _broker=$(offset_of '<broker> <PR#>' "$DISPATCH_ABS")
 if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
@@ -281,8 +296,7 @@ assert_file_has "$SKILL" "the comment URL"
 # A broker that refuses is not an invitation to post around it.
 assert_file_has "$DISPATCH" "never post around a refusal"
 # Hand posting is no longer the default for a dispatched reviewer.
-assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
-assert_file_lacks "$DISPATCH" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
+lacks_all "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
 # ... and the absence of one old sentence guards nothing a rewording cannot
 # walk around, so the POSITIVE rule is asserted: the broker is the only way a
 # dispatched report lands, the header's "post them yourself" belongs to the
@@ -313,10 +327,8 @@ case "$_clause" in
 	pass "the no-broker clause falls back to the in-session reviewer and reports that no cross-vendor review ran" ;;
 *) fail "the no-broker clause does not fall back in-session and say no cross-vendor review ran: '$_clause'" ;;
 esac
-assert_file_lacks "$SKILL" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
-assert_file_lacks "$DISPATCH" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
-assert_file_lacks "$SKILL" "post the captured report" "the captured report is never the session's to post"
-assert_file_lacks "$DISPATCH" "post the captured report" "the captured report is never the session's to post"
+lacks_all "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
+lacks_all "post the captured report" "the captured report is never the session's to post"
 # The same rule for the dispatcher's "harness not reachable" exit (69): like
 # the no-harness exit (3), stdout is the model id and the in-session spawn is
 # the review — the skill names both as the working cases, and says so.
@@ -324,7 +336,7 @@ assert_file_has "$DISPATCH" "not reachable from here"
 assert_file_has "$DISPATCH" "two working cases"
 # The shipped skill names no kit-only file: bootstrap deletes them, and a
 # consumer following the line would run nothing.
-assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
+lacks_all ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
 # ... and the kit's own manual is what gives a kit session the two names and
 # the composition, on the broker's quick-reference row.
 _row=$(grep -F '| Land a dispatched reviewer' AGENTS.md)
@@ -431,8 +443,8 @@ stamp_has "test \`[ -f scripts/stamp.sh ]\` before the call" "no stamp.sh: teste
 # The bullet is the call, its five outcomes and #340's three answers — no
 # more (#331). What the script does is the script's to say; a bullet that
 # restates it grows a second contract to drift.
-assert_file_lacks "$SKILL" "It fetches the body with your tracker's CLI" "the bullet does not restate what the script does"
-assert_file_lacks "$SKILL" "with no \`Tier:\` line qualifies nothing" "the bullet is the call, its five outcomes and #340's three answers — no more"
+lacks_all "It fetches the body with your tracker's CLI" "the bullet does not restate what the script does"
+lacks_all "with no \`Tier:\` line qualifies nothing" "the bullet is the call, its five outcomes and #340's three answers — no more"
 # The order is the contract's: 0, 2, 3, 4, 5.
 order=$(printf '%s\n' "$stamp" | grep -oE '\*\*Exit [0-9]\*\*' | tr -d '*' | tr '\n' ' ')
 [ "$order" = "Exit 0 Exit 2 Exit 3 Exit 4 Exit 5 " ] && pass "the five outcomes, once each, in status order" ||
@@ -458,11 +470,11 @@ grep -qF 'Five statuses, each driven red first' README.md &&
 stamp_has "A domain the checker refuses is never typed into the resolver" "the domain reaches a command only after the checker accepts it"
 # The pipe is gone, not kept beside the call: an agent offered both runs the
 # one with no defined status for a stampless ticket.
-assert_file_lacks "$SKILL" "| sh scripts/vocab.sh" "the lifted pipe is retired — the script is the one reader"
+lacks_all "| sh scripts/vocab.sh" "the lifted pipe is retired — the script is the one reader"
 # The argument form is refused wherever it appears: `sh scripts/vocab.sh '` is
 # how every quoted-argument call starts, whatever field follows.
-assert_file_lacks "$SKILL" "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
-assert_file_lacks "$SKILL" 'sh scripts/vocab.sh "' "nor into a double-quoted one"
+lacks_all "sh scripts/vocab.sh '" "untrusted ticket text is never spliced into a quoted shell argument"
+lacks_all 'sh scripts/vocab.sh "' "nor into a double-quoted one"
 stamp_has "how sure the stamp looked, never how likely it is right" "the PRD's wording"
 stamp_has "\`low\` · \`medium\` · \`high\`" "the three tokens, in the vocabulary's order"
 # The count of answers that change what you do, scoped to what it counts —
@@ -534,7 +546,7 @@ weakened() {
 weakened "the tier left standing" 's/does not stand on its own/stands on its own/' "$conf" "$RULING_WORDS"
 weakened "stop turned into carry on" 's/: stop, and report/: carry on, and report/' "$conf" "$RULING_WORDS"
 weakened "the value remapped onto medium" 's/never read as `low`, or as any declared one/read as `medium`/' "$conf" "$RULING_WORDS"
-assert_file_lacks "$SKILL" "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
+lacks_all "as if it said \`low\`" "stop-on-refused-confidence: the tolerance PRD #273 forbids is gone"
 stamp_has "A missing \`Confidence:\` line is not a blocker" "missing confidence: still not a stop — refused and missing stay two cases"
 # A checker that cannot run is tolerated (PRD #273: the call sites tolerate a
 # checker error; a refused value does not). Inverted, this branch stops every
@@ -543,7 +555,7 @@ stamp_has "or the checker is gone or cannot run here" "checker absent or broken:
 stamp_has "the script never prints a line it could not check" "checker absent: it fails closed — the defaults, never an unchecked value"
 stamp_has "never a stamp read by eye" "no stamp.sh at all: the defaults, not the body read unchecked"
 # The kit wrapper is never named: skills ship unstamped.
-assert_file_lacks "$SKILL" "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
+lacks_all "vocab.kit" "the checker has no kit twin — the plain script is the command everywhere"
 
 # ---------------------------------------------------------------------------
 banner "4c. The stamp reader, EXECUTED: nothing unchecked is ever shown as a stamp"
@@ -655,7 +667,7 @@ banner "4d. A mechanical ticket's oracle line is read as data, never run as writ
 # the rules moved verbatim, and each mutation below must still turn it red.
 restate=$(grep -F -- "1. **Open by restating the ticket**" "$SKILL_ABS" | head -1)
 [ -n "$restate" ] && restate="$restate
-$(cat "$COVERS_ABS")"
+$(awk '/^## The oracle line/ { on = 1 } /^## A living spec/ { on = 0 } on' "$COVERS_ABS")"
 [ -n "$restate" ] && pass "step 1, the restate step, is found" ||
 	fail "no step 1 opens with the restatement — the oracle rules have no home"
 # The full suite step 4 spells, literally, and the sentence it sits in as one
@@ -666,7 +678,7 @@ $(cat "$COVERS_ABS")"
 STEP4_SUITE='the **full suite once** at the end — `sh -c '"'"'for t in tests/*.sh; do sh "$t" || exit 1; done'"'"'` where the suite is a `tests/` directory of shell scripts, otherwise the suite commands `constitution/local-engineering.md`'"'"'s test tiers name.'
 step4=$(grep -F -- "4. **Drive \`/tdd\` through each seam**" "$SKILL_ABS" | head -1)
 [ -n "$step4" ] && step4="$step4
-$(cat "$COVERS_ABS")"
+$(awk '/^## A living spec/ { on = 1 } on' "$COVERS_ABS")"
 t_text_has "$step4" "$STEP4_SUITE" "step 4 spells the full suite as one command, behind sh -c, so a pasted loop cannot close the session's shell" "step 4"
 # The load-bearing words, one per line, spelled ONCE: the live assertions and
 # the probe the weakened copies drive read the same list. The first is the
@@ -714,8 +726,8 @@ weakened "git let back in" 's/not `git`, not any/not `git` unless it is a `git` 
 weakened "the env-prefix refusal softened" 's/not one with an environment/not usually one with an environment/' "$restate" "$ORACLE_WORDS"
 # The bypass the manual names is never in the skill, and the open match set
 # the review refused is gone.
-assert_file_lacks "$SKILL" "PUSH_WITHOUT" "no gate bypass can be selected by an oracle line"
-assert_file_lacks "$SKILL" "the root \`AGENTS.md\` or this skill already names" "the match set is the closed list, not the manual"
+lacks_all "PUSH_WITHOUT" "no gate bypass can be selected by an oracle line"
+lacks_all "the root \`AGENTS.md\` or this skill already names" "the match set is the closed list, not the manual"
 # One spelling of the line across the producer and the reader (M-7):
 # /to-tickets writes it, step 1 reads it, and a drift in either breaks this.
 assert_file_has ".claude/skills/to-tickets/SKILL.md" 'the oracle: `<command>`' "the producer writes the oracle line in the shape step 1 reads"
@@ -826,8 +838,8 @@ assert_file_has "$SKILL" "/pr-iterate"
 # The iterate loop's own mechanics — thread resolution, reply endpoints, the
 # poll — belong to that skill. Two skills owning one PR's review loop is how a
 # comment gets answered twice and a fix gets pushed on top of itself.
-assert_file_lacks "$SKILL" "resolveReviewThread" "resolving review threads is /pr-iterate's job"
-assert_file_lacks "$SKILL" "comments/\$COMMENT_ID/replies" "replying to review threads is /pr-iterate's job"
+lacks_all "resolveReviewThread" "resolving review threads is /pr-iterate's job"
+lacks_all "comments/\$COMMENT_ID/replies" "replying to review threads is /pr-iterate's job"
 
 # ---------------------------------------------------------------------------
 banner "6. Every slash command the skill names resolves to a skill on disk"
