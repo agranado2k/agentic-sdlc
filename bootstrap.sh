@@ -916,7 +916,7 @@ if [ "$ADOPT" = 1 ]; then
 	else
 		a_keep "scripts/docs-conformance/local-vocabulary.mjs"
 	fi
-	for f in scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/trace.config.sh scripts/worktree-cleanup.sh \
+	for f in scripts/guards.config.sh scripts/agents.config.sh scripts/vocab.config.sh scripts/lens-slice.config.sh scripts/trace.config.sh scripts/worktree-cleanup.sh \
 		scripts/docs-conformance/README.md \
 		constitution/local-engineering.md.template constitution/local-workflow.md.template; do
 		if a_exists "$f"; then a_keep "$f"; else a_copy "$f" "$f"; fi

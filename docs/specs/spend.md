@@ -15,6 +15,8 @@ R1. WHEN a chain skill spawns a subagent, the trace SHALL record the spawn's sto
 R4. The Claude Code adapter SHALL provide one agent type per capability tier, each declaring the tools that tier's work needs and no model.
 R5. The reviewer agent type SHALL carry no tool that writes files, reaches the network or calls an MCP server.
 R8. The docs gate SHALL fail when a SKILL.md exceeds the byte ceiling the gate's policy declares for it, naming the file, its size and the ceiling.
+R10. WHEN `/review-pr` spawns a standards lens, the lens SHALL receive its own lens instructions and the diff slice its lens's path rules select, not the whole SKILL.md or the whole diff.
+R11. WHEN `/review-pr` spawns the behavior axis, that worker SHALL receive the whole diff and the ticket.
 R17. WHERE the policy declares a cascade model for the `mechanical` tier, the skill dispatcher SHALL run a mechanical ticket on that model first and run the ticket's named oracle and the pairing guard on the result.
 R18. WHEN the first rung's oracle or pairing guard is red, the dispatcher SHALL discard that rung's working changes and run the ticket again on the tier's mapped model.
 R19. The dispatcher SHALL decide escalation from the oracle's and the guard's exit codes only, never from the worker's own report.
