@@ -13,7 +13,7 @@ named one project's stack with pointers at the artifacts this kit establishes
 | `tdd/` | `engineering/tdd` | project-context prelude added to `SKILL.md`; four sidecars are verbatim; `deep-modules.md`'s two diagrams are redrawn as fenced diagram-language blocks |
 | `diagnose/` | `engineering/diagnose` | tool names in the feedback-loop list generalised; the architectural hand-off at the end names `/improve-codebase-architecture` and the decision record it produces |
 | `to-prd/` | `engineering/to-prd` | tracker/label setup replaced by the kit's autonomy-label mechanism; Objective, Scenarios, Alternatives Considered and Open Issues sections and the stranger reread added |
-| `improve-codebase-architecture/` | `engineering/improve-codebase-architecture` **+** `engineering/codebase-design` | upstream splits the vocabulary into a separate `/codebase-design` skill; this kit ships no such skill, so that skill's glossary and its `DEEPENING.md` / `DESIGN-IT-TWICE.md` are folded in here as `LANGUAGE.md`, `DEEPENING.md` and `INTERFACE-DESIGN.md`. `CONTEXT.md` → `docs/domain-glossary.md`; the illustrative `ADR-0007` → citing a record by its own id; named stand-ins and third-party services → the role they play; upstream's `HTML-REPORT.md` → `PRESENTING.md`, a rendering-agnostic contract keeping the HTML scaffold as one worked example. Added: the capability-tier resolution for the sub-agents it spawns, and the `/to-tickets` hand-off that keeps a deepening out of a feature diff |
+| `improve-codebase-architecture/` | `engineering/improve-codebase-architecture` **+** `engineering/codebase-design` | upstream splits the vocabulary into a separate `/codebase-design` skill; this kit ships no such skill, so that skill's glossary and its `DEEPENING.md` / `DESIGN-IT-TWICE.md` are folded in here as `LANGUAGE.md`, `DEEPENING.md` and `INTERFACE-DESIGN.md`. `CONTEXT.md` → `docs/domain-glossary.md`; upstream's illustrative record number → citing a record by its own id; named stand-ins and third-party services → the role they play; upstream's `HTML-REPORT.md` → `PRESENTING.md`, a rendering-agnostic contract keeping the HTML scaffold as one worked example. Added: the capability-tier resolution for the sub-agents it spawns, and the `/to-tickets` hand-off that keeps a deepening out of a feature diff |
 
 Each of those six carries a one-line attribution note at the bottom of its own
 `SKILL.md`, so the provenance survives being read out of context.
@@ -38,7 +38,7 @@ context map). `housekeeping/` is this kit's too: its agent-file audit
 condenses Addy Osmani's "Audit your Agent files" (2026), its red-flag list is
 Ousterhout's, and its never-fix rule is the dogfood skill's, kept for the same
 reason. `retro/` is this kit's as well: the one sanctioned reader of the
-decision trace (ADR-0008), its eight questions condensed from the trace PRD and its successor,
+decision trace (the kit's ADR-0008), its eight questions condensed from the trace PRD and its successor,
 and its never-fix rule the same one again. `review-pr/` began as an in-house reviewer command in a
 private repository and was substantially rewritten here — the second axis (the
 spec & behavior confirm-list, shared invariant §5) has no upstream at all.

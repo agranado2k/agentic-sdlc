@@ -22,7 +22,7 @@ const B1 = cite("billing", 1);
 const B2 = cite("billing", 2);
 const B3 = cite("billing", 3);
 
-// The living spec of one area (ADR-0012 clause 7): requirement lines carry an
+// The living spec of one area (the kit's ADR-0012 clause 7): requirement lines carry an
 // id `R<n>` at the start of the line; everything else is prose. The test
 // titles cite PRD #527's ids bare.
 const BILLING = [

@@ -64,7 +64,7 @@ Rules it reports: `skill-missing`, `path-missing`, `article-unreferenced`,
 
 `living-spec` checks that every requirement in a living spec — a line opening
 `R<n>.` in `docs/specs/<area>.md` — is named, as `<area>/R<n>`, by at least one
-file `livingSpec.testGlobs` matches (ADR-0012), and is silent with no living
+file `livingSpec.testGlobs` matches (the kit's ADR-0012), and is silent with no living
 spec. A file under this harness's own tree never counts, whatever the globs
 match — its tests are about the gate, not your project — and no file here
 spells a citable id: the fixture tests build theirs at runtime and scan the

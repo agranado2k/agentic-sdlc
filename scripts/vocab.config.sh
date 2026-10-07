@@ -29,7 +29,7 @@
 # it never decides what the tokens are, and for ONE field neither do you:
 #
 #   tier — owned by scripts/agents.lib.sh, the capability-tier resolver. The
-#          four names are CLOSED in the manual layer (ADR-0003), and the
+#          four names are CLOSED in the manual layer (the kit's ADR-0003), and the
 #          resolver refuses a fifth with exit 2 whatever this file says. The
 #          checker reads the tier here for consistency and never widens it: a
 #          fifth token added below is accepted by the checker and refused at
