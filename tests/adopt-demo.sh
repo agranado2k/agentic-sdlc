@@ -212,6 +212,9 @@ assert_file_has "$TARGET/docs/legacy-agent-rules.md" "releases happen on Fridays
 
 assert_status 0 "the adopted repo's own gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
+# The derived sweep over the finished adoption (#562): no `*.kit.*` name, no
+# file carrying the kit-own sentinel, no kit ADR or living spec.
+t_assert_no_kit_residue "$KITCOPY" "$TARGET" "an adoption"
 
 [ -f "$KITCOPY/bootstrap.sh" ] &&
 	fail "bootstrap.sh survived the clean exit — self-deletion is the clean exit's job" ||
@@ -244,6 +247,7 @@ assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" "docs/dogfood-repo
 assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" "markers consumed on the accept path too"
 assert_status 0 "the clean adoption's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
+t_assert_no_kit_residue "$KITCOPY" "$TARGET" "a one-run adoption"
 
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
