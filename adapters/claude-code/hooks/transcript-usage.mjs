@@ -6,11 +6,15 @@
 // (empty is fine; a terminal blocks until EOF), once, for both.
 //
 // STDOUT is one row per model, seven space-separated fields — the four token
-// fields in the order they sit in a trace event, then how far the read went:
+// fields in the order they sit in a trace event, then how far the read went —
+// and an eighth only when its value is not zero:
 //
-//   <model> <input> <output> <cache write> <cache read> <messages> <last id>
+//   <model> <input> <output> <cache write> <cache read> <messages> <last id> [<snapshots>]
 //
-// so a POSIX `while read -r` consumes it without a parser. <messages> is how
+// so a POSIX `while read -r` consumes it without a parser. <snapshots> is how
+// many of the row's messages carry an output count that is a streamed
+// snapshot, not the closing one, so <output> is a lower bound (#608, below).
+// <messages> is how
 // many distinct assistant messages of THAT model the row counts; <last id> is
 // the last message of THAT model the row counts, and it is the model's resume
 // anchor: the event the row becomes carries it, and --resume reads it back
@@ -51,6 +55,20 @@
 // that shrinks it, or that changes the input or cache counts, is drift (M-1,
 // review of PR #363). Every line is still checked for shape — a renamed key
 // on a superseded line is drift all the same.
+//
+// A LAST LINE WRITTEN MID-STREAM HOLDS A SNAPSHOT, AND NOTHING LATER CLOSES IT
+// (#608, ADR-0008 as amended 2026-10-07). A subagent's transcript writes each
+// assistant line as its content block closes — before the response's closing
+// usage arrives — and never rewrites it, so a message whose LAST line says
+// `stop_reason: null` carries the output count streamed so far (at most 182 in
+// 4,988 measured), not the closing one. The session's own transcript writes its
+// lines after the response closes. No later line, no usage-only record and no
+// other field holds the closing count — the diagnosis looked — so the count
+// cannot be read, only flagged: such a message is a SNAPSHOT, the row counts
+// them, and an event carrying the count says its tok_out is a lower bound.
+// A null on a superseded line is #343's shape, closed by the id's last line,
+// and no snapshot. Only an explicit null counts: a line with no stop_reason
+// key says nothing either way.
 //
 // WHAT THIS FILE DOES NOT DO. It never takes a message's count, or a row's,
 // from the transcript's `cost-state` rollup, though that line holds per-model
@@ -217,9 +235,10 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
   }
 
   /**
-   * message.id -> { model, requestId, counts, at, fresh }, in first-seen order.
-   * The model and request id are the first line's, for the duplicate check;
-   * `counts` is the LAST block read for the id; `at` is the id's first-seen
+   * message.id -> { model, requestId, counts, snapshot, at, fresh }, in
+   * first-seen order. The model and request id are the first line's, for the
+   * duplicate check; `counts` is the LAST block read for the id, and
+   * `snapshot` whether that line was written mid-stream; `at` is the id's first-seen
    * position; `fresh` (set after the read) is false for an id first seen at or
    * before its model's anchor, which an earlier read already counted.
    */
@@ -307,6 +326,8 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
     if (FIELDS.every(([field]) => counts[field] === 0)) copied = true;
     lastMessageLine = lineNo;
     const requestId = typeof entry.requestId === "string" ? entry.requestId : "";
+    // Written before the response closed: its output count is a snapshot (#608).
+    const snapshot = message.stop_reason === null;
 
     const first = seen.get(message.id);
     if (first) {
@@ -332,9 +353,10 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
         }
       }
       first.counts = counts;
+      first.snapshot = snapshot;
       continue;
     }
-    seen.set(message.id, { model: message.model, requestId, counts, at: seen.size, fresh: true });
+    seen.set(message.id, { model: message.model, requestId, counts, snapshot, at: seen.size, fresh: true });
   }
 
   /** The first-seen position of an anchor, or drift when the file does not hold it. */
@@ -366,20 +388,28 @@ function add(into, model, counts) {
   into.set(model, running);
 }
 
-/** Per-model totals, distinct-message counts and last ids, in first-seen order. */
+/** model -> how many of the messages counted for it are snapshots, summed into `into`. */
+const tally = (into, model, snapshot) => into.set(model, (into.get(model) ?? 0) + (snapshot ? 1 : 0));
+
+/** The eighth field: a space and the count, or nothing when it is zero. */
+const snapshotsField = (n) => (n > 0 ? ` ${n}` : "");
+
+/** Per-model totals, distinct-message counts, snapshots and last ids, in first-seen order. */
 const totals = new Map();
 const counted = new Map();
+const snapshots = new Map();
 const lastOf = new Map();
-for (const [id, { model, counts, fresh }] of seen) {
+for (const [id, { model, counts, snapshot, fresh }] of seen) {
   if (!fresh) continue;
   counted.set(model, (counted.get(model) ?? 0) + 1);
+  tally(snapshots, model, snapshot);
   lastOf.set(model, id);
   add(totals, model, counts);
 }
 
 let out = "";
 for (const [model, c] of totals) {
-  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${lastOf.get(model)}\n`;
+  out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${lastOf.get(model)}${snapshotsField(snapshots.get(model))}\n`;
 }
 
 // --rollup: THE COMPACTION GAP (#407). The call that writes a compaction
@@ -387,9 +417,13 @@ for (const [model, c] of totals) {
 // own `cost-state` rollup and no row above. With --rollup the difference is
 // one more row per model —
 //
-//   <model> <input> <output> <cache write> <cache read> rollup compaction
+//   <model> <input> <output> <cache write> <cache read> rollup compaction [<snapshots>]
 //
-// — so that the plain sum of the events IS the rollup. The gap is the WHOLE
+// — so that the plain sum of the events IS the rollup. <snapshots>, present
+// only when not zero, is how many of the messages the gap was judged against
+// (this file's and its subagents') are snapshots (#608): the rollup counts
+// their closing output and their rows do not, so the gap's <output> holds
+// that remainder beside the compaction's own. The gap is the WHOLE
 // file's, whatever the anchor: the rollup minus every message in the file
 // (counted now or by an earlier read), minus every subagent file beside it
 // (the subagent-stop hook records those), minus every gap the trace already
@@ -453,9 +487,16 @@ function judgeRollup() {
     }
     add(said, model, counts);
   }
-  // What the events hold, or are about to.
+  // What the events hold, or are about to — and how many of those messages
+  // are snapshots, whose shortfall the rollup counts and the gap therefore
+  // holds (#608): the sum of the events stays the rollup, and the gap row
+  // says how many messages' remainder it absorbed.
   const held = new Map();
-  for (const { model, counts } of seen.values()) add(held, model, counts);
+  const heldSnapshots = new Map();
+  for (const { model, counts, snapshot } of seen.values()) {
+    add(held, model, counts);
+    tally(heldSnapshots, model, snapshot);
+  }
   const dir = path.replace(/\.jsonl$/, "") + "/subagents";
   // No subagents directory is no subagents; any other failure to list it is a
   // refusal, because "none" would over-state the gap (review of PR #438, M-1).
@@ -466,8 +507,9 @@ function judgeRollup() {
     if (error.code !== "ENOENT") refuse(`cannot list ${dir}: ${error.code ?? error.message}`);
   }
   for (const name of names) {
-    for (const { model, counts } of scan(`${dir}/${name}`, null, new Map(), `subagents/${name}: `, refuse).seen.values()) {
+    for (const { model, counts, snapshot } of scan(`${dir}/${name}`, null, new Map(), `subagents/${name}: `, refuse).seen.values()) {
       add(held, model, counts);
+      tally(heldSnapshots, model, snapshot);
     }
   }
   // Read as "nothing recorded", an unreadable stdin would record a gap a
@@ -499,7 +541,7 @@ function judgeRollup() {
       }
     }
     if (FIELDS.every(([field]) => gap[field] === 0)) continue;
-    rows += `${model} ${gap.tok_in} ${gap.tok_out} ${gap.tok_cache_w} ${gap.tok_cache_r} rollup compaction\n`;
+    rows += `${model} ${gap.tok_in} ${gap.tok_out} ${gap.tok_cache_w} ${gap.tok_cache_r} rollup compaction${snapshotsField(heldSnapshots.get(model) ?? 0)}\n`;
   }
   return rows;
 }

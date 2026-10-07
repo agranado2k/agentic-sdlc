@@ -117,8 +117,9 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
 `data.via=rollup` on the gap a compaction left — or, with `outcome=fail`,
 on a rollup that was refused), `session.end` (`data.phantoms`, the
 session's phantom stops), `agent.stop` and `spawn.end` (a sub-agent's or a
-worker's tokens), and the `cost_usd` column the export computes from the
-price table at read time.*
+worker's tokens), `data.out_snapshot` on any of those token-bearing events
+(how many of its messages carry a streamed output snapshot), and the
+`cost_usd` column the export computes from the price table at read time.*
 
 - `sh scripts/trace.sh summary --by model --since <YYYY-MM-DD>` for the models and their cost; `--by skill` and `--by session` for where it went. The pivot gives cost per ticket: every token-bearing event inside a run whose skill opened on that ticket.
 - A cost cell reading `unpriced` is a model the price table does not name.
@@ -142,6 +143,18 @@ price table at read time.*
   came that way. One with `outcome=fail` is a rollup the hook refused: that
   session's figure is an undercount by an unknown amount, and the report
   says so beside it instead of quoting the sum as whole.
+- **Output read from a snapshot**: an event carrying `data.out_snapshot`
+  counted that many messages whose transcript line was written before the
+  response closed, so their output count is the streamed snapshot and
+  nothing later in the file holds the closing one. Its `tok_out` — and the
+  output cost priced from it — is a **lower bound**, short by an unknown
+  amount; input and cache counts are whole. Most sub-agent tool turns end
+  this way, so report the share of `agent.stop` output that is a lower
+  bound beside every output figure, and never compare such a figure as
+  exact against one that is not. On a compaction gap (`data.via=rollup`)
+  the key means the reverse: the rollup counts those messages' closing
+  output, so the gap's `tok_out` holds their remainder beside the
+  compaction's own — the session's sum stays whole, its split does not.
 - **Phantom stops**: sum `data.phantoms` over a session's `session.end`
   events (a resumed session ends more than once). `0` is a count taken; a
   `session.end` with no `data.phantoms` is a count not taken, never zero. A
