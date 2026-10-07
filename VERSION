@@ -2320,56 +2320,7 @@
 # 8), tests/trace-hooks.test.sh and tests/retro-skill.test.sh, and a
 # redacted transcript fixture under tests/fixtures/claude-code/.
 
-# 0.63.0 — the update recipe reads in order for a consumer several releases
-# behind (ticket #563, found by a real 0.48.0 -> 0.54.0 upgrade on
-# 2026-10-06 that worked only by carrying step 1's notes to step 9 by hand).
-# NO file joins and NO file leaves the shared layer. ONE shared file changes
-# content: UPDATING.md. Step 0 lists the releases by version, newest first
-# (--sort=-v:refname), where git's name order put v0.10.0 before v0.9.0.
-# Step 7 gains a verbatim check that clones on its own and reads the list
-# from the consumer's VERSION through scripts/manifest.lib.sh, so "run it any
-# time" survives step 10's rm of $WORK. Step 8 prints every changed path
-# beside the step 9 sub-step that takes it — none skipped, the kit's own
-# files marked kit — and then the consumer's path: each "Arriving from" note
-# from FROM_REF up, oldest first, under every sub-step it names. 9a reads
-# the kit at .agents/skills/... first, for the base and for theirs, falling
-# back to the pre-0.14.0 address for the base only: past the move the kit's
-# .claude/skills/<name> is a symlink, and git show at a tag finds nothing
-# through it. 9c names where each docs template landed, docs/specs/README.md
-# among them, with a loop that calls a starter newer than the bootstrap NEW.
-# 9d prints a .sh policy file's diff after its key sets, for a key shipped
-# commented out (0.53.0's AGENT_TIER_REVIEWER_FALLBACK). A new 9f takes the
-# files that fit no category — the docs harness's README and fixture tests,
-# .agents/prompts/, .githooks/, .gitignore, scripts/task.*, scripts/catalogue.*
-# and scripts/worktree-cleanup.sh. The 0.54.0 and 0.60.0 notes say to take
-# living-spec.test.mjs whole when absent, the 0.59.0 note deletes the codex
-# twin only if present, and four notes name the sub-step their take belongs
-# to. The arriving-from paragraph is new, and both worked examples re-pin,
-# the ADD commentary's quote with them: it had read v0.40.0 since that
-# release, its probe matching the transcript's line instead.
-#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# Landed on main after v0.62.0, outside the manifest: /implement and
-# /review-pr record a spawn its vendor refused (out of usage credits,
-# rate_limit or HTTP 429) as spawn.end outcome=unreachable rather than fail,
-# and re-resolve past the model the session spawned on through
-# AGENT_UNREACHABLE_MODELS (#609) — take them like any skill. The Claude
-# Code adapter's transcript-usage.mjs, hook.lib.sh and README.md mark a
-# usage event whose messages hold a streamed output snapshot with
-# data.out_snapshot, so its tok_out reads as a lower bound, and /retro's
-# QUESTIONS.md question 5 says so beside every output figure (#612) — take
-# the adapter files as 9e says, and QUESTIONS.md like any skill file.
-# Kit-only, never shipped: tests/docs-demo.sh's C4j to C4p, each running the
-# recipe's own block — the tag order over tags whose two orders disagree,
-# step 7's check on a consumer past step 10, step 8's classification of the
-# Part 2 run, 9a's three-way at both skill layouts, 9c's starter taken, 9d's
-# commented key against a two-tag fixture, and the path from 0.48.0 — its
-# fake 0.3.0 kit without the specs starter, and its D2 probe anchored on the
-# ADD commentary. Also kit-only from #612: the ADR-0008 amendment (clause 8),
-# tests/trace-hooks.test.sh, tests/retro-skill.test.sh and a redacted
-# snapshot transcript fixture; from #609, tests/trace-skills.test.sh and
-# tests/review-pr-output.test.sh.
-
-shared-layer: 0.63.0
+shared-layer: 0.62.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
