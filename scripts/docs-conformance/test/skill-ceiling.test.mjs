@@ -65,6 +65,13 @@ test("R8: the kit's own skills sit under the ceilings its policy declares", () =
   assert.deepEqual(run(ctx), []);
 });
 
+test("R8: every ceiling the kit declares names a skill the kit ships — a mistyped path would be silent", () => {
+  const ctx = makeContext({ repoRoot: KIT, config: defaultConfig });
+  for (const file of Object.keys(defaultConfig.skillCeilings ?? {})) {
+    assert.equal(ctx.kind(file), "file", `${file} has a ceiling but is no file in the kit`);
+  }
+});
+
 // The POSIX twin: scripts/check.sh without node reads the same policy by text
 // from config.mjs, so the fixture carries the kit's real wrapper, its two
 // sourced libraries and a config whose block is spelled as the kit's is.
