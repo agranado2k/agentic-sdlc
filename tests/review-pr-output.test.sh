@@ -710,6 +710,15 @@ lens_rules_missing() {
 		grep -F '`ok` when it returned its report' | grep -F '`unreachable` when its vendor refused it' |
 		grep -F '`fail` when it ended with' |
 		grep -qF 'no report' || _lr_out="$_lr_out started-lens:one-spawn.end-ok-and-fail-with-cause"
+	# #566: the refusal is named by the text a spawn returns, `fail` keeps
+	# every other cause, and an unreachable lens is re-resolved past the model
+	# it was spawned on — never a name read out of the error.
+	printf '%s\n' "$_lr_sen" | grep -F '`unreachable` when its vendor refused it' | grep -F 'out of usage credits' |
+		grep -F 'rate_limit' | grep -qF '429' || _lr_out="$_lr_out unreachable-bound-to-the-refusal-text"
+	printf '%s\n' "$_lr_sen" | grep -F '`fail` when it ended with' | grep -qF 'any other cause' ||
+		_lr_out="$_lr_out fail-kept-for-any-other-cause"
+	printf '%s\n' "$_lr_sen" | grep -F 'AGENT_UNREACHABLE_MODELS="$model"' | grep -F 'sh scripts/agents.lib.sh reviewer' |
+		grep -qF 're-resolve' || _lr_out="$_lr_out re-resolve-past-the-model-it-spawned-on"
 	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -qF 'its record stands' ||
 		_lr_out="$_lr_out audited-here:record-stands"
 	_lr_line=$(region '^### Review Summary$' '^| | Severity | Count |$' "$1" | grep '^Lenses not run: ')
@@ -745,6 +754,12 @@ for b in \
 	's/`unreachable` when its vendor/`fail` when its vendor/' \
 	's/`ok` when it returned its report/`fail` when it returned its report/' \
 	's/vendor refused it/vendor paused it/g' \
+	's/out of usage credits/out of credit/' \
+	's/rate_limit/throttle/g' \
+	's/HTTP 429/HTTP 4xx/g' \
+	's/any other cause/one cause/g' \
+	's/AGENT_UNREACHABLE_MODELS="$model"/AGENT_UNREACHABLE_MODELS="<the model>"/g' \
+	's/re-resolve/resolve/g' \
 	's/no report/a short report/g' \
 	's/before the verdict/after the verdict/g' \
 	's/its record stands/its record is replaced/' \

@@ -1556,80 +1556,55 @@ v=$(cat "$dir"/events/*.jsonl 2>/dev/null | grep -F '"kind":"review.verdict"' | 
 [ "$v" = 2 ] && pass "the trace holds one review.verdict per axis, both naming the single-reviewer pass" ||
 	fail "expected two review.verdict events naming single-reviewer, found $v"
 
+
 # ---------------------------------------------------------------------------
-banner "25. A spawn its vendor refused ends unreachable, never fail (#566)"
+banner "25. A reviewer its vendor refused ends unreachable, never fail (#566)"
 # ---------------------------------------------------------------------------
 # Retro 20261006T080718Z, question 6: 8 of 9 failed spawns were a vendor's
-# "out of usage credits" HTTP 429, recorded as `spawn.end outcome=fail` — so
-# the trace read an exhausted vendor as a broken session, and the resolver's
-# ordered fallback, which re-resolves past what the caller names unreachable
-# (AGENT_UNREACHABLE_MODELS), had no recorded signal. trace.sh's per-kind
-# table already holds `unreachable` for spawn.end; the hole was the two skills
-# that write the in-session end. Each must: offer `unreachable` beside `fail`
-# on its spawn.end line; bind `unreachable` to the refusal, named by the text
-# the spawn returns (out of usage credits, rate_limit, 429) in ONE sentence;
-# keep `fail` for any other failure; and send an unreachable spawn back to
-# the resolver with AGENT_UNREACHABLE_MODELS. Read per sentence, inside the
-# region that holds the spawn — /implement's (b) branch, /review-pr's §3 — so
-# a word that wanders elsewhere satisfies nothing.
-# refusal_region <skill> <file> — the text the rule must live in.
-refusal_region() {
-	case "$1" in
-	implement) grep -F -- '- **(b) A `/review-pr` subagent' "$2" ;;
-	review-pr) awk '/^### 3\. / { on = 1 } /^#### Agent 1 / { exit } on' "$2" ;;
-	esac
-}
-# refusal_rules_missing <skill> <file> — the #566 rules the region does not hold.
+# "out of usage credits" 429 recorded as `fail`, so the resolver's fallback
+# had no recorded signal. Held here on /implement's (b) branch, per sentence;
+# /review-pr's lens end is held beside its other lens rules, in
+# tests/review-pr-output.test.sh section 11.
+# refusal_rules_missing <skill file> — the #566 rules the (b) branch does not hold.
 refusal_rules_missing() {
-	_rf_reg=$(refusal_region "$1" "$2")
-	_rf_sen=$(printf '%s\n' "$_rf_reg" | tr '\n' ' ' | awk '{ gsub(/\. /, ".\n"); print }')
+	_rf_reg=$(fallback_branch "$1")
+	_rf_sen=$(printf '%s\n' "$_rf_reg" | awk '{ gsub(/\. /, ".\n"); print }')
 	_rf_end=$(printf '%s\n' "$_rf_reg" | grep -o '`sh scripts/trace\.sh emit kind=spawn\.end[^`]*`' || true)
 	_rf_out=''
-	[ -n "$_rf_end" ] || _rf_out="$_rf_out no-spawn.end-line"
-	printf '%s\n' "$_rf_end" | grep -v 'outcome=[a-z|]*unreachable' | grep -q . && _rf_out="$_rf_out spawn.end-offers-unreachable"
-	printf '%s\n' "$_rf_end" | grep -v 'outcome=[a-z|]*fail' | grep -q . && _rf_out="$_rf_out spawn.end-keeps-fail"
+	printf '%s\n' "$_rf_end" | grep -qF 'outcome=ok|unreachable|fail' || _rf_out="$_rf_out spawn.end-offers-ok|unreachable|fail"
 	printf '%s\n' "$_rf_sen" | grep -F '`unreachable` when' | grep -F 'out of usage credits' |
 		grep -F 'rate_limit' | grep -qF '429' || _rf_out="$_rf_out unreachable-bound-to-the-refusal-text"
 	printf '%s\n' "$_rf_sen" | grep -F '`fail` when' | grep -qF 'any other' || _rf_out="$_rf_out fail-kept-for-any-other-cause"
-	printf '%s\n' "$_rf_sen" | grep -F 'AGENT_UNREACHABLE_MODELS=' | grep -F 'sh scripts/agents.lib.sh reviewer' |
-		grep -qF 're-resolve' || _rf_out="$_rf_out re-resolve-past-the-refusal"
+	printf '%s\n' "$_rf_sen" | grep -F 'AGENT_UNREACHABLE_MODELS="$model"' | grep -F 'sh scripts/agents.lib.sh reviewer' |
+		grep -qF 're-resolve' || _rf_out="$_rf_out re-resolve-past-the-model-it-spawned-on"
 	printf '%s' "$_rf_out" | sed 's/^ //'
 }
-for s in implement review-pr; do
-	f=$(skill_md "$s")
-	miss=$(refusal_rules_missing "$s" "$f")
-	[ -z "$miss" ] && pass "/$s ends a refused spawn unreachable, keeps fail for a real failure, and re-resolves past the refusal" ||
-		fail "/$s does not record a vendor's refusal as unreachable: $miss — an exhausted vendor reads as a broken session (#566)"
-	# The demo: the skill's own spawn.end line, run twice against a scratch
-	# trace — once as the 429 writes it, once as a real failure does.
-	dir="$SCRATCH/run.566.$s"
-	line=$(t_trace_spans "$f" | grep -F 'kind=spawn.end' | head -1)
-	for o in unreachable fail; do
-		cmd=$(t_trace_runnable "$(printf '%s\n' "$line" | sed "s/outcome=[a-z|]*/outcome=$o/")")
-		( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) ||
-			fail "/$s's spawn.end line does not run with outcome=$o: $cmd"
-	done
-	got=$(cat "$dir"/events/*.jsonl 2>/dev/null | grep -F '"kind":"spawn.end"' | sed 's/.*"outcome":"\([a-z]*\)".*/\1/' | tr '\n' ' ')
-	[ "$got" = "unreachable fail " ] && pass "/$s: a credit refusal is recorded outcome=unreachable, a real failure outcome=fail" ||
-		fail "/$s: the two ends recorded '$got', not 'unreachable fail '"
-done
+miss=$(refusal_rules_missing "$IM")
+[ -z "$miss" ] && pass "/implement ends a refused reviewer unreachable, keeps fail for any other cause, and re-resolves past the model it spawned on" ||
+	fail "/implement does not record a vendor's refusal as unreachable: $miss — an exhausted vendor reads as a broken session (#566)"
+# The demo: the (b) branch's own spawn.end line, as a 429 writes it.
+dir="$SCRATCH/run.566"
+line=$(fallback_branch "$IM" | grep -o '`sh scripts/trace\.sh emit kind=spawn\.end[^`]*`' | tr -d '`')
+cmd=$(t_trace_runnable "$(printf '%s\n' "$line" | sed 's/outcome=[a-z|]*/outcome=unreachable/')")
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) &&
+	grep -qF '"outcome":"unreachable"' "$dir"/events/*.jsonl 2>/dev/null &&
+	pass "a credit refusal is recorded spawn.end outcome=unreachable" ||
+	fail "the (b) branch's spawn.end line does not record outcome=unreachable: $cmd"
 # Baits: one per rule, so none survives its own deletion.
 for b in \
-	'review-pr|s/outcome=ok|unreachable|fail/outcome=ok|fail/' \
-	'implement|s/outcome=ok|unreachable|fail/outcome=ok|unreachable/' \
-	'review-pr|s/out of usage credits/out of credit/' \
-	'implement|s/rate_limit/throttle/g' \
-	'review-pr|s/429/4xx/g' \
-	'implement|s/`fail` when/`fail` if/' \
-	'review-pr|s/any other/one/g' \
-	'implement|s/AGENT_UNREACHABLE_MODELS=/AGENT_SESSION_MODEL=/g' \
-	'review-pr|s/re-resolve/resolve/g'; do
-	bs=${b%%|*}; bx=${b#*|}
-	sed "$bx" "$(skill_md "$bs")" >"$SCRATCH/bait566.md"
-	if ! cmp -s "$SCRATCH/bait566.md" "$(skill_md "$bs")" && [ -n "$(refusal_rules_missing "$bs" "$SCRATCH/bait566.md")" ]; then
-		pass "bait: /$bs '$bx' goes red"
+	's/outcome=ok|unreachable|fail/outcome=ok|fail/' \
+	's/out of usage credits/out of credit/' \
+	's/rate_limit/throttle/g' \
+	's/429/4xx/g' \
+	's/`fail` when/`fail` if/' \
+	's/any other/one/g' \
+	's/AGENT_UNREACHABLE_MODELS="$model"/AGENT_UNREACHABLE_MODELS="<the model>"/g' \
+	's/re-resolve/resolve/g'; do
+	sed "$b" "$IM" >"$SCRATCH/bait566.md"
+	if ! cmp -s "$SCRATCH/bait566.md" "$IM" && [ -n "$(refusal_rules_missing "$SCRATCH/bait566.md")" ]; then
+		pass "bait: '$b' goes red"
 	else
-		fail "bait: /$bs '$bx' was not caught — or planted nothing"
+		fail "bait: '$b' was not caught — or planted nothing"
 	fi
 done
 
