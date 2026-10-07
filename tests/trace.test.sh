@@ -1363,10 +1363,11 @@ t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='p
 	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a key no row requires is no violation when missing" ||
 	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $S_STATUS): $S_ERR"
 # The shape is the kind's, not the key's: another kind's data.id stays open.
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.raise subject='pr:#1' data.id='a b'
-[ "$S_STATUS" = 0 ] && grep -F '"kind":"finding.raise"' "$SH/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"a b"' &&
-	pass "finding.raise data.id='a b' is written as given — only finding.triage holds data.id" ||
-	fail "finding.raise data.id='a b' was refused or not written (exit $S_STATUS): $S_ERR"
+# (finding.raise was this case's kind until #567 held a raise's id too.)
+t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.dismiss subject='pr:#1' data.id='a b'
+[ "$S_STATUS" = 0 ] && grep -F '"kind":"finding.dismiss"' "$SH/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"a b"' &&
+	pass "finding.dismiss data.id='a b' is written as given — a kind with no id row leaves data.id open" ||
+	fail "finding.dismiss data.id='a b' was refused or not written (exit $S_STATUS): $S_ERR"
 # The shapes live in the kind table, beside the outcome words.
 grep -q "^TRACE_SHAPES='.*finding\.triage=id:.*pr\.iterate=iteration:" "$TRACE" &&
 	pass "the script declares both shapes in one TRACE_SHAPES table" || fail "scripts/trace.sh has no TRACE_SHAPES line declaring finding.triage's id and pr.iterate's iteration"
@@ -2001,5 +2002,98 @@ _dp_hits=$(cd "$KIT" && printf '%s\n' "$_dp_files" | while IFS= read -r _f; do [
 [ -n "$_dp_files" ] && [ -z "$_dp_hits" ] && pass "no bare end in the kit's skills, hooks, scripts, suites, adapters or stamped sources" ||
 	fail "a bare end is left (or nothing was scanned):
 $_dp_hits"
+
+# ---------------------------------------------------------------------------
+banner "30. A finding raise's id is the review's severity id, held at emit (ticket #567)"
+# ---------------------------------------------------------------------------
+# The retrospective of 2026-10-06 (question 3): two raises took the review's
+# literal placeholder as their id — INITIAL-1, INITIAL-2 on #535, INITIAL-1 on
+# #541 — so the triage that answered one, recorded as L-1, joined nothing.
+# #466 held the triage side to [CHML]-[0-9]+; this holds the raise side to the
+# same shape, read from where the report contract numbers its findings
+# (/review-pr's C-/H-/M-/L- ids, the worker contract's "C-1, H-1, M-1, L-1",
+# the broker's **[CHML]-[0-9]+** lift). A confirm-list item is never raised,
+# so A2-N, legal on the triage side, is refused here. A present id is held;
+# a missing one stays legal, as every shape row's key is (ADR-0008 #466).
+RI="$SCRATCH/raise-id"; RION=$(policy "$RI")
+# ri_emit <emit args…> — runs the emit and sets RI_GREW to the lines it added.
+ri_emit() {
+	_ri_n=$(cat "$RI/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	t_run_split env TRACE_CONFIG="$RION" sh "$TRACE" emit "$@"
+	RI_GREW=$(($(cat "$RI/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ') - _ri_n))
+}
+R='kind=finding.raise subject=pr:#535 outcome=raised data.severity=low data.agent=simplicity'
+# shellcheck disable=SC2086 # $R is the emit's fixed head, split on purpose
+{
+ri_emit $R data.id=INITIAL-1
+case $S_STATUS:$RI_GREW:$S_ERR in
+2:0:*"finding.raise: data.id 'INITIAL-1' is not [CHML]-[0-9]+"*) pass "finding.raise data.id=INITIAL-1 is exit 2, names the kind, the value and the shape, and writes nothing" ;;
+*) fail "finding.raise data.id=INITIAL-1 was not refused by shape (exit $S_STATUS, $RI_GREW line(s) written): $S_ERR" ;;
+esac
+for _ri_bad in INITIAL-N A2-1 X-1 h-3 H- H-3a local-H-3 'H 3' PRRC_kwDO12; do
+	ri_emit $R "data.id=$_ri_bad"
+	[ "$S_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and data.id='$_ri_bad' is refused" ||
+		fail "finding.raise data.id='$_ri_bad' was not refused (exit $S_STATUS, $RI_GREW line(s)): $S_ERR"
+done
+ri_emit $R data.id=H-1 data.id=INITIAL-2
+[ "$S_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and a second data.id is held too" ||
+	fail "a second, malformed data.id on a raise was not refused (exit $S_STATUS): $S_ERR"
+for _ri_ok in H-3 C-1 M-12 L-7; do
+	ri_emit $R "data.id=$_ri_ok"
+	[ "$S_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "finding.raise data.id=$_ri_ok writes" ||
+		fail "finding.raise data.id=$_ri_ok was refused or not written (exit $S_STATUS): $S_ERR"
+done
+ri_emit $R
+[ "$S_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "a raise with no data.id still writes — a missing key is no violation" ||
+	fail "a raise with no data.id was refused (exit $S_STATUS): $S_ERR"
+}
+grep -F '"kind":"finding.raise"' "$RI/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"H-3"' &&
+	pass "and H-3 is in the trace as given" || fail "the raise H-3 is not in the trace as given"
+# The shape is one the triage side accepts, read from the table, never copied:
+# the two ends of the join cannot drift apart.
+_ri_raise=$(sed -n "s/^TRACE_SHAPES='.*finding\.raise=id:\([^ ']*\).*/\1/p" "$TRACE")
+_ri_local=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage\/data\.source~local=id:\([^ ']*\).*/\1/p" "$TRACE")
+_ri_join=no
+[ -n "$_ri_raise" ] && case "|$_ri_local|" in *"|$_ri_raise|"*) _ri_join=yes ;; esac
+[ "$_ri_join" = yes ] && pass "the raise's shape ($_ri_raise) is one the local triage's ($_ri_local) accepts" ||
+	fail "TRACE_SHAPES' raise id shape '$_ri_raise' is not an alternative of the local triage's '$_ri_local'"
+
+# verify: a raise already written with a malformed id is history — an advisory
+# on stderr naming file, line and value, never a bad line, never the verdict.
+RIV="$SCRATCH/raise-verify"; RIVON=$(policy "$RIV")
+TRACE_CONFIG=$RIVON sh "$TRACE" emit kind=finding.raise subject='pr:#1' outcome=raised data.id=H-1 reason=clean
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r1","kind":"finding.raise","subject":"pr:#535","outcome":"raised","data":{"id":"INITIAL-1","severity":"low"}}\n' >>"$RIV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r2","kind":"finding.triage","subject":"pr:#535","outcome":"answered","data":{"source":"human","id":"INITIAL-1"}}\n' >>"$RIV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r3","kind":"finding.raise","subject":"pr:#541","outcome":"raised","data":{"severity":"low","thread_id":"x","id":"M-2"}}\n' >>"$RIV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r4","kind":"finding.raise","subject":"pr:#541","outcome":"raised","data":{"agent":"simplicity","id":"INITIAL-2"}}\n' >>"$RIV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r5","kind":"finding.raise","subject":"pr:#541","outcome":"raised"}\n' >>"$RIV/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over a malformed raise id exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over a malformed raise id: $S_OUT"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2:"*finding.raise*INITIAL-1*"[CHML]-[0-9]+"*advisory*) pass "and names the raise's file:line, the value and the shape on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, finding.raise, INITIAL-1 and the shape: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:5:"*INITIAL-2*) pass "and the second raise too, its id after another key" ;; *) fail "stderr did not name $TODAY.jsonl:5 INITIAL-2: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"*) fail "verify advised on a raise whose id is a severity id: $S_ERR" ;; *) pass "and leaves a severity id alone, beside a key ending in id" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's data.id to the raise shape: $S_ERR" ;; *) pass "and holds no other kind's id to it" ;; esac
+case $S_ERR in *"$TODAY.jsonl:6:"*) fail "verify advised on a raise with no id: $S_ERR" ;; *) pass "and a raise with no id is no advisory" ;; esac
+printf 'not json at all\n' >>"$RIV/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
+_ri_v=no
+[ "$S_STATUS" = 1 ] && case $S_OUT in *"$TODAY.jsonl:2:"*) ;; *"$TODAY.jsonl:7:"*) _ri_v=yes ;; esac
+[ "$_ri_v" = yes ] && pass "a real bad line still fails verify, and the old raise is not among the bad lines" ||
+	fail "verify mixed the raise advisory into the verdict (exit $S_STATUS): $S_OUT"
+
+# The decision is recorded where decisions live, and the review's own raise
+# lines name the shape the script holds them to — never the placeholder.
+sed -n '/Amended 2026-10-07 (#567)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
+	pass "ADR-0008 carries the dated #567 amendment naming the raise's shape" || fail "ADR-0008 has no '*Amended 2026-10-07 (#567):*' block naming [CHML]-[0-9]+"
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-07 (#567"*) pass "the index row for 0008 carries the #567 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-07 (#567 …' note" ;;
+esac
+_ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md")
+[ "$(printf '%s\n' "$_ri_lines" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$_ri_lines" | grep -q 'data\.id=[^ ]*INITIAL' &&
+	pass "/review-pr's raise lines never offer INITIAL-N as data.id's value" || fail "a /review-pr raise line still offers the INITIAL-N placeholder as data.id"
+[ -n "$_ri_raise" ] && printf '%s\n' "$_ri_lines" | tr '\n' ' ' | grep -qF "$_ri_raise" &&
+	pass "and its raise paragraphs state the shape TRACE_SHAPES declares, $_ri_raise" || fail "/review-pr's raise paragraphs do not state $_ri_raise"
 
 t_done "trace script"

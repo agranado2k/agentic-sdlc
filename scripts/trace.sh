@@ -198,17 +198,21 @@ TRACE_EVENT_CAP=4000
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (ADR-0008 clause 1, as amended
-# 2026-10-01 for #420 and 2026-10-02 for #466): a data key a reader joins on,
-# held at emit to a shape. Each row is `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`,
-# and a value matches an ERE only whole. `<kind>=<key>:<ERE>` holds a PRESENT
-# key: data.* stays open, and an emit missing the key writes as before. A
-# `/<when>~<ERE>` applies the row only to a line whose `<when>` — `outcome`,
-# or `data.<key>` — matches; a `!` after the key makes the key required on
-# such a line. So: a triage's source is check, bot, human or local; a local
-# finding's id is the review's INITIAL-N, or A2-N for a confirm-list item
-# (numbered in the list's order, 2026-10-02 at PR #487), and that id is the
-# local source's alone; and a green or red iteration carries its three counts, digits.
-TRACE_SHAPES='finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
+# 2026-10-01 for #420, 2026-10-02 for #466 and 2026-10-07 for #567): a data
+# key a reader joins on, held at emit to a shape. Each row is
+# `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, and a value matches an ERE only
+# whole. `<kind>=<key>:<ERE>` holds a PRESENT key: data.* stays open, and an
+# emit missing the key writes as before. A `/<when>~<ERE>` applies the row
+# only to a line whose `<when>` — `outcome`, or `data.<key>` — matches; a `!`
+# after the key makes the key required on such a line. So: a raise's id is the
+# review's severity id, C-, H-, M- or L- and a number — never the INITIAL-N
+# placeholder the review's prose names them by; a triage's source is check,
+# bot, human or local; a local finding's id is that same severity id, or A2-N
+# for a confirm-list item (numbered in the list's order, 2026-10-02 at PR
+# #487), and that id is the local source's alone; and a green or red iteration
+# carries its three counts, digits. `verify` advises on a raise written before
+# its row (TRACE_AWK_RAISE reads the row from here).
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -1284,6 +1288,37 @@ function outcome_scan(line,   env, d, k, o) {
 }
 '
 
+# TRACE_AWK_RAISE — verify's half of the raise-id row (#567): a finding.raise
+# written before its id was held, with an id off the shape, is history and an
+# advisory. raise_re is the row's ERE, handed over by trace_raise_re from
+# TRACE_SHAPES, so the emit and the advisory cannot read different shapes.
+# raise_scan reads the kind from the ENVELOPE and every data.id from the DATA
+# MAP — `{"id":"` or `,"id":"`, so a key merely ending in id is not one — and
+# calls the caller's raise_bad(value) for each id off the shape. A raise with
+# no id is never one. Single-quoted: no apostrophe in it.
+TRACE_AWK_RAISE='
+function raise_scan(line,   d, m, v) {
+	d = index(line, ",\"data\":{")
+	if (!d || !index(substr(line, 1, d), ",\"kind\":\"finding.raise\"")) return
+	m = substr(line, d + 8)
+	while (match(m, /[{,]"id":"[^"]*"/)) {
+		v = substr(m, RSTART + 7, RLENGTH - 8)
+		if (v !~ ("^(" raise_re ")$")) raise_bad(v)
+		m = substr(m, RSTART + RLENGTH)
+	}
+}
+'
+
+# trace_raise_re — prints the ERE TRACE_SHAPES holds a raise's id to. A table
+# with no such row is a table error, and dies (exit 2): an advisory that
+# silently matched nothing would fail open.
+trace_raise_re() {
+	case " $TRACE_SHAPES " in *" finding.raise=id:"*) ;; *) die "TRACE_SHAPES has no finding.raise=id row" ;; esac
+	_rr=" $TRACE_SHAPES "
+	_rr=${_rr#* finding.raise=id:}
+	printf '%s' "${_rr%% *}"
+}
+
 # trace_spelling_note [<since>] — the stderr lines `summary` and `export` say
 # when the trace holds history a rule younger than it would refuse: old
 # numbered spellings (#305) and outcomes their kind does not declare (#348).
@@ -1343,6 +1378,7 @@ trace_verify() {
 	# The list is captured FIRST, with pathname expansion still on, because
 	# trace_files finds the day files with a glob of its own; only the SPLIT of
 	# that list runs with globbing off. Nothing in the loop body globs.
+	_vf_raise=$(trace_raise_re) || exit 2
 	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
 	IFS=$_trace_nl
@@ -1356,7 +1392,7 @@ trace_verify() {
 		# note goes to stderr through a pipe, which POSIX awk has where it has no
 		# /dev/stderr. `summary` and `export` switch the per-line notes off and
 		# say the count once instead (trace_spelling_note).
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME"'
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE"'
 		function spelled(field, v) {
 			if (advise != "list" || spelled_ok(v)) return
 			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
@@ -1369,6 +1405,10 @@ trace_verify() {
 			else { gsub(/\|/, " ", w); w = "one of " w }
 			printf "!  trace: %s:%d: %s outcome %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, q, o, q, w | "cat 1>&2"
 		}
+		function raise_bad(v) {
+			if (advise != "list") return
+			printf "!  trace: %s:%d: finding.raise data.id %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q, raise_re | "cat 1>&2"
+		}
 		{
 			bad = ""
 			if (substr($0, 1, 13) != "{\"v\":1,\"ts\":\"") bad = "does not open with the schema version and a timestamp"
@@ -1380,7 +1420,7 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
-			else { spelled_scan($0); outcome_scan($0) }
+			else { spelled_scan($0); outcome_scan($0); raise_scan($0) }
 		}
 		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then

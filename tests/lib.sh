@@ -986,9 +986,13 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # The run an end names, `<the run id your begin printed>`, becomes the top of
 # the stack the span runs against, read with `stack .` — the id the begin
 # earlier in the document printed, as an agent would type it (ticket #543).
+# A raise's id, `data.id='<its id, [CHML]-[0-9]+>'`, becomes `H-1` before the
+# optional-group rule could read its bracket as one: the script holds it to
+# that shape (ticket #567).
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
+		-e "s/data\.id='<its id, \[CHML\]-\[0-9\]+>'/data.id='H-1'/g" \
 		-e 's/<the run id your begin printed>/"$(sh scripts\/trace.sh stack . | sed -n 1p)"/g' \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \
