@@ -183,4 +183,29 @@ kr_tree
 : >"$SCRATCH/kr-tree/docs/specs/trace.md"
 says "a kit living spec fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
 
+# ---------------------------------------------------------------------------
+banner "6. t_assert_no_kit_record_cite — a kit record named as the project's fails (#564)"
+# ---------------------------------------------------------------------------
+# self-host's sweep over a fresh bootstrap passes once every shipped file says
+# whose record it cites; this is what proves that pass is not vacuous.
+rc_tree() {
+	rm -rf "$SCRATCH/rc-tree"
+	mkdir -p "$SCRATCH/rc-tree/scripts" "$SCRATCH/rc-tree/.agents/skills/x"
+	printf '# THE WALK (the kit'"'"'s ADR-0013). The Kit'"'"'s ADR is a phrase, not a cite.\n' >"$SCRATCH/rc-tree/scripts/a.sh"
+	printf 'The kit'"'"'s ADR-0008 says so, and so does the kit'"'"'s ADR-0012 clause 3.\n' >"$SCRATCH/rc-tree/.agents/skills/x/SKILL.md"
+	printf '# 0.1.0 — ADR-0001 records it.\n' >"$SCRATCH/rc-tree/VERSION"
+}
+rc_tree
+says "a clean tree (the kit's ADR-<n>, either case, and VERSION's history) passes" ok t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a clean tree"
+printf 'Written here and never read (ADR-0008).\n' >>"$SCRATCH/rc-tree/.agents/skills/x/SKILL.md"
+says "a bare ADR-<n> fails" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+out=$(printed t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak")
+case $out in *".agents/skills/x/SKILL.md:2"*) pass "the fail line names the file and the line" ;; *) fail "the cite is not located: $out" ;; esac
+rc_tree
+printf '# the kit'"'"'s ADR-0007 and ADR-0013 on one line\n' >>"$SCRATCH/rc-tree/scripts/a.sh"
+says "one bare cite beside a qualified one fails" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+rc_tree
+printf "# per the kit's\n# ADR-0006\n" >>"$SCRATCH/rc-tree/scripts/a.sh"
+says "a qualifier on the line before does not count" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+
 t_done "harness helpers"

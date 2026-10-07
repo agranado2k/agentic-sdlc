@@ -4,7 +4,7 @@
 #
 #   sh scripts/coverage.sh <prd-body-file> <ticket-file>...
 #
-# WHAT IT ANSWERS. /to-tickets runs it before its quiz (ADR-0012 clause 4) on
+# WHAT IT ANSWERS. /to-tickets runs it before its quiz (the kit's ADR-0012 clause 4) on
 # the PRD body — the pre-screen's scratch copy — and on each drafted ticket's
 # body, one file per ticket, the file named by the ticket's label (its draft
 # number). It names every requirement no ticket's `Covers:` line lists, and

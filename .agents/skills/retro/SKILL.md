@@ -7,7 +7,7 @@ metadata:
 
 # /retro — the trace, read after the fact, into candidate tickets
 
-The chain writes a decision trace and never reads it back (ADR-0008 clause
+The chain writes a decision trace and never reads it back (the kit's ADR-0008 clause
 7, shared invariant §4). Somebody has to, or the trace is a file that grows.
 This skill is that reader — the one sanctioned reader beside the operator at
 the keyboard and a `/diagnose` looking for a bug — and it reads with a fixed
@@ -28,7 +28,7 @@ a session that read the history and edited a skill on the strength of it.
 
 It **reads and routes**; it never fixes. A repair by the session that read the
 history destroys the only independent reading anyone had of it, and it turns
-the trace into a memory the chain acts on — the non-goal ADR-0005 and ADR-0008
+the trace into a memory the chain acts on — the non-goal the kit's ADR-0005 and the kit's ADR-0008
 both keep. So this pass never edits a skill, an article, a policy file or a
 gate; it never runs the chain; it never publishes a ticket itself. Every
 finding leaves as a **candidate ticket** for `/to-tickets` — one a landed

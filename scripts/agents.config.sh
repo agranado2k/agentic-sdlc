@@ -112,7 +112,7 @@
 # The kit has said so for a while; templates/workflows/ai-review.example.yml
 # runs two vendors against one prompt and says in its header that the
 # cross-provider leg "is unreachable from inside the authoring harness". This
-# axis is what makes it reachable. ADR-0005 records why.
+# axis is what makes it reachable. The kit's ADR-0005 records why.
 #
 # DECLARE YOUR AGENT HARNESSES, then prefix a tier's value with one:
 #
@@ -300,5 +300,5 @@ AGENT_TIER_REVIEWER=''
 # or a session names it unreachable after a spawn failed on its first call
 # (AGENT_UNREACHABLE_MODELS='<model> …', in this file's own words). Space-
 # separated, each a model or `<token>:<model>`; empty means no next answer, and
-# a spent list prints nothing — never the session's own model. ADR-0013 records why.
+# a spent list prints nothing — never the session's own model. The kit's ADR-0013 records why.
 #   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'

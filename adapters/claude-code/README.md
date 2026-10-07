@@ -62,6 +62,36 @@ Two things worth being explicit about:
   warning. If you ever wrap this in something that merges the streams, you will
   start spawning agents on a model called `! agents: capability tier ...`.
 
+## One agent type per tier
+
+A spawn that names no agent type gets the harness's catch-all type, which
+carries every tool the session has. [`agents/`](agents/) holds four types
+instead, one per capability tier, each named with the tier's own word — so
+the spawn's agent-type parameter takes the tier you already resolved, and the
+`model` parameter takes the resolver's answer exactly as above. **A type
+declares tools and never a model**: the model stays a spawn-time answer
+(the kit's ADR-0003, the kit's ADR-0013's ordered fallback), and a `model:` line in a type would
+be a second mapping, unrecorded, that outranks the policy file. The docs gate
+fails one that carries a model line or anything shaped like a model id
+(`agent-type-model`, a POSIX check in `scripts/check.sh`).
+
+| Tier | Tools | Why these and no others |
+| ---- | ----- | ----------------------- |
+| `planner` | Read, Grep, Glob, Bash, Edit, Write, Skill, Agent | Writes specs, tickets and records (files and the forge CLI through the shell), runs the chain's skills, and fans out to subagents. No web tools: research is an untrusted read, and the trust boundary sends that to a tool-restricted subagent, never to the session that also writes. |
+| `implementer` | Read, Grep, Glob, Bash, Edit, Write, Skill, Agent | Builds a ticket test-first and delivers it: edits, runs the suite, pushes and opens the PR through the shell, and spawns its independent reviewer. No web tools, for the planner's reason. |
+| `mechanical` | Read, Grep, Glob, Bash, Edit, Write, Skill | The implementer's hands without its fan-out: a mechanical change is held to one oracle command, and its caller (the skill dispatcher's cascade, a fan-out) decides what runs next. No Agent, because a spawn from inside mechanical work is a design call the tier is not sized for; no web tools. |
+| `reviewer` | Read, Grep, Glob | Reads a diff and a spec — untrusted content — and judges them. Nothing that writes a file, reaches the network, calls a tool server or spawns an agent that could: that rules out Bash, which is all three, so the spawner hands the diff and the ticket as files to read, and posts the report itself (the offline worker of the kit's ADR-0009, in-session). No Skill either: a lens receives its own instructions in its prompt. |
+
+Two consequences worth knowing before you wire them:
+
+- **They arrive dormant.** Claude Code reads agent types from `.claude/agents/`;
+  nothing the kit stamps puts them there. Link or copy the four files in when
+  your skills start spawning by type — the chain's own spawns move onto them in
+  a later release.
+- **A tool list is the whole list.** A type with no `tools:` line inherits
+  every tool, which is the catch-all again; and a tool server's tools are only
+  reachable when listed by name, which is why none of these lists one.
+
 ## Filling in `scripts/agents.config.sh`
 
 The values are whatever identifiers your account can actually invoke — not
@@ -246,13 +276,13 @@ The other half of this adapter is `hooks/`, and it answers a different
 question: **what did that session cost, and which model spent it?**
 `scripts/trace.sh` records the chain's decisions but knows nothing about a
 session — sessions belong to the agent harness, which is why these four files
-live here rather than in the shared script (ADR-0008 clause 8).
+live here rather than in the shared script (the kit's ADR-0008 clause 8).
 
 | File | The event it records |
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on — with `data.behind`, how far the root checkout is behind `origin/main` |
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end`, each carrying the run handed over at spawn when the session's own prompt opens on a `Trace-Run: <run id> [<parent run id>]` line (#474), with that parent, the run the shared script resolves otherwise; the denials it sweeps (`tool.use` `outcome=denied`) never carry the handed run — their marker names no agent — and resolve as the shared script does. Precedence, as in every row here: a `TRACE_RUN` already in the environment, then the run handed over, then the fallback |
-| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565) |
+| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565); and `data.out_snapshot` when some of the messages it counted carry a streamed output snapshot — how many, its `tok_out` a lower bound (#608); and what the spawn served, from the prompt's second line under that one, exactly `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` — the tier one of the four, a domain and a skill `[a-z][a-z0-9-]*` of 32 characters at most, a ticket `#` and up to six digits — written into the event's `tier`, `domain` and `skill` columns with the ticket a `related` subject, from the same bounded read; no such line, or one that does not match exactly, records tier `unattributed`, a row `summary --by tier` shows (#583) |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below — carrying the run handed over at spawn (`Trace-Run: <run id> [<parent run id>]`, with that parent) to the agent that made the call: the subagent the payload's `agent_id` names, read from its own transcript, or the session itself (#474); the run the shared script resolves when none was handed, never the run handed to its session for a subagent handed none — once the payload is read: a `tool.use` `outcome=fail` written before then (no scratch, no node, a payload the reader refuses) resolves as the shared script does |
 | `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
@@ -406,6 +436,20 @@ you get it wrong:
   usage snapshot and then with the final one (#343). Only `output_tokens`
   may differ, and only by growing; a later block that shrinks it, or changes
   the input or cache counts, is still drift.
+- **A subagent's output count is often a snapshot nothing closes** (ticket
+  #608). A subagent's transcript writes each assistant line as its content
+  block closes — before the response's closing usage arrives — and never
+  rewrites it: a message whose last line says `stop_reason: null` carries the
+  output streamed so far (never more than 182 in those measured), and no later line, usage
+  record or other field holds the closing count. On CLI 2.1.287, 4,988 of
+  5,585 subagent messages ended so; the session's own transcript writes its
+  lines after the response closes. The count cannot be read, so it is
+  flagged: an event whose messages include such snapshots carries
+  `data.out_snapshot`, how many, and its `tok_out` is a lower bound —
+  input and cache counts are whole. On a compaction gap the same key says
+  the gap's `tok_out` holds those messages' remainder, which the rollup
+  counts and their own events cannot: so "usage plus agent.stop equals the
+  rollup" holds for output only where a gap was judged.
 - **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
   payload carries two paths: `transcript_path` is the *parent session's* and
   `agent_transcript_path` is the subagent's. Read the first one there and every
@@ -440,7 +484,7 @@ you get it wrong:
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
-  counts and prices them on read, from a table you own (ADR-0008 clause 6).
+  counts and prices them on read, from a table you own (the kit's ADR-0008 clause 6).
 
 One race, observed in a live session rather than in a fixture: **the
 subagent-stop hook can run before the subagent's transcript has its final
@@ -500,7 +544,7 @@ three other routes; the probe settled which reaches a reader:
 | a top-level `systemMessage` in a JSON object on stdout | the operator: documented as shown to the user, and an interactive session prints it under its banner | yes |
 | `hookSpecificOutput.additionalContext` in the same object | the model, which relays it — the one route into a non-interactive run's output | yes, beside it |
 | plain stdout | the model only, and it would make the object unparseable | no |
-| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (ADR-0008 clause 4) | no |
+| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (the kit's ADR-0008 clause 4) | no |
 
 So past the threshold the hook prints exactly one object carrying the note in
 both fields, still exits 0, and still writes the stderr line for a reader of the
@@ -743,9 +787,10 @@ that keeps its marker and its hooks.
   scripts arrive, the wiring is yours to write.
 - **No agent type for the reader.** The in-session path above is a request
   because the kit ships no `.claude/agents/` definition that would make it a
-  restriction, and it will not: that file names a tool set, which is a
-  consumer's decision in a consumer's file. The CLI flag is the one restriction
-  this adapter can name without owning a file in your tree.
+  restriction, and it will not: a file there names a tool set in a consumer's
+  own tree. The tier types above are reference files under `agents/`, wired
+  only by you. The CLI flag is the one restriction this adapter can name
+  without owning a file in your tree.
 - **No workflow, and no check on tier selection.** Tier selection is a
   spawn-time decision inside a session. There is nothing for CI to enforce, and
   a check that asserted "this ticket ran on the right model" would be asserting

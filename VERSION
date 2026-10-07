@@ -2263,7 +2263,64 @@
 # fills a raise's id as H-1; the ADR-0008 amendment, its header ledger entry
 # and its index note; the glossary's Event entry.
 
-shared-layer: 0.61.0
+# 0.62.0 — shipped files cite nothing a consumer lacks (ticket #564, found by
+# a real consumer upgrade on 2026-10-06).
+# NO file joins and NO file leaves the shared layer. Eight shared files change
+# content, and in comments or message wording only: every cite of a kit
+# decision record now reads "the kit's ADR-NNNN" in scripts/agents.lib.sh,
+# scripts/agent-dispatch.sh (and its budget refusal's wording),
+# scripts/coverage.sh, scripts/requirement.lib.sh, scripts/trace.sh (and the
+# bare-end deprecation warning's wording), scripts/check.sh and
+# validators/living-spec.mjs. A consumer never receives the kit's records and
+# numbers its own from 0001, so a bare ADR-0008 pointed at a record the
+# project lacks or at its own 0008. No exit status, argument or verdict
+# changes. UPDATING.md changes content: the arriving-from paragraph, the
+# 0.34.0 and 0.26.0 paragraphs' two cites (one claimed the consumer held a
+# copy of the record), and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# The same spelling, comments and prose only, in sixteen skills and two skill
+# files: /design-brief, /diagnose, /grill-me, /grill-with-docs, /housekeeping
+# and its CHECKLIST.md, /implement, /merge-train, /pr-iterate, /prototype,
+# /retro, /review-pr, /tdd, /to-prd, /to-tickets, /worktree-cleanup, and
+# LICENSE-mattpocock-skills.md (whose upstream example number is no cite);
+# the Claude Code adapter's README.md, hook.lib.sh, session-end.sh,
+# tool-post.sh and transcript-usage.mjs; .githooks/pre-push; .gitignore; the
+# policy files agents.config.sh, trace.config.sh, vocab.config.sh and
+# config.mjs (yours: take the comment lines or leave them); and
+# scripts/docs-conformance/README.md and test/living-spec.test.mjs (yours).
+# constitution/AGENTS.md.template: the tiers section gains the reviewer
+# walk's two caller-held facts — say what you run on with
+# AGENT_SESSION_MODEL, and after a spawn fails on its first call re-resolve
+# with AGENT_UNREACHABLE_MODELS naming it, never override the reviewer by
+# hand — the sentence the 0.53.0 note told you to take and nothing shipped.
+# templates/docs/specs/README.md: a ticket's Covers: line cites an id as its
+# PRD spells it — plain R<n> under a new area's PRD (/to-tickets rule 15),
+# where the old line said <area>/R<n> and covered nothing — with a Covers:
+# example for each kind of PRD; it no longer claims to be the only file
+# bootstrap put there. templates/docs/adr/INDEX.md.template: a convention
+# saying "the kit's ADR-NNNN" is the kit's record, not one of the project's.
+# Kit-only, never shipped: tests/lib.sh's t_kit_record_cites sweep, asserted
+# over a fresh bootstrap and the optional dogfood skill in
+# tests/self-host.test.sh, VERSION exempt as the kit's ledger, driven red per
+# case by tests/harness-helpers.test.sh; tests/coverage.test.sh runs both of
+# the starter's Covers: examples through the check; tests/agents-tiers.test.sh
+# holds the template's sentence. ADR-0017 records the rule and its index
+# row lists it; bootstrap.sh's kit-own deletion list gains it, so no
+# consumer receives it.
+# Landed on main after v0.61.0 (#606), outside the manifest: the Claude Code
+# adapter's subagent-stop.sh reads a run that ends on the agent harness's
+# hand-back tool (a user line carrying "toolEndsTurn":true) as final, records
+# how the run ended in data.final, and counts each model past the agent's own
+# earlier anchors so a second stop never re-counts the first; hook.lib.sh
+# gains hook_anchors, the one anchor reader session-end.sh and
+# subagent-stop.sh share; the adapter README.md drops "never wrote a final
+# message"; /retro's QUESTIONS.md question 6 counts a stop's give-ups per
+# agent and reads data.final. Take the adapter files as 9e says, and
+# QUESTIONS.md like any skill file. Kit-only: the ADR-0008 amendment (clause
+# 8), tests/trace-hooks.test.sh and tests/retro-skill.test.sh, and a
+# redacted transcript fixture under tests/fixtures/claude-code/.
+
+shared-layer: 0.62.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2307,6 +2364,7 @@ files:
   scripts/docs-conformance/validators/skill-bridge.mjs
   scripts/docs-conformance/validators/banned-words.mjs
   scripts/docs-conformance/validators/living-spec.mjs
+  scripts/docs-conformance/validators/skill-ceiling.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

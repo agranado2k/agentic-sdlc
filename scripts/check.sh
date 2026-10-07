@@ -21,6 +21,7 @@
 #     1. placeholder-unstamped  no double-brace mark survived bootstrap
 #     2. shared-layer-missing   every file VERSION lists still exists
 #     3. root-manual-missing    the root agent manual (AGENTS.md) exists at all
+#     4. agent-type-model       no adapter agent type names a model
 #
 #   (3) stays in shell rather than moving into the harness on purpose: the
 #   harness treats an absent manual as "this repo does not model that layer" and
@@ -160,7 +161,33 @@ fi
 	"Run bootstrap.sh to stamp constitution/AGENTS.md.template into AGENTS.md. Every other layer hangs off this one, and CLAUDE.md / GEMINI.md are only shims importing it."
 
 # ---------------------------------------------------------------------------
-# 4. References — the node harness, or the reduced POSIX fallback
+# 4. No agent type names a model  (always, POSIX)
+# ---------------------------------------------------------------------------
+# An adapter's agent types (adapters/<harness>/agents/*.md) carry tools, never
+# a model: the model is the tier resolver's answer at spawn time, so a model
+# line in a type is a second mapping that outranks the policy file, and an
+# identifier anywhere in one rots on a vendor's schedule. Two shapes fail: a
+# `model:` key in the frontmatter, whatever its value, and anything shaped
+# like a model identifier anywhere in the file. The key is matched in any
+# case and spacing, since a spelling the gate missed may still be read.
+model_id_re='(claude|gpt|gemini|llama|mistral|sonnet|opus|haiku|fable)-[0-9]|claude-[a-z]+-[0-9]|(opus|sonnet|haiku|fable) [0-9]'
+list_files | grep -E '^adapters/[^/]+/agents/[^/]+\.md$' | while IFS= read -r f; do
+	[ -f "$f" ] || continue
+	line=$(awk 'NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
+		fm && /^---[[:space:]]*$/ { exit }
+		fm && tolower($0) ~ /^[[:space:]]*model[[:space:]]*:/ { print NR; exit }' "$f")
+	[ -n "$line" ] && report "agent-type-model" "$f:$line" \
+		"an agent type carries a model line" \
+		"Delete it. The spawn passes the model the tier resolver printed, or none to inherit the session's; the type declares tools only."
+	grep -n -i -E "$model_id_re" "$f" 2>/dev/null | while IFS= read -r hit; do
+		report "agent-type-model" "$f:${hit%%:*}" \
+			"an agent type names a model identifier" \
+			"Name the tier, never the model: the identifier belongs in the project's tier policy file, which the resolver reads."
+	done
+done
+
+# ---------------------------------------------------------------------------
+# 5. References — the node harness, or the reduced POSIX fallback
 # ---------------------------------------------------------------------------
 harness_out=""
 harness_status=0
@@ -253,7 +280,7 @@ if [ "$engine" = "fallback" ]; then
 		scan_manual "$article"
 	done
 
-	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
+	# The living-spec rule's POSIX twin (validators/living-spec.mjs, the kit's ADR-0012
 	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
 	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced
@@ -331,6 +358,25 @@ if [ "$engine" = "fallback" ]; then
 				"Name \`$name\` in a test (its name, or a comment beside it) in a file livingSpec.testGlobs in scripts/docs-conformance/config.mjs matches, or retire the requirement with a REMOVED delta. A living requirement no test names is a claim (shared invariant §8)."
 		done <"$vfile.specs"
 	fi
+
+	# The skill-ceiling rule's POSIX twin (validators/skill-ceiling.mjs): a
+	# SKILL.md over the byte ceiling config.mjs's `skillCeilings` block
+	# declares for it fails, naming the file, its size and the ceiling. The
+	# block is read BY TEXT, one `"<path>": <bytes>,` per line, which is why
+	# config.mjs keeps it literal. No block is no ceilings; an absent file is
+	# silent — the harness's answers too.
+	if [ -f "$ls_cfg" ]; then
+		awk '/^const skillCeilings = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg" |
+			sed -n 's/^[[:space:]]*"\([^"]*\)":[[:space:]]*\([0-9][0-9]*\),\{0,1\}[[:space:]]*$/\1 \2/p' |
+			while read -r skill ceiling; do
+				[ -f "$skill" ] || continue
+				size=$(wc -c <"$skill" | tr -d ' ')
+				[ "$size" -gt "$ceiling" ] || continue
+				report "skill-over-ceiling" "$skill" \
+					"is $size bytes, over its ceiling of $ceiling bytes" \
+					"Move the parts only a worker or a rare branch needs into files the SKILL.md names, or raise the ceiling in config.mjs's skillCeilings — a visible policy diff."
+			done
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -339,7 +385,8 @@ fi
 if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer," >&2
-	echo "        and living specs against the test globs (the living-spec rule, its POSIX twin)." >&2
+	echo "        living specs against the test globs (the living-spec rule, its POSIX twin)," >&2
+	echo "        and skill byte ceilings (the skill-ceiling rule, its POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2
