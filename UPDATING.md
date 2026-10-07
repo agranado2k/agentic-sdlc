@@ -450,14 +450,14 @@ history note in `VERSION` lists every file; Part 2 is how you take them.
 No shared file changes at 0.46.0. The skill's delivery step now ends its
 PR body with `<!-- implement: ticket=#<N> tier=<tier> -->`, an HTML comment
 the forge does not render, so a landing tool can tell a PR the skill opened
-from one it did not. Part 2 is how you take it; nothing reads the line
+from one it did not. Part 2 is how you take it, in 9a; nothing reads the line
 unless your landing path does.
 
 **Arriving from 0.44.0 or older, no shared file changes; two skills do.**
 `/review-pr` accounts for every lens it planned — a refused one is recorded
 as refused, a failed one as `fail` with its cause, and the report names
 both on a `Lenses not run:` line — and `/retro`'s chain-health question
-reads a refused spawn on its own row. Part 2 is how you take them.
+reads a refused spawn on its own row. Part 2 is how you take them, in 9a.
 
 **Arriving from 0.43.0 or older, a signal ends a dispatch with 128+signal.**
 `scripts/agent-dispatch.sh` (shared, changed at 0.44.0) exits 130, 143 or
@@ -1116,10 +1116,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2751 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2756 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2905 insertions(+), 1 deletion(-)
+ 3 files changed, 2910 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1347,12 +1347,13 @@ change under `templates/docs/`' descendants is something to read and borrow
 from, never something to copy over the top. This is that rule, stated where the
 line actually appears in front of you.
 
-**Then print your path.** Step 1's release notes are newest first, and each
-one's Part 2 half names the sub-step it belongs to. This reads them from the
-recipe on disk — which step 5 made `$TO_REF`'s — and prints every note from
-your release up, **oldest first**, under each sub-step it names; a note inside
-a 9 sub-step's own section counts for that sub-step, and `--` marks a note that
-names none, to read whole:
+**Then print your path.** Step 1's release notes are newest first, and from
+0.44.0 on a note that carries a Part 2 take names the sub-step it belongs to.
+This reads them from the recipe on disk — which step 5 made `$TO_REF`'s — and
+prints every note from your release up, **oldest first**, under each sub-step
+it names; a note inside a 9 sub-step's own section counts for that sub-step,
+and `--` marks a note that names none — a Part 1 note, or one from before
+0.44.0 that says only "Part 2 is how you take them" — to read whole:
 
 ```sh
 awk -v from="${FROM_REF#v}" '
@@ -2356,12 +2357,16 @@ grep '^9f ' "$WORK/changed.steps" | cut -c6- | while IFS= read -r f; do
 done
 ```
 
-- **`NEW`** and **`UNTOUCHED`** are `kit_take "$TO_REF" "$f" "$f"` — for a
-  `NEW` file, after `mkdir -p "$(dirname "$f")"`, and only if you use what it
-  is for: a fixture test is worth taking if you run the harness's tests.
+- **`NEW`** is `kit archive "$TO_REF" -- "$f" | tar -x`, as step 5 takes a
+  file, because a new file's mode has to arrive with it — a hook under
+  `.githooks/` taken through a redirect lands without its executable bit, and
+  git skips it in silence. Take one only if you use what it is for: a fixture
+  test is worth taking if you run the harness's tests.
   `scripts/docs-conformance/test/living-spec.test.mjs` is the one that was
   missed in the field — created at 0.49.0, so a consumer bootstrapped before
   that has none, and a note telling you to edit it means take it whole.
+- **`UNTOUCHED`** is `kit_take "$TO_REF" "$f" "$f"`: the file is already
+  yours, and keeps its mode.
 - **`YOURS`** is the three-way of 9a, with `$K` and `$S` both set to `$f`.
 - **`REMOVED`** and **`DECLINED`** are nothing to take; a removed file you
   still have is yours to keep or delete.

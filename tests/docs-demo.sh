@@ -1606,12 +1606,10 @@ banner "C4j. Step 0 offers the releases in version order, newest first"
 # four tags disagree in the two orders, and its clone pins the name order the
 # way an operator's default would be — the document's own flag must win.
 TAGREPO="$SCRATCH/tag-order"
-git init -q "$TAGREPO"
-git -C "$TAGREPO" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false \
-	commit -q --allow-empty -m release
-for _t in v0.1.0 v0.9.0 v0.10.0 v0.62.0; do
-	git -C "$TAGREPO" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag "$_t"
-done
+mkdir -p "$TAGREPO"
+t_git_identity "$TAGREPO" "Kit Release" "kit@example.invalid"
+git -C "$TAGREPO" commit -q --allow-empty -m release
+for _t in v0.1.0 v0.9.0 v0.10.0 v0.62.0; do git -C "$TAGREPO" tag "$_t"; done
 git -C "$TAGREPO" config tag.sort refname
 t_fence "$KIT/UPDATING.md" opens '^FROM_REF=' >"$SCRATCH/step0-refs.sh"
 c4j_line=$(grep -E '^kit tag --list' "$SCRATCH/step0-refs.sh" | head -1)
@@ -1667,6 +1665,16 @@ else
 		fail "step 8 printed lines with no step:"
 		printf '%s\n' "$c4l_bad" | head -5 | sed 's/^/        | /'
 	fi
+	# "Skips none" is a count, not a shape (M-3, review of #614): every path
+	# the kit changed outside the layer is one classified line, no fewer.
+	c4l_want_n=$(git --git-dir="$WORK1/kit.git" diff --name-only v0.3.0 "v$KITV" | sort |
+		comm -23 - "$WORK1/shared.all" | grep -c .)
+	c4l_got_n=$(printf '%s\n' "$c4l_block" | grep -c .)
+	if [ "$c4l_want_n" -gt 0 ] && [ "$c4l_got_n" = "$c4l_want_n" ]; then
+		pass "step 8 classified all $c4l_want_n paths the kit changed outside the layer"
+	else
+		fail "step 8 printed $c4l_got_n lines for $c4l_want_n changed paths — it skipped some"
+	fi
 	for c4l_want in '9c   templates/docs/specs/README.md' '9a   .agents/skills/implement/SKILL.md' \
 		'9f   scripts/catalogue.md' 'kit  AGENTS.md' 'kit  bootstrap.sh'; do
 		if printf '%s\n' "$c4l_block" | grep -qxF "$c4l_want"; then
@@ -1694,13 +1702,23 @@ c4m_run() { # c4m_run <consumer> <kit git dir> <from> <your path> <label>
 		cat "$SCRATCH/take.sh"
 		sed -e "s|^S=.*|S=$4|" -e 's|/implement/SKILL\.md|/to-tickets/SKILL.md|' "$SCRATCH/9a-base.sh"
 		cat "$SCRATCH/9a-merge.sh"
+		# The merge's own exit is the case's verdict; the two inputs are then
+		# proved, so a merge that did nothing on inputs it never fetched cannot
+		# pass (M-2, review of #614): the base is the kit's copy at FROM, and
+		# theirs is byte for byte the release's canonical file.
+		echo 'rc=$?'
+		echo "kit_take \"\$FROM_REF\" \"\$K\" \"\$WORK/want.base\" 2>/dev/null || kit_take \"\$FROM_REF\" \"\$O\" \"\$WORK/want.base\""
+		echo '[ -s "$WORK/base" ] && cmp -s "$WORK/base" "$WORK/want.base" && echo BASE-FROM-KIT'
+		echo "cmp -s \"\$WORK/theirs\" \"$KIT/.agents/skills/to-tickets/SKILL.md\" && echo THEIRS-CANONICAL"
+		echo 'exit $rc'
 	} >"$SCRATCH/9a-case.sh"
 	(cd "$1" && sh "$SCRATCH/9a-case.sh") >"$SCRATCH/9a-case.out" 2>&1
 	c4m_rc=$?
-	if [ "$c4m_rc" = 0 ] && grep -q 'LOCAL: tickets in this repo' "$1/$4"; then
-		pass "9a merged /to-tickets for $5, and the local note survived"
+	if [ "$c4m_rc" = 0 ] && grep -q 'LOCAL: tickets in this repo' "$1/$4" &&
+		grep -qx BASE-FROM-KIT "$SCRATCH/9a-case.out" && grep -qx THEIRS-CANONICAL "$SCRATCH/9a-case.out"; then
+		pass "9a merged /to-tickets for $5 from the kit's base and the release's file, and the local note survived"
 	else
-		fail "9a's three-way failed for $5 (exit $c4m_rc)"
+		fail "9a's three-way failed for $5 (exit $c4m_rc), or merged inputs it did not fetch"
 		sed 's/^/        | /' "$SCRATCH/9a-case.out" | head -6
 	fi
 }
@@ -1733,16 +1751,16 @@ banner "C4o. 9d reads the diff for a key the release ships commented out"
 # no NAME= line: the key-set comparison prints nothing for it, and a
 # consumer reading only that comparison never sees the key exists.
 C4O="$SCRATCH/c4o-kit"
-git init -q "$C4O"
 mkdir -p "$C4O/scripts"
+t_git_identity "$C4O" "Kit Release" "kit@example.invalid"
 printf "AGENT_TIER_REVIEWER=''\n" >"$C4O/scripts/agents.config.sh"
 git -C "$C4O" add -A
-git -C "$C4O" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m one
-git -C "$C4O" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag v1.0.0
+git -C "$C4O" commit -q -m one
+git -C "$C4O" tag v1.0.0
 printf "AGENT_TIER_REVIEWER=''\n#   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'\n" \
 	>"$C4O/scripts/agents.config.sh"
-git -C "$C4O" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -qam two
-git -C "$C4O" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag v1.1.0
+git -C "$C4O" commit -qam two
+git -C "$C4O" tag v1.1.0
 mkdir -p "$SCRATCH/c4o-mine/scripts"
 printf "AGENT_TIER_REVIEWER='mine'\n" >"$SCRATCH/c4o-mine/scripts/agents.config.sh"
 if [ -s "$SCRATCH/keys.sh" ]; then
@@ -1811,6 +1829,25 @@ if printf '%s\n' "$c4p_note" | grep -qF 'living-spec.test.mjs' &&
 	pass "the 0.54.0 note says to take living-spec.test.mjs whole when absent"
 else
 	fail "the 0.54.0 note does not say to take living-spec.test.mjs whole when you have none"
+fi
+# A note that carries a sub-step's take must name it, or the path files it
+# under `--` (M-5, review of #614: the 0.44.0 note's 9a take did).
+if [ -s "$SCRATCH/path.sh" ]; then
+	(cd "$KIT" && FROM_REF=v0.43.0 sh "$SCRATCH/path.sh") >"$SCRATCH/path43.out" 2>&1
+	if grep -qF '9a  0.44.0  ' "$SCRATCH/path43.out"; then
+		pass "the 0.44.0 note's skill take is filed under 9a"
+	else
+		fail "the 0.44.0 note carries a 9a take but your path files it elsewhere"
+	fi
+fi
+# 9f covers .githooks/: a NEW hook taken through kit_take lands without its
+# executable bit and git ignores it (M-1, review of #614). A NEW 9f file is
+# taken the way step 5 takes one, with its mode.
+c4p_9f=$(awk '/^### 9f\./{on=1; next} on && /^## /{exit} on' "$KIT/UPDATING.md")
+if printf '%s\n' "$c4p_9f" | grep -qF 'kit archive "$TO_REF" -- "$f" | tar -x'; then
+	pass "9f takes a NEW file with its mode (kit archive | tar -x)"
+else
+	fail "9f takes a NEW file through a redirect — a new hook would lose its executable bit"
 fi
 
 banner "C5. The gate is what makes the hand edits non-optional"
