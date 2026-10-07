@@ -499,19 +499,18 @@ recipe() {
 	WORK=$(mktemp -d "$SCRATCH/work.XXXXXX")
 	git clone --bare --quiet "$KIT_URL" "$WORK/kit.git"
 	# The consumer's own clone of the kit, and the one whose `tag --list` output
-	# UPDATING.md pins byte for byte. Pinned to git's DEFAULT tag order for the
-	# reason tests/lib.sh gives at t_git_identity: a developer with
-	# `-version:refname` set globally otherwise sees a different order here than
-	# CI does, reports the transcript stale, re-pastes their machine's output,
-	# and turns CI red for everyone else. Asked and answered the hard way.
-	git --git-dir="$WORK/kit.git" config tag.sort refname
+	# UPDATING.md pins byte for byte. Step 0 names its order on the command
+	# line, newest release first by version (#563), so a developer with a
+	# `tag.sort` of their own set globally sees the order CI does — the flag
+	# outranks the config. Before the flag, this clone pinned git's default
+	# name order instead, which listed v0.10.0 before v0.9.0.
 	kit() { git --git-dir="$WORK/kit.git" "$@"; }
 
 	FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
 	TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 
-	echo "\$ kit tag --list"
-	kit tag --list
+	echo "\$ kit tag --list --sort=-v:refname"
+	kit tag --list --sort=-v:refname
 	echo "\$ echo \"\$FROM_REF -> \$TO_REF\""
 	echo "$FROM_REF -> $TO_REF"
 
@@ -740,6 +739,14 @@ rm -f "$OLD3/scripts/agents.config.sh"
 rm -f "$OLD3/scripts/agents.lib.sh"
 rm -f "$OLD3/templates/workflows/ai-review.example.yml"
 rm -f "$OLD3/templates/workflows/ai-review-prompt.md"
+# The living specs' starter is a 0.49.0 template, so a 0.3.0 consumer has no
+# docs/specs/README.md — and step 8 used to tell it to skip the line, because
+# templates/docs/ is a path no consumer has (#563). 9c is the step that needs
+# it. The fixture's bootstrap loses its copy line with the file, or it would
+# stop on the missing source.
+rm -f "$OLD3/templates/docs/specs/README.md"
+sed '/specs\/README\.md/d' "$KIT/bootstrap.sh" >"$OLD3/bootstrap.sh"
+chmod +x "$OLD3/bootstrap.sh"
 
 # And the 0.5.0 wave's shared addition: a faithful 0.3.0 has neither the
 # code-craft article nor any manual reference to it (same reasoning as B0).
@@ -972,13 +979,16 @@ recipe2() {
 	TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)"
 
 	# --- Step 8: what changed outside the shared layer -----------------------
-	kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
-	sort -u "$WORK/from.list" "$WORK/to.list" >"$WORK/shared.all"
-	comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
-
-	echo "\$ comm -23 \"\$WORK/changed.all\" \"\$WORK/shared.all\" >\"\$WORK/changed.yours\""
-	echo "\$ cat \"\$WORK/changed.yours\""
-	cat "$WORK/changed.yours"
+	# The DOCUMENT's own block, not a mirror (#563): its classification is
+	# what C4l asserts on, and a mirror could be fixed here while the recipe a
+	# consumer follows still hid a line.
+	echo "\$ # step 8 — every path the kit changed outside the layer, by the step that takes it"
+	if [ -s "$SCRATCH/step8.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$SCRATCH/step8.sh"
+	else
+		echo "(UPDATING.md has no step 8 classifier block)"
+	fi
 
 	# --- Step 9a: skills ------------------------------------------------------
 	echo ""
@@ -995,12 +1005,14 @@ recipe2() {
 
 	echo ""
 	echo "\$ # 9a — /implement: the kit changed it, we did not"
-	S=.claude/skills/implement/SKILL.md
+	S=.claude/skills/implement/SKILL.md # this consumer never moved (9a-bis)
 	K=.agents/skills/implement/SKILL.md
-	echo "\$ kit diff -M --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$S\" \"\$K\""
-	kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$S" "$K"
-	echo "\$ kit show \"\$FROM_REF:\$S\" | diff -u - \"\$S\" | head -1"
-	kit show "$FROM_REF:$S" | diff -u - "$S" | head -1 | grep . || echo "(no local edit — take it)"
+	O=.claude/skills/implement/SKILL.md
+	kit_take "$FROM_REF" "$K" "$WORK/base" 2>/dev/null || kit_take "$FROM_REF" "$O" "$WORK/base"
+	echo "\$ kit diff -M --stat \"\$FROM_REF\" \"\$TO_REF\" -- \"\$O\" \"\$K\""
+	kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$O" "$K"
+	echo "\$ diff -u \"\$WORK/base\" \"\$S\" | head -1"
+	diff -u "$WORK/base" "$S" | head -1 | grep . || echo "(no local edit — take it)"
 	kit_take "$TO_REF" "$K" "$S"
 	echo "  took    $S"
 
@@ -1087,6 +1099,24 @@ recipe2() {
 	done <"$WORK/workflows.verdicts"
 	echo "  took    .github/workflows/ai-review.example.yml + its prompt file"
 
+	# The docs bootstrap consumed from templates/docs/ — the document's own
+	# loop again (#563): a starter newer than the consumer's bootstrap is a
+	# take, never a line step 8 skips.
+	echo ""
+	echo "\$ # 9c — the docs bootstrap made from templates/docs/: one newer than yours is a take"
+	if [ -s "$SCRATCH/9c-docs.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$SCRATCH/9c-docs.sh" >"$WORK/docs.verdicts"
+		cat "$WORK/docs.verdicts"
+	else
+		echo "(UPDATING.md has no 9c docs block)"
+	fi
+	if grep -q '^NEW  *docs/specs/README\.md$' "$WORK/docs.verdicts" 2>/dev/null; then
+		mkdir -p docs/specs
+		kit_take "$TO_REF" templates/docs/specs/README.md docs/specs/README.md &&
+			echo "  took    docs/specs/README.md"
+	fi
+
 	# --- Step 9d: config ------------------------------------------------------
 	echo ""
 	echo "\$ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first."
@@ -1144,6 +1174,11 @@ recipe2() {
 	return $gate2
 }
 
+# Two of Part 2's blocks run as the document spells them (#563) — step 8's
+# classifier and 9c's docs loop. Extracted here, before the run; a missing
+# block prints a line in the transcript, and C4l/C4n fail on it.
+t_fence "$KIT/UPDATING.md" opens '^kit diff --name-only ..FROM_REF' >"$SCRATCH/step8.sh"
+t_fence "$KIT/UPDATING.md" opens '^kit ls-tree -r --name-only' >"$SCRATCH/9c-docs.sh"
 recipe2 >"$SCRATCH/part2.transcript" 2>&1
 recipe2_status=$?
 cat "$SCRATCH/part2.transcript"
@@ -1464,6 +1499,7 @@ assert_block '^keys\(\)' "$SCRATCH/keys.sh" "UPDATING.md's 9d key-set block is e
 if [ -s "$SCRATCH/keys.sh" ]; then
 	{
 		echo "WORK=$SCRATCH"
+		echo "FROM_REF=v0.3.0"
 		echo "TO_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' "$KIT/VERSION" | head -1)""
 		echo "C=scripts/docs-conformance/config.mjs"
 		echo "kit() { git --git-dir=\"$WORK1/kit.git\" \"\$@\"; }"
@@ -1555,6 +1591,227 @@ fi
 # wiring points included.
 assert_has "$KIT/UPDATING.md" "Arriving from 0.10.0 or older"
 assert_has "$KIT/UPDATING.md" "explain-diff-appendix"
+
+# ---------------------------------------------------------------------------
+# #563 — the recipe reads in order for a consumer several releases behind.
+# Found by a real 0.48.0 -> 0.54.0 upgrade that followed the recipe literally:
+# it worked only by carrying step 1's newest-first notes to step 9 by hand.
+# Each case below runs the DOCUMENT's own block, as C4e does, against a
+# fixture at an old tag where one can be built.
+# ---------------------------------------------------------------------------
+
+banner "C4j. Step 0 offers the releases in version order, newest first"
+# git lists tags by NAME unless told otherwise, so v0.10.0 sorts before
+# v0.9.0 and the newest release sits wherever its name falls. The fixture's
+# four tags disagree in the two orders, and its clone pins the name order the
+# way an operator's default would be — the document's own flag must win.
+TAGREPO="$SCRATCH/tag-order"
+git init -q "$TAGREPO"
+git -C "$TAGREPO" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false \
+	commit -q --allow-empty -m release
+for _t in v0.1.0 v0.9.0 v0.10.0 v0.62.0; do
+	git -C "$TAGREPO" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag "$_t"
+done
+git -C "$TAGREPO" config tag.sort refname
+t_fence "$KIT/UPDATING.md" opens '^FROM_REF=' >"$SCRATCH/step0-refs.sh"
+c4j_line=$(grep -E '^kit tag --list' "$SCRATCH/step0-refs.sh" | head -1)
+if [ -z "$c4j_line" ]; then
+	fail "step 0 has no 'kit tag --list' line in its refs block — this case can no longer find it"
+else
+	c4j_order=$(TAGREPO="$TAGREPO" sh -c 'kit() { git -C "$TAGREPO" "$@"; }; eval "$1"' _ "$c4j_line" | tr '\n' ' ')
+	if [ "$c4j_order" = "v0.62.0 v0.10.0 v0.9.0 v0.1.0 " ]; then
+		pass "step 0 lists the releases by version, newest first, whatever tag.sort says"
+	else
+		fail "step 0 listed '$c4j_order' — expected v0.62.0 v0.10.0 v0.9.0 v0.1.0"
+	fi
+fi
+
+banner "C4k. Step 7's check still runs after step 10 deleted \$WORK"
+# Step 7 says to run the verbatim check any time, and step 10 deletes the
+# bare clone and the manifest lists that check read. Part B's consumer is
+# past its update with \$WORK gone, and B3 left one shared file edited — so
+# the block must say verbatim and DRIFT, each where it is true, with nothing
+# of step 0's state in hand.
+cd "$CONSUMER" || exit 2
+assert_block '^VERIFY=' "$SCRATCH/step7.sh" "UPDATING.md's step 7 any-time check is extractable"
+if [ -s "$SCRATCH/step7.sh" ]; then
+	if grep -q 'WORK' "$SCRATCH/step7.sh"; then
+		fail "step 7's any-time check reads \$WORK — step 10 deleted it"
+	else
+		pass "step 7's any-time check names nothing step 10 deleted"
+	fi
+	env -u WORK -u FROM_REF -u TO_REF KIT_URL="$HIST" sh "$SCRATCH/step7.sh" >"$SCRATCH/step7.out" 2>&1
+	if grep -qx 'verbatim  scripts/check.sh' "$SCRATCH/step7.out" &&
+		grep -qx 'DRIFT     constitution/shared-invariants.md' "$SCRATCH/step7.out"; then
+		pass "the any-time check calls the untouched file verbatim and the edited one DRIFT"
+	else
+		fail "the any-time check did not tell verbatim from DRIFT on a consumer past step 10"
+		sed 's/^/        | /' "$SCRATCH/step7.out" | head -8
+	fi
+fi
+
+banner "C4l. Step 8 gives every changed path a step, and skips none"
+# The old step 8 told a consumer to skip any path it did not have — and
+# templates/docs/ is a path no consumer ever has, so the living specs'
+# starter 9c needed was skipped with the kit's own test files. The
+# classifier names the step for every line, and says which lines are the
+# kit's own.
+c4l_block=$(awk '/^\$ # step 8 /{on=1; next} on && /^\$ /{exit} on' "$SCRATCH/part2.transcript")
+if [ -z "$c4l_block" ]; then
+	fail "the Part 2 transcript has no step 8 classification"
+else
+	c4l_bad=$(printf '%s\n' "$c4l_block" | grep -v '^$' | grep -vE '^(9[a-f]|kit) +[^ ]' || true)
+	if [ -z "$c4l_bad" ]; then
+		pass "every step 8 line names its step or calls the path the kit's own"
+	else
+		fail "step 8 printed lines with no step:"
+		printf '%s\n' "$c4l_bad" | head -5 | sed 's/^/        | /'
+	fi
+	for c4l_want in '9c   templates/docs/specs/README.md' '9a   .agents/skills/implement/SKILL.md' \
+		'9f   scripts/catalogue.md' 'kit  AGENTS.md' 'kit  bootstrap.sh'; do
+		if printf '%s\n' "$c4l_block" | grep -qxF "$c4l_want"; then
+			pass "step 8 says: $c4l_want"
+		else
+			fail "step 8 does not say '$c4l_want'"
+		fi
+	done
+fi
+
+banner "C4m. 9a's three-way reads the kit at its canonical path, at either layout"
+# At a release past 0.14.0 the kit's .claude/skills/<name> is a symlink, so
+# `kit show <old tag>:.claude/skills/…/SKILL.md` finds nothing — the old
+# snippet's base and theirs both failed for a consumer that bootstrapped
+# after the move. Two consumers: Part B's, whose kit had moved at FROM, and
+# Part C's, whose kit had not.
+assert_block '^S=' "$SCRATCH/9a-base.sh" "UPDATING.md's 9a base block is extractable"
+assert_block '^kit_take ".TO_REF" ".K" ' "$SCRATCH/9a-merge.sh" "UPDATING.md's 9a merge block is extractable"
+c4m_run() { # c4m_run <consumer> <kit git dir> <from> <your path> <label>
+	{
+		echo "WORK=\$(mktemp -d)"
+		echo "kit() { git --git-dir=\"$2\" \"\$@\"; }"
+		echo "FROM_REF=$3"
+		echo "TO_REF=v$KITV"
+		cat "$SCRATCH/take.sh"
+		sed -e "s|^S=.*|S=$4|" -e 's|/implement/SKILL\.md|/to-tickets/SKILL.md|' "$SCRATCH/9a-base.sh"
+		cat "$SCRATCH/9a-merge.sh"
+	} >"$SCRATCH/9a-case.sh"
+	(cd "$1" && sh "$SCRATCH/9a-case.sh") >"$SCRATCH/9a-case.out" 2>&1
+	c4m_rc=$?
+	if [ "$c4m_rc" = 0 ] && grep -q 'LOCAL: tickets in this repo' "$1/$4"; then
+		pass "9a merged /to-tickets for $5, and the local note survived"
+	else
+		fail "9a's three-way failed for $5 (exit $c4m_rc)"
+		sed 's/^/        | /' "$SCRATCH/9a-case.out" | head -6
+	fi
+}
+if [ -s "$SCRATCH/9a-base.sh" ] && [ -s "$SCRATCH/9a-merge.sh" ]; then
+	git clone --bare --quiet "$HIST" "$SCRATCH/hist-b.git"
+	cd "$CONSUMER" || exit 2
+	awk 'NR == 4 { print; print ""; print "> LOCAL: tickets in this repo also carry a `Team:` line."; next } { print }' \
+		.agents/skills/to-tickets/SKILL.md >"$SCRATCH/tt-b" && cat "$SCRATCH/tt-b" >.agents/skills/to-tickets/SKILL.md
+	c4m_run "$CONSUMER" "$SCRATCH/hist-b.git" v0.1.0 .agents/skills/to-tickets/SKILL.md \
+		"a consumer whose kit had moved at FROM (.agents/skills)"
+	c4m_run "$C3" "$WORK1/kit.git" v0.3.0 .claude/skills/to-tickets/SKILL.md \
+		"a consumer whose kit had not (.claude/skills, never migrated)"
+fi
+
+banner "C4n. 9c names the living specs' starter, and the run took it"
+cd "$C3" || exit 2
+assert_has "$SCRATCH/part2.transcript" "NEW       docs/specs/README.md"
+assert_file "docs/specs/README.md"
+assert_same "$KIT/templates/docs/specs/README.md" "docs/specs/README.md" \
+	"the starter 9c took is the release's"
+c4n_9c=$(awk '/^### 9c\./{on=1; next} on && /^### /{exit} on' "$KIT/UPDATING.md")
+if printf '%s\n' "$c4n_9c" | grep -qF 'docs/specs/README.md'; then
+	pass "9c's own text names docs/specs/README.md"
+else
+	fail "9c never names docs/specs/README.md — a consumer reaches it only through step 1's notes"
+fi
+
+banner "C4o. 9d reads the diff for a key the release ships commented out"
+# 0.53.0's AGENT_TIER_REVIEWER_FALLBACK arrived as a comment line, which is
+# no NAME= line: the key-set comparison prints nothing for it, and a
+# consumer reading only that comparison never sees the key exists.
+C4O="$SCRATCH/c4o-kit"
+git init -q "$C4O"
+mkdir -p "$C4O/scripts"
+printf "AGENT_TIER_REVIEWER=''\n" >"$C4O/scripts/agents.config.sh"
+git -C "$C4O" add -A
+git -C "$C4O" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -q -m one
+git -C "$C4O" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag v1.0.0
+printf "AGENT_TIER_REVIEWER=''\n#   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'\n" \
+	>"$C4O/scripts/agents.config.sh"
+git -C "$C4O" -c user.name=t -c user.email=t@example.invalid -c commit.gpgsign=false commit -qam two
+git -C "$C4O" -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag v1.1.0
+mkdir -p "$SCRATCH/c4o-mine/scripts"
+printf "AGENT_TIER_REVIEWER='mine'\n" >"$SCRATCH/c4o-mine/scripts/agents.config.sh"
+if [ -s "$SCRATCH/keys.sh" ]; then
+	{
+		echo "WORK=\$(mktemp -d)"
+		echo "kit() { git -C \"$C4O\" \"\$@\"; }"
+		echo "FROM_REF=v1.0.0"
+		echo "TO_REF=v1.1.0"
+		echo "C=scripts/agents.config.sh"
+		cat "$SCRATCH/take.sh"
+		cat "$SCRATCH/keys.sh"
+	} >"$SCRATCH/c4o-case.sh"
+	(cd "$SCRATCH/c4o-mine" && sh "$SCRATCH/c4o-case.sh") >"$SCRATCH/c4o.out" 2>&1
+	if grep -q 'AGENT_TIER_REVIEWER_FALLBACK' "$SCRATCH/c4o.out"; then
+		pass "9d's MERGE block shows the commented key the key sets cannot see"
+	else
+		fail "9d's MERGE block printed nothing about a key the release ships commented out"
+		sed 's/^/        | /' "$SCRATCH/c4o.out" | head -6
+	fi
+else
+	fail "no 9d key-set block to run (C4g found none)"
+fi
+
+banner "C4p. Part 2 opens on YOUR path: each release's notes under the step that needs them"
+# Step 1's notes are newest first and Part 1's to read; a consumer several
+# releases behind needs each one again at the step it names. The block reads
+# the recipe on disk and prints, per step, the notes from FROM_REF up, oldest
+# first — run here as a 0.48.0 consumer would, the real upgrade's start.
+assert_block '^awk -v from=' "$SCRATCH/path.sh" "UPDATING.md's your-path block is extractable"
+if [ -s "$SCRATCH/path.sh" ]; then
+	(cd "$KIT" && FROM_REF=v0.48.0 sh "$SCRATCH/path.sh") >"$SCRATCH/path.out" 2>&1
+	sed 's/^/      > /' "$SCRATCH/path.out" | head -12
+	for c4p_want in '9d  0.48.0  ' '9c  0.49.0  ' '9d  0.52.0  ' '9f  0.53.0  ' '9f  0.59.0  '; do
+		if grep -qF "$c4p_want" "$SCRATCH/path.out"; then
+			pass "your path names '$c4p_want' at its step"
+		else
+			fail "your path from 0.48.0 has no '$c4p_want' line"
+		fi
+	done
+	if grep -E '^[^ ]+  0\.(4[0-7]|[0-3]?[0-9])\.0  ' "$SCRATCH/path.out" >/dev/null; then
+		fail "your path from 0.48.0 lists a note for a release it already holds"
+	else
+		pass "your path lists no note older than the consumer's own release"
+	fi
+	c4p_a=$(grep -nF '9d  0.48.0  ' "$SCRATCH/path.out" | cut -d: -f1 | head -1)
+	c4p_b=$(grep -nF '9d  0.52.0  ' "$SCRATCH/path.out" | cut -d: -f1 | head -1)
+	if [ -n "$c4p_a" ] && [ -n "$c4p_b" ] && [ "$c4p_a" -lt "$c4p_b" ]; then
+		pass "within a step the notes read oldest first, in the order they apply"
+	else
+		fail "9d's notes are not oldest first (0.48.0 at line ${c4p_a:-none}, 0.52.0 at ${c4p_b:-none})"
+	fi
+	# The newest note in the recipe is this release's own, whatever is tagged.
+	c4p_newest=$(grep -m1 -oE '^\*\*Arriving from [0-9]+\.[0-9]+\.[0-9]+' "$KIT/UPDATING.md" | sed 's/.* //')
+	if [ -n "$c4p_newest" ] && grep -qE "^[^ ]+  $c4p_newest  " "$SCRATCH/path.out"; then
+		pass "your path reaches the newest note in the recipe (arriving from $c4p_newest)"
+	else
+		fail "your path never reaches the newest note in the recipe (arriving from ${c4p_newest:-?})"
+	fi
+fi
+# The 0.54.0 note was the one that failed the real run: its test file was
+# created at 0.49.0, step 8 classed it as a path to skip, and the note said
+# only to copy two tests into it.
+c4p_note=$(awk 'index($0, "**Arriving from 0.53.0 or older") == 1 { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md")
+if printf '%s\n' "$c4p_note" | grep -qF 'living-spec.test.mjs' &&
+	printf '%s\n' "$c4p_note" | grep -qiE 'take it whole|whole'; then
+	pass "the 0.54.0 note says to take living-spec.test.mjs whole when absent"
+else
+	fail "the 0.54.0 note does not say to take living-spec.test.mjs whole when you have none"
+fi
 
 banner "C5. The gate is what makes the hand edits non-optional"
 # A quick-reference row whose skill was never copied is the failure mode Part 2's
@@ -2005,7 +2262,10 @@ prose_probe "Part 1's 'updating to' intro"        'updating to \*\*0\.'
 prose_probe "9c's MERGE/ADD case sentence"        'is the 0\.4\.0 → 0\.'
 prose_probe "Part 2 intro's VERSION-says line"    'its `VERSION` says 0\.'
 prose_probe "Part 2 intro's clone-arrow note"     'a real `v0\.3\.0 → v0\.'
-prose_probe "the ADD commentary bold-quote"       'is new at v0\.'
+# Anchored on the commentary's own bold lead: unanchored, the probe matched
+# the transcript's ADD line first — always current — and passed while the
+# commentary below it still quoted v0.40.0 (found by #563's re-read).
+prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
 
 # ---------------------------------------------------------------------------
 banner "Result"

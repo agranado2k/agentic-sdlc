@@ -119,7 +119,7 @@ Now pick the two points you are comparing.
 ```sh
 FROM_REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"   # what you have
 
-kit tag --list        # the releases on offer
+kit tag --list --sort=-v:refname        # the releases on offer, newest first
 
 TO_REF=               # ← what you want: fill it in from the list above
 
@@ -135,7 +135,9 @@ TO_REF=               # ← what you want: fill it in from the list above
 ```
 
 > **Release refs.** Releases are the `v`-prefixed tags — `kit tag --list` above
-> is the offer, and the kit holds itself to tagging every bump. Any ref the
+> is the offer, and the kit holds itself to tagging every bump. The sort is
+> by version, newest first: git's own order is by name, which puts `v0.10.0`
+> before `v0.9.0` and the newest release wherever its name happens to fall. Any ref the
 > clone can resolve still works for an experiment, but an update you record in
 > `VERSION` should come from a tag: an untagged ref is a point in someone's
 > history, not a release.
@@ -219,6 +221,32 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+The notes below run **newest first**, one per release, and step 1 is where
+Part 1's half of each is read. Their Part 2 halves are needed later, at the
+step each one names, so you do not carry them there by hand: step 8 ends by
+printing **your path** — every note from your release up, oldest first, under
+the step 9 sub-step that needs it.
+
+**Arriving from 0.62.0 or older, the recipe reads in order.**
+No file joins or leaves at 0.63.0, and no shared file changes but this
+recipe — so re-read it from disk after step 5, as always. Step 0 lists the
+releases by version, newest first. Step 7 gains a verbatim check you can run
+any time, which needs nothing step 10 deleted. Step 8 prints every changed
+path beside the 9 sub-step that takes it, skipping none, and then your path:
+each of these notes from your release up, oldest first, under the sub-step it
+names. In 9a the kit is read at `.agents/skills/…` first, for the base and for
+`theirs`; 9c lists where every docs template landed, `docs/specs/README.md`
+among them, and calls a starter newer than your bootstrap `NEW`; 9d prints a
+`.sh` policy file's diff after its key sets, for a key shipped commented out;
+and a new 9f takes the files no other sub-step does, the docs harness's
+`README.md` and fixture tests among them. Part 2 also has two takes that
+landed after 0.62.0: in 9a, `/implement` and `/review-pr` record a spawn its
+vendor refused as `unreachable`, not `fail`, and re-resolve past the model
+they spawned on, and `/retro`'s `QUESTIONS.md` reads `data.out_snapshot`; in
+9e, the Claude Code adapter's `transcript-usage.mjs`, `hook.lib.sh` and
+`README.md` flag a usage event whose `tok_out` is a streamed snapshot, and so
+a lower bound.
+
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
 shared files change comments, and two stderr lines their wording, so that
@@ -250,7 +278,7 @@ written off the shape on stderr, as history, and its verdict does not
 change, so your old trace stays readable; `summary` and `export` say the
 count once. After step 5, check any raise line
 you own — a review skill you adapted, a script — passes the finding's own
-id. Part 2 has one take: `.agents/skills/review-pr/SKILL.md`'s two raise
+id. Part 2 has one take, in 9a: `.agents/skills/review-pr/SKILL.md`'s two raise
 lines spell the shape in place of the placeholder; take it as any changed
 skill.
 
@@ -262,18 +290,21 @@ fixture tests are about the gate, and the shipped `living-spec.test.mjs`
 spelled ids such as `billing` R1 to R3 from a path the default globs match,
 so a living spec of that area passed with no test of your own (#561). If the
 gate goes red after step 5 naming a requirement, nothing of yours ever named
-it — write the test. Part 2 has one take: replace
+it — write the test. Part 2 has one take, in 9f: replace
 `scripts/docs-conformance/test/living-spec.test.mjs` (yours, shipped) with
 the kit's, which builds every id at runtime and scans the harness for a
-spelled one; a fixture test you added there builds its ids the same way.
+spelled one — or take it whole if you have none; a fixture test you added
+there builds its ids the same way.
 
 **Arriving from 0.58.0 or older, delete one file the kit leaked to you.**
 No file joins or leaves at 0.59.0, and no shared file changes behavior.
 `scripts/agents.kit.codex.config.sh` is the kit's own tier → model mapping
 for a codex session, and bootstrap should have deleted it: it was missing
 from the kit-only deletion list, so a project bootstrapped while it was in
-the kit carries the kit's model ids. Delete it — `git rm
-scripts/agents.kit.codex.config.sh` — in the same commit as step 5. Nothing
+the kit carries the kit's model ids. Delete it if present — `git rm -q
+--ignore-unmatch scripts/agents.kit.codex.config.sh` — in the same commit as
+step 5; a project bootstrapped before it existed has none, and the command
+then does nothing. Nothing
 outside the kit reads it, so the delete changes nothing; your own mapping is
 `scripts/agents.config.sh`, which this does not touch. No other kit-only file
 leaked: any other `*.kit.*` name in your tree is yours.
@@ -292,7 +323,7 @@ leave one open: a ``` line inside a ~~~ block no longer closes it in the
 reduced gate or the living-spec rule, an unclosed fence now hides the rest of
 its file from the harness's path and reference checks, and banned-words no
 longer reads a form feed before a marker as a fence. Read such a document
-once after the update. Part 2 has one optional take:
+once after the update. Part 2 has one optional take, in 9f:
 `scripts/docs-conformance/test/fence.test.mjs` (yours) is new — copy it if
 you run the fixture tests; it holds the harness's fence patterns to the
 grammar file.
@@ -336,10 +367,11 @@ same step 5. Without it the reduced gate reports `shared-layer-missing` and
 the coverage check refuses with exit 2 — neither reads nothing and passes.
 `validators/living-spec.mjs` now exports its five patterns under the file's
 names; no verdict of either engine or of the coverage check changes. Part 2
-has one optional take: `scripts/docs-conformance/test/living-spec.test.mjs`
+has one optional take, in 9f: `scripts/docs-conformance/test/living-spec.test.mjs`
 (yours) gains the test that holds the validator's patterns equal to the new
 file — copy its two new tests and the `readFileSync` import if you run the
-fixture tests.
+fixture tests. **No such file in your tree** means you bootstrapped before
+0.49.0 created it: take it whole from `${TO_REF}` instead, as 9f says.
 
 **Arriving from 0.52.0 or older, the reviewer gains an ordered fallback.**
 `scripts/agents.lib.sh` changes content at 0.53.0; take it as step 5 says.
@@ -820,7 +852,31 @@ genuinely on.
 
 The check in step 6 is what makes this honest: it is the difference between "we
 are on 0.3.0" and "we believe we are on 0.3.0". Run it any time, not only during
-an update.
+an update — but not by re-running step 6 itself once the update is over: it
+reads `$WORK`, which step 10 deletes. This form needs nothing from step 0. It
+clones into a scratch directory of its own, reads the file list from your own
+`VERSION` through your own copy of the manifest grammar (shared layer, so it
+is the release's), and removes the clone when it is done:
+
+```sh
+VERIFY=$(mktemp -d)
+git clone --bare --quiet "${KIT_URL:-https://github.com/agranado2k/agentic-sdlc.git}" "$VERIFY/kit.git"
+REF="v$(sed -n 's/^shared-layer:[[:space:]]*//p' VERSION | head -1)"
+. scripts/manifest.lib.sh
+manifest_section files <VERSION | while IFS= read -r f; do
+	want=$(git --git-dir="$VERIFY/kit.git" ls-tree "$REF" -- "$f" | awk '{print $1}')
+	if [ "$want" = 100755 ]; then wx=yes; else wx=no; fi
+	if [ -x "$f" ]; then hx=yes; else hx=no; fi
+	if ! git --git-dir="$VERIFY/kit.git" show "${REF}:$f" 2>/dev/null | cmp -s - "$f"; then
+		echo "DRIFT     $f"
+	elif [ "$wx" != "$hx" ]; then
+		echo "MODE      $f (kit has $want)"
+	else
+		echo "verbatim  $f"
+	fi
+done
+rm -rf "$VERIFY"
+```
 
 ## When a file joins the shared layer
 
@@ -1010,7 +1066,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.62.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.63.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1021,11 +1077,11 @@ another locale may see the same lines sorted differently — `sort` and `comm`
 order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
-$ kit tag --list
+$ kit tag --list --sort=-v:refname
+v0.63.0
 v0.1.0
-v0.62.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.62.0
+v0.1.0 -> v0.63.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1059,10 +1115,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2502 +++++++++++++++++++++++++++++++++++++
- constitution/shared-code-craft.md |  147 +++
+ UPDATING.md                       | 2748 +++++++++++++++++++++++++++++++++++++
+ constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2656 insertions(+), 1 deletion(-)
+ 3 files changed, 2902 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1125,7 +1181,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.62.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.63.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1172,10 +1228,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.63.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.62.0
-Part 1 complete — shared layer at v0.62.0. The update is not done: go to step 8.
+0.63.0
+Part 1 complete — shared layer at v0.63.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1224,36 +1280,57 @@ judgements, and a reviewer reading the two mixed together can check neither.
 ## Step 8 — list what changed outside the shared layer
 
 Reuse the bare clone, the two refs, and the two manifests from steps 0 and 1.
+Every path the kit changed outside the layer prints once, beside the step 9
+sub-step that takes it:
 
 ```sh
 kit diff --name-only "$FROM_REF" "$TO_REF" | sort >"$WORK/changed.all"
 sort -u "$WORK/from.list" "$WORK/to.list" >"$WORK/shared.all"
 comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
 
-cat "$WORK/changed.yours"
+step_of() {                        # step_of <path> — the step 9 sub-step that takes it
+	case "$1" in
+	AGENTS.md | CLAUDE.md | GEMINI.md | README.md | VERSION | bootstrap.sh | \
+		EXCLUSIONS.md | SETUP.md | setup/* | docs/* | tests/* | *.kit.* | \
+		.github/workflows/kit-* | .github/PULL_REQUEST_TEMPLATE.md | \
+		.claude/settings.json) echo kit ;;
+	.agents/skills/* | .claude/skills/*) echo 9a ;;
+	constitution/*) echo 9b ;;
+	templates/*) echo 9c ;;
+	scripts/*.config.sh | scripts/docs-conformance/config.mjs | \
+		scripts/docs-conformance/local-vocabulary.mjs.template) echo 9d ;;
+	adapters/*) echo 9e ;;
+	*) echo 9f ;;
+	esac
+}
+while IFS= read -r p; do
+	printf '%-4s %s\n' "$(step_of "$p")" "$p"
+done <"$WORK/changed.yours" | sort >"$WORK/changed.steps"
+cat "$WORK/changed.steps"
 ```
 
 Do **not** re-derive `FROM_REF` from `VERSION` here: step 5 already moved it to
 the release you are adopting. Part 2 runs in the same session as Part 1, on the
 same two refs.
 
-**Two different kinds of line in there get skipped, for two different reasons,
-and only the first kind is obvious.**
+**No line is skipped here, and a path you do not have is not a reason to.**
+Bootstrap consumed `templates/docs/` into `docs/`, so no consumer has a path
+under it, and the living specs' starter that 0.49.0 added there is exactly the
+file a consumer bootstrapped before it needs from 9c. A file the kit created
+after your bootstrap is absent from your tree for the same reason. Each step
+below says what absence means for its category.
 
-**Paths you do not have.** Bootstrap deletes the kit's own scaffolding (`tests/`,
-`.github/workflows/kit-*.yml`, `EXCLUSIONS.md`, and `bootstrap.sh` itself) and
-consumes `templates/docs/` into `docs/`. A path you do not have is not an update
-— skip those lines. `VERSION` prints too, because it is not an entry in its own
-manifest; step 5 already copied it.
-
-**Paths you DO have, that are the kit's copy of a file you own.** The kit
-self-hosts the constitution it ships, so it has its own `AGENTS.md`, its
+**`kit` marks the kit's own files.** Bootstrap deletes the kit's scaffolding
+(`tests/`, `.github/workflows/kit-*.yml`, `EXCLUSIONS.md`, `bootstrap.sh`
+itself, every `*.kit.*` file), and `VERSION` prints because it is not an entry
+in its own manifest — step 5 already copied it. The other `kit` lines are
+paths you **do** have, because they are the kit's copy of a file you own. The
+kit self-hosts the constitution it ships, so it has its own `AGENTS.md`, its
 `CLAUDE.md` / `GEMINI.md` shims, its `README.md`, its `docs/diary.md`, its
 `docs/adr/*` and its `docs/domain-glossary.md` — and every one of those is a real
-path in your repo too. "A path you do not have" does not dismiss them, so say it
-plainly instead: **the kit's own manual and docs are never your base.** They are
-one project's filled-in copy, exactly as yours is; two consumers of the kit are
-not each other's upstream.
+path in your repo too. Say it plainly: **the kit's own manual and docs are never
+your base.** They are one project's filled-in copy, exactly as yours is; two
+consumers of the kit are not each other's upstream.
 
 The trap is `AGENTS.md`, because it is the one where the mistake produces a
 plausible-looking diff. Your manual's base is `constitution/AGENTS.md.template`
@@ -1267,6 +1344,57 @@ change under `templates/docs/`' descendants is something to read and borrow
 from, never something to copy over the top. This is that rule, stated where the
 line actually appears in front of you.
 
+**Then print your path.** Step 1's release notes are newest first, and each
+one's Part 2 half names the sub-step it belongs to. This reads them from the
+recipe on disk — which step 5 made `$TO_REF`'s — and prints every note from
+your release up, **oldest first**, under each sub-step it names; a note inside
+a 9 sub-step's own section counts for that sub-step, and `--` marks a note that
+names none, to read whole:
+
+```sh
+awk -v from="${FROM_REF#v}" '
+	function num(v,  p) { split(v, p, "."); return p[1] * 1000000 + p[2] * 1000 + p[3] }
+	function out(s) { printf "%s %09d %s  %s\n", s, num(v), v, lead }
+	function flush(  t, s, n) {
+		if (!on) return
+		on = 0
+		lead = para
+		sub(/^ *\*\*/, "", lead)
+		sub(/\*\*.*/, "", lead)
+		split("", seen)
+		n = 0
+		t = para
+		while (match(t, /(^|[^0-9.])9[a-f]([^a-z0-9]|$)/)) {
+			s = substr(t, RSTART, RLENGTH)
+			sub(/^[^9]*/, "", s)
+			s = substr(s, 1, 2)
+			if (!(s in seen)) { seen[s] = 1; out(s); n++ }
+			t = substr(t, RSTART + RLENGTH)
+		}
+		if (sec != "" && !(sec in seen)) { out(sec); n++ }
+		if (!n) out("--")
+	}
+	/^## /                     { flush(); sec = "" }
+	/^### 9[a-f]/              { flush(); sec = substr($2, 1, 2) }
+	/^\*\*Arriving from [0-9]/ {
+		flush()
+		match($0, /[0-9]+\.[0-9]+\.[0-9]+/)
+		v = substr($0, RSTART, RLENGTH)
+		if (num(v) >= num(from)) { on = 1; para = "" }
+	}
+	on && /^$/                 { flush(); next }
+	on                         { para = para " " $0 }
+	END                        { flush() }
+' UPDATING.md | sort | sed 's/^\([^ ]*\) [0-9]\{9\} /\1  /'
+```
+
+Each line is one note — the release you arrive from, then its bold lead — and
+the note itself is in step 1, or in the section it sits in. A consumer moving
+from 0.48.0 sees the `livingSpec` block under 9d at 0.48.0, the living specs'
+starter under 9c at 0.49.0, and the reviewer fallback under 9d at 0.52.0, in
+the order they apply. Read a sub-step's lines when you reach it, before its
+commands.
+
 ## Step 9 — take each category by its own rule
 
 One rule per category, because the categories differ in what a local edit
@@ -1276,9 +1404,10 @@ One rule per category, because the categories differ in what a local edit
 | --- | --- | --- |
 | **Skills** (9a) | `.agents/skills/*/` (kit-side since 0.14.0; yours are wherever bootstrap put them) | three-way: kit's old → kit's new → yours. Take the delta unless you deliberately forked |
 | **Manual & articles** (9b) | `AGENTS.md`, `constitution/local-*.md` | three-way against the `.template` they were stamped from; you are hunting for **sections** you do not have |
-| **Templates** (9c) | `templates/workflows/*` → `.github/workflows/` | copy only what the release changed and you have not customized; a template you deleted stays deleted |
-| **Policy files** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) or read the diff (`.mjs`) — the new shared code may read a key you do not set |
+| **Templates** (9c) | `templates/workflows/*` → `.github/workflows/`; `templates/docs/*` → `docs/`, `README.md` and `.github/PULL_REQUEST_TEMPLATE.md` | copy only what the release changed and you have not customized; a template you deleted stays deleted; a doc starter newer than your bootstrap is a take |
+| **Policy files** (9d) | `scripts/*.config.sh`, `scripts/docs-conformance/config.mjs`, `.../local-vocabulary.mjs` | **never overwrite.** Ask about both refs, then diff the key sets (`.sh`) and read the diff (always) — the new shared code may read a key you do not set |
 | **Adapters** (9e) | `adapters/` | opt-in, whole-directory. Take a tree or leave it; never half of one |
+| **Everything else bootstrap copied** (9f) | `scripts/docs-conformance/README.md` and `scripts/docs-conformance/test/`, `.agents/prompts/`, `.githooks/`, `.gitignore`, `scripts/task.*`, `scripts/catalogue.*`, `scripts/worktree-cleanup.sh` | yours, copied once: take what you never edited, three-way what you did, take whole what is newer than your bootstrap |
 
 ### 9a. Skills — a three-way, not a copy
 
@@ -1382,18 +1511,25 @@ here; the right one is **"what did the kit change, and did I change the same
 lines?"**
 
 ```sh
-S=.claude/skills/implement/SKILL.md          # YOURS — wherever your copy lives
+S=.agents/skills/implement/SKILL.md          # YOURS — .claude/skills/… if you never moved (9a-bis)
 K=.agents/skills/implement/SKILL.md          # the KIT's — canonical since 0.14.0
+O=.claude/skills/implement/SKILL.md          # the kit's address before 0.14.0
 
-kit diff -M "$FROM_REF" "$TO_REF" -- "$S" "$K"   # what the KIT changed; -M pairs
+kit_take "$FROM_REF" "$K" "$WORK/base" 2>/dev/null || kit_take "$FROM_REF" "$O" "$WORK/base" ||
+	{ echo "no $K or $O at $FROM_REF"; false; }
+
+kit diff -M "$FROM_REF" "$TO_REF" -- "$O" "$K"   # what the KIT changed; -M pairs
                                                  # the 0.14.0 home move as a rename
-kit show "$FROM_REF:$S" | diff -u - "$S"     # what YOU changed since bootstrap
+diff -u "$WORK/base" "$S"                        # what YOU changed since bootstrap
 ```
 
-(Crossing the 0.14.0 boundary, the kit side of the diff is at `$K`; at older
-refs it was at `$S`. Listing both paths with `-M` gives one clean content
-diff either way. Your own copy's address never has to move — see the 0.14.0
-migration note below for making the move if you want it.)
+**The kit is always read at `$K` first, whatever your own address.** From
+0.14.0 on, the kit's `.claude/skills/<name>` is a symlink, and `git show` at a
+tag does not follow one — so `kit show "$REF:$O"` finds nothing at any release
+past the move, and the base falls back to `$O` only for a `FROM_REF` older
+than it. Listing both paths with `-M` gives one clean content diff either way.
+Your own copy's address never has to move — set `$S` to wherever it lives, and
+see the 0.14.0 migration note below for making the move if you want it.
 
 Four outcomes, and only one of them needs a human:
 
@@ -1401,23 +1537,23 @@ Four outcomes, and only one of them needs a human:
 - **kit changed, you clean** — take it: `kit_take "$TO_REF" "$K" "$S"` (the
   kit-side path, written to yours).
 - **kit clean, you changed** — nothing to do. Your version stands.
-- **both changed** — merge; do not pick a side:
+- **both changed** — merge; do not pick a side. The base is the one fetched
+  above; `theirs` comes from the canonical path too:
 
-  ```sh
-  kit_take "$FROM_REF" "$S" "$WORK/base" || { echo "no $S at $FROM_REF"; false; }
-  kit_take "$TO_REF" "$S" "$WORK/theirs" || { echo "no $S at $TO_REF"; false; }
-  git merge-file "$S" "$WORK/base" "$WORK/theirs"
-  ```
+```sh
+kit_take "$TO_REF" "$K" "$WORK/theirs" || { echo "no $K at $TO_REF"; false; }
+git merge-file "$S" "$WORK/base" "$WORK/theirs"
+```
 
-  `git merge-file` merges in place and exits non-zero after writing conflict
-  markers where the two edits overlap. Read those; there is no verbatim check to
-  fall back on, which is exactly why this category is not automatable.
+`git merge-file` merges in place and exits non-zero after writing conflict
+markers where the two edits overlap. Read those; there is no verbatim check to
+fall back on, which is exactly why this category is not automatable.
 
-  The two takes are guarded even though they only write scratch files, because
-  `git merge-file` writes **`$S` itself**. Hand it an empty `theirs` — which is
-  what a plain `kit show … >"$WORK/theirs"` leaves behind when the kit renamed
-  the skill — and every line of your file reads as "deleted upstream", so the
-  merge empties it. Guarding a temp file is guarding `$S`, one step removed.
+The takes are guarded even though they only write scratch files, because
+`git merge-file` writes **`$S` itself**. Hand it an empty `theirs` — which is
+what a plain `kit show … >"$WORK/theirs"` leaves behind when the kit renamed
+the skill — and every line of your file reads as "deleted upstream", so the
+merge empties it. Guarding a temp file is guarding `$S`, one step removed.
 
 **If you deliberately forked a skill, write the fork down** — one line in a
 local article ("`/review-pr`'s Axis-2 section is ours; we replaced the
@@ -1753,9 +1889,56 @@ run. Take a template together with its neighbours, and keep the `.example`
 suffix until you have added a provider secret — it ships inert on purpose.
 
 `templates/docs/` is a different case: bootstrap consumed it and deleted it. Its
-descendants — `README.md`, `docs/diary.md`, `docs/adr/`, the PR template — are
-ordinary files of yours now. A kit change there is something you may read and
-borrow from; it is never something to copy over the top.
+descendants are ordinary files of yours now, and this is where each one lives:
+
+| Template | Bootstrap made it into |
+| --- | --- |
+| `templates/docs/README.md.template` | `README.md` |
+| `templates/docs/PULL_REQUEST_TEMPLATE.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
+| `templates/docs/diary.md.template` | `docs/diary.md` |
+| `templates/docs/domain-glossary.md.template` | `docs/domain-glossary.md` |
+| `templates/docs/adr/INDEX.md.template` | `docs/adr/INDEX.md` |
+| `templates/docs/adr/NNNN-template.md` | `docs/adr/NNNN-template.md` |
+| `templates/docs/specs/README.md` | `docs/specs/README.md` — the living specs' starter, new at 0.49.0 |
+
+A kit change to one you have is something you may read and borrow from; it is
+never something to copy over the top. One you do **not** have is either a
+starter newer than your bootstrap — `docs/specs/README.md` for anyone who
+bootstrapped before 0.49.0 — or one you removed, and the same two questions as
+the workflow loop tell them apart:
+
+```sh
+kit ls-tree -r --name-only "$TO_REF" templates/docs/ | while IFS= read -r t; do
+	case "$t" in
+	templates/docs/README.md.template) dest=README.md ;;
+	templates/docs/PULL_REQUEST_TEMPLATE.md) dest=.github/PULL_REQUEST_TEMPLATE.md ;;
+	*)
+		dest="docs/${t#templates/docs/}"
+		dest="${dest%.template}"
+		;;
+	esac
+
+	if [ ! -e "$dest" ]; then
+		if kit cat-file -e "${FROM_REF}:$t" 2>/dev/null; then
+			echo "DECLINED  $dest"        # bootstrap made it and you removed it
+		else
+			echo "NEW       $dest"        # newer than your bootstrap: take it
+		fi
+	elif kit diff --quiet "$FROM_REF" "$TO_REF" -- "$t"; then
+		echo "UNCHANGED $dest"
+	else
+		echo "CHANGED   $dest"            # yours: read the diff of $t and borrow
+	fi
+done
+```
+
+`NEW` is a take into a directory that may not exist yet —
+`mkdir -p docs/specs && kit_take "$TO_REF" templates/docs/specs/README.md
+docs/specs/README.md` for the living specs' starter, which holds no
+requirement, so the gate stays green with it. A `NEW` file ending `.template`
+carries the double-brace marks bootstrap would have filled: fill them by hand
+as you take it. `CHANGED` is the read-and-borrow above, and `UNCHANGED` and
+`DECLINED` are nothing to do.
 
 ### 9d. Policy files — never overwrite, and never guess which ref has them
 
@@ -1770,12 +1953,12 @@ because both facts change what you do with it:
 
 | Policy file | In the kit it is | Compared by |
 | --- | --- | --- |
-| `scripts/guards.config.sh` | a file at that path | key sets (`NAME=`) |
-| `scripts/agents.config.sh` | a file at that path, since 0.4.0 | key sets (`NAME=`) |
+| `scripts/guards.config.sh` | a file at that path | key sets (`NAME=`), then the diff |
+| `scripts/agents.config.sh` | a file at that path, since 0.4.0 | key sets (`NAME=`), then the diff |
 | `scripts/docs-conformance/config.mjs` | a file at that path | reading the diff |
 | `scripts/docs-conformance/local-vocabulary.mjs` | **only a `.template`** | reading the diff of the `.template` |
 | `scripts/vocab.config.sh` | a file at that path, since 0.25.0 — and shipped **filled** | key sets (`NAME=`), then the diff of the values |
-| `scripts/trace.config.sh` | a file at that path, in new-project bootstraps since 0.25.0, adopted repos since 0.29.0, and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`) |
+| `scripts/trace.config.sh` | a file at that path, in new-project bootstraps since 0.25.0, adopted repos since 0.29.0, and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`), then the diff |
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
@@ -1920,7 +2103,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.62.0 case for this file, and `ADD` is the 0.3.0 → 0.62.0
+`MERGE` is the 0.4.0 → 0.63.0 case for this file, and `ADD` is the 0.3.0 → 0.63.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -1969,11 +2152,22 @@ keys "$C" >"$WORK/keys.mine"
 if [ -s "$WORK/keys.new" ]; then
 	comm -13 "$WORK/keys.mine" "$WORK/keys.new"   # keys the RELEASE expects, you lack
 	comm -23 "$WORK/keys.mine" "$WORK/keys.new"   # keys only you have — yours, or removed upstream
+	kit diff "$FROM_REF" "$TO_REF" -- "$C"        # and READ this: a key shipped commented out
+	                                              # is no NAME= line, so the comms cannot see it
 else
 	echo "keys(): no NAME= lines in $C — wrong tool for this file; read the diff" >&2
 	false
 fi
 ```
+
+**The key sets are not the whole answer, so the block prints the file's diff
+too.** A key the kit ships *commented out* — an opt-in it documents but will
+not set for you — is no `NAME=` line on either side. 0.53.0's reviewer
+fallback is the case that was missed in the field: the release added
+`#   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'` to
+`scripts/agents.config.sh`, the two `comm`s printed nothing, and the key was
+visible only in the diff. Read it for every `.sh` policy file, after the
+`comm`s.
 
 Add each missing key to your file **with your value**, and bring the kit's
 comment block for it across so the next reader knows what it is for. An unset
@@ -2130,6 +2324,45 @@ Never merge a single adapter file. Each directory is one worked wiring that has
 to stay internally consistent; half of the release's on top of half of yours is a
 configuration nobody has ever run.
 
+### 9f. Everything else bootstrap copied — yours, and taken by what you did to it
+
+Some files bootstrap copied fit none of the five categories above: the docs
+harness's own `scripts/docs-conformance/README.md` and its fixture tests under
+`scripts/docs-conformance/test/`, the worker prompts under `.agents/prompts/`,
+the hooks under `.githooks/`, `.gitignore`, and the scripts that sit beside
+the shared layer without being in it (`scripts/task.sh`, `scripts/catalogue.sh`,
+`scripts/worktree-cleanup.sh` and their notes). Step 8 marks each with `9f`.
+They are yours like the rest of Part 2 — copied once, edited if you chose to —
+so the question is the 9a one, asked of a single file:
+
+```sh
+grep '^9f ' "$WORK/changed.steps" | cut -c6- | while IFS= read -r f; do
+	if ! kit cat-file -e "${TO_REF}:$f" 2>/dev/null; then
+		echo "REMOVED   $f"        # the kit deleted it: delete yours unless you use it
+	elif [ ! -e "$f" ]; then
+		if kit cat-file -e "${FROM_REF}:$f" 2>/dev/null; then
+			echo "DECLINED  $f"    # you had it and removed it
+		else
+			echo "NEW       $f"    # newer than your bootstrap: take it whole
+		fi
+	elif kit show "${FROM_REF}:$f" 2>/dev/null | cmp -s - "$f"; then
+		echo "UNTOUCHED $f"        # the old release's copy, verbatim: take it
+	else
+		echo "YOURS     $f"        # you edited it: three-way, as 9a
+	fi
+done
+```
+
+- **`NEW`** and **`UNTOUCHED`** are `kit_take "$TO_REF" "$f" "$f"` — for a
+  `NEW` file, after `mkdir -p "$(dirname "$f")"`, and only if you use what it
+  is for: a fixture test is worth taking if you run the harness's tests.
+  `scripts/docs-conformance/test/living-spec.test.mjs` is the one that was
+  missed in the field — created at 0.49.0, so a consumer bootstrapped before
+  that has none, and a note telling you to edit it means take it whole.
+- **`YOURS`** is the three-way of 9a, with `$K` and `$S` both set to `$f`.
+- **`REMOVED`** and **`DECLINED`** are nothing to take; a removed file you
+  still have is yours to keep or delete.
+
 ## Step 10 — verify with the gate, then commit
 
 Part 2 has no verbatim claim to check, so the gate is the check — and it is not a
@@ -2149,7 +2382,9 @@ rm -rf "$WORK"   # the bare clone and both manifests — the update is over
 ```
 
 That `rm` belongs *here* and nowhere earlier: `$WORK` holds the bare clone, both
-manifests and `changed.yours`, and every step from 8 on reuses them.
+manifests and `changed.yours`, and every step from 8 on reuses them. Nothing
+after it does: the verbatim check you can run any time is step 7's own form,
+which makes its own clone.
 
 Note it in `docs/diary.md` alongside the Part 1 entry. Part 2 is where the
 release's behaviour actually changed, so it is the half a future reader will want
@@ -2234,14 +2469,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.62.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.63.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.62.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.63.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2255,84 +2490,85 @@ is *silent*, which is why that red is the only alarm that fires. Part 2 is what
 fixes all of it:
 
 ```console
-$ comm -23 "$WORK/changed.all" "$WORK/shared.all" >"$WORK/changed.yours"
-$ cat "$WORK/changed.yours"
-.agents/prompts/README.md
-.agents/prompts/implement-worker.md
-.agents/prompts/review-worker.md
-.agents/skills/LICENSE-mattpocock-skills.md
-.agents/skills/design-brief/BRIEF-FORMAT.md
-.agents/skills/design-brief/SKILL.md
-.agents/skills/diagnose/SKILL.md
-.agents/skills/diagnose/hitl-loop.template.sh
-.agents/skills/dogfood/SKILL.md
-.agents/skills/explain-diff/MICROWORLDS.md
-.agents/skills/explain-diff/SKILL.md
-.agents/skills/grill-me/SKILL.md
-.agents/skills/grill-with-docs/ADR-FORMAT.md
-.agents/skills/grill-with-docs/GLOSSARY-FORMAT.md
-.agents/skills/grill-with-docs/SKILL.md
-.agents/skills/housekeeping/CHECKLIST.md
-.agents/skills/housekeeping/SKILL.md
-.agents/skills/implement/SKILL.md
-.agents/skills/improve-codebase-architecture/DEEPENING.md
-.agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
-.agents/skills/improve-codebase-architecture/LANGUAGE.md
-.agents/skills/improve-codebase-architecture/PRESENTING.md
-.agents/skills/improve-codebase-architecture/SKILL.md
-.agents/skills/merge-train/SKILL.md
-.agents/skills/pr-iterate/SKILL.md
-.agents/skills/prototype/SKILL.md
-.agents/skills/retro/QUESTIONS.md
-.agents/skills/retro/SKILL.md
-.agents/skills/review-pr/SKILL.md
-.agents/skills/tdd/SKILL.md
-.agents/skills/tdd/deep-modules.md
-.agents/skills/tdd/interface-design.md
-.agents/skills/tdd/mocking.md
-.agents/skills/tdd/refactoring.md
-.agents/skills/tdd/tests.md
-.agents/skills/to-prd/SKILL.md
-.agents/skills/to-tickets/SKILL.md
-.agents/skills/worktree-cleanup/SKILL.md
-.claude/skills/LICENSE-mattpocock-skills.md
-.claude/skills/design-brief
-.claude/skills/diagnose
-.claude/skills/dogfood
-.claude/skills/explain-diff
-.claude/skills/grill-me
-.claude/skills/grill-with-docs
-.claude/skills/housekeeping
-.claude/skills/implement
-.claude/skills/implement/SKILL.md
-.claude/skills/improve-codebase-architecture
-.claude/skills/merge-train
-.claude/skills/pr-iterate
-.claude/skills/prototype
-.claude/skills/retro
-.claude/skills/review-pr
-.claude/skills/tdd
-.claude/skills/to-prd
-.claude/skills/to-tickets
-.claude/skills/worktree-cleanup
-AGENTS.md
-EXCLUSIONS.md
-README.md
-VERSION
-adapters/claude-code/README.md
-constitution/AGENTS.md.template
-constitution/local-engineering.md.template
-constitution/local-product.md.template
-constitution/local-workflow.md.template
-docs/adr/0011-task-local-contracts-bound-the-lifecycle.md
-docs/adr/0015-a-release-is-tagged-by-its-landing-before-main-is-judged.md
-docs/diary.md
-docs/domain-glossary.md
-scripts/agents.config.sh
-scripts/catalogue.md
-setup/agent-bootstrap.md
-templates/workflows/ai-review-prompt.md
-templates/workflows/ai-review.example.yml
+$ # step 8 — every path the kit changed outside the layer, by the step that takes it
+9a   .agents/skills/LICENSE-mattpocock-skills.md
+9a   .agents/skills/design-brief/BRIEF-FORMAT.md
+9a   .agents/skills/design-brief/SKILL.md
+9a   .agents/skills/diagnose/SKILL.md
+9a   .agents/skills/diagnose/hitl-loop.template.sh
+9a   .agents/skills/dogfood/SKILL.md
+9a   .agents/skills/explain-diff/MICROWORLDS.md
+9a   .agents/skills/explain-diff/SKILL.md
+9a   .agents/skills/grill-me/SKILL.md
+9a   .agents/skills/grill-with-docs/ADR-FORMAT.md
+9a   .agents/skills/grill-with-docs/GLOSSARY-FORMAT.md
+9a   .agents/skills/grill-with-docs/SKILL.md
+9a   .agents/skills/housekeeping/CHECKLIST.md
+9a   .agents/skills/housekeeping/SKILL.md
+9a   .agents/skills/implement/SKILL.md
+9a   .agents/skills/improve-codebase-architecture/DEEPENING.md
+9a   .agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
+9a   .agents/skills/improve-codebase-architecture/LANGUAGE.md
+9a   .agents/skills/improve-codebase-architecture/PRESENTING.md
+9a   .agents/skills/improve-codebase-architecture/SKILL.md
+9a   .agents/skills/merge-train/SKILL.md
+9a   .agents/skills/pr-iterate/SKILL.md
+9a   .agents/skills/prototype/SKILL.md
+9a   .agents/skills/retro/QUESTIONS.md
+9a   .agents/skills/retro/SKILL.md
+9a   .agents/skills/review-pr/SKILL.md
+9a   .agents/skills/tdd/SKILL.md
+9a   .agents/skills/tdd/deep-modules.md
+9a   .agents/skills/tdd/interface-design.md
+9a   .agents/skills/tdd/mocking.md
+9a   .agents/skills/tdd/refactoring.md
+9a   .agents/skills/tdd/tests.md
+9a   .agents/skills/to-prd/SKILL.md
+9a   .agents/skills/to-tickets/SKILL.md
+9a   .agents/skills/worktree-cleanup/SKILL.md
+9a   .claude/skills/LICENSE-mattpocock-skills.md
+9a   .claude/skills/design-brief
+9a   .claude/skills/diagnose
+9a   .claude/skills/dogfood
+9a   .claude/skills/explain-diff
+9a   .claude/skills/grill-me
+9a   .claude/skills/grill-with-docs
+9a   .claude/skills/housekeeping
+9a   .claude/skills/implement
+9a   .claude/skills/implement/SKILL.md
+9a   .claude/skills/improve-codebase-architecture
+9a   .claude/skills/merge-train
+9a   .claude/skills/pr-iterate
+9a   .claude/skills/prototype
+9a   .claude/skills/retro
+9a   .claude/skills/review-pr
+9a   .claude/skills/tdd
+9a   .claude/skills/to-prd
+9a   .claude/skills/to-tickets
+9a   .claude/skills/worktree-cleanup
+9b   constitution/AGENTS.md.template
+9b   constitution/local-engineering.md.template
+9b   constitution/local-product.md.template
+9b   constitution/local-workflow.md.template
+9c   templates/docs/specs/README.md
+9c   templates/workflows/ai-review-prompt.md
+9c   templates/workflows/ai-review.example.yml
+9d   scripts/agents.config.sh
+9e   adapters/claude-code/README.md
+9f   .agents/prompts/README.md
+9f   .agents/prompts/implement-worker.md
+9f   .agents/prompts/review-worker.md
+9f   scripts/catalogue.md
+kit  AGENTS.md
+kit  EXCLUSIONS.md
+kit  README.md
+kit  VERSION
+kit  bootstrap.sh
+kit  docs/adr/0011-task-local-contracts-bound-the-lifecycle.md
+kit  docs/adr/0015-a-release-is-tagged-by-its-landing-before-main-is-judged.md
+kit  docs/diary.md
+kit  docs/domain-glossary.md
+kit  setup/agent-bootstrap.md
 
 $ # 9a — the INVENTORY first: state, not delta (one is a decline, one is a gap)
 $ comm -23 "$WORK/skills.manifest" "$WORK/skills.installed"   # skills you LACK
@@ -2340,11 +2576,11 @@ dogfood
 improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
-$ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$S" "$K"
+$ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$O" "$K"
  .agents/skills/implement/SKILL.md | 66 +++++++++++++++++++++++++++++++++++++++
  .claude/skills/implement/SKILL.md | 44 --------------------------
  2 files changed, 66 insertions(+), 44 deletions(-)
-$ kit show "$FROM_REF:$S" | diff -u - "$S" | head -1
+$ diff -u "$WORK/base" "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
 
@@ -2416,9 +2652,19 @@ UNCHANGED .github/workflows/docs-gate.yml
 DECLINED  .github/workflows/tdd-pairing.yml
   took    .github/workflows/ai-review.example.yml + its prompt file
 
+$ # 9c — the docs bootstrap made from templates/docs/: one newer than yours is a take
+UNCHANGED .github/PULL_REQUEST_TEMPLATE.md
+UNCHANGED README.md
+UNCHANGED docs/adr/INDEX.md
+UNCHANGED docs/adr/NNNN-template.md
+UNCHANGED docs/diary.md
+UNCHANGED docs/domain-glossary.md
+NEW       docs/specs/README.md
+  took    docs/specs/README.md
+
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.62.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.63.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2444,7 +2690,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.63.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -2458,7 +2704,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.40.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.63.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
