@@ -49,6 +49,7 @@ The transcripts are the files the agent harness itself wrote under
 | `compacted-transcript.redacted.jsonl` | the resumed session in full: five runs, a `/compact` among them, 85 lines |
 | `forked-transcript.redacted.jsonl` | a `--fork-session` of it after the compaction: 39 lines, two copied lines with usage zeroed |
 | `handback-subagent-transcript.redacted.jsonl` | a subagent run that ends on the hand-back tool: 19 lines, the last a user line carrying `"toolEndsTurn":true` |
+| `snapshot-subagent-transcript.redacted.jsonl` | a subagent run whose tool turns were written mid-stream: 57 lines, 8 of 12 messages ending on a `stop_reason` null line |
 
 ## The second capture: the two tool payloads
 
@@ -207,6 +208,33 @@ What it establishes, and what the suite leans on:
 Redacted with the fourth capture's mechanical rule, keeping `name` (so the
 tool's name survives); the project path became `/tmp/spike-proj`, and every
 `gitBranch` and `serverClassifier*` body was replaced whole.
+
+## The seventh capture: output counts that are snapshots
+
+`snapshot-subagent-transcript.redacted.jsonl` was cut for ticket #608 on
+**2026-10-07** from a real subagent transcript of the kit's own sessions,
+written that day by the `claude` CLI at **2.1.287** (`claude-sonnet-5-5`).
+It was chosen as the smallest 2.1.287 subagent run that ends on a final
+message and mixes both shapes of tool turn. What it establishes, and what
+the suite leans on:
+
+- **A line written mid-stream is never closed.** 8 of its 12 message ids end
+  on a line whose `stop_reason` is null, and no later line of the same id,
+  no usage-only record and no other field carries a different count. Line 42
+  is a `Write` call whose input was 1408 characters, recorded at
+  `output_tokens` 3 — far fewer tokens than the input it carries.
+- **The other shape sits beside it.** Lines 24, 48 and 54 are tool turns
+  whose line says `stop_reason` `tool_use` and the closing count (128, 119,
+  119), and line 57 is the `end_turn` that ends the run — so the flag is per
+  message, never per file or per CLI version.
+- **The sums.** The whole file is `26 / 624 / 52403 / 616704` over twelve
+  messages, eight of them snapshots; after line 48's message,
+  `8 / 300 / 4977 / 191539` over three, one a snapshot.
+
+Redacted with the fourth capture's mechanical rule, keeping `name` and
+`attributionAgent`; the project path became `/tmp/spike-proj`, and every
+`gitBranch`, `serverClassifier*` and `attributionSkill` body was replaced
+whole.
 
 ## What was redacted
 
