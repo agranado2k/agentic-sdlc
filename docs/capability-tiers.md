@@ -30,6 +30,16 @@ sizes a command nobody wrote a ticket for.
 `/to-tickets` stamps a tier on every ticket and shows it at the quiz for
 override; `/implement` reads it when it spawns.
 
+**The mechanical tier can run cheap-first.** Where the policy declares
+`AGENT_CASCADE_MECHANICAL`, the skill dispatcher runs a mechanical ticket on
+that model first, then the ticket's oracle and the pairing guard in its
+worktree; red on either exit code, it resets the worktree to the ticket's base
+and runs the ticket again on the tier's mapped model. The worker's own report
+never decides. A ticket with no closed-list oracle is refused the cascade, and
+so is a cascade model the dispatcher cannot cross to — an oracle cannot judge
+work the dispatcher never ran. The kit's own value names no agent harness
+today, so its cascade is declared but refused until one is wired (#586).
+
 ## The mapping is data, and the kit carries its own
 
 **The root manual names no model, and neither does any other file the kit

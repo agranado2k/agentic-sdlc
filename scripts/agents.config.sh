@@ -279,6 +279,16 @@ AGENT_TIER_IMPLEMENTER=''
 # 3. MECHANICAL — checkable definition of done, no judgement required
 # ---------------------------------------------------------------------------
 AGENT_TIER_MECHANICAL=''
+#
+# Its CASCADE: a cheaper model the skill dispatcher tries FIRST on a
+# mechanical ticket that names an oracle command. The ticket's oracle and the
+# pairing guard then judge that rung by their exit codes alone; red, the
+# ticket's worktree is reset to its base and the ticket runs again on the
+# model above. Empty means no cascade. A model or `<token>:<model>`, like a
+# tier; a rung the dispatcher cannot run itself (no agent harness named)
+# refuses the cascade, since an oracle cannot judge work it never ran.
+#   AGENT_CASCADE_MECHANICAL='<a cheaper model the oracle may vouch for>'
+AGENT_CASCADE_MECHANICAL=''
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — adversarial reading of a finished diff, in fresh context
