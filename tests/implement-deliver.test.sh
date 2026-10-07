@@ -41,6 +41,15 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 SKILL=".claude/skills/implement/SKILL.md"
 SKILL_ABS="$ROOT/$SKILL"
+# The split under the skill's byte ceiling (#593): SKILL.md stays the one entry
+# point, and each branch only some sessions take sits beside it in a file it
+# names by relative path. An assertion about moved text reads the file it moved
+# to — the stamp's outcomes, the oracle and Covers: lines with the living-spec
+# delta, and the dispatched review's composition.
+STAMP_ABS="$ROOT/.claude/skills/implement/STAMP.md"
+COVERS_ABS="$ROOT/.claude/skills/implement/COVERS.md"
+DISPATCH=".claude/skills/implement/DISPATCHED-REVIEW.md"
+DISPATCH_ABS="$ROOT/$DISPATCH"
 
 cd "$ROOT" || exit 2
 
@@ -52,7 +61,7 @@ cd "$ROOT" || exit 2
 # are single long lines, so two phrases of one step share a line number.
 offset_of() {
 	LIT=$1 awk 'BEGIN { lit = ENVIRON["LIT"] }
-		{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "$SKILL_ABS"
+		{ i = index($0, lit); if (i) { print n + i; exit } n += length($0) + 1 }' "${2:-$SKILL_ABS}"
 }
 
 # ---------------------------------------------------------------------------
@@ -62,6 +71,17 @@ banner "0. The file under test"
 	fail "$SKILL is missing — nothing else in this suite means anything"
 	t_done "/implement delivery contract"
 }
+# One entry point (#593): every file beside SKILL.md is named from it by
+# relative path, so the branch that needs it can open it, and each is present.
+for f in "$STAMP_ABS" "$COVERS_ABS" "$DISPATCH_ABS"; do
+	[ -f "$f" ] && pass "${f##*/} sits beside SKILL.md" || fail "${f##*/} is missing — a moved branch with no file"
+done
+for f in "$ROOT"/.claude/skills/implement/*.md; do
+	b=${f##*/}
+	[ "$b" = SKILL.md ] && continue
+	grep -qF "($b)" "$SKILL_ABS" && pass "SKILL.md names $b by relative path" ||
+		fail "SKILL.md does not name $b — a moved branch no entry point opens"
+done
 
 # ---------------------------------------------------------------------------
 banner "1. The Deliver phase exists, and ends where shared invariant §7 says"
@@ -205,30 +225,31 @@ assert_file_has "$SKILL" "skill dispatcher"
 assert_file_has "$SKILL" "never posts"
 # The composition: two commands, never one pipeline, and WHY — without the
 # reason the next editor "simplifies" it back into a pipe.
-assert_file_has "$SKILL" "redirect followed by the broker"
-assert_file_has "$SKILL" "never as one pipeline"
-assert_file_has "$SKILL" "cannot see the dispatcher's exit status through a pipe"
+assert_file_has "$DISPATCH" "redirect followed by the broker"
+assert_file_has "$DISPATCH" "never as one pipeline"
+assert_file_has "$DISPATCH" "cannot see the dispatcher's exit status through a pipe"
 # Not a keyword match on one spelling of the pipe: NO `|` anywhere between the
 # dispatcher and the broker inside the composition's code span, so `|<broker>`,
 # `| sh <broker>` and a `| tee … | <broker>` are all refused.
-if grep -qE '<skill dispatcher>[^`]*\|[^`]*<broker>' "$SKILL_ABS"; then
+if grep -qE '<skill dispatcher>[^`]*\|[^`]*<broker>' "$SKILL_ABS" "$DISPATCH_ABS"; then
 	fail "a pipe stands between the skill dispatcher and the broker in the composition"
 else
 	pass "no pipe stands between the skill dispatcher and the broker, however it is spelled"
 fi
 # The exit-status check comes BEFORE the broker runs, and a non-dispatch exit
 # is reported as no review rather than handed to the broker.
-assert_file_has "$SKILL" "Check the dispatcher's exit status"
-assert_file_has "$SKILL" "Only on 0"
-assert_file_has "$SKILL" "a model id"
-assert_file_has "$SKILL" "no dispatched review ran"
+assert_file_has "$DISPATCH" "Check the dispatcher's exit status"
+assert_file_has "$DISPATCH" "Only on 0"
+assert_file_has "$DISPATCH" "a model id"
+assert_file_has "$DISPATCH" "no dispatched review ran"
 # `rc`, never `status`: zsh holds `status` read-only, and the first real run of
 # this composition died on the assignment with the exit status lost.
 assert_file_lacks "$SKILL" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
-_status=$(offset_of '; rc=$?;')
-_broker=$(offset_of '<broker> <PR#>')
+assert_file_lacks "$DISPATCH" '`status=$?`' "zsh reserves the name — the assignment fails and the exit status is lost"
+_status=$(offset_of '; rc=$?;' "$DISPATCH_ABS")
+_broker=$(offset_of '<broker> <PR#>' "$DISPATCH_ABS")
 if [ -n "$_status" ] && [ -n "$_broker" ] && [ "$_status" -lt "$_broker" ] &&
-	grep -qF '[ "$rc" -eq 0 ] && <broker> <PR#>' "$SKILL_ABS"; then
+	grep -qF '[ "$rc" -eq 0 ] && <broker> <PR#>' "$DISPATCH_ABS"; then
 	pass "the exit status is captured (offset $_status) before the broker runs (offset $_broker), and the broker command is conditional on 0"
 else
 	fail "the broker is not visibly gated on the dispatcher's exit status — status='$_status' broker='$_broker'"
@@ -239,14 +260,14 @@ fi
 # exists to prevent. So the skill says it, says why, and gives the four steps
 # as one literal command line rather than as four commands to type in turn.
 assert_file_has "$SKILL" "one shell invocation"
-assert_file_has "$SKILL" "a fresh shell per command"
+assert_file_has "$DISPATCH" "a fresh shell per command"
 _one='`tip=$(git rev-parse HEAD); <skill dispatcher> review-pr … > <report file>; rc=$?; [ "$rc" -eq 0 ] && <broker> <PR#> <report file> --commit "$tip"`'
-assert_file_has "$SKILL" "$_one" "the composition is one literal command line: tip, dispatch, status, gated broker"
+assert_file_has "$DISPATCH" "$_one" "the composition is one literal command line: tip, dispatch, status, gated broker"
 # The recorded tip is the cross-check, taken BEFORE the dispatch.
-assert_file_has "$SKILL" "Record the branch tip"
-assert_file_has "$SKILL" '--commit "$tip"'
-_tip=$(offset_of 'tip=$(git rev-parse HEAD)')
-_disp=$(offset_of '<skill dispatcher> review-pr')
+assert_file_has "$DISPATCH" "Record the branch tip"
+assert_file_has "$DISPATCH" '--commit "$tip"'
+_tip=$(offset_of 'tip=$(git rev-parse HEAD)' "$DISPATCH_ABS")
+_disp=$(offset_of '<skill dispatcher> review-pr' "$DISPATCH_ABS")
 if [ -n "$_tip" ] && [ -n "$_disp" ] && [ "$_tip" -lt "$_disp" ] && [ "$_disp" -lt "${_status:-0}" ]; then
 	pass "the tip is recorded (offset $_tip) before the dispatch (offset $_disp), and the dispatch before the status is read"
 else
@@ -254,13 +275,14 @@ else
 fi
 # Operator decision on PR #283: the dispatcher stages the offline contract;
 # a --prompt-file is the caller's own document, so the skill says not to pass one.
-assert_file_has "$SKILL" "Pass no \`--prompt-file\`"
+assert_file_has "$DISPATCH" "Pass no \`--prompt-file\`"
 # The report lifts BOTH URLs the broker printed.
 assert_file_has "$SKILL" "the comment URL"
 # A broker that refuses is not an invitation to post around it.
-assert_file_has "$SKILL" "never post around a refusal"
+assert_file_has "$DISPATCH" "never post around a refusal"
 # Hand posting is no longer the default for a dispatched reviewer.
 assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
+assert_file_lacks "$DISPATCH" "a dispatched CLI on another vendor often cannot" "that sentence made hand posting the default for every dispatched review"
 # ... and the absence of one old sentence guards nothing a rewording cannot
 # walk around, so the POSITIVE rule is asserted: the broker is the only way a
 # dispatched report lands, the header's "post them yourself" belongs to the
@@ -268,12 +290,12 @@ assert_file_lacks "$SKILL" "a dispatched CLI on another vendor often cannot" "th
 # sentence anywhere offers hand posting to a dispatched reviewer.
 assert_file_has "$SKILL" "lands through the **broker** and no other way"
 assert_file_has "$SKILL" "post them yourself only when that subagent cannot reach the forge"
-if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$SKILL_ABS"; then
+if grep -qE 'post (them|it|the findings|the report) yourself[^.]*dispatched' "$SKILL_ABS" "$DISPATCH_ABS"; then
 	fail "a sentence offers hand posting to a dispatched reviewer — the broker is the only way its report lands"
 else
 	pass "no sentence offers hand posting to a dispatched reviewer"
 fi
-_yourself=$(grep -oE 'post [a-z ]*yourself' "$SKILL_ABS" | grep -c '')
+_yourself=$(cat "$SKILL_ABS" "$DISPATCH_ABS" | grep -oE 'post [a-z ]*yourself' | grep -c '')
 if [ "$_yourself" -eq 1 ]; then
 	pass "the in-session subagent's is the only 'post ... yourself' in the skill"
 else
@@ -285,19 +307,21 @@ fi
 # credentialed session posting an unvalidated worker report is the
 # untrusted-content-to-forge path ADR-0009 closes, so the skill never offers
 # hand posting as the gap-filler it once was.
-_clause=$(grep -oE 'No broker named by the root manual[^.]*\.' "$SKILL_ABS")
+_clause=$(grep -oE 'No broker named by the root manual[^.]*\.' "$DISPATCH_ABS")
 case "$_clause" in
 *'in-session'*'no cross-vendor review ran'*)
 	pass "the no-broker clause falls back to the in-session reviewer and reports that no cross-vendor review ran" ;;
 *) fail "the no-broker clause does not fall back in-session and say no cross-vendor review ran: '$_clause'" ;;
 esac
 assert_file_lacks "$SKILL" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
+assert_file_lacks "$DISPATCH" "hand posting" "no hand posting is left for a dispatched review — the in-session reviewer is the fallback"
 assert_file_lacks "$SKILL" "post the captured report" "the captured report is never the session's to post"
+assert_file_lacks "$DISPATCH" "post the captured report" "the captured report is never the session's to post"
 # The same rule for the dispatcher's "harness not reachable" exit (69): like
 # the no-harness exit (3), stdout is the model id and the in-session spawn is
 # the review — the skill names both as the working cases, and says so.
-assert_file_has "$SKILL" "not reachable from here"
-assert_file_has "$SKILL" "two working cases"
+assert_file_has "$DISPATCH" "not reachable from here"
+assert_file_has "$DISPATCH" "two working cases"
 # The shipped skill names no kit-only file: bootstrap deletes them, and a
 # consumer following the line would run nothing.
 assert_file_lacks "$SKILL" ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"
@@ -374,7 +398,7 @@ banner "4b. The stamp is read through the checker: restate on low, stop on refus
 # The pipe this replaced answered with the checker's status alone, which made a
 # failed fetch and a stampless ticket the same silence; the script's own
 # contract is driven by tests/stamp.test.sh, and 4c below runs it from here.
-stamp=$(grep -F -- "sh scripts/stamp.sh" "$SKILL_ABS" | head -1)
+stamp=$(grep -F -- "sh scripts/stamp.sh" "$STAMP_ABS" | head -1)
 [ -n "$stamp" ] && pass "one bullet reads the ticket's stamp through scripts/stamp.sh" ||
 	fail "no line runs sh scripts/stamp.sh — the stamp is read unchecked"
 # stamp_has <fixed string> <why> — t_text_has (tests/lib.sh) on the stamp
@@ -627,7 +651,11 @@ banner "4d. A mechanical ticket's oracle line is read as data, never run as writ
 # have selected a gate bypass. Every rule sits in step 1's own line, so none
 # can drift into the delivery steps (where #480 writes the PR body) and still
 # count.
+# Step 1's own line and the COVERS.md branch it opens (#593) are one subject:
+# the rules moved verbatim, and each mutation below must still turn it red.
 restate=$(grep -F -- "1. **Open by restating the ticket**" "$SKILL_ABS" | head -1)
+[ -n "$restate" ] && restate="$restate
+$(cat "$COVERS_ABS")"
 [ -n "$restate" ] && pass "step 1, the restate step, is found" ||
 	fail "no step 1 opens with the restatement — the oracle rules have no home"
 # The full suite step 4 spells, literally, and the sentence it sits in as one
@@ -637,6 +665,8 @@ restate=$(grep -F -- "1. **Open by restating the ticket**" "$SKILL_ABS" | head -
 # as "optionally" survives (local review H-1).
 STEP4_SUITE='the **full suite once** at the end — `sh -c '"'"'for t in tests/*.sh; do sh "$t" || exit 1; done'"'"'` where the suite is a `tests/` directory of shell scripts, otherwise the suite commands `constitution/local-engineering.md`'"'"'s test tiers name.'
 step4=$(grep -F -- "4. **Drive \`/tdd\` through each seam**" "$SKILL_ABS" | head -1)
+[ -n "$step4" ] && step4="$step4
+$(cat "$COVERS_ABS")"
 t_text_has "$step4" "$STEP4_SUITE" "step 4 spells the full suite as one command, behind sh -c, so a pasted loop cannot close the session's shell" "step 4"
 # The load-bearing words, one per line, spelled ONCE: the live assertions and
 # the probe the weakened copies drive read the same list. The first is the
