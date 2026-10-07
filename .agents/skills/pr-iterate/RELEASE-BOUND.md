@@ -22,4 +22,4 @@ triage_reds() {
 }
 ```
 
-A set-aside red is **never fixed, never triaged and never re-run** — no commit aimed at it, no re-run of the job, no empty push to try it again — on this iteration or any later one: the next iteration's split sets it aside again. Every `triage` red goes through the table below exactly as before. When the set-aside reds are all that is left — nothing to triage, no open bot thread, no unanswered human thread — the iteration stops there (step 6), and the release-bound red is the operator's to carry to the release.
+A set-aside red is **never fixed, never triaged and never re-run** — no commit aimed at it, no re-run of the job, no empty push to try it again — on this iteration or any later one: the next iteration's split sets it aside again. Every `triage` red goes through the classification table in `SKILL.md` step 3 exactly as before. When the set-aside reds are all that is left — nothing to triage, no open bot thread, no unanswered human thread — the iteration stops there (`SKILL.md` step 6), and the release-bound red is the operator's to carry to the release.
