@@ -4374,6 +4374,23 @@ stop474 "$SCRATCH/spawn-583n.jsonl"
 	[ "$(str "$STOP" related)" = "session:$SESSION" ] &&
 	pass "domain=none and ticket=none leave the domain absent and relate no ticket" ||
 	fail "a none/none line: '$STOP'"
+# The read is the run channel's own: a TRACE_RUN in the environment does not
+# skip it, a line past the first 4096 bytes is not read, and a transcript that
+# cannot be read is unattributed beside its failure (review of PR #600).
+stop474 "$SCRATCH/spawn-583.jsonl" TRACE_RUN=from-the-env-583
+[ "$(str "$STOP" run)" = from-the-env-583 ] && [ "$(str "$STOP" tier)" = implementer ] &&
+	pass "a TRACE_RUN in the environment wins the run and the Trace-Spawn line is still read" ||
+	fail "under TRACE_RUN: run '$(str "$STOP" run)' tier '$(str "$STOP" tier)'"
+sed '/"type":"user"/s|"type":"user"|"type":"user","pad":"'"$PAD474"'"|' "$SCRATCH/spawn-583.jsonl" >"$SCRATCH/far-583.jsonl"
+stop474 "$SCRATCH/far-583.jsonl"
+[ "$(str "$STOP" tier)" = unattributed ] &&
+	pass "a Trace-Spawn line past the first 4096 bytes of the first user record is not read" ||
+	fail "a Trace-Spawn line 5000 bytes in gave tier '$(str "$STOP" tier)'"
+mkdir -p "$SCRATCH/dir-583.jsonl"
+stop474 "$SCRATCH/dir-583.jsonl"
+[ "$(str "$STOP" outcome)" = fail ] && [ "$(str "$STOP" tier)" = unattributed ] &&
+	pass "a transcript that cannot be read as a file is unattributed, beside its failure" ||
+	fail "an unreadable transcript: outcome '$(str "$STOP" outcome)' tier '$(str "$STOP" tier)'"
 # Not an exact match: no attribution, tier unattributed.
 for bad583 in "Trace-Run: $WT474\\\\nBuild it." \
 	"Trace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it." \
@@ -4405,12 +4422,12 @@ if [ "$HAVE_NODE" = 1 ]; then
 	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by tier
 	ROW583=$(printf '%s\n' "$S_OUT" | awk '$1 == "implementer" { print $2, $7 }')
 	UN583=$(printf '%s\n' "$S_OUT" | awk '$1 == "unattributed" { print $2, $7 }')
-	case $ROW583 in "1 "[0-9]*.[0-9]*) pass "summary --by tier prices the attributed stop under its tier ($ROW583)" ;;
+	case $ROW583 in "2 "[0-9]*.[0-9]*) pass "summary --by tier prices the attributed stop under its tier ($ROW583)" ;;
 	*) fail "summary --by tier implementer row '$ROW583'; stdout '$S_OUT'" ;; esac
-	case $UN583 in "14 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
+	case $UN583 in "16 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
 	*) fail "summary --by tier unattributed row '$UN583'; stdout '$S_OUT'" ;; esac
 	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by domain
-	case $(printf '%s\n' "$S_OUT" | awk '$1 == "content" { print $2 }') in 1) pass "summary --by domain groups the stop under its domain" ;;
+	case $(printf '%s\n' "$S_OUT" | awk '$1 == "content" { print $2 }') in 2) pass "summary --by domain groups the stop under its domain" ;;
 	*) fail "summary --by domain: '$S_OUT'" ;; esac
 else
 	skip "summary --by tier pricing (node is not on PATH, so no stop carried tokens)"
