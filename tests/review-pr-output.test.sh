@@ -554,11 +554,12 @@ exception=$(sentences_of "$SKILL_ABS" | grep -F "divergent-behavior" | grep -F "
 printf '%s\n' "$agent5" | grep -qE '^#{1,6} ' &&
 	fail "Agent 5's section grew a heading — the report's shape is §5's and does not change here" ||
 	pass "Agent 5's section adds no heading: the report's shape is unchanged"
-# The roster is unchanged: still seven lenses and the unattributed token.
+# The roster: seven lenses, the unattributed token and — since #568 — the
+# single-reviewer token (section 13).
 roster=$(region '^\*\*The sub-agent roster\.\*\*' '^#### Agent 1 ' | grep -c '^- `')
-[ "$roster" = 8 ] &&
-	pass "the roster still names seven lenses and the unattributed token" ||
-	fail "the roster names $roster tokens, not 8 — this ticket does not change the roster"
+[ "$roster" = 9 ] &&
+	pass "the roster names seven lenses, the unattributed token and the single-reviewer token" ||
+	fail "the roster names $roster tokens, not 9 — seven lenses, unattributed and single-reviewer"
 # Bait 1: the ruling withdrawn from a copy of the skill — ruling_of must be
 # what catches it, so it is known to read the prompt and not a word that
 # happens to be elsewhere in the file.
@@ -807,6 +808,79 @@ for b in \
 		carries "$(printf '%s\n' "$a7_sentences" | sed "$b")" "$R9_NONE" &&
 		fail "bait: '$b' still reads as the ruling" ||
 		pass "bait: '$b' goes red"
+done
+
+# ---------------------------------------------------------------------------
+banner "13. A single-reviewer review says so, and records both verdicts (#568)"
+# ---------------------------------------------------------------------------
+# Retro 20261006T080718Z (questions 2 and 6): 7 of 33 reviews ran ONE reviewer
+# that audited every lens itself, yet filed its raises under lens tokens no
+# lens agent produced — /retro's count per lens read the reviewer's own
+# sorting as a lens's signal — and two reviews recorded no review.verdict at
+# all. The ruling: the seven sub-agents are the protocol, and one context
+# auditing the lenses itself — the single-reviewer pass — is allowed only
+# when no lens agent can run, and only when recorded: its own roster token on
+# every raise a lens agent did not produce, the same token on both verdict
+# lines, and both verdicts on every review, before the run's end.
+# single_rules_missing <skill file> — the rules the file has lost, one name
+# per line. Each rule is held where it is read: the roster row in the roster,
+# the protocol in §3, the raise in §6's record step, the relay in its own
+# section, the verdicts beside §5b's emit and the end in §7.
+single_rules_missing() {
+	_sr_rows=$(t_roster_rows "$1")
+	printf '%s\n' "$_sr_rows" | grep -qF -- '- `single-reviewer` — ' || printf '%s\n' 'roster row'
+	printf '%s\n' "$_sr_rows" | grep -F -- '- `single-reviewer` — ' | grep -qF 'never a spawn' || printf '%s\n' 'row: never a spawn'
+	_sr_s3=$(region '^### 3\. ' '^#### Agent 1 ' "$1" | tr '\n' ' ' | tr -s ' ')
+	for _sr_r in \
+		'protocol|**The seven sub-agents are the protocol; one context auditing every lens itself is the single-reviewer pass, allowed only when no lens agent can run and only when recorded.**' \
+		'never to save spawns|never a choice made to save spawns: a context that can spawn the seven spawns them' \
+		'summary names the lenses|Its summary'"'"'s `Lenses not run:` line names every lens it audited, each marked "run in this context instead"' \
+		'raises under the token|Every finding it raises carries `data.agent=single-reviewer`, never the token of a lens no lens agent ran' \
+		'verdicts carry the token|both of its verdict lines (§5, §5b) carry `data.agent=single-reviewer`' \
+		'one lens audited here|that lens'"'"'s findings are `single-reviewer`'"'"'s'; do
+		case "$_sr_s3" in *"${_sr_r#*|}"*) ;; *) printf '%s\n' "${_sr_r%%|*}" ;; esac
+	done
+	_sr_rec=$(region '^#### Approval Process' '^#### Relaying a review' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_sr_rec" in *'On a single-reviewer pass (§3) the token is `single-reviewer` for every finding no lens agent produced'*) ;; *) printf '%s\n' 'raise step: the token' ;; esac
+	_sr_rel=$(region '^#### Relaying a review' '^### 7\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_sr_rel" in *'`single-reviewer` for every finding of a report that says one reviewer audited the lenses itself, whatever lens it names'*) ;; *) printf '%s\n' 'relay: the token' ;; esac
+	_sr_5b=$(region '^### 5b\. ' '^### 6\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_sr_5b" in *'**Both verdicts are recorded on every review — seven agents, a single-reviewer pass, a relay — before the run'"'"'s `end` (§7).**'*) ;; *) printf '%s\n' 'both verdicts always' ;; esac
+	case "$_sr_5b" in *'A verdict is never skipped because the report had no findings: `pass` is a verdict.'*) ;; *) printf '%s\n' 'pass is a verdict' ;; esac
+	_sr_cl=$(region '^### 7\. ' '^ZZZ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_sr_cl" in *'the run closes after the raises and both verdicts, never before them'*) ;; *) printf '%s\n' 'end after both verdicts' ;; esac
+}
+miss=$(single_rules_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "/review-pr allows a single-reviewer pass only when no lens agent can run, files its raises and verdicts under its own token, and records both verdicts on every review before the end" ||
+	fail "/review-pr's single-reviewer rules are missing: $miss — a one-reviewer review files raises under lenses nobody ran (retro 20261006T080718Z)"
+# The token is a token on the roster — the holder in tests/trace-skills.test.sh
+# reads every data.agent against it — and it is not a lens: it has no Agent
+# number, so the lens count other skills read (/to-tickets' session cap)
+# stays the seven agents.
+t_roster_rows "$SKILL_ABS" | grep -F -- '- `single-reviewer` — ' | grep -q 'Agent [0-9]' &&
+	fail "the single-reviewer row names an agent number — it is not a lens, and the lens count would grow" ||
+	pass "the single-reviewer row names no agent number: it is not a lens"
+# Baits: each rule deleted from a copy is named.
+bait568() { # <rule name> <sed script>
+	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait568.md"
+	! cmp -s "$SCRATCH/bait568.md" "$SKILL_ABS" && single_rules_missing "$SCRATCH/bait568.md" | grep -qxF -- "$1"
+}
+for b in \
+	'roster row|/^- `single-reviewer` — /d' \
+	'row: never a spawn|/^- `single-reviewer` — /s/never a spawn/a spawn/' \
+	'protocol|s/allowed only when no lens agent can run and only when recorded/allowed whenever it is quicker/' \
+	'never to save spawns|s/never a choice made to save spawns/also a way to save spawns/' \
+	'summary names the lenses|s/line names every lens it audited/line may name a lens/' \
+	'raises under the token|s/never the token of a lens no lens agent ran/or the token of the lens it fits/' \
+	'verdicts carry the token|s/both of its verdict lines (§5, §5b) carry/its verdict lines may carry/' \
+	"one lens audited here|s/that lens's findings are \`single-reviewer\`'s/that lens keeps its token/" \
+	'raise step: the token|s/the token is `single-reviewer` for every finding no lens agent produced/the token is the lens it fits/' \
+	'relay: the token|s/whatever lens it names/unless it names a lens/' \
+	'both verdicts always|s/Both verdicts are recorded on every review/A verdict is recorded on most reviews/' \
+	'pass is a verdict|s/`pass` is a verdict\./no findings need no verdict./' \
+	'end after both verdicts|s/closes after the raises and both verdicts/closes after the raises/'; do
+	bait568 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
 
 t_done "/review-pr output contract"
