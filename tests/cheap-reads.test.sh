@@ -1,6 +1,7 @@
 #!/bin/sh
-# tests/cheap-reads.test.sh — every spawned worker is pointed at the
-# cheap-reads reference before it reads (#594, PRD #580 R23).
+# tests/cheap-reads.test.sh — every spawning skill and every dispatched worker
+# contract points its worker at the cheap-reads reference before it reads
+# (#594, PRD #580 R23).
 #
 # Code reads and whole diffs were about 76% of spawn tool output in PRD
 # #580's baseline. The reference names the reads that return the smallest
@@ -8,9 +9,12 @@
 # held here is the pointing, not only the file.
 #
 # What is asserted: the reference exists and names the four reads; every
-# spawn site in a shipped skill — a line carrying a `Trace-Spawn:` stamp,
-# which #615 put on every one — names the reference on that same line; and
-# each dispatched worker contract under .agents/prompts/ names it too.
+# skill that resolves a tier to spawn (`agents.lib.sh` anywhere in its files)
+# names the reference; every stamped spawn site (a `Trace-Spawn:` line) names
+# it on that same line — "always" for a worker that holds the tree and a
+# shell, "never" for a judge reader, whose reach is its scratch files alone;
+# and each dispatched worker contract under .agents/prompts/ names it too.
+# The kit-only skill dispatcher's own composed prompts are not held here.
 #
 # Usage: sh tests/cheap-reads.test.sh
 
@@ -23,18 +27,33 @@ t_init
 cd "$ROOT" || exit 2
 
 REF=.agents/prompts/cheap-reads.md
+ALWAYS="names \`$REF\` always"
+NEVER="never names \`$REF\`"
 
 banner "the reference exists and names the four reads"
 assert_file "$REF"
 for want in 'git diff --stat' 'git log -S' 'grep -w' 'line range'; do
-	if [ -f "$REF" ] && grep -qF -- "$want" "$REF"; then
-		pass "$REF names '$want'"
-	else
-		fail "$REF does not name '$want'"
-	fi
+	assert_file_has "$REF" "$want"
 done
 
-banner "every skill spawn site names the reference"
+banner "every spawning skill names the reference"
+skills=0
+for d in .agents/skills/*/; do
+	grep -qs 'agents\.lib\.sh' "$d"*.md || continue
+	skills=$((skills + 1))
+	if grep -qsF "$REF" "$d"*.md; then
+		pass "$d names $REF"
+	else
+		fail "$d resolves a tier to spawn but never names $REF"
+	fi
+done
+# Eight spawning skills today: fewer means the resolve moved and this block
+# went vacuous, not that it passed.
+[ "$skills" -ge 8 ] &&
+	pass "$skills spawning skills checked" ||
+	fail "only $skills spawning skills found — the tier resolve moved, re-aim this suite"
+
+banner "every stamped spawn site names the reference, judge readers as never"
 sites=0
 for f in .agents/skills/*/*.md; do
 	# grep -n output: <line>:<text>; a spawn site is a line carrying the stamp.
@@ -43,13 +62,16 @@ for f in .agents/skills/*/*.md; do
 		sites=$((sites + 1))
 		n=${line%%:*}
 		case $line in
-		*"$REF"*) pass "$f:$n names $REF" ;;
-		*) fail "$f:$n spawns a worker without naming $REF" ;;
+		*'domain=judge'*) want=$NEVER ;;
+		*) want=$ALWAYS ;;
+		esac
+		case $line in
+		*"$want"*) pass "$f:$n says '$want'" ;;
+		*) fail "$f:$n spawns a worker without saying '$want'" ;;
 		esac
 	done <"$SCRATCH/sites"
 done
-# Six spawn sites today (implement 2, pr-iterate 2, to-tickets 1, review-pr 1):
-# fewer means the stamp moved and this suite went vacuous, not that it passed.
+# Six stamped sites today (implement 2, pr-iterate 2, to-tickets 1, review-pr 1).
 [ "$sites" -ge 6 ] &&
 	pass "$sites spawn sites checked" ||
 	fail "only $sites spawn sites found — the Trace-Spawn stamp moved, re-aim this suite"
@@ -57,9 +79,7 @@ done
 banner "every dispatched worker contract names the reference"
 for f in .agents/prompts/*-worker.md; do
 	[ -f "$f" ] || { fail "no worker contract under .agents/prompts/"; continue; }
-	grep -qF "$REF" "$f" &&
-		pass "$f names $REF" ||
-		fail "$f does not name $REF"
+	assert_file_has "$f" "$REF"
 done
 
 t_done "cheap reads"

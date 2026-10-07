@@ -42,6 +42,7 @@ shape is a worker whose answer has to be re-read by a human every time.
 ## The one reference that is not a task kind
 
 `cheap-reads.md` is no worker contract: it carries no markers and is never
-dispatched. It names the reads that return the smallest exact answer, and every
-spawn site in the skills and both worker contracts point a worker at it by this
-stable path — `tests/cheap-reads.test.sh` holds them to that.
+dispatched. It names the reads that return the smallest exact answer. Every
+spawning skill and both worker contracts point a worker at it by this stable
+path; a judge reader, whose reach is the files it judges, is told it is not for
+it — `tests/cheap-reads.test.sh` holds them to that.
