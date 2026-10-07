@@ -61,6 +61,12 @@ Two things worth being explicit about:
   captures the model id and nothing else, and the operator still sees the
   warning. If you ever wrap this in something that merges the streams, you will
   start spawning agents on a model called `! agents: capability tier ...`.
+- **Record the spawn with the resolver's id, never the word the spawn tool
+  took.** Where your policy pins full ids and the spawn parameter takes only a
+  family word, the word is what you hand the tool and `$model` is still what
+  the `kind=spawn` trace line carries: `scripts/trace.sh` refuses a spawn
+  `model` that is not an id `sh scripts/agents.lib.sh --ids` lists, so one
+  model is one row when spend is read by model.
 
 ## One agent type per tier
 

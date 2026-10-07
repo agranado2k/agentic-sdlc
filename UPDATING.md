@@ -219,6 +219,50 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.62.0 or older, a spawn's model is held at emit to an id your agents policy maps.**
+One file joins at 0.63.0, `scripts/docs-conformance/validators/skill-ceiling.mjs`
+(#585, below); none leaves. `scripts/agents.lib.sh` gains
+`--ids`, which prints every model id your `scripts/agents.config.sh` maps,
+in the form `--model` prints; `scripts/trace.sh emit kind=spawn` now
+refuses, exit 2 and nothing written, a `model` that is not one of them — the
+word your agent harness's spawn parameter took in place of a pinned id
+(`model=$model` must carry the resolver's answer, not the word), an id with
+its harness prefix left on, or any model at all when your policy maps none,
+since an unmapped resolver prints nothing and the spawn then carries no
+model. A spawn with no model still writes, and other kinds' `model` is not
+held. `verify` names a spawn already written off the list on stderr, as
+history, judged against the policy as it is now; its verdict does not
+change, and `summary` and `export` say the count once. After step 5, check
+any spawn line you own — a skill you adapted, a wrapper that sets
+`AGENTS_CONFIG` for your own policy file — passes the resolver's id, and
+that `scripts/trace.sh` can reach the policy your resolver reads. Part 2 has
+three takes: `.agents/skills/implement/SKILL.md` and
+`.agents/skills/review-pr/SKILL.md` say which form their spawn lines carry,
+and `adapters/claude-code/README.md` says it for the Claude Code spawn
+parameter; take them as any changed skill and adapter. Two more
+changes ride along from main since 0.62.0: both skills also end a spawn its
+vendor refused as `spawn.end` `unreachable`, not `fail`, and re-resolve past
+the model the session spawned on (#609); and the Claude Code adapter's
+`hooks/transcript-usage.mjs` and `hooks/hook.lib.sh` mark a usage event
+whose `tok_out` is a streamed snapshot with `data.out_snapshot`, which
+`.agents/skills/retro/QUESTIONS.md` reads as a lower bound (#612); and
+`hooks/subagent-stop.sh` reads a spawn prompt's `Trace-Spawn:` second line
+through `hook.lib.sh` to attribute the `agent.stop` it files, while
+`scripts/trace.sh summary` gains `--by tier` and `--by domain` (#583) —
+take the adapter files as 9e says. And a skill that outgrows its byte
+ceiling now fails the docs gate (#585): the joining validator, its twin in
+`scripts/check.sh`, and `context.mjs`'s `size(rel)` arrive in step 5, but
+the ceilings are policy — merge the `skillCeilings` block into your
+`scripts/docs-conformance/config.mjs` in 9d, one literal `"<path>": <bytes>,`
+per line, or declare none and the rule checks nothing. Two more ride
+along (#584, #586): `scripts/check.sh` fails a Claude Code agent type that
+carries a model, for the four new `adapters/claude-code/agents/*.md` types
+(one per tier, tools and no model — take them with the adapter, 9e), and
+`scripts/trace.sh` declares `passed`, `escalated` and `failed` for a
+cascade rung's `spawn`; your `scripts/agents.config.sh` gains
+`AGENT_CASCADE_MECHANICAL`, empty — add it in 9d — and `--ids` lists the
+model it maps.
+
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
 shared files change comments, and two stderr lines their wording, so that
@@ -1010,7 +1054,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.62.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.63.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1023,9 +1067,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.62.0
+v0.63.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.62.0
+v0.1.0 -> v0.63.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1045,6 +1089,7 @@ scripts/docs-conformance/validators/housekeeping-due.mjs
 scripts/docs-conformance/validators/living-spec.mjs
 scripts/docs-conformance/validators/mutation-decision.mjs
 scripts/docs-conformance/validators/skill-bridge.mjs
+scripts/docs-conformance/validators/skill-ceiling.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
@@ -1059,10 +1104,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2502 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2552 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2656 insertions(+), 1 deletion(-)
+ 3 files changed, 2706 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1115,6 +1160,7 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/living-spec.mjs
   updated scripts/docs-conformance/validators/mutation-decision.mjs
   updated scripts/docs-conformance/validators/skill-bridge.mjs
+  updated scripts/docs-conformance/validators/skill-ceiling.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
@@ -1125,7 +1171,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.62.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.63.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1146,6 +1192,7 @@ verbatim  scripts/docs-conformance/validators/housekeeping-due.mjs
 verbatim  scripts/docs-conformance/validators/living-spec.mjs
 verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
 verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
+verbatim  scripts/docs-conformance/validators/skill-ceiling.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
@@ -1172,10 +1219,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.63.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.62.0
-Part 1 complete — shared layer at v0.62.0. The update is not done: go to step 8.
+0.63.0
+Part 1 complete — shared layer at v0.63.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1920,7 +1967,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.62.0 case for this file, and `ADD` is the 0.3.0 → 0.62.0
+`MERGE` is the 0.4.0 → 0.63.0 case for this file, and `ADD` is the 0.3.0 → 0.63.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2234,14 +2281,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.62.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.63.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.62.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.63.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2281,6 +2328,8 @@ $ cat "$WORK/changed.yours"
 .agents/skills/improve-codebase-architecture/PRESENTING.md
 .agents/skills/improve-codebase-architecture/SKILL.md
 .agents/skills/merge-train/SKILL.md
+.agents/skills/pr-iterate/DISMISSALS.md
+.agents/skills/pr-iterate/RELEASE-BOUND.md
 .agents/skills/pr-iterate/SKILL.md
 .agents/skills/prototype/SKILL.md
 .agents/skills/retro/QUESTIONS.md
@@ -2293,6 +2342,7 @@ $ cat "$WORK/changed.yours"
 .agents/skills/tdd/refactoring.md
 .agents/skills/tdd/tests.md
 .agents/skills/to-prd/SKILL.md
+.agents/skills/to-tickets/RETRO-CANDIDATES.md
 .agents/skills/to-tickets/SKILL.md
 .agents/skills/worktree-cleanup/SKILL.md
 .claude/skills/LICENSE-mattpocock-skills.md
@@ -2418,7 +2468,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.62.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.63.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2444,7 +2494,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.63.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.

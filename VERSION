@@ -2320,7 +2320,90 @@
 # 8), tests/trace-hooks.test.sh and tests/retro-skill.test.sh, and a
 # redacted transcript fixture under tests/fixtures/claude-code/.
 
-shared-layer: 0.62.0
+# 0.63.0 — a spawn's model is recorded in one form, an id the agents policy
+# maps (ticket #569, ADR-0008 clause 1 as amended 2026-10-07) — and the
+# release for everything that landed on main after v0.62.0 with no bump:
+# PRD #580's wave (#581, #600, #603, #607, #610), #609, #612 and #615.
+# Renumbered past the 0.62.0 that landed first (#564). From the
+# retrospective of 2026-10-06, question 5: two models recorded five ways —
+# each as its spawn word and as its pinned id, one also half-spelled —
+# split spend per model.
+# ONE file joins: scripts/docs-conformance/validators/skill-ceiling.mjs
+# (#603, ticket #585) — a SKILL.md over the byte ceiling config.mjs's
+# skillCeilings block declares for it fails the docs gate, naming the file,
+# its size and the ceiling. None leaves. Every shared file that changes
+# content since v0.62.0, one line each:
+#   scripts/agents.lib.sh — gains `--ids`, every model id the policy maps
+#     (each AGENT_TIER_* and AGENT_CASCADE_* value, a list word by word, a
+#     declared harness prefix off: --model's form), and agents_values, the
+#     one enumeration of the policy's values (#569).
+#   scripts/trace.sh — `emit kind=spawn` holds a present model to that list:
+#     a spawn word, a half-spelled id or a prefix left on is exit 2 naming
+#     the value and the ids, nothing written; a policy that maps nothing, or
+#     a resolver that fails, refuses every model; no resolver beside the
+#     script turns the rule off; verify advises on a spawn already written
+#     off the list and summary and export say the count once (#569). Also:
+#     summary gains `--by tier` and `--by domain`, for the agent.stop the
+#     Trace-Spawn line attributes (#600, ticket #583); spawn's outcomes gain
+#     passed, escalated and failed, a cascade rung's (#610, ticket #586).
+#   scripts/check.sh — the skill-ceiling rule's POSIX twin and the NOTICE
+#     line naming it (#603); the agent-type-model check, failing a Claude
+#     Code agent type that carries a model line or id (#607, ticket #584).
+#   scripts/docs-conformance/context.mjs — the context gains size(rel), the
+#     byte count the skill-ceiling validator reads (#603).
+#   scripts/docs-conformance/runner.mjs — registers the skill-ceiling
+#     validator (#603).
+#   UPDATING.md — the arriving-from paragraph, and both worked examples
+#     re-pin (this release).
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/implement/SKILL.md and .agents/skills/review-pr/SKILL.md:
+# their kind=spawn lines say `$model` is the resolver's id as printed, never
+# the spawn word, and that the trace refuses a model the policy does not map
+# (#569); both also end a spawn its vendor refused as spawn.end unreachable,
+# not fail, and re-resolve past the model the session spawned on (#609).
+# /implement, /review-pr, /pr-iterate and /to-tickets write a spawn
+# prompt's Trace-Spawn second line under Trace-Run (#615). Take them like
+# any skill. .agents/skills/retro/QUESTIONS.md reads data.out_snapshot as a
+# lower bound on tok_out (#612); /retro's SKILL.md and QUESTIONS.md
+# question 5 report spend per tier, skill and cascade rung (#617).
+# /pr-iterate's SKILL.md moves two rare step-3 branches beside it, into the
+# new .agents/skills/pr-iterate/DISMISSALS.md and RELEASE-BOUND.md, opened
+# on a mechanical trigger (#616) — take the directory whole. Chain spawns
+# in /implement, /review-pr and /to-tickets take their tier's agent type,
+# /review-pr's coordinator runs behavior-delta for its read-only lenses, and
+# /to-tickets moves its retro sibling check into the new
+# .agents/skills/to-tickets/RETRO-CANDIDATES.md (#618) — take the directory
+# whole; adapters/claude-code/README.md carries the reasons.
+# The Claude Code adapter (take it as 9e says): adapters/claude-code/README.md
+# gains the spawn-model bullet (#569), the snapshot paragraph (#612), the
+# Trace-Spawn read (#600) and the agent-type section (#607);
+# hooks/transcript-usage.mjs and hooks/hook.lib.sh mark a usage event whose
+# tok_out is a streamed snapshot with data.out_snapshot (#612);
+# hooks/subagent-stop.sh reads the Trace-Spawn line through hook.lib.sh's
+# hook_spawn_handed and attributes the agent.stop it files (#600);
+# adapters/claude-code/agents/planner.md, implementer.md, mechanical.md and
+# reviewer.md are new, one agent type per tier carrying tools and no model,
+# and adapters/README.md names them (#607).
+# Policy files (yours, 9d): scripts/agents.config.sh gains
+# AGENT_CASCADE_MECHANICAL, empty — a cheaper model a cascade-running
+# dispatcher tries first on a mechanical ticket with an oracle (#610);
+# scripts/docs-conformance/config.mjs gains the skillCeilings block, one
+# literal `"<path>": <bytes>,` per line, seeded at the kit's four largest
+# skills (#603), the pr-iterate and to-tickets ceilings lowered after
+# their splits (#616, #618). scripts/docs-conformance/README.md (yours) describes the
+# rule, and scripts/docs-conformance/test/skill-ceiling.test.mjs and
+# context.test.mjs (yours, shipped) hold it (#603).
+# Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
+# kit's agents policy (`agents.kit.sh --policy`) and names a failed lookup;
+# scripts/agents.kit.sh's unreachable bridge reads agents_values;
+# scripts/skill-dispatch.kit.sh's cascade (#610) and its Trace-Run and
+# Trace-Spawn lines (#615); tests/trace.test.sh §31 and
+# tests/agents-tiers.test.sh's --ids section, driven red first;
+# tests/trace-skills.test.sh's agents fixture that maps the `x` its span
+# filler hands `$model`; the ADR-0008 amendment, its ledger entry and index
+# note; the glossary's Event entry.
+
+shared-layer: 0.63.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

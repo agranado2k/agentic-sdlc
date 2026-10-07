@@ -120,15 +120,14 @@ _kit_fold() {
 # is no id a word can cover — and whether it crosses is the resolver's
 # answer, not this wrapper's: the subshell sources scripts/agents.lib.sh and
 # asks its agents_split_harness, the one membership test (#559), rather than
-# keeping a second copy here that could drift from it.
+# keeping a second copy here that could drift from it. The values it walks
+# are the resolver's agents_values, the one enumeration --ids reads too.
 if [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] && [ -f "$AGENTS_CONFIG" ]; then
 	_kit_pinned=$(
 		. scripts/agents.lib.sh
-		set -a
-		. "$AGENTS_CONFIG" >/dev/null 2>&1
-		set +a
+		agents_load_config >/dev/null 2>&1
 		AGENTS_TIER_QUIET=1
-		for _kit_v in $(env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p'); do
+		agents_values 2>/dev/null | while IFS= read -r _kit_v; do
 			agents_split_harness "$_kit_v"
 			[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
 		done

@@ -470,6 +470,12 @@ banner "7. Every documented line runs: placeholders filled, the span executes an
 # (tests/lib.sh) — one definition, shared with the other skill suites.
 BLOBF="$SCRATCH/blob.x"
 printf 'evidence\n' >"$BLOBF"
+# A spawn's model is held to the ids the agents policy maps (#569), and
+# t_trace_runnable fills `$model` with x — so the suite's agents policy maps
+# x, as a project's maps the id its resolver hands `$model`.
+AGENTS_CONFIG="$SCRATCH/agents.x.sh"
+export AGENTS_CONFIG
+printf "AGENT_TIER_REVIEWER='x'\n" >"$AGENTS_CONFIG"
 for s in $CHAIN; do
 	f=$(skill_md "$s")
 	dir="$SCRATCH/run.$s"

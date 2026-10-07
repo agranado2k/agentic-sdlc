@@ -446,6 +446,64 @@ EOF
 # ASCII whatever locale the caller runs in.
 trace_matches() { printf '%s\n' "$1" | LC_ALL=C grep -Eq -- "^($2)\$"; }
 
+# trace_model_ids — the model ids a spawn's `model` may be (#569, the kit's ADR-0008
+# clause 1 as amended 2026-10-07): the ones the shipped resolver beside this
+# script prints for `--ids`, every id its agents policy maps, in the form
+# `--model` prints. The trace reads no agents policy of its own — in the kit
+# the right one is kit-only, and the resolver already knows where the policy
+# is ($AGENTS_CONFIG, then the project's scripts/agents.config.sh). Sets
+# TRACE_MODEL_IDS, space-separated; returns 0 when the rule is on, 1 when no
+# resolver sits beside this script (no ids to hold a model to: the rule is
+# off), 2 when the resolver failed (TRACE_MODEL_WHY says how).
+trace_model_ids() {
+	TRACE_MODEL_IDS=
+	if [ ! -f "$_trace_here/agents.lib.sh" ]; then
+		_tm_rc=1
+		return 1
+	fi
+	if _tm_out=$(AGENTS_TIER_QUIET=1 sh "$_trace_here/agents.lib.sh" --ids 2>/dev/null); then
+		TRACE_MODEL_IDS=$(printf '%s' "$_tm_out" | tr '\n' ' ')
+		_tm_rc=0
+	else
+		# Asked again for its stderr alone: the failure is rare, and a second
+		# call beats a temporary file on every emit.
+		_tm_out=$(AGENTS_TIER_QUIET=1 sh "$_trace_here/agents.lib.sh" --ids 2>&1 >/dev/null | tr '\n' ' ')
+		TRACE_MODEL_WHY="the resolver could not list the agents policy's model ids: $_tm_out"
+		_tm_rc=2
+	fi
+	return "$_tm_rc"
+}
+
+# trace_check_spawn_model <model> — a spawn's present model is one id the
+# agents policy maps, whole: never the in-session spawn word a harness took
+# (`opus` for `claude-opus-5-5`), never a half-spelled id. The retrospective
+# of 2026-10-06 found two models recorded five ways, and spend per model
+# split one model into several rows. No vendor knowledge: membership in the
+# resolver's own list. A policy that maps nothing refuses every model — the
+# resolver printed nothing, so the spawn inherited, and an inherited spawn
+# carries no model. Returns 1 with TRACE_MODEL_WHY set.
+trace_check_spawn_model() {
+	_cm_rc=0
+	trace_model_ids || _cm_rc=$?
+	case $_cm_rc in
+	1) return 0 ;;
+	2)
+		TRACE_MODEL_WHY="spawn: model '$1' cannot be judged — $TRACE_MODEL_WHY"
+		return 1
+		;;
+	esac
+	if [ -z "$TRACE_MODEL_IDS" ]; then
+		TRACE_MODEL_WHY="spawn: model '$1' — the agents policy maps no model, so the resolver printed nothing and the spawn inherited its session's model; an inherited spawn carries no model"
+		return 1
+	fi
+	case $1 in
+	*' '*) ;;
+	*) case " $TRACE_MODEL_IDS " in *" $1 "*) return 0 ;; esac ;;
+	esac
+	TRACE_MODEL_WHY="spawn: model '$1' is not a model id the agents policy maps (${TRACE_MODEL_IDS% }) — record the resolver's answer, sh scripts/agents.lib.sh <tier> [domain], never the spawn word"
+	return 1
+}
+
 # trace_check_token <value> — a field or data key: [a-z][a-z0-9_]*. Checked
 # BEFORE any membership test or eval, so a key with a space in it is refused
 # as a key and never reaches the list or the assignment.
@@ -831,6 +889,7 @@ trace_emit() {
 	_em_dlines=
 	_em_blob_src=
 	_em_outcome=
+	_em_model=
 	_em_on=0
 	TRACE_BLOB=
 	TRACE_BLOB_BYTES=
@@ -889,6 +948,7 @@ trace_emit() {
 					_em_esc=$(trace_json_str "$_em_val") || die "$_em_key carries a control character; a multi-line value is a blob, not a field, and --blob is a later slice."
 					eval "_em_v_$_em_key=\$_em_esc"
 					[ "$_em_key" = outcome ] && _em_outcome=$_em_val
+					[ "$_em_key" = model ] && _em_model=$_em_val
 					;;
 				*)
 					case " $TRACE_TOKEN_FIELDS " in
@@ -912,6 +972,9 @@ trace_emit() {
 	# command line. An empty value is no outcome: the line omits it.
 	[ -z "$_em_outcome" ] || trace_check_outcome "$_em_kind" "$_em_outcome" || die "$TRACE_OUTCOME_WHY"
 	trace_check_shapes "$_em_kind" "$_em_outcome" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+	if [ "$_em_kind" = spawn ] && [ -n "$_em_model" ]; then
+		trace_check_spawn_model "$_em_model" || die "$TRACE_MODEL_WHY"
+	fi
 
 	# The directory first: identity's fallbacks and the blob store both live in
 	# it, and whether it resolves at all is what makes this emit a no-op.
@@ -1309,6 +1372,49 @@ function raise_scan(line,   d, m, v) {
 }
 '
 
+# TRACE_AWK_MODEL — verify's half of the spawn-model rule (#569): a spawn
+# written before its model was held, with a model the agents policy does not
+# map, is history and an advisory. model_ids is TRACE_MODEL_IDS, space-padded,
+# handed over by trace_model_ids, so the emit and the advisory cannot read
+# different lists; model_on is 0 when no resolver could answer. model_scan
+# reads the kind and the model from the ENVELOPE only — a data key called
+# model is never the spawn's — and calls the caller's model_bad(value). A
+# spawn with no model is never one. Single-quoted: no apostrophe in it.
+TRACE_AWK_MODEL='
+function model_scan(line,   env, d, m) {
+	if (!model_on) return
+	env = line
+	d = index(env, ",\"data\":{")
+	if (d) env = substr(env, 1, d - 1)
+	if (!index(env, ",\"kind\":\"spawn\"")) return
+	if (!match(env, /,"model":"[^"]*"/)) return
+	m = substr(env, RSTART + 10, RLENGTH - 11)
+	if (m == "") return
+	if (index(m, " ") || !index(model_ids, " " m " ")) model_bad(m)
+}
+'
+
+# trace_model_scan_args <say|quiet> — sets _ms_on and _ms_ids for
+# TRACE_AWK_MODEL: the rule on only when the resolver answered. A resolver
+# that failed judges nothing, and `say` prints that once on stderr — the emit
+# refuses in that state, so a read that skipped it in silence would hide it
+# (review of PR #611, L-1). verify says it when it lists; summary and export
+# say it through trace_spelling_note, so each command says it once.
+trace_model_scan_args() {
+	_ms_on=0
+	_ms_ids=
+	_ms_rc=0
+	trace_model_ids || _ms_rc=$?
+	case $_ms_rc in
+	0)
+		_ms_on=1
+		_ms_ids=" $TRACE_MODEL_IDS "
+		;;
+	2) [ "$1" = say ] && echo "!  trace: spawn models are not judged — $TRACE_MODEL_WHY" >&2 ;;
+	esac
+	return 0
+}
+
 # trace_raise_re — prints the ERE TRACE_SHAPES holds a raise's id to. A table
 # with no such row is a table error, and dies (exit 2): an advisory that
 # silently matched nothing would fail open.
@@ -1330,29 +1436,34 @@ trace_spelling_note() {
 	_sn_n=0
 	_sn_o=0
 	_sn_r=0
+	_sn_m=0
 	_sn_re=$(trace_raise_re) || exit 2
+	trace_model_scan_args say
 	_sn_files=$(trace_files "${1:-}")
 	_sn_ifs=$IFS
 	IFS=$_trace_nl
 	trace_glob_off
 	for _sn_f in $_sn_files; do
 		IFS=$_sn_ifs
-		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE"'
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_MODEL"'
 		function spelled(field, v) { if (!spelled_ok(v)) n++ }
 		function outcome_bad(k, o) { m++ }
 		function raise_bad(v) { r++ }
-		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0) }
-		END { print n + 0, m + 0, r + 0 }' "$_sn_f")
+		function model_bad(v) { s++ }
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0); model_scan($0) }
+		END { print n + 0, m + 0, r + 0, s + 0 }' "$_sn_f")
 		set -- $_sn_c
 		_sn_n=$((_sn_n + $1))
 		_sn_o=$((_sn_o + $2))
 		_sn_r=$((_sn_r + $3))
+		_sn_m=$((_sn_m + $4))
 	done
 	IFS=$_sn_ifs
 	trace_glob_on
 	[ "$_sn_n" = 0 ] || echo "!  trace: $_sn_n numbered subject(s) in the trace are spelled the old way — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_o" = 0 ] || echo "!  trace: $_sn_o outcome(s) in the trace are not a word their kind declares — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_r" = 0 ] || echo "!  trace: $_sn_r finding.raise id(s) in the trace are not $_sn_re — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	[ "$_sn_m" = 0 ] || echo "!  trace: $_sn_m spawn model(s) in the trace are not an id the agents policy maps — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	return 0
 }
 
@@ -1385,6 +1496,7 @@ trace_verify() {
 	# trace_files finds the day files with a glob of its own; only the SPLIT of
 	# that list runs with globbing off. Nothing in the loop body globs.
 	_vf_raise=$(trace_raise_re) || exit 2
+	if [ "${_trace_quiet_advice:-list}" = list ]; then trace_model_scan_args say; else trace_model_scan_args quiet; fi
 	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
 	IFS=$_trace_nl
@@ -1398,7 +1510,7 @@ trace_verify() {
 		# note goes to stderr through a pipe, which POSIX awk has where it has no
 		# /dev/stderr. `summary` and `export` switch the per-line notes off and
 		# say the count once instead (trace_spelling_note).
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE"'
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_MODEL"'
 		function spelled(field, v) {
 			if (advise != "list" || spelled_ok(v)) return
 			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
@@ -1415,6 +1527,10 @@ trace_verify() {
 			if (advise != "list") return
 			printf "!  trace: %s:%d: finding.raise data.id %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q, raise_re | "cat 1>&2"
 		}
+		function model_bad(v) {
+			if (advise != "list") return
+			printf "!  trace: %s:%d: spawn model %s%s%s is not an id the agents policy maps — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q | "cat 1>&2"
+		}
 		{
 			bad = ""
 			if (substr($0, 1, 13) != "{\"v\":1,\"ts\":\"") bad = "does not open with the schema version and a timestamp"
@@ -1426,7 +1542,7 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
-			else { spelled_scan($0); outcome_scan($0); raise_scan($0) }
+			else { spelled_scan($0); outcome_scan($0); raise_scan($0); model_scan($0) }
 		}
 		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then
