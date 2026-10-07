@@ -451,8 +451,9 @@ resolves=$(grep -c 'sh scripts/agents.lib.sh reviewer' "$RP" | tr -d ' ')
 [ "$resolves" = 1 ] && pass "/review-pr resolves the reviewer tier exactly once" ||
 	fail "/review-pr resolves the reviewer tier $resolves times — once, before the sub-agents, so every spawn records the same answer"
 r_line=$(grep -n 'sh scripts/agents.lib.sh reviewer' "$RP" | head -1 | cut -d: -f1)
-# Agent 1's heading is in its lens file since #589: read across the skill's whole text, SKILL.md first.
-a1_line=$(grep -n '^#### Agent 1' "$(skill_text review-pr)" | head -1 | cut -d: -f1)
+# Agent 1 lives in its lens file since #589; the coordinator's own lens block
+# heading is where the lenses begin in SKILL.md, so the resolve is held before it.
+a1_line=$(grep -n '^#### Agents 1–6 ' "$RP" | head -1 | cut -d: -f1)
 if [ -n "$r_line" ] && [ -n "$a1_line" ] && [ "$r_line" -lt "$a1_line" ]; then
 	pass "the resolve (line $r_line) comes before Agent 1 (line $a1_line)"
 else
