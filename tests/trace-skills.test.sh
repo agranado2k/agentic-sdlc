@@ -451,7 +451,9 @@ resolves=$(grep -c 'sh scripts/agents.lib.sh reviewer' "$RP" | tr -d ' ')
 [ "$resolves" = 1 ] && pass "/review-pr resolves the reviewer tier exactly once" ||
 	fail "/review-pr resolves the reviewer tier $resolves times — once, before the sub-agents, so every spawn records the same answer"
 r_line=$(grep -n 'sh scripts/agents.lib.sh reviewer' "$RP" | head -1 | cut -d: -f1)
-a1_line=$(grep -n '^#### Agent 1' "$RP" | head -1 | cut -d: -f1)
+# Agent 1 lives in its lens file since #589; the coordinator's own lens block
+# heading is where the lenses begin in SKILL.md, so the resolve is held before it.
+a1_line=$(grep -n '^#### Agents 1–6 ' "$RP" | head -1 | cut -d: -f1)
 if [ -n "$r_line" ] && [ -n "$a1_line" ] && [ "$r_line" -lt "$a1_line" ]; then
 	pass "the resolve (line $r_line) comes before Agent 1 (line $a1_line)"
 else
@@ -976,14 +978,15 @@ dupes=$(printf '%s\n' "$ROSTER" | sort | uniq -d | tr '\n' ' ')
 # The roster covers the agents: every `#### Agent N — Title` heading has a row
 # naming that number and that title, so a renamed or added agent cannot leave
 # the roster describing a review that no longer runs.
-no_row=$(headings_without_row "$RP" | tr '\n' ' ' | sed 's/ $//')
+RPT=$(skill_text review-pr) # the lens headings live in its lens files since #589
+no_row=$(headings_without_row "$RPT" | tr '\n' ' ' | sed 's/ $//')
 [ -z "$no_row" ] && pass "every agent heading has its roster row, by number and title" ||
 	fail "the roster has no row for: $no_row — the heading and the roster disagree"
-sed 's/^#### Agent 4 — Simplicity Advocate$/#### Agent 4 — Complexity Hunter/' "$RP" >"$SCRATCH/bait-heading.md"
+sed 's/^#### Agent 4 — Simplicity Advocate$/#### Agent 4 — Complexity Hunter/' "$RPT" >"$SCRATCH/bait-heading.md"
 [ "$(headings_without_row "$SCRATCH/bait-heading.md")" = 'Agent 4 (Complexity Hunter)' ] &&
 	pass "bait: a renamed agent heading with no roster row is named — in the parent shell, where it counts" ||
 	fail "bait: a renamed heading was not caught (got '$(headings_without_row "$SCRATCH/bait-heading.md")')"
-n_head=$(grep -cE '^#### Agent [0-9]+ — ' "$RP" | tr -d ' ')
+n_head=$(grep -cE '^#### Agent [0-9]+ — ' "$RPT" | tr -d ' ')
 [ "$n_head" = 7 ] && pass "seven agent headings, as the skill's description says" || fail "found $n_head agent headings, not 7"
 printf '%s\n' "$ROSTER" | grep -qx unattributed && pass "the roster holds 'unattributed' for a report that names no agent" ||
 	fail "the roster has no 'unattributed' token — a dispatched worker's report names no agent, and the relay then has nothing legal to write"

@@ -1145,7 +1145,8 @@ s_assert_out_lacks '"kind"' "…and nothing reaches the trace for pr:#32"
 STUB_PR=12
 export STUB_PR
 
-# The roster's titles live in /review-pr's own headings; the broker maps them
+# The roster's titles live in /review-pr's own headings — one per lens file
+# since #589, lens-<token>.md beside SKILL.md; the broker maps them
 # onto tokens. Lift each Axis-1 title from the skill, name it in one finding,
 # and the raise must carry that lens's token — so a rename on either side is
 # red here, not a silent drift to `unattributed`.
@@ -1153,7 +1154,7 @@ ROSTER="$SCRATCH/roster.md"
 {
 	printf 'REVIEWED: %s\nVERDICT: six lenses\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
 	sed -n 's/^#### Agent \([1-6]\) — \(.*\)$/**L-\1** `scripts\/a.sh:3` — \2: one finding.\
-↳ fix: none./p' "$KIT/.agents/skills/review-pr/SKILL.md"
+↳ fix: none./p' "$KIT/.agents/skills/review-pr/"lens-*.md
 	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six lenses.\n'
 } >"$ROSTER"
 # The quiet switch rides the emit command, never a prefix on the `trace`
@@ -1371,7 +1372,7 @@ banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still
 # spells it, read over prose unwrapped and spaces squeezed (a contract is
 # 80-column prose, the skill is not): the one reader for both prompts below.
 fix_line_of() { tr '\n' ' ' <"$1" | tr -s ' ' | grep -o '↳ fix:` line reads `[^`]*`' | head -n 1 | sed 's/^.*reads `//; s/`$//'; }
-CT_FIX=$(fix_line_of "$KIT/.agents/skills/review-pr/SKILL.md")
+CT_FIX=$(fix_line_of "$KIT/.agents/skills/review-pr/lens-reuse-dry.md") # Agent 5's own file since #589
 [ -n "$CT_FIX" ] && pass "the reuse/DRY prompt spells the candidate ticket's fix line: $CT_FIX" ||
 	fail "the reuse/DRY prompt no longer spells the candidate ticket's fix line (a code span after: fix: line reads) — nothing to run through the broker"
 # The dispatched worker is told the same line (#471): its contract spells it

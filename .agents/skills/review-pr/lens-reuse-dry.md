@@ -1,0 +1,17 @@
+<!-- /review-pr standards lens `reuse-dry` (Axis 1). SKILL.md beside this file is the coordinator; a lens agent is handed this file, never that one. -->
+
+#### Agent 5 — Reuse & DRY Auditor
+
+Often the highest-yield lens: **new code must reuse what already exists before it reinvents it.** Using the reuse catalog from step 1, for every new function, type, constant, query, or block of logic in the diff, ask: *does an equivalent already exist in the codebase, and should this have called it instead?*
+
+Flag, with the exact existing export/`file:line` that should have been reused:
+
+- **Reimplemented helpers** — a new local function that duplicates a shared utility or value object that is already exported. Cite the existing one.
+- **Copy-paste blocks** — the same logic (validation, mapping, error shaping, authorization checks, pagination handling) pasted across two or more changed files, or pasted from an existing file the diff clearly mirrors. Recommend extracting once and calling it from both sites.
+- **Parallel constant/enum definitions** — a value, label map, or option list redefined locally when a canonical source already exists (e.g. deriving UI options from a domain enum rather than hand-listing them). Cite the canonical source.
+- **Duplicated wire/DTO shapes or mappers** — a storage↔domain or domain↔wire mapping rewritten instead of routed through the existing mapper.
+- **Divergent-behavior duplication** (highest severity) — two copies that are *supposed* to behave identically but have already drifted (one validates, the other doesn't; one degrades a legacy record, the other throws). This is a latent bug, not just a style issue — bump it up a severity band.
+
+Distinguish **genuine duplication worth removing** from **incidental similarity** (two short blocks that look alike but are coupled to different concerns and would be wrongly fused by a shared abstraction). Do NOT recommend a premature shared abstraction for a single occurrence — that contradicts Agent 4. The bar is: an existing reusable thing is right there, OR the same non-trivial logic appears in ≥2 places in this diff. When in doubt about whether extraction is worth it, state the trade-off rather than asserting.
+
+**Then ask which case the duplication is, because the two leave the report differently.** A duplication **the diff ADDS** — a new copy of something that already exists, or the same logic pasted twice within this diff — is the author's, and a finding at the severity the buckets give it. A duplication the diff merely **touches or extends** — copies that pre-date the branch, which the diff edits in place, mirrors into one more call site, or leaves beside a helper it added — is not the author's to consolidate: moving those copies into a shared file is a behaviour-preserving refactor, and shared invariant §10 lands one on its own ticket, never as a passenger on a feature diff. Report that case as a **candidate ticket** — a LOW whose what/where line opens `candidate ticket:`, whose `↳ cites:` line names shared invariant §10, and whose `↳ fix:` line reads `none on this PR — candidate ticket (shared invariant §10)`, so the PR is asked for nothing. The report's shape does not change: a candidate ticket is a LOW with the §5 anatomy, not a new section, badge or status, so `/pr-iterate` reads it as a LOW it may defer and the trace counts it as this lens's raise — and the one exception is the divergent-behavior copy above, which is a latent bug whichever branch introduced it and stays a finding.
