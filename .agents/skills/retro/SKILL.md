@@ -69,9 +69,10 @@ The full form — what to read, what counts as a finding, where it goes — is i
 4. **Diagnosis calibration** — the rank a hypothesis held against the one
    confirmed. How often the first was right says whether the ordering step
    is worth its cost.
-5. **Spend** — cost per ticket, per skill and per model; sessions whose usage
-   dwarfs their outcome; models the price table cannot price; the tokens a
-   compaction spent, and the phantom stops each session counted.
+5. **Spend** — cost per ticket, tier, skill, model and cascade rung, the
+   unattributed its own row and spawns bucketed by order of magnitude;
+   sessions whose usage dwarfs their outcome; unpriced models; compaction
+   tokens and phantom stops.
 6. **Chain health** — tickets with no PR, PRs with no landing, spawns that
    failed, timed out, hit budget or could not reach their vendor, runs never
    closed, tool calls denied (per session and tool), sub-agent stops read

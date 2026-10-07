@@ -53,6 +53,10 @@
 #      says the project accepts train-only verdicts (#572, section 15): the
 #      spans that count each question's operator verdicts RUN over two
 #      fixture windows, and the kit's own record is found by the span.
+#  11. Question 5 answers spend per tier, skill and cascade rung (#595,
+#      spend/R22, section 16): its spend span RUNS over a fixture trace of
+#      attributed, unattributed and cascade spawns, and prints the rows,
+#      the order-of-magnitude buckets and the unattributed row.
 #
 # NOT HELD here, on purpose: question 8's "what counts as a finding"
 # criteria and the rubric version its tier oracle names. Both are on the
@@ -1503,5 +1507,70 @@ if [ -n "$rspan" ]; then
 else
 	fail "question 7 carries no \`for f in docs/adr/…\` span that finds an accepted record"
 fi
+
+
+# ---------------------------------------------------------------------------
+banner "16. Question 5 answers spend per tier, skill and cascade rung (spend/R22, #595)"
+# ---------------------------------------------------------------------------
+# PRD #580 attributes every stop (#583: tier, domain, skill, ticket) and
+# records each cascade rung as a spawn (#586). Question 5 reads both: its
+# spend span RUNS here over a fixture trace holding attributed stops, a
+# stop recorded `unattributed`, a stop from before the attribution existed (no
+# tier at all), an unpriced model and a two-rung cascade, and the rows it
+# prints are the answer — the tier, skill and rung rows, the order-of-magnitude
+# buckets and the unattributed row. Its first-call span reads the stops'
+# transcripts and prints the median prompt the first call sent.
+sspan=$(sec_of 5 | grep -o '`sh scripts/trace\.sh export --csv[^`]*`' | tr -d '`' | head -1)
+fspan=$(sec_of 5 | grep -o '`sh scripts/trace\.sh export --since[^`]*transcript[^`]*`' | tr -d '`' | head -1)
+[ -n "$sspan" ] && pass "question 5 carries a spend span over the priced export" || fail "question 5 carries no \`sh scripts/trace.sh export --csv …\` span answering spend per tier, skill and rung (spend/R22)"
+[ -n "$fspan" ] && pass "question 5 carries a first-call span reading the stops' transcripts" || fail "question 5 carries no \`sh scripts/trace.sh export --since … transcript …\` span for the median first-call prompt"
+sp="$SCRATCH/spend.retro"
+mkdir -p "$sp/tx"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,3.75,0.30'\n" "$sp/t" >"$sp/policy.sh"
+sp_trace() { ( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+tx() { printf '{"type":"user","message":{"content":"x"}}\n{"type":"assistant","message":{"usage":{"input_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s,"output_tokens":9}}}\n{"type":"assistant","message":{"usage":{"input_tokens":1,"cache_creation_input_tokens":1,"cache_read_input_tokens":99999,"output_tokens":9}}}\n' "$2" "$3" "$4" >"$sp/tx/$1.jsonl"; }
+tx a1 3 30000 10000
+tx a2 2 18000 2000
+tx a3 1 59999 0
+sp_trace emit kind=agent.stop subject=agent:a1 related='ticket:#1' tier=implementer skill=implement model=m1 tok_in=1000000 data.transcript="$sp/tx/a1.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a2 tier=reviewer domain=self-implemented skill=review-pr model=m1 tok_in=100000 data.transcript="$sp/tx/a2.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a3 tier=unattributed model=m1 tok_in=10000 data.transcript="$sp/tx/a3.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a4 model=m1 tok_in=5000000 data.transcript="$sp/tx/gone.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a5 tier=planner skill=to-tickets model=nope tok_in=10
+# The cascade: the verdict spawns carry the tier and skill, the rungs' own
+# spawn.end events carry the tokens and only the rung.
+( TRACE_RUN=C1; export TRACE_RUN
+  sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=dispatched data.rung=1
+  sp_trace emit kind=spawn.end subject=run:C1 outcome=ok model=m1 tok_in=200000 data.rung=1
+  sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=escalated data.rung=1
+  sp_trace emit kind=spawn.end subject=run:C1 outcome=ok model=m1 tok_in=400000 data.rung=2
+  sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=passed data.rung=2
+  # A stop from before the attribution, filed under the same run: it is not
+  # the cascade's, so it never borrows the run's tier.
+  sp_trace emit kind=agent.stop subject=agent:a6 model=m1 tok_in=1000 )
+# A second cascade whose mapped rung was red too: a verdict with no tokens of
+# its own, so it moves the verdict rows and no cost row.
+( TRACE_RUN=C2; export TRACE_RUN
+  sp_trace emit kind=spawn subject=run:C2 tier=mechanical skill=implement model=m1 outcome=failed data.rung=2 )
+if [ -n "$sspan" ]; then
+	sout=$( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$sspan")" 2>/dev/null )
+	for row in 'tier implementer 1 3.0000' 'tier reviewer 1 0.3000' 'tier mechanical 2 1.8000' 'tier planner 1 unpriced' \
+		'tier unattributed 3 15.0330' 'skill implement 3 4.8000' 'skill review-pr 1 0.3000' 'skill unattributed 3 15.0330' \
+		'rung 1 1 0.6000' 'rung 2 1 1.2000' 'verdict rung-1:escalated 1 -' 'verdict rung-2:passed 1 -' 'verdict rung-2:failed 1 -' \
+		'bucket under-0.10 2 0.0330' 'bucket 0.10-1 2 0.9000' 'bucket 1-10 2 4.2000' 'bucket 10-up 1 15.0000' \
+		'bucket unpriced 1 unpriced' 'total all 8 unpriced'; do
+		printf '%s\n' "$sout" | grep -qxF "$row" && pass "spend/R22: the spend span prints '$row'" ||
+			fail "spend/R22: the spend span did not print '$row' over the fixture; it printed: $(printf '%s' "$sout" | tr '\n' ';')"
+	done
+	printf '%s\n' "$sout" | grep -q 'dispatched' && fail "the spend span counts a dispatch as a rung verdict" || pass "…and counts only verdicts as a rung's outcome, never the dispatch"
+fi
+if [ -n "$fspan" ]; then
+	fout=$( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$fspan")" 2>/dev/null )
+	[ "$fout" = 40003 ] && pass "the first-call span prints the median first-call prompt, skipping a transcript that is gone" ||
+		fail "the first-call span printed '$fout' over the fixture, not 40003: $fspan"
+fi
+for needle in 'per tier' 'per cascade rung' 'unattributed' 'order of magnitude' 'first-call prompt'; do
+	sec_of 5 | flat | grep -qiF "$needle" && pass "question 5 names: $needle" || fail "question 5 does not name '$needle' (spend/R22)"
+done
 
 t_done "/retro contract"
