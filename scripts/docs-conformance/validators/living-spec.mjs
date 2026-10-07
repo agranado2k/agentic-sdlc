@@ -33,7 +33,7 @@
 // TEXT — which is why `testGlobs` must stay a literal list, one quoted glob
 // per line. The GRAMMAR (area, fence, requirement line, cited name and token)
 // has one home, scripts/requirement.lib.sh, which the twin sources (#545).
-// This module keeps its own copies of those five patterns — a fixture-tree
+// This module keeps its own copies of those patterns — a fixture-tree
 // run must not depend on a shell file — exported under the home's names, and
 // the fixture tests hold each one equal to the home byte for byte. Each is an
 // ERE in the dialect awk, `grep -E` and RegExp read alike: a literal full stop
@@ -49,6 +49,7 @@ export const id = "living-spec";
 
 export const REQ_AREA_ERE = "[a-z][a-z0-9-]*";
 export const REQ_FENCE_ERE = "^[ \\t]*(```|~~~)";
+export const REQ_FENCE_CLOSE_ERE = "^[ \\t]*(```+|~~~+)[ \\t\\r]*$";
 export const REQ_LINE_ERE = "^R[0-9]+[.]([ \\t\\r]|$)";
 export const REQ_CITED_NAME_ERE = `${REQ_AREA_ERE}/R[0-9]+`;
 export const REQ_CITED_TOKEN_ERE = `[A-Za-z0-9_/-]?${REQ_CITED_NAME_ERE}([A-Za-z0-9_]|[.][0-9])?`;
@@ -92,16 +93,48 @@ export function globToRegExp(glob) {
   return new RegExp(`^${body}$`);
 }
 
+const FENCE_CLOSE_RE = new RegExp(REQ_FENCE_CLOSE_ERE);
+
+/** The run of marker characters a fence line opens with, its indent dropped. */
+function markerRun(line) {
+  const s = line.replace(/^[ \t]*/, "");
+  let n = 1;
+  while (s[n] === s[0]) n++;
+  return s.slice(0, n);
+}
+
+/**
+ * The fence rule of every reader of a markdown line in the docs harness — the
+ * shell home's fence_strip, read line for line (#571): true for each line
+ * that is a fence's opening or closing line or lies between them. A fence
+ * opens on REQ_FENCE_ERE and closes on REQ_FENCE_CLOSE_ERE when the closing
+ * run is of the opening's kind and at least as long; one left open runs to the
+ * end. claude-md-refs' stripFences, banned-words' prose pass and the
+ * requirement reader below all read it, so no other validator spells a fence.
+ */
+export function fencedLines(lines) {
+  let open = "";
+  return lines.map((line) => {
+    if (!open) {
+      if (!FENCE_RE.test(line)) return false;
+      open = markerRun(line);
+      return true;
+    }
+    if (FENCE_CLOSE_RE.test(line)) {
+      const run = markerRun(line);
+      if (run[0] === open[0] && run.length >= open.length) open = "";
+    }
+    return true;
+  });
+}
+
 /** The requirement ids of one spec body, fences skipped, in file order, once each. */
 function requirementIds(raw) {
   const ids = [];
-  let fence = false;
-  for (const line of raw.split("\n")) {
-    if (FENCE_RE.test(line)) {
-      fence = !fence;
-      continue;
-    }
-    if (fence) continue;
+  const lines = raw.split("\n");
+  const fenced = fencedLines(lines);
+  for (const [i, line] of lines.entries()) {
+    if (fenced[i]) continue;
     if (!REQUIREMENT_RE.test(line)) continue;
     const rid = line.slice(0, line.indexOf("."));
     if (!ids.includes(rid)) ids.push(rid);

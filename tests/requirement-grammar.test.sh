@@ -40,7 +40,7 @@ for fn in req_spec_lines req_spec_ids req_prd_ids fence_strip; do
 	command -v "$fn" >/dev/null 2>&1 && pass "sourcing defines $fn" ||
 		fail "sourcing $MODULE does not define $fn"
 done
-for v in REQ_AREA_ERE REQ_FENCE_ERE REQ_LINE_ERE REQ_CITED_NAME_ERE REQ_CITED_TOKEN_ERE \
+for v in REQ_AREA_ERE REQ_FENCE_ERE REQ_FENCE_CLOSE_ERE REQ_LINE_ERE REQ_CITED_NAME_ERE REQ_CITED_TOKEN_ERE \
 	REQ_PRD_ID_ERE REQ_PRD_LINE_ERE REQ_BOUNDED_ID_ERE REQ_ID_AREA_MAX REQ_ID_NUM_MAX; do
 	eval "val=\${$v:-}"
 	[ -n "$val" ] && pass "sourcing sets $v" || fail "sourcing $MODULE leaves $v empty"
@@ -103,14 +103,18 @@ got=$(printf '%s\n' "$CITED" | LC_ALL=C grep -o -E "$REQ_CITED_TOKEN_ERE" | LC_A
 # ---------------------------------------------------------------------------
 banner "1b. Fence detection — one rule, for every reader of a markdown line"
 # ---------------------------------------------------------------------------
-# A line whose first non-blank characters are ``` or ~~~ toggles a fence, and
-# every line from one such line to the next is quoted material: the living
-# spec's reader skips it, and so do the code-span readers — the gate's reduced
-# path check, the suites' skill spans and the kit demo's manual commands
-# (#557). fence_strip is that rule as a reader. It TOGGLES on either marker,
-# so a ``` line inside a ~~~ block closes it: pinned as the behavior the
-# readers had, not endorsed — unifying it with the docs harness's paired
-# reading is a behavior change, its own ticket (#571).
+# A fence OPENS on a line whose first non-blank characters are ``` or ~~~, at
+# any indent of blanks and tabs, an info string allowed after the marker. It
+# CLOSES on a line holding a run of the SAME character, at least as long as
+# the opening run, and nothing after it but blanks, tabs or a carriage return
+# — CommonMark's pairing, so a ``` line inside a ~~~ block is quoted material,
+# a ```sh line inside a ``` block is too, and a ```` block can quote a ```
+# fence. A fence left open runs to the end of its file. Every line from the
+# opening to the closing, both included, is quoted material: the living
+# spec's readers skip it, and so do the code-span readers — the gate's
+# reduced path check, the suites' skill spans, the kit demo's manual commands
+# (#557) and the docs harness's readers, which read the same rule from
+# validators/living-spec.mjs (#571). fence_strip is that rule as a reader.
 DOC="$SCRATCH/fenced.md"
 {
 	printf 'before `a`\n'
@@ -120,16 +124,31 @@ DOC="$SCRATCH/fenced.md"
 	printf '%s```\nin tab-indented fence\n```\n' "$TAB"
 	printf '~~~md\n'
 	printf '```\n'
-	printf 'after a backtick line inside a tilde block\n'
+	printf 'a backtick line inside a tilde block closes nothing\n'
 	printf '```\n'
 	printf '~~~\n'
+	printf 'after the tilde block\n'
+	printf '```\n'
+	printf '```sh\n'
+	printf 'a closing line with an info string closes nothing\n'
+	printf '```%s%s\n' "$TAB" "$CR"
+	printf 'after a closing line ending in a tab and a carriage return\n'
+	printf '````md\n'
+	printf '```\n'
+	printf 'a shorter run closes nothing\n'
+	printf '`````\n'
+	printf 'after a longer closing run\n'
 	printf 'x```not a fence\n'
 	printf 'after\n'
 } >"$DOC"
 got=$(fence_strip "$DOC" | tr '\n' '|')
-[ "$got" = 'before `a`|between|after a backtick line inside a tilde block|x```not a fence|after|' ] &&
-	pass "fence_strip keeps the lines outside every fence, toggling on either marker at any indent" ||
+[ "$got" = 'before `a`|between|after the tilde block|after a closing line ending in a tab and a carriage return|after a longer closing run|x```not a fence|after|' ] &&
+	pass "fence_strip keeps the lines outside every fence, a marker closed only by its own kind, alone, at least as long" ||
 	fail "fence_strip printed '$got'"
+printf '~~~\nR1. quoted\n```\nR2. still quoted\n```\n~~~\nR3. outside\n' >"$SCRATCH/mixed-spec.md"
+got=$(req_spec_ids "$SCRATCH/mixed-spec.md" | tr '\n' ' ')
+[ "$got" = "R3 " ] && pass "req_spec_ids reads the same fences — a ~~~ block quoting a \`\`\` fence hides both of its requirements" ||
+	fail "req_spec_ids read '$got' from a ~~~ block quoting a \`\`\` fence, expected 'R3 '"
 got=$(printf '```\nhidden\n```\nshown\n' | fence_strip)
 [ "$got" = "shown" ] && pass "fence_strip reads stdin when given no file" || fail "fence_strip on stdin printed '$got'"
 printf '```\nunclosed\n' >"$SCRATCH/open.md"
@@ -238,12 +257,15 @@ grep -q 'requirement\.lib\.sh' "$ROOT/scripts/coverage.sh" && pass "scripts/cove
 # `R[0-9]`, `R[1-9]`, `R\d` (or `R\\d`, its spelling inside a JavaScript
 # string handed to RegExp, as living-spec.mjs builds its patterns) or
 # `R[[:digit:]]`; a fence pattern is the ``` and
-# ~~~ alternation in either order, or a three-of-a-kind repetition.
+# ~~~ alternation in either order — the closing line's run of either kind
+# among them — or a three-of-a-kind repetition.
 #
 # Allowed, and nothing else: the home; the docs harness's validator
 # (validators/living-spec.mjs), whose literals living-spec.test.mjs holds
-# equal to the home byte for byte; that fixture test, which plants a drifted
-# copy to prove it fires; and this suite, which plants copies of its own.
+# equal to the home byte for byte (fence.test.mjs holds the two fence
+# patterns, and builds its markers so it spells none); that fixture test,
+# which plants a drifted copy to prove it fires; and this suite, which plants
+# copies of its own.
 ID_SPELLINGS='R[0-9]
 R[1-9]
 R\d
@@ -251,6 +273,8 @@ R\\d
 R[[:digit:]]'
 FENCE_SPELLINGS='```|~~~
 ~~~|```
+```+|~~~+
+~~~+|```+
 `{3}
 ~{3}
 [`~]{3}
@@ -259,22 +283,11 @@ GRAMMAR_ALLOWED="$MODULE
 scripts/docs-conformance/validators/living-spec.mjs
 scripts/docs-conformance/test/living-spec.test.mjs
 tests/requirement-grammar.test.sh"
-# The docs harness reads fences two OTHER ways (#571): claude-md-refs.mjs's
-# stripFences pairs a marker with its own kind through a backreference, and
-# banned-words.mjs's leftover pass opens on any whitespace (`\s`, which holds
-# a CR, a form feed and a vertical tab the home's `[ \t]` does not). Neither
-# is a copy of the home's rule — each is a different rule, kept apart until
-# #571 decides between them — so each is declared here by its file and its
-# line, byte for byte, and passes the fence scan on that line only. Telling
-# them apart is a check, not a say-so: a declared line must still be in its
-# file exactly (so neither reader changes unseen), and must DIFFER from the
-# home's rule — it lacks the home's `^[ \t]*(```|~~~)` opening, or it closes
-# on a `\1` backreference the home's toggle never takes. A declared line that
-# became a copy of the home's rule fails here; any other fence pattern, in
-# these two files or elsewhere, is flagged like any copy.
-FENCE_DIFFERENT_RULES='scripts/docs-conformance/validators/claude-md-refs.mjs	  return raw.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[ \t]*$/gm, "");
-scripts/docs-conformance/validators/banned-words.mjs	    if (/^\s*(```|~~~)/.test(line)) {'
-TABC=$(printf '\t')
+# The docs harness reads every fence through living-spec.mjs's fencedLines
+# (#571): claude-md-refs.mjs's stripFences (and the four validators that call
+# it) and banned-words.mjs's leftover pass once kept rules of their own — one
+# paired by a backreference, one opened on any whitespace — and now spell no
+# fence pattern at all, which the scan below holds.
 
 scan_kind() { # <path> — the kind of code the file holds: sh, js, md, or nothing
 	p=$1
@@ -309,17 +322,10 @@ id_copies() { # <dir> — <file>:<line> of every id pattern spelled outside the 
 		scan_hits "$ID_SPELLINGS" "$1" "$f"
 	done | cut -f1,2 | tr '\t' ':'
 }
-fence_copies() { # <dir> — <file>:<line> of every fence pattern outside the home and the declared different rules
+fence_copies() { # <dir> — <file>:<line> of every fence pattern spelled outside the home
 	scan_files "$1" | while IFS= read -r f; do
 		scan_hits "$FENCE_SPELLINGS" "$1" "$f"
-	done | while IFS= read -r hit; do
-		file=${hit%%"$TABC"*}
-		line=${hit#*"$TABC"}
-		text=${line#*"$TABC"}
-		line=${line%%"$TABC"*}
-		printf '%s\n' "$FENCE_DIFFERENT_RULES" | grep -Fqx -- "$file$TABC$text" && continue
-		printf '%s:%s\n' "$file" "$line"
-	done
+	done | cut -f1,2 | tr '\t' ':'
 }
 
 kinds=$(scan_files "$ROOT" | while IFS= read -r f; do scan_kind "$f"; done | sort -u | tr '\n' ' ')
@@ -328,27 +334,20 @@ kinds=$(scan_files "$ROOT" | while IFS= read -r f; do scan_kind "$f"; done | sor
 stray=$(id_copies "$ROOT")
 [ -z "$stray" ] && pass "no file of any kind outside the home spells an id pattern" ||
 	fail "an id pattern is spelled outside $MODULE: $(printf '%s' "$stray" | tr '\n' ' ')"
-# Fence detection is one rule in every reader (#557): the gate's reduced path
-# check, tests/lib.sh's skill spans and the kit demo's manual commands call
-# fence_strip.
+# Fence detection is one rule in every reader (#557, #571): the gate's reduced
+# path check, tests/lib.sh's skill spans and the kit demo's manual commands
+# call fence_strip; the docs harness's readers call living-spec.mjs's
+# fencedLines, whose patterns its fixture tests hold to the home.
 for f in scripts/check.sh tests/lib.sh tests/kit-demo.sh; do
 	grep -q 'fence_strip' "$ROOT/$f" && pass "$f reads fence_strip" || fail "$f does not read fence_strip from $MODULE"
+done
+for f in scripts/docs-conformance/validators/claude-md-refs.mjs scripts/docs-conformance/validators/banned-words.mjs; do
+	grep -q '^import { [^}]*fencedLines[^}]* } from "./living-spec.mjs";$' "$ROOT/$f" &&
+		pass "$f reads fencedLines from living-spec.mjs" || fail "$f does not import fencedLines from living-spec.mjs"
 done
 stray=$(fence_copies "$ROOT")
 [ -z "$stray" ] && pass "no file of any kind outside the home spells a fence pattern" ||
 	fail "a fence pattern is spelled outside $MODULE: $(printf '%s' "$stray" | tr '\n' ' ')"
-printf '%s\n' "$FENCE_DIFFERENT_RULES" | while IFS="$TABC" read -r file text; do
-	grep -Fqx -- "$text" "$ROOT/$file" || echo "absent $file"
-	case $text in
-	*'^[ \t]*(```|~~~)'*) case $text in *'\1'*) ;; *) echo "same $file" ;; esac ;;
-	esac
-done >"$SCRATCH/rules.out"
-grep -q '^absent' "$SCRATCH/rules.out" &&
-	fail "a declared different fence rule is no longer in its file, byte for byte: $(sed -n 's/^absent //p' "$SCRATCH/rules.out" | tr '\n' ' ')— re-read it against the home" ||
-	pass "both declared different fence rules (#571) are still in their files, byte for byte"
-grep -q '^same' "$SCRATCH/rules.out" &&
-	fail "a declared different fence rule reads the home's rule — it is a copy: $(sed -n 's/^same //p' "$SCRATCH/rules.out" | tr '\n' ' ')" ||
-	pass "both declared fence rules differ from the home's — one pairs by backreference, one opens on any whitespace"
 
 # …and each scan can go red, in every kind: a tree holding one planted copy
 # per kind, beside a comment or prose mention per kind that is no copy.
@@ -363,17 +362,19 @@ printf '%s\n' 'Prose may name `R[[:digit:]]` and ```|~~~ freely.' '' '```sh' "gr
 	"awk '/^ *(\`\`\`|~~~)/' x.md" '```' >"$PLANT/.agents/skills/x/SKILL.md"
 printf '%s\n' '#!/bin/sh' "grep -E '^R[0-9]+' \"\$1\"" >"$PLANT/.githooks/pre-push"
 printf '%s\n' '```' 'grep "R[1-9]" x' '```' >"$PLANT/templates/doc.md.template"
-# A declared different rule passes on its own line in its own file only: the
-# same line elsewhere, or another fence pattern in that file, is flagged.
-printf '%s\n' "$FENCE_DIFFERENT_RULES" | grep 'banned-words' | cut -f2- >"$PLANT/scripts/other.mjs"
-printf '%s\n' 'const F = /^[ \t]*(```|~~~)/;' >"$PLANT/scripts/docs-conformance/validators/banned-words.mjs"
+# The two rules the docs harness kept before #571, planted back in their own
+# files, and the closing line's pattern copied anywhere: each is flagged.
+printf '%s\n' '  return raw.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[ \t]*$/gm, "");' \
+	>"$PLANT/scripts/docs-conformance/validators/claude-md-refs.mjs"
+printf '%s\n' '    if (/^\s*(```|~~~)/.test(line)) {' >"$PLANT/scripts/docs-conformance/validators/banned-words.mjs"
+printf '%s\n' "awk -v closer='^[ \\t]*(\`\`\`+|~~~+)[ \\t\\r]*\$' '\$0 ~ closer' x.md" >"$PLANT/scripts/closer.sh"
 got=$(id_copies "$PLANT" | sort | tr '\n' ' ')
 want='.agents/skills/x/SKILL.md:4 .githooks/pre-push:2 scripts/plant.awk:2 scripts/plant.mjs:3 scripts/plant.mjs:5 scripts/plant.sh:2 templates/doc.md.template:2 '
 [ "$got" = "$want" ] && pass "the id scan flags a planted copy in a script, an awk program, a module, a hook, a template and a skill's fenced command — and no comment or prose" ||
 	fail "the id scan read the planted tree as '$got', expected '$want'"
 got=$(fence_copies "$PLANT" | sort | tr '\n' ' ')
-want='.agents/skills/x/SKILL.md:5 scripts/docs-conformance/validators/banned-words.mjs:1 scripts/other.mjs:1 scripts/plant.awk:3 scripts/plant.mjs:4 scripts/plant.sh:3 '
-[ "$got" = "$want" ] && pass "the fence scan flags a planted copy of every kind, and a declared different rule anywhere but its own line" ||
+want='.agents/skills/x/SKILL.md:5 scripts/closer.sh:1 scripts/docs-conformance/validators/banned-words.mjs:1 scripts/docs-conformance/validators/claude-md-refs.mjs:1 scripts/plant.awk:3 scripts/plant.mjs:4 scripts/plant.sh:3 '
+[ "$got" = "$want" ] && pass "the fence scan flags a planted copy of every kind, the harness's two old rules and the closing line's pattern among them" ||
 	fail "the fence scan read the planted tree as '$got', expected '$want'"
 
 # ---------------------------------------------------------------------------
@@ -386,6 +387,29 @@ PROJ="$SCRATCH/proj"
 t_consumer_from "$ROOT" "$PROJ" "Grammar Fixture" "grammar@example.invalid" --no-dogfood "Grammar Fixture" "A project with a living spec."
 cd "$ROOT" || exit 2
 git -C "$PROJ" config core.hooksPath .git/no-such-hooks
+# Before the home is taken away: both engines of the gate read one fence rule
+# (#571), so a manual whose ~~~ block quotes a ``` fence yields the same code
+# spans in both. The quoted span names a file that does not exist, and is
+# silent in both engines; the same span after the block is a reference, and
+# fails both. Under the toggle the reduced engine kept, the quoted ``` line
+# closed the ~~~ block and the span inside fell into the path check.
+HAVE_NODE=0; command -v node >/dev/null 2>&1 && HAVE_NODE=1
+engines_agree() { # <expected status> <label>
+	f=$(cd "$PROJ" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh >"$SCRATCH/fence-fallback.out" 2>&1; echo $?)
+	[ "$f" = "$1" ] && pass "fallback: $2 (exit $f)" ||
+		{ fail "fallback: $2 — expected exit $1, got $f"; grep 'missing' "$SCRATCH/fence-fallback.out" | sed 's/^/        | /' | head -4; }
+	if [ "$HAVE_NODE" = 1 ]; then
+		h=$(cd "$PROJ" && sh scripts/check.sh >/dev/null 2>&1; echo $?)
+		[ "$h" = "$1" ] && pass "harness: $2 (exit $h)" || fail "harness: $2 — expected exit $1, got $h"
+	else
+		printf '  skip  harness half of: %s (no node)\n' "$2"
+	fi
+}
+printf '\n~~~md\n```sh\n`scripts/ghost-quoted.sh`\n```\n~~~\n' >>"$PROJ/AGENTS.md"
+engines_agree 0 "a ~~~ block quoting a \`\`\` fence hides the span inside it"
+printf '\nSee `scripts/ghost-after.sh`.\n' >>"$PROJ/AGENTS.md"
+engines_agree 1 "a span after that block is a reference again"
+git -C "$PROJ" checkout -q -- AGENTS.md
 (cd "$PROJ" && rm -f "$MODULE" && DOCS_CHECK_NO_NODE=1 sh scripts/check.sh >"$SCRATCH/nogrammar.out" 2>&1; echo $? >"$SCRATCH/nogrammar.rc")
 [ "$(cat "$SCRATCH/nogrammar.rc")" = 1 ] && grep -q "shared-layer-missing.*requirement" "$SCRATCH/nogrammar.out" &&
 	pass "a missing grammar is a red reduced gate (shared-layer-missing), not a silent pass" ||

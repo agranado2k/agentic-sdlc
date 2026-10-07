@@ -2,21 +2,30 @@
 # scripts/requirement.lib.sh — the one grammar for requirement lines and ids,
 # and for the fences that hide a markdown line from every reader of one.
 #
-# THE FENCE (#557) — a line whose first non-blank characters are ``` or ~~~
-# toggles a fence, and the lines between two such lines are quoted material.
-# The requirement reader below skips them, and so does every code-span reader
-# of the shell side: the gate's reduced path check (scripts/check.sh), the
-# suites' skill spans (tests/lib.sh) and the kit demo's manual commands. They
-# all read REQ_FENCE_ERE, the first three through fence_strip. The fence lives
-# HERE rather than in a module of its own because the requirement grammar was
-# its first home and a 0.54.0 consumer's fixture test already holds
-# REQ_FENCE_ERE to this file: a move would turn that test red for nothing.
-# The rule TOGGLES on either marker, so a ``` line inside a ~~~ block closes
-# it. The docs harness reads fences two other ways — claude-md-refs.mjs's
-# stripFences pairs a marker with its own kind, and banned-words.mjs's leftover
-# pass opens on any whitespace — and unifying the engines is a behavior
-# change, its own ticket (#571); only validators/living-spec.mjs keeps this
-# pattern, held equal to it byte for byte.
+# THE FENCE (#557, #571) — CommonMark's pairing. A fence OPENS on a line
+# whose first non-blank characters are ``` or ~~~ (REQ_FENCE_ERE: any indent
+# of blanks and tabs, an info string allowed after the marker), and CLOSES on
+# a line holding a run of the SAME character at least as long as the opening
+# run, with nothing after it but blanks, tabs or a carriage return
+# (REQ_FENCE_CLOSE_ERE, plus the kind and the length, which no ERE can
+# compare). So a ``` line inside a ~~~ block is quoted material, a ```sh line
+# inside a ``` block is too, and a ```` block can quote a ``` fence — which
+# is why a manual reaches for the other kind or a longer run. A fence left
+# open runs to the end of its file. Every line from the opening to the
+# closing, both included, is quoted material: the requirement reader below
+# skips them, and so does every code-span reader of the shell side — the
+# gate's reduced path check (scripts/check.sh), the suites' skill spans
+# (tests/lib.sh) and the kit demo's manual commands, all through fence_strip.
+# The docs harness reads the same rule through validators/living-spec.mjs's
+# fencedLines (its code-span readers, banned-words' prose pass and the living
+# spec's reader), and its fixture tests hold both patterns equal to this file
+# byte for byte and its reading equal to fence_strip line for line. The fence
+# lives HERE rather than in a module of its own because the requirement
+# grammar was its first home and a 0.54.0 consumer's fixture test already
+# holds REQ_FENCE_ERE to this file: a move would turn that test red for
+# nothing. Before #571 this home TOGGLED on either marker, and the harness
+# kept two rules of its own; the three agreed on every document the kit
+# tracks, and disagreed only on mixed or longer fences.
 #
 # A requirement is a numbered line (ADR-0012). Two readers read it, and they
 # read DIFFERENT shapes on purpose, so this file holds two grammars side by
@@ -44,9 +53,10 @@
 #
 # DIALECT. Every pattern here is an ERE that means the same thing to awk, to
 # `grep -E` and to JavaScript's RegExp: a literal full stop is `[.]`, never a
-# backslash, and the only backslashes are `\t` and `\r`, in the two patterns
-# only awk reads — always through `-v`, which turns them into the characters
-# themselves in every awk. The docs harness's validator
+# backslash, and the only backslashes are `\t` and `\r`, in the three patterns
+# awk reads only through `-v` (the two fence patterns and REQ_LINE_ERE), which
+# turns them into the characters themselves in every awk. The docs harness's
+# validator
 # (validators/living-spec.mjs) keeps its own copies of the living-spec
 # patterns, because a fixture-tree run must not depend on a shell file, and
 # its fixture tests hold each one equal to this file byte for byte.
@@ -73,6 +83,7 @@ REQ_AREA_ERE='[a-z][a-z0-9-]*'
 
 # --- the living spec --------------------------------------------------------
 REQ_FENCE_ERE='^[ \t]*(```|~~~)'
+REQ_FENCE_CLOSE_ERE='^[ \t]*(```+|~~~+)[ \t\r]*$'
 REQ_LINE_ERE='^R[0-9]+[.]([ \t\r]|$)'
 # A cited name, unanchored; and the token the gate cuts out of a test file:
 # it swallows one letter, digit, `_`, `-` or `/` before the name and one
@@ -93,18 +104,35 @@ REQ_PRD_LINE_ERE="^($REQ_AREA_ERE/)?$REQ_PRD_ID_ERE[.]"
 # held to REQ_ID_AREA_MAX characters, the number to REQ_ID_NUM_MAX digits.
 REQ_BOUNDED_ID_ERE="([a-z][a-z0-9-]{0,$((REQ_ID_AREA_MAX - 1))}/)?R[1-9][0-9]{0,$((REQ_ID_NUM_MAX - 1))}"
 
+# The fence as an awk program's opening rules, read with -v opener= and
+# -v closer= set to the two fence patterns: every fence line and every line
+# between is consumed (`next`), so the rules after it see the lines outside
+# every fence and nothing else. `run` is the run of marker characters a line
+# opens with once its indent is dropped — the kind is its first character.
+_REQ_FENCE_AWK='
+	function run(s,    c, n) {
+		sub(/^[ \t]*/, "", s)
+		c = substr(s, 1, 1)
+		for (n = 1; substr(s, n + 1, 1) == c; n++);
+		return substr(s, 1, n)
+	}
+	fence == "" && $0 ~ opener { fence = run($0); next }
+	fence != "" {
+		if ($0 ~ closer) {
+			r = run($0)
+			if (substr(r, 1, 1) == substr(fence, 1, 1) && length(r) >= length(fence)) fence = ""
+		}
+		next
+	}
+'
+
 req_spec_lines() {
-	awk -v fence="$REQ_FENCE_ERE" -v line="$REQ_LINE_ERE" '
-		$0 ~ fence { infence = !infence; next }
-		!infence && $0 ~ line
-	' "$@"
+	awk -v opener="$REQ_FENCE_ERE" -v closer="$REQ_FENCE_CLOSE_ERE" -v line="$REQ_LINE_ERE" \
+		"$_REQ_FENCE_AWK"'$0 ~ line' "$@"
 }
 
 fence_strip() {
-	awk -v fence="$REQ_FENCE_ERE" '
-		$0 ~ fence { infence = !infence; next }
-		!infence
-	' "$@"
+	awk -v opener="$REQ_FENCE_ERE" -v closer="$REQ_FENCE_CLOSE_ERE" "$_REQ_FENCE_AWK"'{ print }' "$@"
 }
 
 req_spec_ids() {
