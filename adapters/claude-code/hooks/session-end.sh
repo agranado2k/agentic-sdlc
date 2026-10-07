@@ -78,18 +78,13 @@ set --
 # THE SAME LINES ARE THE RECORDED ROLLUP GAPS (#407). The extractor reads them
 # on stdin under --rollup, so a compaction's gap an earlier end recorded is
 # never recorded again; a gap event carries no last_msg, so it never anchors.
-after=
-recorded=
-if [ $# -gt 0 ]; then
-	recorded=$(hook_trace show "session:$sid" --kind session.usage)
-	after=$(printf '%s\n' "$recorded" |
-		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
-	hook_id_ok "$after" || after=
-fi
+hook_recorded=
+hook_after=
+[ $# -gt 0 ] && hook_anchors "session:$sid" session.usage
 
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-	printf '%s\n' "$recorded" |
-		hook_tokens "$transcript" session.usage --rollup --resume ${after:+--after "$after"} "$@"
+	printf '%s\n' "$hook_recorded" |
+		hook_tokens "$transcript" session.usage --rollup --resume ${hook_after:+--after "$hook_after"} "$@"
 else
 	hook_trace emit kind=session.usage outcome=fail \
 		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"

@@ -117,16 +117,11 @@ fi
 #
 # stop_tokens <field>=<value> … — the read, past this agent's anchors.
 stop_tokens() {
-	_st_after=
-	_st_recorded=
-	if [ -n "$aid" ] && hook_id_ok "$aid"; then
-		_st_recorded=$(hook_trace show "agent:$aid" --kind agent.stop)
-		_st_after=$(printf '%s\n' "$_st_recorded" |
-			sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
-		hook_id_ok "$_st_after" || _st_after=
-	fi
-	printf '%s\n' "$_st_recorded" |
-		hook_tokens "$transcript" agent.stop --resume ${_st_after:+--after "$_st_after"} "$@"
+	hook_recorded=
+	hook_after=
+	[ -n "$aid" ] && hook_id_ok "$aid" && hook_anchors "agent:$aid" agent.stop
+	printf '%s\n' "$hook_recorded" |
+		hook_tokens "$transcript" agent.stop --resume ${hook_after:+--after "$hook_after"} "$@"
 }
 
 if [ -z "$transcript" ]; then

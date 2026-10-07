@@ -380,6 +380,22 @@ hook_point_at() {
 
 # --- token counts -----------------------------------------------------------
 
+# hook_anchors <subject> <kind> — how far earlier reads of one subject already
+# went: sets hook_recorded to that subject's <kind> events, as `show` prints
+# them, and hook_after to the last data.last_msg among them, held to the
+# identifier class (empty when none, or when it is not an id). A read hands
+# hook_recorded to hook_tokens on stdin under --resume, and hook_after as
+# --after. Only the subject is asked, so another subject's read never anchors
+# this one; a fail event carries no last_msg, so it never anchors either.
+# session-end.sh reads its session's (#307, #408), subagent-stop.sh its
+# agent's (#565).
+hook_anchors() {
+	hook_recorded=$(hook_trace show "$1" --kind "$2")
+	hook_after=$(printf '%s\n' "$hook_recorded" |
+		sed -n 's/.*,"data":{.*"last_msg":"\([^"]*\)".*/\1/p' | sed -n '$p')
+	hook_id_ok "$hook_after" || hook_after=
+}
+
 # hook_tokens <transcript> <kind> [--rollup] [--resume] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
 # token counts, and at least one event whatever happens. Seven shapes, all of
@@ -402,20 +418,21 @@ hook_point_at() {
 #   rollup refused   with --rollup only: the numbers as usual, then one event,
 #                    outcome=fail and data.via=rollup, the extractor's reason
 #
-# --rollup and --resume read the trace's own earlier events for this session
-# on stdin — session-end.sh pipes them in. Under --rollup a gap already
+# --rollup and --resume read the trace's own earlier events for this subject
+# on stdin — hook_anchors reads them, for session-end.sh (a session's) and
+# subagent-stop.sh (an agent's, #565). Under --rollup a gap already
 # recorded is not recorded again; transcript-usage.mjs says when a rollup is
 # judged at all. Under --resume each model is counted only after the last
 # data.last_msg the trace holds for THAT model (#307, #408), so an end killed
 # between two models' events loses neither: see transcript-usage.mjs for why a
-# resumed session needs it and session-end.sh for where the events come from.
+# resumed session needs it and hook_anchors for where the events come from.
 #
 # --after is an earlier read's data.last_msg: an empty read is then "nothing
 # new" rather than "nothing to read", carrying that id forward. Alone, it is
 # also the extractor's one anchor for every model (#307). Beside --resume it
 # is only that signal and never the anchor — one id for every model is the
-# shape a kill partway turned into lost messages (#408) — and session-end.sh
-# passes the last data.last_msg the trace holds, of any model.
+# shape a kill partway turned into lost messages (#408) — and hook_anchors
+# gives the last data.last_msg the trace holds for the subject, of any model.
 #
 # EVERY FAILURE SHAPE CARRIES outcome=fail AND NO TOKEN COUNTS. The counts,
 # because a partial sum is the failure this whole path exists to avoid and an
