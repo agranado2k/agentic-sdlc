@@ -84,7 +84,9 @@ The full form — what to read, what counts as a finding, where it goes — is i
    landing whose `feedback` is `unasked` counts as one with no verdict, and
    a verdict `by` the `train` — judged under a delegating instruction — is
    counted apart from the operator's: a window of only `train` verdicts
-   has no human verdict in it.
+   has no human verdict in it. A project whose binding decision record
+   accepts train-only verdicts has that window answered with one retired
+   line, never a finding, until a window holds an operator verdict again.
 8. **Stamp calibration** — per decision field and per skill, never one
    number for the chain: how often a tier or a label stamped at each
    confidence was overridden at the quiz, and how often a finding raised at
@@ -93,6 +95,9 @@ The full form — what to read, what counts as a finding, where it goes — is i
    clause; a row with too few events says so instead of a rate; and the
    label's override rate is computable once its stamps carry
    `data.label_proposed` — a row whose stamps predate that key says so.
+   Where that record accepts train-only verdicts, a window where no human
+   dismissed a finding or overrode a stamp is answered with the same retired
+   line, and the rows come back with the first window that holds one.
 
 ## Procedure
 

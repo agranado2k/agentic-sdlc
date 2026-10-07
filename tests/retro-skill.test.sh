@@ -49,6 +49,10 @@
 #      closed, sibling reports in the same window are named, questions 5 and
 #      6 read the compaction gap, the phantom stops and the wait-bound keys,
 #      and a finding is searched for in the tracker before it is recorded.
+#  10. Questions 7 and 8 retire, per window, while a binding decision record
+#      says the project accepts train-only verdicts (#572, section 15): the
+#      spans that count each question's operator verdicts RUN over two
+#      fixture windows, and the kit's own record is found by the span.
 #
 # NOT HELD here, on purpose: question 8's "what counts as a finding"
 # criteria and the rubric version its tier oracle names. Both are on the
@@ -1357,5 +1361,133 @@ case "$sec6_prose" in
 *'**Refused spawns**'*) pass "question 6 counts refused spawns as their own row" ;;
 *) fail "question 6 has no **Refused spawns** bullet" ;;
 esac
+
+# ---------------------------------------------------------------------------
+banner "15. Questions 7 and 8 retire while the project accepts train-only verdicts (#572)"
+# ---------------------------------------------------------------------------
+# The operator ruled on #570 that train-only landing verdicts are fine, after
+# four windows running had re-raised "no human verdict" as a finding nobody
+# could act on. So a project that records, in a binding decision record, that
+# it accepts train-only verdicts gets questions 7 and 8 answered with one
+# retired line — no finding, no note — whenever the window holds no operator
+# verdict, and the calibration resumes by itself the first window holding one.
+# The skill ships unstamped: the line says "the project", and the kit records
+# its own answer as a decision record of its own.
+#
+# 15a. Each question carries the span that counts its operator verdicts, and
+# the span RUNS: over a window of train and unasked verdicts only — no
+# dismissal, no quiz override — both print 0, the retired case; over a window
+# holding an operator verdict, a dismissal and an override, each prints the
+# count, the calibration case.
+sec_of() { awk -v n="$1" '$0 ~ "^## " n "\\. " { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+vspan() { sec_of "$1" | grep -o '`sh scripts/trace\.sh export[^`]*`' | tr -d '`' | head -1; }
+v7=$(vspan 7)
+v8=$(vspan 8)
+[ -n "$v7" ] && pass "question 7 carries a span that counts its operator verdicts" || fail "question 7 carries no \`sh scripts/trace.sh export …\` span counting operator verdicts"
+[ -n "$v8" ] && pass "question 8 carries a span that counts its operator verdicts" || fail "question 8 carries no \`sh scripts/trace.sh export …\` span counting operator verdicts"
+vcount() { # <trace dir> <span>
+	( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$2")" 2>/dev/null )
+}
+tw="$SCRATCH/train-only.retro"
+tw_trace() { ( cd "$ROOT" && TRACE_DIR="$tw" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+# Before the window (H-1, review of PR #601): an operator verdict, a human
+# dismissal and a quiz override, all on a day before the window's start — the
+# day file renamed to one the --since day excludes. A span that dropped its
+# --since would count them.
+tw_trace emit kind=feedback subject='ticket:#9' related='pr:#19' outcome=missed data.by=operator reason=fixture
+tw_trace emit kind=finding.dismiss subject='pr:#19' outcome=dismissed data.via=thread data.where=b.sh:1 data.thread=T9 reason=fixture
+tw_trace emit kind=ticket.write subject='ticket:#9' tier=planner data.tier_proposed=implementer data.confidence=low
+for f in "$tw"/events/*.jsonl; do mv "$f" "$tw/events/2025-12-31.jsonl"; done
+# A ticket written before the proposed keys existed is no override (H-2): the
+# span's guards read a missing key as nothing to compare.
+tw_trace emit kind=ticket.write subject='ticket:#5' tier=implementer data.label=ready-for-agent data.confidence=high data.label_confidence=high
+tw_trace emit kind=feedback subject='ticket:#1' related='pr:#11' outcome=hit data.by=train reason=fixture
+tw_trace emit kind=feedback subject='ticket:#2' related='pr:#12' outcome=unasked data.by=train reason=fixture
+tw_trace emit kind=ticket.write subject='ticket:#3' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=high data.label_confidence=high
+tw_trace emit kind=finding.raise subject='pr:#11' outcome=raised data.id=L-1 data.severity=low data.agent=simplicity data.where=a.sh:1 data.posted=yes reason=fixture
+if [ -n "$v7" ]; then
+	[ "$(vcount "$tw" "$v7")" = 0 ] && pass "…question 7's span prints 0 over a window of train and unasked verdicts — the retired case" ||
+		fail "question 7's span printed '$(vcount "$tw" "$v7")' over a window with no operator verdict, not 0: $v7"
+fi
+if [ -n "$v8" ]; then
+	[ "$(vcount "$tw" "$v8")" = 0 ] && pass "…question 8's span prints 0 over a window with no dismissal and no override — the retired case" ||
+		fail "question 8's span printed '$(vcount "$tw" "$v8")' over a window with no dismissal and no override, not 0: $v8"
+fi
+ho="$SCRATCH/operator.retro"
+ho_trace() { ( cd "$ROOT" && TRACE_DIR="$ho" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+ho_trace emit kind=feedback subject='ticket:#1' related='pr:#11' outcome=hit data.by=train reason=fixture
+ho_trace emit kind=feedback subject='ticket:#2' related='pr:#12' outcome=adjusted data.by=operator reason=fixture
+# A ticket overridden on its draft and confirmed on its re-write: only the
+# latest write per subject counts, so it is no override.
+ho_trace emit kind=ticket.write subject='ticket:#3' tier=planner data.tier_proposed=implementer data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=low data.label_confidence=low
+ho_trace emit kind=ticket.write subject='ticket:#3' tier=planner data.tier_proposed=planner data.label=ready-for-agent data.label_proposed=ready-for-agent data.confidence=low data.label_confidence=low
+# One label override at the quiz, and one human dismissal.
+ho_trace emit kind=ticket.write subject='ticket:#4' tier=implementer data.tier_proposed=implementer data.label=none data.label_proposed=ready-for-agent data.confidence=high data.label_confidence=high
+ho_trace emit kind=finding.raise subject='pr:#11' outcome=raised data.id=L-1 data.severity=low data.agent=simplicity data.where=a.sh:1 data.posted=yes reason=fixture
+ho_trace emit kind=finding.dismiss subject='pr:#11' outcome=dismissed data.via=thread data.where=a.sh:1 data.thread=T1 reason=fixture
+if [ -n "$v7" ]; then
+	[ "$(vcount "$ho" "$v7")" = 1 ] && pass "…question 7's span counts the one operator verdict and not the train's — the calibration resumes" ||
+		fail "question 7's span printed '$(vcount "$ho" "$v7")' over a window with one operator verdict, not 1: $v7"
+fi
+if [ -n "$v8" ]; then
+	[ "$(vcount "$ho" "$v8")" = 2 ] && pass "…question 8's span counts the dismissal and the latest write's override, not the draft's — the calibration resumes" ||
+		fail "question 8's span printed '$(vcount "$ho" "$v8")' over a window with one dismissal and one override, not 2: $v8"
+fi
+
+# 15b. The prose of each section: the retired line, its two conditions, that
+# it is no finding, that it resumes by itself, and that a project with no such
+# record raises the finding as before.
+q_has() { case "$prose" in *"$1"*) pass "$2" ;; *) fail "$2 — question $n does not say: $1" ;; esac; }
+for n in 7 8; do
+	prose=$(sec_of "$n" | flat)
+	q_has '`retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`' "question $n carries the retired line, in the project's terms"
+	q_has 'binding decision record' "…held to a binding decision record"
+	q_has 'is no finding' "…says the retired line is no finding"
+	q_has 'records no note' "…and records no note for it"
+	q_has 'resumes by itself' "…resumes by itself the first window holding an operator verdict"
+	q_has 'A project with no such record has the absence raised as before' "…and a project with no such record has the absence raised as before"
+done
+# H-3 (review of PR #601): the retired line swallows no missing emit.
+n=7 prose=$(sec_of 7 | flat)
+q_has 'is still counted on the row' "question 7 still counts a landing with no feedback event on its row"
+q_has 'question 6'"'"'s to raise' "…as a missing emit, question 6's to raise"
+case "$sec7_route" in
+*'retired'*) pass "question 7's route says a retired answer goes nowhere" ;;
+*) fail "question 7's Route line does not say where a retired answer goes" ;;
+esac
+
+# 15c. SKILL.md's order says it too, and the record is found by a span that
+# runs: in this repo it lists the kit's own record, accepted, citing #570.
+q8_line=$(awk '/^8\. \*\*Stamp calibration\*\*/ { on = 1; print; next } /^[0-9]+\. |^## / { on = 0 } on' "$SKILL_ABS" | flat)
+for line in "$q7_line" "$q8_line"; do
+	case "$line" in
+	*'train-only verdicts'*'retired'* | *'retired'*'train-only verdicts'*) pass "SKILL.md's question names the retired answer under train-only verdicts: ${line%%—*}" ;;
+	*) fail "SKILL.md's question does not say it retires while the project accepts train-only verdicts: ${line%%—*}" ;;
+	esac
+done
+# The record span (M-1, review of PR #601) lists a record only when it says
+# the project accepts train-only verdicts AND its status is Accepted — never
+# the index, a proposed record or a superseded one. Run over a fixture
+# decision directory first, then over this repo.
+rspan=$(sec_of 7 | grep -o '`for f in docs/adr/[^`]*`' | tr -d '`' | head -1)
+if [ -n "$rspan" ]; then
+	ra="$SCRATCH/records"
+	mkdir -p "$ra/docs/adr"
+	printf '# ADR-0001: The project accepts train-only verdicts\n\n- **Status**: Accepted\n' >"$ra/docs/adr/0001-yes.md"
+	printf '# ADR-0002: The project accepts train-only verdicts\n\n- **Status**: Proposed\n' >"$ra/docs/adr/0002-proposed.md"
+	printf '# ADR-0003: The project accepts train-only verdicts\n\n- **Status**: Superseded by 0004\n' >"$ra/docs/adr/0003-superseded.md"
+	printf '# ADR-0004: Something else\n\n- **Status**: Accepted\n' >"$ra/docs/adr/0004-other.md"
+	printf '| [0001](0001-yes.md) | The project accepts train-only verdicts | Accepted |\n' >"$ra/docs/adr/INDEX.md"
+	fx_rec=$( cd "$ra" && sh -c "$rspan" 2>/dev/null )
+	[ "$fx_rec" = docs/adr/0001-yes.md ] && pass "the record span lists only the accepted record that accepts train-only verdicts — not the index, a proposed or a superseded one" ||
+		fail "over a fixture decision directory the record span listed '$fx_rec', not docs/adr/0001-yes.md: $rspan"
+	rec=$( cd "$ROOT" && sh -c "$rspan" 2>/dev/null )
+	[ "$(printf '%s\n' "$rec" | grep -c .)" = 1 ] && pass "the record span lists exactly one record in this repo: $rec" ||
+		fail "the record span lists '$rec' in this repo, not one record: $rspan"
+	[ -n "$rec" ] && grep -qF '#570' "$ROOT/$rec" && pass "…citing the operator's ruling, #570" || fail "the kit's train-only record does not cite #570"
+	[ -n "$rec" ] && grep -qF "($(basename "$rec"))" "$ROOT/docs/adr/INDEX.md" && pass "…and indexed" || fail "docs/adr/INDEX.md has no row for $rec"
+else
+	fail "question 7 carries no \`for f in docs/adr/…\` span that finds an accepted record"
+fi
 
 t_done "/retro contract"

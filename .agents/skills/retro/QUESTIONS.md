@@ -245,11 +245,29 @@ answerer's words — emitted by `/merge-train` at landing and by
   **no human verdict**, read with the landings that got none. A `feedback`
   with no `data.by` was written before the key existed: count it as `<p>
   unattributed`, never as the operator's.
+- **Retired while the project accepts train-only verdicts.** A project
+  that delegates its landings may decide that a train's verdict is enough,
+  and records so in a binding decision record: one whose text says it
+  accepts train-only verdicts and whose status is Accepted —
+  `for f in docs/adr/[0-9]*.md; do grep -qi 'accepts train-only verdicts' "$f" && grep -q '^- \*\*Status\*\*: Accepted' "$f" && echo "$f"; done`
+  lists it, never the index, a proposed record or a superseded one. Count the window's operator
+  verdicts: `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk '/"kind":"feedback"/ && /"by":"operator"/ { n++ } END { print n + 0 }'`,
+  skipping, as everywhere, the events before the window's start. With
+  that record binding and that count 0, the question answers
+  `retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`
+  — the record named by its file — in place of the no-human-verdict
+  finding and the misses: the row's counts still print, but the retired
+  line is no finding, counts toward no total and records no note. It
+  resumes by itself: the first window holding one operator verdict
+  calibrates as above, the record notwithstanding. A project with no such
+  record has the absence raised as before. A landing with no `feedback`
+  event at all is still counted on the row — a missing emit, which is
+  question 6's to raise, not this one's.
 
 Route: `/to-tickets` — the ordering rule or the tier rubric, with the misses
 as evidence; the missing verdicts and the `unasked` ones to `/merge-train`;
 a window of `train` verdicts to the operator who delegated them — no skill
-asks the question on their behalf.
+asks the question on their behalf; a retired answer routes nowhere.
 
 ## 8. Stamp calibration
 
@@ -374,6 +392,22 @@ be nobody's. An event none of the three names goes on a row named
   the same case, not a band nobody dismissed: the severity rows print their
   raises and `no dismissal recorded in the window`, and whether the emitter
   ran is question 6's to ask.
+- **Retired while the project accepts train-only verdicts.** Every row
+  above is graded by a human — the one at the quiz or the one who closed a
+  thread — so a window where no human changed a stamp grades nothing: each
+  row reads 0 and a `high` row ties a `low` one by noise. The operator
+  verdicts here are the dismissals and the quiz overrides, read on the
+  latest write per subject as above:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } /"kind":"finding\.dismiss"/ { n++ } /"kind":"ticket\.write"/ { s = v("subject"); o[s] = (v("tier_proposed") != "" && v("tier_proposed") != v("tier")) || (v("label_proposed") != "" && v("label_proposed") != v("label")) } END { for (s in o) n += o[s]; print n + 0 }'`,
+  skipping the events before the window's start. With question 7's
+  binding decision record in place and that count 0, the question answers
+  `retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`
+  in place of its rows' rates and findings: the raises and stamps it
+  counted still print, but the retired line is no finding, counts toward
+  no total and records no note. It resumes by itself: the first window
+  holding one dismissal or one override prints the rows above, the record
+  notwithstanding. A project with no such record has the absence raised as
+  before.
 
 The rows read like this — the field, the skill, the stamp's value, the
 counts, the rate or the words that replace it, the clause:
