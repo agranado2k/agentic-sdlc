@@ -430,6 +430,36 @@ for bad in 0587 abc '#' 1234567 '587 x'; do
 done
 
 # ---------------------------------------------------------------------------
+banner "4e. A dry run names the spawn's agent type and model (#588)"
+# ---------------------------------------------------------------------------
+# spend/R6–R7: under the Claude Code adapter a spawn takes its tier's agent
+# type (adapters/claude-code/agents/<tier>.md) and the model the resolver
+# printed for that tier and domain; an unmapped tier keeps its agent type and
+# names no model, so the spawn inherits the session's. The dry run says both,
+# so a session spawning in its own harness reads them off one line.
+cat >"$STUBTREE/scripts/agents.kit.local.config.sh" <<'LOCAL_CFG'
+AGENT_TIER_REVIEWER='model-for-reviewing'
+AGENT_TIER_IMPLEMENTER_TESTS='model-for-testing'
+LOCAL_CFG
+local_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh "$@"; }
+local_dispatch /review-pr --prompt 'x' --dry-run
+case "$S_ERR" in
+*"agent type 'reviewer', model 'model-for-reviewing'"*) pass "a mapped tier's dry run names its agent type and the resolver's model" ;;
+*) fail "the dry run does not name agent type and model for a mapped tier: $S_ERR" ;;
+esac
+local_dispatch /tdd --tier implementer --domain tests --prompt 'x' --dry-run
+case "$S_ERR" in
+*"agent type 'implementer', model 'model-for-testing'"*) pass "…the model is the tier-and-domain answer, the type the tier's" ;;
+*) fail "the dry run does not resolve the domain for the model: $S_ERR" ;;
+esac
+local_dispatch /tdd --tier planner --prompt 'x' --dry-run
+case "$S_ERR" in
+*"agent type 'planner', no model"*) pass "an unmapped tier's dry run names its agent type and no model — the spawn inherits" ;;
+*) fail "the dry run does not name the agent type with no model for an unmapped tier: $S_ERR" ;;
+esac
+rm -f "$STUBTREE/scripts/agents.kit.local.config.sh"
+
+# ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
 # ---------------------------------------------------------------------------
 # The declaration is only worth having if it ends in an executable spawn. For
