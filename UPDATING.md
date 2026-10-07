@@ -227,6 +227,22 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.64.0 or older, one script joins and each review lens reads its slice.**
+One file joins at 0.65.0, `scripts/lens-slice.sh`; none leaves, and no other
+shared file changes but this recipe. The slicer is what `/review-pr`'s
+coordinator now runs once per review: one `<lens>.diff` per standards lens,
+the changed paths its rule selects, and `behavior.diff`, the whole diff. Its
+rules are policy, in `scripts/lens-slice.config.sh`, which is yours and
+ships filled for a kit-shaped layout — take it whole in 9d when absent, then
+retune `LENS_SLICE_RULES` to your layout; with no rules every lens reads the
+whole diff, and the slicer says so on stderr. In 9d, too, `config.mjs`'s
+`skillCeilings` lowers the `review-pr` and `implement` ceilings after their
+splits. Part 2 takes the rest in 9a and 9f: `/review-pr`'s six lenses move
+into `lens-*.md` files beside its SKILL.md, and `/implement`'s rare branches
+into `COVERS.md`, `DISPATCHED-REVIEW.md` and `STAMP.md` — take both skill
+directories whole; `.agents/prompts/cheap-reads.md` is new, and every
+spawning skill and both worker contracts point a worker at it.
+
 **Arriving from 0.63.0 or older, the recipe reads in order.**
 No file joins or leaves at 0.64.0, and no shared file changes but this
 recipe — so re-read it from disk after step 5, as always. Step 0 lists the
@@ -1104,7 +1120,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.64.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.65.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -2145,7 +2161,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.64.0 case for this file, and `ADD` is the 0.3.0 → 0.64.0
+`MERGE` is the 0.4.0 → 0.65.0 case for this file, and `ADD` is the 0.3.0 → 0.65.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2515,14 +2531,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.64.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.65.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.64.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.65.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2753,7 +2769,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.64.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.65.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

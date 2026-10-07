@@ -18,6 +18,7 @@
 #   scripts/guards.config.sh                       the guards' view of your layout
 #   scripts/agents.config.sh                       tier -> model, your provider's
 #   scripts/vocab.config.sh                        the words a decision line may carry — ships FILLED
+#   scripts/lens-slice.config.sh                   which changed paths each review lens reads — ships FILLED
 #   scripts/trace.config.sh                        whether and where decisions are traced — ships EMPTY
 #
 # Edit those freely — the whole point of stamping a template is that the copy
@@ -2443,7 +2444,64 @@
 # ADD commentary; C4m proves the merge's inputs and C4l counts every
 # classified path.
 
-shared-layer: 0.64.0
+# 0.65.0 — the spend-per-spawn wave's release (PRD #580, ticket #596): a
+# standards lens reads only its slice of the diff, and every spawned worker
+# is pointed at the reads that return the smallest exact answer. Releases
+# what landed on main after v0.64.0 with no bump: #620 (ticket #593), #621
+# (ticket #589), #623 (ticket #590) and #625 (ticket #594).
+# ONE file joins: scripts/lens-slice.sh (#623, ticket #590) — the slicer
+# /review-pr's coordinator runs once per review, writing one <lens>.diff per
+# standards lens (the changed paths its rule selects) and behavior.diff, the
+# whole diff; exit 2 a caller error, nothing written. Its mechanism is shared
+# like scripts/vocab.sh's; its policy, scripts/lens-slice.config.sh, is yours
+# and ships FILLED like scripts/vocab.config.sh, so the header above now
+# lists it among the policy files. Joining also puts it in bootstrap's
+# adoption arm, which copies the files: list, so an adopted repo's
+# /review-pr no longer calls a script it never received. None leaves. No other shared file changes
+# content but UPDATING.md: the arriving-from paragraph, and both worked
+# examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Policy files (yours, 9d): scripts/lens-slice.config.sh is new — take it
+# whole when absent, then retune LENS_SLICE_RULES to your layout; with no
+# rules every lens reads the whole diff, said on stderr.
+# scripts/docs-conformance/config.mjs's skillCeilings block lowers two
+# ceilings after their splits: review-pr 49000 -> 40000, implement 35000 ->
+# 27000 — merge by hand, or keep yours if your skills are larger.
+# /review-pr's SKILL.md moves each standards lens into a file of its own
+# beside it — lens-security.md, lens-api-crud.md, lens-pattern.md,
+# lens-simplicity.md, lens-reuse-dry.md and lens-test-hygiene.md (#621,
+# ticket #589) — hands each lens only its slice from scripts/lens-slice.sh,
+# records a lens whose slice is empty under "Lenses not run", and falls back
+# to the whole diff, said, when the slicer refuses (#623, ticket #590).
+# /implement's SKILL.md moves its rare branches beside it, opened on a
+# mechanical trigger: COVERS.md (the oracle and Covers: reading),
+# DISPATCHED-REVIEW.md (the dispatched review through the broker) and
+# STAMP.md (each stamp.sh exit and a low confidence); a missing
+# scripts/stamp.sh takes exit 3's path (#620, ticket #593). Take both skill
+# directories whole.
+# .agents/prompts/cheap-reads.md is new (9f): no worker contract, never
+# dispatched, a table of the narrow read before the broad one.
+# .agents/prompts/implement-worker.md and review-worker.md point their worker
+# at it, and .agents/prompts/README.md says what it is (#625, ticket #594).
+# Every spawning skill names it in its spawn prompt — /design-brief,
+# /housekeeping, /improve-codebase-architecture and its INTERFACE-DESIGN.md,
+# /implement, /pr-iterate and /review-pr — and the judge readers, in the
+# dogfood skill and /to-tickets, are told it is not for them: their reach
+# is the files they judge. Take them like any skill.
+# The rest of the wave shipped at 0.63.0 and is enumerated in that note:
+# the four adapter agent types and their .claude/agents wiring (#607,
+# #618), the Trace-Spawn line on every spawn site (#615), the cheap-first
+# cascade (#610), the skill byte ceilings (#603), /retro's spend per tier,
+# skill and rung (#617), and the pr-iterate and to-tickets splits (#616,
+# #619).
+# Kit-only, never shipped: tests/lens-slice.test.sh and
+# tests/cheap-reads.test.sh (both new), tests/review-pr-output.test.sh,
+# tests/implement-deliver.test.sh, tests/trace-skills.test.sh,
+# tests/spec-skills.test.sh and tests/forge-broker.test.sh; docs/specs/
+# spend.md's R10 and R11; the glossary; the kit CI jobs; bootstrap.sh's
+# adoption arm copies the new policy file, and both new suites stay out.
+
+shared-layer: 0.65.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2474,6 +2532,7 @@ files:
   scripts/tdd-pairing-guard.sh
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh
+  scripts/lens-slice.sh
   scripts/check.sh
   scripts/docs-conformance/index.mjs
   scripts/docs-conformance/context.mjs
