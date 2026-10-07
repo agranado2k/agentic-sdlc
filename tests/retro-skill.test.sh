@@ -652,7 +652,7 @@ fx_ticket implementer implementer ready-for-agent ready-for-agent run-this-inste
 fx_trace emit kind=ticket.write subject='ticket:#12' tier=implementer data.tier_proposed=implementer data.label=ready-for-agent data.label_confidence=high
 # A first review's run raises six `low` findings; a human closes one thread,
 # and two iterations both see it closed — one (thread, where) pair, once.
-fx_trace begin review-pr subject='pr:#9' >/dev/null
+fx_run=$(fx_trace begin review-pr subject='pr:#9')
 for line in 1 2 3 4 5 6; do
 	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id="L-$line" data.severity=low data.agent=simplicity data.where="a.sh:$line" data.posted=yes reason=fixture
 done
@@ -660,7 +660,7 @@ done
 # the line the human later closes: nobody could have dismissed it, so it is
 # in no denominator and pairs with nothing.
 fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id=L-7 data.severity=low data.agent=simplicity data.where=a.sh:2 data.posted=no reason=fixture
-fx_trace end outcome=ok
+fx_trace end "$fx_run" outcome=ok
 for _ in 1 2; do
 	fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T1 reason=fixture
 done
@@ -669,11 +669,11 @@ done
 # first review raised on; a human closes one thread there. The dismissal
 # pairs with the LATEST raise at that line and its same-review sibling —
 # both count, the row says two shared it — and not with the first review's.
-fx_trace begin review-pr subject='pr:#9' >/dev/null
+fx_run=$(fx_trace begin review-pr subject='pr:#9')
 for where in a.sh:2 a.sh:2 b.sh:1 b.sh:2 b.sh:3; do
 	fx_trace emit kind=finding.raise subject='pr:#9' outcome=raised data.id=M-1 data.severity=medium data.agent=simplicity data.where="$where" reason=fixture
 done
-fx_trace end outcome=ok
+fx_trace end "$fx_run" outcome=ok
 fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=thread data.where=a.sh:2 data.thread=T2 reason=fixture
 # …and a dismissal at a line nobody raised on is counted beside the table.
 fx_trace emit kind=finding.dismiss subject='pr:#9' outcome=dismissed data.via=review data.where=z.sh:1 data.thread=R1 reason=fixture
@@ -1235,7 +1235,7 @@ banner "13. The retro learns from its own runs: a closed window, an open sibling
 # print A's run.end and nothing of B.
 lw="$SCRATCH/learn.retro"
 lw_trace() { ( cd "$ROOT" && TRACE_DIR="$lw" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
-run_a=$(lw_trace begin retro); lw_trace end outcome=ok data.findings=1 >/dev/null
+run_a=$(lw_trace begin retro); lw_trace end "$run_a" outcome=ok data.findings=1 >/dev/null
 run_b=$(lw_trace begin retro)
 wspan=$(window_section | grep -o '`sh scripts/trace\.sh[^`]*`' | tr -d '`' | head -1)
 wout=$( cd "$ROOT" && TRACE_DIR="$lw" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$wspan")" 2>/dev/null )
