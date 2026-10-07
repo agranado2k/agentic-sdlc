@@ -72,7 +72,9 @@ a candidate that contradicts a binding record is a different conversation from
 one that does not, and you cannot tell which you have until you have read them.
 
 Then spawn a read-only exploration subagent in **fresh context** (shared
-invariant §4) to walk the codebase. Don't follow rigid heuristics — explore
+invariant §4) to walk the codebase. Its spawn prompt names
+`.agents/prompts/cheap-reads.md` always, the
+reads to make first. Don't follow rigid heuristics — explore
 organically and note where you experience friction:
 
 - Where does understanding one concept require bouncing between many small modules?

@@ -59,7 +59,9 @@ glossary section and a decision record. Prefactoring the brief implies goes to
 
 - Read the brief, the glossary and the decision records yourself.
 - **Existing codebase:** spawn a read-only exploration subagent in fresh
-  context (shared invariant §4) at the planner tier. It returns, in the
+  context (shared invariant §4) at the planner tier. Its spawn prompt
+  names `.agents/prompts/cheap-reads.md`
+  always, the reads to make first. It returns, in the
   glossary's words: the paradigm the code actually uses and where it is
   mixed; the layering as it is, not as documented; the hot spots from a
   stretch of history; the patterns already present; and where dependencies
@@ -82,7 +84,9 @@ finding, not a failure: say so, and expect several anchors to read
 
 ### 3. Design it twice
 
-Spawn two planner-tier subagents in fresh context — the same discipline
+Spawn two planner-tier subagents in fresh context, each spawn prompt naming
+`.agents/prompts/cheap-reads.md` always, the reads to make first —
+the same discipline
 `/improve-codebase-architecture` applies to an interface, here applied to the
 whole shape. Each gets the brief, the glossary, the subdomain classification
 and the exploration's data, and **a different constraint**:

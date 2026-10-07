@@ -971,6 +971,7 @@ sh tests/housekeeping-skill.test.sh                    # the /housekeeping contr
 sh tests/retro-skill.test.sh                           # the /retro contract
 sh tests/spec-skills.test.sh                           # the /to-prd and /to-tickets contracts
 sh tests/skill-phase.test.sh                           # every skill declares its phase of work
+sh tests/cheap-reads.test.sh                           # every spawning skill and worker contract points at the cheap-reads reference
 sh tests/skill-cascade.test.sh                         # a mechanical ticket runs cheap-first, escalating on a red oracle
 sh tests/manifest.test.sh                              # the manifest grammar, once
 sh tests/no-box-art.test.sh                            # craft §10: no character art in the shipped prose

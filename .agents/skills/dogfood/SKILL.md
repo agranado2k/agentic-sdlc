@@ -80,7 +80,10 @@ screen and nothing to read: it is not handed over.
 Spawn it — `sh scripts/agents.lib.sh mechanical judge` resolves its model,
 and nothing printed means it inherits yours — with read access to that file
 and nothing else: no shell, no forge CLI, no network, and no reach to the
-surface under test. How an agent harness withholds those tools is the
+surface under test. The reader's spawn prompt never names
+`.agents/prompts/cheap-reads.md`: its reach is the files it judges, and that
+reference's reads need the tree or a shell. How an agent harness withholds
+those tools is the
 adapter's, not this skill's, to say. Where the adapter documents a restricted
 path through the agent CLI, spawn the reader through it, run from `$scratch`
 so that file and its return file are the reader's whole reach — the adapter

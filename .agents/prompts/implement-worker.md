@@ -22,6 +22,9 @@ a decision recorded there outranks your priors, and contradicting one without
 saying so is the most expensive thing you can do here. Read `docs/diary.md`'s
 current-state block, which is what the last session left you.
 
+Read cheaply: `.agents/prompts/cheap-reads.md` names the reads that return the
+smallest exact answer. Widen only when the narrow read was not enough.
+
 The ticket:
 
 %%BODY%%

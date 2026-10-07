@@ -20,7 +20,7 @@ Show this, then immediately proceed to Step 2. The human reads and thinks while 
 
 Spawn 3+ sub-agents in parallel. Each must produce a **radically different** interface for the deepened module. Interface design is `planner`-tier work: resolve the model with `sh scripts/agents.lib.sh planner` before spawning, and pass nothing if the resolver prints nothing — an unmapped tier means the spawn inherits this session's model, which is a working state.
 
-Each sub-agent gets its own technical brief in **fresh context** (shared invariant §4): file paths, coupling details, dependency category, what sits behind the seam. The brief is independent of the human-facing framing from Step 1 — a sub-agent that reads your framing designs your idea again. Give each one a different design constraint:
+Each sub-agent gets its own technical brief in **fresh context** (shared invariant §4): file paths, coupling details, dependency category, what sits behind the seam. The brief is independent of the human-facing framing from Step 1 — a sub-agent that reads your framing designs your idea again. Give each one a different design constraint: Each brief names `.agents/prompts/cheap-reads.md` always, the reads to make first.
 
 - Agent 1: "Minimise the interface — aim for 1–3 entry points max. Maximise leverage per entry point."
 - Agent 2: "Maximise flexibility — support many use cases and extension."

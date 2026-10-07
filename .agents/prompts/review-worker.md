@@ -55,6 +55,9 @@ from the refs already in this checkout; there is nothing to fetch. Keep that
 command below names, because %%BRANCH%% is a moving ref: the session that
 started you shares this checkout and may commit to it while you read.
 
+Read cheaply: `.agents/prompts/cheap-reads.md` names the reads that return the
+smallest exact answer. Widen only when the narrow read was not enough.
+
 Then read the diff yourself, against the sha you pinned:
 
     git diff %%BASE%%...<the sha you pinned>
