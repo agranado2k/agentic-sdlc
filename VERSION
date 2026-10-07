@@ -2339,9 +2339,18 @@
 # enumeration of the policy's values. From the retrospective of 2026-10-06,
 # question 5: two models recorded five ways — each as its spawn word and as
 # its pinned id, one also half-spelled — split spend per model.
-# NO file joins or leaves. UPDATING.md changes content: the arriving-from
-# paragraph, and both worked examples re-pin. Renumbered past the 0.62.0
-# that landed first (#564).
+# ONE file joins, carried from main (#585, below):
+# scripts/docs-conformance/validators/skill-ceiling.mjs. None leaves.
+# UPDATING.md changes content: the arriving-from paragraph, and both worked
+# examples re-pin. Renumbered past the 0.62.0 that landed first (#564).
+# ALSO CARRIED, landed on main after v0.62.0 with no bump (#585): a skill
+# that outgrows its byte ceiling fails the docs gate. The new validator
+# validators/skill-ceiling.mjs joins the layer, and shared files change
+# with it — scripts/check.sh (its POSIX twin, and the NOTICE line naming
+# it), scripts/docs-conformance/context.mjs (the context gains size(rel))
+# and runner.mjs (the validator registered). The ceilings themselves are
+# policy: config.mjs's skillCeilings block, yours, one literal
+# `"<path>": <bytes>,` per line.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # .agents/skills/implement/SKILL.md and .agents/skills/review-pr/SKILL.md:
 # their kind=spawn lines say `$model` is the resolver's id as printed, never
@@ -2361,8 +2370,13 @@
 # attributes the agent.stop it files, with adapters/claude-code/README.md
 # saying so — while scripts/trace.sh's summary gains `--by tier` and
 # `--by domain`, a shared-file change that landed with no bump and ships
-# here (#583, ADR-0008 clause 5 amended). Take the skills like any skill and
-# the adapter files as 9e says.
+# here (#583, ADR-0008 clause 5 amended). scripts/docs-conformance/config.mjs
+# (yours) gains the skillCeilings block, seeded at the kit's four largest
+# skills, scripts/docs-conformance/README.md (yours) describes the rule, and
+# scripts/docs-conformance/test/skill-ceiling.test.mjs and context.test.mjs
+# (yours, shipped) hold it (#585). Take the skills like any skill, the
+# adapter files as 9e says, and merge skillCeilings into your config.mjs as
+# 9d says for a policy file.
 # Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
 # kit's agents policy (`agents.kit.sh --policy`) and names a failed lookup;
 # scripts/agents.kit.sh's unreachable bridge reads agents_values; tests/trace.test.sh §31

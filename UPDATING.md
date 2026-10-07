@@ -220,7 +220,8 @@ manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
 **Arriving from 0.62.0 or older, a spawn's model is held at emit to an id your agents policy maps.**
-No file joins or leaves at 0.63.0. `scripts/agents.lib.sh` gains
+One file joins at 0.63.0, `scripts/docs-conformance/validators/skill-ceiling.mjs`
+(#585, below); none leaves. `scripts/agents.lib.sh` gains
 `--ids`, which prints every model id your `scripts/agents.config.sh` maps,
 in the form `--model` prints; `scripts/trace.sh emit kind=spawn` now
 refuses, exit 2 and nothing written, a `model` that is not one of them — the
@@ -248,7 +249,12 @@ whose `tok_out` is a streamed snapshot with `data.out_snapshot`, which
 `hooks/subagent-stop.sh` reads a spawn prompt's `Trace-Spawn:` second line
 through `hook.lib.sh` to attribute the `agent.stop` it files, while
 `scripts/trace.sh summary` gains `--by tier` and `--by domain` (#583) —
-take the adapter files as 9e says.
+take the adapter files as 9e says. And a skill that outgrows its byte
+ceiling now fails the docs gate (#585): the joining validator, its twin in
+`scripts/check.sh`, and `context.mjs`'s `size(rel)` arrive in step 5, but
+the ceilings are policy — merge the `skillCeilings` block into your
+`scripts/docs-conformance/config.mjs` in 9d, one literal `"<path>": <bytes>,`
+per line, or declare none and the rule checks nothing.
 
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
@@ -1076,6 +1082,7 @@ scripts/docs-conformance/validators/housekeeping-due.mjs
 scripts/docs-conformance/validators/living-spec.mjs
 scripts/docs-conformance/validators/mutation-decision.mjs
 scripts/docs-conformance/validators/skill-bridge.mjs
+scripts/docs-conformance/validators/skill-ceiling.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
@@ -1090,10 +1097,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2533 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2542 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2687 insertions(+), 1 deletion(-)
+ 3 files changed, 2696 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1146,6 +1153,7 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/living-spec.mjs
   updated scripts/docs-conformance/validators/mutation-decision.mjs
   updated scripts/docs-conformance/validators/skill-bridge.mjs
+  updated scripts/docs-conformance/validators/skill-ceiling.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
@@ -1177,6 +1185,7 @@ verbatim  scripts/docs-conformance/validators/housekeeping-due.mjs
 verbatim  scripts/docs-conformance/validators/living-spec.mjs
 verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
 verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
+verbatim  scripts/docs-conformance/validators/skill-ceiling.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
