@@ -343,6 +343,98 @@ for s in to-tickets pr-iterate dogfood; do
 done
 
 # ---------------------------------------------------------------------------
+banner "A7. The Claude Code adapter offers one agent type per tier (spend/R4, spend/R5, spend/R24)"
+# ---------------------------------------------------------------------------
+# A spawn that names no agent type inherits the catch-all one, with every tool
+# the harness has. The adapter ships one type per capability tier instead,
+# each declaring the tools that tier's work needs and NO model: the model is
+# the resolver's answer at spawn time (ADR-0003, ADR-0013), so a model line in
+# a type would be a second, unrecorded mapping that outranks the policy file.
+# The lists below are the decision, held here and recorded with each reason in
+# the adapter's README ("One agent type per tier") — the suite and the README
+# move together.
+TYPES_DIR="$KIT/adapters/claude-code/agents"
+
+# fm_field <file> <key> — the value of a frontmatter key, or empty.
+fm_field() {
+	awk -v k="$2" '
+		NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
+		fm && /^---[[:space:]]*$/ { exit }
+		fm && index($0, k ":") == 1 { v = substr($0, length(k) + 2); sub(/^[[:space:]]+/, "", v); print v; exit }
+	' "$1"
+}
+# fm_has <file> <key> — the frontmatter carries the key at all.
+fm_has() {
+	awk -v k="$2" '
+		NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
+		fm && /^---[[:space:]]*$/ { exit }
+		fm && index($0, k ":") == 1 { found = 1; exit }
+		END { exit !found }
+	' "$1"
+}
+
+for spec in \
+	'planner|Read, Grep, Glob, Bash, Edit, Write, Skill, Agent' \
+	'implementer|Read, Grep, Glob, Bash, Edit, Write, Skill, Agent' \
+	'mechanical|Read, Grep, Glob, Bash, Edit, Write, Skill' \
+	'reviewer|Read, Grep, Glob'; do
+	tier=${spec%%|*}
+	want=${spec#*|}
+	f="$TYPES_DIR/$tier.md"
+	if [ ! -f "$f" ]; then
+		fail "adapters/claude-code/agents/$tier.md is missing — the $tier tier has no agent type (spend/R4)"
+		continue
+	fi
+	[ "$(fm_field "$f" name)" = "$tier" ] &&
+		pass "$tier.md names itself '$tier' — the tier word is the type's name" ||
+		fail "$tier.md's name is '$(fm_field "$f" name)', not '$tier'"
+	[ -n "$(fm_field "$f" description)" ] &&
+		pass "$tier.md carries a description" ||
+		fail "$tier.md has no description — the harness lists the type with nothing to choose it by"
+	# An absent tools line is the dangerous default: the type then inherits
+	# every tool, which is the catch-all this ticket exists to replace.
+	got=$(fm_field "$f" tools)
+	[ "$got" = "$want" ] &&
+		pass "$tier.md declares exactly: $want (spend/R4)" ||
+		fail "$tier.md declares tools '$got', not '$want' — change the README's table and this list together (spend/R4)"
+	fm_has "$f" model &&
+		fail "$tier.md carries a model line — the model is the resolver's answer at spawn time (spend/R4, spend/R24)" ||
+		pass "$tier.md carries no model line (spend/R4)"
+	t_assert_no_model_id "$f"
+done
+
+n=$(find "$TYPES_DIR" -name '*.md' -type f 2>/dev/null | wc -l | tr -d ' ')
+[ "$n" = 4 ] && pass "exactly four agent types — one per tier" ||
+	fail "$n agent types under adapters/claude-code/agents — expected four, one per tier"
+
+# The reviewer reads untrusted content (a diff, a ticket) and judges it. It
+# holds nothing that writes a file, reaches the network, calls a tool server
+# or spawns another agent that could: Bash is all three, so it is out too,
+# and the spawner hands the reviewer its diff as a file to read.
+if [ -f "$TYPES_DIR/reviewer.md" ]; then
+	rtools=$(fm_field "$TYPES_DIR/reviewer.md" tools)
+	for bad in Write Edit NotebookEdit Bash WebFetch WebSearch Agent Task 'mcp__'; do
+		case ", $rtools," in
+		*", $bad"*) fail "the reviewer type carries $bad — it may not write, reach the network or call a tool server (spend/R5)" ;;
+		*) pass "the reviewer type carries no $bad (spend/R5)" ;;
+		esac
+	done
+fi
+
+# The README records each type's tools and why, and names the directory.
+CC_TYPES_README="$KIT/adapters/claude-code/README.md"
+if grep -q '^## One agent type per tier' "$CC_TYPES_README"; then
+	pass "the adapter README has its 'One agent type per tier' section"
+	for tier in planner implementer mechanical reviewer; do
+		sed -n '/^## One agent type per tier/,/^## [^O]/p' "$CC_TYPES_README" | grep -q "^| \`$tier\` |" &&
+			pass "the README's table has a row for $tier" ||
+			fail "the README's table has no row for $tier — the decision is not recorded where it is read"
+	done
+else
+	fail "the adapter README has no 'One agent type per tier' section — the tool lists are not recorded with their reasons"
+fi
+
+# ---------------------------------------------------------------------------
 banner "B. Setup — simulate 'Use this template'"
 # ---------------------------------------------------------------------------
 mkdir -p "$PROJ"
@@ -463,6 +555,71 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the POSIX fallback fails with adapters/ in the tree"
 		printf '%s\n' "$out" | sed 's/^/        | /'
 	fi
+fi
+
+# ---------------------------------------------------------------------------
+banner "B4. The gate fails an agent type that names a model (spend/R24)"
+# ---------------------------------------------------------------------------
+# Three plants, one rule: a model line in a type's frontmatter (spelled as
+# the harness writes it, and spaced or capitalised, since a key the gate
+# misses by spelling is a key the harness may still read), and a model
+# identifier anywhere in its body. Each must turn the project's gate red under
+# both engines — the check is POSIX and runs in either — and naming the file.
+# The identifier is assembled from parts so this suite carries none.
+fam=sonnet
+plant_line="model: $fam"
+plant_id="claude-$fam-9-9"
+for plant in line spaced id; do
+	case "$plant" in
+	line) body="---
+name: rogue
+description: a fixture type that names a model
+tools: Read
+$plant_line
+---
+A fixture.
+" ;;
+	spaced) body="---
+name: rogue
+description: a fixture type that names a model
+tools: Read
+Model : $fam
+---
+A fixture.
+" ;;
+	id) body="---
+name: rogue
+description: a fixture type that names a model
+tools: Read
+---
+Spawn this on $plant_id.
+" ;;
+	esac
+	mkdir -p adapters/claude-code/agents
+	printf '%s' "$body" >adapters/claude-code/agents/rogue.md
+	for engine in node posix; do
+		[ "$engine" = node ] && [ "$HAVE_NODE" = 0 ] && continue
+		if [ "$engine" = posix ]; then
+			out=$(DOCS_CHECK_NO_NODE=1 sh scripts/check.sh 2>&1)
+		else
+			out=$(sh scripts/check.sh 2>&1)
+		fi
+		st=$?
+		if [ "$st" = 1 ] && printf '%s' "$out" | grep -q 'agent-type-model' &&
+			printf '%s' "$out" | grep -q 'adapters/claude-code/agents/rogue.md'; then
+			pass "the gate ($engine) fails a type whose $plant names a model, naming the file (spend/R24)"
+		else
+			fail "the gate ($engine) did not fail a type whose $plant names a model (status $st)"
+			printf '%s\n' "$out" | tail -8 | sed 's/^/        | /'
+		fi
+	done
+done
+rm -f adapters/claude-code/agents/rogue.md
+if out=$(DOCS_CHECK_NO_NODE=1 sh scripts/check.sh 2>&1); then
+	pass "the plant removed, the gate is green again"
+else
+	fail "the gate stays red with the plant removed"
+	printf '%s\n' "$out" | tail -8 | sed 's/^/        | /'
 fi
 
 # ---------------------------------------------------------------------------
