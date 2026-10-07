@@ -1544,14 +1544,17 @@ sp_trace emit kind=agent.stop subject=agent:a5 tier=planner skill=to-tickets mod
   sp_trace emit kind=spawn.end subject=run:C1 outcome=ok model=m1 tok_in=200000 data.rung=1
   sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=escalated data.rung=1
   sp_trace emit kind=spawn.end subject=run:C1 outcome=ok model=m1 tok_in=400000 data.rung=2
-  sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=passed data.rung=2 )
+  sp_trace emit kind=spawn subject=run:C1 tier=mechanical skill=implement model=m1 outcome=passed data.rung=2
+  # A stop from before the attribution, filed under the same run: it is not
+  # the cascade's, so it never borrows the run's tier.
+  sp_trace emit kind=agent.stop subject=agent:a6 model=m1 tok_in=1000 )
 if [ -n "$sspan" ]; then
 	sout=$( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$sspan")" 2>/dev/null )
 	for row in 'tier implementer 1 3.0000' 'tier reviewer 1 0.3000' 'tier mechanical 2 1.8000' 'tier planner 1 unpriced' \
-		'tier unattributed 2 15.0300' 'skill implement 3 4.8000' 'skill review-pr 1 0.3000' 'skill unattributed 2 15.0300' \
+		'tier unattributed 3 15.0330' 'skill implement 3 4.8000' 'skill review-pr 1 0.3000' 'skill unattributed 3 15.0330' \
 		'rung 1 1 0.6000' 'rung 2 1 1.2000' 'verdict rung-1:escalated 1 -' 'verdict rung-2:passed 1 -' \
-		'bucket under-0.10 1 0.0300' 'bucket 0.10-1 2 0.9000' 'bucket 1-10 2 4.2000' 'bucket 10-up 1 15.0000' \
-		'bucket unpriced 1 unpriced' 'total all 7 unpriced'; do
+		'bucket under-0.10 2 0.0330' 'bucket 0.10-1 2 0.9000' 'bucket 1-10 2 4.2000' 'bucket 10-up 1 15.0000' \
+		'bucket unpriced 1 unpriced' 'total all 8 unpriced'; do
 		printf '%s\n' "$sout" | grep -qxF "$row" && pass "spend/R22: the spend span prints '$row'" ||
 			fail "spend/R22: the spend span did not print '$row' over the fixture; it printed: $(printf '%s' "$sout" | tr '\n' ';')"
 	done
