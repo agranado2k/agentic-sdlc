@@ -172,7 +172,7 @@ AGENT_TIER_IMPLEMENTER_TESTS='stub:model-for-testing'
 AGENT_TIER_MECHANICAL='stub:model-for-mechanics'
 AGENT_TIER_REVIEWER='stub:model-for-reviewing'
 STUB_CFG
-stub_dispatch() { t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
+stub_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
 
 # staged_prompt — what the stub read on stdin, which is the prompt the worker
 # would have received: the dispatcher's own stdout is the worker's.
@@ -364,6 +364,70 @@ else
 	fail "a kit dispatch wrote no spawn record — the wrapper does not name scripts/trace.kit.config.sh (exit $S_STATUS)"
 fi
 rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+
+# ---------------------------------------------------------------------------
+banner "4d. A dispatched worker's prompt opens with the run and what the spawn served (#587)"
+# ---------------------------------------------------------------------------
+# spend/R1: every spawn the chain makes says what it served, so a wave's stops
+# come out attributed without anyone tagging them by hand. The channel is the
+# spawn prompt's first two lines — `Trace-Run: <run> [<parent>]`, then
+# `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>`
+# — exactly as the adapter's subagent-stop hook reads them (ADR-0008 clause 5,
+# #583 amendment). The dispatcher writes both, from the run it is dispatched
+# under and the stamp it resolved; --ticket names the ticket. With no run there
+# is nothing for the second line to sit under, and neither is written.
+RUN587=20261007T104205Z-4242-0a1b2c3d
+PARENT587=20261007T090000Z-17-deadbeef
+spawn_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub "$@"; }
+# dry_prompt — the prompt a dry run shows, between its two rules.
+dry_prompt() { printf '%s\n' "$S_OUT" | sed -n '/^--- prompt (/,/^--- end prompt ---$/p' | sed '1d;$d'; }
+
+spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket 587 --prompt 'build it' --dry-run
+p=$(dry_prompt)
+[ "$S_STATUS" = 0 ] || fail "a dry run with --ticket exited $S_STATUS: $S_ERR"
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $RUN587" ] &&
+	pass "a dry run's prompt opens with the run it was dispatched under" ||
+	fail "the prompt's first line is not 'Trace-Run: $RUN587': $(printf '%s\n' "$p" | sed -n 1p)"
+[ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=none skill=tdd ticket=#587" ] &&
+	pass "…then the Trace-Spawn line: the stamp's tier, no domain, the skill, the ticket" ||
+	fail "the prompt's second line is not the Trace-Spawn line: $(printf '%s\n' "$p" | sed -n 2p)"
+[ "$(printf '%s\n' "$p" | sed -n 3p)" = "Run /tdd. build it" ] &&
+	pass "…and the instruction follows them" ||
+	fail "the instruction does not follow the two lines: $(printf '%s\n' "$p" | sed -n 3p)"
+
+spawn_dispatch TRACE_RUN=$RUN587 TRACE_PARENT=$PARENT587 sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --domain tests --prompt 'build it' --dry-run
+p=$(dry_prompt)
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $RUN587 $PARENT587" ] &&
+	pass "a run that nests in another carries its parent after one space" ||
+	fail "the parent is not on the first line: $(printf '%s\n' "$p" | sed -n 1p)"
+[ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=tests skill=tdd ticket=none" ] &&
+	pass "with no --ticket the line says ticket=none, and the stamp's domain rides along" ||
+	fail "the no-ticket Trace-Spawn line is wrong: $(printf '%s\n' "$p" | sed -n 2p)"
+
+spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /review-pr --ticket '#587' --prompt 'the spec' --set BRANCH=b --set BASE=main --dry-run
+p=$(dry_prompt)
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $RUN587" ] &&
+	[ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=reviewer domain=none skill=review-pr ticket=#587" ] &&
+	pass "the review worker's contract opens with both lines too, the phase's tier on the second" ||
+	fail "the review contract does not open with both lines: $(printf '%s\n' "$p" | sed -n 1,2p)"
+case "$(printf '%s\n' "$p" | sed -n 3,4p)" in
+*"no network"*) pass "…and the contract's offline line follows them at once" ;;
+*) fail "the contract's opening line does not follow the two lines: $(printf '%s\n' "$p" | sed -n 3,4p)" ;;
+esac
+case "$p" in *'<!--'*) fail "…but the contract's editor header was sent with them" ;;
+*) pass "…and the contract's editor header is still stripped" ;; esac
+
+spawn_dispatch TRACE_RUN= sh scripts/skill-dispatch.kit.sh /tdd --ticket 587 --prompt 'build it' --dry-run
+p=$(dry_prompt)
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Run /tdd. build it" ] &&
+	pass "with no run, neither line is written — a Trace-Spawn line under no run is no line" ||
+	fail "a dispatch under no run still opened with: $(printf '%s\n' "$p" | sed -n 1p)"
+
+for bad in 0587 abc '#' 1234567 '587 x'; do
+	spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --ticket "$bad" --prompt 'x' --dry-run
+	[ "$S_STATUS" = 2 ] && pass "--ticket '$bad' is refused (exit 2)" ||
+		fail "--ticket '$bad' exited $S_STATUS"
+done
 
 # ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"

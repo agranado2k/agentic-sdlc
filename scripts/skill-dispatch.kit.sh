@@ -5,6 +5,7 @@
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt <text>      [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt-file <path> [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --tier <tier> [--domain <token>] ...
+#   sh scripts/skill-dispatch.kit.sh <skill> --ticket <N> ...   (the Trace-Spawn line's ticket)
 #   sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> \
 #                                     (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh --tier-of <skill>
@@ -88,7 +89,7 @@ TRACE_CONFIG="$ROOT/scripts/trace.kit.config.sh"
 export TRACE_CONFIG
 
 usage() {
-	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]" >&2
+	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] [--ticket <N>] --prompt <text> [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
@@ -150,6 +151,7 @@ shift
 # and must not reach it as flags.
 OVERRIDE_TIER=''
 OVERRIDE_DOMAIN=''
+TICKET=''
 CASCADE_TICKET=''
 CASCADE_WT=''
 CASCADE_BASE=''
@@ -170,6 +172,16 @@ while [ "$_count" -gt 0 ]; do
 		OVERRIDE_DOMAIN=$1
 		shift
 		_count=$((_count - 1))
+		;;
+	--ticket)
+		[ "$_count" -gt 0 ] || die "--ticket needs the number of the ticket the dispatch serves"
+		TICKET=${1#\#}
+		shift
+		_count=$((_count - 1))
+		case "$TICKET" in
+		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-9][0-9][0-9][0-9][0-9] | [1-9][0-9][0-9][0-9][0-9][0-9]) ;;
+		*) die "--ticket takes a ticket number, '#' optional, no leading zero, six digits at most" ;;
+		esac
 		;;
 	--ticket-file | --worktree | --base)
 		[ "$_count" -gt 0 ] || die "$a needs a value"
@@ -203,6 +215,32 @@ for a in "$@"; do
 	break
 done
 
+# What the spawn served, on the prompt's first two lines (#587, spend/R1):
+# `Trace-Run: <run> [<parent>]`, then `Trace-Spawn: tier=<tier>
+# domain=<domain|none> skill=<skill> ticket=<#N|none>` — exactly the channel
+# the adapter's subagent-stop hook reads (ADR-0008 clause 5, #583 amendment).
+# The run is the one this dispatch runs under, asked of the trace script the
+# way agent-dispatch.sh asks it (a dry-run emit, which writes nothing); with no
+# trace script, the environment's. No run, no lines: a Trace-Spawn line with
+# no Trace-Run line above it is no line to the hook.
+SPAWN_LINES=''
+_sl_run=${TRACE_RUN:-} _sl_parent=${TRACE_PARENT:-}
+if [ -f "$ROOT/scripts/trace.sh" ]; then
+	_sl_ev=$(TRACE_QUIET=1 sh "$ROOT/scripts/trace.sh" emit kind=note --dry-run 2>/dev/null) || _sl_ev=''
+	_sl_run=$(printf '%s\n' "$_sl_ev" | sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
+	_sl_parent=$(printf '%s\n' "$_sl_ev" | sed -n 's/.*"parent":"\([^"]*\)".*/\1/p')
+fi
+_sl_id_ok() { printf '%s\n' "$1" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}'; }
+if [ -n "$_sl_run" ] && _sl_id_ok "$_sl_run"; then
+	_sl_id_ok "$_sl_parent" || _sl_parent=''
+	_sl_tier=${TIER_ARGS%% *} _sl_domain=none
+	case "$TIER_ARGS" in *' '*) _sl_domain=${TIER_ARGS#* } ;; esac
+	_sl_ticket=none
+	[ -z "$TICKET" ] || _sl_ticket="#$TICKET"
+	SPAWN_LINES="Trace-Run: $_sl_run${_sl_parent:+ $_sl_parent}
+Trace-Spawn: tier=$_sl_tier domain=$_sl_domain skill=${SKILL#/} ticket=$_sl_ticket
+"
+fi
 # --- the cascade: cheap first, where an oracle decides (#586, PRD #580) ------
 # WHY. The mechanical tier once ran on the cheapest model outright and failed
 # three tickets of three in a day (retro 20261001T150216Z): each worker said
@@ -472,7 +510,7 @@ dispatch_rewritten() {
 		if [ "$take_next" = 1 ]; then
 			take_next=0
 			case "$_dr_mode" in
-			prefix) set -- "$@" --prompt "Run $SKILL. $a" ;;
+			prefix) set -- "$@" --prompt "${SPAWN_LINES}Run $SKILL. $a" ;;
 			spec) set -- "$@" --set "SPEC=$a" ;;
 			esac
 			continue
@@ -500,6 +538,22 @@ review-pr)
 	if [ "$PROMPT_SEEN" != file ]; then
 		CONTRACT="$ROOT/.agents/prompts/review-worker.md"
 		[ -f "$CONTRACT" ] || die "no worker contract at .agents/prompts/review-worker.md — /review-pr cannot be dispatched without it"
+		if [ -n "$SPAWN_LINES" ]; then
+			# The two lines go under the contract's editor header, which the
+			# dispatcher strips, so they open what the worker reads. A copy,
+			# never the contract itself; removed when the dispatch returns.
+			_sl_contract=$(mktemp "${TMPDIR:-/tmp}/skill-dispatch.XXXXXX") || die "cannot stage the worker contract"
+			SPAWN_LINES=$SPAWN_LINES awk '
+				BEGIN { lines = ENVIRON["SPAWN_LINES"] }
+				NR == 1 && $0 != "<!--" { printf "%s", lines; done = 1 }
+				{ print }
+				!done && $0 == "-->" { printf "%s", lines; done = 1 }
+			' "$CONTRACT" >"$_sl_contract"
+			_sl_rc=0
+			(dispatch_rewritten spec "$@" --prompt-file "$_sl_contract") || _sl_rc=$?
+			rm -f "$_sl_contract"
+			exit "$_sl_rc"
+		fi
 		dispatch_rewritten spec "$@" --prompt-file "$CONTRACT"
 	fi
 	;;
