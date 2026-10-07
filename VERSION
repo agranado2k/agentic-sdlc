@@ -2230,6 +2230,11 @@
 # and the proof that scan can go red; replace your copy with the kit's
 # (#561). scripts/docs-conformance/README.md (yours, shipped) says so in the
 # living-spec paragraph.
+# .agents/skills/review-pr/SKILL.md: a single-reviewer pass — one context
+# auditing every lens, allowed only when no lens agent can run — records its
+# findings and both verdict lines under data.agent=single-reviewer, a roster
+# token that is no lens, and every review records both verdicts before its
+# run ends (#568, landed on main after v0.59.0). Take it like any skill.
 # Kit-only, never shipped: tests/docs-demo.sh's A5c, the consumer case in
 # both engines with the shipped fixtures present.
 
