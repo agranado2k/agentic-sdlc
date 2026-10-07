@@ -288,34 +288,7 @@ hook_run_of() {
 # TRACE_PARENT already set is kept.
 hook_run_handed() {
 	[ -n "${TRACE_RUN+set}" ] && return 0
-	[ -n "${1:-}" ] || return 1
-	# Fifty lines: the prompt is written when the agent starts, ahead of
-	# everything it does. 4096 bytes: the record's keys and the prompt's first
-	# line fit many times over, and nothing past them is the channel's.
-	_rh_line=$(head -n 50 "$1" 2>/dev/null |
-		sed -n '/"type"[[:space:]]*:[[:space:]]*"user"/{p;q;}' | cut -b 1-4096)
-	# The message's own content, anchored on its role so no nested content
-	# block answers for it: one string, or content blocks whose first is text.
-	_rh_rest=${_rh_line#*'"role":"user","content":"'}
-	[ "$_rh_rest" != "$_rh_line" ] ||
-		_rh_rest=${_rh_line#*'"role":"user","content":[{"type":"text","text":"'}
-	[ "$_rh_rest" != "$_rh_line" ] || return 1
-	case $_rh_rest in 'Trace-Run: '*) ;; *) return 1 ;; esac
-	_rh_val=${_rh_rest#Trace-Run: }
-	# The line ends where the JSON string's next escape or its close begins,
-	# and that escape must be a newline: a tab or anything else after the ids
-	# is more on the line, and no channel.
-	_rh_run=${_rh_val%%\\*}
-	_rh_run=${_rh_run%%\"*}
-	case ${_rh_val#"$_rh_run"} in '\n'* | '"'*) ;; *) return 1 ;; esac
-	_rh_parent=
-	case $_rh_run in *' '*)
-		_rh_parent=${_rh_run#* }
-		_rh_run=${_rh_run%% *}
-		hook_run_id_ok "$_rh_parent" || return 1
-		;;
-	esac
-	hook_run_id_ok "$_rh_run" || return 1
+	hook_handed_line "${1:-}" || return 1
 	TRACE_RUN=$_rh_run
 	export TRACE_RUN
 	if [ -z "${TRACE_PARENT+set}" ]; then
@@ -323,6 +296,128 @@ hook_run_handed() {
 		export TRACE_PARENT
 	fi
 	return 0
+}
+
+# hook_prompt_of <transcript> — set hook_prompt to the opening of the first
+# user record's prompt, as JSON-string text, its first 4096 bytes at most;
+# status 1 when there is none. The ONE bounded read both channel lines are
+# taken from (hook_run_handed above, hook_spawn_handed below): it is kept for
+# the file it read, so a hook asking for both reads the transcript once.
+hook_prompt_of() {
+	[ -n "${1:-}" ] || return 1
+	if [ "${_hp_file-}" != "$1" ]; then
+		_hp_file=$1
+		# Fifty lines: the prompt is written when the agent starts, ahead of
+		# everything it does. 4096 bytes: the record's keys and the prompt's
+		# first lines fit many times over, and nothing past them is a channel's.
+		_hp_line=$(head -n 50 "$1" 2>/dev/null |
+			sed -n '/"type"[[:space:]]*:[[:space:]]*"user"/{p;q;}' | cut -b 1-4096)
+		# The message's own content, anchored on its role so no nested content
+		# block answers for it: one string, or content blocks whose first is text.
+		hook_prompt=${_hp_line#*'"role":"user","content":"'}
+		[ "$hook_prompt" != "$_hp_line" ] ||
+			hook_prompt=${_hp_line#*'"role":"user","content":[{"type":"text","text":"'}
+		[ "$hook_prompt" != "$_hp_line" ] || hook_prompt=
+	fi
+	[ -n "$hook_prompt" ]
+}
+
+# hook_handed_line <transcript> — status 0, with _rh_run, _rh_parent and
+# _rh_after (the prompt's text past the line's newline, empty when the line
+# closed the prompt) set, when the prompt's first line is a well-formed
+# `Trace-Run:` line; 1 otherwise. The shape is hook_run_handed's header.
+hook_handed_line() {
+	hook_prompt_of "${1:-}" || return 1
+	case $hook_prompt in 'Trace-Run: '*) ;; *) return 1 ;; esac
+	_rh_val=${hook_prompt#Trace-Run: }
+	# The line ends where the JSON string's next escape or its close begins,
+	# and that escape must be a newline: a tab or anything else after the ids
+	# is more on the line, and no channel.
+	_rh_run=${_rh_val%%\\*}
+	_rh_run=${_rh_run%%\"*}
+	_rh_after=${_rh_val#"$_rh_run"}
+	case $_rh_after in
+	'\n'*) _rh_after=${_rh_after#??} ;;
+	'"'*) _rh_after= ;;
+	*) return 1 ;;
+	esac
+	_rh_parent=
+	case $_rh_run in *' '*)
+		_rh_parent=${_rh_run#* }
+		_rh_run=${_rh_run%% *}
+		hook_run_id_ok "$_rh_parent" || return 1
+		;;
+	esac
+	hook_run_id_ok "$_rh_run"
+}
+
+# hook_spawn_handed <transcript> — set hook_spawn_tier, hook_spawn_domain,
+# hook_spawn_skill and hook_spawn_ticket from what the spawn served; status 0
+# when the prompt named it, 1 when it did not — and then the tier is
+# `unattributed` and the other three are empty. Ticket #583.
+#
+# THE LINE is the prompt's SECOND, under a well-formed Trace-Run first line
+# (hook_run_handed), exactly
+#   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>
+# four fields in that order, one space apart, nothing else on the line. The
+# tier is one of the four the kit sizes work to; a domain and a skill are
+# `[a-z][a-z0-9-]*`, 32 characters at most; a ticket is `#` and a number with
+# no leading zero, six digits at most. `none` leaves the domain empty and
+# relates no ticket. A line further down, out of order, with an extra field, a
+# tab or a value of another shape is no line: the stop is `unattributed`, which
+# the summary shows as a row of its own rather than dropping. Each value is
+# only ever a field on an event — never executed — and the read is
+# hook_prompt_of's, the same bounded one that finds the run, whether or not
+# the environment already named the run.
+hook_spawn_handed() {
+	hook_spawn_tier=unattributed
+	hook_spawn_domain=
+	hook_spawn_skill=
+	hook_spawn_ticket=
+	hook_handed_line "${1:-}" || return 1
+	case $_rh_after in 'Trace-Spawn: '*) ;; *) return 1 ;; esac
+	_hs_val=${_rh_after#Trace-Spawn: }
+	_hs_line=${_hs_val%%\\*}
+	_hs_line=${_hs_line%%\"*}
+	case ${_hs_val#"$_hs_line"} in '\n'* | '"'*) ;; *) return 1 ;; esac
+	_hs_t=${_hs_line%% *}
+	_hs_r=${_hs_line#* }
+	_hs_d=${_hs_r%% *}
+	_hs_r=${_hs_r#* }
+	_hs_s=${_hs_r%% *}
+	_hs_k=${_hs_r#* }
+	case $_hs_k in *' '*) return 1 ;; esac
+	# DELIBERATE COUPLING, like hook_run_id_ok's: the four tiers are the kit's
+	# fixed vocabulary (docs/capability-tiers.md), spelled here too so a hook
+	# reads no policy file to size a stop; a typo never mints a summary row.
+	case $_hs_t in tier=planner | tier=implementer | tier=mechanical | tier=reviewer) ;; *) return 1 ;; esac
+	case $_hs_d in domain=*) ;; *) return 1 ;; esac
+	case $_hs_s in skill=*) ;; *) return 1 ;; esac
+	case $_hs_k in ticket=*) ;; *) return 1 ;; esac
+	_hs_d=${_hs_d#domain=}
+	_hs_s=${_hs_s#skill=}
+	_hs_k=${_hs_k#ticket=}
+	[ "$_hs_d" = none ] || hook_spawn_word_ok "$_hs_d" || return 1
+	hook_spawn_word_ok "$_hs_s" || return 1
+	case $_hs_k in
+	none) ;;
+	'#'[1-9] | '#'[1-9][0-9] | '#'[1-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9] | \
+		'#'[1-9][0-9][0-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9][0-9][0-9]) ;;
+	*) return 1 ;;
+	esac
+	hook_spawn_tier=${_hs_t#tier=}
+	[ "$_hs_d" = none ] || hook_spawn_domain=$_hs_d
+	hook_spawn_skill=$_hs_s
+	[ "$_hs_k" = none ] || hook_spawn_ticket=$_hs_k
+	return 0
+}
+
+# hook_spawn_word_ok <value> — a domain or a skill as the Trace-Spawn line may
+# carry one: `[a-z][a-z0-9-]*`, 32 characters at most.
+hook_spawn_word_ok() {
+	case ${1:-} in [a-z]*) ;; *) return 1 ;; esac
+	case $1 in *[!a-z0-9-]*) return 1 ;; esac
+	[ "${#1}" -le 32 ]
 }
 
 # hook_run_id_ok <value> — is this a run id the shared script could have
