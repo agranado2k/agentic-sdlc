@@ -2415,6 +2415,7 @@ files:
   scripts/docs-conformance/validators/skill-bridge.mjs
   scripts/docs-conformance/validators/banned-words.mjs
   scripts/docs-conformance/validators/living-spec.mjs
+  scripts/docs-conformance/validators/skill-ceiling.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

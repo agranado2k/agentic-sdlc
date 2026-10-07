@@ -68,5 +68,15 @@ export function makeContext({ repoRoot, config }) {
 
   const exists = (rel) => existsSync(join(repoRoot, rel));
 
-  return { repoRoot, config, read, kind, readable, list, exists };
+  /** The size in bytes of a repo-relative regular file; null when there is none. */
+  const size = (rel) => {
+    try {
+      const st = statSync(join(repoRoot, rel));
+      return st.isFile() ? st.size : null;
+    } catch {
+      return null;
+    }
+  };
+
+  return { repoRoot, config, read, kind, readable, list, exists, size };
 }

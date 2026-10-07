@@ -76,8 +76,16 @@ test("a FIFO is null to kind — nothing opens it, so nothing blocks on it", () 
   cleanup(ctx);
 });
 
-test("the context exposes exactly read, kind, readable, list and exists — no recursive lister", () => {
+test("the context exposes exactly read, kind, readable, list, exists and size — no recursive lister", () => {
   const ctx = ctxFor({});
-  assert.deepEqual(Object.keys(ctx).sort(), ["config", "exists", "kind", "list", "read", "readable", "repoRoot"]);
+  assert.deepEqual(Object.keys(ctx).sort(), ["config", "exists", "kind", "list", "read", "readable", "repoRoot", "size"]);
+  cleanup(ctx);
+});
+
+test("size is a regular file's bytes, and null for a directory or nothing", () => {
+  const ctx = ctxFor({ "a/f.md": "é\n" });
+  assert.equal(ctx.size("a/f.md"), 3);
+  assert.equal(ctx.size("a"), null);
+  assert.equal(ctx.size("missing.md"), null);
   cleanup(ctx);
 });
