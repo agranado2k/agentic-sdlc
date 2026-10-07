@@ -1720,6 +1720,19 @@ case "$_kit_code" in
 *AGENT_HARNESSES*) fail "the kit wrapper reads AGENT_HARNESSES itself — a second copy of the resolver's membership test" ;;
 *) pass "the kit wrapper holds no copy of the membership test: it reads no AGENT_HARNESSES" ;;
 esac
+# …nor does any suite or other script (#597): a suite that re-decided which
+# prefix crosses would keep passing on its own copy while the resolver's moved
+# under it. Reading the declaration's VALUE is the copy's signature — writing
+# one into a fixture policy is not, and the resolver alone may read it.
+_copies=
+for _f in "$KIT"/tests/*.sh "$KIT"/scripts/*.sh; do
+	[ "$_f" = "$KIT/scripts/agents.lib.sh" ] && continue
+	sed 's/^[[:space:]]*#.*//' "$_f" | grep -Eq '[$][{]?AGENT_HARNESSES' &&
+		_copies="$_copies ${_f#"$KIT"/}"
+done
+[ -z "$_copies" ] &&
+	pass "no suite or script outside the resolver reads AGENT_HARNESSES: one membership test" ||
+	fail "a copy of the resolver's membership test reads AGENT_HARNESSES in:$_copies"
 # …and the answer it bridges by IS that function's, observed rather than
 # grepped: a library copy whose sourced agents_split_harness says one bare
 # value crosses (the override follows the direct-execution block, so the
