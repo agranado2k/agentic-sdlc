@@ -47,6 +47,9 @@ jobs:
       - name: behavior-delta.sh
         run: sh tests/behavior-delta.test.sh
 
+      - name: lens-slice.sh
+        run: sh tests/lens-slice.test.sh
+
       # Not a guard either, but the same config-as-data shape: mechanism in a
       # shared lib, policy in a local config, and an unconfigured default that
       # warns and passes rather than blocking a fresh project.

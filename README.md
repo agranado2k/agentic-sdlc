@@ -88,6 +88,8 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
+| `scripts/lens-slice.sh` | Cuts the branch's diff into the slice each `/review-pr` standards lens reads, and the whole diff for the behavior axis. |
+| `scripts/lens-slice.config.sh` | **Yours.** Which changed paths each lens reads. Ships filled for a kit-shaped layout; retune it to yours. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `.githooks/pre-commit` | Refuses an agent's commit from the main working copy or on the default branch (hard rule 1, "Worktree, always"); a human with no agent-harness marker set commits as before. One loud bypass, documented in the hook. |
@@ -933,6 +935,7 @@ sh tests/adapters-demo.sh                              # K5: the adapters tree, 
 sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
+sh tests/lens-slice.test.sh                            # each review lens reads only its slice
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 sh tests/agents-tiers.test.sh                          # the capability-tier resolver

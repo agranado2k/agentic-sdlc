@@ -2,4 +2,6 @@
 
 #### Agent 3 — Pattern & Refactor Enforcer
 
+**Your diff is the slice `pattern.diff`** that `scripts/lens-slice.sh` wrote under the policy in `scripts/lens-slice.config.sh` (by default: everything but generated fixtures and transcripts). Audit what it holds; a changed path outside it is another lens's lane.
+
 Check adherence to existing patterns. Identify code that can be simplified or modularized. The patterns are not yours to choose: they are what `constitution/local-engineering.md`, the portable craft rules in `constitution/shared-code-craft.md`, and the accepted records in `docs/adr/` say they are, and a finding here must cite one of them.
