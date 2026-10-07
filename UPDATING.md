@@ -906,8 +906,8 @@ policy file empty, none of this writes anything.
 now holds each kind's `outcome` to a vocabulary of its own — `review.verdict`
 takes `pass`, `blocked` or `confirm`, `merge.land` takes `landed`, `skipped`
 or `stopped`, and so on for every kind; the script's header carries the
-table beside its kind list, and your copy of ADR-0008 does not, since
-decision records are yours.
+table beside its kind list. The kit's ADR-0008 records the decision, and
+no copy of it reaches you, since decision records are yours.
 An emit with no outcome is legal on every kind, `run.start` and
 `session.end` take none, and `note` takes any one word. What used to write
 and now exits 2 is an outcome its kind does not declare:
@@ -1827,10 +1827,11 @@ probabilities out, in two shapes a mapping answers one of — *decide* among
 supplied options, *rank-or-verify* over supplied candidates. It ships
 UNMAPPED and the kit maps it for nobody, so nothing you run changes; map
 `AGENT_TIER_MECHANICAL_JUDGE` in `scripts/agents.config.sh` only if you have
-a typed-decision model you trust, and read `docs/adr/0010-…` first for the
-one rule that comes with it: a decider is never handed a verification, and no
-typed judge takes the review verdict. Part 2's worked example below re-pins
-because it quotes the manual template's own diff stat.
+a typed-decision model you trust, and read the kit's ADR-0010 (its
+`docs/adr/0010-…`, in the kit's repository) first for the one rule that
+comes with it: a decider is never handed a verification, and no typed judge
+takes the review verdict. Part 2's worked example below re-pins because it
+quotes the manual template's own diff stat.
 
 **Arriving from 0.24.0 or older, one policy file joins, and it arrives
 filled.** `scripts/vocab.config.sh` holds the vocabularies that

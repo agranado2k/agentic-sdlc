@@ -246,7 +246,7 @@ The other half of this adapter is `hooks/`, and it answers a different
 question: **what did that session cost, and which model spent it?**
 `scripts/trace.sh` records the chain's decisions but knows nothing about a
 session — sessions belong to the agent harness, which is why these four files
-live here rather than in the shared script (ADR-0008 clause 8).
+live here rather than in the shared script (the kit's ADR-0008 clause 8).
 
 | File | The event it records |
 | --- | --- |
@@ -440,7 +440,7 @@ you get it wrong:
 - **Cost is not recorded.** That same rollup carries the vendor's own cost
   figure and the extractor deliberately ignores it: a price is an
   interpretation that rots on the vendor's schedule, so the trace keeps token
-  counts and prices them on read, from a table you own (ADR-0008 clause 6).
+  counts and prices them on read, from a table you own (the kit's ADR-0008 clause 6).
 
 One race, observed in a live session rather than in a fixture: **the
 subagent-stop hook can run before the subagent's transcript has its final
@@ -487,7 +487,7 @@ three other routes; the probe settled which reaches a reader:
 | a top-level `systemMessage` in a JSON object on stdout | the operator: documented as shown to the user, and an interactive session prints it under its banner | yes |
 | `hookSpecificOutput.additionalContext` in the same object | the model, which relays it — the one route into a non-interactive run's output | yes, beside it |
 | plain stdout | the model only, and it would make the object unparseable | no |
-| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (ADR-0008 clause 4) | no |
+| a non-zero, non-2 exit status | whoever the agent harness shows a failure to — and it would break rule 1, exit 0 always (the kit's ADR-0008 clause 4) | no |
 
 So past the threshold the hook prints exactly one object carrying the note in
 both fields, still exits 0, and still writes the stderr line for a reader of the

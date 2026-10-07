@@ -30,7 +30,7 @@ the Agent Skills specification.*
   `retro-<YYYYMMDDTHHMMSSZ>.md` under `.retro/<YYYY>/<MM>/` at the root
   checkout, or a PR body or a diary entry quoting one, dated after the last
   pass. This pass does not open the trace to find out — the chain never reads
-  it (ADR-0008), and the retro's own record is its report. A window with
+  it (the kit's ADR-0008), and the retro's own record is its report. A window with
   landed PRs and no retro is a finding: the loop has no clock.
 - **Skill hygiene.** Frontmatter limited to the specification's fields;
   description under the specification's 1024 characters and leading with the
@@ -106,7 +106,7 @@ stale `none` is a ticket to make the decision again.
 - **The root checkout's lag.** Ask the operator for the last `session.start`
   event's `data.behind` — how far the checkout the agent-harness hooks run
   from was behind the last fetched origin/main — since this pass never reads
-  the trace itself (ADR-0008); a count past the policy file's
+  the trace itself (the kit's ADR-0008); a count past the policy file's
   `TRACE_BEHIND_WARN`, or none recorded where hooks are wired, is a finding.
 - Then run `/worktree-cleanup`.
 - **Dispatch scratch.** A dispatch that died before its trap — killed, over a

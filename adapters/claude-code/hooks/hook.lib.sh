@@ -5,7 +5,7 @@
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
 # subagent finished. Those are the agent harness's own events, so they live
-# here in its adapter rather than in `scripts/trace.sh` (ADR-0008 clause 8:
+# here in its adapter rather than in `scripts/trace.sh` (the kit's ADR-0008 clause 8:
 # "the agent harness is the adapter's business"). Everything portable — the
 # line format, the closed kind vocabulary, where the trace directory is — stays
 # in the shared script, which these hooks call and never reimplement.
@@ -22,7 +22,7 @@
 #   1. EXIT 0, ALWAYS. A hook is on the agent harness's critical path. A
 #      non-zero exit is a signal to the agent harness about the SESSION, and
 #      observability that can fail a session is worse than none (PRD #237,
-#      story 15; ADR-0008 clause 4). Every call into the trace ends in `|| :`
+#      story 15; the kit's ADR-0008 clause 4). Every call into the trace ends in `|| :`
 #      and every hook ends in `exit 0`. ONE SANCTIONED EXCEPTION: the kill
 #      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
 #      exits 2 — the agent harness's block status — when, and only when, it
@@ -33,7 +33,7 @@
 #   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
 #      reaches the agent harness's own parser. The trace's answers go to a
 #      file; nothing about the trace is ever said there. STDERR is a different
-#      stream and is deliberately loud — ADR-0008 clause 4 wants a trace error
+#      stream and is deliberately loud — the kit's ADR-0008 clause 4 wants a trace error
 #      visible. The one exception is session-start's behind note, which is
 #      about the code the hooks run, not the trace: stderr on exit 0 reaches
 #      no reader on this agent harness, so past its threshold the note is also
@@ -554,7 +554,7 @@ hook_policy() {
 # WHY A HOOK READS POLICY AT ALL, when every other answer here comes out of
 # `scripts/trace.sh`: the shared script has no opinion on tool capture. An event
 # is an event, whoever asked for it, and the agent harness is the adapter's
-# business (ADR-0008 clause 8) — so the only reader of TRACE_TOOLS is the hook
+# business (the kit's ADR-0008 clause 8) — so the only reader of TRACE_TOOLS is the hook
 # that would do the capturing. It reads the same file with the same precedence
 # the shared script gives TRACE_DIR: the environment wins over the file, and an
 # environment value of '' is the documented OFF even when the file says 1.
@@ -589,7 +589,7 @@ hook_tools_on() {
 # OFF IS NOT AN ERROR, AND AN ERROR IS NOT OFF. Off is the documented no-op and
 # is said nowhere (rule 3). A refused policy file is the shared script's error,
 # and its own line reaches the hook's stderr untouched, the way an emit's would
-# (rule 1 keeps the exit 0, ADR-0008 clause 4 keeps it loud) — so a session
+# (rule 1 keeps the exit 0, the kit's ADR-0008 clause 4 keeps it loud) — so a session
 # hook that stops at the ask still says why (H-1, review of PR #518). The tool
 # hooks, which run on every tool call, discard it at their own call site.
 #

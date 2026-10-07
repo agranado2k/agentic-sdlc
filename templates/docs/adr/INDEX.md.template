@@ -22,6 +22,10 @@ alone answers "what is currently binding?" without opening 40 files.
 
 - **File name**: `NNNN-short-kebab-title.md`, zero-padded to four digits.
   Numbers are never reused, even for a rejected ADR.
+- **`the kit's ADR-NNNN` is not one of these.** The files the kit ships cite
+  the kit's own decision records that way; those live in the kit's repository
+  (its `docs/adr/`), never arrive here, and do not share this index's
+  numbering.
 - **Status values**: `Proposed` · `Accepted` · `Rejected` · `Deprecated` ·
   `Superseded by NNNN`.
 - **The "Decision outcome" section is the contract.** Implementation detail and

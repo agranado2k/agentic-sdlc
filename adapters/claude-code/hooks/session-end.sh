@@ -6,7 +6,7 @@
 # the spend inside the session rather than after it.
 #
 # COST IS NOT WRITTEN HERE, and that is a decision rather than an omission
-# (ADR-0008 clause 6). The transcript's own final line carries the agent
+# (the kit's ADR-0008 clause 6). The transcript's own final line carries the agent
 # harness's cost figure and it would be one `sed` away; it is an interpretation
 # of a vendor's price list on the day it was written, and a price edit could
 # never reach it afterwards. Token counts are facts. `summary` and `export`

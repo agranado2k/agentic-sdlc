@@ -5,8 +5,8 @@ This directory holds the project's **living specs**: one file per area,
 built and closed; a living spec outlives it, so a test can name a requirement
 that is still true long after the wave that introduced it.
 
-There is no living spec here yet. This README is the only file bootstrap
-put in the directory, and it holds no requirement: it is not an area file.
+A living spec is the project's own: none arrives with the kit. This README
+holds no requirement, so it is not an area file.
 
 ## The file
 
@@ -19,7 +19,9 @@ put in the directory, and it holds no requirement: it is not an area file.
   Any other line — a heading, prose, an indented line, a fenced example — is
   not a requirement.
 - **Outside the file, a requirement is cited as `<area>/R<n>`** — in a
-  ticket's `Covers:` line, in a PRD's delta, and in the test that holds it.
+  PRD's delta and in the test that holds it. A ticket's `Covers:` line
+  cites an id as its PRD spells it: `<area>/R<n>` under a PRD of deltas,
+  plain `R<n>` under a new area's PRD (both below).
 - **An id is stable for the file's life and never reused.**
 
 ```md
@@ -52,6 +54,12 @@ billing/R1. Removed: the legal name moved to the customer record.
 - `### MODIFIED` restates the whole new text under the existing id.
 - `### REMOVED` names the id and why it goes.
 
+A ticket that delivers all three cites them as the PRD spells them:
+
+```md
+Covers: billing/R4, billing/R2, billing/R1
+```
+
 The session that implements a ticket applies the deltas for the ids its
 ticket covers to this file **in the same diff as the test that names
 `<area>/R<n>`**, so the living spec and its tests land together or not at
@@ -66,7 +74,20 @@ no test has to name it; kept, it stops the id from being reused.
 
 A PRD for an area with no living spec writes plain `R<n>.` lines and names
 its area on an `Area: <area>` line; the first ticket that covers one creates
-`docs/specs/<area>.md`, keeping the PRD's numbers.
+`docs/specs/<area>.md`, keeping the PRD's numbers. Its tickets cite the ids
+as that PRD spells them, plain, while the test that holds each one names it
+`<area>/R<n>`, as it will read in the living spec:
+
+```md
+Area: ledger
+
+R1. The ledger SHALL record every posting with its date.
+R2. WHEN a posting is reversed, the ledger SHALL keep both entries.
+```
+
+```md
+Covers: R1, R2
+```
 
 ## The gate
 

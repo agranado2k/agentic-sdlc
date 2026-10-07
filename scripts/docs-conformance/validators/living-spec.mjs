@@ -1,4 +1,4 @@
-// The LIVING SPEC, held to the suite (ADR-0012 clauses 7 and 10). Each area
+// The LIVING SPEC, held to the suite (the kit's ADR-0012 clauses 7 and 10). Each area
 // keeps its current requirements in `docs/specs/<area>.md`, one per line that
 // opens with its id `R<n>.`; outside the file a requirement is cited as
 // `<area>/R<n>`. Every such requirement must be NAMED by at least one file the
