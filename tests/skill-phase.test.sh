@@ -457,7 +457,14 @@ case "$S_ERR" in
 *"agent type 'planner', no model"*) pass "an unmapped tier's dry run names its agent type and no model — the spawn inherits" ;;
 *) fail "the dry run does not name the agent type with no model for an unmapped tier: $S_ERR" ;;
 esac
-rm -f "$STUBTREE/scripts/agents.kit.local.config.sh"
+# A resolver that REFUSES is not an unmapped tier: a value it cannot accept
+# must not read as "no model — the spawn inherits" (PR #618 review, M-2):
+# here the policy file the dispatch names does not exist.
+t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=absent sh scripts/skill-dispatch.kit.sh /tdd --tier planner --prompt 'x' --dry-run
+case "$S_STATUS:$S_ERR" in
+0:* | *"no model"*) fail "a refused resolution read as an unmapped tier (exit $S_STATUS): $S_ERR" ;;
+*) pass "a resolver that refuses fails the dry run instead of printing 'no model'" ;;
+esac
 
 # ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
