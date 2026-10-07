@@ -139,7 +139,7 @@ code craft §10), at most two pages, and tell the human the absolute path.
 Record the recommendation as presented:
 `sh scripts/trace.sh emit kind=brief.decide outcome=presented data.candidate='<A, B, or hybrid>' reason='<why this one, one line>' || :`.
 The trace is not the tree: it is local, ignored, written here and never read
-(ADR-0008); unconfigured, the call is a silent no-op.
+(the kit's ADR-0008); unconfigured, the call is a silent no-op.
 
 **Stop here for a human yes before writing anything into the repo.** The
 brief is a judgment call with an irreversible consequence — every later diff

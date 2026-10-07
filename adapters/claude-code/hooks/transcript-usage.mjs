@@ -55,7 +55,7 @@
 // WHAT THIS FILE DOES NOT DO. It never takes a message's count, or a row's,
 // from the transcript's `cost-state` rollup, though that line holds per-model
 // totals and a cost figure and would save all the work below. Two reasons:
-// the cost is the vendor's interpretation, which ADR-0008 clause 6 keeps out
+// the cost is the vendor's interpretation, which the kit's ADR-0008 clause 6 keeps out
 // of an event, and the rollup includes subagent tokens that live in files the
 // session transcript never names — so attributing it to the session would
 // double-count against the subagent events. The rollup is the oracle; the one
@@ -260,7 +260,7 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
     if (entry.type !== "assistant") continue;
     // An API ERROR is written as an assistant line too, with a placeholder model
     // and zero counts. It passes every check below, and `model` is a join column
-    // (ADR-0008 clause 1) — so it would grow a row in every `summary --by model`
+    // (the kit's ADR-0008 clause 1) — so it would grow a row in every `summary --by model`
     // that each later reader has to know to ignore. Skipped by the flag the
     // agent harness sets, and by the angle-bracket shape of the name, because one
     // of the two may be absent (M-3, review of PR #291).
@@ -396,7 +396,7 @@ for (const [model, c] of totals) {
 // holds for this session, which the caller hands over on stdin as the trace's
 // own lines. The rollup stays the oracle for what was spent and never the
 // source of a message's count, and its cost figure is still never read
-// (ADR-0008 clause 6).
+// (the kit's ADR-0008 clause 6).
 //
 // JUDGED ONLY WHERE IT MEANS WHAT IT SAYS — each condition is a shape real
 // transcripts on the machine this was built on have:

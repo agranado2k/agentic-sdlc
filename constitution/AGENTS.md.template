@@ -109,6 +109,14 @@ nothing, and the spawn inherits the session's own model. Which harness parameter
 receives that value is a wiring detail — see `adapters/claude-code/README.md`
 for one worked example.
 
+**Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
+word the policy file uses> sh scripts/agents.lib.sh reviewer [domain]` — the
+resolver walks the answer, the plain reviewer tier, then the policy file's
+ordered `AGENT_TIER_REVIEWER_FALLBACK`, skipping yours. **A reviewer spawn that
+fails on its first call** (rate limit, login): re-resolve with
+`AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added, and never override the
+reviewer by hand. A spent walk prints nothing, with a warning your report quotes.
+
 > **Kit note —** the tiers above are the kit's vocabulary and the skills speak
 > it by name. Re-point them at whatever models you like; renaming them means
 > editing the skills too.
