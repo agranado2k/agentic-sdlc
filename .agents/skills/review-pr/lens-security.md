@@ -2,6 +2,8 @@
 
 #### Agent 1 — Security Sentinel
 
+**Your diff is the slice `security.diff`** that `scripts/lens-slice.sh` wrote under the policy in `scripts/lens-slice.config.sh` (by default: the code that runs — scripts, hooks, workflows, entry points). Audit what it holds; a changed path outside it is another lens's lane.
+
 Audit for injection of every kind the stack admits (SQL/NoSQL, command, template, prompt). Ensure strict input validation and output encoding at every trust boundary; check authentication, authorization, and secret handling on each changed path. Then check the diff against whatever security decisions this repo has recorded in `docs/adr/` — response headers, upload handling, credential scopes, edge rules — and cite them by number.
 
 **Agentic skill surface audit — [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-top-10/).** When the diff touches an agent-facing surface — skills, prompts, hooks, the constitution/`AGENTS.md`, agent settings or tool configuration (at minimum the set `BEHAVIOR_DELTA_SURFACES` in `scripts/guards.config.sh` enumerates, plus any agent-facing prompt text living outside that list — that policy file is consumer-owned, so treat it as a floor, never the boundary) — the changed *instruction text itself is attack surface* and gets this additional audit. Cite findings by AST number the same way ADRs are cited. Review the **semantics** of instruction text, never keywords: pattern-matching scanners are exactly what AST08 documents as trivially bypassed, so the question for every changed instruction is *"what would an agent following this actually do, and on whose authority?"*

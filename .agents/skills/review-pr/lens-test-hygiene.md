@@ -2,6 +2,8 @@
 
 #### Agent 6 — Test Hygiene Inspector
 
+**Your diff is the slice `test-hygiene.diff`** that `scripts/lens-slice.sh` wrote under the policy in `scripts/lens-slice.config.sh` (by default: the suites, generated fixtures left out). Audit what it holds; a changed path outside it is another lens's lane. The code under test is read from the tree, never from another slice.
+
 When the PR includes test files, this agent MUST:
 
 1. Identify which package or workspace the test belongs to.

@@ -73,8 +73,9 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Policy file** — a file the kit ships whose whole purpose is to be edited by
   the consumer, deliberately kept OUT of the shared layer:
   `scripts/docs-conformance/config.mjs`, `scripts/guards.config.sh`,
-  `scripts/agents.config.sh`, `scripts/trace.config.sh`, `scripts/vocab.config.sh`.
-  Mechanism is shared; policy is local. The last one ships *filled*: a
+  `scripts/agents.config.sh`, `scripts/trace.config.sh`, `scripts/vocab.config.sh`,
+  `scripts/lens-slice.config.sh`. Mechanism is shared; policy is local. The last
+  two ship *filled* (the lenses' path rules fit a kit-shaped layout): a
   vocabulary is the kit's to name where a model id is a vendor's, so the
   consumer edits the kit's words rather than an empty form.
   - _Avoid_: "config" alone — it hides the load-bearing half, which is that this

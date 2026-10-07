@@ -2,6 +2,8 @@
 
 #### Agent 5 — Reuse & DRY Auditor
 
+**Your diff is the slice `reuse-dry.diff`** that `scripts/lens-slice.sh` wrote under the policy in `scripts/lens-slice.config.sh` (by default: everything but generated fixtures and transcripts). Audit what it holds; a changed path outside it is another lens's lane.
+
 Often the highest-yield lens: **new code must reuse what already exists before it reinvents it.** Using the reuse catalog from step 1, for every new function, type, constant, query, or block of logic in the diff, ask: *does an equivalent already exist in the codebase, and should this have called it instead?*
 
 Flag, with the exact existing export/`file:line` that should have been reused:

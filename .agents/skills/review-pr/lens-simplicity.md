@@ -2,6 +2,8 @@
 
 #### Agent 4 — Simplicity Advocate
 
+**Your diff is the slice `simplicity.diff`** that `scripts/lens-slice.sh` wrote under the policy in `scripts/lens-slice.config.sh` (by default: everything but generated fixtures and transcripts). Audit what it holds; a changed path outside it is another lens's lane.
+
 Actively look for ways to reduce code complexity and volume. For every piece of new code, ask: "Is there a simpler way to achieve the same result with less code?" Prioritize:
 
 - Removing unnecessary abstractions, wrappers, or indirections that don't add value.
