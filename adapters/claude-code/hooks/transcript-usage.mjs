@@ -57,7 +57,7 @@
 // on a superseded line is drift all the same.
 //
 // A LAST LINE WRITTEN MID-STREAM HOLDS A SNAPSHOT, AND NOTHING LATER CLOSES IT
-// (#608, ADR-0008 as amended 2026-10-07). A subagent's transcript writes each
+// (#608, the kit's ADR-0008 as amended 2026-10-07). A subagent's transcript writes each
 // assistant line as its content block closes — before the response's closing
 // usage arrives — and never rewrites it, so a message whose LAST line says
 // `stop_reason: null` carries the output count streamed so far (at most 182 in
