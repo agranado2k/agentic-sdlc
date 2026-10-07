@@ -84,6 +84,21 @@ TRACE="scripts/trace.sh"
 
 skill_md() { printf '%s/%s/SKILL.md' "$SKILLS" "$1"; }
 
+# skill_text <skill> — a scratch file holding the skill's whole text: its
+# SKILL.md first, then every sibling .md beside it. A skill split under its
+# byte ceiling (#591) keeps one entry point and moves a rare branch into a file
+# the SKILL.md names, so what a skill records or says is read across both.
+skill_text() {
+	_st="$SCRATCH/skill-text-$1.md"
+	{
+		cat "$SKILLS/$1/SKILL.md"
+		for _st_f in "$SKILLS/$1"/*.md; do
+			[ "$_st_f" = "$SKILLS/$1/SKILL.md" ] || cat "$_st_f"
+		done
+	} >"$_st"
+	printf '%s' "$_st"
+}
+
 # The span tokeniser and the placeholder filler are tests/lib.sh's
 # (t_trace_lines, t_trace_spans, t_trace_runnable): held once, shared with
 # tests/retro-skill.test.sh.
@@ -210,7 +225,7 @@ banner "5. The decision points: one emit per decision, per skill"
 # `data.x=` or `--blob` token is a field the emit must carry.
 expects() {
 	_ex_s=$1; shift
-	_ex_f=$(skill_md "$_ex_s")
+	_ex_f=$(skill_text "$_ex_s")
 	_ex_lines=$(t_trace_lines "$_ex_f")
 	for _ex_tok; do
 		case $_ex_tok in
@@ -253,7 +268,7 @@ done
 # data.where; data.thread is what a reader counts once when two iterations saw
 # the same closed thread. /pr-iterate is its only emitter: it is the skill that
 # fetches the threads, and it learns of the dismissal from the forge.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 dm=$(grep -F 'kind=finding.dismiss' "$PI")
 for tok in 'subject=pr:#<N>' 'outcome=dismissed' 'data.via=thread|review' 'data.where=' 'data.thread='; do
 	printf '%s\n' "$dm" | grep -qF -- "$tok" && pass "/pr-iterate's dismissal carries $tok" ||
@@ -672,8 +687,17 @@ banner "13. /pr-iterate stops at the first release-bound red (#347)"
 # on a fixture PR, and the failing case is a second iteration on the same red.
 # No message below prints the marker itself: a red line of THIS suite that
 # carried it would be set aside as release-bound.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 RB_MARK='release-bound:'
+
+# The split keeps one entry point (#591): each file beside SKILL.md is named
+# from it by relative path, so the branch that needs it can open it.
+for f in "$SKILLS"/pr-iterate/*.md; do
+	b=${f##*/}
+	[ "$b" = SKILL.md ] && continue
+	grep -qF "($b)" "$(skill_md pr-iterate)" && pass "/pr-iterate's SKILL.md names $b by relative path" ||
+		fail "/pr-iterate's SKILL.md does not name $b — a moved branch no entry point opens"
+done
 
 # The text: the stop, what marks it, and that the loop never re-fires on it.
 pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
@@ -1167,7 +1191,7 @@ banner "18. A thread a human closed with no commit reaches finding.dismiss, driv
 # emit runs once per line it printed, into a scratch trace. A placeholder the
 # snapshot cannot fill — the line a comment was FIRST posted on, who resolved
 # the thread, whether a commit moved its line — is red here, by name.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 D18="$SCRATCH/dismiss"
 mkdir -p "$D18/bin"
 # The stub forge renders a `--jq` projection the one way the snapshot is held
