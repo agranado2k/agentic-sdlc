@@ -1321,32 +1321,38 @@ trace_raise_re() {
 
 # trace_spelling_note [<since>] — the stderr lines `summary` and `export` say
 # when the trace holds history a rule younger than it would refuse: old
-# numbered spellings (#305) and outcomes their kind does not declare (#348).
-# One line each, the count and where the list is. Repeating verify's per-line
+# numbered spellings (#305), outcomes their kind does not declare (#348) and
+# raise ids off the review's severity shape (#567). One line each, the count and where the list is. Repeating verify's per-line
 # advisories on every read would bury the command's own output under history
 # nobody may rewrite. Reads the lines that open as an event does; a line that
 # does not is verify's verdict, not this.
 trace_spelling_note() {
 	_sn_n=0
 	_sn_o=0
+	_sn_r=0
+	_sn_re=$(trace_raise_re) || exit 2
 	_sn_files=$(trace_files "${1:-}")
 	_sn_ifs=$IFS
 	IFS=$_trace_nl
 	trace_glob_off
 	for _sn_f in $_sn_files; do
 		IFS=$_sn_ifs
-		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME"'
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE"'
 		function spelled(field, v) { if (!spelled_ok(v)) n++ }
 		function outcome_bad(k, o) { m++ }
-		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0) }
-		END { print n + 0, m + 0 }' "$_sn_f")
-		_sn_n=$((_sn_n + ${_sn_c%% *}))
-		_sn_o=$((_sn_o + ${_sn_c#* }))
+		function raise_bad(v) { r++ }
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0) }
+		END { print n + 0, m + 0, r + 0 }' "$_sn_f")
+		set -- $_sn_c
+		_sn_n=$((_sn_n + $1))
+		_sn_o=$((_sn_o + $2))
+		_sn_r=$((_sn_r + $3))
 	done
 	IFS=$_sn_ifs
 	trace_glob_on
 	[ "$_sn_n" = 0 ] || echo "!  trace: $_sn_n numbered subject(s) in the trace are spelled the old way — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_o" = 0 ] || echo "!  trace: $_sn_o outcome(s) in the trace are not a word their kind declares — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	[ "$_sn_r" = 0 ] || echo "!  trace: $_sn_r finding.raise id(s) in the trace are not $_sn_re — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	return 0
 }
 

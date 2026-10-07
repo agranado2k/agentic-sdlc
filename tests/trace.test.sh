@@ -2075,6 +2075,22 @@ case $S_ERR in *"$TODAY.jsonl:5:"*INITIAL-2*) pass "and the second raise too, it
 case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"*) fail "verify advised on a raise whose id is a severity id: $S_ERR" ;; *) pass "and leaves a severity id alone, beside a key ending in id" ;; esac
 case $S_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's data.id to the raise shape: $S_ERR" ;; *) pass "and holds no other kind's id to it" ;; esac
 case $S_ERR in *"$TODAY.jsonl:6:"*) fail "verify advised on a raise with no id: $S_ERR" ;; *) pass "and a raise with no id is no advisory" ;; esac
+# summary and export say the count once, as they do for the older advisories,
+# and repeat none of verify's per-line notes (review of PR #605, M-1).
+for _ri_cmd in summary export; do
+	t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" $_ri_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_ri_cmd over malformed raise ids still exits 0" || fail "$_ri_cmd exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'raise')" = 1 ] && pass "and $_ri_cmd says so in exactly one stderr line" || fail "$_ri_cmd did not print exactly one raise advisory: $S_ERR"
+	case $S_ERR in *"2 "*raise*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_ri_cmd's raise advisory lacks the count or the pointer: $S_ERR" ;; esac
+	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_ri_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+done
+# A table that lost the raise row is a table error, refused, never a silent
+# advisory that matches nothing (review of PR #605, M-3).
+RIX="$SCRATCH/raise-norow"; mkdir -p "$RIX"
+sed "s/^TRACE_SHAPES='finding\.raise=id:\[CHML\]-\[0-9\]+ /TRACE_SHAPES='/" "$TRACE" >"$RIX/trace.sh"
+grep -q "^TRACE_SHAPES='.*finding\.raise=id:" "$RIX/trace.sh" && fail "the fixture still carries the raise row — the bait proves nothing" || pass "bait: a copy of the script without the raise row"
+t_run_split env TRACE_CONFIG="$RIVON" sh "$RIX/trace.sh" verify
+case $S_STATUS:$S_ERR in 2:*"finding.raise=id"*) pass "verify on a table with no raise row is exit 2, naming the row" ;; *) fail "verify without the raise row exited $S_STATUS, not 2 naming the row: $S_ERR" ;; esac
 printf 'not json at all\n' >>"$RIV/events/$TODAY.jsonl"
 t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
 _ri_v=no

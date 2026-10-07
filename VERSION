@@ -2246,7 +2246,8 @@
 # #541, a confirm-list A2-N, anything else — is exit 2 naming the kind, the
 # key, the value and the shape, and writes nothing; a raise with no id still
 # writes. verify reads the same row and advises on a raise already written
-# off it — stderr, file and line — never a bad line, never the verdict. From
+# off it — stderr, file and line — never a bad line, never the verdict — and
+# summary and export say the count once, pointing at verify. From
 # the retrospective of 2026-10-06, question 3: the triage side was held
 # (#466), the raise side was not, and the join lost its link. NO file joins
 # or leaves. UPDATING.md changes content: the arriving-from paragraph, and

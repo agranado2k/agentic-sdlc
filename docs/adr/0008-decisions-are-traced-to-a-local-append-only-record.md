@@ -347,7 +347,10 @@ Chosen: **option 1**.
    an advisory: a raise already written with an id off the shape is history
    — one stderr line naming the file, the line, the value and the shape —
    never a bad line and never a change to the verdict, so old traces stay
-   readable. The review's two raise lines name the shape in place of the
+   readable — and `summary` and `export` say the count once and point at
+   `verify`, as they do for the #305 and #348 advisories. A table with no
+   raise row is a table error, exit 2, never an advisory that silently
+   matches nothing. The review's two raise lines name the shape in place of the
    `INITIAL-N` placeholder that was copied whole. The trace script is
    shared layer, so this is a release.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy

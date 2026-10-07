@@ -226,7 +226,8 @@ severity id, `[CHML]-[0-9]+` — `H-3`, never the literal `INITIAL-N`
 placeholder, and never a confirm-list `A2-N`, which is triaged but never
 raised. A raise with no id still writes. `verify` names a raise already
 written off the shape on stderr, as history, and its verdict does not
-change, so your old trace stays readable. After step 5, check any raise line
+change, so your old trace stays readable; `summary` and `export` say the
+count once. After step 5, check any raise line
 you own — a review skill you adapted, a script — passes the finding's own
 id. Part 2 has one take: `.agents/skills/review-pr/SKILL.md`'s two raise
 lines spell the shape in place of the placeholder; take it as any changed
@@ -1037,10 +1038,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2479 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2480 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2633 insertions(+), 1 deletion(-)
+ 3 files changed, 2634 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
