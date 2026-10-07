@@ -2403,7 +2403,47 @@
 # filler hands `$model`; the ADR-0008 amendment, its ledger entry and index
 # note; the glossary's Event entry.
 
-shared-layer: 0.63.0
+# 0.64.0 — the update recipe reads in order for a consumer several releases
+# behind (ticket #563, found by a real 0.48.0 -> 0.54.0 upgrade on
+# 2026-10-06 that worked only by carrying step 1's notes to step 9 by hand).
+# NO file joins and NO file leaves the shared layer. ONE shared file changes
+# content: UPDATING.md. Step 0 lists the releases by version, newest first
+# (--sort=-v:refname), where git's name order put v0.10.0 before v0.9.0.
+# Step 7 gains a verbatim check that clones on its own and reads the list
+# from the consumer's VERSION through scripts/manifest.lib.sh, so "run it any
+# time" survives step 10's rm of $WORK. Step 8 prints every changed path
+# beside the step 9 sub-step that takes it — none skipped, the kit's own
+# files marked kit — and then the consumer's path: each "Arriving from" note
+# from FROM_REF up, oldest first, under every sub-step it names. 9a reads
+# the kit at .agents/skills/... first, for the base and for theirs, falling
+# back to the pre-0.14.0 address for the base only: past the move the kit's
+# .claude/skills/<name> is a symlink, and git show at a tag finds nothing
+# through it. 9c names where each docs template landed, docs/specs/README.md
+# among them, with a loop that calls a starter newer than the bootstrap NEW.
+# 9d prints a .sh policy file's diff after its key sets, for a key shipped
+# commented out (0.53.0's AGENT_TIER_REVIEWER_FALLBACK). A new 9f takes the
+# files that fit no category — the docs harness's README and fixture tests,
+# .agents/prompts/, .githooks/, .gitignore, scripts/task.*, scripts/catalogue.*
+# and scripts/worktree-cleanup.sh — a NEW one taken with kit archive | tar -x,
+# so a new hook keeps its executable bit. The 0.54.0 and 0.60.0 notes say to
+# take living-spec.test.mjs whole when absent, the 0.59.0 note deletes the
+# codex twin only if present, and six notes (0.44.0, 0.45.0, 0.53.0, 0.57.0,
+# 0.59.0, 0.60.0) name the sub-step their take belongs to. The arriving-from
+# paragraph is new, and both worked examples re-pin, the ADD commentary's
+# quote with them: it had read v0.40.0 since that release, its probe
+# matching the transcript's line instead.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# This wave adds nothing outside the manifest that a consumer takes.
+# Kit-only, never shipped: tests/docs-demo.sh's C4j to C4p, each running the
+# recipe's own block — the tag order over tags whose two orders disagree,
+# step 7's check on a consumer past step 10, step 8's classification of the
+# Part 2 run, 9a's three-way at both skill layouts, 9c's starter taken, 9d's
+# commented key against a two-tag fixture, and the path from 0.48.0 — its
+# fake 0.3.0 kit without the specs starter, and its D2 probe anchored on the
+# ADD commentary; C4m proves the merge's inputs and C4l counts every
+# classified path.
+
+shared-layer: 0.64.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
