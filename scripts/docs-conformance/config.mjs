@@ -380,4 +380,24 @@ const livingSpec = {
   ],
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillPaths };
+/**
+ * skill-ceiling — the most bytes each named SKILL.md may hold. Every byte of a
+ * skill is re-read by every agent that runs it, so a skill that grows past its
+ * ceiling fails the gate, naming the file, its size and the ceiling. A skill
+ * not named here has no ceiling; a ceiling whose file is absent is silent.
+ *
+ * The first ceilings are the four largest skills' sizes when the rule landed
+ * plus a stated margin: 10%, rounded up to the next 1000 bytes. Splitting a
+ * skill lowers its ceiling; raising one is this visible policy diff.
+ *
+ * KEEP IT LITERAL — one `"<repo-relative path>": <bytes>,` per line. The
+ * gate's POSIX twin in scripts/check.sh reads this block by text.
+ */
+const skillCeilings = {
+  ".agents/skills/review-pr/SKILL.md": 49000,
+  ".agents/skills/to-tickets/SKILL.md": 43000,
+  ".agents/skills/pr-iterate/SKILL.md": 42000,
+  ".agents/skills/implement/SKILL.md": 35000,
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillCeilings, skillPaths };

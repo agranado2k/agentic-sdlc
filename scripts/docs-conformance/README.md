@@ -46,7 +46,7 @@ the *reference* checks:
 | | Engine | Covers |
 | --- | --- | --- |
 | node on PATH | this harness | layered manuals, slash-command resolution, article reachability, package-relative paths, portability deny-list |
-| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec` rule's twin — and it prints a NOTICE listing what it is *not* checking |
+| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec` and `skill-ceiling` rules' twins — and it prints a NOTICE listing what it is *not* checking |
 
 Set `DOCS_CHECK_NO_NODE=1` to force the fallback. The two share one policy in
 two places (`config.mjs`'s `pathRoots` and `check.sh`'s `path_roots`); that
@@ -66,9 +66,15 @@ Rules it reports: `skill-missing`, `path-missing`, `article-unreferenced`,
 `R<n>.` in `docs/specs/<area>.md` — is named, as `<area>/R<n>`, by at least one
 file `livingSpec.testGlobs` matches (ADR-0012), and is silent with no living
 spec. Rules it reports: `living-spec-untested`, `living-spec-area-invalid` —
-both violations. It is the one validator with a POSIX twin: the fallback in
-`check.sh` runs the same rule, and reads `livingSpec` from `config.mjs` by
-text, which is why that block keeps its values literal.
+both violations. It has a POSIX twin: the fallback in `check.sh` runs the same
+rule, and reads `livingSpec` from `config.mjs` by text, which is why that
+block keeps its values literal.
+
+`skill-ceiling` fails a SKILL.md larger than the byte ceiling `skillCeilings`
+declares for it, naming the file, its size and the ceiling; a skill the block
+does not name has no ceiling. Rule it reports: `skill-over-ceiling`, a
+violation. Its POSIX twin in `check.sh` reads `skillCeilings` by text, one
+`"<path>": <bytes>,` per line.
 
 ### The shims
 
