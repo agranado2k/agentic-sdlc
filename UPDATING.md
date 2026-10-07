@@ -1154,10 +1154,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2750 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2797 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2904 insertions(+), 1 deletion(-)
+ 3 files changed, 2951 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -2558,6 +2558,8 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9a   .agents/skills/improve-codebase-architecture/PRESENTING.md
 9a   .agents/skills/improve-codebase-architecture/SKILL.md
 9a   .agents/skills/merge-train/SKILL.md
+9a   .agents/skills/pr-iterate/DISMISSALS.md
+9a   .agents/skills/pr-iterate/RELEASE-BOUND.md
 9a   .agents/skills/pr-iterate/SKILL.md
 9a   .agents/skills/prototype/SKILL.md
 9a   .agents/skills/retro/QUESTIONS.md
@@ -2570,6 +2572,7 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9a   .agents/skills/tdd/refactoring.md
 9a   .agents/skills/tdd/tests.md
 9a   .agents/skills/to-prd/SKILL.md
+9a   .agents/skills/to-tickets/RETRO-CANDIDATES.md
 9a   .agents/skills/to-tickets/SKILL.md
 9a   .agents/skills/worktree-cleanup/SKILL.md
 9a   .claude/skills/LICENSE-mattpocock-skills.md
