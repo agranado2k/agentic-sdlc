@@ -57,6 +57,10 @@
 #      whether this session audited the lens in its own context instead, so a
 #      review that ran six lenses never reads as one that ran seven. Every
 #      rule proved by its own bait.
+#  14. Each standards lens reads only its own instructions (#589): Agents 1–6
+#      live in lens-<roster-token>.md beside SKILL.md, each under its own
+#      heading; the coordinator names every file, holds no lens body, keeps
+#      Agent 7, and hands a lens agent its own file, never the skill.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -488,8 +492,11 @@ banner "9. The reuse/DRY lens tells added duplication from inherited duplication
 # line this suite pins through it).
 # Scoped to Agent 5's own section: the other lenses' prompts stay as they
 # were, and a rule written into §5's shared anatomy would bind all six.
-a5=$(t_line_of "$SKILL_ABS" "#### Agent 5 ")
-a6=$(t_line_of "$SKILL_ABS" "#### Agent 6 ")
+# Agent 5's prompt is its own lens file since #589: its section runs from its
+# heading to the file's end, and every reader below reads that file.
+LENS5="$ROOT/.agents/skills/review-pr/lens-reuse-dry.md"
+a5=$(t_line_of "$LENS5" "#### Agent 5 ")
+a6=$(($(wc -l <"$LENS5") + 1))
 if [ -n "$a5" ] && [ -n "$a6" ] && [ "$a5" -lt "$a6" ]; then
 	pass "Agent 5's section is extractable (lines $a5-$a6)"
 else
@@ -507,7 +514,7 @@ fi
 agent5_of() { sed -n "$((${a5:-0} + 1)),$((${a6:-1} - 1))p" "$1"; }
 sentences() { tr '\n' ' ' | tr -s ' ' | tr '.' '\n' | sed 's/^ //; s/ $//'; }
 sentences_of() { agent5_of "$1" | sentences; }
-agent5=$(agent5_of "$SKILL_ABS")
+agent5=$(agent5_of "$LENS5")
 agent5_flat=$(printf '%s\n' "$agent5" | tr '\n' ' ')
 a5_has() {
 	if printf '%s\n' "$agent5_flat" | grep -qF -- "$1"; then
@@ -532,7 +539,7 @@ spells_fix() { printf '%s\n' "$1" | grep -qF -- "\`↳ fix:\` line reads \`$CT_F
 # all in ONE sentence, so the four cannot be met by a word each, scattered
 # across the section. (A later sentence that re-asks for the move is a
 # reviewer's catch, not this check's: it holds the ruling, not the whole prose.)
-ruling=$(ruling_of "$SKILL_ABS")
+ruling=$(ruling_of "$LENS5")
 [ -n "$ruling" ] &&
 	pass "one sentence rules the inherited case: a candidate ticket, LOW, citing invariant §10" ||
 	fail "no single sentence of Agent 5's prompt names the inherited duplication a candidate ticket AND puts it at LOW AND cites invariant §10"
@@ -545,7 +552,7 @@ a5_has "↳ cites:" "the citation is on the finding's own line, not only in the 
 # The one exception stays, and is held in one sentence with its verdict: a
 # divergent-behavior copy is a latent bug whichever branch introduced it, so
 # the candidate-ticket ruling never defers it.
-exception=$(sentences_of "$SKILL_ABS" | grep -F "divergent-behavior" | grep -F "stays a finding")
+exception=$(sentences_of "$LENS5" | grep -F "divergent-behavior" | grep -F "stays a finding")
 [ -n "$exception" ] &&
 	pass "the exception is pinned: a divergent-behavior copy stays a finding whichever branch introduced it" ||
 	fail "no sentence of Agent 5's prompt keeps the divergent-behavior copy a finding — the candidate-ticket ruling would defer a latent bug"
@@ -557,25 +564,25 @@ printf '%s\n' "$agent5" | grep -qE '^#{1,6} ' &&
 	pass "Agent 5's section adds no heading: the report's shape is unchanged"
 # The roster: seven lenses, the unattributed token and — since #568 — the
 # single-reviewer token (section 13).
-roster=$(region '^\*\*The sub-agent roster\.\*\*' '^#### Agent 1 ' | grep -c '^- `')
+roster=$(region '^\*\*The sub-agent roster\.\*\*' '^#### Agents 1–6 ' | grep -c '^- `')
 [ "$roster" = 9 ] &&
 	pass "the roster names seven lenses, the unattributed token and the single-reviewer token" ||
 	fail "the roster names $roster tokens, not 9 — seven lenses, unattributed and single-reviewer"
 # Bait 1: the ruling withdrawn from a copy of the skill — ruling_of must be
 # what catches it, so it is known to read the prompt and not a word that
 # happens to be elsewhere in the file.
-sed "$((a5 + 1)),$((a6 - 1))s/candidate ticket/follow-up/g" "$SKILL_ABS" >"$SCRATCH/bait5.md"
+sed "$((a5 + 1)),$((a6 - 1))s/candidate ticket/follow-up/g" "$LENS5" >"$SCRATCH/bait5.md"
 b5=$(ruling_of "$SCRATCH/bait5.md")
-[ -z "$b5" ] && ! cmp -s "$SCRATCH/bait5.md" "$SKILL_ABS" &&
+[ -z "$b5" ] && ! cmp -s "$SCRATCH/bait5.md" "$LENS5" &&
 	pass "bait: the ruling renamed away from 'candidate ticket' goes red" ||
 	fail "bait: with 'candidate ticket' withdrawn from Agent 5's section the ruling still reads '$b5'"
 # Bait 2: the fix line replaced by a request for the move, in the same
 # sentence — the ruling still reads, and the fix assertion is what goes red.
 # This is the check that carries retro H2: a lens that names the ticket and
 # still asks for the consolidation.
-sed "$((a5 + 1)),$((a6 - 1))s/none on this PR[^\`]*/extract the copies into one helper and call it from both sites/" "$SKILL_ABS" >"$SCRATCH/bait5-fix.md"
+sed "$((a5 + 1)),$((a6 - 1))s/none on this PR[^\`]*/extract the copies into one helper and call it from both sites/" "$LENS5" >"$SCRATCH/bait5-fix.md"
 b5f=$(ruling_of "$SCRATCH/bait5-fix.md")
-if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$SKILL_ABS" && ! spells_fix "$b5f"; then
+if [ -n "$b5f" ] && ! cmp -s "$SCRATCH/bait5-fix.md" "$LENS5" && ! spells_fix "$b5f"; then
 	pass "bait: the fix line swapped for a request to move the copies goes red at the fix assertion"
 else
 	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"
@@ -593,7 +600,7 @@ banner "10. The dispatched worker and its CI twin carry the reuse/DRY ruling in 
 # sentence over prose unwrapped and spaces squeezed: the contract is
 # 80-column prose and the skill is not, and both models read sentences.
 w_sentences=$(printf '%s\n' "$body" | sentences)
-a5_sentences=$(sentences_of "$SKILL_ABS")
+a5_sentences=$(sentences_of "$LENS5")
 # The CI review prompt is the worker's twin — "same two axes, same standard",
 # its header says — so it rules duplication in the same words, or the two
 # reviewers of one diff disagree on whose duplication it is. Both are held
@@ -690,7 +697,7 @@ banner "11. Every planned lens is accounted for, and a missing lens is named (#4
 # start records `spawn outcome=refused` and no `spawn.end` — nothing started,
 # so nothing ends; a lens that started ends in exactly one `spawn.end`.
 lens_rules_missing() {
-	_lr_s3=$(region '^### 3\. ' '^#### Agent 1 ' "$1")
+	_lr_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1")
 	# One sentence per line: split at a full stop followed by a space, so
 	# `spawn.end` and `§5` stay whole (awk, not sed: a `\n` in a sed
 	# replacement is GNU's alone).
@@ -848,7 +855,7 @@ single_rules_missing() {
 	_sr_rows=$(t_roster_rows "$1")
 	printf '%s\n' "$_sr_rows" | grep -qF -- '- `single-reviewer` — ' || printf '%s\n' 'roster row'
 	printf '%s\n' "$_sr_rows" | grep -F -- '- `single-reviewer` — ' | grep -qF 'never a spawn' || printf '%s\n' 'row: never a spawn'
-	_sr_s3=$(region '^### 3\. ' '^#### Agent 1 ' "$1" | tr '\n' ' ' | tr -s ' ')
+	_sr_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1" | tr '\n' ' ' | tr -s ' ')
 	for _sr_r in \
 		'protocol|**The seven sub-agents are the protocol; one context auditing every lens itself is the single-reviewer pass, allowed only when no lens agent can run and only when recorded.**' \
 		'never to save spawns|never a choice made to save spawns: a context that can spawn the seven spawns them' \
@@ -900,5 +907,55 @@ for b in \
 	bait568 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
+
+# ---------------------------------------------------------------------------
+banner "14. Each standards lens reads only its own instructions (#589)"
+# ---------------------------------------------------------------------------
+# PRD #580's baseline: 6.5% of all spawn tool output went to lens agents
+# re-reading the whole 44KB skill. So SKILL.md is the coordinator, and each
+# Axis-1 lens's instructions live in a file of their own beside it, named by
+# its roster token — `lens-<token>.md` — which is the one file that lens's
+# agent is handed. Agent 7 (Axis 2) stays in SKILL.md: the behavior axis is
+# unchanged. lens_gaps <a skill directory> — what the split has lost, one line
+# per gap; nothing printed when every lens has its file, its heading and its
+# name in the coordinator, and the coordinator carries no lens body.
+lens_gaps() {
+	_lg_rows=$(t_roster_rows "$1/SKILL.md" | grep -E '^- `[a-z-]+` — Agent [1-6], ')
+	[ "$(printf '%s\n' "$_lg_rows" | grep -c .)" = 6 ] || printf '%s\n' 'six Axis-1 roster rows'
+	printf '%s\n' "$_lg_rows" | while IFS= read -r _lg_row; do
+		_lg_tok=$(printf '%s\n' "$_lg_row" | sed 's/^- `\([^`]*\)`.*/\1/')
+		_lg_n=$(printf '%s\n' "$_lg_row" | sed 's/^.* — Agent \([1-6]\), .*/\1/')
+		_lg_title=$(printf '%s\n' "$_lg_row" | sed 's/^.* — Agent [1-6], //')
+		_lg_f="$1/lens-$_lg_tok.md"
+		[ -f "$_lg_f" ] || { printf 'lens-%s.md: no file\n' "$_lg_tok"; continue; }
+		grep -qxF -- "#### Agent $_lg_n — $_lg_title" "$_lg_f" || printf 'lens-%s.md: no Agent %s heading\n' "$_lg_tok" "$_lg_n"
+		grep -qF -- "lens-$_lg_tok.md" "$1/SKILL.md" || printf 'SKILL.md: lens-%s.md not named\n' "$_lg_tok"
+	done
+	grep -qE '^#### Agent [1-6] ' "$1/SKILL.md" && printf '%s\n' 'SKILL.md: a lens body is still in the coordinator'
+	grep -qE '^#### Agent 7 — ' "$1/SKILL.md" || printf '%s\n' 'SKILL.md: Agent 7 left the coordinator'
+	tr '\n' ' ' <"$1/SKILL.md" | tr -s ' ' | grep -qF 'A lens agent reads its own file, never this one' ||
+		printf '%s\n' 'SKILL.md: no rule that a lens agent reads only its own file'
+	for _lg_f in "$1"/lens-*.md; do
+		[ -f "$_lg_f" ] || continue
+		_lg_tok=$(basename "$_lg_f" .md)
+		printf '%s\n' "$_lg_rows" | grep -qF -- "- \`${_lg_tok#lens-}\` — " || printf '%s: no roster row\n' "$_lg_tok"
+	done
+	:
+}
+LENS_DIR=$(dirname "$SKILL_ABS")
+gaps=$(lens_gaps "$LENS_DIR")
+[ -z "$gaps" ] && pass "six lens files, each named by its roster token and carrying its own heading; the coordinator names each, holds no lens body, keeps Agent 7, and hands a lens only its own file" ||
+	fail "the lens split has gaps: $(printf '%s' "$gaps" | tr '\n' ';')"
+# Baits: a copy of the skill with one lens file gone, and one with a lens body
+# put back into the coordinator — lens_gaps must name each.
+mkdir -p "$SCRATCH/lens-bait"
+cp "$LENS_DIR"/*.md "$SCRATCH/lens-bait/"
+rm -f "$SCRATCH/lens-bait/lens-simplicity.md"
+lens_gaps "$SCRATCH/lens-bait" | grep -qF 'lens-simplicity.md: no file' &&
+	pass "bait: a lens file removed is named" || fail "bait: a lens file removed was not caught"
+cp "$LENS_DIR/lens-simplicity.md" "$SCRATCH/lens-bait/" 2>/dev/null
+cat "$SCRATCH/lens-bait/lens-simplicity.md" >>"$SCRATCH/lens-bait/SKILL.md" 2>/dev/null
+lens_gaps "$SCRATCH/lens-bait" | grep -qF 'a lens body is still in the coordinator' &&
+	pass "bait: a lens body back in the coordinator is named" || fail "bait: a lens body back in the coordinator was not caught"
 
 t_done "/review-pr output contract"

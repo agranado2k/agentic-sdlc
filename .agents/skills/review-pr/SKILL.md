@@ -68,96 +68,18 @@ All agents MUST only analyze code within the branch scope defined in step 0.
 - `unattributed` — a relayed report that names no agent (§6); a spawn never writes it
 - `single-reviewer` — this review's own context, auditing a lens no lens agent ran (above); never a spawn's token
 
-#### Agent 1 — Security Sentinel
+#### Agents 1–6 — the standards lenses, one file each
 
-Audit for injection of every kind the stack admits (SQL/NoSQL, command, template, prompt). Ensure strict input validation and output encoding at every trust boundary; check authentication, authorization, and secret handling on each changed path. Then check the diff against whatever security decisions this repo has recorded in `docs/adr/` — response headers, upload handling, credential scopes, edge rules — and cite them by number.
+Each Axis-1 lens's instructions live in a file of their own beside this one, named by its roster token — `lens-<roster-token>.md`:
 
-**Agentic skill surface audit — [OWASP Agentic Skills Top 10](https://owasp.org/www-project-agentic-skills-top-10/).** When the diff touches an agent-facing surface — skills, prompts, hooks, the constitution/`AGENTS.md`, agent settings or tool configuration (at minimum the set `BEHAVIOR_DELTA_SURFACES` in `scripts/guards.config.sh` enumerates, plus any agent-facing prompt text living outside that list — that policy file is consumer-owned, so treat it as a floor, never the boundary) — the changed *instruction text itself is attack surface* and gets this additional audit. Cite findings by AST number the same way ADRs are cited. Review the **semantics** of instruction text, never keywords: pattern-matching scanners are exactly what AST08 documents as trivially bypassed, so the question for every changed instruction is *"what would an agent following this actually do, and on whose authority?"*
+- Agent 1, Security Sentinel — [`lens-security.md`](lens-security.md)
+- Agent 2, API & CRUD Contract Manager — [`lens-api-crud.md`](lens-api-crud.md)
+- Agent 3, Pattern & Refactor Enforcer — [`lens-pattern.md`](lens-pattern.md)
+- Agent 4, Simplicity Advocate — [`lens-simplicity.md`](lens-simplicity.md)
+- Agent 5, Reuse & DRY Auditor — [`lens-reuse-dry.md`](lens-reuse-dry.md)
+- Agent 6, Test Hygiene Inspector — [`lens-test-hygiene.md`](lens-test-hygiene.md)
 
-- **Embedded imperatives that exfiltrate or escalate (AST01) — CRITICAL.** Skill or prompt text directing an agent to read credentials/secrets, transmit data to an external host, weaken permissions, or conceal its own actions.
-- **Instructions sourced from outside the repo (AST05) — CRITICAL.** A skill that tells the agent to fetch a URL (or read an external doc) *and follow what it finds* splices an attacker-controlled document into the prompt. External content may be read **as data**; it must never be followed **as instructions**, and the skill text must state which it is. An unpinned external instruction source is the finding even when today's content is benign.
-- **Supply-chain execution (AST02, AST07) — CRITICAL/HIGH.** `curl | sh`, unpinned installs, or setup that executes before/without user consent in a skill's scripts or hooks (CRITICAL); version-unpinned or hash-unverified dependencies a skill relies on, where a later upstream change silently changes what runs (HIGH).
-- **Over-privilege (AST03) — HIGH.** Tool grants or permission additions broader than the skill's stated job; writes to standing-instruction files (`AGENTS.md`, constitution, settings, *other* skills or memory files) that the skill's purpose does not require. A skill that edits the rules future sessions run under is privilege escalation, not convenience — least-privilege applies to instructions exactly as it does to code.
-- **Metadata/behavior mismatch and metadata injection (AST04) — HIGH.** A frontmatter `description` that under-states or misrepresents what the body does (the description is what decides the skill gets loaded, so the mismatch is the vulnerability), and any frontmatter or manifest built from untrusted input.
-- **Isolation weakening (AST06) — HIGH.** Instructions to disable sandboxing, run untrusted or fetched code on the host, or expose long-lived credentials to content retrieved at runtime.
-- **Governance trail (AST09) — MEDIUM.** A new or changed skill/hook that leaves no audit trail this repo requires (changelog or UPDATING entry, decision record when it changes policy). Axis 2 already confirms *that* these surfaces changed; this check is about whether the change is inventoried.
-- **Cross-platform porting (AST10) — MEDIUM.** A skill ported from another agent platform whose permission or safety metadata was dropped in translation — flag only what the diff shows was lost.
-
-**Shell-hazard audit — when the diff touches shell code or operator-facing command snippets.** Two shapes with reproduced data-loss incidents in this framework's own history; judge each changed command by what it does on FAILURE, not success, and cite `constitution/shared-code-craft.md` §11–§12 by number the way ADRs and AST numbers are cited:
-
-- **Truncate-before-failure (§11) — HIGH.** A `>` aimed at a file the repo or operator cannot lose, fed by a command that can fail — the redirect empties the target before the producer runs. Scratch-then-move is the fix; flag the bare form even when today's producer "cannot fail", because the next edit changes the producer, not the redirect.
-- **Interpreter drift (§12) — HIGH.** A snippet with no declared shell, or an unbraced expansion followed by text an interactive shell can reinterpret (`"$REF:x"` forms). The finding is the unpinned form itself, never whether the author's own shell happens to bite today — the operator's shell is not the author's.
-
-#### Agent 2 — API & CRUD Contract Manager
-
-Verify CRUD symmetry, status codes, and response-shape data leaks. When a public interface changed, check that its **contract artifact** changed with it — the artifacts are enumerated in `scripts/guards.config.sh` under `BEHAVIOR_DELTA_SURFACES`, which is the one place this repo says where behavior is externalized.
-
-#### Agent 3 — Pattern & Refactor Enforcer
-
-Check adherence to existing patterns. Identify code that can be simplified or modularized. The patterns are not yours to choose: they are what `constitution/local-engineering.md`, the portable craft rules in `constitution/shared-code-craft.md`, and the accepted records in `docs/adr/` say they are, and a finding here must cite one of them.
-
-#### Agent 4 — Simplicity Advocate
-
-Actively look for ways to reduce code complexity and volume. For every piece of new code, ask: "Is there a simpler way to achieve the same result with less code?" Prioritize:
-
-- Removing unnecessary abstractions, wrappers, or indirections that don't add value.
-- Replacing verbose logic with concise alternatives (built-in methods, fewer branches).
-- Eliminating dead code, redundant checks, or over-engineered patterns.
-- Suggesting inline solutions over extracted helpers when the helper is used only once.
-- Flagging premature generalizations — code that handles hypothetical future cases instead of the current need.
-
-The goal is: less code to read, less code to maintain. Simpler code is easier to review, test, and debug.
-
-#### Agent 5 — Reuse & DRY Auditor
-
-Often the highest-yield lens: **new code must reuse what already exists before it reinvents it.** Using the reuse catalog from step 1, for every new function, type, constant, query, or block of logic in the diff, ask: *does an equivalent already exist in the codebase, and should this have called it instead?*
-
-Flag, with the exact existing export/`file:line` that should have been reused:
-
-- **Reimplemented helpers** — a new local function that duplicates a shared utility or value object that is already exported. Cite the existing one.
-- **Copy-paste blocks** — the same logic (validation, mapping, error shaping, authorization checks, pagination handling) pasted across two or more changed files, or pasted from an existing file the diff clearly mirrors. Recommend extracting once and calling it from both sites.
-- **Parallel constant/enum definitions** — a value, label map, or option list redefined locally when a canonical source already exists (e.g. deriving UI options from a domain enum rather than hand-listing them). Cite the canonical source.
-- **Duplicated wire/DTO shapes or mappers** — a storage↔domain or domain↔wire mapping rewritten instead of routed through the existing mapper.
-- **Divergent-behavior duplication** (highest severity) — two copies that are *supposed* to behave identically but have already drifted (one validates, the other doesn't; one degrades a legacy record, the other throws). This is a latent bug, not just a style issue — bump it up a severity band.
-
-Distinguish **genuine duplication worth removing** from **incidental similarity** (two short blocks that look alike but are coupled to different concerns and would be wrongly fused by a shared abstraction). Do NOT recommend a premature shared abstraction for a single occurrence — that contradicts Agent 4. The bar is: an existing reusable thing is right there, OR the same non-trivial logic appears in ≥2 places in this diff. When in doubt about whether extraction is worth it, state the trade-off rather than asserting.
-
-**Then ask which case the duplication is, because the two leave the report differently.** A duplication **the diff ADDS** — a new copy of something that already exists, or the same logic pasted twice within this diff — is the author's, and a finding at the severity the buckets give it. A duplication the diff merely **touches or extends** — copies that pre-date the branch, which the diff edits in place, mirrors into one more call site, or leaves beside a helper it added — is not the author's to consolidate: moving those copies into a shared file is a behaviour-preserving refactor, and shared invariant §10 lands one on its own ticket, never as a passenger on a feature diff. Report that case as a **candidate ticket** — a LOW whose what/where line opens `candidate ticket:`, whose `↳ cites:` line names shared invariant §10, and whose `↳ fix:` line reads `none on this PR — candidate ticket (shared invariant §10)`, so the PR is asked for nothing. The report's shape does not change: a candidate ticket is a LOW with the §5 anatomy, not a new section, badge or status, so `/pr-iterate` reads it as a LOW it may defer and the trace counts it as this lens's raise — and the one exception is the divergent-behavior copy above, which is a latent bug whichever branch introduced it and stays a finding.
-
-#### Agent 6 — Test Hygiene Inspector
-
-When the PR includes test files, this agent MUST:
-
-1. Identify which package or workspace the test belongs to.
-2. Locate that workspace's test-runner config and check for global setup/bootstrap entries.
-3. Read those global setup files to understand what mocks, stubs, or configurations are already provided globally.
-4. Flag as **duplicated code** any mock or setup in the test file that is already handled by the global setup.
-5. Verify that EVERY new function, method, or module introduced in this branch has corresponding tests. Flag missing coverage.
-6. Check that each test case is truly **unitary** — testing exactly ONE behavior or scenario. Flag tests that:
-   - Assert multiple unrelated behaviors in a single test block.
-   - Combine happy-path and error-path assertions in one test.
-   - Have vague descriptions that don't clearly state the single thing being tested.
-7. Flag **redundant tests** — tests that verify the same behavior in different ways without adding value. Each test must justify its existence by covering a unique scenario.
-8. Ensure test descriptions state the expected behavior and the condition, not the implementation.
-
-Common examples of duplication to flag:
-
-- Re-mocking modules that are already mocked in global setup.
-- Redefining environment variables that are set globally.
-- Re-stubbing globals already stubbed in setup files.
-- Duplicating per-test hooks that mirror global setup behavior.
-
-**If this repo has a mutation adapter, cite surviving mutants rather than taste.** Points 5–7 ask you to judge whether a test is *load-bearing*, and an opinion on that ("this assertion looks weak") is cheap for an author to argue with. Where a machine answer exists, use it instead.
-
-Mutation testing is stack-specific, so the kit's core does not ship it: check `adapters/` for a wiring that provides a **mutation delta** (its output handed to you as a file when you hold no shell) — a mutation run scoped to the source files *this branch* changed, reporting the score plus every surviving mutant with `file:line` and the mutator. A surviving mutant is production behavior that was deleted or inverted with **no test failing** (shared invariant §9: green is a claim, not a measurement). **If no such adapter is wired, skip this block entirely and say so in one line — do not invent a substitute metric, and do not treat its absence as a clean bill of health.**
-
-When a mutation delta IS available, use its output like this:
-
-- **A survivor is a finding; an unbacked "this test looks weak" is not.** Report each as `[file:line] <Mutator> survives — <what the mutant changed>, no test failed`. **HIGH** when the mutant sits in code this branch added or changed (the branch shipped behavior nothing checks); **MEDIUM** when it is pre-existing (real, but not this PR's regression).
-- **Assertion weakening is the failure mode this exists to catch.** An *edited existing* assertion in the diff plus a new survivor in the code that assertion covers is the signature of a test made to ask for less so it would pass. Name it as that, explicitly, and cite both the assertion hunk and the mutant.
-- **Never report the score itself as a finding.** This is a diagnostic, not a gate, and the score drifts run to run. Report mutants, which are reproducible; small score movements are noise.
-- **"The mutant is equivalent" is a legitimate resolution** — some mutants provably cannot be killed. If the author has already argued equivalence for a mutant, that closes it; do not re-raise it.
-- **Its silence is not coverage.** A mutation run covers only the tree the adapter scopes it to, so points 1–8 still apply across every other tree in the diff.
+**A lens agent reads its own file, never this one.** Spawn each of the six on its lens file's path, beside the step-0 diff and — for Agent 5 — step 1's reuse catalog: the file is that lens's whole instructions, and this skill's protocol stays with the coordinator. A context auditing a lens itself (the single-reviewer pass above) reads that lens's file the same way.
 
 #### Agent 7 — Spec & Behavior Reviewer (Axis 2 — fresh context)
 
