@@ -1822,7 +1822,8 @@ banner "--ids: every model id the policy maps, the one form a spawn records (#56
 # it may not read a policy file of its own (it would name a kit-only file in
 # the kit). So the resolver lists them: every mapped value, a fallback list
 # word by word, a declared agent harness's prefix taken off — the --model
-# answer's form — sorted, once each.
+# answer's form — sorted, once each. A cascade rung the policy maps is one of them:
+# the dispatcher records its spawn under that model (#610).
 IDS_CFG="$SCRATCH/ids.policy.sh"
 cat >"$IDS_CFG" <<'EOF'
 AGENT_HARNESSES='other'
@@ -1832,9 +1833,10 @@ AGENT_TIER_MECHANICAL='maker-big-2-0'
 AGENT_TIER_REVIEWER='other:remote-x'
 AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='maker-mid-1-0'
 AGENT_TIER_REVIEWER_FALLBACK='maker-mid-1-0 local:tag-7'
+AGENT_CASCADE_MECHANICAL='maker-cheap-0-9'
 EOF
 t_run_split env AGENTS_CONFIG="$IDS_CFG" sh "$LIB" --ids
-_ids_want=$(printf '%s\n' local:tag-7 maker-big-2-0 maker-mid-1-0 maker-wise-3-1 remote-x | LC_ALL=C sort)
+_ids_want=$(printf '%s\n' local:tag-7 maker-big-2-0 maker-cheap-0-9 maker-mid-1-0 maker-wise-3-1 remote-x | LC_ALL=C sort)
 [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$_ids_want" ] &&
 	pass "--ids prints each mapped id once, sorted, the fallback list split and a declared harness's prefix off" ||
 	fail "--ids printed (status $S_STATUS): $S_OUT | $S_ERR"

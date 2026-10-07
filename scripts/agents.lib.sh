@@ -103,8 +103,8 @@ agents_usage() {
 }
 
 # agents_ids — every model id the policy maps, one per line, sorted, once
-# each: every AGENT_TIER_* value, a fallback list word by word, a declared
-# agent harness's prefix taken off, exactly the form `--model` prints. It is
+# each: every AGENT_TIER_* and AGENT_CASCADE_* value, a fallback list word
+# by word, a declared agent harness's prefix taken off, exactly the form `--model` prints. It is
 # the closed list a spawn's recorded model is held to (scripts/trace.sh,
 # the kit's ADR-0008 as amended for #569): the trace may not read a policy file itself,
 # because in the kit the policy it should read is kit-only, so it asks the
@@ -132,8 +132,9 @@ agents_ids() {
 }
 
 # agents_values — every value the policy maps, one word per line, as
-# written: each AGENT_TIER_* variable, a list split word by word, a harness
-# prefix still on. THE one enumeration of the policy's values: --ids reads
+# written: each AGENT_TIER_* and AGENT_CASCADE_* variable — a cascade rung
+# is a model the dispatcher spawns and records (#610) — a list split word by
+# word, a harness prefix still on. THE one enumeration of the policy's values: --ids reads
 # it, and so does the kit wrapper's bridge (review of PR #611, M-2), so the
 # two cannot disagree about which values exist. Read back through `env` from
 # a subshell that sourced the policy under `set -a`, so a sourcing caller's
@@ -152,7 +153,8 @@ agents_values() {
 		_av_rc=$?
 		set +a
 		[ "$_av_rc" = 2 ] && exit 2
-		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p' | tr ' \t' '\n\n' | sed '/^$/d'
+		env | sed -n -e 's/^AGENT_TIER_[A-Z0-9_]*=//p' -e 's/^AGENT_CASCADE_[A-Z0-9_]*=//p' |
+			tr ' \t' '\n\n' | sed '/^$/d'
 	)
 }
 
