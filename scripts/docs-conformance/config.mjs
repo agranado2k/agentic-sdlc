@@ -395,7 +395,7 @@ const livingSpec = {
  */
 const skillCeilings = {
   ".agents/skills/review-pr/SKILL.md": 49000,
-  ".agents/skills/to-tickets/SKILL.md": 43000,
+  ".agents/skills/to-tickets/SKILL.md": 35000,
   ".agents/skills/pr-iterate/SKILL.md": 37000,
   ".agents/skills/implement/SKILL.md": 35000,
 };
