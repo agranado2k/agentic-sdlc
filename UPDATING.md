@@ -254,7 +254,14 @@ ceiling now fails the docs gate (#585): the joining validator, its twin in
 `scripts/check.sh`, and `context.mjs`'s `size(rel)` arrive in step 5, but
 the ceilings are policy — merge the `skillCeilings` block into your
 `scripts/docs-conformance/config.mjs` in 9d, one literal `"<path>": <bytes>,`
-per line, or declare none and the rule checks nothing.
+per line, or declare none and the rule checks nothing. Two more ride
+along (#584, #586): `scripts/check.sh` fails a Claude Code agent type that
+carries a model, for the four new `adapters/claude-code/agents/*.md` types
+(one per tier, tools and no model — take them with the adapter, 9e), and
+`scripts/trace.sh` declares `passed`, `escalated` and `failed` for a
+cascade rung's `spawn`; your `scripts/agents.config.sh` gains
+`AGENT_CASCADE_MECHANICAL`, empty — add it in 9d — and `--ids` lists the
+model it maps.
 
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
@@ -1097,10 +1104,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2542 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2549 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2696 insertions(+), 1 deletion(-)
+ 3 files changed, 2703 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

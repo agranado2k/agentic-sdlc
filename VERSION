@@ -2376,7 +2376,19 @@
 # scripts/docs-conformance/test/skill-ceiling.test.mjs and context.test.mjs
 # (yours, shipped) hold it (#585). Take the skills like any skill, the
 # adapter files as 9e says, and merge skillCeilings into your config.mjs as
-# 9d says for a policy file.
+# 9d says for a policy file. And two more waves (#584, #586): the
+# Claude Code adapter gains one agent type per tier,
+# adapters/claude-code/agents/planner.md, implementer.md, mechanical.md and
+# reviewer.md, each carrying its tier's tools and no model, which
+# scripts/check.sh's new agent-type-model check holds (a shared-file change,
+# carried here); adapters/claude-code/README.md and adapters/README.md say
+# so. scripts/agents.config.sh (yours) gains AGENT_CASCADE_MECHANICAL,
+# empty: a cheaper model a cascade-running dispatcher tries first on a
+# mechanical ticket with an oracle; scripts/trace.sh's spawn outcomes gain
+# passed, escalated and failed for its rungs (a shared-file change, carried
+# here), and --ids lists a mapped cascade rung, so its spawn records. Take
+# the agent types with the adapter as 9e says, and add the variable to your
+# policy file as 9d says.
 # Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
 # kit's agents policy (`agents.kit.sh --policy`) and names a failed lookup;
 # scripts/agents.kit.sh's unreachable bridge reads agents_values; tests/trace.test.sh §31
