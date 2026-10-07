@@ -1842,6 +1842,18 @@ _ids_impl=$(sh "$KIT_WRAPPER" implementer)
 [ "$S_STATUS" = 0 ] && printf '%s\n' "$S_OUT" | grep -qxF "$_ids_impl" &&
 	pass "the kit wrapper passes --ids through, and the implementer's id ($_ids_impl) is among them" ||
 	fail "the kit wrapper's --ids (status $S_STATUS) lacks '$_ids_impl': $S_OUT"
+# No policy anywhere — a library copy outside any repository, nothing named —
+# is the unconfigured state: nothing, exit 0 (review of PR #611, L-10).
+mkdir -p "$SCRATCH/ids-nopolicy"; cp "$LIB" "$SCRATCH/ids-nopolicy/agents.lib.sh"
+t_run_split env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH/ids-nopolicy/agents.lib.sh" --ids
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "--ids with no policy file at all prints nothing and exits 0" ||
+	fail "--ids with no policy at all (status $S_STATUS): $S_OUT | $S_ERR"
+# One enumeration of the policy's values: the kit wrapper's bridge reads them
+# through the resolver's agents_values, never a scan of its own (review of
+# PR #611, M-2).
+_kit_scan=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER" | grep -c 'AGENT_TIER_\[')
+[ "$_kit_scan" = 0 ] && pass "the kit wrapper keeps no AGENT_TIER_ scan of its own — the resolver's agents_values is the one" ||
+	fail "the kit wrapper still scans AGENT_TIER_ values itself ($_kit_scan line(s))"
 _ids_word=$(sh "$KIT_WRAPPER" --alias implementer)
 printf '%s\n' "$S_OUT" | grep -qxF "$_ids_word" && fail "the kit's --ids lists the spawn word '$_ids_word'" ||
 	pass "and the spawn word ($_ids_word) is not among them"

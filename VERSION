@@ -2277,7 +2277,9 @@
 # turns the rule off. The trace reads no agents policy itself — the
 # resolver knows where it is. verify advises on a spawn already written off
 # the list — stderr, file and line, never the verdict — and summary and
-# export say the count once. From the retrospective of 2026-10-06,
+# export say the count once; a resolver that fails is said once, never
+# skipped in silence. The resolver's new agents_values is the one
+# enumeration of the policy's values. From the retrospective of 2026-10-06,
 # question 5: two models recorded five ways — each as its spawn word and as
 # its pinned id, one also half-spelled — split spend per model.
 # NO file joins or leaves. UPDATING.md changes content: the arriving-from
@@ -2296,7 +2298,8 @@
 # .agents/skills/retro/QUESTIONS.md's question 6 counts a stop's give-ups
 # per agent and reads data.final. Take the adapter and the skill whole.
 # Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
-# kit's agents policy (`agents.kit.sh --policy`); tests/trace.test.sh §31
+# kit's agents policy (`agents.kit.sh --policy`) and names a failed lookup;
+# scripts/agents.kit.sh's unreachable bridge reads agents_values; tests/trace.test.sh §31
 # and tests/agents-tiers.test.sh's --ids section, driven red first;
 # tests/trace-skills.test.sh's agents fixture that maps the `x` its span
 # filler hands `$model`; the ADR-0008 amendment, its ledger entry and index

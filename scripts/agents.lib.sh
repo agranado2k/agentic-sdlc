@@ -110,28 +110,49 @@ agents_usage() {
 # because in the kit the policy it should read is kit-only, so it asks the
 # resolver, which already knows where the policy is. No policy, or one that
 # maps nothing, prints nothing and exits 0; a named policy that is missing is
-# exit 2, as it is for a tier. The values are read back through `env` from a
-# subshell that sourced the policy under `set -a`, the way the kit wrapper
-# reads them, so a sourcing caller's variables are untouched; the split is a
-# pipe, never an unquoted expansion, which zsh would not split.
+# exit 2, as it is for a tier.
 agents_ids() {
 	[ $# -eq 0 ] || {
 		agents_usage
 		return 2
 	}
 	(
-		set -a
-		agents_load_config
-		_ai_rc=$?
-		set +a
-		[ "$_ai_rc" = 2 ] && exit 2
+		_ai_vals=$(agents_values) || exit 2
+		# The declaration the split reads; agents_values loaded the policy in
+		# a subshell of its own, which kept nothing.
+		agents_load_config >/dev/null 2>&1
 		AGENTS_TIER_QUIET=1
-		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p' | tr ' \t' '\n\n' |
+		printf '%s\n' "$_ai_vals" |
 			while IFS= read -r _ai_v; do
 				[ -n "$_ai_v" ] || continue
 				agents_split_harness "$_ai_v"
 				[ -n "$_ah_model" ] && printf '%s\n' "$_ah_model"
 			done | LC_ALL=C sort -u
+	)
+}
+
+# agents_values — every value the policy maps, one word per line, as
+# written: each AGENT_TIER_* variable, a list split word by word, a harness
+# prefix still on. THE one enumeration of the policy's values: --ids reads
+# it, and so does the kit wrapper's bridge (review of PR #611, M-2), so the
+# two cannot disagree about which values exist. Read back through `env` from
+# a subshell that sourced the policy under `set -a`, so a sourcing caller's
+# variables are untouched — and so a value the environment already exported
+# under that prefix is one too, as it is to resolve_tier, which reads the
+# same variables. The split is a pipe, never an unquoted expansion, which
+# zsh would not split. No policy prints nothing; a named one missing is 2.
+agents_values() {
+	(
+		# Sourced afresh whatever the memo says: the values are read back as
+		# exports, and a policy the caller already loaded was not exported.
+		_agents_config_loaded=0
+		_agents_config_tried=0
+		set -a
+		agents_load_config
+		_av_rc=$?
+		set +a
+		[ "$_av_rc" = 2 ] && exit 2
+		env | sed -n 's/^AGENT_TIER_[A-Z0-9_]*=//p' | tr ' \t' '\n\n' | sed '/^$/d'
 	)
 }
 

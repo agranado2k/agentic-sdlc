@@ -397,7 +397,12 @@ Chosen: **option 1**.
    with a model off it is history — one stderr line naming the file, the
    line and the value — never a bad line and never the verdict; `summary`
    and `export` say the count once and point at `verify`, as they do for
-   the #305, #348 and #567 advisories. Judged against the policy as it is
+   the #305, #348 and #567 advisories; a resolver that fails judges
+   nothing there, and each of them says so once on stderr rather than
+   skipping in silence. `verify`, `summary` and `export` therefore read the
+   agents policy too, through the resolver. One enumeration of the policy's
+   values, the resolver's `agents_values`, feeds `--ids` and the kit
+   wrapper's unreachable bridge alike. Judged against the policy as it is
    now, so a model a roster move retired is advised on too, which an
    advisory may be. The resolver and the trace script are shared layer, so
    this is a release.

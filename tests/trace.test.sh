@@ -2215,6 +2215,25 @@ for _sm_cmd in summary export; do
 done
 t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" verify
 case $S_ERR in *"spawn"*) fail "a script with no resolver beside it advised on spawn models: $S_ERR" ;; *) pass "and with no resolver beside the script, verify says nothing of spawn models" ;; esac
+# An agents policy that maps nothing advises on every spawn model, as the
+# emit refuses every one (review of PR #611, M-1).
+t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMEMPTY" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify under an empty agents policy still exits 0" || fail "verify under an empty agents policy exited $S_STATUS"
+case $S_ERR in *"$TODAY.jsonl:1:"*spawn*"$TODAY.jsonl:6:"*maker-mid-1-0*) pass "and advises on every spawn model, a once-mapped id included" ;; *) fail "verify under an empty policy did not advise on lines 1 and 6: $S_ERR" ;; esac
+# A resolver that fails judges nothing, and says so once — never a silent
+# skip beside an emit that refuses (review of PR #611, M-1 and L-1).
+for _sm_cmd in verify summary; do
+	t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SCRATCH/spawn-model.missing.sh" sh "$TRACE" $_sm_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_sm_cmd with a failing resolver still exits 0" || fail "$_sm_cmd with a failing resolver exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'spawn models are not judged')" = 1 ] &&
+		pass "and $_sm_cmd says once that spawn models are not judged" || fail "$_sm_cmd did not say once that spawn models are not judged: $S_ERR"
+	case $S_ERR in *"spawn model '"*) fail "$_sm_cmd advised per line with no list to judge against: $S_ERR" ;; *) pass "and advises on no line" ;; esac
+done
+# The kit wrapper's agents-policy lookup failing is said, never a bare exit
+# (review of PR #611, M-3).
+SMK="$SCRATCH/spawn-model-kit"; mkdir -p "$SMK/scripts"; cp "$KIT/scripts/trace.kit.sh" "$SMK/scripts/"
+t_run_split sh -c 'cd "$1" && sh scripts/trace.kit.sh dir' _ "$SMK"
+case $S_STATUS:$S_ERR in 2:*"trace.kit.sh: "*"agents.kit.sh --policy"*) pass "the kit wrapper with no agents policy to name is exit 2, naming the lookup" ;; *) fail "the kit wrapper's failed policy lookup was not exit 2 naming it (exit $S_STATUS): $S_ERR" ;; esac
 
 # The decision is recorded where decisions live, and the skills that record a
 # spawn say which form to pass.

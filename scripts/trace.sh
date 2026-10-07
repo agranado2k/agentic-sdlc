@@ -454,10 +454,8 @@ trace_matches() { printf '%s\n' "$1" | LC_ALL=C grep -Eq -- "^($2)\$"; }
 # is ($AGENTS_CONFIG, then the project's scripts/agents.config.sh). Sets
 # TRACE_MODEL_IDS, space-separated; returns 0 when the rule is on, 1 when no
 # resolver sits beside this script (no ids to hold a model to: the rule is
-# off), 2 when the resolver failed (TRACE_MODEL_WHY says how). Asked once
-# per process.
+# off), 2 when the resolver failed (TRACE_MODEL_WHY says how).
 trace_model_ids() {
-	[ -z "${_tm_rc:-}" ] || return "$_tm_rc"
 	TRACE_MODEL_IDS=
 	if [ ! -f "$_trace_here/agents.lib.sh" ]; then
 		_tm_rc=1
@@ -1396,15 +1394,24 @@ function model_scan(line,   env, d, m) {
 }
 '
 
-# trace_model_scan_args — sets _ms_on and _ms_ids for TRACE_AWK_MODEL: the
-# rule on only when the resolver answered.
+# trace_model_scan_args <say|quiet> — sets _ms_on and _ms_ids for
+# TRACE_AWK_MODEL: the rule on only when the resolver answered. A resolver
+# that failed judges nothing, and `say` prints that once on stderr — the emit
+# refuses in that state, so a read that skipped it in silence would hide it
+# (review of PR #611, L-1). verify says it when it lists; summary and export
+# say it through trace_spelling_note, so each command says it once.
 trace_model_scan_args() {
 	_ms_on=0
 	_ms_ids=
-	if trace_model_ids; then
+	_ms_rc=0
+	trace_model_ids || _ms_rc=$?
+	case $_ms_rc in
+	0)
 		_ms_on=1
 		_ms_ids=" $TRACE_MODEL_IDS "
-	fi
+		;;
+	2) [ "$1" = say ] && echo "!  trace: spawn models are not judged — $TRACE_MODEL_WHY" >&2 ;;
+	esac
 	return 0
 }
 
@@ -1431,7 +1438,7 @@ trace_spelling_note() {
 	_sn_r=0
 	_sn_m=0
 	_sn_re=$(trace_raise_re) || exit 2
-	trace_model_scan_args
+	trace_model_scan_args say
 	_sn_files=$(trace_files "${1:-}")
 	_sn_ifs=$IFS
 	IFS=$_trace_nl
@@ -1489,7 +1496,7 @@ trace_verify() {
 	# trace_files finds the day files with a glob of its own; only the SPLIT of
 	# that list runs with globbing off. Nothing in the loop body globs.
 	_vf_raise=$(trace_raise_re) || exit 2
-	trace_model_scan_args
+	if [ "${_trace_quiet_advice:-list}" = list ]; then trace_model_scan_args say; else trace_model_scan_args quiet; fi
 	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
 	IFS=$_trace_nl
