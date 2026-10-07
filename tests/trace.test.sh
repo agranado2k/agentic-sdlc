@@ -2122,4 +2122,142 @@ _ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md
 [ -n "$_ri_raise" ] && printf '%s\n' "$_ri_lines" | tr '\n' ' ' | grep -qF "$_ri_raise" &&
 	pass "and its raise paragraphs state the shape TRACE_SHAPES declares, $_ri_raise" || fail "/review-pr's raise paragraphs do not state $_ri_raise"
 
+# ---------------------------------------------------------------------------
+banner "31. A spawn's model is one form: an id the agents policy maps, held at emit (ticket #569)"
+# ---------------------------------------------------------------------------
+# The retrospective of 2026-10-06 (question 5): two models were recorded five
+# ways — `opus` and `claude-opus-5-5`, `sonnet`, `claude-sonnet` and
+# `claude-sonnet-5-5` — because callers recorded the in-session spawn word or
+# the policy id as they happened to hold it, and spend per model split one
+# model into several rows. The rule needs no vendor knowledge: a present
+# model on a spawn is one the shipped resolver prints, read from it with
+# `agents.lib.sh --ids` — the trace reads no policy file of its own.
+SM="$SCRATCH/spawn-model"; SMON=$(policy "$SM")
+SMA="$SCRATCH/spawn-model.agents.sh"
+cat >"$SMA" <<'EOF'
+AGENT_HARNESSES='other'
+AGENT_TIER_IMPLEMENTER='maker-big-2-0'
+AGENT_TIER_REVIEWER='maker-wise-3-1'
+AGENT_TIER_REVIEWER_FALLBACK='maker-mid-1-0 other:remote-x'
+EOF
+SMEMPTY="$SCRATCH/spawn-model.empty.sh"; : >"$SMEMPTY"
+# sm_emit <agents policy> <emit args…> — sets SM_GREW to the lines it added.
+sm_emit() {
+	_sm_cfg=$1; shift
+	_sm_n=$(cat "$SM/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$_sm_cfg" sh "$TRACE" emit "$@"
+	SM_GREW=$(($(cat "$SM/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ') - _sm_n))
+}
+SP='kind=spawn subject=pr:#1 tier=reviewer outcome=in-session'
+# shellcheck disable=SC2086 # $SP is the emit's fixed head, split on purpose
+{
+sm_emit "$SMA" $SP model=wise
+case $S_STATUS:$SM_GREW:$S_ERR in
+2:0:*"spawn: model 'wise' is not"*maker-wise-3-1*) pass "a spawn word is exit 2, names the value and the ids the policy maps, and writes nothing" ;;
+*) fail "spawn model=wise was not refused (exit $S_STATUS, $SM_GREW line(s)): $S_ERR" ;;
+esac
+for _sm_bad in maker-wise maker-wise-3-1x other:remote-x 'maker-big-2-0 maker-mid-1-0' MAKER-BIG-2-0; do
+	sm_emit "$SMA" $SP "model=$_sm_bad"
+	[ "$S_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "…and model='$_sm_bad' is refused" ||
+		fail "spawn model='$_sm_bad' was not refused (exit $S_STATUS, $SM_GREW line(s)): $S_ERR"
+done
+for _sm_ok in maker-big-2-0 maker-wise-3-1 maker-mid-1-0 remote-x; do
+	sm_emit "$SMA" $SP "model=$_sm_ok"
+	[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "spawn model=$_sm_ok writes — a mapped id, the fallback's included, a crossing's model part too" ||
+		fail "spawn model=$_sm_ok was refused or not written (exit $S_STATUS): $S_ERR"
+done
+sm_emit "$SMA" $SP
+[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "a spawn with no model writes — the inherited case" || fail "a spawn with no model was refused (exit $S_STATUS): $S_ERR"
+sm_emit "$SMA" $SP model=
+[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "…and so does model= empty, what an unmapped resolver hands \$model" || fail "spawn model= empty was refused (exit $S_STATUS): $S_ERR"
+sm_emit "$SMA" kind=session.usage model=wise tok_in=1
+[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "another kind's model is not held — a harness reports its own" || fail "session.usage model=wise was refused (exit $S_STATUS): $S_ERR"
+sm_emit "$SMEMPTY" $SP model=maker-big-2-0
+case $S_STATUS:$SM_GREW:$S_ERR in
+2:0:*"maps no model"*) pass "an agents policy that maps nothing refuses any model — the resolver printed nothing, so the spawn inherited" ;;
+*) fail "an empty agents policy let a spawn model through (exit $S_STATUS, $SM_GREW): $S_ERR" ;;
+esac
+sm_emit "$SCRATCH/spawn-model.missing.sh" $SP model=maker-big-2-0
+[ "$S_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "a named agents policy that is missing refuses the model — never a silent pass" ||
+	fail "a missing agents policy let a spawn model through (exit $S_STATUS, $SM_GREW): $S_ERR"
+sm_emit "$SMA" $SP model=wise --dry-run
+[ "$S_STATUS" = 2 ] && pass "--dry-run is held to the same rule" || fail "--dry-run let model=wise through (exit $S_STATUS)"
+}
+# A copy of the script with no resolver beside it cannot judge the rule, and
+# writes: a project that removed the resolver has no ids to hold a model to.
+SMX="$SCRATCH/spawn-model-nolib"; mkdir -p "$SMX"; cp "$TRACE" "$SMX/trace.sh"
+t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" emit $SP model=wise
+[ "$S_STATUS" = 0 ] && pass "with no resolver beside the script the rule is off, and the spawn writes" ||
+	fail "a script with no resolver beside it refused the spawn (exit $S_STATUS): $S_ERR"
+# The kit's own wrapper points the resolver at the kit's policy: the kit's
+# implementer id writes, its spawn word is refused.
+_sm_id=$(cd "$KIT" && sh scripts/agents.kit.sh implementer)
+_sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias implementer)
+_sm_kit() { cd "$KIT" && env -u AGENTS_CONFIG sh scripts/trace.kit.sh emit "$@" --dry-run; }
+t_run_split _sm_kit $SP "model=$_sm_id"
+[ "$S_STATUS" = 0 ] && pass "through the kit wrapper the kit's implementer id ($_sm_id) is accepted" || fail "the kit wrapper refused $_sm_id (exit $S_STATUS): $S_ERR"
+t_run_split _sm_kit $SP "model=$_sm_word"
+[ "$S_STATUS" = 2 ] && pass "and its spawn word ($_sm_word) is refused" || fail "the kit wrapper let the spawn word $_sm_word through (exit $S_STATUS)"
+
+# verify: a spawn already written with a model off the rule is history — an
+# advisory naming file, line and value, never a bad line, never the verdict.
+SMV="$SCRATCH/spawn-verify"; SMVON=$(policy "$SMV")
+TRACE_CONFIG=$SMVON AGENTS_CONFIG=$SMA sh "$TRACE" emit $SP model=maker-big-2-0 reason=clean
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s1","kind":"spawn","subject":"pr:#535","tier":"reviewer","model":"opus","outcome":"in-session"}\n' >>"$SMV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s2","kind":"session.usage","model":"opus","tok_in":1}\n' >>"$SMV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s3","kind":"spawn","subject":"pr:#541","outcome":"in-session","data":{"model":"opus"}}\n' >>"$SMV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s4","kind":"spawn","subject":"pr:#541","model":"claude-sonnet","outcome":"in-session"}\n' >>"$SMV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s5","kind":"spawn","subject":"pr:#541","model":"maker-mid-1-0","outcome":"in-session"}\n' >>"$SMV/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over an off-rule spawn model exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an off-rule spawn model: $S_OUT"
+[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2:"*spawn*"model 'opus'"*advisory*) pass "and names the spawn's file:line and the value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, spawn and 'opus': $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:5:"*claude-sonnet*) pass "and the second one too" ;; *) fail "stderr did not name $TODAY.jsonl:5 claude-sonnet: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:6:"*) fail "verify advised on a spawn whose model is a mapped id: $S_ERR" ;; *) pass "and leaves a mapped id alone" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's model to the rule: $S_ERR" ;; *) pass "and holds no other kind's model to it" ;; esac
+case $S_ERR in *"$TODAY.jsonl:4:"*) fail "verify read a data key called model as the spawn's: $S_ERR" ;; *) pass "and never reads a data key called model as the envelope's" ;; esac
+for _sm_cmd in summary export; do
+	t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" $_sm_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_sm_cmd over off-rule spawn models still exits 0" || fail "$_sm_cmd exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'spawn model')" = 1 ] && pass "and $_sm_cmd says so in exactly one stderr line" || fail "$_sm_cmd did not print exactly one spawn-model advisory: $S_ERR"
+	case $S_ERR in *"2 spawn model"*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_sm_cmd's spawn-model advisory lacks the count or the pointer: $S_ERR" ;; esac
+	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_sm_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+done
+t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" verify
+case $S_ERR in *"spawn"*) fail "a script with no resolver beside it advised on spawn models: $S_ERR" ;; *) pass "and with no resolver beside the script, verify says nothing of spawn models" ;; esac
+# An agents policy that maps nothing advises on every spawn model, as the
+# emit refuses every one (review of PR #611, M-1).
+t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMEMPTY" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify under an empty agents policy still exits 0" || fail "verify under an empty agents policy exited $S_STATUS"
+case $S_ERR in *"$TODAY.jsonl:1:"*spawn*"$TODAY.jsonl:6:"*maker-mid-1-0*) pass "and advises on every spawn model, a once-mapped id included" ;; *) fail "verify under an empty policy did not advise on lines 1 and 6: $S_ERR" ;; esac
+# A resolver that fails judges nothing, and says so once — never a silent
+# skip beside an emit that refuses (review of PR #611, M-1 and L-1).
+for _sm_cmd in verify summary; do
+	t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SCRATCH/spawn-model.missing.sh" sh "$TRACE" $_sm_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_sm_cmd with a failing resolver still exits 0" || fail "$_sm_cmd with a failing resolver exited $S_STATUS: $S_ERR"
+	[ "$(printf '%s\n' "$S_ERR" | grep -c 'spawn models are not judged')" = 1 ] &&
+		pass "and $_sm_cmd says once that spawn models are not judged" || fail "$_sm_cmd did not say once that spawn models are not judged: $S_ERR"
+	case $S_ERR in *"spawn model '"*) fail "$_sm_cmd advised per line with no list to judge against: $S_ERR" ;; *) pass "and advises on no line" ;; esac
+done
+# The kit wrapper's agents-policy lookup failing is said, never a bare exit
+# (review of PR #611, M-3).
+SMK="$SCRATCH/spawn-model-kit"; mkdir -p "$SMK/scripts"; cp "$KIT/scripts/trace.kit.sh" "$SMK/scripts/"
+t_run_split sh -c 'cd "$1" && sh scripts/trace.kit.sh dir' _ "$SMK"
+case $S_STATUS:$S_ERR in 2:*"trace.kit.sh: "*"agents.kit.sh --policy"*) pass "the kit wrapper with no agents policy to name is exit 2, naming the lookup" ;; *) fail "the kit wrapper's failed policy lookup was not exit 2 naming it (exit $S_STATUS): $S_ERR" ;; esac
+
+# The decision is recorded where decisions live, and the skills that record a
+# spawn say which form to pass.
+sed -n '/Amended 2026-10-07 (#569)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF -- '--ids' &&
+	pass "ADR-0008 carries the dated #569 amendment naming --ids" || fail "ADR-0008 has no '*Amended 2026-10-07 (#569):*' block naming --ids"
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"amended 2026-10-07 (#569"*) pass "the index row for 0008 carries the #569 amendment's dated note" ;;
+*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-07 (#569 …' note" ;;
+esac
+for _sm_skill in implement review-pr; do
+	_sm_par=$(grep -F 'kind=spawn subject=' "$KIT/.agents/skills/$_sm_skill/SKILL.md")
+	printf '%s\n' "$_sm_par" | grep -qF 'never the spawn word' &&
+		pass "/$_sm_skill's spawn line says to record the resolver's id, never the spawn word" ||
+		fail "/$_sm_skill's spawn paragraph does not say 'never the spawn word'"
+done
+
 t_done "trace script"

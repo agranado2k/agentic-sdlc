@@ -1817,6 +1817,61 @@ t_run_split env AGENT_HARNESS_SELF=codex AGENTS_CONFIG="$SHIPPED" sh "$KIT_WRAPP
 	pass "the wrapper's own choice still beats an inherited AGENTS_CONFIG" ||
 	fail "an inherited AGENTS_CONFIG overrode the wrapper's policy choice — got '$S_OUT'"
 
+banner "--ids: every model id the policy maps, the one form a spawn records (#569)"
+# The shared trace holds a spawn's model to an id the resolver can print, and
+# it may not read a policy file of its own (it would name a kit-only file in
+# the kit). So the resolver lists them: every mapped value, a fallback list
+# word by word, a declared agent harness's prefix taken off — the --model
+# answer's form — sorted, once each. A cascade rung the policy maps is one of them:
+# the dispatcher records its spawn under that model (#610).
+IDS_CFG="$SCRATCH/ids.policy.sh"
+cat >"$IDS_CFG" <<'EOF'
+AGENT_HARNESSES='other'
+AGENT_TIER_PLANNER='maker-wise-3-1'
+AGENT_TIER_IMPLEMENTER='maker-big-2-0'
+AGENT_TIER_MECHANICAL='maker-big-2-0'
+AGENT_TIER_REVIEWER='other:remote-x'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='maker-mid-1-0'
+AGENT_TIER_REVIEWER_FALLBACK='maker-mid-1-0 local:tag-7'
+AGENT_CASCADE_MECHANICAL='maker-cheap-0-9'
+EOF
+t_run_split env AGENTS_CONFIG="$IDS_CFG" sh "$LIB" --ids
+_ids_want=$(printf '%s\n' local:tag-7 maker-big-2-0 maker-cheap-0-9 maker-mid-1-0 maker-wise-3-1 remote-x | LC_ALL=C sort)
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$_ids_want" ] &&
+	pass "--ids prints each mapped id once, sorted, the fallback list split and a declared harness's prefix off" ||
+	fail "--ids printed (status $S_STATUS): $S_OUT | $S_ERR"
+[ -z "$S_ERR" ] && pass "and says nothing on stderr — an undeclared prefix is an id, not a warning, here" ||
+	fail "--ids warned: $S_ERR"
+t_run_split env AGENTS_CONFIG="$SHIPPED" sh "$LIB" --ids
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "--ids over the shipped empty policy prints nothing and exits 0, silently" ||
+	fail "--ids over the empty policy (status $S_STATUS): $S_OUT | $S_ERR"
+t_run_split env AGENTS_CONFIG="$SCRATCH/no-such-policy.sh" sh "$LIB" --ids
+[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && pass "--ids with a named policy that is missing is exit 2" ||
+	fail "--ids with a missing named policy exited $S_STATUS: $S_OUT"
+t_run_split env AGENTS_CONFIG="$IDS_CFG" sh "$LIB" --ids planner
+[ "$S_STATUS" = 2 ] && pass "--ids takes no tier — exit 2" || fail "--ids planner exited $S_STATUS"
+t_run_split sh "$KIT_WRAPPER" --ids
+_ids_impl=$(sh "$KIT_WRAPPER" implementer)
+[ "$S_STATUS" = 0 ] && printf '%s\n' "$S_OUT" | grep -qxF "$_ids_impl" &&
+	pass "the kit wrapper passes --ids through, and the implementer's id ($_ids_impl) is among them" ||
+	fail "the kit wrapper's --ids (status $S_STATUS) lacks '$_ids_impl': $S_OUT"
+# No policy anywhere — a library copy outside any repository, nothing named —
+# is the unconfigured state: nothing, exit 0 (review of PR #611, L-10).
+mkdir -p "$SCRATCH/ids-nopolicy"; cp "$LIB" "$SCRATCH/ids-nopolicy/agents.lib.sh"
+t_run_split env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH/ids-nopolicy/agents.lib.sh" --ids
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "--ids with no policy file at all prints nothing and exits 0" ||
+	fail "--ids with no policy at all (status $S_STATUS): $S_OUT | $S_ERR"
+# One enumeration of the policy's values: the kit wrapper's bridge reads them
+# through the resolver's agents_values, never a scan of its own (review of
+# PR #611, M-2).
+_kit_scan=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER" | grep -c 'AGENT_TIER_\[')
+[ "$_kit_scan" = 0 ] && pass "the kit wrapper keeps no AGENT_TIER_ scan of its own — the resolver's agents_values is the one" ||
+	fail "the kit wrapper still scans AGENT_TIER_ values itself ($_kit_scan line(s))"
+_ids_word=$(sh "$KIT_WRAPPER" --alias implementer)
+printf '%s\n' "$S_OUT" | grep -qxF "$_ids_word" && fail "the kit's --ids lists the spawn word '$_ids_word'" ||
+	pass "and the spawn word ($_ids_word) is not among them"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi

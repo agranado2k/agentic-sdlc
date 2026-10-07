@@ -1527,7 +1527,8 @@ fspan=$(sec_of 5 | grep -o '`sh scripts/trace\.sh export --since[^`]*transcript[
 sp="$SCRATCH/spend.retro"
 mkdir -p "$sp/tx"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,3.75,0.30'\n" "$sp/t" >"$sp/policy.sh"
-sp_trace() { ( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
+printf "AGENT_TIER_MECHANICAL='m1'\n" >"$sp/agents.sh"  # a spawn's model is an id the agents policy maps (#569)
+sp_trace() { ( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" AGENTS_CONFIG="$sp/agents.sh" TRACE_QUIET=1 sh "$TRACE" "$@" ); }
 tx() { printf '{"type":"user","message":{"content":"x"}}\n{"type":"assistant","message":{"usage":{"input_tokens":%s,"cache_creation_input_tokens":%s,"cache_read_input_tokens":%s,"output_tokens":9}}}\n{"type":"assistant","message":{"usage":{"input_tokens":1,"cache_creation_input_tokens":1,"cache_read_input_tokens":99999,"output_tokens":9}}}\n' "$2" "$3" "$4" >"$sp/tx/$1.jsonl"; }
 tx a1 3 30000 10000
 tx a2 2 18000 2000
