@@ -136,8 +136,8 @@ worker's tokens; a stop's `tier`, `domain` and `skill` say which spawn it served
   its `passed`, `escalated` and `failed` — a cheap rung that escalates often
   costs more than the mapped rung alone. `bucket` sorts every spawn by
   **order of magnitude** — under $0.10, $0.10 to $1, $1 to $10, $10 up —
-  so the tail that carries the spend shows; put each bucket's share of the
-  total beside it.
+  so the tail that carries the spend shows. The span prints sums, not
+  shares: the report divides each bucket's sum by the `total all` row's.
 - **The first-call prompt** — what a spawn's first call sent, the size of
   the context it starts from:
   `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk -F'"transcript":"' '/"kind":"agent\.stop"/ && NF - 1 { split($2, a, "\""); print a[1] }' | while read -r t; do test -f "$t" && awk 'function n(k) { return match($0, "\"" k "\":[0-9]+") ? substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3) + 0 : 0 } /"usage"/ { print n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens"); exit }' "$t"; done | sort -n | awk '{ v[NR] = $1 } END { print NR ? v[int((NR + 1) / 2)] : "none" }'`
