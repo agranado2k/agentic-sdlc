@@ -454,6 +454,14 @@ jobs:
       - name: Skill phase suite
         run: sh tests/skill-phase.test.sh
 
+  skill-cascade:
+    name: A mechanical ticket runs cheap-first, escalating on a red oracle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skill cascade suite
+        run: sh tests/skill-cascade.test.sh
+
   manifest:
     name: The manifest grammar, once
     runs-on: ubuntu-latest
