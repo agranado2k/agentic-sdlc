@@ -62,6 +62,36 @@ Two things worth being explicit about:
   warning. If you ever wrap this in something that merges the streams, you will
   start spawning agents on a model called `! agents: capability tier ...`.
 
+## One agent type per tier
+
+A spawn that names no agent type gets the harness's catch-all type, which
+carries every tool the session has. [`agents/`](agents/) holds four types
+instead, one per capability tier, each named with the tier's own word — so
+the spawn's agent-type parameter takes the tier you already resolved, and the
+`model` parameter takes the resolver's answer exactly as above. **A type
+declares tools and never a model**: the model stays a spawn-time answer
+(ADR-0003, ADR-0013's ordered fallback), and a `model:` line in a type would
+be a second mapping, unrecorded, that outranks the policy file. The docs gate
+fails one that carries a model line or anything shaped like a model id
+(`agent-type-model`, a POSIX check in `scripts/check.sh`).
+
+| Tier | Tools | Why these and no others |
+| ---- | ----- | ----------------------- |
+| `planner` | Read, Grep, Glob, Bash, Edit, Write, Skill, Agent | Writes specs, tickets and records (files and the forge CLI through the shell), runs the chain's skills, and fans out to subagents. No web tools: research is an untrusted read, and the trust boundary sends that to a tool-restricted subagent, never to the session that also writes. |
+| `implementer` | Read, Grep, Glob, Bash, Edit, Write, Skill, Agent | Builds a ticket test-first and delivers it: edits, runs the suite, pushes and opens the PR through the shell, and spawns its independent reviewer. No web tools, for the planner's reason. |
+| `mechanical` | Read, Grep, Glob, Bash, Edit, Write, Skill | The implementer's hands without its fan-out: a mechanical change is held to one oracle command, and its caller (the skill dispatcher's cascade, a fan-out) decides what runs next. No Agent, because a spawn from inside mechanical work is a design call the tier is not sized for; no web tools. |
+| `reviewer` | Read, Grep, Glob | Reads a diff and a spec — untrusted content — and judges them. Nothing that writes a file, reaches the network, calls a tool server or spawns an agent that could: that rules out Bash, which is all three, so the spawner hands the diff and the ticket as files to read, and posts the report itself (the offline worker of ADR-0009, in-session). No Skill either: a lens receives its own instructions in its prompt. |
+
+Two consequences worth knowing before you wire them:
+
+- **They arrive dormant.** Claude Code reads agent types from `.claude/agents/`;
+  nothing the kit stamps puts them there. Link or copy the four files in when
+  your skills start spawning by type — the chain's own spawns move onto them in
+  a later release.
+- **A tool list is the whole list.** A type with no `tools:` line inherits
+  every tool, which is the catch-all again; and a tool server's tools are only
+  reachable when listed by name, which is why none of these lists one.
+
 ## Filling in `scripts/agents.config.sh`
 
 The values are whatever identifiers your account can actually invoke — not
@@ -730,9 +760,10 @@ that keeps its marker and its hooks.
   scripts arrive, the wiring is yours to write.
 - **No agent type for the reader.** The in-session path above is a request
   because the kit ships no `.claude/agents/` definition that would make it a
-  restriction, and it will not: that file names a tool set, which is a
-  consumer's decision in a consumer's file. The CLI flag is the one restriction
-  this adapter can name without owning a file in your tree.
+  restriction, and it will not: a file there names a tool set in a consumer's
+  own tree. The tier types above are reference files under `agents/`, wired
+  only by you. The CLI flag is the one restriction this adapter can name
+  without owning a file in your tree.
 - **No workflow, and no check on tier selection.** Tier selection is a
   spawn-time decision inside a session. There is nothing for CI to enforce, and
   a check that asserted "this ticket ran on the right model" would be asserting

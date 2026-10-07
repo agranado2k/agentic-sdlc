@@ -21,6 +21,7 @@
 #     1. placeholder-unstamped  no double-brace mark survived bootstrap
 #     2. shared-layer-missing   every file VERSION lists still exists
 #     3. root-manual-missing    the root agent manual (AGENTS.md) exists at all
+#     4. agent-type-model       no adapter agent type names a model
 #
 #   (3) stays in shell rather than moving into the harness on purpose: the
 #   harness treats an absent manual as "this repo does not model that layer" and
@@ -160,7 +161,32 @@ fi
 	"Run bootstrap.sh to stamp constitution/AGENTS.md.template into AGENTS.md. Every other layer hangs off this one, and CLAUDE.md / GEMINI.md are only shims importing it."
 
 # ---------------------------------------------------------------------------
-# 4. References — the node harness, or the reduced POSIX fallback
+# 4. No agent type names a model  (always, POSIX)
+# ---------------------------------------------------------------------------
+# An adapter's agent types (adapters/<harness>/agents/*.md) carry tools, never
+# a model: the model is the tier resolver's answer at spawn time, so a model
+# line in a type is a second mapping that outranks the policy file, and an
+# identifier anywhere in one rots on a vendor's schedule. Two shapes fail: a
+# `model:` key in the frontmatter, whatever its value, and anything shaped
+# like a model identifier anywhere in the file. A grep, so it runs in shell.
+model_id_re='(claude|gpt|gemini|llama|mistral|sonnet|opus|haiku|fable)-[0-9]|claude-[a-z]+-[0-9]|(opus|sonnet|haiku|fable) [0-9]'
+list_files | grep -E '^adapters/[^/]+/agents/[^/]+\.md$' | while IFS= read -r f; do
+	[ -f "$f" ] || continue
+	line=$(awk 'NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
+		fm && /^---[[:space:]]*$/ { exit }
+		fm && /^model:/ { print NR; exit }' "$f")
+	[ -n "$line" ] && report "agent-type-model" "$f:$line" \
+		"an agent type carries a model line" \
+		"Delete it. The spawn passes the model the tier resolver printed, or none to inherit the session's; the type declares tools only."
+	grep -n -i -E "$model_id_re" "$f" 2>/dev/null | while IFS= read -r hit; do
+		report "agent-type-model" "$f:${hit%%:*}" \
+			"an agent type names a model identifier" \
+			"Name the tier, never the model: the identifier belongs in the project's tier policy file, which the resolver reads."
+	done
+done
+
+# ---------------------------------------------------------------------------
+# 5. References — the node harness, or the reduced POSIX fallback
 # ---------------------------------------------------------------------------
 harness_out=""
 harness_status=0
