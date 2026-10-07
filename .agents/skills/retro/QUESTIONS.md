@@ -117,11 +117,33 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
 `data.via=rollup` on the gap a compaction left — or, with `outcome=fail`,
 on a rollup that was refused), `session.end` (`data.phantoms`, the
 session's phantom stops), `agent.stop` and `spawn.end` (a sub-agent's or a
-worker's tokens), `data.out_snapshot` on any of those token-bearing events
+worker's tokens; a stop's `tier`, `domain` and `skill` say which spawn it served,
+`unattributed` when none was handed), `spawn` (a cascade rung's verdict,
+`data.rung`), `data.out_snapshot` on any of those token-bearing events
 (how many of its messages carry a streamed output snapshot), and the
 `cost_usd` column the export computes from the price table at read time.*
 
 - `sh scripts/trace.sh summary --by model --since <YYYY-MM-DD>` for the models and their cost; `--by skill` and `--by session` for where it went. The pivot gives cost per ticket: every token-bearing event inside a run whose skill opened on that ticket.
+- **Per tier, per skill and per cascade rung** — one span over the priced
+  export prints the answer, a row per line, `<axis> <key> <spawns> <cost>`:
+  `sh scripts/trace.sh export --csv --since <YYYY-MM-DD> | awk 'function csv(s, f,   n, q, c, t) { n = 0; q = 0; t = ""; while (s != "") { c = substr(s, 1, 1); s = substr(s, 2); if (q && c == "\"" && substr(s, 1, 1) == "\"") { t = t c; s = substr(s, 2) } else if (c == "\"") q = !q; else if (c == "," && !q) { f[++n] = t; t = "" } else t = t c } f[++n] = t } function add(r, x) { n[r]++; if (x == "unpriced") u[r]++; else s[r] += x } NR == 1 { csv($0, h); for (i in h) k[h[i]] = i; next } { split("", f); csv($0, f); e = f[k["kind"]]; run = f[k["run"]]; g = match(f[k["data"]], /"rung":"[0-9]+/) ? substr(f[k["data"]], RSTART + 8, RLENGTH - 8) : "" } e == "spawn" && f[k["tier"]] != "" { rt[run] = f[k["tier"]]; rs[run] = f[k["skill"]] } e == "spawn" && g != "" && f[k["outcome"]] ~ /^(passed|escalated|failed)$/ { add("verdict rung-" g ":" f[k["outcome"]], 0) } (e == "agent.stop" || e == "spawn.end") && f[k["cost_usd"]] != "" { m++; c[m] = f[k["cost_usd"]]; ti[m] = f[k["tier"]]; sk[m] = f[k["skill"]]; ru[m] = run; rg[m] = g } END { for (i = 1; i in c; i++) { x = c[i]; t = ti[i] != "" ? ti[i] : rt[ru[i]] != "" ? rt[ru[i]] : "unattributed"; y = sk[i] != "" ? sk[i] : rs[ru[i]] != "" ? rs[ru[i]] : "unattributed"; add("tier " t, x); add("skill " y, x); if (rg[i] != "") add("rung " rg[i], x); add("bucket " (x == "unpriced" ? "unpriced" : x + 0 >= 10 ? "10-up" : x + 0 >= 1 ? "1-10" : x + 0 >= 0.1 ? "0.10-1" : "under-0.10"), x); add("total all", x) } for (r in n) printf "%s %d %s\n", r, n[r], r ~ /^verdict/ ? "-" : u[r] ? "unpriced" : sprintf("%.4f", s[r]) }' | sort`.
+  A spawn is a token-bearing `agent.stop` or `spawn.end`; a `spawn.end` with
+  no tier of its own takes the tier and skill of the `spawn` in its run — the
+  cascade's verdicts carry them. A stop with no tier, or with tier
+  `unattributed`, is the **unattributed** row, its own row and never dropped:
+  its share of the total is how much spend no tier can answer for. `rung <n>`
+  sums each cascade rung's spawns, and `verdict rung-<n>:<outcome>` counts
+  its `passed`, `escalated` and `failed` — a cheap rung that escalates often
+  costs more than the mapped rung alone. `bucket` sorts every spawn by
+  **order of magnitude** — under $0.10, $0.10 to $1, $1 to $10, $10 up —
+  so the tail that carries the spend shows; put each bucket's share of the
+  total beside it.
+- **The first-call prompt** — what a spawn's first call sent, the size of
+  the context it starts from:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk -F'"transcript":"' '/"kind":"agent\.stop"/ && NF - 1 { split($2, a, "\""); print a[1] }' | while read -r t; do test -f "$t" && awk 'function n(k) { return match($0, "\"" k "\":[0-9]+") ? substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3) + 0 : 0 } /"usage"/ { print n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens"); exit }' "$t"; done | sort -n | awk '{ v[NR] = $1 } END { print NR ? v[int((NR + 1) / 2)] : "none" }'`
+  prints the median over the window's stops whose transcript is still on
+  disk (`none` when none is). Set it beside the baseline the project's
+  spend PRD recorded, when it recorded one.
 - A cost cell reading `unpriced` is a model the price table does not name.
   That is a finding about the policy file, and until it is fixed every total
   that includes the model reads `unpriced` too — say so in the report rather

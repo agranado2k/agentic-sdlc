@@ -19,4 +19,5 @@ R18. WHEN the first rung's oracle or pairing guard is red, the dispatcher SHALL 
 R19. The dispatcher SHALL decide escalation from the oracle's and the guard's exit codes only, never from the worker's own report.
 R20. IF a mechanical ticket names no oracle command, THEN the dispatcher SHALL refuse the cascade and run the ticket on the tier's mapped model, saying why.
 R21. The trace SHALL record each cascade rung as its own spawn under one run, with `outcome` `passed` or `escalated`.
+R22. `/retro`'s spend question SHALL report spend per tier, per skill and per cascade rung over its window, from the attributed events.
 R24. No file the kit ships SHALL name a model identifier, including the agent types and the cascade's configuration (ADR-0003). The docs gate's existing check SHALL cover the new files.
