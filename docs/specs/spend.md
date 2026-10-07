@@ -11,4 +11,5 @@ file a requirement is cited as `spend/R<n>`, and the docs gate fails one that
 no suite under `tests/` names. The kit's own: bootstrap strips it, so no
 consumer inherits a spec whose tests it does not have.
 
+R1. WHEN a chain skill spawns a subagent, the trace SHALL record the spawn's stop with the tier, the domain (or none), the skill and the ticket (or none) the spawn served.
 R8. The docs gate SHALL fail when a SKILL.md exceeds the byte ceiling the gate's policy declares for it, naming the file, its size and the ceiling.

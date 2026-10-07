@@ -5,6 +5,7 @@
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt <text>      [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt-file <path> [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --tier <tier> [--domain <token>] ...
+#   sh scripts/skill-dispatch.kit.sh <skill> --ticket <N> ...   (the Trace-Spawn line's ticket)
 #   sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> \
 #                                     (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh --tier-of <skill>
@@ -88,7 +89,7 @@ TRACE_CONFIG="$ROOT/scripts/trace.kit.config.sh"
 export TRACE_CONFIG
 
 usage() {
-	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] --prompt <text> [--dry-run]" >&2
+	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] [--ticket <N>] --prompt <text> [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
