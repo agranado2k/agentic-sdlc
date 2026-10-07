@@ -2364,7 +2364,11 @@
 # /implement, /review-pr, /pr-iterate and /to-tickets write a spawn
 # prompt's Trace-Spawn second line under Trace-Run (#615). Take them like
 # any skill. .agents/skills/retro/QUESTIONS.md reads data.out_snapshot as a
-# lower bound on tok_out (#612).
+# lower bound on tok_out (#612); /retro's SKILL.md and QUESTIONS.md
+# question 5 report spend per tier, skill and cascade rung (#617).
+# /pr-iterate's SKILL.md moves two rare step-3 branches beside it, into the
+# new .agents/skills/pr-iterate/DISMISSALS.md and RELEASE-BOUND.md, opened
+# on a mechanical trigger (#616) — take the directory whole.
 # The Claude Code adapter (take it as 9e says): adapters/claude-code/README.md
 # gains the spawn-model bullet (#569), the snapshot paragraph (#612), the
 # Trace-Spawn read (#600) and the agent-type section (#607);
@@ -2380,7 +2384,7 @@
 # dispatcher tries first on a mechanical ticket with an oracle (#610);
 # scripts/docs-conformance/config.mjs gains the skillCeilings block, one
 # literal `"<path>": <bytes>,` per line, seeded at the kit's four largest
-# skills (#603). scripts/docs-conformance/README.md (yours) describes the
+# skills (#603), the pr-iterate ceiling lowered after its split (#616). scripts/docs-conformance/README.md (yours) describes the
 # rule, and scripts/docs-conformance/test/skill-ceiling.test.mjs and
 # context.test.mjs (yours, shipped) hold it (#603).
 # Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
