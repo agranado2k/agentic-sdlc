@@ -327,6 +327,9 @@ Grouped by the seam each term belongs to. Entry shape:
   the list's order — which no other source may carry; `pr.iterate`'s
   `data.iteration` and its three counts, digits, the counts required when
   the outcome is green or red (ADR-0008, amended 2026-10-01 and 2026-10-02).
+  A `spawn`'s `model`, when present, is one id the agents policy maps, as
+  `sh scripts/agents.lib.sh --ids` lists it — never the spawn word an
+  in-session spawn parameter took (2026-10-07, #569).
   Fields sit in a fixed order and absent optionals are omitted; nothing ever
   rewrites one — a correction is a new event. A finding has three kinds:
   `finding.raise` when a review reports it, `finding.triage` for the

@@ -2263,7 +2263,46 @@
 # fills a raise's id as H-1; the ADR-0008 amendment, its header ledger entry
 # and its index note; the glossary's Event entry.
 
-shared-layer: 0.61.0
+# 0.62.0 — a spawn's model is recorded in one form, an id the agents policy
+# maps (ticket #569, ADR-0008 clause 1 as amended 2026-10-07). TWO shared
+# files change content. scripts/agents.lib.sh gains `--ids`: every model id
+# the policy maps, one per line, sorted — each AGENT_TIER_* value, a
+# fallback list word by word, a declared agent harness's prefix taken off,
+# the form `--model` prints. scripts/trace.sh holds `emit kind=spawn`'s
+# present model to that list: the spawn word an in-session spawn parameter
+# took, a half-spelled id or a prefix left on is exit 2 naming the value and
+# the ids, and nothing is written; a policy that maps nothing refuses every
+# model (the resolver printed nothing, so the spawn inherited and carries
+# none); a resolver that fails refuses too; no resolver beside the script
+# turns the rule off. The trace reads no agents policy itself — the
+# resolver knows where it is. verify advises on a spawn already written off
+# the list — stderr, file and line, never the verdict — and summary and
+# export say the count once. From the retrospective of 2026-10-06,
+# question 5: two models recorded five ways — each as its spawn word and as
+# its pinned id, one also half-spelled — split spend per model.
+# NO file joins or leaves. UPDATING.md changes content: the arriving-from
+# paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# .agents/skills/implement/SKILL.md and .agents/skills/review-pr/SKILL.md:
+# their kind=spawn lines say `$model` is the resolver's id as printed, never
+# the spawn word, and that the trace refuses a model the policy does not
+# map. adapters/claude-code/README.md: one bullet, the spawn tool takes the
+# word, the trace line carries the id. Landed on main after v0.61.0 (#565),
+# carried by this release: the Claude Code adapter's hooks/subagent-stop.sh,
+# hooks/session-end.sh and hooks/hook.lib.sh read a run that ends on a
+# turn-ending tool's result as final, record data.final=message|tool, and
+# read past their own agent's earlier stops through one anchor reader;
+# adapters/claude-code/README.md says so; and
+# .agents/skills/retro/QUESTIONS.md's question 6 counts a stop's give-ups
+# per agent and reads data.final. Take the adapter and the skill whole.
+# Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
+# kit's agents policy (`agents.kit.sh --policy`); tests/trace.test.sh §31
+# and tests/agents-tiers.test.sh's --ids section, driven red first;
+# tests/trace-skills.test.sh's agents fixture that maps the `x` its span
+# filler hands `$model`; the ADR-0008 amendment, its ledger entry and index
+# note; the glossary's Event entry.
+
+shared-layer: 0.62.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
