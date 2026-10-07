@@ -1132,10 +1132,10 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list --sort=-v:refname
-v0.64.0
+v0.65.0
 v0.1.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.64.0
+v0.1.0 -> v0.65.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1159,6 +1159,7 @@ scripts/docs-conformance/validators/skill-ceiling.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
 scripts/guards.lib.sh
+scripts/lens-slice.sh
 scripts/manifest.lib.sh
 scripts/requirement.lib.sh
 scripts/stamp.sh
@@ -1170,10 +1171,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2797 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2826 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2951 insertions(+), 1 deletion(-)
+ 3 files changed, 2980 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1230,6 +1231,7 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
   updated scripts/guards.lib.sh
+  updated scripts/lens-slice.sh
   updated scripts/manifest.lib.sh
   updated scripts/requirement.lib.sh
   updated scripts/stamp.sh
@@ -1237,7 +1239,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.64.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.65.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1262,6 +1264,7 @@ verbatim  scripts/docs-conformance/validators/skill-ceiling.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
 verbatim  scripts/guards.lib.sh
+verbatim  scripts/lens-slice.sh
 verbatim  scripts/manifest.lib.sh
 verbatim  scripts/requirement.lib.sh
 verbatim  scripts/stamp.sh
@@ -1285,10 +1288,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.64.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.65.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.64.0
-Part 1 complete — shared layer at v0.64.0. The update is not done: go to step 8.
+0.65.0
+Part 1 complete — shared layer at v0.65.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -2567,7 +2570,10 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9a   .agents/skills/grill-with-docs/SKILL.md
 9a   .agents/skills/housekeeping/CHECKLIST.md
 9a   .agents/skills/housekeeping/SKILL.md
+9a   .agents/skills/implement/COVERS.md
+9a   .agents/skills/implement/DISPATCHED-REVIEW.md
 9a   .agents/skills/implement/SKILL.md
+9a   .agents/skills/implement/STAMP.md
 9a   .agents/skills/improve-codebase-architecture/DEEPENING.md
 9a   .agents/skills/improve-codebase-architecture/INTERFACE-DESIGN.md
 9a   .agents/skills/improve-codebase-architecture/LANGUAGE.md
@@ -2581,6 +2587,12 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9a   .agents/skills/retro/QUESTIONS.md
 9a   .agents/skills/retro/SKILL.md
 9a   .agents/skills/review-pr/SKILL.md
+9a   .agents/skills/review-pr/lens-api-crud.md
+9a   .agents/skills/review-pr/lens-pattern.md
+9a   .agents/skills/review-pr/lens-reuse-dry.md
+9a   .agents/skills/review-pr/lens-security.md
+9a   .agents/skills/review-pr/lens-simplicity.md
+9a   .agents/skills/review-pr/lens-test-hygiene.md
 9a   .agents/skills/tdd/SKILL.md
 9a   .agents/skills/tdd/deep-modules.md
 9a   .agents/skills/tdd/interface-design.md
@@ -2621,6 +2633,7 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9d   scripts/agents.config.sh
 9e   adapters/claude-code/README.md
 9f   .agents/prompts/README.md
+9f   .agents/prompts/cheap-reads.md
 9f   .agents/prompts/implement-worker.md
 9f   .agents/prompts/review-worker.md
 9f   scripts/catalogue.md
@@ -2729,7 +2742,7 @@ NEW       docs/specs/README.md
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.64.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.65.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2755,7 +2768,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.64.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.65.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
