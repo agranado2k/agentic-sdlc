@@ -704,8 +704,18 @@ t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model --since "$TO
 	fail "m1 row since $TODAY was: $(summary_row "$S_OUT" m1)"
 t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary
 case $(printf '%s\n' "$S_OUT" | head -1) in kind*) pass "--by defaults to kind" ;; *) fail "the default axis is not kind: $(printf '%s\n' "$S_OUT" | head -1)" ;; esac
-assert_status 2 "an unknown --by axis is exit 2 — the axis vocabulary is closed" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --by tier
-assert_out_has "kind, skill, model, session"
+# #583: tier and domain join the axes — the columns a spawn's Trace-Spawn line
+# fills on its agent.stop. None of these events carries either, so each groups
+# whole under (none), priced as any other axis is.
+for ax583 in tier domain; do
+	t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by $ax583
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | head -1 | awk '{ print $1 }')" = "$ax583" ] &&
+		[ "$(summary_row "$S_OUT" '(none)')" = "$(summary_row "$S_OUT" TOTAL)" ] &&
+		pass "summary --by $ax583 is accepted, and events carrying no $ax583 group under (none)" ||
+		fail "summary --by $ax583: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+done
+assert_status 2 "an unknown --by axis is exit 2 — the axis vocabulary is closed" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --by bogus
+assert_out_has "kind, skill, model, session, tier, domain"
 assert_status 2 "a malformed --since is exit 2" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --since yesterday
 t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" summary --by model
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "summary on an unconfigured trace is exit 0 and silent on stdout" || fail "summary unconfigured printed '$S_OUT' (exit $S_STATUS)"
