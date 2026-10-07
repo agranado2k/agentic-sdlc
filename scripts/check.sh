@@ -168,13 +168,14 @@ fi
 # line in a type is a second mapping that outranks the policy file, and an
 # identifier anywhere in one rots on a vendor's schedule. Two shapes fail: a
 # `model:` key in the frontmatter, whatever its value, and anything shaped
-# like a model identifier anywhere in the file. A grep, so it runs in shell.
+# like a model identifier anywhere in the file. The key is matched in any
+# case and spacing, since a spelling the gate missed may still be read.
 model_id_re='(claude|gpt|gemini|llama|mistral|sonnet|opus|haiku|fable)-[0-9]|claude-[a-z]+-[0-9]|(opus|sonnet|haiku|fable) [0-9]'
 list_files | grep -E '^adapters/[^/]+/agents/[^/]+\.md$' | while IFS= read -r f; do
 	[ -f "$f" ] || continue
 	line=$(awk 'NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
 		fm && /^---[[:space:]]*$/ { exit }
-		fm && /^model:/ { print NR; exit }' "$f")
+		fm && tolower($0) ~ /^[[:space:]]*model[[:space:]]*:/ { print NR; exit }' "$f")
 	[ -n "$line" ] && report "agent-type-model" "$f:$line" \
 		"an agent type carries a model line" \
 		"Delete it. The spawn passes the model the tier resolver printed, or none to inherit the session's; the type declares tools only."

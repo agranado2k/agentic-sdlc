@@ -560,20 +560,30 @@ fi
 # ---------------------------------------------------------------------------
 banner "B4. The gate fails an agent type that names a model (spend/R24)"
 # ---------------------------------------------------------------------------
-# Two plants, one rule: a model line in a type's frontmatter, and a model
+# Three plants, one rule: a model line in a type's frontmatter (spelled as
+# the harness writes it, and spaced or capitalised, since a key the gate
+# misses by spelling is a key the harness may still read), and a model
 # identifier anywhere in its body. Each must turn the project's gate red under
 # both engines — the check is POSIX and runs in either — and naming the file.
 # The identifier is assembled from parts so this suite carries none.
 fam=sonnet
 plant_line="model: $fam"
 plant_id="claude-$fam-9-9"
-for plant in line id; do
+for plant in line spaced id; do
 	case "$plant" in
 	line) body="---
 name: rogue
 description: a fixture type that names a model
 tools: Read
 $plant_line
+---
+A fixture.
+" ;;
+	spaced) body="---
+name: rogue
+description: a fixture type that names a model
+tools: Read
+Model : $fam
 ---
 A fixture.
 " ;;
