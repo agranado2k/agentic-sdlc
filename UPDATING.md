@@ -1104,10 +1104,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2549 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2551 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2703 insertions(+), 1 deletion(-)
+ 3 files changed, 2705 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -2328,6 +2328,8 @@ $ cat "$WORK/changed.yours"
 .agents/skills/improve-codebase-architecture/PRESENTING.md
 .agents/skills/improve-codebase-architecture/SKILL.md
 .agents/skills/merge-train/SKILL.md
+.agents/skills/pr-iterate/DISMISSALS.md
+.agents/skills/pr-iterate/RELEASE-BOUND.md
 .agents/skills/pr-iterate/SKILL.md
 .agents/skills/prototype/SKILL.md
 .agents/skills/retro/QUESTIONS.md
