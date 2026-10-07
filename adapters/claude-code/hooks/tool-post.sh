@@ -17,7 +17,7 @@
 # BEHIND ITS OWN SWITCH. TRACE_TOOLS in the policy file, empty as shipped: a
 # tool call is the least decision-bearing line in the trace and there are
 # hundreds per session, and a tool result is the contents of whatever was read
-# (ADR-0008 clause 8). With the switch empty this hook starts, exits 0 and
+# (the kit's ADR-0008 clause 8). With the switch empty this hook starts, exits 0 and
 # writes nothing — the whole cost a project that did not ask for it pays.
 #
 # TWO OUTCOMES HERE; THE THIRD IS SWEPT. `denied` has no payload to read: a

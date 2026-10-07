@@ -785,6 +785,34 @@ t_assert_no_kit_residue() {
 		fail "kit-only files survived $3: $(printf '%s' "$_kr_out" | tr '\n' ' ')"
 }
 
+# t_kit_record_cites <tree> — print, one `<path>:<line>` per line, every line
+# of a shipped <tree> that names a decision record as `ADR-<nnnn>` without
+# saying it is the kit's. A consumer never receives the kit's records
+# (bootstrap strips them, and t_kit_residue proves it), and numbers its own
+# from 0001: a bare `ADR-0008` in a shipped file points at a record the
+# project lacks, or at the project's own 0008, which says something else
+# (#564). The one spelling a shipped file may use is `the kit's ADR-<nnnn>`,
+# on one line, so a reader knows to look in the kit's repository. VERSION is
+# exempt: it is the kit's own release ledger, every line of it the kit
+# speaking of itself, and its notes are history that is not rewritten.
+# Empty output is a clean tree.
+t_kit_record_cites() {
+	(cd "$1" && grep -rnE --exclude-dir=.git 'ADR-[0-9]{4}' . 2>/dev/null) |
+		sed 's#^\./##' | grep -v '^VERSION:' |
+		sed -E "s/[Tt]he kit's ADR-[0-9]{4}//g" | grep -E 'ADR-[0-9]{4}' |
+		cut -d: -f1,2
+	return 0
+}
+
+# t_assert_no_kit_record_cite <tree> <what> — one assertion over
+# t_kit_record_cites: pass on an empty sweep, fail naming every line.
+t_assert_no_kit_record_cite() {
+	_rc_out=$(t_kit_record_cites "$1")
+	[ -z "$_rc_out" ] &&
+		pass "no file in $2 cites a kit decision record as if the project had it" ||
+		fail "$2 cites a kit decision record without saying it is the kit's (spell it \`the kit's ADR-<nnnn>\`): $(printf '%s' "$_rc_out" | tr '\n' ' ')"
+}
+
 # t_fake_host <dir> <slice pids.max> <MemAvailable kB> — the host the
 # dispatcher's derivation reads through AGENT_DISPATCH_HOST_ROOT, so a suite
 # asserts the arithmetic against numbers it chose: this process in
@@ -1015,9 +1043,13 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # The run an end names, `<the run id your begin printed>`, becomes the top of
 # the stack the span runs against, read with `stack .` — the id the begin
 # earlier in the document printed, as an agent would type it (ticket #543).
+# A raise's id, `data.id='<its id, [CHML]-[0-9]+>'`, becomes `H-1` before the
+# optional-group rule could read its bracket as one: the script holds it to
+# that shape (ticket #567).
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
+		-e "s/data\.id='<its id, \[CHML\]-\[0-9\]+>'/data.id='H-1'/g" \
 		-e 's/<the run id your begin printed>/"$(sh scripts\/trace.sh stack . | sed -n 1p)"/g' \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \

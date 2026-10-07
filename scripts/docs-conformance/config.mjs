@@ -346,7 +346,7 @@ const bannedWords = {
 };
 
 /**
- * Policy for the living-spec rule (ADR-0012): every requirement in a living
+ * Policy for the living-spec rule (the kit's ADR-0012): every requirement in a living
  * spec — a line opening `R<n>.` in `<specsDir>/<area>.md` — must be named, as
  * `<area>/R<n>`, by at least one file these globs match. With no living spec
  * the rule is silent. A requirement no test names FAILS the gate.

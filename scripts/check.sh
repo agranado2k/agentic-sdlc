@@ -253,7 +253,7 @@ if [ "$engine" = "fallback" ]; then
 		scan_manual "$article"
 	done
 
-	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
+	# The living-spec rule's POSIX twin (validators/living-spec.mjs, the kit's ADR-0012
 	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
 	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced

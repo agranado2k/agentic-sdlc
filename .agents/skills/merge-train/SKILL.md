@@ -59,7 +59,7 @@ force-pushed.
 
 Open the train's run first, so every landing below carries it:
 `sh scripts/trace.sh begin merge-train || :`. The trace is written here and
-never read (ADR-0008); unconfigured, every call is a silent no-op.
+never read (the kit's ADR-0008); unconfigured, every call is a silent no-op.
 
 If the operator gave PR numbers, use exactly those (still verify each is green —
 refuse red ones with a one-line reason). Otherwise discover:

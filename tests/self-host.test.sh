@@ -376,6 +376,13 @@ assert_status 0 "the stamped project's gate is green" -- \
 # said bootstrap deleted it, because no assertion named it.
 t_assert_no_kit_residue "$KIT" "$PROJ" "a fresh bootstrap"
 
+# And nothing that did survive cites a kit record as the project's (#564): the
+# records are gone, so a shipped file names one only as `the kit's ADR-<n>`.
+# The optional /dogfood skill is not in this tree (--no-dogfood above), so it
+# is swept where it ships from.
+t_assert_no_kit_record_cite "$PROJ" "a fresh bootstrap"
+t_assert_no_kit_record_cite "$KIT/.agents/skills/dogfood" "the optional /dogfood skill"
+
 # Nothing kit-authoring survived either. `tests/` is the whole set: every suite
 # is on bootstrap's KIT_ONLY list, so the directory itself must be gone — which
 # is the assertion that catches a NEW suite somebody forgot to add to that list.
