@@ -212,6 +212,18 @@ fi
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
 	echo "skill-dispatch: tier '$TIER_ARGS' — from $TIER_SOURCE" >&2
+	# The spawn's agent type and model (#588, spend/R6–R7): under the Claude
+	# Code adapter a spawn takes its tier's agent type and the resolver's
+	# model for the tier and domain; no model means the spawn inherits. A
+	# resolver that refuses is not an unmapped tier: its own stderr says why.
+	# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
+	_dr_model=$(AGENTS_TIER_QUIET=1 sh "$ROOT/scripts/agents.lib.sh" --model $TIER_ARGS) ||
+		die "the tier resolver refused '$TIER_ARGS' — no agent type or model to name"
+	if [ -n "$_dr_model" ]; then
+		echo "skill-dispatch: agent type '${TIER_ARGS%% *}', model '$_dr_model'" >&2
+	else
+		echo "skill-dispatch: agent type '${TIER_ARGS%% *}', no model — the spawn inherits the session's" >&2
+	fi
 	break
 done
 
