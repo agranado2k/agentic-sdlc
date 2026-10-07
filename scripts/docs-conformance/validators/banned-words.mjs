@@ -19,6 +19,7 @@
 // in it, produces nothing.
 
 import { DEFAULT_SKILLS_DIR, skillHomes, stripFences } from "./claude-md-refs.mjs";
+import { fencedLines } from "./living-spec.mjs";
 
 export const id = "banned-words";
 
@@ -92,18 +93,13 @@ export function parseEntries(sectionText) {
 /**
  * Prose only, with every line still on its own line so a match's offset maps
  * back to a line number: fenced blocks are blanked line by line (not removed,
- * as stripFences does), and code spans are blanked in place.
+ * as stripFences does) by the one fence rule, living-spec.mjs's fencedLines
+ * (#571), and code spans are blanked in place.
  */
 function prose(raw) {
-  const out = [];
-  let fence = false;
-  for (const line of raw.split("\n")) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      fence = !fence;
-      out.push("");
-    } else out.push(fence ? "" : line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length)));
-  }
-  return out.join("\n");
+  const lines = raw.split("\n");
+  const fenced = fencedLines(lines);
+  return lines.map((line, i) => (fenced[i] ? "" : line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length)))).join("\n");
 }
 
 /** The 1-based line of a character offset in text. */
