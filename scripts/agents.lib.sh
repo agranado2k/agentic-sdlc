@@ -23,8 +23,8 @@
 # with a domain) · AGENT_TIER_<TIER>.
 # Reviewer tier only: a walk past that answer — the plain tier, then the
 # policy's ordered AGENT_TIER_REVIEWER_FALLBACK — skipping the caller's
-# $AGENT_SESSION_MODEL and every name in $AGENT_UNREACHABLE_MODELS (ADR-0007,
-# ADR-0013; described where resolve_tier does it).
+# $AGENT_SESSION_MODEL and every name in $AGENT_UNREACHABLE_MODELS (the kit's ADR-0007,
+# the kit's ADR-0013; described where resolve_tier does it).
 #
 # Exit: 0 resolved (a value, or deliberately nothing — an unmapped tier warns
 # once per process, AGENTS_TIER_QUIET=1 silences it, the caller spawns with no
@@ -202,7 +202,7 @@ agents_split_harness() {
 	# resolved to no agent harness and a model id of `Alpha:some-model`, in
 	# total silence — a capitalisation typo in the policy file spawning on the
 	# caller's own agent harness with nothing said anywhere. That is exactly the
-	# silent wrong-harness spawn ADR-0005 clause 5 forbids. A malformed prefix
+	# silent wrong-harness spawn the kit's ADR-0005 clause 5 forbids. A malformed prefix
 	# falls through to the same warning an undeclared one gets.
 	_ah_shape=ok
 	case $_ah_prefix in
@@ -384,7 +384,7 @@ resolve_tier() {
 		return 0
 	fi
 
-	# THE REVIEWER IS NEVER THE MODEL THAT WROTE THE DIFF (ADR-0007).
+	# THE REVIEWER IS NEVER THE MODEL THAT WROTE THE DIFF (the kit's ADR-0007).
 	#
 	# "The reviewer differs from the implementer" is a relation between two
 	# models, and one of them — the session's own — is a fact only the CALLER
@@ -404,7 +404,7 @@ resolve_tier() {
 	# so it compares what the policy file says. A caller that knows its session
 	# by another spelling names it in the spelling its own policy uses.
 	#
-	# THE WALK (ADR-0013). One refusal had one next answer, the plain tier, and
+	# THE WALK (the kit's ADR-0013). One refusal had one next answer, the plain tier, and
 	# on a day that answer's vendor was out of credits there was none past it.
 	# So the reviewer tier walks an ordered list: the answer looked up above
 	# (the domain's, when one is mapped), then the plain reviewer, then each
@@ -466,8 +466,8 @@ resolve_tier() {
 		done
 
 		if [ "${AGENTS_TIER_QUIET:-}" != 1 ]; then
-			# A name that matches no candidate skipped nothing — the miss ADR-0007's
-			# 2026-10-05 amendment shows for a session named by its spawn word.
+			# A name that matches no candidate skipped nothing — the miss the amendment of
+			# 2026-10-05 to the kit's ADR-0007 shows for a session named by its spawn word.
 			# Silent, it would hand back the very model the caller found dead.
 			_rt_rest=$_rt_unr
 			while :; do
@@ -486,7 +486,7 @@ resolve_tier() {
 			done
 
 			if [ -z "$_rt_fb" ] && [ -z "$_rt_unr" ]; then
-				# No list and nothing named unreachable: ADR-0007's two outcomes,
+				# No list and nothing named unreachable: the two outcomes of the kit's ADR-0007,
 				# worded as they always were, so a caller that predates the walk
 				# reads exactly what it read before.
 				if [ -n "$_rt_pick" ] && [ "$_rt_nskips" -gt 0 ]; then

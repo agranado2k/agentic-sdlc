@@ -4342,4 +4342,350 @@ for h474 in subagent-stop session-end tool-post; do
 	*) fail "the README row for $h474.sh does not name the Trace-Run line (#474)" ;; esac
 done
 
+# ---------------------------------------------------------------------------
+banner "48. A run that ends on a turn-ending tool is final, and a later stop reads only what is new (#565)"
+# ---------------------------------------------------------------------------
+# Retro finding (question 5, retro-20261006T080718Z): after #479 tripled the
+# wait to 3000 ms, 59 % of stops still gave up on a user line aged about the
+# wait. The diagnosis, from the transcripts on the capturing machine (ADR-0008,
+# the #565 amendment): 222 of the 257 give-ups ended, as they stood at the
+# stop, on the tool_result of a SubagentHandback call — a user line carrying
+# "toolEndsTurn":true, after an assistant tool_use line whose stop_reason is
+# null. The run ends THERE: no assistant line follows, ever, so no bound is
+# long enough. The fixture is one of them, redacted (the fixtures README's
+# sixth capture). And 128 of 301 agents stopped more than once — an end_turn,
+# then a handback — so the second stop must read past the first one's anchor,
+# or finding the handback would count the first stop's messages twice.
+HB="$FIX/handback-subagent-transcript.redacted.jsonl"
+[ "$(sed -n '$p' "$HB" | grep -c '"type":"user".*"toolEndsTurn":true')" = 1 ] &&
+	[ "$(sed -n '18p' "$HB" | grep -c '"name":"SubagentHandback".*"stop_reason":null')" = 1 ] &&
+	[ "$(grep -c '"type":"assistant"' "$HB")" = 4 ] &&
+	pass "premise: the fixture ends on a handback's result, after a tool_use line with stop_reason null" ||
+	fail "premise: the handback fixture no longer has the observed shape"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE OBSERVED SHAPE IS FINAL AT ONCE — no wait spent, every message read.
+	new_trace
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$H" outcome)" != fail ] &&
+		[ "$(num "$H" tok_in)/$(num "$H" tok_out)/$(num "$H" tok_cache_w)/$(num "$H" tok_cache_r)" = 20/301/10929/10582 ] &&
+		[ "$(str "$H" msgs)" = 2 ] &&
+		pass "a transcript ending on a turn-ending tool's result reads as final, both messages counted" ||
+		fail "the handback-ended transcript was not read as final: exit $S_STATUS, event $H"
+	[ "$(str "$H" waited_ms)" = 0 ] && [ "$NAPS" = 0 ] &&
+		pass "and it is final before the first nap (waited_ms 0)" ||
+		fail "the handback-ended stop waited: $NAPS naps, waited_ms '$(str "$H" waited_ms)'"
+	[ "$(str "$H" final)" = tool ] &&
+		pass "and data.final=tool says the run ended on a tool, whose last usage block is the streamed one" ||
+		fail "the handback-ended stop does not say data.final=tool: $H"
+
+	# AN END_TURN SAYS SO TOO, so a retro can split the two.
+	head -n 14 "$HB" >"$SCRATCH/hb-head-565.jsonl"
+	new_trace
+	stop_on "$SCRATCH/hb-head-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$H" final)" = message ] && [ "$(num "$H" tok_out)" = 299 ] &&
+		pass "a transcript ending on an end_turn reads as final with data.final=message" ||
+		fail "the end_turn stop: event $H"
+
+	# A SECOND STOP OF THE SAME AGENT READS PAST THE FIRST ONE'S ANCHOR. Same
+	# trace: the end_turn stop above, then the handback stop — which counts the
+	# handback's message alone, never the end_turn's again.
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(num "$H2" tok_in)/$(num "$H2" tok_out)/$(num "$H2" tok_cache_w)/$(num "$H2" tok_cache_r)" = 10/2/347/10582 ] &&
+		[ "$(str "$H2" msgs)" = 1 ] && [ "$(str "$H2" last_msg)" = msg_011CfknNNwj5Qd2EqtwG3CgZ ] &&
+		pass "the agent's second stop counts only the message after its first stop's anchor" ||
+		fail "the second stop double-counted or failed: $H2"
+	[ "$(sum_tok tok_out agent.stop)" = 301 ] &&
+		pass "and the agent's two stops sum to the whole transcript (tok_out 301)" ||
+		fail "the agent's stops sum to tok_out '$(sum_tok tok_out agent.stop)', not 301"
+	# A third stop with nothing new carries the anchor forward and counts nothing.
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H3=$(ev_of agent.stop | sed -n '3p')
+	[ "$(str "$H3" outcome)" != fail ] && [ -z "$(num "$H3" tok_out)" ] && [ "$(str "$H3" msgs)" = 0 ] &&
+		pass "a stop with nothing new since the last one records nothing new, not a failure" ||
+		fail "the nothing-new stop: $H3"
+	# Another agent's anchor is never this one's: the same transcript under
+	# another agent id counts everything.
+	sed 's/"agent_id": "[^"]*"/"agent_id": "a0ther565agent00"/' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-other-565.json"
+	t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-other-565.json"
+	H4=$(ev_of agent.stop | grep -F '"subject":"agent:a0ther565agent00"' | sed -n '1p')
+	[ "$(num "$H4" tok_out)" = 301 ] &&
+		pass "another agent's anchors never shorten this agent's read" ||
+		fail "another agent's stop read '$(num "$H4" tok_out)', not 301: $H4"
+
+	# A STOP THAT GAVE UP LEAVES NO ANCHOR, so the next one counts it all: the
+	# first stop sees the end_turn and the prompt after it, never final; the
+	# second sees the handback and counts both messages.
+	head -n 16 "$HB" >"$SCRATCH/hb-meta-565.jsonl"
+	new_trace
+	stop_on "$SCRATCH/hb-meta-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	G1=$(ev_of agent.stop | sed -n '1p')
+	G2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(str "$G1" outcome)" = fail ] && [ "$(num "$G2" tok_out)" = 301 ] &&
+		pass "after a stop that gave up, the next stop counts every message — nothing lost" ||
+		fail "after a give-up: first $G1, second $G2"
+
+	# WHAT IS NOT FINAL STAYS NOT FINAL. A turn-ending result followed by the
+	# prompt that resumed the agent; a result whose flag is false; and a result
+	# whose TEXT quotes the key, escaped, with the real key gone.
+	{ cat "$HB"; sed -n '16p' "$HB"; } >"$SCRATCH/hb-resumed-565.jsonl"
+	final "a turn-ending result followed by the prompt that resumed the agent" "$SCRATCH/hb-resumed-565.jsonl" not
+	sed '$s/"toolEndsTurn":true/"toolEndsTurn":false/' "$HB" >"$SCRATCH/hb-false-565.jsonl"
+	final "a tool result whose toolEndsTurn is false" "$SCRATCH/hb-false-565.jsonl" not
+	sed '$s/"toolEndsTurn":true,//; $s/"content":"\[REDACTED content/"content":"\\"toolEndsTurn\\":true [REDACTED content/' \
+		"$HB" >"$SCRATCH/hb-quoted-565.jsonl"
+	grep -q '\\"toolEndsTurn\\":true' "$SCRATCH/hb-quoted-565.jsonl" &&
+		final "a tool result whose text quotes the key, escaped" "$SCRATCH/hb-quoted-565.jsonl" not ||
+		fail "the quoted-key fixture was not built"
+	sed 's/"toolEndsTurn":true/"toolEndsTurn" : true/' "$HB" >"$SCRATCH/hb-spaced-565.jsonl"
+	final "a turn-ending result serialised with spaces around the colon" "$SCRATCH/hb-spaced-565.jsonl" final
+
+	# THE NO-WAIT PATH READS THE SAME WAY (M-3, review of PR #606): with no
+	# bound the hook reads at once, and still says how the run ended and
+	# still reads past the agent's own anchor.
+	new_trace
+	stop_on "$SCRATCH/hb-head-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	N1=$(ev_of agent.stop | sed -n '1p')
+	N2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(str "$N1" final)" = message ] && [ "$(str "$N2" final)" = tool ] && [ -z "$(str "$N2" waited_ms)" ] &&
+		[ "$(num "$N2" tok_out)" = 2 ] && [ "$(str "$N2" msgs)" = 1 ] &&
+		pass "with no wait bound a stop still records data.final and reads past the agent's anchor" ||
+		fail "the no-wait path: first $N1, second $N2"
+	# Read at once, a transcript that has not ended is priced without the key:
+	# data.final is said only of a run that ended.
+	new_trace
+	stop_on "$SCRATCH/hb-meta-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=
+	N3=$(ev_of agent.stop | sed -n '1p')
+	[ -n "$(num "$N3" tok_out)" ] && [ -z "$(str "$N3" final)" ] &&
+		pass "with no wait bound a run that has not ended carries no data.final" ||
+		fail "the no-wait read of an unended run: $N3"
+
+	# NO USABLE AGENT ID, NO ANCHOR (M-4): a payload whose agent id is empty
+	# or outside the identifier class names no subject to read anchors from,
+	# so each stop reads the whole file — never another agent's anchors.
+	for bad565 in '' '../x'; do
+		new_trace
+		stop_on "$SCRATCH/hb-head-565.jsonl"
+		sed 's|"agent_id": "[^"]*"|"agent_id": "'"$bad565"'"|' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-bad-565.json"
+		t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-bad-565.json"
+		stop_on "$HB"
+		sed 's|"agent_id": "[^"]*"|"agent_id": "'"$bad565"'"|' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-bad-565.json"
+		t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-bad-565.json"
+		B2=$(ev_of agent.stop | sed -n '2p')
+		[ "$S_STATUS" = 0 ] && [ "$(num "$B2" tok_out)" = 301 ] &&
+			pass "an agent id of '$bad565' reads no anchor: the second stop counts the whole file" ||
+			fail "an agent id of '$bad565': status $S_STATUS, second stop $B2"
+	done
+
+	# A STALE ANCHOR IS A NAMED FAILURE, NEVER A RE-COUNT (M-5): an earlier
+	# event of this agent naming a message the transcript does not hold is
+	# refused by the extractor as drift — no tokens. One whose value is not an
+	# identifier at all never reaches the command line as --after.
+	for anchor565 in msg_011CfknNOTHERE000000000 'msg x;y'; do
+		new_trace
+		(cd "$KIT" && TRACE_DIR="$TDIR" sh scripts/trace.sh emit kind=agent.stop subject="agent:$AGENT" \
+			model=claude-haiku-4-5-20251001 tok_in=1 tok_out=1 tok_cache_w=0 tok_cache_r=0 \
+			data.msgs=1 data.last_msg="$anchor565" reason='a seeded earlier stop') >/dev/null 2>&1
+		stop_on "$HB"
+		timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+		A2=$(ev_of agent.stop | sed -n '2p')
+		[ "$S_STATUS" = 0 ] && [ -n "$A2" ] && [ "$(str "$A2" outcome)" = fail ] && [ -z "$(num "$A2" tok_out)" ] &&
+			pass "an earlier anchor of '$anchor565' the transcript does not hold is a failure, no tokens" ||
+			fail "an anchor of '$anchor565': status $S_STATUS, event $A2, stderr $S_ERR"
+	done
+else
+	skip "the handback legs read tokens with the extractor, which needs node"
+fi
+
+# ---------------------------------------------------------------------------
+banner "49. A message whose line was written mid-stream carries a snapshot, and the event says tok_out is a lower bound (#608)"
+# ---------------------------------------------------------------------------
+# Finding from #606's diagnosis, confirmed for #608 (ADR-0008, the #608
+# amendment): a SUBAGENT transcript writes each assistant line as its content
+# block closes, before the response's closing usage arrives, and nothing
+# rewrites it — so a message whose last line says stop_reason null carries an
+# output_tokens snapshot, not the closing count. No later line for the id, no
+# usage-only record and no other field carries the closing count: 4,988 of
+# 5,585 messages in 221 subagent transcripts on CLI 2.1.287 ended so, none of
+# them ever moved. The fixture is the smallest 2.1.287 subagent run that mixes
+# both shapes (the fixtures README's seventh capture). The extractor cannot
+# read a count the file does not hold, so it says how many messages it
+# counted from a snapshot, and the event carries data.out_snapshot.
+SNAP="$FIX/snapshot-subagent-transcript.redacted.jsonl"
+SNAP_LAST=msg_011CfkimJPYvGZQsVMkfRS3G
+SNAP_MODEL=claude-sonnet-5-5
+[ "$(grep -c '' "$SNAP")" = 57 ] && [ "$(grep -c '"version":"2.1.287"' "$SNAP")" = 57 ] &&
+	[ "$(grep -c '"role":"assistant".*"stop_reason":null' "$SNAP")" = 12 ] &&
+	[ "$(sed -n '42p' "$SNAP" | grep -c '"name":"Write","input":"\[REDACTED input, 1408 chars\]".*"stop_reason":null.*"output_tokens":3,')" = 1 ] &&
+	[ "$(sed -n '$p' "$SNAP" | grep -c '"stop_reason":"end_turn"')" = 1 ] &&
+	pass "premise: a 2.1.287 subagent run whose tool turns were written mid-stream — a 1408-char Write at output_tokens 3" ||
+	fail "premise: the snapshot fixture no longer has the observed shape"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR: the row says how many of its messages are snapshots — an
+	# eighth field, present only when there is one.
+	t_run_split node "$EXTRACTOR" "$SNAP"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SNAP_MODEL 26 624 52403 616704 12 $SNAP_LAST 8" ] &&
+		pass "the extractor's row counts 8 of its 12 messages as streamed snapshots" ||
+		fail "the snapshot fixture's row is '$S_OUT' (status $S_STATUS: $S_ERR)"
+	# A message is a snapshot by its LAST line: a thinking line's null that a
+	# later line of the same id closes is no snapshot (#343's shape).
+	t_run_split node "$EXTRACTOR" "$TSUB"
+	[ "$S_OUT" = "$TMODEL 18 158 15600 13892 2 msg_011CfZXycwXfJKUZUXVPyGsv" ] &&
+		pass "a null on a superseded line, closed by the id's last line, is no snapshot" ||
+		fail "the two-block transcript's row is '$S_OUT'"
+	# Under an anchor, only the fresh messages are counted, snapshots included.
+	t_run_split node "$EXTRACTOR" --after msg_011Cfkidudtc7txQaZQe5qZY "$SNAP"
+	[ "$S_OUT" = "$SNAP_MODEL 8 300 4977 191539 3 $SNAP_LAST 1" ] &&
+		pass "after an anchor the snapshot count is the fresh messages' own" ||
+		fail "the anchored read is '$S_OUT'"
+
+	# THE HOOK: the agent.stop event carries data.out_snapshot beside tok_out.
+	new_trace
+	stop_on "$SNAP"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	P=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(num "$P" tok_out)" = 624 ] && [ "$(str "$P" out_snapshot)" = 8 ] &&
+		pass "the subagent-stop event says 8 messages' output is a snapshot: tok_out 624 is a lower bound" ||
+		fail "the snapshot stop: exit $S_STATUS, event $P"
+	# A run whose every message closed says nothing of the kind.
+	new_trace
+	stop_on "$TSUB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	P=$(ev_of agent.stop | sed -n '1p')
+	[ -n "$(num "$P" tok_out)" ] && [ -z "$(str "$P" out_snapshot)" ] &&
+		pass "a run whose every message closed carries no data.out_snapshot" ||
+		fail "the closed run's event: $P"
+
+	# THE GAP ABSORBS THE SHORTFALL. The rollup counts each response's closing
+	# count, so a subagent snapshot's shortfall lands in the compaction gap: the
+	# gap row says how many snapshot messages it was judged against. Built from
+	# #407's subagent case with the subagent's last line turned mid-stream.
+	mkdir -p "$SCRATCH/compacted-snap-608/subagents"
+	sed '$s/"stop_reason":"end_turn"/"stop_reason":null/' "$FIX/thinking-subagent-transcript.redacted.jsonl" \
+		>"$SCRATCH/compacted-snap-608/subagents/agent-a1.jsonl"
+	cp "$SCRATCH/compacted-sub-407.jsonl" "$SCRATCH/compacted-snap-608.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-snap-608.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP 1" ] &&
+		pass "a gap judged against a subagent snapshot says so: its tok_out holds that shortfall" ||
+		fail "the gap beside a snapshot: status $S_STATUS, '$S_OUT' ($S_ERR)"
+	new_trace
+	set_key transcript_path "$SCRATCH/compacted-snap-608.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$RSESSION" >"$SCRATCH/end-snap-608.json"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-snap-608.json"
+	G=$(ev_of session.usage | grep -F '"via":"rollup"' | sed -n '1p')
+	[ "$(str "$G" out_snapshot)" = 1 ] && [ "$(str "$G" reason)" = compaction ] &&
+		pass "and the session-end hook records it on the gap event as data.out_snapshot" ||
+		fail "the gap event beside a snapshot: $G"
+else
+	skip "the snapshot legs read tokens with the extractor, which needs node"
+fi
+
+# ---------------------------------------------------------------------------
+banner "50. The spawn's attribution rides on the prompt's second line (#583)"
+# ---------------------------------------------------------------------------
+# Under the Trace-Run first line, a spawn prompt's SECOND line,
+# `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>`,
+# names what the spawn served; the subagent-stop hook writes it into the
+# trace's tier, domain and skill columns and relates the ticket. Read in the
+# same bounded read that finds the run, held to an exact shape, never executed.
+# A stop with no such line, or one that does not match exactly, is tier
+# `unattributed` — a row the summary shows, never one it drops.
+new_trace
+SP583="Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it."
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-583.jsonl" "$SP583"
+stop474 "$SCRATCH/spawn-583.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = implementer ] && [ "$(str "$STOP" domain)" = content ] &&
+	[ "$(str "$STOP" skill)" = implement ] && [ "$(str "$STOP" run)" = "$WT474" ] &&
+	pass "agent.stop carries the tier, domain and skill its spawn prompt's second line named, beside the handed run" ||
+	fail "agent.stop with a Trace-Spawn line: exit $S_STATUS, '$STOP', stderr '$S_ERR'"
+case " $(str "$STOP" related) " in
+*" ticket:#583 "*) case " $(str "$STOP" related) " in *" session:$SESSION "*) pass "the ticket is a related subject, beside the session" ;;
+	*) fail "the session left related: '$(str "$STOP" related)'" ;; esac ;;
+*) fail "agent.stop's related is '$(str "$STOP" related)', want ticket:#583 among it" ;;
+esac
+EXP583=$(env TRACE_DIR="$TDIR" sh "$TRACE" export --csv 2>/dev/null | sed -n '1p;$p')
+case $EXP583 in *tier*domain*implementer*content*) pass "export carries the tier and domain columns the line filled" ;;
+*) fail "export did not carry the attribution: '$EXP583'" ;; esac
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-583n.jsonl" "Trace-Run: $WT474\\\\nTrace-Spawn: tier=reviewer domain=none skill=review-pr ticket=none\\\\nReview it."
+stop474 "$SCRATCH/spawn-583n.jsonl"
+[ "$(str "$STOP" tier)" = reviewer ] && [ -z "$(str "$STOP" domain)" ] && [ "$(str "$STOP" skill)" = review-pr ] &&
+	[ "$(str "$STOP" related)" = "session:$SESSION" ] &&
+	pass "domain=none and ticket=none leave the domain absent and relate no ticket" ||
+	fail "a none/none line: '$STOP'"
+# The read is the run channel's own: a TRACE_RUN in the environment does not
+# skip it, a line past the first 4096 bytes is not read, and a transcript that
+# cannot be read is unattributed beside its failure (review of PR #600).
+stop474 "$SCRATCH/spawn-583.jsonl" TRACE_RUN=from-the-env-583
+[ "$(str "$STOP" run)" = from-the-env-583 ] && [ "$(str "$STOP" tier)" = implementer ] &&
+	pass "a TRACE_RUN in the environment wins the run and the Trace-Spawn line is still read" ||
+	fail "under TRACE_RUN: run '$(str "$STOP" run)' tier '$(str "$STOP" tier)'"
+sed '/"type":"user"/s|"type":"user"|"type":"user","pad":"'"$PAD474"'"|' "$SCRATCH/spawn-583.jsonl" >"$SCRATCH/far-583.jsonl"
+stop474 "$SCRATCH/far-583.jsonl"
+[ "$(str "$STOP" tier)" = unattributed ] &&
+	pass "a Trace-Spawn line past the first 4096 bytes of the first user record is not read" ||
+	fail "a Trace-Spawn line 5000 bytes in gave tier '$(str "$STOP" tier)'"
+mkdir -p "$SCRATCH/dir-583.jsonl"
+stop474 "$SCRATCH/dir-583.jsonl"
+[ "$(str "$STOP" outcome)" = fail ] && [ "$(str "$STOP" tier)" = unattributed ] &&
+	pass "a transcript that cannot be read as a file is unattributed, beside its failure" ||
+	fail "an unreadable transcript: outcome '$(str "$STOP" outcome)' tier '$(str "$STOP" tier)'"
+# Not an exact match: no attribution, tier unattributed.
+for bad583 in "Trace-Run: $WT474\\\\nBuild it." \
+	"Trace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it." \
+	"Trace-Run: $WT474\\\\nBuild it.\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583 extra=1" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement\\\\tticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\tx" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer  domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: domain=content tier=implementer skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=wizard domain=content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=Content skill=implement ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=\$(touch pwned-583) ticket=#583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=583" \
+	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#0583" \
+	"Trace-Run: not-a-run\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583"; do
+	prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/bad-583.jsonl" "$bad583"
+	stop474 "$SCRATCH/bad-583.jsonl"
+	[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = unattributed ] && [ -z "$(str "$STOP" domain)" ] &&
+		[ -z "$(str "$STOP" skill)" ] && [ "$(str "$STOP" related)" = "session:$SESSION" ] &&
+		pass "a prompt '$bad583' attributes nothing: tier unattributed" ||
+		fail "a prompt '$bad583' gave tier '$(str "$STOP" tier)' domain '$(str "$STOP" domain)' skill '$(str "$STOP" skill)' related '$(str "$STOP" related)'"
+done
+[ ! -e "$R474/pwned-583" ] && [ ! -e "$SCRATCH/pwned-583" ] &&
+	pass "and no Trace-Spawn value was ever executed" || fail "a Trace-Spawn value was executed: pwned-583 exists"
+# The summary prices each tier, and shows the unattributed row.
+if [ "$HAVE_NODE" = 1 ]; then
+	P583="$SCRATCH/policy-583.sh"
+	{ printf "TRACE_DIR='%s'\n" "$TDIR"; printf "TRACE_PRICE_CLAUDE_FABLE_5_1='3,15,3.75,0.30'\n"; } >"$P583"
+	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by tier
+	ROW583=$(printf '%s\n' "$S_OUT" | awk '$1 == "implementer" { print $2, $7 }')
+	UN583=$(printf '%s\n' "$S_OUT" | awk '$1 == "unattributed" { print $2, $7 }')
+	case $ROW583 in "2 "[0-9]*.[0-9]*) pass "summary --by tier prices the attributed stop under its tier ($ROW583)" ;;
+	*) fail "summary --by tier implementer row '$ROW583'; stdout '$S_OUT'" ;; esac
+	case $UN583 in "16 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
+	*) fail "summary --by tier unattributed row '$UN583'; stdout '$S_OUT'" ;; esac
+	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by domain
+	case $(printf '%s\n' "$S_OUT" | awk '$1 == "content" { print $2 }') in 2) pass "summary --by domain groups the stop under its domain" ;;
+	*) fail "summary --by domain: '$S_OUT'" ;; esac
+else
+	skip "summary --by tier pricing (node is not on PATH, so no stop carried tokens)"
+fi
+case $(grep -F "| \`hooks/subagent-stop.sh\` |" "$KIT/adapters/claude-code/README.md") in
+*"Trace-Spawn: tier=<tier>"*"#583"*) pass "the README row for subagent-stop.sh names the Trace-Spawn line (#583)" ;;
+*) fail "the README row for subagent-stop.sh does not name the Trace-Spawn line (#583)" ;; esac
+
 t_done "trace hooks"

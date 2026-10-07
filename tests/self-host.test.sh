@@ -36,7 +36,7 @@ PROJECT_DESC="A throwaway project proving the kit strips its own files."
 # The kit's own files — the ones bootstrap has to take out of a consumer's way.
 # Kept here rather than derived from bootstrap.sh so the two lists can disagree
 # and something notices.
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md docs/specs/spend.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
 
 # t_kit_copy <dest> — "Use this template", as tests/kit-demo.sh simulates it:
 # the whole tree minus the .git dir and minus any nested worktree, which `cp -R`
@@ -117,6 +117,50 @@ banner "B. The kit's own gate is GREEN at the kit root"
 assert_status 0 "check.sh passes at the kit root" -- sh "$KIT/scripts/check.sh"
 assert_status 0 "check.sh passes at the kit root without node" -- \
 	env DOCS_CHECK_NO_NODE=1 sh "$KIT/scripts/check.sh"
+
+# spend/R8: the kit's own policy holds its largest skills to a byte ceiling,
+# in both engines. A project carrying the kit's gate, its harness and its
+# config.mjs, with one skill the policy names grown one byte past its ceiling:
+# the gate fails, naming the file, its size and the ceiling. Not a copy of the
+# kit — its tree would carry every other rule's findings in with it.
+CEIL="$SCRATCH/ceiling"
+mkdir -p "$CEIL/scripts" "$CEIL/.agents/skills/review-pr"
+cp -R "$KIT/scripts/docs-conformance" "$CEIL/scripts/"
+cp "$KIT/scripts/check.sh" "$KIT/scripts/manifest.lib.sh" "$KIT/scripts/requirement.lib.sh" "$CEIL/scripts/"
+printf '# Manual\n' >"$CEIL/AGENTS.md"
+for shim in CLAUDE.md GEMINI.md; do cp "$KIT/$shim" "$CEIL/$shim"; done
+printf 'shared-layer: 0.0.0\n' >"$CEIL/VERSION"
+ceiling=$(sed -n 's|^[[:space:]]*"\.agents/skills/review-pr/SKILL\.md":[[:space:]]*\([0-9][0-9]*\),.*|\1|p' "$KIT/scripts/docs-conformance/config.mjs")
+if [ -z "$ceiling" ]; then
+	fail "spend/R8: the kit's config.mjs declares no ceiling for .agents/skills/review-pr/SKILL.md"
+else
+	head -c "$((ceiling + 1))" /dev/zero | tr '\0' x >"$CEIL/.agents/skills/review-pr/SKILL.md"
+	ceil_check() {
+		t_run env GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" sh -c 'cd "$1" && sh scripts/check.sh' sh "$CEIL"
+		# Each engine lays the finding out its own way, so each part is
+		# asked for on its own: the rule, the file, and size with ceiling.
+		_cc_named=0
+		for _cc_shape in "skill-over-ceiling] .agents/skills/review-pr/SKILL.md" ".agents/skills/review-pr/SKILL.md [skill-over-ceiling]"; do
+			printf '%s\n' "$LAST_OUT" | grep -qF "$_cc_shape" && _cc_named=1
+		done
+		if [ "$LAST_STATUS" = 1 ] && [ "$_cc_named" = 1 ] &&
+			printf '%s\n' "$LAST_OUT" | grep -qF "is $((ceiling + 1)) bytes, over its ceiling of $ceiling bytes"; then
+			return 0
+		fi
+		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
+		return 1
+	}
+	ceil_check DOCS_CHECK_NO_NODE=1 &&
+		pass "spend/R8: without node, a skill one byte past its ceiling fails the gate, naming file, size and ceiling" ||
+		fail "spend/R8: without node, a skill past its ceiling did not fail the gate as named (exit $LAST_STATUS)"
+	if command -v node >/dev/null 2>&1; then
+		ceil_check DOCS_CHECK_NO_NODE= &&
+			pass "spend/R8: with the docs harness, the same skill fails the gate, naming file, size and ceiling" ||
+			fail "spend/R8: with the docs harness, a skill past its ceiling did not fail the gate as named (exit $LAST_STATUS)"
+	else
+		skip "spend/R8: node is not on PATH — the docs harness engine is not run here"
+	fi
+fi
 
 # The reduced form must SAY what it cannot check, and every scan the harness
 # runs is one it cannot: the NOTICE's "NOT checked" list has to name each
@@ -331,6 +375,13 @@ assert_status 0 "the stamped project's gate is green" -- \
 # twin of the kit's tier mapping leaked past a header that
 # said bootstrap deleted it, because no assertion named it.
 t_assert_no_kit_residue "$KIT" "$PROJ" "a fresh bootstrap"
+
+# And nothing that did survive cites a kit record as the project's (#564): the
+# records are gone, so a shipped file names one only as `the kit's ADR-<n>`.
+# The optional /dogfood skill is not in this tree (--no-dogfood above), so it
+# is swept where it ships from.
+t_assert_no_kit_record_cite "$PROJ" "a fresh bootstrap"
+t_assert_no_kit_record_cite "$KIT/.agents/skills/dogfood" "the optional /dogfood skill"
 
 # Nothing kit-authoring survived either. `tests/` is the whole set: every suite
 # is on bootstrap's KIT_ONLY list, so the directory itself must be gone — which

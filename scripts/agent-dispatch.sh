@@ -16,7 +16,7 @@
 # call can do that. `templates/workflows/ai-review.example.yml` says so in its
 # own header: the cross-provider leg "is unreachable from inside the authoring
 # harness", which is why the kit's only cross-vendor review runs in CI, where
-# the secrets are. This file is that leg, reachable locally. ADR-0005 records
+# the secrets are. This file is that leg, reachable locally. The kit's ADR-0005 records
 # the decision and why this script is shared layer.
 #
 # WHY THIS EXECUTES AND adapters/ DOES NOT. `adapters/README.md` is explicit
@@ -46,7 +46,7 @@
 #      and this is what stops it. Refused before the tier is resolved or the
 #      prompt is read, so nothing spawns. AGENT_DISPATCH_MAX_DEPTH below.
 # 124  the worker ran past --timeout and its process tree was killed
-#  71  the worker exceeded its budget (ADR-0006, EX_OSERR — "can't fork"): a
+#  71  the worker exceeded its budget (the kit's ADR-0006, EX_OSERR — "can't fork"): a
 #      task or memory ceiling on its whole process tree was hit. The verdict is
 #      a flag the dispatcher writes from the scope's pids.events / memory.events
 #      counters, never inferred from the worker's own status. On the weaker
@@ -99,7 +99,7 @@
 # WHAT THIS RECORDS. A spawn is a decision — which tier was asked for, which
 # model answered, and how the worker ended — and this file is the only place
 # that knows all three at once. So it appends two lines to the decision trace
-# (scripts/trace.sh; ADR-0008 is the record, PRD #237 the design): a `spawn`
+# (scripts/trace.sh; the kit's ADR-0008 is the record, PRD #237 the design): a `spawn`
 # when it crosses, carrying the tier, the task domain, the agent harness, the
 # model, the depth and the size of the prompt it assembled, and a `spawn.end`
 # at every way out past that point, carrying the outcome — `ok`, `timeout`,
@@ -116,7 +116,7 @@
 # their `run` column instead, join it in `export` and `summary` rather than
 # there.
 #
-# None of it is load-bearing (ADR-0008 clause 4): a consumer whose shared layer
+# None of it is load-bearing (the kit's ADR-0008 clause 4): a consumer whose shared layer
 # has no trace.sh beside this file loses nothing, and a trace that fails is
 # loud on stderr and changes no exit status. Whether anything is written at all
 # is the trace policy file's business and not this one's; unconfigured, every
@@ -134,7 +134,7 @@
 # something this script can enforce — which is exactly why it is written here.
 
 # SOURCED OR EXECUTED. tests/lib.sh sources this file for the budget alone —
-# every suite runs inside the budget a worker gets (ADR-0006, #209), derived
+# every suite runs inside the budget a worker gets (the kit's ADR-0006, #209), derived
 # by THIS code so a suite and a worker cannot disagree about a number. Sourced,
 # the file runs everything up to the "dispatch proper" line below and
 # returns. What the sourcing shell receives, all of it:
@@ -272,12 +272,12 @@ _read_policy_numbers() {
 # A task ceiling and a memory ceiling for the worker's WHOLE process tree,
 # derived from this host now: a percentage of the task ceiling this session
 # runs under and of the memory available at this moment, each clamped to a
-# policy floor and ceiling. ADR-0006 is the decision. scripts/agents.config.sh
+# policy floor and ceiling. The kit's ADR-0006 is the decision. scripts/agents.config.sh
 # carries the percentages and clamps, and empty there means the defaults
 # below — a policy file from before the budget existed still gets one.
 #
 # THE BUDGET IS DERIVED BY _budget_derive AND APPLIED AT THE FOOT OF THIS FILE
-# (ADR-0006, #208): the spawn wraps the worker in the strongest mechanism the
+# (the kit's ADR-0006, #208): the spawn wraps the worker in the strongest mechanism the
 # host offers — a transient scope, else rlimits, else a loud no-op — and reads
 # a verdict back. --dry-run still shows the numbers and the rung without
 # running anything. Everything from here to the "dispatch proper" line is
@@ -298,12 +298,12 @@ _host=${AGENT_DISPATCH_HOST_ROOT:-}
 # The per-dispatch flags the derivation reads; the argument parse below sets them.
 BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
 
-# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (ADR-0006
+# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (the kit's ADR-0006
 # clause 3): the budget sits BELOW the ceiling the session shares, and 100 or
 # more would put it at or above, in silence.
 _budget_percent_below_100() {
 	[ "$2" -lt 100 ] ||
-		die "AGENT_BUDGET_$1 must be below 100 — the budget sits below the ceiling the session shares (ADR-0006), got $2"
+		die "AGENT_BUDGET_$1 must be below 100 — the budget sits below the ceiling the session shares (the kit's ADR-0006), got $2"
 }
 
 # _budget_floor_at_most_ceiling <floor suffix> <floor> <ceiling suffix> <ceiling>
@@ -316,7 +316,7 @@ _budget_floor_at_most_ceiling() {
 # _budget_session_tasks — the task ceiling this session runs under: the
 # smallest numeric pids.max on the path from this process's own cgroup up to
 # the root. On a systemd host that is the user slice's TasksMax — 33% of
-# threads-max by default, and the ceiling the incident behind ADR-0006
+# threads-max by default, and the ceiling the incident behind the kit's ADR-0006
 # filled. Prints "<ceiling> <cgroup>"; fails when no cgroup on the path sets
 # one, which is also what a host without cgroup v2 (no `0::` line) looks like.
 _budget_session_tasks() {
@@ -396,7 +396,7 @@ _budget_nproc_flag() {
 	return 1
 }
 
-# _budget_rung — the highest rung of ADR-0006's ladder this host offers,
+# _budget_rung — the highest rung of the kit's ADR-0006 ladder this host offers,
 # probed rather than configured: a policy file cannot know what host it is
 # on. `scope` needs systemd-run, a user manager that answers, AND the pids
 # and memory controllers delegated to it — read from cgroup.controllers on
@@ -430,7 +430,7 @@ _budget_rung() {
 }
 
 # The budget's three modes: disabled by flag, inherited from an outer
-# dispatch, or derived here. An inner dispatch derives nothing (ADR-0006
+# dispatch, or derived here. An inner dispatch derives nothing (the kit's ADR-0006
 # clause 7): a scope opened inside a scope is a sibling, not a child, and
 # would escape the outer's ceiling — so the outer's numbers arrive by
 # environment and are taken as given.
@@ -545,7 +545,7 @@ CNT
 # on that rung; the pre-flight and the real spawn open a scope with the same.
 #
 # OOMPolicy=continue and MemorySwapMax=0 REFINE clause 5's bare
-# `-p MemoryMax=<MiB>M` (ADR-0006 records why): without OOMPolicy=continue this
+# `-p MemoryMax=<MiB>M` (the kit's ADR-0006 records why): without OOMPolicy=continue this
 # host tore the whole scope down on the first OOM and the wrapper never ran to
 # read the counter clause 6 needs; without MemorySwapMax=0 the runaway filled
 # swap for seconds and could trip systemd-oomd's pressure kill of the scope
@@ -705,7 +705,7 @@ done
 #   1. A CONSUMER MAY NOT HOLD IT. The shared layer is copied file by file and
 #      an update is a recipe a human follows, so a project can hold this file
 #      with no scripts/trace.sh beside it. Missing, every emit is a no-op.
-#   2. A TRACE IS NEVER LOAD-BEARING (ADR-0008 clause 4). The call ends in
+#   2. A TRACE IS NEVER LOAD-BEARING (the kit's ADR-0008 clause 4). The call ends in
 #      `|| :` and its stdout goes to /dev/null — stdout here belongs to the
 #      worker, and to the model id on exits 3 and 69 — so an emit's own status
 #      and output can never become this dispatch's. Its stderr is left alone: a
@@ -1180,7 +1180,7 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
 # content-addressed blob, only when the policy switch above asked for it.
 #
 # WHERE IT IS CALLED FROM MATTERS, and it is why this is a function rather than
-# a line: an event cannot be taken back (ADR-0008: the record is
+# a line: an event cannot be taken back (the kit's ADR-0008: the record is
 # append-only), so a spawn must not be on disk before the last thing that can
 # end this dispatch WITHOUT a spawn.end has had its say. Deriving the budget
 # is that thing — half an inherited budget is a usage error — so the ordinary
@@ -1195,7 +1195,7 @@ _trace_spawn() {
 	_trace "$@"
 	# Only now is there a pair for a signal to close: a signal that lands
 	# while the spawn is being written ends the dispatch with no end at all,
-	# never with an end that pairs with nothing (ADR-0008: the record is
+	# never with an end that pairs with nothing (the kit's ADR-0008: the record is
 	# append-only).
 	_SPAWNED=1
 }
@@ -1273,7 +1273,7 @@ _budget_derive
 _trace_spawn
 
 # --- announce, once, on stderr — for a dry run and a real dispatch alike -----
-# ADR-0006 clause 8: the floor note, the off switch, the inherited-no-escape
+# The kit's ADR-0006 clause 8: the floor note, the off switch, the inherited-no-escape
 # note and the no-mechanism note are said on EVERY dispatch, not only the dry
 # run. stdout stays the dry run's; this is the half an operator piping stdout
 # still hears.
@@ -1320,7 +1320,7 @@ if [ "$DRY_RUN" = 1 ]; then
 	printf 'command:        %s\n' "$CMD"
 	printf 'depth:          %s of %s\n' "$DEPTH" "$MAX_DEPTH"
 	[ -n "$TIMEOUT" ] && printf 'timeout:        %ss\n' "$TIMEOUT"
-	# The budget: the numbers, the rung, and that it IS enforced (ADR-0006
+	# The budget: the numbers, the rung, and that it IS enforced (the kit's ADR-0006
 	# clause 8). The floor note and the off switch are said on stderr by
 	# _budget_announce below, where an operator piping stdout still hears them.
 	case "$BUDGET_MODE" in
@@ -1397,7 +1397,7 @@ TRACE_PARENT=$_dispatch_run
 export TRACE_RUN TRACE_PARENT
 
 # The budget travels to a nested dispatch the way the depth does — through the
-# environment (ADR-0006 clause 7). A derived or an inherited budget is exported
+# environment (the kit's ADR-0006 clause 7). A derived or an inherited budget is exported
 # so an inner dispatch inherits it and opens NO second scope: a scope opened
 # inside a scope is a sibling that escapes this one's cgroup. Both names or
 # neither, held to the inherited validator on the way in. A disabled budget
@@ -1465,7 +1465,7 @@ WRAP
 		;;
 	rlimit)
 		# ulimit in the worker's shell, before the worker: -u/-p for the task
-		# count, -d for the data segment (KiB). Weaker, per ADR-0006:
+		# count, -d for the data segment (KiB). Weaker, per the kit's ADR-0006:
 		# RLIMIT_NPROC counts the uid, and RLIMIT_DATA is per process. A ceiling
 		# hit here is not observable, so the worker's own status passes through.
 		# The string always runs under its own `sh` (both spawn paths), so the
@@ -1493,7 +1493,7 @@ fi
 
 # --- the scope rung is decided BEFORE the spawn -----------------------------
 # systemd-run can refuse after the probe passed — the bus gone between probe
-# and spawn, a manager that will not create scopes (ADR-0006 clause 5). So an
+# and spawn, a manager that will not create scopes (the kit's ADR-0006 clause 5). So an
 # empty scope with the real properties is opened and closed first, in
 # milliseconds; a refusal there falls to the weaker rung, loudly, with
 # systemd-run's own message. After the real spawn nothing is retried: the
@@ -1673,7 +1673,7 @@ _spawn_run() {
 # (pids.events max > 0) or, on the full scope rung, a memory ceiling hit
 # (memory.events oom_kill > 0) exits 71 and names which was hit. On the rlimit
 # and no-op rungs there is no counter, and the worker's own status passes
-# through (ADR-0006 clause 6).
+# through (the kit's ADR-0006 clause 6).
 #
 # A verdict that cannot be read is its own outcome, said on stderr, with the
 # run's own status passed through — never a silent zero (driver 4): the marker
@@ -1739,7 +1739,7 @@ _budget_verdict() {
 
 _spawn_run
 if [ "$_timed_out" = 1 ]; then
-	# Whichever fired first (ADR-0006 clause 6): the watchdog read the scope's
+	# Whichever fired first (the kit's ADR-0006 clause 6): the watchdog read the scope's
 	# counters before it signalled, and a ceiling hit already on them happened
 	# before the timeout did. A verdict that cannot be read here is not an
 	# outcome of its own — the timeout is what was observed.

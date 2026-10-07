@@ -280,7 +280,7 @@ if [ "$engine" = "fallback" ]; then
 		scan_manual "$article"
 	done
 
-	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
+	# The living-spec rule's POSIX twin (validators/living-spec.mjs, the kit's ADR-0012
 	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
 	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced
@@ -358,6 +358,25 @@ if [ "$engine" = "fallback" ]; then
 				"Name \`$name\` in a test (its name, or a comment beside it) in a file livingSpec.testGlobs in scripts/docs-conformance/config.mjs matches, or retire the requirement with a REMOVED delta. A living requirement no test names is a claim (shared invariant §8)."
 		done <"$vfile.specs"
 	fi
+
+	# The skill-ceiling rule's POSIX twin (validators/skill-ceiling.mjs): a
+	# SKILL.md over the byte ceiling config.mjs's `skillCeilings` block
+	# declares for it fails, naming the file, its size and the ceiling. The
+	# block is read BY TEXT, one `"<path>": <bytes>,` per line, which is why
+	# config.mjs keeps it literal. No block is no ceilings; an absent file is
+	# silent — the harness's answers too.
+	if [ -f "$ls_cfg" ]; then
+		awk '/^const skillCeilings = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg" |
+			sed -n 's/^[[:space:]]*"\([^"]*\)":[[:space:]]*\([0-9][0-9]*\),\{0,1\}[[:space:]]*$/\1 \2/p' |
+			while read -r skill ceiling; do
+				[ -f "$skill" ] || continue
+				size=$(wc -c <"$skill" | tr -d ' ')
+				[ "$size" -gt "$ceiling" ] || continue
+				report "skill-over-ceiling" "$skill" \
+					"is $size bytes, over its ceiling of $ceiling bytes" \
+					"Move the parts only a worker or a rare branch needs into files the SKILL.md names, or raise the ceiling in config.mjs's skillCeilings — a visible policy diff."
+			done
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -366,7 +385,8 @@ fi
 if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer," >&2
-	echo "        and living specs against the test globs (the living-spec rule, its POSIX twin)." >&2
+	echo "        living specs against the test globs (the living-spec rule, its POSIX twin)," >&2
+	echo "        and skill byte ceilings (the skill-ceiling rule, its POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2

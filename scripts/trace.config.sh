@@ -28,7 +28,7 @@
 #
 # The kit itself traces its own sessions — through a never-shipped twin of this
 # file, reached by the TRACE_CONFIG seam, exactly as its tier mapping and its
-# guard policy are (ADR-0003, as amended).
+# guard policy are (the kit's ADR-0003, as amended).
 #
 # ---------------------------------------------------------------------------
 # TRACE_DIR — where the trace lives. Three honest values:
@@ -71,7 +71,7 @@ TRACE_NUMBERED_TYPES=''
 # A SWITCH OF ITS OWN, beside TRACE_DIR rather than folded into it, because the
 # two answers are genuinely different. A decision is one line a day; a tool call
 # is hundreds of lines a session, and the least decision-bearing of them
-# (ADR-0008 clause 8). So "trace my decisions" must not silently mean "keep
+# (the kit's ADR-0008 clause 8). So "trace my decisions" must not silently mean "keep
 # every file I read and every command I ran, with its output".
 #
 # WHAT IT COSTS WHEN IT IS ON: disk, in your trace directory, proportional to
@@ -155,7 +155,7 @@ TRACE_BEHIND_WARN=''
 # a wave cost.
 #
 # Cost is computed when you READ the trace, never when an event is written
-# (ADR-0008 clause 6). An event carries the model and four raw token counts,
+# (the kit's ADR-0008 clause 6). An event carries the model and four raw token counts,
 # because those are facts; a price is an interpretation that rots on a vendor's
 # schedule. Writing a cost into an event would freeze one day's price into
 # history and make a price correction unable to reach it. Pricing on read means

@@ -12,10 +12,11 @@ import * as housekeepingDue from "./validators/housekeeping-due.mjs";
 import * as livingSpec from "./validators/living-spec.mjs";
 import * as mutationDecision from "./validators/mutation-decision.mjs";
 import * as skillBridge from "./validators/skill-bridge.mjs";
+import * as skillCeiling from "./validators/skill-ceiling.mjs";
 import * as skillPaths from "./validators/skill-paths.mjs";
 import * as skillWeb from "./validators/skill-web.mjs";
 
-export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillBridge, skillPaths, skillWeb];
+export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillBridge, skillCeiling, skillPaths, skillWeb];
 
 /** Run all validators against the context; returns a flat list of findings —
  * violations and warnings alike. `index.mjs` splits them by severity; only it
