@@ -442,10 +442,12 @@ t_text_has "$rubric" "first hit wins" "the rubric still reads first hit wins —
 # backticks, and each one WHOLE: "<name>, <command>" and not a byte more, so a
 # trailing "or make test" is a disagreement, not a passenger.
 IMPL_ABS="$ROOT/.agents/skills/implement/SKILL.md"
-impl_forms=$(sed -n 's/.*one entry of this closed list of verification commands: \*\*\([^*]*\)\*\*.*/\1/p' "$IMPL_ABS")
+# The closed list moved, verbatim, to the branch step 1 opens (#593).
+IMPL_COVERS_ABS="$ROOT/.agents/skills/implement/COVERS.md"
+impl_forms=$(sed -n 's/.*one entry of this closed list of verification commands: \*\*\([^*]*\)\*\*.*/\1/p' "$IMPL_COVERS_ABS")
 impl_loop=$(awk '/^4\. / { print; exit }' "$IMPL_ABS" | sed -n "s/.*\(\`sh -c '[^\`]*'\`\).*/\1/p")
 if [ -z "$impl_forms" ]; then
-	fail "/implement's step 1 lost 'one entry of this closed list of verification commands: **…**' — the allow-list the rubric is held to; the rubric's oracle list cannot be compared"
+	fail "/implement's step 1 branch (COVERS.md) lost 'one entry of this closed list of verification commands: **…**' — the allow-list the rubric is held to; the rubric's oracle list cannot be compared"
 elif [ -z "$impl_loop" ]; then
 	fail "/implement's step 4 no longer spells the full suite as a \`sh -c '…'\` loop — the full-suite entry the rubric is held to; the rubric's oracle list cannot be compared"
 else
