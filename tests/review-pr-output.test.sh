@@ -50,8 +50,9 @@
 #  11. Every planned lens is accounted for (#482, retro F6): a lens the host
 #      refused to start records its spawn with `outcome=refused` and no
 #      `spawn.end` — nothing started, so nothing ends; a lens that started
-#      ends in exactly one `spawn.end`, `fail` with its cause when it returned
-#      no report or hit a usage limit — all recorded before the verdict; and
+#      ends in exactly one `spawn.end`, `unreachable` when its vendor refused
+#      it (a usage limit, #566) and `fail` with its cause when it returned no
+#      report — all recorded before the verdict; and
 #      the summary carries a `Lenses not run:` line naming both kinds and
 #      whether this session audited the lens in its own context instead, so a
 #      review that ran six lenses never reads as one that ran seven. Every
@@ -697,16 +698,17 @@ lens_rules_missing() {
 	_lr_end=$(printf '%s\n' "$_lr_s3" | grep -o '`sh scripts/trace\.sh emit kind=spawn\.end[^`]*`' || true)
 	_lr_out=''
 	[ "$(printf '%s\n' "$_lr_end" | grep -c .)" = 1 ] || _lr_out="$_lr_out one-spawn.end-emit-in-§3"
-	printf '%s\n' "$_lr_end" | grep -qF 'outcome=ok|fail' || _lr_out="$_lr_out outcome=ok|fail"
+	printf '%s\n' "$_lr_end" | grep -qF 'outcome=ok|unreachable|fail' || _lr_out="$_lr_out outcome=ok|unreachable|fail"
 	printf '%s\n' "$_lr_end" | grep -qF 'data.agent=<roster-token>' || _lr_out="$_lr_out spawn.end-data.agent"
 	printf '%s\n' "$_lr_sen" | grep -F 'Every lens this review planned' | grep -qF 'before the verdict' ||
 		_lr_out="$_lr_out every-lens-before-the-verdict"
 	printf '%s\n' "$_lr_sen" | grep -F 'outcome=refused' | grep -F 'no `spawn.end`' | grep -qF 'concurrent' ||
 		_lr_out="$_lr_out refused-lens:outcome=refused-and-no-spawn.end"
 	# One sentence binds each outcome to its cause: `ok` to a returned report,
-	# `fail` to a usage limit or no report.
+	# `unreachable` to a vendor's refusal (#566), `fail` to no report.
 	printf '%s\n' "$_lr_sen" | grep -F 'started' | grep -F 'ends in exactly one `spawn.end`' |
-		grep -F '`ok` when it returned its report' | grep -F '`fail` when it hit a usage limit' |
+		grep -F '`ok` when it returned its report' | grep -F '`unreachable` when its vendor refused it' |
+		grep -F '`fail` when it ended with' |
 		grep -qF 'no report' || _lr_out="$_lr_out started-lens:one-spawn.end-ok-and-fail-with-cause"
 	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -qF 'its record stands' ||
 		_lr_out="$_lr_out audited-here:record-stands"
@@ -733,15 +735,16 @@ th=$(t_line_of "$SKILL_ABS" "| | Severity | Count |")
 	fail "'Lenses not run:' is not between Clean audits ($c) and the count table ($th) — got '$ln'"
 # Baits: one per rule the reader holds, so no rule survives its own deletion.
 for b in \
-	's/\(kind=spawn\.end[^`]*\)outcome=ok|fail/\1outcome=ok/' \
+	's/\(kind=spawn\.end[^`]*\)outcome=ok|unreachable|fail/\1outcome=ok|fail/' \
 	's/\(kind=spawn\.end[^`]*\) data\.agent=<roster-token>/\1/' \
 	's/\(`sh scripts\/trace\.sh emit kind=spawn\.end[^`]*`\)/\1 and \1/' \
 	's/outcome=refused/outcome=fail/g' \
 	's/no `spawn\.end`/a `spawn.end`/g' \
 	's/ends in exactly one `spawn\.end`/ends in a `spawn.end`/g' \
-	's/`fail` when it hit/`ok` when it hit/' \
+	's/`fail` when it ended/`ok` when it ended/' \
+	's/`unreachable` when its vendor/`fail` when its vendor/' \
 	's/`ok` when it returned its report/`fail` when it returned its report/' \
-	's/usage limit/limit/g' \
+	's/vendor refused it/vendor paused it/g' \
 	's/no report/a short report/g' \
 	's/before the verdict/after the verdict/g' \
 	's/its record stands/its record is replaced/' \
