@@ -756,6 +756,35 @@ strip_nested_worktrees() {
 		done
 }
 
+# t_kit_residue <kit> <tree> — print, one per line, every kit-only file that
+# survived into a consumer <tree>: any name of the `*.kit.*` shape (the kit's
+# own twins and wrappers, never shipped), any file carrying the kit-own
+# sentinel, and any record the kit keeps of itself — a numbered ADR or a
+# living spec — under a name the kit's own docs/ holds. A derived sweep, not a
+# list, so a kit-only file nobody added to bootstrap's KIT_ONLY shows up here
+# rather than in a consumer's tree (#562). Empty output is a clean tree.
+t_kit_residue() {
+	_kr_kit=$1 _kr_tree=$2
+	(cd "$_kr_tree" && find . -path ./.git -prune -o -name '*.kit.*' -print) | sed 's#^\./##'
+	grep -rlF --exclude-dir=.git "agentic-sdlc:kit-own" "$_kr_tree" 2>/dev/null | sed "s#^$_kr_tree/##"
+	for _kr_rec in "$_kr_kit"/docs/adr/[0-9]*.md "$_kr_kit"/docs/specs/*.md; do
+		[ -e "$_kr_rec" ] || continue
+		_kr_rel=${_kr_rec#"$_kr_kit"/}
+		[ "$_kr_rel" = docs/specs/README.md ] && continue
+		[ -e "$_kr_tree/$_kr_rel" ] && printf '%s\n' "$_kr_rel"
+	done
+	return 0
+}
+
+# t_assert_no_kit_residue <kit> <tree> <what> — one assertion over
+# t_kit_residue: pass on an empty sweep, fail naming every survivor.
+t_assert_no_kit_residue() {
+	_kr_out=$(t_kit_residue "$1" "$2" | sort -u)
+	[ -z "$_kr_out" ] &&
+		pass "no kit-only file or kit-own record survived $3" ||
+		fail "kit-only files survived $3: $(printf '%s' "$_kr_out" | tr '\n' ' ')"
+}
+
 # t_fake_host <dir> <slice pids.max> <MemAvailable kB> — the host the
 # dispatcher's derivation reads through AGENT_DISPATCH_HOST_ROOT, so a suite
 # asserts the arithmetic against numbers it chose: this process in
