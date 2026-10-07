@@ -1087,10 +1087,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2502 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2530 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2656 insertions(+), 1 deletion(-)
+ 3 files changed, 2684 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
