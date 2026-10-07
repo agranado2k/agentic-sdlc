@@ -2245,3 +2245,57 @@ scan matches only `R[0-9]` in `.sh` files; the length bound is encoded twice
 in the coverage reader; the wrapper duplicates the resolver's harness
 membership test; making a named `end` mandatory once consumers have moved.
 
+
+## 2026-10-06 — spike: a spawn can carry its tier to the stop event (PRD #580)
+
+Question, from PRD #580's open issues: can a chain skill's spawn carry its
+tier, domain, skill and ticket to the `agent.stop` event? Verdict: **true, and
+no new hook is needed.** Probed on Claude Code with an Opus 5.5 session and a
+Haiku 4.5 Explore spawn.
+
+- The channel already exists. `hook_run_handed` (#474) reads `Trace-Run:
+  <run> [<parent>]` from the spawn prompt's first line, inside one bounded read
+  of the subagent transcript's first user record (4096 bytes). A live spawn
+  whose prompt opened with that line had its `agent.stop` recorded under the
+  run. A second line, `Trace-Spawn: tier=… domain=… skill=… ticket=…`, sat
+  verbatim in the same record, inside the same read.
+- Skill and ticket are mostly attributable already: 91 of the last 100 stops
+  carry a run, and every `run.start` names its skill and subject. Tier is not.
+  797 `spawn` events carry a tier, but nothing joins one to its stop, and 13 of
+  45 runs with stops mix tiers, so a join by run is ambiguous. The PRD's R1
+  becomes: one `Trace-Spawn:` line on the spawn prompt, read with the run line.
+- Surprise: the spike agent's stop was recorded twice, both `outcome=fail`
+  with no tokens. The transcript ended on a `user` record, and the 3000 ms
+  wait bound passed. A stop that ends on a user record loses its usage. That
+  is a separate defect from attribution, and the spike leaves it for
+  `/to-tickets` to dedupe.
+
+Evidence is in the trace as the `spike.verdict` blob on `prd:#580`.
+
+## 2026-10-06 — spike: a typed judge cannot size the review fan-out here (PRD #580)
+
+Question, from PRD #580: can a typed judge, given only a PR's changed paths,
+keep ≥95% of `/review-pr`'s findings while skipping ≥30% of its standards-lens
+spawns? Verdict: **false**. Probed TypeSafe's Jev (`jev-latest`, answered as
+`jev-1.13.0`) over 81 kit PRs with an axis-1 review in the trace. Their 872
+`finding.raise` events are labelled by lens. Only the changed paths were sent,
+and the repository is public.
+
+- **Jev has no signal on paths.** Per lens, the AUC of its yes-probability
+  against "this lens raised a finding" was 0.38–0.54. On security it was below
+  chance. At a threshold of 0.5 it skipped 45% of spawns and lost 37.5% of the
+  findings. At 0.3 it skipped 4% and lost api-crud findings on four PRs.
+- **There is little to skip here anyway.** Each lens raised something on
+  46–88% of PRs (test hygiene 88%, reuse/DRY 77%, security 46%). Only 1 of the
+  81 PRs was Markdown-only, so path rules alone skip 0.6% of lens spawns.
+- **The service itself works.** Calls took 0.26 s at p50 and 0.30 s at p95,
+  and all 81 calls used 43,794 input tokens ($0.0018). A noul question needs
+  an `instructions` string (or a `criteria` object).
+
+What it changes: the review's spend is reduced by making each lens cheaper
+(a diff slice, a split skill, a smaller prefix), not by running fewer lenses.
+PRD #580 drops its fan-out-sizing requirements, and the `judge` domain's
+recorded decline in the kit's policy file stands, now with a measurement
+behind it. What stays untested: whether a judge given the diff's content
+rather than its paths does better. That would send code to a vendor whose data
+retention is not documented, and it is a separate decision.
