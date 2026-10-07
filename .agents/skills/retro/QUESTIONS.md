@@ -157,7 +157,7 @@ decomposition.
 
 *Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
 `spawn` (`outcome` `refused`), `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
-`agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`),
+`agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`) and a priced one (`data.final`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
 `data.input_head`).*
 
@@ -185,11 +185,17 @@ decomposition.
   that recurs is a skill planning more workers than the host will run.
 - **Stops read too early**: an `agent.stop` with `outcome=fail` is a
   sub-agent whose transcript had not ended when the hook's wait bound
-  passed, so its tokens are in no event. `data.last_kind` is the type of the
-  file's last line and `data.last_age_ms` that line's age when the bound
-  passed: a young line is an agent still writing — the bound is too short,
-  a policy-file value — and an old one an agent that never wrote a final
-  message. Count them per shape, not per stop.
+  passed. A give-up leaves no anchor, so a later stop of the same agent
+  (its subject) counts what it could not: its tokens are lost only when no
+  later stop of that agent was priced. Count them per agent as well as per
+  stop — an agent whose last stop is priced lost nothing, and a run
+  the agent harness prompted again after its end gives up once on the way.
+  A priced stop's `data.final` says how the run ended: `message`, or `tool` — a
+  turn-ending tool such as the hand-back. `data.last_kind` is the type of
+  the file's last line and `data.last_age_ms` that line's age when the
+  bound passed: a young line is an agent still writing — the bound is too
+  short, a policy-file value — and an old one an agent whose run ended in
+  a shape the hook does not read as final. Count them per shape.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
 - **Denied tool calls**: each `tool.use` with `outcome=denied` — a call that

@@ -32,6 +32,13 @@
 # in data.waited_ms and what the file can say of why — its last line's kind,
 # that line's age and the line count (#387).
 #
+# A FINAL MESSAGE IS NOT THE ONLY END (#565). Most runs end on the agent
+# harness's hand-back tool, whose result line says `"toolEndsTurn":true` and
+# is followed by nothing — the wait gave those up at every bound. hook_final
+# reads that line as final, and the event says how the run ended in
+# data.final. Every stop of one agent reads the same file, so each counts past
+# the agent's own earlier anchors (stop_tokens, below).
+#
 # A PHANTOM STOP WRITES NOTHING (ticket #344): a transcript that does not
 # exist is neither waited for nor recorded — the adapter README says why — but
 # it is COUNTED, one line on its session's counter, which the session-end hook
@@ -97,6 +104,26 @@ if [ -n "$hook_wait_bad" ]; then
 	set -- "$@" data.wait_refused="$hook_wait_bad"
 fi
 
+# HOW FAR AN EARLIER STOP OF THIS AGENT ALREADY READ (#565). An agent stops
+# more than once — 128 of 301 in the window #565 measured: it ends a turn on
+# a plain message, the agent harness prompts it again, and it ends the run on
+# the hand-back — and every stop reads the agent's one transcript. Without an
+# anchor the later stop re-counts the earlier one. The anchor is the trace's
+# own record, exactly as session-end.sh reads it: this agent's agent.stop
+# events, each saying how far it read for its model. Only this agent's subject
+# is asked, so another agent's read never shortens this one's; a stop that
+# gave up carries no anchor, so the next one counts what it could not. Asked
+# only on the paths that read tokens: a phantom or a give-up reads nothing.
+#
+# stop_tokens <field>=<value> … — the read, past this agent's anchors.
+stop_tokens() {
+	hook_recorded=
+	hook_after=
+	[ -n "$aid" ] && hook_id_ok "$aid" && hook_anchors "agent:$aid" agent.stop
+	printf '%s\n' "$hook_recorded" |
+		hook_tokens "$transcript" agent.stop --resume ${hook_after:+--after "$hook_after"} "$@"
+}
+
 if [ -z "$transcript" ]; then
 	hook_trace emit kind=agent.stop \
 		reason="the payload named no subagent transcript, so no tokens were read" "$@"
@@ -107,7 +134,9 @@ elif [ ! -f "$transcript" ] || [ ! -r "$transcript" ]; then
 		reason="the subagent transcript exists but cannot be read as a file, so no tokens were read: $transcript" "$@"
 elif [ -n "$hook_wait_ms" ]; then
 	if waited=$(hook_wait_final "$transcript" "$hook_wait_ms"); then
-		hook_tokens "$transcript" agent.stop "$@" data.waited_ms="$waited"
+		# The wait ran in a subshell; how the run ended is asked again here.
+		hook_final "$transcript" && set -- "$@" data.final="$hook_final_by"
+		stop_tokens "$@" data.waited_ms="$waited"
 	else
 		# Why it ran out, as far as the file can say (#387, hook_tail_facts).
 		hook_tail_facts "$transcript"
@@ -118,7 +147,8 @@ elif [ -n "$hook_wait_ms" ]; then
 			reason="the subagent transcript did not end on a final message within the ${hook_wait_ms} ms bound, so no tokens were read — a partial sum would be an undercount" "$@"
 	fi
 else
-	hook_tokens "$transcript" agent.stop "$@"
+	hook_final "$transcript" && set -- "$@" data.final="$hook_final_by"
+	stop_tokens "$@"
 fi
 
 exit 0
