@@ -219,8 +219,8 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
-**Arriving from 0.58.0 or older, a living requirement may stop passing on the harness's word.**
-No file joins or leaves at 0.59.0. `validators/living-spec.mjs` and its twin in
+**Arriving from 0.59.0 or older, a living requirement may stop passing on the harness's word.**
+No file joins or leaves at 0.60.0. `validators/living-spec.mjs` and its twin in
 `scripts/check.sh` now read no citation from a file under
 `scripts/docs-conformance/`, whatever your test globs match: the harness's
 fixture tests are about the gate, and the shipped `living-spec.test.mjs`
@@ -231,6 +231,17 @@ it — write the test. Part 2 has one take: replace
 `scripts/docs-conformance/test/living-spec.test.mjs` (yours, shipped) with
 the kit's, which builds every id at runtime and scans the harness for a
 spelled one; a fixture test you added there builds its ids the same way.
+
+**Arriving from 0.58.0 or older, delete one file the kit leaked to you.**
+No file joins or leaves at 0.59.0, and no shared file changes behavior.
+`scripts/agents.kit.codex.config.sh` is the kit's own tier → model mapping
+for a codex session, and bootstrap should have deleted it: it was missing
+from the kit-only deletion list, so a project bootstrapped while it was in
+the kit carries the kit's model ids. Delete it — `git rm
+scripts/agents.kit.codex.config.sh` — in the same commit as step 5. Nothing
+outside the kit reads it, so the delete changes nothing; your own mapping is
+`scripts/agents.config.sh`, which this does not touch. No other kit-only file
+leaked: any other `*.kit.*` name in your tree is yours.
 
 **Arriving from 0.57.0 or older, both engines read a code fence by one rule.**
 No file joins or leaves at 0.58.0. A fence now pairs as CommonMark pairs it:
@@ -964,7 +975,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.59.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.60.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1013,10 +1024,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2455 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2453 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2609 insertions(+), 1 deletion(-)
+ 3 files changed, 2607 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1873,7 +1884,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.59.0 case for this file, and `ADD` is the 0.3.0 → 0.59.0
+`MERGE` is the 0.4.0 → 0.60.0 case for this file, and `ADD` is the 0.3.0 → 0.60.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2187,14 +2198,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.59.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.60.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.59.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.60.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
