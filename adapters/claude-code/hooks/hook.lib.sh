@@ -404,6 +404,9 @@ hook_anchors() {
 #   the numbers      one event per model, tokens on it, and how far the read
 #                    went FOR THAT MODEL: data.msgs (its messages) and
 #                    data.last_msg (its last one), its own resume anchor (#408)
+#                    — and data.out_snapshot, only when some of those messages
+#                    were written mid-stream: how many, so tok_out is a lower
+#                    bound (#608; transcript-usage.mjs says why)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
 #                    a resume anchor the transcript no longer holds is one
@@ -414,7 +417,9 @@ hook_anchors() {
 #   the rollup gap   with --rollup only, beside the numbers: one more event per
 #                    model the rollup counts beyond them, data.via=rollup and
 #                    data.reason=compaction, with no data.last_msg — it counts
-#                    no message, so it never anchors a later read (#407)
+#                    no message, so it never anchors a later read (#407) —
+#                    and data.out_snapshot when the messages it was judged
+#                    against hold snapshots, whose remainder its tok_out holds
 #   rollup refused   with --rollup only: the numbers as usual, then one event,
 #                    outcome=fail and data.via=rollup, the extractor's reason
 #
@@ -514,11 +519,11 @@ hook_tokens() {
 	fi
 	_ht_gap=$(printf '%s\n' "$_ht_out" | awk '$6 == "rollup"')
 	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF && $6 != "rollup"')
-	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c; do
+	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c _ht_s; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
-			data.via="$_ht_v" data.reason="$_ht_c" \
+			data.via="$_ht_v" data.reason="$_ht_c" ${_ht_s:+data.out_snapshot="$_ht_s"} \
 			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
 	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
@@ -531,11 +536,11 @@ hook_tokens() {
 			reason='the transcript carries no assistant message with a usage block — nothing to read yet' "$@"
 		return 0
 	fi
-	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l; do
+	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l _ht_s; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
-			data.msgs="$_ht_n" data.last_msg="$_ht_l" "$@"
+			data.msgs="$_ht_n" data.last_msg="$_ht_l" ${_ht_s:+data.out_snapshot="$_ht_s"} "$@"
 	done
 	return 0
 }

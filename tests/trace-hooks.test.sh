@@ -4510,4 +4510,88 @@ else
 	skip "the handback legs read tokens with the extractor, which needs node"
 fi
 
+# ---------------------------------------------------------------------------
+banner "49. A message whose line was written mid-stream carries a snapshot, and the event says tok_out is a lower bound (#608)"
+# ---------------------------------------------------------------------------
+# Finding from #606's diagnosis, confirmed for #608 (ADR-0008, the #608
+# amendment): a SUBAGENT transcript writes each assistant line as its content
+# block closes, before the response's closing usage arrives, and nothing
+# rewrites it — so a message whose last line says stop_reason null carries an
+# output_tokens snapshot, not the closing count. No later line for the id, no
+# usage-only record and no other field carries the closing count: 4,988 of
+# 5,585 messages in 221 subagent transcripts on CLI 2.1.287 ended so, none of
+# them ever moved. The fixture is the smallest 2.1.287 subagent run that mixes
+# both shapes (the fixtures README's seventh capture). The extractor cannot
+# read a count the file does not hold, so it says how many messages it
+# counted from a snapshot, and the event carries data.out_snapshot.
+SNAP="$FIX/snapshot-subagent-transcript.redacted.jsonl"
+SNAP_LAST=msg_011CfkimJPYvGZQsVMkfRS3G
+SNAP_MODEL=claude-sonnet-5-5
+[ "$(grep -c '' "$SNAP")" = 57 ] && [ "$(grep -c '"version":"2.1.287"' "$SNAP")" = 57 ] &&
+	[ "$(grep -c '"role":"assistant".*"stop_reason":null' "$SNAP")" = 12 ] &&
+	[ "$(sed -n '42p' "$SNAP" | grep -c '"name":"Write","input":"\[REDACTED input, 1408 chars\]".*"stop_reason":null.*"output_tokens":3,')" = 1 ] &&
+	[ "$(sed -n '$p' "$SNAP" | grep -c '"stop_reason":"end_turn"')" = 1 ] &&
+	pass "premise: a 2.1.287 subagent run whose tool turns were written mid-stream — a 1408-char Write at output_tokens 3" ||
+	fail "premise: the snapshot fixture no longer has the observed shape"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE EXTRACTOR: the row says how many of its messages are snapshots — an
+	# eighth field, present only when there is one.
+	t_run_split node "$EXTRACTOR" "$SNAP"
+	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SNAP_MODEL 26 624 52403 616704 12 $SNAP_LAST 8" ] &&
+		pass "the extractor's row counts 8 of its 12 messages as streamed snapshots" ||
+		fail "the snapshot fixture's row is '$S_OUT' (status $S_STATUS: $S_ERR)"
+	# A message is a snapshot by its LAST line: a thinking line's null that a
+	# later line of the same id closes is no snapshot (#343's shape).
+	t_run_split node "$EXTRACTOR" "$TSUB"
+	[ "$S_OUT" = "$TMODEL 18 158 15600 13892 2 msg_011CfZXycwXfJKUZUXVPyGsv" ] &&
+		pass "a null on a superseded line, closed by the id's last line, is no snapshot" ||
+		fail "the two-block transcript's row is '$S_OUT'"
+	# Under an anchor, only the fresh messages are counted, snapshots included.
+	t_run_split node "$EXTRACTOR" --after msg_011Cfkidudtc7txQaZQe5qZY "$SNAP"
+	[ "$S_OUT" = "$SNAP_MODEL 8 300 4977 191539 3 $SNAP_LAST 1" ] &&
+		pass "after an anchor the snapshot count is the fresh messages' own" ||
+		fail "the anchored read is '$S_OUT'"
+
+	# THE HOOK: the agent.stop event carries data.out_snapshot beside tok_out.
+	new_trace
+	stop_on "$SNAP"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	P=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(num "$P" tok_out)" = 624 ] && [ "$(str "$P" out_snapshot)" = 8 ] &&
+		pass "the subagent-stop event says 8 messages' output is a snapshot: tok_out 624 is a lower bound" ||
+		fail "the snapshot stop: exit $S_STATUS, event $P"
+	# A run whose every message closed says nothing of the kind.
+	new_trace
+	stop_on "$TSUB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	P=$(ev_of agent.stop | sed -n '1p')
+	[ -n "$(num "$P" tok_out)" ] && [ -z "$(str "$P" out_snapshot)" ] &&
+		pass "a run whose every message closed carries no data.out_snapshot" ||
+		fail "the closed run's event: $P"
+
+	# THE GAP ABSORBS THE SHORTFALL. The rollup counts each response's closing
+	# count, so a subagent snapshot's shortfall lands in the compaction gap: the
+	# gap row says how many snapshot messages it was judged against. Built from
+	# #407's subagent case with the subagent's last line turned mid-stream.
+	mkdir -p "$SCRATCH/compacted-snap-608/subagents"
+	sed '$s/"stop_reason":"end_turn"/"stop_reason":null/' "$FIX/thinking-subagent-transcript.redacted.jsonl" \
+		>"$SCRATCH/compacted-snap-608/subagents/agent-a1.jsonl"
+	cp "$SCRATCH/compacted-sub-407.jsonl" "$SCRATCH/compacted-snap-608.jsonl"
+	t_run_split node "$EXTRACTOR" --rollup "$SCRATCH/compacted-snap-608.jsonl" </dev/null
+	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n '$p')" = "$CGAP 1" ] &&
+		pass "a gap judged against a subagent snapshot says so: its tok_out holds that shortfall" ||
+		fail "the gap beside a snapshot: status $S_STATUS, '$S_OUT' ($S_ERR)"
+	new_trace
+	set_key transcript_path "$SCRATCH/compacted-snap-608.jsonl" <"$FIX/session-end.payload.json" |
+		set_key session_id "$RSESSION" >"$SCRATCH/end-snap-608.json"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-snap-608.json"
+	G=$(ev_of session.usage | grep -F '"via":"rollup"' | sed -n '1p')
+	[ "$(str "$G" out_snapshot)" = 1 ] && [ "$(str "$G" reason)" = compaction ] &&
+		pass "and the session-end hook records it on the gap event as data.out_snapshot" ||
+		fail "the gap event beside a snapshot: $G"
+else
+	skip "the snapshot legs read tokens with the extractor, which needs node"
+fi
+
 t_done "trace hooks"
