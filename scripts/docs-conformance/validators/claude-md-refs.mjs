@@ -47,6 +47,8 @@
 // must stay copyable verbatim into another repo. `portability-leak` enforces
 // the deny-list in config.claudeMdRefs.portability.
 
+import { fencedLines } from "./living-spec.mjs";
+
 export const id = "claude-md-refs";
 
 const DEFAULT_ROOT_MANUAL = "AGENTS.md";
@@ -238,18 +240,21 @@ function normalizeSpan(raw) {
 }
 
 /**
- * Strip fenced code blocks. A fence's own markers (``` = three backticks) would
- * otherwise be read as a code-span delimiter run. `~~~` fences get the same
- * treatment — a manual reaches for `~~~` precisely to show a ``` fence
- * verbatim, which is the case that leaves stray backticks behind. Fences may be
- * indented (lists), so anchor on optional leading whitespace.
+ * Strip fenced code blocks: the lines outside every fence, fence lines dropped
+ * — the shell home's fence_strip, line for line, because the rule is
+ * living-spec.mjs's fencedLines (#571). A fence's own markers (``` = three
+ * backticks) would otherwise be read as a code-span delimiter run, and a
+ * manual reaches for `~~~` or a longer run precisely to show a ``` fence
+ * verbatim — which only a fence closed by its own kind keeps whole.
  *
  * Exported: every validator that scans document content is expected to strip
  * fences first (skill-paths does via pathRefs; mutation-decision imports this
  * directly), so quoted material never counts as the real thing.
  */
 export function stripFences(raw) {
-  return raw.replace(/^[ \t]*(```|~~~)[\s\S]*?^[ \t]*\1[ \t]*$/gm, "");
+  const lines = raw.split("\n");
+  const fenced = fencedLines(lines);
+  return lines.filter((_, i) => !fenced[i]).join("\n");
 }
 
 /**

@@ -2134,7 +2134,58 @@
 # stub git beside the stub gh; ADR-0015 and its INDEX row; the root manual's
 # landing-script row.
 
-shared-layer: 0.56.0
+# 0.57.0 — a bare `end` is deprecated, on the way to a mandatory run id
+# (ticket #560, ADR-0008 clause 5 as amended 2026-10-06).
+# ONE shared file changes content: scripts/trace.sh. A bare `end` — no run
+# id — still closes the top of this session's stack in this checkout, exit 0
+# as before, and then prints one note on stderr: the form is deprecated, the
+# run it closed, the named form `sh scripts/trace.sh end <that run>`, and
+# that a later release makes the id mandatory. A note like every other —
+# trace-prefixed, silenced by TRACE_QUIET=1. A named `end` prints nothing
+# new; a bare `end` that closes nothing — refused, or unconfigured — names
+# nothing. From #551's confirm-list: the #543 guarantee was opt-in, and a
+# caller that skipped its `begin` could still close its parent's run with a
+# bare `end`. NO file joins or leaves. UPDATING.md changes content: the
+# arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Nothing a consumer receives moves outside the manifest: the six skills that
+# close a run have named it since 0.52.0.
+# Kit-only, never shipped: tests/trace.test.sh §29 (the note, and a scan of
+# the kit's skills, hooks, scripts, suites, adapters and stamped sources for
+# a bare `end`, baited red); tests/trace-hooks, retro-skill, agent-dispatch
+# and trace-skills name the run at every `end`; the ADR-0008 amendment, its
+# header ledger entry and its index note; AGENTS.md's trace row.
+
+# 0.58.0 — both engines of the docs gate read a code fence by one rule
+# (ticket #571). 0.55.0 gave the shell side one fence home and recorded the
+# docs harness's two other readings instead of unifying them; this release
+# unifies them on CommonMark's pairing: a fence opens on a line whose first
+# non-blank characters are ``` or ~~~ and closes only on a run of the same
+# character, at least as long, alone on its line; one left open runs to the
+# end of its file. NO file joins or leaves the shared layer. Four
+# manifest-listed files change behavior. scripts/requirement.lib.sh gains
+# REQ_FENCE_CLOSE_ERE, and fence_strip and req_spec_lines share one awk rule
+# that pairs instead of toggling — read by scripts/check.sh's reduced path
+# check and living-spec twin, which do not change. validators/living-spec.mjs exports
+# the closing pattern and fencedLines, the harness's one reading, and its
+# requirement reader uses it; validators/claude-md-refs.mjs's stripFences and
+# validators/banned-words.mjs's prose pass import it instead of their own
+# patterns (a backreference that left an unclosed fence unstripped; a toggle
+# that opened on any whitespace). A verdict changes only on a document whose
+# fences mix kinds or lengths or stay open; none of the kit's own documents
+# does. UPDATING.md changes content: the arriving-from paragraph, and both
+# worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# scripts/docs-conformance/test/fence.test.mjs (policy, yours) is new: it
+# holds both fence patterns to the grammar file byte for byte, stripFences to
+# fence_strip line for line, and pins each changed case in each reader — an
+# optional take for a project that runs the fixture tests.
+# Kit-only, never shipped: tests/requirement-grammar.test.sh pins the paired
+# rule in place of the toggle, drops the declared different rules and their
+# "still differs" checks, scans for the closing pattern too, and proves both
+# engines agree on a manual whose ~~~ block quotes a ``` fence.
+
+shared-layer: 0.58.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

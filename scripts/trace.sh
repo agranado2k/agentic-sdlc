@@ -25,8 +25,10 @@
 # prints the resolved directory, `begin` the run id it just opened, `show` the
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
 # line it would append, `stack` a checkout's open run and the run below it; a
-# successful `emit` and a successful `end` print nothing. Every diagnostic is
-# on stderr, prefixed `trace:`. Exit 0 is done,
+# successful `emit` and a successful `end` print nothing on stdout — a bare
+# `end`, with no <run>, is deprecated and says so in one stderr line naming
+# the run it closed (#560). Every diagnostic is on stderr, prefixed `trace:`.
+# Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a data value its kind's shape refuses
 # (TRACE_SHAPES) or a data key a row requires and the line lacks, a malformed
@@ -1024,7 +1026,8 @@ trace_begin() {
 # exit 2 naming the run that is open, before a line is written or the stack
 # touched. A bare `end` closes the top whoever began it — a subagent sharing
 # the session and the checkout that skipped its own `begin` closed its
-# parent's run that way — so a caller that holds its run id names it.
+# parent's run that way — so a caller that holds its run id names it. A bare
+# `end` is deprecated (#560): it still closes the top, then says so on stderr.
 trace_end() {
 	_en_want=
 	_en_named=
@@ -1071,6 +1074,18 @@ trace_end() {
 		trace_emit kind=run.end run="$_en_run" "$@"
 	fi
 	trace_pop
+	[ -n "$_en_named" ] || trace_bare_end_note "$_en_run"
+}
+
+# trace_bare_end_note <run> — the one line a bare `end` says once it has closed
+# <run> (#560): deprecated, the run it closed, the named form that closes it,
+# and that a later release makes the id mandatory (ADR-0008 clause 5, #560
+# amendment). A note like every other — stderr, silenced by TRACE_QUIET=1 —
+# and only after a close: a bare `end` refused, or unconfigured, closed nothing
+# and has nothing to name.
+trace_bare_end_note() {
+	[ "${TRACE_QUIET:-}" = 1 ] && return 0
+	echo "!  trace: a bare end is deprecated — it closed $1, the top of this stack; name the run begin printed: sh scripts/trace.sh end $1. A later release makes the run id mandatory (ADR-0008)." >&2
 }
 
 # trace_stack_of <dir> [session=<id>] — the run open in the checkout <dir> is
