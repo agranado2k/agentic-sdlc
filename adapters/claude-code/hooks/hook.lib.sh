@@ -5,7 +5,7 @@
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
 # subagent finished. Those are the agent harness's own events, so they live
-# here in its adapter rather than in `scripts/trace.sh` (ADR-0008 clause 8:
+# here in its adapter rather than in `scripts/trace.sh` (the kit's ADR-0008 clause 8:
 # "the agent harness is the adapter's business"). Everything portable — the
 # line format, the closed kind vocabulary, where the trace directory is — stays
 # in the shared script, which these hooks call and never reimplement.
@@ -22,7 +22,7 @@
 #   1. EXIT 0, ALWAYS. A hook is on the agent harness's critical path. A
 #      non-zero exit is a signal to the agent harness about the SESSION, and
 #      observability that can fail a session is worse than none (PRD #237,
-#      story 15; ADR-0008 clause 4). Every call into the trace ends in `|| :`
+#      story 15; the kit's ADR-0008 clause 4). Every call into the trace ends in `|| :`
 #      and every hook ends in `exit 0`. ONE SANCTIONED EXCEPTION: the kill
 #      guard, tool-pre-guard.sh, is a guard rather than an observer, and it
 #      exits 2 — the agent harness's block status — when, and only when, it
@@ -33,7 +33,7 @@
 #   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
 #      reaches the agent harness's own parser. The trace's answers go to a
 #      file; nothing about the trace is ever said there. STDERR is a different
-#      stream and is deliberately loud — ADR-0008 clause 4 wants a trace error
+#      stream and is deliberately loud — the kit's ADR-0008 clause 4 wants a trace error
 #      visible. The one exception is session-start's behind note, which is
 #      about the code the hooks run, not the trace: stderr on exit 0 reaches
 #      no reader on this agent harness, so past its threshold the note is also
@@ -404,6 +404,9 @@ hook_anchors() {
 #   the numbers      one event per model, tokens on it, and how far the read
 #                    went FOR THAT MODEL: data.msgs (its messages) and
 #                    data.last_msg (its last one), its own resume anchor (#408)
+#                    — and data.out_snapshot, only when some of those messages
+#                    were written mid-stream: how many, so tok_out is a lower
+#                    bound (#608; transcript-usage.mjs says why)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
 #                    a resume anchor the transcript no longer holds is one
@@ -414,7 +417,9 @@ hook_anchors() {
 #   the rollup gap   with --rollup only, beside the numbers: one more event per
 #                    model the rollup counts beyond them, data.via=rollup and
 #                    data.reason=compaction, with no data.last_msg — it counts
-#                    no message, so it never anchors a later read (#407)
+#                    no message, so it never anchors a later read (#407) —
+#                    and data.out_snapshot when the messages it was judged
+#                    against hold snapshots, whose remainder its tok_out holds
 #   rollup refused   with --rollup only: the numbers as usual, then one event,
 #                    outcome=fail and data.via=rollup, the extractor's reason
 #
@@ -514,11 +519,11 @@ hook_tokens() {
 	fi
 	_ht_gap=$(printf '%s\n' "$_ht_out" | awk '$6 == "rollup"')
 	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF && $6 != "rollup"')
-	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c; do
+	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c _ht_s; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
-			data.via="$_ht_v" data.reason="$_ht_c" \
+			data.via="$_ht_v" data.reason="$_ht_c" ${_ht_s:+data.out_snapshot="$_ht_s"} \
 			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
 	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
@@ -531,11 +536,11 @@ hook_tokens() {
 			reason='the transcript carries no assistant message with a usage block — nothing to read yet' "$@"
 		return 0
 	fi
-	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l; do
+	printf '%s\n' "$_ht_out" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_n _ht_l _ht_s; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
-			data.msgs="$_ht_n" data.last_msg="$_ht_l" "$@"
+			data.msgs="$_ht_n" data.last_msg="$_ht_l" ${_ht_s:+data.out_snapshot="$_ht_s"} "$@"
 	done
 	return 0
 }
@@ -571,7 +576,7 @@ hook_policy() {
 # WHY A HOOK READS POLICY AT ALL, when every other answer here comes out of
 # `scripts/trace.sh`: the shared script has no opinion on tool capture. An event
 # is an event, whoever asked for it, and the agent harness is the adapter's
-# business (ADR-0008 clause 8) — so the only reader of TRACE_TOOLS is the hook
+# business (the kit's ADR-0008 clause 8) — so the only reader of TRACE_TOOLS is the hook
 # that would do the capturing. It reads the same file with the same precedence
 # the shared script gives TRACE_DIR: the environment wins over the file, and an
 # environment value of '' is the documented OFF even when the file says 1.
@@ -606,7 +611,7 @@ hook_tools_on() {
 # OFF IS NOT AN ERROR, AND AN ERROR IS NOT OFF. Off is the documented no-op and
 # is said nowhere (rule 3). A refused policy file is the shared script's error,
 # and its own line reaches the hook's stderr untouched, the way an emit's would
-# (rule 1 keeps the exit 0, ADR-0008 clause 4 keeps it loud) — so a session
+# (rule 1 keeps the exit 0, the kit's ADR-0008 clause 4 keeps it loud) — so a session
 # hook that stops at the ask still says why (H-1, review of PR #518). The tool
 # hooks, which run on every tool call, discard it at their own call site.
 #
@@ -683,7 +688,7 @@ hook_wait_bound() {
 # how most subagent runs end: the run's last act is a call to a tool that ends
 # it (the agent harness's hand-back), the harness writes that call's result as
 # a user line carrying the flag, and NO assistant line follows, ever — so a
-# wait for one ran out at any bound (ADR-0008, the #565 amendment). The tool
+# wait for one ran out at any bound (the kit's ADR-0008, the #565 amendment). The tool
 # call's own line is written mid-stream, stop_reason null, so its usage block
 # is the streamed snapshot; `data.final=tool` on the event says so. A flag
 # followed by the prompt that resumed the agent is not final, by the rule

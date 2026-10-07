@@ -19,7 +19,7 @@
 # appended to a per-day file under the trace directory. The chain writes it and
 # never reads it (shared invariant §4: a reviewer must not see implementation
 # history); the operator, a diagnosis and a retrospective read it after the
-# fact. ADR-0008 is the record; PRD #237 the design.
+# fact. The kit's ADR-0008 is the record; PRD #237 the design.
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
 # prints the resolved directory, `begin` the run id it just opened, `show` the
@@ -38,7 +38,7 @@
 # same verdict out. `begin` and `end` add two exits
 # of their own to the 2 — closing a run that is not open, and a run stack that
 # cannot be named or read. Both are CALLER errors, the thing the caller asked
-# for did not happen, which ADR-0008 clause 4 (as amended) keeps apart from a
+# for did not happen, which the kit's ADR-0008 clause 4 (as amended) keeps apart from a
 # trace error: an `emit` never fails a caller this way. `stack` refuses with
 # the same 2 and for the same reasons — a stack that cannot be named or read —
 # and for one more, a directory that is no checkout of this repository.
@@ -49,7 +49,7 @@
 # caller's own error and the two ask opposite things — fix your command, versus
 # update the shared layer and change nothing about the call. `verify` exits 3
 # and judges no line; `export` refuses with 3 and prints nothing; `summary`
-# still exits 0 and says so in its first line (ADR-0008 clause 4, as amended
+# still exits 0 and says so in its first line (the kit's ADR-0008 clause 4, as amended
 # 2026-09-28 for #271).
 #
 # UNCONFIGURED IS A WORKING STATE. The policy file scripts/trace.config.sh ships
@@ -133,7 +133,7 @@
 # reporting every line as malformed, and that refusal is exit 3 — the code
 # above, for a trace this reader cannot judge.
 #
-# COST IS COMPUTED ON READ, NEVER ON WRITE (ADR-0008 clause 6). An event carries
+# COST IS COMPUTED ON READ, NEVER ON WRITE (the kit's ADR-0008 clause 6). An event carries
 # raw token counts and the model that spent them, because that is a fact; a
 # price is an interpretation that rots on a vendor's schedule. So `summary` and
 # `export` price the tokens at the moment you ask, from the policy file:
@@ -181,10 +181,10 @@ _trace_here=$(cd "$(dirname "$0")" && pwd -P)
 TRACE_SCHEMA=1
 # The exit status for a trace this reader cannot judge, kept as a name because
 # three readers have to agree on it: verify returns it, export refuses with it,
-# and summary recognises it to mark its own first line (ADR-0008 clause 4).
+# and summary recognises it to mark its own first line (the kit's ADR-0008 clause 4).
 TRACE_EX_SCHEMA=3
 TRACE_EVENT_CAP=4000
-# THE KIND TABLE: every kind, and the outcome vocabulary of its own (ADR-0008
+# THE KIND TABLE: every kind, and the outcome vocabulary of its own (the kit's ADR-0008
 # clause 1, as amended 2026-10-01 for #348). The kind set was closed from the
 # start; the outcome was open per kind, so a whole sentence could stand where
 # a verdict belonged and every reader counting the verdict missed it. Each
@@ -197,7 +197,7 @@ TRACE_EVENT_CAP=4000
 # one; the trace suite holds the two to the same kinds, row for row.
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
-# THE SHAPES, beside the outcome words (ADR-0008 clause 1, as amended
+# THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466 and 2026-10-07 for #567): a data
 # key a reader joins on, held at emit to a shape. Each row is
 # `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, and a value matches an ERE only
@@ -996,7 +996,7 @@ trace_emit() {
 	# A blob is READ only when something will come of it. A dry run needs the
 	# hash for the line it prints; an unconfigured emit needs nothing at all,
 	# and reading a payload there would hand a consumer who never opened the
-	# policy file a brand-new way for an emit to exit non-zero (ADR-0008
+	# policy file a brand-new way for an emit to exit non-zero (the kit's ADR-0008
 	# clause 4: a trace error is never in an exit status a caller acts on).
 	if [ -n "$_em_blob_src" ]; then
 		if [ "$_em_dry" = 1 ]; then
@@ -1134,7 +1134,7 @@ trace_end() {
 	# nothing about the line — and popping first meant a refused argument
 	# destroyed the entry, wrote no run.end, and left the retry closing the run
 	# OUTSIDE this one. An append-only record cannot be corrected, only added
-	# to (ADR-0008 clause 5), so it would have stayed wrong.
+	# to (the kit's ADR-0008 clause 5), so it would have stayed wrong.
 	if [ -n "$_en_parent" ]; then
 		trace_emit kind=run.end run="$_en_run" parent="$_en_parent" "$@"
 	else
@@ -1146,13 +1146,13 @@ trace_end() {
 
 # trace_bare_end_note <run> — the one line a bare `end` says once it has closed
 # <run> (#560): deprecated, the run it closed, the named form that closes it,
-# and that a later release makes the id mandatory (ADR-0008 clause 5, #560
+# and that a later release makes the id mandatory (the kit's ADR-0008 clause 5, #560
 # amendment). A note like every other — stderr, silenced by TRACE_QUIET=1 —
 # and only after a close: a bare `end` refused, or unconfigured, closed nothing
 # and has nothing to name.
 trace_bare_end_note() {
 	[ "${TRACE_QUIET:-}" = 1 ] && return 0
-	echo "!  trace: a bare end is deprecated — it closed $1, the top of this stack; name the run begin printed: sh scripts/trace.sh end $1. A later release makes the run id mandatory (ADR-0008)." >&2
+	echo "!  trace: a bare end is deprecated — it closed $1, the top of this stack; name the run begin printed: sh scripts/trace.sh end $1. A later release makes the run id mandatory (the kit's ADR-0008)." >&2
 }
 
 # trace_stack_of <dir> [session=<id>] — the run open in the checkout <dir> is
@@ -1801,7 +1801,7 @@ trace_note_unpriced() {
 }
 
 # --- the table's age --------------------------------------------------------
-# A price is an interpretation with a date on it (ADR-0008 clause 6): pricing on
+# A price is an interpretation with a date on it (the kit's ADR-0008 clause 6): pricing on
 # read is what lets a correction reach the whole past, and the cost of that
 # choice is a table that rots QUIETLY. A cost column nobody re-derives is
 # exactly the number an operator believes, and unlike a wrong model id a stale

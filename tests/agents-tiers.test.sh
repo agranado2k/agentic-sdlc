@@ -843,6 +843,18 @@ for manual in docs/capability-tiers.md constitution/AGENTS.md.template; do
 		says "$tiers" "$phrase" "$manual's tiers section"
 	done
 done
+# The reviewer walk's two caller-held facts reach a consumer's sessions only
+# through the manual they read (#564): the 0.53.0 note told a consumer to tell
+# its sessions to re-resolve with the dead model named, and the template held
+# no such sentence to take. The kit's root says it in its own tiers section.
+tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/constitution/AGENTS.md.template" | tr '\n' ' ')
+for phrase in 'Before you spawn a reviewer, say what you run on' 'AGENT_SESSION_MODEL=' 'sh scripts/agents.lib.sh reviewer' 'AGENT_TIER_REVIEWER_FALLBACK' 'fails on its first call' "AGENT_UNREACHABLE_MODELS='" 'never override the reviewer by hand'; do
+	says "$tiers" "$phrase" "the consumer manual's tiers section"
+done
+case $tiers in
+*agents.kit.sh*) fail "the consumer manual's tiers section names the kit's own wrapper" ;;
+*) pass "the consumer manual's tiers section names the shipped resolver, never the kit's wrapper" ;;
+esac
 entry=$(awk '/^- \*\*Task domain\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$KIT/docs/domain-glossary.md" | tr '\n' ' ')
 for phrase in '`judge`' 'decide' 'rank-or-verify'; do
 	says "$entry" "$phrase" "the glossary's task-domain entry"

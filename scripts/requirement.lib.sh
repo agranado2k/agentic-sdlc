@@ -27,7 +27,7 @@
 # kept two rules of its own; the three agreed on every document the kit
 # tracks, and disagreed only on mixed or longer fences.
 #
-# A requirement is a numbered line (ADR-0012). Two readers read it, and they
+# A requirement is a numbered line (the kit's ADR-0012). Two readers read it, and they
 # read DIFFERENT shapes on purpose, so this file holds two grammars side by
 # side and never derives one from the other:
 #

@@ -339,6 +339,35 @@ for h in ADDED MODIFIED REMOVED; do
 done
 
 # ---------------------------------------------------------------------------
+banner "7d. The docs/specs/ starter's own examples pass the check (#564)"
+# ---------------------------------------------------------------------------
+# The starter README a consumer reads (templates/docs/specs/README.md) shows a
+# ticket's `Covers:` line for each kind of PRD, and each one is run here as
+# written: a delta PRD's ticket cites `<area>/R<n>`, and a new area's PRD —
+# plain `R<n>.` lines under an `Area:` line — gives its ticket plain `R<n>`
+# (/to-tickets rule 15). The README once said every `Covers:` line cites
+# `<area>/R<n>`, which covers nothing under a new area's PRD.
+STARTER="$KIT/templates/docs/specs/README.md"
+fresh
+t_fence "$STARTER" holds '### ADDED' md >"$SCRATCH/prd"
+t_fence "$STARTER" opens '^Covers: [a-z]' md >"$SCRATCH/draft/delta"
+run "$(T delta)"
+[ -s "$SCRATCH/draft/delta" ] && s_assert_resolved "" "the starter's delta PRD and its Covers: example pass — exit 0, nothing printed" ||
+	fail "the starter shows no Covers: example for its delta PRD"
+fresh
+t_fence "$STARTER" opens '^Area: ' md >"$SCRATCH/prd"
+t_fence "$STARTER" opens '^Covers: R' md >"$SCRATCH/draft/new-area"
+run "$(T new-area)"
+[ -s "$SCRATCH/prd" ] && [ -s "$SCRATCH/draft/new-area" ] && s_assert_resolved "" "the starter's new-area PRD and its Covers: example pass — exit 0, nothing printed" ||
+	fail "the starter shows no new-area PRD (an Area: line, plain R<n>.) with its Covers: example"
+# The spelling the README once taught, run against its own new-area example:
+# area-qualified ids cover none of a plain PRD's lines.
+area=$(sed -n 's/^Area: //p' "$SCRATCH/prd")
+printf 'Covers: %s\n' "$(sed -n 's/^Covers: //p' "$SCRATCH/draft/new-area" | sed -E "s#(^|, )R#\\1$area/R#g")" >"$SCRATCH/draft/new-area"
+run "$(T new-area)"
+s_assert_status 1 "… and the same ticket spelled <area>/R<n> leaves the new area's requirements uncovered"
+
+# ---------------------------------------------------------------------------
 banner "8. Usage and unreadable input: exit 2, nothing on stdout"
 # ---------------------------------------------------------------------------
 t_run_split sh "$COVERAGE"
