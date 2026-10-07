@@ -756,6 +756,63 @@ strip_nested_worktrees() {
 		done
 }
 
+# t_kit_residue <kit> <tree> — print, one per line, every kit-only file that
+# survived into a consumer <tree>: any name of the `*.kit.*` shape (the kit's
+# own twins and wrappers, never shipped), any file carrying the kit-own
+# sentinel, and any record the kit keeps of itself — a numbered ADR or a
+# living spec — under a name the kit's own docs/ holds. A derived sweep, not a
+# list, so a kit-only file nobody added to bootstrap's KIT_ONLY shows up here
+# rather than in a consumer's tree (#562). Empty output is a clean tree.
+t_kit_residue() {
+	_kr_kit=$1 _kr_tree=$2
+	(cd "$_kr_tree" && find . -path ./.git -prune -o -name '*.kit.*' -print) | sed 's#^\./##'
+	grep -rlF --exclude-dir=.git "agentic-sdlc:kit-own" "$_kr_tree" 2>/dev/null | sed "s#^$_kr_tree/##"
+	for _kr_rec in "$_kr_kit"/docs/adr/[0-9]*.md "$_kr_kit"/docs/specs/*.md; do
+		[ -e "$_kr_rec" ] || continue
+		_kr_rel=${_kr_rec#"$_kr_kit"/}
+		[ "$_kr_rel" = docs/specs/README.md ] && continue
+		[ -e "$_kr_tree/$_kr_rel" ] && printf '%s\n' "$_kr_rel"
+	done
+	return 0
+}
+
+# t_assert_no_kit_residue <kit> <tree> <what> — one assertion over
+# t_kit_residue: pass on an empty sweep, fail naming every survivor.
+t_assert_no_kit_residue() {
+	_kr_out=$(t_kit_residue "$1" "$2" | sort -u)
+	[ -z "$_kr_out" ] &&
+		pass "no kit-only file or kit-own record survived $3" ||
+		fail "kit-only files survived $3: $(printf '%s' "$_kr_out" | tr '\n' ' ')"
+}
+
+# t_kit_record_cites <tree> — print, one `<path>:<line>` per line, every line
+# of a shipped <tree> that names a decision record as `ADR-<nnnn>` without
+# saying it is the kit's. A consumer never receives the kit's records
+# (bootstrap strips them, and t_kit_residue proves it), and numbers its own
+# from 0001: a bare `ADR-0008` in a shipped file points at a record the
+# project lacks, or at the project's own 0008, which says something else
+# (#564). The one spelling a shipped file may use is `the kit's ADR-<nnnn>`,
+# on one line, so a reader knows to look in the kit's repository. VERSION is
+# exempt: it is the kit's own release ledger, every line of it the kit
+# speaking of itself, and its notes are history that is not rewritten.
+# Empty output is a clean tree.
+t_kit_record_cites() {
+	(cd "$1" && grep -rnE --exclude-dir=.git 'ADR-[0-9]{4}' . 2>/dev/null) |
+		sed 's#^\./##' | grep -v '^VERSION:' |
+		sed -E "s/[Tt]he kit's ADR-[0-9]{4}//g" | grep -E 'ADR-[0-9]{4}' |
+		cut -d: -f1,2
+	return 0
+}
+
+# t_assert_no_kit_record_cite <tree> <what> — one assertion over
+# t_kit_record_cites: pass on an empty sweep, fail naming every line.
+t_assert_no_kit_record_cite() {
+	_rc_out=$(t_kit_record_cites "$1")
+	[ -z "$_rc_out" ] &&
+		pass "no file in $2 cites a kit decision record as if the project had it" ||
+		fail "$2 cites a kit decision record without saying it is the kit's (spell it \`the kit's ADR-<nnnn>\`): $(printf '%s' "$_rc_out" | tr '\n' ' ')"
+}
+
 # t_fake_host <dir> <slice pids.max> <MemAvailable kB> — the host the
 # dispatcher's derivation reads through AGENT_DISPATCH_HOST_ROOT, so a suite
 # asserts the arithmetic against numbers it chose: this process in
@@ -986,9 +1043,13 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # The run an end names, `<the run id your begin printed>`, becomes the top of
 # the stack the span runs against, read with `stack .` — the id the begin
 # earlier in the document printed, as an agent would type it (ticket #543).
+# A raise's id, `data.id='<its id, [CHML]-[0-9]+>'`, becomes `H-1` before the
+# optional-group rule could read its bracket as one: the script holds it to
+# that shape (ticket #567).
 t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
+		-e "s/data\.id='<its id, \[CHML\]-\[0-9\]+>'/data.id='H-1'/g" \
 		-e 's/<the run id your begin printed>/"$(sh scripts\/trace.sh stack . | sed -n 1p)"/g' \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \

@@ -398,11 +398,20 @@ for cfg in scripts/agents.kit.config.sh scripts/agents.kit.codex.config.sh; do
 		if [ -n "$_harness" ]; then
 			# A crossing must name an agent harness the policy declares AND
 			# gave a command template, or the dispatch dies at run time.
-			_decl=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; printf "%s" "${AGENT_HARNESSES:-}"' "$cfg")
+			# Whether it is declared is the resolver's answer, asked of its
+			# agents_split_harness under this policy — the one membership
+			# test (#597), never a copy kept here to drift from it.
+			_split=$(
+				. "$ROOT/scripts/agents.lib.sh"
+				. "$cfg" >/dev/null 2>&1
+				AGENTS_TIER_QUIET=1
+				agents_split_harness "$_harness:$_model"
+				printf '%s' "$_ah_harness"
+			)
 			_cmdvar="AGENT_HARNESS_$(printf '%s' "$_harness" | tr 'a-z-' 'A-Z_')_CMD"
 			_cmd=$(AGENTS_CONFIG="$cfg" sh -c '. "$0" 2>/dev/null; eval printf "%s" "\$$1"' "$cfg" "$_cmdvar")
-			case " $_decl " in
-			*" $_harness "*) : ;;
+			case "$_split" in
+			"$_harness") : ;;
 			*)
 				fail "$_clabel: /$_skill crosses to '$_harness', which AGENT_HARNESSES does not declare"
 				_unreachable=$((_unreachable + 1))

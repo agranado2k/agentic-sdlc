@@ -219,6 +219,65 @@ grammars for one file format is two chances to disagree about what your own
 manifest says — which is why the name of an entry is its first word in both
 sections, and anything after it is annotation.
 
+**Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
+No file joins or leaves at 0.62.0, and nothing changes behavior: eight
+shared files change comments, and two stderr lines their wording, so that
+every decision record they cite reads "the kit's ADR-NNNN" — the kit's
+records never reach you, and a record of yours under the same number is
+a different decision.
+Part 2 takes the rest: in 9a the same spelling in sixteen skills, which
+you may take or leave; in 9b, `constitution/AGENTS.md.template`'s tiers
+section gains the reviewer sentence the 0.53.0 paragraph below told you to
+write yourself — say what you run on with `AGENT_SESSION_MODEL`, and after
+a reviewer spawn fails on its first call re-resolve with
+`AGENT_UNREACHABLE_MODELS` naming the dead model; in 9c,
+`templates/docs/specs/README.md` now says a ticket's `Covers:` line cites
+plain `R<n>` under a new area's PRD (`<area>/R<n>` covered nothing there)
+and stops claiming to be the only file bootstrap put in the directory, and
+`templates/docs/adr/INDEX.md.template` says where the kit's records live;
+in 9d and 9e, comment lines only, in your policy files and the adapter —
+beside the adapter fix that rides along (#606): `subagent-stop.sh` reads a
+run that ends on the hand-back tool as final, with `hook.lib.sh`'s shared
+anchor reader, and `/retro`'s `QUESTIONS.md` question 6 reads `data.final`.
+
+**Arriving from 0.60.0 or older, a finding raise's id is held at emit.**
+No file joins or leaves at 0.61.0. `scripts/trace.sh emit kind=finding.raise`
+now refuses, exit 2 and nothing written, a `data.id` that is not the review's
+severity id, `[CHML]-[0-9]+` — `H-3`, never the literal `INITIAL-N`
+placeholder, and never a confirm-list `A2-N`, which is triaged but never
+raised. A raise with no id still writes. `verify` names a raise already
+written off the shape on stderr, as history, and its verdict does not
+change, so your old trace stays readable; `summary` and `export` say the
+count once. After step 5, check any raise line
+you own — a review skill you adapted, a script — passes the finding's own
+id. Part 2 has one take: `.agents/skills/review-pr/SKILL.md`'s two raise
+lines spell the shape in place of the placeholder; take it as any changed
+skill.
+
+**Arriving from 0.59.0 or older, a living requirement may stop passing on the harness's word.**
+No file joins or leaves at 0.60.0. `validators/living-spec.mjs` and its twin in
+`scripts/check.sh` now read no citation from a file under
+`scripts/docs-conformance/`, whatever your test globs match: the harness's
+fixture tests are about the gate, and the shipped `living-spec.test.mjs`
+spelled ids such as `billing` R1 to R3 from a path the default globs match,
+so a living spec of that area passed with no test of your own (#561). If the
+gate goes red after step 5 naming a requirement, nothing of yours ever named
+it — write the test. Part 2 has one take: replace
+`scripts/docs-conformance/test/living-spec.test.mjs` (yours, shipped) with
+the kit's, which builds every id at runtime and scans the harness for a
+spelled one; a fixture test you added there builds its ids the same way.
+
+**Arriving from 0.58.0 or older, delete one file the kit leaked to you.**
+No file joins or leaves at 0.59.0, and no shared file changes behavior.
+`scripts/agents.kit.codex.config.sh` is the kit's own tier → model mapping
+for a codex session, and bootstrap should have deleted it: it was missing
+from the kit-only deletion list, so a project bootstrapped while it was in
+the kit carries the kit's model ids. Delete it — `git rm
+scripts/agents.kit.codex.config.sh` — in the same commit as step 5. Nothing
+outside the kit reads it, so the delete changes nothing; your own mapping is
+`scripts/agents.config.sh`, which this does not touch. No other kit-only file
+leaked: any other `*.kit.*` name in your tree is yours.
+
 **Arriving from 0.57.0 or older, both engines read a code fence by one rule.**
 No file joins or leaves at 0.58.0. A fence now pairs as CommonMark pairs it:
 it opens on a line whose first non-blank characters are ``` or ~~~, and
@@ -882,8 +941,8 @@ policy file empty, none of this writes anything.
 now holds each kind's `outcome` to a vocabulary of its own — `review.verdict`
 takes `pass`, `blocked` or `confirm`, `merge.land` takes `landed`, `skipped`
 or `stopped`, and so on for every kind; the script's header carries the
-table beside its kind list, and your copy of ADR-0008 does not, since
-decision records are yours.
+table beside its kind list. The kit's ADR-0008 records the decision, and
+no copy of it reaches you, since decision records are yours.
 An emit with no outcome is legal on every kind, `run.start` and
 `session.end` take none, and `note` takes any one word. What used to write
 and now exits 2 is an outcome its kind does not declare:
@@ -951,7 +1010,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.58.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.62.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -964,9 +1023,9 @@ order by the locale's collation, and only the paths move, never the verdicts.
 ```console
 $ kit tag --list
 v0.1.0
-v0.58.0
+v0.62.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.58.0
+v0.1.0 -> v0.62.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1000,10 +1059,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2442 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2502 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2596 insertions(+), 1 deletion(-)
+ 3 files changed, 2656 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1066,7 +1125,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.58.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.62.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1113,10 +1172,10 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.58.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.58.0
-Part 1 complete — shared layer at v0.58.0. The update is not done: go to step 8.
+0.62.0
+Part 1 complete — shared layer at v0.62.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -1803,10 +1862,11 @@ probabilities out, in two shapes a mapping answers one of — *decide* among
 supplied options, *rank-or-verify* over supplied candidates. It ships
 UNMAPPED and the kit maps it for nobody, so nothing you run changes; map
 `AGENT_TIER_MECHANICAL_JUDGE` in `scripts/agents.config.sh` only if you have
-a typed-decision model you trust, and read `docs/adr/0010-…` first for the
-one rule that comes with it: a decider is never handed a verification, and no
-typed judge takes the review verdict. Part 2's worked example below re-pins
-because it quotes the manual template's own diff stat.
+a typed-decision model you trust, and read the kit's ADR-0010 (its
+`docs/adr/0010-…`, in the kit's repository) first for the one rule that
+comes with it: a decider is never handed a verification, and no typed judge
+takes the review verdict. Part 2's worked example below re-pins because it
+quotes the manual template's own diff stat.
 
 **Arriving from 0.24.0 or older, one policy file joins, and it arrives
 filled.** `scripts/vocab.config.sh` holds the vocabularies that
@@ -1860,7 +1920,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.58.0 case for this file, and `ADD` is the 0.3.0 → 0.58.0
+`MERGE` is the 0.4.0 → 0.62.0 case for this file, and `ADD` is the 0.3.0 → 0.62.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2174,14 +2234,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.58.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.62.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.58.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.62.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2339,12 +2399,12 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 
 $ # 9b — new SECTIONS in the manual template we were stamped from
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
- constitution/AGENTS.md.template            |  70 +++++++++++++-
+ constitution/AGENTS.md.template            |  78 ++++++++++++++-
  constitution/local-engineering.md.template |   2 +-
  constitution/local-product.md.template     | 103 ++++++++++++++++++++
  constitution/local-workflow.md.template    |  53 +++++++++++
  constitution/shared-code-craft.md          | 147 +++++++++++++++++++++++++++++
- 5 files changed, 371 insertions(+), 4 deletions(-)
+ 5 files changed, 379 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 
@@ -2358,7 +2418,7 @@ DECLINED  .github/workflows/tdd-pairing.yml
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.58.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.62.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2384,7 +2444,7 @@ WARN  docs conformance: advisories (gate stays green)
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
 
-OK  docs gate: all checks passed (shared-layer 0.58.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.62.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.

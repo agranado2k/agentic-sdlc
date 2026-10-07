@@ -7,7 +7,7 @@ metadata:
 
 # /retro — the trace, read after the fact, into candidate tickets
 
-The chain writes a decision trace and never reads it back (ADR-0008 clause
+The chain writes a decision trace and never reads it back (the kit's ADR-0008 clause
 7, shared invariant §4). Somebody has to, or the trace is a file that grows.
 This skill is that reader — the one sanctioned reader beside the operator at
 the keyboard and a `/diagnose` looking for a bug — and it reads with a fixed
@@ -28,7 +28,7 @@ a session that read the history and edited a skill on the strength of it.
 
 It **reads and routes**; it never fixes. A repair by the session that read the
 history destroys the only independent reading anyone had of it, and it turns
-the trace into a memory the chain acts on — the non-goal ADR-0005 and ADR-0008
+the trace into a memory the chain acts on — the non-goal the kit's ADR-0005 and the kit's ADR-0008
 both keep. So this pass never edits a skill, an article, a policy file or a
 gate; it never runs the chain; it never publishes a ticket itself. Every
 finding leaves as a **candidate ticket** for `/to-tickets` — one a landed
@@ -84,7 +84,9 @@ The full form — what to read, what counts as a finding, where it goes — is i
    landing whose `feedback` is `unasked` counts as one with no verdict, and
    a verdict `by` the `train` — judged under a delegating instruction — is
    counted apart from the operator's: a window of only `train` verdicts
-   has no human verdict in it.
+   has no human verdict in it. A project whose binding decision record
+   accepts train-only verdicts has that window answered with one retired
+   line, never a finding, until a window holds an operator verdict again.
 8. **Stamp calibration** — per decision field and per skill, never one
    number for the chain: how often a tier or a label stamped at each
    confidence was overridden at the quiz, and how often a finding raised at
@@ -93,6 +95,9 @@ The full form — what to read, what counts as a finding, where it goes — is i
    clause; a row with too few events says so instead of a rate; and the
    label's override rate is computable once its stamps carry
    `data.label_proposed` — a row whose stamps predate that key says so.
+   Where that record accepts train-only verdicts, a window where no human
+   dismissed a finding or overrode a stamp is answered with the same retired
+   line, and the rows come back with the first window that holds one.
 
 ## Procedure
 

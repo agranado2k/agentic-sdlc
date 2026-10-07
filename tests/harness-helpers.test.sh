@@ -156,4 +156,56 @@ says "no project to run in: a refusal assertion fails" FAIL no_project refused "
 says "a project that is not a directory: a refusal assertion fails" FAIL no_project refused "$SCRATCH/no-such-project"
 says "…and an accepted assertion fails too" FAIL no_project accepted "$SCRATCH/no-such-project"
 
+# ---------------------------------------------------------------------------
+banner "5. t_assert_no_kit_residue — each kind of survivor fails the sweep (#562)"
+# ---------------------------------------------------------------------------
+# The adoption arm copies an allow-list and leaks nothing today, so the
+# suites' sweep over it passes; this is what proves that pass is not vacuous.
+KR_KIT="$SCRATCH/kr-kit"
+mkdir -p "$KR_KIT/docs/adr" "$KR_KIT/docs/specs"
+: >"$KR_KIT/docs/adr/0001-a-kit-decision.md"
+: >"$KR_KIT/docs/specs/README.md"
+: >"$KR_KIT/docs/specs/trace.md"
+kr_tree() { rm -rf "$SCRATCH/kr-tree"; mkdir -p "$SCRATCH/kr-tree/scripts" "$SCRATCH/kr-tree/docs/adr" "$SCRATCH/kr-tree/docs/specs"; : >"$SCRATCH/kr-tree/docs/specs/README.md"; : >"$SCRATCH/kr-tree/docs/adr/0001-their-own.md"; }
+kr_tree
+says "a clean tree (their own ADR, the starter README) passes" ok t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a clean tree"
+: >"$SCRATCH/kr-tree/scripts/agents.kit.codex.config.sh"
+says "a *.kit.* file fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+out=$(printed t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak")
+case $out in *"scripts/agents.kit.codex.config.sh"*) pass "the fail line names the survivor" ;; *) fail "the survivor is not named: $out" ;; esac
+kr_tree
+printf '<!-- agentic-sdlc:kit-own -->\n' >"$SCRATCH/kr-tree/NOTES.md"
+says "a file carrying the kit-own sentinel fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+kr_tree
+: >"$SCRATCH/kr-tree/docs/adr/0001-a-kit-decision.md"
+says "a kit ADR fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+kr_tree
+: >"$SCRATCH/kr-tree/docs/specs/trace.md"
+says "a kit living spec fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+
+# ---------------------------------------------------------------------------
+banner "6. t_assert_no_kit_record_cite — a kit record named as the project's fails (#564)"
+# ---------------------------------------------------------------------------
+# self-host's sweep over a fresh bootstrap passes once every shipped file says
+# whose record it cites; this is what proves that pass is not vacuous.
+rc_tree() {
+	rm -rf "$SCRATCH/rc-tree"
+	mkdir -p "$SCRATCH/rc-tree/scripts" "$SCRATCH/rc-tree/.agents/skills/x"
+	printf '# THE WALK (the kit'"'"'s ADR-0013). The Kit'"'"'s ADR is a phrase, not a cite.\n' >"$SCRATCH/rc-tree/scripts/a.sh"
+	printf 'The kit'"'"'s ADR-0008 says so, and so does the kit'"'"'s ADR-0012 clause 3.\n' >"$SCRATCH/rc-tree/.agents/skills/x/SKILL.md"
+	printf '# 0.1.0 — ADR-0001 records it.\n' >"$SCRATCH/rc-tree/VERSION"
+}
+rc_tree
+says "a clean tree (the kit's ADR-<n>, either case, and VERSION's history) passes" ok t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a clean tree"
+printf 'Written here and never read (ADR-0008).\n' >>"$SCRATCH/rc-tree/.agents/skills/x/SKILL.md"
+says "a bare ADR-<n> fails" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+out=$(printed t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak")
+case $out in *".agents/skills/x/SKILL.md:2"*) pass "the fail line names the file and the line" ;; *) fail "the cite is not located: $out" ;; esac
+rc_tree
+printf '# the kit'"'"'s ADR-0007 and ADR-0013 on one line\n' >>"$SCRATCH/rc-tree/scripts/a.sh"
+says "one bare cite beside a qualified one fails" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+rc_tree
+printf "# per the kit's\n# ADR-0006\n" >>"$SCRATCH/rc-tree/scripts/a.sh"
+says "a qualifier on the line before does not count" FAIL t_assert_no_kit_record_cite "$SCRATCH/rc-tree" "a leak"
+
 t_done "harness helpers"

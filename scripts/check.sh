@@ -253,7 +253,7 @@ if [ "$engine" = "fallback" ]; then
 		scan_manual "$article"
 	done
 
-	# The living-spec rule's POSIX twin (validators/living-spec.mjs, ADR-0012
+	# The living-spec rule's POSIX twin (validators/living-spec.mjs, the kit's ADR-0012
 	# clause 10): every requirement — a line opening `R<n>.` outside a fence in
 	# <specsDir>/<area>.md — must be named, as `<area>/R<n>`, by a file the
 	# test globs match. Vacuous with no living spec. The GRAMMAR is sourced
@@ -264,7 +264,9 @@ if [ "$engine" = "fallback" ]; then
 	# are read BY TEXT from config.mjs's `livingSpec` block, which is why that
 	# block keeps them literal. No block (a config older than the rule) is no
 	# globs, so a requirement fails with the hint that names the policy — the
-	# harness's answer too.
+	# harness's answer too. One exclusion is the engine's, not the policy's: a
+	# file under the harness's own tree, scripts/docs-conformance/, never
+	# cites, in both engines (#561).
 	ls_cfg="scripts/docs-conformance/config.mjs"
 	specs_dir="" spec_globs=""
 	if [ -f "$ls_cfg" ]; then
@@ -296,8 +298,8 @@ if [ "$engine" = "fallback" ]; then
 		# Both boundaries are the harness's too: the match swallows one letter,
 		# digit, `_`, `-` or `/` before the id and one letter, digit, `_`, or
 		# `.` and a digit after it, and the second grep, anchored at both ends,
-		# drops it — `Xledger/R1`, `sub/ledger/R1`, `ledger/R1abc` and
-		# `ledger/R1.5` cite nothing, and `ledger/R1-ledger/R2` cites R1 alone.
+		# drops it (`<a>` is any area, #561) — `X<a>/R1`, `sub/<a>/R1`, `<a>/R1abc` and
+		# `<a>/R1.5` cite nothing, and `<a>/R1-<a>/R2` cites R1 alone.
 		list_files | {
 			set -f
 			_ifs=$IFS
@@ -305,6 +307,11 @@ if [ "$engine" = "fallback" ]; then
 '
 			while read -r f; do
 				[ -f "$f" ] || continue
+				# The harness's own tree cites nothing, whatever the globs
+				# match (#561, the validator's header says why).
+				case "$f" in
+				scripts/docs-conformance/*) continue ;;
+				esac
 				for g in $spec_globs; do
 					# shellcheck disable=SC2254  # the glob is a pattern on purpose
 					case "$f" in

@@ -17,7 +17,7 @@ When exploring the codebase, use `docs/domain-glossary.md` to get a clear mental
 
 Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give up.**
 
-Open the diagnosis's run first, so every hypothesis below carries it: `sh scripts/trace.sh begin diagnose [subject=<ticket:#N or issue:#N, when the bug has one>] || :`. The trace is written here and never read (ADR-0008); unconfigured, every call is a silent no-op.
+Open the diagnosis's run first, so every hypothesis below carries it: `sh scripts/trace.sh begin diagnose [subject=<ticket:#N or issue:#N, when the bug has one>] || :`. The trace is written here and never read (the kit's ADR-0008); unconfigured, every call is a silent no-op.
 
 ### Ways to construct one — try them in roughly this order
 

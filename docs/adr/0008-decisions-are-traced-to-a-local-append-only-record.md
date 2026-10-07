@@ -4,7 +4,7 @@
 - **Date**: 2026-09-22
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #237
 - **Supersedes / amends**: — (leaves ADR-0005's "not a memory or a context store" non-goal intact, and is bound by it)
-- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02. Amended 2026-10-02: a subagent's run reaches the Claude Code adapter's hooks through a channel fixed at spawn — the spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]` — and no longer through the payload's `cwd`, which names the session's directory; see clause 5. Decided for #474, from the retrospective of 2026-10-02, finding F3. Amended 2026-10-05: `end <run>` closes the run it names or nothing, so a subagent sharing its session and checkout cannot close its parent's run; see clause 5. Decided for #543, from the wave of 2026-10-05. Amended 2026-10-06: a bare `end` is deprecated — it still closes the top, then says so in one stderr line naming the run it closed and the named form — and a later release makes the run id mandatory; see clause 5. Decided for #560, from #551's confirm-list. Amended 2026-10-06: a spawn prompt's second line, `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>`, attributes the subagent's `agent.stop`, an absent or malformed one recording tier `unattributed`; see clause 5. Decided for #583, PRD #580)
+- **Superseded by**: — (amended 2026-09-28: clause 4 governs an emit; a caller error in `begin` or `end` — a pop with nothing to pop, a malformed argument — is exit 2 like an unknown kind, and the call site still tolerates it. Decided at the `/pr-iterate` stop for #248, PR #263. Amended again 2026-09-28: a reader that cannot judge a trace — an unknown `SCHEMA` version — is exit 3, a third family beside the verdict and the caller error; see clause 4. Decided for #271. Amended 2026-09-30: clause 7's readers are the operator and the retrospective skill, and a diagnosis reads the trace by the operator's hand; see clause 7. Decided for #309. Amended 2026-09-30: clause 1's closed kind vocabulary gains `finding.dismiss`, a human closing a posted finding with no commit answering it, emitted by `/pr-iterate` on the subject of the `finding.raise` it answers — not carried on `feedback`. Decided at planner ticket #277, which resolves PRD #273's first open issue; the merge of its pull request is the operator's yes. Amended 2026-10-01: `feedback`'s outcome vocabulary gains `unasked` — the train nobody could answer — and the emit is `/merge-train`'s exit condition per landed PR; see clause 1. Decided for #345, from the retrospective of 2026-10-01, finding F2. Amended 2026-10-01: every kind holds `outcome` to a vocabulary of its own, refused at emit and advised on by `verify`; see clause 1. Decided for #348, from the same retrospective, finding F8. Amended 2026-10-01: `feedback` carries `data.by=operator|train` — who gave the verdict, a human in the session or a train under a delegating instruction; see clause 1. Decided for #385, from the retrospective of 2026-10-01, finding G3. Amended 2026-10-01: `emit` holds `finding.triage`'s `data.id` to one token and `pr.iterate`'s `data.iteration` to digits, a present key of the wrong shape refused; see clause 1. Decided for #420, from the retrospective of 2026-10-01, finding H3. Amended 2026-10-02: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs; see clause 5. Decided for #453, from the retrospective of 2026-10-01, finding R1. Amended 2026-10-02: `finding.triage` holds `data.source` to `check|bot|human|local`, a local finding's `data.id` to `[CHML]-[0-9]+` — or `A2-[0-9]+`, a confirm-list item numbered in the list's order — and that id to the local source alone, and a green or red `pr.iterate` to its three counts, digits; see clause 1. Decided for #466, from the same finding and the retrospective of 2026-10-02, finding F2. Amended 2026-10-02: the script reads a named checkout's run stack through `stack <dir> [session=<id>]`, so the Claude Code adapter's subagent-stop hook keeps no copy of the stack's format; see clause 5. Decided for #472, from the wave of 2026-10-02. Amended 2026-10-02: a subagent's run reaches the Claude Code adapter's hooks through a channel fixed at spawn — the spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]` — and no longer through the payload's `cwd`, which names the session's directory; see clause 5. Decided for #474, from the retrospective of 2026-10-02, finding F3. Amended 2026-10-05: `end <run>` closes the run it names or nothing, so a subagent sharing its session and checkout cannot close its parent's run; see clause 5. Decided for #543, from the wave of 2026-10-05. Amended 2026-10-06: a bare `end` is deprecated — it still closes the top, then says so in one stderr line naming the run it closed and the named form — and a later release makes the run id mandatory; see clause 5. Decided for #560, from #551's confirm-list. Amended 2026-10-06: a spawn prompt's second line, `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>`, attributes the subagent's `agent.stop`, an absent or malformed one recording tier `unattributed`; see clause 5. Decided for #583, PRD #580. Amended 2026-10-07: `finding.raise` holds a present `data.id` to the review's severity id, `[CHML]-[0-9]+`, refused at emit and advised on by `verify`; see clause 1. Decided for #567, from the retrospective of 2026-10-06, question 3. Amended 2026-10-07: the Claude Code adapter's subagent-stop hook reads a run that ends on a turn-ending tool's result as final, records how it ended, and reads past its own agent's earlier stops; see clause 8. Decided for #565, from the retrospective of 2026-10-06, question 5. Amended 2026-10-07: an output count the transcript wrote mid-stream is a snapshot no later line closes, so the Claude Code adapter's usage events say how many messages they counted that way, `data.out_snapshot`, and their `tok_out` is a lower bound; see clause 8. Decided for #608, from #606's diagnosis)
 
 ## Context and problem statement
 
@@ -323,6 +323,36 @@ Chosen: **option 1**.
    says so: `data.source` and `data.id` both stay optional. `verify` is
    unchanged — lines written before this amendment are history and draw no
    advisory. The trace script is shared layer, so this is a release.
+
+   *Amended 2026-10-07 (#567):* **a finding raise's id is held at emit to
+   the review's severity id, `[CHML]-[0-9]+`.** The retrospective of
+   2026-10-06 (question 3) found two raises that took the review's literal
+   placeholder as their id — `INITIAL-1` and `INITIAL-2` on PR #535,
+   `INITIAL-1` on PR #541 — so the triage that answered one, recorded as
+   `L-1` under the #466 rows, joined nothing: the triage side was held, the
+   raise side was not. One row joins `TRACE_SHAPES`:
+   - `finding.raise` `data.id` — `[CHML]-[0-9]+`. The shape is read from
+     where the report contract numbers its findings: `/review-pr`'s rule
+     that ids are a severity letter and a number, numbered per severity;
+     the offline worker contract's `C-1, H-1, M-1, L-1`; and the broker's
+     lift of a finding by its bold `[CHML]-[0-9]+` id. It is the #466 local
+     triage's own shape, so the two ends of the join hold one id. A
+     confirm-list item's `A2-[0-9]+` is **not** widened in: a raise records
+     a standards finding, and the confirm-list is never raised —
+     `/pr-iterate` triages its items without a raise to answer.
+   A present id is held; a missing one stays legal, as every shape row's key
+   is unless a `!` says otherwise — the review's raise lines and the broker
+   always carry one. A refusal is exit 2 naming the kind, the key, the value
+   and the shape, and nothing is written. **`verify` reads the row too**, as
+   an advisory: a raise already written with an id off the shape is history
+   — one stderr line naming the file, the line, the value and the shape —
+   never a bad line and never a change to the verdict, so old traces stay
+   readable — and `summary` and `export` say the count once and point at
+   `verify`, as they do for the #305 and #348 advisories. A table with no
+   raise row is a table error, exit 2, never an advisory that silently
+   matches nothing. The review's two raise lines name the shape in place of the
+   `INITIAL-N` placeholder that was copied whole. The trace script is
+   shared layer, so this is a release.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`
@@ -559,6 +589,83 @@ Chosen: **option 1**.
    Claude Code adapter, dormant for consumers; only a kit-only settings file
    wires them here. Tool-call capture sits behind its own policy switch,
    because it is the largest source of lines and the least decision-bearing.
+   *Amended 2026-10-07 (#565):* **a subagent's run ends on a turn-ending
+   tool as often as on a final message, and a later stop of the same agent
+   reads past the earlier one's anchor.** The subagent-stop hook waited for
+   the transcript's last user-or-assistant line to be an assistant line with
+   a non-`tool_use` stop reason — a layout taken from the hooks reference and
+   the #246 capture (CLI 2.1.278), never probed against a live hand-back.
+   After #479 tripled the bound to 3000 ms, the give-ups did not fall. The
+   diagnosis read the transcripts on the capturing machine (CLI 2.1.286 and
+   2.1.287), as data, rebuilt as each stood when its stop's wait ended. Of
+   the 257 stops that gave up at the 3000 ms bound, **222 ended on the
+   result of the agent harness's hand-back tool**: an assistant line calling
+   it, stop reason null, then a user line carrying `"toolEndsTurn":true` —
+   and no assistant line after it, ever. The run ends there; the flag is the
+   harness's own word that it does (1,024 such lines across 1,113 subagent
+   transcripts, 1,023 of them right after a hand-back call, every one
+   followed by nothing or by the prompt that resumed the agent). Three
+   hypotheses fell: **the wrong file** — every give-up named the subagent's own transcript
+   under `subagents/`, its id the payload's; **a final message written past
+   the bound** — for those 222 none was ever written, the line the wait
+   waited for does not exist, which is why its age always matched the wait;
+   only 12 of 257 transcripts gained an assistant line later at all, 9 of
+   them minutes later through a resume. **The layout differs** stood, and
+   the hook now reads a last user line carrying the flag as final, and
+   records how the run ended, `data.final=message|tool` — `tool` because
+   that run's last message is written mid-stream, stop reason null, so its
+   usage block is the streamed snapshot rather than a closing one. The
+   second finding came with it: **128 of 301 agents stopped more than once**
+   — a turn ended on a plain message, the harness prompted the agent again,
+   and the run ended on the hand-back — and each stop read the whole
+   transcript, so a second stop that read at all counted the first one's
+   messages again. The stop now reads as session-end.sh does: this agent's
+   own `agent.stop` events on stdin under `--resume`, each model counted
+   after the last `data.last_msg` the trace holds for it under this agent's
+   subject; a stop that gave up carries no anchor, so the next one counts
+   what it could not. Replayed over the 257, the readiness rule finds 222
+   final at once. **The residue, stated:** 33 of the other 35 are stops
+   whose transcript, by the stop, had a harness prompt (`isMeta`) after the
+   run's end — the agent was being prompted again, its next stop counts
+   those messages, and the give-up is recorded as before; `/retro`'s
+   question 6 counts give-ups per agent as well as per stop to tell the two
+   apart (review of PR #606, M-2). The bound itself is unchanged: it still covers the measured lag of
+   a final message that IS written (#308, #479).
+   *Amended 2026-10-07 (#608):* **an output count written mid-stream is a
+   snapshot, and nothing later closes it — so it is flagged, not read.**
+   #606's diagnosis saw a tool turn's line on CLI 2.1.287 carry
+   `stop_reason: null` and an `output_tokens` of 2 to 24, where a line from
+   2.1.285 carried `tool_use` and the closing count, and suspected the CLI.
+   The #608 diagnosis read every transcript on the capturing machine, as
+   structure only. **The version hypothesis fell**: the discriminant is the
+   file, not the CLI. The session's own transcript writes its lines after
+   the response closes (on 2.1.287, no message of 410 ends on a null line);
+   a subagent's writes each line as its content block closes, before the
+   closing usage arrives — 2,437 of 2,700 tool messages on 2.1.278, 12,630
+   of 13,694 on 2.1.285, 4,972 of 5,307 on 2.1.287. A subagent line closes
+   only when the closing usage beat its write, on every version from 2.1.278
+   on (2.1.259 closed 430 of its 434), so a
+   closed line from one CLI beside an open one from another says nothing
+   about either.
+   **The closing-count hypotheses fell with it**: across 221 subagent
+   transcripts on 2.1.287, of 5,585 messages 4,988 end on a null line, none
+   whose count ever moved on a later line of the same id (218 counts moved,
+   every one onto a line that names a stop reason — #343's shape); the files
+   hold no line type but user, attachment, assistant and system, so no
+   usage-only record; and the only other usage the harness writes, a
+   completion notice's `totalTokens`, has no output split. A null line's
+   count tops out at 182 while a closed tool turn's starts at 58, and one
+   `Write` of 1,408 characters was recorded at 3 output tokens: the snapshot
+   is an undercount and the closing count is nowhere in the file. So the
+   extractor marks a message whose **last** line says `stop_reason: null` a
+   snapshot (a null that a later line of the id closes is no snapshot), each
+   row counts them, and the event carries `data.out_snapshot` when the
+   count is not zero — `tok_out` a lower bound, input and cache whole. The
+   rollup counts the closing output, so a compaction gap judged beside
+   snapshots holds their remainder: its event carries the same key, the
+   session's sum stays whole and its split does not. `/retro`'s spend
+   question reads the key and reports the lower-bound share beside every
+   output figure.
 9. **Explicit non-goal**: the trace is not a memory and not a context store.
    ADR-0005's non-goal stands; nothing here moves a transcript or feeds a
    later session what an earlier one decided. It is not telemetry either:
@@ -625,9 +732,21 @@ Chosen: **option 1**.
 - Amended for ticket #543: `end <run>`, the run-naming close, the skills
   that name their run at `end`, and the suite sections that hold them
   (trace §28, trace-skills §23).
+- Amended for ticket #608: the usage extractor's snapshot count, the
+  usage events' `data.out_snapshot`, the snapshot fixture, `/retro`
+  question 5's lower-bound bullet, and the suite sections that hold them
+  (trace-hooks §49, retro-skill §13c).
+- Amended for ticket #565: the subagent-stop hook's readiness rule (a
+  turn-ending tool's result is final), `data.final`, its per-agent resume
+  anchor, the hand-back fixture, `/retro` question 6's per-agent count,
+  and the suite sections that hold them
+  (trace-hooks §48, retro-skill §13c).
 - Amended for ticket #466: the conditional and required rows of
   `TRACE_SHAPES`, `/pr-iterate`'s triage and iteration prose, and the
   suite sections that hold them (trace §26, trace-skills §21).
+- Amended for ticket #567: the `finding.raise` id row of `TRACE_SHAPES`,
+  `verify`'s advisory on an old raise, `/review-pr`'s raise lines, and the
+  suite section that holds them (trace §30).
 - Related: ADR-0003 (policy files ship empty; the kit's twin), ADR-0005 (the
   dispatcher, and the non-goal this record keeps), ADR-0004 (the line budget
   that was never a token budget), shared invariant §4 (fresh context) and

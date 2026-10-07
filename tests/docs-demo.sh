@@ -324,6 +324,54 @@ assert_out_has "docs/specs/Ledger_Book.md"
 rm -rf docs/specs docs/ledger-notes.md tests/ledger.sh && rmdir tests
 assert_status 0 "no docs/specs/ at all passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 
+banner "A5c. The harness's own fixtures cite nothing of the project's — #561"
+# Found by a real upgrade: the shipped fixture test spelled the very ids a
+# consumer's first living spec would hold, and its path matched the default
+# test globs, so `docs/specs/billing.md` passed with no consumer test at all.
+# Both engines, with the shipped fixture tests present, must fail it.
+assert_file scripts/docs-conformance/test/living-spec.test.mjs
+mkdir -p docs/specs
+printf '# Billing\n\nR1. One.\nR2. Two.\nR3. Three.\n' >docs/specs/billing.md
+printf '# Process\n\nR1. One.\nR10. Ten.\n' >docs/specs/process.md
+printf '# Subprocess\n\nR1. One.\n' >docs/specs/subprocess.md
+assert_status 1 "a project's billing, process and subprocess specs with no test fail without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+for want in billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1; do
+	assert_out_has "$want is named by no test"
+done
+if command -v node >/dev/null 2>&1; then
+	assert_status 1 "the same specs with no test fail the docs harness" -- node scripts/docs-conformance/index.mjs .
+	for want in billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1; do
+		assert_out_has "$want is named by no test"
+	done
+else
+	skip "node absent — the docs harness leg of A5c did not run"
+fi
+# The engine's half: even a fixture test the project adds under the harness's
+# tree, spelling every id, cites nothing — in both engines.
+printf '// billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >scripts/docs-conformance/test/mine.test.mjs
+assert_status 1 "a name under scripts/docs-conformance/ cites nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+assert_out_has "billing/R1 is named by no test"
+assert_out_has "subprocess/R1 is named by no test"
+if command -v node >/dev/null 2>&1; then
+	assert_status 1 "a name under scripts/docs-conformance/ cites nothing in the docs harness" -- node scripts/docs-conformance/index.mjs .
+	assert_out_has "billing/R1 is named by no test"
+	assert_out_has "subprocess/R1 is named by no test"
+fi
+rm -f scripts/docs-conformance/test/mine.test.mjs
+# …and the exclusion is that tree exactly (#578 review, M-3): a directory
+# whose name merely begins the same way is the project's, and cites.
+mkdir -p scripts/docs-conformance-extra/test
+printf '// billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >scripts/docs-conformance-extra/test/mine.test.mjs
+assert_status 0 "scripts/docs-conformance-extra/ is the project's, and cites, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+rm -rf scripts/docs-conformance-extra
+mkdir -p tests
+printf '#!/bin/sh\n# billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >tests/specs.sh
+assert_status 0 "green once the project's own test names every id, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+if command -v node >/dev/null 2>&1; then
+	assert_status 0 "green once the project's own test names every id, in the docs harness" -- node scripts/docs-conformance/index.mjs .
+fi
+rm -rf docs/specs tests/specs.sh && rmdir tests
+
 banner "A6. The gate is NOT vacuous over the new docs"
 # If an unstamped mark could survive in docs/, "personalized" would be unchecked.
 printf '\n- **Owner** — %s\n' "$(t_mark PROJECT_OWNER)" >>docs/domain-glossary.md

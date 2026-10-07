@@ -843,6 +843,18 @@ for manual in docs/capability-tiers.md constitution/AGENTS.md.template; do
 		says "$tiers" "$phrase" "$manual's tiers section"
 	done
 done
+# The reviewer walk's two caller-held facts reach a consumer's sessions only
+# through the manual they read (#564): the 0.53.0 note told a consumer to tell
+# its sessions to re-resolve with the dead model named, and the template held
+# no such sentence to take. The kit's root says it in its own tiers section.
+tiers=$(sed -n '/^## Capability tiers/,/^## /p' "$KIT/constitution/AGENTS.md.template" | tr '\n' ' ')
+for phrase in 'Before you spawn a reviewer, say what you run on' 'AGENT_SESSION_MODEL=' 'sh scripts/agents.lib.sh reviewer' 'AGENT_TIER_REVIEWER_FALLBACK' 'fails on its first call' "AGENT_UNREACHABLE_MODELS='" 'never override the reviewer by hand'; do
+	says "$tiers" "$phrase" "the consumer manual's tiers section"
+done
+case $tiers in
+*agents.kit.sh*) fail "the consumer manual's tiers section names the kit's own wrapper" ;;
+*) pass "the consumer manual's tiers section names the shipped resolver, never the kit's wrapper" ;;
+esac
 entry=$(awk '/^- \*\*Task domain\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on { print }' "$KIT/docs/domain-glossary.md" | tr '\n' ' ')
 for phrase in '`judge`' 'decide' 'rank-or-verify'; do
 	says "$entry" "$phrase" "the glossary's task-domain entry"
@@ -1720,6 +1732,19 @@ case "$_kit_code" in
 *AGENT_HARNESSES*) fail "the kit wrapper reads AGENT_HARNESSES itself — a second copy of the resolver's membership test" ;;
 *) pass "the kit wrapper holds no copy of the membership test: it reads no AGENT_HARNESSES" ;;
 esac
+# …nor does any suite or other script (#597): a suite that re-decided which
+# prefix crosses would keep passing on its own copy while the resolver's moved
+# under it. Reading the declaration's VALUE is the copy's signature — writing
+# one into a fixture policy is not, and the resolver alone may read it.
+_copies=
+for _f in "$KIT"/tests/*.sh "$KIT"/scripts/*.sh; do
+	[ "$_f" = "$KIT/scripts/agents.lib.sh" ] && continue
+	sed 's/^[[:space:]]*#.*//' "$_f" | grep -Eq '[$][{]?AGENT_HARNESSES' &&
+		_copies="$_copies ${_f#"$KIT"/}"
+done
+[ -z "$_copies" ] &&
+	pass "no suite or script outside the resolver reads AGENT_HARNESSES: one membership test" ||
+	fail "a copy of the resolver's membership test reads AGENT_HARNESSES in:$_copies"
 # …and the answer it bridges by IS that function's, observed rather than
 # grepped: a library copy whose sourced agents_split_harness says one bare
 # value crosses (the override follows the direct-execution block, so the

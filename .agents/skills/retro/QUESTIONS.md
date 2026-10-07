@@ -117,8 +117,9 @@ Route: `/to-tickets` — a change to the hypothesis step in `/diagnose`.
 `data.via=rollup` on the gap a compaction left — or, with `outcome=fail`,
 on a rollup that was refused), `session.end` (`data.phantoms`, the
 session's phantom stops), `agent.stop` and `spawn.end` (a sub-agent's or a
-worker's tokens), and the `cost_usd` column the export computes from the
-price table at read time.*
+worker's tokens), `data.out_snapshot` on any of those token-bearing events
+(how many of its messages carry a streamed output snapshot), and the
+`cost_usd` column the export computes from the price table at read time.*
 
 - `sh scripts/trace.sh summary --by model --since <YYYY-MM-DD>` for the models and their cost; `--by skill` and `--by session` for where it went. The pivot gives cost per ticket: every token-bearing event inside a run whose skill opened on that ticket.
 - A cost cell reading `unpriced` is a model the price table does not name.
@@ -142,6 +143,18 @@ price table at read time.*
   came that way. One with `outcome=fail` is a rollup the hook refused: that
   session's figure is an undercount by an unknown amount, and the report
   says so beside it instead of quoting the sum as whole.
+- **Output read from a snapshot**: an event carrying `data.out_snapshot`
+  counted that many messages whose transcript line was written before the
+  response closed, so their output count is the streamed snapshot and
+  nothing later in the file holds the closing one. Its `tok_out` — and the
+  output cost priced from it — is a **lower bound**, short by an unknown
+  amount; input and cache counts are whole. Most sub-agent tool turns end
+  this way, so report the share of `agent.stop` output that is a lower
+  bound beside every output figure, and never compare such a figure as
+  exact against one that is not. On a compaction gap (`data.via=rollup`)
+  the key means the reverse: the rollup counts those messages' closing
+  output, so the gap's `tok_out` holds their remainder beside the
+  compaction's own — the session's sum stays whole, its split does not.
 - **Phantom stops**: sum `data.phantoms` over a session's `session.end`
   events (a resumed session ends more than once). `0` is a count taken; a
   `session.end` with no `data.phantoms` is a count not taken, never zero. A
@@ -157,7 +170,7 @@ decomposition.
 
 *Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
 `spawn` (`outcome` `refused`), `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
-`agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`),
+`agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`) and a priced one (`data.final`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
 `data.input_head`).*
 
@@ -185,11 +198,17 @@ decomposition.
   that recurs is a skill planning more workers than the host will run.
 - **Stops read too early**: an `agent.stop` with `outcome=fail` is a
   sub-agent whose transcript had not ended when the hook's wait bound
-  passed, so its tokens are in no event. `data.last_kind` is the type of the
-  file's last line and `data.last_age_ms` that line's age when the bound
-  passed: a young line is an agent still writing — the bound is too short,
-  a policy-file value — and an old one an agent that never wrote a final
-  message. Count them per shape, not per stop.
+  passed. A give-up leaves no anchor, so a later stop of the same agent
+  (its subject) counts what it could not: its tokens are lost only when no
+  later stop of that agent was priced. Count them per agent as well as per
+  stop — an agent whose last stop is priced lost nothing, and a run
+  the agent harness prompted again after its end gives up once on the way.
+  A priced stop's `data.final` says how the run ended: `message`, or `tool` — a
+  turn-ending tool such as the hand-back. `data.last_kind` is the type of
+  the file's last line and `data.last_age_ms` that line's age when the
+  bound passed: a young line is an agent still writing — the bound is too
+  short, a policy-file value — and an old one an agent whose run ended in
+  a shape the hook does not read as final. Count them per shape.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
 - **Denied tool calls**: each `tool.use` with `outcome=denied` — a call that
@@ -245,11 +264,29 @@ answerer's words — emitted by `/merge-train` at landing and by
   **no human verdict**, read with the landings that got none. A `feedback`
   with no `data.by` was written before the key existed: count it as `<p>
   unattributed`, never as the operator's.
+- **Retired while the project accepts train-only verdicts.** A project
+  that delegates its landings may decide that a train's verdict is enough,
+  and records so in a binding decision record: one whose text says it
+  accepts train-only verdicts and whose status is Accepted —
+  `for f in docs/adr/[0-9]*.md; do grep -qi 'accepts train-only verdicts' "$f" && grep -q '^- \*\*Status\*\*: Accepted' "$f" && echo "$f"; done`
+  lists it, never the index, a proposed record or a superseded one. Count the window's operator
+  verdicts: `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk '/"kind":"feedback"/ && /"by":"operator"/ { n++ } END { print n + 0 }'`,
+  skipping, as everywhere, the events before the window's start. With
+  that record binding and that count 0, the question answers
+  `retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`
+  — the record named by its file — in place of the no-human-verdict
+  finding and the misses: the row's counts still print, but the retired
+  line is no finding, counts toward no total and records no note. It
+  resumes by itself: the first window holding one operator verdict
+  calibrates as above, the record notwithstanding. A project with no such
+  record has the absence raised as before. A landing with no `feedback`
+  event at all is still counted on the row — a missing emit, which is
+  question 6's to raise, not this one's.
 
 Route: `/to-tickets` — the ordering rule or the tier rubric, with the misses
 as evidence; the missing verdicts and the `unasked` ones to `/merge-train`;
 a window of `train` verdicts to the operator who delegated them — no skill
-asks the question on their behalf.
+asks the question on their behalf; a retired answer routes nowhere.
 
 ## 8. Stamp calibration
 
@@ -374,6 +411,22 @@ be nobody's. An event none of the three names goes on a row named
   the same case, not a band nobody dismissed: the severity rows print their
   raises and `no dismissal recorded in the window`, and whether the emitter
   ran is question 6's to ask.
+- **Retired while the project accepts train-only verdicts.** Every row
+  above is graded by a human — the one at the quiz or the one who closed a
+  thread — so a window where no human changed a stamp grades nothing: each
+  row reads 0 and a `high` row ties a `low` one by noise. The operator
+  verdicts here are the dismissals and the quiz overrides, read on the
+  latest write per subject as above:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } /"kind":"finding\.dismiss"/ { n++ } /"kind":"ticket\.write"/ { s = v("subject"); o[s] = (v("tier_proposed") != "" && v("tier_proposed") != v("tier")) || (v("label_proposed") != "" && v("label_proposed") != v("label")) } END { for (s in o) n += o[s]; print n + 0 }'`,
+  skipping the events before the window's start. With question 7's
+  binding decision record in place and that count 0, the question answers
+  `retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`
+  in place of its rows' rates and findings: the raises and stamps it
+  counted still print, but the retired line is no finding, counts toward
+  no total and records no note. It resumes by itself: the first window
+  holding one dismissal or one override prints the rows above, the record
+  notwithstanding. A project with no such record has the absence raised as
+  before.
 
 The rows read like this — the field, the skill, the stamp's value, the
 counts, the rate or the words that replace it, the clause:
