@@ -247,12 +247,23 @@ _cascade_tier=${TIER_ARGS%% *}
 _cascade_domain=''
 case "$TIER_ARGS" in *' '*) _cascade_domain=${TIER_ARGS#* } ;; esac
 
+# _cascade_oracle_line <ticket file> — the line that opens the ticket's
+# Acceptance section, when it is an oracle line; nothing otherwise. An oracle
+# line anywhere else in the body is prose, as /implement step 1 reads it.
+_cascade_oracle_line() {
+	[ -f "$1" ] || return 0
+	awk '
+		/^#+[ \t]*Acceptance[ \t]*$/ { in_acc = 1; next }
+		in_acc && /^[ \t]*$/ { next }
+		in_acc { if (index($0, "the oracle: `")) print; exit }
+	' "$1"
+}
+
 # _cascade_oracle <ticket file> <worktree> — the closed-list command the
 # ticket's oracle line selects, or nothing. Typed from this list, never from
 # the ticket.
 _cascade_oracle() {
-	[ -f "$1" ] || return 0
-	_co_text=$(sed -n 's/^.*the oracle: `\([^`]*\)`.*$/\1/p' "$1" | head -n 1)
+	_co_text=$(_cascade_oracle_line "$1" | sed -n 's/^.*the oracle: `\([^`]*\)`.*$/\1/p')
 	case "$_co_text" in
 	'sh scripts/check.sh' | 'scripts/check.sh') printf '%s\n' 'sh scripts/check.sh' ;;
 	"sh -c 'for t in tests/*.sh; do sh \"\$t\" || exit 1; done'")
@@ -275,8 +286,8 @@ if [ "$_cascade_tier" = mechanical ]; then
 fi
 if [ -n "$CASCADE_MODEL" ]; then
 	CASCADE_ORACLE=$(_cascade_oracle "$CASCADE_TICKET" "${CASCADE_WT:-.}")
-	if [ -z "$CASCADE_TICKET" ] || [ -z "$(sed -n '/the oracle: `/p' "$CASCADE_TICKET" 2>/dev/null)" ]; then
-		echo "skill-dispatch: cascade refused — the ticket names no oracle command; running on the mechanical tier's mapped model" >&2
+	if [ -z "$(_cascade_oracle_line "$CASCADE_TICKET")" ]; then
+		echo "skill-dispatch: cascade refused — the ticket names no oracle command (its Acceptance section opens with none); running on the mechanical tier's mapped model" >&2
 	elif [ -z "$CASCADE_ORACLE" ]; then
 		echo "skill-dispatch: cascade refused — the ticket's oracle line names no command on the closed list (the docs gate, one suite under tests/, the full suite); it is not run, and the ticket runs on the mechanical tier's mapped model" >&2
 	else
@@ -334,6 +345,12 @@ _cascade_rung() {
 	ORACLE_EXIT=0 GUARD_EXIT=0
 	(cd "$CASCADE_WT" && eval "$CASCADE_ORACLE") >&2 || ORACLE_EXIT=$?
 	(cd "$CASCADE_WT" && sh "$CASCADE_GUARD" "$CASCADE_BASE" HEAD) >&2 || GUARD_EXIT=$?
+	# The guard reads commits only, so work a rung left uncommitted would pass
+	# it unseen: a tree the rung left dirty is a red guard, exit 3, said.
+	if [ "$GUARD_EXIT" = 0 ] && [ -n "$(cd "$CASCADE_WT" && git status --porcelain --untracked-files=all)" ]; then
+		echo "skill-dispatch: the rung left uncommitted work in '$CASCADE_WT'; the pairing guard cannot judge it, so the guard counts red" >&2
+		GUARD_EXIT=3
+	fi
 	return 0
 }
 

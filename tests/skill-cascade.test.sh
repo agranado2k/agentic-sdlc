@@ -55,14 +55,16 @@ cat >/dev/null
 dirty=''
 for f in *-leftover.txt; do [ -e "$f" ] && dirty=' DIRTY'; done
 echo "$model$dirty" >work.txt
-echo left >"$model-leftover.txt"
-git add work.txt && git commit -qm "work by $model"
+[ -n "${FIXTURE_CHEAP_LEFTOVER:-}" ] && [ "$model" = model-cheap ] && echo left >"$model-leftover.txt"
+if [ -n "${FIXTURE_CHEAP_NO_COMMIT:-}" ] && [ "$model" = model-cheap ]; then :; else
+	git add work.txt && git commit -qm "work by $model"
+fi
 echo "REPORT from $model: success, the oracle is green"
 STUB_EOF
 chmod +x "$STUB"
 
-# write_policy <cascade value> — the stub tree's policy, with the cascade
-# variable set to the argument (empty: the shipped default).
+# write_policy <cascade value> [<mapped value>] — the stub tree's policy, with
+# the cascade variable set to the argument (empty: the shipped default).
 write_policy() {
 	cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<CFG
 AGENT_HARNESSES='stub'
@@ -70,7 +72,7 @@ AGENT_HARNESS_STUB_CMD='$STUB --model-flag {model_flag} < {prompt_file}'
 AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
 AGENT_TIER_PLANNER='stub:model-for-planning'
 AGENT_TIER_IMPLEMENTER='stub:model-for-building'
-AGENT_TIER_MECHANICAL='stub:model-mapped'
+AGENT_TIER_MECHANICAL='${2:-stub:model-mapped}'
 AGENT_TIER_REVIEWER='stub:model-for-reviewing'
 AGENT_CASCADE_MECHANICAL='$1'
 CFG
@@ -86,6 +88,7 @@ git -C "$REPO" init -q -b main
 git -C "$REPO" config user.email t@example.invalid
 git -C "$REPO" config user.name t
 cat >"$REPO/tests/oracle.sh" <<'EOF'
+[ -n "${FIXTURE_ORACLE_RED:-}" ] && exit 1
 [ -n "${FIXTURE_ORACLE_GREEN:-}" ] && exit 0
 grep -qx model-mapped work.txt
 EOF
@@ -121,6 +124,10 @@ T_NONE="$SCRATCH/ticket-none.md"
 ticket "$T_NONE" ''
 T_EVIL="$SCRATCH/ticket-evil.md"
 ticket "$T_EVIL" 'the oracle: `sh tests/pwn.sh; true`'
+# An oracle line that does not open the Acceptance section is prose.
+T_BURIED="$SCRATCH/ticket-buried.md"
+ticket "$T_BURIED" ''
+echo 'the oracle: `sh tests/oracle.sh`' >>"$T_BURIED"
 
 cascade() { # <ticket file> [extra args…]
 	_tf=$1
@@ -142,7 +149,10 @@ spawn_rungs() {
 banner "1. A red oracle on the cheap rung escalates to the mapped model (spend/R17, spend/R18)"
 # ---------------------------------------------------------------------------
 fresh_wt
+FIXTURE_CHEAP_LEFTOVER=1
+export FIXTURE_CHEAP_LEFTOVER
 cascade "$T_ORACLE"
+unset FIXTURE_CHEAP_LEFTOVER
 [ "$S_STATUS" = 0 ] && pass "the cascade exits 0 when its last rung passes" ||
 	fail "the cascade exited $S_STATUS: $S_ERR"
 [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-mapped ] &&
@@ -194,7 +204,54 @@ rungs=$(spawn_rungs)
 	fail "spend/R17: a green cheap rung gave '$rungs'"
 [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-cheap ] &&
 	pass "…and the cheap rung's work is kept" || fail "work.txt reads '$(cat "$WT/work.txt" 2>/dev/null)'"
+
+# Work the cheap rung left uncommitted is work the pairing guard never saw:
+# a dirty tree counts as a red guard, however green the oracle.
+fresh_wt
+FIXTURE_CHEAP_NO_COMMIT=1
+export FIXTURE_CHEAP_NO_COMMIT
+cascade "$T_ORACLE"
+unset FIXTURE_CHEAP_NO_COMMIT
+rungs=$(spawn_rungs)
+[ "$(printf '%s\n' "$rungs" | awk '{print $1 $2}' | tr '\n' ' ')" = "escalated1 passed2 " ] &&
+	pass "spend/R19: a rung that left its work uncommitted escalates, the oracle green" ||
+	fail "spend/R19: uncommitted cheap work gave rungs '$rungs'"
+case "$S_ERR" in
+*uncommitted*) pass "…saying the guard could not judge uncommitted work" ;;
+*) fail "nothing on stderr names the uncommitted work: $S_ERR" ;;
+esac
 unset FIXTURE_ORACLE_GREEN
+
+# ---------------------------------------------------------------------------
+banner "2b. The mapped rung red too: nothing left to escalate to"
+# ---------------------------------------------------------------------------
+fresh_wt
+FIXTURE_ORACLE_RED=1
+export FIXTURE_ORACLE_RED
+cascade "$T_ORACLE"
+unset FIXTURE_ORACLE_RED
+[ "$S_STATUS" = 1 ] && pass "a red mapped rung exits 1" || fail "a red mapped rung exited $S_STATUS"
+rungs=$(spawn_rungs)
+[ "$(printf '%s\n' "$rungs" | awk '{print $1 $2}' | tr '\n' ' ')" = "escalated1 failed2 " ] &&
+	pass "spend/R21: the trace holds rung 1 escalated, then rung 2 failed" ||
+	fail "spend/R21: a red mapped rung gave '$rungs'"
+case "$S_ERR" in
+*"back to a human"*) pass "…and says the ticket goes back to a human" ;;
+*) fail "no hand-back on stderr: $S_ERR" ;;
+esac
+
+# A mapped model the dispatcher cannot cross to is handed back to the caller,
+# exit 3 with its model id, recorded in-session.
+write_policy 'stub:model-cheap' 'model-mapped-bare'
+fresh_wt
+cascade "$T_ORACLE"
+[ "$S_STATUS" = 3 ] && printf '%s\n' "$S_OUT" | grep -qx 'model-mapped-bare' &&
+	pass "a mapped rung with no agent harness exits 3 with its model id, for the caller to spawn" ||
+	fail "an undispatchable mapped rung exited $S_STATUS with '$S_OUT'"
+rungs=$(spawn_rungs)
+[ "$(printf '%s\n' "$rungs" | awk '{print $1 $2}' | tr '\n' ' ')" = "escalated1 in-session2 " ] &&
+	pass "spend/R21: …recorded in-session on rung 2" || fail "spend/R21: an in-session rung 2 gave '$rungs'"
+write_policy 'stub:model-cheap'
 
 # ---------------------------------------------------------------------------
 banner "3. No oracle, no cascade — and the refusal is said (spend/R20)"
@@ -223,6 +280,24 @@ case "$S_ERR" in
 *"cascade refused"*) pass "…saying the cascade was refused" ;;
 *) fail "no refusal for an off-list oracle: $S_ERR" ;;
 esac
+
+fresh_wt
+cascade "$T_BURIED"
+case "$S_ERR" in
+*"cascade refused"*oracle*) pass "an oracle line that does not open the Acceptance section is refused as no oracle" ;;
+*) fail "a buried oracle line was read: $S_ERR" ;;
+esac
+
+# A worktree with no pairing guard has nothing to judge a rung by.
+fresh_wt
+rm "$WT/scripts/guards.kit.sh"
+cascade "$T_ORACLE"
+case "$S_ERR" in
+*"cascade refused"*"pairing guard"*) pass "a worktree with no pairing guard is refused the cascade" ;;
+*) fail "a guardless worktree was not refused: $S_ERR" ;;
+esac
+printf '%s\n' "$S_OUT" | grep -q 'REPORT from model-mapped' &&
+	pass "…and runs on the mapped model" || fail "a guardless worktree reached: $S_OUT"
 
 # A cascade model the dispatcher cannot run itself — no agent harness named,
 # so agent-dispatch hands it back for the caller to spawn — is refused too: an
