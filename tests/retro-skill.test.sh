@@ -1548,11 +1548,15 @@ sp_trace emit kind=agent.stop subject=agent:a5 tier=planner skill=to-tickets mod
   # A stop from before the attribution, filed under the same run: it is not
   # the cascade's, so it never borrows the run's tier.
   sp_trace emit kind=agent.stop subject=agent:a6 model=m1 tok_in=1000 )
+# A second cascade whose mapped rung was red too: a verdict with no tokens of
+# its own, so it moves the verdict rows and no cost row.
+( TRACE_RUN=C2; export TRACE_RUN
+  sp_trace emit kind=spawn subject=run:C2 tier=mechanical skill=implement model=m1 outcome=failed data.rung=2 )
 if [ -n "$sspan" ]; then
 	sout=$( cd "$ROOT" && TRACE_CONFIG="$sp/policy.sh" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$sspan")" 2>/dev/null )
 	for row in 'tier implementer 1 3.0000' 'tier reviewer 1 0.3000' 'tier mechanical 2 1.8000' 'tier planner 1 unpriced' \
 		'tier unattributed 3 15.0330' 'skill implement 3 4.8000' 'skill review-pr 1 0.3000' 'skill unattributed 3 15.0330' \
-		'rung 1 1 0.6000' 'rung 2 1 1.2000' 'verdict rung-1:escalated 1 -' 'verdict rung-2:passed 1 -' \
+		'rung 1 1 0.6000' 'rung 2 1 1.2000' 'verdict rung-1:escalated 1 -' 'verdict rung-2:passed 1 -' 'verdict rung-2:failed 1 -' \
 		'bucket under-0.10 2 0.0330' 'bucket 0.10-1 2 0.9000' 'bucket 1-10 2 4.2000' 'bucket 10-up 1 15.0000' \
 		'bucket unpriced 1 unpriced' 'total all 8 unpriced'; do
 		printf '%s\n' "$sout" | grep -qxF "$row" && pass "spend/R22: the spend span prints '$row'" ||
