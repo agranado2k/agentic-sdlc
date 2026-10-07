@@ -20,7 +20,12 @@ SLICER="$KIT/scripts/lens-slice.sh"
 . "$KIT/tests/lib.sh"
 t_init
 
-LENSES='security api-crud pattern simplicity reuse-dry test-hygiene'
+SKILL_DIR="$KIT/.agents/skills/review-pr"
+# The six standards lenses, read from the skill's own roster — never a copy:
+# the behavior agent and the two non-spawn tokens are not lenses.
+LENSES=$(t_roster_of "$SKILL_DIR/SKILL.md" | grep -vx -e spec-behavior -e unattributed -e single-reviewer | tr '\n' ' ')
+[ "$(printf '%s' "$LENSES" | wc -w | tr -d ' ')" = 6 ] && pass "six standards lenses on the skill's roster" ||
+	fail "expected six standards lenses on the roster, read: $LENSES"
 
 # slice <repo> <out> [env…] — run the kit's slicer in <repo> against main.
 slice() {
@@ -60,6 +65,10 @@ base_repo() {
 '
 	t_write "$REPO" docs/guide.md 'guide
 '
+	t_write "$REPO" docs/a1.md 'one
+'
+	t_write "$REPO" 'docs/a[1].md' 'bracket
+'
 	t_commit "$REPO" "chore: base" >/dev/null
 	git -C "$REPO" checkout -q -b feat/x
 }
@@ -84,6 +93,33 @@ assert_slice "$OUT" pattern ".githooks/pre-push bootstrapxsh scripts/tool.sh"
 assert_slice "$OUT" behavior ".githooks/pre-push bootstrapxsh scripts/tool.sh"
 assert_out_has "test-hygiene 0 $OUT/test-hygiene.diff"
 assert_out_has "security 2 $OUT/security.diff"
+for l in $LENSES behavior; do
+	[ -f "$OUT/$l.diff" ] && pass "$l.diff written" || fail "$l.diff not written"
+done
+
+banner "a non-ASCII name and an agent-facing skill reach their slices"
+base_repo
+t_write "$REPO" scripts/café.sh 'echo accent
+'
+t_write "$REPO" .agents/skills/x/SKILL.md 'Do the thing.
+'
+t_commit "$REPO" "feat: names" >/dev/null
+OUT="$SCRATCH/out1b"
+slice "$REPO" "$OUT"
+assert_slice "$OUT" security ".agents/skills/x/SKILL.md scripts/café.sh"
+assert_slice "$OUT" behavior ".agents/skills/x/SKILL.md scripts/café.sh"
+
+banner "a path with glob characters is matched literally"
+base_repo
+t_write "$REPO" 'docs/a[1].md' 'bracket, changed
+'
+t_write "$REPO" docs/a1.md 'one, changed
+'
+t_commit "$REPO" "docs: brackets" >/dev/null
+printf '%s\n' "LENS_SLICE_RULES='security \\[1'" >"$SCRATCH/bracket.sh"
+OUT="$SCRATCH/out1c"
+slice "$REPO" "$OUT" LENS_SLICE_CONFIG="$SCRATCH/bracket.sh"
+assert_slice "$OUT" security "docs/a[1].md"
 
 banner "tests-only diff: test-hygiene sees the test, never the generated fixture"
 base_repo
@@ -100,7 +136,7 @@ assert_slice "$OUT" api-crud ""
 for l in pattern simplicity reuse-dry; do assert_slice "$OUT" "$l" "tests/tool.test.sh"; done
 assert_slice "$OUT" behavior "tests/fixtures/run.jsonl tests/tool.test.sh"
 
-banner "mixed diff: each lens its lane, the behavior axis everything"
+banner "mixed diff: each lens its lane (spend/R10), the behavior axis everything (spend/R11)"
 base_repo
 t_write "$REPO" scripts/tool.sh 'echo three
 '
@@ -152,7 +188,15 @@ OUT="$SCRATCH/out6"
 slice "$REPO" "$OUT" LENS_SLICE_CONFIG="$SCRATCH/typo.sh"
 [ "$LAST_STATUS" = 2 ] && pass "an unknown lens is refused (exit 2)" || fail "unknown lens: exit $LAST_STATUS"
 assert_out_has "securty"
-[ -e "$OUT/security.diff" ] && fail "a refused policy still wrote slices" || pass "a refused policy writes no slice"
+assert_no_file "$OUT/security.diff"
+printf '%s\n' "LENS_SLICE_RULES='security ^scripts/ x extra'" >"$SCRATCH/long.sh"
+slice "$REPO" "$SCRATCH/out6b" LENS_SLICE_CONFIG="$SCRATCH/long.sh"
+[ "$LAST_STATUS" = 2 ] && pass "a record of four fields is refused (exit 2)" || fail "four-field record: exit $LAST_STATUS"
+assert_no_file "$SCRATCH/out6b/security.diff"
+cp "$SCRATCH/policy.sh" "$REPO/bare-policy.sh"
+slice "$REPO" "$SCRATCH/out6c" LENS_SLICE_CONFIG=bare-policy.sh
+[ "$LAST_STATUS" = 0 ] && pass "a bare policy name is read from the cwd, not PATH" || fail "bare policy name: exit $LAST_STATUS: $LAST_OUT"
+assert_slice "$SCRATCH/out6c" security "docs/guide.md"
 slice "$REPO" "$SCRATCH/out7" LENS_SLICE_CONFIG="$SCRATCH/no-such.sh"
 [ "$LAST_STATUS" = 2 ] && pass "a named policy that is absent is refused (exit 2)" || fail "absent named policy: exit $LAST_STATUS"
 t_run sh -c 'cd "$1" && sh "$2" main' _ "$REPO" "$SLICER"
@@ -160,8 +204,7 @@ t_run sh -c 'cd "$1" && sh "$2" main' _ "$REPO" "$SLICER"
 t_run sh -c 'cd "$1" && sh "$2" no-such-ref "$3"' _ "$REPO" "$SLICER" "$SCRATCH/out9"
 [ "$LAST_STATUS" = 2 ] && pass "an unresolvable base is a caller error (exit 2)" || fail "bad base: exit $LAST_STATUS"
 
-banner "/review-pr hands each worker its slice, the behavior axis the whole diff"
-SKILL_DIR="$KIT/.agents/skills/review-pr"
+banner "/review-pr hands each lens its slice (spend/R10), the behavior axis the whole diff (spend/R11)"
 for l in $LENSES; do
 	if grep -qF "Your diff is the slice \`$l.diff\`" "$SKILL_DIR/lens-$l.md"; then
 		pass "lens-$l.md names its slice"

@@ -21,13 +21,15 @@
 # it always reads the whole diff.
 #
 # Defaults (#590): security and api-crud read code that runs — scripts, hooks,
-# workflows, the bootstrap entry point and adapters; test-hygiene reads the
-# suites; pattern, simplicity and reuse-dry read everything but generated
+# workflows, the bootstrap entry point and adapters — and the agent-facing
+# surfaces an agent obeys: skills, prompts, the manual and its shims, the
+# constitution, templates and setup; test-hygiene reads the suites, the docs
+# harness's own included; pattern, simplicity and reuse-dry read everything but generated
 # fixtures and transcripts, which no author wrote by hand.
 
-LENS_SLICE_RULES='security     ^(scripts/|\.githooks/|\.github/workflows/|adapters/|bootstrap\.sh$)  (^|/)fixtures/
-api-crud     ^(scripts/|\.githooks/|\.github/workflows/|adapters/|bootstrap\.sh$)  (^|/)fixtures/
-test-hygiene ^tests/  (^|/)fixtures/
+LENS_SLICE_RULES='security     ^(scripts/|\.githooks/|\.github/workflows/|adapters/|bootstrap\.sh$|\.agents/|\.claude/|constitution/|templates/|setup/|SETUP\.md$|(AGENTS|CLAUDE|GEMINI)\.md$)  (^|/)fixtures/
+api-crud     ^(scripts/|\.githooks/|\.github/workflows/|adapters/|bootstrap\.sh$|\.agents/|\.claude/|constitution/|templates/|setup/|SETUP\.md$|(AGENTS|CLAUDE|GEMINI)\.md$)  (^|/)fixtures/
+test-hygiene ^(tests/|scripts/docs-conformance/test/)  (^|/)fixtures/
 pattern      .  (^|/)fixtures/|\.jsonl$
 simplicity   .  (^|/)fixtures/|\.jsonl$
 reuse-dry    .  (^|/)fixtures/|\.jsonl$'

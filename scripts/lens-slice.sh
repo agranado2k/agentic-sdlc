@@ -48,23 +48,32 @@ out=$2
 here=$(dirname "$0")
 if [ -n "${LENS_SLICE_CONFIG:-}" ]; then
 	[ -f "$LENS_SLICE_CONFIG" ] || die "LENS_SLICE_CONFIG=$LENS_SLICE_CONFIG does not exist"
-	. "$LENS_SLICE_CONFIG"
+	# A bare name would be searched on PATH by `.`: anchor it to the cwd.
+	case $LENS_SLICE_CONFIG in
+	*/*) . "$LENS_SLICE_CONFIG" ;;
+	*) . "./$LENS_SLICE_CONFIG" ;;
+	esac
 elif [ -f "$here/lens-slice.config.sh" ]; then
 	. "$here/lens-slice.config.sh"
 fi
 rules=${LENS_SLICE_RULES:-}
 
-# Refuse a record for a lens off the roster before anything is written.
+# Refuse a record for a lens off the roster, or one with more than three
+# fields, before anything is written.
 if [ -n "$rules" ]; then
 	bad=$(printf '%s\n' "$rules" | awk -v roster=" $ROSTER " '
 		NF && index(roster, " " $1 " ") == 0 { print $1 }')
 	[ -z "$bad" ] || die "LENS_SLICE_RULES names a lens not on the roster ($ROSTER): $(printf '%s' "$bad" | tr '\n' ' ')"
+	long=$(printf '%s\n' "$rules" | awk 'NF > 3 { print $1 }')
+	[ -z "$long" ] || die "LENS_SLICE_RULES has a record of more than three fields (lens include exclude): $(printf '%s' "$long" | tr '\n' ' ')"
 else
 	echo "lens-slice: no rules in LENS_SLICE_RULES — every lens gets the whole diff" >&2
 fi
 
 base=$(git merge-base "$base_ref" HEAD 2>/dev/null) || die "cannot resolve merge-base($base_ref, HEAD)"
-changed=$(git diff --name-only "$base" HEAD)
+# -z: unquoted names. Without it git quotes a non-ASCII or special name, and
+# the quoted form matches no pathspec, dropping the file from every slice.
+changed=$(git diff --name-only -z "$base" HEAD | tr '\0' '\n')
 
 mkdir -p "$out" || die "cannot create $out"
 
@@ -82,10 +91,12 @@ write() {
 		_w_ifs=$IFS
 		IFS='
 '
+		set -f # the split must not glob a name like `a[1].md` against the cwd
 		for _w_p in $_w_paths; do set -- "$@" ":(literal)$_w_p"; done
+		set +f
 		IFS=$_w_ifs
-		git diff "$base" HEAD -- "$@" >"$_w_file"
-		_w_n=$(printf '%s\n' "$_w_paths" | grep -c .)
+		_w_n=$#
+		git -c core.quotePath=false diff "$base" HEAD -- "$@" >"$_w_file"
 	fi
 	printf '%s %s %s\n' "$_w_name" "$_w_n" "$_w_file"
 }
