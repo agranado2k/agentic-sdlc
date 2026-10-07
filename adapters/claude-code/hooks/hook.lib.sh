@@ -658,10 +658,19 @@ hook_wait_bound() {
 }
 
 # hook_final <transcript> — does the transcript end on a final message? Status
-# 0 for yes.
+# 0 for yes, with hook_final_by set to how it ended: `message` or `tool`.
 #
 # FINAL means: its last user-or-assistant line is an ASSISTANT line whose
-# stop_reason is set and is not tool_use. Each half is load-bearing. "Last user
+# stop_reason is set and is not tool_use (by `message`) — or a USER line the
+# agent harness marks `"toolEndsTurn":true` (by `tool`, #565). The second is
+# how most subagent runs end: the run's last act is a call to a tool that ends
+# it (the agent harness's hand-back), the harness writes that call's result as
+# a user line carrying the flag, and NO assistant line follows, ever — so a
+# wait for one ran out at any bound (ADR-0008, the #565 amendment). The tool
+# call's own line is written mid-stream, stop_reason null, so its usage block
+# is the streamed snapshot; `data.final=tool` on the event says so. A flag
+# followed by the prompt that resumed the agent is not final, by the rule
+# below. Each half of the first rule is load-bearing. "Last user
 # or assistant line", because a subagent resumed after an earlier stop already
 # holds an end_turn from that stop, and the user line that resumed it comes
 # after — so an old final message never reads as this stop's. "Not tool_use and
@@ -675,13 +684,22 @@ hook_wait_bound() {
 # line, not on its top-level object. Text inside a message is an escaped string
 # and cannot match, but a tool's STRUCTURED result is written as a JSON object,
 # so a user line whose result object itself holds a `"type":"assistant"` and a
-# `stop_reason` would read as final. Nothing observed writes such a result; if
-# one ever does, the cost is one early read, which the extractor then sums.
+# `stop_reason` — or a `"toolEndsTurn":true` — would read as final. Nothing
+# observed writes such a result; if one ever does, the cost is one early read,
+# which the extractor then sums. A result's TEXT quoting the flag is escaped,
+# `\"toolEndsTurn\"`, and cannot match.
 hook_final() {
+	hook_final_by=
 	_hf_last=$(grep -E '"type"[[:space:]]*:[[:space:]]*"(user|assistant)"' "$1" 2>/dev/null | tail -n 1)
+	if printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"user"'; then
+		printf '%s\n' "$_hf_last" | grep -Eq '"toolEndsTurn"[[:space:]]*:[[:space:]]*true' || return 1
+		hook_final_by=tool
+		return 0
+	fi
 	printf '%s\n' "$_hf_last" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"assistant"' || return 1
 	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"' || return 1
 	printf '%s\n' "$_hf_last" | grep -Eq '"stop_reason"[[:space:]]*:[[:space:]]*"tool_use"' && return 1
+	hook_final_by=message
 	return 0
 }
 

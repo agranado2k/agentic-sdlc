@@ -4342,4 +4342,114 @@ for h474 in subagent-stop session-end tool-post; do
 	*) fail "the README row for $h474.sh does not name the Trace-Run line (#474)" ;; esac
 done
 
+# ---------------------------------------------------------------------------
+banner "48. A run that ends on a turn-ending tool is final, and a later stop reads only what is new (#565)"
+# ---------------------------------------------------------------------------
+# Retro finding (question 5, retro-20261006T080718Z): after #479 tripled the
+# wait to 3000 ms, 59 % of stops still gave up on a user line aged about the
+# wait. The diagnosis, from the transcripts on the capturing machine (ADR-0008,
+# the #565 amendment): 222 of the 257 give-ups ended, as they stood at the
+# stop, on the tool_result of a SubagentHandback call — a user line carrying
+# "toolEndsTurn":true, after an assistant tool_use line whose stop_reason is
+# null. The run ends THERE: no assistant line follows, ever, so no bound is
+# long enough. The fixture is one of them, redacted (the fixtures README's
+# sixth capture). And 128 of 301 agents stopped more than once — an end_turn,
+# then a handback — so the second stop must read past the first one's anchor,
+# or finding the handback would count the first stop's messages twice.
+HB="$FIX/handback-subagent-transcript.redacted.jsonl"
+[ "$(sed -n '$p' "$HB" | grep -c '"type":"user".*"toolEndsTurn":true')" = 1 ] &&
+	[ "$(sed -n '18p' "$HB" | grep -c '"name":"SubagentHandback".*"stop_reason":null')" = 1 ] &&
+	[ "$(grep -c '"type":"assistant"' "$HB")" = 4 ] &&
+	pass "premise: the fixture ends on a handback's result, after a tool_use line with stop_reason null" ||
+	fail "premise: the handback fixture no longer has the observed shape"
+
+if [ "$HAVE_NODE" = 1 ]; then
+	# THE OBSERVED SHAPE IS FINAL AT ONCE — no wait spent, every message read.
+	new_trace
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H=$(ev_of agent.stop | sed -n '1p')
+	[ "$S_STATUS" = 0 ] && [ "$(str "$H" outcome)" != fail ] &&
+		[ "$(num "$H" tok_in)/$(num "$H" tok_out)/$(num "$H" tok_cache_w)/$(num "$H" tok_cache_r)" = 20/301/10929/10582 ] &&
+		[ "$(str "$H" msgs)" = 2 ] &&
+		pass "a transcript ending on a turn-ending tool's result reads as final, both messages counted" ||
+		fail "the handback-ended transcript was not read as final: exit $S_STATUS, event $H"
+	[ "$(str "$H" waited_ms)" = 0 ] && [ "$NAPS" = 0 ] &&
+		pass "and it is final before the first nap (waited_ms 0)" ||
+		fail "the handback-ended stop waited: $NAPS naps, waited_ms '$(str "$H" waited_ms)'"
+	[ "$(str "$H" final)" = tool ] &&
+		pass "and data.final=tool says the run ended on a tool, whose last usage block is the streamed one" ||
+		fail "the handback-ended stop does not say data.final=tool: $H"
+
+	# AN END_TURN SAYS SO TOO, so a retro can split the two.
+	head -n 14 "$HB" >"$SCRATCH/hb-head-565.jsonl"
+	new_trace
+	stop_on "$SCRATCH/hb-head-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$H" final)" = message ] && [ "$(num "$H" tok_out)" = 299 ] &&
+		pass "a transcript ending on an end_turn reads as final with data.final=message" ||
+		fail "the end_turn stop: event $H"
+
+	# A SECOND STOP OF THE SAME AGENT READS PAST THE FIRST ONE'S ANCHOR. Same
+	# trace: the end_turn stop above, then the handback stop — which counts the
+	# handback's message alone, never the end_turn's again.
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(num "$H2" tok_in)/$(num "$H2" tok_out)/$(num "$H2" tok_cache_w)/$(num "$H2" tok_cache_r)" = 10/2/347/10582 ] &&
+		[ "$(str "$H2" msgs)" = 1 ] && [ "$(str "$H2" last_msg)" = msg_011CfknNNwj5Qd2EqtwG3CgZ ] &&
+		pass "the agent's second stop counts only the message after its first stop's anchor" ||
+		fail "the second stop double-counted or failed: $H2"
+	[ "$(sum_tok tok_out agent.stop)" = 301 ] &&
+		pass "and the agent's two stops sum to the whole transcript (tok_out 301)" ||
+		fail "the agent's stops sum to tok_out '$(sum_tok tok_out agent.stop)', not 301"
+	# A third stop with nothing new carries the anchor forward and counts nothing.
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	H3=$(ev_of agent.stop | sed -n '3p')
+	[ "$(str "$H3" outcome)" != fail ] && [ -z "$(num "$H3" tok_out)" ] && [ "$(str "$H3" msgs)" = 0 ] &&
+		pass "a stop with nothing new since the last one records nothing new, not a failure" ||
+		fail "the nothing-new stop: $H3"
+	# Another agent's anchor is never this one's: the same transcript under
+	# another agent id counts everything.
+	sed 's/"agent_id": "[^"]*"/"agent_id": "a0ther565agent00"/' "$SCRATCH/stop-308.json" >"$SCRATCH/stop-other-565.json"
+	t_run_split env TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300 sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-other-565.json"
+	H4=$(ev_of agent.stop | grep -F '"subject":"agent:a0ther565agent00"' | sed -n '1p')
+	[ "$(num "$H4" tok_out)" = 301 ] &&
+		pass "another agent's anchors never shorten this agent's read" ||
+		fail "another agent's stop read '$(num "$H4" tok_out)', not 301: $H4"
+
+	# A STOP THAT GAVE UP LEAVES NO ANCHOR, so the next one counts it all: the
+	# first stop sees the end_turn and the prompt after it, never final; the
+	# second sees the handback and counts both messages.
+	head -n 16 "$HB" >"$SCRATCH/hb-meta-565.jsonl"
+	new_trace
+	stop_on "$SCRATCH/hb-meta-565.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=50
+	stop_on "$HB"
+	timed TRACE_DIR="$TDIR" TRACE_AGENT_WAIT_MS=300
+	G1=$(ev_of agent.stop | sed -n '1p')
+	G2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(str "$G1" outcome)" = fail ] && [ "$(num "$G2" tok_out)" = 301 ] &&
+		pass "after a stop that gave up, the next stop counts every message — nothing lost" ||
+		fail "after a give-up: first $G1, second $G2"
+
+	# WHAT IS NOT FINAL STAYS NOT FINAL. A turn-ending result followed by the
+	# prompt that resumed the agent; a result whose flag is false; and a result
+	# whose TEXT quotes the key, escaped, with the real key gone.
+	{ cat "$HB"; sed -n '16p' "$HB"; } >"$SCRATCH/hb-resumed-565.jsonl"
+	final "a turn-ending result followed by the prompt that resumed the agent" "$SCRATCH/hb-resumed-565.jsonl" not
+	sed '$s/"toolEndsTurn":true/"toolEndsTurn":false/' "$HB" >"$SCRATCH/hb-false-565.jsonl"
+	final "a tool result whose toolEndsTurn is false" "$SCRATCH/hb-false-565.jsonl" not
+	sed '$s/"toolEndsTurn":true,//; $s/"content":"\[REDACTED content/"content":"\\"toolEndsTurn\\":true [REDACTED content/' \
+		"$HB" >"$SCRATCH/hb-quoted-565.jsonl"
+	grep -q '\\"toolEndsTurn\\":true' "$SCRATCH/hb-quoted-565.jsonl" &&
+		final "a tool result whose text quotes the key, escaped" "$SCRATCH/hb-quoted-565.jsonl" not ||
+		fail "the quoted-key fixture was not built"
+	sed 's/"toolEndsTurn":true/"toolEndsTurn" : true/' "$HB" >"$SCRATCH/hb-spaced-565.jsonl"
+	final "a turn-ending result serialised with spaces around the colon" "$SCRATCH/hb-spaced-565.jsonl" final
+else
+	skip "the handback legs read tokens with the extractor, which needs node"
+fi
+
 t_done "trace hooks"
