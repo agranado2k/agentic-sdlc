@@ -31,6 +31,9 @@ PRD=".agents/skills/to-prd/SKILL.md"
 TIX=".agents/skills/to-tickets/SKILL.md"
 PRD_ABS="$ROOT/$PRD"
 TIX_ABS="$ROOT/$TIX"
+# The retro branch lives beside SKILL.md (#592): one entry point, the rare
+# branch in a file it names by relative path.
+RETRO_CAND_ABS="$ROOT/.agents/skills/to-tickets/RETRO-CANDIDATES.md"
 
 cd "$ROOT" || exit 2
 
@@ -635,7 +638,10 @@ banner "4b. A retro's candidates merge into a sibling retro's tickets (#481)"
 # FINDS: the quiz shows the planned merges and closures, and publish step 4
 # carries them out after the human's yes (review of PR #521, H-2).
 RETRO_ABS="$ROOT/.agents/skills/retro/SKILL.md"
-sib=$(section_of "$TIX_ABS" "A retro's candidates" | tr '\n' ' ' | tr -s ' ')
+grep -qF "(RETRO-CANDIDATES.md)" "$TIX_ABS" && section_of "$TIX_ABS" "A retro's candidates" | grep -qF "(RETRO-CANDIDATES.md)" &&
+	pass "/to-tickets' SKILL.md names RETRO-CANDIDATES.md by relative path, in its retro section" ||
+	fail "/to-tickets' SKILL.md does not name RETRO-CANDIDATES.md from '## A retro's candidates' — a moved branch no entry point opens"
+sib=$(section_of "$RETRO_CAND_ABS" "A retro's candidates" | tr '\n' ' ' | tr -s ' ')
 [ -n "$sib" ] && pass "/to-tickets carries a section for a retro's candidates" ||
 	fail "/to-tickets has no '## A retro's candidates' section — a retro's twins are filed again"
 t_text_has "$sib" "first line" "the report's first line names its siblings (/retro, #461) and is read first"
@@ -673,14 +679,14 @@ t_text_has "$draft" "A retro's candidates" "the draft step routes a retro report
 # A twin is no landed slice: its closure records no verdict, and the same
 # sentence stands wherever a `feedback` event is written or could be.
 twin_rule="A ticket closed as a duplicate records no \`feedback\`: feedback is a verdict on a landed slice, and a twin is none."
-for f in "$TIX_ABS" "$ROOT/.agents/skills/merge-train/SKILL.md" "$ROOT/.agents/skills/pr-iterate/SKILL.md"; do
+for f in "$RETRO_CAND_ABS" "$ROOT/.agents/skills/merge-train/SKILL.md" "$ROOT/.agents/skills/pr-iterate/SKILL.md"; do
 	tr '\n' ' ' <"$f" | tr -s ' ' | grep -qF -- "$twin_rule" &&
 		pass "$(basename "$(dirname "$f")") says a duplicate closure records no feedback" ||
 		fail "$(basename "$(dirname "$f")") never says '$twin_rule'"
 done
 # One window start, one form: /retro writes it on the report's first line, and
 # /to-tickets reads it back from there (M-4).
-for f in "$RETRO_ABS" "$TIX_ABS"; do
+for f in "$RETRO_ABS" "$RETRO_CAND_ABS"; do
 	grep -qF -- '`window-start <YYYYMMDDTHHMMSSZ>`' "$f" &&
 		pass "$(basename "$(dirname "$f")") names the first line's window-start form" ||
 		fail "$(basename "$(dirname "$f")") never names '\`window-start <YYYYMMDDTHHMMSSZ>\`' — the start has no one form"
@@ -689,7 +695,7 @@ done
 # The section's fence runs: the sibling listing over a scratch retro folder,
 # and the tracker calls against a stand-in CLI that records what it was asked.
 t_init
-fence=$(t_fence "$TIX_ABS" holds 'retro_siblings()')
+fence=$(t_fence "$RETRO_CAND_ABS" holds 'retro_siblings()')
 if [ -z "$fence" ]; then
 	fail "no sh fence defines retro_siblings() — the listing is prose nobody can run"
 else

@@ -241,6 +241,50 @@ among them, and calls a starter newer than your bootstrap `NEW`; 9d prints a
 and a new 9f takes the files no other sub-step does, the docs harness's
 `README.md` and fixture tests among them. Nothing else in Part 2 moves.
 
+**Arriving from 0.62.0 or older, a spawn's model is held at emit to an id your agents policy maps.**
+One file joins at 0.63.0, `scripts/docs-conformance/validators/skill-ceiling.mjs`
+(#585, below); none leaves. `scripts/agents.lib.sh` gains
+`--ids`, which prints every model id your `scripts/agents.config.sh` maps,
+in the form `--model` prints; `scripts/trace.sh emit kind=spawn` now
+refuses, exit 2 and nothing written, a `model` that is not one of them — the
+word your agent harness's spawn parameter took in place of a pinned id
+(`model=$model` must carry the resolver's answer, not the word), an id with
+its harness prefix left on, or any model at all when your policy maps none,
+since an unmapped resolver prints nothing and the spawn then carries no
+model. A spawn with no model still writes, and other kinds' `model` is not
+held. `verify` names a spawn already written off the list on stderr, as
+history, judged against the policy as it is now; its verdict does not
+change, and `summary` and `export` say the count once. After step 5, check
+any spawn line you own — a skill you adapted, a wrapper that sets
+`AGENTS_CONFIG` for your own policy file — passes the resolver's id, and
+that `scripts/trace.sh` can reach the policy your resolver reads. Part 2 has
+three takes: `.agents/skills/implement/SKILL.md` and
+`.agents/skills/review-pr/SKILL.md` say which form their spawn lines carry,
+and `adapters/claude-code/README.md` says it for the Claude Code spawn
+parameter; take them as any changed skill and adapter. Two more
+changes ride along from main since 0.62.0: both skills also end a spawn its
+vendor refused as `spawn.end` `unreachable`, not `fail`, and re-resolve past
+the model the session spawned on (#609); and the Claude Code adapter's
+`hooks/transcript-usage.mjs` and `hooks/hook.lib.sh` mark a usage event
+whose `tok_out` is a streamed snapshot with `data.out_snapshot`, which
+`.agents/skills/retro/QUESTIONS.md` reads as a lower bound (#612); and
+`hooks/subagent-stop.sh` reads a spawn prompt's `Trace-Spawn:` second line
+through `hook.lib.sh` to attribute the `agent.stop` it files, while
+`scripts/trace.sh summary` gains `--by tier` and `--by domain` (#583) —
+take the adapter files as 9e says. And a skill that outgrows its byte
+ceiling now fails the docs gate (#585): the joining validator, its twin in
+`scripts/check.sh`, and `context.mjs`'s `size(rel)` arrive in step 5, but
+the ceilings are policy — merge the `skillCeilings` block into your
+`scripts/docs-conformance/config.mjs` in 9d, one literal `"<path>": <bytes>,`
+per line, or declare none and the rule checks nothing. Two more ride
+along (#584, #586): `scripts/check.sh` fails a Claude Code agent type that
+carries a model, for the four new `adapters/claude-code/agents/*.md` types
+(one per tier, tools and no model — take them with the adapter, 9e), and
+`scripts/trace.sh` declares `passed`, `escalated` and `failed` for a
+cascade rung's `spawn`; your `scripts/agents.config.sh` gains
+`AGENT_CASCADE_MECHANICAL`, empty — add it in 9d — and `--ids` lists the
+model it maps.
+
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
 shared files change comments, and two stderr lines their wording, so that

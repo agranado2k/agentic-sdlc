@@ -1032,8 +1032,9 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # `[optional]` groups are dropped; `<one word>` becomes `x` and `<several
 # words>` becomes `x y`, so a prose placeholder the document left unquoted
 # breaks exactly as the real value would; an `a|b|c` choice becomes its first
-# option; `$model` becomes a model id; `--blob x` becomes the file given, when
-# one is; and the trailing `|| :` goes.
+# option; `$model` becomes `x`, an id the calling suite's agents policy must
+# map (#569); `--blob x` becomes the file given, when one is; and the trailing
+# `|| :` goes.
 # A numbered reference `#<N>` becomes `#1`: a project that holds ticket, pr
 # and prd to `<type>:#<digits>` refuses anything else (ticket #305).
 # An iteration `data.iteration=<i>` becomes `1`: the script holds it to

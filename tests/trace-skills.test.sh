@@ -84,6 +84,21 @@ TRACE="scripts/trace.sh"
 
 skill_md() { printf '%s/%s/SKILL.md' "$SKILLS" "$1"; }
 
+# skill_text <skill> — a scratch file holding the skill's whole text: its
+# SKILL.md first, then every sibling .md beside it. A skill split under its
+# byte ceiling (#591) keeps one entry point and moves a rare branch into a file
+# the SKILL.md names, so what a skill records or says is read across both.
+skill_text() {
+	_st="$SCRATCH/skill-text-$1.md"
+	{
+		cat "$SKILLS/$1/SKILL.md"
+		for _st_f in "$SKILLS/$1"/*.md; do
+			[ "$_st_f" = "$SKILLS/$1/SKILL.md" ] || cat "$_st_f"
+		done
+	} >"$_st"
+	printf '%s' "$_st"
+}
+
 # The span tokeniser and the placeholder filler are tests/lib.sh's
 # (t_trace_lines, t_trace_spans, t_trace_runnable): held once, shared with
 # tests/retro-skill.test.sh.
@@ -210,7 +225,7 @@ banner "5. The decision points: one emit per decision, per skill"
 # `data.x=` or `--blob` token is a field the emit must carry.
 expects() {
 	_ex_s=$1; shift
-	_ex_f=$(skill_md "$_ex_s")
+	_ex_f=$(skill_text "$_ex_s")
 	_ex_lines=$(t_trace_lines "$_ex_f")
 	for _ex_tok; do
 		case $_ex_tok in
@@ -253,7 +268,7 @@ done
 # data.where; data.thread is what a reader counts once when two iterations saw
 # the same closed thread. /pr-iterate is its only emitter: it is the skill that
 # fetches the threads, and it learns of the dismissal from the forge.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 dm=$(grep -F 'kind=finding.dismiss' "$PI")
 for tok in 'subject=pr:#<N>' 'outcome=dismissed' 'data.via=thread|review' 'data.where=' 'data.thread='; do
 	printf '%s\n' "$dm" | grep -qF -- "$tok" && pass "/pr-iterate's dismissal carries $tok" ||
@@ -455,6 +470,12 @@ banner "7. Every documented line runs: placeholders filled, the span executes an
 # (tests/lib.sh) — one definition, shared with the other skill suites.
 BLOBF="$SCRATCH/blob.x"
 printf 'evidence\n' >"$BLOBF"
+# A spawn's model is held to the ids the agents policy maps (#569), and
+# t_trace_runnable fills `$model` with x — so the suite's agents policy maps
+# x, as a project's maps the id its resolver hands `$model`.
+AGENTS_CONFIG="$SCRATCH/agents.x.sh"
+export AGENTS_CONFIG
+printf "AGENT_TIER_REVIEWER='x'\n" >"$AGENTS_CONFIG"
 for s in $CHAIN; do
 	f=$(skill_md "$s")
 	dir="$SCRATCH/run.$s"
@@ -666,8 +687,17 @@ banner "13. /pr-iterate stops at the first release-bound red (#347)"
 # on a fixture PR, and the failing case is a second iteration on the same red.
 # No message below prints the marker itself: a red line of THIS suite that
 # carried it would be set aside as release-bound.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 RB_MARK='release-bound:'
+
+# The split keeps one entry point (#591): each file beside SKILL.md is named
+# from it by relative path, so the branch that needs it can open it.
+for f in "$SKILLS"/pr-iterate/*.md; do
+	b=${f##*/}
+	[ "$b" = SKILL.md ] && continue
+	grep -qF "($b)" "$(skill_md pr-iterate)" && pass "/pr-iterate's SKILL.md names $b by relative path" ||
+		fail "/pr-iterate's SKILL.md does not name $b — a moved branch no entry point opens"
+done
 
 # The text: the stop, what marks it, and that the loop never re-fires on it.
 pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
@@ -1161,7 +1191,7 @@ banner "18. A thread a human closed with no commit reaches finding.dismiss, driv
 # emit runs once per line it printed, into a scratch trace. A placeholder the
 # snapshot cannot fill — the line a comment was FIRST posted on, who resolved
 # the thread, whether a commit moved its line — is red here, by name.
-PI=$(skill_md pr-iterate)
+PI=$(skill_text pr-iterate)
 D18="$SCRATCH/dismiss"
 mkdir -p "$D18/bin"
 # The stub forge renders a `--jq` projection the one way the snapshot is held
@@ -1493,13 +1523,57 @@ hand474 review-pr '**Resolve the reviewer tier once, before any agent spawns**'
 hand474 pr-iterate '**A tool-restricted subagent reads those files, and returns a declared shape.**'
 hand474 pr-iterate '**In the `/pr-iterate` context, bypass the question**'
 # The skills that open no run have none to hand over, and say nothing of it.
-for sk in design-brief dogfood housekeeping improve-codebase-architecture to-tickets; do
+for sk in design-brief dogfood housekeeping improve-codebase-architecture; do
 	if grep -qF 'Trace-Run:' "$ROOT/$(skill_md "$sk")"; then
 		fail "/$sk opens no run and still names a Trace-Run line"
 	else
 		pass "/$sk opens no run and names no Trace-Run line"
 	fi
 done
+
+# ---------------------------------------------------------------------------
+banner "22b. Every spawn a skill hands its run to also says what it served, on the second line (#587)"
+# ---------------------------------------------------------------------------
+# spend/R1: the subagent-stop hook reads `Trace-Spawn: tier=<tier>
+# domain=<domain|none> skill=<skill> ticket=<#N|none>` from the spawn prompt's
+# second line, under the Trace-Run line, and records anything else as
+# `unattributed` (ADR-0008 clause 5, #583 amendment). Each spawn site spells
+# the line; here every spelling is filled with sample values and put through
+# the hook's own reader, so a site that drifts from the grammar fails here,
+# not silently in a wave's summary.
+SPAWN587_RUN=20261007T104205Z-4242-0a1b2c3d
+spawn587() {
+	_s5_para=$(grep -F "$2" "$ROOT/$(skill_md "$1")")
+	[ -n "$_s5_para" ] || { fail "/$1 has no paragraph holding '$2'"; return; }
+	_s5_line=$(printf '%s\n' "$_s5_para" | grep -oE '`Trace-Spawn: [^`]*`' | head -n 1 | tr -d '`')
+	[ -n "$_s5_line" ] || { fail "/$1's spawn step ('$2') spells no Trace-Spawn line"; return; }
+	case $_s5_para in *"second line"*) ;; *) fail "/$1's spawn step ('$2') does not say the Trace-Spawn line is the second"; return ;; esac
+	case $_s5_line in *" skill=$1 "*) ;; *) fail "/$1's Trace-Spawn line does not name /$1 as its skill: $_s5_line"; return ;; esac
+	_s5_filled=$(printf '%s\n' "$_s5_line" | sed -e 's/<tier>/implementer/' -e 's/<domain|none>/none/' \
+		-e 's/<#N|none>/#587/' -e 's/#<N>/#587/')
+	printf '{"type":"user","message":{"role":"user","content":"Trace-Run: %s\\n%s\\nGo."}}\n' \
+		"$SPAWN587_RUN" "$_s5_filled" >"$SCRATCH/spawn587.jsonl"
+	# shellcheck disable=SC1091
+	_s5_read=$( (. "$ROOT/adapters/claude-code/hooks/hook.lib.sh" &&
+		hook_spawn_handed "$SCRATCH/spawn587.jsonl" &&
+		printf '%s %s' "$hook_spawn_tier" "$hook_spawn_skill") 2>/dev/null) || _s5_read=''
+	case $_s5_read in
+	*" $1") pass "/$1's spawn step ('$2') spells a Trace-Spawn line the hook reads: $_s5_line" ;;
+	*) fail "/$1's Trace-Spawn line is not one the hook accepts: $_s5_line (filled: $_s5_filled)" ;;
+	esac
+}
+spawn587 implement '**When you spawn a subagent**'
+spawn587 implement '**(b) A `/review-pr` subagent in the agent harness — the fallback.**'
+spawn587 review-pr '**Resolve the reviewer tier once, before any agent spawns**'
+spawn587 pr-iterate '**A tool-restricted subagent reads those files, and returns a declared shape.**'
+spawn587 pr-iterate '**In the `/pr-iterate` context, bypass the question**'
+spawn587 to-tickets '**A tool-restricted subagent reads that file, and returns a declared shape.**'
+# The holder itself must be able to fail: a line out of grammar is refused.
+printf '{"type":"user","message":{"role":"user","content":"Trace-Run: %s\\nTrace-Spawn: tier=implementer skill=implement ticket=#587\\nGo."}}\n' \
+	"$SPAWN587_RUN" >"$SCRATCH/spawn587.jsonl"
+( . "$ROOT/adapters/claude-code/hooks/hook.lib.sh" && hook_spawn_handed "$SCRATCH/spawn587.jsonl") 2>/dev/null &&
+	fail "the hook's reader accepted a Trace-Spawn line with no domain — the holder above proves nothing" ||
+	pass "the hook's reader refuses a line out of grammar, so the holder above can fail"
 
 # ---------------------------------------------------------------------------
 banner "23. A skill that closes a run names it: end <the run id your begin printed> (#543)"
