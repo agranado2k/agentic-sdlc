@@ -2322,7 +2322,7 @@
 
 # 0.63.0 — a spawn's model is recorded in one form, an id the agents policy
 # maps (ticket #569, ADR-0008 clause 1 as amended 2026-10-07). TWO shared
-# files change content. scripts/agents.lib.sh gains `--ids`: every model id
+# files change content (scripts/trace.sh also carries #583's change, below). scripts/agents.lib.sh gains `--ids`: every model id
 # the policy maps, one per line, sorted — each AGENT_TIER_* value, a
 # fallback list word by word, a declared agent harness's prefix taken off,
 # the form `--model` prints. scripts/trace.sh holds `emit kind=spawn`'s
@@ -2354,8 +2354,15 @@
 # (#609); the Claude Code adapter's hooks/transcript-usage.mjs and
 # hooks/hook.lib.sh mark a usage event whose tok_out is a streamed snapshot
 # with data.out_snapshot, adapters/claude-code/README.md says so, and
-# .agents/skills/retro/QUESTIONS.md reads it as a lower bound (#612). Take
-# the skills like any skill and the adapter files as 9e says.
+# .agents/skills/retro/QUESTIONS.md reads it as a lower bound (#612); and
+# a spawn prompt's second line, `Trace-Spawn: tier=<tier> domain=<domain|none>
+# skill=<skill> ticket=<#N|none>`, is read by the adapter's
+# hooks/subagent-stop.sh through hooks/hook.lib.sh's hook_spawn_handed and
+# attributes the agent.stop it files, with adapters/claude-code/README.md
+# saying so — while scripts/trace.sh's summary gains `--by tier` and
+# `--by domain`, a shared-file change that landed with no bump and ships
+# here (#583, ADR-0008 clause 5 amended). Take the skills like any skill and
+# the adapter files as 9e says.
 # Kit-only, never shipped: scripts/trace.kit.sh hands the resolver the
 # kit's agents policy (`agents.kit.sh --policy`) and names a failed lookup;
 # scripts/agents.kit.sh's unreachable bridge reads agents_values; tests/trace.test.sh §31

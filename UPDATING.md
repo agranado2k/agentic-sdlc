@@ -244,8 +244,11 @@ vendor refused as `spawn.end` `unreachable`, not `fail`, and re-resolve past
 the model the session spawned on (#609); and the Claude Code adapter's
 `hooks/transcript-usage.mjs` and `hooks/hook.lib.sh` mark a usage event
 whose `tok_out` is a streamed snapshot with `data.out_snapshot`, which
-`.agents/skills/retro/QUESTIONS.md` reads as a lower bound (#612) — take
-the adapter files as 9e says.
+`.agents/skills/retro/QUESTIONS.md` reads as a lower bound (#612); and
+`hooks/subagent-stop.sh` reads a spawn prompt's `Trace-Spawn:` second line
+through `hook.lib.sh` to attribute the `agent.stop` it files, while
+`scripts/trace.sh summary` gains `--by tier` and `--by domain` (#583) —
+take the adapter files as 9e says.
 
 **Arriving from 0.61.0 or older, a cite of the kit's records says whose it is.**
 No file joins or leaves at 0.62.0, and nothing changes behavior: eight
@@ -1087,10 +1090,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2530 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2533 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 +++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2684 insertions(+), 1 deletion(-)
+ 3 files changed, 2687 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
