@@ -2501,7 +2501,71 @@
 # spend.md's R10 and R11; the glossary; the kit CI jobs; bootstrap.sh's
 # adoption arm copies the new policy file, and both new suites stay out.
 
-shared-layer: 0.65.0
+# 0.66.0 — the retro-candidate wave's release (tickets #627 to #638, from
+# retro-20261007T180238Z and retro-20261007T151351Z; ticket #653). Releases
+# what landed on main after v0.65.0 with no bump: #639, #640, #641, #642,
+# #643, #644, #645, #648, #649, #650, #651, #652 and #657.
+# NO file joins and NO file leaves the shared layer. TWO shared files change
+# content. scripts/trace.sh (#649, ticket #628): ticket.start gains the
+# outcome `resumed`, a session that found its ticket's PR or branch already
+# started, and pr.iterate gains a shaped key, data.cause=conflict|pending-stuck,
+# the interruption that turned an iteration red or stopped it. Every emit
+# that was valid at 0.65.0 is valid now. And UPDATING.md: the arriving-from
+# paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a; take each as 9a says):
+# /implement records `resumed` on its ticket.start when the ticket's PR or
+# branch already exists (#649), says who records each finding.raise for a
+# reviewer it spawns — the reviewer told to post, the relay only for one told
+# neither (#641, ticket #629), and ends its run on every hand-back, whatever
+# the outcome, the token-burn stop included (#657, ticket #638).
+# /review-pr raises each lens's findings as the lens returns on path (a),
+# records both verdicts before anything is posted, and never filters a raised
+# finding (#641); it counts a LOW and never posts one, the band rule scoped to
+# its own paths (#644, ticket #635); and lens-reuse-dry.md lists the
+# consolidations the decision records declined, drawn from rejected triage
+# (#645, ticket #633).
+# /pr-iterate never escalates a LOW (#644), names an interruption on its
+# iteration line — data.cause=conflict for a CONFLICTING PR, pending-stuck
+# for a check-run in progress after its job ended (#649) — and bounds its
+# check wait with `timeout 30m gh pr checks --watch` in the foreground (#652,
+# ticket #637).
+# /merge-train records merge.land in the landing script's fields — via,
+# method, workflows, implement, implement_tier, release, tagged, reruns — the
+# implement line read through a filter that prints only its two values (#648,
+# ticket #634), and bounds every wait with its own timeout, exit 124 a wait
+# that ran out (#652).
+# /retro's QUESTIONS.md and SKILL.md read the interruptions: a resumed
+# ticket.start counted once and never as a second ticket, and pr.iterate's
+# data.cause, under chain health (#649).
+# /to-tickets sizes a rule and its sweep as two tickets, the sweep blocked by
+# the rule (#650, ticket #631); constitution/local-workflow.md.template's
+# rubric mirrors the line (9b, #653 — #650's review, L-3). Merge that
+# paragraph into your local-workflow.md by hand, or keep yours.
+# The Claude Code adapter (9e): hooks/spawn-guard.sh is new — a PreToolUse
+# guard on the spawn tool that, with tracing on, refuses a spawn whose prompt
+# carries no well-formed Trace-Spawn line and records one note (#642, ticket
+# #627); hooks/hook.lib.sh gains one hook_deny record and one prompt byte
+# bound that spawn-guard.sh and tool-pre-guard.sh share; and on a resume whose
+# last recorded word is a session.start, hooks/session-start.sh records the
+# usage and phantom stops of the run nothing ended, through one helper
+# session-end.sh shares (#643, ticket #632). README.md documents both and
+# carries the settings snippet that wires the guard — a consumer who wires
+# the adapter adds that PreToolUse entry to their own settings file; the kit's
+# own .claude/settings.json wiring is kit-only, never shipped.
+# Kit-only, never shipped: the kit's planner and mechanical tiers follow a
+# model family, ADR-0018, in scripts/agents.kit.config.sh, agents.kit.sh and
+# skill-dispatch.kit.sh (#639); the landing script scripts/land.kit.sh
+# refuses a PR with no pr.iterate at its head, ADR-0019 (#640, ticket #630),
+# fast-forwards a clean root checkout after the landing (#651, ticket #636),
+# and writes pr.open when the trace holds none for the PR (#657); ADR-0008's
+# amendments; .claude/settings.json; bootstrap.sh strips the two new records;
+# tests/trace-hooks.test.sh, land.test.sh, review-pr-output.test.sh,
+# agents-tiers.test.sh, trace-skills.test.sh, trace.test.sh,
+# implement-deliver.test.sh, skill-cascade.test.sh, spec-skills.test.sh and
+# adapters-demo.sh.
+
+shared-layer: 0.66.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
