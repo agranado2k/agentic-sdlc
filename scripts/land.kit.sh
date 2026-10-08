@@ -21,7 +21,7 @@
 #      is the train's to take.
 #   1b. REFUSES the same way a PR with no /pr-iterate iteration at its head
 #      commit: no pr.iterate event on pr:#<N> in the trace stamped at or
-#      after the head commit's committed date (#630, ADR-0018). The operator
+#      after the head commit's committed date (#630, ADR-0019). The operator
 #      overrides it with --no-iteration '<reason>', and merge.land records
 #      data.iterated=no with the reason as data.no_iteration; with one at
 #      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
@@ -63,7 +63,7 @@
 # THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
 # the merge and stdout are exactly what a traced run does. Its one read is
 # step 1b's, and that read IS load-bearing when the trace is configured: no
-# pr.iterate at the head refuses the landing (ADR-0018). Kit-only, so the kit's own
+# pr.iterate at the head refuses the landing (ADR-0019). Kit-only, so the kit's own
 # policy is the default seam — scripts/trace.sh read through
 # scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
 # TRACE_CONFIG still wins (the broker's arrangement).
@@ -171,7 +171,7 @@ case $? in
 *) refuse "its checks are not green" ;;
 esac
 
-# --- 1b. an iteration at the head commit (#630, ADR-0018) ---------------------
+# --- 1b. an iteration at the head commit (#630, ADR-0019) ---------------------
 # /pr-iterate records one pr.iterate per iteration, after its own push, so an
 # iteration that saw the head commit is stamped at or after that commit's
 # date. Each such stamp on pr:#<N> is compared with the head's date,

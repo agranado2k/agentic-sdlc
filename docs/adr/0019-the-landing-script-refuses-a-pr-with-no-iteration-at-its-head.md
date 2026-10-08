@@ -1,4 +1,4 @@
-# ADR-0018: The landing script refuses a PR with no iteration at its head
+# ADR-0019: The landing script refuses a PR with no iteration at its head
 
 - **Status**: Accepted
 - **Date**: 2026-10-08

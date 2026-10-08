@@ -348,6 +348,33 @@ t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch
 printf '%s\n' "$S_OUT" | grep -q 'model-for-building' && ! printf '%s\n' "$S_OUT" | grep -q model-cheap &&
 	pass "an implementer ticket never cascades" || fail "an implementer ticket reached: $S_OUT"
 
+# ---------------------------------------------------------------------------
+banner "A cascade rung equal to the mapped model escalates to the implementer's (ADR-0018)"
+# ---------------------------------------------------------------------------
+# When the mechanical tier itself runs on the cheap model the cascade names,
+# rung 2 on "the tier's mapped model" would run the same model again — a
+# second draw, not an escalation. The dispatcher then escalates to the
+# implementer tier's model instead, and says so.
+write_policy 'stub:model-same' 'stub:model-same'
+fresh_wt
+FIXTURE_ORACLE_GREEN=1 FIXTURE_GUARD_RED_ON=model-same
+export FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+cascade "$T_ORACLE"
+unset FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+[ "$S_STATUS" = 0 ] && [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-for-building ] &&
+	pass "rung 2 ran on the implementer's model, not the cheap model a second time" ||
+	fail "rung 2 left '$(cat "$WT/work.txt" 2>/dev/null)' (status $S_STATUS): $S_ERR"
+case "$S_ERR" in
+*implementer*) pass "…and stderr says the escalation went to the implementer tier's model" ;;
+*) fail "…but stderr does not name the implementer tier: $S_ERR" ;;
+esac
+_esc_models=$(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"rung"' |
+	sed -n 's/.*"model":"\([^"]*\)".*/\1/p' | tr '\n' ' ')
+[ "$_esc_models" = "model-same model-for-building " ] &&
+	pass "the rung records carry the cheap model, then the implementer's" ||
+	fail "the rung records' models read '$_esc_models'"
+write_policy 'stub:model-cheap'
+
 SHIPPED="$ROOT/scripts/agents.config.sh"
 grep -q "^AGENT_CASCADE_MECHANICAL=''" "$SHIPPED" &&
 	pass "spend/R24: the shipped policy file carries AGENT_CASCADE_MECHANICAL, empty" ||
@@ -356,5 +383,13 @@ t_assert_no_model_id "$SHIPPED"
 grep -Eq "^AGENT_CASCADE_MECHANICAL='[^']+'" "$ROOT/scripts/agents.kit.config.sh" &&
 	pass "the kit's own policy maps the cascade's cheap rung" ||
 	fail "the kit's own policy leaves the cascade unmapped"
+# ADR-0018: the kit's mechanical tier follows the Sonnet family, and so does
+# its cascade rung — the same word, so the escalation rule above is what
+# makes the cascade's rung 2 the implementer's model.
+_kit_casc=$(sh -c '. "$1"; printf "%s" "$AGENT_CASCADE_MECHANICAL"' _ "$ROOT/scripts/agents.kit.config.sh")
+_kit_mech=$(sh -c '. "$1"; printf "%s" "$AGENT_TIER_MECHANICAL"' _ "$ROOT/scripts/agents.kit.config.sh")
+[ "$_kit_casc" = "$_kit_mech" ] &&
+	pass "the kit's cascade rung is the mechanical tier's own model ('$_kit_casc'), so a red rung escalates to the implementer's" ||
+	fail "the kit's cascade rung '$_kit_casc' differs from the mechanical tier's '$_kit_mech' (ADR-0018 makes them one)"
 
 t_done "skill cascade"

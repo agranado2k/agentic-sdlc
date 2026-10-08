@@ -28,11 +28,11 @@
 # run, a pid list from `ps | awk` — walks past it. It catches the reflex the
 # retro saw, and says so rather than claiming more.
 #
-# THE ONE HOOK HERE THAT MAY EXIT NON-ZERO. hook.lib.sh's rule 1 is "exit 0,
+# A GUARD, SO IT MAY EXIT NON-ZERO. hook.lib.sh's rule 1 is "exit 0,
 # always", because observability must never change a session. This hook is a
-# guard rather than an observer: exit 2 is the agent harness's block status,
-# its stderr goes back to the sub-agent as the reason, and it is the only
-# non-zero exit — every other path, a payload it cannot read included, is
+# guard rather than an observer, as spawn-guard.sh and root-guard.sh are: exit
+# 2 is the agent harness's block status, its stderr goes back to the
+# sub-agent as the reason, and it is this hook's only non-zero exit — every other path, a payload it cannot read included, is
 # exit 0. With node missing it fails CLOSED for a sub-agent only: a payload
 # naming pkill, killall or pgrep anywhere is refused unread.
 #
@@ -127,12 +127,7 @@ fi
 [ -n "$why" ] || exit 0
 
 hook_id_ok "$atype" || atype=unnamed
-sid=$(hook_field session_id)
-tuid=$(hook_field tool_use_id)
-set -- kind=note harness=claude-code outcome=denied data.rule=kill-guard data.agent_type="$atype"
-hook_id_ok "$sid" && set -- "$@" subject="session:$sid" session="$sid"
-hook_id_ok "$tuid" && set -- "$@" data.tool_use_id="$tuid"
-hook_trace emit "$@" reason="kill-guard refused a spawned sub-agent's Bash call: $why"
+hook_deny kill-guard "kill-guard refused a spawned sub-agent's Bash call: $why" data.agent_type="$atype"
 
 echo "kill-guard: refused — a spawned sub-agent ($atype) may not signal processes by name: $why. Parallel sessions run the same suites on this machine, so a name match may be a sibling's run. Signal only what you started: a job (kill %1) or a pid you hold (kill \$!)." >&2
 exit 2

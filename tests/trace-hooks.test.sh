@@ -434,8 +434,9 @@ if [ -f "$SETTINGS" ]; then
 			SessionEnd) _w_want=session-end.sh ;;
 			SubagentStop) _w_want=subagent-stop.sh ;;
 			PostToolUse | PostToolUseFailure) _w_want=tool-post.sh ;;
-			# Three scripts on PreToolUse: the kill guard (#414), the pending
-			# marker a denied call leaves behind (#409), and the root guard
+			# Four scripts on PreToolUse: the kill guard (#414), the spawn
+			# guard (#627), the pending marker a denied call leaves behind
+			# (#409), and the root guard
 			# (#392). The root guard is no trace hook: it reads no trace policy,
 			# so it is held to its script alone, and its own suite,
 			# tests/root-guard.test.sh, holds the rest.
@@ -443,6 +444,7 @@ if [ -f "$SETTINGS" ]; then
 				case $_w_cmd in
 				*"/hooks/root-guard.sh"*) continue ;;
 				*"/hooks/tool-pre.sh"*) _w_want=tool-pre.sh ;;
+				*"/hooks/spawn-guard.sh"*) _w_want=spawn-guard.sh ;;
 				*) _w_want=tool-pre-guard.sh ;;
 				esac
 				;;
@@ -487,13 +489,14 @@ if [ -f "$SETTINGS" ]; then
 	# A `for` loop and not a pipeline: a `while read` in a pipeline runs in a
 	# subshell, and every failure it counted would die with it.
 	scripts=$(printf '%s\n' "$cmds" | tr ' ' '\n' | grep '/hooks/' | tr -d '"' || :)
-	# Six events, eight commands, seven scripts: one script serves both
+	# Six events, nine commands, eight scripts: one script serves both
 	# post-tool events, because the only difference between them is the
-	# outcome it records; PreToolUse runs three — the kill guard (#414), the
-	# pending marker a denied call leaves behind (#409), and the root guard (#392).
-	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 8 ] &&
-		pass "it names a hook script per wired command, eight in all" ||
-		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 8"
+	# outcome it records; PreToolUse runs four — the kill guard (#414), the
+	# spawn guard (#627), the pending marker a denied call leaves behind
+	# (#409), and the root guard (#392).
+	[ "$(printf '%s\n' "$scripts" | grep -c .)" = 9 ] &&
+		pass "it names a hook script per wired command, nine in all" ||
+		fail "it names $(printf '%s\n' "$scripts" | grep -c .) hook script(s), expected 9"
 	for script in $scripts; do
 		resolved=$(printf '%s' "$script" | sed "s|\\\$CLAUDE_PROJECT_DIR|$KIT|; s|\\\${CLAUDE_PROJECT_DIR}|$KIT|")
 		[ -f "$resolved" ] && pass "${resolved#"$KIT"/} exists" ||
@@ -4645,7 +4648,6 @@ stop474 "$SCRATCH/dir-583.jsonl"
 	fail "an unreadable transcript: outcome '$(str "$STOP" outcome)' tier '$(str "$STOP" tier)'"
 # Not an exact match: no attribution, tier unattributed.
 for bad583 in "Trace-Run: $WT474\\\\nBuild it." \
-	"Trace-Spawn: tier=implementer domain=content skill=implement ticket=#583\\\\nBuild it." \
 	"Trace-Run: $WT474\\\\nBuild it.\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583" \
 	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement ticket=#583 extra=1" \
 	"Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=content skill=implement\\\\tticket=#583" \
@@ -4676,7 +4678,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 	UN583=$(printf '%s\n' "$S_OUT" | awk '$1 == "unattributed" { print $2, $7 }')
 	case $ROW583 in "2 "[0-9]*.[0-9]*) pass "summary --by tier prices the attributed stop under its tier ($ROW583)" ;;
 	*) fail "summary --by tier implementer row '$ROW583'; stdout '$S_OUT'" ;; esac
-	case $UN583 in "16 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
+	case $UN583 in "15 "[0-9]*.[0-9]*) pass "and shows the unattributed row, priced ($UN583)" ;;
 	*) fail "summary --by tier unattributed row '$UN583'; stdout '$S_OUT'" ;; esac
 	t_run_split env TRACE_CONFIG="$P583" TRACE_QUIET=1 sh "$TRACE" summary --by domain
 	case $(printf '%s\n' "$S_OUT" | awk '$1 == "content" { print $2 }') in 2) pass "summary --by domain groups the stop under its domain" ;;
@@ -4687,5 +4689,144 @@ fi
 case $(grep -F "| \`hooks/subagent-stop.sh\` |" "$KIT/adapters/claude-code/README.md") in
 *"Trace-Spawn: tier=<tier>"*"#583"*) pass "the README row for subagent-stop.sh names the Trace-Spawn line (#583)" ;;
 *) fail "the README row for subagent-stop.sh does not name the Trace-Spawn line (#583)" ;; esac
+
+# A prompt that OPENS with the Trace-Spawn line, no Trace-Run above it, is the
+# spawn of a session with no run open (#627): it is attributed all the same.
+new_trace
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-627.jsonl" "Trace-Spawn: tier=implementer domain=content skill=implement ticket=#627\\\\nBuild it."
+stop474 "$SCRATCH/spawn-627.jsonl"
+[ "$S_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = implementer ] && [ "$(str "$STOP" skill)" = implement ] &&
+	pass "a prompt opening with the Trace-Spawn line, no run handed, is attributed (#627)" ||
+	fail "a Trace-Spawn first line: exit $S_STATUS, '$STOP'"
+
+# ---------------------------------------------------------------------------
+banner "51. A spawn whose prompt carries no well-formed Trace-Spawn line is refused (#627)"
+# ---------------------------------------------------------------------------
+# After #615, 43 of 108 subagent stops were still unattributed: a spawn made
+# outside the chain's spawn sites carried no Trace-Spawn line and nothing made
+# it. spawn-guard.sh, on PreToolUse for the agent harness's spawn tool, refuses
+# — exit 2, the wanted line named on stderr — a spawn whose prompt does not
+# carry the line where the stop hook reads it: the second line under a
+# well-formed Trace-Run first line, or the first line when no run is handed.
+# Tracing off, it never blocks: there is no trace to attribute a stop in.
+SGUARD="$HOOKS/spawn-guard.sh"
+SG_RUN=20261008T120000Z-123-0123abcd
+SG_LINE='Trace-Spawn: tier=implementer domain=none skill=implement ticket=#627'
+# sg_payload <tool> <prompt as JSON-string text> — a compact PreToolUse payload.
+sg_payload() {
+	printf '{"session_id":"%s","transcript_path":"/nowhere.jsonl","cwd":"/tmp/x","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"description":"d","prompt":"%s","subagent_type":"general-purpose"},"tool_use_id":"%s"}' \
+		"$TSESSION" "$1" "$2" "$TUSE"
+}
+# sg <tool> <prompt> [env…] — run the hook on that payload, tracing on.
+sg() {
+	_sg_tool=$1
+	_sg_p=$2
+	shift 2
+	sg_payload "$_sg_tool" "$_sg_p" >"$SCRATCH/sg-627.json"
+	t_run_split env TRACE_DIR="$TDIR" "$@" sh "$SGUARD" <"$SCRATCH/sg-627.json"
+}
+if [ -f "$SGUARD" ]; then
+	assert_status 0 "adapters/claude-code/hooks/spawn-guard.sh parses under sh -n" -- sh -n "$SGUARD"
+else
+	fail "adapters/claude-code/hooks/spawn-guard.sh does not exist"
+fi
+
+# Missing: refused, the wanted line named, one note recorded.
+new_trace
+sg Agent 'Review PR 12.'
+[ "$S_STATUS" = 2 ] && pass "a spawn whose prompt has no Trace-Spawn line is refused with exit 2" ||
+	fail "a spawn with no Trace-Spawn line exited $S_STATUS, not 2: $S_ERR"
+case $S_ERR in spawn-guard:*'Trace-Spawn: tier=<'*'domain=<'*'skill=<'*'ticket=<'*) pass "and stderr names the rule and the line it wants" ;;
+*) fail "stderr does not name the rule and the wanted line: $S_ERR" ;; esac
+[ -z "$S_OUT" ] && pass "and says nothing on stdout" || fail "the spawn guard printed on stdout: $S_OUT"
+SGN=$(ev_of note | sed -n '1p')
+[ "$(events | grep -c '')" = 1 ] && [ "$(str "$SGN" outcome)" = denied ] && [ "$(str "$SGN" rule)" = spawn-guard ] &&
+	[ "$(str "$SGN" subject)" = "session:$TSESSION" ] && [ "$(str "$SGN" tool_use_id)" = "$TUSE" ] &&
+	pass "the refusal is one note, outcome=denied on the session, naming the rule and the call" ||
+	fail "the refusal's record: $(events)"
+
+# Malformed, in each shape the stop hook would read as unattributed: refused.
+for bad627 in \
+	'Trace-Spawn: tier=wizard domain=none skill=implement ticket=#627\nGo.' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement\nGo.' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=#627 extra=1' \
+	'Trace-Spawn: domain=none tier=implementer skill=implement ticket=#627' \
+	'Trace-Spawn: tier=implementer domain=none skill=$(touch pwned-627) ticket=#627' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=627' \
+	"Trace-Run: $SG_RUN\\nGo.\\n$SG_LINE" \
+	"Trace-Run: not-a-run\\n$SG_LINE" \
+	"Go.\\n$SG_LINE" \
+	" $SG_LINE"; do
+	new_trace
+	sg Agent "$bad627"
+	[ "$S_STATUS" = 2 ] && pass "a prompt '$bad627' is refused" ||
+		fail "a prompt '$bad627' exited $S_STATUS, not 2"
+done
+[ ! -e "$SCRATCH/pwned-627" ] && [ ! -e "$KIT/pwned-627" ] &&
+	pass "and no Trace-Spawn value was ever executed" || fail "a Trace-Spawn value was executed: pwned-627 exists"
+
+# Well-formed: allowed, silent, nothing recorded — under a Trace-Run line,
+# with a parent run, or opening the prompt when no run is open.
+for good627 in \
+	"Trace-Run: $SG_RUN\\n$SG_LINE\\nBuild it." \
+	"Trace-Run: $SG_RUN $SG_RUN\\nTrace-Spawn: tier=reviewer domain=self-implemented skill=review-pr ticket=none\\nReview it." \
+	"$SG_LINE\\nBuild it." \
+	"$SG_LINE"; do
+	new_trace
+	sg Agent "$good627"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] && [ -z "$(events)" ] &&
+		pass "a prompt '$good627' is allowed, silently" ||
+		fail "a prompt '$good627' exited $S_STATUS: $S_ERR $(events)"
+done
+
+# The older name of the spawn tool is held the same; any other tool is not
+# the guard's business.
+new_trace
+sg Task 'Review PR 12.'
+[ "$S_STATUS" = 2 ] && pass "a Task spawn with no Trace-Spawn line is refused too" ||
+	fail "a Task spawn with no line exited $S_STATUS"
+new_trace
+sg Bash 'Review PR 12.'
+[ "$S_STATUS" = 0 ] && [ -z "$(events)" ] && pass "a call to any other tool passes through" ||
+	fail "a Bash call exited $S_STATUS"
+
+# A payload with no prompt to judge passes: a guard that cannot read is not a
+# guard that refuses.
+new_trace
+sg_payload Agent 'Review PR 12.' | sed 's/"prompt":/"brief":/' >"$SCRATCH/sg-np-627.json"
+t_run_split env TRACE_DIR="$TDIR" sh "$SGUARD" <"$SCRATCH/sg-np-627.json"
+[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ -z "$(events)" ] &&
+	pass "a spawn payload with no prompt key passes, silently" ||
+	fail "a spawn payload with no prompt key exited $S_STATUS: $S_ERR"
+
+# Tracing off: every spawn is allowed, nothing written.
+for off627 in 'Review PR 12.' 'Trace-Spawn: tier=wizard'; do
+	new_trace
+	sg Agent "$off627" TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh"
+	[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ -z "$(events)" ] &&
+		pass "with tracing off a spawn prompt '$off627' is allowed" ||
+		fail "with tracing off a spawn prompt '$off627' exited $S_STATUS: $S_ERR"
+done
+# A trace policy the shared script refuses is not a reason to block a spawn.
+printf 'TRACE_DIR=$(nope)\n' >"$SCRATCH/bad-policy-627.sh"
+sg_payload Agent 'Review PR 12.' >"$SCRATCH/sg-627.json"
+t_run_split env -u TRACE_DIR TRACE_CONFIG="$SCRATCH/bad-policy-627.sh" sh "$SGUARD" <"$SCRATCH/sg-627.json"
+[ "$S_STATUS" = 0 ] && pass "a trace policy the script refuses never blocks a spawn" ||
+	fail "under a refused policy the spawn guard exited $S_STATUS: $S_ERR"
+
+# THE WIRING, and the README.
+if [ "$HAVE_NODE" = 1 ]; then
+	# $PRE is section 35's listing of the PreToolUse wiring.
+	case $PRE in *"Agent|Task "*'TRACE_CONFIG=scripts/trace.kit.config.sh'*spawn-guard.sh*) pass "the settings file wires spawn-guard.sh on PreToolUse, matcher Agent|Task" ;;
+	*) fail "the settings file does not wire spawn-guard.sh on PreToolUse for Agent|Task: $PRE" ;; esac
+else
+	skip "the spawn guard's wiring check needs a JSON parser"
+fi
+case $(grep -F "| \`hooks/spawn-guard.sh\` |" "$KIT/adapters/claude-code/README.md") in
+*"Trace-Spawn"*"#627"*) pass "the README row for spawn-guard.sh names the line it wants (#627)" ;;
+*) fail "the adapter README has no row for spawn-guard.sh naming the Trace-Spawn line (#627)" ;; esac
+grep -q '^### The spawn guard' "$KIT/adapters/claude-code/README.md" &&
+	pass "the README says how a session satisfies the spawn guard" ||
+	fail "the adapter README has no 'The spawn guard' section"
 
 t_done "trace hooks"

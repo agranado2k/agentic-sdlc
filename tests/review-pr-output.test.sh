@@ -61,6 +61,10 @@
 #      live in lens-<roster-token>.md beside SKILL.md, each under its own
 #      heading; the coordinator names every file, holds no lens body, keeps
 #      Agent 7, and hands a lens agent its own file, never the skill.
+#  15. A posted review is never raise-less or verdict-less (#629): on path
+#      (a) a lens's raises are recorded beside its spawn.end the moment it
+#      returns, and a review run replayed up to the first post holds its
+#      spawn.end and review.verdict for axis 1 and axis 2.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -870,7 +874,7 @@ single_rules_missing() {
 	_sr_rel=$(region '^#### Relaying a review' '^### 7\. ' "$1" | tr '\n' ' ' | tr -s ' ')
 	case "$_sr_rel" in *'`single-reviewer` for every finding of a report that says one reviewer audited the lenses itself, whatever lens it names'*) ;; *) printf '%s\n' 'relay: the token' ;; esac
 	_sr_5b=$(region '^### 5b\. ' '^### 6\. ' "$1" | tr '\n' ' ' | tr -s ' ')
-	case "$_sr_5b" in *'**Both verdicts are recorded on every review — seven agents, a single-reviewer pass, a relay — before the run'"'"'s `end` (§7).**'*) ;; *) printf '%s\n' 'both verdicts always' ;; esac
+	case "$_sr_5b" in *'**Both verdicts are recorded on every review — seven agents, a single-reviewer pass, a relay — before anything is posted and before the run'"'"'s `end` (§7).**'*) ;; *) printf '%s\n' 'both verdicts always' ;; esac
 	case "$_sr_5b" in *'A verdict is never skipped because the report had no findings: `pass` is a verdict.'*) ;; *) printf '%s\n' 'pass is a verdict' ;; esac
 	_sr_cl=$(region '^### 7\. ' '^ZZZ' "$1" | tr '\n' ' ' | tr -s ' ')
 	case "$_sr_cl" in *'the run closes after the raises and both verdicts, never before them'*) ;; *) printf '%s\n' 'end after both verdicts' ;; esac
@@ -983,5 +987,112 @@ rm -rf "$SCRATCH/lens-bait" && mkdir -p "$SCRATCH/lens-bait" && cp "$LENS_DIR"/*
 	cp "$LENS_DIR/lens-pattern.md" "$SCRATCH/lens-bait/lens-orphan.md"
 lens_gaps "$SCRATCH/lens-bait" | grep -qF 'lens-orphan: no roster row' &&
 	pass "bait: a lens file with no roster row is named" || fail "bait: an orphan lens file was not caught"
+
+
+# ---------------------------------------------------------------------------
+banner "15. A posted review is never raise-less or verdict-less (#629)"
+# ---------------------------------------------------------------------------
+# #603, #617 and #626 posted reviews whose trace held no finding.raise and no
+# review.verdict: the emits were left to the end of the review and written
+# from memory, and a whole review's worth was lost at once. The ruling: on
+# path (a) — the spawn prompt answered the post question before any lens ran
+# — a lens's raises are recorded beside its spawn.end the moment it returns,
+# and both verdicts are recorded before anything is posted.
+# emit_points_missing <skill file> — each rule the file has lost, one per line.
+emit_points_missing() {
+	_ep_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1" | tr '\n' ' ' | tr -s ' ')
+	for _ep_r in \
+		"raise at lens return|**On §6's path (a) a lens's raises are recorded beside its \`spawn.end\`, the moment it returns**" \
+		'ids in arrival order|the coordinator numbers it in arrival order' \
+		"audited here raises at its end|raises that lens's findings the moment its audit ends" \
+		'b and c raise at 6|Paths (b) and (c) learn their answer after the report, and raise at §6'; do
+		case "$_ep_s3" in *"${_ep_r#*|}"*) ;; *) printf '%s\n' "${_ep_r%%|*}" ;; esac
+	done
+	_ep_ap=$(region '^#### Approval Process' '^#### Relaying a review' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ep_ap" in *'records every raise as its lens returned (§3)'*) ;; *) printf '%s\n' 'path a points at the lens return' ;; esac
+	case "$_ep_ap" in *'whose relay (below) posts it and records no second raise'*) ;; *) printf '%s\n' 'unreachable forge: no second raise' ;; esac
+	_ep_5=$(region '^### 5\. ' '^### 5b\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ep_5" in *"Record the axis's verdict once, before anything is posted"*) ;; *) printf '%s\n' 'axis 1 verdict before the post' ;; esac
+	_ep_5b=$(region '^### 5b\. ' '^### 6\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ep_5b" in *'before anything is posted and before the run'*) ;; *) printf '%s\n' 'both verdicts before the post' ;; esac
+	_ep_rl=$(region '^#### Relaying a review' '^### 7\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ep_rl" in *'record, verdict, post'*) ;; *) printf '%s\n' 'relay order' ;; esac
+	_ep_v=$(t_line_of "$1" '**Then the two verdicts')
+	_ep_p=$(t_line_of "$1" '**Then post**')
+	[ -n "$_ep_v" ] && [ -n "$_ep_p" ] && [ "$_ep_v" -lt "$_ep_p" ] || printf '%s\n' 'relay verdicts above its post'
+}
+miss=$(emit_points_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "/review-pr records a lens's raises at its return on path (a), and both verdicts before anything is posted" ||
+	fail "/review-pr's emit points are missing: $miss — a posted review reads raise-less in the trace (#629)"
+bait629() { # <rule name> <sed script>
+	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait629.md"
+	! cmp -s "$SCRATCH/bait629.md" "$SKILL_ABS" && emit_points_missing "$SCRATCH/bait629.md" | grep -qxF -- "$1"
+}
+for b in \
+	"raise at lens return|s/a lens's raises are recorded beside its \`spawn.end\`, the moment it returns/a lens's raises wait for the end/" \
+	'ids in arrival order|s/numbers it in arrival order/picks/' \
+	"audited here raises at its end|s/the moment its audit ends/at the end/" \
+	'b and c raise at 6|s/and raise at §6/and raise whenever/' \
+	'path a points at the lens return|s/records every raise as its lens returned (§3)/records every raise/' \
+	'unreachable forge: no second raise|s/posts it and records no second raise/records them again/' \
+	"axis 1 verdict before the post|s/verdict once, before anything is posted/verdict once/" \
+	'both verdicts before the post|s/before anything is posted and before the run/before the run/' \
+	'relay order|s/record, verdict, post/record, post, verdict/' \
+	'relay verdicts above its post|s/\*\*Then the two verdicts/**Last, the two verdicts/'; do
+	bait629 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+# The acceptance, run: replay every documented trace line above §6 — the
+# protocol up to the first post — in document order, under one review run.
+# The run holds a spawn.end and a review.verdict for axis 1 and for axis 2:
+# a verdict whose emit moved below the post is red here.
+replay_before_post() { # <skill file> <trace dir> — exit 0 when every span ran
+	_rp_cut=$(t_line_of "$1" '### 6. ')
+	head -n "$((_rp_cut - 1))" "$1" >"$SCRATCH/pre-post.md"
+	# §3 hands path (a)'s raise to §6 step 3's line: the replay types it there.
+	region '^### 3\. ' '^#### Agents 1–6 ' "$1" | grep -qF "§6 step 3's line" &&
+		t_trace_lines "$1" | grep -F 'kind=finding.raise' | grep -vF 'data.via=relay' >>"$SCRATCH/pre-post.md"
+	printf '`sh scripts/trace.sh end <the run id your begin printed> outcome=ok || :`\n' >>"$SCRATCH/pre-post.md"
+	_rp_bad=0
+	while IFS= read -r _rp_span; do
+		[ -n "$_rp_span" ] || continue
+		_rp_cmd=$(t_trace_runnable "$_rp_span")
+		( cd "$ROOT" && TRACE_DIR="$2" TRACE_QUIET=1 sh -c "$_rp_cmd" >/dev/null 2>&1 ) || _rp_bad=1
+	done <<SPANS
+$(t_trace_spans "$SCRATCH/pre-post.md")
+SPANS
+	return "$_rp_bad"
+}
+AGENTS_CONFIG="$SCRATCH/agents.x.sh"
+export AGENTS_CONFIG
+printf "AGENT_TIER_REVIEWER='x'\n" >"$AGENTS_CONFIG"
+holds_before_post() { # <trace dir> — names each record the replayed run lacks
+	_hb=$(cat "$1"/events/*.jsonl 2>/dev/null)
+	printf '%s\n' "$_hb" | grep -qF '"kind":"spawn.end"' || printf '%s\n' 'spawn.end'
+	printf '%s\n' "$_hb" | grep -qF '"kind":"finding.raise"' || printf '%s\n' 'finding.raise'
+	for _hb_a in 1 2; do
+		printf '%s\n' "$_hb" | grep -F '"kind":"review.verdict"' | grep -qE "\"axis\":\"?$_hb_a\"?[,}]" || printf '%s\n' "verdict axis $_hb_a"
+	done
+}
+rm -rf "$SCRATCH/run.629"
+replay_before_post "$SKILL_ABS" "$SCRATCH/run.629" && pass "every documented trace line above §6 runs" ||
+	fail "a documented trace line above §6 does not run"
+miss=$(holds_before_post "$SCRATCH/run.629" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "a review run replayed up to the first post holds its spawn.end, a lens's finding.raise and review.verdict for axis 1 and axis 2" ||
+	fail "a review run replayed up to the first post lacks: $miss — a posted review reads verdict-less (#629)"
+# Bait: the axis-2 verdict's emit moved below the post — the replay is red.
+awk '/kind=review\.verdict[^`]*data\.axis=2/ && !done { held = $0; done = 1; sub(/`sh scripts\/trace\.sh emit kind=review\.verdict[^`]*`/, "", $0) } /^#### Relaying a review/ && held { print held } { print }' "$SKILL_ABS" >"$SCRATCH/bait629-late.md"
+rm -rf "$SCRATCH/run.629b"
+replay_before_post "$SCRATCH/bait629-late.md" "$SCRATCH/run.629b" || :
+holds_before_post "$SCRATCH/run.629b" | grep -qxF 'verdict axis 2' &&
+	pass "bait: an axis-2 verdict recorded after the post is red" ||
+	fail "bait: an axis-2 verdict moved below the post was not caught"
+# Bait: §3 without the lens-return raise — the replay holds no raise before the post.
+sed "s/§6 step 3's line/the line in §6/" "$SKILL_ABS" >"$SCRATCH/bait629-noraise.md"
+rm -rf "$SCRATCH/run.629c"
+replay_before_post "$SCRATCH/bait629-noraise.md" "$SCRATCH/run.629c" || :
+holds_before_post "$SCRATCH/run.629c" | grep -qxF 'finding.raise' &&
+	pass "bait: a raise left for the end of the review is red" ||
+	fail "bait: a review that raises nothing before the post was not caught"
 
 t_done "/review-pr output contract"

@@ -636,7 +636,7 @@ mt_order "$SCRATCH/mt.late" && fail "the order probe passed a skill that tags af
 banner "9. No pr.iterate at the head commit: refused, or landed on a named reason and recorded (#630)"
 # ---------------------------------------------------------------------------
 # #625 and #626 landed with no /pr-iterate iteration at their head commit. The
-# landing reads the trace (ADR-0018) for a pr.iterate on the PR stamped at or
+# landing reads the trace (ADR-0019) for a pr.iterate on the PR stamped at or
 # after its head commit's date; with none it refuses — exit 2, nothing merged,
 # nothing recorded — unless --no-iteration names why, and then merge.land says
 # the landing had none. Every PR here is #300 up, so no seed above reaches it.

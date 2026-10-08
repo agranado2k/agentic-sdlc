@@ -367,7 +367,7 @@ fi
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
 	if [ "$CASCADE" = 1 ]; then
-		echo "skill-dispatch: cascade — rung 1 on the cascade model, judged by '$CASCADE_ORACLE' and the pairing guard; a red rung resets to $CASCADE_BASE and rung 2 runs on the tier's mapped model. A dry run runs neither." >&2
+		echo "skill-dispatch: cascade — rung 1 on the cascade model, judged by '$CASCADE_ORACLE' and the pairing guard; a red rung resets to $CASCADE_BASE and rung 2 runs on the tier's mapped model, or the implementer tier's when that is the cascade model itself. A dry run runs neither." >&2
 		CASCADE=0
 	fi
 	break
@@ -453,8 +453,36 @@ _cascade() {
 	(cd "$CASCADE_WT" && git reset -q --hard "$CASCADE_BASE" && git clean -qfd) ||
 		die "the reset of '$CASCADE_WT' to $CASCADE_BASE failed; rung 2 does not run on a dirty tree"
 
-	_cascade_rung 2 "$AGENTS_CONFIG" "$_cs_tmp/rung2.out" "$@"
-	_m2=$(_cascade_model "$AGENTS_CONFIG")
+	# THE ESCALATION MUST CHANGE THE MODEL (ADR-0018). When the mechanical
+	# tier itself maps the cascade's model — the kit's own policy since its
+	# mechanical tier follows the Sonnet family — rung 2 on "the tier's mapped
+	# model" would be the same model drawn twice. It escalates to the
+	# implementer tier's model instead (the ticket's domain carried through),
+	# both halves of it, staged as the mechanical mapping for that one rung.
+	_cs_cfg2=$AGENTS_CONFIG
+	# shellcheck disable=SC2086
+	if [ "$_m1" = "$(_cascade_model "$AGENTS_CONFIG")" ] &&
+		[ "$(AGENTS_CONFIG=$_cs_tmp/cheap.config.sh sh "$ROOT/scripts/agents.lib.sh" --harness $TIER_ARGS 2>/dev/null)" = \
+			"$(AGENTS_CONFIG=$AGENTS_CONFIG sh "$ROOT/scripts/agents.lib.sh" --harness $TIER_ARGS 2>/dev/null)" ]; then
+		# shellcheck disable=SC2086
+		_esc_model=$(AGENTS_CONFIG=$AGENTS_CONFIG sh "$ROOT/scripts/agents.lib.sh" implementer $_cascade_domain 2>/dev/null) || _esc_model=''
+		# shellcheck disable=SC2086
+		_esc_harness=$(AGENTS_CONFIG=$AGENTS_CONFIG sh "$ROOT/scripts/agents.lib.sh" --harness implementer $_cascade_domain 2>/dev/null) || _esc_harness=''
+		if [ -n "$_esc_model" ]; then
+			case "$_esc_harness$_esc_model" in *"'"*) die "the implementer tier's value carries a quote; the cascade cannot stage its escalation" ;; esac
+			{
+				printf ". '%s'\n" "$AGENTS_CONFIG"
+				printf "AGENT_TIER_MECHANICAL='%s%s'\n" "${_esc_harness:+$_esc_harness:}" "$_esc_model"
+				[ -n "$_cascade_domain" ] &&
+					printf 'unset AGENT_TIER_MECHANICAL_%s\n' "$(printf '%s' "$_cascade_domain" | tr 'a-z-' 'A-Z_')"
+			} >"$_cs_tmp/escalate.config.sh"
+			_cs_cfg2=$_cs_tmp/escalate.config.sh
+			echo "skill-dispatch: the mechanical tier maps the cascade's own model ($_m1); rung 2 escalates to the implementer tier's model ($_esc_model)" >&2
+		fi
+	fi
+
+	_cascade_rung 2 "$_cs_cfg2" "$_cs_tmp/rung2.out" "$@"
+	_m2=$(_cascade_model "$_cs_cfg2")
 	case "$RUNG_STATUS" in
 	3 | 69)
 		_cascade_emit model="$_m2" outcome=in-session data.rung=2 \
