@@ -121,6 +121,10 @@ The rubric, in the order to ask it:
    an unsure planner picking the cheap tier turns a saving into a re-run, and a
    re-run costs more than the tier ever saved.
 
+A change that adds a rule and applies it to every site of a shape is two
+tickets — the rule with its check first, the sweep second, `Blocked by:` the
+first — whatever tier each one draws.
+
 Two rules that keep the rubric honest:
 
 - **Ambiguity resolves upward**, the opposite direction from the autonomy label

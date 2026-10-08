@@ -533,6 +533,12 @@ case $wf_rubric in
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
 oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
+# The template mirrors the skill's sweep line (#650's review, L-3, folded into
+# #653): a consumer's own rubric sizes a rule and its sweep as two tickets too.
+wf_rubric_all=$(awk '/^The rubric, in the order to ask it:/ { on = 1 } on && /^Unmapped is a working state/ { exit } on { print }' "$ROOT/constitution/local-workflow.md.template" | tr '\n' ' ' | tr -s ' ')
+t_text_has "$wf_rubric_all" "adds a rule and applies it to every site of a shape is two tickets" "the workflow template sizes a rule plus its sweep as two tickets"
+t_text_has "$wf_rubric_all" "the rule with its check first, the sweep second" "the workflow template orders the rule and its check before the sweep"
+t_text_has "$wf_rubric_all" "the sweep second, \`Blocked by:\` the first" "the workflow template blocks the sweep on the rule"
 # The two tier tables (ticket #467): the kit's (in its kit-own tiers article
 # since ADR-0014) and the consumer manual
 # template each give a `mechanical` row a signal cell, and #418 left both
