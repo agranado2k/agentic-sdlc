@@ -4725,13 +4725,13 @@ head -25 "$RFIX" >"$SCRATCH/resumed-632.jsonl"
 start_632 startup
 phantom_632
 phantom_632
-# The harness is killed here: no SessionEnd. Then `claude --resume`.
+# The agent harness is killed here: no SessionEnd. Then `claude --resume`.
 start_632 resume
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "the resume's start hook exits 0, silent on stdout" ||
 	fail "the resume's start hook: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 E632=$(end_line "$S632")
 [ "$(printf '%s\n' "$E632" | grep -c .)" = 1 ] &&
-	pass "the run the harness never ended gets one session.end at the resume" ||
+	pass "the run the agent harness never ended gets one session.end at the resume" ||
 	fail "expected one session.end for the killed run, got: $E632"
 [ "$(data_of "$E632" phantoms)" = 2 ] &&
 	pass "and it carries the killed run's two phantoms" ||

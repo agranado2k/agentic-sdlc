@@ -70,7 +70,7 @@ if [ -n "$why" ]; then
 	exit 0
 fi
 
-# THE RUN BEFORE A RESUME, WHEN NOTHING ENDED IT (#632). A harness that is
+# THE RUN BEFORE A RESUME, WHEN NOTHING ENDED IT (#632). An agent harness that is
 # killed or restarted fires no SessionEnd, so that run's usage and phantom
 # count were recorded by nobody — retro-20261007T151351Z found a session with
 # three starts and no end. A resume is the first moment anything sees the
