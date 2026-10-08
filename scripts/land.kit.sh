@@ -159,8 +159,8 @@ trace_read() {
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
 # One value per line: a title is the only free text, and it comes last.
-STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,title \
-	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), .title') ||
+STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,headRefName,title \
+	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), (.headRefName // ""), .title') ||
 	refuse "the forge did not answer for it"
 field() { printf '%s\n' "$STATE" | sed -n "${1}p"; }
 [ "$(field 1)" = OPEN ] || refuse "it is $(field 1), not open"
@@ -216,7 +216,7 @@ fi
 
 BASE=$(field 6)
 [ -n "$TICKET" ] || TICKET=$(field 7)
-TITLE=$(field 8)
+TITLE=$(field 9)
 if [ -n "$TICKET" ]; then
 	FB_SUBJECT="ticket:#$TICKET"
 	set -- "related=ticket:#$TICKET"
@@ -237,14 +237,11 @@ if [ -n "$(trace_read dir)" ] &&
 	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
 	_po_rel=
 	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
-	_po_branch=$(gh pr view "$PR" --json headRefName --jq '.headRefName // ""' 2>/dev/null |
-		sed -n '1{/^[A-Za-z0-9][A-Za-z0-9._/-]\{0,99\}$/p;}')
+	_po_branch=$(field 8 | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
 	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
-	if [ -n "$_po_rel" ]; then
-		trace quiet kind=pr.open "subject=pr:#$PR" "related=$_po_rel" outcome=opened data.via=land "reason=$TITLE"
-	else
-		trace quiet kind=pr.open "subject=pr:#$PR" outcome=opened data.via=land "reason=$TITLE"
-	fi
+	# The landing's own arguments sit in "$@" for step 2: the optional field
+	# is spelled as an argument only when it is there, never by `set --`.
+	trace quiet kind=pr.open "subject=pr:#$PR" ${_po_rel:+"related=$_po_rel"} outcome=opened data.via=land "reason=$TITLE"
 fi
 
 # --- 2. the merge -------------------------------------------------------------

@@ -33,7 +33,7 @@ t_init
 # --- the stub forge CLI ------------------------------------------------------
 # The PR's state is one value per line, in the order the script asks for it:
 # state, isDraft, mergeable, mergeStateStatus, reviewDecision, base branch,
-# closing ticket, title. STUB_* variables set the forge's answers.
+# closing ticket, head branch, title. STUB_* variables set the forge's answers.
 STUBDIR="$SCRATCH/bin"
 mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
@@ -49,11 +49,6 @@ case " $* " in
 	[ "${STUB_HEAD_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_HEAD_RC"; }
 	printf '%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}"
 	;;
-*" pr view "*"headRefName"*)
-	# The PR's head branch: the pr.open the landing writes when the PR has none
-	# names it (#638).
-	printf '%s\n' "${STUB_BRANCH-feat/x}"
-	;;
 *" pr view "*"body"*)
 	# The PR body is a file the case wrote — free text, quotes and all, so it
 	# never passes through the knob file's quoting.
@@ -63,7 +58,7 @@ case " $* " in
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
 	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
-		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_TITLE:-feat(x): a slice}"
+		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_BRANCH-feat/x}" "${STUB_TITLE:-feat(x): a slice}"
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
@@ -915,6 +910,7 @@ land STUB_TICKET= 403
 opens 403 | grep -qF '"related":"branch:feat/x"' && pass "with no ticket known, related names the branch alone" ||
 	fail "with no ticket, the pr.open's related is not the branch alone: $(opens 403)"
 
+# #404 is seeded with no pr.iterate, so the iteration check refuses it.
 land 404
 [ "$(events 404 pr.open)" = 0 ] && pass "a refused PR gets no pr.open either" || fail "a refused PR was recorded opened"
 
