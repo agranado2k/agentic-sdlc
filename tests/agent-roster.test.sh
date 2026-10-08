@@ -361,6 +361,11 @@ grep -q 'trace question was not asked' "$OUT" &&
 	pass "…and bootstrap says the question was not asked" ||
 	fail "bootstrap left the trace off with no terminal and did not say it was not asked"
 trace_says_off "$OUT" "no terminal"
+# The note sits under a list wrapped to the terminal's 80 columns; a line of it
+# running past them reads as a defect in the one paragraph meant to be read.
+wide=$(sed -n '/^The trace is OFF/,/^$/p' "$OUT" | awk 'length($0) > 80')
+[ -z "$wide" ] && pass "the OFF note is wrapped to 80 columns" ||
+	fail "the OFF note runs past 80 columns: $wide"
 
 # The stamped ignore file: the trace directory a yes writes is covered, and the
 # comment over it describes the consumer's own policy file — never a kit-only

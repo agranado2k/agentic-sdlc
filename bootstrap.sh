@@ -378,15 +378,16 @@ EOF
 		;;
 	no) _tn_why="you answered no" ;;
 	uncovered) _tn_why=".gitignore does not cover .trace/ yet" ;;
-	*) _tn_why="the question was not asked — no terminal" ;;
+	*) _tn_why="the question was not asked: no terminal" ;;
 	esac
 	cat <<EOF
 
 The trace is OFF — $_tn_why.
 That is a day-one decision, not a default to inherit: with TRACE_DIR empty
-every skill run records nothing, and /retro has no wave to read. To turn it on, make sure .gitignore lists .trace/, then set
-TRACE_DIR='.trace' in scripts/trace.config.sh. Off on purpose is fine — say so
-in docs/diary.md, so the next session does not have to ask.
+every skill run records nothing, and /retro has no wave to read. To turn it
+on, make sure .gitignore lists .trace/, then set TRACE_DIR='.trace' in
+scripts/trace.config.sh. Off on purpose is fine — say so in docs/diary.md, so
+the next session does not have to ask.
 EOF
 }
 
