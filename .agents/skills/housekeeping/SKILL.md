@@ -59,7 +59,10 @@ to — is in `CHECKLIST.md`; this is the order.
    whose target moved, counts in prose against reality, articles and skills
    that nothing invokes, skill descriptions that no longer match their bodies,
    frontmatter outside the specification, memory that outlived the code,
-   whether a `/retro` ran inside the window.
+   whether a `/retro` ran inside the window, and the two day-one settings —
+   each a finding in the report: when `sh scripts/trace.sh dir` prints nothing,
+   "trace unconfigured — this run recorded nothing"; when `sh scripts/agents.lib.sh reviewer` prints
+   nothing, "reviewer tier unmapped — the review shared the author's model".
    *Source: Addy Osmani, "Audit your Agent files"; shared invariant §11 (the
    context budget); the Agent Skills specification.*
 2. **The glossary against the code** — terms with no use, names with no term,

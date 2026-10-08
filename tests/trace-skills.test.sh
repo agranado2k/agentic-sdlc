@@ -1757,4 +1757,49 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "27. An off trace and an unmapped reviewer are findings in the report (#654)"
+# ---------------------------------------------------------------------------
+# A consumer ran a whole wave with the trace off and the reviewer tier
+# unmapped: every emit a silent no-op, every review on the author's model, and
+# both said only in stderr lines buried in subagent output. /implement,
+# /review-pr and /merge-train now list each in their final report, and
+# /housekeeping in its report — each phrase in the same sentence as the one
+# read that decides it: `trace.sh dir` printing nothing, the resolver printing
+# nothing for the reviewer tier (/review-pr names its one resolve, §3, rather
+# than a second one — section 6 holds it to resolving once).
+DAY_ONE_TRACE='trace unconfigured — this run recorded nothing'
+DAY_ONE_REVIEWER="reviewer tier unmapped — the review shared the author's model"
+# day_one_missing <SKILL.md> — the findings the file does not hold.
+day_one_missing() {
+	_do=$(tr '\n' ' ' <"$1" | awk '{ gsub(/\. /, ".\n"); print }')
+	_do_out=''
+	printf '%s\n' "$_do" | grep -F 'sh scripts/trace.sh dir' | grep -qF "$DAY_ONE_TRACE" || _do_out="$_do_out trace"
+	printf '%s\n' "$_do" | grep -F 'scripts/agents.lib.sh' | grep -qF "$DAY_ONE_REVIEWER" || _do_out="$_do_out reviewer"
+	printf '%s\n' "$_do" | grep -F "$DAY_ONE_TRACE" | grep -qiF 'report' || _do_out="$_do_out not-in-the-report"
+	printf '%s' "$_do_out" | sed 's/^ //'
+}
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(skill_md "$sk")
+	miss=$(day_one_missing "$f")
+	[ -z "$miss" ] && pass "/$sk reports an off trace and an unmapped reviewer as findings" ||
+		fail "/$sk does not hold the day-one findings: $miss (#654)"
+done
+# The read each finding rests on answers as the sentence says: nothing printed.
+( cd "$ROOT" && TRACE_DIR='' TRACE_CONFIG="$ROOT/scripts/trace.config.sh" sh "$TRACE" dir 2>/dev/null ) | grep -q . &&
+	fail "trace.sh dir printed a directory with the shipped empty policy" ||
+	pass "trace.sh dir prints nothing when the shipped policy leaves TRACE_DIR empty"
+# Baits: each phrase deleted, in each skill, goes red.
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(skill_md "$sk")
+	for phrase in "$DAY_ONE_TRACE" "$DAY_ONE_REVIEWER"; do
+		grep -vF "$phrase" "$f" >"$SCRATCH/bait654.md"
+		if ! cmp -s "$SCRATCH/bait654.md" "$f" && [ -n "$(day_one_missing "$SCRATCH/bait654.md")" ]; then
+			pass "bait: /$sk without '$phrase' goes red"
+		else
+			fail "bait: /$sk without '$phrase' was not caught — or planted nothing"
+		fi
+	done
+done
+
 t_done "trace skills contract"

@@ -9,7 +9,8 @@
 # held here is the pointing, not only the file.
 #
 # What is asserted: the reference exists and names the four reads; every
-# skill that resolves a tier to spawn (`agents.lib.sh` anywhere in its files)
+# skill that resolves a tier to spawn (`agents.lib.sh` anywhere in its files,
+# bar the line reporting an unmapped reviewer tier)
 # names the reference; every stamped spawn site (a `Trace-Spawn:` line) names
 # it on that same line — "always" for a worker that holds the tree and a
 # shell, "never" for a judge reader, whose reach is its scratch files alone;
@@ -38,8 +39,11 @@ done
 
 banner "every spawning skill names the reference"
 skills=0
+# The one line that names the resolver without spawning is the day-one
+# finding (#654) — a report that the reviewer tier answered nothing — so a
+# line carrying it does not make a skill a spawning one.
 for d in .agents/skills/*/; do
-	grep -qs 'agents\.lib\.sh' "$d"*.md || continue
+	grep -hs 'agents\.lib\.sh' "$d"*.md | grep -qvF 'reviewer tier unmapped — the review shared' || continue
 	skills=$((skills + 1))
 	if grep -qsF "$REF" "$d"*.md; then
 		pass "$d names $REF"
