@@ -423,13 +423,16 @@ trace quiet kind=feedback "$@"
 # one write is `merge --ff-only`. It changes no exit status and no event.
 RC=${LAND_ROOT_CHECKOUT:-$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')}
 leave_root() { note "left the root checkout $RC alone: $1 — fast-forward it by hand when it is clean and on $BASE"; }
+# Read before the ladder, never inside it: empty is a detached HEAD, or no
+# checkout at all, which the first rung below names first.
+_rc_branch=$(git -C "$RC" symbolic-ref -q --short HEAD 2>/dev/null) || _rc_branch=
 if [ -z "$RC" ] || ! _rc_top=$(git -C "$RC" rev-parse --show-toplevel 2>/dev/null) ||
 	[ "$_rc_top" != "$(cd "$RC" 2>/dev/null && pwd -P)" ]; then
 	note "the root checkout ${RC:-<none found>} is not a checkout — no root fast-forwarded"
-elif _rc_branch=$(git -C "$RC" symbolic-ref -q --short HEAD 2>/dev/null) && [ "$_rc_branch" != "$BASE" ]; then
-	leave_root "it is on $_rc_branch, not $BASE"
-elif [ -z "${_rc_branch:-}" ]; then
+elif [ -z "$_rc_branch" ]; then
 	leave_root "its HEAD is detached, not on $BASE"
+elif [ "$_rc_branch" != "$BASE" ]; then
+	leave_root "it is on $_rc_branch, not $BASE"
 elif [ -n "$(git -C "$RC" --no-optional-locks status --porcelain 2>/dev/null)" ]; then
 	leave_root "it has uncommitted changes"
 elif ! git -C "$RC" fetch -q origin "$BASE" >/dev/null 2>&1; then
