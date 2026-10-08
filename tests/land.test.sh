@@ -43,6 +43,12 @@ printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
 case " $* " in
 *" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
+*" pr view "*"headRefOid"*)
+	# The head commit, and the date it was committed: the iteration check
+	# reads the trace for a pr.iterate at or after it (#630).
+	[ "${STUB_HEAD_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_HEAD_RC"; }
+	printf '%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}"
+	;;
 *" pr view "*"body"*)
 	# The PR body is a file the case wrote — free text, quotes and all, so it
 	# never passes through the knob file's quoting.
@@ -159,14 +165,18 @@ events() { show "pr:#$1" | grep -c "\"kind\":\"$2\"" | tr -d ' '; }
 # ---------------------------------------------------------------------------
 banner "1. A PR that is not green and mergeable is refused: exit 2, nothing merged, nothing emitted"
 # ---------------------------------------------------------------------------
+# not_landed <pr> <label> — the last run refused: exit 2, no merge call.
+not_landed() {
+	s_assert_status 2 "$2: refused with exit 2"
+	[ "$(merges)" = 0 ] && pass "$2: no merge call reached the forge" ||
+		fail "$2: the forge was asked to merge a PR the script should have refused"
+}
 # refused <knob> <pr> <label>
 refused() {
 	_r_pr=$2
 	_r_label=$3
 	land "$1" "$_r_pr"
-	s_assert_status 2 "$_r_label: refused with exit 2"
-	[ "$(merges)" = 0 ] && pass "$_r_label: no merge call reached the forge" ||
-		fail "$_r_label: the forge was asked to merge a PR the script should have refused"
+	not_landed "$_r_pr" "$_r_label"
 	[ "$(show "pr:#$_r_pr" | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "$_r_label: nothing reached the trace" ||
 		fail "$_r_label: an event was emitted for a refused PR"
 }
@@ -185,6 +195,23 @@ land abc
 s_assert_status 2 "a PR that is not a number is a usage error"
 land
 s_assert_status 2 "no PR at all is a usage error"
+
+# iterated <PR>… — record a /pr-iterate iteration on each PR, now: the stub's
+# head commit is dated 2000 unless a case says otherwise, so each event sits
+# at its head. Section 1's PRs are refused before the trace is read, and #140
+# is section 4's unconfigured run, whose trace must stay empty.
+iterated() {
+	for _it_pr in "$@"; do
+		env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=pr.iterate \
+			"subject=pr:#$_it_pr" outcome=stopped data.iteration=1 reason=seeded </dev/null >/dev/null 2>&1 ||
+			fail "could not seed a pr.iterate event on pr:#$_it_pr"
+	done
+}
+_seed=120
+while [ "$_seed" -le 210 ]; do
+	[ "$_seed" = 140 ] || iterated "$_seed"
+	_seed=$((_seed + 1))
+done
 
 # ---------------------------------------------------------------------------
 banner "2. A green PR lands: one merge.land, one feedback"
@@ -604,5 +631,84 @@ grep -qF 'gh run rerun <id> --failed' "$MT" && tr '\n' ' ' <"$MT" | grep -qiE 'r
 awk '/git tag -a v<version> <merge sha>/ { held = $0; next } { print } END { print held }' "$MT" >"$SCRATCH/mt.late"
 mt_order "$SCRATCH/mt.late" && fail "the order probe passed a skill that tags after the wait — the check is vacuous" ||
 	pass "the order probe rejects a skill that tags after the wait"
+
+# ---------------------------------------------------------------------------
+banner "9. No pr.iterate at the head commit: refused, or landed on a named reason and recorded (#630)"
+# ---------------------------------------------------------------------------
+# #625 and #626 landed with no /pr-iterate iteration at their head commit. The
+# landing reads the trace (ADR-0019) for a pr.iterate on the PR stamped at or
+# after its head commit's date; with none it refuses — exit 2, nothing merged,
+# nothing recorded — unless --no-iteration names why, and then merge.land says
+# the landing had none. Every PR here is #300 up, so no seed above reaches it.
+# no_iter <label> <pr> — refused on the iteration check: the seeded
+# pr.iterate stays, so the trace is held to no merge.land and no feedback.
+no_iter() {
+	_ni_label=$1
+	not_landed "$2" "$_ni_label"
+	[ "$(events "$2" merge.land)" = 0 ] && [ "$(events "$2" feedback)" = 0 ] &&
+		pass "$_ni_label: no landing reached the trace" || fail "$_ni_label: a landing was recorded: $(show "pr:#$2")"
+	s_assert_err_has "pr-iterate" "$_ni_label: stderr sends it to /pr-iterate"
+	s_assert_err_has "--no-iteration" "$_ni_label: and names the override"
+}
+land 300
+no_iter "no pr.iterate event at all" 300
+s_assert_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
+
+iterated 301
+land STUB_HEAD_DATE=2999-01-01T00:00:00Z 301
+no_iter "a pr.iterate older than the head commit" 301
+
+iterated 3020
+land 302
+no_iter "a pr.iterate on another PR only (#3020)" 302
+
+iterated 303
+land STUB_HEAD_RC=1 303
+no_iter "a forge that does not name the head commit" 303
+land STUB_HEAD_DATE=yesterday 303
+no_iter "a head date of no known shape" 303
+
+iterated 304
+land 304
+landed_with 304 "a pr.iterate at the head commit" '"iterated":"yes"'
+show 'pr:#304' --kind merge.land | grep -qF '"no_iteration"' && fail "an iterated landing carries a no_iteration reason" ||
+	pass "and carries no no_iteration reason"
+
+land 305 --no-iteration 'hotfix: the operator ran the checks by hand'
+landed_with 305 "no pr.iterate, with --no-iteration" '"iterated":"no"' '"no_iteration":"hotfix: the operator ran the checks by hand"'
+[ "$(merges)" = 1 ] && pass "--no-iteration: one merge call" || fail "--no-iteration: $(merges) merge calls"
+
+iterated 306
+land 306 --no-iteration 'not needed'
+landed_with 306 "an iteration at head and --no-iteration both" '"iterated":"yes"'
+show 'pr:#306' --kind merge.land | grep -qF '"no_iteration"' && fail "an unused override reason was recorded" ||
+	pass "and the unused override's reason is not recorded"
+
+land STUB_MERGE_RC=1 307 --no-iteration 'forge rejects it'
+show 'pr:#307' --kind merge.land | grep -qF '"iterated":"no"' && pass "a rejected merge's merge.land stopped says it had no iteration too" ||
+	fail "the stopped merge.land lacks iterated=no: $(show 'pr:#307' --kind merge.land)"
+
+land 308 "--no-iteration" "two
+lines"
+s_assert_status 2 "--no-iteration with a reason that is not one line is a usage error, before any merge"
+[ "$(merges)" = 0 ] && pass "and nothing reached the forge" || fail "a multi-line reason was merged on: $(merges) merge calls"
+
+land STUB_HEAD_OID='not-a-sha' 310
+no_iter "a head the forge names in no sha shape" 310
+s_assert_err_has "<unnamed>" "stderr marks the head commit unnamed, never echoing the forge's text"
+land STUB_HEAD_DATE= 310
+s_assert_err_has "<undated>" "stderr marks an undated head as such"
+
+land 308 --no-iteration ''
+s_assert_status 2 "--no-iteration with an empty reason is a usage error"
+land 308 --no-iteration
+s_assert_status 2 "--no-iteration with no reason is a usage error"
+
+# Unconfigured, nothing can be read and nothing is recorded: the check is
+# skipped, said on stderr, and the merge goes on (ADR-0008 clause 2).
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 309 </dev/null
+s_assert_status 0 "unconfigured, a PR with no recorded iteration still lands"
+s_assert_err_has "not checked" "and stderr says the iteration was not checked"
 
 t_done "land one PR by hand"

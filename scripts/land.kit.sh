@@ -3,7 +3,7 @@
 # Kit-authoring only, never shipped (bootstrap.sh's KIT_ONLY list deletes it,
 # with tests/land.test.sh).
 #
-#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']
+#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>']
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -19,6 +19,13 @@
 #      base, carries no human "changes requested", and every check is green.
 #      A PR behind its base is refused too: the train's update-branch step
 #      is the train's to take.
+#   1b. REFUSES the same way a PR with no /pr-iterate iteration at its head
+#      commit: no pr.iterate event on pr:#<N> in the trace stamped at or
+#      after the head commit's committed date (#630, ADR-0019). The operator
+#      overrides it with --no-iteration '<reason>', and merge.land records
+#      data.iterated=no with the reason as data.no_iteration; with one at
+#      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
+#      and records nothing: the check is skipped, and stderr says so.
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
 #      one /merge-train's hard rule 3 reads from the local workflow article
 #      (in this repo, the root AGENTS.md). A merge the forge rejects
@@ -53,8 +60,10 @@
 # THE TICKET is the PR's first closing reference, or --ticket. With neither,
 # the feedback sits on the PR itself.
 #
-# THE TRACE is never load-bearing (ADR-0008 clause 4): unconfigured, the merge
-# and stdout are exactly what a traced run does. Kit-only, so the kit's own
+# THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
+# the merge and stdout are exactly what a traced run does. Its one read is
+# step 1b's, and that read IS load-bearing when the trace is configured: no
+# pr.iterate at the head refuses the landing (ADR-0019). Kit-only, so the kit's own
 # policy is the default seam — scripts/trace.sh read through
 # scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
 # TRACE_CONFIG still wins (the broker's arrangement).
@@ -74,10 +83,11 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 
 usage() {
 	cat >&2 <<'EOF'
-usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>']
+usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>']
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
+  --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
 exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 EOF
 	exit 2
@@ -91,6 +101,7 @@ refuse() {
 PR=
 TICKET=
 UNASKED=
+NO_ITERATION=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--ticket)
@@ -101,6 +112,14 @@ while [ $# -gt 0 ]; do
 	--unasked)
 		[ $# -ge 2 ] && [ -n "$2" ] || usage
 		UNASKED=$2
+		shift
+		;;
+	--no-iteration)
+		# One printable line: the trace refuses a control character, and a
+		# reason it refused after the merge would leave the landing unrecorded.
+		[ $# -ge 2 ] && [ -n "$2" ] || usage
+		case $2 in *[![:print:]]*) note "--no-iteration takes a one-line reason"; usage ;; esac
+		NO_ITERATION=$2
 		shift
 		;;
 	-h | --help) usage ;;
@@ -116,12 +135,18 @@ command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
 # trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured
 # note, so an unconfigured run says it once. The switch rides the external
 # command, never a prefix on this function (forge-broker.kit.sh says why).
+TRACE_POLICY=${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}
 trace() {
 	_tr_quiet=
 	[ "$1" = quiet ] && _tr_quiet=1
 	shift
-	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
+	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="$TRACE_POLICY" \
 		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
+}
+# trace_read <subcommand> … — a read through the same policy, quiet.
+trace_read() {
+	TRACE_QUIET=1 TRACE_CONFIG="$TRACE_POLICY" \
+		sh "$ROOT/scripts/trace.sh" "$@" </dev/null 2>/dev/null
 }
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
@@ -145,6 +170,42 @@ case $? in
 8) refuse "its checks are still pending — not green yet" ;;
 *) refuse "its checks are not green" ;;
 esac
+
+# --- 1b. an iteration at the head commit (#630, ADR-0019) ---------------------
+# /pr-iterate records one pr.iterate per iteration, after its own push, so an
+# iteration that saw the head commit is stamped at or after that commit's
+# date. Each such stamp on pr:#<N> is compared with the head's date,
+# both ISO 8601 in UTC, as strings. Any outcome counts: whether the checks
+# are green is the gate above's question, not this one's. A head the forge
+# does not date is no iteration at it.
+ITERATED=
+if [ -z "$(trace_read dir)" ]; then
+	note "the trace is unconfigured — whether /pr-iterate ran at the head of PR #$PR is not checked"
+else
+	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h | $h, ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")' 2>/dev/null) || HEAD=
+	HEAD_OID=$(printf '%s\n' "$HEAD" | sed -n 1p)
+	HEAD_AT=$(printf '%s\n' "$HEAD" | sed -n 2p)
+	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
+	ITERATED=no
+	case $HEAD_AT in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z)
+		# The envelope only — up to the data map, as `show` reads it — so a
+		# data key never reads as the event's subject or stamp.
+		trace_read show "pr:#$PR" --kind pr.iterate |
+			awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
+				{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
+				index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
+				END { exit !f }' && ITERATED=yes
+		;;
+	*) HEAD_AT='<undated>' ;;
+	esac
+	if [ "$ITERATED" = no ]; then
+		[ -n "$NO_ITERATION" ] ||
+			refuse "no /pr-iterate iteration is recorded at its head commit $HEAD_OID ($HEAD_AT) — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
+		note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
+	fi
+fi
+
 BASE=$(field 6)
 [ -n "$TICKET" ] || TICKET=$(field 7)
 TITLE=$(field 8)
@@ -155,6 +216,8 @@ else
 	FB_SUBJECT="pr:#$PR"
 	set --
 fi
+[ -z "$ITERATED" ] || set -- "$@" "data.iterated=$ITERATED"
+[ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
 
 # --- 2. the merge -------------------------------------------------------------
 if ! gh pr merge "$PR" --merge >&2; then
