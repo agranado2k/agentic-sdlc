@@ -1015,14 +1015,42 @@ for _k_c in $_k_fb_rest; do
 	for _k_spec in planner implementer mechanical 'implementer content'; do
 		# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
 		_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+		# A tier mapped to a bare family word (ADR-0018) is held below, through
+		# the wrapper's bridge, not by this spelling check.
+		case $_k_ses in *-*) ;; *) continue ;; esac
 		_k_sw=$(printf '%s' "$_k_ses" | sed 's/^[^-]*-//; s/-.*//')
 		[ "$_k_c" = "$_k_ses" ] && _k_fb_bad="$_k_fb_bad $_k_c is the '$_k_spec' model;"
 		[ "$_k_cw" = "$_k_sw" ] && _k_fb_bad="$_k_fb_bad $_k_c shares the '$_k_spec' spawn word '$_k_sw';"
 	done
 done
 [ -z "$_k_fb_bad" ] &&
-	pass "every in-session fallback is no session tier's model, by id or by spawn word" ||
+	pass "every in-session fallback is no pinned session tier's model, by id or by spawn word" ||
 	fail "the kit's fallback can hand a session itself:$_k_fb_bad"
+# A FAMILY-FOLLOWING SESSION (ADR-0018) names itself by the bare word its tier
+# maps, and a pinned candidate of the same family IS its model today. The kit
+# wrapper's bridge refuses those; walked to the end through the wrapper — the
+# one way this repo resolves (hard rule 10) — no answer is of its family.
+_k_famwalk_bad=
+for _k_spec in planner implementer mechanical 'implementer content'; do
+	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+	case $_k_ses in '' | *-*) continue ;; esac
+	for _k_dom in '' self-implemented; do
+		_k_dead= _k_n=0
+		while [ "$_k_n" -lt 12 ]; do
+			# shellcheck disable=SC2086 # the optional domain, absent when empty
+			_k_ans=$(env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL="$_k_ses" AGENT_UNREACHABLE_MODELS="$_k_dead" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer $_k_dom)
+			[ -n "$_k_ans" ] || break
+			_k_aw=$(printf '%s' "$_k_ans" | sed 's/^[^-]*-//; s/-.*//')
+			[ "$_k_aw" = "$_k_ses" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_spec' reviewer${_k_dom:+ $_k_dom} -> $_k_ans;"
+			_k_dead="$_k_dead $_k_ans"
+			_k_n=$((_k_n + 1))
+		done
+	done
+done
+[ -z "$_k_famwalk_bad" ] &&
+	pass "walked through the wrapper, no family-following session is handed a model of its own family" ||
+	fail "a family-following session was handed its own family:$_k_famwalk_bad"
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
@@ -1778,19 +1806,86 @@ t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fb AGENT_UNREACHABLE_MODELS='vend
 	pass "a pinned id passes the bridge and matches; an unknown word reaches the resolver's warning" ||
 	fail "id and unknown word through the bridge: stdout '$S_OUT', stderr '$S_ERR'"
 
+# A FAMILY WORD THE POLICY MAPS IS THE POLICY'S OWN SPELLING (ADR-0018). A
+# tier that follows a family is mapped to the bare word — `sonnet`, "the
+# newest Sonnet" — so a session on that tier names itself by it, as the
+# contract asks. The pinned ids that fold to that word are the same family,
+# and today the same model: a review by one of them is the author reviewing
+# itself. The wrapper owns the fold, so it treats a mapped family word as
+# covering those ids, for the session it names and for an unreachable name
+# alike. A word the policy does NOT map (`mid`, above) is still compared
+# exactly and refuses nothing.
+cat >"$PROBE/scripts/agents.kit.fam.config.sh" <<'PROBE_FAM_CFG'
+AGENT_TIER_PLANNER='strong'
+AGENT_TIER_IMPLEMENTER='vendor-mid-4-20260101'
+AGENT_TIER_MECHANICAL='small'
+AGENT_TIER_REVIEWER='vendor-strong-9'
+AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='vendor-small-2'
+AGENT_TIER_REVIEWER_FALLBACK='vendor-small-2 vendor-third-3'
+PROBE_FAM_CFG
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fam AGENT_SESSION_MODEL=small sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "a session named by a mapped family word is refused every pinned id of that family" ||
+	fail "AGENT_SESSION_MODEL=small (mapped) gave '$S_OUT', expected vendor-strong-9 past vendor-small-2"
+case "$S_ERR" in
+*"session's own model"*) pass "…and the refusal is said as the session's own model" ;;
+*) fail "…with stderr '$S_ERR'" ;;
+esac
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fam AGENT_SESSION_MODEL=strong sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-small-2 ] &&
+	pass "a planner session on the mapped word 'strong' is refused vendor-strong-9, and vendor-small-2 is not its family" ||
+	fail "AGENT_SESSION_MODEL=strong gave '$S_OUT', expected vendor-small-2"
+t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=fam AGENT_UNREACHABLE_MODELS=small sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = vendor-strong-9 ] &&
+	pass "a mapped family word named unreachable still covers the pinned ids that fold to it" ||
+	fail "AGENT_UNREACHABLE_MODELS=small (mapped) gave '$S_OUT', expected vendor-strong-9"
+case "$S_ERR" in
+*"matches no"*) fail "…but it was warned about as matching nothing: '$S_ERR'" ;;
+*) pass "…and draws no match warning" ;;
+esac
+# The kit's own policy, through its own wrapper: a mechanical session names
+# itself `sonnet`, the policy's word for its tier, and must not be handed the
+# self-implemented reviewer, a pinned Sonnet.
+_k_mech=$(env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" mechanical 2>/dev/null)
+t_run_split env AGENT_SESSION_MODEL="$_k_mech" sh "$KIT_WRAPPER" --alias reviewer self-implemented
+[ -n "$S_OUT" ] && [ "$S_OUT" != "$(sh "$KIT_WRAPPER" --alias mechanical)" ] &&
+	pass "a '$_k_mech' session asking 'reviewer self-implemented' gets '$S_OUT', not its own family" ||
+	fail "a '$_k_mech' session asking 'reviewer self-implemented' got '${S_OUT:-nothing}' — its own family"
+
 # --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
 # the full id; the in-session spawn parameter takes the family word. Pinning
 # is what makes a model change a decision someone committed rather than a
 # roster moving underneath the policy, and this is what keeps it spawnable.
+# ADR-0018 un-pins two tiers on purpose: the planner follows the Opus family
+# and the mechanical tier the Sonnet family, each spelled as the bare family
+# word both the CLI's --model and the spawn parameter take — so their alias
+# is their value, folded to itself.
 t_run_split sh "$KIT_WRAPPER" --alias planner
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = fable ] &&
-	pass "--alias planner is the spawn word 'fable' for the pinned claude-fable-5-1" ||
-	fail "--alias planner gave '$S_OUT' (status $S_STATUS), expected 'fable'"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = opus ] &&
+	pass "--alias planner is 'opus' — the planner follows the Opus family (ADR-0018)" ||
+	fail "--alias planner gave '$S_OUT' (status $S_STATUS), expected 'opus'"
 t_run_split sh "$KIT_WRAPPER" --alias implementer
 [ "$S_OUT" = opus ] && pass "--alias implementer is 'opus'" || fail "--alias implementer gave '$S_OUT'"
 t_run_split sh "$KIT_WRAPPER" --alias mechanical
-[ "$S_OUT" = opus ] && pass "--alias mechanical is 'opus' — the tier moved off the cheapest model on 2026-10-01 (retro 20261001T150216Z)" ||
+[ "$S_OUT" = sonnet ] && pass "--alias mechanical is 'sonnet' — the tier follows the Sonnet family (ADR-0018)" ||
 	fail "--alias mechanical gave '$S_OUT'"
+# The family-following tiers are exactly two, spelled as the family word; every
+# other tier the policy maps stays a pinned id, versioned (ADR-0018 clause 1).
+for _fam in 'planner opus' 'mechanical sonnet'; do
+	_fam_tier=${_fam%% *} _fam_word=${_fam#* }
+	t_run_split env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" "$_fam_tier"
+	[ "$S_OUT" = "$_fam_word" ] &&
+		pass "the kit's $_fam_tier is the family word '$_fam_word', not a pinned id (ADR-0018)" ||
+		fail "the kit's $_fam_tier resolved '$S_OUT', expected the family word '$_fam_word'"
+done
+for _pin in implementer reviewer 'implementer content' 'reviewer self-implemented'; do
+	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+	t_run_split env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_pin
+	case "$S_OUT" in
+	*-*[0-9]*) pass "the kit's '$_pin' stays a pinned id ('$S_OUT')" ;;
+	*) fail "the kit's '$_pin' is '$S_OUT' — only the planner and mechanical tiers follow a family (ADR-0018)" ;;
+	esac
+done
 t_run_split sh "$KIT_WRAPPER" --alias implementer content
 [ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
 # The reviewer is local since #423, on the content model, so it has a spawn word.
@@ -1868,9 +1963,19 @@ t_run_split env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH
 _kit_scan=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER" | grep -c 'AGENT_TIER_\[')
 [ "$_kit_scan" = 0 ] && pass "the kit wrapper keeps no AGENT_TIER_ scan of its own — the resolver's agents_values is the one" ||
 	fail "the kit wrapper still scans AGENT_TIER_ values itself ($_kit_scan line(s))"
-_ids_word=$(sh "$KIT_WRAPPER" --alias implementer)
-printf '%s\n' "$S_OUT" | grep -qxF "$_ids_word" && fail "the kit's --ids lists the spawn word '$_ids_word'" ||
-	pass "and the spawn word ($_ids_word) is not among them"
+# A PINNED tier's spawn word is never an id: the reviewer's 'fable' folds from
+# claude-fable-5-1 and no tier maps the bare word. A family-following tier's
+# value IS its word (ADR-0018), so 'opus' and 'sonnet' are ids here — what the
+# planner's and the mechanical tier's spawns record.
+_ids_word=$(sh "$KIT_WRAPPER" --alias reviewer)
+t_run_split sh "$KIT_WRAPPER" --ids
+printf '%s\n' "$S_OUT" | grep -qxF "$_ids_word" && fail "the kit's --ids lists the pinned reviewer's spawn word '$_ids_word'" ||
+	pass "and a pinned tier's spawn word ($_ids_word) is not among them"
+for _fam_word in opus sonnet; do
+	printf '%s\n' "$S_OUT" | grep -qxF "$_fam_word" &&
+		pass "the kit's --ids lists the family word '$_fam_word' a family-following tier maps (ADR-0018)" ||
+		fail "the kit's --ids lacks '$_fam_word': $S_OUT"
+done
 
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"

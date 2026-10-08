@@ -2190,14 +2190,20 @@ t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" emi
 [ "$S_STATUS" = 0 ] && pass "with no resolver beside the script the rule is off, and the spawn writes" ||
 	fail "a script with no resolver beside it refused the spawn (exit $S_STATUS): $S_ERR"
 # The kit's own wrapper points the resolver at the kit's policy: the kit's
-# implementer id writes, its spawn word is refused.
+# implementer id writes, and a PINNED tier's spawn word is refused — the
+# reviewer's, since ADR-0018 maps the planner to the bare word `opus`, which
+# makes that word an id the policy maps (asserted below), not a spawn word.
 _sm_id=$(cd "$KIT" && sh scripts/agents.kit.sh implementer)
-_sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias implementer)
+_sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias reviewer)
+_sm_fam=$(cd "$KIT" && sh scripts/agents.kit.sh mechanical)
 _sm_kit() { cd "$KIT" && env -u AGENTS_CONFIG sh scripts/trace.kit.sh emit "$@" --dry-run; }
 t_run_split _sm_kit $SP "model=$_sm_id"
 [ "$S_STATUS" = 0 ] && pass "through the kit wrapper the kit's implementer id ($_sm_id) is accepted" || fail "the kit wrapper refused $_sm_id (exit $S_STATUS): $S_ERR"
 t_run_split _sm_kit $SP "model=$_sm_word"
 [ "$S_STATUS" = 2 ] && pass "and its spawn word ($_sm_word) is refused" || fail "the kit wrapper let the spawn word $_sm_word through (exit $S_STATUS)"
+t_run_split _sm_kit $SP "model=$_sm_fam"
+[ "$S_STATUS" = 0 ] && pass "and a family word a tier maps ($_sm_fam, ADR-0018) is an id, accepted" ||
+	fail "the kit wrapper refused the mapped family word $_sm_fam (exit $S_STATUS): $S_ERR"
 
 # verify: a spawn already written with a model off the rule is history — an
 # advisory naming file, line and value, never a bad line, never the verdict.

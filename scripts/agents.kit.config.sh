@@ -65,9 +65,24 @@
 # of what a recorded policy is for. Pinning means the move is a commit someone
 # made on purpose.
 #
+# TWO TIERS FOLLOW A FAMILY INSTEAD (ADR-0018, the operator, 2026-10-08): the
+# planner is `opus` and the mechanical tier `sonnet` — the bare family word,
+# "the newest in that family", not a pinned id. The rule above holds for every
+# other tier. The trade: no diff and no decision when Opus or Sonnet moves, in
+# exchange for the two tiers where the operator wants the current model always
+# being on it. The family word reaches both consumption paths unchanged: the
+# in-session spawn parameter takes it (`--alias` folds it to itself), and
+# `claude --model` documents "an alias for the latest model (e.g. 'fable',
+# 'opus', or 'sonnet')", verified against `claude --help` on 2026-10-08. A
+# mapped family word is also the policy's own spelling for a session on that
+# tier: scripts/agents.kit.sh treats it as covering every pinned id that folds
+# to it, so a `sonnet` session is never handed the pinned Sonnet reviewer.
+#
 # The cost of pinning is that the two consumption paths take different
-# spellings. `claude --model` (what scripts/agent-dispatch.sh runs when a tier
-# crosses agent harnesses) takes the full id. The IN-SESSION spawn parameter
+# spellings for a PINNED tier. `claude --model` (what scripts/agent-dispatch.sh
+# runs when a tier crosses agent harnesses) is given the full id — it takes
+# the family alias too, which is why the two family-following tiers above
+# need no bridge on that path. The IN-SESSION spawn parameter
 # — the Agent/Task tool, adapters/claude-code/README.md — takes only the
 # family word. `sh scripts/agents.kit.sh --alias <tier> [domain]` is the
 # bridge: it resolves the tier and prints the spawn word for it, so a session
@@ -115,8 +130,10 @@ AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
 # 1. PLANNER — strongest reasoning available. A wrong decomposition is paid
 #    for by every downstream ticket, so this is the one tier where "most
 #    expensive" is the cost-saving choice.
+#    2026-10-08 (ADR-0018): the newest Opus, by family word — it was the
+#    pinned claude-fable-5-1.
 # ---------------------------------------------------------------------------
-AGENT_TIER_PLANNER='claude-fable-5-1'
+AGENT_TIER_PLANNER='opus'
 
 # ---------------------------------------------------------------------------
 # 2. IMPLEMENTER — best cost/capability for real coding work. This is where
@@ -128,14 +145,16 @@ AGENT_TIER_IMPLEMENTER='claude-opus-5-5'   # the builder
 # 3. MECHANICAL — cheapest capable model. The suite is the oracle; capability
 #    past "can follow the pattern" buys nothing here.
 # ---------------------------------------------------------------------------
-AGENT_TIER_MECHANICAL='claude-opus-5'   # 2026-10-01: moved off the cheapest model — three of three mechanical tickets that day (#352, #354, #388) reviewed themselves or shipped untested rules and needed a rescue session (retro 20261001T150216Z); the operator chose Opus 5 for the tier, Opus 5.5 stays the implementer
+AGENT_TIER_MECHANICAL='sonnet'   # 2026-10-08 (ADR-0018): the newest Sonnet, by family word. It was claude-opus-5 from 2026-10-01, when three of three mechanical tickets that day (#352, #354, #388) on the cheapest model reviewed themselves or shipped untested rules (retro 20261001T150216Z)
 #
-# The cascade's cheap rung (#586, PRD #580): operator decision 2026-10-06.
-# Sonnet 5.5 runs a mechanical ticket first; the oracle and the pairing guard
-# decide whether Opus 5 above runs it again. Bare, as written, it names no
-# agent harness, so the skill dispatcher refuses the cascade and says so: the
-# rung runs only once it names one the dispatcher can cross to.
-AGENT_CASCADE_MECHANICAL='claude-sonnet-5-5'
+# The cascade's cheap rung (#586, PRD #580; operator decision 2026-10-06,
+# re-decided by ADR-0018). The rung is the mechanical tier's own model, the
+# same word: the skill dispatcher, seeing the cascade model equal the tier's
+# mapping, escalates a red rung to the IMPLEMENTER tier's model rather than
+# drawing Sonnet twice. Bare, as written, it names no agent harness, so the
+# dispatcher refuses the cascade and says so: the rung runs only once it
+# names one the dispatcher can cross to.
+AGENT_CASCADE_MECHANICAL='sonnet'
 
 # ---------------------------------------------------------------------------
 # 4. REVIEWER — strongest reasoning, in fresh context, and DIFFERENT from
@@ -154,7 +173,10 @@ AGENT_CASCADE_MECHANICAL='claude-sonnet-5-5'
 #      plain `reviewer`, no session named
 #        -> claude-fable-5-1, never the implementer's claude-opus-5-5
 #      `reviewer self-implemented`, any session this policy maps
-#        -> claude-sonnet-5-5, the model no session tier runs on
+#        -> claude-sonnet-5-5, the model no PINNED session tier runs on; a
+#           `sonnet` (mechanical) session is refused it by the kit
+#           wrapper's family bridge (ADR-0018 clause 4) and gets the plain
+#           reviewer
 #
 #    tests/agents-tiers.test.sh pins both. Past either answer the resolver
 #    walks AGENT_TIER_REVIEWER_FALLBACK, below (ADR-0013): a claude-fable-5-1
@@ -175,7 +197,8 @@ AGENT_TIER_REVIEWER='claude-fable-5-1'
 #
 #    2026-10-05 (#546, ADR-0007 amended): moved off claude-opus-5-5 to a THIRD
 #    model. The session models are two — claude-opus-5-5 (implementer) and
-#    claude-fable-5-1 (planner, content) — and one fixed answer can differ
+#    claude-fable-5-1 (content; the planner too until ADR-0018 moved it to
+#    `opus`) — and one fixed answer can differ
 #    from both only if it is neither. While it named claude-opus-5-5 it was
 #    right only for a fable session: every implementer session that day got
 #    its own model back, was saved by ADR-0007's refusal ONLY when it named
@@ -200,8 +223,9 @@ AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-sonnet-5-5'
 #    the plain reviewer, then this list in order; a spent list prints
 #    nothing, never the session's own model.
 #
-#      claude-sonnet-5-5   no session tier runs on it and its spawn word,
-#                          `sonnet`, is no session tier's — so a plain
+#      claude-sonnet-5-5   no pinned session tier runs on it (the mechanical
+#                          tier's `sonnet` is bridged, ADR-0018) and its spawn word,
+#                          `sonnet`, is no pinned session tier's — so a plain
 #                          `reviewer` whose fable is out of credits, or a
 #                          fable session refused its own, lands where the
 #                          2026-10-05 wave landed by hand.
