@@ -328,6 +328,10 @@ banner "7. The trace question: asked, flagged, or said to be unasked (#654)"
 # run with no terminal leave it empty — and each of those says so in the
 # next-steps text, so "off" is never inherited by silence.
 trace_line() { grep '^TRACE_DIR=' "$PROJ/scripts/trace.config.sh" | head -1; }
+# trace_is <the TRACE_DIR line expected> <what> — one assertion on the line.
+trace_is() {
+	[ "$(trace_line)" = "$1" ] && pass "$2" || fail "$2 — the file says: $(trace_line)"
+}
 OUT="$SCRATCH/trace.out"
 
 # trace_says_off <output file> <what> — the next-steps text names the decision
@@ -346,9 +350,7 @@ trace_says_on() {
 # asked — the case the consumer who traced nothing was in.
 fresh_project
 (cd "$PROJ" && sh bootstrap.sh --no-agents "Demo Trace Quiet" "A project." </dev/null >"$OUT" 2>&1)
-[ "$(trace_line)" = "TRACE_DIR=''" ] &&
-	pass "with no terminal the trace policy file stays empty" ||
-	fail "something was written with no terminal: $(trace_line)"
+trace_is "TRACE_DIR=''" "with no terminal the trace policy file stays empty"
 grep -q 'trace question was not asked' "$OUT" &&
 	pass "…and bootstrap says the question was not asked" ||
 	fail "bootstrap left the trace off with no terminal and did not say it was not asked"
@@ -362,7 +364,7 @@ wide=$(sed -n '/^The trace is OFF/,/^$/p' "$OUT" | awk 'length($0) > 80')
 # The stamped ignore file: the trace directory a yes writes is covered, and the
 # comment over it describes the consumer's own policy file — never a kit-only
 # file, which bootstrap has just deleted from this very tree.
-if git -C "$PROJ" check-ignore -q .trace/probe; then
+if git -C "$PROJ" check-ignore -v .trace/probe | grep -q '^\.gitignore:[0-9]*:[^!]'; then
 	pass "the stamped .gitignore covers the trace directory a yes writes"
 else
 	fail "the stamped .gitignore does not ignore .trace/"
@@ -376,16 +378,12 @@ grep -q 'scripts/trace.config.sh' "$PROJ/.gitignore" &&
 # answer is the whole question.
 fresh_project
 (cd "$PROJ" && sh bootstrap.sh --no-agents --with-trace "Demo Trace Yes" "A project." </dev/null >"$OUT" 2>&1)
-[ "$(trace_line)" = "TRACE_DIR='.trace'" ] &&
-	pass "--with-trace writes the trace directory, unattended" ||
-	fail "--with-trace wrote: $(trace_line)"
+trace_is "TRACE_DIR='.trace'" "--with-trace writes the trace directory, unattended"
 trace_says_on "$OUT" "--with-trace"
 
 fresh_project
 (cd "$PROJ" && sh bootstrap.sh --no-agents --no-trace "Demo Trace No" "A project." </dev/null >"$OUT" 2>&1)
-[ "$(trace_line)" = "TRACE_DIR=''" ] &&
-	pass "--no-trace leaves the trace policy file empty" ||
-	fail "--no-trace wrote: $(trace_line)"
+trace_is "TRACE_DIR=''" "--no-trace leaves the trace policy file empty"
 grep -q 'trace question was not asked' "$OUT" &&
 	fail "--no-trace was reported as not asked — it was answered" ||
 	pass "…and is reported as answered, not as unasked"
@@ -398,9 +396,7 @@ fresh_project
 sed "s|^TRACE_DIR=''|TRACE_DIR='elsewhere'|" "$PROJ/scripts/trace.config.sh" >"$PROJ/trace.tmp" &&
 	mv "$PROJ/trace.tmp" "$PROJ/scripts/trace.config.sh"
 (cd "$PROJ" && sh bootstrap.sh --no-agents --with-trace "Demo Trace Kept" "A project." </dev/null >"$OUT" 2>&1)
-[ "$(trace_line)" = "TRACE_DIR='elsewhere'" ] &&
-	pass "a TRACE_DIR the project already filled survives --with-trace, untouched" ||
-	fail "a filled TRACE_DIR was rewritten: $(trace_line)"
+trace_is "TRACE_DIR='elsewhere'" "a TRACE_DIR the project already filled survives --with-trace, untouched"
 assert_file_lacks "$OUT" "The trace is" "a filled TRACE_DIR is kept silently"
 assert_file_lacks "$OUT" "trace question was not asked" "a filled TRACE_DIR was never a question"
 
@@ -424,24 +420,25 @@ if [ "$HAVE_PTY" = 1 ]; then
 	grep -q 'Trace the chain' "$SCRATCH/pty.log" &&
 		pass "on a terminal the trace question is asked" ||
 		fail "no trace question appeared on the terminal"
-	[ "$(trace_line)" = "TRACE_DIR='.trace'" ] &&
-		pass "a yes on the terminal writes the trace directory" ||
-		fail "a yes wrote: $(trace_line)"
+	trace_is "TRACE_DIR='.trace'" "a yes on the terminal writes the trace directory"
 	trace_says_on "$SCRATCH/pty.log" "a terminal yes"
 
 	fresh_project
 	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-no" --no-agents
-	[ "$(trace_line)" = "TRACE_DIR=''" ] &&
-		pass "a no on the terminal leaves it empty" ||
-		fail "a no wrote: $(trace_line)"
+	trace_is "TRACE_DIR=''" "a no on the terminal leaves it empty"
 	trace_says_off "$SCRATCH/pty.log" "a terminal no"
+
+	# Enter alone is an answer, and the answer is no: [y/N].
+	printf '\n' >"$SCRATCH/answers.trace-enter"
+	fresh_project
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-enter" --no-agents
+	trace_is "TRACE_DIR=''" "Enter alone on the terminal is a no"
+	assert_file_has "$SCRATCH/pty.log" "The trace is OFF — you answered no" "Enter is reported as answered"
 
 	# The yes is WAITING — so an empty line is the flag's doing, not a quiet run's.
 	fresh_project
 	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-yes" --no-agents --no-trace
-	[ "$(trace_line)" = "TRACE_DIR=''" ] &&
-		pass "--no-trace suppresses the question even with a yes waiting on a terminal" ||
-		fail "--no-trace did not suppress it: $(trace_line)"
+	trace_is "TRACE_DIR=''" "--no-trace suppresses the question even with a yes waiting on a terminal"
 else
 	skip "no python3 — the trace question's terminal legs are NOT covered on this machine"
 fi
