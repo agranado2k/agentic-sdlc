@@ -26,6 +26,9 @@
 #      data.iterated=no with the reason as data.no_iteration; with one at
 #      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
 #      and records nothing: the check is skipped, and stderr says so.
+#   1c. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
+#      the head branch) when the trace holds none for it: a PR opened outside
+#      /implement still joins its ticket for /retro (#638).
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
 #      one /merge-train's hard rule 3 reads from the local workflow article
 #      (in this repo, the root AGENTS.md). A merge the forge rejects
@@ -223,6 +226,26 @@ else
 fi
 [ -z "$ITERATED" ] || set -- "$@" "data.iterated=$ITERATED"
 [ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
+
+# --- 1c. a PR the trace never saw opened (#638) --------------------------------
+# A PR opened outside /implement left no pr.open, and /retro joins a ticket to
+# its PR through that event's related field. When the trace holds none on
+# pr:#<N>, the landing writes it, marked data.via=land. The head branch is
+# forge text: only a ref of a bounded shape reaches the trace, else nothing.
+# Unconfigured, there is nothing to read and nothing written.
+if [ -n "$(trace_read dir)" ] &&
+	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
+	_po_rel=
+	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
+	_po_branch=$(gh pr view "$PR" --json headRefName --jq '.headRefName // ""' 2>/dev/null |
+		sed -n '1{/^[A-Za-z0-9][A-Za-z0-9._/-]\{0,99\}$/p;}')
+	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
+	if [ -n "$_po_rel" ]; then
+		trace quiet kind=pr.open "subject=pr:#$PR" "related=$_po_rel" outcome=opened data.via=land "reason=$TITLE"
+	else
+		trace quiet kind=pr.open "subject=pr:#$PR" outcome=opened data.via=land "reason=$TITLE"
+	fi
+fi
 
 # --- 2. the merge -------------------------------------------------------------
 if ! gh pr merge "$PR" --merge >&2; then
