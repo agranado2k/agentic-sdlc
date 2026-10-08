@@ -718,11 +718,12 @@ banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
 # reader joins them as one kind, so they write one field set. The script's set
 # is every data key its landed merge.land events above carry — a release, a
 # tier and an override among them — and the train's is the data keys its emit
-# line names. Two keys are the script's alone: data.iterated and
+# line names, compared whole. Two keys are the script's alone: data.iterated and
 # data.no_iteration answer a trace read (ADR-0019) that no chain skill makes
 # (ADR-0008 clause 7), so the train names neither.
 LAND_ONLY='iterated no_iteration'
-land_keys=$(grep -rh '"kind":"merge.land"' "$TRACE_DIR" | grep -F '"outcome":"landed"' |
+land_keys=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" export 2>/dev/null |
+	grep -F '"kind":"merge.land"' | grep -F '"outcome":"landed"' |
 	sed 's/.*"data":{//' | grep -oE '(^|,)"[a-z_]+":' | tr -d ',":' | sort -u)
 for _k in $LAND_ONLY; do land_keys=$(printf '%s\n' "$land_keys" | grep -vx "$_k"); done
 # train_keys <skill file> — the data keys /merge-train's merge.land line names.
@@ -734,10 +735,6 @@ if [ "$(train_keys "$MT")" = "$land_keys" ]; then
 else
 	fail "/merge-train's merge.land fields differ from the landing script's — train: $(echo $(train_keys "$MT")); script: $(echo $land_keys)"
 fi
-for _k in $LAND_ONLY; do
-	train_keys "$MT" | grep -qx "$_k" && fail "/merge-train names data.$_k, which only a trace read answers" ||
-		pass "/merge-train names no data.$_k (the landing script's trace read)"
-done
 # The probe can go red: the train's line with one field dropped.
 sed '/kind=merge.land/s/ data\.waited=[^ ]*//' "$MT" >"$SCRATCH/mt.short"
 [ "$(train_keys "$SCRATCH/mt.short")" = "$land_keys" ] && fail "the field probe passed a train line with data.waited dropped — the check is vacuous" ||
