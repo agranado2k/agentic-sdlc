@@ -546,7 +546,8 @@ hook_anchors() {
 # session's `session.usage` events for what is new in <transcript> since the
 # trace's last read of it: hook_anchors, then hook_tokens under --rollup and
 # --resume, or one fail event when the transcript cannot be read. The fields
-# ride every event. An id hook_id_ok refuses anchors nothing: the whole file. session-end.sh reads a run's end with it, and
+# ride every event. An id hook_id_ok refuses anchors nothing: the whole
+# file. session-end.sh reads a run's end with it, and
 # session-start.sh the end a killed run never had (#632).
 hook_session_usage() {
 	_su_sid=$1
