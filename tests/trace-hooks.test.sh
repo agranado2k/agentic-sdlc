@@ -4915,4 +4915,44 @@ start_632 compact
 	pass "a compaction's start writes no recovered session.end" ||
 	fail "a compaction's start wrote: $(end_line "$S632" | sed -n '$p')"
 
+# ---------------------------------------------------------------------------
+banner "53. The chain's waits are bounded by their own timeout and pass the kill guard (#637)"
+# ---------------------------------------------------------------------------
+# Retro 20261007T151351Z, F8: four times in one wave a spawned sub-agent asked
+# for pkill and section 35's guard refused it. What it was killing, read from
+# the transcripts: a background `until gh pr checks … | grep -q pending; do
+# sleep 30; done` (the shape /pr-iterate's step 5 printed as "bounded" while
+# carrying no bound), two `until [ -s <task output> ]` waiters, and a full
+# suite run. A wait that never ends on its own is one somebody has to kill. So
+# every wait /merge-train and /pr-iterate print — a fenced line that watches
+# or loops — opens with `timeout <duration>`, and every one of them passes the
+# guard as a spawned sub-agent's call.
+# waits_637 <skill file> — each non-comment line of its fenced blocks that waits.
+waits_637() {
+	awk '/^```/ { f = !f; next } f && !/^[ \t]*#/ && /--watch|run watch|(^|[ ;])(until|while) / { sub(/^[ \t]+/, ""); print }' "$1"
+}
+# bounded_637 <line> — exit 0 when the line opens with its own timeout.
+bounded_637() { printf '%s\n' "$1" | grep -qE '^timeout [0-9]+[smhd]? '; }
+N637=0
+for f in "$KIT/.agents/skills/merge-train/SKILL.md" "$KIT/.agents/skills/pr-iterate/SKILL.md"; do
+	waits_637 "$f" >"$SCRATCH/waits-637"
+	while IFS= read -r w; do
+		N637=$((N637 + 1))
+		bounded_637 "$w" && pass "$(basename "$(dirname "$f")")'s wait is bounded: $w" ||
+			fail "$(basename "$(dirname "$f")")'s wait has no timeout of its own: $w"
+		new_trace
+		guard general-purpose "$w"
+		[ "$S_STATUS" = 0 ] && [ -z "$(events)" ] &&
+			pass "and the kill guard lets a spawned sub-agent run it" ||
+			fail "the kill guard refused a spawned sub-agent's '$w' (exit $S_STATUS): $S_ERR"
+	done <"$SCRATCH/waits-637"
+done
+[ "$N637" -ge 3 ] && pass "the two skills print $N637 waits (4b, 4d and pr-iterate's step 5 at least)" ||
+	fail "the two skills print $N637 waits; the probe found fewer than the three it holds"
+# The probe can go red: the unbounded shapes the retro's sub-agents ran.
+for w in 'gh pr checks "$PR" --watch' "until ! gh pr checks \"\$PR\" 2>&1 | grep -qE 'pending'; do sleep 30; done"; do
+	bounded_637 "$w" && fail "the bound probe passed an unbounded wait — the check is vacuous: $w" ||
+		pass "the bound probe rejects an unbounded wait: $w"
+done
+
 t_done "trace hooks"

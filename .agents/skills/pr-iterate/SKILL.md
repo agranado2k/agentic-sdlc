@@ -322,9 +322,11 @@ Either way this is where most iterations end, so the scratch files go here first
 If running manually and the operator asked you to wait for the result:
 
 ```bash
-# Wait until no checks remain pending — bounded
-until ! gh pr checks "$PR" 2>&1 | grep -qE 'pending'; do sleep 30; done
+# Wait until no checks remain pending — bounded: exit 124 ran out.
+timeout 30m gh pr checks "$PR" --watch
 ```
+
+Run it in the foreground: a wait with no bound, left in the background, is one only a kill by name stops — which the kill guard refuses a spawned agent.
 
 …but only if explicitly asked.
 

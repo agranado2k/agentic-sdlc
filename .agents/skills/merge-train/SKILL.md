@@ -105,8 +105,8 @@ operator's go-ahead. When the operator passed explicit PR numbers, that message
 gh pr view "$PR" --json mergeStateStatus --jq .mergeStateStatus   # BEHIND?
 gh api -X PUT "repos/{owner}/{repo}/pulls/$PR/update-branch"
 
-# b. Wait for checks to re-run and go green.
-gh pr checks "$PR" --watch
+# b. Wait for checks to re-run and go green — bounded: exit 124 ran out.
+timeout 30m gh pr checks "$PR" --watch
 
 # c. Merge, with the method the local workflow article mandates.
 gh pr merge "$PR" --merge
@@ -120,8 +120,14 @@ git tag -a v<version> <merge sha> && git push origin v<version>
 #    observe each result, not outrun it, even when their concurrency groups
 #    would queue anyway.
 gh run list --branch <base> --limit 5 --json name,status,conclusion,databaseId
-gh run watch <databaseId>
+timeout 30m gh run watch <databaseId> --exit-status
 ```
+
+**Every wait carries its own bound.** Exit 124 is a wait that ran out: at
+4b skip the PR as a red, at 4d stop the train (`data.workflows=unknown`).
+Wait in the foreground; a wait left in the background to be killed later
+is one only a kill by name can stop, which the kill guard refuses a
+spawned agent and which may hit a sibling session's run.
 
 **A release is tagged at its merge (4c2), not after the batch.** A release is not landed until its merge commit carries the tag, and a
 repo whose CI enforces that (the kit's own does, in its self-host suite's
