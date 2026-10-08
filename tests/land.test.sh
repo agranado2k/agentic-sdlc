@@ -165,14 +165,18 @@ events() { show "pr:#$1" | grep -c "\"kind\":\"$2\"" | tr -d ' '; }
 # ---------------------------------------------------------------------------
 banner "1. A PR that is not green and mergeable is refused: exit 2, nothing merged, nothing emitted"
 # ---------------------------------------------------------------------------
+# not_landed <pr> <label> — the last run refused: exit 2, no merge call.
+not_landed() {
+	s_assert_status 2 "$2: refused with exit 2"
+	[ "$(merges)" = 0 ] && pass "$2: no merge call reached the forge" ||
+		fail "$2: the forge was asked to merge a PR the script should have refused"
+}
 # refused <knob> <pr> <label>
 refused() {
 	_r_pr=$2
 	_r_label=$3
 	land "$1" "$_r_pr"
-	s_assert_status 2 "$_r_label: refused with exit 2"
-	[ "$(merges)" = 0 ] && pass "$_r_label: no merge call reached the forge" ||
-		fail "$_r_label: the forge was asked to merge a PR the script should have refused"
+	not_landed "$_r_pr" "$_r_label"
 	[ "$(show "pr:#$_r_pr" | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "$_r_label: nothing reached the trace" ||
 		fail "$_r_label: an event was emitted for a refused PR"
 }
@@ -636,12 +640,12 @@ banner "9. No pr.iterate at the head commit: refused, or landed on a named reaso
 # after its head commit's date; with none it refuses — exit 2, nothing merged,
 # nothing recorded — unless --no-iteration names why, and then merge.land says
 # the landing had none. Every PR here is #300 up, so no seed above reaches it.
+# no_iter <label> <pr> — refused on the iteration check: the seeded
+# pr.iterate stays, so the trace is held to no merge.land and no feedback.
 no_iter() {
 	_ni_label=$1
-	s_assert_status 2 "$_ni_label: refused with exit 2"
-	[ "$(merges)" = 0 ] && pass "$_ni_label: no merge call reached the forge" ||
-		fail "$_ni_label: the forge was asked to merge a PR with no iteration at its head"
-	[ "$(show "pr:#$2" | grep -c '"kind":"merge.land"\|"kind":"feedback"' | tr -d ' ')" = 0 ] &&
+	not_landed "$2" "$_ni_label"
+	[ "$(events "$2" merge.land)" = 0 ] && [ "$(events "$2" feedback)" = 0 ] &&
 		pass "$_ni_label: no landing reached the trace" || fail "$_ni_label: a landing was recorded: $(show "pr:#$2")"
 	s_assert_err_has "pr-iterate" "$_ni_label: stderr sends it to /pr-iterate"
 	s_assert_err_has "--no-iteration" "$_ni_label: and names the override"

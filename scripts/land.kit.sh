@@ -130,16 +130,17 @@ command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
 # trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured
 # note, so an unconfigured run says it once. The switch rides the external
 # command, never a prefix on this function (forge-broker.kit.sh says why).
+TRACE_POLICY=${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}
 trace() {
 	_tr_quiet=
 	[ "$1" = quiet ] && _tr_quiet=1
 	shift
-	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
+	TRACE_QUIET="${_tr_quiet:-${TRACE_QUIET:-}}" TRACE_CONFIG="$TRACE_POLICY" \
 		sh "$ROOT/scripts/trace.sh" emit "$@" </dev/null || :
 }
 # trace_read <subcommand> … — a read through the same policy, quiet.
 trace_read() {
-	TRACE_QUIET=1 TRACE_CONFIG="${TRACE_CONFIG:-$ROOT/scripts/trace.kit.config.sh}" \
+	TRACE_QUIET=1 TRACE_CONFIG="$TRACE_POLICY" \
 		sh "$ROOT/scripts/trace.sh" "$@" </dev/null 2>/dev/null
 }
 
