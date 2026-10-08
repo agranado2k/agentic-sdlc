@@ -4927,12 +4927,13 @@ banner "53. The chain's waits are bounded by their own timeout and pass the kill
 # every wait /merge-train and /pr-iterate print — a fenced line that watches
 # or loops — opens with `timeout <duration>`, and every one of them passes the
 # guard as a spawned sub-agent's call.
-# waits_637 <skill file> — each non-comment line of its fenced blocks that waits.
+# waits_637 <skill file> — each non-comment line of its fenced blocks that
+# waits: a watch, or a loop that sleeps, at any indent.
 waits_637() {
-	awk '/^```/ { f = !f; next } f && !/^[ \t]*#/ && /--watch|run watch|(^|[ ;])(until|while) / { sub(/^[ \t]+/, ""); print }' "$1"
+	awk '/^```/ { f = !f; next } f && !/^[ \t]*#/ && /--watch|run watch|(^|[ \t;])(until|while) .*sleep/ { sub(/^[ \t]+/, ""); print }' "$1"
 }
 # bounded_637 <line> — exit 0 when the line opens with its own timeout.
-bounded_637() { printf '%s\n' "$1" | grep -qE '^timeout [0-9]+[smhd]? '; }
+bounded_637() { printf '%s\n' "$1" | grep -qE '^timeout [1-9][0-9]*[smhd]? '; }
 N637=0
 for f in "$KIT/.agents/skills/merge-train/SKILL.md" "$KIT/.agents/skills/pr-iterate/SKILL.md"; do
 	waits_637 "$f" >"$SCRATCH/waits-637"
@@ -4950,7 +4951,7 @@ done
 [ "$N637" -ge 3 ] && pass "the two skills print $N637 waits (4b, 4d and pr-iterate's step 5 at least)" ||
 	fail "the two skills print $N637 waits; the probe found fewer than the three it holds"
 # The probe can go red: the unbounded shapes the retro's sub-agents ran.
-for w in 'gh pr checks "$PR" --watch' "until ! gh pr checks \"\$PR\" 2>&1 | grep -qE 'pending'; do sleep 30; done"; do
+for w in 'gh pr checks "$PR" --watch' 'timeout 0 gh pr checks "$PR" --watch' "until ! gh pr checks \"\$PR\" 2>&1 | grep -qE 'pending'; do sleep 30; done"; do
 	bounded_637 "$w" && fail "the bound probe passed an unbounded wait — the check is vacuous: $w" ||
 		pass "the bound probe rejects an unbounded wait: $w"
 done
