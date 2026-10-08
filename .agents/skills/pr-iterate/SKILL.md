@@ -216,7 +216,7 @@ The confirm-list is a **distinct output**: ✅ and ❌ items triage normally bel
 | Clear, mechanical, no judgment needed | Add to the iteration's Act list — fix it in one Conventional Commits commit. |
 | Contradicts a binding decision record, or the author already made a considered call | Record it in the iteration report ("not applied — reason: …") and move on. |
 | Needs a design call or touches an open question | Add to the escalation list. Don't apply; surface to the operator at end of iteration. |
-| A LOW | Apply it only when it is clear and mechanical, inside this diff; otherwise decline it, citing `/review-pr` §5's band rule in the triage's reason. A LOW is never escalated: the band is the one no operator is asked to read. |
+| A LOW | Apply it only when it is clear and mechanical, inside this diff; otherwise decline it, citing `/review-pr` §5's band rule in the triage's reason. A LOW is never escalated: the band is the one no operator is asked to read, so for a LOW this row wins over the two above it and over hard rule 7. |
 
 The local review is **complementary** to any automated reviewers configured on the PR. They look at the same diff with different lenses: third-party reviewers are prompted with generic context and post inline comments; `/review-pr` runs fresh per iteration with full local file access and the repo's own records. Treat them as independent reviewers — if both flag the same issue it is almost certainly worth applying; if they disagree, that is an escalation candidate.
 

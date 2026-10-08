@@ -1113,7 +1113,7 @@ low_band_missing() {
 	_lb_r=$(tr '\n' ' ' <"$1" | tr -s ' ')
 	_lb_i=$(tr '\n' ' ' <"$2" | tr -s ' ')
 	for _lb in \
-		'band rule|**A LOW is counted, never posted by an agent**' \
+		'band rule|**A LOW is counted, never posted by an agent path of this skill**' \
 		'band evidence|114 of 171 raises were LOW' \
 		'band says why not stop at medium|why not a lens that stops at MEDIUM' \
 		'path a: a LOW is posted=no|and `no` for every LOW (§5)' \
@@ -1121,13 +1121,14 @@ low_band_missing() {
 		'relay posts no LOW|never a LOW (§5)'; do
 		case "$_lb_r" in *"${_lb#*|}"*) ;; *) printf '%s\n' "${_lb%%|*}" ;; esac
 	done
-	_lb_b=$(t_line_of "$1" '**A LOW is counted, never posted by an agent**')
+	_lb_b=$(t_line_of "$1" '**A LOW is counted, never posted by an agent path of this skill**')
 	_lb_h=$(t_line_of "$1" 'LOW is minor simplifications and style')
 	[ -n "$_lb_b" ] && [ "$_lb_b" = "$_lb_h" ] || printf '%s\n' 'band rule beside the bands'
 	for _lb in \
 		'iterate: a LOW row|| A LOW | Apply it only when it is clear and mechanical, inside this diff' \
 		'iterate: decline cites the band|decline it, citing `/review-pr` §5' \
-		'iterate: never escalate a LOW|never escalated'; do
+		'iterate: never escalate a LOW|never escalated' \
+		'iterate: the LOW row wins|for a LOW this row wins over the two above it and over hard rule 7'; do
 		case "$_lb_i" in *"${_lb#*|}"*) ;; *) printf '%s\n' "${_lb%%|*}" ;; esac
 	done
 }
@@ -1141,16 +1142,17 @@ bait635() { # <rule name> <file: r|i> <sed script>
 	if [ "$2" = i ]; then low_band_missing "$SKILL_ABS" "$SCRATCH/bait635.md"; else low_band_missing "$SCRATCH/bait635.md" "$ITER_ABS"; fi | grep -qxF -- "$1"
 }
 for b in \
-	'band rule|r|s/A LOW is counted, never posted by an agent/A LOW is posted/' \
+	'band rule|r|s/A LOW is counted, never posted by an agent path of this skill/A LOW is posted/' \
 	'band evidence|r|s/114 of 171 raises were LOW/many raises were LOW/' \
 	'band says why not stop at medium|r|s/why not a lens that stops at MEDIUM/why/' \
 	'path a: a LOW is posted=no|r|s/and `no` for every LOW (§5)//' \
 	'relay: a LOW is posted=no|r|s/`no` for a LOW, which no relay posts (§5)/likewise/' \
 	'relay posts no LOW|r|s/never a LOW (§5)/every finding/' \
-	'band rule beside the bands|r|s/ \*\*A LOW is counted, never posted by an agent\*\*/\n\n**A LOW is counted, never posted by an agent**/' \
+	'band rule beside the bands|r|s/ \*\*A LOW is counted, never posted by an agent path of this skill\*\*/\n\n**A LOW is counted, never posted by an agent path of this skill**/' \
 	'iterate: a LOW row|i|s/| A LOW | Apply it only/| A LOW | Apply it/' \
 	'iterate: decline cites the band|i|s/decline it, citing `\/review-pr` §5/decline it/' \
-	'iterate: never escalate a LOW|i|s/never escalated/escalated when unsure/'; do
+	'iterate: never escalate a LOW|i|s/never escalated/escalated when unsure/' \
+	'iterate: the LOW row wins|i|s/for a LOW this row wins over the two above it and over hard rule 7/when no row above matches/'; do
 	_bn=${b%%|*}; _rest=${b#*|}
 	bait635 "$_bn" "${_rest%%|*}" "${_rest#*|}" && pass "bait: without '$_bn' goes red" ||
 		fail "bait: without '$_bn' was not caught — or the bait planted nothing"
