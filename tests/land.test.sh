@@ -33,7 +33,7 @@ t_init
 # --- the stub forge CLI ------------------------------------------------------
 # The PR's state is one value per line, in the order the script asks for it:
 # state, isDraft, mergeable, mergeStateStatus, reviewDecision, base branch,
-# closing ticket, title. STUB_* variables set the forge's answers.
+# closing ticket, head branch, title. STUB_* variables set the forge's answers.
 STUBDIR="$SCRATCH/bin"
 mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
@@ -58,7 +58,7 @@ case " $* " in
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
 	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
-		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_TITLE:-feat(x): a slice}"
+		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_BRANCH-feat/x}" "${STUB_TITLE:-feat(x): a slice}"
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
@@ -869,5 +869,53 @@ s_assert_status 0 "with no LAND_ROOT_CHECKOUT, the landing still exits 0"
 [ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] &&
 	pass "with no LAND_ROOT_CHECKOUT, the main worktree of the script's repo is the root fast-forwarded" ||
 	fail "the default root was not the main worktree: $S_ERR"
+
+# ---------------------------------------------------------------------------
+banner "12. A PR the trace never saw opened gets its pr.open from the landing (#638)"
+# ---------------------------------------------------------------------------
+# A PR opened outside /implement left no pr.open, so /retro's join from ticket
+# to PR had nothing to read for it. The landing writes one when the trace holds
+# none on pr:#<N> — before merge.land, related to the ticket and the branch,
+# marked data.via=land — and never a second when one is there.
+opens() { show "pr:#$1" --kind pr.open; }
+iterated 400 401 402 403
+land 400
+s_assert_status 0 "a PR with no pr.open lands"
+[ "$(events 400 pr.open)" = 1 ] && pass "the landing wrote one pr.open for pr:#400" ||
+	fail "$(events 400 pr.open) pr.open events for pr:#400"
+po=$(opens 400)
+for tok in '"outcome":"opened"' '"related":"ticket:#77 branch:feat/x"' '"via":"land"' '"reason":"feat(x): a slice"'; do
+	printf '%s\n' "$po" | grep -qF -- "$tok" && pass "the fallback pr.open carries $tok" || fail "the fallback pr.open lacks $tok: $po"
+done
+order=$(show 'pr:#400' | grep -oE '"kind":"(pr.open|merge.land)"' | tr '\n' ' ')
+[ "$order" = '"kind":"pr.open" "kind":"merge.land" ' ] && pass "pr.open is written before merge.land" ||
+	fail "the events are out of order: $order"
+
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=pr.open subject=pr:#401 \
+	related='ticket:#77 branch:feat/y' outcome=opened reason=seeded </dev/null >/dev/null 2>&1 ||
+	fail "could not seed a pr.open event on pr:#401"
+land 401
+[ "$(events 401 pr.open)" = 1 ] && pass "a PR /implement opened keeps its one pr.open — none added" ||
+	fail "$(events 401 pr.open) pr.open events for pr:#401"
+opens 401 | grep -qF '"via":"land"' && fail "the landing wrote over a PR that had its pr.open" ||
+	pass "and the one there is the session's, not the landing's"
+
+land STUB_BRANCH='feat/x; rm -rf' STUB_TICKET= 402
+po=$(opens 402)
+printf '%s\n' "$po" | grep -qF '"related"' && fail "a branch of no ref shape, with no ticket, still reached related: $po" ||
+	pass "a branch of no ref shape is left out, never copied into the trace"
+[ "$(events 402 pr.open)" = 1 ] && pass "and the pr.open is written without it" || fail "$(events 402 pr.open) pr.open events for pr:#402"
+
+land STUB_TICKET= 403
+opens 403 | grep -qF '"related":"branch:feat/x"' && pass "with no ticket known, related names the branch alone" ||
+	fail "with no ticket, the pr.open's related is not the branch alone: $(opens 403)"
+
+# #404 is seeded with no pr.iterate, so the iteration check refuses it.
+land 404
+[ "$(events 404 pr.open)" = 0 ] && pass "a refused PR gets no pr.open either" || fail "a refused PR was recorded opened"
+
+land STUB_MERGE_RC=1 405 --no-iteration 'forge rejects it'
+[ "$(events 405 pr.open)" = 1 ] && pass "a merge the forge rejects still records the PR opened" ||
+	fail "$(events 405 pr.open) pr.open events for the rejected pr:#405"
 
 t_done "land one PR by hand"
