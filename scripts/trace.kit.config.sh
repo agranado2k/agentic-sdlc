@@ -126,7 +126,7 @@ TRACE_PRICES_DISAGREE_PCT='5'
 #   reaches them, and a price is one number per token field.
 TRACE_PRICE_CLAUDE_FABLE_5_1='10,50,12.50,0.25'
 TRACE_PRICE_CLAUDE_OPUS_5_5='4,20,5,0.20'
-TRACE_PRICE_CLAUDE_OPUS_5='4,20,5,0.20'   # the mechanical tier's model since 2026-10-01; priced as 5.5 until the next --check, which is the claim to re-check first
+TRACE_PRICE_CLAUDE_OPUS_5='4,20,5,0.20'   # the mechanical tier's model 2026-10-01 to 2026-10-08 (ADR-0018 moved it to the Sonnet family); kept for those events, priced as 5.5 until the next --check
 TRACE_PRICE_CLAUDE_SONNET_5_5='3,15,3.75,0.30'
 TRACE_PRICE_CLAUDE_HAIKU_4_5_20251001='1,5,1.25,0.10'
 TRACE_PRICE_CODEX_GPT_5_6_SOL='4,20,5,0.40'

@@ -34,7 +34,9 @@ override; `/implement` reads it when it spawns.
 `AGENT_CASCADE_MECHANICAL`, the skill dispatcher runs a mechanical ticket on
 that model first, then the ticket's oracle and the pairing guard in its
 worktree; red on either exit code, it resets the worktree to the ticket's base
-and runs the ticket again on the tier's mapped model. The worker's own report
+and runs the ticket again on the tier's mapped model — or, when that mapping
+is the cascade model itself, on the implementer tier's (ADR-0018: escalating
+to the same model is a second draw, not an escalation). The worker's own report
 never decides. A ticket with no closed-list oracle is refused the cascade, and
 so is a cascade model the dispatcher cannot cross to — an oracle cannot judge
 work the dispatcher never ran. The kit's own value names no agent harness
