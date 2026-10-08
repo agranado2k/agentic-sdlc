@@ -2501,7 +2501,59 @@
 # spend.md's R10 and R11; the glossary; the kit CI jobs; bootstrap.sh's
 # adoption arm copies the new policy file, and both new suites stay out.
 
-shared-layer: 0.65.0
+# 0.66.0 — the day-one trace release (ticket #654, PR #656): a project
+# decides on day one whether it traces, and an off trace or an unmapped
+# reviewer tier is a finding in the chain's reports, never a stderr line.
+# Releases what landed on main after v0.65.0 with no bump: #639, #640
+# (ticket #630), #641 (ticket #629), #642 (ticket #627), #643 (ticket #632),
+# #644 (ticket #635), #645 (ticket #633), #648 (ticket #634), #649 (ticket
+# #628), #650 (ticket #631), #651 (ticket #636), #652 (ticket #637) and #657
+# (ticket #638) — and this PR.
+# NO file joins or leaves. ONE shared file changes content besides
+# UPDATING.md: scripts/trace.sh (#649, ticket #628) — ticket.start accepts
+# the outcome resumed, and pr.iterate accepts data.cause=conflict|
+# pending-stuck, the interruption that turned an iteration red or stopped
+# it. UPDATING.md gains the arriving-from paragraph, and both worked
+# examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# bootstrap.sh asks whether to trace (--with-trace / --no-trace answer it
+# unattended), writes TRACE_DIR='.trace' only where the project's own
+# .gitignore covers .trace/, and its next-steps text names an off trace and
+# how to reverse it; the stamped .gitignore's trace comment names
+# scripts/trace.config.sh, the project's own policy file, never a kit-only
+# one. A bootstrapped project has run already: nothing to take.
+# Policy files (yours, 9d): scripts/trace.config.sh still ships EMPTY; its
+# comment now says off is a decision bootstrap asks for — merge the comment
+# by hand, keep your TRACE_DIR.
+# Skills (9a), take each directory whole: /implement, /review-pr and
+# /merge-train list "trace unconfigured — this run recorded nothing" and
+# "reviewer tier unmapped — the review shared the author's model" as
+# findings in their final reports (this PR); /housekeeping audits both
+# settings, its detail in CHECKLIST.md (this PR). /implement also ends its
+# run on every hand-back (#657) and its review raises each lens's findings
+# at its return (#641, with /review-pr); /review-pr counts a LOW and never
+# posts one, and /pr-iterate never escalates a LOW (#644); the reuse/DRY
+# lens, lens-reuse-dry.md, names the rules the records declined (#645);
+# /pr-iterate records a conflict and a stuck check-run as an iteration's
+# cause and /implement a resumed ticket, with /retro's SKILL.md and
+# QUESTIONS.md reading them (#649); /to-tickets sizes a rule and its sweep
+# as two tickets (#650); /merge-train records merge.land in the landing
+# script's fields (#648), and it and /pr-iterate bound every wait with its
+# own timeout (#652).
+# Adapters (9e): the claude-code adapter's README.md, hook.lib.sh,
+# session-start.sh and session-end.sh record the usage of a resumed run
+# nothing ended (#643); spawn-guard.sh and tool-pre-guard.sh refuse a spawn
+# whose prompt carries no Trace-Spawn line, wired in .claude/settings.json
+# (#642).
+# setup/agent-bootstrap.md passes TRACE_FLAG in both arms (this PR); it is
+# the kit's own setup payload, never stamped into a project.
+# Kit-only, never shipped: scripts/land.kit.sh refuses a PR with no
+# pr.iterate at its head (#640), fast-forwards a clean root checkout (#651)
+# and records pr.open (#657); the kit's tier mapping follows a model family
+# (#639); the kit's records 0018 and 0019 and its ADR-0008 amendments; the
+# root manual; tests/ throughout.
+
+shared-layer: 0.66.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
