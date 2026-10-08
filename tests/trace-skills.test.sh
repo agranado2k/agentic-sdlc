@@ -1779,8 +1779,16 @@ day_one_missing() {
 	printf '%s\n' "$_do" | grep -F "$DAY_ONE_TRACE" | grep -qiF 'report' || _do_out="$_do_out not-in-the-report"
 	printf '%s' "$_do_out" | sed 's/^ //'
 }
+# day_one_file <skill> — where the findings live: /housekeeping keeps its
+# audit's detail in CHECKLIST.md, its SKILL.md the order alone.
+day_one_file() {
+	case $1 in
+	housekeeping) printf '%s/housekeeping/CHECKLIST.md' "$SKILLS" ;;
+	*) skill_md "$1" ;;
+	esac
+}
 for sk in implement review-pr merge-train housekeeping; do
-	f=$(skill_md "$sk")
+	f=$(day_one_file "$sk")
 	miss=$(day_one_missing "$f")
 	[ -z "$miss" ] && pass "/$sk reports an off trace and an unmapped reviewer as findings" ||
 		fail "/$sk does not hold the day-one findings: $miss (#654)"
@@ -1790,14 +1798,19 @@ done
 	fail "trace.sh dir printed a directory with the shipped empty policy" ||
 	pass "trace.sh dir prints nothing when the shipped policy leaves TRACE_DIR empty"
 # Baits: each phrase deleted, in each skill, goes red.
+# Each bait deletes the phrase alone, never its line, so the read beside it
+# survives — and the helper must name the finding the bait took, not merely
+# report something missing.
 for sk in implement review-pr merge-train housekeeping; do
-	f=$(skill_md "$sk")
-	for phrase in "$DAY_ONE_TRACE" "$DAY_ONE_REVIEWER"; do
-		grep -vF "$phrase" "$f" >"$SCRATCH/bait654.md"
-		if ! cmp -s "$SCRATCH/bait654.md" "$f" && [ -n "$(day_one_missing "$SCRATCH/bait654.md")" ]; then
-			pass "bait: /$sk without '$phrase' goes red"
+	f=$(day_one_file "$sk")
+	for which in trace reviewer; do
+		case $which in trace) phrase=$DAY_ONE_TRACE ;; *) phrase=$DAY_ONE_REVIEWER ;; esac
+		awk -v p="$phrase" '{ while ((i = index($0, p)) > 0) $0 = substr($0, 1, i - 1) substr($0, i + length(p)); print }' "$f" >"$SCRATCH/bait654.md"
+		miss=$(day_one_missing "$SCRATCH/bait654.md")
+		if ! cmp -s "$SCRATCH/bait654.md" "$f" && printf ' %s ' "$miss" | grep -qF " $which "; then
+			pass "bait: /$sk without '$phrase' goes red, naming $which"
 		else
-			fail "bait: /$sk without '$phrase' was not caught — or planted nothing"
+			fail "bait: /$sk without '$phrase' did not name $which (got: '$miss') — or planted nothing"
 		fi
 	done
 done
