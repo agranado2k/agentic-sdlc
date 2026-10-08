@@ -127,12 +127,7 @@ fi
 [ -n "$why" ] || exit 0
 
 hook_id_ok "$atype" || atype=unnamed
-sid=$(hook_field session_id)
-tuid=$(hook_field tool_use_id)
-set -- kind=note harness=claude-code outcome=denied data.rule=kill-guard data.agent_type="$atype"
-hook_id_ok "$sid" && set -- "$@" subject="session:$sid" session="$sid"
-hook_id_ok "$tuid" && set -- "$@" data.tool_use_id="$tuid"
-hook_trace emit "$@" reason="kill-guard refused a spawned sub-agent's Bash call: $why"
+hook_deny kill-guard "kill-guard refused a spawned sub-agent's Bash call: $why" data.agent_type="$atype"
 
 echo "kill-guard: refused — a spawned sub-agent ($atype) may not signal processes by name: $why. Parallel sessions run the same suites on this machine, so a name match may be a sibling's run. Signal only what you started: a job (kill %1) or a pid you hold (kill \$!)." >&2
 exit 2
