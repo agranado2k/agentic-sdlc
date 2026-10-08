@@ -65,6 +65,10 @@
 #      (a) a lens's raises are recorded beside its spawn.end the moment it
 #      returns, and a review run replayed up to the first post holds its
 #      spawn.end and review.verdict for axis 1 and axis 2.
+#  16. A LOW is counted, never posted by an agent (#635): the rule sits beside
+#      the bands with its evidence, path (a) and the relay raise a LOW
+#      data.posted=no and post none, and /pr-iterate applies a mechanical LOW
+#      or declines it citing the band — never escalates one.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1094,5 +1098,64 @@ replay_before_post "$SCRATCH/bait629-noraise.md" "$SCRATCH/run.629c" || :
 holds_before_post "$SCRATCH/run.629c" | grep -qxF 'finding.raise' &&
 	pass "bait: a raise left for the end of the review is red" ||
 	fail "bait: a review that raises nothing before the post was not caught"
+
+# ---------------------------------------------------------------------------
+banner "16. A LOW is counted, never posted by an agent (#635)"
+# ---------------------------------------------------------------------------
+# Retro F3 (2026-10-07): 114 of 171 raises were LOW, all posted, and the loop
+# declined 52 of them as lows. The ruling: a lens still raises a LOW (about
+# four in ten triaged LOWs were applied), the report and the trace count it,
+# and no agent path posts it; /pr-iterate applies a mechanical one or declines
+# it citing the band, and never hands one to the operator.
+ITER_ABS="$ROOT/$ITER"
+# low_band_missing <review-pr file> <pr-iterate file> — each rule lost, one per line.
+low_band_missing() {
+	_lb_r=$(tr '\n' ' ' <"$1" | tr -s ' ')
+	_lb_i=$(tr '\n' ' ' <"$2" | tr -s ' ')
+	for _lb in \
+		'band rule|**A LOW is counted, never posted by an agent path of this skill**' \
+		'band evidence|114 of 171 raises were LOW' \
+		'band says why not stop at medium|why not a lens that stops at MEDIUM' \
+		'path a: a LOW is posted=no|and `no` for every LOW (§5)' \
+		'relay: a LOW is posted=no|`no` for a LOW, which no relay posts (§5)' \
+		'relay posts no LOW|never a LOW (§5)'; do
+		case "$_lb_r" in *"${_lb#*|}"*) ;; *) printf '%s\n' "${_lb%%|*}" ;; esac
+	done
+	_lb_b=$(t_line_of "$1" '**A LOW is counted, never posted by an agent path of this skill**')
+	_lb_h=$(t_line_of "$1" 'LOW is minor simplifications and style')
+	[ -n "$_lb_b" ] && [ "$_lb_b" = "$_lb_h" ] || printf '%s\n' 'band rule beside the bands'
+	for _lb in \
+		'iterate: a LOW row|| A LOW | Apply it only when it is clear and mechanical, inside this diff' \
+		'iterate: decline cites the band|decline it, citing `/review-pr` §5' \
+		'iterate: never escalate a LOW|never escalated' \
+		'iterate: the LOW row wins|for a LOW this row wins over the two above it and over hard rule 7'; do
+		case "$_lb_i" in *"${_lb#*|}"*) ;; *) printf '%s\n' "${_lb%%|*}" ;; esac
+	done
+}
+miss=$(low_band_missing "$SKILL_ABS" "$ITER_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "a LOW is counted, never posted: the rule beside the bands, path (a), the relay and /pr-iterate's triage" ||
+	fail "the LOW band rule is missing: $miss (#635)"
+bait635() { # <rule name> <file: r|i> <sed script>
+	_bf=$SKILL_ABS; [ "$2" = i ] && _bf=$ITER_ABS
+	sed "$3" "$_bf" >"$SCRATCH/bait635.md"
+	! cmp -s "$SCRATCH/bait635.md" "$_bf" || return 1
+	if [ "$2" = i ]; then low_band_missing "$SKILL_ABS" "$SCRATCH/bait635.md"; else low_band_missing "$SCRATCH/bait635.md" "$ITER_ABS"; fi | grep -qxF -- "$1"
+}
+for b in \
+	'band rule|r|s/A LOW is counted, never posted by an agent path of this skill/A LOW is posted/' \
+	'band evidence|r|s/114 of 171 raises were LOW/many raises were LOW/' \
+	'band says why not stop at medium|r|s/why not a lens that stops at MEDIUM/why/' \
+	'path a: a LOW is posted=no|r|s/and `no` for every LOW (§5)//' \
+	'relay: a LOW is posted=no|r|s/`no` for a LOW, which no relay posts (§5)/likewise/' \
+	'relay posts no LOW|r|s/never a LOW (§5)/every finding/' \
+	'band rule beside the bands|r|s/ \*\*A LOW is counted, never posted by an agent path of this skill\*\*/\n\n**A LOW is counted, never posted by an agent path of this skill**/' \
+	'iterate: a LOW row|i|s/| A LOW | Apply it only/| A LOW | Apply it/' \
+	'iterate: decline cites the band|i|s/decline it, citing `\/review-pr` §5/decline it/' \
+	'iterate: never escalate a LOW|i|s/never escalated/escalated when unsure/' \
+	'iterate: the LOW row wins|i|s/for a LOW this row wins over the two above it and over hard rule 7/when no row above matches/'; do
+	_bn=${b%%|*}; _rest=${b#*|}
+	bait635 "$_bn" "${_rest%%|*}" "${_rest#*|}" && pass "bait: without '$_bn' goes red" ||
+		fail "bait: without '$_bn' was not caught — or the bait planted nothing"
+done
 
 t_done "/review-pr output contract"
