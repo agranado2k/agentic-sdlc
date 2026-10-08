@@ -227,20 +227,21 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.65.0 or older, a project decides its trace on day one.**
-No file joins or leaves at 0.66.0; one shared file changes content besides
-this recipe, `scripts/trace.sh`, which accepts two more words: a resumed
-ticket's `ticket.start` and an iteration's `data.cause`. The rest is Part
-2's. In 9d `scripts/trace.config.sh` still ships empty — merge its comment by
-hand and keep your `TRACE_DIR`; if it is empty and that is not deliberate,
-add `.trace/` to your `.gitignore` and set `TRACE_DIR='.trace'`. In 9a take
-`/implement`, `/review-pr`, `/merge-train` and `/housekeeping` (its
-`CHECKLIST.md` too) whole: each now reports an off trace and an unmapped
-reviewer tier as findings, and with them come `/pr-iterate`, `/retro` (and
-its `QUESTIONS.md`), `/to-tickets` and the reuse/DRY lens,
-`lens-reuse-dry.md`. In 9e the claude-code adapter's `README.md`,
-`hook.lib.sh`, `session-start.sh`, `session-end.sh`, `spawn-guard.sh` and
-`tool-pre-guard.sh` moved; take them whole.
+**Arriving from 0.65.0 or older, the trace records an interruption.**
+No file joins or leaves at 0.66.0. One shared file changes content besides
+this recipe: `scripts/trace.sh` accepts `ticket.start` with the outcome
+`resumed`, and a `pr.iterate` whose `data.cause` is `conflict` or
+`pending-stuck`; every emit valid at 0.65.0 is valid still. Part 2 takes the
+rest. In 9a, `/implement`, `/review-pr` with `lens-reuse-dry.md`,
+`/pr-iterate`, `/merge-train`, `/retro` with `QUESTIONS.md`, and `/to-tickets`:
+a LOW is counted and never posted or escalated, a lens's findings are raised
+as it returns, every wait carries its own bound, and a rule and its sweep are
+two tickets. In 9b, `local-workflow.md.template`'s rubric gains that sweep
+line — merge the paragraph by hand. In 9e, the Claude Code adapter gains
+`hooks/spawn-guard.sh`, which refuses a spawn whose prompt carries no
+`Trace-Spawn:` line while tracing is on; `hook.lib.sh`, `tool-pre-guard.sh`,
+`session-start.sh` and `session-end.sh` change with it, and its `README.md`
+carries the `PreToolUse` entry your own settings file adds to wire the guard.
 
 **Arriving from 0.64.0 or older, one script joins and each review lens reads its slice.**
 One file joins at 0.65.0, `scripts/lens-slice.sh`; none leaves, and no other
@@ -1186,10 +1187,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2841 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2842 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2995 insertions(+), 1 deletion(-)
+ 3 files changed, 2996 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -2731,9 +2732,9 @@ $ kit diff --stat "$FROM_REF" "$TO_REF" -- constitution/
  constitution/AGENTS.md.template            |  78 ++++++++++++++-
  constitution/local-engineering.md.template |   2 +-
  constitution/local-product.md.template     | 103 ++++++++++++++++++++
- constitution/local-workflow.md.template    |  53 +++++++++++
+ constitution/local-workflow.md.template    |  57 +++++++++++
  constitution/shared-code-craft.md          | 147 +++++++++++++++++++++++++++++
- 5 files changed, 379 insertions(+), 4 deletions(-)
+ 5 files changed, 383 insertions(+), 4 deletions(-)
 $ # copied across by hand: the Capability tiers section, and two rows
   edited  AGENTS.md (new section + three quick-reference rows + the code-craft pointer)
 

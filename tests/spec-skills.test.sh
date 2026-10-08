@@ -432,9 +432,14 @@ t_text_has "$rubric" "first hit wins" "the rubric still reads first hit wins —
 # A sweep is two tickets (#631, retro-20261007T151351Z): 4 of 22 implementer
 # tickets cost over three times the median, each one a rule applied to every
 # site of a shape at once. The rubric's sizing guidance splits it.
-t_text_has "$rubric" "adds a rule and applies it to every site of a shape is two tickets" "#631: a rule plus its sweep is sized as two tickets"
-t_text_has "$rubric" "the rule with its check first, the sweep second" "#631: the order — the rule and its check land before the sweep"
-t_text_has "$rubric" "the sweep second, \`Blocked by:\` the first" "#631: the sweep is blocked by the rule, so the DAG holds the order"
+# sweep_line_held <text> <whose> — the three phrases of the sweep line, held
+# once for the skill's rubric and again for the template's mirror (#653).
+sweep_line_held() {
+	t_text_has "$1" "adds a rule and applies it to every site of a shape is two tickets" "#631: $2 sizes a rule plus its sweep as two tickets"
+	t_text_has "$1" "the rule with its check first, the sweep second" "#631: $2 orders the rule and its check before the sweep"
+	t_text_has "$1" "the sweep second, \`Blocked by:\` the first" "#631: $2 blocks the sweep on the rule, so the DAG holds the order"
+}
+sweep_line_held "$rubric" "the /to-tickets rubric"
 # The oracle forms the rubric names are the ones /implement runs (ticket #510,
 # from PR #484's review). Since #468 /implement matches a mechanical ticket's
 # oracle line against a closed allow-list in its step 1 and holds anything
@@ -533,6 +538,10 @@ case $wf_rubric in
 *) pass "the workflow template's rubric line 1 names no tier but mechanical" ;;
 esac
 oracle_forms_agree "$wf_rubric" "the workflow template's rubric line 1"
+# The template mirrors the skill's sweep line (#650's review, L-3, folded into
+# #653): a consumer's own rubric sizes a rule and its sweep as two tickets too.
+wf_rubric_all=$(awk '/^The rubric, in the order to ask it:/ { on = 1 } on && /^Unmapped is a working state/ { exit } on { print }' "$ROOT/constitution/local-workflow.md.template" | tr '\n' ' ' | tr -s ' ')
+sweep_line_held "$wf_rubric_all" "the workflow template's rubric"
 # The two tier tables (ticket #467): the kit's (in its kit-own tiers article
 # since ADR-0014) and the consumer manual
 # template each give a `mechanical` row a signal cell, and #418 left both
