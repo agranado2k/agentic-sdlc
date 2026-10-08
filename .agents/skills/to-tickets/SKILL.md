@@ -36,6 +36,8 @@ The four tiers are defined in the root `AGENTS.md`; the cost/benefit practice ar
 3. **Is the deliverable a verdict on a diff rather than the diff?** ⇒ `reviewer`.
 4. **Otherwise** ⇒ `implementer`, and defaulting here is correct. Under-tiering is silent — you get a plausible wrong diff — while over-tiering only costs money, which is visible. **Ambiguity resolves upward**, the opposite direction from the autonomy label.
 
+A change that adds a rule and applies it to every site of a shape is two tickets — the rule with its check first, the sweep second, `Blocked by:` the first — whatever tier each one draws.
+
 A tier is **not** a permission: it says which model runs the work, never how much autonomy it carries. `ready-for-agent` is the only thing that says that, and rule 4 above is untouched by rule 9.
 
 Never write a model name in a ticket. The tier → model mapping is data in `scripts/agents.config.sh`, resolved by `scripts/agents.lib.sh`; model identifiers rot and a ticket outlives them.
