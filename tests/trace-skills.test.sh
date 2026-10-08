@@ -1685,4 +1685,74 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "26. Interruptions leave events: a resumed ticket, a conflict, a stuck check (#628)"
+# ---------------------------------------------------------------------------
+# Retro 20261007T180238Z: usage-limit deaths, resumed /implement sessions,
+# conflicts with a moving main and a check-run stuck in_progress were all
+# invisible in the trace. /implement now records `ticket.start
+# outcome=resumed`, and /pr-iterate a red iteration carrying `data.cause`
+# `conflict` or `pending-stuck`, words the trace's kind table declares. Held
+# per rule, each emit line run with the new word, and each rule baited red.
+# interrupt_rules_missing <implement file> <pr-iterate file> — the rules unheld.
+interrupt_rules_missing() {
+	_ir_im=$(awk '{ gsub(/\. /, ".\n"); print }' "$1")
+	_ir_pi=$(awk '{ gsub(/\. /, ".\n"); print }' "$2")
+	_ir_out=''
+	printf '%s\n' "$_ir_im" | grep -o '`sh scripts/trace\.sh emit kind=ticket\.start[^`]*`' |
+		grep -qF 'outcome=read|defaulted|disputed|resumed' || _ir_out="$_ir_out im-resumed-on-the-line"
+	printf '%s\n' "$_ir_im" | grep -F '`resumed`' | grep -qF 'worktree or PR already exists' || _ir_out="$_ir_out im-resumed-when"
+	printf '%s\n' "$_ir_pi" | grep -o '`sh scripts/trace\.sh emit kind=pr\.iterate[^`]*outcome=green|red|stopped[^`]*`' |
+		grep -qF '[data.cause=conflict|pending-stuck]' || _ir_out="$_ir_out pi-cause-on-the-line"
+	printf '%s\n' "$_ir_pi" | grep -F 'CONFLICTING' | grep -qF 'data.cause=conflict' || _ir_out="$_ir_out pi-conflict-when"
+	printf '%s\n' "$_ir_pi" | grep -F 'in_progress' | grep -F '30 minutes' | grep -F 'conclusion' |
+		grep -qF 'data.cause=pending-stuck' || _ir_out="$_ir_out pi-stuck-when"
+	printf '%s' "$_ir_out" | sed 's/^ //'
+}
+IM=$(skill_md implement)
+PI=$(skill_md pr-iterate)
+miss=$(interrupt_rules_missing "$IM" "$PI")
+[ -z "$miss" ] && pass "/implement records a resumed ticket, /pr-iterate a conflict and a stuck check, each on its emit line" ||
+	fail "an interruption leaves no event: $miss (#628)"
+# The demo: each skill's own line, run with the new word against a scratch trace.
+dir="$SCRATCH/run.628"
+line=$(grep -o '`sh scripts/trace\.sh emit kind=ticket\.start[^`]*`' "$IM" | head -1 | tr -d '`')
+cmd=$(t_trace_runnable "$(printf '%s\n' "$line" | sed 's/outcome=[a-z|]*/outcome=resumed/')")
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) &&
+	grep -qF '"outcome":"resumed"' "$dir"/events/*.jsonl 2>/dev/null &&
+	pass "a resumed ticket is recorded ticket.start outcome=resumed" ||
+	fail "/implement's ticket.start line does not record outcome=resumed: $cmd"
+line=$(grep -o '`sh scripts/trace\.sh emit kind=pr\.iterate[^`]*outcome=green|red|stopped[^`]*`' "$PI" | head -1 | tr -d '`')
+for c in conflict pending-stuck; do
+	cmd=$(t_trace_runnable "$(printf '%s\n' "$line" | sed "s/outcome=[a-z|]*/outcome=red/; s/\[data\.cause=[a-z|-]*\]/data.cause=$c/")")
+	( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) &&
+		grep -qF "\"cause\":\"$c\"" "$dir"/events/*.jsonl 2>/dev/null &&
+		pass "a red iteration is recorded with data.cause=$c" ||
+		fail "/pr-iterate's iteration line does not record data.cause=$c: $cmd"
+done
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+	pass "and what they wrote verifies" || fail "the interruption lines ran but the trace they wrote does not verify"
+# The vocabulary is closed: a cause the kind table does not declare is refused.
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red \
+	data.iteration=1 data.applied=0 data.rejected=0 data.escalated=0 data.cause=stuck >/dev/null 2>&1 ); st=$?
+[ "$st" = 2 ] && pass "a cause outside conflict|pending-stuck is exit 2" || fail "data.cause=stuck exited $st, not 2"
+# Baits: one per rule, so none survives its own deletion.
+for b in \
+	'I|s/outcome=read|defaulted|disputed|resumed/outcome=read|defaulted|disputed/' \
+	'I|s/worktree or PR already exists/worktree already exists/g' \
+	'P|s/ \[data\.cause=conflict|pending-stuck\]//' \
+	'P|s/CONFLICTING/conflicting/g' \
+	'P|s/30 minutes/a while/g' \
+	'P|s/data\.cause=pending-stuck/data.cause=stuck/g'; do
+	which=${b%%|*}; expr=${b#?|}
+	if [ "$which" = I ]; then src=$IM; else src=$PI; fi
+	sed "$expr" "$src" >"$SCRATCH/bait628.md"
+	if [ "$which" = I ]; then got=$(interrupt_rules_missing "$SCRATCH/bait628.md" "$PI"); else got=$(interrupt_rules_missing "$IM" "$SCRATCH/bait628.md"); fi
+	if ! cmp -s "$SCRATCH/bait628.md" "$src" && [ -n "$got" ]; then
+		pass "bait: '$expr' goes red"
+	else
+		fail "bait: '$expr' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"

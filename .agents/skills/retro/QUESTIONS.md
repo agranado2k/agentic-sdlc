@@ -190,7 +190,7 @@ decomposition.
 
 ## 6. Chain health
 
-*Reads: `ticket.write`, `ticket.start`, `pr.open`, `merge.land`, `spawn`,
+*Reads: `ticket.write`, `ticket.start` (and `outcome` `resumed`), `pr.iterate` (`data.cause`), `pr.open`, `merge.land`, `spawn`,
 `spawn` (`outcome` `refused`), `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
 `agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`) and a priced one (`data.final`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
@@ -231,6 +231,13 @@ decomposition.
   bound passed: a young line is an agent still writing — the bound is too
   short, a policy-file value — and an old one an agent whose run ended in
   a shape the hook does not read as final. Count them per shape.
+- **Interruptions**: a `ticket.start` with `outcome=resumed` — a session
+  died or was replaced before its ticket reached a PR, usage limits the
+  commonest cause — and a red `pr.iterate` whose `data.cause` is `conflict`
+  (the PR fell behind a moving main) or `pending-stuck` (a check-run sat
+  `in_progress` after its job had ended). Count each per ticket and per
+  cause: one that recurs is a wave sized past its sessions, or a main
+  moving faster than its PRs land.
 - **Runs never closed**: a `run.start` with no `run.end` — a session that
   stopped without saying how, or a skill whose end line nobody ran.
 - **Denied tool calls**: each `tool.use` with `outcome=denied` — a call that

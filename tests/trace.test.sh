@@ -1141,7 +1141,7 @@ spawn dispatched in-session refused
 spawn.end ok fail timeout budget unreachable
 prd.write published
 ticket.write stamped
-ticket.start read defaulted disputed
+ticket.start read defaulted disputed resumed
 tdd.cycle red green refactor
 review.verdict pass blocked confirm
 finding.raise raised
