@@ -322,7 +322,7 @@ Either way this is where most iterations end, so the scratch files go here first
 If running manually and the operator asked you to wait for the result:
 
 ```bash
-# Wait until no checks remain pending — bounded: exit 124 ran out.
+# Wait until no checks remain pending — bounded: exit 124 ran out, 1 a red.
 timeout 30m gh pr checks "$PR" --watch
 ```
 
