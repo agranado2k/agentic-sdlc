@@ -30,6 +30,9 @@
 #      exit 0 like everything else here. root-guard.sh sources this file for
 #      hook_root alone, and keeps a rule of its own: it exits 2 to refuse an
 #      edit at the root checkout (#392), and 0 on every path it cannot read.
+#      spawn-guard.sh is the third guard: it exits 2 to refuse a spawn whose
+#      prompt carries no well-formed Trace-Spawn line while tracing is on
+#      (#627), and 0 on every other path.
 #   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
 #      reaches the agent harness's own parser. The trace's answers go to a
 #      file; nothing about the trace is ever said there. STDERR is a different
@@ -328,8 +331,15 @@ hook_prompt_of() {
 # `Trace-Run:` line; 1 otherwise. The shape is hook_run_handed's header.
 hook_handed_line() {
 	hook_prompt_of "${1:-}" || return 1
-	case $hook_prompt in 'Trace-Run: '*) ;; *) return 1 ;; esac
-	_rh_val=${hook_prompt#Trace-Run: }
+	hook_handed_in "$hook_prompt"
+}
+
+# hook_handed_in <prompt as JSON-string text> — hook_handed_line's test on
+# text already in hand: the spawn guard reads it from the tool payload rather
+# than from a transcript (#627).
+hook_handed_in() {
+	case ${1-} in 'Trace-Run: '*) ;; *) return 1 ;; esac
+	_rh_val=${1#Trace-Run: }
 	# The line ends where the JSON string's next escape or its close begins,
 	# and that escape must be a newline: a tab or anything else after the ids
 	# is more on the line, and no channel.
@@ -357,7 +367,8 @@ hook_handed_line() {
 # `unattributed` and the other three are empty. Ticket #583.
 #
 # THE LINE is the prompt's SECOND, under a well-formed Trace-Run first line
-# (hook_run_handed), exactly
+# (hook_run_handed) — or its FIRST, when no run was handed: the spawn of a
+# session with no run open (#627) — exactly
 #   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>
 # four fields in that order, one space apart, nothing else on the line. The
 # tier is one of the four the kit sizes work to; a domain and a skill are
@@ -374,9 +385,25 @@ hook_spawn_handed() {
 	hook_spawn_domain=
 	hook_spawn_skill=
 	hook_spawn_ticket=
-	hook_handed_line "${1:-}" || return 1
-	case $_rh_after in 'Trace-Spawn: '*) ;; *) return 1 ;; esac
-	_hs_val=${_rh_after#Trace-Spawn: }
+	hook_prompt_of "${1:-}" || return 1
+	hook_spawn_in "$hook_prompt"
+}
+
+# hook_spawn_in <prompt as JSON-string text> — hook_spawn_handed's read of text
+# already in hand, the spawn guard's as well as the stop's (#627): one parser,
+# so the guard refuses exactly the prompts the stop would call unattributed.
+hook_spawn_in() {
+	hook_spawn_tier=unattributed
+	hook_spawn_domain=
+	hook_spawn_skill=
+	hook_spawn_ticket=
+	if hook_handed_in "${1-}"; then
+		_hs_val=$_rh_after
+	else
+		_hs_val=${1-}
+	fi
+	case $_hs_val in 'Trace-Spawn: '*) ;; *) return 1 ;; esac
+	_hs_val=${_hs_val#Trace-Spawn: }
 	_hs_line=${_hs_val%%\\*}
 	_hs_line=${_hs_line%%\"*}
 	case ${_hs_val#"$_hs_line"} in '\n'* | '"'*) ;; *) return 1 ;; esac
