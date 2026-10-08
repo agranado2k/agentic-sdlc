@@ -26,6 +26,9 @@
 #      data.iterated=no with the reason as data.no_iteration; with one at
 #      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
 #      and records nothing: the check is skipped, and stderr says so.
+#   1c. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
+#      the head branch) when the trace holds none for it: a PR opened outside
+#      /implement still joins its ticket for /retro (#638).
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
 #      one /merge-train's hard rule 3 reads from the local workflow article
 #      (in this repo, the root AGENTS.md). A merge the forge rejects
@@ -156,8 +159,8 @@ trace_read() {
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
 # One value per line: a title is the only free text, and it comes last.
-STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,title \
-	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), .title') ||
+STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,headRefName,title \
+	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), (.headRefName // ""), .title') ||
 	refuse "the forge did not answer for it"
 field() { printf '%s\n' "$STATE" | sed -n "${1}p"; }
 [ "$(field 1)" = OPEN ] || refuse "it is $(field 1), not open"
@@ -213,7 +216,7 @@ fi
 
 BASE=$(field 6)
 [ -n "$TICKET" ] || TICKET=$(field 7)
-TITLE=$(field 8)
+TITLE=$(field 9)
 if [ -n "$TICKET" ]; then
 	FB_SUBJECT="ticket:#$TICKET"
 	set -- "related=ticket:#$TICKET"
@@ -223,6 +226,23 @@ else
 fi
 [ -z "$ITERATED" ] || set -- "$@" "data.iterated=$ITERATED"
 [ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
+
+# --- 1c. a PR the trace never saw opened (#638) --------------------------------
+# A PR opened outside /implement left no pr.open, and /retro joins a ticket to
+# its PR through that event's related field. When the trace holds none on
+# pr:#<N>, the landing writes it, marked data.via=land. The head branch is
+# forge text: only a ref of a bounded shape reaches the trace, else nothing.
+# Unconfigured, there is nothing to read and nothing written.
+if [ -n "$(trace_read dir)" ] &&
+	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
+	_po_rel=
+	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
+	_po_branch=$(field 8 | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
+	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
+	# The landing's own arguments sit in "$@" for step 2: the optional field
+	# is spelled as an argument only when it is there, never by `set --`.
+	trace quiet kind=pr.open "subject=pr:#$PR" ${_po_rel:+"related=$_po_rel"} outcome=opened data.via=land "reason=$TITLE"
+fi
 
 # --- 2. the merge -------------------------------------------------------------
 if ! gh pr merge "$PR" --merge >&2; then

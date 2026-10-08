@@ -874,4 +874,29 @@ else
 	fail "README still describes the chain as if /implement ended at a commit"
 fi
 
+# ---------------------------------------------------------------------------
+banner "9. Every hand-back ends the run, whatever the outcome (#638)"
+# ---------------------------------------------------------------------------
+# Runs were left open after hand-back: step 10's `end` sat on the delivered
+# path only, so a session that stopped short — a ticket not ready, a stamp
+# stop, a disputed tier, a split for token burn — handed back with its run
+# still open. Step 10 says the end is owed on every hand-back, and the stops
+# elsewhere in the skill point back to it.
+_stop=$(t_line_of "$SKILL_ABS" "**Stop.**")
+_every=$(t_line_of "$SKILL_ABS" "**Every hand-back ends the run, whatever the outcome**")
+[ -n "$_every" ] && [ "$_every" = "$_stop" ] && pass "step 10 owes the run's end on every hand-back" ||
+	fail "step 10 (line '$_stop') does not say every hand-back ends the run (line '$_every')"
+_s10=$(sed -n "${_stop:-0}p" "$SKILL_ABS")
+for _tok in 'outcome=stopped' 'STAMP.md' 'step 1 cannot' 'disputed' 'token burn'; do
+	case "$_s10" in
+	*"$_tok"*) pass "step 10's end names $_tok" ;;
+	*) fail "step 10's end does not name $_tok" ;;
+	esac
+done
+_tb=$(grep -F '**Token burn' "$SKILL_ABS")
+case "$_tb" in
+*'step 10'*) pass "the token-burn stop ends the run through step 10" ;;
+*) fail "the token-burn stop does not point at step 10's end: $_tb" ;;
+esac
+
 t_done "/implement delivery contract"
