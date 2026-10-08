@@ -51,10 +51,20 @@ export function shellValue(text, name) {
   return value;
 }
 
-/** Whether an ignore file carries a plain, un-negated entry for `dir`. */
+/**
+ * Whether an ignore file ignores `dir` by a plain entry. The last matching
+ * line wins, as git reads it: a later `!` entry for the same directory
+ * un-ignores it.
+ */
 function ignores(text, dir) {
   const wanted = new Set([dir, `${dir}/`, `/${dir}`, `/${dir}/`]);
-  return text.split(/\r?\n/).some((line) => wanted.has(line.trimEnd()));
+  let ignored = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trimEnd();
+    if (wanted.has(line)) ignored = true;
+    else if (line.startsWith("!") && wanted.has(line.slice(1))) ignored = false;
+  }
+  return ignored;
 }
 
 export function run(ctx) {

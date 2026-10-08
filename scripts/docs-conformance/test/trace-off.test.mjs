@@ -69,6 +69,18 @@ test("the ignore entry is read in its other spellings, and never from a comment 
   }
 });
 
+test("a later negation un-ignores the directory, as git reads it — the last matching line wins", () => {
+  for (const [lines, fires] of [
+    [".trace/\n!.trace/\n", false],
+    ["!.trace/\n.trace/\n", true],
+    [".trace/\n!/.trace\n", false],
+  ]) {
+    const ctx = ctxFor({ "scripts/trace.config.sh": policy("TRACE_DIR=''"), ".gitignore": lines }, DEFAULTS);
+    assert.equal(hasRule(run(ctx), "trace-off"), fires, `ignore file ${JSON.stringify(lines)}`);
+    cleanup(ctx);
+  }
+});
+
 test("the value is read as the shell reads it: quoted, bare or double-quoted, the last line winning", () => {
   for (const [line, fires] of [
     ['TRACE_DIR=""', true],
