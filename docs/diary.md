@@ -2386,3 +2386,31 @@ loops; a wider `AGENT_HARNESSES` scan beyond `tests/` and `scripts/`; the
 dogfood sweep's missing-directory case; a bare `end` made mandatory once
 consumers have moved (ADR-0008's #560 amendment names what reopens it).
 
+
+## 2026-10-08 — the gate advises on an off trace and an unmapped reviewer tier; shared layer 0.67.0
+
+Ticket #655, blocked by #654 (PR #656). Two advisories join the shared
+validator set, `trace-off` and `reviewer-unmapped`: warnings only, each naming
+the setting, the policy file it lives in and what it costs. `trace-off` fires
+only when the trace could be on at no further step — `TRACE_DIR` empty while
+the ignore file already lists `.trace/`; without the entry, turning it on
+would put private text in a pushable tree, and that nudge belongs to
+bootstrap's next-steps text, not the gate.
+
+The decision this ticket asked for: **how the kit's own root gate stays free
+of both.** The kit traces and maps its tiers through never-shipped twins, and
+the shipped policy files it carries are the empty ones. Chosen: each
+validator's policy is an ordered `policyFiles` list, the first existing file
+read — the same shape as the scripts' own resolution, a seam first and the
+shipped file last — and the kit's `config.mjs` lists its twin first. Rejected:
+a validator that knows the kit's twin names (kit vocabulary in the shared
+layer), and a kit-only marker block in `config.mjs` stripped at bootstrap
+(machinery for one line). The cost accepted: a consumer's stamped `config.mjs`
+names two kit files that never exist there, which the list skips; the comment
+above each block says so. The fixture tests hold both halves — the kit's tree
+silent through the real config, and firing through the shipped defaults — and
+skip both where no kit twin exists, so a consumer's own advisory never turns
+into a failing harness test.
+
+The reduced POSIX gate carries neither; its notice says so, and self-host's
+notice probe holds that.

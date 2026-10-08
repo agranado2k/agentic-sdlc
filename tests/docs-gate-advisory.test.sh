@@ -71,10 +71,26 @@ assert_status 0 "the gate exits 0 — an advisory never fails a push" -- sh scri
 assert_out_has "design-brief-missing"
 assert_out_has "OK  docs gate"
 
+banner "2b. A fresh project's off trace and unmapped reviewer tier are audible through the gate (#655)"
+# Bootstrapped unattended with no trace answer, the project carries the shipped
+# empty TRACE_DIR beside a .gitignore that already lists .trace/, and the
+# shipped empty tier mapping — the two settings a whole wave once ran on with
+# the gate green throughout.
+grep -q "^TRACE_DIR=''" scripts/trace.config.sh && grep -qx '.trace/' .gitignore &&
+	pass "the fixture is the shape: an empty TRACE_DIR beside an ignored .trace/" ||
+	fail "the fixture degraded — no empty TRACE_DIR beside an ignored .trace/"
+assert_status 0 "the gate exits 0 — neither setting fails a push" -- sh scripts/check.sh
+assert_out_has "trace-off"
+assert_out_has "reviewer-unmapped"
+
 banner "3. A tree with nothing to advise prints no advisory block — the relay is not noise"
 printf '\n**Paradigm**: functional — pure domain, classes only at the adapters.\n' >>constitution/local-engineering.md
+sed -i.bak "s/^TRACE_DIR=''/TRACE_DIR='.trace'/" scripts/trace.config.sh && rm scripts/trace.config.sh.bak
+sed -i.bak "s/^AGENT_TIER_REVIEWER=''/AGENT_TIER_REVIEWER='a-second-model'/" scripts/agents.config.sh && rm scripts/agents.config.sh.bak
 assert_status 0 "the gate is green once one anchor is filled" -- sh scripts/check.sh
 assert_out_lacks "design-brief-missing"
+assert_out_lacks "trace-off"
+assert_out_lacks "reviewer-unmapped"
 assert_out_lacks "advisories"
 # The probe that tells "relay advisories" from "relay everything": on a clean
 # tree the harness still prints its own OK line, and an unconditional relay
@@ -88,6 +104,8 @@ assert_status 0 "the fallback gate exits 0" -- sh scripts/check.sh
 assert_out_has "design-brief advisory"
 assert_out_has "housekeeping-due advisory"
 assert_out_has "banned-words advisory"
+assert_out_has "trace-off advisory"
+assert_out_has "reviewer-unmapped advisory"
 unset DOCS_CHECK_NO_NODE
 
 t_done "docs gate advisory visibility"

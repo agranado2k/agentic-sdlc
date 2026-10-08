@@ -396,8 +396,10 @@ if [ "$engine" = "fallback" ]; then
 	echo "        decision (the mutation-decision advisory) and its design brief" >&2
 	echo "        (the design-brief advisory), the diary's housekeeping date (the" >&2
 	echo "        housekeeping-due advisory), materialized skill-bridge symlinks" >&2
-	echo "        (the skill-bridge advisory), and the glossary's banned words" >&2
-	echo "        (the banned-words advisory)." >&2
+	echo "        (the skill-bridge advisory), the glossary's banned words" >&2
+	echo "        (the banned-words advisory), an off trace beside an ignored trace" >&2
+	echo "        directory (the trace-off advisory) and an unmapped reviewer tier" >&2
+	echo "        (the reviewer-unmapped advisory)." >&2
 	echo "        Install node and re-run to get the full harness (scripts/docs-conformance)." >&2
 	echo "" >&2
 fi
