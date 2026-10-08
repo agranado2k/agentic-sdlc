@@ -133,6 +133,12 @@ STUB_LOG="$SCRATCH/gh.log"
 STUB_KNOBS="$SCRATCH/gh.knobs"
 STUB_SHA=abcdef0123456789abcdef0123456789abcdef01
 export PATH STUB_LOG STUB_KNOBS
+# The root checkout the landing fast-forwards (#636) is the script's own repo's
+# main worktree unless LAND_ROOT_CHECKOUT names another: every run here names
+# a scratch path that is no checkout, so no case ever moves this repo's root.
+# Section 11 points it at scratch checkouts of its own.
+LAND_ROOT_CHECKOUT="$SCRATCH/no-root"
+export LAND_ROOT_CHECKOUT
 
 TRACE_DIR="$SCRATCH/trace"
 export TRACE_DIR
@@ -739,5 +745,129 @@ fi
 sed '/kind=merge.land/s/ data\.waited=[^ ]*//' "$MT" >"$SCRATCH/mt.short"
 [ "$(train_keys "$SCRATCH/mt.short")" = "$land_keys" ] && fail "the field probe passed a train line with data.waited dropped — the check is vacuous" ||
 	pass "the field probe rejects a train line with a field dropped"
+
+# ---------------------------------------------------------------------------
+banner "11. After the landing, a clean root checkout on main is fast-forwarded; any other is left and named (#636)"
+# ---------------------------------------------------------------------------
+# mkroot <dir> — a checkout on main at c1, its origin/main one commit ahead
+# at c2, as a fetch would leave it (the stub's fetch fetches nothing).
+mkroot() {
+	mkdir -p "$1" && t_git_identity "$1" t t@t &&
+		t_write "$1" f one && t_commit "$1" c1 >/dev/null &&
+		t_write "$1" f two && t_commit "$1" c2 >/dev/null &&
+		git -C "$1" update-ref refs/remotes/origin/main HEAD &&
+		git -C "$1" reset -q --hard HEAD^
+}
+head_of() { "$REAL_GIT" -C "$1" rev-parse HEAD; }
+# landed_with_root <dir> <pr> [STUB_<KNOB>=<value> …] — land <pr> with the
+# root checkout at <dir>, the knobs in the environment of that one run.
+landed_with_root() {
+	_lr_root=$1
+	_lr_pr=$2
+	shift 2
+	: >"$STUB_LOG"
+	t_run_split env LAND_ROOT_CHECKOUT="$_lr_root" LAND_POLL_SECONDS=0 "$@" sh "$LAND" "$_lr_pr" </dev/null
+}
+iterated 211 212 213 214 215
+
+R="$SCRATCH/root-clean"
+mkroot "$R" || fail "could not build the clean root checkout"
+want=$("$REAL_GIT" -C "$R" rev-parse origin/main)
+landed_with_root "$R" 205
+s_assert_status 0 "a landing with a clean root checkout exits 0"
+[ "$(head_of "$R")" = "$want" ] && pass "the clean root checkout on main is fast-forwarded to origin/main" ||
+	fail "the clean root checkout was not fast-forwarded: HEAD $(head_of "$R"), origin/main $want"
+# One fetch for the release question, one in the root checkout before it moves.
+[ "$(grep -c '^ARGV: git fetch -q origin main$' "$STUB_LOG")" = 2 ] && pass "it fetches the base again for the root checkout" ||
+	fail "it did not fetch the base for the root checkout: $(grep 'git' "$STUB_LOG")"
+s_assert_err_has "fast-forwarded the root checkout $R" "stderr says the root was fast-forwarded, and where"
+
+R="$SCRATCH/root-dirty"
+mkroot "$R" || fail "could not build the dirty root checkout"
+was=$(head_of "$R")
+echo edit >"$R/f"
+landed_with_root "$R" 206
+s_assert_status 0 "a dirty root checkout does not fail the landing"
+[ "$(head_of "$R")" = "$was" ] && [ "$(cat "$R/f")" = edit ] && pass "a dirty root checkout is left alone, its edit intact" ||
+	fail "a dirty root checkout was touched: HEAD $(head_of "$R"), f '$(cat "$R/f")'"
+s_assert_err_has "left the root checkout $R alone" "stderr names the dirty root it left"
+s_assert_err_has "uncommitted" "and says why: uncommitted changes"
+
+R="$SCRATCH/root-branch"
+mkroot "$R" || fail "could not build the off-main root checkout"
+git -C "$R" checkout -q -b feat/elsewhere
+was=$(head_of "$R")
+landed_with_root "$R" 207
+s_assert_status 0 "a root checkout off main does not fail the landing"
+[ "$(head_of "$R")" = "$was" ] && [ "$("$REAL_GIT" -C "$R" rev-parse main)" = "$was" ] &&
+	pass "a root checkout off main is left alone, main not moved" || fail "a root checkout off main was touched"
+s_assert_err_has "left the root checkout $R alone" "stderr names the off-main root it left"
+s_assert_err_has "feat/elsewhere" "and says which branch it is on"
+
+R="$SCRATCH/root-diverged"
+mkroot "$R" || fail "could not build the diverged root checkout"
+t_write "$R" g three && t_commit "$R" local >/dev/null
+was=$(head_of "$R")
+landed_with_root "$R" 208
+s_assert_status 0 "a diverged root checkout does not fail the landing"
+[ "$(head_of "$R")" = "$was" ] && pass "a diverged root checkout is left alone" || fail "a diverged root checkout was moved"
+s_assert_err_has "left the root checkout $R alone" "stderr names the diverged root it left"
+s_assert_err_has "diverged" "and says it has diverged"
+
+landed_with_root "$SCRATCH/no-root" 209
+s_assert_status 0 "a root path that is no checkout does not fail the landing"
+s_assert_err_has "is not a checkout" "and stderr says so"
+
+R="$SCRATCH/root-untracked"
+mkroot "$R" || fail "could not build the root checkout with an untracked file"
+t_write "$R" scratch.txt note
+landed_with_root "$R" 211
+[ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] && [ -f "$R/scratch.txt" ] &&
+	pass "an untracked file alone does not hold the root back: fast-forwarded, the file kept (worktree-cleanup's rule)" ||
+	fail "a root with only an untracked file was not fast-forwarded: $S_ERR"
+
+R="$SCRATCH/root-detached"
+mkroot "$R" || fail "could not build the detached root checkout"
+git -C "$R" checkout -q --detach
+was=$(head_of "$R")
+landed_with_root "$R" 203
+[ "$(head_of "$R")" = "$was" ] && pass "a detached root checkout is left alone" || fail "a detached root checkout was moved"
+s_assert_err_has "detached" "and stderr says its HEAD is detached"
+
+R="$SCRATCH/root-current"
+mkroot "$R" || fail "could not build the up-to-date root checkout"
+git -C "$R" merge -q --ff-only origin/main
+landed_with_root "$R" 204
+s_assert_err_has "already at origin/main" "a root already at origin/main is said to be so"
+
+R="$SCRATCH/root-nofetch"
+mkroot "$R" || fail "could not build the root checkout whose fetch fails"
+was=$(head_of "$R")
+landed_with_root "$R" 210 STUB_FETCH_RC=1
+s_assert_status 0 "a fetch that fails in the root does not fail the landing"
+[ "$(head_of "$R")" = "$was" ] && pass "a root whose fetch failed is left alone" || fail "a root whose fetch failed was moved"
+s_assert_err_has "fetching origin main there failed" "and stderr says the fetch failed"
+
+R="$SCRATCH/root-noorigin"
+mkroot "$R" || fail "could not build the root checkout with no origin/main"
+git -C "$R" update-ref -d refs/remotes/origin/main
+was=$(head_of "$R")
+landed_with_root "$R" 212
+[ "$(head_of "$R")" = "$was" ] && pass "a root with no origin/main is left alone" || fail "a root with no origin/main was moved"
+s_assert_err_has "no origin/main to follow" "and stderr says there is nothing to follow"
+
+# The default: the main worktree of the repo the script runs from — here a
+# scratch repo whose linked worktree holds a copy of the kit's scripts.
+R="$SCRATCH/root-default"
+W="$SCRATCH/root-default-wt"
+mkroot "$R" || fail "could not build the default root checkout"
+git -C "$R" worktree add -q "$W" -b side 2>/dev/null && cp -R "$KIT/scripts" "$W/" ||
+	fail "could not build the linked worktree the default case runs from"
+: >"$STUB_LOG"
+t_run_split env LAND_ROOT_CHECKOUT= LAND_POLL_SECONDS=0 sh "$W/scripts/land.kit.sh" 213 </dev/null
+s_assert_status 0 "with no LAND_ROOT_CHECKOUT, the landing still exits 0"
+[ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] &&
+	pass "with no LAND_ROOT_CHECKOUT, the main worktree of the script's repo is the root fast-forwarded" ||
+	fail "the default root was not the main worktree: $S_ERR"
 
 t_done "land one PR by hand"
