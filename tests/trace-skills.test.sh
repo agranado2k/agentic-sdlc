@@ -310,7 +310,7 @@ post_rules_missing() { # <review-pr skill file>
 		"b follows the answer|\`data.posted\` follows the answer" \
 		"path c|**(c) No instruction, and no answer.**" \
 		"c posted no|record every raise \`data.posted=no\` before acting on that message" \
-		"a unreachable forge records none|a reviewer told to post that cannot reach the forge at all records no raise"; do
+		"a unreachable forge raises once|a reviewer told to post that cannot reach the forge at all has raised every finding as posted already"; do
 		case "$_ap" in *"${_r#*|}"*) ;; *) printf '%s\n' "${_r%%|*}" ;; esac
 	done
 	case "$_cl" in *'On path (b) only'*) ;; *) printf '%s\n' 'the question on (b) only' ;; esac
@@ -329,9 +329,9 @@ missing=$(post_rules_missing "$RP" | tr '\n' ',' | sed 's/,$//')
 [ -z "$missing" ] && pass "/review-pr settles the post question on three named paths, the instruction from the caller's spawn prompt, each raise recorded once and the run ending after them" ||
 	fail "/review-pr's post rules are missing: $missing"
 # …and when /implement's in-session reviewer cannot reach the forge at all
-# (second local review of PR #374, H-1), it records none and the relay
-# records each raise once, as posted — never a not-posted raise and a posted
-# one for the same finding.
+# (second local review of PR #374, H-1), each finding is still raised once:
+# since #629 the reviewer raised it as posted when its lens returned, and the
+# relay that posts the report records no second raise.
 # Each rule has a test that fails without it (H-2/H-3 of the same review):
 # one bait per rule, the rule's own needle removed from a copy.
 bait_post() { # <rule name> <sed script> — exit 0 only when the copy changed and the holder names the rule
@@ -348,7 +348,7 @@ for b in \
 	"b follows the answer|s/\`data.posted\` follows the answer/\`data.posted\` is a guess/" \
 	"path c|s/\*\*(c) No instruction, and no answer\.\*\*/**(c) Silence.**/" \
 	"c posted no|s/record every raise \`data.posted=no\` before acting on that message/move on/" \
-	"a unreachable forge records none|s/cannot reach the forge at all records no raise/records its raises as not posted/" \
+	"a unreachable forge raises once|s/cannot reach the forge at all has raised every finding as posted already/records its raises as not posted/" \
 	"the question on (b) only|s/On path (b) only/On every path/" \
 	"end after the raises|s/never before them/whenever/" \
 	"one own raise line|/kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1/s/\$/ Also \`sh scripts\/trace.sh emit kind=finding.raise subject=pr:#<N> data.posted=yes || :\`./" \
