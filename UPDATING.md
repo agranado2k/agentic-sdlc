@@ -227,6 +227,23 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.66.0 or older, the gate advises on an off trace and an unmapped reviewer tier.**
+Two files join at 0.67.0, `scripts/docs-conformance/validators/trace-off.mjs`
+and `reviewer-unmapped.mjs`; none leaves. `runner.mjs` registers them,
+`scripts/check.sh`'s no-node notice names them, and this recipe changes. Both
+are advisories: the gate stays green and prints a warning when
+`scripts/trace.config.sh` leaves `TRACE_DIR` empty while `.gitignore` already
+lists `.trace/`, and when `scripts/agents.config.sh` leaves
+`AGENT_TIER_REVIEWER` empty. Your `config.mjs` is kept, and the validators run
+on their defaults without its two new blocks, `traceOff` and
+`reviewerUnmapped` (9d) — add them only to point at a policy file of your
+own. Part 2 takes the rest. In 9a, `/implement`, `/review-pr` and
+`/merge-train` list both settings as findings in their final report, and
+`/housekeeping` with its `CHECKLIST.md` reads them. In 9d,
+`trace.config.sh`'s header says off is a decision — merge the comment, keep
+your value; bootstrap now asks about the trace (`--with-trace`,
+`--no-trace`), which an updating project answers by setting the line.
+
 **Arriving from 0.65.0 or older, the trace records an interruption.**
 No file joins or leaves at 0.66.0. One shared file changes content besides
 this recipe: `scripts/trace.sh` accepts `ticket.start` with the outcome
@@ -1136,7 +1153,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.66.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.67.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1148,10 +1165,10 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list --sort=-v:refname
-v0.66.0
+v0.67.0
 v0.1.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.66.0
+v0.1.0 -> v0.67.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1170,10 +1187,12 @@ scripts/docs-conformance/validators/design-brief.mjs
 scripts/docs-conformance/validators/housekeeping-due.mjs
 scripts/docs-conformance/validators/living-spec.mjs
 scripts/docs-conformance/validators/mutation-decision.mjs
+scripts/docs-conformance/validators/reviewer-unmapped.mjs
 scripts/docs-conformance/validators/skill-bridge.mjs
 scripts/docs-conformance/validators/skill-ceiling.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
+scripts/docs-conformance/validators/trace-off.mjs
 scripts/guards.lib.sh
 scripts/lens-slice.sh
 scripts/manifest.lib.sh
@@ -1187,10 +1206,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2842 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2885 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 2996 insertions(+), 1 deletion(-)
+ 3 files changed, 3039 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1242,10 +1261,12 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/housekeeping-due.mjs
   updated scripts/docs-conformance/validators/living-spec.mjs
   updated scripts/docs-conformance/validators/mutation-decision.mjs
+  updated scripts/docs-conformance/validators/reviewer-unmapped.mjs
   updated scripts/docs-conformance/validators/skill-bridge.mjs
   updated scripts/docs-conformance/validators/skill-ceiling.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
+  updated scripts/docs-conformance/validators/trace-off.mjs
   updated scripts/guards.lib.sh
   updated scripts/lens-slice.sh
   updated scripts/manifest.lib.sh
@@ -1255,7 +1276,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.66.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.67.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1275,10 +1296,12 @@ verbatim  scripts/docs-conformance/validators/design-brief.mjs
 verbatim  scripts/docs-conformance/validators/housekeeping-due.mjs
 verbatim  scripts/docs-conformance/validators/living-spec.mjs
 verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
+verbatim  scripts/docs-conformance/validators/reviewer-unmapped.mjs
 verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
 verbatim  scripts/docs-conformance/validators/skill-ceiling.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
+verbatim  scripts/docs-conformance/validators/trace-off.mjs
 verbatim  scripts/guards.lib.sh
 verbatim  scripts/lens-slice.sh
 verbatim  scripts/manifest.lib.sh
@@ -1290,6 +1313,13 @@ verbatim  scripts/trace.sh
 verbatim  scripts/vocab.sh
 $ sh scripts/check.sh
 FAIL  docs gate: violations found
+
+WARN  docs conformance: advisories (gate stays green)
+
+  [reviewer-unmapped] ! scripts/agents.config.sh [reviewer-unmapped] — leaves AGENT_TIER_REVIEWER empty, so the reviewer tier is unmapped
+      -> Every review spawn then inherits the session's model: the independent review runs on the author's model, sharing its blind spots. Name a model the implementer does not run on in AGENT_TIER_REVIEWER in scripts/agents.config.sh. reviewerUnmapped in the gate config names the file read.
+  [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
+      -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
 FAIL  docs conformance: violations found
 
@@ -1304,10 +1334,17 @@ Fix them, or see .githooks/pre-push for the logged bypass.
 $ # RED, deliberately: the ARTICLE is shared layer, the POINTER to it is
 $ # yours (the root manual — Part 2 territory). Add it and re-run.
 $ sh scripts/check.sh
-OK  docs gate: all checks passed (shared-layer 0.66.0, engine: docs harness)
+WARN  docs conformance: advisories (gate stays green)
+
+  [reviewer-unmapped] ! scripts/agents.config.sh [reviewer-unmapped] — leaves AGENT_TIER_REVIEWER empty, so the reviewer tier is unmapped
+      -> Every review spawn then inherits the session's model: the independent review runs on the author's model, sharing its blind spots. Name a model the implementer does not run on in AGENT_TIER_REVIEWER in scripts/agents.config.sh. reviewerUnmapped in the gate config names the file read.
+  [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
+      -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
+
+OK  docs gate: all checks passed (shared-layer 0.67.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.66.0
-Part 1 complete — shared layer at v0.66.0. The update is not done: go to step 8.
+0.67.0
+Part 1 complete — shared layer at v0.67.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -2180,7 +2217,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.66.0 case for this file, and `ADD` is the 0.3.0 → 0.66.0
+`MERGE` is the 0.4.0 → 0.67.0 case for this file, and `ADD` is the 0.3.0 → 0.67.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2550,14 +2587,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.66.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.67.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.66.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.67.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2716,6 +2753,8 @@ WARN  docs conformance: advisories (gate stays green)
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
   [skill-paths] ! .claude/skills/to-tickets/SKILL.md [skill-path-missing] — references `scripts/agents.config.sh` but neither it nor `scripts/agents.config.sh.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
+      -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
 FAIL  docs conformance: violations found
 
@@ -2758,7 +2797,7 @@ NEW       docs/specs/README.md
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.66.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.67.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2781,10 +2820,14 @@ ruby
 $ sh scripts/check.sh
 WARN  docs conformance: advisories (gate stays green)
 
+  [reviewer-unmapped] ! scripts/agents.config.sh [reviewer-unmapped] — leaves AGENT_TIER_REVIEWER empty, so the reviewer tier is unmapped
+      -> Every review spawn then inherits the session's model: the independent review runs on the author's model, sharing its blind spots. Name a model the implementer does not run on in AGENT_TIER_REVIEWER in scripts/agents.config.sh. reviewerUnmapped in the gate config names the file read.
   [skill-paths] ! .agents/skills/improve-codebase-architecture/SKILL.md [skill-path-missing] — references `.agents/skills/LICENSE-mattpocock-skills.md` but neither it nor `.agents/skills/LICENSE-mattpocock-skills.md.template` exists
       -> Fix the reference, restore the file, or finish the update that delivers it — an agent obeying this skill will be pointed at it. An upstream-verbatim file goes in skillPaths.exemptFiles; a path that exists only after something creates it goes in skillPaths.exemptTokens. Reasons on every entry.
+  [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
+      -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.66.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.67.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -2798,7 +2841,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.66.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.67.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

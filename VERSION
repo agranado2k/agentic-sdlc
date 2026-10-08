@@ -2565,7 +2565,48 @@
 # implement-deliver.test.sh, skill-cascade.test.sh, spec-skills.test.sh and
 # adapters-demo.sh.
 
-shared-layer: 0.66.0
+# 0.67.0 — the gate advises on an off trace and an unmapped reviewer tier
+# (ticket #655). Releases what landed on main after v0.66.0 with no bump:
+# #656 (ticket #654).
+# TWO files JOIN the shared layer: scripts/docs-conformance/validators/
+# trace-off.mjs and reviewer-unmapped.mjs, two advisories — warnings, never
+# a failure. trace-off fires when the trace policy leaves TRACE_DIR empty
+# while the ignore file already ignores the trace directory; reviewer-unmapped
+# fires when the tier mapping leaves AGENT_TIER_REVIEWER empty. Each reads the
+# first file of an ordered policyFiles list that exists, defaulting to the
+# shipped scripts/trace.config.sh and scripts/agents.config.sh. NO file
+# leaves. THREE shared files change content: scripts/docs-conformance/
+# runner.mjs registers the two; scripts/check.sh's reduced-form notice names
+# them as NOT checked (no POSIX twin); and UPDATING.md: the arriving-from
+# paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Gate policy (9d): scripts/docs-conformance/config.mjs gains two blocks,
+# traceOff and reviewerUnmapped (#655). Yours is kept on update, and the
+# validators run on their defaults without them — add the blocks only to
+# point at a policy file of your own. The kit's own blocks list its
+# never-shipped twins first; in your tree that entry finds nothing and the
+# list falls through to the shipped file.
+# The harness's fixture tests: scripts/docs-conformance/test/trace-off.test.mjs
+# and reviewer-unmapped.test.mjs are new, and README.md there documents both
+# rules (#655).
+# From #656 (ticket #654), the trace is decided on day one. Bootstrap asks
+# once, beside the tier question, in both arms, and --with-trace / --no-trace
+# answer it unattended; a yes writes TRACE_DIR='.trace' only where the ignore
+# file covers it, and the next-steps text names an off trace. The new-project
+# .gitignore's trace comment says bootstrap writes the line; trace.config.sh's
+# header says off is a decision, never a default (9d — merge the comment by
+# hand, keep your value). The setup payload, setup/agent-bootstrap.md, passes
+# a TRACE_FLAG in both arms. Skills (9a): /implement, /review-pr and
+# /merge-train list "trace unconfigured — this run recorded nothing" and
+# "reviewer tier unmapped — the review shared the author's model" as findings
+# in their final report; /housekeeping and its CHECKLIST.md read the two
+# day-one settings and report each.
+# Kit-only, never shipped: ADR-0008's 2026-10-08 amendment and the index
+# row; the glossary's Advisory entry; tests/docs-gate-advisory.test.sh,
+# adopt-demo.sh, agent-roster.test.sh, cheap-reads.test.sh,
+# harness-helpers.test.sh, lib.sh, setup-demo.sh and trace-skills.test.sh.
+
+shared-layer: 0.67.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2611,6 +2652,8 @@ files:
   scripts/docs-conformance/validators/banned-words.mjs
   scripts/docs-conformance/validators/living-spec.mjs
   scripts/docs-conformance/validators/skill-ceiling.mjs
+  scripts/docs-conformance/validators/trace-off.mjs
+  scripts/docs-conformance/validators/reviewer-unmapped.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap
