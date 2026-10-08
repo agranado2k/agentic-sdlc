@@ -33,6 +33,7 @@ alone answers "what is currently binding?" without opening 40 files.
 | [0015](0015-a-release-is-tagged-by-its-landing-before-main-is-judged.md) | A release is tagged by its landing, before main is judged | Accepted 2026-10-06 — gives hard rule 3's landed release its mechanism; built by #509 |
 | [0016](0016-the-kit-accepts-train-only-verdicts-while-it-delegates-landing.md) | The kit accepts train-only verdicts while it delegates landing | Accepted 2026-10-06 — the operator's ruling on #570; reads alongside ADR-0008's amendment of 2026-10-01 (#385); `/retro` questions 7 and 8 retire on it per window, built by #572 |
 | [0017](0017-a-shipped-file-cites-a-kit-record-only-as-the-kits.md) | A shipped file cites a kit record only as the kit's | Accepted 2026-10-07 — #564; held by `t_kit_record_cites` in self-host over a fresh bootstrap |
+| [0018](0018-the-landing-script-refuses-a-pr-with-no-iteration-at-its-head.md) | The landing script refuses a PR with no iteration at its head | Accepted 2026-10-08 — #630; names the landing script an operator-run reader beside ADR-0008 clause 7; held by `tests/land.test.sh` section 9 |
 
 ## Conventions
 
