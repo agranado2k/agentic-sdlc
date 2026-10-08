@@ -637,6 +637,7 @@ arm_env() {
 		echo "PROJECT_NAME='$PROJECT_NAME'"
 		echo "PROJECT_DESC='$PROJECT_DESC'"
 		echo "DOGFOOD_FLAG=--no-dogfood"
+		echo "TRACE_FLAG=--with-trace"
 		cat "$@"
 	} >"$SCRATCH/arm.run"
 	(cd "$TARGET" && sh "$SCRATCH/arm.run")
