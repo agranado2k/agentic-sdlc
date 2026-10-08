@@ -45,12 +45,19 @@ fill in the values:
 PROJECT_NAME="My Project"
 PROJECT_DESC="One line about what it does."
 DOGFOOD_FLAG=--no-dogfood
+TRACE_FLAG=--with-trace
 ```
 
 Set `DOGFOOD_FLAG` to `--with-dogfood` or `--no-dogfood` **explicitly, always**.
 `bootstrap.sh` skips the question silently when it has no terminal to ask on —
 a safe default for a headless script, and the wrong one for you: you have a
 human on the line, and the decision is theirs, not a default's.
+
+`TRACE_FLAG` is the same kind of answer: `--with-trace` records the chain's
+decisions as plain text under `.trace/` at the root checkout — gitignored by
+the stamped `.gitignore`, never pushed — and `/retro` reads them after a wave;
+`--no-trace` leaves them unrecorded. With no terminal and no flag the trace
+stays off unasked, so set it **explicitly, always**, from your human's answer.
 
 ## 1. Make the clone yours
 
@@ -70,7 +77,7 @@ git init -b main
 ## 2. Bootstrap
 
 ```sh
-sh bootstrap.sh "$DOGFOOD_FLAG" "$PROJECT_NAME" "$PROJECT_DESC"
+sh bootstrap.sh "$DOGFOOD_FLAG" "$TRACE_FLAG" "$PROJECT_NAME" "$PROJECT_DESC"
 ```
 
 This stamps `AGENTS.md` and the docs set with your values, removes the kit's
@@ -183,7 +190,13 @@ KIT_CLONE=/absolute/path/to/this/clone
 PROJECT_NAME=my-project
 PROJECT_DESC="One line about the project."
 DOGFOOD_FLAG=--no-dogfood
+TRACE_FLAG=--with-trace
 ```
+
+`TRACE_FLAG` as in the new-project fill-in, with one difference: here a
+`--with-trace` is written only when your human's own `.gitignore` already
+lists `.trace/` — otherwise the trace stays off and the closing note says
+why. Add the line to their `.gitignore` first if they want it on.
 
 From inside your human's repository:
 
@@ -192,7 +205,7 @@ git switch -c chore/adopt-kit
 ```
 
 ```sh
-sh "$KIT_CLONE/bootstrap.sh" --adopt "$DOGFOOD_FLAG" "$PROJECT_NAME" "$PROJECT_DESC"
+sh "$KIT_CLONE/bootstrap.sh" --adopt "$DOGFOOD_FLAG" "$TRACE_FLAG" "$PROJECT_NAME" "$PROJECT_DESC"
 ```
 
 Read the result as data. **Exit code 0**: nothing collided — the adoption
