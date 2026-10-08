@@ -596,6 +596,42 @@ else
 	fail "bait: with the fix line swapped for a request to move the copies, the fix assertion still passes (ruling: '$b5f')"
 fi
 
+# The declined list (#633). Retro 2026-10-07: Agent 5 was rejected 6 of 9
+# times in the wave, each rejection citing a decision record, so the lens
+# names each rule a record declines, with that record, and stops raising it.
+# The list was drawn from the trace's rejected finding.triage events joined
+# to their reuse-dry raises — never invented — so each record below is one a
+# rejection cited. declined_of <a copy of the lens> — the bullets under the
+# list's lead-in, up to the first blank line after them.
+DECLINED_LEAD='**What the decision records decline.**'
+declined_of() {
+	awk -v lead="$DECLINED_LEAD" 'index($0, lead) { on = 1; next } on && n && /^$/ { exit } on && /^- / { n++; print }' "$1"
+}
+declined=$(declined_of "$LENS5")
+[ -n "$declined" ] &&
+	pass "Agent 5's prompt lists the rules the decision records decline" ||
+	fail "Agent 5's prompt has no '$DECLINED_LEAD' list — the lens keeps raising what the records declined"
+# Every bullet names its record on a 'declined by' clause: a rule with no
+# record is an invented one.
+# Judged only when the list exists: an absent list is the assertion above's
+# one failure, not a second one here.
+if [ -n "$declined" ]; then
+	unrecorded=$(printf '%s\n' "$declined" | grep -v -F 'declined by ' || :)
+	[ -z "$unrecorded" ] &&
+		pass "every declined rule names the record that declines it" ||
+		fail "a declined rule names no record: $unrecorded"
+fi
+# The records the rejected triages cited, each named on a bullet.
+for rec in 'shared invariant §10' '`constitution/shared-code-craft.md` §1' "the kit's root manual, hard rule 3" "the kit's ADR-0013 clause 2" "the kit's living spec requirement process/R7"; do
+	t_text_has "$declined" "declined by $rec" "a rejected reuse-dry raise cited it" "the declined list"
+done
+# Bait: one bullet's record cut from a copy of the lens goes red.
+sed "/^- .*declined by the kit's ADR-0013/s/ — declined by .*//" "$LENS5" >"$SCRATCH/bait5-declined.md"
+bd=$(declined_of "$SCRATCH/bait5-declined.md" | grep -v -F 'declined by ' || :)
+[ -n "$bd" ] && ! cmp -s "$SCRATCH/bait5-declined.md" "$LENS5" &&
+	pass "bait: a declined rule with its record cut goes red" ||
+	fail "bait: with ADR-0013's record cut from its bullet, the list still reads as recorded"
+
 # ---------------------------------------------------------------------------
 banner "10. The dispatched worker and its CI twin carry the reuse/DRY ruling in the skill's words (#471)"
 # ---------------------------------------------------------------------------
