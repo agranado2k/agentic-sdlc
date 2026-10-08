@@ -434,6 +434,7 @@ t_text_has "$rubric" "first hit wins" "the rubric still reads first hit wins —
 # site of a shape at once. The rubric's sizing guidance splits it.
 t_text_has "$rubric" "adds a rule and applies it to every site of a shape is two tickets" "#631: a rule plus its sweep is sized as two tickets"
 t_text_has "$rubric" "the rule with its check first, the sweep second" "#631: the order — the rule and its check land before the sweep"
+t_text_has "$rubric" "the sweep second, \`Blocked by:\` the first" "#631: the sweep is blocked by the rule, so the DAG holds the order"
 # The oracle forms the rubric names are the ones /implement runs (ticket #510,
 # from PR #484's review). Since #468 /implement matches a mechanical ticket's
 # oracle line against a closed allow-list in its step 1 and holds anything
