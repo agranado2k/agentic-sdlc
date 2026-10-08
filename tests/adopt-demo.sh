@@ -274,6 +274,24 @@ assert_status 0 "a repo that ignores .trace/ only locally adopts with --with-tra
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "an ignore outside the project's .gitignore writes nothing"
 assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
 
+# …and a .gitignore that lists .trace/ and then un-ignores it does not cover
+# it: git's verdict is the last matching line, never the first that mentions
+# the directory.
+mk_kitcopy
+mk_target
+printf '.trace/\n!.trace/\n' >"$TARGET/.gitignore"
+assert_status 0 "a repo that un-ignores .trace/ adopts with --with-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "a negated .trace/ line writes nothing"
+assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+
+# The adopt arm's no: answered, and said as answered.
+mk_kitcopy
+mk_target
+assert_status 0 "the adopt arm takes --no-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --no-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "The trace is OFF — you answered no"
+
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
 # ---------------------------------------------------------------------------

@@ -255,8 +255,8 @@ agents_set() {
 	_as_file=$1 _as_var=$2 _as_val=$3
 	grep -q "^$_as_var=''" "$_as_file" 2>/dev/null || return 0
 	# `|` as the delimiter: the values reaching here are an agent-harness token
-	# and a model id, both shape-checked before they are written, and neither
-	# alphabet contains a pipe.
+	# and a model id, both shape-checked before they are written, and the
+	# trace wizard's literal `.trace` — no alphabet among them has a pipe.
 	sed "s|^$_as_var=''|$_as_var='$_as_val'|" "$_as_file" >"$_as_file.tmp" &&
 		mv "$_as_file.tmp" "$_as_file" || die "could not write $_as_file"
 }
@@ -361,8 +361,9 @@ trace_wizard() {
 	# The project's own .gitignore must be what covers it: a global excludes
 	# file or .git/info/exclude ignores .trace/ on this machine only, and the
 	# next clone would see the trace as untracked files waiting for a commit.
-	if git check-ignore -v .trace/probe 2>/dev/null | grep -q '^\.gitignore:' ||
-		grep -qxE '/?\.trace/?' .gitignore 2>/dev/null; then
+	# `-v` names the deciding line, a negation included, so a `!` there is
+	# git saying the directory is NOT ignored. Both arms run inside a repo.
+	if git check-ignore -v .trace/probe 2>/dev/null | grep -q '^\.gitignore:[0-9]*:[^!]'; then
 		agents_set "$_tw_file" TRACE_DIR .trace
 		trace_state=on
 	else

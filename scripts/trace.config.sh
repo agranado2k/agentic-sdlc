@@ -42,9 +42,11 @@
 #   ''               tracing is OFF (the shipped default)
 #   '.trace'         a directory under the ROOT CHECKOUT: an emit from inside a
 #                    linked worktree lands beside the root's .git, so pruning
-#                    the worktree loses nothing. The shipped .gitignore
-#                    already lists .trace/ — the trace is local by design,
-#                    never pushed by the kit.
+#                    the worktree loses nothing. A new project's stamped
+#                    .gitignore lists .trace/; an adopted or updated repo
+#                    adds it to its own, and bootstrap writes this line only
+#                    once that file covers it — the trace is local by
+#                    design, never pushed by the kit.
 #   '/abs/path'      anywhere else, taken as given.
 #
 # An environment TRACE_DIR overrides this line for one process.
