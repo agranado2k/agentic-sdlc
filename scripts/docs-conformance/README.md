@@ -79,6 +79,17 @@ does not name has no ceiling. Rule it reports: `skill-over-ceiling`, a
 violation. Its POSIX twin in `check.sh` reads `skillCeilings` by text, one
 `"<path>": <bytes>,` per line.
 
+`trace-off` and `reviewer-unmapped` read a policy file's setting rather than
+prose, and both only advise. `trace-off` warns when the trace policy leaves
+`TRACE_DIR` empty while the ignore file already ignores the trace directory —
+the trace could be on and nothing says it was decided off. `reviewer-unmapped`
+warns when the tier mapping leaves `AGENT_TIER_REVIEWER` empty — every review
+then runs on the author's model. Each reads the first file of its
+`policyFiles` list that exists (`traceOff`, `reviewerUnmapped`), the value
+taken as the shell would after sourcing it, and is silent with no such file.
+Rules they report: `trace-off`, `reviewer-unmapped` — both warnings. Neither
+has a POSIX twin; the reduced form's notice says so.
+
 ### The shims
 
 `claudeMdRefs.rootManual` is `AGENTS.md`, and `claudeMdRefs.shims` lists the

@@ -132,9 +132,10 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Advisory** — a gate finding on the warning channel: printed to stderr by
   the docs harness and relayed by `scripts/check.sh` on a green run, never failing
   the push. The decision-anchor advisories name a promotion path in their
-  validator's header comment. The kit has six (`skill-web`, `skill-paths`,
-  `skill-bridge`, `mutation-decision`, `design-brief`, `housekeeping-due` —
-  the count moves with
+  validator's header comment. The kit has nine (`skill-web`, `skill-paths`,
+  `skill-bridge`, `mutation-decision`, `design-brief`, `housekeeping-due`,
+  `banned-words`, and the two that read a policy file's setting, `trace-off`
+  and `reviewer-unmapped` — the count moves with
   `scripts/docs-conformance/runner.mjs`). An advisory is the posture for a
   rule about consumer-owned prose, where version skew is a sanctioned state.
   - _Avoid_: "soft failure" — an advisory does not fail; "lint warning" — it

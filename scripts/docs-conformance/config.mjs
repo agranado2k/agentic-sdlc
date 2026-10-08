@@ -329,6 +329,36 @@ const housekeepingDue = {
 };
 
 /**
+ * Policy for the trace-off advisory: which file holds YOUR trace policy, the
+ * ignore file, and the trace directory. The validator warns (never fails)
+ * when the policy leaves TRACE_DIR empty while the ignore file already
+ * ignores the directory — the trace could be on, and nothing says it was
+ * decided off. `policyFiles` is an ordered list and the first that exists is
+ * read, the way the trace script reaches its policy through a seam.
+ *
+ * The kit's own tree traces through a never-shipped twin of the policy file,
+ * so the kit lists the twin first; in your project the twin does not exist
+ * and the list falls through to the shipped file. A repo that keeps its policy
+ * elsewhere lists that file first, the same way.
+ */
+const traceOff = {
+  policyFiles: ["scripts/trace.kit.config.sh", "scripts/trace.config.sh"],
+  // ignoreFile: ".gitignore",
+  // dir: ".trace",
+};
+
+/**
+ * Policy for the reviewer-unmapped advisory: which file holds YOUR tier
+ * mapping. The validator warns (never fails) when that file leaves
+ * AGENT_TIER_REVIEWER empty — every review then runs on the author's model.
+ * An ordered list, first existing read, for the reason traceOff gives: the
+ * kit's twin first, which your project does not have.
+ */
+const reviewerUnmapped = {
+  policyFiles: ["scripts/agents.kit.config.sh", "scripts/agents.config.sh"],
+};
+
+/**
  * Policy for the banned-words advisory: the glossary whose "Words this
  * project does not use" section is the list, and the files the scan leaves
  * alone. The scan covers the root manual, every article in the constitution
@@ -400,4 +430,4 @@ const skillCeilings = {
   ".agents/skills/implement/SKILL.md": 27000,
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, skillCeilings, skillPaths };
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillPaths, traceOff };
