@@ -1049,6 +1049,9 @@ done
 replay_before_post() { # <skill file> <trace dir> — exit 0 when every span ran
 	_rp_cut=$(t_line_of "$1" '### 6. ')
 	head -n "$((_rp_cut - 1))" "$1" >"$SCRATCH/pre-post.md"
+	# §3 hands path (a)'s raise to §6 step 3's line: the replay types it there.
+	region '^### 3\. ' '^#### Agents 1–6 ' "$1" | grep -qF "§6 step 3's line" &&
+		t_trace_lines "$1" | grep -F 'kind=finding.raise' | grep -vF 'data.via=relay' >>"$SCRATCH/pre-post.md"
 	printf '`sh scripts/trace.sh end <the run id your begin printed> outcome=ok || :`\n' >>"$SCRATCH/pre-post.md"
 	_rp_bad=0
 	while IFS= read -r _rp_span; do
@@ -1066,6 +1069,7 @@ printf "AGENT_TIER_REVIEWER='x'\n" >"$AGENTS_CONFIG"
 holds_before_post() { # <trace dir> — names each record the replayed run lacks
 	_hb=$(cat "$1"/events/*.jsonl 2>/dev/null)
 	printf '%s\n' "$_hb" | grep -qF '"kind":"spawn.end"' || printf '%s\n' 'spawn.end'
+	printf '%s\n' "$_hb" | grep -qF '"kind":"finding.raise"' || printf '%s\n' 'finding.raise'
 	for _hb_a in 1 2; do
 		printf '%s\n' "$_hb" | grep -F '"kind":"review.verdict"' | grep -qE "\"axis\":\"?$_hb_a\"?[,}]" || printf '%s\n' "verdict axis $_hb_a"
 	done
@@ -1074,7 +1078,7 @@ rm -rf "$SCRATCH/run.629"
 replay_before_post "$SKILL_ABS" "$SCRATCH/run.629" && pass "every documented trace line above §6 runs" ||
 	fail "a documented trace line above §6 does not run"
 miss=$(holds_before_post "$SCRATCH/run.629" | tr '\n' ',' | sed 's/,$//')
-[ -z "$miss" ] && pass "a review run replayed up to the first post holds its spawn.end and review.verdict for axis 1 and axis 2" ||
+[ -z "$miss" ] && pass "a review run replayed up to the first post holds its spawn.end, a lens's finding.raise and review.verdict for axis 1 and axis 2" ||
 	fail "a review run replayed up to the first post lacks: $miss — a posted review reads verdict-less (#629)"
 # Bait: the axis-2 verdict's emit moved below the post — the replay is red.
 awk '/kind=review\.verdict[^`]*data\.axis=2/ && !done { held = $0; done = 1; sub(/`sh scripts\/trace\.sh emit kind=review\.verdict[^`]*`/, "", $0) } /^#### Relaying a review/ && held { print held } { print }' "$SKILL_ABS" >"$SCRATCH/bait629-late.md"
@@ -1083,5 +1087,12 @@ replay_before_post "$SCRATCH/bait629-late.md" "$SCRATCH/run.629b" || :
 holds_before_post "$SCRATCH/run.629b" | grep -qxF 'verdict axis 2' &&
 	pass "bait: an axis-2 verdict recorded after the post is red" ||
 	fail "bait: an axis-2 verdict moved below the post was not caught"
+# Bait: §3 without the lens-return raise — the replay holds no raise before the post.
+sed "s/§6 step 3's line/the line in §6/" "$SKILL_ABS" >"$SCRATCH/bait629-noraise.md"
+rm -rf "$SCRATCH/run.629c"
+replay_before_post "$SCRATCH/bait629-noraise.md" "$SCRATCH/run.629c" || :
+holds_before_post "$SCRATCH/run.629c" | grep -qxF 'finding.raise' &&
+	pass "bait: a raise left for the end of the review is red" ||
+	fail "bait: a review that raises nothing before the post was not caught"
 
 t_done "/review-pr output contract"
