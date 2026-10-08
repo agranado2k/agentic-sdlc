@@ -751,13 +751,12 @@ banner "11. After the landing, a clean root checkout on main is fast-forwarded; 
 # ---------------------------------------------------------------------------
 # mkroot <dir> — a checkout on main at c1, its origin/main one commit ahead
 # at c2, as a fetch would leave it (the stub's fetch fetches nothing).
-rgit() { "$REAL_GIT" -c core.hooksPath=/dev/null -c user.name=t -c user.email=t@t "$@"; }
 mkroot() {
-	rgit init -q -b main "$1" &&
-		echo one >"$1/f" && rgit -C "$1" add f && rgit -C "$1" commit -qm c1 &&
-		echo two >"$1/f" && rgit -C "$1" commit -qam c2 &&
-		rgit -C "$1" update-ref refs/remotes/origin/main HEAD &&
-		rgit -C "$1" reset -q --hard HEAD^
+	mkdir -p "$1" && t_git_identity "$1" t t@t &&
+		t_write "$1" f one && t_commit "$1" c1 >/dev/null &&
+		t_write "$1" f two && t_commit "$1" c2 >/dev/null &&
+		git -C "$1" update-ref refs/remotes/origin/main HEAD &&
+		git -C "$1" reset -q --hard HEAD^
 }
 head_of() { "$REAL_GIT" -C "$1" rev-parse HEAD; }
 # landed_with_root <dir> <pr> — land <pr> with the root checkout at <dir>.
@@ -791,7 +790,7 @@ s_assert_err_has "uncommitted" "and says why: uncommitted changes"
 
 R="$SCRATCH/root-branch"
 mkroot "$R" || fail "could not build the off-main root checkout"
-rgit -C "$R" checkout -q -b feat/elsewhere
+git -C "$R" checkout -q -b feat/elsewhere
 was=$(head_of "$R")
 landed_with_root "$R" 207
 s_assert_status 0 "a root checkout off main does not fail the landing"
@@ -802,7 +801,7 @@ s_assert_err_has "feat/elsewhere" "and says which branch it is on"
 
 R="$SCRATCH/root-diverged"
 mkroot "$R" || fail "could not build the diverged root checkout"
-echo three >"$R/g" && rgit -C "$R" add g && rgit -C "$R" commit -qm local
+t_write "$R" g three && t_commit "$R" local >/dev/null
 was=$(head_of "$R")
 landed_with_root "$R" 208
 s_assert_status 0 "a diverged root checkout does not fail the landing"
