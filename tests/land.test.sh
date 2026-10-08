@@ -688,6 +688,17 @@ land STUB_MERGE_RC=1 307 --no-iteration 'forge rejects it'
 show 'pr:#307' --kind merge.land | grep -qF '"iterated":"no"' && pass "a rejected merge's merge.land stopped says it had no iteration too" ||
 	fail "the stopped merge.land lacks iterated=no: $(show 'pr:#307' --kind merge.land)"
 
+land 308 "--no-iteration" "two
+lines"
+s_assert_status 2 "--no-iteration with a reason that is not one line is a usage error, before any merge"
+[ "$(merges)" = 0 ] && pass "and nothing reached the forge" || fail "a multi-line reason was merged on: $(merges) merge calls"
+
+land STUB_HEAD_OID='not-a-sha' 310
+no_iter "a head the forge names in no sha shape" 310
+s_assert_err_has "<unnamed>" "stderr marks the head commit unnamed, never echoing the forge's text"
+land STUB_HEAD_DATE= 310
+s_assert_err_has "<undated>" "stderr marks an undated head as such"
+
 land 308 --no-iteration ''
 s_assert_status 2 "--no-iteration with an empty reason is a usage error"
 land 308 --no-iteration

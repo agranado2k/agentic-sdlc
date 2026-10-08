@@ -60,8 +60,10 @@
 # THE TICKET is the PR's first closing reference, or --ticket. With neither,
 # the feedback sits on the PR itself.
 #
-# THE TRACE is never load-bearing (ADR-0008 clause 4): unconfigured, the merge
-# and stdout are exactly what a traced run does. Kit-only, so the kit's own
+# THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
+# the merge and stdout are exactly what a traced run does. Its one read is
+# step 1b's, and that read IS load-bearing when the trace is configured: no
+# pr.iterate at the head refuses the landing (ADR-0018). Kit-only, so the kit's own
 # policy is the default seam — scripts/trace.sh read through
 # scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
 # TRACE_CONFIG still wins (the broker's arrangement).
@@ -113,7 +115,10 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	--no-iteration)
+		# One printable line: the trace refuses a control character, and a
+		# reason it refused after the merge would leave the landing unrecorded.
 		[ $# -ge 2 ] && [ -n "$2" ] || usage
+		case $2 in *[![:print:]]*) note "--no-iteration takes a one-line reason"; usage ;; esac
 		NO_ITERATION=$2
 		shift
 		;;
@@ -177,7 +182,7 @@ ITERATED=
 if [ -z "$(trace_read dir)" ]; then
 	note "the trace is unconfigured — whether /pr-iterate ran at the head of PR #$PR is not checked"
 else
-	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid, ((.commits // []) | last | .committedDate // "")' 2>/dev/null) || HEAD=
+	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h | $h, ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")' 2>/dev/null) || HEAD=
 	HEAD_OID=$(printf '%s\n' "$HEAD" | sed -n 1p)
 	HEAD_AT=$(printf '%s\n' "$HEAD" | sed -n 2p)
 	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
