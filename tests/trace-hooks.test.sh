@@ -4858,6 +4858,8 @@ phantom_632() {
 		set_key agent_transcript_path "$SCRATCH/never-there-632.jsonl" >"$SCRATCH/phantom-632.json"
 	env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-632.json" >/dev/null 2>&1
 }
+# usage_632 — the four session.usage token sums, space-separated.
+usage_632() { echo "$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)"; }
 # kinds_632 — the session lifecycle and usage kinds, in the order written.
 kinds_632() { events | sed -n 's/.*"kind":"\(session\.[a-z]*\)".*/\1/p' | tr '\n' ' '; }
 
@@ -4887,15 +4889,15 @@ if [ "$HAVE_NODE" = 1 ]; then
 	case $(kinds_632) in "session.start session.usage session.end session.start ")
 		pass "the killed run's usage and end land before the resume's own start" ;;
 	*) fail "the lifecycle order is '$(kinds_632)'" ;; esac
-	[ "$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)" = "$R25" ] &&
+	[ "$(usage_632)" = "$R25" ] &&
 		pass "the recovered session.usage is the killed run's rollup ($R25)" ||
-		fail "the recovered usage sums to '$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)', the rollup was '$R25'"
+		fail "the recovered usage sums to '$(usage_632)', the rollup was '$R25'"
 	# The resumed run ends cleanly: it counts only what came after.
 	cp "$RFIX" "$SCRATCH/resumed-632.jsonl"
 	end_632
-	[ "$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)" = "$R34" ] &&
+	[ "$(usage_632)" = "$R34" ] &&
 		pass "the resumed run's own end counts only what is new: the session totals its rollup ($R34)" ||
-		fail "after the clean end the usage sums to '$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)', the rollup was '$R34'"
+		fail "after the clean end the usage sums to '$(usage_632)', the rollup was '$R34'"
 else
 	skip "the recovered usage legs (node is not on PATH)"
 	end_632
