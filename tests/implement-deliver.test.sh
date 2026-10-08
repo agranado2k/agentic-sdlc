@@ -190,7 +190,7 @@ banner "3a. The PR body carries the one line the landing reads (#480)"
 # ---------------------------------------------------------------------------
 # Retro F1 (#477): three tickets of a wave were built with no /implement run,
 # and nothing at landing could tell — so a `mechanical` stamp could not be
-# rated. The landing reads the forge, never the trace (ADR-0008 clause 7), so
+# rated. The landing reads this signal from the forge, not the trace, so
 # the signal is a line /implement writes into the body of the PR it opens: the
 # ticket and the tier it read through the stamp checker. Its exact shape is
 # the contract the landing matches, byte for byte — tests/land.test.sh lifts
