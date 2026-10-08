@@ -78,17 +78,7 @@ set --
 # THE SAME LINES ARE THE RECORDED ROLLUP GAPS (#407). The extractor reads them
 # on stdin under --rollup, so a compaction's gap an earlier end recorded is
 # never recorded again; a gap event carries no last_msg, so it never anchors.
-hook_recorded=
-hook_after=
-[ $# -gt 0 ] && hook_anchors "session:$sid" session.usage
-
-if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-	printf '%s\n' "$hook_recorded" |
-		hook_tokens "$transcript" session.usage --rollup --resume ${hook_after:+--after "$hook_after"} "$@"
-else
-	hook_trace emit kind=session.usage outcome=fail \
-		reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"
-fi
+hook_session_usage "$sid" "$transcript" "$@"
 
 # The tool calls this session began and never returned from: denied (#409).
 # Swept on the environment as it stood before the hand above: the marker names

@@ -90,16 +90,7 @@ if [ -n "$tdir" ] && [ "$src" = resume ]; then
 		(
 			hook_run_handed "$transcript" || :
 			set -- subject="session:$sid" session="$sid" data.recovered=resume
-			hook_recorded=
-			hook_after=
-			hook_anchors "session:$sid" session.usage
-			if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-				printf '%s\n' "$hook_recorded" |
-					hook_tokens "$transcript" session.usage --rollup --resume ${hook_after:+--after "$hook_after"} "$@"
-			else
-				hook_trace emit kind=session.usage outcome=fail \
-					reason="the transcript the payload named cannot be read: ${transcript:-none named}" "$@"
-			fi
+			hook_session_usage "$sid" "$transcript" "$@"
 			phantoms=$(hook_phantom_take "$tdir" "$sid") && set -- "$@" data.phantoms="$phantoms"
 			hook_trace emit kind=session.end harness=claude-code \
 				reason='the run before this resume ended without the agent harness firing SessionEnd (killed or restarted); recorded at the resume' "$@"

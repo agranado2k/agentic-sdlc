@@ -491,6 +491,28 @@ hook_anchors() {
 	hook_id_ok "$hook_after" || hook_after=
 }
 
+# hook_session_usage <session id> <transcript> [<field>=<value> …] — that
+# session's `session.usage` events for what is new in <transcript> since the
+# trace's last read of it: hook_anchors, then hook_tokens under --rollup and
+# --resume, or one fail event when the transcript cannot be read. The fields
+# ride every event. An id hook_id_ok refuses anchors nothing: the whole file. session-end.sh reads a run's end with it, and
+# session-start.sh the end a killed run never had (#632).
+hook_session_usage() {
+	_su_sid=$1
+	_su_file=$2
+	shift 2
+	hook_recorded=
+	hook_after=
+	hook_id_ok "$_su_sid" && hook_anchors "session:$_su_sid" session.usage
+	if [ -n "$_su_file" ] && [ -f "$_su_file" ]; then
+		printf '%s\n' "$hook_recorded" |
+			hook_tokens "$_su_file" session.usage --rollup --resume ${hook_after:+--after "$hook_after"} "$@"
+	else
+		hook_trace emit kind=session.usage outcome=fail \
+			reason="the transcript the payload named cannot be read: ${_su_file:-none named}" "$@"
+	fi
+}
+
 # hook_tokens <transcript> <kind> [--rollup] [--resume] [--after <message id>] [<field>=<value> …] —
 # one event of <kind> per model in the transcript, carrying that model's four
 # token counts, and at least one event whatever happens. Seven shapes, all of
