@@ -52,8 +52,8 @@
 #      `hit|adjusted|missed`; with no terminal, or --unasked, it emits
 #      `unasked` with the reason — never a verdict nobody gave.
 #   6. Fast-forwards the root checkout — the main worktree of this repo, or
-#      LAND_ROOT_CHECKOUT — to origin's base when it is on that branch, clean
-#      and not diverged, and says so on stderr; a dirty, off-base, detached
+#      LAND_ROOT_CHECKOUT — to origin's base when it is on that branch, with
+#      no tracked change uncommitted, and not diverged, and says so on stderr; a dirty, off-base, detached
 #      or diverged root is left untouched and named (#636). No event, no
 #      exit status: the landing is what the record is about.
 #   A failed post-merge workflow still records both events — the PR did land —
@@ -417,9 +417,11 @@ trace quiet kind=feedback "$@"
 # --- 6. the root checkout follows the landing (#636) ---------------------------
 # The hooks run from the root checkout, so a landed hook fix reaches no session
 # until the root moves. It is fast-forwarded to origin's base only when it is
-# a checkout, on the base branch, with nothing uncommitted (untracked files
-# included) and nothing of its own that origin lacks; any other root is left
-# exactly as it was, and named. Never a reset, a stash or a merge commit: the
+# a checkout, on the base branch, with no tracked change uncommitted and
+# nothing of its own that origin lacks; any other root is left exactly as it
+# was, and named. Tracked changes only, as scripts/worktree-cleanup.sh judges
+# the same root: an untracked file is safe, since `merge --ff-only` refuses
+# rather than overwrite one. Never a reset, a stash or a merge commit: the
 # one write is `merge --ff-only`. It changes no exit status and no event.
 RC=${LAND_ROOT_CHECKOUT:-$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')}
 leave_root() { note "left the root checkout $RC alone: $1 — fast-forward it by hand when it is clean and on $BASE"; }
@@ -433,7 +435,7 @@ elif [ -z "$_rc_branch" ]; then
 	leave_root "its HEAD is detached, not on $BASE"
 elif [ "$_rc_branch" != "$BASE" ]; then
 	leave_root "it is on $_rc_branch, not $BASE"
-elif [ -n "$(git -C "$RC" --no-optional-locks status --porcelain 2>/dev/null)" ]; then
+elif ! git -C "$RC" diff --quiet 2>/dev/null || ! git -C "$RC" diff --cached --quiet 2>/dev/null; then
 	leave_root "it has uncommitted changes"
 elif ! git -C "$RC" fetch -q origin "$BASE" >/dev/null 2>&1; then
 	leave_root "fetching origin $BASE there failed"

@@ -818,6 +818,14 @@ landed_with_root "$SCRATCH/no-root" 209
 s_assert_status 0 "a root path that is no checkout does not fail the landing"
 s_assert_err_has "is not a checkout" "and stderr says so"
 
+R="$SCRATCH/root-untracked"
+mkroot "$R" || fail "could not build the root checkout with an untracked file"
+t_write "$R" scratch.txt note
+landed_with_root "$R" 211
+[ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] && [ -f "$R/scratch.txt" ] &&
+	pass "an untracked file alone does not hold the root back: fast-forwarded, the file kept (worktree-cleanup's rule)" ||
+	fail "a root with only an untracked file was not fast-forwarded: $S_ERR"
+
 R="$SCRATCH/root-detached"
 mkroot "$R" || fail "could not build the detached root checkout"
 git -C "$R" checkout -q --detach
