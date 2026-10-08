@@ -263,6 +263,17 @@ assert_status 0 "a repo that ignores .trace/ adopts with --with-trace" -- \
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR='.trace'" "the adopt arm writes the trace directory on a yes"
 assert_out_has "The trace is ON"
 
+# …but only their own .gitignore counts: an ignore in .git/info/exclude (or a
+# global excludes file) holds on this machine alone, so the next clone would
+# see the trace as untracked files one `git add -A` from a commit.
+mk_kitcopy
+mk_target
+printf '.trace/\n' >>"$TARGET/.git/info/exclude"
+assert_status 0 "a repo that ignores .trace/ only locally adopts with --with-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "an ignore outside the project's .gitignore writes nothing"
+assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
 # ---------------------------------------------------------------------------

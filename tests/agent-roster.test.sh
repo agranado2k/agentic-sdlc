@@ -407,6 +407,28 @@ grep -q 'trace question was not asked' "$OUT" &&
 	pass "…and is reported as answered, not as unasked"
 trace_says_off "$OUT" "--no-trace"
 
+# A policy file the project already filled is its decision, made before
+# bootstrap ran: a --with-trace waiting beside it rewrites nothing, and the
+# next-steps text says nothing about the trace either way.
+fresh_project
+sed "s|^TRACE_DIR=''|TRACE_DIR='elsewhere'|" "$PROJ/scripts/trace.config.sh" >"$PROJ/trace.tmp" &&
+	mv "$PROJ/trace.tmp" "$PROJ/scripts/trace.config.sh"
+(cd "$PROJ" && sh bootstrap.sh --no-agents --with-trace "Demo Trace Kept" "A project." </dev/null >"$OUT" 2>&1)
+[ "$(trace_line)" = "TRACE_DIR='elsewhere'" ] &&
+	pass "a TRACE_DIR the project already filled survives --with-trace, untouched" ||
+	fail "a filled TRACE_DIR was rewritten: $(trace_line)"
+assert_file_lacks "$OUT" "The trace is" "a filled TRACE_DIR is kept silently"
+assert_file_lacks "$OUT" "trace question was not asked" "a filled TRACE_DIR was never a question"
+
+# No policy file at all: the trace is off, and the note says the file is
+# missing — never that no terminal was there to ask on, when --with-trace
+# answered and no terminal was needed.
+fresh_project
+rm "$PROJ/scripts/trace.config.sh"
+(cd "$PROJ" && sh bootstrap.sh --no-agents --with-trace "Demo Trace Missing" "A project." </dev/null >"$OUT" 2>&1)
+assert_file_has "$OUT" "The trace is OFF — scripts/trace.config.sh is missing" "a missing policy file is named as the reason"
+assert_file_lacks "$OUT" "not asked: no terminal" "a missing policy file is not blamed on the terminal"
+
 # On a terminal: the question itself, both ways, and the flag stopping it with
 # a yes waiting. One answer each — --no-agents keeps the roster's prompts out.
 if [ "$HAVE_PTY" = 1 ]; then

@@ -310,7 +310,8 @@ agents_read_token() {
 # away from being pushed.
 trace_choice=ask
 # trace_state — what the next-steps note reports: on | no | unasked | uncovered
-# | kept (the project's file was already filled, so nothing was asked).
+# | missing (no policy file to write the answer into) | kept (the project's
+# file was already filled, so nothing was asked).
 trace_state=unasked
 
 # trace_flag <arg> — --with-trace / --no-trace, tried beside agents_flag.
@@ -326,7 +327,10 @@ trace_flag() {
 # trace_wizard <path to trace.config.sh> — ask, then write.
 trace_wizard() {
 	_tw_file=$1
-	[ -f "$_tw_file" ] || return 0
+	if [ ! -f "$_tw_file" ]; then
+		trace_state=missing
+		return 0
+	fi
 	if ! grep -q "^TRACE_DIR=''" "$_tw_file" 2>/dev/null; then
 		trace_state=kept
 		return 0
@@ -354,7 +358,11 @@ trace_wizard() {
 		trace_state=no
 		return 0
 	fi
-	if git check-ignore -q .trace/probe 2>/dev/null || grep -qxE '/?\.trace/?' .gitignore 2>/dev/null; then
+	# The project's own .gitignore must be what covers it: a global excludes
+	# file or .git/info/exclude ignores .trace/ on this machine only, and the
+	# next clone would see the trace as untracked files waiting for a commit.
+	if git check-ignore -v .trace/probe 2>/dev/null | grep -q '^\.gitignore:' ||
+		grep -qxE '/?\.trace/?' .gitignore 2>/dev/null; then
 		agents_set "$_tw_file" TRACE_DIR .trace
 		trace_state=on
 	else
@@ -378,6 +386,7 @@ EOF
 		;;
 	no) _tn_why="you answered no" ;;
 	uncovered) _tn_why=".gitignore does not cover .trace/ yet" ;;
+	missing) _tn_why="scripts/trace.config.sh is missing" ;;
 	*) _tn_why="the question was not asked: no terminal" ;;
 	esac
 	cat <<EOF
