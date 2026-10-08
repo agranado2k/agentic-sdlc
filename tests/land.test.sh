@@ -759,11 +759,16 @@ mkroot() {
 		git -C "$1" reset -q --hard HEAD^
 }
 head_of() { "$REAL_GIT" -C "$1" rev-parse HEAD; }
-# landed_with_root <dir> <pr> — land <pr> with the root checkout at <dir>.
+# landed_with_root <dir> <pr> [STUB_<KNOB>=<value> …] — land <pr> with the
+# root checkout at <dir>, the knobs in the environment of that one run.
 landed_with_root() {
+	_lr_root=$1
+	_lr_pr=$2
+	shift 2
 	: >"$STUB_LOG"
-	t_run_split env LAND_ROOT_CHECKOUT="$1" LAND_POLL_SECONDS=0 sh "$LAND" "$2" </dev/null
+	t_run_split env LAND_ROOT_CHECKOUT="$_lr_root" LAND_POLL_SECONDS=0 "$@" sh "$LAND" "$_lr_pr" </dev/null
 }
+iterated 211 212 213 214 215
 
 R="$SCRATCH/root-clean"
 mkroot "$R" || fail "could not build the clean root checkout"
@@ -812,5 +817,49 @@ s_assert_err_has "diverged" "and says it has diverged"
 landed_with_root "$SCRATCH/no-root" 209
 s_assert_status 0 "a root path that is no checkout does not fail the landing"
 s_assert_err_has "is not a checkout" "and stderr says so"
+
+R="$SCRATCH/root-detached"
+mkroot "$R" || fail "could not build the detached root checkout"
+git -C "$R" checkout -q --detach
+was=$(head_of "$R")
+landed_with_root "$R" 203
+[ "$(head_of "$R")" = "$was" ] && pass "a detached root checkout is left alone" || fail "a detached root checkout was moved"
+s_assert_err_has "detached" "and stderr says its HEAD is detached"
+
+R="$SCRATCH/root-current"
+mkroot "$R" || fail "could not build the up-to-date root checkout"
+git -C "$R" merge -q --ff-only origin/main
+landed_with_root "$R" 204
+s_assert_err_has "already at origin/main" "a root already at origin/main is said to be so"
+
+R="$SCRATCH/root-nofetch"
+mkroot "$R" || fail "could not build the root checkout whose fetch fails"
+was=$(head_of "$R")
+landed_with_root "$R" 210 STUB_FETCH_RC=1
+s_assert_status 0 "a fetch that fails in the root does not fail the landing"
+[ "$(head_of "$R")" = "$was" ] && pass "a root whose fetch failed is left alone" || fail "a root whose fetch failed was moved"
+s_assert_err_has "fetching origin main there failed" "and stderr says the fetch failed"
+
+R="$SCRATCH/root-noorigin"
+mkroot "$R" || fail "could not build the root checkout with no origin/main"
+git -C "$R" update-ref -d refs/remotes/origin/main
+was=$(head_of "$R")
+landed_with_root "$R" 212
+[ "$(head_of "$R")" = "$was" ] && pass "a root with no origin/main is left alone" || fail "a root with no origin/main was moved"
+s_assert_err_has "no origin/main to follow" "and stderr says there is nothing to follow"
+
+# The default: the main worktree of the repo the script runs from — here a
+# scratch repo whose linked worktree holds a copy of the kit's scripts.
+R="$SCRATCH/root-default"
+W="$SCRATCH/root-default-wt"
+mkroot "$R" || fail "could not build the default root checkout"
+git -C "$R" worktree add -q "$W" -b side 2>/dev/null && cp -R "$KIT/scripts" "$W/" ||
+	fail "could not build the linked worktree the default case runs from"
+: >"$STUB_LOG"
+t_run_split env LAND_ROOT_CHECKOUT= LAND_POLL_SECONDS=0 sh "$W/scripts/land.kit.sh" 213 </dev/null
+s_assert_status 0 "with no LAND_ROOT_CHECKOUT, the landing still exits 0"
+[ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] &&
+	pass "with no LAND_ROOT_CHECKOUT, the main worktree of the script's repo is the root fast-forwarded" ||
+	fail "the default root was not the main worktree: $S_ERR"
 
 t_done "land one PR by hand"
