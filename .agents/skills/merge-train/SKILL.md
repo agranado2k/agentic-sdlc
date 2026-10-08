@@ -234,7 +234,8 @@ Findings:  <either setting below, when it holds — or none>
 **Two settings are findings in the train's report, never a stderr line relayed
 in passing**: when `sh scripts/trace.sh dir` prints nothing, the report lists
 "trace unconfigured — this run recorded nothing"; and
-when `sh scripts/agents.lib.sh reviewer` prints nothing, it lists "reviewer tier unmapped — the review shared the author's model", of every PR the train landed.
+when `sh scripts/agents.lib.sh reviewer` prints nothing, it lists
+"reviewer tier unmapped — the review shared the author's model".
 
 ## Cross-references
 
