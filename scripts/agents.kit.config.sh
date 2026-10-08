@@ -79,8 +79,10 @@
 # to it, so a `sonnet` session is never handed the pinned Sonnet reviewer.
 #
 # The cost of pinning is that the two consumption paths take different
-# spellings. `claude --model` (what scripts/agent-dispatch.sh runs when a tier
-# crosses agent harnesses) takes the full id. The IN-SESSION spawn parameter
+# spellings for a PINNED tier. `claude --model` (what scripts/agent-dispatch.sh
+# runs when a tier crosses agent harnesses) is given the full id — it takes
+# the family alias too, which is why the two family-following tiers above
+# need no bridge on that path. The IN-SESSION spawn parameter
 # — the Agent/Task tool, adapters/claude-code/README.md — takes only the
 # family word. `sh scripts/agents.kit.sh --alias <tier> [domain]` is the
 # bridge: it resolves the tier and prints the spawn word for it, so a session
