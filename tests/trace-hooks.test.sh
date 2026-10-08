@@ -4829,4 +4829,90 @@ grep -q '^### The spawn guard' "$KIT/adapters/claude-code/README.md" &&
 	pass "the README says how a session satisfies the spawn guard" ||
 	fail "the adapter README has no 'The spawn guard' section"
 
+# ---------------------------------------------------------------------------
+banner "52. A resumed run records what the run before it never ended (#632)"
+# ---------------------------------------------------------------------------
+# Ticket #632 (retro-20261007T151351Z, F5). A run the agent harness kills or
+# restarts never fires SessionEnd, so its usage and its phantom count were
+# recorded by nobody: a session with three session.start lines and no
+# session.end at all. The resume is the first moment anything sees that session
+# again, so the SessionStart hook, on source=resume, closes the run before it
+# when the trace's last word on the session is a start: the usage the earlier
+# end would have read (anchored as always, so the next real end counts only
+# what is new) and a session.end carrying the phantoms and data.recovered.
+S632=8b4bc828-f171-457e-9b1c-36fbc3814818
+start_632() {
+	set_key session_id "$S632" <"$FIX/session-start.payload.json" |
+		set_key transcript_path "$SCRATCH/resumed-632.jsonl" |
+		set_key source "$1" >"$SCRATCH/start-632.json"
+	t_run_split env TRACE_DIR="$TDIR" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-632.json"
+}
+end_632() {
+	set_key session_id "$S632" <"$FIX/session-end.payload.json" |
+		set_key transcript_path "$SCRATCH/resumed-632.jsonl" >"$SCRATCH/end-632.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end-632.json" >/dev/null 2>&1
+}
+phantom_632() {
+	set_key session_id "$S632" <"$FIX/subagent-stop.payload.json" |
+		set_key transcript_path "$SCRATCH/resumed-632.jsonl" |
+		set_key agent_transcript_path "$SCRATCH/never-there-632.jsonl" >"$SCRATCH/phantom-632.json"
+	env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/phantom-632.json" >/dev/null 2>&1
+}
+# usage_632 — the four session.usage token sums, space-separated.
+usage_632() { echo "$(sum_tok tok_in session.usage) $(sum_tok tok_out session.usage) $(sum_tok tok_cache_w session.usage) $(sum_tok tok_cache_r session.usage)"; }
+# kinds_632 — the session lifecycle and usage kinds, in the order written.
+kinds_632() { events | sed -n 's/.*"kind":"\(session\.[a-z]*\)".*/\1/p' | tr '\n' ' '; }
+
+new_trace
+head -25 "$RFIX" >"$SCRATCH/resumed-632.jsonl"
+start_632 startup
+phantom_632
+phantom_632
+# The agent harness is killed here: no SessionEnd. Then `claude --resume`.
+start_632 resume
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "the resume's start hook exits 0, silent on stdout" ||
+	fail "the resume's start hook: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+E632=$(end_line "$S632")
+[ "$(printf '%s\n' "$E632" | grep -c .)" = 1 ] &&
+	pass "the run the agent harness never ended gets one session.end at the resume" ||
+	fail "expected one session.end for the killed run, got: $E632"
+[ "$(data_of "$E632" phantoms)" = 2 ] &&
+	pass "and it carries the killed run's two phantoms" ||
+	fail "the recovered session.end carries phantoms='$(data_of "$E632" phantoms)': $E632"
+[ "$(data_of "$E632" recovered)" = resume ] &&
+	pass "and says it was recorded at the resume (data.recovered=resume)" ||
+	fail "the recovered session.end carries no data.recovered=resume: $E632"
+[ -z "$(find "$TDIR" -name '*.phantoms*' 2>/dev/null)" ] &&
+	pass "and the phantom counter was taken with it" ||
+	fail "a counter outlived the recovered end: $(find "$TDIR" -name '*.phantoms*')"
+if [ "$HAVE_NODE" = 1 ]; then
+	case $(kinds_632) in "session.start session.usage session.end session.start ")
+		pass "the killed run's usage and end land before the resume's own start" ;;
+	*) fail "the lifecycle order is '$(kinds_632)'" ;; esac
+	[ "$(usage_632)" = "$R25" ] &&
+		pass "the recovered session.usage is the killed run's rollup ($R25)" ||
+		fail "the recovered usage sums to '$(usage_632)', the rollup was '$R25'"
+	# The resumed run ends cleanly: it counts only what came after.
+	cp "$RFIX" "$SCRATCH/resumed-632.jsonl"
+	end_632
+	[ "$(usage_632)" = "$R34" ] &&
+		pass "the resumed run's own end counts only what is new: the session totals its rollup ($R34)" ||
+		fail "after the clean end the usage sums to '$(usage_632)', the rollup was '$R34'"
+else
+	skip "the recovered usage legs (node is not on PATH)"
+	end_632
+fi
+
+# A RESUME AFTER A CLEAN END recovers nothing: the trace's last word is an end.
+N632=$(end_line "$S632" | grep -c .)
+start_632 resume
+[ "$(end_line "$S632" | grep -c .)" = "$N632" ] &&
+	pass "a resume after a clean end writes no recovered session.end" ||
+	fail "a resume after a clean end wrote: $(end_line "$S632" | sed -n '$p')"
+# A COMPACTION is inside a run, never after one: it recovers nothing either.
+start_632 compact
+[ "$(end_line "$S632" | grep -c .)" = "$N632" ] &&
+	pass "a compaction's start writes no recovered session.end" ||
+	fail "a compaction's start wrote: $(end_line "$S632" | sed -n '$p')"
+
 t_done "trace hooks"

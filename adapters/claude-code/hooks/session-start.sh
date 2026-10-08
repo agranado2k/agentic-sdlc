@@ -70,6 +70,34 @@ if [ -n "$why" ]; then
 	exit 0
 fi
 
+# THE RUN BEFORE A RESUME, WHEN NOTHING ENDED IT (#632). An agent harness that is
+# killed or restarted fires no SessionEnd, so that run's usage and phantom
+# count were recorded by nobody — retro-20261007T151351Z found a session with
+# three starts and no end. A resume is the first moment anything sees the
+# session again, and its transcript then holds exactly what the earlier runs
+# wrote. So when the trace's last word on this session is a start, this hook
+# records what session-end.sh would have: the usage, anchored exactly as there
+# (the next real end counts only what is new), and a session.end carrying the
+# phantoms and data.recovered=resume, so a reader tells it from a real end.
+# Only on a resume: a compaction is inside a run, and a startup is a new id.
+# The pending markers are left for the next real end — a call the kill cut
+# off was not denied, and the sweep would say it was.
+if [ -n "$tdir" ] && [ "$src" = resume ]; then
+	last=$(hook_trace show "session:$sid" |
+		sed -n -e 's/.*"kind":"\(session\.start\)".*/\1/p' -e 's/.*"kind":"\(session\.end\)".*/\1/p' |
+		sed -n '$p')
+	if [ "$last" = session.start ]; then
+		(
+			hook_run_handed "$transcript" || :
+			set -- subject="session:$sid" session="$sid" data.recovered=resume
+			hook_session_usage "$sid" "$transcript" "$@"
+			phantoms=$(hook_phantom_take "$tdir" "$sid") && set -- "$@" data.phantoms="$phantoms"
+			hook_trace emit kind=session.end harness=claude-code \
+				reason='the run before this resume ended without the agent harness firing SessionEnd (killed or restarted); recorded at the resume' "$@"
+		)
+	fi
+fi
+
 # The transcript is POINTED AT, never copied: the chain of thought stays where
 # the agent harness keeps it and the trace stays one short line (PRD #237,
 # story 22). `session=` as well as `subject=`, so the event names the session
