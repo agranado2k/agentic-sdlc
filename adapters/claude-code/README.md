@@ -300,13 +300,14 @@ live here rather than in the shared script (the kit's ADR-0008 clause 8).
 | --- | --- |
 | `hooks/session-start.sh` | `session.start`, and the session identity every later emit joins on — with `data.behind`, how far the root checkout is behind `origin/main` |
 | `hooks/session-end.sh` | one `session.usage` per model with four token counts — only what is new since this session's last one — then `session.end`, each carrying the run handed over at spawn when the session's own prompt opens on a `Trace-Run: <run id> [<parent run id>]` line (#474), with that parent, the run the shared script resolves otherwise; the denials it sweeps (`tool.use` `outcome=denied`) never carry the handed run — their marker names no agent — and resolve as the shared script does. Precedence, as in every row here: a `TRACE_RUN` already in the environment, then the run handed over, then the fallback |
-| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565); and `data.out_snapshot` when some of the messages it counted carry a streamed output snapshot — how many, its `tok_out` a lower bound (#608); and what the spawn served, from the prompt's second line under that one, exactly `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` — the tier one of the four, a domain and a skill `[a-z][a-z0-9-]*` of 32 characters at most, a ticket `#` and up to six digits — written into the event's `tier`, `domain` and `skill` columns with the ticket a `related` subject, from the same bounded read; no such line, or one that does not match exactly, records tier `unattributed`, a row `summary --by tier` shows (#583) |
+| `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565); and `data.out_snapshot` when some of the messages it counted carry a streamed output snapshot — how many, its `tok_out` a lower bound (#608); and what the spawn served, from the prompt's second line under that one — or its first, when no run is handed (#627) — exactly `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` — the tier one of the four, a domain and a skill `[a-z][a-z0-9-]*` of 32 characters at most, a ticket `#` and up to six digits — written into the event's `tier`, `domain` and `skill` columns with the ticket a `related` subject, from the same bounded read; no such line, or one that does not match exactly, records tier `unattributed`, a row `summary --by tier` shows (#583) |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below — carrying the run handed over at spawn (`Trace-Run: <run id> [<parent run id>]`, with that parent) to the agent that made the call: the subagent the payload's `agent_id` names, read from its own transcript, or the session itself (#474); the run the shared script resolves when none was handed, never the run handed to its session for a subagent handed none — once the payload is read: a `tool.use` `outcome=fail` written before then (no scratch, no node, a payload the reader refuses) resolves as the shared script does |
 | `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
+| `hooks/spawn-guard.sh` | a guard, not a recorder: with tracing on, refuses a spawn (the `Agent` or `Task` tool) whose prompt carries no well-formed `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` line where `hooks/subagent-stop.sh` reads it, naming the line it wants, and leaves one `note` (#627) — see "The spawn guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
 | `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` and `tool-pre.sh` split a payload with |
-| `hooks/hook.lib.sh` | not a hook either: what the six share |
+| `hooks/hook.lib.sh` | not a hook either: what the seven share |
 
 **They are dormant until a settings file names them.** Three properties make
 that safe to leave in your tree: every hook exits 0 whatever happens, none of
@@ -595,7 +596,7 @@ command that signals by name: `pkill`, `killall`, `kill` alongside `pgrep`, or
 `kill` handed a word that is not a pid, a job or an expansion. `kill %1`,
 `kill $!` and `kill <pid>` pass, and so does everything the operator's own
 session runs. A refusal exits 2 — the agent harness's block status, the one
-non-zero exit any hook here makes — with the rule, `kill-guard`, named on
+non-zero exit a hook here makes, and only a guard makes it — with the rule, `kill-guard`, named on
 stderr, and records one `note` with `outcome=denied` on the session, naming
 the rule. With tool capture on, the refused call is also swept at the
 session's end into a `tool.use` with `outcome=denied` of its own (#409).
@@ -642,6 +643,47 @@ the same once-only rule the usage read keeps; `/retro` sums a session's ends.
 A counter left by a session that never fires `SessionEnd` stays where it is
 until an end for that session id takes it — a resumed session's next end
 counts it — and is otherwise harmless.
+
+### The spawn guard: every spawn says what it served
+
+A subagent's stop is priced by the tier, domain and skill its spawn prompt
+named, and a stop whose prompt named none is `unattributed` — after #615 that
+was still 43 of 108 stops, 63 % of their cost, because the line was prose only
+the chain's own spawn sites wrote. `hooks/spawn-guard.sh` is a PreToolUse hook
+on the spawn tool that refuses, **with tracing on**, a spawn whose prompt does
+not carry the line, before the subagent starts (#627). It exits 2 with the
+rule, `spawn-guard`, and the wanted line named on stderr, and records one
+`note` with `outcome=denied` on the session.
+
+**How a session satisfies it**: open every spawn prompt with the line, in the
+exact shape `hooks/subagent-stop.sh` reads — the same parser holds both, so the
+guard refuses exactly what the stop would call `unattributed`:
+
+```
+Trace-Run: <run id> [<parent run id>]
+Trace-Spawn: tier=<planner|implementer|mechanical|reviewer> domain=<domain|none> skill=<skill> ticket=<#N|none>
+```
+
+The `Trace-Run:` line first when the session hands the subagent a run; with no
+run open, the `Trace-Spawn:` line is the prompt's first. Four fields in that
+order, one space apart, a domain and a skill `[a-z][a-z0-9-]*`, a ticket `#`
+and up to six digits. **It never refuses a spawn for lacking a `Trace-Run:`
+line**: the payload's `cwd` is the session's, not the checkout its run was
+begun in (#478), so the hook cannot tell whether a run is open, and it holds
+only the line it can judge.
+
+**It is never in the way of a session that traces nothing.** Tracing off, a
+trace policy the shared script refuses, a tool other than `Agent` or `Task`, or
+a payload with no prompt to read, and the spawn passes, silently.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [ { "matcher": "Agent|Task", "hooks": [ { "type": "command",
+      "command": "sh \"$CLAUDE_PROJECT_DIR/adapters/claude-code/hooks/spawn-guard.sh\"" } ] } ]
+  }
+}
+```
 
 ### Reading it back: DuckDB and SQLite
 

@@ -1,6 +1,6 @@
 #!/bin/sh
-# hook.lib.sh — what the hooks beside this file share: the trace hooks and the
-# kill guard, and hook_root for the root guard.
+# hook.lib.sh — what the hooks beside this file share: the trace hooks, the
+# kill guard and the spawn guard, and hook_root for the root guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a
@@ -30,6 +30,9 @@
 #      exit 0 like everything else here. root-guard.sh sources this file for
 #      hook_root alone, and keeps a rule of its own: it exits 2 to refuse an
 #      edit at the root checkout (#392), and 0 on every path it cannot read.
+#      spawn-guard.sh is the third guard: it exits 2 to refuse a spawn whose
+#      prompt carries no well-formed Trace-Spawn line while tracing is on
+#      (#627), and 0 on every other path.
 #   2. SILENT ON STDOUT, but for one object. What a hook prints on stdout
 #      reaches the agent harness's own parser. The trace's answers go to a
 #      file; nothing about the trace is ever said there. STDERR is a different
@@ -251,6 +254,24 @@ hook_run_of() {
 	return 0
 }
 
+# --- a guard's refusal --------------------------------------------------------
+
+# hook_deny <rule> <reason> [<field=value>…] — the record a guard leaves when it
+# refuses a call: one `note`, outcome=denied, naming the rule, on the session
+# and the call the payload names when each is an id this adapter may use. The
+# caller prints its own stderr line and exits 2; this only records.
+hook_deny() {
+	_dn_rule=$1
+	_dn_why=$2
+	shift 2
+	_dn_sid=$(hook_field session_id)
+	_dn_tuid=$(hook_field tool_use_id)
+	set -- kind=note harness=claude-code outcome=denied data.rule="$_dn_rule" "$@"
+	hook_id_ok "$_dn_sid" && set -- "$@" subject="session:$_dn_sid" session="$_dn_sid"
+	hook_id_ok "$_dn_tuid" && set -- "$@" data.tool_use_id="$_dn_tuid"
+	hook_trace emit "$@" reason="$_dn_why"
+}
+
 # --- the run handed over at spawn -------------------------------------------
 
 # hook_run_handed <transcript> — export TRACE_RUN, and TRACE_PARENT unless
@@ -298,6 +319,12 @@ hook_run_handed() {
 	return 0
 }
 
+# hook_prompt_bytes — how much of a prompt either channel line is read from:
+# the stop hooks' bounded read below and the spawn guard's read of a tool
+# payload (#627) take the same bytes, so the guard never passes a line the
+# stop would not reach.
+hook_prompt_bytes=4096
+
 # hook_prompt_of <transcript> — set hook_prompt to the opening of the first
 # user record's prompt, as JSON-string text, its first 4096 bytes at most;
 # status 1 when there is none. The ONE bounded read both channel lines are
@@ -311,7 +338,7 @@ hook_prompt_of() {
 		# everything it does. 4096 bytes: the record's keys and the prompt's
 		# first lines fit many times over, and nothing past them is a channel's.
 		_hp_line=$(head -n 50 "$1" 2>/dev/null |
-			sed -n '/"type"[[:space:]]*:[[:space:]]*"user"/{p;q;}' | cut -b 1-4096)
+			sed -n '/"type"[[:space:]]*:[[:space:]]*"user"/{p;q;}' | cut -b "1-$hook_prompt_bytes")
 		# The message's own content, anchored on its role so no nested content
 		# block answers for it: one string, or content blocks whose first is text.
 		hook_prompt=${_hp_line#*'"role":"user","content":"'}
@@ -328,8 +355,15 @@ hook_prompt_of() {
 # `Trace-Run:` line; 1 otherwise. The shape is hook_run_handed's header.
 hook_handed_line() {
 	hook_prompt_of "${1:-}" || return 1
-	case $hook_prompt in 'Trace-Run: '*) ;; *) return 1 ;; esac
-	_rh_val=${hook_prompt#Trace-Run: }
+	hook_handed_in "$hook_prompt"
+}
+
+# hook_handed_in <prompt as JSON-string text> — hook_handed_line's test on
+# text already in hand: the spawn guard reads it from the tool payload rather
+# than from a transcript (#627).
+hook_handed_in() {
+	case ${1-} in 'Trace-Run: '*) ;; *) return 1 ;; esac
+	_rh_val=${1#Trace-Run: }
 	# The line ends where the JSON string's next escape or its close begins,
 	# and that escape must be a newline: a tab or anything else after the ids
 	# is more on the line, and no channel.
@@ -357,7 +391,8 @@ hook_handed_line() {
 # `unattributed` and the other three are empty. Ticket #583.
 #
 # THE LINE is the prompt's SECOND, under a well-formed Trace-Run first line
-# (hook_run_handed), exactly
+# (hook_run_handed) — or its FIRST, when no run was handed: the spawn of a
+# session with no run open (#627) — exactly
 #   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>
 # four fields in that order, one space apart, nothing else on the line. The
 # tier is one of the four the kit sizes work to; a domain and a skill are
@@ -374,9 +409,25 @@ hook_spawn_handed() {
 	hook_spawn_domain=
 	hook_spawn_skill=
 	hook_spawn_ticket=
-	hook_handed_line "${1:-}" || return 1
-	case $_rh_after in 'Trace-Spawn: '*) ;; *) return 1 ;; esac
-	_hs_val=${_rh_after#Trace-Spawn: }
+	hook_prompt_of "${1:-}" || return 1
+	hook_spawn_in "$hook_prompt"
+}
+
+# hook_spawn_in <prompt as JSON-string text> — hook_spawn_handed's read of text
+# already in hand, the spawn guard's as well as the stop's (#627): one parser,
+# so the guard refuses exactly the prompts the stop would call unattributed.
+hook_spawn_in() {
+	hook_spawn_tier=unattributed
+	hook_spawn_domain=
+	hook_spawn_skill=
+	hook_spawn_ticket=
+	if hook_handed_in "${1-}"; then
+		_hs_val=$_rh_after
+	else
+		_hs_val=${1-}
+	fi
+	case $_hs_val in 'Trace-Spawn: '*) ;; *) return 1 ;; esac
+	_hs_val=${_hs_val#Trace-Spawn: }
 	_hs_line=${_hs_val%%\\*}
 	_hs_line=${_hs_line%%\"*}
 	case ${_hs_val#"$_hs_line"} in '\n'* | '"'*) ;; *) return 1 ;; esac
