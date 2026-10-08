@@ -24,7 +24,13 @@
 # unasked would write a hidden directory of it into every consumer's tree, and
 # the kit does not own your ignore file. So: UNSET IS A WORKING STATE. With
 # TRACE_DIR empty every emit exits 0 having written nothing, after one note on
-# stderr. The note is the whole nudge; nothing fails.
+# stderr; nothing fails.
+#
+# But off is a DECISION, never a default to inherit by silence: bootstrap asks
+# once (--with-trace / --no-trace answer it unattended) and writes the answer
+# here, its next-steps text names an off trace, /housekeeping reports it, and
+# the chain's final reports say "trace unconfigured — this run recorded
+# nothing" while it stays empty.
 #
 # The kit itself traces its own sessions — through a never-shipped twin of this
 # file, reached by the TRACE_CONFIG seam, exactly as its tier mapping and its
@@ -36,8 +42,9 @@
 #   ''               tracing is OFF (the shipped default)
 #   '.trace'         a directory under the ROOT CHECKOUT: an emit from inside a
 #                    linked worktree lands beside the root's .git, so pruning
-#                    the worktree loses nothing. Add it to .gitignore — the
-#                    trace is local by design, never pushed by the kit.
+#                    the worktree loses nothing. The shipped .gitignore
+#                    already lists .trace/ — the trace is local by design,
+#                    never pushed by the kit.
 #   '/abs/path'      anywhere else, taken as given.
 #
 # An environment TRACE_DIR overrides this line for one process.

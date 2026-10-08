@@ -1,5 +1,6 @@
 #!/bin/sh
-# tests/agent-roster.test.sh — bootstrap's agent-roster question.
+# tests/agent-roster.test.sh — bootstrap's agent-roster question, and the
+# trace question asked beside it (section 7).
 #
 # scripts/agents.config.sh ships EMPTY and stays empty until somebody reads its
 # comments, so a fresh project runs every tier on the session's own model and
@@ -16,6 +17,12 @@
 # NOT ASKING IS A WORKING STATE, and most of what follows checks that: no
 # terminal, or --no-agents, and the file is untouched and the project starts
 # exactly where every project started before this existed.
+#
+# THE TRACE QUESTION (#654) sits beside it for the same reason: a consumer
+# whose scripts/trace.config.sh shipped empty ran a whole wave and recorded
+# nothing, and nothing ever asked. Section 7 drives it both ways on a terminal,
+# unattended through both flags, and with no terminal at all — and holds the
+# next-steps text to naming the decision whenever it was left off.
 #
 # Usage: sh tests/agent-roster.test.sh
 
@@ -137,6 +144,8 @@ banner "1. The prompt exists, takes both flags, and names no model"
 # ---------------------------------------------------------------------------
 assert_file_has "$KIT/bootstrap.sh" "--with-agents" "the non-interactive yes"
 assert_file_has "$KIT/bootstrap.sh" "--no-agents" "the non-interactive no"
+assert_file_has "$KIT/bootstrap.sh" "--with-trace" "the trace question's unattended yes"
+assert_file_has "$KIT/bootstrap.sh" "--no-trace" "the trace question's unattended no"
 
 # The load-bearing rule. A model identifier in bootstrap.sh would be a standing
 # instruction with a timer on it, shipped in the prompt of the tool that exists
@@ -212,7 +221,7 @@ also-written
 
 
 PY_ANSWERS
-	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.none" --no-agents
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.none" --no-agents --no-trace
 	line=$(tier_line PLANNER)
 	[ "$line" = "AGENT_TIER_PLANNER=''" ] &&
 		pass "--no-agents suppresses the question even with answers waiting on a terminal" ||
@@ -237,7 +246,7 @@ implementer-id
 otherharness
 reviewer-id
 PY_ANSWERS
-	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.with" --with-agents
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.with" --with-agents --no-trace
 	line=$(tier_line PLANNER)
 	[ "$line" = "AGENT_TIER_PLANNER='planner-id'" ] &&
 		pass "--with-agents asks the tiers without the yes/no question" ||
@@ -276,7 +285,7 @@ implementer-id
 
 
 PY_ANSWERS
-	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.filled" --with-agents
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.filled" --with-agents --no-trace
 	line=$(tier_line PLANNER)
 	[ "$line" = "AGENT_TIER_PLANNER='already-chosen'" ] &&
 		pass "a value the project already chose survives, untouched" ||
@@ -301,13 +310,129 @@ PY_ANSWERS
 	fresh_project
 	sed "s|^AGENT_HARNESSES=''|AGENT_HARNESSES='pre-existing'|" \
 		"$PROJ/$CONFIG" >"$PROJ/$CONFIG.tmp" && mv "$PROJ/$CONFIG.tmp" "$PROJ/$CONFIG"
-	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.with" --with-agents
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.with" --with-agents --no-trace
 	line=$(grep "^AGENT_HARNESSES=" "$PROJ/$CONFIG" | head -1)
 	[ "$line" = "AGENT_HARNESSES='pre-existing'" ] &&
 		pass "a declaration the project already wrote is not rewritten" ||
 		fail "the existing declaration was clobbered: $line"
 else
 	skip "no python3 — the terminal legs (flags, writing, the already-mapped case) are NOT covered on this machine"
+fi
+
+# ---------------------------------------------------------------------------
+banner "7. The trace question: asked, flagged, or said to be unasked (#654)"
+# ---------------------------------------------------------------------------
+# scripts/trace.config.sh still SHIPS empty (the kit's ADR-0008, as amended):
+# what changed is that a project decides it on day one. A yes writes the
+# directory the stamped .gitignore already covers; a no, a --no-trace and a
+# run with no terminal leave it empty — and each of those says so in the
+# next-steps text, so "off" is never inherited by silence.
+trace_line() { grep '^TRACE_DIR=' "$PROJ/scripts/trace.config.sh" | head -1; }
+OUT="$SCRATCH/trace.out"
+
+# trace_says_off <output file> <what> — the next-steps text names the decision
+# AND how to reverse it; trace_says_on the opposite.
+trace_says_off() {
+	if grep -q 'The trace is OFF' "$1" && grep -q 'day-one decision' "$1" &&
+		grep -qF "TRACE_DIR='.trace'" "$1"; then
+		pass "$2: the next-steps text names the trace as a day-one decision, and how to turn it on"
+	else
+		fail "$2: the next-steps text does not name the trace decision"
+		sed 's/^/        | /' "$1" | tail -25
+	fi
+}
+trace_says_on() {
+	if grep -q 'The trace is ON' "$1" && ! grep -q 'The trace is OFF' "$1"; then
+		pass "$2: the next-steps text says the trace is on"
+	else
+		fail "$2: the next-steps text does not say the trace is on"
+		sed 's/^/        | /' "$1" | tail -25
+	fi
+}
+
+# Unattended, no terminal and no flag: nothing written, and it SAYS it was not
+# asked — the case the consumer who traced nothing was in.
+fresh_project
+(cd "$PROJ" && sh bootstrap.sh --no-agents "Demo Trace Quiet" "A project." </dev/null >"$OUT" 2>&1)
+[ "$(trace_line)" = "TRACE_DIR=''" ] &&
+	pass "with no terminal the trace policy file stays empty" ||
+	fail "something was written with no terminal: $(trace_line)"
+grep -q 'trace question was not asked' "$OUT" &&
+	pass "…and bootstrap says the question was not asked" ||
+	fail "bootstrap left the trace off with no terminal and did not say it was not asked"
+trace_says_off "$OUT" "no terminal"
+
+# The stamped ignore file: the trace directory a yes writes is covered, and the
+# comment over it describes the consumer's own policy file — never a kit-only
+# file, which bootstrap has just deleted from this very tree.
+if git -C "$PROJ" check-ignore -q .trace/probe; then
+	pass "the stamped .gitignore covers the trace directory a yes writes"
+else
+	fail "the stamped .gitignore does not ignore .trace/"
+fi
+kit_only=$(sed -n 's/^KIT_ONLY="\(.*\)"$/\1/p' "$KIT/bootstrap.sh")
+leaked=''
+for f in $kit_only; do
+	grep -qF "$f" "$PROJ/.gitignore" && leaked="$leaked $f"
+done
+grep -qE '[a-z-]+\.kit\.[a-z.]+' "$PROJ/.gitignore" && leaked="$leaked $(grep -oE '[a-z/-]+\.kit\.[a-z.]+' "$PROJ/.gitignore" | tr '\n' ' ')"
+[ -n "$kit_only" ] && [ -z "$leaked" ] &&
+	pass "the stamped .gitignore names no kit-only file" ||
+	fail "the stamped .gitignore names a kit-only file:${leaked:- (or KIT_ONLY could not be read)}"
+grep -q 'scripts/trace.config.sh' "$PROJ/.gitignore" &&
+	pass "…and its trace comment names the project's own trace policy file" ||
+	fail "the stamped .gitignore's trace comment does not name scripts/trace.config.sh"
+
+# Unattended through the flags: --with-trace needs no terminal, because the
+# answer is the whole question.
+fresh_project
+(cd "$PROJ" && sh bootstrap.sh --no-agents --with-trace "Demo Trace Yes" "A project." </dev/null >"$OUT" 2>&1)
+[ "$(trace_line)" = "TRACE_DIR='.trace'" ] &&
+	pass "--with-trace writes the trace directory, unattended" ||
+	fail "--with-trace wrote: $(trace_line)"
+trace_says_on "$OUT" "--with-trace"
+
+fresh_project
+(cd "$PROJ" && sh bootstrap.sh --no-agents --no-trace "Demo Trace No" "A project." </dev/null >"$OUT" 2>&1)
+[ "$(trace_line)" = "TRACE_DIR=''" ] &&
+	pass "--no-trace leaves the trace policy file empty" ||
+	fail "--no-trace wrote: $(trace_line)"
+grep -q 'trace question was not asked' "$OUT" &&
+	fail "--no-trace was reported as not asked — it was answered" ||
+	pass "…and is reported as answered, not as unasked"
+trace_says_off "$OUT" "--no-trace"
+
+# On a terminal: the question itself, both ways, and the flag stopping it with
+# a yes waiting. One answer each — --no-agents keeps the roster's prompts out.
+if [ "$HAVE_PTY" = 1 ]; then
+	printf 'y\n' >"$SCRATCH/answers.trace-yes"
+	printf 'n\n' >"$SCRATCH/answers.trace-no"
+
+	fresh_project
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-yes" --no-agents
+	grep -q 'Trace the chain' "$SCRATCH/pty.log" &&
+		pass "on a terminal the trace question is asked" ||
+		fail "no trace question appeared on the terminal"
+	[ "$(trace_line)" = "TRACE_DIR='.trace'" ] &&
+		pass "a yes on the terminal writes the trace directory" ||
+		fail "a yes wrote: $(trace_line)"
+	trace_says_on "$SCRATCH/pty.log" "a terminal yes"
+
+	fresh_project
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-no" --no-agents
+	[ "$(trace_line)" = "TRACE_DIR=''" ] &&
+		pass "a no on the terminal leaves it empty" ||
+		fail "a no wrote: $(trace_line)"
+	trace_says_off "$SCRATCH/pty.log" "a terminal no"
+
+	# The yes is WAITING — so an empty line is the flag's doing, not a quiet run's.
+	fresh_project
+	run_bootstrap_pty "$PROJ" "$SCRATCH/answers.trace-yes" --no-agents --no-trace
+	[ "$(trace_line)" = "TRACE_DIR=''" ] &&
+		pass "--no-trace suppresses the question even with a yes waiting on a terminal" ||
+		fail "--no-trace did not suppress it: $(trace_line)"
+else
+	skip "no python3 — the trace question's terminal legs are NOT covered on this machine"
 fi
 
 t_done "agent roster"
