@@ -177,6 +177,15 @@ if t_fence "$PAYLOAD" opens '^PROJECT_NAME=' | grep -q 'DOGFOOD_FLAG'; then
 else
 	fail "the payload's fill-in fence does not name DOGFOOD_FLAG"
 fi
+# The trace (#654): bootstrap leaves it off, unasked, with no terminal — so
+# both arms' fill-in fences carry the answer, and the spine passes it.
+for opener in '^PROJECT_NAME=' '^KIT_CLONE='; do
+	if t_fence "$PAYLOAD" opens "$opener" | grep -q '^TRACE_FLAG=--'; then
+		pass "the payload's fill-in fence opening $opener names TRACE_FLAG — the trace is answered, never left off unasked"
+	else
+		fail "the payload's fill-in fence opening $opener does not name TRACE_FLAG"
+	fi
+done
 
 # The mutation decision (issue #85): the hand-back guidance must name it, so
 # whoever fills the engineering article makes the choice out loud instead of
@@ -209,6 +218,7 @@ printf 'printf %%s "$KIT_TAG" >%s/resolved-tag\n' "$SCRATCH" >>"$SPINE"
 	printf 'PROJECT_NAME="Setup Demo Project"\n'
 	printf 'PROJECT_DESC="A throwaway project the setup referee builds."\n'
 	printf 'DOGFOOD_FLAG=--no-dogfood\n'
+	printf 'TRACE_FLAG=--with-trace\n'
 } >>"$SPINE"
 # The leading bracket is double-escaped: awk -v processes escape sequences in
 # the value, so a single \[ arrives as a bare [ and the anchor silently
@@ -234,6 +244,11 @@ else
 	fail "the resolve step picked '$resolved', expected v10.0.0 — the newest release did not win"
 fi
 
+if grep -qx "TRACE_DIR='.trace'" "$PROJ/scripts/trace.config.sh" 2>/dev/null; then
+	pass "the produced project traces — the bootstrap fence passed TRACE_FLAG and the stamped .gitignore covers .trace/"
+else
+	fail "the produced project's trace is off — the bootstrap fence did not pass TRACE_FLAG"
+fi
 if [ -f "$PROJ/AGENTS.md" ] && grep -q "Setup Demo Project" "$PROJ/AGENTS.md" 2>/dev/null; then
 	pass "the produced project has a stamped AGENTS.md"
 else
@@ -379,6 +394,7 @@ t_fence "$ENTRY" opens '^KIT_TAG=' >>"$SPINE2"
 	printf 'PROJECT_NAME="Broken Demo"\n'
 	printf 'PROJECT_DESC="Should never bootstrap."\n'
 	printf 'DOGFOOD_FLAG=--no-dogfood\n'
+	printf 'TRACE_FLAG=--with-trace\n'
 } >>"$SPINE2"
 t_fence "$BROKEN" opens '^\\[ -f bootstrap' >>"$SPINE2"
 t_fence "$BROKEN" opens '^sh bootstrap' >>"$SPINE2"

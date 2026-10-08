@@ -59,7 +59,8 @@ to — is in `CHECKLIST.md`; this is the order.
    whose target moved, counts in prose against reality, articles and skills
    that nothing invokes, skill descriptions that no longer match their bodies,
    frontmatter outside the specification, memory that outlived the code,
-   whether a `/retro` ran inside the window.
+   whether a `/retro` ran inside the window, and the two day-one settings,
+   the trace and the reviewer tier.
    *Source: Addy Osmani, "Audit your Agent files"; shared invariant §11 (the
    context budget); the Agent Skills specification.*
 2. **The glossary against the code** — terms with no use, names with no term,

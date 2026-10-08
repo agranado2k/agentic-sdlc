@@ -16,6 +16,12 @@
 #   --no-dogfood     skip it
 # Without either flag the script asks, once, on a terminal; with no terminal to
 # ask on it skips. See the F6 block below for why skip is the safe default.
+#   --with-agents    map the capability tiers (needs a terminal to ask on)
+#   --no-agents      skip that question
+#   --with-trace     trace the chain's decisions under .trace/ — unattended
+#   --no-trace       leave the trace off
+# The trace question is asked on a terminal and, with none, left off — and the
+# next-steps text says it was not asked. See THE TRACE block below.
 #
 # POSIX sh, git only. No node, no package manager — the kit's core is
 # language-agnostic, and bootstrap runs before your project has a toolchain.
@@ -249,8 +255,8 @@ agents_set() {
 	_as_file=$1 _as_var=$2 _as_val=$3
 	grep -q "^$_as_var=''" "$_as_file" 2>/dev/null || return 0
 	# `|` as the delimiter: the values reaching here are an agent-harness token
-	# and a model id, both shape-checked before they are written, and neither
-	# alphabet contains a pipe.
+	# and a model id, both shape-checked before they are written, and the
+	# trace wizard's literal `.trace` — no alphabet among them has a pipe.
 	sed "s|^$_as_var=''|$_as_var='$_as_val'|" "$_as_file" >"$_as_file.tmp" &&
 		mv "$_as_file.tmp" "$_as_file" || die "could not write $_as_file"
 }
@@ -284,6 +290,115 @@ agents_read_token() {
 		fi
 		return 0
 	done
+}
+
+# ============================================================================
+# THE TRACE — whether this project records its chain's decisions (#654)
+# ----------------------------------------------------------------------------
+# scripts/trace.config.sh ships EMPTY and keeps shipping empty: a trace is
+# findings, reasons and token counts in plain text, private data the kit does
+# not write unasked (the kit's ADR-0008, clause 2). But "off" inherited by
+# silence is how a consumer ran a whole wave and recorded nothing, and found
+# out after the merge. So bootstrap ASKS — one question, beside the roster's —
+# and an answer of off is said again in the next-steps text, with how to
+# reverse it. The default stays no: Enter is an answer, and the note says so.
+#
+# Unlike the roster, the answer needs no typing, so --with-trace is honoured
+# unattended. A yes is written only where the ignore file already covers the
+# directory: the new-project arm's .gitignore ships `.trace/`, an adopted
+# repo's may not, and a trace written into a tracked tree is one `git add -A`
+# away from being pushed.
+trace_choice=ask
+# trace_state — what the next-steps note reports: on | no | unasked | uncovered
+# | missing (no policy file to write the answer into) | kept (the project's
+# file was already filled, so nothing was asked).
+trace_state=unasked
+
+# trace_flag <arg> — --with-trace / --no-trace, tried beside agents_flag.
+trace_flag() {
+	case "$1" in
+	--with-trace) trace_choice=yes ;;
+	--no-trace) trace_choice=no ;;
+	*) return 1 ;;
+	esac
+	return 0
+}
+
+# trace_wizard <path to trace.config.sh> — ask, then write.
+trace_wizard() {
+	_tw_file=$1
+	if [ ! -f "$_tw_file" ]; then
+		trace_state=missing
+		return 0
+	fi
+	if ! grep -q "^TRACE_DIR=''" "$_tw_file" 2>/dev/null; then
+		trace_state=kept
+		return 0
+	fi
+	if [ "$trace_choice" = ask ]; then
+		if [ ! -t 0 ]; then
+			trace_state=unasked
+			echo "  note: the trace question was not asked — no terminal; scripts/trace.config.sh keeps TRACE_DIR empty." >&2
+			return 0
+		fi
+		echo ""
+		echo "  The trace records the chain's decisions — the tier each ticket ran on,"
+		echo "  every review finding and what became of it, what each run cost — as"
+		echo "  plain text under .trace/ at the root checkout: gitignored, never pushed."
+		echo "  /retro reads it after a wave; with it off, a wave leaves nothing to read."
+		echo ""
+		printf "Trace the chain's decisions locally, under .trace/? [y/N] "
+		read -r _tw_ans || _tw_ans=""
+		case "$_tw_ans" in
+		[Yy] | [Yy][Ee][Ss]) trace_choice=yes ;;
+		*) trace_choice=no ;;
+		esac
+	fi
+	if [ "$trace_choice" = no ]; then
+		trace_state=no
+		return 0
+	fi
+	# The project's own .gitignore must be what covers it: a global excludes
+	# file or .git/info/exclude ignores .trace/ on this machine only, and the
+	# next clone would see the trace as untracked files waiting for a commit.
+	# `-v` names the deciding line, a negation included, so a `!` there is
+	# git saying the directory is NOT ignored. Both arms run inside a repo.
+	if git check-ignore -v .trace/probe 2>/dev/null | grep -q '^\.gitignore:[0-9]*:[^!]'; then
+		agents_set "$_tw_file" TRACE_DIR .trace
+		trace_state=on
+	else
+		trace_state=uncovered
+		echo "  note: a trace was asked for, but .gitignore does not cover .trace/ — TRACE_DIR was left empty." >&2
+	fi
+}
+
+# trace_note — the next-steps paragraph: the decision, said either way.
+trace_note() {
+	case "$trace_state" in
+	kept) return 0 ;;
+	on)
+		cat <<'EOF'
+
+The trace is ON: scripts/trace.config.sh sets TRACE_DIR='.trace', so the
+chain's decisions land in .trace/ at the root checkout — gitignored, never
+pushed. /retro reads them after a wave; /housekeeping checks the setting.
+EOF
+		return 0
+		;;
+	no) _tn_why="you answered no" ;;
+	uncovered) _tn_why=".gitignore does not cover .trace/ yet" ;;
+	missing) _tn_why="scripts/trace.config.sh is missing" ;;
+	*) _tn_why="the question was not asked: no terminal" ;;
+	esac
+	cat <<EOF
+
+The trace is OFF — $_tn_why.
+That is a day-one decision, not a default to inherit: with TRACE_DIR empty
+every skill run records nothing, and /retro has no wave to read. To turn it
+on, make sure .gitignore lists .trace/, then set TRACE_DIR='.trace' in
+scripts/trace.config.sh. Off on purpose is fine — say so in docs/diary.md, so
+the next session does not have to ask.
+EOF
 }
 
 # agents_wizard <path to agents.config.sh> — ask, then write.
@@ -619,7 +734,7 @@ if [ "$ADOPT" = 1 ]; then
 	for a_arg in "$@"; do
 		case "$a_arg" in
 		--adopt) ;;
-		-*) agents_flag "$a_arg" || opt_flag "$a_arg" || die "unknown option '$a_arg' for --adopt. Supported: $(opt_supported), --with-agents, --no-agents." ;;
+		-*) agents_flag "$a_arg" || trace_flag "$a_arg" || opt_flag "$a_arg" || die "unknown option '$a_arg' for --adopt. Supported: $(opt_supported), --with-agents, --no-agents, --with-trace, --no-trace." ;;
 		*)
 			if [ "$a_have" = 0 ]; then
 				a_name=$a_arg a_have=1
@@ -927,6 +1042,7 @@ if [ "$ADOPT" = 1 ]; then
 	# and probably already filled — agents_set only ever rewrites the shipped
 	# empty form, so a filled policy file is left alone either way.
 	agents_wizard "scripts/agents.config.sh"
+	trace_wizard "scripts/trace.config.sh"
 	for _o in $OPTIONAL_SKILLS; do
 		[ "$(opt_choice "$_o")" = yes ] || continue
 		for f in $(opt_field "$_o" carries); do
@@ -986,6 +1102,7 @@ if [ "$ADOPT" = 1 ]; then
 	echo ""
 	echo "adopt: complete. The gate is yours now — run: sh scripts/check.sh"
 	echo "adopt: the scratch kit clone at $a_kit can be deleted; its bootstrap has retired itself."
+	trace_note
 	rm -f "$a_kit/bootstrap.sh"
 	exit 0
 fi
@@ -1142,7 +1259,7 @@ while [ $# -gt 0 ]; do
 		done
 		break
 		;;
-	-*) agents_flag "$1" || opt_flag "$1" || die "unknown option '$1'. Supported: $(opt_supported), --with-agents, --no-agents." ;;
+	-*) agents_flag "$1" || trace_flag "$1" || opt_flag "$1" || die "unknown option '$1'. Supported: $(opt_supported), --with-agents, --no-agents, --with-trace, --no-trace." ;;
 	*) take_positional "$1" ;;
 	esac
 	shift
@@ -1353,7 +1470,9 @@ rmdir .claude/agents tests/fixtures/claude-code tests/fixtures/prices tests/fixt
 # Asked LAST, after the tree is final, for two reasons. It is a question about
 # models rather than about the kit, so it does not belong among the stamping;
 # and it is the one question whose answer changes the next-steps note below.
+# The trace question sits beside it, and its answer is said after the list.
 agents_wizard "scripts/agents.config.sh"
+trace_wizard "scripts/trace.config.sh"
 
 # --- next steps -------------------------------------------------------------
 cat <<EOF
@@ -1440,6 +1559,7 @@ and scripts/docs-conformance/local-vocabulary.mjs.
 The shared layer (see VERSION) is copied verbatim from the kit and is not
 edited here. Everything else is yours.
 EOF
+trace_note
 
 # ============================================================================
 # F6 BEGIN — what each optional answer meant (#27, #130)

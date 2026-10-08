@@ -37,6 +37,16 @@ the Agent Skills specification.*
   use case; the body under
   five hundred lines; supporting files one level deep; no hard-coded date,
   version or model name; the description still true of the body.
+- **The two day-one settings.** Each read once, each a finding in the
+  report when it answers nothing. `sh scripts/trace.sh dir` printing nothing
+  is reported as "trace unconfigured — this run recorded nothing": the
+  project's policy file left `TRACE_DIR` empty, so every skill run since
+  bootstrap recorded nothing and `/retro` has no wave to read.
+  `sh scripts/agents.lib.sh reviewer` printing nothing is reported as
+  "reviewer tier unmapped — the review shared the author's model": every
+  review ran on the session's own model. Route both to `/to-tickets`;
+  an off trace the diary records as deliberate is reported, not ticketed.
+  Reading the setting is not reading the trace.
 - **Memory.** Whatever the agent harness keeps outside the repo — preferences,
   auto-memory — reviewed separately from the project files, because it holds
   stale preferences longest.

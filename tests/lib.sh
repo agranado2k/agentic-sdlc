@@ -760,7 +760,9 @@ strip_nested_worktrees() {
 # survived into a consumer <tree>: any name of the `*.kit.*` shape (the kit's
 # own twins and wrappers, never shipped), any file carrying the kit-own
 # sentinel, and any record the kit keeps of itself — a numbered ADR or a
-# living spec — under a name the kit's own docs/ holds. A derived sweep, not a
+# living spec — under a name the kit's own docs/ holds, and any `*.kit.*` name
+# an ignore file carries, printed as `<file> names <name>`: a comment pointing
+# a consumer at a file bootstrap deleted. A derived sweep, not a
 # list, so a kit-only file nobody added to bootstrap's KIT_ONLY shows up here
 # rather than in a consumer's tree (#562). Empty output is a clean tree.
 t_kit_residue() {
@@ -773,6 +775,11 @@ t_kit_residue() {
 		[ "$_kr_rel" = docs/specs/README.md ] && continue
 		[ -e "$_kr_tree/$_kr_rel" ] && printf '%s\n' "$_kr_rel"
 	done
+	(cd "$_kr_tree" && find . -path ./.git -prune -o -name .gitignore -type f -print) |
+		while IFS= read -r _kr_ig; do
+			grep -oE '[A-Za-z0-9_./-]+\.kit\.[A-Za-z0-9_.-]+' "$_kr_tree/$_kr_ig" 2>/dev/null |
+				sed "s#^#${_kr_ig#./} names #"
+		done
 	return 0
 }
 

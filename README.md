@@ -43,9 +43,12 @@ git clone --branch "$KIT_TAG" "$KIT_URL" my-project && cd my-project
 rm -rf .git && git init -b main
 
 # 2. Bootstrap. Runs once, then deletes itself. Commits nothing.
-#    It asks one question — whether to include the optional /dogfood skill.
-#    Answer it up front with --with-dogfood / --no-dogfood if you prefer;
-#    with no terminal to ask on, it skips.
+#    It asks whether to include the optional /dogfood skill, whether to map
+#    the capability tiers to models, and whether to trace the chain's
+#    decisions under the gitignored .trace/. Answer up front with
+#    --with-dogfood / --no-dogfood, --no-agents and --with-trace / --no-trace
+#    if you prefer; with no terminal to ask on, each is skipped — and an
+#    unasked trace is named as off in the next-steps text.
 sh bootstrap.sh "My Project" "One line about what it does."
 
 # 3. Check the gate is green, then make the first commit yours.

@@ -5,10 +5,11 @@
 # git's own warning is the only thing that says so.
 worktree/
 
-# The kit traces its own decisions under here (scripts/trace.kit.config.sh,
-# the kit's ADR-0008). The trace is local by design — findings, reasons and token counts
-# in plain text — and the kit never pushes it; a gitignored directory is also
-# invisible to the docs gate's placeholder scan, which is the point.
+# The decision trace lands here when scripts/trace.config.sh sets
+# TRACE_DIR='.trace' — bootstrap asks, and that file is where the answer lives.
+# The trace is local by design — findings, reasons and token counts in plain
+# text — and is never pushed; a gitignored directory is also invisible to the
+# docs gate's placeholder scan, which is the point.
 .trace/
 
 # The retrospective's reports — /retro writes `.retro/<YYYY>/<MM>/retro-<stamp>.md`

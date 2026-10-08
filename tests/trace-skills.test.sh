@@ -1757,4 +1757,74 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "27. An off trace and an unmapped reviewer are findings in the report (#654)"
+# ---------------------------------------------------------------------------
+# A consumer ran a whole wave with the trace off and the reviewer tier
+# unmapped: every emit a silent no-op, every review on the author's model, and
+# both said only in stderr lines buried in subagent output. /implement,
+# /review-pr and /merge-train now list each in their final report, and
+# /housekeeping in its report — each phrase in the same sentence as the one
+# read that decides it: `trace.sh dir` printing nothing, the resolver printing
+# nothing for the reviewer tier (/review-pr names its one resolve, §3, rather
+# than a second one — section 6 holds it to resolving once).
+DAY_ONE_TRACE='trace unconfigured — this run recorded nothing'
+DAY_ONE_REVIEWER="reviewer tier unmapped — the review shared the author's model"
+# day_one_missing <SKILL.md> — the findings the file does not hold.
+day_one_missing() {
+	_do=$(tr '\n' ' ' <"$1" | awk '{ gsub(/\. /, ".\n"); print }')
+	_do_out=''
+	printf '%s\n' "$_do" | grep -F 'sh scripts/trace.sh dir' | grep -qF "$DAY_ONE_TRACE" || _do_out="$_do_out trace"
+	printf '%s\n' "$_do" | grep -F 'scripts/agents.lib.sh' | grep -qF "$DAY_ONE_REVIEWER" || _do_out="$_do_out reviewer"
+	printf '%s\n' "$_do" | grep -F "$DAY_ONE_TRACE" | grep -qiF 'report' || _do_out="$_do_out not-in-the-report"
+	printf '%s' "$_do_out" | sed 's/^ //'
+}
+# day_one_file <skill> — where the findings live: /housekeeping keeps its
+# audit's detail in CHECKLIST.md, its SKILL.md the order alone.
+day_one_file() {
+	case $1 in
+	housekeeping) printf '%s/housekeeping/CHECKLIST.md' "$SKILLS" ;;
+	*) skill_md "$1" ;;
+	esac
+}
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(day_one_file "$sk")
+	miss=$(day_one_missing "$f")
+	[ -z "$miss" ] && pass "/$sk reports an off trace and an unmapped reviewer as findings" ||
+		fail "/$sk does not hold the day-one findings: $miss (#654)"
+done
+# The read each finding rests on answers as the sentence says: nothing printed.
+( cd "$ROOT" && env -u TRACE_DIR TRACE_CONFIG="$ROOT/scripts/trace.config.sh" sh "$TRACE" dir 2>/dev/null ) | grep -q . &&
+	fail "trace.sh dir printed a directory with the shipped empty policy" ||
+	pass "trace.sh dir prints nothing when the shipped policy leaves TRACE_DIR empty"
+# Baits: each phrase deleted, in each skill, goes red.
+# Each bait deletes the phrase alone, never its line, so the read beside it
+# survives — and the helper must name the finding the bait took, not merely
+# report something missing.
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(day_one_file "$sk")
+	for which in trace reviewer; do
+		case $which in trace) phrase=$DAY_ONE_TRACE ;; *) phrase=$DAY_ONE_REVIEWER ;; esac
+		awk -v p="$phrase" '{ while ((i = index($0, p)) > 0) $0 = substr($0, 1, i - 1) substr($0, i + length(p)); print }' "$f" >"$SCRATCH/bait654.md"
+		miss=$(day_one_missing "$SCRATCH/bait654.md")
+		if ! cmp -s "$SCRATCH/bait654.md" "$f" && printf ' %s ' "$miss" | grep -qF " $which "; then
+			pass "bait: /$sk without '$phrase' goes red, naming $which"
+		else
+			fail "bait: /$sk without '$phrase' did not name $which (got: '$miss') — or planted nothing"
+		fi
+	done
+done
+# …and the third rule: the trace phrase kept, the word "report" taken from
+# the file, and the helper names the finding as out of the report.
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(day_one_file "$sk")
+	sed 's/[Rr]eport//g' "$f" >"$SCRATCH/bait654.md"
+	miss=$(day_one_missing "$SCRATCH/bait654.md")
+	if ! cmp -s "$SCRATCH/bait654.md" "$f" && printf ' %s ' "$miss" | grep -qF " not-in-the-report "; then
+		pass "bait: /$sk with no 'report' beside the trace phrase goes red"
+	else
+		fail "bait: /$sk with no 'report' did not name not-in-the-report (got: '$miss')"
+	fi
+done
+
 t_done "trace skills contract"

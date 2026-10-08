@@ -226,8 +226,13 @@ banner "E. A collision-free repo adopts in ONE run — and dogfood's yes works t
 mk_kitcopy
 mk_target
 assert_status 0 "a clean tree adopts fully, first run" -- \
-	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
 assert_out_lacks "COLLISION"
+# The trace question runs in this arm too (#654). Their repo has no ignore
+# file covering .trace/, so a yes is NOT written — a trace in a tracked tree is
+# one `git add -A` from being pushed — and the closing note says why it is off.
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "a yes with .trace/ unignored writes nothing"
+assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
 assert_file_has "$TARGET/AGENTS.md" "$PROJECT_NAME" "stamped in one pass"
 cmp -s "$SCRATCH/theirs/README.md" "$TARGET/README.md" &&
 	pass "their README is kept even on the clean path — an adopted repo keeps its front page" ||
@@ -248,6 +253,44 @@ assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" 
 assert_status 0 "the clean adoption's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 t_assert_no_kit_residue "$KITCOPY" "$TARGET" "a one-run adoption"
+
+# …and where their ignore file does cover it, the same yes is written.
+mk_kitcopy
+mk_target
+printf '.trace/\n' >"$TARGET/.gitignore"
+assert_status 0 "a repo that ignores .trace/ adopts with --with-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR='.trace'" "the adopt arm writes the trace directory on a yes"
+assert_out_has "The trace is ON"
+
+# …but only their own .gitignore counts: an ignore in .git/info/exclude (or a
+# global excludes file) holds on this machine alone, so the next clone would
+# see the trace as untracked files one `git add -A` from a commit.
+mk_kitcopy
+mk_target
+printf '.trace/\n' >>"$TARGET/.git/info/exclude"
+assert_status 0 "a repo that ignores .trace/ only locally adopts with --with-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "an ignore outside the project's .gitignore writes nothing"
+assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+
+# …and a .gitignore that lists .trace/ and then un-ignores it does not cover
+# it: git's verdict is the last matching line, never the first that mentions
+# the directory.
+mk_kitcopy
+mk_target
+printf '.trace/\n!.trace/\n' >"$TARGET/.gitignore"
+assert_status 0 "a repo that un-ignores .trace/ adopts with --with-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "a negated .trace/ line writes nothing"
+assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+
+# The adopt arm's no: answered, and said as answered.
+mk_kitcopy
+mk_target
+assert_status 0 "the adopt arm takes --no-trace" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --no-trace '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_out_has "The trace is OFF — you answered no"
 
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
@@ -612,6 +655,7 @@ arm_env() {
 		echo "PROJECT_NAME='$PROJECT_NAME'"
 		echo "PROJECT_DESC='$PROJECT_DESC'"
 		echo "DOGFOOD_FLAG=--no-dogfood"
+		echo "TRACE_FLAG=--with-trace"
 		cat "$@"
 	} >"$SCRATCH/arm.run"
 	(cd "$TARGET" && sh "$SCRATCH/arm.run")
