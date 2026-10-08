@@ -1794,7 +1794,7 @@ for sk in implement review-pr merge-train housekeeping; do
 		fail "/$sk does not hold the day-one findings: $miss (#654)"
 done
 # The read each finding rests on answers as the sentence says: nothing printed.
-( cd "$ROOT" && TRACE_DIR='' TRACE_CONFIG="$ROOT/scripts/trace.config.sh" sh "$TRACE" dir 2>/dev/null ) | grep -q . &&
+( cd "$ROOT" && env -u TRACE_DIR TRACE_CONFIG="$ROOT/scripts/trace.config.sh" sh "$TRACE" dir 2>/dev/null ) | grep -q . &&
 	fail "trace.sh dir printed a directory with the shipped empty policy" ||
 	pass "trace.sh dir prints nothing when the shipped policy leaves TRACE_DIR empty"
 # Baits: each phrase deleted, in each skill, goes red.
@@ -1813,6 +1813,18 @@ for sk in implement review-pr merge-train housekeeping; do
 			fail "bait: /$sk without '$phrase' did not name $which (got: '$miss') — or planted nothing"
 		fi
 	done
+done
+# …and the third rule: the trace phrase kept, the word "report" taken from
+# the file, and the helper names the finding as out of the report.
+for sk in implement review-pr merge-train housekeeping; do
+	f=$(day_one_file "$sk")
+	sed 's/[Rr]eport//g' "$f" >"$SCRATCH/bait654.md"
+	miss=$(day_one_missing "$SCRATCH/bait654.md")
+	if ! cmp -s "$SCRATCH/bait654.md" "$f" && printf ' %s ' "$miss" | grep -qF " not-in-the-report "; then
+		pass "bait: /$sk with no 'report' beside the trace phrase goes red"
+	else
+		fail "bait: /$sk with no 'report' did not name not-in-the-report (got: '$miss')"
+	fi
 done
 
 t_done "trace skills contract"

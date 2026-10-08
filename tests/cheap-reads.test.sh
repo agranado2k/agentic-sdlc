@@ -39,11 +39,13 @@ done
 
 banner "every spawning skill names the reference"
 skills=0
-# The one line that names the resolver without spawning is the day-one
+# The one sentence that names the resolver without spawning is the day-one
 # finding (#654) — a report that the reviewer tier answered nothing — so a
-# line carrying it does not make a skill a spawning one.
+# sentence carrying it does not make a skill a spawning one. Read as joined
+# sentences, so a re-wrap cannot move the resolver off the finding's line.
 for d in .agents/skills/*/; do
-	grep -hs 'agents\.lib\.sh' "$d"*.md | grep -qvF 'reviewer tier unmapped — the review shared' || continue
+	cat "$d"*.md 2>/dev/null | tr '\n' ' ' | awk '{ gsub(/\. /, ".\n"); print }' |
+		grep -F 'agents.lib.sh' | grep -qvF 'reviewer tier unmapped — the review shared' || continue
 	skills=$((skills + 1))
 	if grep -qsF "$REF" "$d"*.md; then
 		pass "$d names $REF"
