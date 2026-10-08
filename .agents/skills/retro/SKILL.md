@@ -73,7 +73,8 @@ The full form — what to read, what counts as a finding, where it goes — is i
    unattributed its own row and spawns bucketed by order of magnitude;
    sessions whose usage dwarfs their outcome; unpriced models; compaction
    tokens and phantom stops.
-6. **Chain health** — tickets with no PR, PRs with no landing, spawns that
+6. **Chain health** — tickets with no PR, PRs with no landing, interruptions
+   (a resumed ticket, a conflict, a stuck check), spawns that
    failed, timed out, hit budget or could not reach their vendor, runs never
    closed, tool calls denied (per session and tool), sub-agent stops read
    before their transcript ended, and skills whose emits
