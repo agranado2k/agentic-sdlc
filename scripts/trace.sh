@@ -199,7 +199,8 @@ TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567 and
-# 2026-10-08 for #628): a data key a reader joins on, held at emit to a shape. Each row is
+# 2026-10-08 for #628): a data key a reader joins on, held at emit to a
+# shape. Each row is
 # `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, and a value matches an ERE only
 # whole. `<kind>=<key>:<ERE>` holds a PRESENT key: data.* stays open, and an
 # emit missing the key writes as before. A `/<when>~<ERE>` applies the row
@@ -211,8 +212,9 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # for a confirm-list item (numbered in the list's order, 2026-10-02 at PR
 # #487), and that id is the local source's alone; and a green or red iteration
 # carries its three counts, digits; an iteration's cause, when it names one,
-# is the interruption that turned it red: a conflict, or a pending-stuck check.
-# `verify` advises on a raise written before its row (TRACE_AWK_RAISE reads the row from here).
+# is the interruption that turned it red or stopped it: a conflict, or a
+# pending-stuck check. `verify` advises on a raise written before its row
+# (TRACE_AWK_RAISE reads the row from here).
 TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'

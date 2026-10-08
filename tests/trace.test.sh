@@ -2266,4 +2266,32 @@ for _sm_skill in implement review-pr; do
 		fail "/$_sm_skill's spawn paragraph does not say 'never the spawn word'"
 done
 
+# ---------------------------------------------------------------------------
+banner "32. An iteration's cause is an interruption's word, held at emit (ticket #628)"
+# ---------------------------------------------------------------------------
+# The retrospective of 2026-10-07: a conflict with a moving main and a stuck
+# check-run were visible only in `reason`, a sentence no reader counts. The
+# kind table holds a present `data.cause` on pr.iterate to conflict or
+# pending-stuck, on any outcome — /pr-iterate writes it on a red iteration and
+# on one stopped by an escalated conflict (ADR-0008, amended 2026-10-08). A
+# refusal is exit 2 naming the kind, the key, the value and the shape, and
+# nothing is written; a missing cause still writes.
+C='kind=pr.iterate subject=pr:#1 data.iteration=1 data.applied=0 data.rejected=0 data.escalated=0'
+# shellcheck disable=SC2086 # $C is the emit's fixed head, split on purpose
+{
+ls_refused "pr.iterate data.cause=stuck is refused — the cause is conflict or pending-stuck" \
+	"pr.iterate: data.cause 'stuck' is not conflict|pending-stuck" $C outcome=red data.cause=stuck
+ls_refused "pr.iterate data.cause='conflict pending-stuck' is refused — one word, not both" \
+	"pr.iterate: data.cause 'conflict pending-stuck' is not conflict|pending-stuck" $C outcome=red data.cause='conflict pending-stuck'
+ls_writes "a red pr.iterate with data.cause=conflict is written" $C outcome=red data.cause=conflict
+ls_writes "a red pr.iterate with data.cause=pending-stuck is written" $C outcome=red data.cause=pending-stuck
+ls_writes "a stopped pr.iterate with data.cause=conflict is written — an escalated conflict keeps its cause" \
+	kind=pr.iterate subject=pr:#1 outcome=stopped data.iteration=1 data.cause=conflict
+ls_writes "a red pr.iterate with no data.cause is written — a failing check names no cause" $C outcome=red
+}
+grep -q "^TRACE_SHAPES='.*pr\.iterate=cause:conflict|pending-stuck" "$TRACE" &&
+	pass "the script declares the cause row in TRACE_SHAPES" || fail "scripts/trace.sh's TRACE_SHAPES has no pr.iterate=cause:conflict|pending-stuck row"
+sed -n '/Amended 2026-10-08 (#628)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'stopped' &&
+	pass "ADR-0008's #628 amendment says a stopped iteration may carry the cause" || fail "ADR-0008's #628 amendment does not say where the cause rides beside red"
+
 t_done "trace script"

@@ -421,11 +421,13 @@ Chosen: **option 1**.
    - `pr.iterate` holds a present `data.cause` to `conflict` or
      `pending-stuck`, a row of `TRACE_SHAPES`: the PR was `CONFLICTING`
      with its base, or a check-run sat `in_progress` past the skill's bound
-     while its job reported a conclusion. A red iteration with neither
-     carries none, and its `reason` names the failing check as before.
+     while its job reported a conclusion. The cause rides a red iteration,
+     or one stopped because a conflict's resolution needed a design call,
+     so the row holds it on any outcome. An iteration with neither carries
+     none, and its `reason` names the failing check as before.
    The retrospective's question 6 counts both. `verify` is unchanged: no
    line written before carries either word. The trace script is shared
-   layer, so this is a release; this ticket leaves the bump to one.
+   layer, so this is a release.
 2. **Unconfigured is a working state.** `scripts/trace.config.sh` is a policy
    file and ships with `TRACE_DIR` empty; an empty value makes every emit exit
    0 having written nothing, after one note on stderr that `TRACE_QUIET=1`

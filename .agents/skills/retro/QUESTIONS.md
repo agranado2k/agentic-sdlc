@@ -26,6 +26,8 @@ the ticket's runs.*
 - A tier whose PRs average more criticals or more iterations than the tier
   above it is mis-rubriced: the work needed more judgement than the stamp
   bought. `mechanical` iterating like `implementer` is the classic case.
+- A `ticket.start` with `outcome` `resumed` is a second start, never a
+  second ticket: count tickets once.
 - A `ticket.start` with `outcome` `disputed` — the implementer demonstrated
   the stamp wrong — or `defaulted` — the ticket carried no tier at all — is
   counted per tier, before any PR opens: `disputed` is a finding about the
@@ -197,7 +199,7 @@ decomposition.
 `data.input_head`).*
 
 - **Tickets with no PR**: a `ticket.write` with no later `ticket.start`, or a
-  `ticket.start` with no `pr.open`, inside the window and older than the
+  `ticket.start` (a `resumed` one never counted alone) with no `pr.open`, inside the window and older than the
   wave's median ticket.
 - **PRs with no landing**: a `pr.open` with no `merge.land` — and a PR the
   forge shows merged with no `merge.land` at all, which is `/merge-train`
@@ -233,7 +235,7 @@ decomposition.
   a shape the hook does not read as final. Count them per shape.
 - **Interruptions**: a `ticket.start` with `outcome=resumed` — a session
   died or was replaced before its ticket reached a PR, usage limits the
-  commonest cause — and a red `pr.iterate` whose `data.cause` is `conflict`
+  commonest cause — and a red or stopped `pr.iterate` whose `data.cause` is `conflict`
   (the PR fell behind a moving main) or `pending-stuck` (a check-run sat
   `in_progress` after its job had ended). Count each per ticket and per
   cause: one that recurs is a wave sized past its sessions, or a main
