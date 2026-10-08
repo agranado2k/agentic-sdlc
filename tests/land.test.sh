@@ -711,4 +711,33 @@ t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL
 s_assert_status 0 "unconfigured, a PR with no recorded iteration still lands"
 s_assert_err_has "not checked" "and stderr says the iteration was not checked"
 
+# ---------------------------------------------------------------------------
+banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
+# ---------------------------------------------------------------------------
+# Two emitters write merge.land: this script and /merge-train's step 4. A
+# reader joins them as one kind, so they write one field set. The script's set
+# is every data key its landed merge.land events above carry — a release, a
+# tier and an override among them — and the train's is the data keys its emit
+# line names, compared whole. Two keys are the script's alone: data.iterated and
+# data.no_iteration answer a trace read (ADR-0019) that no chain skill makes
+# (ADR-0008 clause 7), so the train names neither.
+LAND_ONLY='iterated no_iteration'
+land_keys=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" export 2>/dev/null |
+	grep -F '"kind":"merge.land"' | grep -F '"outcome":"landed"' |
+	sed 's/.*"data":{//' | grep -oE '(^|,)"[a-z_]+":' | tr -d ',":' | sort -u)
+for _k in $LAND_ONLY; do land_keys=$(printf '%s\n' "$land_keys" | grep -vx "$_k"); done
+# train_keys <skill file> — the data keys /merge-train's merge.land line names.
+train_keys() { grep -F 'kind=merge.land' "$1" | grep -oE 'data\.[a-z_]+=' | sed 's/^data\.//; s/=$//' | sort -u; }
+[ "$(printf '%s\n' "$land_keys" | grep -c .)" -ge 10 ] && pass "the landings above yield the script's field set ($(echo $land_keys))" ||
+	fail "the landings above yield too few fields to compare: $(echo $land_keys)"
+if [ "$(train_keys "$MT")" = "$land_keys" ]; then
+	pass "/merge-train's merge.land names the landing script's fields, no more and no fewer"
+else
+	fail "/merge-train's merge.land fields differ from the landing script's — train: $(echo $(train_keys "$MT")); script: $(echo $land_keys)"
+fi
+# The probe can go red: the train's line with one field dropped.
+sed '/kind=merge.land/s/ data\.waited=[^ ]*//' "$MT" >"$SCRATCH/mt.short"
+[ "$(train_keys "$SCRATCH/mt.short")" = "$land_keys" ] && fail "the field probe passed a train line with data.waited dropped — the check is vacuous" ||
+	pass "the field probe rejects a train line with a field dropped"
+
 t_done "land one PR by hand"

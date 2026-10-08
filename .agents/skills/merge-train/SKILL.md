@@ -144,8 +144,14 @@ a release whose tag could not be pushed stops the train too — merged, not
 landed.
 
 **Record each PR's fate as the train decides it**, one event per PR (`<ticket>`
-is the ticket it implemented):
-`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.merge_sha='<the merge sha, when landed>' data.waited='<how long 4d waited, in seconds>' reason='<the PR title when landed; why it was skipped; what stopped the train>' || :`.
+is the ticket it implemented), in the landing script's fields:
+`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.via=train data.method=merge data.merge_sha='<the merge sha>' data.waited='<seconds 4d waited>' data.workflows=success|failure|none|unknown data.implement=yes|no data.implement_tier='<its tier>' data.release=v<version> data.tagged=yes|no data.reruns='<runs 4c2 re-ran>' reason='<the PR title, its quote characters dropped; why it was skipped; what stopped the train>' || :`.
+A key with no answer is left off: the merge's on a PR not merged, the
+release's on a merge that bumps nothing. Read the body's `<!-- implement: -->` line through a filter that
+prints only that line's two values, never the body:
+`gh pr view <N> --json body --jq .body | tr -d '\r' | sed -n 's/^<!-- implement: ticket=#\([0-9]*\) tier=\([a-z-]*\) -->$/\1 \2/p'`.
+`implement=yes` only on exactly one output line whose ticket is this one; its tier
+recorded only when the `Tier` vocabulary lists it (`sh scripts/vocab.sh fields`).
 
 **Then ask the operator, once per landed PR — after the plan step, never
 before the merge** — whether the slice hit its target, and record the answer
