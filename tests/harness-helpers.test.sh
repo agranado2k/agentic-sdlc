@@ -182,6 +182,11 @@ says "a kit ADR fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree"
 kr_tree
 : >"$SCRATCH/kr-tree/docs/specs/trace.md"
 says "a kit living spec fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+kr_tree
+printf '# the kit traces through scripts/trace.kit.config.sh\n.trace/\n' >"$SCRATCH/kr-tree/.gitignore"
+says "a .gitignore naming a kit-only file fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+out=$(printed t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak")
+case $out in *".gitignore names scripts/trace.kit.config.sh"*) pass "the fail line names the ignore file and the name it carries" ;; *) fail "the ignore file's kit-only name is not named: $out" ;; esac
 
 # ---------------------------------------------------------------------------
 banner "6. t_assert_no_kit_record_cite — a kit record named as the project's fails (#564)"

@@ -333,21 +333,13 @@ OUT="$SCRATCH/trace.out"
 # trace_says_off <output file> <what> — the next-steps text names the decision
 # AND how to reverse it; trace_says_on the opposite.
 trace_says_off() {
-	if grep -q 'The trace is OFF' "$1" && grep -q 'day-one decision' "$1" &&
-		grep -qF "TRACE_DIR='.trace'" "$1"; then
-		pass "$2: the next-steps text names the trace as a day-one decision, and how to turn it on"
-	else
-		fail "$2: the next-steps text does not name the trace decision"
-		sed 's/^/        | /' "$1" | tail -25
-	fi
+	assert_file_has "$1" "The trace is OFF" "$2"
+	assert_file_has "$1" "day-one decision" "$2: named as a decision"
+	assert_file_has "$1" "TRACE_DIR='.trace'" "$2: with how to turn it on"
 }
 trace_says_on() {
-	if grep -q 'The trace is ON' "$1" && ! grep -q 'The trace is OFF' "$1"; then
-		pass "$2: the next-steps text says the trace is on"
-	else
-		fail "$2: the next-steps text does not say the trace is on"
-		sed 's/^/        | /' "$1" | tail -25
-	fi
+	assert_file_has "$1" "The trace is ON" "$2"
+	assert_file_lacks "$1" "The trace is OFF" "$2"
 }
 
 # Unattended, no terminal and no flag: nothing written, and it SAYS it was not
@@ -375,15 +367,7 @@ if git -C "$PROJ" check-ignore -q .trace/probe; then
 else
 	fail "the stamped .gitignore does not ignore .trace/"
 fi
-kit_only=$(sed -n 's/^KIT_ONLY="\(.*\)"$/\1/p' "$KIT/bootstrap.sh")
-leaked=''
-for f in $kit_only; do
-	grep -qF "$f" "$PROJ/.gitignore" && leaked="$leaked $f"
-done
-grep -qE '[a-z-]+\.kit\.[a-z.]+' "$PROJ/.gitignore" && leaked="$leaked $(grep -oE '[a-z/-]+\.kit\.[a-z.]+' "$PROJ/.gitignore" | tr '\n' ' ')"
-[ -n "$kit_only" ] && [ -z "$leaked" ] &&
-	pass "the stamped .gitignore names no kit-only file" ||
-	fail "the stamped .gitignore names a kit-only file:${leaked:- (or KIT_ONLY could not be read)}"
+t_assert_no_kit_residue "$KIT" "$PROJ" "into the stamped .gitignore"
 grep -q 'scripts/trace.config.sh' "$PROJ/.gitignore" &&
 	pass "…and its trace comment names the project's own trace policy file" ||
 	fail "the stamped .gitignore's trace comment does not name scripts/trace.config.sh"
