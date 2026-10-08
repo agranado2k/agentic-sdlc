@@ -1,6 +1,6 @@
 #!/bin/sh
-# hook.lib.sh — what the hooks beside this file share: the trace hooks and the
-# kill guard, and hook_root for the root guard.
+# hook.lib.sh — what the hooks beside this file share: the trace hooks, the
+# kill guard and the spawn guard, and hook_root for the root guard.
 #
 # WHAT THESE HOOKS ARE. One agent harness can tell the decision trace three
 # things nothing else knows: that a session began, what it spent, and that a

@@ -28,11 +28,11 @@
 # run, a pid list from `ps | awk` — walks past it. It catches the reflex the
 # retro saw, and says so rather than claiming more.
 #
-# THE ONE HOOK HERE THAT MAY EXIT NON-ZERO. hook.lib.sh's rule 1 is "exit 0,
+# A GUARD, SO IT MAY EXIT NON-ZERO. hook.lib.sh's rule 1 is "exit 0,
 # always", because observability must never change a session. This hook is a
-# guard rather than an observer: exit 2 is the agent harness's block status,
-# its stderr goes back to the sub-agent as the reason, and it is the only
-# non-zero exit — every other path, a payload it cannot read included, is
+# guard rather than an observer, as spawn-guard.sh and root-guard.sh are: exit
+# 2 is the agent harness's block status, its stderr goes back to the
+# sub-agent as the reason, and it is this hook's only non-zero exit — every other path, a payload it cannot read included, is
 # exit 0. With node missing it fails CLOSED for a sub-agent only: a payload
 # naming pkill, killall or pgrep anywhere is refused unread.
 #

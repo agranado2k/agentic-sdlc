@@ -4790,11 +4790,19 @@ sg Bash 'Review PR 12.'
 [ "$S_STATUS" = 0 ] && [ -z "$(events)" ] && pass "a call to any other tool passes through" ||
 	fail "a Bash call exited $S_STATUS"
 
+# A payload with no prompt to judge passes: a guard that cannot read is not a
+# guard that refuses.
+new_trace
+sg_payload Agent 'Review PR 12.' | sed 's/"prompt":/"brief":/' >"$SCRATCH/sg-np-627.json"
+t_run_split env TRACE_DIR="$TDIR" sh "$SGUARD" <"$SCRATCH/sg-np-627.json"
+[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ -z "$(events)" ] &&
+	pass "a spawn payload with no prompt key passes, silently" ||
+	fail "a spawn payload with no prompt key exited $S_STATUS: $S_ERR"
+
 # Tracing off: every spawn is allowed, nothing written.
 for off627 in 'Review PR 12.' 'Trace-Spawn: tier=wizard'; do
 	new_trace
-	sg_payload Agent "$off627" >"$SCRATCH/sg-627.json"
-	t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$SGUARD" <"$SCRATCH/sg-627.json"
+	sg Agent "$off627" TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh"
 	[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && [ -z "$(events)" ] &&
 		pass "with tracing off a spawn prompt '$off627' is allowed" ||
 		fail "with tracing off a spawn prompt '$off627' exited $S_STATUS: $S_ERR"
@@ -4808,10 +4816,9 @@ t_run_split env -u TRACE_DIR TRACE_CONFIG="$SCRATCH/bad-policy-627.sh" sh "$SGUA
 
 # THE WIRING, and the README.
 if [ "$HAVE_NODE" = 1 ]; then
-	PRE627=$(node -e 'const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-		for (const g of (s.hooks.PreToolUse || [])) for (const h of g.hooks || []) console.log(g.matcher + " " + h.command);' "$SETTINGS")
-	case $PRE627 in *"Agent|Task "*'TRACE_CONFIG=scripts/trace.kit.config.sh'*spawn-guard.sh*) pass "the settings file wires spawn-guard.sh on PreToolUse, matcher Agent|Task" ;;
-	*) fail "the settings file does not wire spawn-guard.sh on PreToolUse for Agent|Task: $PRE627" ;; esac
+	# $PRE is section 35's listing of the PreToolUse wiring.
+	case $PRE in *"Agent|Task "*'TRACE_CONFIG=scripts/trace.kit.config.sh'*spawn-guard.sh*) pass "the settings file wires spawn-guard.sh on PreToolUse, matcher Agent|Task" ;;
+	*) fail "the settings file does not wire spawn-guard.sh on PreToolUse for Agent|Task: $PRE" ;; esac
 else
 	skip "the spawn guard's wiring check needs a JSON parser"
 fi

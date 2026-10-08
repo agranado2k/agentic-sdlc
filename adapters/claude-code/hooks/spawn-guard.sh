@@ -42,17 +42,16 @@ hook_dir >/dev/null 2>&1 || exit 0
 # The prompt's JSON-string text, its first hook_prompt_bytes — the stop hook's
 # bound.
 # Inside a JSON string every quote is escaped, so `"prompt":"` with bare quotes
-# can only be the key.
+# can only be the key. The payload arrives compact (hook.lib.sh, "the
+# payload"), so the key is read in that one spelling; no `"prompt":"`, no
+# prompt to judge, and the spawn passes.
 p=${hook_json#*'"prompt":"'}
-if [ "$p" = "$hook_json" ]; then
-	p=${hook_json#*'"prompt": "'}
-	[ "$p" != "$hook_json" ] || exit 0
-fi
+[ "$p" != "$hook_json" ] || exit 0
 p=$(printf '%s\n' "$p" | sed -n '1p' | cut -b "1-$hook_prompt_bytes")
 
 hook_spawn_in "$p" && exit 0
 
 hook_deny spawn-guard "spawn-guard refused a spawn whose prompt carries no well-formed Trace-Spawn line"
 
-echo "spawn-guard: refused — this spawn's prompt carries no well-formed Trace-Spawn line, so its subagent's stop would be unattributed. Open the prompt with: Trace-Spawn: tier=<planner|implementer|mechanical|reviewer> domain=<domain|none> skill=<skill> ticket=<#N|none> — exactly four fields, one space apart, a skill and a domain [a-z][a-z0-9-]*; under a 'Trace-Run: <run id> [<parent run id>]' first line when you hand the subagent a run, as the first line itself when you have none." >&2
+echo "spawn-guard: refused — this spawn's prompt carries no well-formed Trace-Spawn line (or its first line is a Trace-Run line that is not well-formed, which hides the line under it), so its subagent's stop would be unattributed. Open the prompt with: Trace-Spawn: tier=<planner|implementer|mechanical|reviewer> domain=<domain|none> skill=<skill> ticket=<#N|none> — exactly four fields, one space apart, a skill and a domain [a-z][a-z0-9-]*; under a 'Trace-Run: <run id> [<parent run id>]' first line when you hand the subagent a run, as the first line itself when you have none." >&2
 exit 2
