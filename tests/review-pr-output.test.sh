@@ -609,15 +609,17 @@ declined=$(declined_of "$LENS5")
 	fail "Agent 5's prompt has no '$DECLINED_LEAD' list — the lens keeps raising what the records declined"
 # Every bullet names its record on a 'declined by' clause: a rule with no
 # record is an invented one.
-unrecorded=$(printf '%s\n' "$declined" | grep -v -F 'declined by ' || :)
-[ -n "$declined" ] && [ -z "$unrecorded" ] &&
-	pass "every declined rule names the record that declines it" ||
-	fail "a declined rule names no record: $unrecorded"
+# Judged only when the list exists: an absent list is the assertion above's
+# one failure, not a second one here.
+if [ -n "$declined" ]; then
+	unrecorded=$(printf '%s\n' "$declined" | grep -v -F 'declined by ' || :)
+	[ -z "$unrecorded" ] &&
+		pass "every declined rule names the record that declines it" ||
+		fail "a declined rule names no record: $unrecorded"
+fi
 # The records the rejected triages cited, each named on a bullet.
-for rec in 'shared invariant §10' '`constitution/shared-code-craft.md` §1' 'hard rule 3' "ADR-0013 clause 2" 'process/R7'; do
-	printf '%s\n' "$declined" | grep -F 'declined by ' | grep -qF -- "$rec" &&
-		pass "the declined list names $rec" ||
-		fail "the declined list never names $rec, which a rejected reuse-dry raise cited"
+for rec in 'shared invariant §10' '`constitution/shared-code-craft.md` §1' "the kit's root manual, hard rule 3" "the kit's ADR-0013 clause 2" "the kit's living spec requirement process/R7"; do
+	t_text_has "$declined" "declined by $rec" "a rejected reuse-dry raise cited it" "the declined list"
 done
 # Bait: one bullet's record cut from a copy of the lens goes red.
 sed "/^- .*declined by the kit's ADR-0013/s/ — declined by .*//" "$LENS5" >"$SCRATCH/bait5-declined.md"
