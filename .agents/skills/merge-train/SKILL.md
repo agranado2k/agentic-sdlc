@@ -144,8 +144,13 @@ a release whose tag could not be pushed stops the train too — merged, not
 landed.
 
 **Record each PR's fate as the train decides it**, one event per PR (`<ticket>`
-is the ticket it implemented):
-`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.merge_sha='<the merge sha, when landed>' data.waited='<how long 4d waited, in seconds>' reason='<the PR title when landed; why it was skipped; what stopped the train>' || :`.
+is the ticket it implemented), in the landing script's fields:
+`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.via=train data.method=merge data.merge_sha='<the merge sha>' data.waited='<seconds 4d waited>' data.workflows=success|failure|none data.implement=yes|no data.implement_tier='<its tier>' data.release=v<version> data.tagged=yes|no data.reruns='<runs 4c2 re-ran>' reason='<the PR title; why it was skipped; what stopped the train>' || :`.
+A key with no answer is left off: the merge's on a PR not merged, the
+release's on a merge that bumps nothing. `implement=yes` only when the body
+holds exactly one `<!-- implement: ticket=#<N> tier=<tier> -->` line, its
+ticket this one; the tier is recorded only when it is a word the `Tier`
+vocabulary lists (`sh scripts/vocab.sh fields`), and you type the list's word, never the body's.
 
 **Then ask the operator, once per landed PR — after the plan step, never
 before the merge** — whether the slice hit its target, and record the answer
