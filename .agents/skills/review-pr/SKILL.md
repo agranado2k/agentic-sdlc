@@ -142,7 +142,7 @@ After all agents complete, you MUST present the **Axis 1 (standards)** findings 
 **Verdict:** <one line — blocking or not, and what to fix first; "no findings" is a valid verdict>
 Clean audits: <the lenses that found nothing, comma-separated — one line, never sections of nothing>
 Lenses not run: <"none", or each lens the host refused or whose spawn ended in fail, by roster token and cause — marked "run in this context instead" when this session audited it itself>
-Lenses run: <data.lenses> of <data.roster> — then " — short review" when fewer ran, " — single-context review" when none did
+Lenses run: <data.lenses> of <data.roster> — then " — short review" when fewer ran, " — single-context review" when none did of a roster above 0
 
 | | Severity | Count |
 |---|----------|-------|

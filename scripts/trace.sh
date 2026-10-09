@@ -199,8 +199,8 @@ TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
-# 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins on, held at emit to a
-# shape. Each row is
+# 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
+# on, held at emit to a shape. Each row is
 # `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, and a value matches an ERE only
 # whole. `<kind>=<key>:<ERE>` holds a PRESENT key: data.* stays open, and an
 # emit missing the key writes as before. A `/<when>~<ERE>` applies the row

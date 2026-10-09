@@ -1835,7 +1835,9 @@ banner "28. A review records how many lenses ran, and its summary says when it r
 # thin review read the same as a full one. /review-pr's axis-1 verdict line
 # carries data.lenses (the lens agents that returned a report) beside
 # data.roster (the lenses it planned), 0 on a single-reviewer pass; its
-# summary's `Lenses run:` line names a short and a single-context review.
+# summary's `Lenses run:` line names a short and a single-context review,
+# the latter only for a roster above 0 — every slice empty is no pass at all
+# (review of PR #666, L-2).
 # lens_count_missing <skill file> — the #663 rules the skill does not hold.
 lens_count_missing() {
 	_lc_out=''
@@ -1848,7 +1850,7 @@ lens_count_missing() {
 	printf '%s\n' "$_lc_sen" | grep -F '`data.roster`' | grep -F 'planned' | grep -qF 'slice was empty' ||
 		_lc_out="$_lc_out roster-defined:planned-less-empty"
 	_lc_line=$(sed -n '/^### Review Summary$/,/^| | Severity | Count |$/p' "$1" | grep '^Lenses run: ')
-	for _lc_p in '<data.lenses> of <data.roster>' 'short review' 'single-context review'; do
+	for _lc_p in '<data.lenses> of <data.roster>' 'short review' 'single-context review' 'roster above 0'; do
 		printf '%s\n' "$_lc_line" | grep -qF -- "$_lc_p" || _lc_out="$_lc_out summary-line:'$_lc_p'"
 	done
 	printf '%s' "$_lc_out" | sed 's/^ //'
@@ -1882,7 +1884,8 @@ for b in \
 	's/less any lens whose slice was empty/less some/g' \
 	's/^Lenses run: .*$//' \
 	'/^Lenses run: /s/short review/thin/' \
-	'/^Lenses run: /s/single-context review/one pass/'; do
+	'/^Lenses run: /s/single-context review/one pass/' \
+	'/^Lenses run: /s/ of a roster above 0//'; do
 	sed "$b" "$RP" >"$SCRATCH/bait663.md"
 	if ! cmp -s "$SCRATCH/bait663.md" "$RP" && [ -n "$(lens_count_missing "$SCRATCH/bait663.md")" ]; then
 		pass "bait: '$b' goes red"
