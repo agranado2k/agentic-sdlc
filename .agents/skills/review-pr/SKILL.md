@@ -142,6 +142,7 @@ After all agents complete, you MUST present the **Axis 1 (standards)** findings 
 **Verdict:** <one line — blocking or not, and what to fix first; "no findings" is a valid verdict>
 Clean audits: <the lenses that found nothing, comma-separated — one line, never sections of nothing>
 Lenses not run: <"none", or each lens the host refused or whose spawn ended in fail, by roster token and cause — marked "run in this context instead" when this session audited it itself>
+Lenses run: <data.lenses> of <data.roster> — then " — short review" when fewer ran, " — single-context review" when none did of a roster above 0
 
 | | Severity | Count |
 |---|----------|-------|
@@ -180,7 +181,7 @@ Anatomy rules:
 - Items are numbered INITIAL-N (C = Critical, H = High, M = Medium, L = Low). Numbering resets per category, and the IDs are how findings stay citable across iterations and commit messages.
 - Axis 1 owns the four circle badges. It never borrows the confirm-list's glyph set, and never lends its badges to §5b — the two axes must be tell-apart-at-a-glance.
 
-Record the axis's verdict once, before anything is posted: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1 reason='<the Verdict line>' || :`. The findings are raised as their lenses return on path (a) (§3), and on paths (b) and (c) in §6, once the post question is answered.
+Record the axis's verdict once, before anything is posted: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=pass|blocked data.axis=1 data.lenses=<count> data.roster=<count> reason='<the Verdict line>' || :`. `data.lenses` is the lens agents that returned a report — `0` on a single-reviewer pass; `data.roster` the lenses planned, six less any lens whose slice was empty; both digits. The findings are raised as their lenses return on path (a) (§3), and on paths (b) and (c) in §6, once the post question is answered.
 
 ### 5b. Behavior Confirm-List (MANDATORY — Axis 2, never merged with §5)
 
