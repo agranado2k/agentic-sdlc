@@ -4,7 +4,7 @@
 - **Date**: 2026-09-28
 - **Deciders**: Arthur Granado (operator), at the planning session for PRD #261
 - **Supersedes / amends**: — (builds on ADR-0005's clause 12, the dispatcher's explicit non-goal of not enforcing what a worker may do: this record is where that enforcement lives, beside the dispatcher and not in it)
-- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #412: clause 10 reads the finding's lens line first — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the end of this record)
+- **Superseded by**: — (amended 2026-09-30, #268: clause 6's two reserved staleness cases are decided, and clauses 7 and 9 follow — see the end of this record; amended again 2026-10-01, PR #320: clause 5's `--commit` is mandatory on drift; amended 2026-10-01, #375: clause 10 records each posted finding and a verdict per axis; amended 2026-10-01, #411: a retry records one note, not a second set — see the end of this record; amended 2026-10-01, #412: clause 10 reads the finding's lens line first — see the end of this record; amended 2026-10-01, #424: every raise carries `data.posted=yes` — see the end of this record; amended 2026-10-09, #646: a LOW is counted, never posted, and raised `data.posted=no` — see the end of this record)
 
 ## Context and problem statement
 
@@ -326,3 +326,22 @@ inline, so each raise carries `data.posted=yes` — the same key, with the
 same meaning, as the raise `/review-pr` records in session and the one its
 relay path records — and `data.agent` stays a token on `/review-pr`'s roster,
 `unattributed` included, so the three review paths read alike.
+
+### Amendment, 2026-10-09 — a LOW is counted, never posted (#646)
+
+Amends the posting of clause 6 and the raise of #424; a narrowing — fewer
+findings posted — that changes no exit status and no option, so the record
+is amended in place. `/review-pr` §5 now rules that a LOW is counted and
+traced, never posted by an agent path (#635, PR #644): of the LOWs the trace
+holds, most posted threads were declined unread, and the fixes a LOW did
+earn came from the local review that never posts. The broker is an agent
+path, so it follows the same band rule:
+
+- **CRITICAL, HIGH and MEDIUM** are posted inline as before, each checked
+  against the diff and withheld when it is not there.
+- **a LOW** takes no inline comment. The review body's LOW section counts
+  them — `— <n> found; counted, not posted` — and each is raised with
+  `data.posted=no`, the key `/review-pr`'s own paths write for a LOW. A
+  LOW's location never reaches the forge, so it is never checked against
+  the diff: one off the diff is counted and raised like any other, never
+  withheld and never on the `dropped …` line.

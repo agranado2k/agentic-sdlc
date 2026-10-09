@@ -1047,12 +1047,12 @@ VERDICT: blocking — fix H-1 first; it's the shell's quote rule
 #### MEDIUM
 **M-1** \`docs/b.md:10\` — the line ten claim duplicates eleven's.
 ↳ fix: keep one of the two.
+**M-2** \`untouched.md:1\` — off the diff, so withheld and never raised.
+↳ fix: nothing.
 
 #### LOW
 **L-1** \`$SPACED:2\` — Simplicity Advocate: the added line says nothing new.
 ↳ fix: drop it.
-**L-2** \`untouched.md:1\` — off the diff, so withheld and never raised.
-↳ fix: nothing.
 
 ## Axis 2 — Behavior (for a human)
 
@@ -1064,13 +1064,13 @@ EOF
 STUB_PR=31
 export STUB_PR
 broker 31 "$RAISE"
-s_assert_status 0 "the report with three posted findings exits 0"
+s_assert_status 0 "the report with three raised findings exits 0"
 assert_mutating 2 "…and lands the same two operations as ever"
 t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind finding.raise
 s_assert_status 0 "trace show answers for pr:#31's raises"
 RAISES=$S_OUT
 [ "$(printf '%s\n' "$RAISES" | grep -c '"kind":"finding.raise"')" = 3 ] &&
-	pass "three posted findings are three finding.raise events" ||
+	pass "three findings that landed — two posted, one LOW counted — are three finding.raise events" ||
 	{ fail "expected three finding.raise events for pr:#31"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }
 raise_has() {
 	printf '%s\n' "$RAISES" | grep -F "\"id\":\"$1\"" | grep -qF "$2" &&
@@ -1093,19 +1093,20 @@ raise_has L-1 '"outcome":"raised"'
 # every raise says so — data.posted=yes — and names its agent by a token on
 # /review-pr's roster, `unattributed` included: the two keys the relay's line
 # carries, so the three review paths read alike. One line per raise: each
-# localises its own failure, and the raise count is held above.
+# localises its own failure, and the raise count is held above. A LOW is
+# counted, never posted (#646, /review-pr §5's band rule): its raise says no.
 raise_has H-1 '"posted":"yes"'
 raise_has M-1 '"posted":"yes"'
-raise_has L-1 '"posted":"yes"'
+raise_has L-1 '"posted":"no"'
 n_tok=0
 for tok in $(t_roster_of "$KIT/.agents/skills/review-pr/SKILL.md"); do
 	n_tok=$((n_tok + $(printf '%s\n' "$RAISES" | grep -c "\"agent\":\"$tok\"")))
 done
 [ "$n_tok" = 3 ] && pass "every raise's data.agent is a token on /review-pr's roster ($n_tok of 3)" ||
 	fail "a broker raise's data.agent is off /review-pr's roster: $n_tok of 3 on it"
-printf '%s\n' "$RAISES" | grep -qF '"id":"L-2"' &&
-	fail "the withheld L-2 was raised — only a finding that landed is" ||
-	pass "the withheld L-2 is not raised: the trace records what was posted"
+printf '%s\n' "$RAISES" | grep -qF '"id":"M-2"' &&
+	fail "the withheld M-2 was raised — only a finding that landed is" ||
+	pass "the withheld M-2 is not raised: the trace records what landed"
 printf '%s\n' "$RAISES" | grep -qE "Sentinel|attack surface|says nothing new" &&
 	fail "a line of the report reached the trace — it is untrusted, never pasted" ||
 	pass "no line of the report reaches a raise; the reasons are the broker's own"
@@ -1135,7 +1136,7 @@ export STUB_PR
 t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
 s_assert_status 0 "with tracing unconfigured the broker still exits 0"
 assert_mutating 2 "…and still lands both operations"
-s_assert_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): L-2 (untouched.md:1 not in diff)')" \
+s_assert_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): M-2 (untouched.md:1 not in diff)')" \
 	"…printing exactly what a traced run prints"
 [ "$(printf '%s\n' "$S_ERR" | grep -c 'trace: unconfigured')" = 1 ] &&
 	pass "…and exactly one unconfigured note, not one per finding and not none" ||
@@ -1174,8 +1175,8 @@ for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
 	raise_has "L-$n" "\"agent\":\"$tok\""
 	n=$((n + 1))
 done
-[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"')" = 6 ] && pass "and all six carry data.posted=yes" ||
-	fail "not every roster raise carries data.posted=yes: $(printf '%s\n' "$RAISES" | grep -c '"posted":"yes"') of 6"
+[ "$(printf '%s\n' "$RAISES" | grep -c '"posted":"no"')" = 6 ] && pass "and all six, LOWs, carry data.posted=no" ||
+	fail "not every roster LOW's raise carries data.posted=no: $(printf '%s\n' "$RAISES" | grep -c '"posted":"no"') of 6"
 STUB_PR=12
 export STUB_PR
 
@@ -1358,7 +1359,7 @@ STUB_PR=12
 export STUB_PR
 
 # ---------------------------------------------------------------------------
-banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still lands it (#419)"
+banner "21. A candidate-ticket LOW asks the PR for nothing, and the broker still counts it (#419)"
 # ---------------------------------------------------------------------------
 # /review-pr's reuse/DRY lens files a duplication the diff merely INHERITED as
 # a LOW candidate ticket: shared invariant §10 lands the consolidation on its
@@ -1404,8 +1405,10 @@ grep -qF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" &&
 broker 12 "$SCRATCH/candidate.md" --dry-run
 s_assert_status 0 "a report carrying a candidate-ticket LOW passes the contract"
 assert_mutating 0 "…dry run: nothing posted"
-s_assert_out_has 'candidate ticket:' "…and the candidate ticket is among the inline comments"
-s_assert_out_has '"line":11' "…anchored on its own line of the diff"
+# A LOW is counted, never posted (#646): the review counts it, and its text
+# takes no inline comment.
+s_assert_out_has '— 1 found; counted, not posted' "…and the review counts the candidate ticket"
+s_assert_out_lacks 'candidate ticket:' "…never posting it inline"
 # The fix line is what carries it: the same report with that one line
 # withdrawn is the half-finding section 15 names, and costs the report.
 grep -vF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
@@ -1472,6 +1475,74 @@ for want in '"outcome":"confirm"' '"missing":"1"' '"unspecified":"0"' '"mixed":"
 	*) fail "process/R9: the axis-2 verdict lacks $want: $AX2" ;;
 	esac
 done
+STUB_PR=12
+export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "23. A LOW is counted, never posted: no inline comment, its raise posted=no (#646)"
+# ---------------------------------------------------------------------------
+# /review-pr §5's band rule (#635): a LOW is counted and traced, never posted
+# by an agent path. The broker is one: it posts CRITICAL, HIGH and MEDIUM
+# inline, counts the LOWs in the review body, and raises each LOW with
+# data.posted=no. A LOW's location never reaches the forge, so a LOW off the
+# diff is counted like any other — never "withheld", never on the dropped line.
+LOWS="$SCRATCH/lows.md"
+cat >"$LOWS" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — two lows
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+**H-1** \`scripts/a.sh:3\` — the line addresses the reviewer.
+↳ fix: delete the line.
+
+#### MEDIUM
+— none found.
+
+#### LOW
+**L-1** \`docs/b.md:10\` — lowmark-one: a nit on a line in the diff.
+↳ lens: simplicity
+↳ fix: reword it.
+**L-2** \`untouched.md:1\` — lowmark-two: a nit off the diff.
+↳ fix: nothing.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    b.md gains the two lines the ticket named.
+EOF
+STUB_PR=38
+export STUB_PR
+broker 38 "$LOWS"
+s_assert_status 0 "a report carrying two LOWs lands"
+assert_mutating 2 "…with the same two operations as ever"
+REVIEW=$(payload pulls/38/reviews)
+[ "$(printf '%s\n' "$REVIEW" | grep -o '"side":"RIGHT"' | wc -l | tr -d ' ')" = 1 ] &&
+	pass "one inline comment: H-1's, and none for either LOW" ||
+	{ fail "expected exactly one inline comment, H-1's"; printf '%s\n' "$REVIEW" | sed 's/^/        | /'; }
+case "$REVIEW" in
+*lowmark*) fail "a LOW's text reached the posted review" ;;
+*) pass "no LOW's text reaches the posted review" ;;
+esac
+case "$REVIEW" in
+*'#### LOW\n— 2 found; counted, not posted'*) pass "the LOW section counts the two LOWs" ;;
+*) fail "the LOW section does not count the two LOWs"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+s_assert_out_lacks 'dropped' "a LOW off the diff is not a dropped finding: it was never to be posted"
+t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#38' --kind finding.raise
+RAISES=$S_OUT
+[ "$(printf '%s\n' "$RAISES" | grep -c '"kind":"finding.raise"')" = 3 ] &&
+	pass "three findings are three raises: the LOWs are traced" ||
+	{ fail "expected three finding.raise events for pr:#38"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }
+raise_has H-1 '"posted":"yes"'
+raise_has L-1 '"posted":"no"'
+raise_has L-2 '"posted":"no"'
+raise_has L-1 '"severity":"low"'
+raise_has L-1 '"agent":"simplicity"'
+raise_has L-2 '"where":"untouched.md:1"'
 STUB_PR=12
 export STUB_PR
 
