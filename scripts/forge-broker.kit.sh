@@ -65,14 +65,16 @@
 #      instead. A retried session lands the review once — and a lookup the
 #      forge REFUSES is exit 69, never a silent "not there".
 #   6. Perform the two operations: one review with `event` COMMENT and the
-#      findings as inline comments, one top-level comment with the behavior
-#      confirm-list. Print the two URLs on stdout, one per line, then one
+#      CRITICAL, HIGH and MEDIUM findings as inline comments — a LOW is
+#      counted in the review body and never posted, /review-pr §5's band
+#      rule (ADR-0009, amended for #646), so step 4 never checks one — and
+#      one top-level comment with the behavior confirm-list. Print the two URLs on stdout, one per line, then one
 #      `dropped …` line when anything was withheld, then one `drift: …` line
 #      when the review was anchored behind the head.
 #   7. Record what landed in the trace, subject `pr:#<N>`: one
-#      `finding.raise` per finding posted inline (withheld ones are not
-#      raised), each saying so — `data.posted=yes`, the key /retro's dismissal
-#      denominator counts, and `data.agent` a /review-pr roster token — then
+#      `finding.raise` per finding posted inline or LOW counted (withheld
+#      ones are not raised), each saying which — `data.posted=yes`, or `no`
+#      for a LOW, the key /retro's dismissal denominator counts, and `data.agent` a /review-pr roster token — then
 #      one `review.verdict` per axis — Axis 1 with the verdict
 #      as outcome, Axis 2 as /review-pr §5b counts it — each marked
 #      `data.via=broker`, with the model and agent harness when the caller
@@ -495,7 +497,9 @@ MARKER="<!-- forge-broker: $HASH -->"
 # finding text itself lives on the inline comment, once.
 DROPPED=
 NDROPPED=0
+nlow=0
 : >"$TMP/comments.json"
+: >"$TMP/raises"
 for sev in CRITICAL HIGH MEDIUM LOW; do
 	printf '\n#### %s\n' "$sev" >>"$TMP/body.md"
 	any=0
@@ -504,14 +508,21 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 	while [ "$i" -le "$COUNT" ]; do
 		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
 		if [ "$f_sev" = "$sev" ]; then
-			if ! in_diff "$f_path" "$f_line"; then
+			if [ "$sev" = LOW ]; then
+				# /review-pr §5's band rule (#635): a LOW is counted and
+				# traced, never posted by an agent path — so it takes no
+				# inline comment, and its location is never the forge's to
+				# refuse.
+				printf '%s no\n' "$i" >>"$TMP/raises"
+				nlow=$((nlow + 1))
+			elif ! in_diff "$f_path" "$f_line"; then
 				note "dropped $f_id: $f_path:$f_line is not in $DIFF_LOG — the forge would refuse the whole review for it"
 				DROPPED="${DROPPED:+$DROPPED, }$f_id ($f_path:$f_line not in diff)"
 				NDROPPED=$((NDROPPED + 1))
 				secdrop=$((secdrop + 1))
 			else
 				any=1
-				printf '%s\n' "$i" >>"$TMP/posted"
+				printf '%s yes\n' "$i" >>"$TMP/raises"
 				printf '**%s** `%s:%s` — inline below.\n' "$f_id" "$f_path" "$f_line" >>"$TMP/body.md"
 				[ -s "$TMP/comments.json" ] && printf ',' >>"$TMP/comments.json"
 				printf '{"path":"%s","line":%s,"side":"RIGHT","body":"%s"}' \
@@ -523,7 +534,9 @@ for sev in CRITICAL HIGH MEDIUM LOW; do
 	# Absence is only ever REPORTED absence. A section whose findings were all
 	# withheld says so — "none found." there would be the broker putting a
 	# claim the worker never made under its own review.
-	if [ "$any" != 1 ]; then
+	if [ "$nlow" -gt 0 ]; then
+		printf -- '— %s found; counted, not posted (a LOW is never posted by an agent: /review-pr §5).\n' "$nlow" >>"$TMP/body.md"
+	elif [ "$any" != 1 ]; then
 		if [ "$secdrop" = 0 ]; then
 			printf -- '— none found.\n' >>"$TMP/body.md"
 		else
@@ -688,18 +701,18 @@ fi
 # One raise per finding that landed inline, before the verdicts (/review-pr
 # §6: record, then verdict). The unconfigured note is said once, by the
 # Axis-1 verdict below, not once per finding.
-if [ -s "$TMP/posted" ]; then
-	while read -r i; do
-		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
-		f_where="${f_path}:${f_line}"
-		case $f_where in *[!A-Za-z0-9./_:-]*) f_where=unsafe-path ;; esac
-		f_note="posted inline by the forge broker"
-		[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
-		trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
-			"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
-			"data.where=$f_where" data.via=broker data.posted=yes "reason=$f_note"
-	done <"$TMP/posted"
-fi
+# A posted finding says posted=yes; a counted LOW says posted=no.
+while read -r i f_posted; do
+	IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
+	f_where="${f_path}:${f_line}"
+	case $f_where in *[!A-Za-z0-9./_:-]*) f_where=unsafe-path ;; esac
+	f_note="posted inline by the forge broker"
+	[ "$f_posted" = no ] && f_note="a LOW, counted in the review body and never posted (/review-pr §5)"
+	[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
+	trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
+		"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
+		"data.where=$f_where" data.via=broker "data.posted=$f_posted" "reason=$f_note"
+done <"$TMP/raises"
 # The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
 # and the worker's VERDICT line is a sentence: its opening is the contract's
 # "blocking or not", so that is read and nothing else — "not blocking" and
