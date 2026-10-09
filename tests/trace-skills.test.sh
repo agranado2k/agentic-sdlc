@@ -1894,4 +1894,42 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "29. The train lands through the landing script where the manual names one (#662)"
+# ---------------------------------------------------------------------------
+# On 2026-10-08 a train landed four PRs with a red release check, writing its
+# own merge.land with neither the landing script's gate nor its fields. Where
+# the root manual names a landing script, the train's per-PR landing (4c-4d)
+# is that script's — after the train's own ordering and update-branch — and
+# its refusal skips the PR as a red check does. The train's own merge.land
+# line is the no-script path only: a consumer's, whose manual names none.
+# train_lands_missing <skill file> — one word per claim the skill drops.
+train_lands_missing() {
+	_tl_flat=$(tr '\n' ' ' <"$1" | tr -s ' ')
+	printf '%s\n' "$_tl_flat" | grep -qiE 'where the root `AGENTS\.md` names a landing script[^.]*4c' || echo script-step
+	printf '%s\n' "$_tl_flat" | grep -qiE 'after 4a and 4b[^.]*run (it|the landing script)' || echo after-update
+	printf '%s\n' "$_tl_flat" | grep -qiE 'exit 2 is (its|a) refusal[^.]*skips the PR' || echo refusal-skips
+	printf '%s\n' "$_tl_flat" | grep -qiE 'no-script path only' || echo no-script-only
+	# The paragraph that holds the train's own emit line opens on that path.
+	awk -v RS= '/kind=merge\.land/' "$1" | head -c 200 | tr '\n' ' ' | grep -qiE '^\*\*With no landing script' || echo emit-paragraph
+}
+MT=$(skill_md merge-train)
+_tl=$(train_lands_missing "$MT")
+[ -z "$_tl" ] && pass "/merge-train lands each PR through the landing script where the manual names one; its own merge.land is the no-script path" ||
+	fail "/merge-train drops: $(echo $_tl)"
+# Baits: one per claim, so none survives its own deletion.
+for b in \
+	's/names a landing script, 4c/names a landing script, the merge/' \
+	's/After 4a and 4b, run it/Then run it/' \
+	's/exit 2 is its refusal/exit 2 is its answer/' \
+	's/no-script path only/usual path/' \
+	's/^\*\*With no landing script/**For each PR/'; do
+	sed "$b" "$MT" >"$SCRATCH/bait662.md"
+	if ! cmp -s "$SCRATCH/bait662.md" "$MT" && [ -n "$(train_lands_missing "$SCRATCH/bait662.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"
