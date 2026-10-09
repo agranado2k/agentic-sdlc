@@ -102,6 +102,31 @@ PR is asked for nothing. The one exception is a divergent-behavior copy — two
 copies meant to behave identically that have already drifted — which is a
 latent bug whichever branch introduced it and stays a finding.
 
+**What the decision records decline.** Each raise below was rejected in triage
+with the record beside it as the reason, so do not raise it, on any diff: the
+list is drawn from the trace's rejected `finding.triage` events against this
+lens, never invented, and a rule joins it only beside the record its rejection
+cited. A record that names the kit is the kit's own; a project that never
+adopted it judges that case by the bar above.
+
+- **Consolidating copies the diff did not write** into one shared helper on
+  this PR — declined by shared invariant §10: the inherited case above is the
+  one way such copies leave the report.
+- **A shared file for a second copy of a short helper**, where the extraction
+  would add a library the change otherwise does not need — declined by
+  `constitution/shared-code-craft.md` §1, the smallest diff that delivers the
+  behavior.
+- **A consolidation whose shared home is a shared-layer file**, or that ties a
+  kit-only list to one — declined by the kit's root manual, hard rule 3: a
+  shared-layer edit is a release action, never a passenger on a ticket.
+- **The kit wrapper's spawn-word bridge, read as a copy of the resolver's
+  agent-harness split** — declined by the kit's ADR-0013 clause 2, which puts
+  the spawn-word bridge in the wrapper on purpose.
+- **A restated bound that is the observable contract**, such as the coverage
+  grammar's id bounds a suite holds beside `scripts/coverage.sh` — declined by
+  the kit's living spec requirement process/R7, which makes those bounds the
+  contract.
+
 When the diff touches agent-facing surfaces — skills, prompts, hooks,
 `AGENTS.md`/`constitution/`, agent settings or tool configuration — the changed
 INSTRUCTION TEXT is itself attack surface. Audit it against the OWASP Agentic
