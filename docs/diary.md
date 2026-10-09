@@ -6,7 +6,7 @@
 
 ---
 
-## Current state — 2026-10-07
+## Current state — 2026-10-09
 
 <!--
 Update this block IN PLACE. It is the only part of this file that is edited
@@ -20,15 +20,15 @@ is in flight. Do not restate the README.
 
 | Field | Value |
 | --- | --- |
-| **Phase** | The kit is shipping. Shared layer 0.64.0 tagged 2026-10-07 at `ef308d5`, the merge of PR #614 (#563: the update recipe reads in order for a consumer several releases behind). The same two days: 0.63.0 at `6546ced` (PR #611, #569: a spawn's `model` is a policy id, and the note carries the #580 wave's unbumped shared changes), 0.62.0 at `85bd230` (PR #613, #564: a shipped file cites a kit record only as the kit's — ADR-0017), 0.61.0 at `dbef54d` (PR #605, #567: a finding raise's id is held to the severity shape), 0.60.0 at `ebab6fe` (PR #578, #561: the docs harness's fixtures can no longer satisfy a project's living spec), 0.59.0 at `9ea1824` (PR #576, #562: no kit-only file survives bootstrap), 0.58.0 at `eea6d6d` (PR #599, #571: both gate engines read a code fence by CommonMark's one rule), 0.57.0 at `63d815a` (PR #598, #560: a bare `trace.sh end` is deprecated), 0.56.0 at `eb2aa68` (PR #577, #509: a release is tagged by its landing before main is judged — ADR-0015), 0.55.0 at `a7fd604` (PR #574, #557: fence detection has one home). Since #577 the landing script tags the merge commit itself; main no longer goes red between a release and its tag. Shared layer 0.54.0 tagged 2026-10-05 at `fe6c4b7`, the merge of PR #554 (#545: the requirement-line grammar has one home, `scripts/requirement.lib.sh`). The same day: 0.53.0 at `efd4a77` (PR #553, #548: the reviewer walks an ordered fallback in the shared resolver, ADR-0013), 0.52.0 at `6169911` (PR #551, #543: `trace.sh end <run>` closes only the run its caller began), 0.51.0 at `dfeeffd` (PR #550, #544: a cited living-spec id is bounded on its left). Shared layer 0.50.0 tagged 2026-10-05 at `50bf936`, the merge of PR #541 (#534: `scripts/coverage.sh` joins the layer; requirement ids reach the ticket, the review and the living spec). 0.49.0 tagged 2026-10-05 at `201951d`, the merge of PR #537 (#530: a living-spec requirement no test names fails the docs gate, in both engines). Both close PRD #527 (ADR-0012: the kit moved from spec-first to spec-anchored). Shared layer 0.48.0 tagged 2026-10-02 at `122faa0`, the merge of PR #523 (#472: `trace.sh stack` reads a checkout's run stack). 0.47.0 tagged 2026-10-02 at `0b03c6d` (PR #520, the non-manifest half of the waves #462/#477). 0.46.0 at `5e82f73` (#480), 0.45.0 at `0e572e0` (#482), 0.44.0 at `8542b28` (#465). Shared layer 0.43.0 tagged 2026-10-02 at `678ffc6`, the merge of PR #487 (#466: the trace holds the triage source, the local id and the iteration's counts at emit). 0.42.0 tagged 2026-10-02 at `a59e9f4`, the merge of PR #476 (#453: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs). 0.41.0 tagged 2026-10-02 at `5252882`, the merge of PR #451 (#401: `scripts/vocab.sh`'s header says what its contract is). 0.40.0 tagged 2026-10-02 at `9c5b988`, the merge of PR #446 (#409: a denied tool call is visible). 0.39.0 tagged 2026-10-02 (#400: `scripts/stamp.sh` bounds what it lifts). 0.38.0 tagged 2026-10-02 at `44b1ccf`, the merge of PR #443 (#418: a `mechanical` stamp names its one oracle and one pattern). 0.37.0 tagged 2026-10-02 at `925b0e7`, the merge of PR #442 (#420: the trace holds `finding.triage`'s `data.id` and `pr.iterate`'s `data.iteration` to a shape). Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
+| **Phase** | The kit is shipping. Shared layer 0.67.0 tagged 2026-10-08 at `e3cc28a`, the merge of PR #659 (#655: the docs gate advises on an off trace and an unmapped reviewer tier). The same day: 0.66.0 at `d190ff8` (PR #658, #653: the retro-candidate wave #627–#638 — `scripts/trace.sh` records an interruption; ADR-0018, ADR-0019), and on 2026-10-07 0.65.0 at `06b4341` (PR #626, #596: PRD #580's spend-per-spawn wave closes). Shared layer 0.64.0 tagged 2026-10-07 at `ef308d5`, the merge of PR #614 (#563: the update recipe reads in order for a consumer several releases behind). The same two days: 0.63.0 at `6546ced` (PR #611, #569: a spawn's `model` is a policy id, and the note carries the #580 wave's unbumped shared changes), 0.62.0 at `85bd230` (PR #613, #564: a shipped file cites a kit record only as the kit's — ADR-0017), 0.61.0 at `dbef54d` (PR #605, #567: a finding raise's id is held to the severity shape), 0.60.0 at `ebab6fe` (PR #578, #561: the docs harness's fixtures can no longer satisfy a project's living spec), 0.59.0 at `9ea1824` (PR #576, #562: no kit-only file survives bootstrap), 0.58.0 at `eea6d6d` (PR #599, #571: both gate engines read a code fence by CommonMark's one rule), 0.57.0 at `63d815a` (PR #598, #560: a bare `trace.sh end` is deprecated), 0.56.0 at `eb2aa68` (PR #577, #509: a release is tagged by its landing before main is judged — ADR-0015), 0.55.0 at `a7fd604` (PR #574, #557: fence detection has one home). Since #577 the landing script tags the merge commit itself; main no longer goes red between a release and its tag. Shared layer 0.54.0 tagged 2026-10-05 at `fe6c4b7`, the merge of PR #554 (#545: the requirement-line grammar has one home, `scripts/requirement.lib.sh`). The same day: 0.53.0 at `efd4a77` (PR #553, #548: the reviewer walks an ordered fallback in the shared resolver, ADR-0013), 0.52.0 at `6169911` (PR #551, #543: `trace.sh end <run>` closes only the run its caller began), 0.51.0 at `dfeeffd` (PR #550, #544: a cited living-spec id is bounded on its left). Shared layer 0.50.0 tagged 2026-10-05 at `50bf936`, the merge of PR #541 (#534: `scripts/coverage.sh` joins the layer; requirement ids reach the ticket, the review and the living spec). 0.49.0 tagged 2026-10-05 at `201951d`, the merge of PR #537 (#530: a living-spec requirement no test names fails the docs gate, in both engines). Both close PRD #527 (ADR-0012: the kit moved from spec-first to spec-anchored). Shared layer 0.48.0 tagged 2026-10-02 at `122faa0`, the merge of PR #523 (#472: `trace.sh stack` reads a checkout's run stack). 0.47.0 tagged 2026-10-02 at `0b03c6d` (PR #520, the non-manifest half of the waves #462/#477). 0.46.0 at `5e82f73` (#480), 0.45.0 at `0e572e0` (#482), 0.44.0 at `8542b28` (#465). Shared layer 0.43.0 tagged 2026-10-02 at `678ffc6`, the merge of PR #487 (#466: the trace holds the triage source, the local id and the iteration's counts at emit). 0.42.0 tagged 2026-10-02 at `a59e9f4`, the merge of PR #476 (#453: the run stack is keyed by session as well as by toplevel, so two sessions in one checkout never read or pop each other's runs). 0.41.0 tagged 2026-10-02 at `5252882`, the merge of PR #451 (#401: `scripts/vocab.sh`'s header says what its contract is). 0.40.0 tagged 2026-10-02 at `9c5b988`, the merge of PR #446 (#409: a denied tool call is visible). 0.39.0 tagged 2026-10-02 (#400: `scripts/stamp.sh` bounds what it lifts). 0.38.0 tagged 2026-10-02 at `44b1ccf`, the merge of PR #443 (#418: a `mechanical` stamp names its one oracle and one pattern). 0.37.0 tagged 2026-10-02 at `925b0e7`, the merge of PR #442 (#420: the trace holds `finding.triage`'s `data.id` and `pr.iterate`'s `data.iteration` to a shape). Shared layer 0.36.0 tagged 2026-10-01 at `4d032fa`, the merge of PR #325 (#297: a task contract is admitted before an ordinary request's first edit — ADR-0011's second lifecycle slice, drafted as 0.29.0 and renumbered at its merge with main). 0.35.0 tagged 2026-10-01 at `d653c7e`, the merge of PR #371 (#331: `scripts/stamp.sh` joined the layer — `/implement` reads a ticket's stamp through it). 0.34.0 tagged 2026-10-01 at `efc61da`, the merge of PR #380 (#348: every trace kind holds its outcome to a vocabulary of its own — the first NARROWING of `scripts/trace.sh`). 0.33.0 tagged 2026-10-01 at `800f27f`, the merge of PR #322 (PRD #261: a dispatched review lands through the broker). Shared layer 0.32.0 tagged 2026-09-30 at `b610852`, the merge of PR #311 (#279, the confidence stamp), closing PRD #273's wave with 0.31.0 at `39c0d75` (#319, `finding.dismiss`) and 0.30.0 at `7798b6e` (#318, the typed return) the same day. Before them: 0.29.0 tagged 2026-09-30 at `870f2e7`, the merge of PR #326 (#255): `scripts/trace.sh` joined the layer and the dispatcher records every spawn, closing PRD #237's wave. Before it: 0.28.0 tagged 2026-09-30 at `39b10e2` (#293, `/retro`), 0.27.0 the same day at `24103c7` (#310), 0.26.0 on 2026-09-29 at `c5432e4` (#288), 0.25.0 at `59d5acb` (#289). The constitution, both gates, the guards (enforced on this repo too, through a kit-only policy), eighteen skills each declaring the phase of work it is, the three agent-harness adapters (claude-code, gemini-cli, and the dormant codex) beside the node-ts and ruby stack adapters, the consumer workflow templates, the dispatcher — which bounds a worker in depth, tasks and memory (ADR-0006), reaches another vendor for real, and now says whose failure an unreachable crossing is — and its two worker prompts are all in place and under test. The kit measures its own validators with `sh scripts/mutation.kit.sh` (baseline 76.53 % at `d29673c`, Stryker 10.0.0 — oracle: the validators' own fixture tests, 2026-09-02, at `d29673c`, no held-out set). |
 | **Repo** | `agentic-sdlc`, a template repository (`main`). Feature work happens in `worktree/<slug>` on a `<type>/<slug>` branch. |
 | **Remote** | `git@github.com:agranado2k/agentic-sdlc.git` |
-| **Last commit on `main`** | `ef308d5` — merge of PR #614 (#563, the 0.64.0 release), tagged `v0.64.0`. |
+| **Last commit on `main`** | `e3cc28a` — merge of PR #659 (#655, the 0.67.0 release), tagged `v0.67.0`. |
 | **Deployed / live** | Nothing is deployed — the kit's delivery is the one-line agent setup (`SETUP.md` → clone at the newest `v*` tag → `setup/agent-bootstrap.md`), or the same clone-at-tag ritual by hand. |
-| **Spec status** | Wave-based; tickets are the unit of work and each one carries a capability tier — and, since PRD #527 (ADR-0012), a `Covers:` line naming the PRD requirement ids it delivers, checked by `scripts/coverage.sh` before the quiz. A PRD's requirements are numbered EARS-lite lines; an area may keep a living spec under `docs/specs/<area>.md`, changed by deltas and held to the suite by the gate. The kit keeps its first living spec, `docs/specs/process.md` (#556, PR #573): PRD #527's R1–R14 as they landed, cited `process/R<n>` by the suites, stripped from consumers by bootstrap. PRD #527 is complete (#528–#534), and so are its follow-ups #542–#546 and #548. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
+| **Spec status** | PRD #580 (spend less per spawn) is complete: #583–#596 landed by 0.65.0, its requirements in the kit's second living spec, `docs/specs/spend.md`; the retro-candidate wave #627–#638 that followed landed in 0.66.0, with #646 and #647 open as its follow-ups. Wave-based; tickets are the unit of work and each one carries a capability tier — and, since PRD #527 (ADR-0012), a `Covers:` line naming the PRD requirement ids it delivers, checked by `scripts/coverage.sh` before the quiz. A PRD's requirements are numbered EARS-lite lines; an area may keep a living spec under `docs/specs/<area>.md`, changed by deltas and held to the suite by the gate. The kit keeps its first living spec, `docs/specs/process.md` (#556, PR #573): PRD #527's R1–R14 as they landed, cited `process/R<n>` by the suites, stripped from consumers by bootstrap. PRD #527 is complete (#528–#534), and so are its follow-ups #542–#546 and #548. Skills carry a `metadata.phase` too, and #229 settled which wins: the ticket, because its tier was decided by the actor who saw the whole wave. PRD #237 — a trace of every decision the chain makes — was decomposed into #246–#255, #270–#272 and #303–#309, and its release ticket #255 is the 0.29.0 PR; several of those issues are still open on the forge though their code has landed, and close by hand. PRD #273 — the chain's closed-set judgments as checked values, with a confidence, a judge contract and a calibration question — was decomposed into #274–#282 and is complete; what it left undecided is on the confirm-lists of its PRs, which are the operator's to rule on, and in the closing entry below. |
 | **Last housekeeping** | 2026-10-02 — second pass: 19 findings, none fixed, filed as candidate issues #489–#507 (root manual 350 lines, at its 350-line budget, up from 334); the one that matters: the root manual has no headroom left (#489), and the next quick-reference row turns the self-host suite red. Mutation run reaped by host memory pressure at 432/997 mutants (interim about 75 %, no final score; #507 — oracle: the validators' own fixture tests, the 2026-10-02 run at `origin/main`, compared with the 76.53 % baseline of 2026-09-02, no held-out set). Worktree pruning skipped: other sessions hold live worktrees. Report: `housekeeping-20261002T094754Z.md` in the OS temp directory. |
 | **Self-hosting** | The kit now obeys its own constitution: root `AGENTS.md`, the two shims, this docs set, and a green `sh scripts/check.sh` at the repo root. See `docs/adr/0001-the-kit-self-hosts-its-own-constitution.md`. |
-| **Active worktrees** | None from the third spec-anchored wave (2026-10-06/07: #509, #489, #556–#569, #571, #572, #597, #608; PRs #573–#579, #582, #598–#606, #609, #611–#614): every merged worktree pruned. The `worktree/` checkouts for the #580 wave (`589-review-pr-lenses`, `591-pr-iterate-split`, `592-to-tickets-split`, `implement-split`, `retro-spend-attribution`, `tier-agent-spawns`, `trace-spawn-skills`) are another session's, live, and not this session's to prune. None from the follow-up wave (2026-10-05, #542–#546 and #548, PRs #549–#554): all merged worktrees pruned. None from the spec-anchored wave (2026-10-05): PRD #527's seven tickets landed in PRs #535–#541 after ADR-0012's #526, and every merged worktree — `worktree/` and the agent harness's own under `.claude/worktrees/` — was pruned. None from the waves #462 and #477 (2026-10-02): all eighteen tickets landed and their thirteen merged worktrees were pruned. None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. The retro wave of 2026-10-01 (#343–#354, from `.retro/2026/10/retro-20261001T093317Z.md`) is complete: all twelve landed the same day, with the follow-ups #372 and #375, in PRs #359–#370, #377, #379 and the release #380; its nine merged worktrees were pruned on 2026-10-01. What that wave left for the next retro is on PRD #237's closing comment. None from the forge-broker wave: PRD #261 is complete — #265–#269 landed on 2026-10-01 as PRs #285, #283, #321, #320 and the 0.33.0 release #322; the four stacked worktrees and the release worktree were pruned. `worktree/lifecycle-entry` is PR #325, the lifecycle wave's second slice (#297, ADR-0011), carrying the 0.36.0 bump; #298–#302 are the later slices, and #302 owns consumer adoption of the mechanisms. Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert; codex has been logged out on the operator's machine since 2026-09-30, so no cross-vendor review has run since — every review has been an in-session reviewer on a different model, posted through the broker. The second retro wave of the same day (#384–#388, from `.retro/2026/10/retro-20261001T150216Z.md`) is complete too: all five landed in PRs #389–#391, #393 and #394, and its worktrees are pruned; its headline — the kit's hooks execute the root checkout, which had sat 140 commits behind main for four hours — is answered by #384's `behind` record and by the root being synced. |
+| **Active worktrees** | As of 2026-10-09: `worktree/diary-0965-0966` is this diary refresh's own; `646-broker-low`, `647-worker-declined`, `660-reviewer-family`, `661-land-rerun-wait` and `663-review-lens-count` are other sessions', live, not to be pruned. None from the #580 wave, the retro-candidate wave or #655: their merged worktrees are pruned. None from the third spec-anchored wave (2026-10-06/07: #509, #489, #556–#569, #571, #572, #597, #608; PRs #573–#579, #582, #598–#606, #609, #611–#614): every merged worktree pruned. None from the follow-up wave (2026-10-05, #542–#546 and #548, PRs #549–#554): all merged worktrees pruned. None from the spec-anchored wave (2026-10-05): PRD #527's seven tickets landed in PRs #535–#541 after ADR-0012's #526, and every merged worktree — `worktree/` and the agent harness's own under `.claude/worktrees/` — was pruned. None from the waves #462 and #477 (2026-10-02): all eighteen tickets landed and their thirteen merged worktrees were pruned. None from the typed-judgments wave either: PRD #273 is complete — #274–#282 landed in the releases 0.25.0, 0.26.0, 0.28.0 and 0.30.0–0.32.0 and in PRs #287, #328 and #329; its merged worktrees are pruned. None from the trace wave: PRD #237 is complete. Every ticket landed — #246–#255, #270–#272, #303–#309 — 0.29.0 is tagged, and the thirteen merged worktrees were pruned on 2026-09-30 (the cleanup now keeps a fresh, commit-less worktree, #304). What the wave left for `/retro` and the next pass is listed on PRD #237's closing comments. The retro wave of 2026-10-01 (#343–#354, from `.retro/2026/10/retro-20261001T093317Z.md`) is complete: all twelve landed the same day, with the follow-ups #372 and #375, in PRs #359–#370, #377, #379 and the release #380; its nine merged worktrees were pruned on 2026-10-01. What that wave left for the next retro is on PRD #237's closing comment. None from the forge-broker wave: PRD #261 is complete — #265–#269 landed on 2026-10-01 as PRs #285, #283, #321, #320 and the 0.33.0 release #322; the four stacked worktrees and the release worktree were pruned. `worktree/lifecycle-entry` is PR #325, the lifecycle wave's second slice (#297, ADR-0011), carrying the 0.36.0 bump; #298–#302 are the later slices, and #302 owns consumer adoption of the mechanisms. Still open from before: a cross-vendor Gemini review end to end; `ai-review.example.yml` is still inert; codex has been logged out on the operator's machine since 2026-09-30, so no cross-vendor review has run since — every review has been an in-session reviewer on a different model, posted through the broker. The second retro wave of the same day (#384–#388, from `.retro/2026/10/retro-20261001T150216Z.md`) is complete too: all five landed in PRs #389–#391, #393 and #394, and its worktrees are pruned; its headline — the kit's hooks execute the root checkout, which had sat 140 commits behind main for four hours — is answered by #384's `behind` record and by the root being synced. |
 
 ### Open questions / unresolved decisions
 
@@ -2386,6 +2386,123 @@ loops; a wider `AGENT_HARNESSES` scan beyond `tests/` and `scripts/`; the
 dogfood sweep's missing-directory case; a bare `end` made mandatory once
 consumers have moved (ADR-0008's #560 amendment names what reopens it).
 
+
+## 2026-10-07 — PRD #580, spend less per spawn; shared layer 0.65.0
+
+PRD #580 started from one measured sentence: "The kit pays to load context
+into fresh windows, not to think or write." Its goal was to cut the spend per
+spawn three ways at once — attribute every spawn's cost to its tier, skill
+and ticket, shrink what each spawn starts from, and run mechanical work
+cheap-first behind an oracle — over nineteen requirements, seeded into the
+kit's second living spec, `docs/specs/spend.md`, as each ticket landed. The
+two spikes of 2026-10-06 (above) settled its open questions first. Tickets
+#583–#596 landed in PRs #600, #603, #607, #610, #615–#621, #623, #625 and
+#626; the operator chose one release at the end rather than one per ticket,
+and part of the wave rode 0.63.0 when the third spec-anchored wave's release
+absorbed what had already landed (that entry says why). v0.65.0 is the merge
+of PR #626 (#596), `06b4341`. The narrative is in two reports: the efficiency
+report, https://view.centaurspec.com/uBdrniISzZ, and the wave report,
+https://view.centaurspec.com/zKqP75O3xU.
+
+What landed:
+
+- **A spawn says what it served.** A spawn prompt's second line,
+  `Trace-Spawn: tier=… domain=… skill=… ticket=…`, attributes its
+  `agent.stop` (#600, #583), and every chain spawn site writes it (#615);
+  `trace.sh summary` gains `--by tier` and `--by domain`; `/retro`'s question
+  5 reports spend per tier, skill and cascade rung (#617).
+- **One Claude Code agent type per tier**, each carrying the tools its work
+  needs and no model (#607); the reviewer type cannot write, reach the
+  network or call a tool server. The chain's spawns take their tier's type
+  and the resolved model (#618).
+- **Skills have byte ceilings.** A `SKILL.md` over the ceiling the gate's
+  policy declares fails the docs gate (#603), and four skills split their
+  rare branches into files beside them: `/pr-iterate` (#616), `/to-tickets`
+  (#619), `/implement` (#620, `COVERS.md`, `DISPATCHED-REVIEW.md`,
+  `STAMP.md`) and `/review-pr`, one file per standards lens (#621).
+- **A lens reads only its slice.** `scripts/lens-slice.sh` joins the shared
+  layer and hands each standards lens the paths its rule selects, the
+  behavior axis the whole diff (#623).
+- **Workers read narrow first.** `.agents/prompts/cheap-reads.md`, named in
+  every spawning skill's prompt (#625).
+- **Mechanical work runs cheap-first.** The skill dispatcher runs a
+  mechanical ticket on the policy's cascade model, judges it by the ticket's
+  oracle and the pairing guard only, and escalates on red (#610).
+
+What the wave learned:
+
+- **A subagent stopped mid-delivery leaves a PR stranded.** Sessions killed
+  by a usage limit or a session pause left PRs pushed but not driven; #625
+  sat unreviewed until someone looked. Nothing recorded the interruption —
+  the retro-candidate wave's `resumed` outcome and the landing's iteration
+  check (next entry) answer it.
+- **Four PRs conflicted against a main other sessions moved.** Each merged
+  main in, never rebased, so its review history stayed attached.
+- **A check-run can sit `in_progress` with `conclusion=success`.** The job
+  had ended; the forge never closed the run, and a watcher waits forever.
+- **`/tmp` quota** struck again under parallel suites (as in the entry
+  above).
+- **The agent harness's permission classifier refused the landing script on
+  an unreviewed PR.** The landing went no further until the PR was
+  reviewed; ADR-0019 (next entry) now puts a like check in the script
+  itself.
+- **One release at the end means a red main for the wave.** With no bump
+  per ticket, main sat release-bound red — `self-host.test.sh` holding
+  unbumped shared changes to a release — until #626 landed. The operator
+  chose that trade knowingly; the next wave kept it.
+
+## 2026-10-08 — the retro-candidate wave; shared layer 0.66.0
+
+Two retrospectives over the #580 wave, `retro-20261007T180238Z` and
+`retro-20261007T151351Z`, became tickets #627–#638, and the release ticket
+#653 cut them as one minor. PRs #639–#645, #648–#652, #657 and the release
+#658; v0.66.0 is its merge, `d190ff8`. Two shared files change content:
+`scripts/trace.sh` (#649) and `UPDATING.md`'s arriving-from paragraph; the
+rest is skills, the adapter and kit-only scripts, enumerated in
+`VERSION`'s 0.66.0 note.
+
+What landed:
+
+- **ADR-0018: two kit tiers follow a model family** (#639). The operator
+  ruled that the planner runs the newest Opus and the mechanical tier the
+  newest Sonnet, always the latest: `AGENT_TIER_PLANNER='opus'`,
+  `AGENT_TIER_MECHANICAL='sonnet'` in the kit-only policy, every other tier
+  pinned and the shared resolver unchanged. Because the cascade's cheap rung
+  is already Sonnet, the cascade now escalates to the implementer tier's
+  model rather than running Sonnet twice.
+- **The spawn guard** (#642, #627): with tracing on, the Claude Code
+  adapter's `hooks/spawn-guard.sh` refuses a spawn whose prompt carries no
+  well-formed `Trace-Spawn:` line. Every spawn now needs one.
+- **The LOW band rule** (#644, #635): `/review-pr` counts a LOW and never
+  posts one; `/pr-iterate` never escalates one. Lenses raise their findings
+  as they return, both verdicts recorded before the post (#641); the
+  reuse/DRY lens names the consolidations the records declined (#645).
+- **The trace records an interruption** (#649): `ticket.start` gains
+  `resumed`, and `pr.iterate` a `data.cause` of `conflict` or
+  `pending-stuck` — the #580 wave's stranded PR, conflicts and stuck
+  check-run, made visible to `/retro`.
+- **The landing gets stricter and quieter.** ADR-0019: the landing script
+  refuses a PR with no `pr.iterate` at its head commit (#640); it
+  fast-forwards a clean root checkout afterwards (#651), and `merge.land`
+  carries the landing script's fields (#648). Every merge-train wait has its
+  own timeout (#652); a resume records the usage of a run nothing ended
+  (#643); `/to-tickets` sizes a rule and its sweep as two tickets (#650);
+  `pr.open` is written from the landing when missing, and `/implement` ends
+  its run on every hand-back (#657).
+
+Follow-ups filed: #646 (the forge broker posts a dispatched review's LOWs
+inline) and #647 (the dispatched reviewer and its CI twin carry the
+reuse/DRY declined list).
+
+Afterwards, on 2026-10-09: the operator confirmed every confirm-list on the
+28 PRs of the two waves. Correction notes were recorded for the short
+`merge.land` records of #649, #651 and #652. A cascade dry run showed the
+wiring engages — Sonnet on rung 1, escalation to the implementer tier's
+model — but a live run needs an agent harness for the mechanical tier,
+which the kit has not yet wired. And `skill-dispatch.kit.sh implement
+--ticket-file` without `--tier` sizes from the skill's `metadata.phase`,
+ignoring the ticket's stamp — the opposite of the rule #229 settled; a
+candidate ticket, not yet filed.
 
 ## 2026-10-08 — the gate advises on an off trace and an unmapped reviewer tier; shared layer 0.67.0
 
