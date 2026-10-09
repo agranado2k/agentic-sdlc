@@ -65,24 +65,26 @@
 # of what a recorded policy is for. Pinning means the move is a commit someone
 # made on purpose.
 #
-# TWO TIERS FOLLOW A FAMILY INSTEAD (ADR-0018, the operator, 2026-10-08): the
-# planner is `opus` and the mechanical tier `sonnet` — the bare family word,
-# "the newest in that family", not a pinned id. The rule above holds for every
-# other tier. The trade: no diff and no decision when Opus or Sonnet moves, in
-# exchange for the two tiers where the operator wants the current model always
-# being on it. The family word reaches both consumption paths unchanged: the
+# THREE TIERS FOLLOW A FAMILY INSTEAD (the operator, 2026-10-08): the planner
+# is `opus` and the mechanical tier `sonnet` (ADR-0018), and the reviewer
+# `sonnet` too, with `opus` first on its fallback (ADR-0020) — the bare family
+# word, "the newest in that family", not a pinned id. The rule above holds for
+# every other tier. The trade: no diff and no decision when Opus or Sonnet
+# moves, in exchange for the tiers where the operator wants the current model
+# always being on it. The family word reaches both consumption paths unchanged: the
 # in-session spawn parameter takes it (`--alias` folds it to itself), and
 # `claude --model` documents "an alias for the latest model (e.g. 'fable',
 # 'opus', or 'sonnet')", verified against `claude --help` on 2026-10-08. A
 # mapped family word is also the policy's own spelling for a session on that
-# tier: scripts/agents.kit.sh treats it as covering every pinned id that folds
-# to it, so a `sonnet` session is never handed the pinned Sonnet reviewer.
+# tier: scripts/agents.kit.sh treats it and every pinned id that folds to it
+# as one family, so a `sonnet` session — or a claude-sonnet-* one — is never
+# handed the `sonnet` reviewer, and an Opus session never the `opus` fallback.
 #
 # The cost of pinning is that the two consumption paths take different
 # spellings for a PINNED tier. `claude --model` (what scripts/agent-dispatch.sh
 # runs when a tier crosses agent harnesses) is given the full id — it takes
-# the family alias too, which is why the two family-following tiers above
-# need no bridge on that path. The IN-SESSION spawn parameter
+# the family alias too, which is why the family-following tiers above need
+# no bridge on that path. The IN-SESSION spawn parameter
 # — the Agent/Task tool, adapters/claude-code/README.md — takes only the
 # family word. `sh scripts/agents.kit.sh --alias <tier> [domain]` is the
 # bridge: it resolves the tier and prints the spawn word for it, so a session
@@ -168,80 +170,76 @@ AGENT_CASCADE_MECHANICAL='sonnet'
 #    crossing this host attempted returned 401 — 4 of 4 in the third retro
 #    window — so a reviewer mapped to the other vendor answered nothing and the
 #    review fell to whatever the session happened to run on. Until that CLI
-#    authenticates the reviewer is local:
+#    authenticates the reviewer is local.
 #
-#      plain `reviewer`, no session named
-#        -> claude-fable-5-1, never the implementer's claude-opus-5-5
-#      `reviewer self-implemented`, any session this policy maps
-#        -> claude-sonnet-5-5, the model no PINNED session tier runs on; a
-#           `sonnet` (mechanical) session is refused it by the kit
-#           wrapper's family bridge (ADR-0018 clause 4) and gets the plain
-#           reviewer
+#    2026-10-08 (ADR-0020, the operator: "always use the Sonnet family to
+#    review"): THE REVIEWER FOLLOWS THE SONNET FAMILY, the family the
+#    mechanical tier follows (ADR-0018), by the bare word. It was the pinned
+#    claude-fable-5-1, and its `self-implemented` domain the pinned
+#    claude-sonnet-5-5: over the retro window of 2026-10-08 the reviewer tier
+#    cost 2.8 times the implementer tier, the review skill 56% of all spend.
 #
-#    tests/agents-tiers.test.sh pins both. Past either answer the resolver
-#    walks AGENT_TIER_REVIEWER_FALLBACK, below (ADR-0013): a claude-fable-5-1
-#    session asking plain `reviewer` is refused its own model and gets the
-#    first fallback — a session that wrote the diff still asks `reviewer
-#    self-implemented`. The cross-vendor ids
+#      plain `reviewer`, an Opus or a Fable session, or none named
+#        -> sonnet, never the implementer's claude-opus-5-5
+#      `reviewer self-implemented`, the same sessions
+#        -> sonnet: the domain is deliberately unmapped below, so it falls
+#           back to the plain tier — one decision, not two copies of it
+#      either form, a session on the Sonnet family — `sonnet` (the mechanical
+#      tier's word) or any pinned Sonnet id
+#        -> the fallback's first entry, `opus`: refused its own family by the
+#           kit wrapper's family bridge (ADR-0018 clause 4, widened by
+#           ADR-0020), never handed nothing
+#
+#    The trade: a session that names nothing gets `sonnet` whatever it runs
+#    on, so a mechanical session that does not say what it runs on is handed
+#    its own family. Say what you run on — AGENT_SESSION_MODEL, the root
+#    manual's "Before you spawn a reviewer" — and the bridge refuses it.
+#
+#    tests/agents-tiers.test.sh pins all of the above. The cross-vendor ids
 #    (codex:gpt-5.6-sol for the reviewer, codex:gpt-6-astra for
-#    self-implemented) come back when that CLI authenticates — ask the
-#    operator again on 2026-10-08.
-AGENT_TIER_REVIEWER='claude-fable-5-1'
+#    self-implemented) come back when that CLI authenticates.
+AGENT_TIER_REVIEWER='sonnet'
 #
-#    The case the plain lookup cannot see: the session ITSELF implemented the
-#    diff — every /implement session that writes its own code or prose. It is
-#    resolved through the domain axis below, as `sh scripts/agents.kit.sh
-#    reviewer self-implemented` — a domain that names a situation rather than
-#    a medium, which the open vocabulary allows and the glossary's "Task
-#    domain" entry records.
+#    THE `self-implemented` DOMAIN IS UNMAPPED, deliberately. It names the
+#    situation the plain lookup cannot see — the session itself implemented
+#    the diff (`sh scripts/agents.kit.sh reviewer self-implemented`; the
+#    glossary's "Task domain" entry) — and from 2026-10-05 (#546, ADR-0007
+#    amended) to ADR-0020 it was the pinned claude-sonnet-5-5, a model no
+#    pinned session tier ran on. With the reviewer itself on the Sonnet
+#    family its answer is the plain tier's, so mapping it would repeat that
+#    value as a second decision to keep in sync (the same reason there is no
+#    AGENT_TIER_IMPLEMENTER_CODE, below). The domain still means something:
+#    asked with it, the resolver walks the same candidates, and the session's
+#    own family is refused by AGENT_SESSION_MODEL, not by a third model.
 #
-#    2026-10-05 (#546, ADR-0007 amended): moved off claude-opus-5-5 to a THIRD
-#    model. The session models are two — claude-opus-5-5 (implementer) and
-#    claude-fable-5-1 (content; the planner too until ADR-0018 moved it to
-#    `opus`) — and one fixed answer can differ
-#    from both only if it is neither. While it named claude-opus-5-5 it was
-#    right only for a fable session: every implementer session that day got
-#    its own model back, was saved by ADR-0007's refusal ONLY when it named
-#    itself by this file's pinned id (`opus`, the spawn word, matches
-#    nothing), and fell back to claude-fable-5-1 — which was out of usage
-#    credits all day, so every session overrode the reviewer by hand with
-#    sonnet. This value is that override, recorded: right for every session
-#    this file maps, whether or not it says what it runs on. The cost is
-#    strength — a mid-tier read where a fable session used to get opus —
-#    chosen over a stronger review that does not run. The refusal
-#    (scripts/agents.lib.sh since 0.22.0) stays as the net, now for a
-#    session on this model itself. Verified 2026-10-05: claude-sonnet-5-5 is
-#    the model the Claude Code harness's `sonnet` spawn word ran that day,
-#    and `--alias` prints `sonnet` for it.
-#
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-sonnet-5-5'
-#
-#    THE ORDERED FALLBACK (ADR-0013, #548) — the next answers when the two
-#    above are refused (the session's own model) or named unreachable by the
-#    caller in AGENT_UNREACHABLE_MODELS (a spawn that failed on its first
+#    THE ORDERED FALLBACK (ADR-0013, #548) — the next answers when the
+#    reviewer is refused (the session's own family) or named unreachable by
+#    the caller in AGENT_UNREACHABLE_MODELS (a spawn that failed on its first
 #    call: a rate limit, a logged-out CLI). The walk is the domain answer,
 #    the plain reviewer, then this list in order; a spent list prints
 #    nothing, never the session's own model.
 #
-#      claude-sonnet-5-5   no pinned session tier runs on it (the mechanical
-#                          tier's `sonnet` is bridged, ADR-0018) and its spawn word,
-#                          `sonnet`, is no pinned session tier's — so a plain
-#                          `reviewer` whose fable is out of credits, or a
-#                          fable session refused its own, lands where the
-#                          2026-10-05 wave landed by hand.
+#      opus               the newest Opus, by family word (ADR-0020): where a
+#                         Sonnet session goes, and a Fable session whose
+#                         Sonnet is unreachable. An Opus session — the
+#                         implementer's claude-opus-5-5 or the planner's
+#                         `opus` — is refused it by the bridge.
+#      claude-fable-5-1   pinned: where an Opus session goes once Sonnet is
+#                         unreachable. A Fable session (the content domain)
+#                         is refused it exactly.
 #
 #    The cross-vendor reviewer (codex:gpt-5.6-sol) is deliberately NOT on the
-#    list yet. It is logged out until 2026-10-07, and an entry that crosses
-#    agent harnesses has no in-session spawn word: `--alias` prints nothing
-#    for it, and an in-session spawn given nothing inherits the session — the
-#    self-review the walk exists to prevent. It joins when it authenticates
-#    and the caller's dispatch path is the one that reads it.
+#    list yet: an entry that crosses agent harnesses has no in-session spawn
+#    word — `--alias` prints nothing for it, and an in-session spawn given
+#    nothing inherits the session, the self-review the walk exists to
+#    prevent. It joins when that CLI authenticates and the caller's dispatch
+#    path is the one that reads it.
 #
 #    tests/agents-tiers.test.sh pins the list against the rule, not the ids:
-#    walked to its end for every session tier, no answer is the session's
-#    own model, and no in-session entry is a session tier's model or spawn
-#    word.
-AGENT_TIER_REVIEWER_FALLBACK='claude-sonnet-5-5'
+#    walked to its end through the kit wrapper for every session tier — by
+#    its value, by a mapped spawn word, and by a pinned id of the reviewer's
+#    family — no answer is of the session's own family.
+AGENT_TIER_REVIEWER_FALLBACK='opus claude-fable-5-1'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
@@ -277,16 +275,17 @@ AGENT_TIER_IMPLEMENTER_CONTENT='claude-fable-5-1'
 # the other vendor, for the reason the reviewer did until #423 and will again.
 AGENT_TIER_IMPLEMENTER_TESTS='codex:gpt-5.6-sol'
 
-# The third domain this repo maps, AGENT_TIER_REVIEWER_SELF_IMPLEMENTED,
-# sits in the reviewer block above with its reasoning.
+# The reviewer's `self-implemented` domain is a decline, recorded with its
+# reasoning in the reviewer block above (ADR-0020).
 #
 # THERE IS DELIBERATELY NO AGENT_TIER_IMPLEMENTER_CODE. The plain tier above
 # already resolves code work to 'opus'; naming the domain to repeat that value
 # would record a non-decision as a decision, and would then have to be kept in
 # sync with the tier it duplicates. The fallback IS the mapping for code.
 #
-# Same reasoning for the other three tiers: planner and reviewer are already on
-# the strongest model available for either medium, and mechanical work is
+# Same reasoning for the other three tiers: the planner is already on the
+# strongest model available for either medium, the reviewer follows one family
+# for every medium by the operator's ruling (ADR-0020), and mechanical work is
 # oracle-checked whatever it is made of. Add a domain here when — and only
 # when — the medium would change the answer.
 

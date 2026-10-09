@@ -2191,10 +2191,11 @@ t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" emi
 	fail "a script with no resolver beside it refused the spawn (exit $S_STATUS): $S_ERR"
 # The kit's own wrapper points the resolver at the kit's policy: the kit's
 # implementer id writes, and a PINNED tier's spawn word is refused — the
-# reviewer's, since ADR-0018 maps the planner to the bare word `opus`, which
-# makes that word an id the policy maps (asserted below), not a spawn word.
+# content domain's, since ADR-0018 and ADR-0020 map the planner, the
+# mechanical tier and the reviewer to bare family words, which makes those
+# words ids the policy maps (asserted below), not spawn words.
 _sm_id=$(cd "$KIT" && sh scripts/agents.kit.sh implementer)
-_sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias reviewer)
+_sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias implementer content)
 _sm_fam=$(cd "$KIT" && sh scripts/agents.kit.sh mechanical)
 _sm_kit() { cd "$KIT" && env -u AGENTS_CONFIG sh scripts/trace.kit.sh emit "$@" --dry-run; }
 t_run_split _sm_kit $SP "model=$_sm_id"
