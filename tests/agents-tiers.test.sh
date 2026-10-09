@@ -696,6 +696,10 @@ banner "The kit's own mapping — scripts/agents.kit.config.sh, never shipped"
 # the seam a kit session actually types:
 #   AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 KIT_CONFIG="$KIT/scripts/agents.kit.config.sh"
+# The kit wrapper is defined here, before the first assertion that walks
+# through it: read unset under `set -u`, a walk in a command substitution
+# dies empty and passes vacuously (#660 found the family walk doing so).
+KIT_WRAPPER="$KIT/scripts/agents.kit.sh"
 [ -f "$KIT_CONFIG" ] && pass "scripts/agents.kit.config.sh exists" || fail "scripts/agents.kit.config.sh is missing"
 # Its vocabulary header points where the tier words are defined for the kit:
 # the kit-own article they moved to (ADR-0014), not the root's section.
@@ -896,12 +900,13 @@ banner "The reviewer is never the implementer — the kit's mapping, and the pro
 # The policy the root manual states, and which the review of PR #140 (H-1)
 # deferred to this ticket: a review from the implementer's own model is an editorial pass
 # wearing a second hat. Two halves, one probe. (1) The mapping resolves
-# reviewer and implementer to different models. (2) The mapping names the
-# reviewer for the case the plain lookup cannot see — the session itself
-# implemented, on the reviewer's model — as the domain `self-implemented`,
-# and that answer differs from the reviewer's. The probe runs on the kit's
-# config and then on two throwaways that break each half, so it is proven
-# able to fail before it is trusted.
+# reviewer and implementer to different models. (2) The mapping has a next
+# answer for the case the plain lookup cannot see — the session itself
+# implemented, on the reviewer's model: a `self-implemented` answer that
+# differs from the reviewer's, or an ordered fallback to walk to (ADR-0013,
+# ADR-0020). The probe runs on the kit's config and then on throwaways that
+# break each half, and one that keeps the second half by its fallback alone,
+# so it is proven able to fail before it is trusted.
 reviewer_rule_gaps() { # <config>
 	_rg_rev=$(AGENTS_CONFIG="$1" sh "$LIB" reviewer 2>/dev/null)
 	_rg_imp=$(AGENTS_CONFIG="$1" sh "$LIB" implementer 2>/dev/null)
@@ -910,38 +915,37 @@ reviewer_rule_gaps() { # <config>
 		echo "the reviewer tier is unmapped — the rule has nothing to compare"
 	[ -n "$_rg_rev" ] && [ "$_rg_rev" = "$_rg_imp" ] &&
 		echo "reviewer and implementer both map to '$_rg_rev'"
-	[ -n "$_rg_rev" ] && [ "$_rg_self" = "$_rg_rev" ] &&
-		echo "'reviewer self-implemented' resolves to the reviewer's own model '$_rg_rev' — no fallback for a diff the session wrote"
+	# A self-implemented answer equal to the reviewer's is a gap only when the
+	# policy names no fallback either: then a session on that model, refused
+	# it, has nowhere to go (ADR-0020 — the kit's reviewer follows one family,
+	# and the ordered fallback is where a session on that family goes).
+	_rg_fb=$(. "$1"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
+	[ -n "$_rg_rev" ] && [ "$_rg_self" = "$_rg_rev" ] && [ -z "$_rg_fb" ] &&
+		echo "'reviewer self-implemented' resolves to the reviewer's own model '$_rg_rev' and no fallback is mapped — no fallback for a diff the session wrote"
 	return 0
 }
 gaps=$(reviewer_rule_gaps "$KIT_CONFIG")
 [ -z "$gaps" ] &&
-	pass "the kit's reviewer differs from its implementer, and 'reviewer self-implemented' differs from the reviewer" ||
+	pass "the kit's reviewer differs from its implementer, and a session on the reviewer's model has a next answer" ||
 	fail "the kit's own mapping breaks the reviewer rule — $(printf '%s' "$gaps" | tr '\n' ';')"
-# The answers the kit's Claude Code policy has to give (#423, #546). Plain,
-# with no session named, the reviewer is the content model, never the
-# implementer's. The `self-implemented` answer is a model NO session tier
-# runs on (ADR-0007, amended 2026-10-05): with two session models — the code
-# model and the content model — one fixed answer can differ from both only if
-# it is a third, and only then is it right for a session that never says what
-# it runs on, or says it in a word the policy does not use. ADR-0007's
-# refusal stays the net; it is no longer the route the common case takes.
+# The answers the kit's Claude Code policy has to give (ADR-0020, #660). The
+# reviewer tier follows a model FAMILY — the one the mechanical tier already
+# follows (ADR-0018) — spelled as the bare family word, and its
+# `self-implemented` domain gives that same answer: a session that names
+# itself is refused its own family by the kit wrapper's bridge, and the
+# ordered fallback is where it goes. Asserted on the policy's own data, so a
+# re-pin of either tier moves both answers together.
 _k_imp=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer 2>/dev/null)
 _k_con=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" implementer content 2>/dev/null)
+_k_mec=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" mechanical 2>/dev/null)
 _k_rev=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" reviewer 2>/dev/null)
 _k_self=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" reviewer self-implemented 2>/dev/null)
-[ -n "$_k_rev" ] && [ "$_k_rev" = "$_k_con" ] && [ "$_k_rev" != "$_k_imp" ] &&
-	pass "the kit's plain reviewer is the content model '$_k_con', not the implementer's '$_k_imp'" ||
-	fail "the kit's plain reviewer is '$_k_rev' — expected the content model '$_k_con', differing from the implementer '$_k_imp'"
-_k_clash=
-for _k_spec in planner implementer mechanical 'implementer content'; do
-	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
-	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
-	[ -n "$_k_ses" ] && [ "$_k_ses" = "$_k_self" ] && _k_clash="$_k_clash '$_k_spec'"
-done
-[ -n "$_k_self" ] && [ -z "$_k_clash" ] &&
-	pass "with no session named, 'reviewer self-implemented' is '$_k_self' — a model no session tier runs on" ||
-	fail "with no session named, 'reviewer self-implemented' is '${_k_self:-nothing}' — the model of a session tier:${_k_clash:- none, it is unmapped}"
+[ -n "$_k_rev" ] && [ "$_k_rev" = "$_k_mec" ] && [ "$_k_rev" != "$_k_imp" ] &&
+	pass "the kit's plain reviewer is the mechanical tier's family word '$_k_mec', not the implementer's '$_k_imp' (ADR-0020)" ||
+	fail "the kit's plain reviewer is '$_k_rev' — expected the mechanical tier's family word '$_k_mec', differing from the implementer '$_k_imp'"
+[ -n "$_k_self" ] && [ "$_k_self" = "$_k_rev" ] &&
+	pass "with no session named, 'reviewer self-implemented' is the reviewer's family word '$_k_rev' too" ||
+	fail "with no session named, 'reviewer self-implemented' is '${_k_self:-nothing}', expected the reviewer's '$_k_rev'"
 # The two session models the reviewer rule is about each get that answer as it
 # stands: nothing to refuse, so nothing to fall back from, and nothing on stderr.
 for _k_ses in "$_k_con" "$_k_imp"; do
@@ -952,9 +956,9 @@ for _k_ses in "$_k_con" "$_k_imp"; do
 		fail "on a '$_k_ses' session, 'reviewer self-implemented' gave '$_k_out' (stderr: '$_k_err') — expected '$_k_self', unrefused"
 done
 # A session that names itself by its spawn word rather than the policy's
-# pinned id matches nothing in ADR-0007's exact comparison, so the refusal
-# cannot catch it — and it must still not be handed its own model. That is
-# the case a third model exists for (#546).
+# pinned id must still not be handed its own model. The reviewer is another
+# family than the implementer's (ADR-0020), so the plain answer already
+# differs; the bridge's own cases are held below.
 _k_word=$(env -u AGENT_HARNESS_SELF -u AGENTS_CONFIG -C "$KIT" sh scripts/agents.kit.sh --alias implementer 2>/dev/null)
 _k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_word" sh "$LIB" reviewer self-implemented 2>/dev/null)
 [ -n "$_k_word" ] && [ "$_k_word" != "$_k_imp" ] && [ -n "$_k_ans" ] && [ "$_k_ans" != "$_k_imp" ] &&
@@ -978,10 +982,9 @@ done
 # THE KIT'S FALLBACK (#548, ADR-0013 clause 5). The mapping names one, and no
 # answer on the walk is ever a session's own model: for every session tier,
 # each answer the walk gives is named unreachable in turn until the list is
-# spent, and not one of those answers is the session's model. And every
-# in-session entry on the list — one with no agent harness — is no session
-# tier's model and shares no session tier's spawn word, so a session named by
-# its spawn word, or not named at all, is never handed itself from the list.
+# spent, and not one of those answers is the session's model. That exact
+# comparison is the shared resolver's; the family — a spawn word, a pinned id
+# of a family-word candidate — is held through the kit wrapper below.
 _k_fb=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
 [ -n "$_k_fb" ] &&
 	pass "the kit's mapping names a reviewer fallback ('$_k_fb')" ||
@@ -1007,61 +1010,86 @@ done
 [ -z "$_k_walk_bad" ] &&
 	pass "walked to the end for every session tier, no answer is the session's own model" ||
 	fail "the kit's walk answered a session its own model:$_k_walk_bad"
-_k_fb_bad=
-_k_fb_rest=$_k_fb
-for _k_c in $_k_fb_rest; do
-	case $_k_c in *:*) continue ;; esac
-	_k_cw=$(printf '%s' "$_k_c" | sed 's/^[^-]*-//; s/-.*//')
-	for _k_spec in planner implementer mechanical 'implementer content'; do
-		# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
-		_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
-		# A tier mapped to a bare family word (ADR-0018) is held below, through
-		# the wrapper's bridge, not by this spelling check.
-		case $_k_ses in *-*) ;; *) continue ;; esac
-		_k_sw=$(printf '%s' "$_k_ses" | sed 's/^[^-]*-//; s/-.*//')
-		[ "$_k_c" = "$_k_ses" ] && _k_fb_bad="$_k_fb_bad $_k_c is the '$_k_spec' model;"
-		[ "$_k_cw" = "$_k_sw" ] && _k_fb_bad="$_k_fb_bad $_k_c shares the '$_k_spec' spawn word '$_k_sw';"
-	done
-done
-[ -z "$_k_fb_bad" ] &&
-	pass "every in-session fallback is no pinned session tier's model, by id or by spawn word" ||
-	fail "the kit's fallback can hand a session itself:$_k_fb_bad"
-# A FAMILY-FOLLOWING SESSION (ADR-0018) names itself by the bare word its tier
-# maps, and a pinned candidate of the same family IS its model today. The kit
-# wrapper's bridge refuses those; walked to the end through the wrapper — the
-# one way this repo resolves (hard rule 10) — no answer is of its family.
-_k_famwalk_bad=
+# THE FAMILY, THROUGH THE WRAPPER (ADR-0018 clause 4, ADR-0020). The reviewer
+# and the fallback's first entry are bare family words, and a family word is
+# the same model today as every pinned id that folds to it. So the resolver's
+# exact comparison above is not the whole rule: walked to the end through the
+# kit wrapper — the one way this repo resolves (hard rule 10) — no session,
+# named by its policy value, by its spawn word when that word is one the
+# policy maps, or by a pinned id of the reviewer's own family, is ever handed
+# a model of its own family.
+_k_fold() { printf '%s' "$1" | sed 's/^[^-]*-\([^-]*\)-.*/\1/'; }
+_k_vendor=${_k_imp%%-*}
+_k_famwalk_bad= _k_famwalk_n=0
+_k_sessions="$_k_rev $_k_vendor-$_k_rev-9-9"
 for _k_spec in planner implementer mechanical 'implementer content'; do
 	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
-	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
-	case $_k_ses in '' | *-*) continue ;; esac
+	_k_v=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_k_spec 2>/dev/null)
+	case " $_k_sessions " in *" $_k_v "*) ;; *) _k_sessions="$_k_sessions $_k_v" ;; esac
+done
+_k_mapped=$(env -u AGENT_HARNESS_SELF sh "$KIT_WRAPPER" --ids)
+_k_imp_word=$(_k_fold "$_k_imp")
+case " $_k_sessions " in
+*" $_k_imp_word "*) ;;
+*) printf '%s\n' "$_k_mapped" | grep -qxF "$_k_imp_word" && _k_sessions="$_k_sessions $_k_imp_word" ;;
+esac
+for _k_ses in $_k_sessions; do
+	_k_sw=$(_k_fold "$_k_ses")
 	for _k_dom in '' self-implemented; do
 		_k_dead= _k_n=0
 		while [ "$_k_n" -lt 12 ]; do
 			# shellcheck disable=SC2086 # the optional domain, absent when empty
 			_k_ans=$(env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL="$_k_ses" AGENT_UNREACHABLE_MODELS="$_k_dead" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer $_k_dom)
 			[ -n "$_k_ans" ] || break
-			_k_aw=$(printf '%s' "$_k_ans" | sed 's/^[^-]*-//; s/-.*//')
-			[ "$_k_aw" = "$_k_ses" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_spec' reviewer${_k_dom:+ $_k_dom} -> $_k_ans;"
+			_k_famwalk_n=$((_k_famwalk_n + 1))
+			[ "$(_k_fold "$_k_ans")" = "$_k_sw" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer${_k_dom:+ $_k_dom} -> $_k_ans;"
 			_k_dead="$_k_dead $_k_ans"
 			_k_n=$((_k_n + 1))
 		done
+		[ "$_k_n" -lt 12 ] || _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer${_k_dom:+ $_k_dom} never spent;"
 	done
 done
-[ -z "$_k_famwalk_bad" ] &&
-	pass "walked through the wrapper, no family-following session is handed a model of its own family" ||
-	fail "a family-following session was handed its own family:$_k_famwalk_bad"
+[ -z "$_k_famwalk_bad" ] && [ "$_k_famwalk_n" -gt 0 ] &&
+	pass "walked through the wrapper, no session is handed a model of its own family ($_k_famwalk_n answers over:$_k_sessions)" ||
+	fail "a session was handed its own family, or the walk answered nothing:$_k_famwalk_bad"
+# THE OPERATOR'S RULING, AS ASKED (#660). A session on the planner's family —
+# by the planner's family word or by the implementer's pinned Opus id — is
+# handed the reviewer's family word, plain and self-implemented. A session on
+# the reviewer's own family — by that word or by a pinned id of it — is handed
+# the fallback's first entry, a different family, and never nothing.
+_k_plan=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" planner 2>/dev/null)
+_k_fb1=${_k_fb%% *}
+[ -n "$_k_fb1" ] && [ "$(_k_fold "$_k_fb1")" != "$_k_rev" ] &&
+	pass "the fallback's first entry '$_k_fb1' is another family than the reviewer's '$_k_rev'" ||
+	fail "the fallback's first entry '${_k_fb1:-nothing}' is the reviewer's own family '$_k_rev'"
+for _k_case in "$_k_plan:$_k_rev" "$_k_imp:$_k_rev" "$_k_rev:$_k_fb1" "$_k_vendor-$_k_rev-9-9:$_k_fb1"; do
+	_k_ses=${_k_case%%:*} _k_want=${_k_case#*:}
+	for _k_dom in '' self-implemented; do
+		# shellcheck disable=SC2086 # the optional domain, absent when empty
+		t_run_split env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL="$_k_ses" sh "$KIT_WRAPPER" reviewer $_k_dom
+		[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$_k_want" ] &&
+			pass "a '$_k_ses' session asking 'reviewer${_k_dom:+ $_k_dom}' through the wrapper gets '$_k_want'" ||
+			fail "a '$_k_ses' session asking 'reviewer${_k_dom:+ $_k_dom}' got '${S_OUT:-nothing}' (status $S_STATUS), expected '$_k_want' — stderr: $S_ERR"
+	done
+done
 SAME="$SCRATCH/same.config.sh"
 sed "s/^AGENT_TIER_REVIEWER=.*/AGENT_TIER_REVIEWER='model-for-implementing'/" "$FULL" >"$SAME"
 case "$(reviewer_rule_gaps "$SAME")" in
 *"both map to 'model-for-implementing'"*) pass "the probe reports a mapping where reviewer equals implementer" ;;
 *) fail "the probe missed reviewer == implementer" ;;
 esac
-# $FULL maps no self-implemented domain, so the fallback IS the reviewer.
+# $FULL maps no self-implemented domain and no fallback list, so a session on
+# the reviewer's model has nowhere to go.
 case "$(reviewer_rule_gaps "$FULL")" in
 *"no fallback for a diff the session wrote"*) pass "the probe reports a mapping with no self-implemented answer" ;;
 *) fail "the probe missed a missing self-implemented mapping" ;;
 esac
+# …and the same mapping with an ordered fallback has that next answer: the
+# shape the kit's own policy takes since ADR-0020.
+FULLFB="$SCRATCH/full-fallback.config.sh"
+{ cat "$FULL"; echo "AGENT_TIER_REVIEWER_FALLBACK='model-for-falling-back'"; } >"$FULLFB"
+[ -z "$(reviewer_rule_gaps "$FULLFB")" ] && pass "the probe accepts a self-implemented answer equal to the reviewer's when a fallback is mapped" ||
+	fail "the probe reported a gap on a mapping whose fallback is the next answer: $(reviewer_rule_gaps "$FULLFB")"
 # An unmapped reviewer is not a pass — the rule has nothing to compare.
 case "$(reviewer_rule_gaps "$EMPTY")" in
 *"the reviewer tier is unmapped"*) pass "the probe reports a mapping with no reviewer at all, rather than passing vacuously" ;;
@@ -1080,7 +1108,6 @@ banner "The kit's own wrapper — scripts/agents.kit.sh (f13 review M-2)"
 # (empty) file before invoking it. A pass that depended on the caller's
 # environment instead of the wrapper's own assignment would be the bug this
 # section exists to catch.
-KIT_WRAPPER="$KIT/scripts/agents.kit.sh"
 [ -f "$KIT_WRAPPER" ] && pass "scripts/agents.kit.sh exists" || fail "scripts/agents.kit.sh is missing"
 
 AGENTS_CONFIG="$SHIPPED"
@@ -1145,16 +1172,14 @@ unset AGENTS_CONFIG
 # ---------------------------------------------------------------------------
 banner "The wrapper never hands a review to the session's own model (#224, ADR-0007)"
 # ---------------------------------------------------------------------------
-# The mapping's `self-implemented` answer is one model, chosen on the
-# assumption that the session runs on the planner's — so on a session that
-# runs on THAT model, the answer is the implementer's own, which is the case
-# the domain exists to avoid. The config cannot know who is asking; the
+# The reviewer follows one family (ADR-0020): plain or `self-implemented`, the
+# mapping answers one model, chosen with no idea who is asking — so on a
+# session that runs on THAT model, the answer is the author's own, which is
+# the case ADR-0007 refuses. The config cannot know who is asking; the
 # caller can say. When $AGENT_SESSION_MODEL names the session's model and the
-# reviewer answer equals it, the wrapper warns once and falls back to the
-# plain reviewer tier; when that too equals it, the wrapper warns that the
-# review will share the author's model and prints nothing. Unset, nothing
-# changes — every case above ran without it. Not the shared resolver: that
-# half is 0.21.0's (the release ticket says so).
+# reviewer answer equals it, the resolver warns and walks to the policy's
+# ordered fallback (ADR-0013); a spent walk prints nothing. Unset, nothing
+# changes — every case above ran without it.
 # t_run_split (tests/lib.sh) is the runner that keeps stdout and stderr apart —
 # the whole contract here, since a warning merged into stdout would read as a
 # model id. `env` carries the session model into the child without exporting it
@@ -1172,25 +1197,25 @@ wrap() { # <session model or ''> <args...> — sets W_OUT W_STATUS W_ERR_TEXT
 wrap '' reviewer; K_REV=$W_OUT
 wrap '' reviewer self-implemented; K_SELF=$W_OUT
 wrap '' implementer; K_IMP=$W_OUT
-[ -n "$K_REV" ] && [ -n "$K_SELF" ] && [ "$K_REV" != "$K_SELF" ] &&
-	pass "premise: the kit maps reviewer ('$K_REV') and reviewer self-implemented ('$K_SELF') to different models" ||
-	fail "premise broken: reviewer='$K_REV' self-implemented='$K_SELF' — the section below cannot mean anything"
+K_FB1=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK%% *}")
+[ -n "$K_REV" ] && [ "$K_SELF" = "$K_REV" ] && [ -n "$K_FB1" ] && [ "$K_FB1" != "$K_REV" ] &&
+	pass "premise: the kit maps reviewer and reviewer self-implemented to one model ('$K_REV'), and its fallback opens on another ('$K_FB1')" ||
+	fail "premise broken: reviewer='$K_REV' self-implemented='$K_SELF' fallback='$K_FB1' — the section below cannot mean anything"
 
-# (1) The session runs on the self-implemented answer: fall back to the plain reviewer, and say so.
+# (1) The session runs on the self-implemented answer: walk to the fallback, and say so.
 wrap "$K_SELF" reviewer self-implemented
-[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_REV" ] &&
-	pass "on a '$K_SELF' session, 'reviewer self-implemented' falls back to the plain reviewer '$K_REV'" ||
-	fail "on a '$K_SELF' session, 'reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — expected the plain reviewer '$K_REV'"
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_FB1" ] &&
+	pass "on a '$K_SELF' session, 'reviewer self-implemented' walks to the fallback '$K_FB1'" ||
+	fail "on a '$K_SELF' session, 'reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — expected the fallback '$K_FB1'"
 case "$W_ERR_TEXT" in
 *"session's own model"*) pass "…and warns that the mapped answer was the session's own model" ;;
 *) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
 esac
 
 # (2) The session runs on the plain reviewer's model and asks for the plain
-# reviewer. Before #548 nothing differed and nothing was printed; the kit's
-# mapping now names an ordered fallback (ADR-0013), so the walk answers its
-# first entry — never the session's own model — and says what it skipped.
-# The spent-list case is pinned against a throwaway policy further down.
+# reviewer: the walk answers the fallback's first entry — never the session's
+# own model — and says what it skipped. The spent-list case is pinned against
+# a throwaway policy further down.
 wrap "$K_REV" reviewer
 [ "$W_STATUS" = 0 ] && [ -n "$W_OUT" ] && [ "$W_OUT" != "$K_REV" ] &&
 	pass "on a '$K_REV' session, 'reviewer' walks to the kit's fallback '$W_OUT', not the session's own model" ||
@@ -1221,7 +1246,7 @@ wrap "$K_IMP" implementer
 # (5) The quiet switch silences the refusal's warning too, and changes nothing else.
 t_run_split env AGENT_SESSION_MODEL="$K_SELF" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer self-implemented
 W_OUT=$S_OUT; W_ERR_TEXT=$S_ERR
-[ "$W_OUT" = "$K_REV" ] && [ -z "$W_ERR_TEXT" ] &&
+[ "$W_OUT" = "$K_FB1" ] && [ -z "$W_ERR_TEXT" ] &&
 	pass "AGENTS_TIER_QUIET=1 keeps the fallback and drops the warning" ||
 	fail "AGENTS_TIER_QUIET=1: stdout '$W_OUT', stderr '$W_ERR_TEXT'"
 
@@ -1231,8 +1256,8 @@ W_OUT=$S_OUT; W_ERR_TEXT=$S_ERR
 # so a guard that read $1 alone would let exactly the refused answer through,
 # silently, by the spelling the policy file itself documents.
 wrap "$K_SELF" --model reviewer self-implemented
-[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_REV" ] &&
-	pass "'--model reviewer self-implemented' is refused like the bare form, falling back to '$K_REV'" ||
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_FB1" ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form, walking to '$K_FB1'" ||
 	fail "'--model reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — the flagged spelling walks past the refusal"
 case "$W_ERR_TEXT" in
 *"self-implemented"*) pass "…and the warning names the domain that was asked for" ;;
@@ -1244,8 +1269,10 @@ esac
 # own policy file, and the kit maps no agent harness and no empty tier, so
 # neither can be driven RED from here. #226 moves the rule into the shared
 # resolver, where a throwaway policy file can reach both — that is where they
-# earn a failing check.
-wrap "$K_SELF" --harness reviewer
+# earn a failing check. The session named is the implementer's, which the
+# reviewer answer does not equal, so a warning here could only be the guard
+# comparing the harness token.
+wrap "$K_IMP" --harness reviewer
 [ "$W_STATUS" = 0 ] &&
 	case "$W_ERR_TEXT" in *"session's own model"*) false ;; *) true ;; esac &&
 	pass "'--harness reviewer' passes through — a harness token is not a model to compare" ||
@@ -1843,9 +1870,50 @@ case "$S_ERR" in
 *"matches no"*) fail "…but it was warned about as matching nothing: '$S_ERR'" ;;
 *) pass "…and draws no match warning" ;;
 esac
+# A REVIEWER THAT FOLLOWS A FAMILY (ADR-0020). Once a reviewer candidate is
+# itself a mapped family word, the bridge runs the other way too: a session
+# named by a pinned id of that family — one the policy need not map at all —
+# is the word's model today, and is refused it; so is a session on a tier
+# whose pinned id folds to a candidate word. Named unreachable, a pinned id
+# covers the mapped word it folds to. A pinned id whose family the policy
+# does not map is still compared exactly.
+cat >"$PROBE/scripts/agents.kit.famrev.config.sh" <<'PROBE_FAMREV_CFG'
+AGENT_TIER_PLANNER='strong'
+AGENT_TIER_IMPLEMENTER='vendor-strong-4'
+AGENT_TIER_MECHANICAL='small'
+AGENT_TIER_REVIEWER='small'
+AGENT_TIER_REVIEWER_FALLBACK='strong vendor-third-3'
+PROBE_FAMREV_CFG
+famrev() { t_run_split env -C "$PROBE" AGENT_HARNESS_SELF=famrev "$@"; }
+famrev AGENT_SESSION_MODEL=small sh scripts/agents.kit.sh reviewer self-implemented
+[ "$S_OUT" = strong ] && pass "a session on the reviewer's family word is handed the fallback's other family" ||
+	fail "AGENT_SESSION_MODEL=small gave '$S_OUT', expected strong (stderr '$S_ERR')"
+famrev AGENT_SESSION_MODEL=vendor-small-7 sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = strong ] && pass "a session named by a pinned id of the reviewer's family, unmapped, is refused the family word" ||
+	fail "AGENT_SESSION_MODEL=vendor-small-7 gave '$S_OUT', expected strong (stderr '$S_ERR')"
+case "$S_ERR" in
+*"small (the session's own model)"*) pass "…and the refusal is said as the session's own model" ;;
+*) fail "…with stderr '$S_ERR'" ;;
+esac
+famrev AGENT_SESSION_MODEL=vendor-strong-4 AGENT_UNREACHABLE_MODELS=small sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-third-3 ] && pass "a pinned-id session is refused the fallback's word its id folds to" ||
+	fail "AGENT_SESSION_MODEL=vendor-strong-4, small unreachable, gave '$S_OUT', expected vendor-third-3 (stderr '$S_ERR')"
+famrev AGENT_SESSION_MODEL=strong AGENT_UNREACHABLE_MODELS=small sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-third-3 ] && pass "a session on a mapped word that is itself a reviewer candidate is refused that word" ||
+	fail "AGENT_SESSION_MODEL=strong, small unreachable, gave '$S_OUT', expected vendor-third-3 (stderr '$S_ERR')"
+famrev AGENT_UNREACHABLE_MODELS=vendor-small-7 sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = strong ] && pass "a pinned id named unreachable covers the mapped family word it folds to" ||
+	fail "AGENT_UNREACHABLE_MODELS=vendor-small-7 gave '$S_OUT', expected strong (stderr '$S_ERR')"
+case "$S_ERR" in
+*"matches no"*) fail "…but it was warned about as matching nothing: '$S_ERR'" ;;
+*) pass "…and draws no match warning" ;;
+esac
+famrev AGENT_SESSION_MODEL=vendor-third-9 AGENT_UNREACHABLE_MODELS='small strong' sh scripts/agents.kit.sh reviewer
+[ "$S_OUT" = vendor-third-3 ] && pass "a pinned id whose family the policy does not map is compared exactly — vendor-third-3 is not refused" ||
+	fail "AGENT_SESSION_MODEL=vendor-third-9 gave '$S_OUT', expected vendor-third-3 (stderr '$S_ERR')"
 # The kit's own policy, through its own wrapper: a mechanical session names
 # itself `sonnet`, the policy's word for its tier, and must not be handed the
-# self-implemented reviewer, a pinned Sonnet.
+# self-implemented reviewer, which follows the Sonnet family (ADR-0020).
 _k_mech=$(env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" mechanical 2>/dev/null)
 t_run_split env AGENT_SESSION_MODEL="$_k_mech" sh "$KIT_WRAPPER" --alias reviewer self-implemented
 [ -n "$S_OUT" ] && [ "$S_OUT" != "$(sh "$KIT_WRAPPER" --alias mechanical)" ] &&
@@ -1869,30 +1937,34 @@ t_run_split sh "$KIT_WRAPPER" --alias implementer
 t_run_split sh "$KIT_WRAPPER" --alias mechanical
 [ "$S_OUT" = sonnet ] && pass "--alias mechanical is 'sonnet' — the tier follows the Sonnet family (ADR-0018)" ||
 	fail "--alias mechanical gave '$S_OUT'"
-# The family-following tiers are exactly two, spelled as the family word; every
-# other tier the policy maps stays a pinned id, versioned (ADR-0018 clause 1).
-for _fam in 'planner opus' 'mechanical sonnet'; do
-	_fam_tier=${_fam%% *} _fam_word=${_fam#* }
-	t_run_split env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" "$_fam_tier"
+# The family-following tiers are three, spelled as the family word — the
+# planner and the mechanical tier (ADR-0018) and the reviewer, plain and
+# self-implemented (ADR-0020); every other tier the policy maps stays a pinned
+# id, versioned (ADR-0018 clause 1).
+for _fam in 'planner opus' 'mechanical sonnet' 'reviewer sonnet' 'reviewer self-implemented sonnet'; do
+	_fam_tier=${_fam% *} _fam_word=${_fam##* }
+	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
+	t_run_split env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_fam_tier
 	[ "$S_OUT" = "$_fam_word" ] &&
-		pass "the kit's $_fam_tier is the family word '$_fam_word', not a pinned id (ADR-0018)" ||
-		fail "the kit's $_fam_tier resolved '$S_OUT', expected the family word '$_fam_word'"
+		pass "the kit's '$_fam_tier' is the family word '$_fam_word', not a pinned id (ADR-0018, ADR-0020)" ||
+		fail "the kit's '$_fam_tier' resolved '$S_OUT', expected the family word '$_fam_word'"
 done
-for _pin in implementer reviewer 'implementer content' 'reviewer self-implemented'; do
+for _pin in implementer 'implementer content'; do
 	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
 	t_run_split env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" $_pin
 	case "$S_OUT" in
 	*-*[0-9]*) pass "the kit's '$_pin' stays a pinned id ('$S_OUT')" ;;
-	*) fail "the kit's '$_pin' is '$S_OUT' — only the planner and mechanical tiers follow a family (ADR-0018)" ;;
+	*) fail "the kit's '$_pin' is '$S_OUT' — only the planner, mechanical and reviewer tiers follow a family (ADR-0018, ADR-0020)" ;;
 	esac
 done
 t_run_split sh "$KIT_WRAPPER" --alias implementer content
 [ "$S_OUT" = fable ] && pass "--alias carries the domain through" || fail "--alias with a domain gave '$S_OUT'"
-# The reviewer is local since #423, on the content model, so it has a spawn word.
+# The reviewer is local since #423, and follows the Sonnet family since
+# ADR-0020, so its spawn word is its value.
 t_run_split sh "$KIT_WRAPPER" --alias reviewer
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = fable ] &&
-	pass "--alias reviewer is 'fable' — the local reviewer is spawnable in session" ||
-	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS), expected 'fable'"
+[ "$S_STATUS" = 0 ] && [ "$S_OUT" = sonnet ] &&
+	pass "--alias reviewer is 'sonnet' — the local reviewer is spawnable in session" ||
+	fail "--alias reviewer printed '$S_OUT' (status $S_STATUS), expected 'sonnet'"
 # A value that is not an Anthropic id has no spawn word: it belongs to another
 # agent harness, and printing a guess would be worse than printing nothing.
 t_run_split env AGENT_HARNESS_SELF=codex sh "$KIT_WRAPPER" --alias reviewer
@@ -1960,14 +2032,18 @@ t_run_split env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH
 # One enumeration of the policy's values: the kit wrapper's bridge reads them
 # through the resolver's agents_values, never a scan of its own (review of
 # PR #611, M-2).
+# The reviewer walk's candidates (#660) are read by NAME — the plain
+# reviewer and the fallback, the domain's answer asked of the resolver — which
+# is a lookup in the resolver's order, not a scan of the policy.
 _kit_scan=$(sed 's/^[[:space:]]*#.*//' "$KIT_WRAPPER" | grep -c 'AGENT_TIER_\[')
 [ "$_kit_scan" = 0 ] && pass "the kit wrapper keeps no AGENT_TIER_ scan of its own — the resolver's agents_values is the one" ||
 	fail "the kit wrapper still scans AGENT_TIER_ values itself ($_kit_scan line(s))"
-# A PINNED tier's spawn word is never an id: the reviewer's 'fable' folds from
-# claude-fable-5-1 and no tier maps the bare word. A family-following tier's
-# value IS its word (ADR-0018), so 'opus' and 'sonnet' are ids here — what the
-# planner's and the mechanical tier's spawns record.
-_ids_word=$(sh "$KIT_WRAPPER" --alias reviewer)
+# A PINNED tier's spawn word is never an id: the content domain's 'fable'
+# folds from a pinned Fable id and no tier maps the bare word. A
+# family-following tier's value IS its word (ADR-0018, ADR-0020), so 'opus'
+# and 'sonnet' are ids here — what the planner's, the mechanical tier's and
+# the reviewer's spawns record.
+_ids_word=$(sh "$KIT_WRAPPER" --alias implementer content)
 t_run_split sh "$KIT_WRAPPER" --ids
 printf '%s\n' "$S_OUT" | grep -qxF "$_ids_word" && fail "the kit's --ids lists the pinned reviewer's spawn word '$_ids_word'" ||
 	pass "and a pinned tier's spawn word ($_ids_word) is not among them"

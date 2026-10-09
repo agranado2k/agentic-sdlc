@@ -123,26 +123,61 @@ _kit_fold() {
 # keeping a second copy here that could drift from it. The values it walks
 # are the resolver's agents_values, the one enumeration --ids reads too.
 #
-# A FAMILY WORD THE POLICY ITSELF MAPS (ADR-0018). A tier that follows a
-# family is mapped to the bare word (`sonnet`, the newest Sonnet), so that word
-# is both an id the resolver compares and the family of every pinned id that
-# folds to it. Named unreachable, it covers those ids — not itself, which only
-# a family-following tier maps and never the reviewer, whose every candidate
-# stays pinned (ADR-0018 clause 1), so naming it would only draw the
-# resolver's "matches no reviewer candidate" warning. Named as the
-# session — a session on that tier says what it runs on in the policy's word,
-# as the contract asks — the pinned ids of its family are its own model too:
-# the first becomes $AGENT_SESSION_MODEL, the resolver's one session slot, and
-# any further one joins the unreachable list. A word the policy does not map is
-# never folded on the session side: that comparison stays exact.
-_kit_values() {
+# A FAMILY WORD THE POLICY ITSELF MAPS (ADR-0018, ADR-0020). A tier that
+# follows a family is mapped to the bare word (`sonnet`, the newest Sonnet),
+# so that word is both an id the resolver compares and, today, the same model
+# as every pinned id that folds to it — whether the policy maps that id or
+# not. Since ADR-0020 the reviewer is such a tier, and its fallback names
+# another family's word, so the bridge reads a name's whole family:
+#
+#   - a name whose family word the policy maps — the word itself, or any
+#     pinned id that folds to it, mapped or not — stands for the word and for
+#     every pinned id the policy maps that folds to it;
+#   - an unmapped word named UNREACHABLE stands for the pinned ids that fold
+#     to it (the spawn word a failed spawn took, ADR-0013 clause 2); named as
+#     the SESSION it stays exact, as ADR-0007 has it: the policy did not say
+#     that word is one of its models;
+#   - anything else is itself.
+#
+# Of that family, only the reviewer walk's own candidates are passed on (a
+# name that matches none draws the resolver's "matches no reviewer candidate"
+# warning). Named unreachable, all of them are. Named as the session, the
+# first becomes $AGENT_SESSION_MODEL, the resolver's one session slot, and the
+# rest join the unreachable list; a session whose family holds no candidate is
+# passed on as it came. The bridge runs for the reviewer tier only — the one
+# tier the resolver reads either list for.
+# _kit_policy values|candidates [domain] — one subshell that sources the
+# resolver and its policy, so this wrapper keeps no copy of either:
+#   values      every value the policy maps (the resolver's agents_values, the
+#               enumeration --ids reads too), those that cross to a declared
+#               agent harness left out — they have no spawn word to fold;
+#   candidates  the reviewer walk's candidates, model halves, in the
+#               resolver's own order (scripts/agents.lib.sh, "THE WALK"): the
+#               resolver's answer for the domain, the plain reviewer, the
+#               fallback list. The first is asked of the resolver itself, with
+#               no session or unreachable name, so its domain check — the
+#               whitelist for its own eval — is the only one; a malformed
+#               domain prints nothing here and the resolver says why below.
+_kit_policy() {
 	(
 		. scripts/agents.lib.sh
 		agents_load_config >/dev/null 2>&1
 		AGENTS_TIER_QUIET=1
-		agents_values 2>/dev/null | while IFS= read -r _kit_v; do
+		if [ "$1" = values ]; then
+			agents_values 2>/dev/null | while IFS= read -r _kit_v; do
+				agents_split_harness "$_kit_v"
+				[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
+			done
+			exit 0
+		fi
+		_kit_dv=
+		[ -z "${2:-}" ] || _kit_dv=$(
+			unset AGENT_SESSION_MODEL AGENT_UNREACHABLE_MODELS
+			sh scripts/agents.lib.sh --model reviewer "$2" 2>/dev/null
+		) || _kit_dv=
+		for _kit_v in $_kit_dv ${AGENT_TIER_REVIEWER:-} ${AGENT_TIER_REVIEWER_FALLBACK:-}; do
 			agents_split_harness "$_kit_v"
-			[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
+			printf '%s\n' "$_ah_model"
 		done
 	)
 }
@@ -153,31 +188,50 @@ _kit_covers() {
 	done
 	return 0
 }
-if { [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] || [ -n "${AGENT_SESSION_MODEL:-}" ]; } && [ -f "$AGENTS_CONFIG" ]; then
+# _kit_family <name> <session|unreachable> — the candidates in <name>'s
+# family, the name first when it is one, each once.
+_kit_family() {
+	_kit_w=$(_kit_fold "$1")
+	_kit_fam="$1"
+	case $_kit_ids in
+	*" $_kit_w "*) _kit_fam="$_kit_fam $_kit_w $(_kit_covers "$_kit_w")" ;;
+	*) [ "$2" = unreachable ] && [ "$_kit_w" = "$1" ] && _kit_fam="$_kit_fam $(_kit_covers "$1")" ;;
+	esac
+	_kit_out=' '
+	for _kit_v in $_kit_fam; do
+		case $_kit_cands in *" $_kit_v "*) ;; *) continue ;; esac
+		case $_kit_out in *" $_kit_v "*) continue ;; esac
+		_kit_out="$_kit_out$_kit_v "
+	done
+	printf '%s' "$_kit_out"
+}
+case ${1:-} in
+--*) _kit_tier=${2:-} _kit_domain=${3:-} ;;
+*) _kit_tier=${1:-} _kit_domain=${2:-} ;;
+esac
+if [ "$_kit_tier" = reviewer ] && [ -f "$AGENTS_CONFIG" ] &&
+	{ [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] || [ -n "${AGENT_SESSION_MODEL:-}" ]; }; then
 	_kit_ids=' '
-	for _kit_v in $(_kit_values); do
+	for _kit_v in $(_kit_policy values); do
 		_kit_ids="$_kit_ids$_kit_v "
+	done
+	_kit_cands=' '
+	for _kit_v in $(_kit_policy candidates "$_kit_domain"); do
+		_kit_cands="$_kit_cands$_kit_v "
 	done
 	_kit_unr=
 	for _kit_n in ${AGENT_UNREACHABLE_MODELS:-}; do
-		_kit_cover=$(_kit_covers "$_kit_n")
-		case $_kit_ids in
-		*" $_kit_n "*) [ "$(_kit_fold "$_kit_n")" = "$_kit_n" ] || _kit_cover= ;;
-		esac
-		_kit_unr="$_kit_unr ${_kit_cover:-$_kit_n}"
+		_kit_cover=$(_kit_family "$_kit_n" unreachable)
+		case $_kit_cover in *[!\ ]*) ;; *) _kit_cover=$_kit_n ;; esac
+		_kit_unr="$_kit_unr $_kit_cover"
 	done
-	_kit_s=${AGENT_SESSION_MODEL:-}
-	case $_kit_ids in
-	*" $_kit_s "*)
-		if [ -n "$_kit_s" ] && [ "$(_kit_fold "$_kit_s")" = "$_kit_s" ]; then
-			_kit_first=
-			for _kit_v in $(_kit_covers "$_kit_s"); do
-				if [ -z "$_kit_first" ]; then _kit_first=$_kit_v; else _kit_unr="$_kit_unr $_kit_v"; fi
-			done
-			[ -z "$_kit_first" ] || { AGENT_SESSION_MODEL=$_kit_first; export AGENT_SESSION_MODEL; }
-		fi
-		;;
-	esac
+	if [ -n "${AGENT_SESSION_MODEL:-}" ]; then
+		_kit_first=
+		for _kit_v in $(_kit_family "$AGENT_SESSION_MODEL" session); do
+			if [ -z "$_kit_first" ]; then _kit_first=$_kit_v; else _kit_unr="$_kit_unr $_kit_v"; fi
+		done
+		[ -z "$_kit_first" ] || { AGENT_SESSION_MODEL=$_kit_first; export AGENT_SESSION_MODEL; }
+	fi
 	if [ -n "$_kit_unr" ]; then
 		AGENT_UNREACHABLE_MODELS=$_kit_unr
 		export AGENT_UNREACHABLE_MODELS

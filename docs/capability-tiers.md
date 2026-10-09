@@ -73,6 +73,15 @@ AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 
 — one name to substitute, not an environment prefix to type right every time.
 
+**Most of the kit's tiers pin an id; three follow a family.** The planner is
+`opus` and the mechanical tier `sonnet` (ADR-0018), and the reviewer is `sonnet`
+too, with `opus` first on its fallback (ADR-0020): the bare family word, the
+newest model in that family. A family word and every pinned id that folds to it
+are one family to the kit wrapper, so a session on the Sonnet family, named by
+the word or by a pinned id, is refused the `sonnet` reviewer and handed `opus`,
+and an Opus session is refused the `opus` fallback. This holds only through
+`scripts/agents.kit.sh`; the shared resolver compares exactly.
+
 ## The policy behind the mapping
 
 Plan on the strongest model available; execute spawned per tier, and per
@@ -89,8 +98,10 @@ The two vocabularies are opposite: the four tier names are **closed** (an
 unknown one is exit 2), while domains are **open local policy**, so an unmapped
 one falls back to the tier in silence. This repo maps `content`, for the prose
 that is most of the kit's product — `implementer` work by tier, not code by
-medium — and `self-implemented` on the reviewer tier, for a diff the session
-wrote on the reviewer's model, a situation, not a medium, chosen at spawn time.
+medium. `self-implemented` on the reviewer tier names a situation, not a
+medium: a diff the session wrote itself, chosen at spawn time. It is unmapped
+since ADR-0020, so it gives the plain reviewer's answer, and the session's own
+family is refused through `AGENT_SESSION_MODEL`.
 `code` is unmapped: the plain tier is its answer. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change the model, and `/implement`
 passes it as the second argument; a situation domain is never stamped on a
