@@ -47,6 +47,8 @@
 #      a mutant that cuts exactly the text it holds. Its twin, the CI review
 #      prompt, carries the same ruling in the same words, and both define the
 #      buckets the added case is graded by in the skill's own sentence.
+#      Both also carry the lens's declined list (#647), lead-in and every
+#      bullet word for word from the lens; a bullet dropped from either is red.
 #  11. Every planned lens is accounted for (#482, retro F6): a lens the host
 #      refused to start records its spawn with `outcome=refused` and no
 #      `spawn.end` — nothing started, so nothing ends; a lens that started
@@ -730,6 +732,35 @@ bait_w=$(printf '%s\n' "$w_sentences" | sed 's/none on this PR/extract the copie
 carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 	fail "bait: the worker's fix line reworded still reads as the skill's ruling" ||
 	pass "bait: the worker's fix line reworded goes red"
+# The declined list rides along (#647). Section 9's list (#633) reached the
+# in-session lens only, so a dispatched or CI reviewer kept raising the rules
+# the records declined. Both carry its lead-in and every bullet word for word,
+# read from the lens here and never retyped — compared over prose unwrapped
+# and spaces squeezed, since the two files wrap at 80 columns and the lens
+# does not. declined_said_in <file> — the lens's lead-in paragraph and
+# bullets the file does not say, one per line; empty when it says them all.
+declined_lead=$(grep -F -- "$DECLINED_LEAD" "$LENS5" | head -n 1)
+declined_said_in() {
+	_ds_text=$(unwrap "$1")
+	printf '%s\n%s\n' "$declined_lead" "$declined" | while IFS= read -r _ds_line; do
+		[ -n "$_ds_line" ] || continue
+		printf '%s\n' "$_ds_text" | grep -qF -- "$_ds_line" || printf '%s\n' "$_ds_line"
+	done
+}
+[ -n "$declined_lead" ] && [ -n "$declined" ] ||
+	fail "the lens's declined list is gone — nothing to hold the worker and its CI twin to"
+for f in "$WORKER" "$TWIN"; do
+	unsaid=$(declined_said_in "$f")
+	[ -n "$declined" ] && [ -z "$unsaid" ] &&
+		pass "$f carries the lens's declined list, lead-in and every bullet, word for word" ||
+		fail "$f does not say, word for word, what the lens's declined list says — its reviewer keeps raising: $unsaid"
+	# Bait: one bullet dropped from a copy of the file goes red.
+	awk 'index($0, "- **A consolidation whose shared home") { skip = 1; next } skip && /^  / { next } { skip = 0; print }' "$f" >"$SCRATCH/bait647.md"
+	! cmp -s "$SCRATCH/bait647.md" "$f" && [ -n "$(declined_said_in "$SCRATCH/bait647.md")" ] &&
+		pass "bait: a declined bullet dropped from $f goes red" ||
+		fail "bait: with a declined bullet dropped from $f, the list still reads as carried — or the bait planted nothing"
+done
+
 
 # ---------------------------------------------------------------------------
 banner "11. Every planned lens is accounted for, and a missing lens is named (#482)"
