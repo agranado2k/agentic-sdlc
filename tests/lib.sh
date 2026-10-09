@@ -1067,6 +1067,8 @@ t_trace_runnable() {
 		-e 's/data\.applied=<[^<>]*>/data.applied=1/g' \
 		-e 's/data\.rejected=<[^<>]*>/data.rejected=1/g' \
 		-e 's/data\.escalated=<[^<>]*>/data.escalated=1/g' \
+		-e 's/data\.lenses=<[^<>]*>/data.lenses=6/g' \
+		-e 's/data\.roster=<[^<>]*>/data.roster=6/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/<[^<>]* [^<>]*>/x y/g' -e 's/<[^<>]*>/x/g' \
 		-e 's/=\([a-z][a-z0-9_-]*\)|[a-z0-9_|-]*/=\1/g' \

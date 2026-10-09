@@ -74,7 +74,10 @@ case " $* " in
 	grep -q '^ARGV: run rerun' "$STUB_LOG" && exit "${STUB_WATCH_RC_AFTER:-0}"
 	exit "${STUB_WATCH_RC:-0}"
 	;;
-*" run rerun "*) exit "${STUB_RERUN_RC:-0}" ;;
+*" run rerun "*)
+	# A refused re-run says why on stderr, as the forge's CLI does.
+	[ "${STUB_RERUN_RC:-0}" = 0 ] || { printf '%s\n' "${STUB_RERUN_ERR:-run cannot be rerun}" >&2; exit "$STUB_RERUN_RC"; }
+	;;
 *" run view "*)
 	# A re-run's new attempt shows `completed` (the old attempt) for the first
 	# STUB_COMPLETED_VIEWS asks, then queued.
@@ -605,6 +608,43 @@ show 'pr:#202' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and
 	fail "a refused re-run was not recorded as failure: $(show 'pr:#202' --kind merge.land)"
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and a refused re-run is not watched" ||
 	fail "a refused re-run was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
+s_assert_err_has "run cannot be rerun" "and stderr carries the forge's refusal"
+
+# A re-run refused because the run is still going is no verdict: the landing
+# waits for that run and judges its end (#661 — #659's release was recorded
+# failure while main's run on it ended success).
+BUSY="STUB_RERUN_RC=1"
+BUSY_ERR="STUB_RERUN_ERR=run 901 cannot be rerun; This workflow is already running"
+iterated 230 231 232
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 $BUSY "$BUSY_ERR" STUB_WATCH_RC_AFTER=0 230
+s_assert_status 0 "a re-run refused as already running, whose run then ends green, lands with exit 0"
+show 'pr:#230' --kind merge.land | grep -qF '"workflows":"success"' && pass "and is recorded with data.workflows=success" ||
+	fail "a still-running run that ended green was not recorded success: $(show 'pr:#230' --kind merge.land)"
+show 'pr:#230' --kind merge.land | grep -qF '"reruns":"0"' && pass "and data.reruns=0 — the forge started no re-run" ||
+	fail "a refused re-run was counted as one: $(show 'pr:#230' --kind merge.land)"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 2 ] && pass "it watched the running run to its end" ||
+	fail "run 901 was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times, not twice"
+s_assert_err_has "already running" "stderr says the run was still going"
+s_assert_err_lacks "land nothing else" "and raises no failure"
+
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 $BUSY "$BUSY_ERR" STUB_WATCH_RC_AFTER=1 231
+s_assert_status 1 "a re-run refused as already running, whose run then ends red, is exit 1"
+show 'pr:#231' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and is recorded with data.workflows=failure" ||
+	fail "a still-running run that ended red was not recorded failure: $(show 'pr:#231' --kind merge.land)"
+s_assert_err_has "land nothing else" "stderr says to land nothing else"
+
+# shellcheck disable=SC2086
+land $REL STUB_WATCH_RC=1 $BUSY "STUB_RERUN_ERR=HTTP 403: Resource not accessible by integration" 232
+s_assert_status 1 "a re-run refused for any other reason is still exit 1"
+show 'pr:#232' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
+	fail "a re-run refused for another reason was not recorded failure: $(show 'pr:#232' --kind merge.land)"
+show 'pr:#232' --kind merge.land | grep -qF '"reruns":"0"' && pass "and data.reruns=0 — a refused re-run is never counted" ||
+	fail "a re-run refused for another reason was counted as one: $(show 'pr:#232' --kind merge.land)"
+[ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and its run is not watched again" ||
+	fail "a run refused for another reason was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
+s_assert_err_has "Resource not accessible" "and stderr names the refusal"
 
 land STUB_FETCH_RC=1 STUB_WATCH_RC=1 197
 s_assert_status 1 "with the merge commit unreadable, the landing is judged as before (a red run is exit 1)"

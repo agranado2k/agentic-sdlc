@@ -198,9 +198,9 @@ TRACE_EVENT_CAP=4000
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
 TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
-# 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567 and
-# 2026-10-08 for #628): a data key a reader joins on, held at emit to a
-# shape. Each row is
+# 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
+# 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
+# on, held at emit to a shape. Each row is
 # `<kind>[/<when>~<ERE>]=<key>[!]:<ERE>`, and a value matches an ERE only
 # whole. `<kind>=<key>:<ERE>` holds a PRESENT key: data.* stays open, and an
 # emit missing the key writes as before. A `/<when>~<ERE>` applies the row
@@ -213,9 +213,12 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # #487), and that id is the local source's alone; and a green or red iteration
 # carries its three counts, digits; an iteration's cause, when it names one,
 # is the interruption that turned it red or stopped it: a conflict, or a
-# pending-stuck check. `verify` advises on a raise written before its row
-# (TRACE_AWK_RAISE reads the row from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+'
+# pending-stuck check; and a review's verdict, when it counts its lenses,
+# counts them in digits — the lens agents that returned a report, and the
+# lenses the review planned. `verify` advises on a raise and on a lens count
+# written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
+# from here).
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -1356,7 +1359,7 @@ function outcome_scan(line,   env, d, k, o) {
 
 # TRACE_AWK_RAISE — verify's half of the raise-id row (#567): a finding.raise
 # written before its id was held, with an id off the shape, is history and an
-# advisory. raise_re is the row's ERE, handed over by trace_raise_re from
+# advisory. raise_re is the row's ERE, handed over by trace_shape_re from
 # TRACE_SHAPES, so the emit and the advisory cannot read different shapes.
 # raise_scan reads the kind from the ENVELOPE and every data.id from the DATA
 # MAP — `{"id":"` or `,"id":"`, so a key merely ending in id is not one — and
@@ -1370,6 +1373,29 @@ function raise_scan(line,   d, m, v) {
 	while (match(m, /[{,]"id":"[^"]*"/)) {
 		v = substr(m, RSTART + 7, RLENGTH - 8)
 		if (v !~ ("^(" raise_re ")$")) raise_bad(v)
+		m = substr(m, RSTART + RLENGTH)
+	}
+}
+'
+
+# TRACE_AWK_LENS — verify's half of the lens-count rows (#663): a
+# review.verdict written before its counts were held, with data.lenses or
+# data.roster off the shape, is history and an advisory. lens_re and
+# roster_re are the rows' EREs, handed over by trace_shape_re. lens_scan reads
+# the kind from the ENVELOPE and each key from the DATA MAP, and calls the
+# caller's lens_bad(key, value). Single-quoted: no apostrophe in it.
+TRACE_AWK_LENS='
+function lens_scan(line,   d, m) {
+	d = index(line, ",\"data\":{")
+	if (!d || !index(substr(line, 1, d), ",\"kind\":\"review.verdict\"")) return
+	m = substr(line, d + 8)
+	lens_key(m, "lenses", lens_re)
+	lens_key(m, "roster", roster_re)
+}
+function lens_key(m, k, re,   v) {
+	while (match(m, "[{,]\"" k "\":\"[^\"]*\"")) {
+		v = substr(m, RSTART + length(k) + 5, RLENGTH - length(k) - 6)
+		if (v !~ ("^(" re ")$")) lens_bad(k, v)
 		m = substr(m, RSTART + RLENGTH)
 	}
 }
@@ -1418,20 +1444,21 @@ trace_model_scan_args() {
 	return 0
 }
 
-# trace_raise_re — prints the ERE TRACE_SHAPES holds a raise's id to. A table
-# with no such row is a table error, and dies (exit 2): an advisory that
-# silently matched nothing would fail open.
-trace_raise_re() {
-	case " $TRACE_SHAPES " in *" finding.raise=id:"*) ;; *) die "TRACE_SHAPES has no finding.raise=id row" ;; esac
+# trace_shape_re <kind> <key> — prints the ERE TRACE_SHAPES' unconditional
+# row holds the kind's key to. A table with no such row is a table error, and
+# dies (exit 2): an advisory that silently matched nothing would fail open.
+trace_shape_re() {
+	case " $TRACE_SHAPES " in *" $1=$2:"*) ;; *) die "TRACE_SHAPES has no $1=$2 row" ;; esac
 	_rr=" $TRACE_SHAPES "
-	_rr=${_rr#* finding.raise=id:}
+	_rr=${_rr#* "$1=$2:"}
 	printf '%s' "${_rr%% *}"
 }
 
 # trace_spelling_note [<since>] — the stderr lines `summary` and `export` say
 # when the trace holds history a rule younger than it would refuse: old
-# numbered spellings (#305), outcomes their kind does not declare (#348) and
-# raise ids off the review's severity shape (#567). One line each, the count and where the list is. Repeating verify's per-line
+# numbered spellings (#305), outcomes their kind does not declare (#348),
+# raise ids off the review's severity shape (#567) and lens counts off digits
+# (#663). One line each, the count and where the list is. Repeating verify's per-line
 # advisories on every read would bury the command's own output under history
 # nobody may rewrite. Reads the lines that open as an event does; a line that
 # does not is verify's verdict, not this.
@@ -1440,7 +1467,10 @@ trace_spelling_note() {
 	_sn_o=0
 	_sn_r=0
 	_sn_m=0
-	_sn_re=$(trace_raise_re) || exit 2
+	_sn_l=0
+	_sn_re=$(trace_shape_re finding.raise id) || exit 2
+	_sn_lre=$(trace_shape_re review.verdict lenses) || exit 2
+	_sn_rre=$(trace_shape_re review.verdict roster) || exit 2
 	trace_model_scan_args say
 	_sn_files=$(trace_files "${1:-}")
 	_sn_ifs=$IFS
@@ -1448,24 +1478,27 @@ trace_spelling_note() {
 	trace_glob_off
 	for _sn_f in $_sn_files; do
 		IFS=$_sn_ifs
-		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_MODEL"'
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v lens_re="$_sn_lre" -v roster_re="$_sn_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL"'
 		function spelled(field, v) { if (!spelled_ok(v)) n++ }
 		function outcome_bad(k, o) { m++ }
 		function raise_bad(v) { r++ }
 		function model_bad(v) { s++ }
-		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0); model_scan($0) }
-		END { print n + 0, m + 0, r + 0, s + 0 }' "$_sn_f")
+		function lens_bad(k, v) { l++ }
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0) }
+		END { print n + 0, m + 0, r + 0, s + 0, l + 0 }' "$_sn_f")
 		set -- $_sn_c
 		_sn_n=$((_sn_n + $1))
 		_sn_o=$((_sn_o + $2))
 		_sn_r=$((_sn_r + $3))
 		_sn_m=$((_sn_m + $4))
+		_sn_l=$((_sn_l + $5))
 	done
 	IFS=$_sn_ifs
 	trace_glob_on
 	[ "$_sn_n" = 0 ] || echo "!  trace: $_sn_n numbered subject(s) in the trace are spelled the old way — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_o" = 0 ] || echo "!  trace: $_sn_o outcome(s) in the trace are not a word their kind declares — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_r" = 0 ] || echo "!  trace: $_sn_r finding.raise id(s) in the trace are not $_sn_re — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	[ "$_sn_l" = 0 ] || echo "!  trace: $_sn_l review.verdict lens count(s) in the trace are not digits — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_m" = 0 ] || echo "!  trace: $_sn_m spawn model(s) in the trace are not an id the agents policy maps — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	return 0
 }
@@ -1498,7 +1531,9 @@ trace_verify() {
 	# The list is captured FIRST, with pathname expansion still on, because
 	# trace_files finds the day files with a glob of its own; only the SPLIT of
 	# that list runs with globbing off. Nothing in the loop body globs.
-	_vf_raise=$(trace_raise_re) || exit 2
+	_vf_raise=$(trace_shape_re finding.raise id) || exit 2
+	_vf_lre=$(trace_shape_re review.verdict lenses) || exit 2
+	_vf_rre=$(trace_shape_re review.verdict roster) || exit 2
 	if [ "${_trace_quiet_advice:-list}" = list ]; then trace_model_scan_args say; else trace_model_scan_args quiet; fi
 	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
@@ -1513,7 +1548,7 @@ trace_verify() {
 		# note goes to stderr through a pipe, which POSIX awk has where it has no
 		# /dev/stderr. `summary` and `export` switch the per-line notes off and
 		# say the count once instead (trace_spelling_note).
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_MODEL"'
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v lens_re="$_vf_lre" -v roster_re="$_vf_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL"'
 		function spelled(field, v) {
 			if (advise != "list" || spelled_ok(v)) return
 			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
@@ -1530,6 +1565,10 @@ trace_verify() {
 			if (advise != "list") return
 			printf "!  trace: %s:%d: finding.raise data.id %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q, raise_re | "cat 1>&2"
 		}
+		function lens_bad(k, v) {
+			if (advise != "list") return
+			printf "!  trace: %s:%d: review.verdict data.%s %s%s%s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, q, v, q, (k == "lenses" ? lens_re : roster_re) | "cat 1>&2"
+		}
 		function model_bad(v) {
 			if (advise != "list") return
 			printf "!  trace: %s:%d: spawn model %s%s%s is not an id the agents policy maps — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q | "cat 1>&2"
@@ -1545,7 +1584,7 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
-			else { spelled_scan($0); outcome_scan($0); raise_scan($0); model_scan($0) }
+			else { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0) }
 		}
 		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then

@@ -44,7 +44,9 @@
 #      watched to its end. For a tagged release, each run that failed —
 #      started on the merge push, before the tag could exist — is re-run
 #      once (`gh run rerun <id> --failed`) and only its second result is
-#      judged. An untagged merge's red is never re-run.
+#      judged. A re-run refused because the run is already running is no
+#      verdict: that run is watched to its end and judged (#661); any other
+#      refusal is a failure. An untagged merge's red is never re-run.
 #   4. Emits merge.land (`landed`, the sha, the method, the wait, the
 #      workflows' result) on pr:#<N>, related to the ticket — and whether
 #      /implement opened the PR (data.implement=yes|no, with
@@ -349,13 +351,32 @@ fi
 # a run on the merge push may have started before the tag existed, and its
 # second attempt alone is judged. With no tag on origin a re-run would fail
 # the same way, so nothing is re-run, and an untagged merge is never re-run.
+# A re-run the forge refuses because the run is already running is no verdict:
+# that run is watched to its end and its end is judged (#661). Any other
+# refusal is a failure. data.reruns counts the re-runs the forge started.
 RERUNS=0
 if [ "$TAGGED" = yes ] && [ -n "$FAILED" ]; then
 	note "re-running, once, what failed before $RELEASE was on origin:$FAILED"
 	WORKFLOWS=success
 	for id in $FAILED; do
+		# The forge's answer reaches stderr as before, and is kept to be read.
+		_said=$(gh run rerun "$id" --failed 2>&1)
+		_rc=$?
+		[ -z "$_said" ] || printf '%s\n' "$_said" >&2
+		if [ "$_rc" -ne 0 ]; then
+			case $_said in
+			*"already running"*)
+				note "run $id is already running — the re-run was refused; waiting for that run's end instead"
+				gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+				;;
+			*)
+				note "the forge refused to re-run run $id — judged a failure"
+				WORKFLOWS=failure
+				;;
+			esac
+			continue
+		fi
 		RERUNS=$((RERUNS + 1))
-		gh run rerun "$id" --failed >&2 || { WORKFLOWS=failure; continue; }
 		# The new attempt leaves `completed` a beat after the re-run is asked.
 		i=0
 		while [ "$i" -lt "$POLL_TRIES" ] &&

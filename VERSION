@@ -2605,8 +2605,30 @@
 # row; the glossary's Advisory entry; tests/docs-gate-advisory.test.sh,
 # adopt-demo.sh, agent-roster.test.sh, cheap-reads.test.sh,
 # harness-helpers.test.sh, lib.sh, setup-demo.sh and trace-skills.test.sh.
+# 0.68.0 — a review says how many lenses ran (ticket #663, from
+# retro-20261008T160141Z). Releases what landed on main after v0.67.0 with
+# no bump: nothing; this PR is the release.
+# NO file joins and NO file leaves the shared layer. TWO shared files change
+# content. scripts/trace.sh: review.verdict gains two shaped keys,
+# data.lenses (the lens agents that returned a report) and data.roster (the
+# lenses the review planned), each held to digits when present — exit 2 at
+# emit for any other value, and an advisory in verify, one count line in
+# summary and export, for a verdict written off the shape before the rule.
+# Neither key is required: every emit that was valid at 0.67.0 is valid now.
+# And UPDATING.md: the arriving-from paragraph, and both worked examples
+# re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr's SKILL.md writes data.lenses and data.roster on
+# its axis-1 review.verdict — 0 lenses on a single-reviewer pass, the roster
+# six less any lens whose slice was empty — and its summary gains a
+# `Lenses run: <n> of <m>` line that says "short review" when fewer ran
+# than were planned and "single-context review" when none did (#663). Take
+# the skill directory whole.
+# Kit-only, never shipped: ADR-0008's 2026-10-09 amendment and the index
+# row; tests/trace.test.sh section 33, trace-skills.test.sh section 28 and
+# lib.sh's placeholder fills for the two counts.
 
-shared-layer: 0.67.0
+shared-layer: 0.68.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
