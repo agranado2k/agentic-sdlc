@@ -986,8 +986,6 @@ ml=$(show 'pr:#501' --kind merge.land)
 for tok in '"outcome":"landed"' '"via":"train"' "\"merge_sha\":\"$STUB_SHA\"" '"iterated":"yes"'; do
 	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "the train's merge.land carries $tok" || fail "the train's merge.land lacks $tok: $ml"
 done
-printf '%s\n' "$ml" | grep -qF '"via":"land"' && fail "a train landing is marked as a by-hand one: $ml" ||
-	pass "and is not marked data.via=land"
 [ "$(events 501 feedback)" = 0 ] && pass "--train writes no feedback: the verdict is the train's to record" ||
 	fail "--train wrote $(events 501 feedback) feedback event(s) — the train's own would make a second"
 s_assert_out_has "feedback: left to the train" "stdout says the verdict is left to the train"
@@ -995,6 +993,7 @@ s_assert_out_has "feedback: left to the train" "stdout says the verdict is left 
 land 502 --train --unasked 'nobody here'
 s_assert_status 2 "--train with --unasked is a usage error: the train records the verdict"
 [ "$(merges)" = 0 ] && pass "and nothing is merged" || fail "a usage error still merged"
+s_assert_err_has "drop --unasked" "and stderr names --unasked as what made it one"
 
 # The manual's row is where the train reads how to run the script.
 grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- '--train' &&
