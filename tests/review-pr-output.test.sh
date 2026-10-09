@@ -48,7 +48,8 @@
 #      prompt, carries the same ruling in the same words, and both define the
 #      buckets the added case is graded by in the skill's own sentence.
 #      Both also carry the lens's declined list (#647), lead-in and every
-#      bullet word for word from the lens; a bullet dropped from either is red.
+#      bullet word for word from the lens (the twin, a consumer template, all
+#      but the one citing a numbered ADR); a bullet dropped from either is red.
 #  11. Every planned lens is accounted for (#482, retro F6): a lens the host
 #      refused to start records its spawn with `outcome=refused` and no
 #      `spawn.end` — nothing started, so nothing ends; a lens that started
@@ -737,13 +738,18 @@ carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 # the records declined. Both carry its lead-in and every bullet word for word,
 # read from the lens here and never retyped — compared over prose unwrapped
 # and spaces squeezed, since the two files wrap at 80 columns and the lens
-# does not. declined_said_in <file> — the lens's lead-in paragraph and
-# bullets the file does not say, one per line; empty when it says them all.
+# does not. One bullet is the worker's alone: the CI twin is a template a
+# consumer receives, and tests/ai-review-template.test.sh refuses it a
+# numbered `ADR-0` citation — true of one repo only — so the bullet citing
+# the kit's ADR-0013 is not the twin's to carry, and every other one is.
+# declined_said_in <file> — the lens's lead-in paragraph and bullets the file
+# does not say, one per line; empty when it says them all.
 declined_lead=$(grep -F -- "$DECLINED_LEAD" "$LENS5" | head -n 1)
 declined_said_in() {
 	_ds_text=$(unwrap "$1")
 	printf '%s\n%s\n' "$declined_lead" "$declined" | while IFS= read -r _ds_line; do
 		[ -n "$_ds_line" ] || continue
+		case $1 in *"$TWIN") case $_ds_line in *ADR-0*) continue ;; esac ;; esac
 		printf '%s\n' "$_ds_text" | grep -qF -- "$_ds_line" || printf '%s\n' "$_ds_line"
 	done
 }
@@ -752,7 +758,7 @@ declined_said_in() {
 for f in "$WORKER" "$TWIN"; do
 	unsaid=$(declined_said_in "$f")
 	[ -n "$declined" ] && [ -z "$unsaid" ] &&
-		pass "$f carries the lens's declined list, lead-in and every bullet, word for word" ||
+		pass "$f carries the lens's declined list, lead-in and every bullet it may, word for word" ||
 		fail "$f does not say, word for word, what the lens's declined list says — its reviewer keeps raising: $unsaid"
 	# Bait: one bullet dropped from a copy of the file goes red.
 	awk 'index($0, "- **A consolidation whose shared home") { skip = 1; next } skip && /^  / { next } { skip = 0; print }' "$f" >"$SCRATCH/bait647.md"

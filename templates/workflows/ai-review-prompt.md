@@ -89,9 +89,6 @@ bar above.
   ties a kit-only list to one — declined by the kit's root manual, hard
   rule 3: a shared-layer edit is a release action, never a passenger on
   a ticket.
-- **The kit wrapper's spawn-word bridge, read as a copy of the
-  resolver's agent-harness split** — declined by the kit's ADR-0013
-  clause 2, which puts the spawn-word bridge in the wrapper on purpose.
 - **A restated bound that is the observable contract**, such as the
   coverage grammar's id bounds a suite holds beside
   `scripts/coverage.sh` — declined by the kit's living spec requirement
