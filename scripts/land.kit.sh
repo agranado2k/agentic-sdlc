@@ -360,9 +360,11 @@ if [ "$TAGGED" = yes ] && [ -n "$FAILED" ]; then
 	WORKFLOWS=success
 	for id in $FAILED; do
 		# The forge's answer reaches stderr as before, and is kept to be read.
-		if ! _refusal=$({ gh run rerun "$id" --failed 2>&1 >&3; } 3>&2); then
-			[ -z "$_refusal" ] || printf '%s\n' "$_refusal" >&2
-			case $_refusal in
+		_said=$(gh run rerun "$id" --failed 2>&1)
+		_rc=$?
+		[ -z "$_said" ] || printf '%s\n' "$_said" >&2
+		if [ "$_rc" -ne 0 ]; then
+			case $_said in
 			*"already running"*)
 				note "run $id is already running — the re-run was refused; waiting for that run's end instead"
 				gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure

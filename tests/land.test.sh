@@ -640,6 +640,8 @@ land $REL STUB_WATCH_RC=1 $BUSY "STUB_RERUN_ERR=HTTP 403: Resource not accessibl
 s_assert_status 1 "a re-run refused for any other reason is still exit 1"
 show 'pr:#232' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
 	fail "a re-run refused for another reason was not recorded failure: $(show 'pr:#232' --kind merge.land)"
+show 'pr:#232' --kind merge.land | grep -qF '"reruns":"0"' && pass "and data.reruns=0 — a refused re-run is never counted" ||
+	fail "a re-run refused for another reason was counted as one: $(show 'pr:#232' --kind merge.land)"
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and its run is not watched again" ||
 	fail "a run refused for another reason was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
 s_assert_err_has "Resource not accessible" "and stderr names the refusal"
