@@ -2456,9 +2456,10 @@ What the wave learned:
 Two retrospectives over the #580 wave, `retro-20261007T180238Z` and
 `retro-20261007T151351Z`, became tickets #627–#638, and the release ticket
 #653 cut them as one minor. PRs #639–#645, #648–#652, #657 and the release
-#658; v0.66.0 is its merge, `d190ff8`. The only shared-layer content change
-is `scripts/trace.sh` (#649); the rest is skills, the adapter and kit-only
-scripts, enumerated in `VERSION`'s 0.66.0 note.
+#658; v0.66.0 is its merge, `d190ff8`. Two shared files change content:
+`scripts/trace.sh` (#649) and `UPDATING.md`'s arriving-from paragraph; the
+rest is skills, the adapter and kit-only scripts, enumerated in
+`VERSION`'s 0.66.0 note.
 
 What landed:
 
@@ -2495,12 +2496,13 @@ reuse/DRY declined list).
 
 Afterwards, on 2026-10-09: the operator confirmed every confirm-list on the
 28 PRs of the two waves. Correction notes were recorded for the short
-`merge.land` records of #649, #651 and #652. A cascade dry run showed the wiring engages — Sonnet on rung
-1, escalation to the implementer tier's model — but a live run needs an
-agent harness for the mechanical tier, which the kit has not yet wired. And
-`skill-dispatch.kit.sh implement --ticket-file` without `--tier` sizes from
-the skill's `metadata.phase`, ignoring the ticket's stamp — the opposite of
-the rule #229 settled; a candidate ticket, not yet filed.
+`merge.land` records of #649, #651 and #652. A cascade dry run showed the
+wiring engages — Sonnet on rung 1, escalation to the implementer tier's
+model — but a live run needs an agent harness for the mechanical tier,
+which the kit has not yet wired. And `skill-dispatch.kit.sh implement
+--ticket-file` without `--tier` sizes from the skill's `metadata.phase`,
+ignoring the ticket's stamp — the opposite of the rule #229 settled; a
+candidate ticket, not yet filed.
 
 ## 2026-10-08 — the gate advises on an off trace and an unmapped reviewer tier; shared layer 0.67.0
 
