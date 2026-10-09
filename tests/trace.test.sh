@@ -2294,4 +2294,49 @@ grep -q "^TRACE_SHAPES='.*pr\.iterate=cause:conflict|pending-stuck" "$TRACE" &&
 sed -n '/Amended 2026-10-08 (#628)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'stopped' &&
 	pass "ADR-0008's #628 amendment says a stopped iteration may carry the cause" || fail "ADR-0008's #628 amendment does not say where the cause rides beside red"
 
+# ---------------------------------------------------------------------------
+banner "33. A review says how many lenses ran, digits, held at emit and advised on by verify (ticket #663)"
+# ---------------------------------------------------------------------------
+# The retrospective of 2026-10-08: 6 of 16 reviews ran without the lens
+# fan-out, and nothing in the trace said so. review.verdict carries
+# data.lenses, the lens agents that returned a report, beside data.roster,
+# the lenses the review planned; the kind table holds a present one of each
+# to digits (ADR-0008, amended 2026-10-09). Optional, so every verdict
+# written before the rule still writes; verify advises on one already
+# written off the shape and leaves the verdict at 0.
+V='kind=review.verdict subject=pr:#1 outcome=pass data.axis=1'
+# shellcheck disable=SC2086 # $V is the emit's fixed head, split on purpose
+{
+ls_refused "review.verdict data.lenses=six is refused — the count is digits" \
+	"review.verdict: data.lenses 'six' is not [0-9]+" $V data.lenses=six data.roster=6
+ls_refused "review.verdict data.roster='6 lenses' is refused — the roster is digits" \
+	"review.verdict: data.roster '6 lenses' is not [0-9]+" $V data.lenses=6 data.roster='6 lenses'
+ls_refused "review.verdict data.lenses=-1 is refused — a count carries no sign" \
+	"review.verdict: data.lenses '-1' is not [0-9]+" $V data.lenses=-1 data.roster=6
+ls_writes "a full review's verdict, data.lenses=6 data.roster=6, is written" $V data.lenses=6 data.roster=6
+ls_writes "a single-context review's verdict, data.lenses=0, is written" $V data.lenses=0 data.roster=6 data.agent=single-reviewer
+ls_writes "a verdict with neither count is written — a review recorded before the rule still writes" $V
+}
+grep -q "^TRACE_SHAPES='.*review\.verdict=lenses:\[0-9\]+ review\.verdict=roster:\[0-9\]+" "$TRACE" &&
+	pass "the script declares both count rows in TRACE_SHAPES" || fail "scripts/trace.sh's TRACE_SHAPES has no review.verdict=lenses / roster rows"
+RLV="$SCRATCH/lens-verify"; RLVON=$(policy "$RLV")
+TRACE_CONFIG=$RLVON sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass data.axis=1 data.lenses=6 data.roster=6
+printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l1","kind":"review.verdict","subject":"pr:#649","outcome":"pass","data":{"axis":"1","lenses":"six","roster":"6"}}\n' >>"$RLV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l2","kind":"review.verdict","subject":"pr:#649","outcome":"pass","data":{"axis":"1","lenses":"0","roster":"all"}}\n' >>"$RLV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l3","kind":"note","subject":"pr:#649","data":{"lenses":"many"}}\n' >>"$RLV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l4","kind":"review.verdict","subject":"pr:#649","outcome":"pass","data":{"axis":"2"}}\n' >>"$RLV/events/$TODAY.jsonl"
+t_run_split env TRACE_CONFIG="$RLVON" sh "$TRACE" verify
+[ "$S_STATUS" = 0 ] && pass "verify over a malformed lens count exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over a malformed lens count: $S_OUT"
+case $S_ERR in *"$TODAY.jsonl:2:"*review.verdict*lenses*six*"[0-9]+"*advisory*) pass "and names the verdict's file:line, the key, the value and the shape" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict, lenses, six and the shape: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:3:"*roster*all*) pass "and the roster key too" ;; *) fail "stderr did not name $TODAY.jsonl:3 roster all: $S_ERR" ;; esac
+case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"* | *"$TODAY.jsonl:5:"*) fail "verify advised on a digit count, another kind, or a verdict with no count: $S_ERR" ;; *) pass "and leaves digits, another kind's key and a count-less verdict alone" ;; esac
+for _rl_cmd in summary export; do
+	t_run_split env TRACE_CONFIG="$RLVON" sh "$TRACE" $_rl_cmd
+	[ "$S_STATUS" = 0 ] && pass "$_rl_cmd over malformed lens counts still exits 0" || fail "$_rl_cmd exited $S_STATUS: $S_ERR"
+	case $S_ERR in *"2 review.verdict lens count"*verify*) pass "and $_rl_cmd says the count, 2, once, pointing at verify" ;; *) fail "$_rl_cmd's lens-count advisory lacks the count or the pointer: $S_ERR" ;; esac
+	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_rl_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+done
+sed -n '/Amended 2026-10-09 (#663)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'data.lenses' &&
+	pass "ADR-0008 carries the #663 amendment naming data.lenses" || fail "ADR-0008 has no 'Amended 2026-10-09 (#663)' naming data.lenses"
+
 t_done "trace script"
