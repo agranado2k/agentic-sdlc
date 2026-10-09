@@ -146,33 +146,38 @@ _kit_fold() {
 # rest join the unreachable list; a session whose family holds no candidate is
 # passed on as it came. The bridge runs for the reviewer tier only — the one
 # tier the resolver reads either list for.
-_kit_values() {
+# _kit_policy values|candidates [domain] — one subshell that sources the
+# resolver and its policy, so this wrapper keeps no copy of either:
+#   values      every value the policy maps (the resolver's agents_values, the
+#               enumeration --ids reads too), those that cross to a declared
+#               agent harness left out — they have no spawn word to fold;
+#   candidates  the reviewer walk's candidates, model halves, in the
+#               resolver's own order (scripts/agents.lib.sh, "THE WALK"): the
+#               resolver's answer for the domain, the plain reviewer, the
+#               fallback list. The first is asked of the resolver itself, with
+#               no session or unreachable name, so its domain check — the
+#               whitelist for its own eval — is the only one; a malformed
+#               domain prints nothing here and the resolver says why below.
+_kit_policy() {
 	(
 		. scripts/agents.lib.sh
 		agents_load_config >/dev/null 2>&1
 		AGENTS_TIER_QUIET=1
-		agents_values 2>/dev/null | while IFS= read -r _kit_v; do
-			agents_split_harness "$_kit_v"
-			[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
-		done
-	)
-}
-# _kit_candidates [domain] — the reviewer walk's in-session candidates: the
-# domain's value, the plain reviewer, the fallback list — the resolver's
-# order. A domain the resolver would refuse as malformed names no variable
-# here; the resolver says why below.
-_kit_candidates() {
-	(
-		. scripts/agents.lib.sh
-		agents_load_config >/dev/null 2>&1
+		if [ "$1" = values ]; then
+			agents_values 2>/dev/null | while IFS= read -r _kit_v; do
+				agents_split_harness "$_kit_v"
+				[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
+			done
+			exit 0
+		fi
 		_kit_dv=
-		case ${1:-} in
-		'' | *[!a-z0-9-]*) ;;
-		*) eval "_kit_dv=\${AGENT_TIER_REVIEWER_$(printf '%s' "$1" | tr 'a-z-' 'A-Z_'):-}" ;;
-		esac
+		[ -z "${2:-}" ] || _kit_dv=$(
+			unset AGENT_SESSION_MODEL AGENT_UNREACHABLE_MODELS
+			sh scripts/agents.lib.sh --model reviewer "$2" 2>/dev/null
+		) || _kit_dv=
 		for _kit_v in $_kit_dv ${AGENT_TIER_REVIEWER:-} ${AGENT_TIER_REVIEWER_FALLBACK:-}; do
 			agents_split_harness "$_kit_v"
-			[ -n "$_ah_harness" ] || printf '%s\n' "$_kit_v"
+			printf '%s\n' "$_ah_model"
 		done
 	)
 }
@@ -207,11 +212,11 @@ esac
 if [ "$_kit_tier" = reviewer ] && [ -f "$AGENTS_CONFIG" ] &&
 	{ [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] || [ -n "${AGENT_SESSION_MODEL:-}" ]; }; then
 	_kit_ids=' '
-	for _kit_v in $(_kit_values); do
+	for _kit_v in $(_kit_policy values); do
 		_kit_ids="$_kit_ids$_kit_v "
 	done
 	_kit_cands=' '
-	for _kit_v in $(_kit_candidates "$_kit_domain"); do
+	for _kit_v in $(_kit_policy candidates "$_kit_domain"); do
 		_kit_cands="$_kit_cands$_kit_v "
 	done
 	_kit_unr=

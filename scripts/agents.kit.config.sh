@@ -159,10 +159,10 @@ AGENT_TIER_MECHANICAL='sonnet'   # 2026-10-08 (ADR-0018): the newest Sonnet, by 
 AGENT_CASCADE_MECHANICAL='sonnet'
 
 # ---------------------------------------------------------------------------
-# 4. REVIEWER — strongest reasoning, in fresh context, and DIFFERENT from
-#    whatever implemented the diff. A cheap verdict is a rubber stamp, and a
-#    reviewer sharing the implementer's model is one editorial pass wearing a
-#    second hat.
+# 4. REVIEWER — in fresh context, on the family the operator chose for
+#    review (ADR-0020), and DIFFERENT from whatever implemented the diff: a
+#    reviewer sharing the implementer's model is one editorial pass wearing
+#    a second hat.
 # ---------------------------------------------------------------------------
 #    The kit's answer to that is a DIFFERENT VENDOR, not just a different
 #    model: a reviewer that shares the author's training shares the author's
@@ -203,9 +203,8 @@ AGENT_TIER_REVIEWER='sonnet'
 #    THE `self-implemented` DOMAIN IS UNMAPPED, deliberately. It names the
 #    situation the plain lookup cannot see — the session itself implemented
 #    the diff (`sh scripts/agents.kit.sh reviewer self-implemented`; the
-#    glossary's "Task domain" entry) — and from 2026-10-05 (#546, ADR-0007
-#    amended) to ADR-0020 it was the pinned claude-sonnet-5-5, a model no
-#    pinned session tier ran on. With the reviewer itself on the Sonnet
+#    glossary's "Task domain" entry); ADR-0020 records what it mapped
+#    before. With the reviewer itself on the Sonnet
 #    family its answer is the plain tier's, so mapping it would repeat that
 #    value as a second decision to keep in sync (the same reason there is no
 #    AGENT_TIER_IMPLEMENTER_CODE, below). The domain still means something:
