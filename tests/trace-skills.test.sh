@@ -1827,4 +1827,68 @@ for sk in implement review-pr merge-train housekeeping; do
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "28. A review records how many lenses ran, and its summary says when it ran short (#663)"
+# ---------------------------------------------------------------------------
+# Retro 20261008T160141Z: 6 of 16 reviews ran without the lens fan-out — five
+# in a single context, one handed back before its lenses returned — and a
+# thin review read the same as a full one. /review-pr's axis-1 verdict line
+# carries data.lenses (the lens agents that returned a report) beside
+# data.roster (the lenses it planned), 0 on a single-reviewer pass; its
+# summary's `Lenses run:` line names a short and a single-context review.
+# lens_count_missing <skill file> — the #663 rules the skill does not hold.
+lens_count_missing() {
+	_lc_out=''
+	_lc_v=$(t_trace_spans "$1" | grep -F 'kind=review.verdict' | grep -F 'data.axis=1' | head -1)
+	printf '%s\n' "$_lc_v" | grep -qF 'data.lenses=<' || _lc_out="$_lc_out verdict:data.lenses"
+	printf '%s\n' "$_lc_v" | grep -qF 'data.roster=<' || _lc_out="$_lc_out verdict:data.roster"
+	_lc_sen=$(awk '{ gsub(/\. /, ".\n"); print }' "$1")
+	printf '%s\n' "$_lc_sen" | grep -F '`data.lenses`' | grep -F 'returned a report' | grep -qF '`0`' ||
+		_lc_out="$_lc_out lenses-defined:returned-and-0-single"
+	printf '%s\n' "$_lc_sen" | grep -F '`data.roster`' | grep -F 'planned' | grep -qF 'slice was empty' ||
+		_lc_out="$_lc_out roster-defined:planned-less-empty"
+	_lc_line=$(sed -n '/^### Review Summary$/,/^| | Severity | Count |$/p' "$1" | grep '^Lenses run: ')
+	for _lc_p in '<data.lenses> of <data.roster>' 'short review' 'single-context review'; do
+		printf '%s\n' "$_lc_line" | grep -qF -- "$_lc_p" || _lc_out="$_lc_out summary-line:'$_lc_p'"
+	done
+	printf '%s' "$_lc_out" | sed 's/^ //'
+}
+miss=$(lens_count_missing "$RP")
+[ -z "$miss" ] && pass "/review-pr records data.lenses of data.roster on its axis-1 verdict and says a short or single-context review in its summary" ||
+	fail "/review-pr does not record how many lenses ran: $miss (#663)"
+# The demo: the axis-1 verdict line as a full review and as a single-context
+# pass write it; both write and verify.
+dir="$SCRATCH/run.663"
+cmd=$(t_trace_runnable "$(t_trace_spans "$RP" | grep -F 'kind=review.verdict' | grep -F 'data.axis=1' | head -1)")
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) &&
+	pass "the axis-1 verdict line runs with its counts" || fail "the axis-1 verdict line does not run: $cmd"
+one=$(printf '%s\n' "$cmd" | sed 's/data\.lenses=[0-9]*/data.lenses=0/; s/ reason=/ data.agent=single-reviewer reason=/')
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$one" >/dev/null 2>&1 ) &&
+	pass "and as a single-context pass writes it, data.lenses=0" || fail "the single-context verdict does not run: $one"
+grep -F '"kind":"review.verdict"' "$dir"/events/*.jsonl 2>/dev/null | grep -F '"lenses":"0"' | grep -qF '"roster":"6"' &&
+	pass "the trace holds the single-context verdict's 0 of 6" || fail "the trace has no review.verdict with lenses 0 of roster 6"
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) &&
+	pass "and what they wrote verifies" || fail "the lens-count verdicts ran but the trace does not verify"
+# The script refuses what the skill must never write: the count in words.
+bad=$(printf '%s\n' "$cmd" | sed 's/data\.lenses=[0-9]*/data.lenses=six/')
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$bad" >/dev/null 2>&1 ) &&
+	fail "the verdict line wrote data.lenses=six — the count is not held to digits" ||
+	pass "the same line with data.lenses=six is refused"
+# Baits: one per rule, so none survives its own deletion.
+for b in \
+	's/ data\.lenses=<[^>]*>//' \
+	's/ data\.roster=<[^>]*>//' \
+	's/returned a report/answered/g' \
+	's/less any lens whose slice was empty/less some/g' \
+	's/^Lenses run: .*$//' \
+	'/^Lenses run: /s/short review/thin/' \
+	'/^Lenses run: /s/single-context review/one pass/'; do
+	sed "$b" "$RP" >"$SCRATCH/bait663.md"
+	if ! cmp -s "$SCRATCH/bait663.md" "$RP" && [ -n "$(lens_count_missing "$SCRATCH/bait663.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"
