@@ -150,8 +150,20 @@ with the run log. For a release, that is the result after its one re-run;
 a release whose tag could not be pushed stops the train too — merged, not
 landed.
 
-**Record each PR's fate as the train decides it**, one event per PR (`<ticket>`
-is the ticket it implemented), in the landing script's fields:
+**Where the root `AGENTS.md` names a landing script, 4c–4d are that
+script's.** After 4a and 4b, run it on the PR the way the manual's row says a
+train does: it merges, tags a release, waits, and records the PR's
+`merge.land` — one gate and one emitter for a train and a by-hand landing.
+Its exit 2 is its refusal — not green, not mergeable, no iteration at the
+head — and skips the PR exactly as a red at 4b does, nothing merged; a
+non-zero exit other than 2 stops the train, as a failed 4d does (hard rule
+6); 0 is landed. The train then writes no `merge.land` of its own for that
+PR: the line below is the no-script path only. The `feedback` after it stays
+the train's on both paths.
+
+**With no landing script, record each PR's fate as the train decides it**,
+one event per PR (`<ticket>` is the ticket it implemented), in the landing
+script's fields:
 `sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.via=train data.method=merge data.merge_sha='<the merge sha>' data.waited='<seconds 4d waited>' data.workflows=success|failure|none|unknown data.implement=yes|no data.implement_tier='<its tier>' data.release=v<version> data.tagged=yes|no data.reruns='<runs 4c2 re-ran>' reason='<the PR title, its quote characters dropped; why it was skipped; what stopped the train>' || :`.
 A key with no answer is left off: the merge's on a PR not merged, the
 release's on a merge that bumps nothing. Read the body's `<!-- implement: -->` line through a filter that

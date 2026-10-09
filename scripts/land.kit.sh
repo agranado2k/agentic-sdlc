@@ -3,7 +3,7 @@
 # Kit-authoring only, never shipped (bootstrap.sh's KIT_ONLY list deletes it,
 # with tests/land.test.sh).
 #
-#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>']
+#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -61,6 +61,12 @@
 #      no tracked change uncommitted, and not diverged, and says so on stderr; a dirty, off-base, detached
 #      or diverged root is left untouched and named (#636). No event, no
 #      exit status: the landing is what the record is about.
+#   With --train, /merge-train is the caller (#662): it ran its own ordering
+#   and update-branch steps and lands each PR here, so a train meets the same
+#   gate and writes merge.land through the same emitter. merge.land is marked
+#   data.via=train, and step 5 is skipped: the train asks the verdict after
+#   the merge and records who answered (data.by), which this run cannot.
+#   --train with --unasked is a usage error — the train records the verdict.
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
 #   merge commit the forge never names (data.workflows=unknown, no sha), and
@@ -93,11 +99,12 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 
 usage() {
 	cat >&2 <<'EOF'
-usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>']
+usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
   --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
+  --train     /merge-train is landing it: merge.land says via=train, and the verdict is left to the train
 exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 EOF
 	exit 2
@@ -112,6 +119,7 @@ PR=
 TICKET=
 UNASKED=
 NO_ITERATION=
+VIA=land
 while [ $# -gt 0 ]; do
 	case $1 in
 	--ticket)
@@ -132,6 +140,7 @@ while [ $# -gt 0 ]; do
 		NO_ITERATION=$2
 		shift
 		;;
+	--train) VIA=train ;;
 	-h | --help) usage ;;
 	-*) note "unknown option '$1'"; usage ;;
 	*) [ -z "$PR" ] || usage; PR=$1 ;;
@@ -139,6 +148,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 case $PR in '' | *[!0-9]*) [ -z "$PR" ] || note "'$PR' is not a pull request number"; usage ;; esac
+[ "$VIA" = land ] || [ -z "$UNASKED" ] || { note "--train leaves the verdict to the train; drop --unasked"; usage; }
 case $TICKET in *[!0-9]*) note "--ticket '$TICKET' is not a ticket number"; usage ;; esac
 command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
 
@@ -249,7 +259,7 @@ fi
 # --- 2. the merge -------------------------------------------------------------
 if ! gh pr merge "$PR" --merge >&2; then
 	note "the forge rejected the merge of PR #$PR — re-read its state; nothing else was done"
-	trace loud kind=merge.land "subject=pr:#$PR" "$@" outcome=stopped data.method=merge data.via=land \
+	trace loud kind=merge.land "subject=pr:#$PR" "$@" outcome=stopped data.method=merge "data.via=$VIA" \
 		"reason=the forge rejected the merge"
 	exit 1
 fi
@@ -418,7 +428,7 @@ if [ -n "$IMPL" ]; then
 		IMPL_TIER=$_il_tier
 	fi
 fi
-set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" data.via=land "reason=$TITLE" \
+set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" "data.via=$VIA" "reason=$TITLE" \
 	"data.implement=$IMPLEMENT"
 [ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"
 [ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
@@ -426,34 +436,40 @@ set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAI
 trace loud kind=merge.land "$@"
 
 # --- 5. the verdict ---------------------------------------------------------------
-VERDICT=unasked
-WHY=$UNASKED
-if [ -z "$UNASKED" ]; then
-	if [ -t 0 ]; then
-		WHY="the operator left the prompt without a verdict"
-		while :; do
-			printf 'Did the slice hit its target? hit | adjusted | missed: ' >&2
-			read -r ans || break
-			case $ans in
-			hit | adjusted | missed)
-				printf 'One line: what it taught, or what gets re-cut: ' >&2
-				read -r WHY || WHY=
-				VERDICT=$ans
-				break
-				;;
-			esac
-			note "answer hit, adjusted or missed"
-		done
-	else
-		WHY="no terminal at the prompt, so nobody was asked"
+# Under --train the verdict is the train's: it asks after the merge and says
+# who answered, so this run writes no feedback a second one would join.
+if [ "$VIA" = train ]; then
+	VERDICT="left to the train"
+else
+	VERDICT=unasked
+	WHY=$UNASKED
+	if [ -z "$UNASKED" ]; then
+		if [ -t 0 ]; then
+			WHY="the operator left the prompt without a verdict"
+			while :; do
+				printf 'Did the slice hit its target? hit | adjusted | missed: ' >&2
+				read -r ans || break
+				case $ans in
+				hit | adjusted | missed)
+					printf 'One line: what it taught, or what gets re-cut: ' >&2
+					read -r WHY || WHY=
+					VERDICT=$ans
+					break
+					;;
+				esac
+				note "answer hit, adjusted or missed"
+			done
+		else
+			WHY="no terminal at the prompt, so nobody was asked"
+		fi
 	fi
+	# On the ticket, related to the PR — the join to merge.land; on the PR alone
+	# when no ticket is known. A verdict given with no line carries no reason.
+	set -- "subject=$FB_SUBJECT" "outcome=$VERDICT"
+	[ -z "$TICKET" ] || set -- "$@" "related=pr:#$PR"
+	[ -z "$WHY" ] || set -- "$@" "reason=$WHY"
+	trace quiet kind=feedback "$@"
 fi
-# On the ticket, related to the PR — the join to merge.land; on the PR alone
-# when no ticket is known. A verdict given with no line carries no reason.
-set -- "subject=$FB_SUBJECT" "outcome=$VERDICT"
-[ -z "$TICKET" ] || set -- "$@" "related=pr:#$PR"
-[ -z "$WHY" ] || set -- "$@" "reason=$WHY"
-trace quiet kind=feedback "$@"
 
 # --- 6. the root checkout follows the landing (#636) ---------------------------
 # The hooks run from the root checkout, so a landed hook fix reaches no session

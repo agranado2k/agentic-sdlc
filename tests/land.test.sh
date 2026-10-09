@@ -958,4 +958,47 @@ land STUB_MERGE_RC=1 405 --no-iteration 'forge rejects it'
 [ "$(events 405 pr.open)" = 1 ] && pass "a merge the forge rejects still records the PR opened" ||
 	fail "$(events 405 pr.open) pr.open events for the rejected pr:#405"
 
+# ---------------------------------------------------------------------------
+banner "13. The train lands through this script: --train (#662)"
+# ---------------------------------------------------------------------------
+# On 2026-10-08 a train landed four PRs with their release check red: it wrote
+# its own merge.land and so never met this script's gate. Where the root
+# manual names the landing script, /merge-train runs it per PR with --train
+# after its own ordering and update-branch steps. The gate is the same one —
+# a red required check is exit 2, nothing merged, nothing recorded, so the
+# train skips the PR — and the record is this script's, marked
+# data.via=train. The verdict stays the train's: it asks after the merge and
+# says who answered (data.by), which no landing run can, so --train writes
+# no feedback of its own.
+iterated 500 501 502
+land STUB_CHECKS_RC=1 500 --train
+s_assert_status 2 "the train's landing of a PR with a red required check is refused: exit 2, the train's skip"
+[ "$(merges)" = 0 ] && pass "and the PR is skipped, not merged — no merge call reached the forge" ||
+	fail "the train's landing merged a PR with a red required check"
+[ "$(show 'pr:#500' --kind merge.land | grep -c .)" = 0 ] && pass "and no merge.land is recorded for the skipped PR" ||
+	fail "a refused train landing recorded a merge.land: $(show 'pr:#500' --kind merge.land)"
+s_assert_err_has "checks" "and stderr names the checks as what refused it"
+
+land 501 --train
+s_assert_status 0 "a green PR the train lands through the script exits 0"
+[ "$(merges)" = 1 ] && pass "merged once" || fail "$(merges) merge calls for the train's green PR"
+ml=$(show 'pr:#501' --kind merge.land)
+for tok in '"outcome":"landed"' '"via":"train"' "\"merge_sha\":\"$STUB_SHA\"" '"iterated":"yes"'; do
+	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "the train's merge.land carries $tok" || fail "the train's merge.land lacks $tok: $ml"
+done
+printf '%s\n' "$ml" | grep -qF '"via":"land"' && fail "a train landing is marked as a by-hand one: $ml" ||
+	pass "and is not marked data.via=land"
+[ "$(events 501 feedback)" = 0 ] && pass "--train writes no feedback: the verdict is the train's to record" ||
+	fail "--train wrote $(events 501 feedback) feedback event(s) — the train's own would make a second"
+s_assert_out_has "feedback: left to the train" "stdout says the verdict is left to the train"
+
+land 502 --train --unasked 'nobody here'
+s_assert_status 2 "--train with --unasked is a usage error: the train records the verdict"
+[ "$(merges)" = 0 ] && pass "and nothing is merged" || fail "a usage error still merged"
+
+# The manual's row is where the train reads how to run the script.
+grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- '--train' &&
+	pass "the root manual's landing row names --train" ||
+	fail "the root manual's landing row does not name --train — the train cannot tell how to run the script"
+
 t_done "land one PR by hand"
