@@ -765,6 +765,11 @@ for f in "$WORKER" "$TWIN"; do
 	! cmp -s "$SCRATCH/bait647.md" "$f" && [ -n "$(declined_said_in "$SCRATCH/bait647.md")" ] &&
 		pass "bait: a declined bullet dropped from $f goes red" ||
 		fail "bait: with a declined bullet dropped from $f, the list still reads as carried — or the bait planted nothing"
+	# Bait: the lead-in reworded in a copy of the file goes red too.
+	sed 's/Each raise below was rejected/Each raise below was disputed/' "$f" >"$SCRATCH/bait647-lead.md"
+	! cmp -s "$SCRATCH/bait647-lead.md" "$f" && [ -n "$(declined_said_in "$SCRATCH/bait647-lead.md")" ] &&
+		pass "bait: the declined list's lead-in reworded in $f goes red" ||
+		fail "bait: with the lead-in reworded in $f, the list still reads as carried — or the bait planted nothing"
 done
 
 
