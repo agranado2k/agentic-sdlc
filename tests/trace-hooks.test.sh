@@ -5005,20 +5005,21 @@ if [ "$HAVE_NODE" = 1 ] && [ -n "$B674" ]; then
 	[ "$(sum_tok tok_out agent.stop)" = 301 ] && [ "$(sum_tok tok_in agent.stop)" = 20 ] &&
 		pass "and the agent's stops price the whole transcript (tok_in 20, tok_out 301) — nothing lost past the bound" ||
 		fail "the agent's stops sum to tok_in '$(sum_tok tok_in agent.stop)', tok_out '$(sum_tok tok_out agent.stop)', not 20/301"
-	# The line really landed past the bound — on any clock: a hand-back that
-	# landed inside it would price the first stop, and these legs would pass
-	# vacuously.
-	[ "$(str "$F1" outcome)" = fail ] && [ -z "$(num "$F1" tok_out)" ] && [ -z "$(str "$F1" last_msg)" ] &&
-		pass "the first stop gave up, unpriced, and left no anchor" ||
-		fail "the first stop did not give up without an anchor — the line landed inside the bound: $F1"
-	# How long it waited needs section 27's millisecond clock: without one the
-	# hook counts its naps, a figure that falls short of the time that passed.
+	# The first stop's legs need section 27's millisecond clock, as section
+	# 44's do: without one the hook counts its naps, which fall short of the
+	# time that passed, so its wait can outrun the half-second margin and
+	# price the first stop. The legs above hold on any clock.
 	if [ "$HAVE_MS_CLOCK" = 1 ]; then
+		# The line really landed past the bound: one that landed inside it
+		# would price the first stop, and the legs above would pass vacuously.
+		[ "$(str "$F1" outcome)" = fail ] && [ -z "$(num "$F1" tok_out)" ] && [ -z "$(str "$F1" last_msg)" ] &&
+			pass "the first stop gave up, unpriced, and left no anchor" ||
+			fail "the first stop did not give up without an anchor — the line landed inside the bound: $F1"
 		[ "$(str "$F1" waited_ms)" -ge "$B674" ] 2>/dev/null &&
 			pass "and it gave up at the bound (waited_ms $(str "$F1" waited_ms))" ||
 			fail "the first stop waited '$(str "$F1" waited_ms)' ms, short of the $B674 ms bound: $F1"
 	else
-		note "no millisecond clock on this host: the first stop's wait against the bound was not asserted"
+		note "no millisecond clock on this host: the first stop's give-up at the bound was not asserted"
 	fi
 else
 	note "node is not on PATH, or the kit names no bound: the late hand-back legs did not run"
