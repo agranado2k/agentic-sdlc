@@ -2673,7 +2673,8 @@
 # skill dispatcher the root manual names (9a — take the directory whole).
 # From #670 (ticket #662): /merge-train lands each PR through the landing
 # script where the root manual names one, and records no merge.land of its
-# own for it (9a).
+# own for it (9a). From #714 (ticket #699): /pr-iterate converges only on a
+# head a review.verdict judged, and names the re-review as a red reason (9a).
 # Kit-only, never shipped: this PR (ticket #688) — the landing script
 # records workflows=unknown and exits 1 when a merge whose tree declares a
 # push-triggered workflow gets no run, or the tree cannot be read; #667
