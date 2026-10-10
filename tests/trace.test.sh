@@ -637,21 +637,59 @@ adr8_next_num=$(basename "${ADR8_NEXT:-none}" | cut -c1-4)
 [ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, ADR-$adr8_next_num, and the record exists" ||
 	fail "ADR-0008's status line does not read 'Superseded by NNNN' naming a record that exists"
 adr8_clause() { t_adr_clause "$ADR8_NEXT" "$1"; }
-# Clause N of the successor is clause N of ADR-0008: each opens with the bold
-# lead ADR-0008's clause N opens with, so a missing, renumbered or swapped
-# clause is named (review of PR #715, M-2).
-_a8_bad=
-_a8_k=1
-while [ "$_a8_k" -le 10 ]; do
-	_a8_title=$(t_adr_clause_title "$ADR8_OLD" "$_a8_k")
-	case $(t_adr_clause_title "$ADR8_NEXT" "$_a8_k") in
-	"${_a8_title:-no lead in ADR-0008}"*) ;;
-	*) _a8_bad="$_a8_bad $_a8_k" ;;
-	esac
-	_a8_k=$((_a8_k + 1))
-done
+# adr8_leads_moved <old> <new> — the numbers, 1 to 10, of the clauses whose
+# bold lead in <new> does not open as <old>'s clause of the same number does,
+# each after a space; nothing when every clause kept its number. A missing,
+# renumbered or swapped clause is named (review of PR #715, M-2).
+adr8_leads_moved() {
+	_lm_k=1
+	while [ "$_lm_k" -le 10 ]; do
+		_lm_t=$(t_adr_clause_title "$1" "$_lm_k")
+		case $(t_adr_clause_title "$2" "$_lm_k") in
+		"${_lm_t:-no lead in ADR-0008}"*) ;;
+		*) printf ' %s' "$_lm_k" ;;
+		esac
+		_lm_k=$((_lm_k + 1))
+	done
+}
+# adr8_amendments_unnamed <old> <new> <records dir> — every amendment of <old>
+# that <new> does not name, each after a space: the tickets <old>'s
+# Superseded-by ledger says an amendment was decided for, and every record in
+# <records dir> that amends ADR-0008 (ADR-0021 clause 4). The ledger names 23
+# tickets; fewer read means the read broke, and a loop over nothing would pass
+# having checked nothing (review of PR #715, L-4) — so that prints why instead.
+adr8_amendments_unnamed() {
+	_au_n=0 _au_miss=
+	for _au_t in $(sed -n '/^- \*\*Superseded by\*\*/p' "$1" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+') \
+		$(grep -l 'amends ADR-0008' "$3"/0*.md 2>/dev/null | sed 's,.*/\([0-9]*\)-.*,ADR-\1,'); do
+		_au_n=$((_au_n + 1))
+		grep -qF -- "$_au_t" "${2:-/dev/null}" || _au_miss="$_au_miss $_au_t"
+	done
+	if [ "$_au_n" -lt 23 ]; then printf " (only %s amendments read from ADR-0008's ledger)" "$_au_n"; else printf '%s' "$_au_miss"; fi
+}
+# adr8_holds_raise_rule <new> — 0 when <new>'s clause 1 holds finding.raise's
+# id to [CHML]-[0-9]+ in that rule's own row. Matching the two tokens anywhere
+# in the clause passed with the row deleted: both already appear in the
+# finding.triage rows above it (review of PR #715, M-3).
+adr8_holds_raise_rule() {
+	case $(t_adr_clause "$1" 1) in *'`finding.raise` `data.id` — `[CHML]-[0-9]+`'*) return 0 ;; esac
+	return 1
+}
+_a8_bad=$(adr8_leads_moved "$ADR8_OLD" "$ADR8_NEXT")
 [ -z "$_a8_bad" ] && pass "the successor's clauses 1 to 10 open as ADR-0008's clauses 1 to 10 do — numbers kept" ||
 	fail "the successor's clause does not open as ADR-0008's clause of the same number:$_a8_bad"
+# Baits: each repaired check, run on a copy of the record that breaks the rule
+# it holds, must name the break — a check that cannot fail is a claim.
+ADR8_BAIT="$SCRATCH/adr8-bait"
+mkdir -p "$ADR8_BAIT"
+awk '/^2\. \*\*/ { two = 1; three = 0 } /^3\. \*\*/ { two = 0; three = 1 } /^4\. \*\*/ { three = 0 }
+	two { sub(/^2\./, "3."); b = b $0 "\n"; next }
+	three { sub(/^3\./, "2."); print; next }
+	!two && !three && b != "" { printf "%s", b; b = "" }
+	{ print }' "$ADR8_NEXT" >"$ADR8_BAIT/swapped.md"
+[ "$(adr8_leads_moved "$ADR8_OLD" "$ADR8_BAIT/swapped.md")" = " 2 3" ] &&
+	pass "bait: with clauses 2 and 3 swapped, the lead check names 2 and 3" ||
+	fail "bait: the lead check did not name exactly 2 and 3 on a successor with them swapped: '$(adr8_leads_moved "$ADR8_OLD" "$ADR8_BAIT/swapped.md")'"
 grep -qF -- 'supersedes ADR-0008' "${ADR8_NEXT:-/dev/null}" && pass "its header says it supersedes ADR-0008" || fail "the successor's header does not say 'supersedes ADR-0008'"
 grep -q '^- \*\*Superseded by\*\*:.*ADR-'"$adr8_next_num" "$ADR8_OLD" && pass "and ADR-0008's Superseded-by line names it back" ||
 	fail "ADR-0008's Superseded-by line does not name ADR-$adr8_next_num"
@@ -665,16 +703,20 @@ grep -qF "| [$adr8_next_num](" "$KIT/docs/adr/INDEX.md" && pass "and the success
 # No amendment is dropped: every ticket ADR-0008's header names as the one an
 # amendment was decided for, and every record that amended ADR-0008 since it
 # closed (ADR-0021 clause 4), is named in the successor.
-_a8_miss= _a8_n=0
-for _a8_t in $(sed -n '/^- \*\*Superseded by\*\*/p' "$ADR8_OLD" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+') \
-	$(grep -l 'amends ADR-0008' "$KIT"/docs/adr/0*.md | sed 's,.*/\([0-9]*\)-.*,ADR-\1,'); do
-	_a8_n=$((_a8_n + 1))
-	grep -qF -- "$_a8_t" "${ADR8_NEXT:-/dev/null}" || _a8_miss="$_a8_miss $_a8_t"
-done
-# ADR-0008's ledger names 23 tickets; fewer read means the read broke, and an
-# empty list would pass having checked nothing (review of PR #715, L-4).
-[ "$_a8_n" -ge 23 ] && [ -z "$_a8_miss" ] && pass "the successor names every amendment of ADR-0008, by ticket and by record" ||
-	fail "the successor does not name:${_a8_miss:- (only $_a8_n amendments read from ADR-0008's ledger)}"
+_a8_miss=$(adr8_amendments_unnamed "$ADR8_OLD" "$ADR8_NEXT" "$KIT/docs/adr")
+[ -z "$_a8_miss" ] && pass "the successor names every amendment of ADR-0008, by ticket and by record" ||
+	fail "the successor does not name:$_a8_miss"
+sed '/^- \*\*Superseded by\*\*/d' "$ADR8_OLD" >"$ADR8_BAIT/no-ledger.md"
+case $(adr8_amendments_unnamed "$ADR8_BAIT/no-ledger.md" "$ADR8_NEXT" "$ADR8_BAIT") in
+*'only 0 amendments read'*) pass "bait: with ADR-0008's ledger gone, the amendment check fails having read nothing" ;;
+*) fail "bait: the amendment check passed a ledger it read nothing from" ;;
+esac
+_a8_last=$(sed -n '/^- \*\*Superseded by\*\*/p' "$ADR8_OLD" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+' | tail -1)
+grep -vF -- "$_a8_last" "$ADR8_NEXT" >"$ADR8_BAIT/unnamed.md"
+case $(adr8_amendments_unnamed "$ADR8_OLD" "$ADR8_BAIT/unnamed.md" "$KIT/docs/adr") in
+*" $_a8_last"*) pass "bait: with $_a8_last's lines cut from the successor, the amendment check names it" ;;
+*) fail "bait: the amendment check did not name $_a8_last, cut from the successor" ;;
+esac
 
 banner "12. summary groups the trace, counts it, sums its tokens and prices it on read"
 # A READER fixture is written as FILES, not emitted: only a file whose name is
@@ -2174,10 +2216,12 @@ _ri_v=no
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-07 (#567)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "ADR-0008 carries the dated #567 amendment naming the raise's shape" || fail "ADR-0008 has no '*Amended 2026-10-07 (#567):*' block naming [CHML]-[0-9]+"
-case $(adr8_clause 1) in
-*'`finding.raise` `data.id` — `[CHML]-[0-9]+`'*) pass "the successor's clause 1 folds the #567 rule in: a raise's id is [CHML]-[0-9]+" ;;
-*) fail "the successor's clause 1 does not hold \`finding.raise\`'s id to \`[CHML]-[0-9]+\` (the #567 rule)" ;;
-esac
+adr8_holds_raise_rule "$ADR8_NEXT" && pass "the successor's clause 1 folds the #567 rule in: a raise's id is [CHML]-[0-9]+" ||
+	fail "the successor's clause 1 does not hold \`finding.raise\`'s id to \`[CHML]-[0-9]+\` (the #567 rule)"
+awk '/^     - `finding\.raise` `data\.id` —/ { cut = 1; next } cut && /^     - / { cut = 0 } !cut' "$ADR8_NEXT" >"$ADR8_BAIT/no-raise-rule.md"
+adr8_holds_raise_rule "$ADR8_BAIT/no-raise-rule.md" &&
+	fail "bait: the #567 check passed a successor with the finding.raise row deleted" ||
+	pass "bait: with the finding.raise row deleted, the #567 check fails"
 _ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md")
 [ "$(printf '%s\n' "$_ri_lines" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$_ri_lines" | grep -q 'data\.id=[^ ]*INITIAL' &&
 	pass "/review-pr's raise lines never offer INITIAL-N as data.id's value" || fail "a /review-pr raise line still offers the INITIAL-N placeholder as data.id"
