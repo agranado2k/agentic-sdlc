@@ -183,7 +183,7 @@ trace_read() {
 # read back by its name (#684): reordering the query, or a forge answering the
 # fields in another order, never shifts one field into another.
 STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,headRefName,title \
-	--jq '{state, isDraft: (.isDraft|tostring), mergeable, mergeStateStatus, reviewDecision: (.reviewDecision // ""), baseRefName,
+	--jq '{state, isDraft, mergeable, mergeStateStatus, reviewDecision: (.reviewDecision // ""), baseRefName,
 		ticket: ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), headRefName: (.headRefName // ""), title}
 		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"') ||
 	refuse "the forge did not answer for it"
