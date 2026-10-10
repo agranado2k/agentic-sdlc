@@ -2380,7 +2380,6 @@ al_ask "$AL_WT" --all
 [ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_B" "$AL_N")" ] && [ -z "$S_ERR" ] &&
 	pass "--all prints the top of every session's stack and of the session-less one, one per line" ||
 	fail "--all: exit $S_STATUS, stdout '$S_OUT', want $AL_A2 $AL_B $AL_N; stderr '$S_ERR'"
-case $S_OUT in *"$AL_A1"*) fail "--all printed a run below a top: $S_OUT" ;; *) pass "and only the tops — never a run below one" ;; esac
 al_ask "$AL_REPO" --all
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
@@ -2403,6 +2402,14 @@ if [ "$(id -u)" != 0 ]; then
 	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL_KEY.al-a.runs exists and cannot be read"*) true ;; *) false ;; esac &&
 		pass "one stack that exists and cannot be read refuses the whole answer, exit 2, naming it" ||
 		fail "--all over an unreadable stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	# A run directory that cannot be listed hides every stack in it: refused
+	# too, never answered as "nothing open".
+	chmod 000 "$AL/current"
+	al_ask "$AL_WT" --all
+	chmod 700 "$AL/current"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL/current"*) true ;; *) false ;; esac &&
+		pass "a run directory that cannot be listed refuses the answer, exit 2, naming it" ||
+		fail "--all over an unlistable run directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi

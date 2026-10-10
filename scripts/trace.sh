@@ -656,7 +656,7 @@ trace_key() {
 
 # trace_stack_name <session> — the one spelling of a run stack's path under
 # TRACE_KEY: current/<key>.<session>.runs, or current/<key>.runs for an empty
-# session. `stack --all` hands it `*` and reads the answer as a pattern.
+# session.
 trace_stack_name() {
 	printf '%s/current/%s%s.runs' "$TRACE_ROOT_DIR" "$TRACE_KEY" "${1:+.$1}"
 }
@@ -1237,27 +1237,24 @@ trace_stack_of() {
 }
 
 # trace_stack_tops <dir> — `stack --all`'s answer: the top of every stack keyed
-# on TRACE_KEY, the per-toplevel one and each session's, named by
-# trace_stack_name and read one at a time through trace_stack, so the path and
-# the format stay those helpers'. The tops are gathered before any is printed,
-# so a refusal leaves stdout empty. Pathname expansion is on for the one
-# directory listing and off again before anything else runs.
+# on TRACE_KEY, the per-toplevel one trace_stack_name spells and each session's
+# beside it, read one at a time through trace_stack so the format stays that
+# reader's. The tops are gathered before any is printed, so a refusal leaves
+# stdout empty — and a run directory that cannot be listed is a refusal too,
+# since every stack in it would read as "nothing open". Pathname expansion is on
+# for the one glob, whose only unquoted part is the session's `*`.
 trace_stack_tops() {
 	_st_dir=$1
 	_st_out=
 	_st_own=$(trace_stack_name '')
-	# Every session's name: the `*` trace_stack_name was handed is the one
-	# unquoted part, so a trace root holding a glob character matches itself.
-	_st_any=$(trace_stack_name '*')
-	_st_suf=${_st_any##*\*}
-	_st_pre=${_st_any%"$_st_suf"}
-	_st_pre=${_st_pre%\*}
+	if [ -d "$TRACE_ROOT_DIR/current" ] && { [ ! -r "$TRACE_ROOT_DIR/current" ] || [ ! -x "$TRACE_ROOT_DIR/current" ]; }; then
+		die "cannot list the run stacks of $_st_dir: $TRACE_ROOT_DIR/current cannot be read"
+	fi
 	_st_set=$-
 	set +f
-	set -- "$TRACE_ROOT_DIR/current"/*
+	set -- "$_st_own" "${_st_own%.runs}".*.runs
 	case $_st_set in *f*) set -f ;; esac
 	for TRACE_STACK in "$@"; do
-		case $TRACE_STACK in "$_st_own" | "$_st_pre"*"$_st_suf") ;; *) continue ;; esac
 		[ -e "$TRACE_STACK" ] || continue
 		trace_stack_readable || die "cannot read the run stack of $_st_dir"
 		_st_top=$(trace_stack top) || die "cannot read the run stack of $_st_dir"
