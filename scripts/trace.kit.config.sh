@@ -42,6 +42,24 @@ TRACE_TOOLS=1
 # COST: a stop whose transcript never completes (a subagent killed mid-turn)
 # now holds the session up to three seconds, and past it by one poll. A stop
 # naming a transcript that does not exist is still not waited for at all.
+#
+# RE-MEASURED, AND KEPT (#674). Retro 20261009T112925Z asked for a longer bound
+# because 15 give-ups carried a last line aged 2,986 to 3,570 ms. From
+# `trace.kit.sh export --csv`, agent.stop since 2026-10-02T08:07Z, 1,690 stops:
+# the 1,018 priced ones waited 0 / 14 / 160 / 1,810 ms at p50 / p90 / p99 /
+# max. The 672 give-ups all waited out the bound. Read against their
+# transcripts, 25 of the 27 since 2026-10-08 stood on an end_turn, then the
+# agent harness's hand-back nudge (an isMeta user line) written as the stop
+# fired: that line's age, not a final message's, is the 3 s the retro saw. All
+# 27 agents stopped again, and the line that ended the run landed 7.4 s to
+# 157 s after the first stop began (p50 9.9 s, p90 21 s); since 2026-10-05 the
+# earliest of 104 landed at 4.9 s. So the two populations do not meet: every
+# bound from 1,810 to 4,870 ms prices the same stops, and no bound a session
+# can afford reaches the second — which loses nothing, because a give-up
+# leaves no anchor and the agent's next stop counts it (ADR-0008, the #565
+# amendment; tests/trace-hooks.test.sh section 54 holds that past this bound).
+# A longer bound would only hold each nudged stop longer. 3000 stays: inside
+# the gap, about 1.7 times the priced maximum.
 TRACE_AGENT_WAIT_MS='3000'
 
 # THE ROOT CHECKOUT'S LAG (ticket #384). The kit's hooks run from the root
