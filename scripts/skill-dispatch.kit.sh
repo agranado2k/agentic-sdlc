@@ -74,6 +74,23 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 die() { echo "skill-dispatch: $1" >&2; exit 2; }
 
+# tier_names — the closed tier vocabulary, read from the resolver that owns it
+# rather than spelled here (#681). is_tier <word> — is it one of them? A
+# shaped word holds no space, so contiguous text inside the padded list
+# (`planner implementer`) never passes as a member.
+# Read once, here: a resolver that cannot be sourced stops the dispatcher
+# loudly rather than leaving it an empty vocabulary.
+TIER_NAMES=$(. "$ROOT/scripts/agents.lib.sh" 2>/dev/null && agents_tier_names) && [ -n "$TIER_NAMES" ] ||
+	die "cannot read the tier names from $ROOT/scripts/agents.lib.sh"
+tier_names() { printf '%s' "$TIER_NAMES"; }
+is_tier() {
+	case $1 in '' | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1 ;; esac
+	case " $(tier_names) " in *" $1 "*) return 0 ;; esac
+	return 1
+}
+# phase_names — the phases: the tiers, with `tester` after implementer.
+phase_names() { tier_names | sed 's/implementer/& tester/'; }
+
 # The policy this session resolves through is scripts/agents.kit.sh's choice,
 # asked for by name rather than recomputed: one definition of "which agent
 # harness am I", in the script whose job that already is.
@@ -95,18 +112,20 @@ usage() {
 	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
-	echo "  phases: planner implementer tester mechanical reviewer" >&2
+	echo "  phases: $(phase_names)" >&2
 	exit 2
 }
 
 # phase_tier <phase> — the resolver arguments a phase means, on one line.
 # `tester` is the only one that carries a domain; see the header.
 phase_tier() {
-	case "$1" in
-	planner | implementer | mechanical | reviewer) printf '%s\n' "$1" ;;
-	tester) printf 'implementer tests\n' ;;
-	*) die "unknown phase '$1'. The vocabulary is closed: planner implementer tester mechanical reviewer." ;;
-	esac
+	if is_tier "$1"; then
+		printf '%s\n' "$1"
+	elif [ "$1" = tester ]; then
+		printf 'implementer tests\n'
+	else
+		die "unknown phase '$1'. The vocabulary is closed: $(phase_names)."
+	fi
 }
 
 # skill_phase <skill> — the metadata.phase a skill declares. The leading
@@ -167,7 +186,7 @@ while [ "$_count" -gt 0 ]; do
 	_count=$((_count - 1))
 	case "$a" in
 	--tier)
-		[ "$_count" -gt 0 ] || die "--tier needs one of: planner implementer mechanical reviewer"
+		[ "$_count" -gt 0 ] || die "--tier needs one of: $(tier_names)"
 		OVERRIDE_TIER=$1
 		shift
 		_count=$((_count - 1))
@@ -250,17 +269,16 @@ _fs_read_stamp() {
 	# The checked lines only: a value the checker passed, one word each.
 	_fs_tier=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Tt][Ii][Ee][Rr][[:space:]]*:[[:space:]]*\([a-z]*\)[[:space:]]*$/\1/p' | head -n 1)
 	_fs_domain=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Dd][Oo][Mm][Aa][Ii][Nn][[:space:]]*:[[:space:]]*\([a-z-]*\)[[:space:]]*$/\1/p' | head -n 1)
-	case "$_fs_tier" in
-	planner | implementer | mechanical | reviewer) TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}" ;;
-	*) _fs_none=1 ;;
-	esac
+	if is_tier "$_fs_tier"; then
+		TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}"
+	else
+		_fs_none=1
+	fi
 }
 
 if [ -n "$OVERRIDE_TIER" ]; then
-	case "$OVERRIDE_TIER" in
-	planner | implementer | mechanical | reviewer) ;;
-	*) die "unknown tier '$OVERRIDE_TIER'. The vocabulary is closed: planner implementer mechanical reviewer." ;;
-	esac
+	is_tier "$OVERRIDE_TIER" ||
+		die "unknown tier '$OVERRIDE_TIER'. The vocabulary is closed: $(tier_names)."
 	TIER_ARGS="$OVERRIDE_TIER${OVERRIDE_DOMAIN:+ $OVERRIDE_DOMAIN}"
 	TIER_SOURCE="the ticket's stamp"
 else

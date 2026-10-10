@@ -14,7 +14,7 @@
 #      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
 #      own line (bash and zsh drop a prefix assignment on `.`)
 #
-# tier    CLOSED: planner | implementer | mechanical | reviewer. Unknown: exit 2.
+# tier    CLOSED: the four names agents_tier_names spells. Unknown: exit 2.
 # domain  OPEN local policy, shape `[a-z][a-z0-9-]*`; hyphens fold to `_` in
 #         the variable name. Unmapped: falls back to the tier, silently.
 #
@@ -41,11 +41,23 @@
 # The domain's SHAPE, written once so the usage text and the error text cannot
 # drift apart. It does NOT drive the case pattern that enforces the shape —
 # that pattern spells out the alphabet, for the locale reason documented where
-# it lives — so this string and that pattern are kept in sync by hand. The
-# four tier names are likewise spelled at their three literal sites (the
-# check, the usage text, the unknown-tier error) and move together: a sourced
-# config could reassign a global, so there is no list variable to reassign.
+# it lives — so this string and that pattern are kept in sync by hand.
 AGENT_DOMAIN_SHAPE='[a-z][a-z0-9-]*'
+
+# agents_tier_names — the CLOSED tier vocabulary, on one line, in the manual's
+# order. The one place this file spells it: the check, the usage text and the
+# unknown-tier error all read it here (#681). A function, not a global, so a
+# sourced config's stray assignment cannot reassign it out from under the
+# check or the messages.
+#
+# It is the vocabulary policy's tier line (scripts/vocab.config.sh) restated,
+# and the one restatement outside it: this library is also SOURCED with
+# nothing anchoring it — no $_agents_here, so no policy file it could find —
+# and still owes such a caller a closed answer. The dispatchers and bootstrap
+# read the names here instead of spelling them; tests/vocab-policy.test.sh
+# holds this line equal to the policy and every other script to spelling it
+# nowhere.
+agents_tier_names() { printf '%s' 'planner implementer mechanical reviewer'; }
 
 # The AGENT HARNESS token's shape. Same alphabet as a task domain, and for the
 # same reason: it is interpolated into the variable name carrying that agent
@@ -93,7 +105,7 @@ _agents_dropped_warned=0
 agents_usage() {
 	echo "usage: agents.lib.sh [--model|--harness] <tier> [domain]" >&2
 	echo "       agents.lib.sh --ids" >&2
-	echo "  tier is one of: planner implementer mechanical reviewer" >&2
+	echo "  tier is one of: $(agents_tier_names)" >&2
 	echo "  domain is an optional $AGENT_DOMAIN_SHAPE token naming the medium of the work." >&2
 	echo "  --model    print the model id. The default, and what every caller got" >&2
 	echo "             before the agent-harness axis existed." >&2
@@ -347,8 +359,8 @@ resolve_tier() {
 		return 2
 	fi
 
-	# The accept-check is a LITERAL `case`, not a loop over a variable holding
-	# the list, for two independent reasons.
+	# The accept-check is a `case` on a padded string, not a loop over a
+	# list, for two independent reasons.
 	#
 	# PORTABILITY, the one that was actually broken: `for t in $list`
 	# relies on the shell word-splitting an unquoted expansion, and zsh does not
@@ -358,21 +370,28 @@ resolve_tier() {
 	# behaves identically in sh, bash, ksh and zsh.
 	#
 	# TRUST, a smaller share of it: a sourced config is trusted code — it
-	# could redefine resolve_tier wholesale, so this literal is NOT a security
+	# could redefine resolve_tier wholesale, so this check is NOT a security
 	# boundary against a hostile config. What it does buy: the accepted set
 	# can no longer drift via a reassigned global or a shell's splitting
-	# rules. The MESSAGES spell the same four names as literals too (no
-	# global survives for a config to reassign), so check and diagnostics
-	# cannot disagree — the four names are spelled at their three literal sites (see AGENT_DOMAIN_SHAPE's comment).
+	# rules, and the check and the messages read one function, so they
+	# cannot disagree. The tier is interpolated into a variable name below, so
+	# its SHAPE is held first, by the domain's spelled-out alphabet: a shaped
+	# token holds no space, so `planner implementer` — contiguous text INSIDE
+	# the padded list — can never pass as a member.
 	_rt_tier=$1
 	_rt_domain=${2:-}
 	case "$_rt_tier" in
-	planner | implementer | mechanical | reviewer) _rt_known=1 ;;
-	*) _rt_known=0 ;;
+	[!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _rt_known=0 ;;
+	*)
+		case " $(agents_tier_names) " in
+		*" $_rt_tier "*) _rt_known=1 ;;
+		*) _rt_known=0 ;;
+		esac
+		;;
 	esac
 	if [ "$_rt_known" = 0 ]; then
 		echo "x agents: unknown capability tier '$_rt_tier'." >&2
-		echo "  The vocabulary is closed: planner implementer mechanical reviewer." >&2
+		echo "  The vocabulary is closed: $(agents_tier_names)." >&2
 		echo "  It is defined in the manual layer; a ticket that needs another word needs a manual change first." >&2
 		return 2
 	fi
