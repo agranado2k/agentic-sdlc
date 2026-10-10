@@ -652,6 +652,11 @@ adr8_leads_moved() {
 		_lm_k=$((_lm_k + 1))
 	done
 }
+# adr8_ledger_tickets <old> — the tickets <old>'s Superseded-by ledger says an
+# amendment was decided for, one per line, in the ledger's order.
+adr8_ledger_tickets() {
+	sed -n '/^- \*\*Superseded by\*\*/p' "$1" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+'
+}
 # adr8_amendments_unnamed <old> <new> <records dir> — every amendment of <old>
 # that <new> does not name, each after a space: the tickets <old>'s
 # Superseded-by ledger says an amendment was decided for, and every record in
@@ -660,7 +665,7 @@ adr8_leads_moved() {
 # having checked nothing (review of PR #715, L-4) — so that prints why instead.
 adr8_amendments_unnamed() {
 	_au_n=0 _au_miss=
-	for _au_t in $(sed -n '/^- \*\*Superseded by\*\*/p' "$1" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+') \
+	for _au_t in $(adr8_ledger_tickets "$1") \
 		$(grep -l 'amends ADR-0008' "$3"/0*.md 2>/dev/null | sed 's,.*/\([0-9]*\)-.*,ADR-\1,'); do
 		_au_n=$((_au_n + 1))
 		grep -qF -- "$_au_t" "${2:-/dev/null}" || _au_miss="$_au_miss $_au_t"
@@ -682,7 +687,8 @@ _a8_bad=$(adr8_leads_moved "$ADR8_OLD" "$ADR8_NEXT")
 # it holds, must name the break — a check that cannot fail is a claim.
 ADR8_BAIT="$SCRATCH/adr8-bait"
 mkdir -p "$ADR8_BAIT"
-awk '/^2\. \*\*/ { two = 1; three = 0 } /^3\. \*\*/ { two = 0; three = 1 } /^4\. \*\*/ { three = 0 }
+awk '/^## Decision outcome/ { d = 1 }
+	d && /^2\. \*\*/ { two = 1; three = 0 } d && /^3\. \*\*/ { two = 0; three = 1 } d && /^4\. \*\*/ { three = 0 }
 	two { sub(/^2\./, "3."); b = b $0 "\n"; next }
 	three { sub(/^3\./, "2."); print; next }
 	!two && !three && b != "" { printf "%s", b; b = "" }
@@ -711,7 +717,7 @@ case $(adr8_amendments_unnamed "$ADR8_BAIT/no-ledger.md" "$ADR8_NEXT" "$ADR8_BAI
 *'only 0 amendments read'*) pass "bait: with ADR-0008's ledger gone, the amendment check fails having read nothing" ;;
 *) fail "bait: the amendment check passed a ledger it read nothing from" ;;
 esac
-_a8_last=$(sed -n '/^- \*\*Superseded by\*\*/p' "$ADR8_OLD" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+' | tail -1)
+_a8_last=$(adr8_ledger_tickets "$ADR8_OLD" | tail -1)
 grep -vF -- "$_a8_last" "$ADR8_NEXT" >"$ADR8_BAIT/unnamed.md"
 case $(adr8_amendments_unnamed "$ADR8_OLD" "$ADR8_BAIT/unnamed.md" "$KIT/docs/adr") in
 *" $_a8_last"*) pass "bait: with $_a8_last's lines cut from the successor, the amendment check names it" ;;
