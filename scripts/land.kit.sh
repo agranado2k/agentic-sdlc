@@ -70,6 +70,10 @@
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
 #   merge commit the forge never names (data.workflows=unknown, no sha), and
+#   one no run appeared for within the wait while the base branch's workflows
+#   declare a push trigger, or could not be read (data.workflows=unknown,
+#   #688: exit 1, never 2, so a train stops; `none` is only a base whose
+#   workflows declare no push trigger), and
 #   so does a release whose tag is not on origin: merged, not landed. A
 #   release's merge.land carries data.release, data.tagged and data.reruns.
 #
@@ -326,6 +330,32 @@ fi
 # --- 3. the base branch's workflows on the merge commit -----------------------
 # Listed until nothing new appears: a workflow the forge registers a beat
 # after the first is watched too. With no sha there is nothing to list.
+# push_workflows <commit> — the workflow files under .github/workflows/, as
+# the merge commit holds them, that declare a push trigger: one name per
+# line. Exit 1 when the commit itself is not here to read; a commit with no
+# workflow directory declares none. A trigger is `push` in the top-level
+# `on:` value (`on: push`, `on: [push, …]`) or a `push` key under it. Its
+# branch filters are not read: a push trigger that excludes the base reads as
+# expected, and a wrong `unknown` stops a train where a wrong `none` would
+# call an unverified merge verified.
+push_workflows() {
+	git -C "$ROOT" cat-file -e "$1^{commit}" 2>/dev/null || return 1
+	_pw_names=$(git -C "$ROOT" ls-tree --name-only "$1:.github/workflows" 2>/dev/null) || return 0
+	for _pw_f in $_pw_names; do
+		case $_pw_f in *.yml | *.yaml) ;; *) continue ;; esac
+		git -C "$ROOT" show "$1:.github/workflows/$_pw_f" 2>/dev/null | awk '
+			{ sub(/^#.*/, ""); sub(/[ \t]#.*/, "") }
+			/^[^ \t]/ { on = 0 }
+			/^["\047]?on["\047]?[ \t]*:/ {
+				v = $0; sub(/^[^:]*:/, "", v)
+				if (v ~ /(^|[^A-Za-z0-9_-])push([^A-Za-z0-9_-]|$)/) f = 1
+				on = 1; next
+			}
+			on && /^[ \t]+(-[ \t]+)?["\047]?push["\047]?[ \t]*(:|$)/ { f = 1 }
+			END { exit !f }' && printf '%s\n' "$_pw_f"
+	done
+	return 0
+}
 START=$(date +%s)
 WORKFLOWS=success
 WATCHED=
@@ -352,9 +382,19 @@ else
 		fi
 		[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 	done
+	# No run is a verdict only when none was due (#688): the forge can skip
+	# a push run, and a merge no CI ran must not read as a verified one.
 	if [ -z "$WATCHED" ]; then
-		WORKFLOWS=none
-		note "no workflow ran on $BASE at $SHA within the wait — nothing to watch"
+		if ! EXPECTED=$(push_workflows "$SHA"); then
+			WORKFLOWS=unknown
+			note "no workflow ran on $BASE at $SHA within the wait, and its workflows could not be read here — the merge is unverified"
+		elif [ -n "$EXPECTED" ]; then
+			WORKFLOWS=unknown
+			note "no workflow ran on $BASE at $SHA within the wait, though these declare a push trigger: $(printf '%s\n' "$EXPECTED" | tr '\n' ' ')— the merge is unverified"
+		else
+			WORKFLOWS=none
+			note "no workflow ran on $BASE at $SHA within the wait, and none of its workflows declares a push trigger — nothing to watch"
+		fi
 	fi
 fi
 # A tagged release re-runs, once, each run that failed — its failed jobs only:
@@ -521,7 +561,11 @@ failure)
 	exit 1
 	;;
 unknown)
-	note "find the merge commit of PR #$PR and watch $BASE's workflows on it by hand"
+	if [ -z "$SHA" ]; then
+		note "find the merge commit of PR #$PR and watch $BASE's workflows on it by hand"
+	else
+		note "no CI verified $SHA on $BASE — run its workflows on it (or find why the forge made no run) before landing anything else"
+	fi
 	exit 1
 	;;
 esac
