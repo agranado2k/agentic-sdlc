@@ -217,9 +217,10 @@ Chosen: **option 1**.
      `model` at all; a resolver that fails is a refusal too; a script with no
      resolver beside it has no ids, and the rule is off. Other kinds' `model`
      stays open. `verify` reads the same list as an advisory on a spawn
-     already written off it, and `summary` and `export` say the count once;
-     a resolver that fails judges nothing there and each says so once on
-     stderr. One enumeration of the policy's values, the resolver's
+     already written off it, judged against the policy as it is now — so a
+     model a roster move retired is advised on too — and `summary` and
+     `export` say the count once; a resolver that fails judges nothing there
+     and each says so once on stderr. One enumeration of the policy's values, the resolver's
      `agents_values`, feeds `--ids` and the kit wrapper's unreachable bridge.
 2. **Unconfigured is a working state, and off is decided.**
    `scripts/trace.config.sh` is a policy file and ships with `TRACE_DIR`
@@ -323,7 +324,9 @@ Chosen: **option 1**.
      from the payload's `cwd`, the others through the script's own
      precedence. A skill hands over the run its own `begin` printed, and
      opening none hands none; the skills suite holds `/implement`,
-     `/review-pr` and `/pr-iterate`'s spawn steps to the line. Its limit: a
+     `/review-pr` and `/pr-iterate`'s spawn steps to the line. The channel is
+     the adapter's and the skills'; the line never reaches `emit` as text,
+     and the script is unchanged by it. Its limit: a
      session that spawns `/implement` hands its own run, since the ticket's
      does not exist until the subagent's `begin`.
    - **What a spawn served rides one line down**: `Trace-Spawn:
