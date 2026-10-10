@@ -726,24 +726,8 @@ esac
 # Each rule the first fold of ADR-0008 dropped is held in the clause it binds
 # in (#718, from the review of PR #715): one assertion per rule, its sentence
 # as the successor states it — word for word from ADR-0008's amendment where
-# it still holds. A row is `<clause>|<source>|<sentence>`; no sentence holds
-# a `|`.
-adr8_kept_rules() {
-	cat <<'EOF'
-5|#543|Unconfigured, a named `end` is the silent no-op every call is.
-7|ADR-0019 clause 1|the landing script reads `show` only, for `pr.iterate` and `review.verdict` on the PR it lands (ADR-0019)
-5|#627|The subagent-stop hook reads the first-line form too, through the same parser, so the guard refuses exactly the prompts the stop would record as `unattributed`.
-5|#453|The Claude Code adapter's subagent-stop hook keys the stack on the payload's `session_id` the same way.
-5|ADR-0023 clause 1|Its refusals are `stack <dir>`'s, exit 2 with nothing on stdout, and one more:
-5|#560|then the bare form stays, deprecated, until the run can be named another way.
-1|#569, the pointer|`summary` and `export` say the count once and point at `verify`; a resolver that fails judges nothing there
-1|#569, the advisory's shape|one stderr line naming the file, the line and the value, never a bad line and never the verdict
-1|#409|with tool capture on, the call it refused is swept too. `/retro`'s question 6 counts the denials per session and per tool.
-1|#628|`/retro`'s question 6 counts it, and the conflicts and stuck checks `data.cause` records.
-8|#608|the session's sum stays whole and its split does not.
-1|#586, PR #610|`passed` and `escalated` are `docs/specs/spend.md` R21; `failed` came from PR #610, the dispatcher's own word for the last rung (#586).
-EOF
-}
+# it still holds — and one bait per rule, the same check on a copy of the
+# clause with that sentence cut, which must fail.
 # adr8_states <record> <clause> <sentence> — 0 when clause <clause> of
 # <record>, flattened, carries <sentence> exactly.
 adr8_states() {
@@ -757,13 +741,10 @@ adr8_cut() {
 	printf '## Decision outcome\n\n'
 	t_adr_clause "$1" "$2" | S=$3 awk '{ i = index($0, ENVIRON["S"]); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(ENVIRON["S"])); print }'
 }
-_kr_ifs=$IFS
-IFS='
-'
-for _kr_row in $(adr8_kept_rules); do
-	IFS=$_kr_ifs
-	_kr_c=${_kr_row%%|*} _kr_rest=${_kr_row#*|}
-	_kr_src=${_kr_rest%%|*} _kr_s=${_kr_rest#*|}
+# The rows, `<clause>|<source>|<sentence>`; no sentence holds a `|`. Read
+# from a here-document, never a pipe, so the loop is not a subshell and its
+# failures count.
+while IFS='|' read -r _kr_c _kr_src _kr_s; do
 	adr8_states "$ADR8_NEXT" "$_kr_c" "$_kr_s" &&
 		pass "the successor's clause $_kr_c keeps the $_kr_src rule: $_kr_s" ||
 		fail "the successor's clause $_kr_c does not state the $_kr_src rule: $_kr_s"
@@ -771,8 +752,20 @@ for _kr_row in $(adr8_kept_rules); do
 	adr8_states "$ADR8_BAIT/cut.md" "$_kr_c" "$_kr_s" &&
 		fail "bait: with the $_kr_src sentence cut from clause $_kr_c, the check still passes" ||
 		pass "bait: with the $_kr_src sentence cut from clause $_kr_c, the check fails"
-done
-IFS=$_kr_ifs
+done <<'EOF'
+5|#543|Unconfigured, a named `end` is the silent no-op every call is.
+7|ADR-0019 clause 1|the landing script reads `show` only, for `pr.iterate` and `review.verdict` on the PR it lands (ADR-0019)
+5|#627|The subagent-stop hook reads the first-line form too, through the same parser, so the guard refuses exactly the prompts the stop would record as `unattributed`.
+5|#453|The Claude Code adapter's subagent-stop hook keys the stack on the payload's `session_id` the same way.
+5|ADR-0023 clause 1|Its refusals are `stack <dir>`'s, exit 2 with nothing on stdout, and one more:
+5|#560|then the bare form stays, deprecated, until the run can be named another way.
+1|#569, the pointer|`summary` and `export` say the count once and point at `verify`; a resolver that fails judges nothing there
+1|#569, the advisory's shape|one stderr line naming the file, the line and the value, never a bad line and never the verdict
+1|#409|with tool capture on, the call it refused is swept too. `/retro`'s question 6 counts the denials per session and per tool.
+1|#628|`/retro`'s question 6 counts it, and the conflicts and stuck checks `data.cause` records.
+8|#608|the session's sum stays whole and its split does not.
+1|#586, PR #610|`passed` and `escalated` are `docs/specs/spend.md` R21; `failed` came from PR #610, the dispatcher's own word for the last rung (#586).
+EOF
 
 banner "12. summary groups the trace, counts it, sums its tokens and prices it on read"
 # A READER fixture is written as FILES, not emitted: only a file whose name is
