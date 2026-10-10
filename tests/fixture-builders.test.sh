@@ -275,8 +275,8 @@ VICTIM2=$(cat "$SCRATCH/victim2-path" 2>/dev/null)
 	fail "the second killed suite left no scratch to sweep (victim='$VICTIM2')"
 # A live owner, by name — this suite's own process — and aged past the sweep
 # age, so the age rule alone would take it.
-t_scratch_owner >"$SCRATCH/owner-token" || fail "t_scratch_owner printed no owner token"
-LIVEDIR="$OWNROOT/${T_SCRATCH_PREFIX}$(cat "$SCRATCH/owner-token").livexx"
+_own_tok=$(t_scratch_owner) || fail "t_scratch_owner printed no owner token"
+LIVEDIR="$OWNROOT/${T_SCRATCH_PREFIX}${_own_tok}.livexx"
 mkdir -p "$LIVEDIR"
 touch -t "$_old_stamp" "$LIVEDIR" 2>/dev/null || touch -t 202001010000 "$LIVEDIR"
 # A fresh directory with no recorded owner: the age rule still holds it.
@@ -289,6 +289,10 @@ _dead=$!
 wait "$_dead"
 FOREIGN="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-1.foreign"
 mkdir -p "$FOREIGN"
+# A token that only LOOKS like an owner — a pid with a letter in it — names no
+# process, so it is left to the age rule; a probe on it would answer "dead".
+MALFORMED="$OWNROOT/${T_SCRATCH_PREFIX}1x-${_own_tok#*-}.malformed"
+mkdir -p "$MALFORMED"
 _own_err="$SCRATCH/own-err"
 ( TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
 	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null
@@ -301,6 +305,8 @@ _own_err="$SCRATCH/own-err"
 	fail "the sweep removed fresh scratch whose owner it could not name"
 [ -d "$FOREIGN" ] && pass "…and an owner recorded in another pid namespace is left to the age rule" ||
 	fail "the sweep judged a process in another pid namespace dead by this one's kill -0"
+[ -d "$MALFORMED" ] && pass "…and a malformed owner token is left to the age rule, never probed" ||
+	fail "the sweep removed fresh scratch whose owner token is not a pid"
 case "$(cat "$_own_err")" in
 *'owner process is gone'*) pass "…and says on stderr what it removed, and why" ;;
 *) fail "the owner sweep was silent: '$(cat "$_own_err")'" ;;
@@ -318,6 +324,20 @@ done
 grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
 	grep -q "$T_SCRATCH_PREFIX" "$T_ROOT/tests/lib.sh" &&
 	pass "the harness header names both" || fail "the harness does not document its own scratch"
+
+# Every suite that makes the prefixed scratch makes it through t_scratch, so
+# it is named for its owner and sweeps at start (#676): a suite that spells
+# the template by hand makes owner-less scratch the age rule keeps for a day.
+# tests/docs-demo.sh is the one exception, and only until #677 converts it.
+# The pattern is split so this suite's own line never matches it.
+_hand_pat='T_SCRATCH_PREFIX''}XXXXXX'
+_handmade=''
+for f in "$T_ROOT"/tests/*.sh; do
+	case ${f##*/} in lib.sh | docs-demo.sh) continue ;; esac
+	grep -qF "$_hand_pat" "$f" && _handmade="$_handmade ${f##*/}"
+done
+[ -z "$_handmade" ] && pass "every suite makes its prefixed scratch through t_scratch, named for its owner" ||
+	fail "these build kit-suite scratch by hand, with no owner in its name:$_handmade"
 
 # EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
 # enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`
