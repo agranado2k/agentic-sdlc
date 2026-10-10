@@ -669,10 +669,12 @@ KIT_ONLY="tests/catalogue.test.sh tests/kit-demo.sh tests/gate-path-roots.test.s
 # .claude/agents/<tier>.md: the kit's own wiring of the Claude Code adapter's
 # agent types, links into adapters/ (#588). Stripped like .claude/settings.json
 # below, so a consumer's agent types arrive dormant, wired only by them.
-# One per tier, named from the resolver that owns the tier names (#681) —
-# read here, before the cd below, from the scripts/ beside this script.
-TIER_NAMES=$(. "$(dirname -- "$0")/scripts/agents.lib.sh" && agents_tier_names) ||
-	die "cannot read the tier names from scripts/agents.lib.sh beside $0"
+# One per tier, named by the vocabulary checker's tier field (#681) — asked
+# here, before the cd below, of the scripts/ beside this script. The checker,
+# not the resolver: a kit tree older than the resolver (the docs demo's 0.3.0
+# kit) still carries the checker, and still has agent types to strip.
+TIER_NAMES=$(sh "$(dirname -- "$0")/scripts/vocab.sh" fields 2>/dev/null | sed -n 's/^tier: //p')
+[ -n "$TIER_NAMES" ] || die "cannot read the tier names from scripts/vocab.sh beside $0"
 _tier_agents=
 for _tn in $TIER_NAMES; do _tier_agents="$_tier_agents .claude/agents/$_tn.md"; done
 KIT_ONLY="tests/task.test.sh$_tier_agents $KIT_ONLY"

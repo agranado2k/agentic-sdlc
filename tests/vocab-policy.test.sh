@@ -250,4 +250,17 @@ t_run_split sh "$SCRATCH/lonely/scripts/skill-dispatch.kit.sh" --phase-tier revi
 s_assert_status 2 "a skill dispatcher with no resolver beside it exits 2"
 s_assert_err_has "cannot read the tier names" "…and says it could not read the tier names"
 
+# Bootstrap asks the checker, not the resolver: a kit tree older than the
+# resolver (docs-demo's 0.3.0 kit) still bootstraps and still strips the
+# kit's agent types, one per tier.
+OLDKIT="$SCRATCH/pre-resolver-kit"
+t_kit_tree "$KIT" "$OLDKIT"
+rm -f "$OLDKIT/scripts/agents.lib.sh"
+(cd "$OLDKIT" && git init -q -b main && git config user.name t && git config user.email t@example.invalid &&
+	git config commit.gpgsign false && git add -A && git commit -q -m init --no-verify)
+t_run_split sh -c "cd '$OLDKIT' && sh bootstrap.sh 'Old Kit' 'A kit tree with no resolver.' </dev/null"
+s_assert_status 0 "bootstrap runs in a kit tree with no resolver"
+left=$(ls "$OLDKIT/.claude/agents" 2>/dev/null | tr '\n' ' ')
+assert_equal "…and strips every tier's agent type" "$left" ""
+
 t_done "vocab-policy"
