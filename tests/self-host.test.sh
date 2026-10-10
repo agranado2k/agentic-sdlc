@@ -38,14 +38,11 @@ PROJECT_DESC="A throwaway project proving the kit strips its own files."
 # and something notices.
 KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md docs/specs/spend.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
 
-# t_kit_copy <dest> — "Use this template", as tests/kit-demo.sh simulates it:
-# the whole tree minus the .git dir and minus any nested worktree, which `cp -R`
-# would otherwise drag along.
+# t_kit_copy <dest> — "Use this template": the files git would hand over, no
+# .git, no nested worktree and no ignored directory (t_kit_tree, #690), in a
+# fresh repo of its own.
 t_kit_copy() {
-	mkdir -p "$1"
-	cp -R "$KIT/." "$1/"
-	strip_nested_worktrees "$KIT" "$1"
-	rm -rf "$1/.git"
+	t_kit_tree "$KIT" "$1"
 	git -C "$1" init -q -b main
 	git -C "$1" config user.name "Self Host"
 	git -C "$1" config user.email "self-host@example.invalid"
@@ -244,7 +241,21 @@ grep -q 'Checked:.*stub-scan' "$SCRATCH/notice.claimed" || fail "the twin bait c
 banner "C. Bootstrap strips the kit's own files, and stamps a clean project"
 # ---------------------------------------------------------------------------
 PROJ="$SCRATCH/consumer"
+# The fixture is built from the files git would hand over, never from whatever
+# an ignored directory holds (#690). A checkout carries ignored directories —
+# the trace (hundreds of megabytes on a working machine), the retro folder, the
+# worktree directory — and a fixture that took them in failed nine assertions
+# from the root checkout that passed from a clean worktree. The probe is planted
+# in an ignored directory of the checkout under test and removed on exit.
+PROBE_DIR="$KIT/worktree/self-host-probe.$$"
+mkdir -p "$PROBE_DIR" && printf 'ignored probe\n' >"$PROBE_DIR/690-ignored-probe.txt"
+trap 'rm -rf "$PROBE_DIR"; rmdir "$KIT/worktree" 2>/dev/null; t_cleanup' EXIT INT TERM HUP
+git -C "$KIT" check-ignore -q "$PROBE_DIR/690-ignored-probe.txt" ||
+	fail "the probe is not under an ignored path — the leg below proves nothing"
 t_kit_copy "$PROJ"
+[ ! -e "$PROJ/worktree/self-host-probe.$$" ] &&
+	pass "an ignored directory in the checkout never reaches the fixture (#690)" ||
+	fail "the fixture took in an ignored directory: worktree/self-host-probe.$$"
 assert_status 0 "bootstrap runs on a tree that already holds the kit's own files" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 

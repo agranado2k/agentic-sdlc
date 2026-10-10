@@ -17,9 +17,10 @@ import * as skillCeiling from "./validators/skill-ceiling.mjs";
 import * as skillDated from "./validators/skill-dated.mjs";
 import * as skillPaths from "./validators/skill-paths.mjs";
 import * as skillWeb from "./validators/skill-web.mjs";
+import * as supersession from "./validators/supersession.mjs";
 import * as traceOff from "./validators/trace-off.mjs";
 
-export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillBridge, skillCeiling, skillDated, skillPaths, skillWeb, traceOff];
+export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillBridge, skillCeiling, skillDated, skillPaths, skillWeb, supersession, traceOff];
 
 /** Run all validators against the context; returns a flat list of findings —
  * violations and warnings alike. `index.mjs` splits them by severity; only it

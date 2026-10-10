@@ -31,9 +31,12 @@ TRACE="$KIT/scripts/trace.sh"
 t_init
 
 # --- the stub forge CLI ------------------------------------------------------
-# The PR's state is one value per line, in the order the script asks for it:
-# state, isDraft, mergeable, mergeStateStatus, reviewDecision, base branch,
-# closing ticket, head branch, title. STUB_* variables set the forge's answers.
+# The PR's state is one `name=value` line per field — state, isDraft,
+# mergeable, mergeStateStatus, reviewDecision, baseRefName, ticket,
+# headRefName, title — and the head commit's is oid and committedDate. The
+# script reads each field by its name, never by its line (#684), so
+# STUB_ORDER=reversed answers the same fields bottom-up. STUB_* variables set
+# the forge's answers.
 STUBDIR="$SCRATCH/bin"
 mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
@@ -41,13 +44,26 @@ cat >"$STUBDIR/gh" <<'EOF'
 printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
 # The forge's state for one run: knob assignments land() wrote for it.
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+# order — the answer's lines as asked, or bottom-up under STUB_ORDER=reversed.
+order() { if [ "${STUB_ORDER:-}" = reversed ]; then sed -n '1!G;h;$p'; else cat; fi; }
+# jq_answer — under STUB_PR_JSON, run the script's OWN --jq program over a
+# canned forge answer with jq, as gh would: the key names the script reads are
+# then held to the keys its query emits (#684). Exits the stub when it answered.
+jq_answer() {
+	[ -n "${STUB_PR_JSON:-}" ] || return 0
+	prog= prev=
+	for a; do [ "$prev" = --jq ] && prog=$a; prev=$a; done
+	jq -r "$prog" "$STUB_PR_JSON"
+	exit
+}
 case " $* " in
 *" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
 *" pr view "*"headRefOid"*)
 	# The head commit, and the date it was committed: the iteration check
 	# reads the trace for a pr.iterate at or after it (#630).
 	[ "${STUB_HEAD_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_HEAD_RC"; }
-	printf '%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}"
+	jq_answer "$@"
+	printf 'oid=%s\ncommittedDate=%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}" | order
 	;;
 *" pr view "*"body"*)
 	# The PR body is a file the case wrote — free text, quotes and all, so it
@@ -57,8 +73,10 @@ case " $* " in
 	;;
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
-	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
-		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_BRANCH-feat/x}" "${STUB_TITLE:-feat(x): a slice}"
+	jq_answer "$@"
+	printf '%s\n' "state=${STUB_PRSTATE:-OPEN}" "isDraft=${STUB_DRAFT:-false}" "mergeable=${STUB_MERGEABLE:-MERGEABLE}" \
+		"mergeStateStatus=${STUB_MSS:-CLEAN}" "reviewDecision=${STUB_REVIEW-APPROVED}" baseRefName=main "ticket=${STUB_TICKET-77}" \
+		"headRefName=${STUB_BRANCH-feat/x}" "title=${STUB_TITLE:-feat(x): a slice}" | order
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
@@ -103,7 +121,7 @@ cat >"$STUBDIR/git" <<'EOF'
 _c=
 [ "${1:-}" = -C ] && { _c=$2; shift 2; }
 case ${1:-} in
-fetch | show | ls-remote | tag | push) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
+fetch | show | ls-remote | tag | push | cat-file | ls-tree) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
 *) if [ -n "$_c" ]; then exec "$REAL_GIT" -C "$_c" "$@"; else exec "$REAL_GIT" "$@"; fi ;;
 esac
 case $1 in
@@ -112,6 +130,7 @@ show)
 	case $2 in
 	*'^1:VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_BEFORE:-0.1.0}" ;;
 	*':VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_AFTER:-0.1.0}" ;;
+	*':.github/workflows/'?*) cat "${STUB_WORKFLOWS:-/nonexistent}/${2##*/}" 2>/dev/null || exit 128 ;;
 	*) exit 128 ;;
 	esac
 	;;
@@ -126,6 +145,10 @@ ls-remote)
 		printf '%s\trefs/tags/v%s\n' "$STUB_REMOTE_TAG" "${STUB_VER_AFTER:-0.1.0}"
 	fi
 	;;
+# The merge commit is held here unless STUB_CATFILE_RC says not; its
+# workflow directory is STUB_WORKFLOWS, a scratch tree, and absent without it.
+cat-file) exit "${STUB_CATFILE_RC:-0}" ;;
+ls-tree) [ -d "${STUB_WORKFLOWS:-/nonexistent}" ] || exit 128; ls "$STUB_WORKFLOWS" ;;
 tag) exit "${STUB_TAG_RC:-0}" ;;
 push) exit "${STUB_PUSH_RC:-0}" ;;
 esac
@@ -288,6 +311,48 @@ fb=$(show 'pr:#126' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"subject":"pr:#126"' && pass "with no ticket known, feedback sits on the PR itself" ||
 	fail "with no ticket, feedback is not on pr:#126: $fb"
 
+# The forge's answer read by field name, never by line (#684): the same fields
+# answered bottom-up land the same PR, every value where it belongs — and a
+# draft answered bottom-up is still a draft.
+land STUB_ORDER=reversed STUB_TICKET=91 STUB_BRANCH=feat/reordered STUB_TITLE='feat(y): reordered' 127
+s_assert_status 0 "a forge answering the fields in another order lands the PR"
+ml=$(show 'pr:#127' --kind merge.land)
+for tok in '"related":"ticket:#91"' '"reason":"feat(y): reordered"' '"iterated":"yes"' '"reviewed":"yes"'; do
+	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "reordered, merge.land still carries $tok" || fail "reordered, merge.land lacks $tok: $ml"
+done
+po=$(show 'pr:#127' --kind pr.open)
+printf '%s\n' "$po" | grep -qF '"related":"ticket:#91 branch:feat/reordered"' && pass "reordered, pr.open names the head branch and the ticket" ||
+	fail "reordered, pr.open lost its ticket or branch: $po"
+grep -q '^ARGV: run list --branch main ' "$STUB_LOG" && pass "reordered, the base branch is still main" ||
+	fail "reordered, the base branch was misread: $(grep 'run list' "$STUB_LOG")"
+land STUB_ORDER=reversed STUB_DRAFT=true 108
+not_landed 108 "a draft answered bottom-up"
+printf '%s\n' "$S_ERR" | grep -qF 'it is a draft' && pass "a draft answered bottom-up is refused as a draft" ||
+	fail "a draft answered bottom-up was refused for another reason: $S_ERR"
+# The query's own keys, not only the stub's (#684, review M-1): where jq is on
+# PATH, the stub runs the script's --jq programs over a forge answer whose keys
+# sit in another order than the query names them. A field the script reads by
+# a name its query does not emit leaves that value empty, and this case fails.
+if command -v jq >/dev/null 2>&1; then
+	cat >"$SCRATCH/pr128.json" <<'JSON'
+{"title": "feat(z): through jq", "commits": [{"oid": "1234567890123456789012345678901234567890", "committedDate": "2000-01-01T00:00:00Z"}],
+ "headRefName": "feat/through-jq", "closingIssuesReferences": [{"number": 93}], "baseRefName": "main", "reviewDecision": null,
+ "mergeStateStatus": "CLEAN", "mergeable": "MERGEABLE", "isDraft": false, "state": "OPEN",
+ "headRefOid": "1234567890123456789012345678901234567890"}
+JSON
+	land STUB_PR_JSON="$SCRATCH/pr128.json" 128
+	s_assert_status 0 "the script's own --jq programs, run by jq, land the PR"
+	ml=$(show 'pr:#128' --kind merge.land)
+	for tok in '"related":"ticket:#93"' '"reason":"feat(z): through jq"' '"iterated":"yes"' '"reviewed":"yes"'; do
+		printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "through jq, merge.land carries $tok" || fail "through jq, merge.land lacks $tok: $ml"
+	done
+	po=$(show 'pr:#128' --kind pr.open)
+	printf '%s\n' "$po" | grep -qF '"related":"ticket:#93 branch:feat/through-jq"' && pass "through jq, pr.open names the head branch" ||
+		fail "through jq, pr.open lost its ticket or branch: $po"
+else
+	skip "no jq on PATH — the script's own --jq programs are not run by this suite here"
+fi
+
 # ---------------------------------------------------------------------------
 banner "3. The verdict question, asked at a terminal"
 # ---------------------------------------------------------------------------
@@ -371,6 +436,57 @@ printf '%s\n' "$ml" | grep -qF '"outcome":"landed"' && printf '%s\n' "$ml" | gre
 	pass "the landing still records, landed with data.workflows=unknown" || fail "an unknown sha was not recorded as such: $ml"
 printf '%s\n' "$ml" | grep -qF '"merge_sha"' && fail "an empty merge_sha was recorded: $ml" || pass "and no empty merge_sha"
 printf '%s\n' "$S_ERR" | grep -qi 'merge commit' && pass "stderr says the merge commit is unknown" || fail "stderr: $S_ERR"
+
+# No run for a merge whose base branch's workflows declare a push trigger is
+# no verdict (#688): on 2026-10-09 the forge made no push run for the merge of
+# #670, and the landing recorded workflows=none and reported it done. The
+# workflows are read as the merge commit holds them; `none` stays the answer
+# only for a tree none of whose workflows declares a push trigger.
+mkdir -p "$SCRATCH/wf-push" "$SCRATCH/wf-nopush"
+printf 'name: ci\non:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n' >"$SCRATCH/wf-push/ci.yml"
+printf 'name: release\n"on": [push, workflow_dispatch]\njobs: {}\n' >"$SCRATCH/wf-push/release.yaml"
+printf 'name: lint\non: [pull_request]\njobs:\n  push:\n    runs-on: x\n' >"$SCRATCH/wf-push/lint.yml"
+printf 'name: pr\n# on a push nothing runs here\non:\n  pull_request:\n    types: [opened] # push\njobs:\n  push:\n    runs-on: x\n' >"$SCRATCH/wf-nopush/pr.yml"
+printf 'name: manual\non: workflow_dispatch\njobs: {}\n' >"$SCRATCH/wf-nopush/manual.yml"
+printf 'push: not a workflow\n' >"$SCRATCH/wf-nopush/README.md"
+
+land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-push" 155
+s_assert_status 1 "no run for a merge whose workflows declare a push trigger is exit 1 — not 2, so a train stops"
+ml=$(show 'pr:#155' --kind merge.land)
+printf '%s\n' "$ml" | grep -qF '"outcome":"landed"' && printf '%s\n' "$ml" | grep -qF '"workflows":"unknown"' &&
+	pass "and records landed with data.workflows=unknown, not none" || fail "an unverified merge was not recorded unknown: $ml"
+s_assert_err_has "unverified" "stderr says the merge is unverified"
+s_assert_err_has "ci.yml" "stderr names a block-form push workflow it expected"
+s_assert_err_has "release.yaml" "stderr names a flow-form push workflow it expected"
+printf '%s\n' "$S_ERR" | grep -qF 'lint.yml' && fail "a pull_request-only workflow was named as expected on push: $S_ERR" ||
+	pass "and does not name a workflow with no push trigger"
+s_assert_out_has "workflows unknown" "stdout's landing line says workflows unknown"
+[ "$(events 155 feedback)" = 1 ] && pass "and the landing still gets its feedback" || fail "no feedback after an unverified merge"
+
+land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-nopush" 156
+s_assert_status 0 "no run for a merge whose workflows declare no push trigger: still exit 0"
+show 'pr:#156' --kind merge.land | grep -qF '"workflows":"none"' && pass "and records data.workflows=none" ||
+	fail "a tree with no push trigger was not recorded workflows=none: $(show 'pr:#156')"
+
+land STUB_RUNS= STUB_CATFILE_RC=128 "STUB_WORKFLOWS=$SCRATCH/wf-nopush" 157
+s_assert_status 1 "no run, and a merge commit whose workflows cannot be read here: exit 1"
+show 'pr:#157' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
+	fail "an unreadable workflow tree was recorded as known: $(show 'pr:#157')"
+s_assert_err_has "could not be read" "stderr says the merge's workflows could not be read — the merge is unverified"
+# A workflow file the tree lists but git cannot read is no answer either: a
+# directory named like one stands in for it, beside a file with no push.
+mkdir -p "$SCRATCH/wf-unread/broken.yml"
+cp "$SCRATCH/wf-nopush/manual.yml" "$SCRATCH/wf-unread/"
+land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-unread" 159
+s_assert_status 1 "no run, and a workflow file that cannot be read: exit 1, never none"
+show 'pr:#159' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
+	fail "an unreadable workflow file was read as no push trigger: $(show 'pr:#159')"
+s_assert_err_has "could not be read" "stderr says the workflows could not be read"
+
+land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-push" 158 --train
+s_assert_status 1 "the train's landing of an unverified merge is exit 1 — the train stops on it"
+show 'pr:#158' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown, via the train" ||
+	fail "the train's unverified merge was not recorded unknown: $(show 'pr:#158')"
 
 # ---------------------------------------------------------------------------
 banner "6. The landing records whether /implement opened the PR, read from its body (#480)"

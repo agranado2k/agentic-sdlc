@@ -13,6 +13,7 @@
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
 #   sh scripts/trace.sh dir
 #   sh scripts/trace.sh stack <dir> [session=<id>]
+#   sh scripts/trace.sh stack <dir> --all
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -234,6 +235,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
        sh scripts/trace.sh dir
        sh scripts/trace.sh stack <dir> [session=<id>]
+       sh scripts/trace.sh stack <dir> --all
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
@@ -644,12 +646,19 @@ trace_key() {
 		TRACE_KEY_SESSION=$(trace_pointer_session)
 	fi
 	if trace_session_ok "$TRACE_KEY_SESSION"; then
-		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs"
+		TRACE_STACK=$(trace_stack_name "$TRACE_KEY_SESSION")
 	else
-		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+		TRACE_STACK=$(trace_stack_name '')
 	fi
 	_trace_keyed=1
 	return 0
+}
+
+# trace_stack_name <session> — the one spelling of a run stack's path under
+# TRACE_KEY: current/<key>.<session>.runs, or current/<key>.runs for an empty
+# session.
+trace_stack_name() {
+	printf '%s/current/%s%s.runs' "$TRACE_ROOT_DIR" "$TRACE_KEY" "${1:+.$1}"
 }
 
 # trace_session_ok <id> — 0 for a session a stack can be keyed on: non-empty,
@@ -1184,14 +1193,25 @@ trace_bare_end_note() {
 # a <dir> beginning with `-` or `session=`, which reads as an option or a
 # field — `./<dir>` names the same directory. Unconfigured, it prints nothing
 # and exits 0.
+#
+# `--all` in place of a session asks a wider question (#680; the kit's ADR-0023
+# records it): every run open in that checkout, whoever opened it — the top of
+# each session's stack there and of the session-less one, one run per line,
+# in no promised order, and never a run below a top. Its caller is a worktree
+# cleanup, which stands in the root checkout, knows no session id but its own,
+# and must not prune a worktree a live session still holds. One stack that
+# exists and cannot be read refuses the whole answer, as above: a partial
+# "nothing open" would read as permission to prune.
 trace_stack_of() {
 	[ $# -ge 1 ] && [ $# -le 2 ] || usage
 	_so_dir=$1
 	shift
 	case $_so_dir in '' | -* | session=*) usage ;; esac
+	_so_all=
 	case ${1-session=} in
 	session=) ;;
 	session=*) trace_session_ok "${1#session=}" || usage ;;
+	--all) _so_all=1 ;;
 	*) usage ;;
 	esac
 	trace_arg_session "$@"
@@ -1206,10 +1226,41 @@ trace_stack_of() {
 	[ -n "$_so_common" ] && [ "$_so_common" = "$_so_own" ] ||
 		die "$_so_dir is not a checkout of the repository this script lives in — its run stack is not this trace's"
 	trace_key "$_so_top" || die "cannot name the run stack of $_so_dir: git could not hash its path"
+	if [ -n "$_so_all" ]; then
+		trace_stack_tops "$_so_dir"
+		return 0
+	fi
 	trace_stack_readable || die "cannot read the run stack of $_so_dir"
 	_so_pair=$(trace_stack pair) || die "cannot read the run stack of $_so_dir"
 	[ -n "$_so_pair" ] && printf '%s\n' "$_so_pair"
 	return 0
+}
+
+# trace_stack_tops <dir> — `stack --all`'s answer: the top of every stack keyed
+# on TRACE_KEY, the per-toplevel one trace_stack_name spells and each session's
+# beside it, read one at a time through trace_stack so the format stays that
+# reader's. The tops are gathered before any is printed, so a refusal leaves
+# stdout empty — and a run directory that cannot be listed is a refusal too,
+# since every stack in it would read as "nothing open". Pathname expansion is on
+# for the one glob, whose only unquoted part is the session's `*`.
+trace_stack_tops() {
+	_st_dir=$1
+	_st_out=
+	_st_own=$(trace_stack_name '')
+	if [ -d "$TRACE_ROOT_DIR/current" ] && { [ ! -r "$TRACE_ROOT_DIR/current" ] || [ ! -x "$TRACE_ROOT_DIR/current" ]; }; then
+		die "cannot list the run stacks of $_st_dir: $TRACE_ROOT_DIR/current cannot be read"
+	fi
+	_st_set=$-
+	set +f
+	set -- "$_st_own" "${_st_own%.runs}".*.runs
+	case $_st_set in *f*) set -f ;; esac
+	for TRACE_STACK in "$@"; do
+		[ -e "$TRACE_STACK" ] || continue
+		trace_stack_readable || die "cannot read the run stack of $_st_dir"
+		_st_top=$(trace_stack top) || die "cannot read the run stack of $_st_dir"
+		[ -n "$_st_top" ] && _st_out="$_st_out$_st_top$_trace_nl"
+	done
+	printf '%s' "$_st_out"
 }
 
 # ---------------------------------------------------------------------------

@@ -194,7 +194,8 @@ usage() {
 	echo "                          [--set NAME=VALUE ...] [--timeout <seconds>]" >&2
 	echo "                          [--budget-tasks <n>] [--budget-memory <MiB>] [--no-budget]" >&2
 	echo "                          [--dry-run]" >&2
-	echo "  tier is one of: planner implementer mechanical reviewer" >&2
+	# The tier names are the resolver's, read from it rather than spelled (#681).
+	echo "  tier is one of: $(. "$LIB" && agents_tier_names)" >&2
 	echo "  --set      replace %%NAME%% in the prompt with VALUE. Repeatable." >&2
 	echo "  --set-file replace %%NAME%% with the CONTENTS of a file. For a value" >&2
 	echo "             too large for a command line — a diff, say. Repeatable." >&2

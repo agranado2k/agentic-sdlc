@@ -2627,8 +2627,69 @@
 # Kit-only, never shipped: ADR-0008's 2026-10-09 amendment and the index
 # row; tests/trace.test.sh section 33, trace-skills.test.sh section 28 and
 # lib.sh's placeholder fills for the two counts.
+# 0.69.0 — the gate refuses dated skill evidence and one-sided supersession,
+# and the landing script reads a merge no CI ran as unknown (ticket #688).
+# Releases what landed on main after v0.68.0 with no bump, up to the main
+# merged into this PR (0ac2831), by the standing ruling that the first
+# release to land absorbs another wave's unbumped landings; ticket #687 cuts
+# what lands after it.
+# TWO files JOIN the shared layer: scripts/docs-conformance/validators/
+# skill-dated.mjs, which fails a shipped SKILL.md body carrying dated kit
+# evidence (an ISO date, a cite of the kit's retro, an amendment's issue
+# number), and supersession.mjs, which fails a decision record a later one
+# supersedes when its "Superseded by" line does not name the later one. NO
+# file leaves. FIVE shared files change content besides them:
+# scripts/docs-conformance/runner.mjs registers the two; scripts/check.sh
+# carries a POSIX twin of each in the reduced form, and its notice names
+# both as checked; scripts/agents.lib.sh spells the closed tier names once,
+# in agents_tier_names, which its check and both messages read — same four
+# names, same exit 2 on an unknown one; scripts/agent-dispatch.sh's usage
+# reads them from it; scripts/trace.sh gains `stack <dir> --all`, the top
+# of every session's open run in a checkout, refusing the whole answer when
+# one stack cannot be read. And UPDATING.md: the arriving-from paragraph,
+# and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Gate policy (9d): scripts/docs-conformance/config.mjs gains two blocks,
+# skillDated and supersession, both with empty knownExceptions. Yours is
+# kept on update and neither rule runs without its block: add both to turn
+# them on, keeping each block literal, one value per line, since check.sh
+# reads it by text. The harness's fixture tests skill-dated.test.mjs and
+# supersession.test.mjs are new, and the harness README documents both.
+# From #693 (ticket #678): the skill-dated rule. From #701 (ticket #683):
+# the supersession rule. From #707 (ticket #685): /pr-iterate and
+# /review-pr drop the dated kit evidence the rule found (9a — take both
+# skills whole). From #706 (ticket #686) and #695 (ticket #679): the kit's
+# records name their successors, and ADR-0021 caps in-place amendments.
+# From #712 (ticket #681): the tier names, above; bootstrap reads them from
+# the vocabulary checker. From #710 (ticket #680): scripts/worktree-cleanup.sh
+# (yours — merge the hunk by hand) keeps a merged, clean worktree a live
+# session still holds — an open run its trace's `stack --all` names, or a
+# process working in it — and /worktree-cleanup says "live" is a reason
+# kept (9a).
+# From #668 (ticket #647): templates/workflows/ai-review-prompt.md (9c),
+# and the kit's review-worker.md beside it, carry the reuse/DRY lens's
+# declined list. From #704 (ticket #682): /implement opens a new CASCADE.md
+# beside its SKILL.md when a mechanical ticket runs cheap-first through a
+# skill dispatcher the root manual names (9a — take the directory whole).
+# From #670 (ticket #662): /merge-train lands each PR through the landing
+# script where the root manual names one, and records no merge.land of its
+# own for it (9a). From #714 (ticket #699): /pr-iterate converges only on a
+# head a review.verdict judged, and names the re-review as a red reason (9a).
+# Kit-only, never shipped: this PR (ticket #688) — the landing script
+# records workflows=unknown and exits 1 when a merge whose tree declares a
+# push-triggered workflow gets no run, or the tree cannot be read; #667
+# (ticket #661), #694 (ticket #673) and #700 (ticket #684), the landing
+# script's re-run wait, review-verdict refusal and field reads; #665 (ticket
+# #646), the broker counts a dispatched review's LOWs; #669 (ticket #660),
+# the kit's reviewer tier follows the Sonnet family (ADR-0020); #696 (ticket
+# #672), the skill dispatcher sizes a run by the ticket file's stamp; #703
+# (ticket #674) and #713 (ticket #709), the stop hook's wait bound; #705
+# (ticket #675), #708 (ticket #676) and #711 (ticket #677), suite fixes;
+# #671, the third housekeeping pass; #715 (ticket #692), ADR-0024 succeeds
+# ADR-0008; ADR-0020, ADR-0021, ADR-0023 and the
+# index rows; scripts/worktree-cleanup.kit.sh.
 
-shared-layer: 0.68.0
+shared-layer: 0.69.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2675,6 +2736,7 @@ files:
   scripts/docs-conformance/validators/living-spec.mjs
   scripts/docs-conformance/validators/skill-ceiling.mjs
   scripts/docs-conformance/validators/skill-dated.mjs
+  scripts/docs-conformance/validators/supersession.mjs
   scripts/docs-conformance/validators/trace-off.mjs
   scripts/docs-conformance/validators/reviewer-unmapped.mjs
 

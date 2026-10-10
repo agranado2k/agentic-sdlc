@@ -39,6 +39,32 @@ git -C "$FAKEKIT" worktree add -q "$FAKEKIT/worktree/nested" -b nested >/dev/nul
 TREE2="$SCRATCH/tree2"
 t_kit_tree "$FAKEKIT" "$TREE2"
 [ -f "$TREE2/README.md" ] && [ ! -e "$TREE2/worktree/nested" ] && pass "a nested worktree is stripped from the copy" || fail "the nested worktree rode into the copy"
+# The copy is what git would hand over (#690): tracked files with their working
+# changes, plus untracked files nobody ignored — the work in progress a suite
+# run is checking — and never an ignored directory, a tracked file deleted in
+# the working tree, or anything else the checkout merely happens to hold.
+printf '.trace/\nworktree/\n' >"$FAKEKIT/.gitignore"
+printf 'gone\n' >"$FAKEKIT/deleted.txt"
+git -C "$FAKEKIT" add -A >/dev/null; git -C "$FAKEKIT" commit -q -m "ignore and delete"
+rm "$FAKEKIT/deleted.txt"
+mkdir -p "$FAKEKIT/.trace/blobs"; printf 'trace\n' >"$FAKEKIT/.trace/blobs/big"
+printf 'edited\n' >"$FAKEKIT/README.md"
+printf 'fresh\n' >"$FAKEKIT/fresh.txt"
+ln -s no-such-target "$FAKEKIT/dangling"
+TREE3="$SCRATCH/tree3"
+t_kit_tree "$FAKEKIT" "$TREE3" 2>"$SCRATCH/tree3.err"
+[ ! -e "$TREE3/.trace" ] && pass "an ignored directory stays out of the copy" || fail "the ignored .trace/ rode into the copy"
+[ "$(cat "$TREE3/README.md" 2>/dev/null)" = edited ] && pass "a tracked file arrives with its working change" || fail "the tracked file's working change is missing"
+[ -f "$TREE3/fresh.txt" ] && pass "an untracked, unignored file arrives" || fail "an untracked, unignored file was left out"
+[ ! -e "$TREE3/deleted.txt" ] && [ ! -s "$SCRATCH/tree3.err" ] &&
+	pass "a tracked file deleted in the working tree is skipped in silence" ||
+	fail "the deleted file arrived or the copy complained: $(cat "$SCRATCH/tree3.err")"
+[ -L "$TREE3/dangling" ] && pass "a symlink whose target is missing arrives as a link" || fail "the dangling symlink was dropped from the copy"
+# A source git cannot list is refused, never copied as an empty fixture that
+# every assertion downstream would then misread.
+NOTGIT="$SCRATCH/notgit"; mkdir -p "$NOTGIT"; printf 'x\n' >"$NOTGIT/file"
+(t_kit_tree "$NOTGIT" "$SCRATCH/tree4") 2>/dev/null
+[ $? -eq 2 ] && pass "a source git cannot list is refused with exit 2" || fail "a source git cannot list was copied as if it were a kit"
 
 # ---------------------------------------------------------------------------
 banner "2. t_git_identity — a repo that commits and tags anywhere"
@@ -147,6 +173,20 @@ probe=$(TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONF
 [ "$probe" = "sourced[]" ] &&
 	pass "after sourcing tests/lib.sh, no TRACE_ identity or policy variable the caller exported survives" ||
 	fail "the trace scrub is not effective: the sourced suite still sees $probe"
+
+# ---------------------------------------------------------------------------
+banner "A skip note under set -u does not kill the suite"
+# ---------------------------------------------------------------------------
+# note counts into SKIPPED, and every suite that calls it runs under set -u.
+# A counter the suite never initialised killed the stop-hook suite at its
+# first skip, on a host without a millisecond clock (#709) — and self-host,
+# forge-broker, trace and nine more took the same path (#716). The probe
+# sources the lib under set -u, takes the skip path once and prints the count
+# between sentinels: an unbound counter dies before the closing one.
+probe=$(AGENT_SUITE_BUDGET=off sh -u -c '. "$0"; note "probe skip" >/dev/null; printf "counted[%s]" "$SKIPPED"' "$KIT/tests/lib.sh" 2>/dev/null)
+[ "$probe" = "counted[1]" ] &&
+	pass "after sourcing tests/lib.sh under set -u, a note completes and counts one skip" ||
+	fail "a note under set -u did not complete with SKIPPED=1 — the lib leaves the counter unbound: '$probe'"
 
 # ---------------------------------------------------------------------------
 banner "The split-stream helpers can go red"
@@ -261,6 +301,69 @@ case "$_sweep_msg" in
 *) fail "the sweep removed scratch silently: '$_sweep_msg'" ;;
 esac
 
+# A DEAD OWNER IS SWEPT NOW, A LIVE ONE NEVER (#676). Two OOM-killed suites
+# left ~900 MB of scratch that the day-long age kept, and the quota'd /tmp
+# refused every session's writes until it was swept by hand. Scratch names
+# its owning process, so the next suite to start tells dead from live.
+OWNROOT="$SCRATCH/ownroot"
+mkdir -p "$OWNROOT"
+# The real thing first: a suite killed with SIGKILL, minutes old at most.
+VICTIM_OUT="$SCRATCH/victim2-path" TMPDIR="$OWNROOT" \
+	sh -c "$KILL_BODY" "$T_ROOT/tests/killme" >/dev/null 2>&1
+VICTIM2=$(cat "$SCRATCH/victim2-path" 2>/dev/null)
+[ -n "$VICTIM2" ] && [ -d "$VICTIM2" ] ||
+	fail "the second killed suite left no scratch to sweep (victim='$VICTIM2')"
+# A live owner, by name — this suite's own process — and aged past the sweep
+# age, so the age rule alone would take it.
+_own_tok=$(t_scratch_owner) || fail "t_scratch_owner printed no owner token"
+LIVEDIR="$OWNROOT/${T_SCRATCH_PREFIX}${_own_tok}.livexx"
+mkdir -p "$LIVEDIR"
+touch -t "$_old_stamp" "$LIVEDIR" 2>/dev/null || touch -t 202001010000 "$LIVEDIR"
+# A fresh directory with no recorded owner: the age rule still holds it.
+UNOWNED="$OWNROOT/${T_SCRATCH_PREFIX}legacy"
+mkdir -p "$UNOWNED"
+# A dead owner in ANOTHER pid namespace is not ours to judge — kill -0 there
+# answers about some other process.
+sh -c 'exit 0' &
+_dead=$!
+wait "$_dead"
+FOREIGN="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-1.foreign"
+mkdir -p "$FOREIGN"
+# A token that only LOOKS like an owner — a pid with a letter in it — names no
+# process, so it is left to the age rule; a probe on it would answer "dead".
+MALFORMED="$OWNROOT/${T_SCRATCH_PREFIX}1x-${_own_tok#*-}.malformed"
+mkdir -p "$MALFORMED"
+_own_err="$SCRATCH/own-err"
+( TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null ||
+	fail "the sweeping suite itself failed — the cases below would mislead: $(cat "$_own_err")"
+[ -n "$VICTIM2" ] && [ ! -d "$VICTIM2" ] &&
+	pass "a killed suite's fresh scratch is removed at the next start — its owner is gone" ||
+	fail "a killed suite's scratch survived the next start (owner dead, age irrelevant): '$VICTIM2'"
+[ -d "$LIVEDIR" ] && pass "…and a LIVE owner's scratch is kept, however old" ||
+	fail "the sweep removed scratch whose owner process is still running"
+[ -d "$UNOWNED" ] && pass "…and fresh scratch with no recorded owner is left to the age rule" ||
+	fail "the sweep removed fresh scratch whose owner it could not name"
+[ -d "$FOREIGN" ] && pass "…and an owner recorded in another pid namespace is left to the age rule" ||
+	fail "the sweep judged a process in another pid namespace dead by this one's kill -0"
+# A dead owner's scratch the sweeping user does not own is not judged dead:
+# signal 0 on another user's pid fails as if it were gone. The sweep is run
+# under an `id` that answers another uid, so this directory is "not ours".
+NOTMINE="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-${_own_tok#*-}.notmine"
+mkdir -p "$NOTMINE" "$SCRATCH/fakeid"
+printf '#!/bin/sh\necho 99999\n' >"$SCRATCH/fakeid/id"
+chmod +x "$SCRATCH/fakeid/id"
+( PATH="$SCRATCH/fakeid:$PATH" TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) >/dev/null 2>&1
+[ -d "$NOTMINE" ] && pass "…and a dead owner's scratch under another uid is left to the age rule" ||
+	fail "the sweep removed scratch it does not own on a signal-0 failure that may only mean another user's process"
+[ -d "$MALFORMED" ] && pass "…and a malformed owner token is left to the age rule, never probed" ||
+	fail "the sweep removed fresh scratch whose owner token is not a pid"
+case "$(cat "$_own_err")" in
+*'owner process is gone'*) pass "…and says on stderr what it removed, and why" ;;
+*) fail "the owner sweep was silent: '$(cat "$_own_err")'" ;;
+esac
+
 # One variable, one default, validated before it reaches arithmetic, and
 # documented where a reader of the harness meets it.
 [ "$T_SCRATCH_SWEEP_DAYS" = 1 ] && pass "the sweep age is one variable with a kit default of 1 day" ||
@@ -273,6 +376,19 @@ done
 grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
 	grep -q "$T_SCRATCH_PREFIX" "$T_ROOT/tests/lib.sh" &&
 	pass "the harness header names both" || fail "the harness does not document its own scratch"
+
+# Every suite that makes the prefixed scratch makes it through t_scratch, so
+# it is named for its owner and sweeps at start (#676): a suite that spells
+# the template by hand makes owner-less scratch the age rule keeps for a day.
+# The pattern is split so this suite's own line never matches it.
+_hand_pat='T_SCRATCH_PREFIX''}XXXXXX'
+_handmade=''
+for f in "$T_ROOT"/tests/*.sh; do
+	case ${f##*/} in lib.sh) continue ;; esac
+	grep -qF "$_hand_pat" "$f" && _handmade="$_handmade ${f##*/}"
+done
+[ -z "$_handmade" ] && pass "every suite makes its prefixed scratch through t_scratch, named for its owner" ||
+	fail "these build kit-suite scratch by hand, with no owner in its name:$_handmade"
 
 # EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
 # enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`

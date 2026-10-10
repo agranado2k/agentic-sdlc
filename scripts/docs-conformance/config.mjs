@@ -439,10 +439,10 @@ const skillCeilings = {
  * supporting files beside a SKILL.md are not read. Each pattern is a POSIX ERE with no backslash, so both engines
  * read the same text.
  *
- * knownExceptions are today's sites, one `<skill>|<token>` each (the skill
- * by name, so the entry holds at any skill home), that the
- * sweep (#685) removes; a fixed site leaves the list, and the fixture test
- * fails an entry whose file no longer carries its token.
+ * knownExceptions are open sites, one `<skill>|<token>` each (the skill
+ * by name, so the entry holds at any skill home). Empty since the sweep
+ * (#685) removed the last three; a fixed site leaves the list, and the
+ * fixture test fails an entry whose file no longer carries its token.
  *
  * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
  * scripts/check.sh reads this block by text.
@@ -453,11 +453,28 @@ const skillDated = {
     "[Tt]he kit's retro",
     "[Aa]mended,? #[0-9]+",
   ],
-  knownExceptions: [
-    "pr-iterate|2026-10-01",
-    "review-pr|2026-10-07",
-    "review-pr|the kit's retro",
-  ],
+  knownExceptions: [],
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, traceOff };
+/**
+ * supersession — held both ways between decision records. A record whose
+ * "Supersedes / amends" line has a clause opening "supersedes" (whole or a
+ * clause) obliges each record it names to carry its id on the "Superseded
+ * by" line. recordsDir is where the records live, `NNNN-*.md` each.
+ *
+ * knownExceptions are open links excused for now, one
+ * `<superseded>|<superseding>` each, both records named by file name without
+ * `.md` (a bare number would silence a consumer's own records of the same
+ * numbers). Empty since the sweep (#686) closed the last two; a closed link
+ * leaves the list, and the fixture test fails an entry that is no longer
+ * one-sided.
+ *
+ * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
+ * scripts/check.sh reads this block by text.
+ */
+const supersession = {
+  recordsDir: "docs/adr",
+  knownExceptions: [],
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, supersession, traceOff };

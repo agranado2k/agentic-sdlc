@@ -15,6 +15,9 @@
 # would fail these tests for reasons that have nothing to do with the guards.
 
 failures=0
+# note() counts into SKIPPED; bound here so a suite under set -u that never
+# initialised it does not die at its first skip (#709, #716).
+SKIPPED=0
 LAST_OUT=""
 LAST_STATUS=0
 
@@ -411,7 +414,7 @@ _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 
-# SUITE SCRATCH NAMES ITSELF (#221), and stale scratch is swept.
+# SUITE SCRATCH NAMES ITSELF (#221), and abandoned scratch is swept.
 #
 # A suite that hits its budget ceiling (#209) is killed before its trap runs,
 # by design — so its scratch outlives it. `mktemp -d` with no template names
@@ -421,16 +424,18 @@ t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 #
 # scripts/agent-dispatch.sh solved exactly this one layer down (#210) and
 # this is the same answer, in the same shape: a PREFIX, so what a killed run
-# leaves is identifiable by name alone, and a SWEEP of what is older than a
-# run could plausibly still be. The three rules of that sweep are the
-# dispatcher's, and they are what make it safe on a shared /tmp: only
-# directories carrying the prefix, only those older than the age, and nothing
+# leaves is identifiable by name alone, and a SWEEP at the next suite's start.
+# The sweep judges by OWNER first (#676, below): scratch whose recorded owner
+# is alive is kept, and ours whose owner is gone is removed at once. Only what
+# names no owner this run can judge falls to the AGE rule, the dispatcher's:
+# older than a run could plausibly still be. Every rule keeps the dispatcher's
+# safety on a shared /tmp: only directories carrying the prefix, and nothing
 # followed through a symlink.
 #
-# T_SCRATCH_SWEEP_DAYS is the age, in whole days. The default is deliberately
-# generous — a suite is minutes, not days, so a day-old directory is certainly
-# abandoned — and an operator who runs suites that legitimately outlive it can
-# raise it in their environment.
+# T_SCRATCH_SWEEP_DAYS is that fallback age, in whole days. The default is
+# deliberately generous — a suite is minutes, not days, so a day-old directory
+# is certainly abandoned — and an operator who runs suites that legitimately
+# outlive it can raise it in their environment.
 # The prefix is a CONSTANT, exactly as scripts/agent-dispatch.sh's is, and for
 # the same reason: it is the `-name` of a `find … -exec rm -rf` on a directory
 # every program on the host shares. An overridable one puts that removal on the
@@ -453,29 +458,98 @@ case "${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT}" in
 *) T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT} ;;
 esac
 
-# t_sweep_scratch — remove suite scratch under $TMPDIR older than the sweep
-# age, and say how much went. Never touches a name without the prefix.
+# SCRATCH NAMES ITS OWNER (#676), and a dead owner's is swept at once. The age
+# above was the only rule, so two OOM-killed suites left ~900 MB that the day
+# kept — on a quota'd /tmp every session's writes then failed until somebody
+# swept it by hand. So the name carries the process that made it,
+# `kit-suite.<pid>-<pid namespace>.XXXXXX`, and the next suite to start judges
+# each directory one of three ways:
+#
+#   - its owner is recorded, in THIS pid namespace, and alive: kept, however
+#     old — never delete scratch a live process owns;
+#   - its owner is recorded, in this namespace, and gone, and the directory is
+#     ours (same uid, so kill -0 answered about a process we could signal):
+#     removed now, whatever its age;
+#   - anything else — no owner in the name (scratch made before #676, a fixture,
+#     another kit), another namespace, another user's: the age rule, as before.
+#
+# The record is the NAME, not a file inside: it exists the instant mktemp
+# returns, so there is no window where a half-made scratch looks ownerless, and
+# no suite that lists its own scratch finds a stranger in it. A reused pid only
+# ever errs towards keeping, which the age rule then covers.
+
+# t_scratch_owner — print this process's owner token, `<pid>-<ns>`. The
+# namespace is the pid namespace's inode where /proc says so, and 0 where it
+# does not (no /proc: one namespace is all the host has).
+t_scratch_owner() {
+	_to_ns=$(ls -l /proc/self/ns/pid 2>/dev/null | sed -n 's/.*pid:\[\([0-9][0-9]*\)\].*/\1/p')
+	printf '%s-%s\n' "$$" "${_to_ns:-0}"
+}
+
+# _t_scratch_verdict <dir> <this namespace> <uid> — print live, dead or unknown.
+_t_scratch_verdict() {
+	_tv_rest=${1##*/}
+	_tv_rest=${_tv_rest#"$T_SCRATCH_PREFIX"}
+	_tv_tok=${_tv_rest%%.*}
+	[ "$_tv_tok" != "$_tv_rest" ] || { echo unknown; return; }
+	case $_tv_tok in
+	[1-9]*-[0-9]*) ;;
+	*) echo unknown; return ;;
+	esac
+	_tv_pid=${_tv_tok%%-*}
+	_tv_ns=${_tv_tok#*-}
+	case $_tv_pid$_tv_ns in *[!0-9]*) echo unknown; return ;; esac
+	[ "$_tv_ns" = "$2" ] || { echo unknown; return; }
+	[ -n "$(find "$1" -prune -user "$3" 2>/dev/null)" ] || { echo unknown; return; }
+	if kill -0 "$_tv_pid" 2>/dev/null; then echo live; else echo dead; fi
+}
+
+# t_sweep_scratch — remove suite scratch under $TMPDIR whose owner is gone, or
+# that is older than the sweep age and names no owner this run can judge; keep
+# a live owner's; say how much went and why. Never touches a name without the
+# prefix, never anything but a real directory.
 t_sweep_scratch() {
 	_ts_root=${TMPDIR:-/tmp}
 	[ -d "$_ts_root" ] || return 0
-	# POSIX find only, and the predicates carry the safety rather than sitting
-	# beside it: `dir/.` with `! -name . -prune` is depth one; `-mtime +n` is
-	# true once the whole days elapsed exceed n, so "at least N days" is
-	# +(N-1); the walk is PHYSICAL (no -L, no -H) so a planted
-	# `kit-suite.x -> ~` is a link and `-type d` never hands it to rm; and a
-	# sibling owned by someone else fails at rm on a sticky /tmp, so -print
-	# follows only a removal that worked and the count is of what actually
-	# went.
-	_ts_swept=$(find "$_ts_root/." ! -name . -prune -type d -name "${T_SCRATCH_PREFIX}*" \
-		-mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
-	[ "${_ts_swept:-0}" -gt 0 ] &&
-		echo "i  tests/lib.sh: swept $_ts_swept stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
+	_ts_tok=$(t_scratch_owner)
+	_ts_ns=${_ts_tok#*-}
+	_ts_uid=$(id -u)
+	_ts_dead=0
+	_ts_aged=0
+	for _ts_d in "$_ts_root/$T_SCRATCH_PREFIX"*; do
+		# A real directory only: -d follows a link, so -L is what refuses a
+		# planted `kit-suite.x -> ~`, and rm -rf on the link's own path never
+		# follows it. A plain file carrying the prefix is not -d.
+		[ -d "$_ts_d" ] && [ ! -L "$_ts_d" ] || continue
+		case $(_t_scratch_verdict "$_ts_d" "$_ts_ns" "$_ts_uid") in
+		live) continue ;;
+		dead) rm -rf "$_ts_d" 2>/dev/null && [ ! -e "$_ts_d" ] && _ts_dead=$((_ts_dead + 1)) ;;
+		*)
+			# `-mtime +n` is true once the whole days elapsed exceed n, so "at
+			# least N days" is +(N-1). A sibling owned by someone else fails at
+			# rm on a sticky /tmp, so the count is of what actually went.
+			[ -n "$(find "$_ts_d" -prune -mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" 2>/dev/null)" ] || continue
+			rm -rf "$_ts_d" 2>/dev/null && [ ! -e "$_ts_d" ] && _ts_aged=$((_ts_aged + 1))
+			;;
+		esac
+	done
+	[ "$_ts_dead" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_dead suite scratch under $_ts_root whose owner process is gone — killed before its trap" >&2
+	[ "$_ts_aged" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_aged stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
 	return 0
 }
 
-t_init() {
+# t_scratch — sweep, then make this suite's scratch, named for its owner, in
+# the global SCRATCH. A suite that sets its own trap calls this; t_init is it
+# plus the harness's trap.
+t_scratch() {
 	t_sweep_scratch
-	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}$(t_scratch_owner).XXXXXX") || exit 2
+}
+
+t_init() {
+	t_scratch
 	trap 't_cleanup' EXIT INT TERM HUP
 }
 
@@ -661,16 +735,26 @@ t_done() {
 # ---------------------------------------------------------------------------
 
 # t_kit_tree <kit> <dest> — a .git-free copy of the kit's working tree at
-# <dest>, nested worktrees stripped. The source is resolved to its physical
-# path first: git reports worktrees that way, and the strip matches on the
-# prefix, so a symlinked source (macOS's /var → /private/var, say) would
-# otherwise keep every nested worktree in silence.
+# <dest>, as git would hand it over: tracked files with their working changes,
+# plus untracked files no ignore rule names, and nothing else (#690). An
+# ignored directory — the trace, the retro folder, worktree/ — never arrives:
+# "Use this template" hands nobody those, and the trace alone runs to hundreds
+# of megabytes on a working machine. A tracked file deleted in the working tree
+# is skipped, a source git cannot list is refused (exit 2), and no .git is
+# ever listed, so none arrives. Nested worktrees are still stripped, for one
+# checked out under a path no ignore rule covers. The source is resolved to its physical path
+# first: git reports worktrees that way, and the strip matches on the prefix,
+# so a symlinked source (macOS's /var → /private/var, say) would otherwise keep
+# every nested worktree in silence.
 t_kit_tree() {
 	_kt_src=$(cd "$1" && pwd -P) || exit 2
+	_kt_list=$(git -C "$_kt_src" -c core.quotePath=false ls-files -co --exclude-standard) || exit 2
 	mkdir -p "$2"
-	cp -R "$_kt_src/." "$2/"
+	printf '%s\n' "$_kt_list" |
+		while IFS= read -r _kt_path; do
+			{ [ -e "$_kt_src/$_kt_path" ] || [ -L "$_kt_src/$_kt_path" ]; } && printf '%s\n' "$_kt_path"
+		done | (cd "$_kt_src" && tar -cf - -T -) | (cd "$2" && tar -xf -) || exit 2
 	strip_nested_worktrees "$_kt_src" "$2"
-	rm -rf "$2/.git"
 }
 
 # t_git_identity <dir> <name> <email> — init a repo on main with a fixture
@@ -735,7 +819,7 @@ t_consumer_from() {
 }
 
 # strip_nested_worktrees <src_repo> <dest_tree> — drop any git worktree that
-# lives INSIDE the source repo from a tree that was just `cp -R`'d out of it.
+# lives INSIDE the source repo from a tree that was just copied out of it.
 #
 # Why this exists: the kit's own convention is to develop in worktrees checked
 # out under the repo, and `cp -R` takes them along. A fixture built that way is
@@ -1345,4 +1429,33 @@ t_hold_reader_step() {
 	for _hr_flag in '--tools' '--restricted' '--strict-mcp-config' 'claude -p'; do
 		assert_file_lacks_any_case "$_hr_skill" "$_hr_flag" "a vendor's flag or command is the adapter's to name, never the skill's"
 	done
+}
+
+# t_adr_successor <records dir> <NNNN> — the path of the record that supersedes
+# ADR-NNNN, found through the old record's own Status line, "Superseded by
+# MMMM": the one hop a reader takes (ADR-0021 clause 3). Prints nothing when
+# the record is not superseded or its successor has no file.
+t_adr_successor() {
+	_ts_old=$(ls "$1"/"$2"-*.md 2>/dev/null | head -1)
+	[ -n "$_ts_old" ] || return 0
+	_ts_next=$(sed -n 's/^- \*\*Status\*\*: Superseded by \([0-9][0-9][0-9][0-9]\)$/\1/p' "$_ts_old")
+	[ -n "$_ts_next" ] || return 0
+	ls "$1"/"$_ts_next"-*.md 2>/dev/null | head -1
+}
+
+# t_adr_clause <record> <N> — clause N of a record's Decision outcome,
+# flattened to one line: from "N. **" to the next numbered clause or the next
+# section. Nothing when the record or the clause is missing.
+t_adr_clause() {
+	awk -v n="$2" '
+		/^## Decision outcome/ { d = 1; next }
+		d && !on && $0 ~ "^" n "\\. \\*\\*" { on = 1; print; next }
+		on && (/^[0-9]+\. / || /^## /) { exit }
+		on' "${1:-/dev/null}" 2>/dev/null | tr '\n' ' ' | tr -s ' '
+}
+
+# t_adr_clause_title <record> <N> — the bold lead of clause N of a record's
+# Decision outcome, without its closing full stop: "One event per line".
+t_adr_clause_title() {
+	t_adr_clause "$1" "$2" | sed -n 's/^[0-9]*\. \*\*\([^*]*\)\*\*.*/\1/p' | sed 's/[.:]$//'
 }

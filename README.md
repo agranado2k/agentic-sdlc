@@ -251,7 +251,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.68.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.69.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -877,7 +877,12 @@ skeleton (K0).
   base in its linked worktree and runs again on the mapped model, a ticket
   with no closed-list oracle is refused the cascade, each rung is a spawn
   under one run, and with no `--tier` the ticket file's own `Tier:` stamp,
-  read through `scripts/stamp.sh`, is what sizes the dispatch (#672).
+  read through `scripts/stamp.sh`, is what sizes the dispatch (#672). A rung
+  whose model names no agent harness is handed back in-session — exit 3, its
+  spawn prompt opening with `Trace-Run:` and `Trace-Spawn:` — and a stub
+  in-session spawn drives it end to end: `--rung-done` runs the oracle and the
+  guard, records the verdict under the one run, and escalates from the exit
+  codes (#682).
 
 - `sh tests/self-host.test.sh` covers the claim that the kit keeps its own
   rules. The kit's manual layer exists and its shims really are shims, the docs

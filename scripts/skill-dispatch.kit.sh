@@ -74,6 +74,23 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 die() { echo "skill-dispatch: $1" >&2; exit 2; }
 
+# tier_names — the closed tier vocabulary, read from the resolver that owns it
+# rather than spelled here (#681). is_tier <word> — is it one of them? A
+# shaped word holds no space, so contiguous text inside the padded list
+# (`planner implementer`) never passes as a member.
+# Read once, here: a resolver that cannot be sourced stops the dispatcher
+# loudly rather than leaving it an empty vocabulary.
+TIER_NAMES=$(. "$ROOT/scripts/agents.lib.sh" 2>/dev/null && agents_tier_names) && [ -n "$TIER_NAMES" ] ||
+	die "cannot read the tier names from $ROOT/scripts/agents.lib.sh"
+tier_names() { printf '%s' "$TIER_NAMES"; }
+is_tier() {
+	case $1 in '' | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1 ;; esac
+	case " $(tier_names) " in *" $1 "*) return 0 ;; esac
+	return 1
+}
+# phase_names — the phases: the tiers, with `tester` after implementer.
+phase_names() { tier_names | sed 's/implementer/& tester/'; }
+
 # The policy this session resolves through is scripts/agents.kit.sh's choice,
 # asked for by name rather than recomputed: one definition of "which agent
 # harness am I", in the script whose job that already is.
@@ -95,18 +112,20 @@ usage() {
 	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
-	echo "  phases: planner implementer tester mechanical reviewer" >&2
+	echo "  phases: $(phase_names)" >&2
 	exit 2
 }
 
 # phase_tier <phase> — the resolver arguments a phase means, on one line.
 # `tester` is the only one that carries a domain; see the header.
 phase_tier() {
-	case "$1" in
-	planner | implementer | mechanical | reviewer) printf '%s\n' "$1" ;;
-	tester) printf 'implementer tests\n' ;;
-	*) die "unknown phase '$1'. The vocabulary is closed: planner implementer tester mechanical reviewer." ;;
-	esac
+	if is_tier "$1"; then
+		printf '%s\n' "$1"
+	elif [ "$1" = tester ]; then
+		printf 'implementer tests\n'
+	else
+		die "unknown phase '$1'. The vocabulary is closed: $(phase_names)."
+	fi
 }
 
 # skill_phase <skill> — the metadata.phase a skill declares. The leading
@@ -157,6 +176,9 @@ TICKET=''
 CASCADE_TICKET=''
 CASCADE_WT=''
 CASCADE_BASE=''
+RUNG_DONE=0
+PROMPT_RAW=''
+PROMPT_FILE_RAW=''
 _count=$#
 while [ "$_count" -gt 0 ]; do
 	a=$1
@@ -164,7 +186,7 @@ while [ "$_count" -gt 0 ]; do
 	_count=$((_count - 1))
 	case "$a" in
 	--tier)
-		[ "$_count" -gt 0 ] || die "--tier needs one of: planner implementer mechanical reviewer"
+		[ "$_count" -gt 0 ] || die "--tier needs one of: $(tier_names)"
 		OVERRIDE_TIER=$1
 		shift
 		_count=$((_count - 1))
@@ -185,6 +207,7 @@ while [ "$_count" -gt 0 ]; do
 		*) die "--ticket takes a ticket number, '#' optional, no leading zero, six digits at most" ;;
 		esac
 		;;
+	--rung-done) RUNG_DONE=1 ;;
 	--ticket-file | --worktree | --base)
 		[ "$_count" -gt 0 ] || die "$a needs a value"
 		case "$a" in
@@ -194,6 +217,15 @@ while [ "$_count" -gt 0 ]; do
 		esac
 		shift
 		_count=$((_count - 1))
+		;;
+	--prompt | --prompt-file)
+		# Kept as typed, for an in-session rung's prompt (#682): the
+		# rewrite below prefixes the dispatcher's own lines to it.
+		[ "$_count" -gt 0 ] && case "$a" in
+		--prompt) PROMPT_RAW=$1 ;;
+		*) PROMPT_FILE_RAW=$1 ;;
+		esac
+		set -- "$@" "$a"
 		;;
 	*) set -- "$@" "$a" ;;
 	esac
@@ -237,17 +269,16 @@ _fs_read_stamp() {
 	# The checked lines only: a value the checker passed, one word each.
 	_fs_tier=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Tt][Ii][Ee][Rr][[:space:]]*:[[:space:]]*\([a-z]*\)[[:space:]]*$/\1/p' | head -n 1)
 	_fs_domain=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Dd][Oo][Mm][Aa][Ii][Nn][[:space:]]*:[[:space:]]*\([a-z-]*\)[[:space:]]*$/\1/p' | head -n 1)
-	case "$_fs_tier" in
-	planner | implementer | mechanical | reviewer) TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}" ;;
-	*) _fs_none=1 ;;
-	esac
+	if is_tier "$_fs_tier"; then
+		TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}"
+	else
+		_fs_none=1
+	fi
 }
 
 if [ -n "$OVERRIDE_TIER" ]; then
-	case "$OVERRIDE_TIER" in
-	planner | implementer | mechanical | reviewer) ;;
-	*) die "unknown tier '$OVERRIDE_TIER'. The vocabulary is closed: planner implementer mechanical reviewer." ;;
-	esac
+	is_tier "$OVERRIDE_TIER" ||
+		die "unknown tier '$OVERRIDE_TIER'. The vocabulary is closed: $(tier_names)."
 	TIER_ARGS="$OVERRIDE_TIER${OVERRIDE_DOMAIN:+ $OVERRIDE_DOMAIN}"
 	TIER_SOURCE="the ticket's stamp"
 else
@@ -334,14 +365,18 @@ fi
 # `escalated`, or — the mapped rung red, nothing left to escalate to — `failed`
 # (spend/R21). A rung's own crossing is still agent-dispatch.sh's
 # `dispatched` spawn and its spawn.end, filed under the same run; the rung
-# record is the verdict, not a second crossing. A rung the dispatcher could not
-# run itself (agent-dispatch exit 3 or 69, the caller spawns it) is recorded
-# `in-session` on the mapped rung and `refused` on the cheap one, which then
-# falls through to the plain path: an oracle cannot judge work this process
-# never ran.
+# record is the verdict, not a second crossing. A rung whose model names no
+# agent harness (agent-dispatch exit 3) is handed back in-session and recorded
+# `in-session`, its verdict recorded when the caller's --rung-done judges it
+# (#682, below). A rung whose agent harness is unreachable (exit 69) is
+# recorded `refused` on the cheap rung, which falls through to the plain path,
+# and `in-session` on the mapped one, handed to the caller unjudged.
 #
-# EXIT. 0 a rung passed; 1 the mapped rung was red; any dispatch status that is
-# not a worker's (2, 3, 4, 69) passes through untouched.
+#   --rung-done            judge the rung this worktree handed back, go on
+#
+# EXIT. 0 a rung passed; 1 the mapped rung was red; 3 a rung handed back for
+# the caller to spawn; any other dispatch status that is not a worker's (2, 4,
+# 69) passes through untouched.
 
 CASCADE=0
 CASCADE_MODEL=''
@@ -417,6 +452,8 @@ if [ -n "$CASCADE_MODEL" ]; then
 		fi
 	fi
 fi
+[ "$RUNG_DONE" = 0 ] || [ "$CASCADE" = 1 ] ||
+	die "--rung-done judges a rung a cascade handed back in-session, and this dispatch runs no cascade"
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
 	if [ "$CASCADE" = 1 ]; then
@@ -445,6 +482,12 @@ _cascade_rung() {
 	(cd "$CASCADE_WT" && TRACE_RUN=$CASCADE_RUN TRACE_PARENT=$CASCADE_PARENT AGENTS_CONFIG=$_cr_cfg \
 		sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@") >"$_cr_out" || RUNG_STATUS=$?
 	case "$RUNG_STATUS" in 2 | 3 | 4 | 69) return 0 ;; esac
+	_cascade_judge
+}
+
+# _cascade_judge — the oracle and the pairing guard on what the worktree holds.
+# Sets ORACLE_EXIT and GUARD_EXIT; the rung's own report is never an input.
+_cascade_judge() {
 	ORACLE_EXIT=0 GUARD_EXIT=0
 	(cd "$CASCADE_WT" && eval "$CASCADE_ORACLE") >&2 || ORACLE_EXIT=$?
 	(cd "$CASCADE_WT" && sh "$CASCADE_GUARD" "$CASCADE_BASE" HEAD) >&2 || GUARD_EXIT=$?
@@ -463,14 +506,65 @@ _cascade_model() {
 	AGENTS_CONFIG=$1 sh "$ROOT/scripts/agents.lib.sh" $TIER_ARGS 2>/dev/null || :
 }
 
+# --- the in-session rung (#682) ---------------------------------------------
+# WHY. A rung whose model names no agent harness — the kit's own cascade
+# model, a family word for the session's own vendor — is one this process
+# cannot run: only the calling session can spawn it. It used to be refused,
+# so the kit's cascade was declared and never ran. Now the rung is HANDED
+# BACK: exit 3, the model on stdout exactly as agent-dispatch's in-session
+# exit prints it, and the spawn prompt — Trace-Run and Trace-Spawn lines
+# first, so the spawn guard passes it and the subagent's stop files under the
+# cascade's run — written to the worktree's git dir, never its working tree
+# (a file there would dirty the tree the guard judges). The session spawns the
+# rung on the tier's agent type and that model, waits for it, then runs the
+# SAME command again with --rung-done: the oracle and the pairing guard run on
+# what the rung committed, the verdict is recorded under the same run, and
+# the cascade goes on from that rung exactly as it would have here.
+#
+# THE STATE is four small files under <git dir>/skill-cascade: the run, its
+# parent, the rung handed back and the base it was handed back against. A
+# --rung-done whose base differs, or with no state at all, is exit 2. The
+# state is removed when the cascade ends.
+
+# _cascade_handback <n> <out file> <policy file> — hand rung <n> back. Exits 3.
+_cascade_handback() {
+	_hb_n=$1 _hb_out=$2 _hb_cfg=$3
+	rm -rf "$CASCADE_STATE"
+	mkdir -p "$CASCADE_STATE" || die "cannot stage the in-session rung under '$CASCADE_STATE'"
+	printf '%s\n' "$CASCADE_RUN" >"$CASCADE_STATE/run"
+	printf '%s\n' "$CASCADE_PARENT" >"$CASCADE_STATE/parent"
+	printf '%s\n' "$_hb_n" >"$CASCADE_STATE/rung"
+	printf '%s\n' "$CASCADE_BASE" >"$CASCADE_STATE/base"
+	_hb_parent=''
+	_sl_id_ok "$CASCADE_PARENT" && _hb_parent=" $CASCADE_PARENT"
+	_hb_ticket=none
+	[ -z "$TICKET" ] || _hb_ticket="#$TICKET"
+	{
+		printf 'Trace-Run: %s%s\n' "$CASCADE_RUN" "$_hb_parent"
+		printf 'Trace-Spawn: tier=%s domain=%s skill=%s ticket=%s\n' \
+			"$_cascade_tier" "${_cascade_domain:-none}" "${SKILL#/}" "$_hb_ticket"
+		printf 'You are rung %s of a cheap-first cascade. Work only in the worktree %s, and commit your work there.\n' \
+			"$_hb_n" "$CASCADE_WT_ABS"
+		printf 'Stop before anything leaves that worktree: no push, no pull request, no review request, and never dispatch this ticket again.\n'
+		printf 'Your report is never read: the ticket'"'"'s oracle and the pairing guard judge what you committed.\n\n'
+		if [ -n "$PROMPT_FILE_RAW" ]; then
+			cat "$PROMPT_FILE_RAW"
+		else
+			printf 'Run %s. %s\n' "$SKILL" "$PROMPT_RAW"
+		fi
+	} >"$CASCADE_STATE/prompt"
+	_hb_model=$(_cascade_model "$_hb_cfg")
+	_cascade_emit model="$_hb_model" outcome=in-session data.rung="$_hb_n" \
+		reason='the model names no agent harness this dispatcher runs; the calling session spawns the rung, then runs the dispatch again with --rung-done'
+	echo "skill-dispatch: rung $_hb_n is yours to spawn in-session — agent type '$_cascade_tier', model '${_hb_model:-none: the spawn inherits}', its prompt verbatim from $CASCADE_STATE/prompt. When the rung returns, run this same command again with --rung-done: the oracle and the pairing guard judge what it committed in $CASCADE_WT_ABS." >&2
+	cat "$_hb_out"
+	exit 3
+}
+
 # _cascade <dispatch args…> — the two rungs. Never returns.
 _cascade() {
-	CASCADE_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-cascade"
-	CASCADE_PARENT=${TRACE_RUN:-}
-	if [ -z "${TRACE_RUN+set}" ] && [ -f "$ROOT/scripts/trace.sh" ]; then
-		CASCADE_PARENT=$(TRACE_QUIET=1 sh "$ROOT/scripts/trace.sh" emit kind=note --dry-run 2>/dev/null |
-			sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
-	fi
+	CASCADE_STATE="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
+	CASCADE_WT_ABS=$(cd "$CASCADE_WT" && pwd)
 	_cs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-cascade.XXXXXX") || die "no scratch for the cascade"
 	trap 'rm -rf "$_cs_tmp"' EXIT
 	case "$AGENTS_CONFIG" in *"'"*) die "the policy path carries a quote; the cascade cannot stage its rung policy" ;; esac
@@ -480,24 +574,64 @@ _cascade() {
 		[ -n "$_cascade_domain" ] &&
 			printf 'unset AGENT_TIER_MECHANICAL_%s\n' "$(printf '%s' "$_cascade_domain" | tr 'a-z-' 'A-Z_')"
 	} >"$_cs_tmp/cheap.config.sh"
+	_m1=$(_cascade_model "$_cs_tmp/cheap.config.sh")
+
+	if [ "$RUNG_DONE" = 1 ]; then
+		[ -f "$CASCADE_STATE/run" ] && [ -f "$CASCADE_STATE/rung" ] && [ -f "$CASCADE_STATE/base" ] ||
+			die "--rung-done: no rung was handed back in '$CASCADE_WT' — run the dispatch without it first"
+		[ "$(cat "$CASCADE_STATE/base")" = "$CASCADE_BASE" ] ||
+			die "--rung-done: the rung was handed back against another --base; run the dispatch again from the start"
+		CASCADE_RUN=$(cat "$CASCADE_STATE/run")
+		CASCADE_PARENT=$(cat "$CASCADE_STATE/parent" 2>/dev/null || :)
+		_cs_done=$(cat "$CASCADE_STATE/rung")
+		_cascade_judge
+		case "$_cs_done" in
+		1) _cascade_after1 "$@" ;;
+		2)
+			_cs_cfg2=$AGENTS_CONFIG
+			_cascade_escalation_policy
+			_cascade_after2
+			;;
+		*) die "--rung-done: the hand-back state names no rung this cascade has" ;;
+		esac
+	fi
+
+	# A run in the trace script's own shape — stamp, pid, eight hex digits —
+	# so an in-session rung's Trace-Run line is one the adapter's hooks read.
+	_cs_hex=$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
+	printf '%s\n' "$_cs_hex" | grep -Eqx '[0-9a-f]{8}' || _cs_hex=$(printf '%08x' "$$")
+	CASCADE_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-$_cs_hex"
+	CASCADE_PARENT=${TRACE_RUN:-}
+	if [ -z "${TRACE_RUN+set}" ] && [ -f "$ROOT/scripts/trace.sh" ]; then
+		CASCADE_PARENT=$(TRACE_QUIET=1 sh "$ROOT/scripts/trace.sh" emit kind=note --dry-run 2>/dev/null |
+			sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
+	fi
+	rm -rf "$CASCADE_STATE"
 
 	_cascade_rung 1 "$_cs_tmp/cheap.config.sh" "$_cs_tmp/rung1.out" "$@"
 	case "$RUNG_STATUS" in
-	3 | 69)
-		_cascade_emit model="$(_cascade_model "$_cs_tmp/cheap.config.sh")" outcome=refused data.rung=1 \
-			reason='the cascade model is not dispatchable from here; an oracle cannot judge work this process never ran'
-		echo "skill-dispatch: cascade refused — the cascade model names no agent harness this dispatcher can run (exit $RUNG_STATUS); running on the mechanical tier's mapped model" >&2
+	3) _cascade_handback 1 "$_cs_tmp/rung1.out" "$_cs_tmp/cheap.config.sh" ;;
+	69)
+		_cascade_emit model="$_m1" outcome=refused data.rung=1 \
+			reason='the cascade model names an agent harness that is not reachable from here; an oracle cannot judge work this process never ran'
+		echo "skill-dispatch: cascade refused — the cascade model's agent harness is not reachable from here (exit $RUNG_STATUS); running on the mechanical tier's mapped model" >&2
 		rm -rf "$_cs_tmp"
 		# shellcheck disable=SC2086
 		exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@"
 		;;
 	2 | 4) cat "$_cs_tmp/rung1.out"; exit "$RUNG_STATUS" ;;
 	esac
-	_m1=$(_cascade_model "$_cs_tmp/cheap.config.sh")
+	_cascade_after1 "$@"
+}
+
+# _cascade_after1 <dispatch args…> — rung 1's verdict, then rung 2 on a red
+# one. Never returns.
+_cascade_after1() {
 	if [ "$ORACLE_EXIT" = 0 ] && [ "$GUARD_EXIT" = 0 ]; then
 		_cascade_emit model="$_m1" outcome=passed data.rung=1 data.oracle_exit=0 data.guard_exit=0 \
 			reason='the oracle and the pairing guard are green on the cascade model'
-		cat "$_cs_tmp/rung1.out"
+		rm -rf "$CASCADE_STATE"
+		[ ! -f "$_cs_tmp/rung1.out" ] || cat "$_cs_tmp/rung1.out"
 		exit 0
 	fi
 	_cascade_emit model="$_m1" outcome=escalated data.rung=1 data.oracle_exit="$ORACLE_EXIT" \
@@ -505,14 +639,33 @@ _cascade() {
 	echo "skill-dispatch: cascade escalated — oracle exit $ORACLE_EXIT, pairing guard exit $GUARD_EXIT on the cascade model; resetting the worktree to $CASCADE_BASE and running the mechanical tier's mapped model" >&2
 	(cd "$CASCADE_WT" && git reset -q --hard "$CASCADE_BASE" && git clean -qfd) ||
 		die "the reset of '$CASCADE_WT' to $CASCADE_BASE failed; rung 2 does not run on a dirty tree"
+	rm -rf "$CASCADE_STATE"
 
-	# THE ESCALATION MUST CHANGE THE MODEL (ADR-0018). When the mechanical
-	# tier itself maps the cascade's model — the kit's own policy since its
-	# mechanical tier follows the Sonnet family — rung 2 on "the tier's mapped
-	# model" would be the same model drawn twice. It escalates to the
-	# implementer tier's model instead (the ticket's domain carried through),
-	# both halves of it, staged as the mechanical mapping for that one rung.
 	_cs_cfg2=$AGENTS_CONFIG
+	_cascade_escalation_policy loud
+	_cascade_rung 2 "$_cs_cfg2" "$_cs_tmp/rung2.out" "$@"
+	case "$RUNG_STATUS" in
+	3) _cascade_handback 2 "$_cs_tmp/rung2.out" "$_cs_cfg2" ;;
+	69)
+		_cascade_emit model="$(_cascade_model "$_cs_cfg2")" outcome=in-session data.rung=2 \
+			reason='the mapped model names an agent harness that is not reachable from here; the caller spawns it and holds the oracle'
+		cat "$_cs_tmp/rung2.out"
+		exit "$RUNG_STATUS"
+		;;
+	2 | 4) cat "$_cs_tmp/rung2.out"; exit "$RUNG_STATUS" ;;
+	esac
+	cat "$_cs_tmp/rung2.out"
+	_cascade_after2
+}
+
+# _cascade_escalation_policy [loud] — sets _cs_cfg2 to the policy rung 2 runs
+# under. THE ESCALATION MUST CHANGE THE MODEL (ADR-0018). When the mechanical
+# tier itself maps the cascade's model — the kit's own policy since its
+# mechanical tier follows the Sonnet family — rung 2 on "the tier's mapped
+# model" would be the same model drawn twice. It escalates to the implementer
+# tier's model instead (the ticket's domain carried through), both halves of
+# it, staged as the mechanical mapping for that one rung.
+_cascade_escalation_policy() {
 	# shellcheck disable=SC2086
 	if [ "$_m1" = "$(_cascade_model "$AGENTS_CONFIG")" ] &&
 		[ "$(AGENTS_CONFIG=$_cs_tmp/cheap.config.sh sh "$ROOT/scripts/agents.lib.sh" --harness $TIER_ARGS 2>/dev/null)" = \
@@ -530,22 +683,16 @@ _cascade() {
 					printf 'unset AGENT_TIER_MECHANICAL_%s\n' "$(printf '%s' "$_cascade_domain" | tr 'a-z-' 'A-Z_')"
 			} >"$_cs_tmp/escalate.config.sh"
 			_cs_cfg2=$_cs_tmp/escalate.config.sh
-			echo "skill-dispatch: the mechanical tier maps the cascade's own model ($_m1); rung 2 escalates to the implementer tier's model ($_esc_model)" >&2
+			[ -z "${1:-}" ] ||
+				echo "skill-dispatch: the mechanical tier maps the cascade's own model ($_m1); rung 2 escalates to the implementer tier's model ($_esc_model)" >&2
 		fi
 	fi
+}
 
-	_cascade_rung 2 "$_cs_cfg2" "$_cs_tmp/rung2.out" "$@"
+# _cascade_after2 — rung 2's verdict. Never returns.
+_cascade_after2() {
 	_m2=$(_cascade_model "$_cs_cfg2")
-	case "$RUNG_STATUS" in
-	3 | 69)
-		_cascade_emit model="$_m2" outcome=in-session data.rung=2 \
-			reason='the mapped model names no agent harness this dispatcher runs; the caller spawns it and holds the oracle'
-		cat "$_cs_tmp/rung2.out"
-		exit "$RUNG_STATUS"
-		;;
-	2 | 4) cat "$_cs_tmp/rung2.out"; exit "$RUNG_STATUS" ;;
-	esac
-	cat "$_cs_tmp/rung2.out"
+	rm -rf "$CASCADE_STATE"
 	if [ "$ORACLE_EXIT" = 0 ] && [ "$GUARD_EXIT" = 0 ]; then
 		_cascade_emit model="$_m2" outcome=passed data.rung=2 data.oracle_exit=0 data.guard_exit=0 \
 			reason='the oracle and the pairing guard are green on the mapped model'
