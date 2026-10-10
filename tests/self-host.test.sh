@@ -1236,4 +1236,55 @@ else
 	fail "the oracle probe failed to detect a measurement missing its oracle — the check is vacuous"
 fi
 
+# ---------------------------------------------------------------------------
+banner "H. A record takes at most five in-place amendments (ADR-0021)"
+# ---------------------------------------------------------------------------
+# An amendment is counted where the record's header names it: every dated
+# "amended [again] <date>" between the title and the first section. Past five,
+# a record's next change is a consolidating successor, never another
+# amendment. The two records already past the cap when ADR-0021 was decided
+# are held at the count they had: neither may grow. A ceiling leaves this
+# list when its record is superseded (ADR-0008's by #692).
+ADR_AMEND_CAP=5
+ADR_AMEND_FROZEN="0008:24 0009:7"
+adr_amendments() {
+	sed -n '1,/^## /p' "$1" | grep -oi 'amended[a-z ]* [0-9][0-9]*-[0-9][0-9]*-[0-9][0-9]*' | wc -l | tr -d ' '
+}
+adr_amend_violations() { # <adr dir>
+	for a in "$1"/0*.md; do
+		[ -f "$a" ] || continue
+		n=$(adr_amendments "$a")
+		num=$(basename "$a" | cut -c1-4)
+		ceiling=$ADR_AMEND_CAP
+		for fz in $ADR_AMEND_FROZEN; do
+			[ "${fz%%:*}" = "$num" ] && ceiling=${fz#*:}
+		done
+		grep -q '^- \*\*Status\*\*: Superseded' "$a" && continue
+		[ "$n" -gt "$ceiling" ] && printf '%s names %s amendments, ceiling %s\n' "$(basename "$a")" "$n" "$ceiling"
+	done
+	return 0
+}
+over=$(adr_amend_violations "$KIT/docs/adr")
+if [ -z "$over" ]; then
+	pass "no live record names more in-place amendments than its ceiling"
+else
+	fail "a record is past its amendment ceiling — its next change is a successor (ADR-0021):"
+	printf '%s\n' "$over" | sed 's/^/        | /'
+fi
+
+# Bait: a sixth amendment on an ordinary record, and one more on a frozen one.
+AMEND_BAIT="$SCRATCH/adr.amend-bait"
+mkdir -p "$AMEND_BAIT"
+{
+	printf '# ADR-0001: bait\n\n- **Status**: Accepted\n- **Superseded by**: — ('
+	for d in 01 02 03 04 05 06; do printf 'amended 2026-10-%s, #1; ' "$d"; done
+	printf ')\n\n## Context\n'
+} >"$AMEND_BAIT/0001-bait.md"
+{ sed -n '1,/^## /p' "$KIT"/docs/adr/0008-*.md | sed '$d'; printf ' Amended 2026-10-10: bait.\n\n## Context\n'; } >"$AMEND_BAIT/0008-bait.md"
+bait=$(adr_amend_violations "$AMEND_BAIT")
+case "$bait" in
+*0001-bait.md*0008-bait.md*) pass "the amendment probe catches a sixth amendment and a frozen record that grew" ;;
+*) fail "the amendment probe missed its bait — the check is vacuous: ${bait:-nothing reported}" ;;
+esac
+
 t_done "self-host"
