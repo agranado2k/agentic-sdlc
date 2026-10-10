@@ -442,12 +442,30 @@ esac
 T_BAD="$SCRATCH/ticket-bad.md"
 stamped "$T_BAD" 'Tier: wizard'
 fresh_wt
-nostamp "$T_BAD" --dry-run
-[ "$S_STATUS" = 2 ] && [ ! -e "$WT/work.txt" ] &&
+nostamp "$T_BAD"
+[ "$S_STATUS" = 2 ] && [ ! -e "$WT/work.txt" ] && [ -z "$(spawn_rungs)" ] &&
 	pass "a refused stamp is exit 2, and nothing runs" || fail "a refused stamp exited $S_STATUS: $S_ERR"
 case "$S_ERR" in
 *wizard*) fail "the refused value was printed: $S_ERR" ;;
 *) pass "…and the refused value, ticket text, is never printed" ;;
+esac
+# Any tier the stamp names sizes the run, not only mechanical.
+T_PLAN="$SCRATCH/ticket-plan.md"
+stamped "$T_PLAN" 'Tier: planner'
+fresh_wt
+nostamp "$T_PLAN" --dry-run
+case "$S_ERR" in
+*"tier 'planner'"*"ticket file's stamp"*) pass "a 'Tier: planner' stamp sizes the run as planner" ;;
+*) fail "a planner stamp did not size the run: $S_ERR" ;;
+esac
+# A tree with no stamp checker reads no stamp: the phase answers, said.
+mv "$STUBTREE/scripts/stamp.sh" "$SCRATCH/stamp.sh.away"
+fresh_wt
+nostamp "$T_MECH" --dry-run
+mv "$SCRATCH/stamp.sh.away" "$STUBTREE/scripts/stamp.sh"
+case "$S_ERR" in
+*"tier 'implementer'"*"implement's own phase"*"no stamp"*) pass "with no scripts/stamp.sh the phase answers, and says no stamp was read" ;;
+*) fail "a tree with no stamp checker gave: $S_ERR" ;;
 esac
 fresh_wt
 nostamp "$SCRATCH/no-such-ticket.md" --dry-run
