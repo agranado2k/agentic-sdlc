@@ -625,6 +625,56 @@ grep -qF '`begin`/`end`' "$KIT/AGENTS.md" && pass "and names begin/end, the two 
 grep -qF 'run stack' "$KIT/docs/domain-glossary.md" && pass "the glossary names the run stack" || fail "the glossary has no run stack"
 grep -q '^- \*\*Trace\*\*' "$KIT/docs/domain-glossary.md" && pass "the glossary defines Trace" || fail "the glossary has no Trace entry"
 [ -f "$KIT"/docs/adr/0008-*.md ] && pass "ADR-0008 exists" || fail "no ADR-0008"
+# ADR-0008 is consolidated into a successor that keeps its clause numbers
+# (ADR-0021, #692). The successor is found through ADR-0008's own status line,
+# so the check is the one hop a reader takes. ADR-0008 stays, as the history:
+# the sections below that read an amendment's text read ADR-0008 on purpose,
+# and the rule each amendment made is held in the successor's clause instead
+# of in ADR-0008's index row, which now says only that it is superseded.
+ADR8_OLD=$(ls "$KIT"/docs/adr/0008-*.md | head -1)
+ADR8_NEXT=$(t_adr_successor "$KIT/docs/adr" 0008)
+adr8_next_num=$(basename "${ADR8_NEXT:-none}" | cut -c1-4)
+[ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, ADR-$adr8_next_num, and the record exists" ||
+	fail "ADR-0008's status line does not read 'Superseded by NNNN' naming a record that exists"
+adr8_clause() { t_adr_clause "$ADR8_NEXT" "$1"; }
+# Clause N of the successor is clause N of ADR-0008: each opens with the bold
+# lead ADR-0008's clause N opens with, so a missing, renumbered or swapped
+# clause is named (review of PR #715, M-2).
+_a8_bad=
+_a8_k=1
+while [ "$_a8_k" -le 10 ]; do
+	_a8_title=$(t_adr_clause_title "$ADR8_OLD" "$_a8_k")
+	case $(t_adr_clause_title "$ADR8_NEXT" "$_a8_k") in
+	"${_a8_title:-no lead in ADR-0008}"*) ;;
+	*) _a8_bad="$_a8_bad $_a8_k" ;;
+	esac
+	_a8_k=$((_a8_k + 1))
+done
+[ -z "$_a8_bad" ] && pass "the successor's clauses 1 to 10 open as ADR-0008's clauses 1 to 10 do — numbers kept" ||
+	fail "the successor's clause does not open as ADR-0008's clause of the same number:$_a8_bad"
+grep -qF -- 'supersedes ADR-0008' "${ADR8_NEXT:-/dev/null}" && pass "its header says it supersedes ADR-0008" || fail "the successor's header does not say 'supersedes ADR-0008'"
+grep -q '^- \*\*Superseded by\*\*:.*ADR-'"$adr8_next_num" "$ADR8_OLD" && pass "and ADR-0008's Superseded-by line names it back" ||
+	fail "ADR-0008's Superseded-by line does not name ADR-$adr8_next_num"
+grep -q '\*Amended [0-9]' "${ADR8_NEXT:-/dev/null}" && fail "the successor carries a dated '*Amended' block — its rules are folded in, present tense" ||
+	pass "the successor carries no dated amendment block"
+case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
+*"| Superseded by $adr8_next_num |") pass "ADR-0008's index row says it is superseded by ADR-$adr8_next_num, and nothing else" ;;
+*) fail "ADR-0008's index row's status is not exactly 'Superseded by $adr8_next_num'" ;;
+esac
+grep -qF "| [$adr8_next_num](" "$KIT/docs/adr/INDEX.md" && pass "and the successor has its own index row" || fail "the index has no row for ADR-$adr8_next_num"
+# No amendment is dropped: every ticket ADR-0008's header names as the one an
+# amendment was decided for, and every record that amended ADR-0008 since it
+# closed (ADR-0021 clause 4), is named in the successor.
+_a8_miss= _a8_n=0
+for _a8_t in $(sed -n '/^- \*\*Superseded by\*\*/p' "$ADR8_OLD" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+') \
+	$(grep -l 'amends ADR-0008' "$KIT"/docs/adr/0*.md | sed 's,.*/\([0-9]*\)-.*,ADR-\1,'); do
+	_a8_n=$((_a8_n + 1))
+	grep -qF -- "$_a8_t" "${ADR8_NEXT:-/dev/null}" || _a8_miss="$_a8_miss $_a8_t"
+done
+# ADR-0008's ledger names 23 tickets; fewer read means the read broke, and an
+# empty list would pass having checked nothing (review of PR #715, L-4).
+[ "$_a8_n" -ge 23 ] && [ -z "$_a8_miss" ] && pass "the successor names every amendment of ADR-0008, by ticket and by record" ||
+	fail "the successor does not name:${_a8_miss:- (only $_a8_n amendments read from ADR-0008's ledger)}"
 
 banner "12. summary groups the trace, counts it, sums its tokens and prices it on read"
 # A READER fixture is written as FILES, not emitted: only a file whose name is
@@ -1024,6 +1074,7 @@ case $(sed -n '/^# STREAMS AND EXIT CODES/,/^#$/p' "$TRACE") in *"exit 3"*) pass
 # L-1 (review, PR #292): the label says ROW, so the check has to say row —
 # a bare file-wide grep keeps passing when some other row names the code.
 grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF 'exit 3' && pass "and the root manual's trace ROW names it" || fail "AGENTS.md's trace row does not name exit 3"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 grep -qF 'Amended 2026-09-28 (#271)' "$KIT/docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md" &&
 	pass "and ADR-0008 carries the dated amendment that chose it" || fail "ADR-0008 has no dated amendment for #271"
 
@@ -1298,10 +1349,11 @@ for _ov_cmd in summary export; do
 	case $S_ERR in *"3 "*outcome*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $S_ERR" ;; esac
 done
 
-# The vocabulary is written where the decisions live: the record's amendment
-# spells every row, and the glossary's Event entry names the rule.
-_ov_adr=$(ls "$KIT"/docs/adr/0008-*.md)
-_ov_amend=$(sed -n '/Amended 2026-10-01 (#348)/,/^[0-9][0-9]*\. /p' "$_ov_adr" | tr '\n' ' ')
+# The vocabulary is written where the decisions live: the record's table
+# spells every row, and the glossary's Event entry names the rule. The table
+# moved to ADR-0008's successor, clause 1 (#692): it reads the successor, the
+# table that binds, and no longer ADR-0008's #348 amendment.
+_ov_amend=$(adr8_clause 1)
 _ov_miss=
 IFS='
 '
@@ -1320,7 +1372,7 @@ for _ov_row in $_ov_rows; do
 '
 done
 IFS=$_ov_ifs
-[ -n "$_ov_amend" ] && [ -z "$_ov_miss" ] && pass "ADR-0008's #348 amendment spells every kind and every word of the table" || fail "ADR-0008's #348 amendment is missing:${_ov_miss:- the amendment itself}"
+[ -n "$_ov_amend" ] && [ -z "$_ov_miss" ] && pass "the successor's clause 1 spells every kind and every word of the table" || fail "the successor's clause 1 is missing:${_ov_miss:- the clause itself}"
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'outcome vocabulary of its own' &&
 	pass "the glossary's Event entry says every kind has an outcome vocabulary of its own" || fail "the glossary's Event entry does not name the per-kind outcome vocabulary"
 
@@ -1381,6 +1433,7 @@ t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.dismiss subje
 # The shapes live in the kind table, beside the outcome words.
 grep -q "^TRACE_SHAPES='.*finding\.triage=id:.*pr\.iterate=iteration:" "$TRACE" &&
 	pass "the script declares both shapes in one TRACE_SHAPES table" || fail "scripts/trace.sh has no TRACE_SHAPES line declaring finding.triage's id and pr.iterate's iteration"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-01 (#420)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[A-Za-z0-9._#-]+' &&
 	pass "ADR-0008 records the shapes in a #420 amendment" || fail "ADR-0008 has no '*Amended 2026-10-01 (#420):*' block naming the shape"
 
@@ -1406,6 +1459,7 @@ t_run_split env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind=tool.use subject=sess
 for _od_k in agent.stop session.usage spawn.end; do
 	assert_status 2 "$_od_k outcome=denied is exit 2 — denied is tool.use's word alone" -- env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind="$_od_k" outcome=denied
 done
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _od_adr=$(ls "$KIT"/docs/adr/0008-*.md)
 sed -n '/Amended 2026-10-02 (#409)/,/^[0-9][0-9]*\. /p' "$_od_adr" | tr '\n' ' ' | grep -q '`tool.use`.*`denied`' &&
 	pass "ADR-0008 carries the dated #409 amendment declaring denied on tool.use" ||
@@ -1493,6 +1547,7 @@ _ss_ro=$(awk '/^# hook_run_of </,/^# Ticket #421/' "$KIT/adapters/claude-code/ho
 _ss_wide=$(printf '%s\n%s\n' "$_ss_tk" "$_ss_ro" | awk 'length > 100')
 [ -z "$_ss_wide" ] && pass "the trace_key and hook_run_of headers wrap — no comment line past 100 bytes" ||
 	fail "a header comment runs on past 100 bytes: $_ss_wide"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _ss_adr=$(ls "$KIT"/docs/adr/0008-*.md)
 sed -n '/Amended 2026-10-02 (#453)/,/^[0-9][0-9]*\. \|^## /p' "$_ss_adr" | tr '\n' ' ' | grep -q 'session' &&
 	pass "ADR-0008 carries the dated #453 amendment keying the stack by session" ||
@@ -1654,13 +1709,14 @@ sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a dat
 # The rules live in the one kind table, and the record names them.
 grep -q "^TRACE_SHAPES='.*finding\.triage=source:check|bot|human|local.*finding\.triage/data\.source~local=id:\[CHML\]-\[0-9\]+.*pr\.iterate/outcome~green|red=applied!:" "$TRACE" &&
 	pass "the rules are rows of the one TRACE_SHAPES table" || fail "scripts/trace.sh's TRACE_SHAPES does not declare the source vocabulary, the local id and the required counts"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _ls_adr=$(sed -n '/Amended 2026-10-02 (#466)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 for _ls_t in '`[CHML]-[0-9]+`' '`A2-[0-9]+`' '`check` `bot` `human` `local`' '`data.applied`' '`stopped`'; do
 	case $_ls_adr in *"$_ls_t"*) pass "ADR-0008's #466 amendment names $_ls_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#466):*' block naming $_ls_t" ;; esac
 done
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-02 (#466"*'`[CHML]-[0-9]+`'*'`A2-[0-9]+`'*) pass "the index row for 0008 carries the #466 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-02 (#466 …' note naming [CHML]-[0-9]+ and A2-[0-9]+" ;;
+case $(adr8_clause 1) in
+*'`[CHML]-[0-9]+`'*'`A2-[0-9]+`'*) pass "the successor's clause 1 folds the #466 rows in: [CHML]-[0-9]+ and A2-[0-9]+" ;;
+*) fail "the successor's clause 1 does not name [CHML]-[0-9]+ and A2-[0-9]+ (the #466 rows)" ;;
 esac
 sed -n '/^- \*\*Event\*\*/,/^- \*\*/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "the glossary's Event entry names a local finding's id shape" || fail "the glossary's Event entry does not name the local id shape [CHML]-[0-9]+"
@@ -1842,13 +1898,14 @@ case $S_ERR in *'trace.sh stack <dir> [session=<id>]'*) pass "the usage names st
 case $S_ERR in *'a <dir> beginning with - or session= is refused'*) pass "and says which <dir> it refuses" ;; *) fail "the usage does not say a <dir> beginning with - or session= is refused: $S_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> [session=<id>]' &&
 	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> [session=<id>]"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _sk_adr=$(sed -n '/Amended 2026-10-02 (#472)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 for _sk_t in '`stack <dir> [session=<id>]`' 'exit 2' 'never an event' 'hook'; do
 	case $_sk_adr in *"$_sk_t"*) pass "ADR-0008's #472 amendment names $_sk_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-02 (#472):*' block naming $_sk_t" ;; esac
 done
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-02 (#472"*) pass "the index row for 0008 carries the #472 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-02 (#472 …' note" ;;
+case $(adr8_clause 5) in
+*'`stack <dir> [session=<id>]`'*'exit 2'*) pass "the successor's clause 5 folds the #472 rule in: stack <dir> [session=<id>], exit 2" ;;
+*) fail "the successor's clause 5 does not name \`stack <dir> [session=<id>]\` and its exit 2 (the #472 rule)" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -1923,15 +1980,17 @@ t_run_split sh "$TRACE"
 case $S_ERR in *'trace.sh end [<run>] [outcome='*) pass "the usage names end [<run>]" ;; *) fail "the usage does not name 'end [<run>]': $S_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh end [<run>] [outcome=' &&
 	pass "and so does the script's header" || fail "the header's command list does not name end [<run>]"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _ow_adr=$(sed -n '/Amended 2026-10-05 (#543)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 case $_ow_adr in *'`end <run>`'*'exit 2'*) pass "ADR-0008 carries the dated #543 amendment: end <run>, exit 2" ;;
 *) fail "ADR-0008 has no '*Amended 2026-10-05 (#543):*' block naming \`end <run>\` and exit 2" ;; esac
 # Review M-1 (PR #551): the header's amendment ledger names it too.
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 grep -m1 '^- \*\*Superseded by\*\*' "$(ls "$KIT"/docs/adr/0008-*.md)" | grep -qF 'Decided for #543' &&
 	pass "ADR-0008's header ledger records the #543 amendment" || fail "ADR-0008's Superseded-by ledger stops short of #543"
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-05 (#543"*) pass "the index row for 0008 carries the #543 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-05 (#543 …' note" ;;
+case $(adr8_clause 5) in
+*'`end <run>`'*'exit 2'*) pass "the successor's clause 5 folds the #543 rule in: end <run>, exit 2" ;;
+*) fail "the successor's clause 5 does not name \`end <run>\` and exit 2 (the #543 rule)" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -1978,15 +2037,17 @@ sed -n '2,32p' "$TRACE" | sed 's/^# *//' | tr '\n' ' ' | grep -q 'bare `end`[^.]
 	pass "the script's header says a bare end is deprecated" || fail "the header does not say a bare \`end\` is deprecated"
 grep -F '| Record a decision, or read the trail |' "$KIT/AGENTS.md" | grep -qF 'a bare `end` is deprecated' &&
 	pass "and so does the manual's trace row" || fail "AGENTS.md's trace row does not say a bare \`end\` is deprecated"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _dp_adr=$(sed -n '/Amended 2026-10-06 (#560)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 for _dp_t in 'deprecat' 'mandatory' 'reopen' 'stderr'; do
 	case $_dp_adr in *"$_dp_t"*) pass "ADR-0008's #560 amendment names $_dp_t" ;; *) fail "ADR-0008 has no '*Amended 2026-10-06 (#560):*' block naming $_dp_t" ;; esac
 done
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 grep -m1 '^- \*\*Superseded by\*\*' "$(ls "$KIT"/docs/adr/0008-*.md)" | grep -qF 'Decided for #560' &&
 	pass "ADR-0008's header ledger records the #560 amendment" || fail "ADR-0008's Superseded-by ledger stops short of #560"
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-06 (#560"*) pass "the index row for 0008 carries the #560 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-06 (#560 …' note" ;;
+case $(adr8_clause 5) in
+*'bare `end` is deprecated'*mandatory*) pass "the successor's clause 5 folds the #560 rule in: a bare end is deprecated, the id to become mandatory" ;;
+*) fail "the successor's clause 5 does not say a bare \`end\` is deprecated and the id becomes mandatory (the #560 rule)" ;;
 esac
 
 # No bare end is left in what the kit runs: its skills, hooks, scripts, suites,
@@ -2110,11 +2171,12 @@ _ri_v=no
 
 # The decision is recorded where decisions live, and the review's own raise
 # lines name the shape the script holds them to — never the placeholder.
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-07 (#567)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "ADR-0008 carries the dated #567 amendment naming the raise's shape" || fail "ADR-0008 has no '*Amended 2026-10-07 (#567):*' block naming [CHML]-[0-9]+"
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-07 (#567"*) pass "the index row for 0008 carries the #567 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-07 (#567 …' note" ;;
+case $(adr8_clause 1) in
+*'`finding.raise` `data.id` — `[CHML]-[0-9]+`'*) pass "the successor's clause 1 folds the #567 rule in: a raise's id is [CHML]-[0-9]+" ;;
+*) fail "the successor's clause 1 does not hold \`finding.raise\`'s id to \`[CHML]-[0-9]+\` (the #567 rule)" ;;
 esac
 _ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md")
 [ "$(printf '%s\n' "$_ri_lines" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$_ri_lines" | grep -q 'data\.id=[^ ]*INITIAL' &&
@@ -2254,11 +2316,12 @@ case $S_STATUS:$S_ERR in 2:*"trace.kit.sh: "*"agents.kit.sh --policy"*) pass "th
 
 # The decision is recorded where decisions live, and the skills that record a
 # spawn say which form to pass.
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-07 (#569)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF -- '--ids' &&
 	pass "ADR-0008 carries the dated #569 amendment naming --ids" || fail "ADR-0008 has no '*Amended 2026-10-07 (#569):*' block naming --ids"
-case $(grep -F '| [0008]' "$KIT/docs/adr/INDEX.md") in
-*"amended 2026-10-07 (#569"*) pass "the index row for 0008 carries the #569 amendment's dated note" ;;
-*) fail "docs/adr/INDEX.md's 0008 row has no 'amended 2026-10-07 (#569 …' note" ;;
+case $(adr8_clause 1) in
+*'--ids'*'spawn word'*) pass "the successor's clause 1 folds the #569 rule in: a spawn's model is an --ids id, never the spawn word" ;;
+*) fail "the successor's clause 1 does not name --ids and the spawn word (the #569 rule)" ;;
 esac
 for _sm_skill in implement review-pr; do
 	_sm_par=$(grep -F 'kind=spawn subject=' "$KIT/.agents/skills/$_sm_skill/SKILL.md")
@@ -2292,6 +2355,7 @@ ls_writes "a red pr.iterate with no data.cause is written — a failing check na
 }
 grep -q "^TRACE_SHAPES='.*pr\.iterate=cause:conflict|pending-stuck" "$TRACE" &&
 	pass "the script declares the cause row in TRACE_SHAPES" || fail "scripts/trace.sh's TRACE_SHAPES has no pr.iterate=cause:conflict|pending-stuck row"
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-08 (#628)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'stopped' &&
 	pass "ADR-0008's #628 amendment says a stopped iteration may carry the cause" || fail "ADR-0008's #628 amendment does not say where the cause rides beside red"
 
@@ -2337,6 +2401,7 @@ for _rl_cmd in summary export; do
 	case $S_ERR in *"2 review.verdict lens count"*verify*) pass "and $_rl_cmd says the count, 2, once, pointing at verify" ;; *) fail "$_rl_cmd's lens-count advisory lacks the count or the pointer: $S_ERR" ;; esac
 	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_rl_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
 done
+# Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-09 (#663)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'data.lenses' &&
 	pass "ADR-0008 carries the #663 amendment naming data.lenses" || fail "ADR-0008 has no 'Amended 2026-10-09 (#663)' naming data.lenses"
 

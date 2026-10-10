@@ -51,8 +51,9 @@
 #
 #   8. The record agrees with rule 3: ADR-0008 clause 7 carries its dated
 #      amendment — the readers are the operator and the retrospective skill,
-#      and a diagnosis reads by the operator's hand — and the index row for
-#      0008 carries the same date (#309).
+#      and a diagnosis reads by the operator's hand (#309) — and the rule
+#      binds in ADR-0008's successor's clause 7 (#692), which keeps its
+#      clause numbers.
 #  14. /merge-train leaves a verdict for EVERY landing (#345, retro F2): the
 #      `feedback` emit is the train's exit condition per landed PR, and a train
 #      nobody can answer records `outcome=unasked` with the instruction that
@@ -384,14 +385,19 @@ printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" |
 # alone: a dismissed review is one event per inline comment, every one carrying
 # the review's id, so a reader that counted a data.thread once would fold N
 # dismissed findings into one. The skill and the record
-# say the same key, in the same words.
-ADR8=$(tr '\n' ' ' <docs/adr/0008-decisions-are-traced-to-a-local-append-only-record.md | tr -s ' ')
+# say the same key, in the same words. The record is ADR-0008's successor
+# (#692), found through ADR-0008's own status line: the rule binds there, and
+# ADR-0008's amendment that first said it is history.
+ADR8_NEXT=$(t_adr_successor docs/adr 0008)
+[ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, $(basename "$ADR8_NEXT" | cut -c1-4)" || fail "ADR-0008's status does not read 'Superseded by NNNN' naming a record that exists"
+adr8_clause() { t_adr_clause "$ADR8_NEXT" "$1"; }
+c1_dm=$(adr8_clause 1)
 printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
 	pass "/pr-iterate names the pair that identifies one dismissal — data.thread plus data.where" ||
 	fail "/pr-iterate does not say one dismissal is \`data.thread\` plus \`data.where\` — a dismissed review's events share one data.thread"
-printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
-	pass "and ADR-0008's amendment tells the reader to count that pair" ||
-	fail "ADR-0008's amendment does not tell the reader to count \`data.thread\` plus \`data.where\`"
+printf '%s\n' "$c1_dm" | grep -qF '`data.thread` plus `data.where`' &&
+	pass "and the successor's clause 1 tells the reader to count that pair" ||
+	fail "the successor's clause 1 does not tell the reader to count \`data.thread\` plus \`data.where\`"
 # data.where is now FORGE data — a path the pull request's author chose — typed
 # into a shell line: it stays inside quotes, as data.thread already does. And
 # the line is the one the comment was first posted on: the forge's current line
@@ -508,8 +514,11 @@ banner "8. The record agrees: clause 7 names no skill reader but the retrospecti
 # ---------------------------------------------------------------------------
 # Rule 3 above forbids every skill a read subcommand; the record once named
 # /diagnose as a reader beside the operator and the retrospective. The
-# disagreement is settled by a dated amendment to clause 7 — a record is
-# amended, never rewritten (root manual, hard rule 5) — and the index says so.
+# disagreement was settled by a dated amendment to clause 7 — a record is
+# amended, never rewritten (root manual, hard rule 5). This section reads
+# ADR-0008 on purpose, as that history; the rule now binds in the successor's
+# clause 7 (#692), held at the end of the section in place of ADR-0008's index
+# row, which says only that it is superseded.
 ADR8=$(ls docs/adr/0008-*.md 2>/dev/null | head -1)
 c7=$(awk '/^7\. \*\*The chain never reads the trace/ { on = 1 } on && /^8\. / { exit } on' "$ADR8" 2>/dev/null)
 [ -n "$c7" ] && pass "ADR-0008 has its clause 7" || fail "no clause 7 found in '$ADR8'"
@@ -522,16 +531,11 @@ printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'operator.*retrospecti
 printf '%s\n' "$am" | tr '\n' ' ' | tr -s ' ' | grep -qiE "diagnosis reads the trace by the operator's hand" &&
 	pass "and says a diagnosis reads by the operator's hand" ||
 	fail "the amendment does not say a diagnosis reads the trace by the operator's hand"
-am_date=$(printf '%s\n' "$am" | sed -n 's/.*\*Amended \([0-9-]*\)[^*:]*:\*.*/\1/p' | tail -1)
-row=$(grep -F '| [0008]' docs/adr/INDEX.md)
-# Held to THIS amendment, not to any note that shares its date — and an empty
-# date is a failure, never a match on an older note (review of PR #315, L-2).
-case $row in
-*"amended $am_date (#309"*"clause 7"*) [ -n "$am_date" ] &&
-	pass "the index row for 0008 carries the clause-7 amendment's dated note ($am_date, #309)" ||
-	fail "the amendment carries no date the index row could be held to" ;;
-*) fail "the index row for 0008 has no 'amended ${am_date:-<no date>} (#309 …' note naming clause 7: $row" ;;
-esac
+c7_next=$(adr8_clause 7)
+printf '%s\n' "$c7_next" | grep -qiE 'operator.*retrospective skill' &&
+	printf '%s\n' "$c7_next" | grep -qiE "diagnosis reads the trace by the operator's hand" &&
+	pass "the successor's clause 7 folds the #309 rule in: the operator and the retrospective skill, a diagnosis by the operator's hand" ||
+	fail "the successor's clause 7 does not name the operator and the retrospective skill, and a diagnosis by the operator's hand"
 
 # ---------------------------------------------------------------------------
 banner "9. Every spawn records the resolver's model id, never a typed word"
@@ -904,14 +908,12 @@ printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qE '`feedback`.{0,80}`una
 printf '%s\n' "$am1" | tr '\n' ' ' | tr -s ' ' | grep -qiE 'not a verdict' &&
 	pass "and says unasked is not a verdict" ||
 	fail "the #345 amendment does not say unasked is not a verdict — a reader has no rule for counting it"
-am1_date=$(printf '%s\n' "$am1" | sed -n 's/.*\*Amended \([0-9-]*\) (#345):\*.*/\1/p' | tail -1)
-row=$(grep -F '| [0008]' docs/adr/INDEX.md)
-case $row in
-*"amended $am1_date (#345"*"unasked"*) [ -n "$am1_date" ] &&
-	pass "the index row for 0008 carries the #345 amendment's dated note ($am1_date)" ||
-	fail "the #345 amendment carries no date the index row could be held to" ;;
-*) fail "the index row for 0008 has no 'amended ${am1_date:-<no date>} (#345 …' note naming unasked: $row" ;;
-esac
+# The rule binds in the successor's clause 1 (#692); the ADR-0008 reads above
+# are its history, kept on purpose.
+c1_next=$(adr8_clause 1)
+printf '%s\n' "$c1_next" | grep -qE '`feedback`.{0,200}`unasked`' && printf '%s\n' "$c1_next" | grep -qi 'not a verdict' &&
+	pass "the successor's clause 1 folds the #345 rule in: unasked on feedback, not a verdict" ||
+	fail "the successor's clause 1 does not name \`unasked\` on \`feedback\` as not a verdict"
 gl=$(awk '/^- \*\*Feedback\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on' docs/domain-glossary.md | tr '\n' ' ' | tr -s ' ')
 [ -n "$gl" ] && pass "the glossary has a Feedback entry" || fail "docs/domain-glossary.md has no '- **Feedback**' entry"
 for v in hit adjusted missed unasked; do
@@ -1168,14 +1170,12 @@ sed -n '/^- \*\*Superseded by\*\*/p' "$adr8_path" | grep -qF 'Decided for #385' 
 sed -n '/^## More information/,$p' "$adr8_path" | grep -qF -- '- Amended for ticket #385' &&
 	pass "the record's More-information list carries 'Amended for ticket #385'" ||
 	fail "ADR-0008's More-information list has no '- Amended for ticket #385' bullet — a reader concludes #348 was the last change"
-am2_date=$(printf '%s\n' "$am2" | sed -n 's/.*\*Amended \([0-9-]*\) (#385):\*.*/\1/p' | tail -1)
-row=$(grep -F '| [0008]' docs/adr/INDEX.md)
-case $row in
-*"amended $am2_date (#385"*"data.by"*) [ -n "$am2_date" ] &&
-	pass "the index row for 0008 carries the #385 amendment's dated note ($am2_date)" ||
-	fail "the #385 amendment carries no date the index row could be held to" ;;
-*) fail "the index row for 0008 has no 'amended ${am2_date:-<no date>} (#385 …' note naming data.by: $row" ;;
-esac
+# The rule binds in the successor's clause 1 (#692); the ADR-0008 reads above
+# are its history, kept on purpose.
+c1_next=$(adr8_clause 1)
+for tok in '`data.by`' '`operator`' '`train`' 'no human verdict'; do
+	case "$c1_next" in *"$tok"*) pass "the successor's clause 1 folds the #385 rule in: $tok" ;; *) fail "the successor's clause 1 does not name $tok (the #385 rule)" ;; esac
+done
 gl=$(awk '/^- \*\*Feedback\*\*/ { on = 1; print; next } on && /^- \*\*/ { exit } on' docs/domain-glossary.md | tr '\n' ' ' | tr -s ' ')
 for tok in '`data.by`' '`operator`' '`train`'; do
 	printf '%s\n' "$gl" | grep -qF "$tok" && pass "the glossary's Feedback entry names $tok" ||
