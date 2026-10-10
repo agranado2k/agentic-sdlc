@@ -44,14 +44,20 @@ KITV=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 
-# Scratch carries the harness's prefix (#221) rather than mktemp's anonymous
-# default: a suite killed at its budget ceiling dies before its trap, and what
-# it leaves must be identifiable by name alone. It is created AFTER the source
-# above, because the prefix is the harness's to name — spelling it a second
-# time here is the drift this repo keeps paying for.
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+t_scratch # the harness's owner-named scratch, swept at start (#221, #676)
 
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
+
+# The recipe this suite executes says `WORK=$(mktemp -d)` — a consumer's text,
+# kept as written — and that names a bare tmp.XXXXXX in the shared TMPDIR that
+# outlives the run. Every child of this suite inherits TMPDIR, so pointing it
+# inside the scratch puts each such directory under the owner-named prefix,
+# where the trap removes it and the next start's sweep finds a killed run's
+# (#677; section E holds it).
+E_TMP="$SCRATCH/tmp"
+mkdir "$E_TMP" || exit 2
+TMPDIR=$E_TMP
+export TMPDIR
 
 failures=0
 
@@ -2303,6 +2309,33 @@ prose_probe "Part 2 intro's clone-arrow note"     'a real `v0\.3\.0 → v0\.'
 # the transcript's ADD line first — always current — and passed while the
 # commentary below it still quoted v0.40.0 (found by #563's re-read).
 prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
+
+# ---------------------------------------------------------------------------
+banner "E. The recipe's anonymous scratch stayed inside this suite's own (#677)"
+# ---------------------------------------------------------------------------
+# A bare `mktemp -d` follows TMPDIR, so it escapes the redirect only from a
+# child that runs with TMPDIR reassigned or unset, or the environment cleared. The first
+# check holds this file to one assignment, the redirect's, and no cleared
+# environment — deterministic, where a scan of the shared TMPDIR would also
+# see any parallel suite's transient tmp.*. The second keeps the first from
+# passing on nothing: the recipe's work dirs did land in the scratch.
+# The name is split so this check's own lines never match it.
+e_v='TMP''DIR'
+e_pat="(^|[^_A-Za-z])$e_v=|unset +([A-Za-z_]+ +)*$e_v|-u +$e_v|--unset[= ]$e_v"
+e_pat="$e_pat|(^|[^A-Za-z_-])env( +[^|;&]*)? +-(i|-ignore-environment)?( |\$)"
+e_leaks=$(grep -nE "$e_pat" "$KIT/tests/docs-demo.sh" | grep -vxE "[0-9]+:$e_v=\\\$E_TMP")
+if [ -z "$e_leaks" ]; then
+	pass "the redirect is this suite's one TMPDIR assignment, and no child runs with it cleared"
+else
+	fail "a child of this suite can run outside the redirect — its mktemp -d lands bare in the shared TMPDIR:"
+	printf '%s\n' "$e_leaks" | sed 's/^/        | /'
+fi
+e_bare=$(find "$E_TMP/." ! -name . -prune -type d -name 'tmp.*' | wc -l | tr -d ' ')
+if [ "$e_bare" -gt 0 ]; then
+	pass "the recipe's $e_bare anonymous work dir(s) were made inside the suite's scratch"
+else
+	fail "no anonymous work dir landed in the suite's scratch — the recipe's mktemp -d went elsewhere"
+fi
 
 # ---------------------------------------------------------------------------
 banner "Result"

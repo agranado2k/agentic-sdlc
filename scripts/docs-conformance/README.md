@@ -46,7 +46,7 @@ the *reference* checks:
 | | Engine | Covers |
 | --- | --- | --- |
 | node on PATH | this harness | layered manuals, slash-command resolution, article reachability, package-relative paths, portability deny-list |
-| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec` and `skill-ceiling` rules' twins — and it prints a NOTICE listing what it is *not* checking |
+| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec`, `skill-ceiling`, `skill-dated` and `supersession` rules' twins — and it prints a NOTICE listing what it is *not* checking |
 
 Set `DOCS_CHECK_NO_NODE=1` to force the fallback. The two share one policy in
 two places (`config.mjs`'s `pathRoots` and `check.sh`'s `path_roots`); that
@@ -78,6 +78,27 @@ declares for it, naming the file, its size and the ceiling; a skill the block
 does not name has no ceiling. Rule it reports: `skill-over-ceiling`, a
 violation. Its POSIX twin in `check.sh` reads `skillCeilings` by text, one
 `"<path>": <bytes>,` per line.
+
+`skill-dated` fails a `SKILL.md` body that carries dated kit evidence — an
+ISO date, a cite of the kit's retro, an amendment's issue number — once per
+distinct token, because a consumer copies the skill verbatim and reads the
+kit's dates and history as its own. Every skill home is read, once per skill
+name, like the other skill-body scanners. Fenced blocks are skipped, and
+supporting files are not read. The patterns and the known exceptions (`<skill>|<token>`,
+today's sites, which a sweep removes) are `skillDated` in `config.mjs`. Rule it
+reports: `skill-dated-evidence`, a violation. Its POSIX twin in `check.sh`
+reads `skillDated` by text, one `"<value>",` per line.
+
+`supersession` holds supersession both ways between decision records. A
+record (`NNNN-*.md` under the records directory) whose "Supersedes / amends"
+line has a `;`-separated clause opening "supersedes" — whole or a clause —
+fails unless each record that clause names carries its id on the
+"Superseded by" line; an amendment obliges nothing. The finding is filed on
+the superseded record, the file that has to change. The records directory
+and the known exceptions (`<superseded>|<superseding>`, each record by file name, today's open links,
+which a sweep closes) are `supersession` in `config.mjs`. Rule it reports:
+`supersession-one-sided`, a violation. Its POSIX twin in `check.sh` reads
+`supersession` by text, one `"<value>",` per line.
 
 `trace-off` and `reviewer-unmapped` read a policy file's setting rather than
 prose, and both only advise. `trace-off` warns when the trace policy leaves

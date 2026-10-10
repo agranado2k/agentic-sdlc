@@ -3,7 +3,7 @@
 # Kit-authoring only, never shipped (bootstrap.sh's KIT_ONLY list deletes it,
 # with tests/land.test.sh).
 #
-#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
+#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -24,8 +24,14 @@
 #      after the head commit's committed date (#630, ADR-0019). The operator
 #      overrides it with --no-iteration '<reason>', and merge.land records
 #      data.iterated=no with the reason as data.no_iteration; with one at
-#      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
-#      and records nothing: the check is skipped, and stderr says so.
+#      head, data.iterated=yes. The same for the review (#673): no
+#      review.verdict on pr:#<N>, any axis and any outcome, at or after the
+#      head commit's date refuses it, unless --no-review '<reason>' names why
+#      — data.reviewed=no with data.no_review, or data.reviewed=yes. One
+#      refusal names every check that failed. A prose-only PR nobody iterated
+#      or reviewed — a diary stamp — lands on both overrides, each with its
+#      reason. Unconfigured, the trace holds nothing to read and records
+#      nothing: both checks are skipped, and stderr says so.
 #   1c. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
 #      the head branch) when the trace holds none for it: a PR opened outside
 #      /implement still joins its ticket for /retro (#638).
@@ -70,6 +76,10 @@
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
 #   merge commit the forge never names (data.workflows=unknown, no sha), and
+#   one no run appeared for within the wait while the base branch's workflows
+#   declare a push trigger, or could not be read (data.workflows=unknown,
+#   #688: exit 1, never 2, so a train stops; `none` is only a base whose
+#   workflows declare no push trigger), and
 #   so does a release whose tag is not on origin: merged, not landed. A
 #   release's merge.land carries data.release, data.tagged and data.reruns.
 #
@@ -79,10 +89,11 @@
 # THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
 # the merge and stdout are exactly what a traced run does. Its one read is
 # step 1b's, and that read IS load-bearing when the trace is configured: no
-# pr.iterate at the head refuses the landing (ADR-0019). Kit-only, so the kit's own
-# policy is the default seam — scripts/trace.sh read through
-# scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
-# TRACE_CONFIG still wins (the broker's arrangement).
+# pr.iterate or no review.verdict at the head refuses the landing
+# (ADR-0019). Kit-only, so the kit's own policy is the default seam —
+# scripts/trace.sh read through scripts/trace.kit.config.sh, what
+# scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins (the broker's
+# arrangement).
 #
 # exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 #
@@ -99,11 +110,12 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 
 usage() {
 	cat >&2 <<'EOF'
-usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
+usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
   --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
+  --no-review     land with no /review-pr verdict at the head commit, for this reason (recorded)
   --train     /merge-train is landing it: merge.land says via=train, and the verdict is left to the train
 exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 EOF
@@ -119,6 +131,7 @@ PR=
 TICKET=
 UNASKED=
 NO_ITERATION=
+NO_REVIEW=
 VIA=land
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -132,12 +145,12 @@ while [ $# -gt 0 ]; do
 		UNASKED=$2
 		shift
 		;;
-	--no-iteration)
+	--no-iteration | --no-review)
 		# One printable line: the trace refuses a control character, and a
 		# reason it refused after the merge would leave the landing unrecorded.
 		[ $# -ge 2 ] && [ -n "$2" ] || usage
-		case $2 in *[![:print:]]*) note "--no-iteration takes a one-line reason"; usage ;; esac
-		NO_ITERATION=$2
+		case $2 in *[![:print:]]*) note "$1 takes a one-line reason"; usage ;; esac
+		if [ "$1" = --no-review ]; then NO_REVIEW=$2; else NO_ITERATION=$2; fi
 		shift
 		;;
 	--train) VIA=train ;;
@@ -170,19 +183,25 @@ trace_read() {
 }
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
-# One value per line: a title is the only free text, and it comes last.
+# One `name=value` line per field, every value folded onto one line, and each
+# read back by its name (#684): reordering the query, or a forge answering the
+# fields in another order, never shifts one field into another.
 STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,headRefName,title \
-	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), (.headRefName // ""), .title') ||
+	--jq '{state, isDraft, mergeable, mergeStateStatus, reviewDecision: (.reviewDecision // ""), baseRefName,
+		ticket: ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), headRefName: (.headRefName // ""), title}
+		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"') ||
 	refuse "the forge did not answer for it"
-field() { printf '%s\n' "$STATE" | sed -n "${1}p"; }
-[ "$(field 1)" = OPEN ] || refuse "it is $(field 1), not open"
-[ "$(field 2)" = false ] || refuse "it is a draft"
-[ "$(field 5)" != CHANGES_REQUESTED ] || refuse "a human review requests changes"
-[ "$(field 3)" = MERGEABLE ] || refuse "it is not mergeable ($(field 3)) — send it to /pr-iterate"
-case $(field 4) in
+# named <answer> <name> — the value of the one line named <name>, or nothing.
+named() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -n 1; }
+field() { named "$STATE" "$1"; }
+[ "$(field state)" = OPEN ] || refuse "it is $(field state), not open"
+[ "$(field isDraft)" = false ] || refuse "it is a draft"
+[ "$(field reviewDecision)" != CHANGES_REQUESTED ] || refuse "a human review requests changes"
+[ "$(field mergeable)" = MERGEABLE ] || refuse "it is not mergeable ($(field mergeable)) — send it to /pr-iterate"
+case $(field mergeStateStatus) in
 CLEAN | HAS_HOOKS) ;;
 BEHIND) refuse "it is behind its base — a train updates it through the forge first" ;;
-*) refuse "its merge state is $(field 4), not clean" ;;
+*) refuse "its merge state is $(field mergeStateStatus), not clean" ;;
 esac
 gh pr checks "$PR" >/dev/null 2>&1
 case $? in
@@ -191,44 +210,60 @@ case $? in
 *) refuse "its checks are not green" ;;
 esac
 
-# --- 1b. an iteration at the head commit (#630, ADR-0019) ---------------------
-# /pr-iterate records one pr.iterate per iteration, after its own push, so an
-# iteration that saw the head commit is stamped at or after that commit's
-# date. Each such stamp on pr:#<N> is compared with the head's date,
-# both ISO 8601 in UTC, as strings. Any outcome counts: whether the checks
-# are green is the gate above's question, not this one's. A head the forge
-# does not date is no iteration at it.
+# --- 1b. an iteration and a review at the head commit (#630, #673, ADR-0019) ---
+# /pr-iterate records one pr.iterate per iteration, after its own push, and
+# /review-pr one review.verdict per axis — and /pr-iterate runs a review each
+# iteration — so a loop or a review that saw the head commit is stamped at or
+# after that commit's date. Each such stamp on pr:#<N> is compared with the
+# head's date, both ISO 8601 in UTC, as strings. Any outcome and any axis
+# counts: whether the checks are green is the gate above's question, and
+# what a verdict found is the operator's read, not this one's. A head the
+# forge does not date is neither at it.
 ITERATED=
+REVIEWED=
+# at_head <kind> — a <kind> event on pr:#<PR> stamped at or after $HEAD_AT.
+# The envelope only — up to the data map, as `show` reads it — so a data key
+# never reads as the event's subject or stamp.
+at_head() {
+	trace_read show "pr:#$PR" --kind "$1" |
+		awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
+			{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
+			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
+			END { exit !f }'
+}
 if [ -z "$(trace_read dir)" ]; then
-	note "the trace is unconfigured — whether /pr-iterate ran at the head of PR #$PR is not checked"
+	note "the trace is unconfigured — whether /pr-iterate ran and /review-pr recorded a verdict at the head of PR #$PR is not checked"
 else
-	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h | $h, ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")' 2>/dev/null) || HEAD=
-	HEAD_OID=$(printf '%s\n' "$HEAD" | sed -n 1p)
-	HEAD_AT=$(printf '%s\n' "$HEAD" | sed -n 2p)
+	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h
+		| {oid: $h, committedDate: ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")}
+		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"' 2>/dev/null) || HEAD=
+	HEAD_OID=$(named "$HEAD" oid)
+	HEAD_AT=$(named "$HEAD" committedDate)
 	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
 	ITERATED=no
+	REVIEWED=no
 	case $HEAD_AT in
 	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z)
-		# The envelope only — up to the data map, as `show` reads it — so a
-		# data key never reads as the event's subject or stamp.
-		trace_read show "pr:#$PR" --kind pr.iterate |
-			awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
-				{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
-				index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
-				END { exit !f }' && ITERATED=yes
+		! at_head pr.iterate || ITERATED=yes
+		! at_head review.verdict || REVIEWED=yes
 		;;
 	*) HEAD_AT='<undated>' ;;
 	esac
-	if [ "$ITERATED" = no ]; then
-		[ -n "$NO_ITERATION" ] ||
-			refuse "no /pr-iterate iteration is recorded at its head commit $HEAD_OID ($HEAD_AT) — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
-		note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
-	fi
+	# One refusal names every check that failed, so an operator learns both
+	# overrides from one run.
+	_missing=
+	[ "$ITERATED" = yes ] || [ -n "$NO_ITERATION" ] ||
+		_missing="no /pr-iterate iteration — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
+	[ "$REVIEWED" = yes ] || [ -n "$NO_REVIEW" ] ||
+		_missing="${_missing:+$_missing; }no /review-pr verdict — run /review-pr on it, or land it with --no-review '<reason>'"
+	[ -z "$_missing" ] || refuse "at its head commit $HEAD_OID ($HEAD_AT) the trace records $_missing"
+	[ "$ITERATED" = yes ] || note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
+	[ "$REVIEWED" = yes ] || note "no /review-pr verdict at the head commit $HEAD_OID — landing on --no-review, recorded"
 fi
 
-BASE=$(field 6)
-[ -n "$TICKET" ] || TICKET=$(field 7)
-TITLE=$(field 9)
+BASE=$(field baseRefName)
+[ -n "$TICKET" ] || TICKET=$(field ticket)
+TITLE=$(field title)
 if [ -n "$TICKET" ]; then
 	FB_SUBJECT="ticket:#$TICKET"
 	set -- "related=ticket:#$TICKET"
@@ -238,6 +273,8 @@ else
 fi
 [ -z "$ITERATED" ] || set -- "$@" "data.iterated=$ITERATED"
 [ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
+[ -z "$REVIEWED" ] || set -- "$@" "data.reviewed=$REVIEWED"
+[ "$REVIEWED" != no ] || set -- "$@" "data.no_review=$NO_REVIEW"
 
 # --- 1c. a PR the trace never saw opened (#638) --------------------------------
 # A PR opened outside /implement left no pr.open, and /retro joins a ticket to
@@ -249,7 +286,7 @@ if [ -n "$(trace_read dir)" ] &&
 	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
 	_po_rel=
 	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
-	_po_branch=$(field 8 | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
+	_po_branch=$(field headRefName | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
 	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
 	# The landing's own arguments sit in "$@" for step 2: the optional field
 	# is spelled as an argument only when it is there, never by `set --`.
@@ -323,6 +360,35 @@ if [ -n "$RELEASE" ]; then
 	fi
 fi
 
+# push_workflows <commit> — the workflow files under .github/workflows/, as
+# the merge commit holds them, that declare a push trigger: one name per
+# line. Exit 1 when the commit, or one of its workflow files, is not here to
+# read; a commit with no workflow directory declares none. A trigger is
+# `push` in the top-level `on:` value (`on: push`, `on: [push, …]`) or a
+# `push` key under it. Its branch filters are not read: a push trigger that
+# excludes the base reads as expected, and a wrong `unknown` stops a train
+# where a wrong `none` would call an unverified merge verified.
+push_workflows() {
+	git -C "$ROOT" cat-file -e "$1^{commit}" 2>/dev/null || return 1
+	_pw_names=$(git -C "$ROOT" ls-tree --name-only "$1:.github/workflows" 2>/dev/null) || return 0
+	printf '%s\n' "$_pw_names" | while IFS= read -r _pw_f; do
+		case $_pw_f in *.yml | *.yaml) ;; *) continue ;; esac
+		_pw_text=$(git -C "$ROOT" show "$1:.github/workflows/$_pw_f" 2>/dev/null) || exit 1
+		if printf '%s\n' "$_pw_text" | awk '
+			{ sub(/^#.*/, ""); sub(/[ \t]#.*/, "") }
+			/^[^ \t]/ { on = 0 }
+			/^["\047]?on["\047]?[ \t]*:/ {
+				v = $0; sub(/^[^:]*:/, "", v)
+				if (v ~ /(^|[^A-Za-z0-9_-])push([^A-Za-z0-9_-]|$)/) f = 1
+				on = 1; next
+			}
+			on && /^[ \t]+(-[ \t]+)?["\047]?push["\047]?[ \t]*(:|$)/ { f = 1 }
+			END { exit !f }'; then
+			printf '%s\n' "$_pw_f"
+		fi
+	done
+}
+
 # --- 3. the base branch's workflows on the merge commit -----------------------
 # Listed until nothing new appears: a workflow the forge registers a beat
 # after the first is watched too. With no sha there is nothing to list.
@@ -352,9 +418,19 @@ else
 		fi
 		[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 	done
+	# No run is a verdict only when none was due (#688): the forge can skip
+	# a push run, and a merge no CI ran must not read as a verified one.
 	if [ -z "$WATCHED" ]; then
-		WORKFLOWS=none
-		note "no workflow ran on $BASE at $SHA within the wait — nothing to watch"
+		if ! EXPECTED=$(push_workflows "$SHA"); then
+			WORKFLOWS=unknown
+			note "no workflow ran on $BASE at $SHA within the wait, and its workflows could not be read here — the merge is unverified"
+		elif [ -n "$EXPECTED" ]; then
+			WORKFLOWS=unknown
+			note "no workflow ran on $BASE at $SHA within the wait, though these declare a push trigger: $(printf '%s\n' "$EXPECTED" | tr '\n' ' ')— the merge is unverified"
+		else
+			WORKFLOWS=none
+			note "no workflow ran on $BASE at $SHA within the wait, and none of its workflows declares a push trigger — nothing to watch"
+		fi
 	fi
 fi
 # A tagged release re-runs, once, each run that failed — its failed jobs only:
@@ -521,7 +597,11 @@ failure)
 	exit 1
 	;;
 unknown)
-	note "find the merge commit of PR #$PR and watch $BASE's workflows on it by hand"
+	if [ -z "$SHA" ]; then
+		note "find the merge commit of PR #$PR and watch $BASE's workflows on it by hand"
+	else
+		note "no CI verified $SHA on $BASE — run its workflows on it (or find why the forge made no run) before landing anything else"
+	fi
 	exit 1
 	;;
 esac

@@ -67,7 +67,7 @@ advisory_header="WARN  docs conformance"
 # set inside it is lost when the loop ends. The file is the one channel that
 # survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
-trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited"' EXIT INT TERM HUP
+trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen"' EXIT INT TERM HUP
 
 # report <rule> <file> <message> <hint>
 report() {
@@ -377,6 +377,83 @@ if [ "$engine" = "fallback" ]; then
 					"Move the parts only a worker or a rare branch needs into files the SKILL.md names, or raise the ceiling in config.mjs's skillCeilings — a visible policy diff."
 			done
 	fi
+
+	# The skill-dated rule's POSIX twin (validators/skill-dated.mjs, #678): a
+	# SKILL.md whose fence-stripped body matches one of the patterns
+	# config.mjs's `skillDated` block declares fails, once per distinct
+	# token, unless `<skill>|<token>` is on its knownExceptions. Every skill
+	# home is read — the configured one (claudeMdRefs' skillsDir), then
+	# .agents/skills and .claude/skills — once per skill name, the first home
+	# winning, as the harness's skillHomes does. The block is read BY TEXT,
+	# one `"<value>",` per line — its patterns are EREs with no backslash, so
+	# grep reads the text node compiles. No block is no rule — the harness's
+	# answer too.
+	if [ -f "$ls_cfg" ] && command -v fence_strip >/dev/null 2>&1; then
+		sd_block=$(awk '/^const skillDated = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
+		# sd_list <key> — the quoted values of one array in the block.
+		sd_list() {
+			printf '%s\n' "$sd_block" | awk -v k="$1" '$0 ~ "^[[:space:]]*" k ":[[:space:]]*\\[" { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' |
+				sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p'
+		}
+		sd_dir=$(sed -n 's/^[[:space:]]*skillsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)
+		sd_patterns=$(sd_list patterns)
+		sd_known=$(sd_list knownExceptions)
+		if [ -n "$sd_patterns" ]; then
+			: >"$vfile.seen"
+			for skill in "${sd_dir:-.agents/skills}"/*/SKILL.md .agents/skills/*/SKILL.md .claude/skills/*/SKILL.md; do
+				[ -f "$skill" ] || continue
+				sd_name=${skill%/SKILL.md}
+				sd_name=${sd_name##*/}
+				grep -qxF -- "$sd_name" "$vfile.seen" && continue
+				printf '%s\n' "$sd_name" >>"$vfile.seen"
+				fence_strip "$skill" >"$vfile.body"
+				printf '%s\n' "$sd_patterns" | while IFS= read -r pat; do
+					grep -o -E -- "$pat" "$vfile.body" 2>/dev/null
+				done | sort -u | while IFS= read -r token; do
+					printf '%s\n' "$sd_known" | grep -qxF -- "$sd_name|$token" && continue
+					report "skill-dated-evidence" "$skill" \
+						"carries dated kit evidence \"$token\" — a consumer reads the kit's dates and history as its own" \
+						"Keep the rule and drop the evidence: the dates, counts and amendments belong in the diary or a decision record, which the skill may name (the kit's ADR-NNNN)."
+				done
+			done
+		fi
+	fi
+
+	# The supersession rule's POSIX twin (validators/supersession.mjs, #683):
+	# a record `<recordsDir>/NNNN-*.md` whose "Supersedes / amends" line has a
+	# `;`-separated clause opening "supersedes" (any case) obliges every
+	# ADR-NNNN that clause names — itself and a record with no file aside — to
+	# carry its id on the "Superseded by" line, unless
+	# `<superseded>|<superseding>`, both by file name without .md, is on the
+	# knownExceptions. The block is read
+	# BY TEXT from config.mjs's `supersession` block; no block is no rule.
+	if [ -f "$ls_cfg" ]; then
+		ss_block=$(awk '/^const supersession = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
+		ss_dir=$(printf '%s\n' "$ss_block" | sed -n 's/^[[:space:]]*recordsDir:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+		ss_known=$(printf '%s\n' "$ss_block" | awk '/^[[:space:]]*knownExceptions:[[:space:]]*\[/ { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' |
+			sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p')
+		if [ -n "$ss_dir" ] && [ -d "$ss_dir" ]; then
+			for rec in "$ss_dir"/[0-9][0-9][0-9][0-9]-*.md; do
+				[ -f "$rec" ] || continue
+				ss_self=ADR-$(basename "$rec" | cut -c1-4)
+				sed -n 's/^- \*\*Supersedes \/ amends\*\*:\(.*\)$/\1/p' "$rec" | head -1 | tr ';' '\n' |
+					sed 's/^[[:space:]]*//' | grep -iE '^supersedes([^[:alnum:]_]|$)' |
+					grep -oE 'ADR-[0-9]{4}' | sort -u | while IFS= read -r ss_id; do
+					[ "$ss_id" = "$ss_self" ] && continue
+					ss_old=""
+					for f in "$ss_dir/${ss_id#ADR-}"-*.md; do
+						[ -f "$f" ] && { ss_old=$f; break; }
+					done
+					[ -n "$ss_old" ] || continue
+					sed -n 's/^- \*\*Superseded by\*\*:\(.*\)$/\1/p' "$ss_old" | head -1 | grep -qF -- "$ss_self" && continue
+					printf '%s\n' "$ss_known" | grep -qxF -- "$(basename "$ss_old" .md)|$(basename "$rec" .md)" && continue
+					report "supersession-one-sided" "$ss_old" \
+						"$ss_id is superseded by $ss_self (its \"Supersedes / amends\" line says so), but $ss_id's \"Superseded by\" line does not name $ss_self" \
+						"Name $ss_self on $ss_id's \"Superseded by\" line, and in what respect — the old record is where a reader learns it stopped binding."
+				done
+			done
+		fi
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -386,7 +463,9 @@ if [ "$engine" = "fallback" ]; then
 	echo "NOTICE  docs gate running WITHOUT node — reduced coverage." >&2
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer," >&2
 	echo "        living specs against the test globs (the living-spec rule, its POSIX twin)," >&2
-	echo "        and skill byte ceilings (the skill-ceiling rule, its POSIX twin)." >&2
+	echo "        skill byte ceilings (the skill-ceiling rule, its POSIX twin)," >&2
+	echo "        dated kit evidence in skill bodies (the skill-dated rule, its POSIX twin)," >&2
+	echo "        and supersession held both ways between decision records (the supersession rule, its POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2

@@ -742,14 +742,19 @@ carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 # consumer receives, and tests/ai-review-template.test.sh refuses it a
 # numbered `ADR-0` citation — true of one repo only — so the bullet citing
 # the kit's ADR-0013 is not the twin's to carry, and every other one is.
-# declined_said_in <file> — the lens's lead-in paragraph and bullets the file
-# does not say, one per line; empty when it says them all.
+# TWIN_EXEMPT — the one bullet the twin need not carry, named by its title.
+# A title the lens no longer holds is a stale exemption, and goes red.
+TWIN_EXEMPT='- **The kit wrapper'"'"'s spawn-word bridge, read as a copy of the resolver'"'"'s agent-harness split**'
+t_text_has "$declined" "$TWIN_EXEMPT" "the twin's one exempt bullet, still in the lens — else the exemption names nothing" "the declined list"
+# declined_said_in <file> [<bullets>] — the lens's lead-in paragraph and
+# bullets (the lens's own unless given) the file does not say, one per line;
+# empty when it says them all.
 declined_lead=$(grep -F -- "$DECLINED_LEAD" "$LENS5" | head -n 1)
 declined_said_in() {
 	_ds_text=$(unwrap "$1")
-	printf '%s\n%s\n' "$declined_lead" "$declined" | while IFS= read -r _ds_line; do
+	printf '%s\n%s\n' "$declined_lead" "${2-$declined}" | while IFS= read -r _ds_line; do
 		[ -n "$_ds_line" ] || continue
-		case $1 in *"$TWIN") case $_ds_line in *ADR-0*) continue ;; esac ;; esac
+		case $1 in *"$TWIN") case $_ds_line in "$TWIN_EXEMPT"*) continue ;; esac ;; esac
 		printf '%s\n' "$_ds_text" | grep -qF -- "$_ds_line" || printf '%s\n' "$_ds_line"
 	done
 }
@@ -771,6 +776,13 @@ for f in "$WORKER" "$TWIN"; do
 		pass "bait: the declined list's lead-in reworded in $f goes red" ||
 		fail "bait: with the lead-in reworded in $f, the list still reads as carried — or the bait planted nothing"
 done
+# Bait (#675): a second bullet citing a decision record, absent from the
+# twin, goes red — the twin's exemption is one bullet, not every record cited.
+bait675='- **A bait rule nobody declined** — declined by the kit'"'"'s ADR-0099, which no twin carries.'
+[ "$(declined_said_in "$TWIN" "$declined
+$bait675")" = "$bait675" ] &&
+	pass "bait: a second ADR-citing bullet missing from $TWIN goes red" ||
+	fail "bait: a second ADR-citing bullet missing from $TWIN still reads as carried — the exemption is a pattern, not the one bullet"
 
 
 # ---------------------------------------------------------------------------
@@ -1192,7 +1204,6 @@ low_band_missing() {
 	_lb_i=$(tr '\n' ' ' <"$2" | tr -s ' ')
 	for _lb in \
 		'band rule|**A LOW is counted, never posted by an agent path of this skill**' \
-		'band evidence|114 of 171 raises were LOW' \
 		'band says why not stop at medium|why not a lens that stops at MEDIUM' \
 		'path a: a LOW is posted=no|and `no` for every LOW (§5)' \
 		'relay: a LOW is posted=no|`no` for a LOW, which no relay posts (§5)' \
@@ -1221,7 +1232,6 @@ bait635() { # <rule name> <file: r|i> <sed script>
 }
 for b in \
 	'band rule|r|s/A LOW is counted, never posted by an agent path of this skill/A LOW is posted/' \
-	'band evidence|r|s/114 of 171 raises were LOW/many raises were LOW/' \
 	'band says why not stop at medium|r|s/why not a lens that stops at MEDIUM/why/' \
 	'path a: a LOW is posted=no|r|s/and `no` for every LOW (§5)//' \
 	'relay: a LOW is posted=no|r|s/`no` for a LOW, which no relay posts (§5)/likewise/' \

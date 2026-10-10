@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the operator (Arthur Granado)
 - **Supersedes / amends**: amends ADR-0003 in one respect — the kit's own policy pins ids for every tier *except* the two named here; and the cascade's escalation target decided with #586
-- **Superseded by**: —
+- **Superseded by**: ADR-0020 in part — clause 1 for the reviewer, and clause 4 widened; the rest binds
 
 ## Context and problem statement
 

@@ -287,6 +287,69 @@ case "$_sweep_msg" in
 *) fail "the sweep removed scratch silently: '$_sweep_msg'" ;;
 esac
 
+# A DEAD OWNER IS SWEPT NOW, A LIVE ONE NEVER (#676). Two OOM-killed suites
+# left ~900 MB of scratch that the day-long age kept, and the quota'd /tmp
+# refused every session's writes until it was swept by hand. Scratch names
+# its owning process, so the next suite to start tells dead from live.
+OWNROOT="$SCRATCH/ownroot"
+mkdir -p "$OWNROOT"
+# The real thing first: a suite killed with SIGKILL, minutes old at most.
+VICTIM_OUT="$SCRATCH/victim2-path" TMPDIR="$OWNROOT" \
+	sh -c "$KILL_BODY" "$T_ROOT/tests/killme" >/dev/null 2>&1
+VICTIM2=$(cat "$SCRATCH/victim2-path" 2>/dev/null)
+[ -n "$VICTIM2" ] && [ -d "$VICTIM2" ] ||
+	fail "the second killed suite left no scratch to sweep (victim='$VICTIM2')"
+# A live owner, by name — this suite's own process — and aged past the sweep
+# age, so the age rule alone would take it.
+_own_tok=$(t_scratch_owner) || fail "t_scratch_owner printed no owner token"
+LIVEDIR="$OWNROOT/${T_SCRATCH_PREFIX}${_own_tok}.livexx"
+mkdir -p "$LIVEDIR"
+touch -t "$_old_stamp" "$LIVEDIR" 2>/dev/null || touch -t 202001010000 "$LIVEDIR"
+# A fresh directory with no recorded owner: the age rule still holds it.
+UNOWNED="$OWNROOT/${T_SCRATCH_PREFIX}legacy"
+mkdir -p "$UNOWNED"
+# A dead owner in ANOTHER pid namespace is not ours to judge — kill -0 there
+# answers about some other process.
+sh -c 'exit 0' &
+_dead=$!
+wait "$_dead"
+FOREIGN="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-1.foreign"
+mkdir -p "$FOREIGN"
+# A token that only LOOKS like an owner — a pid with a letter in it — names no
+# process, so it is left to the age rule; a probe on it would answer "dead".
+MALFORMED="$OWNROOT/${T_SCRATCH_PREFIX}1x-${_own_tok#*-}.malformed"
+mkdir -p "$MALFORMED"
+_own_err="$SCRATCH/own-err"
+( TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null ||
+	fail "the sweeping suite itself failed — the cases below would mislead: $(cat "$_own_err")"
+[ -n "$VICTIM2" ] && [ ! -d "$VICTIM2" ] &&
+	pass "a killed suite's fresh scratch is removed at the next start — its owner is gone" ||
+	fail "a killed suite's scratch survived the next start (owner dead, age irrelevant): '$VICTIM2'"
+[ -d "$LIVEDIR" ] && pass "…and a LIVE owner's scratch is kept, however old" ||
+	fail "the sweep removed scratch whose owner process is still running"
+[ -d "$UNOWNED" ] && pass "…and fresh scratch with no recorded owner is left to the age rule" ||
+	fail "the sweep removed fresh scratch whose owner it could not name"
+[ -d "$FOREIGN" ] && pass "…and an owner recorded in another pid namespace is left to the age rule" ||
+	fail "the sweep judged a process in another pid namespace dead by this one's kill -0"
+# A dead owner's scratch the sweeping user does not own is not judged dead:
+# signal 0 on another user's pid fails as if it were gone. The sweep is run
+# under an `id` that answers another uid, so this directory is "not ours".
+NOTMINE="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-${_own_tok#*-}.notmine"
+mkdir -p "$NOTMINE" "$SCRATCH/fakeid"
+printf '#!/bin/sh\necho 99999\n' >"$SCRATCH/fakeid/id"
+chmod +x "$SCRATCH/fakeid/id"
+( PATH="$SCRATCH/fakeid:$PATH" TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) >/dev/null 2>&1
+[ -d "$NOTMINE" ] && pass "…and a dead owner's scratch under another uid is left to the age rule" ||
+	fail "the sweep removed scratch it does not own on a signal-0 failure that may only mean another user's process"
+[ -d "$MALFORMED" ] && pass "…and a malformed owner token is left to the age rule, never probed" ||
+	fail "the sweep removed fresh scratch whose owner token is not a pid"
+case "$(cat "$_own_err")" in
+*'owner process is gone'*) pass "…and says on stderr what it removed, and why" ;;
+*) fail "the owner sweep was silent: '$(cat "$_own_err")'" ;;
+esac
+
 # One variable, one default, validated before it reaches arithmetic, and
 # documented where a reader of the harness meets it.
 [ "$T_SCRATCH_SWEEP_DAYS" = 1 ] && pass "the sweep age is one variable with a kit default of 1 day" ||
@@ -299,6 +362,19 @@ done
 grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
 	grep -q "$T_SCRATCH_PREFIX" "$T_ROOT/tests/lib.sh" &&
 	pass "the harness header names both" || fail "the harness does not document its own scratch"
+
+# Every suite that makes the prefixed scratch makes it through t_scratch, so
+# it is named for its owner and sweeps at start (#676): a suite that spells
+# the template by hand makes owner-less scratch the age rule keeps for a day.
+# The pattern is split so this suite's own line never matches it.
+_hand_pat='T_SCRATCH_PREFIX''}XXXXXX'
+_handmade=''
+for f in "$T_ROOT"/tests/*.sh; do
+	case ${f##*/} in lib.sh) continue ;; esac
+	grep -qF "$_hand_pat" "$f" && _handmade="$_handmade ${f##*/}"
+done
+[ -z "$_handmade" ] && pass "every suite makes its prefixed scratch through t_scratch, named for its owner" ||
+	fail "these build kit-suite scratch by hand, with no owner in its name:$_handmade"
 
 # EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
 # enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`

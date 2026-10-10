@@ -430,4 +430,51 @@ const skillCeilings = {
   ".agents/skills/implement/SKILL.md": 27000,
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillPaths, traceOff };
+/**
+ * skill-dated — dated kit evidence a shipped SKILL.md body may not carry: an
+ * ISO date, a cite of the kit's own retro, an amendment's issue number. A
+ * consumer copies the skill verbatim and reads the kit's dates and history as
+ * its own. Every skill home is read (claudeMdRefs.skillsDir, then the
+ * default and legacy homes), once per skill name. Fenced blocks are skipped;
+ * supporting files beside a SKILL.md are not read. Each pattern is a POSIX ERE with no backslash, so both engines
+ * read the same text.
+ *
+ * knownExceptions are open sites, one `<skill>|<token>` each (the skill
+ * by name, so the entry holds at any skill home). Empty since the sweep
+ * (#685) removed the last three; a fixed site leaves the list, and the
+ * fixture test fails an entry whose file no longer carries its token.
+ *
+ * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
+ * scripts/check.sh reads this block by text.
+ */
+const skillDated = {
+  patterns: [
+    "[0-9]{4}-[0-9]{2}-[0-9]{2}",
+    "[Tt]he kit's retro",
+    "[Aa]mended,? #[0-9]+",
+  ],
+  knownExceptions: [],
+};
+
+/**
+ * supersession — held both ways between decision records. A record whose
+ * "Supersedes / amends" line has a clause opening "supersedes" (whole or a
+ * clause) obliges each record it names to carry its id on the "Superseded
+ * by" line. recordsDir is where the records live, `NNNN-*.md` each.
+ *
+ * knownExceptions are open links excused for now, one
+ * `<superseded>|<superseding>` each, both records named by file name without
+ * `.md` (a bare number would silence a consumer's own records of the same
+ * numbers). Empty since the sweep (#686) closed the last two; a closed link
+ * leaves the list, and the fixture test fails an entry that is no longer
+ * one-sided.
+ *
+ * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
+ * scripts/check.sh reads this block by text.
+ */
+const supersession = {
+  recordsDir: "docs/adr",
+  knownExceptions: [],
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, supersession, traceOff };
