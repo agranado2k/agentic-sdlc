@@ -4987,7 +4987,9 @@ B674=$(sed -n "s/^TRACE_AGENT_WAIT_MS='\([1-9][0-9]*\)'$/\1/p" "$KIT/scripts/tra
 [ "$B674" = "$B674_PINNED" ] && pass "the kit's policy names the wait bound this case is built on ($B674_PINNED ms)" ||
 	fail "scripts/trace.kit.config.sh names TRACE_AGENT_WAIT_MS '$B674', not the $B674_PINNED ms this case's $D674 ms delay is built on — re-read the case against the new bound"
 assert_file_has "$KIT/scripts/trace.kit.config.sh" "(#674)" "the kit's bound carries the #674 measurement beside it"
-if [ "$HAVE_NODE" = 1 ]; then
+# A bound that is not the pinned one has failed above; the legs below would
+# only fail again, blaming the transcript for what the bound did.
+if [ "$HAVE_NODE" = 1 ] && [ "$B674" = "$B674_PINNED" ]; then
 	head -n 16 "$HB" >"$SCRATCH/hb-late-674.jsonl"
 	sed -n '17,$p' "$HB" >"$SCRATCH/hb-tail-674.jsonl"
 	[ "$(sed -n '$p' "$SCRATCH/hb-late-674.jsonl" | grep -c '"isMeta":true')" = 1 ] &&
@@ -5029,7 +5031,7 @@ if [ "$HAVE_NODE" = 1 ]; then
 		note "no millisecond clock on this host: the first stop's give-up at the bound was not asserted"
 	fi
 else
-	note "node is not on PATH: the late hand-back legs did not run"
+	note "node is not on PATH, or the kit's bound is not the pinned one: the late hand-back legs did not run"
 fi
 
 if [ "$SKIPPED" -gt 0 ]; then
