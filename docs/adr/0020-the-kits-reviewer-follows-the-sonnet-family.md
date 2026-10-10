@@ -4,7 +4,7 @@
 - **Date**: 2026-10-09
 - **Deciders**: the operator (Arthur Granado), ruling of 2026-10-08
 - **Supersedes / amends**: supersedes ADR-0018 clause 1 for the reviewer ("a reviewer value is never a family word") and widens its clause 4 bridge; supersedes the 2026-10-05 amendment of ADR-0007 (#546), under which the `self-implemented` domain named a third, pinned model no session tier ran on
-- **Superseded by**: — (amended 2026-10-10, #691: clause 5's non-goal is lifted for the Codex session's policy, whose reviewer now follows the Sonnet family too — see the end of this record)
+- **Superseded by**: — (clause 5's third non-goal, the Codex session's policy, superseded by ADR-0022 on 2026-10-10: that policy's reviewer follows the Sonnet family too)
 
 ## Context and problem statement
 
@@ -64,48 +64,3 @@ Chosen: **option 1.**
 - Implemented in: the PR for #660 (`feat/660-reviewer-family`); held by `tests/agents-tiers.test.sh`.
 - Building it found the family walk in that suite read `$KIT_WRAPPER` before the suite set it, so the walk ran empty and passed vacuously; the suite now sets it first and counts the answers it walked.
 - Related: ADR-0007 (the refusal), ADR-0013 (the walk), ADR-0018 (family-following tiers and the bridge).
-
-### Amendment, 2026-10-10 — the Codex session's policy follows it too (#691)
-
-Lifts clause 5's third non-goal; clauses 1 to 4 and the bridge are unchanged,
-so the record is amended in place. Decided by the implementer session for
-#691, on the operator's direction of 2026-10-09 ("always use the Sonnet family
-to review") and the standing delegation of rulings.
-
-**What happened.** Clause 5 left `scripts/agents.kit.codex.config.sh` out
-because that agent harness was logged out (#669, finding L-6). Its reviewer
-stayed pinned to `claude-code:claude-fable-5-1`, the model whose spawns all
-failed on 2026-10-09 for want of usage credits, with no fallback. A Codex
-session that asked for a review on such a day had no next answer.
-
-**The rule.** The ruling names the review, not the session it is asked from,
-so the Codex policy follows it, spelled the way that agent harness's dispatch takes
-it:
-
-1. `AGENT_TIER_REVIEWER='claude-code:sonnet'` and
-   `AGENT_TIER_REVIEWER_FALLBACK='claude-code:opus claude-code:claude-fable-5-1'`.
-   Every candidate carries its agent harness, so a fallen-back review still crosses
-   (ADR-0013). `AGENT_TIER_REVIEWER_SELF_IMPLEMENTED` is unset, as in clause 1.
-2. The bare family word is workable on this side: the crossing runs
-   `claude -p --model <model>`, and that CLI's `--model` takes "an alias for
-   the latest model (e.g. 'fable', 'opus', or 'sonnet')" (the policy file
-   records the check). `scripts/agent-dispatch.sh --dry-run` shows
-   `claude -p --model sonnet`, and `opus` for a session named `sonnet`. The
-   trace accepts the recorded model: `--ids` lists `sonnet` and `opus` for this
-   policy as well.
-3. **The answers**, through `AGENT_HARNESS_SELF=codex sh scripts/agents.kit.sh`:
-   a Codex session (`gpt-*`), an Opus session (`opus` or `claude-opus-5-5`) or
-   none named gets `sonnet` on `claude-code` for `reviewer` and
-   `reviewer self-implemented`. A Sonnet session named `sonnet` gets `opus`. An
-   Opus session whose Sonnet is unreachable gets `claude-fable-5-1`.
-
-**Honest limitation.** Clause 2's bridge does not apply here: it never folds a
-value that crosses to another agent harness (PR #553 M-1), and every reviewer
-candidate in this policy crosses. So a session is named in the policy's own
-words: `claude-sonnet-5-5` named as the session is compared exactly and is
-handed `sonnet`. No Codex session runs on a Claude model, so the case has no
-caller; the policy's comment says to name `sonnet` if one ever does.
-
-**Not verified live.** Codex is logged out (2026-10-08), so no review was
-dispatched from a Codex session under this mapping. The dispatch dry run and
-`tests/agents-tiers.test.sh` hold it; the first live Codex review is its proof.

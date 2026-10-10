@@ -37,7 +37,7 @@
 # PINNED — a floating alias would make a model change with no diff and no
 # decision, which is the opposite of what a recorded policy is for — except
 # the reviewer and its first fallback, which follow a family by recorded
-# decision (ADR-0020, amended 2026-10-10): there the floating is the decision.
+# decision (ADR-0020, ADR-0022): there the floating is the decision.
 # Every Claude value here crosses to the other agent harness and so reaches a
 # CLI, which takes a full id or a family word alike.
 # ---------------------------------------------------------------------------
@@ -84,8 +84,8 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 #    reason the other policy states in full: a reviewer that shares the
 #    author's training shares the author's blind spots.
 #
-#    WHICH CLAUDE MODEL: THE SONNET FAMILY, as in the other policy (ADR-0020,
-#    as amended on 2026-10-10 for #691). The operator's ruling — "always use
+#    WHICH CLAUDE MODEL: THE SONNET FAMILY, as in the other policy (ADR-0022,
+#    which extends ADR-0020 to this policy, #691). The operator's ruling — "always use
 #    the Sonnet family to review" — names the review, not the session it is
 #    asked from, so this policy follows it rather than keeping the pinned
 #    Fable id it held until then. The bare family word is what the crossing
@@ -100,8 +100,7 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 #    plain tier's word again, and a Codex session cannot have written the
 #    diff on a Claude model anyway — ADR-0007's refusal, in
 #    scripts/agents.lib.sh, is the net if a session ever names one. Name a
-#    session in this file's words (`sonnet`, `opus`): the kit wrapper's
-#    family bridge never folds a crossing value (PR #553 M-1).
+#    session in this file's words (`sonnet`, `opus`) — ADR-0022 clause 4.
 # ---------------------------------------------------------------------------
 AGENT_TIER_REVIEWER='claude-code:sonnet'
 AGENT_TIER_REVIEWER_FALLBACK='claude-code:opus claude-code:claude-fable-5-1'
