@@ -44,25 +44,19 @@ KITV=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 
-# Scratch carries the harness's prefix (#221) rather than mktemp's anonymous
-# default: a suite killed at its budget ceiling dies before its trap, and what
-# it leaves must be identifiable by name alone. It is created AFTER the source
-# above, because the prefix is the harness's to name — spelling it a second
-# time here is the drift this repo keeps paying for.
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+t_scratch # the harness's owner-named scratch, swept at start (#221, #676)
 
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 # The recipe this suite executes says `WORK=$(mktemp -d)` — a consumer's text,
 # kept as written — and that names a bare tmp.XXXXXX in the shared TMPDIR that
-# outlives the run. Pointing TMPDIR inside the scratch puts every such
-# directory under the prefix, so the trap removes it and a killed run's sweep
-# can find it (#677; section E checks it held). The real TMPDIR and a mark of
-# the moment are kept, so E can look there for anything that escaped anyway.
-E_ROOT=${TMPDIR:-/tmp}
-: >"$SCRATCH/e-start.mark"
-TMPDIR="$SCRATCH/tmp"
-mkdir "$TMPDIR" || exit 2
+# outlives the run. Every child of this suite inherits TMPDIR, so pointing it
+# inside the scratch puts each such directory under the owner-named prefix,
+# where the trap removes it and the next start's sweep finds a killed run's
+# (#677; section E holds it).
+E_TMP="$SCRATCH/tmp"
+mkdir "$E_TMP" || exit 2
+TMPDIR=$E_TMP
 export TMPDIR
 
 failures=0
@@ -2319,26 +2313,25 @@ prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
 # ---------------------------------------------------------------------------
 banner "E. The recipe's anonymous scratch stayed inside this suite's own (#677)"
 # ---------------------------------------------------------------------------
-# The redirect is set up beside the trap, near the top. Two checks hold it:
-# the run left no bare tmp.* of its own in the real TMPDIR (a directory owned
-# by this user, made after the run's start mark — on a busy host another
-# program's could match, and the name it prints says whose it is), and the
-# recipe's `WORK=$(mktemp -d)` did go through the redirect — none landing in
-# the scratch would mean the cases above stopped running the recipe, and the
-# first check would then pass on nothing.
-e_escaped=$(find "$E_ROOT/." ! -name . -prune -type d -name 'tmp.*' -user "$(id -u)" \
-	-newer "$SCRATCH/e-start.mark" -print 2>/dev/null)
-if [ -z "$e_escaped" ]; then
-	pass "the run left no bare tmp.* in $E_ROOT"
+# A bare `mktemp -d` follows TMPDIR, so it escapes the redirect only from a
+# child that runs with TMPDIR reassigned or the environment cleared. The first
+# check holds this file to one assignment, the redirect's, and no cleared
+# environment — deterministic, where a scan of the shared TMPDIR would also
+# see any parallel suite's transient tmp.*. The second keeps the first from
+# passing on nothing: the recipe's work dirs did land in the scratch.
+e_leaks=$(grep -nE '(^|[^_A-Za-z])TMPDIR=|env +(-[A-Za-z]+ +)*-(i|-ignore-environment)|-u +TMPDIR|--unset[= ]TMPDIR' "$KIT/tests/docs-demo.sh" |
+	grep -vE '^[0-9]+:TMPDIR=\$E_TMP$|e_leaks=')
+if [ -z "$e_leaks" ]; then
+	pass "the redirect is this suite's one TMPDIR assignment, and no child runs with it cleared"
 else
-	fail "the run left bare tmp.* in $E_ROOT — a mktemp -d escaped the redirect:"
-	printf '%s\n' "$e_escaped" | sed 's/^/        | /'
+	fail "a child of this suite can run outside the redirect — its mktemp -d lands bare in the shared TMPDIR:"
+	printf '%s\n' "$e_leaks" | sed 's/^/        | /'
 fi
-e_bare=$(find "$SCRATCH/tmp/." ! -name . -prune -type d -name 'tmp.*' | wc -l | tr -d ' ')
+e_bare=$(find "$E_TMP/." ! -name . -prune -type d -name 'tmp.*' | wc -l | tr -d ' ')
 if [ "$e_bare" -gt 0 ]; then
 	pass "the recipe's $e_bare anonymous work dir(s) were made inside the suite's scratch"
 else
-	fail "no anonymous work dir landed in \$SCRATCH/tmp — the recipe's mktemp -d went elsewhere"
+	fail "no anonymous work dir landed in the suite's scratch — the recipe's mktemp -d went elsewhere"
 fi
 
 # ---------------------------------------------------------------------------

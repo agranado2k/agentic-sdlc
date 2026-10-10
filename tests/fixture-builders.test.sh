@@ -340,16 +340,15 @@ grep -q 'T_SCRATCH_SWEEP_DAYS' "$T_ROOT/tests/lib.sh" &&
 # Every suite that makes the prefixed scratch makes it through t_scratch, so
 # it is named for its owner and sweeps at start (#676): a suite that spells
 # the template by hand makes owner-less scratch the age rule keeps for a day.
-# tests/docs-demo.sh is the one exception, and only until #677 converts it.
 # The pattern is split so this suite's own line never matches it.
 _hand_pat='T_SCRATCH_PREFIX''}XXXXXX'
 _handmade=''
 for f in "$T_ROOT"/tests/*.sh; do
-	case ${f##*/} in lib.sh | docs-demo.sh) continue ;; esac
+	case ${f##*/} in lib.sh) continue ;; esac
 	grep -qF "$_hand_pat" "$f" && _handmade="$_handmade ${f##*/}"
 done
 [ -z "$_handmade" ] && pass "every suite makes its prefixed scratch through t_scratch, named for its owner" ||
-	fail "these build kit-suite scratch by hand, with no owner in its name (only docs-demo.sh is exempt, until #677):$_handmade"
+	fail "these build kit-suite scratch by hand, with no owner in its name:$_handmade"
 
 # EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
 # enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`
