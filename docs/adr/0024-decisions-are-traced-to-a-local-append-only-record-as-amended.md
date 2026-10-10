@@ -478,7 +478,8 @@ each was folded:
 - Clause 6 — the dated price table and its kit-only refresh (#270).
 - Clause 7 — the readers are the operator and `/retro` (#309); the landing
   script as an operator-run reader (ADR-0019, #630, and its review-verdict
-  check, #673, and its `pr.open` read, #723); the worktree cleanup (ADR-0023 clause 3).
+  check, #673, and its `pr.open` read, #723); the worktree cleanup
+  (ADR-0023 clause 3).
 - Clause 8 — the turn-ending tool and the resume anchor (#565); the output
   snapshot (#608).
 
