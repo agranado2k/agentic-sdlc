@@ -53,6 +53,15 @@ SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
 
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
+# The recipe this suite executes says `WORK=$(mktemp -d)` — a consumer's text,
+# kept as written — and that names a bare tmp.XXXXXX in the shared TMPDIR that
+# outlives the run. Pointing TMPDIR inside the scratch puts every such
+# directory under the prefix, so the trap removes it and a killed run's sweep
+# can find it (#677; section E checks it held).
+TMPDIR="$SCRATCH/tmp"
+mkdir "$TMPDIR" || exit 2
+export TMPDIR
+
 failures=0
 
 # note <text> (tests/lib.sh) — a visible line that is neither a pass nor a fail.
@@ -2303,6 +2312,29 @@ prose_probe "Part 2 intro's clone-arrow note"     'a real `v0\.3\.0 → v0\.'
 # the transcript's ADD line first — always current — and passed while the
 # commentary below it still quoted v0.40.0 (found by #563's re-read).
 prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
+
+# ---------------------------------------------------------------------------
+banner "E. The recipe's anonymous scratch stayed inside this suite's own (#677)"
+# ---------------------------------------------------------------------------
+# The recipe's `WORK=$(mktemp -d)` and `VERIFY=$(mktemp -d)` are text a
+# consumer reads, so they stay as written — and run here, each one named a bare
+# tmp.XXXXXX nobody could tell from any other program's: 1857 of them on one
+# host by the 2026-10-09 housekeeping. TMPDIR points inside $SCRATCH for the
+# whole run, so they land under the prefixed scratch the trap removes and a
+# killed run's sweep finds. Both halves are checked: the redirect held, and the
+# recipe's mktemp calls actually went through it (none would mean the cases
+# above stopped running the recipe, or the redirect stopped reaching them).
+if [ "${TMPDIR:-}" = "$SCRATCH/tmp" ]; then
+	pass "TMPDIR still points inside the suite's scratch"
+else
+	fail "TMPDIR is '${TMPDIR:-}', not \$SCRATCH/tmp — the recipe's mktemp -d escapes to a bare tmp.*"
+fi
+e_bare=$(find "$SCRATCH/tmp/." ! -name . -prune -type d -name 'tmp.*' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${e_bare:-0}" -gt 0 ]; then
+	pass "the recipe's $e_bare anonymous work dir(s) were made inside the suite's scratch"
+else
+	fail "no anonymous work dir landed in \$SCRATCH/tmp — the recipe's mktemp -d went elsewhere"
+fi
 
 # ---------------------------------------------------------------------------
 banner "Result"
