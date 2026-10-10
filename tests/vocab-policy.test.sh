@@ -229,5 +229,19 @@ printf '%s\n' "for t in planner implementer mechanical reviewer; do :; done" >"$
 printf '%s\n' "VOCAB_TIER='planner implementer mechanical reviewer'" >"$SCRATCH/bait-tiers/scripts/vocab.config.sh"
 bait_spellers=$(tier_spellers "$SCRATCH/bait-tiers")
 assert_equal "bait: a planted loop is found, the policy line is not" "$bait_spellers" "bootstrap.sh:1:for t in planner implementer mechanical reviewer; do :; done"
+printf '%s\n' "agents_tier_names() { printf '%s' 'planner implementer mechanical reviewer'; }" \
+	"echo 'tier is one of: planner implementer mechanical reviewer'" >"$SCRATCH/bait-tiers/scripts/agents.lib.sh"
+bait_spellers=$(tier_spellers "$SCRATCH/bait-tiers" | sed 's/:.*//' | sort | tr '\n' ' ')
+assert_equal "bait: the resolver's one function is allowed, a second spelling in it is not" "$bait_spellers" "bootstrap.sh scripts/agents.lib.sh "
+bait_lines=$(tier_spellers "$SCRATCH/bait-tiers" | grep -c '^scripts/agents\.lib\.sh:')
+assert_equal "bait: exactly the echo line of the planted resolver is found" "$bait_lines" "1"
+
+# The names the dispatchers print are the resolver's, read rather than spelled.
+t_run_split sh "$KIT/scripts/skill-dispatch.kit.sh" --phase-tier bogus
+s_assert_status 2 "the skill dispatcher refuses an unknown phase"
+s_assert_err_has "The vocabulary is closed: planner implementer tester mechanical reviewer." "…naming the phases, tester after implementer"
+t_run_split sh "$KIT/scripts/agent-dispatch.sh"
+s_assert_err_has "tier is one of: planner implementer mechanical reviewer" "the agent-harness dispatcher's usage names the resolver's tiers"
+
 
 t_done "vocab-policy"
