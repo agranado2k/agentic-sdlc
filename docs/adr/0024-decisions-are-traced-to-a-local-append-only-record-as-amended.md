@@ -113,8 +113,8 @@ Chosen: **option 1**.
      cheap-first cascade as a spawn of its own under one run: `passed` when
      the rung's oracle and guard passed, `escalated` when a red rung hands up
      to the next, `failed` when the last rung is red. `passed` and
-     `escalated` are `docs/specs/spend.md` R21; `failed` is the dispatcher's
-     own word for the last rung (#586).
+     `escalated` are `docs/specs/spend.md` R21; `failed` came from PR #610,
+     the dispatcher's own word for the last rung (#586).
    - **`ticket.start` `resumed`** means `/implement` picked up a ticket whose
      worktree or PR already exists: the session before it recorded the
      stamp, so this line records the interruption. `/retro`'s question 6
@@ -224,10 +224,11 @@ Chosen: **option 1**.
      resolver beside it has no ids, and the rule is off. Other kinds' `model`
      stays open. `verify` reads the same list as an advisory on a spawn
      already written off it — one stderr line naming the file, the line and
-     the value, never a bad line and never the verdict — judged against the policy as it is now — so a
-     model a roster move retired is advised on too — and `summary` and
-     `export` say the count once and point at `verify`; a resolver that fails judges nothing there
-     and each says so once on stderr. One enumeration of the policy's values, the resolver's
+     the value, never a bad line and never the verdict — judged against the
+     policy as it is now — so a model a roster move retired is advised on
+     too — and `summary` and `export` say the count once and point at
+     `verify`; a resolver that fails judges nothing there and each says so
+     once on stderr. One enumeration of the policy's values, the resolver's
      `agents_values`, feeds `--ids` and the kit wrapper's unreachable bridge.
 2. **Unconfigured is a working state, and off is decided.**
    `scripts/trace.config.sh` is a policy file and ships with `TRACE_DIR`
@@ -411,7 +412,7 @@ Chosen: **option 1**.
      a lower bound, input and cache whole. The rollup counts the closing
      output, so a compaction gap judged beside snapshots holds their
      remainder: its event carries the same key, and the session's sum stays
-     whole while its split does not. `/retro`'s spend question reports the
+     whole and its split does not. `/retro`'s spend question reports the
      lower-bound share beside every output figure.
 9. **Explicit non-goal**: the trace is not a memory and not a context store.
    ADR-0005's non-goal stands; nothing here moves a transcript or feeds a
@@ -447,9 +448,10 @@ Chosen: **option 1**.
   shown by a suite, not a POSIX guarantee, and out of scope on a network
   filesystem. No rotation exists yet.
 - **Honest limitation**: the consolidation is prose no suite fully checks.
-  `tests/trace.test.sh` holds that every amendment's ticket is named here
-  and the table matches the script; that a folded rule says what its
-  amendment said is the review's comparison.
+  `tests/trace.test.sh` holds that every amendment's ticket is named here,
+  that the table matches the script, and that each rule the first fold
+  dropped is stated in its clause, sentence by sentence (#718); that every
+  other folded rule says what its amendment said is the review's comparison.
 
 ## More information
 
@@ -463,7 +465,8 @@ each was folded:
   shape rows (#466, PR #487, with `A2-[0-9]+`); the raise id (#567); the
   spawn model (#569); `resumed` and `data.cause` (#628); the lens counts
   (#663). The cascade's spawn words (#586) were never recorded in ADR-0008;
-  they are stated here from `docs/specs/spend.md` R21 and the script.
+  they are stated here from `docs/specs/spend.md` R21 for `passed` and
+  `escalated`, and from the dispatcher PR #610 shipped for `failed`.
 - Clause 2 — bootstrap asks, an off trace is a finding (#654).
 - Clause 4 — a caller error is exit 2 (#248, PR #263); exit 3 for an
   unsupported schema (#271).
