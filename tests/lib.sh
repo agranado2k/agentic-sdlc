@@ -453,29 +453,98 @@ case "${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT}" in
 *) T_SCRATCH_SWEEP_DAYS=${T_SCRATCH_SWEEP_DAYS:-$T_SCRATCH_SWEEP_DAYS_DEFAULT} ;;
 esac
 
-# t_sweep_scratch — remove suite scratch under $TMPDIR older than the sweep
-# age, and say how much went. Never touches a name without the prefix.
+# SCRATCH NAMES ITS OWNER (#676), and a dead owner's is swept at once. The age
+# above was the only rule, so two OOM-killed suites left ~900 MB that the day
+# kept — on a quota'd /tmp every session's writes then failed until somebody
+# swept it by hand. So the name carries the process that made it,
+# `kit-suite.<pid>-<pid namespace>.XXXXXX`, and the next suite to start judges
+# each directory one of three ways:
+#
+#   - its owner is recorded, in THIS pid namespace, and alive: kept, however
+#     old — never delete scratch a live process owns;
+#   - its owner is recorded, in this namespace, and gone, and the directory is
+#     ours (same uid, so kill -0 answered about a process we could signal):
+#     removed now, whatever its age;
+#   - anything else — no owner in the name (scratch made before #676, a fixture,
+#     another kit), another namespace, another user's: the age rule, as before.
+#
+# The record is the NAME, not a file inside: it exists the instant mktemp
+# returns, so there is no window where a half-made scratch looks ownerless, and
+# no suite that lists its own scratch finds a stranger in it. A reused pid only
+# ever errs towards keeping, which the age rule then covers.
+
+# t_scratch_owner — print this process's owner token, `<pid>-<ns>`. The
+# namespace is the pid namespace's inode where /proc says so, and 0 where it
+# does not (no /proc: one namespace is all the host has).
+t_scratch_owner() {
+	_to_ns=$(ls -l /proc/self/ns/pid 2>/dev/null | sed -n 's/.*pid:\[\([0-9][0-9]*\)\].*/\1/p')
+	printf '%s-%s\n' "$$" "${_to_ns:-0}"
+}
+
+# _t_scratch_verdict <dir> <this namespace> <uid> — print live, dead or unknown.
+_t_scratch_verdict() {
+	_tv_rest=${1##*/}
+	_tv_rest=${_tv_rest#"$T_SCRATCH_PREFIX"}
+	_tv_tok=${_tv_rest%%.*}
+	[ "$_tv_tok" != "$_tv_rest" ] || { echo unknown; return; }
+	case $_tv_tok in
+	[1-9]*-[0-9]*) ;;
+	*) echo unknown; return ;;
+	esac
+	_tv_pid=${_tv_tok%%-*}
+	_tv_ns=${_tv_tok#*-}
+	case $_tv_pid$_tv_ns in *[!0-9]*) echo unknown; return ;; esac
+	[ "$_tv_ns" = "$2" ] || { echo unknown; return; }
+	[ -n "$(find "$1" -prune -user "$3" 2>/dev/null)" ] || { echo unknown; return; }
+	if kill -0 "$_tv_pid" 2>/dev/null; then echo live; else echo dead; fi
+}
+
+# t_sweep_scratch — remove suite scratch under $TMPDIR whose owner is gone, or
+# that is older than the sweep age and names no owner this run can judge; keep
+# a live owner's; say how much went and why. Never touches a name without the
+# prefix, never anything but a real directory.
 t_sweep_scratch() {
 	_ts_root=${TMPDIR:-/tmp}
 	[ -d "$_ts_root" ] || return 0
-	# POSIX find only, and the predicates carry the safety rather than sitting
-	# beside it: `dir/.` with `! -name . -prune` is depth one; `-mtime +n` is
-	# true once the whole days elapsed exceed n, so "at least N days" is
-	# +(N-1); the walk is PHYSICAL (no -L, no -H) so a planted
-	# `kit-suite.x -> ~` is a link and `-type d` never hands it to rm; and a
-	# sibling owned by someone else fails at rm on a sticky /tmp, so -print
-	# follows only a removal that worked and the count is of what actually
-	# went.
-	_ts_swept=$(find "$_ts_root/." ! -name . -prune -type d -name "${T_SCRATCH_PREFIX}*" \
-		-mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" -exec rm -rf {} \; -print 2>/dev/null | wc -l | tr -d ' ')
-	[ "${_ts_swept:-0}" -gt 0 ] &&
-		echo "i  tests/lib.sh: swept $_ts_swept stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
+	_ts_tok=$(t_scratch_owner)
+	_ts_ns=${_ts_tok#*-}
+	_ts_uid=$(id -u)
+	_ts_dead=0
+	_ts_aged=0
+	for _ts_d in "$_ts_root/$T_SCRATCH_PREFIX"*; do
+		# A real directory only: -d follows a link, so -L is what refuses a
+		# planted `kit-suite.x -> ~`, and rm -rf on the link's own path never
+		# follows it. A plain file carrying the prefix is not -d.
+		[ -d "$_ts_d" ] && [ ! -L "$_ts_d" ] || continue
+		case $(_t_scratch_verdict "$_ts_d" "$_ts_ns" "$_ts_uid") in
+		live) continue ;;
+		dead) rm -rf "$_ts_d" 2>/dev/null && [ ! -e "$_ts_d" ] && _ts_dead=$((_ts_dead + 1)) ;;
+		*)
+			# `-mtime +n` is true once the whole days elapsed exceed n, so "at
+			# least N days" is +(N-1). A sibling owned by someone else fails at
+			# rm on a sticky /tmp, so the count is of what actually went.
+			[ -n "$(find "$_ts_d" -prune -mtime "+$((T_SCRATCH_SWEEP_DAYS - 1))" 2>/dev/null)" ] || continue
+			rm -rf "$_ts_d" 2>/dev/null && [ ! -e "$_ts_d" ] && _ts_aged=$((_ts_aged + 1))
+			;;
+		esac
+	done
+	[ "$_ts_dead" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_dead suite scratch under $_ts_root whose owner process is gone — killed before its trap" >&2
+	[ "$_ts_aged" -gt 0 ] &&
+		echo "i  tests/lib.sh: swept $_ts_aged stale suite scratch under $_ts_root — at least $T_SCRATCH_SWEEP_DAYS day(s) old, left by suites that never reached their trap" >&2
 	return 0
 }
 
-t_init() {
+# t_scratch — sweep, then make this suite's scratch, named for its owner, in
+# the global SCRATCH. A suite that sets its own trap calls this; t_init is it
+# plus the harness's trap.
+t_scratch() {
 	t_sweep_scratch
-	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+	SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}$(t_scratch_owner).XXXXXX") || exit 2
+}
+
+t_init() {
+	t_scratch
 	trap 't_cleanup' EXIT INT TERM HUP
 }
 

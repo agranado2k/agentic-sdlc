@@ -261,6 +261,51 @@ case "$_sweep_msg" in
 *) fail "the sweep removed scratch silently: '$_sweep_msg'" ;;
 esac
 
+# A DEAD OWNER IS SWEPT NOW, A LIVE ONE NEVER (#676). Two OOM-killed suites
+# left ~900 MB of scratch that the day-long age kept, and the quota'd /tmp
+# refused every session's writes until it was swept by hand. Scratch names
+# its owning process, so the next suite to start tells dead from live.
+OWNROOT="$SCRATCH/ownroot"
+mkdir -p "$OWNROOT"
+# The real thing first: a suite killed with SIGKILL, minutes old at most.
+VICTIM_OUT="$SCRATCH/victim2-path" TMPDIR="$OWNROOT" \
+	sh -c "$KILL_BODY" "$T_ROOT/tests/killme" >/dev/null 2>&1
+VICTIM2=$(cat "$SCRATCH/victim2-path" 2>/dev/null)
+[ -n "$VICTIM2" ] && [ -d "$VICTIM2" ] ||
+	fail "the second killed suite left no scratch to sweep (victim='$VICTIM2')"
+# A live owner, by name — this suite's own process — and aged past the sweep
+# age, so the age rule alone would take it.
+t_scratch_owner >"$SCRATCH/owner-token" || fail "t_scratch_owner printed no owner token"
+LIVEDIR="$OWNROOT/${T_SCRATCH_PREFIX}$(cat "$SCRATCH/owner-token").livexx"
+mkdir -p "$LIVEDIR"
+touch -t "$_old_stamp" "$LIVEDIR" 2>/dev/null || touch -t 202001010000 "$LIVEDIR"
+# A fresh directory with no recorded owner: the age rule still holds it.
+UNOWNED="$OWNROOT/${T_SCRATCH_PREFIX}legacy"
+mkdir -p "$UNOWNED"
+# A dead owner in ANOTHER pid namespace is not ours to judge — kill -0 there
+# answers about some other process.
+sh -c 'exit 0' &
+_dead=$!
+wait "$_dead"
+FOREIGN="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-1.foreign"
+mkdir -p "$FOREIGN"
+_own_err="$SCRATCH/own-err"
+( TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null
+[ -n "$VICTIM2" ] && [ ! -d "$VICTIM2" ] &&
+	pass "a killed suite's fresh scratch is removed at the next start — its owner is gone" ||
+	fail "a killed suite's scratch survived the next start (owner dead, age irrelevant): '$VICTIM2'"
+[ -d "$LIVEDIR" ] && pass "…and a LIVE owner's scratch is kept, however old" ||
+	fail "the sweep removed scratch whose owner process is still running"
+[ -d "$UNOWNED" ] && pass "…and fresh scratch with no recorded owner is left to the age rule" ||
+	fail "the sweep removed fresh scratch whose owner it could not name"
+[ -d "$FOREIGN" ] && pass "…and an owner recorded in another pid namespace is left to the age rule" ||
+	fail "the sweep judged a process in another pid namespace dead by this one's kill -0"
+case "$(cat "$_own_err")" in
+*'owner process is gone'*) pass "…and says on stderr what it removed, and why" ;;
+*) fail "the owner sweep was silent: '$(cat "$_own_err")'" ;;
+esac
+
 # One variable, one default, validated before it reaches arithmetic, and
 # documented where a reader of the harness meets it.
 [ "$T_SCRATCH_SWEEP_DAYS" = 1 ] && pass "the sweep age is one variable with a kit default of 1 day" ||

@@ -46,10 +46,10 @@ t_as_human
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
-# Scratch carries the harness's prefix (#221) rather than mktemp's anonymous
-# default: a suite killed at its budget ceiling dies before its trap, and what
-# it leaves must be identifiable by name alone.
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/${T_SCRATCH_PREFIX}XXXXXX") || exit 2
+# Scratch comes from the harness (#221, #676): named for its owning process,
+# so a suite killed at its budget ceiling or by the OOM killer — dead before
+# its trap — leaves what the next suite's start can tell from a live run's.
+t_scratch
 PROJ="$SCRATCH/demo-project"
 REMOTE="$SCRATCH/demo-remote.git"
 PROJECT_NAME="Demo Project"
