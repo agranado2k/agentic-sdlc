@@ -92,10 +92,12 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 #    CLI's `--model` takes (verified above: "an alias for the latest model"),
 #    so a new Sonnet reaches review here with no re-pin, as it does there.
 #
-#    The ordered fallback is the other policy's too, each value carrying its
-#    own agent harness so a fallen-back review still crosses (ADR-0013): a
-#    caller that saw Sonnet refuse names `sonnet` in
-#    AGENT_UNREACHABLE_MODELS and is handed `opus`, then the pinned Fable.
+#    The ordered fallback is the other policy's too: EMPTY, by the
+#    operator's ruling of 2026-10-10 (ADR-0020's amendment, #724) — reviews
+#    run on the Sonnet family only, with no Opus fallback. It was
+#    `claude-code:opus claude-code:claude-fable-5-1`. A caller that saw
+#    Sonnet refuse names `sonnet` in AGENT_UNREACHABLE_MODELS and is handed
+#    nothing: the review waits, never an Opus or Fable one.
 #    No `self-implemented` mapping, for ADR-0020's reason: it would name the
 #    plain tier's word again, and a Codex session cannot have written the
 #    diff on a Claude model anyway — ADR-0007's refusal, in
@@ -103,7 +105,7 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 #    session in this file's words (`sonnet`, `opus`) — ADR-0022 clause 4.
 # ---------------------------------------------------------------------------
 AGENT_TIER_REVIEWER='claude-code:sonnet'
-AGENT_TIER_REVIEWER_FALLBACK='claude-code:opus claude-code:claude-fable-5-1'
+AGENT_TIER_REVIEWER_FALLBACK=''
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN — same rules as the other policy. The

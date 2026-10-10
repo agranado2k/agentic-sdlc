@@ -4,7 +4,7 @@
 - **Date**: 2026-10-09
 - **Deciders**: the operator (Arthur Granado), ruling of 2026-10-08
 - **Supersedes / amends**: supersedes ADR-0018 clause 1 for the reviewer ("a reviewer value is never a family word") and widens its clause 4 bridge; supersedes the 2026-10-05 amendment of ADR-0007 (#546), under which the `self-implemented` domain named a third, pinned model no session tier ran on
-- **Superseded by**: — (clause 5's third non-goal, the Codex session's policy, superseded by ADR-0022 on 2026-10-10: that policy's reviewer follows the Sonnet family too)
+- **Superseded by**: — (clause 5's third non-goal, the Codex session's policy, superseded by ADR-0022 on 2026-10-10: that policy's reviewer follows the Sonnet family too; amended 2026-10-10 (#724): the reviewer fallback is empty in both kit policies — reviews run on the Sonnet family only, and a Sonnet session is answered nothing, so a session off that family spawns its review; see the amendment at the end)
 
 ## Context and problem statement
 
@@ -64,3 +64,84 @@ Chosen: **option 1.**
 - Implemented in: the PR for #660 (`feat/660-reviewer-family`); held by `tests/agents-tiers.test.sh`.
 - Building it found the family walk in that suite read `$KIT_WRAPPER` before the suite set it, so the walk ran empty and passed vacuously; the suite now sets it first and counts the answers it walked.
 - Related: ADR-0007 (the refusal), ADR-0013 (the walk), ADR-0018 (family-following tiers and the bridge).
+
+## Amendment 2026-10-10 — reviews run on the Sonnet family only (#724)
+
+Decided by the implementer session for #724, on the operator's ruling of
+2026-10-10 and the standing delegation of rulings.
+
+**What happened.** The operator ruled that reviews — the reviewer and every
+review lens — run on the Sonnet family only, with no Opus fallback. Under
+clause 1 a review whose Sonnet spawn was refused or unreachable walked on to
+`opus`, then the pinned Fable, and on PR #722 a review that ran on Sonnet was
+recorded as Opus.
+
+**The rule.** In both kit policies the reviewer's ordered fallback is empty:
+`AGENT_TIER_REVIEWER_FALLBACK=''` in `scripts/agents.kit.config.sh`, and in
+`scripts/agents.kit.codex.config.sh`, where it was `claude-code:opus
+claude-code:claude-fable-5-1` (ADR-0022 clauses 1 and 3, narrowed the same
+way). The reviewer stays `sonnet` and `self-implemented` stays unmapped. The
+walk is the domain answer and the plain reviewer, and nothing past them.
+
+This narrows clauses 1 and 3. No answer moves to another model; the answers
+that were `opus` or `claude-fable-5-1` become nothing. ADR-0013 still holds,
+since there is no candidate left once Sonnet is refused or unreachable.
+ADR-0007 still holds: no session is handed its own model. The record had no
+in-place amendment before this one, so it is within ADR-0021's cap of five.
+
+**The answers**, through `sh scripts/agents.kit.sh`:
+
+- An Opus session, a Fable session or none named gets `sonnet`, plain and
+  `self-implemented`.
+- A Sonnet session (`sonnet` or any `claude-sonnet-*` id) gets **nothing**,
+  and the resolver warns that no reviewer model differs from the session's
+  own.
+- Any session whose Sonnet is named unreachable gets **nothing**, and the
+  resolver's spent-walk warning.
+
+**What a Sonnet session does.** Here, nothing printed for the reviewer is not
+"inherit the session", whatever the shared resolver's warning says. Inheriting
+would mean a review on the session's own model in one case (against ADR-0007)
+and an Opus or Fable review in the other (against this ruling). So the session
+spawns no review. It stops at the review step, and its report quotes the
+warning and says the review is still owed. A session off the Sonnet family
+then spawns the review on `sonnet`. That is normally the Opus or Fable session
+that spawned the Sonnet one, resolving with its own name. When Sonnet itself
+is unreachable, the review waits for it; it never moves to another family.
+
+A `/review-pr` lens is unchanged in practice. The lenses resolve the plain
+reviewer without naming a session, and get `sonnet`. A lens whose Sonnet is
+unreachable finds the walk spent, and that skill audits the lens in its own
+context. Its coordinator runs on `sonnet`, so the lens is still reviewed on
+Sonnet.
+
+**Rejected.**
+
+- *Keep `opus` on the fallback for a Sonnet session only.* This goes against
+  the ruling, and a Sonnet session has a session off its family above it to
+  hand the review to.
+- *Let a Sonnet session's review inherit the session.* That is the
+  self-review ADR-0007 refuses.
+- *A new record.* The change only removes answers. It does not reverse the
+  decision that the reviewer follows the Sonnet family, it sharpens it.
+
+**Trade-offs.**
+
+- A diff a Sonnet session wrote, as on a mechanical ticket, is reviewed by
+  Sonnet in a fresh context, so it shares the author's family. ADR-0007 holds
+  per session: the session that spawns the review never resolves to its own
+  model. It does not hold per author. The operator chose the family over a
+  different model, and the fresh context (shared invariant §4) is what keeps
+  that review adversarial.
+- An outage of Sonnet stops every review until Sonnet answers again, where
+  Opus used to take over.
+- **Honest limitation**: the rule that "nothing printed means spawn no
+  review" lives in the root manual and `docs/capability-tiers.md`, not in a
+  script. The resolver cannot see the spawn, and a session that ignores the
+  rule inherits its own model just as the shared skills tell a consumer to.
+
+Held by `tests/agents-tiers.test.sh`. That suite checks that neither policy
+names a fallback. It also walks every session through the kit wrapper to the
+end, in both policies, and checks that every answer is the reviewer's family.
+That walk is first shown to fail on a throwaway whose fallback names another
+family.

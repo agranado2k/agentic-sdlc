@@ -78,12 +78,20 @@ AGENTS_CONFIG=scripts/agents.kit.config.sh sh scripts/agents.lib.sh <tier>
 
 **Most of the kit's tiers pin an id; three follow a family.** The planner is
 `opus` and the mechanical tier `sonnet` (ADR-0018), and the reviewer is `sonnet`
-too, with `opus` first on its fallback (ADR-0020): the bare family word, the
-newest model in that family. A family word and every pinned id that folds to it
-are one family to the kit wrapper, so a session on the Sonnet family, named by
-the word or by a pinned id, is refused the `sonnet` reviewer and handed `opus`,
-and an Opus session is refused the `opus` fallback. This holds only through
-`scripts/agents.kit.sh`; the shared resolver compares exactly.
+too (ADR-0020): the bare family word, the newest model in that family. A family
+word and every pinned id that folds to it are one family to the kit wrapper, so
+a session on the Sonnet family, named by the word or by a pinned id, is refused
+the `sonnet` reviewer. This holds only through `scripts/agents.kit.sh`; the
+shared resolver compares exactly.
+
+**Reviews run on the Sonnet family only** (ADR-0020's amendment, #724). Neither
+kit policy names a reviewer fallback. So a Sonnet session, or any session whose
+Sonnet is unreachable, is answered nothing, with a warning. Here, nothing
+printed for the reviewer does not mean "inherit the session". The session spawns
+no review, and its report quotes the warning and says the review is still owed.
+A session off the Sonnet family, usually the Opus or Fable one above it, spawns
+the review on `sonnet`. With Sonnet unreachable the review waits; it never runs
+on Opus or Fable.
 
 ## The policy behind the mapping
 
