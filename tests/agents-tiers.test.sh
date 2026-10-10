@@ -1049,7 +1049,7 @@ walk_answers() {
 		done
 	done
 }
-_k_famwalk_bad= _k_famwalk_n=0
+_k_famwalk_bad= _k_famwalk_n=0 _k_offfam=
 _k_sessions="$_k_rev $_k_vendor-$_k_rev-9-9"
 for _k_spec in planner implementer mechanical 'implementer content'; do
 	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
@@ -1072,6 +1072,8 @@ while read -r _k_ses _k_dom _k_ans; do
 	fi
 	_k_famwalk_n=$((_k_famwalk_n + 1))
 	[ "$(_k_fold "$_k_ans")" = "$(_k_fold "$_k_ses")" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer $_k_dom -> $_k_ans;"
+	# The same walk holds the Sonnet-only rule (#724), checked below.
+	[ "$(_k_fold "$_k_ans")" = "$_k_rev" ] || _k_offfam="$_k_offfam '$_k_ses' reviewer $_k_dom -> $_k_ans;"
 done <<WALK
 $_k_walk
 WALK
@@ -1150,11 +1152,11 @@ case "$(off_family "$SCRATCH/no-such-tree" '' small small 2>/dev/null)" in
 *"none answered"*) pass "the Sonnet-only walk reports a walk that answered nothing, rather than passing vacuously" ;;
 *) fail "the Sonnet-only walk passed a walk that answered nothing" ;;
 esac
-# shellcheck disable=SC2086 # the session list, split on purpose
-_k_off=$(off_family "$KIT" '' "$_k_rev" $_k_sessions)
-[ -z "$_k_off" ] &&
-	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family (over:$_k_sessions)" ||
-	fail "agents.kit.config.sh: a reviewer walk left the '$_k_rev' family: $(printf '%s' "$_k_off" | tr '\n' ';')"
+# The kit policy's walk is the family walk's above, read once: its answers
+# counted, so it cannot pass empty.
+[ -z "$_k_offfam" ] && [ "$_k_famwalk_n" -gt 0 ] &&
+	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family ($_k_famwalk_n answers over:$_k_sessions)" ||
+	fail "agents.kit.config.sh: a reviewer walk left the '$_k_rev' family, or answered nothing:$_k_offfam"
 _k_off=$(off_family "$KIT" codex "$_k_rev" opus claude-opus-5-5 gpt-5.6-sol "$_k_rev")
 [ -z "$_k_off" ] &&
 	pass "agents.kit.codex.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family" ||
@@ -1331,7 +1333,9 @@ W_OUT=$S_OUT; W_ERR_TEXT=$S_ERR
 # scripts/agents.config.sh tells a reader to use to read the mapping's model
 # half back (ADR-0005 clause 4), and the wrapper forwards the WHOLE signature —
 # so a guard that read $1 alone would let exactly the refused answer through,
-# silently, by the spelling the policy file itself documents.
+# silently, by the spelling the policy file itself documents. Its warning is
+# held equal to the bare form's, not to a domain name: the shared resolver's
+# spent-walk warning names no domain, and the kit's walk is spent at once (#724).
 wrap "$K_SELF" --model reviewer self-implemented
 [ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
 	pass "'--model reviewer self-implemented' is refused like the bare form, printing nothing" ||
