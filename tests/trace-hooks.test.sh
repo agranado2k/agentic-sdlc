@@ -54,6 +54,7 @@ TRACE="$KIT/scripts/trace.sh"
 TODAY=$(date -u +%Y-%m-%d)
 
 failures=0
+SKIPPED=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
@@ -4975,12 +4976,18 @@ banner "54. A transcript finalised just past the kit's wait bound is read by the
 # Section 48 drives the same give-up on a 50 ms bound; what this one adds is
 # the bound read from the kit's own policy and a line landing past it in real
 # time.
+#
+# The bound is pinned here, not read and trusted (#709, PR #703's M-2): the
+# half-second margin below was chosen against 3000 ms, and a delay derived
+# from whatever the policy says would follow a changed bound silently. A new
+# bound fails this leg until the case is re-read against it.
+B674_PINNED=3000
+D674=3500
 B674=$(sed -n "s/^TRACE_AGENT_WAIT_MS='\([1-9][0-9]*\)'$/\1/p" "$KIT/scripts/trace.kit.config.sh")
-[ -n "$B674" ] && pass "the kit's policy names its wait bound ($B674 ms)" ||
-	fail "scripts/trace.kit.config.sh names no TRACE_AGENT_WAIT_MS this section can read"
+[ "$B674" = "$B674_PINNED" ] && pass "the kit's policy names the wait bound this case is built on ($B674_PINNED ms)" ||
+	fail "scripts/trace.kit.config.sh names TRACE_AGENT_WAIT_MS '$B674', not the $B674_PINNED ms this case's $D674 ms delay is built on — re-read the case against the new bound"
 assert_file_has "$KIT/scripts/trace.kit.config.sh" "(#674)" "the kit's bound carries the #674 measurement beside it"
-if [ "$HAVE_NODE" = 1 ] && [ -n "$B674" ]; then
-	D674=$((B674 + 500))
+if [ "$HAVE_NODE" = 1 ]; then
 	head -n 16 "$HB" >"$SCRATCH/hb-late-674.jsonl"
 	sed -n '17,$p' "$HB" >"$SCRATCH/hb-tail-674.jsonl"
 	[ "$(sed -n '$p' "$SCRATCH/hb-late-674.jsonl" | grep -c '"isMeta":true')" = 1 ] &&
@@ -5015,14 +5022,14 @@ if [ "$HAVE_NODE" = 1 ] && [ -n "$B674" ]; then
 		[ "$(str "$F1" outcome)" = fail ] && [ -z "$(num "$F1" tok_out)" ] && [ -z "$(str "$F1" last_msg)" ] &&
 			pass "the first stop gave up, unpriced, and left no anchor" ||
 			fail "the first stop did not give up without an anchor — the line landed inside the bound: $F1"
-		[ "$(str "$F1" waited_ms)" -ge "$B674" ] 2>/dev/null &&
+		[ "$(str "$F1" waited_ms)" -ge "$B674_PINNED" ] 2>/dev/null &&
 			pass "and it gave up at the bound (waited_ms $(str "$F1" waited_ms))" ||
-			fail "the first stop waited '$(str "$F1" waited_ms)' ms, short of the $B674 ms bound: $F1"
+			fail "the first stop waited '$(str "$F1" waited_ms)' ms, short of the $B674_PINNED ms bound: $F1"
 	else
 		note "no millisecond clock on this host: the first stop's give-up at the bound was not asserted"
 	fi
 else
-	note "node is not on PATH, or the kit names no bound: the late hand-back legs did not run"
+	note "node is not on PATH: the late hand-back legs did not run"
 fi
 
 t_done "trace hooks"
