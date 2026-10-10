@@ -67,7 +67,7 @@ advisory_header="WARN  docs conformance"
 # set inside it is lost when the loop ends. The file is the one channel that
 # survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
-trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body"' EXIT INT TERM HUP
+trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen"' EXIT INT TERM HUP
 
 # report <rule> <file> <message> <hint>
 report() {
@@ -379,12 +379,15 @@ if [ "$engine" = "fallback" ]; then
 	fi
 
 	# The skill-dated rule's POSIX twin (validators/skill-dated.mjs, #678): a
-	# <skillsDir>/<skill>/SKILL.md whose fence-stripped body matches one of
-	# the patterns config.mjs's `skillDated` block declares fails, once per
-	# distinct token, unless `<file>|<token>` is on its knownExceptions. The
-	# block is read BY TEXT, one `"<value>",` per line — its patterns are
-	# EREs with no backslash, so grep reads the text node compiles. No block
-	# is no rule — the harness's answer too.
+	# SKILL.md whose fence-stripped body matches one of the patterns
+	# config.mjs's `skillDated` block declares fails, once per distinct
+	# token, unless `<file>|<token>` is on its knownExceptions. Every skill
+	# home is read — the configured one (claudeMdRefs' skillsDir), then
+	# .agents/skills and .claude/skills — once per skill name, the first home
+	# winning, as the harness's skillHomes does. The block is read BY TEXT,
+	# one `"<value>",` per line — its patterns are EREs with no backslash, so
+	# grep reads the text node compiles. No block is no rule — the harness's
+	# answer too.
 	if [ -f "$ls_cfg" ] && command -v fence_strip >/dev/null 2>&1; then
 		sd_block=$(awk '/^const skillDated = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
 		# sd_list <key> — the quoted values of one array in the block.
@@ -392,12 +395,17 @@ if [ "$engine" = "fallback" ]; then
 			printf '%s\n' "$sd_block" | awk -v k="$1" '$0 ~ "^[[:space:]]*" k ":[[:space:]]*\\[" { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' |
 				sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p'
 		}
-		sd_dir=$(printf '%s\n' "$sd_block" | sed -n 's/^[[:space:]]*skillsDir:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+		sd_dir=$(sed -n 's/^[[:space:]]*skillsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)
 		sd_patterns=$(sd_list patterns)
 		sd_known=$(sd_list knownExceptions)
-		if [ -n "$sd_dir" ] && [ -n "$sd_patterns" ]; then
-			for skill in "$sd_dir"/*/SKILL.md; do
+		if [ -n "$sd_patterns" ]; then
+			: >"$vfile.seen"
+			for skill in "${sd_dir:-.agents/skills}"/*/SKILL.md .agents/skills/*/SKILL.md .claude/skills/*/SKILL.md; do
 				[ -f "$skill" ] || continue
+				sd_name=${skill%/SKILL.md}
+				sd_name=${sd_name##*/}
+				grep -qxF -- "$sd_name" "$vfile.seen" && continue
+				printf '%s\n' "$sd_name" >>"$vfile.seen"
 				fence_strip "$skill" >"$vfile.body"
 				printf '%s\n' "$sd_patterns" | while IFS= read -r pat; do
 					grep -o -E -- "$pat" "$vfile.body" 2>/dev/null

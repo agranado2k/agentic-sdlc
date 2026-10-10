@@ -82,8 +82,9 @@ violation. Its POSIX twin in `check.sh` reads `skillCeilings` by text, one
 `skill-dated` fails a `SKILL.md` body that carries dated kit evidence — an
 ISO date, a cite of the kit's retro, an amendment's issue number — once per
 distinct token, because a consumer copies the skill verbatim and reads the
-kit's dates and history as its own. Fenced blocks are skipped and supporting
-files are not read. The patterns and the known exceptions (`<file>|<token>`,
+kit's dates and history as its own. Every skill home is read, once per skill
+name, like the other skill-body scanners. Fenced blocks are skipped, and
+supporting files are not read. The patterns and the known exceptions (`<file>|<token>`,
 today's sites, which a sweep removes) are `skillDated` in `config.mjs`. Rule it
 reports: `skill-dated-evidence`, a violation. Its POSIX twin in `check.sh`
 reads `skillDated` by text, one `"<value>",` per line.

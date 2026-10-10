@@ -5,16 +5,19 @@
 // and history. Dated evidence belongs in the diary and the decision records;
 // the skill keeps the rule and, at most, the record's name (#678).
 //
-// The policy is data in config.mjs's `skillDated` block: the skills
-// directory, the patterns (POSIX EREs, the same text both engines read), and
-// the known exceptions, one `<file>|<token>` each, that a sweep removes. Every
-// `<skillsDir>/<skill>/SKILL.md` is read with its fenced blocks stripped — a
+// The policy is data in config.mjs's `skillDated` block: the patterns (POSIX
+// EREs, the same text both engines read) and the known exceptions, one
+// `<file>|<token>` each, that a sweep removes. The skills directory is
+// `claudeMdRefs.skillsDir`, its one home; like the other skill-body scanners
+// this one enumerates every skill home (skillHomes), once per skill name, the
+// configured home first. Each `<home>/<skill>/SKILL.md` is read with its
+// fenced blocks stripped — a
 // fenced command line's date is an example, not evidence — and each distinct
 // token a pattern matches is one VIOLATION. Supporting files beside a
 // SKILL.md are not its body and are not read. The POSIX twin in
 // scripts/check.sh reads the same block by text and reports the same rule.
 
-import { stripFences } from "./claude-md-refs.mjs";
+import { DEFAULT_SKILLS_DIR, skillHomes, stripFences } from "./claude-md-refs.mjs";
 
 export const id = "skill-dated";
 
@@ -23,9 +26,17 @@ export function run(ctx) {
   if (!cfg) return [];
   const known = new Set(cfg.knownExceptions ?? []);
   const out = [];
-  for (const skill of ctx.list(cfg.skillsDir)) {
-    const file = `${cfg.skillsDir}/${skill}/SKILL.md`;
-    if (ctx.kind(file) !== "file") continue;
+  const seen = new Set();
+  const files = [];
+  for (const home of skillHomes(ctx.config.claudeMdRefs?.skillsDir ?? DEFAULT_SKILLS_DIR)) {
+    for (const skill of ctx.list(home)) {
+      const file = `${home}/${skill}/SKILL.md`;
+      if (seen.has(skill) || ctx.kind(file) !== "file") continue;
+      seen.add(skill);
+      files.push(file);
+    }
+  }
+  for (const file of files) {
     const body = stripFences(ctx.read(file) ?? "");
     const tokens = new Set();
     for (const pattern of cfg.patterns ?? []) {
