@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the implementer session for #630, on the operator's standing delegation of rulings (2026-10-08); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: ADR-0008 clause 7, in one respect — it names one more operator-run reader of the trace (clause 1 below)
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; see the amendment below)
 
 ## Context and problem statement
 
@@ -79,3 +79,37 @@ trace has to be decided.
 - Built by #630. `tests/land.test.sh` section 9 drives the refusal, the
   override and the unconfigured skip against a fixture trace.
 - `/merge-train` records `merge.land` in the landing script's shape under #634.
+
+## Amendment 2026-10-10 — a review verdict at the head (#673)
+
+On 2026-10-09 PR #665's review degraded under a vendor's credit exhaustion and
+posted with no `review.verdict`; the script checked for an iteration at its
+head and not for a review, and landed it (retro `retro-20261009T112925Z`).
+Decided by the implementer session for #673 on the operator's standing
+delegation; the merge of its pull request is the operator's yes.
+
+1. **Clause 1 reads one more kind.** The script reads `show` for
+   `review.verdict` on the PR it lands, beside `pr.iterate`; still no skill
+   gains a read.
+2. **A review is at the head** when a `review.verdict` on `pr:#<N>`, **any
+   axis and any outcome**, is stamped at or after the head commit's committed
+   date — clause 2's comparison. `/pr-iterate` runs `/review-pr` each
+   iteration, so a converged loop's last review follows the head. A `blocked`
+   verdict counts: what the review found is the operator's read on the PR, and
+   whether the checks are green is the gate's.
+3. **With none, the script refuses** as clause 3 says, and one refusal names
+   every check that failed — iteration, review or both — so one run teaches
+   both overrides.
+4. **The override is `--no-review '<reason>'`**, shaped like
+   `--no-iteration`: `merge.land` records `data.reviewed=no` and the reason as
+   `data.no_review`; with a verdict at head, `data.reviewed=yes`, and an
+   unused reason is not recorded.
+5. **A prose-only PR** — a diary stamp, a housekeeping row — that nobody
+   iterated or reviewed is a documented path, not an exception: it lands on
+   both overrides, each naming why (`--no-iteration 'prose-only: diary stamp'
+   --no-review 'prose-only: diary stamp'`), and the retro can count them.
+6. **Unconfigured**, both checks are skipped and stderr says so (clause 5).
+
+`tests/land.test.sh` section 14 drives each branch; the train's `merge.land`
+names neither `reviewed` nor `no_review`, the script's alone like the
+iteration keys (section 10).
