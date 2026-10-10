@@ -4,7 +4,7 @@
 - **Date**: 2026-10-09
 - **Deciders**: the operator (Arthur Granado), ruling of 2026-10-08
 - **Supersedes / amends**: supersedes ADR-0018 clause 1 for the reviewer ("a reviewer value is never a family word") and widens its clause 4 bridge; supersedes the 2026-10-05 amendment of ADR-0007 (#546), under which the `self-implemented` domain named a third, pinned model no session tier ran on
-- **Superseded by**: —
+- **Superseded by**: — (clause 5's third non-goal, the Codex session's policy, superseded by ADR-0022 on 2026-10-10: that policy's reviewer follows the Sonnet family too)
 
 ## Context and problem statement
 
