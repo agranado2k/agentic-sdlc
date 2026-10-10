@@ -215,7 +215,11 @@ seed() {
 	# The keys each kind's shape asks for; one word each, split on purpose.
 	case $_sd_kind in
 	pr.iterate) _sd_data='data.iteration=1 data.applied=0 data.rejected=0 data.escalated=0' ;;
-	*) _sd_data='data.axis=1' ;;
+	*)
+		# `confirm` is Axis 2's word alone, so its verdict is Axis 2's.
+		_sd_data='data.axis=1'
+		[ "$_sd_outcome" != confirm ] || _sd_data='data.axis=2'
+		;;
 	esac
 	for _sd_pr in "$@"; do
 		# shellcheck disable=SC2086
