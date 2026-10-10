@@ -430,4 +430,34 @@ const skillCeilings = {
   ".agents/skills/implement/SKILL.md": 27000,
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillPaths, traceOff };
+/**
+ * skill-dated — dated kit evidence a shipped SKILL.md body may not carry: an
+ * ISO date, a cite of the kit's own retro, an amendment's issue number. A
+ * consumer copies the skill verbatim and reads the kit's dates and history as
+ * its own. Every skill home is read (claudeMdRefs.skillsDir, then the
+ * default and legacy homes), once per skill name. Fenced blocks are skipped;
+ * supporting files beside a SKILL.md are not read. Each pattern is a POSIX ERE with no backslash, so both engines
+ * read the same text.
+ *
+ * knownExceptions are today's sites, one `<skill>|<token>` each (the skill
+ * by name, so the entry holds at any skill home), that the
+ * sweep (#685) removes; a fixed site leaves the list, and the fixture test
+ * fails an entry whose file no longer carries its token.
+ *
+ * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
+ * scripts/check.sh reads this block by text.
+ */
+const skillDated = {
+  patterns: [
+    "[0-9]{4}-[0-9]{2}-[0-9]{2}",
+    "[Tt]he kit's retro",
+    "[Aa]mended,? #[0-9]+",
+  ],
+  knownExceptions: [
+    "pr-iterate|2026-10-01",
+    "review-pr|2026-10-07",
+    "review-pr|the kit's retro",
+  ],
+};
+
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, traceOff };

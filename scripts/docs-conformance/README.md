@@ -46,7 +46,7 @@ the *reference* checks:
 | | Engine | Covers |
 | --- | --- | --- |
 | node on PATH | this harness | layered manuals, slash-command resolution, article reachability, package-relative paths, portability deny-list |
-| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec` and `skill-ceiling` rules' twins — and it prints a NOTICE listing what it is *not* checking |
+| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec`, `skill-ceiling` and `skill-dated` rules' twins — and it prints a NOTICE listing what it is *not* checking |
 
 Set `DOCS_CHECK_NO_NODE=1` to force the fallback. The two share one policy in
 two places (`config.mjs`'s `pathRoots` and `check.sh`'s `path_roots`); that
@@ -78,6 +78,16 @@ declares for it, naming the file, its size and the ceiling; a skill the block
 does not name has no ceiling. Rule it reports: `skill-over-ceiling`, a
 violation. Its POSIX twin in `check.sh` reads `skillCeilings` by text, one
 `"<path>": <bytes>,` per line.
+
+`skill-dated` fails a `SKILL.md` body that carries dated kit evidence — an
+ISO date, a cite of the kit's retro, an amendment's issue number — once per
+distinct token, because a consumer copies the skill verbatim and reads the
+kit's dates and history as its own. Every skill home is read, once per skill
+name, like the other skill-body scanners. Fenced blocks are skipped, and
+supporting files are not read. The patterns and the known exceptions (`<skill>|<token>`,
+today's sites, which a sweep removes) are `skillDated` in `config.mjs`. Rule it
+reports: `skill-dated-evidence`, a violation. Its POSIX twin in `check.sh`
+reads `skillDated` by text, one `"<value>",` per line.
 
 `trace-off` and `reviewer-unmapped` read a policy file's setting rather than
 prose, and both only advise. `trace-off` warns when the trace policy leaves

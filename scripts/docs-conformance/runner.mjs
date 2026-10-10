@@ -14,11 +14,12 @@ import * as mutationDecision from "./validators/mutation-decision.mjs";
 import * as reviewerUnmapped from "./validators/reviewer-unmapped.mjs";
 import * as skillBridge from "./validators/skill-bridge.mjs";
 import * as skillCeiling from "./validators/skill-ceiling.mjs";
+import * as skillDated from "./validators/skill-dated.mjs";
 import * as skillPaths from "./validators/skill-paths.mjs";
 import * as skillWeb from "./validators/skill-web.mjs";
 import * as traceOff from "./validators/trace-off.mjs";
 
-export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillBridge, skillCeiling, skillPaths, skillWeb, traceOff];
+export const VALIDATORS = [bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillBridge, skillCeiling, skillDated, skillPaths, skillWeb, traceOff];
 
 /** Run all validators against the context; returns a flat list of findings —
  * violations and warnings alike. `index.mjs` splits them by severity; only it
