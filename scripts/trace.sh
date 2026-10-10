@@ -646,12 +646,19 @@ trace_key() {
 		TRACE_KEY_SESSION=$(trace_pointer_session)
 	fi
 	if trace_session_ok "$TRACE_KEY_SESSION"; then
-		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.$TRACE_KEY_SESSION.runs"
+		TRACE_STACK=$(trace_stack_name "$TRACE_KEY_SESSION")
 	else
-		TRACE_STACK="$TRACE_ROOT_DIR/current/$TRACE_KEY.runs"
+		TRACE_STACK=$(trace_stack_name '')
 	fi
 	_trace_keyed=1
 	return 0
+}
+
+# trace_stack_name <session> — the one spelling of a run stack's path under
+# TRACE_KEY: current/<key>.<session>.runs, or current/<key>.runs for an empty
+# session. `stack --all` hands it `*` and reads the answer as a pattern.
+trace_stack_name() {
+	printf '%s/current/%s%s.runs' "$TRACE_ROOT_DIR" "$TRACE_KEY" "${1:+.$1}"
 }
 
 # trace_session_ok <id> — 0 for a session a stack can be keyed on: non-empty,
@@ -1230,18 +1237,22 @@ trace_stack_of() {
 }
 
 # trace_stack_tops <dir> — `stack --all`'s answer: the top of every stack keyed
-# on TRACE_KEY, the per-toplevel one and each session's, read one at a time
-# through trace_stack so the format stays that reader's. The tops are gathered
-# before any is printed, so a refusal leaves stdout empty. Pathname expansion
-# is on for the one glob and off again before anything else runs.
+# on TRACE_KEY, the per-toplevel one and each session's, named by
+# trace_stack_name and read one at a time through trace_stack, so the path and
+# the format stay those helpers'. The tops are gathered before any is printed,
+# so a refusal leaves stdout empty. Pathname expansion is on for the one
+# directory listing and off again before anything else runs.
 trace_stack_tops() {
 	_st_dir=$1
 	_st_out=
+	_st_own=$(trace_stack_name '')
+	_st_any=$(trace_stack_name '*')
 	_st_set=$-
 	set +f
-	set -- "$TRACE_ROOT_DIR/current/$TRACE_KEY.runs" "$TRACE_ROOT_DIR/current/$TRACE_KEY".*.runs
+	set -- "$TRACE_ROOT_DIR/current"/*
 	case $_st_set in *f*) set -f ;; esac
 	for TRACE_STACK in "$@"; do
+		case $TRACE_STACK in "$_st_own" | $_st_any) ;; *) continue ;; esac
 		[ -e "$TRACE_STACK" ] || continue
 		trace_stack_readable || die "cannot read the run stack of $_st_dir"
 		_st_top=$(trace_stack top) || die "cannot read the run stack of $_st_dir"
