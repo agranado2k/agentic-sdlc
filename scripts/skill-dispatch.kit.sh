@@ -78,7 +78,11 @@ die() { echo "skill-dispatch: $1" >&2; exit 2; }
 # rather than spelled here (#681). is_tier <word> — is it one of them? A
 # shaped word holds no space, so contiguous text inside the padded list
 # (`planner implementer`) never passes as a member.
-tier_names() { (. "$ROOT/scripts/agents.lib.sh" && agents_tier_names); }
+# Read once, here: a resolver that cannot be sourced stops the dispatcher
+# loudly rather than leaving it an empty vocabulary.
+TIER_NAMES=$(. "$ROOT/scripts/agents.lib.sh" 2>/dev/null && agents_tier_names) && [ -n "$TIER_NAMES" ] ||
+	die "cannot read the tier names from $ROOT/scripts/agents.lib.sh"
+tier_names() { printf '%s' "$TIER_NAMES"; }
 is_tier() {
 	case $1 in '' | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1 ;; esac
 	case " $(tier_names) " in *" $1 "*) return 0 ;; esac

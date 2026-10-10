@@ -243,5 +243,11 @@ s_assert_err_has "The vocabulary is closed: planner implementer tester mechanica
 t_run_split sh "$KIT/scripts/agent-dispatch.sh"
 s_assert_err_has "tier is one of: planner implementer mechanical reviewer" "the agent-harness dispatcher's usage names the resolver's tiers"
 
+# A skill dispatcher with no resolver beside it says so, never "closed: ."
+mkdir -p "$SCRATCH/lonely/scripts"
+cp "$KIT/scripts/skill-dispatch.kit.sh" "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.kit.config.sh" "$SCRATCH/lonely/scripts/"
+t_run_split sh "$SCRATCH/lonely/scripts/skill-dispatch.kit.sh" --phase-tier reviewer
+s_assert_status 2 "a skill dispatcher with no resolver beside it exits 2"
+s_assert_err_has "cannot read the tier names" "…and says it could not read the tier names"
 
 t_done "vocab-policy"
