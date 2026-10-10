@@ -245,6 +245,16 @@ assert_out_has "Removing merged worktree $REPO/worktree/held"
 wt_has_worktree held && fail "the held worktree survived after its run closed" ||
 	pass "once its run is closed, the held worktree is pruned"
 
+# Tracing off is no evidence either way: the open run is not seen, and the
+# merged, clean worktree is pruned exactly as before #680.
+live_fixture
+wc_trace "$REPO/worktree/held" live-session begin implement >/dev/null
+WC_OFF="$SCRATCH/wc-trace-680.off.sh"
+printf "TRACE_DIR=''\n" >"$WC_OFF"
+TRACE_CONFIG="$WC_OFF" TRACE_SESSION=the-cleanup wt_run
+assert_out_has "Removing merged worktree $REPO/worktree/held"
+assert_out_lacks "live:"
+
 # A trace that cannot answer keeps the worktree, naming the refusal: a partial
 # "nothing open" must never read as leave to prune.
 if [ "$(id -u)" != 0 ]; then
