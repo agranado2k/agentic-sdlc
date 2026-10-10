@@ -466,11 +466,12 @@ const skillDated = {
  * clause) obliges each record it names to carry its id on the "Superseded
  * by" line. recordsDir is where the records live, `NNNN-*.md` each.
  *
- * knownExceptions are today's open links, one `<superseded>|<superseding>`
- * each, both records named by file name without `.md` (a bare number would
- * silence a consumer's own records of the same numbers), that the sweep (#686)
- * closes; a closed link leaves the list, and the
- * fixture test fails an entry that is no longer one-sided.
+ * knownExceptions are open links excused for now, one
+ * `<superseded>|<superseding>` each, both records named by file name without
+ * `.md` (a bare number would silence a consumer's own records of the same
+ * numbers). Empty since the sweep (#686) closed the last two; a closed link
+ * leaves the list, and the fixture test fails an entry that is no longer
+ * one-sided.
  *
  * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
  * scripts/check.sh reads this block by text.
