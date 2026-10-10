@@ -183,19 +183,25 @@ trace_read() {
 }
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
-# One value per line: a title is the only free text, and it comes last.
+# One `name=value` line per field, every value folded onto one line, and each
+# read back by its name (#684): reordering the query, or a forge answering the
+# fields in another order, never shifts one field into another.
 STATE=$(gh pr view "$PR" --json state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,closingIssuesReferences,headRefName,title \
-	--jq '.state, (.isDraft|tostring), .mergeable, .mergeStateStatus, (.reviewDecision // ""), .baseRefName, ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), (.headRefName // ""), .title') ||
+	--jq '{state, isDraft, mergeable, mergeStateStatus, reviewDecision: (.reviewDecision // ""), baseRefName,
+		ticket: ((.closingIssuesReferences // []) | map(.number|tostring) | first // ""), headRefName: (.headRefName // ""), title}
+		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"') ||
 	refuse "the forge did not answer for it"
-field() { printf '%s\n' "$STATE" | sed -n "${1}p"; }
-[ "$(field 1)" = OPEN ] || refuse "it is $(field 1), not open"
-[ "$(field 2)" = false ] || refuse "it is a draft"
-[ "$(field 5)" != CHANGES_REQUESTED ] || refuse "a human review requests changes"
-[ "$(field 3)" = MERGEABLE ] || refuse "it is not mergeable ($(field 3)) — send it to /pr-iterate"
-case $(field 4) in
+# named <answer> <name> — the value of the one line named <name>, or nothing.
+named() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -n 1; }
+field() { named "$STATE" "$1"; }
+[ "$(field state)" = OPEN ] || refuse "it is $(field state), not open"
+[ "$(field isDraft)" = false ] || refuse "it is a draft"
+[ "$(field reviewDecision)" != CHANGES_REQUESTED ] || refuse "a human review requests changes"
+[ "$(field mergeable)" = MERGEABLE ] || refuse "it is not mergeable ($(field mergeable)) — send it to /pr-iterate"
+case $(field mergeStateStatus) in
 CLEAN | HAS_HOOKS) ;;
 BEHIND) refuse "it is behind its base — a train updates it through the forge first" ;;
-*) refuse "its merge state is $(field 4), not clean" ;;
+*) refuse "its merge state is $(field mergeStateStatus), not clean" ;;
 esac
 gh pr checks "$PR" >/dev/null 2>&1
 case $? in
@@ -228,9 +234,11 @@ at_head() {
 if [ -z "$(trace_read dir)" ]; then
 	note "the trace is unconfigured — whether /pr-iterate ran and /review-pr recorded a verdict at the head of PR #$PR is not checked"
 else
-	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h | $h, ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")' 2>/dev/null) || HEAD=
-	HEAD_OID=$(printf '%s\n' "$HEAD" | sed -n 1p)
-	HEAD_AT=$(printf '%s\n' "$HEAD" | sed -n 2p)
+	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h
+		| {oid: $h, committedDate: ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")}
+		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"' 2>/dev/null) || HEAD=
+	HEAD_OID=$(named "$HEAD" oid)
+	HEAD_AT=$(named "$HEAD" committedDate)
 	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
 	ITERATED=no
 	REVIEWED=no
@@ -253,9 +261,9 @@ else
 	[ "$REVIEWED" = yes ] || note "no /review-pr verdict at the head commit $HEAD_OID — landing on --no-review, recorded"
 fi
 
-BASE=$(field 6)
-[ -n "$TICKET" ] || TICKET=$(field 7)
-TITLE=$(field 9)
+BASE=$(field baseRefName)
+[ -n "$TICKET" ] || TICKET=$(field ticket)
+TITLE=$(field title)
 if [ -n "$TICKET" ]; then
 	FB_SUBJECT="ticket:#$TICKET"
 	set -- "related=ticket:#$TICKET"
@@ -278,7 +286,7 @@ if [ -n "$(trace_read dir)" ] &&
 	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
 	_po_rel=
 	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
-	_po_branch=$(field 8 | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
+	_po_branch=$(field headRefName | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
 	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
 	# The landing's own arguments sit in "$@" for step 2: the optional field
 	# is spelled as an argument only when it is there, never by `set --`.

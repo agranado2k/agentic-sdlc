@@ -1235,5 +1235,72 @@ if [ -n "$missing_oracles_bait" ]; then
 else
 	fail "the oracle probe failed to detect a measurement missing its oracle — the check is vacuous"
 fi
+# ---------------------------------------------------------------------------
+banner "H. A record takes at most five in-place amendments (ADR-0021)"
+# ---------------------------------------------------------------------------
+# An amendment is counted where the record's header names it: every dated
+# note starting "amend" between the title and the first section. Past five,
+# a record's next change is a consolidating successor, never another
+# amendment. The records already past the cap when ADR-0021 was decided are
+# held at the count they had, and ADR-0021 names those ceilings on one line
+# this section reads, so the record and the check cannot drift apart. A
+# superseded record is skipped.
+ADR_AMEND_CAP=5
+ADR_AMEND_FROZEN=$(sed -n 's/.*`frozen: \([0-9: ]*\)`.*/\1/p' "$KIT"/docs/adr/0021-*.md 2>/dev/null)
+[ -n "$ADR_AMEND_FROZEN" ] &&
+	pass "ADR-0021 names the frozen amendment ceilings: $ADR_AMEND_FROZEN" ||
+	fail "ADR-0021 names no \`frozen: NNNN:N …\` line — section H has no ceilings to read"
+adr_amendments() {
+	sed -n '1,/^## /p' "$1" | grep -oi 'amend[a-z ]* [0-9][0-9]*-[0-9][0-9]*-[0-9][0-9]*' | wc -l | tr -d ' '
+}
+adr_amend_violations() { # <adr dir>
+	for a in "$1"/0*.md; do
+		[ -f "$a" ] || continue
+		grep -q '^- \*\*Status\*\*: Superseded' "$a" && continue
+		n=$(adr_amendments "$a")
+		num=$(basename "$a" | cut -c1-4)
+		ceiling=$ADR_AMEND_CAP
+		for fz in $ADR_AMEND_FROZEN; do
+			[ "${fz%%:*}" = "$num" ] && ceiling=${fz#*:}
+		done
+		[ "$n" -gt "$ceiling" ] && printf '%s names %s amendments, ceiling %s\n' "$(basename "$a")" "$n" "$ceiling"
+	done
+	return 0
+}
+over=$(adr_amend_violations "$KIT/docs/adr")
+if [ -z "$over" ]; then
+	pass "no live record names more in-place amendments than its ceiling"
+else
+	fail "a record is past its amendment ceiling — its next change is a successor (ADR-0021):"
+	printf '%s\n' "$over" | sed 's/^/        | /'
+fi
+
+# Bait, built from scratch so it outlives the records it imitates: a sixth
+# amendment on an ordinary record, one more than a frozen ceiling allows
+# (worded "Amends", to hold the wider match), and a superseded record far
+# past the cap, which must stay silent.
+AMEND_BAIT="$SCRATCH/adr.amend-bait"
+mkdir -p "$AMEND_BAIT"
+amend_bait() { # <file> <status> <count> <word>
+	{
+		printf '# ADR: bait\n\n- **Status**: %s\n- **Superseded by**: — (' "$2"
+		k=0
+		while [ "$k" -lt "$3" ]; do k=$((k + 1)); printf '%s 2026-10-%02d, #1; ' "$4" "$k"; done
+		printf ')\n\n## Context\n'
+	} >"$AMEND_BAIT/$1"
+}
+frozen_one=${ADR_AMEND_FROZEN%% *}
+amend_bait 0001-bait.md Accepted $((ADR_AMEND_CAP + 1)) amended
+amend_bait "${frozen_one%%:*}-bait.md" Accepted $((${frozen_one#*:} + 1)) Amends
+amend_bait 0002-bait.md 'Superseded by 0099' 30 amended
+bait=$(adr_amend_violations "$AMEND_BAIT")
+case "$bait" in
+*0001-bait.md*"${frozen_one%%:*}-bait.md"*) pass "the amendment probe catches a sixth amendment and a frozen record that grew" ;;
+*) fail "the amendment probe missed its bait — the check is vacuous: ${bait:-nothing reported}" ;;
+esac
+case "$bait" in
+*0002-bait.md*) fail "the amendment probe counted a superseded record: $bait" ;;
+*) pass "the amendment probe skips a superseded record" ;;
+esac
 
 t_done "self-host"

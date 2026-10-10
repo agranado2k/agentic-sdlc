@@ -2340,4 +2340,97 @@ done
 sed -n '/Amended 2026-10-09 (#663)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'data.lenses' &&
 	pass "ADR-0008 carries the #663 amendment naming data.lenses" || fail "ADR-0008 has no 'Amended 2026-10-09 (#663)' naming data.lenses"
 
+# ---------------------------------------------------------------------------
+banner "34. stack <dir> --all prints the open run of every session in that checkout (ticket #680)"
+# ---------------------------------------------------------------------------
+# A worktree cleanup stands in the root checkout and has to tell a worktree a
+# live session still holds from a finished one — and it knows no session id:
+# the session holding the worktree is somebody else's. Since #453 each session
+# keeps its own stack, so `stack <dir>` alone reads only the stack of the one
+# session it is told about. `--all` is the question the cleanup asks: the top
+# of every stack that checkout holds, one run per line, nothing when no run is
+# open anywhere in it. It reads stacks, never an event, and writes nothing.
+t_repo
+AL_REPO=$REPO
+mkdir -p "$AL_REPO/scripts"
+cp "$TRACE" "$AL_REPO/scripts/trace.sh"
+t_commit "$AL_REPO" "chore: carry the trace script" >/dev/null
+git -C "$AL_REPO" worktree add -q "$AL_REPO/worktree/al" -b feat/al 2>/dev/null || fail "could not add a linked worktree"
+AL_WT="$AL_REPO/worktree/al"
+AL="$SCRATCH/stack-all-680"; ALON=$(policy "$AL")
+al_begin() { (cd "$1" && env TRACE_CONFIG="$ALON" TRACE_SESSION="$2" sh scripts/trace.sh begin "$3" 2>/dev/null); }
+al_ask() { t_run_split env TRACE_CONFIG="$ALON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$@"; }
+al_sorted() { printf '%s\n' "$@" | sort; }
+al_ask "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+	pass "--all on a checkout with no run open anywhere: exit 0, nothing on either stream" ||
+	fail "--all, nothing open: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+AL_A1=$(al_begin "$AL_WT" al-a implement)
+AL_A2=$(al_begin "$AL_WT" al-a review-pr)
+AL_B=$(al_begin "$AL_WT" al-b implement)
+AL_N=$(al_begin "$AL_WT" '' retro)
+[ -n "$AL_A1" ] && [ -n "$AL_A2" ] && [ -n "$AL_B" ] && [ -n "$AL_N" ] &&
+	pass "two sessions and a session-less caller each open a run in the worktree" ||
+	fail "the begins printed '$AL_A1' '$AL_A2' '$AL_B' '$AL_N'"
+al_ask "$AL_WT"
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "without --all, a caller of another session sees none of them — the gap --all closes" ||
+	fail "stack without --all, another session: exit $S_STATUS, stdout '$S_OUT'"
+al_ask "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_B" "$AL_N")" ] && [ -z "$S_ERR" ] &&
+	pass "--all prints the top of every session's stack and of the session-less one, one per line" ||
+	fail "--all: exit $S_STATUS, stdout '$S_OUT', want $AL_A2 $AL_B $AL_N; stderr '$S_ERR'"
+al_ask "$AL_REPO" --all
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
+	fail "--all on the idle root: exit $S_STATUS, stdout '$S_OUT'"
+AL_R=$(al_begin "$AL_REPO" al-a implement)
+al_ask "$AL_WT" --all
+case $S_OUT in *"$AL_R"*) fail "--all on the worktree printed the root's run: $S_OUT" ;; *) pass "a run open in another checkout of the repository is not this one's" ;; esac
+(cd "$AL_WT" && env TRACE_CONFIG="$ALON" TRACE_SESSION=al-b sh scripts/trace.sh end "$AL_B" outcome=ok 2>/dev/null)
+al_ask "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_N")" ] &&
+	pass "a closed run leaves --all, and an emptied stack prints nothing" ||
+	fail "after al-b's end: exit $S_STATUS, stdout '$S_OUT'"
+assert_status 2 "--all with a session= is a usage error — it names every session" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" --all session=al-a
+assert_status 2 "and so is session= before --all" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" session=al-a --all
+AL_KEY=$(printf '%s' "$(git -C "$AL_WT" rev-parse --show-toplevel)" | git hash-object --stdin)
+if [ "$(id -u)" != 0 ]; then
+	chmod 000 "$AL/current/$AL_KEY.al-a.runs"
+	al_ask "$AL_WT" --all
+	chmod 600 "$AL/current/$AL_KEY.al-a.runs"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL_KEY.al-a.runs exists and cannot be read"*) true ;; *) false ;; esac &&
+		pass "one stack that exists and cannot be read refuses the whole answer, exit 2, naming it" ||
+		fail "--all over an unreadable stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	# A run directory that cannot be listed hides every stack in it: refused
+	# too, never answered as "nothing open".
+	chmod 000 "$AL/current"
+	al_ask "$AL_WT" --all
+	chmod 700 "$AL/current"
+	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL/current"*) true ;; *) false ;; esac &&
+		pass "a run directory that cannot be listed refuses the answer, exit 2, naming it" ||
+		fail "--all over an unlistable run directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+else
+	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
+fi
+# A trace root whose path carries a glob character still finds every stack:
+# a stack missed would read as "nothing open", the unsafe direction.
+AL2="$SCRATCH/stack-all-[680]"; AL2ON=$(policy "$AL2")
+AL2_RUN=$(cd "$AL_WT" && env TRACE_CONFIG="$AL2ON" TRACE_SESSION=al-g sh scripts/trace.sh begin implement 2>/dev/null)
+t_run_split env TRACE_CONFIG="$AL2ON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ -n "$AL2_RUN" ] && [ "$S_OUT" = "$AL2_RUN" ] &&
+	pass "a trace root named with [ ] still yields its session's open run" ||
+	fail "--all under a bracketed trace root: exit $S_STATUS, stdout '$S_OUT', want '$AL2_RUN'; stderr '$S_ERR'"
+t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, --all prints nothing and exits 0" ||
+	fail "unconfigured --all: exit $S_STATUS, stdout '$S_OUT'"
+t_run_split sh "$TRACE"
+case $S_ERR in *'trace.sh stack <dir> --all'*) pass "the usage names stack <dir> --all" ;; *) fail "the usage does not name 'stack <dir> --all': $S_ERR" ;; esac
+sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> --all' &&
+	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> --all"
+_al_adr=$(ls "$KIT"/docs/adr/0023-*.md 2>/dev/null | head -n 1)
+[ -n "$_al_adr" ] && grep -qF 'stack <dir> --all' "$_al_adr" && grep -qF 'amends ADR-0008' "$_al_adr" &&
+	pass "ADR-0023 records stack <dir> --all, as a record that amends ADR-0008 (ADR-0021 clause 4)" ||
+	fail "no docs/adr/0023-*.md naming 'stack <dir> --all' and saying it amends ADR-0008"
+
 t_done "trace script"
