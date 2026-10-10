@@ -418,6 +418,41 @@ if [ "$engine" = "fallback" ]; then
 			done
 		fi
 	fi
+
+	# The supersession rule's POSIX twin (validators/supersession.mjs, #683):
+	# a record `<recordsDir>/NNNN-*.md` whose "Supersedes / amends" line has a
+	# `;`-separated clause opening "supersedes" (any case) obliges every
+	# ADR-NNNN that clause names — itself and a record with no file aside — to
+	# carry its id on the "Superseded by" line, unless
+	# `<superseded>|<superseding>`, by record number, is on the knownExceptions. The block is read
+	# BY TEXT from config.mjs's `supersession` block; no block is no rule.
+	if [ -f "$ls_cfg" ]; then
+		ss_block=$(awk '/^const supersession = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
+		ss_dir=$(printf '%s\n' "$ss_block" | sed -n 's/^[[:space:]]*recordsDir:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+		ss_known=$(printf '%s\n' "$ss_block" | awk '/^[[:space:]]*knownExceptions:[[:space:]]*\[/ { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' |
+			sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p')
+		if [ -n "$ss_dir" ] && [ -d "$ss_dir" ]; then
+			for rec in "$ss_dir"/[0-9][0-9][0-9][0-9]-*.md; do
+				[ -f "$rec" ] || continue
+				ss_self=ADR-$(basename "$rec" | cut -c1-4)
+				sed -n 's/^- \*\*Supersedes \/ amends\*\*:\(.*\)$/\1/p' "$rec" | head -1 | tr ';' '\n' |
+					sed 's/^[[:space:]]*//' | grep -iE '^supersedes([^[:alnum:]_]|$)' |
+					grep -oE 'ADR-[0-9]{4}' | sort -u | while IFS= read -r ss_id; do
+					[ "$ss_id" = "$ss_self" ] && continue
+					ss_old=""
+					for f in "$ss_dir/${ss_id#ADR-}"-*.md; do
+						[ -f "$f" ] && { ss_old=$f; break; }
+					done
+					[ -n "$ss_old" ] || continue
+					sed -n 's/^- \*\*Superseded by\*\*:\(.*\)$/\1/p' "$ss_old" | head -1 | grep -qF -- "$ss_self" && continue
+					printf '%s\n' "$ss_known" | grep -qxF -- "${ss_id#ADR-}|${ss_self#ADR-}" && continue
+					report "supersession-one-sided" "$ss_old" \
+						"$ss_id is superseded by $ss_self (its \"Supersedes / amends\" line says so), but $ss_id's \"Superseded by\" line does not name $ss_self" \
+						"Name $ss_self on $ss_id's \"Superseded by\" line, and in what respect — the old record is where a reader learns it stopped binding."
+				done
+			done
+		fi
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -428,7 +463,8 @@ if [ "$engine" = "fallback" ]; then
 	echo "        Checked: unstamped placeholders, shared-layer manifest, repo paths in the manual layer," >&2
 	echo "        living specs against the test globs (the living-spec rule, its POSIX twin)," >&2
 	echo "        skill byte ceilings (the skill-ceiling rule, its POSIX twin)," >&2
-	echo "        and dated kit evidence in skill bodies (the skill-dated rule, its POSIX twin)." >&2
+	echo "        dated kit evidence in skill bodies (the skill-dated rule, its POSIX twin)," >&2
+	echo "        and supersession held both ways between decision records (the supersession rule, its POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2
