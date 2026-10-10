@@ -334,7 +334,7 @@ Run it in the foreground: a wait with no bound, left in the background, is one o
 
 Stop iterating and report when ANY of:
 
-- All required checks green **AND** no open bot threads **AND** no unanswered human threads → ✅ converged
+- All required checks green **AND** no open bot threads **AND** no unanswered human threads **AND** a `review.verdict` recorded after the commit of the head this iteration leaves → ✅ converged. Step 2 ran before step 4's push, so an iteration that pushed must run `/review-pr` again on that head (do NOT post, as step 2 says) before it records `green`: the landing refuses a head no verdict judged. When that review leaves a finding to act on, record `red` instead, the review named as its reason — the next iteration triages it first
 - The only reds left are release-bound (step 3) → 🛑 stopped at the first release-bound red: record it — `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=stopped data.iteration=<i> data.check='<the check by name>' reason='release-bound — <the check by name>' || :`, in place of the iteration's line below — report the check to the operator by name with the line its output carried, and end with `Next: stop — release-bound: <the check by name>` — ending a `/loop` is the operator's, and no later iteration fixes or re-runs the red
 - 5 iterations completed without convergence (likely stuck) → 🟡 escalate with diagnosis
 - A bot suggestion conflicts with a binding record and you can't reply confidently → 🟡 escalate

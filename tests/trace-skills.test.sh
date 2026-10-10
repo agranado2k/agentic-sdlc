@@ -1932,4 +1932,43 @@ for b in \
 	fi
 done
 
+
+# ---------------------------------------------------------------------------
+banner "30. A converged iteration leaves a head a review.verdict judged (#699)"
+# ---------------------------------------------------------------------------
+# PR #696: /pr-iterate pushed a review fix and reported converged, and the
+# landing script refused it — no review.verdict at its head commit. Step 2's
+# review runs before the iteration's push, so its verdict always predates the
+# head the iteration leaves. The rule: converged needs a review.verdict on the
+# head left; an iteration that pushed runs /review-pr again on the new head,
+# not posting, before it records green, and a finding that review leaves to
+# act on makes the iteration not converged, so the next one triages it first.
+# pushed_review_missing <skill file> — one word per claim the stop conditions drop.
+pushed_review_missing() {
+	_pr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^### / { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	printf '%s\n' "$_pr_sc" | grep -qE 'unanswered human threads \*\*AND\*\* a `review\.verdict`[^→]*head[^→]*→ ✅ converged' || echo converged-needs-verdict
+	printf '%s\n' "$_pr_sc" | grep -qiE 'iteration that pushed[^.]*run `/review-pr` again on (that|the new) head' || echo pushed-rereviews
+	printf '%s\n' "$_pr_sc" | grep -qE 'again on (that|the new) head \(do NOT post' || echo rereview-unposted
+	printf '%s\n' "$_pr_sc" | grep -qiE 'before (it records|recording) `green`' || echo before-green
+	printf '%s\n' "$_pr_sc" | grep -qiE 'finding[^.]*to act on[^.]*record `red`[^.]*next iteration' || echo finding-not-converged
+}
+PIM=$(skill_md pr-iterate)
+_pr=$(pushed_review_missing "$PIM")
+[ -z "$_pr" ] && pass "/pr-iterate converges only on a head a review.verdict judged; a pushed head is reviewed again first" ||
+	fail "/pr-iterate drops: $(echo $_pr)"
+# Baits: one per claim, so none survives its own deletion.
+for b in \
+	's/\*\*AND\*\* a `review\.verdict`/**AND** a fresh review/' \
+	's/run `\/review-pr` again on that head/run step 2 again/' \
+	's/again on that head (do NOT post/again on that head (post/' \
+	's/before it records `green`/after it records `green`/' \
+	's/record `red` instead/record `green` anyway/'; do
+	sed "$b" "$PIM" >"$SCRATCH/bait699.md"
+	if ! cmp -s "$SCRATCH/bait699.md" "$PIM" && [ -n "$(pushed_review_missing "$SCRATCH/bait699.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"
