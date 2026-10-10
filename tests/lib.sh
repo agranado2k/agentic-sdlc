@@ -411,7 +411,7 @@ _t_ob='{'
 _t_cb='}'
 t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 
-# SUITE SCRATCH NAMES ITSELF (#221), and stale scratch is swept.
+# SUITE SCRATCH NAMES ITSELF (#221), and abandoned scratch is swept.
 #
 # A suite that hits its budget ceiling (#209) is killed before its trap runs,
 # by design — so its scratch outlives it. `mktemp -d` with no template names
@@ -421,16 +421,18 @@ t_mark() { printf '%s%s%s%s%s' "$_t_ob" "$_t_ob" "$1" "$_t_cb" "$_t_cb"; }
 #
 # scripts/agent-dispatch.sh solved exactly this one layer down (#210) and
 # this is the same answer, in the same shape: a PREFIX, so what a killed run
-# leaves is identifiable by name alone, and a SWEEP of what is older than a
-# run could plausibly still be. The three rules of that sweep are the
-# dispatcher's, and they are what make it safe on a shared /tmp: only
-# directories carrying the prefix, only those older than the age, and nothing
+# leaves is identifiable by name alone, and a SWEEP at the next suite's start.
+# The sweep judges by OWNER first (#676, below): scratch whose recorded owner
+# is alive is kept, and ours whose owner is gone is removed at once. Only what
+# names no owner this run can judge falls to the AGE rule, the dispatcher's:
+# older than a run could plausibly still be. Every rule keeps the dispatcher's
+# safety on a shared /tmp: only directories carrying the prefix, and nothing
 # followed through a symlink.
 #
-# T_SCRATCH_SWEEP_DAYS is the age, in whole days. The default is deliberately
-# generous — a suite is minutes, not days, so a day-old directory is certainly
-# abandoned — and an operator who runs suites that legitimately outlive it can
-# raise it in their environment.
+# T_SCRATCH_SWEEP_DAYS is that fallback age, in whole days. The default is
+# deliberately generous — a suite is minutes, not days, so a day-old directory
+# is certainly abandoned — and an operator who runs suites that legitimately
+# outlive it can raise it in their environment.
 # The prefix is a CONSTANT, exactly as scripts/agent-dispatch.sh's is, and for
 # the same reason: it is the `-name` of a `find … -exec rm -rf` on a directory
 # every program on the host shares. An overridable one puts that removal on the
