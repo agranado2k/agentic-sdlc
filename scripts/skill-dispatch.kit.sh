@@ -37,7 +37,9 @@
 # and `--tier` (with optional `--domain`) OVERRIDES it. A dispatcher that
 # ignored the stamp would quietly replace a decomposer's decision with a skill
 # author's, which is the same failure in the opposite direction from an agent
-# sizing itself. `--dry-run` names which of the two answered.
+# sizing itself. `--dry-run` names which of the two answered. With no
+# `--tier`, a `--ticket-file`'s own stamp is that override (#672), read
+# through scripts/stamp.sh; a file with none leaves the phase answering.
 #
 # WHY `tester` IS NOT A TIER. The four tier names are a CLOSED vocabulary (an
 # unknown one is exit 2, and widening it is a resolver change, a manual change
@@ -197,6 +199,50 @@ while [ "$_count" -gt 0 ]; do
 	esac
 done
 
+# _fs_read_stamp — the --ticket-file's stamp, as TIER_ARGS, when no --tier was
+# given (#672). Without it, `implement --ticket-file <f>` was sized by the
+# skill's phase whatever the file said, and a mechanical ticket never reached
+# the cascade unless its caller repeated the tier by hand.
+#
+# The file is ticket text, untrusted, so it is read THROUGH scripts/stamp.sh —
+# its lift, its bound and its checker, never a second reading of the body
+# here. stamp.sh fetches by issue number and is shared layer (a file form of
+# its own would be a release action), so a stand-in `gh` on its PATH hands it
+# the file as the tracker's answer. Its exits keep their meaning: 0 the
+# checked lines, of which only the Tier: and Domain: values are taken; 3 no
+# stamp, and the skill's phase answers, said; anything else is a stop, exit
+# 2, the refused text never printed. Sets TIER_ARGS, or _fs_none on exit 3.
+_fs_read_stamp() {
+	[ -f "$CASCADE_TICKET" ] || die "--ticket-file '$CASCADE_TICKET' is not a file"
+	if [ ! -f "$ROOT/scripts/stamp.sh" ]; then
+		_fs_none=1
+		return 0
+	fi
+	_fs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-dispatch-stamp.XXXXXX") || die "no scratch to read the ticket file's stamp"
+	printf '#!/bin/sh\nexec cat "$SKILL_DISPATCH_TICKET_FILE"\n' >"$_fs_tmp/gh"
+	chmod +x "$_fs_tmp/gh"
+	_fs_rc=0
+	_fs_lines=$(PATH="$_fs_tmp:$PATH" SKILL_DISPATCH_TICKET_FILE=$CASCADE_TICKET \
+		sh "$ROOT/scripts/stamp.sh" "${TICKET:-0}" 2>"$_fs_tmp/err") || _fs_rc=$?
+	_fs_err=$(cat "$_fs_tmp/err")
+	rm -rf "$_fs_tmp"
+	case "$_fs_rc" in
+	0) ;;
+	3)
+		_fs_none=1
+		return 0
+		;;
+	*) die "the ticket file's stamp was not read (stamp.sh exit $_fs_rc): ${_fs_err:-no reason given}" ;;
+	esac
+	# The checked lines only: a value the checker passed, one word each.
+	_fs_tier=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Tt][Ii][Ee][Rr][[:space:]]*:[[:space:]]*\([a-z]*\)[[:space:]]*$/\1/p' | head -n 1)
+	_fs_domain=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Dd][Oo][Mm][Aa][Ii][Nn][[:space:]]*:[[:space:]]*\([a-z-]*\)[[:space:]]*$/\1/p' | head -n 1)
+	case "$_fs_tier" in
+	planner | implementer | mechanical | reviewer) TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}" ;;
+	*) _fs_none=1 ;;
+	esac
+}
+
 if [ -n "$OVERRIDE_TIER" ]; then
 	case "$OVERRIDE_TIER" in
 	planner | implementer | mechanical | reviewer) ;;
@@ -206,8 +252,15 @@ if [ -n "$OVERRIDE_TIER" ]; then
 	TIER_SOURCE="the ticket's stamp"
 else
 	[ -z "$OVERRIDE_DOMAIN" ] || die "--domain without --tier: a domain is the second half of a ticket's stamp, not a sizing of its own"
-	TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
-	TIER_SOURCE="$SKILL's own phase"
+	TIER_ARGS=''
+	_fs_none=''
+	[ -z "$CASCADE_TICKET" ] || _fs_read_stamp
+	if [ -n "$TIER_ARGS" ]; then
+		TIER_SOURCE="the ticket file's stamp"
+	else
+		TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
+		TIER_SOURCE="$SKILL's own phase${_fs_none:+ (the ticket file carries no stamp)}"
+	fi
 fi
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
