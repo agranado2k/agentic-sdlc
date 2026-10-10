@@ -1340,6 +1340,37 @@ done
 t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" --harness reviewer
 [ -n "$S_OUT" ] && pass "agents.kit.codex.config.sh: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
 	fail "agents.kit.codex.config.sh: the reviewer names no agent harness — the review shares the author's vendor"
+# The Codex policy's reviewer follows the Sonnet family too (ADR-0022, #691),
+# with ADR-0020's ordered fallback. Asserted through the kit wrapper (hard
+# rule 10) for each session the ticket names and the one a Codex session
+# actually is, and every answer must cross to claude-code: a fallback without
+# its agent harness would run a Claude model in the Codex session. Sessions
+# are named in the policy's own words (ADR-0022 clause 4).
+_cx_res() { # <session> <unreachable> <args...>
+	_cx_s=$1 _cx_u=$2
+	shift 2
+	t_run_split env -C "$KIT" AGENT_HARNESS_SELF=codex AGENT_SESSION_MODEL="$_cx_s" \
+		AGENT_UNREACHABLE_MODELS="$_cx_u" sh scripts/agents.kit.sh "$@"
+}
+for _cx_case in \
+	'opus||sonnet' \
+	'claude-opus-5-5||sonnet' \
+	'gpt-5.6-sol||sonnet' \
+	'sonnet||opus' \
+	'opus|sonnet|claude-fable-5-1'; do
+	_cx_sess=${_cx_case%%|*} _cx_rest=${_cx_case#*|}
+	_cx_unr=${_cx_rest%%|*} _cx_want=${_cx_rest#*|}
+	for _cx_dom in '' self-implemented; do
+		# shellcheck disable=SC2086 # the optional domain, absent when empty
+		_cx_res "$_cx_sess" "$_cx_unr" reviewer $_cx_dom
+		_cx_got=$S_OUT
+		# shellcheck disable=SC2086 # the optional domain, absent when empty
+		_cx_res "$_cx_sess" "$_cx_unr" --harness reviewer $_cx_dom
+		[ "$_cx_got" = "$_cx_want" ] && [ "$S_OUT" = claude-code ] &&
+			pass "Codex policy: reviewer${_cx_dom:+ $_cx_dom} for a '$_cx_sess' session${_cx_unr:+, '$_cx_unr' unreachable} is '$_cx_want' on claude-code (ADR-0022)" ||
+			fail "Codex policy: reviewer${_cx_dom:+ $_cx_dom} for a '$_cx_sess' session${_cx_unr:+, '$_cx_unr' unreachable} is '${_cx_got:-nothing}' on '${S_OUT:-the session}', expected '$_cx_want' on claude-code"
+	done
+done
 t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" --harness reviewer
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	pass "agents.kit.config.sh: the reviewer is local — no agent harness while the crossing cannot authenticate" ||

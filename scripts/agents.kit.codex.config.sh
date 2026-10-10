@@ -35,10 +35,11 @@
 # (both "fast and affordable agentic coding"), gpt-5.5, and codex-auto-review.
 # Re-check by reading that file, or `codex exec --help` for the flag. Both halves are
 # PINNED — a floating alias would make a model change with no diff and no
-# decision, which is the opposite of what a recorded policy is for. Every
-# value here crosses to the other agent harness and so reaches a CLI, which
-# takes the full id; the alias question the other policy documents does not
-# arise on this side.
+# decision, which is the opposite of what a recorded policy is for — except
+# the reviewer and its first fallback, which follow a family by recorded
+# decision (ADR-0020, ADR-0022): there the floating is the decision.
+# Every Claude value here crosses to the other agent harness and so reaches a
+# CLI, which takes a full id or a family word alike.
 # ---------------------------------------------------------------------------
 
 # The other agent harness, declared so `<harness>:<model>` is a crossing
@@ -47,9 +48,9 @@
 # VERIFIED against the installed CLI on 2026-09-22, not guessed: `-p/--print`
 # is the non-interactive form, `--model <model>` takes "an alias for the
 # latest model (e.g. 'fable', 'opus', or 'sonnet') or a model's full name
-# (e.g. 'claude-fable-5')" — so the PINNED ids below are exactly what it
-# wants, and the alias the other policy documents is only needed for the
-# in-session spawn parameter, which this path never touches. Re-check with
+# (e.g. 'claude-fable-5')" — so both the PINNED ids and the reviewer's family
+# words below are what it wants; the in-session spawn word the other policy
+# documents is a different question, which this path never touches. Re-check with
 # `claude --help` when that CLI moves.
 AGENT_HARNESSES='claude-code'
 AGENT_HARNESS_CLAUDE_CODE_CMD='claude -p {model_flag} < {prompt_file}'
@@ -82,13 +83,27 @@ AGENT_TIER_MECHANICAL='gpt-5.6-luna'
 # 4. REVIEWER — a DIFFERENT VENDOR, not merely a different model, for the
 #    reason the other policy states in full: a reviewer that shares the
 #    author's training shares the author's blind spots.
+#
+#    WHICH CLAUDE MODEL: THE SONNET FAMILY, as in the other policy (ADR-0022,
+#    which extends ADR-0020 to this policy, #691). The operator's ruling — "always use
+#    the Sonnet family to review" — names the review, not the session it is
+#    asked from, so this policy follows it rather than keeping the pinned
+#    Fable id it held until then. The bare family word is what the crossing
+#    CLI's `--model` takes (verified above: "an alias for the latest model"),
+#    so a new Sonnet reaches review here with no re-pin, as it does there.
+#
+#    The ordered fallback is the other policy's too, each value carrying its
+#    own agent harness so a fallen-back review still crosses (ADR-0013): a
+#    caller that saw Sonnet refuse names `sonnet` in
+#    AGENT_UNREACHABLE_MODELS and is handed `opus`, then the pinned Fable.
+#    No `self-implemented` mapping, for ADR-0020's reason: it would name the
+#    plain tier's word again, and a Codex session cannot have written the
+#    diff on a Claude model anyway — ADR-0007's refusal, in
+#    scripts/agents.lib.sh, is the net if a session ever names one. Name a
+#    session in this file's words (`sonnet`, `opus`) — ADR-0022 clause 4.
 # ---------------------------------------------------------------------------
-AGENT_TIER_REVIEWER='claude-code:claude-fable-5-1'
-#    Vestigial while the reviewer is cross-vendor — a Codex session cannot be
-#    running Fable — but mapped to a SECOND model anyway, so the rule still
-#    has an answer if the reviewer is ever localised. ADR-0007's refusal —
-#    in scripts/agents.lib.sh since 0.22.0 — is the net under both.
-AGENT_TIER_REVIEWER_SELF_IMPLEMENTED='claude-code:claude-opus-5-5'
+AGENT_TIER_REVIEWER='claude-code:sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='claude-code:opus claude-code:claude-fable-5-1'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN — same rules as the other policy. The
