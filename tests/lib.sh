@@ -1415,3 +1415,32 @@ t_hold_reader_step() {
 		assert_file_lacks_any_case "$_hr_skill" "$_hr_flag" "a vendor's flag or command is the adapter's to name, never the skill's"
 	done
 }
+
+# t_adr_successor <records dir> <NNNN> — the path of the record that supersedes
+# ADR-NNNN, found through the old record's own Status line, "Superseded by
+# MMMM": the one hop a reader takes (ADR-0021 clause 3). Prints nothing when
+# the record is not superseded or its successor has no file.
+t_adr_successor() {
+	_ts_old=$(ls "$1"/"$2"-*.md 2>/dev/null | head -1)
+	[ -n "$_ts_old" ] || return 0
+	_ts_next=$(sed -n 's/^- \*\*Status\*\*: Superseded by \([0-9][0-9][0-9][0-9]\)$/\1/p' "$_ts_old")
+	[ -n "$_ts_next" ] || return 0
+	ls "$1"/"$_ts_next"-*.md 2>/dev/null | head -1
+}
+
+# t_adr_clause <record> <N> — clause N of a record's Decision outcome,
+# flattened to one line: from "N. **" to the next numbered clause or the next
+# section. Nothing when the record or the clause is missing.
+t_adr_clause() {
+	awk -v n="$2" '
+		/^## Decision outcome/ { d = 1; next }
+		d && !on && $0 ~ "^" n "\\. \\*\\*" { on = 1; print; next }
+		on && (/^[0-9]+\. / || /^## /) { exit }
+		on' "${1:-/dev/null}" 2>/dev/null | tr '\n' ' ' | tr -s ' '
+}
+
+# t_adr_clause_title <record> <N> — the bold lead of clause N of a record's
+# Decision outcome, without its closing full stop: "One event per line".
+t_adr_clause_title() {
+	t_adr_clause "$1" "$2" | sed -n 's/^[0-9]*\. \*\*\([^*]*\)\*\*.*/\1/p' | sed 's/[.:]$//'
+}

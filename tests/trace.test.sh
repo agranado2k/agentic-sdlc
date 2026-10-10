@@ -632,25 +632,26 @@ grep -q '^- \*\*Trace\*\*' "$KIT/docs/domain-glossary.md" && pass "the glossary 
 # and the rule each amendment made is held in the successor's clause instead
 # of in ADR-0008's index row, which now says only that it is superseded.
 ADR8_OLD=$(ls "$KIT"/docs/adr/0008-*.md | head -1)
-adr8_next_num=$(sed -n 's/^- \*\*Status\*\*: Superseded by \([0-9][0-9][0-9][0-9]\)$/\1/p' "$ADR8_OLD")
-ADR8_NEXT=$(ls "$KIT"/docs/adr/"${adr8_next_num:-none}"-*.md 2>/dev/null | head -1)
+ADR8_NEXT=$(t_adr_successor "$KIT/docs/adr" 0008)
+adr8_next_num=$(basename "${ADR8_NEXT:-none}" | cut -c1-4)
 [ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, ADR-$adr8_next_num, and the record exists" ||
 	fail "ADR-0008's status line does not read 'Superseded by NNNN' naming a record that exists"
-# adr8_clause <N> — clause N of the successor's Decision outcome, flattened
-# to one line: from "N. **" to the next numbered clause or the next section.
-adr8_clause() {
-	awk -v n="$1" '
-		/^## Decision outcome/ { d = 1; next }
-		d && !on && $0 ~ "^" n "\\. \\*\\*" { on = 1; print; next }
-		on && (/^[0-9]+\. / || /^## /) { exit }
-		on' "${ADR8_NEXT:-/dev/null}" | tr '\n' ' ' | tr -s ' '
-}
+adr8_clause() { t_adr_clause "$ADR8_NEXT" "$1"; }
+# Clause N of the successor is clause N of ADR-0008: each opens with the bold
+# lead ADR-0008's clause N opens with, so a missing, renumbered or swapped
+# clause is named (review of PR #715, M-2).
+_a8_bad=
 _a8_k=1
 while [ "$_a8_k" -le 10 ]; do
-	[ -n "$(adr8_clause "$_a8_k")" ] || fail "the successor has no clause $_a8_k — clause numbers are ADR-0008's, kept"
+	_a8_title=$(t_adr_clause_title "$ADR8_OLD" "$_a8_k")
+	case $(t_adr_clause_title "$ADR8_NEXT" "$_a8_k") in
+	"${_a8_title:-no lead in ADR-0008}"*) ;;
+	*) _a8_bad="$_a8_bad $_a8_k" ;;
+	esac
 	_a8_k=$((_a8_k + 1))
 done
-[ -n "$(adr8_clause 10)" ] && [ -n "$(adr8_clause 1)" ] && pass "the successor carries ADR-0008's ten clauses, numbered as they were"
+[ -z "$_a8_bad" ] && pass "the successor's clauses 1 to 10 open as ADR-0008's clauses 1 to 10 do — numbers kept" ||
+	fail "the successor's clause does not open as ADR-0008's clause of the same number:$_a8_bad"
 grep -qF -- 'supersedes ADR-0008' "${ADR8_NEXT:-/dev/null}" && pass "its header says it supersedes ADR-0008" || fail "the successor's header does not say 'supersedes ADR-0008'"
 grep -q '^- \*\*Superseded by\*\*:.*ADR-'"$adr8_next_num" "$ADR8_OLD" && pass "and ADR-0008's Superseded-by line names it back" ||
 	fail "ADR-0008's Superseded-by line does not name ADR-$adr8_next_num"
@@ -664,13 +665,16 @@ grep -qF "| [$adr8_next_num](" "$KIT/docs/adr/INDEX.md" && pass "and the success
 # No amendment is dropped: every ticket ADR-0008's header names as the one an
 # amendment was decided for, and every record that amended ADR-0008 since it
 # closed (ADR-0021 clause 4), is named in the successor.
-_a8_miss=
+_a8_miss= _a8_n=0
 for _a8_t in $(sed -n '/^- \*\*Superseded by\*\*/p' "$ADR8_OLD" | grep -oE '[Dd]ecided (at planner ticket|for) #[0-9]+' | grep -oE '#[0-9]+') \
 	$(grep -l 'amends ADR-0008' "$KIT"/docs/adr/0*.md | sed 's,.*/\([0-9]*\)-.*,ADR-\1,'); do
+	_a8_n=$((_a8_n + 1))
 	grep -qF -- "$_a8_t" "${ADR8_NEXT:-/dev/null}" || _a8_miss="$_a8_miss $_a8_t"
 done
-[ -z "$_a8_miss" ] && pass "the successor names every amendment of ADR-0008, by ticket and by record" ||
-	fail "the successor does not name:$_a8_miss"
+# ADR-0008's ledger names 23 tickets; fewer read means the read broke, and an
+# empty list would pass having checked nothing (review of PR #715, L-4).
+[ "$_a8_n" -ge 23 ] && [ -z "$_a8_miss" ] && pass "the successor names every amendment of ADR-0008, by ticket and by record" ||
+	fail "the successor does not name:${_a8_miss:- (only $_a8_n amendments read from ADR-0008's ledger)}"
 
 banner "12. summary groups the trace, counts it, sums its tokens and prices it on read"
 # A READER fixture is written as FILES, not emitted: only a file whose name is
@@ -2171,7 +2175,7 @@ _ri_v=no
 sed -n '/Amended 2026-10-07 (#567)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF '[CHML]-[0-9]+' &&
 	pass "ADR-0008 carries the dated #567 amendment naming the raise's shape" || fail "ADR-0008 has no '*Amended 2026-10-07 (#567):*' block naming [CHML]-[0-9]+"
 case $(adr8_clause 1) in
-*'`finding.raise`'*'`[CHML]-[0-9]+`'*) pass "the successor's clause 1 folds the #567 rule in: a raise's id is [CHML]-[0-9]+" ;;
+*'`finding.raise` `data.id` — `[CHML]-[0-9]+`'*) pass "the successor's clause 1 folds the #567 rule in: a raise's id is [CHML]-[0-9]+" ;;
 *) fail "the successor's clause 1 does not hold \`finding.raise\`'s id to \`[CHML]-[0-9]+\` (the #567 rule)" ;;
 esac
 _ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md")

@@ -388,23 +388,14 @@ printf '%s\n' "$dm" | grep -qF 'quote it in the reason' && printf '%s\n' "$dm" |
 # say the same key, in the same words. The record is ADR-0008's successor
 # (#692), found through ADR-0008's own status line: the rule binds there, and
 # ADR-0008's amendment that first said it is history.
-adr8_next=$(sed -n 's/^- \*\*Status\*\*: Superseded by \([0-9][0-9][0-9][0-9]\)$/\1/p' docs/adr/0008-*.md)
-ADR8_NEXT=$(ls docs/adr/"${adr8_next:-none}"-*.md 2>/dev/null | head -1)
-[ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, ADR-$adr8_next" || fail "ADR-0008's status does not read 'Superseded by NNNN' naming a record that exists"
-# adr8_clause <N> — clause N of the successor's Decision outcome, from
-# "N. **" to the next clause or section, flattened to one line.
-adr8_clause() {
-	awk -v n="$1" '
-		/^## Decision outcome/ { d = 1; next }
-		d && !on && $0 ~ "^" n "\\. \\*\\*" { on = 1; print; next }
-		on && (/^[0-9]+\. / || /^## /) { exit }
-		on' "${ADR8_NEXT:-/dev/null}" | tr '\n' ' ' | tr -s ' '
-}
-ADR8=$(adr8_clause 1)
+ADR8_NEXT=$(t_adr_successor docs/adr 0008)
+[ -n "$ADR8_NEXT" ] && pass "ADR-0008's status names its successor, $(basename "$ADR8_NEXT" | cut -c1-4)" || fail "ADR-0008's status does not read 'Superseded by NNNN' naming a record that exists"
+adr8_clause() { t_adr_clause "$ADR8_NEXT" "$1"; }
+c1_dm=$(adr8_clause 1)
 printf '%s\n' "$dm" | grep -qF '`data.thread` plus `data.where`' &&
 	pass "/pr-iterate names the pair that identifies one dismissal — data.thread plus data.where" ||
 	fail "/pr-iterate does not say one dismissal is \`data.thread\` plus \`data.where\` — a dismissed review's events share one data.thread"
-printf '%s\n' "$ADR8" | grep -qF '`data.thread` plus `data.where`' &&
+printf '%s\n' "$c1_dm" | grep -qF '`data.thread` plus `data.where`' &&
 	pass "and the successor's clause 1 tells the reader to count that pair" ||
 	fail "the successor's clause 1 does not tell the reader to count \`data.thread\` plus \`data.where\`"
 # data.where is now FORGE data — a path the pull request's author chose — typed
