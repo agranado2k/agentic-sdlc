@@ -46,12 +46,23 @@ printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
 # order — the answer's lines as asked, or bottom-up under STUB_ORDER=reversed.
 order() { if [ "${STUB_ORDER:-}" = reversed ]; then sed -n '1!G;h;$p'; else cat; fi; }
+# jq_answer — under STUB_PR_JSON, run the script's OWN --jq program over a
+# canned forge answer with jq, as gh would: the key names the script reads are
+# then held to the keys its query emits (#684). Exits the stub when it answered.
+jq_answer() {
+	[ -n "${STUB_PR_JSON:-}" ] || return 0
+	prog= prev=
+	for a; do [ "$prev" = --jq ] && prog=$a; prev=$a; done
+	jq -r "$prog" "$STUB_PR_JSON"
+	exit
+}
 case " $* " in
 *" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
 *" pr view "*"headRefOid"*)
 	# The head commit, and the date it was committed: the iteration check
 	# reads the trace for a pr.iterate at or after it (#630).
 	[ "${STUB_HEAD_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_HEAD_RC"; }
+	jq_answer "$@"
 	printf 'oid=%s\ncommittedDate=%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}" | order
 	;;
 *" pr view "*"body"*)
@@ -62,6 +73,7 @@ case " $* " in
 	;;
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
+	jq_answer "$@"
 	printf '%s\n' "state=${STUB_PRSTATE:-OPEN}" "isDraft=${STUB_DRAFT:-false}" "mergeable=${STUB_MERGEABLE:-MERGEABLE}" \
 		"mergeStateStatus=${STUB_MSS:-CLEAN}" "reviewDecision=${STUB_REVIEW-APPROVED}" baseRefName=main "ticket=${STUB_TICKET-77}" \
 		"headRefName=${STUB_BRANCH-feat/x}" "title=${STUB_TITLE:-feat(x): a slice}" | order
@@ -312,6 +324,29 @@ land STUB_ORDER=reversed STUB_DRAFT=true 108
 not_landed 108 "a draft answered bottom-up"
 printf '%s\n' "$S_ERR" | grep -qF 'it is a draft' && pass "a draft answered bottom-up is refused as a draft" ||
 	fail "a draft answered bottom-up was refused for another reason: $S_ERR"
+# The query's own keys, not only the stub's (#684, review M-1): where jq is on
+# PATH, the stub runs the script's --jq programs over a forge answer whose keys
+# sit in another order than the query names them. A field the script reads by
+# a name its query does not emit leaves that value empty, and this case fails.
+if command -v jq >/dev/null 2>&1; then
+	cat >"$SCRATCH/pr128.json" <<'JSON'
+{"title": "feat(z): through jq", "commits": [{"oid": "1234567890123456789012345678901234567890", "committedDate": "2000-01-01T00:00:00Z"}],
+ "headRefName": "feat/through-jq", "closingIssuesReferences": [{"number": 93}], "baseRefName": "main", "reviewDecision": null,
+ "mergeStateStatus": "CLEAN", "mergeable": "MERGEABLE", "isDraft": false, "state": "OPEN",
+ "headRefOid": "1234567890123456789012345678901234567890"}
+JSON
+	land STUB_PR_JSON="$SCRATCH/pr128.json" 128
+	s_assert_status 0 "the script's own --jq programs, run by jq, land the PR"
+	ml=$(show 'pr:#128' --kind merge.land)
+	for tok in '"related":"ticket:#93"' '"reason":"feat(z): through jq"' '"iterated":"yes"' '"reviewed":"yes"'; do
+		printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "through jq, merge.land carries $tok" || fail "through jq, merge.land lacks $tok: $ml"
+	done
+	po=$(show 'pr:#128' --kind pr.open)
+	printf '%s\n' "$po" | grep -qF '"related":"ticket:#93 branch:feat/through-jq"' && pass "through jq, pr.open names the head branch" ||
+		fail "through jq, pr.open lost its ticket or branch: $po"
+else
+	skip "no jq on PATH — the script's own --jq programs are not run by this suite here"
+fi
 
 # ---------------------------------------------------------------------------
 banner "3. The verdict question, asked at a terminal"
