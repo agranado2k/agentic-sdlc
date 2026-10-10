@@ -1215,8 +1215,10 @@ scripts/docs-conformance/validators/mutation-decision.mjs
 scripts/docs-conformance/validators/reviewer-unmapped.mjs
 scripts/docs-conformance/validators/skill-bridge.mjs
 scripts/docs-conformance/validators/skill-ceiling.mjs
+scripts/docs-conformance/validators/skill-dated.mjs
 scripts/docs-conformance/validators/skill-paths.mjs
 scripts/docs-conformance/validators/skill-web.mjs
+scripts/docs-conformance/validators/supersession.mjs
 scripts/docs-conformance/validators/trace-off.mjs
 scripts/guards.lib.sh
 scripts/lens-slice.sh
@@ -1231,10 +1233,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2895 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2917 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3049 insertions(+), 1 deletion(-)
+ 3 files changed, 3071 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1289,8 +1291,10 @@ $ # step 5 — apply
   updated scripts/docs-conformance/validators/reviewer-unmapped.mjs
   updated scripts/docs-conformance/validators/skill-bridge.mjs
   updated scripts/docs-conformance/validators/skill-ceiling.mjs
+  updated scripts/docs-conformance/validators/skill-dated.mjs
   updated scripts/docs-conformance/validators/skill-paths.mjs
   updated scripts/docs-conformance/validators/skill-web.mjs
+  updated scripts/docs-conformance/validators/supersession.mjs
   updated scripts/docs-conformance/validators/trace-off.mjs
   updated scripts/guards.lib.sh
   updated scripts/lens-slice.sh
@@ -1324,8 +1328,10 @@ verbatim  scripts/docs-conformance/validators/mutation-decision.mjs
 verbatim  scripts/docs-conformance/validators/reviewer-unmapped.mjs
 verbatim  scripts/docs-conformance/validators/skill-bridge.mjs
 verbatim  scripts/docs-conformance/validators/skill-ceiling.mjs
+verbatim  scripts/docs-conformance/validators/skill-dated.mjs
 verbatim  scripts/docs-conformance/validators/skill-paths.mjs
 verbatim  scripts/docs-conformance/validators/skill-web.mjs
+verbatim  scripts/docs-conformance/validators/supersession.mjs
 verbatim  scripts/docs-conformance/validators/trace-off.mjs
 verbatim  scripts/guards.lib.sh
 verbatim  scripts/lens-slice.sh
@@ -2648,6 +2654,7 @@ $ # step 8 — every path the kit changed outside the layer, by the step that ta
 9a   .agents/skills/grill-with-docs/SKILL.md
 9a   .agents/skills/housekeeping/CHECKLIST.md
 9a   .agents/skills/housekeeping/SKILL.md
+9a   .agents/skills/implement/CASCADE.md
 9a   .agents/skills/implement/COVERS.md
 9a   .agents/skills/implement/DISPATCHED-REVIEW.md
 9a   .agents/skills/implement/SKILL.md
@@ -2733,9 +2740,9 @@ improve-codebase-architecture
 
 $ # 9a — /implement: the kit changed it, we did not
 $ kit diff -M --stat "$FROM_REF" "$TO_REF" -- "$O" "$K"
- .agents/skills/implement/SKILL.md | 66 +++++++++++++++++++++++++++++++++++++++
- .claude/skills/implement/SKILL.md | 44 --------------------------
- 2 files changed, 66 insertions(+), 44 deletions(-)
+ .agents/skills/implement/SKILL.md | 67 +++++++++++++++++++++++++++++++++++++++
+ .claude/skills/implement/SKILL.md | 45 --------------------------
+ 2 files changed, 67 insertions(+), 45 deletions(-)
 $ diff -u "$WORK/base" "$S" | head -1
 (no local edit — take it)
   took    .claude/skills/implement/SKILL.md
