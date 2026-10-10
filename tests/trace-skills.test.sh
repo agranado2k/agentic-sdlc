@@ -1932,7 +1932,6 @@ for b in \
 	fi
 done
 
-
 # ---------------------------------------------------------------------------
 banner "30. A converged iteration leaves a head a review.verdict judged (#699)"
 # ---------------------------------------------------------------------------
@@ -1946,7 +1945,7 @@ banner "30. A converged iteration leaves a head a review.verdict judged (#699)"
 # pushed_review_missing <skill file> — one word per claim the stop conditions drop.
 pushed_review_missing() {
 	_pr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
-	printf '%s\n' "$_pr_sc" | grep -qE 'unanswered human threads \*\*AND\*\* a `review\.verdict`[^→]*head[^→]*→ ✅ converged' || echo converged-needs-verdict
+	printf '%s\n' "$_pr_sc" | grep -qE 'unanswered human threads \*\*AND\*\* a `review\.verdict` recorded after the commit of the head this iteration leaves → ✅ converged' || echo converged-needs-verdict
 	printf '%s\n' "$_pr_sc" | grep -qiE 'iteration that pushed[^.]*run `/review-pr` again on (that|the new) head' || echo pushed-rereviews
 	printf '%s\n' "$_pr_sc" | grep -qE 'again on (that|the new) head \(do NOT post' || echo rereview-unposted
 	printf '%s\n' "$_pr_sc" | grep -qiE 'before (it records|recording) `green`' || echo before-green
@@ -1960,7 +1959,8 @@ _pr=$(pushed_review_missing "$PI")
 # Baits: one per claim, so none survives its own deletion.
 for b in \
 	's/\*\*AND\*\* a `review\.verdict`/**AND** a fresh review/' \
-	's/run `\/review-pr` again on that head/run step 2 again/' \
+	's/run `\/review-pr` again on that head/run step 2 again on that head/' \
+	's/after the commit of the head this iteration leaves/on any earlier head/' \
 	's/again on that head (do NOT post/again on that head (post/' \
 	's/before it records `green`/after it records `green`/' \
 	's/record `red` instead/record `green` anyway/' \
