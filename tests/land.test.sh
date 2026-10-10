@@ -310,6 +310,8 @@ grep -q '^ARGV: run list --branch main ' "$STUB_LOG" && pass "reordered, the bas
 	fail "reordered, the base branch was misread: $(grep 'run list' "$STUB_LOG")"
 land STUB_ORDER=reversed STUB_DRAFT=true 108
 not_landed 108 "a draft answered bottom-up"
+printf '%s\n' "$S_ERR" | grep -qF 'it is a draft' && pass "a draft answered bottom-up is refused as a draft" ||
+	fail "a draft answered bottom-up was refused for another reason: $S_ERR"
 
 # ---------------------------------------------------------------------------
 banner "3. The verdict question, asked at a terminal"
