@@ -295,7 +295,8 @@ MALFORMED="$OWNROOT/${T_SCRATCH_PREFIX}1x-${_own_tok#*-}.malformed"
 mkdir -p "$MALFORMED"
 _own_err="$SCRATCH/own-err"
 ( TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
-	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null
+	"$T_ROOT/tests/sweeper" ) 2>"$_own_err" >/dev/null ||
+	fail "the sweeping suite itself failed — the cases below would mislead: $(cat "$_own_err")"
 [ -n "$VICTIM2" ] && [ ! -d "$VICTIM2" ] &&
 	pass "a killed suite's fresh scratch is removed at the next start — its owner is gone" ||
 	fail "a killed suite's scratch survived the next start (owner dead, age irrelevant): '$VICTIM2'"
@@ -305,6 +306,17 @@ _own_err="$SCRATCH/own-err"
 	fail "the sweep removed fresh scratch whose owner it could not name"
 [ -d "$FOREIGN" ] && pass "…and an owner recorded in another pid namespace is left to the age rule" ||
 	fail "the sweep judged a process in another pid namespace dead by this one's kill -0"
+# A dead owner's scratch the sweeping user does not own is not judged dead:
+# signal 0 on another user's pid fails as if it were gone. The sweep is run
+# under an `id` that answers another uid, so this directory is "not ours".
+NOTMINE="$OWNROOT/${T_SCRATCH_PREFIX}${_dead}-${_own_tok#*-}.notmine"
+mkdir -p "$NOTMINE" "$SCRATCH/fakeid"
+printf '#!/bin/sh\necho 99999\n' >"$SCRATCH/fakeid/id"
+chmod +x "$SCRATCH/fakeid/id"
+( PATH="$SCRATCH/fakeid:$PATH" TMPDIR="$OWNROOT" sh -c '. "$(dirname "$0")/lib.sh"; t_init' \
+	"$T_ROOT/tests/sweeper" ) >/dev/null 2>&1
+[ -d "$NOTMINE" ] && pass "…and a dead owner's scratch under another uid is left to the age rule" ||
+	fail "the sweep removed scratch it does not own on a signal-0 failure that may only mean another user's process"
 [ -d "$MALFORMED" ] && pass "…and a malformed owner token is left to the age rule, never probed" ||
 	fail "the sweep removed fresh scratch whose owner token is not a pid"
 case "$(cat "$_own_err")" in
@@ -337,7 +349,7 @@ for f in "$T_ROOT"/tests/*.sh; do
 	grep -qF "$_hand_pat" "$f" && _handmade="$_handmade ${f##*/}"
 done
 [ -z "$_handmade" ] && pass "every suite makes its prefixed scratch through t_scratch, named for its owner" ||
-	fail "these build kit-suite scratch by hand, with no owner in its name:$_handmade"
+	fail "these build kit-suite scratch by hand, with no owner in its name (only docs-demo.sh is exempt, until #677):$_handmade"
 
 # EVERY suite goes through the harness or carries the prefix. DEFAULT-DENY:
 # enumerating the anonymous spellings let `mktemp --directory` and `mktemp -dq`
