@@ -608,6 +608,17 @@ cascade_keep "$T_ORACLE" --rung-done
 [ "$S_STATUS" = 2 ] && [ ! -e "$WT/work.txt" ] && [ -z "$(spawn_rungs)" ] &&
 	pass "--rung-done with no hand-back in the worktree is exit 2, nothing judged" ||
 	fail "a stray --rung-done exited $S_STATUS: $S_ERR"
+# …and so is one against another --base than the hand-back's: the guard
+# would judge a different range, and the reset would land somewhere else.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done --base "$(git -C "$WT" rev-parse HEAD)"
+[ "$S_STATUS" = 2 ] && [ "$(rung_seq)" = "in-session1 " ] &&
+	[ "$(cat "$WT/work.txt" 2>/dev/null)" = model-cheap-bare ] &&
+	pass "--rung-done against another --base is exit 2: nothing judged, nothing reset" ||
+	fail "--rung-done against another base exited $S_STATUS, rungs '$(spawn_rungs)': $S_ERR"
 # …and outside a cascade it means nothing.
 t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
 	implement --tier implementer --prompt x --rung-done
