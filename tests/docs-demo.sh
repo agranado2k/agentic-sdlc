@@ -2314,13 +2314,16 @@ prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
 banner "E. The recipe's anonymous scratch stayed inside this suite's own (#677)"
 # ---------------------------------------------------------------------------
 # A bare `mktemp -d` follows TMPDIR, so it escapes the redirect only from a
-# child that runs with TMPDIR reassigned or the environment cleared. The first
+# child that runs with TMPDIR reassigned or unset, or the environment cleared. The first
 # check holds this file to one assignment, the redirect's, and no cleared
 # environment — deterministic, where a scan of the shared TMPDIR would also
 # see any parallel suite's transient tmp.*. The second keeps the first from
 # passing on nothing: the recipe's work dirs did land in the scratch.
-e_leaks=$(grep -nE '(^|[^_A-Za-z])TMPDIR=|env +(-[A-Za-z]+ +)*-(i|-ignore-environment)|-u +TMPDIR|--unset[= ]TMPDIR' "$KIT/tests/docs-demo.sh" |
-	grep -vE '^[0-9]+:TMPDIR=\$E_TMP$|e_leaks=')
+# The name is split so this check's own lines never match it.
+e_v='TMP''DIR'
+e_pat="(^|[^_A-Za-z])$e_v=|unset +([A-Za-z_]+ +)*$e_v|-u +$e_v|--unset[= ]$e_v"
+e_pat="$e_pat|(^|[^A-Za-z_-])env( +[^|;&]*)? +-(i|-ignore-environment)?( |\$)"
+e_leaks=$(grep -nE "$e_pat" "$KIT/tests/docs-demo.sh" | grep -vxE "[0-9]+:$e_v=\\\$E_TMP")
 if [ -z "$e_leaks" ]; then
 	pass "the redirect is this suite's one TMPDIR assignment, and no child runs with it cleared"
 else
