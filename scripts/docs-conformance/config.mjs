@@ -440,9 +440,9 @@ const skillCeilings = {
  * read the same text.
  *
  * knownExceptions are open sites, one `<skill>|<token>` each (the skill
- * by name, so the entry holds at any skill home), that the
- * sweep (#685) removes; a fixed site leaves the list, and the fixture test
- * fails an entry whose file no longer carries its token.
+ * by name, so the entry holds at any skill home). Empty since the sweep
+ * (#685) removed the last three; a fixed site leaves the list, and the
+ * fixture test fails an entry whose file no longer carries its token.
  *
  * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
  * scripts/check.sh reads this block by text.
