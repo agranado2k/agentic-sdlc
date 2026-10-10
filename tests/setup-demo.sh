@@ -34,10 +34,7 @@
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
-# Scratch comes from the harness (#221, #676): named for its owning process,
-# so a suite killed at its budget ceiling or by the OOM killer — dead before
-# its trap — leaves what the next suite's start can tell from a live run's.
-t_scratch
+t_scratch # the harness's owner-named scratch, swept at start (#221, #676)
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 
 failures=0
