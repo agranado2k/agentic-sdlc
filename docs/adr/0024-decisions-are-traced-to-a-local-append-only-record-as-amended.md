@@ -106,16 +106,19 @@ Chosen: **option 1**.
      into one `tool.use` with `outcome=denied`, the tool's name and the input
      head. A session killed mid-call reads the same way, and a reader says
      so. The kill guard's own `note` with `outcome=denied` stays, naming its
-     rule.
+     rule; with tool capture on, the call it refused is swept too. `/retro`'s
+     question 6 counts the denials per session and per tool.
    - **`spawn` `passed`, `escalated` and `failed` are the cascade's.** The
      kit-only skill dispatcher records each rung of a mechanical ticket's
      cheap-first cascade as a spawn of its own under one run: `passed` when
      the rung's oracle and guard passed, `escalated` when a red rung hands up
-     to the next, `failed` when the last rung is red (`docs/specs/spend.md`
-     R21, #586).
+     to the next, `failed` when the last rung is red. `passed` and
+     `escalated` are `docs/specs/spend.md` R21; `failed` is the dispatcher's
+     own word for the last rung (#586).
    - **`ticket.start` `resumed`** means `/implement` picked up a ticket whose
      worktree or PR already exists: the session before it recorded the
-     stamp, so this line records the interruption.
+     stamp, so this line records the interruption. `/retro`'s question 6
+     counts it, and the conflicts and stuck checks `data.cause` records.
    - **`feedback` is a human's verdict on a slice, or the train's.** Subject
      `ticket:#<N>`; `hit`, `adjusted` and `missed` are verdicts. `unasked` is
      **not a verdict**: the train landed the slice and nobody could answer,
@@ -166,8 +169,9 @@ Chosen: **option 1**.
      — an empty value included, every occurrence on the line held — is exit
      2 naming the kind, the key, the value and the shape (for a missing
      required key, the condition that required it), and nothing is written.
-     A missing key is no violation except where `!` says so. A shape is its
-     kind's, not its key's. The rows:
+     A missing key is no violation except where `!` says so — `data.source`
+     and `data.id` stay optional on a triage. A shape is its kind's, not its
+     key's. The rows:
      - `finding.triage` `data.id` — `[A-Za-z0-9._#-]+`, one token: a forge
        comment id, a local finding's id, or a check's name with every run of
        any other character written as one `-`.
@@ -189,7 +193,9 @@ Chosen: **option 1**.
      - `pr.iterate` `data.cause` — `conflict` or `pending-stuck`: the PR was
        `CONFLICTING` with its base, or a check-run sat `in_progress` past the
        skill's bound while its job reported a conclusion. It rides a red
-       iteration or a stopped one, so the row holds it on any outcome.
+       iteration or a stopped one, so the row holds it on any outcome. An
+       iteration with neither carries none, and its reason names the failing
+       check as before.
      - `review.verdict` `data.lenses` and `data.roster` — digits: the lens
        agents that returned a report, and the lenses the review planned (the
        standards roster less any lens whose slice was empty). A
@@ -217,9 +223,10 @@ Chosen: **option 1**.
      `model` at all; a resolver that fails is a refusal too; a script with no
      resolver beside it has no ids, and the rule is off. Other kinds' `model`
      stays open. `verify` reads the same list as an advisory on a spawn
-     already written off it, judged against the policy as it is now — so a
+     already written off it — one stderr line naming the file, the line and
+     the value, never a bad line and never the verdict — judged against the policy as it is now — so a
      model a roster move retired is advised on too — and `summary` and
-     `export` say the count once; a resolver that fails judges nothing there
+     `export` say the count once and point at `verify`; a resolver that fails judges nothing there
      and each says so once on stderr. One enumeration of the policy's values, the resolver's
      `agents_values`, feeds `--ids` and the kit wrapper's unreachable bridge.
 2. **Unconfigured is a working state, and off is decided.**
@@ -269,14 +276,17 @@ Chosen: **option 1**.
      With no session id, or one that is not a single path segment of
      `[A-Za-z0-9._-]`, the stack is `current/<toplevel>.runs`. The pointer
      file stays per toplevel. Two sessions in one checkout never read or pop
-     each other's runs.
+     each other's runs. A run opened on the per-toplevel stack is closed with
+     `TRACE_SESSION=` set empty. The Claude Code adapter's subagent-stop
+     hook keys the stack on the payload's `session_id` the same way.
    - **`end <run>` closes the run it names, or nothing.** Named, it closes
      that run when it is the top of this session's stack in this checkout,
      and otherwise is exit 2 naming the run that is open, nothing written
      and nothing popped — a subagent sharing its session and checkout that
      never began has no id to name, and a parent ending under a child still
      open is refused. The id is one path segment of `[A-Za-z0-9._-]`; an
-     empty one is exit 2, never a bare `end`. Every shipped skill names its
+     empty one is exit 2, never a bare `end`. Unconfigured, a named `end` is
+     the silent no-op every call is. Every shipped skill names its
      run at `end`. A bare `end` is deprecated: it still closes the top, exit
      0, then prints one trace-prefixed stderr line (silenced by
      `TRACE_QUIET=1`) naming the run it closed and the named form
@@ -285,7 +295,8 @@ Chosen: **option 1**.
      kit's own skills, hooks, scripts and suites carry no bare `end`, and the
      trace suite holds them to it. The mandatory id is a later release, its
      own ticket; what reopens that is a caller shown unable to carry the id
-     from its `begin` to its `end`.
+     from its `begin` to its `end` — then the bare form stays, deprecated,
+     until the run can be named another way.
    - **`stack <dir> [session=<id>]` is the one reader of a checkout's
      stack**, for a caller that stands in another checkout. It prints the
      top of the stack an emit made from `<dir>`'s checkout would read, then
@@ -299,8 +310,9 @@ Chosen: **option 1**.
      whoever opened it — the top of each session's stack and of the
      session-less one, one per line, in no promised order, never a run below
      a top. `--all` takes the place of `session=`; both at once is exit 2.
-     One stack that cannot be read, or a run directory that cannot be
-     listed, refuses the whole answer, exit 2 — a partial "nothing open"
+     Its refusals are `stack <dir>`'s, exit 2 with nothing on stdout, and one
+     more: one stack that cannot be read, or a run directory that cannot be
+     listed, refuses the whole answer — a partial "nothing open"
      would read as leave to prune. Unconfigured, it prints nothing, exit 0.
      (`--all` is ADR-0023 clause 1.)
    - **A subagent's run is handed over at spawn, on its prompt's first
@@ -345,8 +357,10 @@ Chosen: **option 1**.
      tool, refuses a spawn whose prompt carries no well-formed
      `Trace-Spawn:` line in either place, naming the line it wants. It never
      refuses one for lacking `Trace-Run:`, since it cannot tell whether a
-     run is open. Tracing off, a policy the script refuses, or a payload with
-     no prompt, and every spawn passes.
+     run is open. The subagent-stop hook reads the first-line form too,
+     through the same parser, so the guard refuses exactly the prompts the
+     stop would record as `unattributed`. Tracing off, a policy the script
+     refuses, or a payload with no prompt, and every spawn passes.
 6. **Cost is computed on read, never on write.** Events carry raw token
    counts and the model; a price table in the policy file prices them at
    summary and export time, and an export stamps when and from which table
@@ -367,7 +381,7 @@ Chosen: **option 1**.
    never a preloaded lessons file (shared invariant §11). A diagnosis reads
    the trace by the operator's hand: the operator runs the read and hands
    over what it printed, as data. Tools the operator runs read as the
-   operator: the landing script reads `show` for `pr.iterate` and
+   operator: the landing script reads `show` only, for `pr.iterate` and
    `review.verdict` on the PR it lands (ADR-0019), and the worktree cleanup
    reads `stack <dir> --all` (ADR-0023). A hook's read of `stack` or of a
    transcript is the adapter's business (clause 8). A skill that writes a
@@ -394,8 +408,10 @@ Chosen: **option 1**.
      the file closes it. The extractor marks a message whose last line says
      `stop_reason: null` a snapshot, each row counts them, and a usage event
      carries `data.out_snapshot` when the count is not zero — `tok_out` then
-     a lower bound, input and cache whole. A compaction gap judged beside
-     snapshots carries the same key. `/retro`'s spend question reports the
+     a lower bound, input and cache whole. The rollup counts the closing
+     output, so a compaction gap judged beside snapshots holds their
+     remainder: its event carries the same key, and the session's sum stays
+     whole while its split does not. `/retro`'s spend question reports the
      lower-bound share beside every output figure.
 9. **Explicit non-goal**: the trace is not a memory and not a context store.
    ADR-0005's non-goal stands; nothing here moves a transcript or feeds a
