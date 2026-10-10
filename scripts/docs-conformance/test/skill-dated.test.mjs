@@ -77,11 +77,20 @@ test("a skill at the legacy home is read too, and one at both homes once, under 
 test("a known exception silences exactly its file and token", () => {
   const ctx = ctxFor(
     { [SKILL]: DATED },
-    policy({ knownExceptions: [`${SKILL}|2026-10-07`] }),
+    policy({ knownExceptions: ["demo|2026-10-07"] }),
   );
   const out = run(ctx);
   assert.equal(out.length, 1);
   assert.match(out[0].message, /the kit's retro/);
+  cleanup(ctx);
+});
+
+test("a known exception names the skill, not its home — a consumer's legacy home is silenced too", () => {
+  const ctx = ctxFor(
+    { ".claude/skills/demo/SKILL.md": DATED },
+    policy({ knownExceptions: ["demo|2026-10-07", "demo|the kit's retro"] }),
+  );
+  assert.deepEqual(run(ctx), []);
   cleanup(ctx);
 });
 
@@ -92,8 +101,8 @@ test("the kit's own skills pass under the policy it ships", () => {
 
 test("every known exception still names a dated token in its file — a fixed site leaves the list", () => {
   for (const entry of defaultConfig.skillDated.knownExceptions) {
-    const [file, token] = entry.split("|");
-    const body = readFileSync(join(KIT, file), "utf8");
+    const [skill, token] = entry.split("|");
+    const body = readFileSync(join(KIT, ".agents/skills", skill, "SKILL.md"), "utf8");
     assert.ok(body.includes(token), `${entry} is listed but its file no longer carries the token`);
   }
 });
@@ -146,7 +155,7 @@ test("the POSIX fallback skips a date inside a fence", () => {
 });
 
 test("the POSIX fallback's known exception silences exactly its file and token", () => {
-  const res = posixProject(DATED, [`${SKILL}|2026-10-07`]);
+  const res = posixProject(DATED, ["demo|2026-10-07"]);
   assert.equal(res.status, 1, `expected exit 1, got ${res.status}\n${res.stdout}${res.stderr}`);
   assert.equal(res.stderr.match(/\[skill-dated-evidence\]/g)?.length, 1);
   assert.match(res.stderr, /the kit's retro/);
@@ -159,4 +168,9 @@ test("the POSIX fallback reads the legacy home too, and a skill at both homes on
   assert.equal(res.stderr.match(/\[skill-dated-evidence\]/g)?.length, 4);
   assert.match(res.stderr, /\.claude\/skills\/old\/SKILL\.md/);
   assert.doesNotMatch(res.stderr, /\.claude\/skills\/demo\/SKILL\.md/);
+});
+
+test("the POSIX fallback's known exception names the skill, not its home", () => {
+  const res = posixProject(DATED, ["demo|2026-10-07", "demo|the kit's retro"]);
+  assert.equal(res.status, 0, `expected exit 0, got ${res.status}\n${res.stdout}${res.stderr}`);
 });

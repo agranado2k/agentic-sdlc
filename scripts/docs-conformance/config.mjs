@@ -439,7 +439,8 @@ const skillCeilings = {
  * supporting files beside a SKILL.md are not read. Each pattern is a POSIX ERE with no backslash, so both engines
  * read the same text.
  *
- * knownExceptions are today's sites, one `<file>|<token>` each, that the
+ * knownExceptions are today's sites, one `<skill>|<token>` each (the skill
+ * by name, so the entry holds at any skill home), that the
  * sweep (#685) removes; a fixed site leaves the list, and the fixture test
  * fails an entry whose file no longer carries its token.
  *
@@ -453,9 +454,9 @@ const skillDated = {
     "[Aa]mended,? #[0-9]+",
   ],
   knownExceptions: [
-    ".agents/skills/pr-iterate/SKILL.md|2026-10-01",
-    ".agents/skills/review-pr/SKILL.md|2026-10-07",
-    ".agents/skills/review-pr/SKILL.md|the kit's retro",
+    "pr-iterate|2026-10-01",
+    "review-pr|2026-10-07",
+    "review-pr|the kit's retro",
   ],
 };
 

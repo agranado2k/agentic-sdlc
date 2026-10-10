@@ -381,7 +381,7 @@ if [ "$engine" = "fallback" ]; then
 	# The skill-dated rule's POSIX twin (validators/skill-dated.mjs, #678): a
 	# SKILL.md whose fence-stripped body matches one of the patterns
 	# config.mjs's `skillDated` block declares fails, once per distinct
-	# token, unless `<file>|<token>` is on its knownExceptions. Every skill
+	# token, unless `<skill>|<token>` is on its knownExceptions. Every skill
 	# home is read — the configured one (claudeMdRefs' skillsDir), then
 	# .agents/skills and .claude/skills — once per skill name, the first home
 	# winning, as the harness's skillHomes does. The block is read BY TEXT,
@@ -410,7 +410,7 @@ if [ "$engine" = "fallback" ]; then
 				printf '%s\n' "$sd_patterns" | while IFS= read -r pat; do
 					grep -o -E -- "$pat" "$vfile.body" 2>/dev/null
 				done | sort -u | while IFS= read -r token; do
-					printf '%s\n' "$sd_known" | grep -qxF -- "$skill|$token" && continue
+					printf '%s\n' "$sd_known" | grep -qxF -- "$sd_name|$token" && continue
 					report "skill-dated-evidence" "$skill" \
 						"carries dated kit evidence \"$token\" — a consumer reads the kit's dates and history as its own" \
 						"Keep the rule and drop the evidence: the dates, counts and amendments belong in the diary or a decision record, which the skill may name (the kit's ADR-NNNN)."

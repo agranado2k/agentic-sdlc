@@ -7,7 +7,8 @@
 //
 // The policy is data in config.mjs's `skillDated` block: the patterns (POSIX
 // EREs, the same text both engines read) and the known exceptions, one
-// `<file>|<token>` each, that a sweep removes. The skills directory is
+// `<skill>|<token>` each — the skill by name, so an exception holds at
+// whichever home a project keeps its skills — that a sweep removes. The skills directory is
 // `claudeMdRefs.skillsDir`, its one home; like the other skill-body scanners
 // this one enumerates every skill home (skillHomes), once per skill name, the
 // configured home first. Each `<home>/<skill>/SKILL.md` is read with its
@@ -33,17 +34,17 @@ export function run(ctx) {
       const file = `${home}/${skill}/SKILL.md`;
       if (seen.has(skill) || ctx.kind(file) !== "file") continue;
       seen.add(skill);
-      files.push(file);
+      files.push({ skill, file });
     }
   }
-  for (const file of files) {
+  for (const { skill, file } of files) {
     const body = stripFences(ctx.read(file) ?? "");
     const tokens = new Set();
     for (const pattern of cfg.patterns ?? []) {
       for (const m of body.matchAll(new RegExp(pattern, "g"))) tokens.add(m[0]);
     }
     for (const token of [...tokens].sort()) {
-      if (known.has(`${file}|${token}`)) continue;
+      if (known.has(`${skill}|${token}`)) continue;
       out.push({
         validator: id,
         file,
