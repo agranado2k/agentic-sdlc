@@ -1204,7 +1204,6 @@ low_band_missing() {
 	_lb_i=$(tr '\n' ' ' <"$2" | tr -s ' ')
 	for _lb in \
 		'band rule|**A LOW is counted, never posted by an agent path of this skill**' \
-		'band evidence|114 of 171 raises were LOW' \
 		'band says why not stop at medium|why not a lens that stops at MEDIUM' \
 		'path a: a LOW is posted=no|and `no` for every LOW (§5)' \
 		'relay: a LOW is posted=no|`no` for a LOW, which no relay posts (§5)' \
@@ -1233,7 +1232,6 @@ bait635() { # <rule name> <file: r|i> <sed script>
 }
 for b in \
 	'band rule|r|s/A LOW is counted, never posted by an agent path of this skill/A LOW is posted/' \
-	'band evidence|r|s/114 of 171 raises were LOW/many raises were LOW/' \
 	'band says why not stop at medium|r|s/why not a lens that stops at MEDIUM/why/' \
 	'path a: a LOW is posted=no|r|s/and `no` for every LOW (§5)//' \
 	'relay: a LOW is posted=no|r|s/`no` for a LOW, which no relay posts (§5)/likewise/' \

@@ -439,10 +439,10 @@ const skillCeilings = {
  * supporting files beside a SKILL.md are not read. Each pattern is a POSIX ERE with no backslash, so both engines
  * read the same text.
  *
- * knownExceptions are today's sites, one `<skill>|<token>` each (the skill
- * by name, so the entry holds at any skill home), that the
- * sweep (#685) removes; a fixed site leaves the list, and the fixture test
- * fails an entry whose file no longer carries its token.
+ * knownExceptions are open sites, one `<skill>|<token>` each (the skill
+ * by name, so the entry holds at any skill home). Empty since the sweep
+ * (#685) removed the last three; a fixed site leaves the list, and the
+ * fixture test fails an entry whose file no longer carries its token.
  *
  * KEEP IT LITERAL — one `"<value>",` per line. The gate's POSIX twin in
  * scripts/check.sh reads this block by text.
@@ -453,11 +453,7 @@ const skillDated = {
     "[Tt]he kit's retro",
     "[Aa]mended,? #[0-9]+",
   ],
-  knownExceptions: [
-    "pr-iterate|2026-10-01",
-    "review-pr|2026-10-07",
-    "review-pr|the kit's retro",
-  ],
+  knownExceptions: [],
 };
 
 /**
