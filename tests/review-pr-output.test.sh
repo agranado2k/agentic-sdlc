@@ -745,9 +745,7 @@ carries "$bait_w" "$(skill_sentence '**candidate ticket**')" &&
 # TWIN_EXEMPT — the one bullet the twin need not carry, named by its title.
 # A title the lens no longer holds is a stale exemption, and goes red.
 TWIN_EXEMPT='- **The kit wrapper'"'"'s spawn-word bridge, read as a copy of the resolver'"'"'s agent-harness split**'
-printf '%s\n' "$declined" | grep -qF -- "$TWIN_EXEMPT" &&
-	pass "the twin's one exempt bullet is still in the lens's declined list" ||
-	fail "the twin's exempt bullet ('$TWIN_EXEMPT') is gone from the lens — the exemption names nothing"
+t_text_has "$declined" "$TWIN_EXEMPT" "the twin's one exempt bullet, still in the lens — else the exemption names nothing" "the declined list"
 # declined_said_in <file> [<bullets>] — the lens's lead-in paragraph and
 # bullets (the lens's own unless given) the file does not say, one per line;
 # empty when it says them all.
