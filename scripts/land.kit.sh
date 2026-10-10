@@ -3,7 +3,7 @@
 # Kit-authoring only, never shipped (bootstrap.sh's KIT_ONLY list deletes it,
 # with tests/land.test.sh).
 #
-#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
+#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -24,8 +24,14 @@
 #      after the head commit's committed date (#630, ADR-0019). The operator
 #      overrides it with --no-iteration '<reason>', and merge.land records
 #      data.iterated=no with the reason as data.no_iteration; with one at
-#      head, data.iterated=yes. Unconfigured, the trace holds nothing to read
-#      and records nothing: the check is skipped, and stderr says so.
+#      head, data.iterated=yes. The same for the review (#673): no
+#      review.verdict on pr:#<N>, any axis and any outcome, at or after the
+#      head commit's date refuses it, unless --no-review '<reason>' names why
+#      — data.reviewed=no with data.no_review, or data.reviewed=yes. One
+#      refusal names every check that failed. A prose-only PR nobody iterated
+#      or reviewed — a diary stamp — lands on both overrides, each with its
+#      reason. Unconfigured, the trace holds nothing to read and records
+#      nothing: both checks are skipped, and stderr says so.
 #   1c. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
 #      the head branch) when the trace holds none for it: a PR opened outside
 #      /implement still joins its ticket for /retro (#638).
@@ -83,10 +89,11 @@
 # THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
 # the merge and stdout are exactly what a traced run does. Its one read is
 # step 1b's, and that read IS load-bearing when the trace is configured: no
-# pr.iterate at the head refuses the landing (ADR-0019). Kit-only, so the kit's own
-# policy is the default seam — scripts/trace.sh read through
-# scripts/trace.kit.config.sh, what scripts/trace.kit.sh runs; a caller's
-# TRACE_CONFIG still wins (the broker's arrangement).
+# pr.iterate or no review.verdict at the head refuses the landing
+# (ADR-0019). Kit-only, so the kit's own policy is the default seam —
+# scripts/trace.sh read through scripts/trace.kit.config.sh, what
+# scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins (the broker's
+# arrangement).
 #
 # exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 #
@@ -103,11 +110,12 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 
 usage() {
 	cat >&2 <<'EOF'
-usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--train]
+usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
   --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
+  --no-review     land with no /review-pr verdict at the head commit, for this reason (recorded)
   --train     /merge-train is landing it: merge.land says via=train, and the verdict is left to the train
 exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
 EOF
@@ -123,6 +131,7 @@ PR=
 TICKET=
 UNASKED=
 NO_ITERATION=
+NO_REVIEW=
 VIA=land
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -136,12 +145,12 @@ while [ $# -gt 0 ]; do
 		UNASKED=$2
 		shift
 		;;
-	--no-iteration)
+	--no-iteration | --no-review)
 		# One printable line: the trace refuses a control character, and a
 		# reason it refused after the merge would leave the landing unrecorded.
 		[ $# -ge 2 ] && [ -n "$2" ] || usage
-		case $2 in *[![:print:]]*) note "--no-iteration takes a one-line reason"; usage ;; esac
-		NO_ITERATION=$2
+		case $2 in *[![:print:]]*) note "$1 takes a one-line reason"; usage ;; esac
+		if [ "$1" = --no-review ]; then NO_REVIEW=$2; else NO_ITERATION=$2; fi
 		shift
 		;;
 	--train) VIA=train ;;
@@ -195,39 +204,53 @@ case $? in
 *) refuse "its checks are not green" ;;
 esac
 
-# --- 1b. an iteration at the head commit (#630, ADR-0019) ---------------------
-# /pr-iterate records one pr.iterate per iteration, after its own push, so an
-# iteration that saw the head commit is stamped at or after that commit's
-# date. Each such stamp on pr:#<N> is compared with the head's date,
-# both ISO 8601 in UTC, as strings. Any outcome counts: whether the checks
-# are green is the gate above's question, not this one's. A head the forge
-# does not date is no iteration at it.
+# --- 1b. an iteration and a review at the head commit (#630, #673, ADR-0019) ---
+# /pr-iterate records one pr.iterate per iteration, after its own push, and
+# /review-pr one review.verdict per axis — and /pr-iterate runs a review each
+# iteration — so a loop or a review that saw the head commit is stamped at or
+# after that commit's date. Each such stamp on pr:#<N> is compared with the
+# head's date, both ISO 8601 in UTC, as strings. Any outcome and any axis
+# counts: whether the checks are green is the gate above's question, and
+# what a verdict found is the operator's read, not this one's. A head the
+# forge does not date is neither at it.
 ITERATED=
+REVIEWED=
+# at_head <kind> — a <kind> event on pr:#<PR> stamped at or after $HEAD_AT.
+# The envelope only — up to the data map, as `show` reads it — so a data key
+# never reads as the event's subject or stamp.
+at_head() {
+	trace_read show "pr:#$PR" --kind "$1" |
+		awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
+			{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
+			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
+			END { exit !f }'
+}
 if [ -z "$(trace_read dir)" ]; then
-	note "the trace is unconfigured — whether /pr-iterate ran at the head of PR #$PR is not checked"
+	note "the trace is unconfigured — whether /pr-iterate ran and /review-pr recorded a verdict at the head of PR #$PR is not checked"
 else
 	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h | $h, ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")' 2>/dev/null) || HEAD=
 	HEAD_OID=$(printf '%s\n' "$HEAD" | sed -n 1p)
 	HEAD_AT=$(printf '%s\n' "$HEAD" | sed -n 2p)
 	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
 	ITERATED=no
+	REVIEWED=no
 	case $HEAD_AT in
 	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z)
-		# The envelope only — up to the data map, as `show` reads it — so a
-		# data key never reads as the event's subject or stamp.
-		trace_read show "pr:#$PR" --kind pr.iterate |
-			awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
-				{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
-				index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
-				END { exit !f }' && ITERATED=yes
+		! at_head pr.iterate || ITERATED=yes
+		! at_head review.verdict || REVIEWED=yes
 		;;
 	*) HEAD_AT='<undated>' ;;
 	esac
-	if [ "$ITERATED" = no ]; then
-		[ -n "$NO_ITERATION" ] ||
-			refuse "no /pr-iterate iteration is recorded at its head commit $HEAD_OID ($HEAD_AT) — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
-		note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
-	fi
+	# One refusal names every check that failed, so an operator learns both
+	# overrides from one run.
+	_missing=
+	[ "$ITERATED" = yes ] || [ -n "$NO_ITERATION" ] ||
+		_missing="no /pr-iterate iteration — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
+	[ "$REVIEWED" = yes ] || [ -n "$NO_REVIEW" ] ||
+		_missing="${_missing:+$_missing; }no /review-pr verdict — run /review-pr on it, or land it with --no-review '<reason>'"
+	[ -z "$_missing" ] || refuse "at its head commit $HEAD_OID ($HEAD_AT) the trace records $_missing"
+	[ "$ITERATED" = yes ] || note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
+	[ "$REVIEWED" = yes ] || note "no /review-pr verdict at the head commit $HEAD_OID — landing on --no-review, recorded"
 fi
 
 BASE=$(field 6)
@@ -242,6 +265,8 @@ else
 fi
 [ -z "$ITERATED" ] || set -- "$@" "data.iterated=$ITERATED"
 [ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
+[ -z "$REVIEWED" ] || set -- "$@" "data.reviewed=$REVIEWED"
+[ "$REVIEWED" != no ] || set -- "$@" "data.no_review=$NO_REVIEW"
 
 # --- 1c. a PR the trace never saw opened (#638) --------------------------------
 # A PR opened outside /implement left no pr.open, and /retro joins a ticket to
