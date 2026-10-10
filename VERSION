@@ -2675,6 +2675,7 @@ files:
   scripts/docs-conformance/validators/living-spec.mjs
   scripts/docs-conformance/validators/skill-ceiling.mjs
   scripts/docs-conformance/validators/skill-dated.mjs
+  scripts/docs-conformance/validators/supersession.mjs
   scripts/docs-conformance/validators/trace-off.mjs
   scripts/docs-conformance/validators/reviewer-unmapped.mjs
 
