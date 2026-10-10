@@ -1026,6 +1026,29 @@ done
 # a model of its own family.
 _k_fold() { printf '%s' "$1" | sed 's/^[^-]*-\([^-]*\)-.*/\1/'; }
 _k_vendor=${_k_imp%%-*}
+# walk_answers <tree> <harness or ''> <session>... — every answer each session
+# is handed, plain and self-implemented, walking to the end through the kit
+# wrapper in <tree>: each answer is named unreachable in turn until the walk
+# prints nothing. One line per answer, "<session> <domain or -> <answer>"; a
+# walk still answering after 12 prints "<session> <domain> NEVER-SPENT".
+walk_answers() {
+	_wa_tree=$1 _wa_h=$2
+	shift 2
+	for _wa_ses in "$@"; do
+		for _wa_dom in '' self-implemented; do
+			_wa_dead= _wa_n=0
+			while [ "$_wa_n" -lt 12 ]; do
+				# shellcheck disable=SC2086 # the optional domain, absent when empty
+				_wa_ans=$(env -C "$_wa_tree" AGENT_HARNESS_SELF="$_wa_h" AGENT_SESSION_MODEL="$_wa_ses" AGENT_UNREACHABLE_MODELS="$_wa_dead" AGENTS_TIER_QUIET=1 sh scripts/agents.kit.sh reviewer $_wa_dom)
+				[ -n "$_wa_ans" ] || break
+				printf '%s %s %s\n' "$_wa_ses" "${_wa_dom:--}" "$_wa_ans"
+				_wa_dead="$_wa_dead $_wa_ans"
+				_wa_n=$((_wa_n + 1))
+			done
+			[ "$_wa_n" -lt 12 ] || printf '%s %s NEVER-SPENT\n' "$_wa_ses" "${_wa_dom:--}"
+		done
+	done
+}
 _k_famwalk_bad= _k_famwalk_n=0
 _k_sessions="$_k_rev $_k_vendor-$_k_rev-9-9"
 for _k_spec in planner implementer mechanical 'implementer content'; do
@@ -1039,22 +1062,19 @@ case " $_k_sessions " in
 *" $_k_imp_word "*) ;;
 *) printf '%s\n' "$_k_mapped" | grep -qxF "$_k_imp_word" && _k_sessions="$_k_sessions $_k_imp_word" ;;
 esac
-for _k_ses in $_k_sessions; do
-	_k_sw=$(_k_fold "$_k_ses")
-	for _k_dom in '' self-implemented; do
-		_k_dead= _k_n=0
-		while [ "$_k_n" -lt 12 ]; do
-			# shellcheck disable=SC2086 # the optional domain, absent when empty
-			_k_ans=$(env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL="$_k_ses" AGENT_UNREACHABLE_MODELS="$_k_dead" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer $_k_dom)
-			[ -n "$_k_ans" ] || break
-			_k_famwalk_n=$((_k_famwalk_n + 1))
-			[ "$(_k_fold "$_k_ans")" = "$_k_sw" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer${_k_dom:+ $_k_dom} -> $_k_ans;"
-			_k_dead="$_k_dead $_k_ans"
-			_k_n=$((_k_n + 1))
-		done
-		[ "$_k_n" -lt 12 ] || _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer${_k_dom:+ $_k_dom} never spent;"
-	done
-done
+# shellcheck disable=SC2086 # the session list, split on purpose
+_k_walk=$(walk_answers "$KIT" '' $_k_sessions)
+while read -r _k_ses _k_dom _k_ans; do
+	[ -n "$_k_ses" ] || continue
+	if [ "$_k_ans" = NEVER-SPENT ]; then
+		_k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer $_k_dom never spent;"
+		continue
+	fi
+	_k_famwalk_n=$((_k_famwalk_n + 1))
+	[ "$(_k_fold "$_k_ans")" = "$(_k_fold "$_k_ses")" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer $_k_dom -> $_k_ans;"
+done <<WALK
+$_k_walk
+WALK
 [ -z "$_k_famwalk_bad" ] && [ "$_k_famwalk_n" -gt 0 ] &&
 	pass "walked through the wrapper, no session is handed a model of its own family ($_k_famwalk_n answers over:$_k_sessions)" ||
 	fail "a session was handed its own family, or the walk answered nothing:$_k_famwalk_bad"
@@ -1097,23 +1117,20 @@ t_run_split env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=opus AGENT_UNREACHABLE
 # wrapper, in both of the kit's policies, every answer any session is handed
 # folds to the reviewer's family word: no walk ever reaches another family.
 # Proved able to fail first, on a throwaway whose fallback names another
-# family — the shape both policies had until this ticket.
-off_family() { # <tree> <harness or ''> <reviewer word> <session>... — prints each answer off that family
+# family — the shape both policies had until this ticket — and on a tree with
+# no wrapper at all: a walk that answers nothing is reported, never a pass.
+off_family() { # <tree> <harness or ''> <reviewer word> <session>... — prints each answer off that family, or "none answered"
 	_of_tree=$1 _of_h=$2 _of_rev=$3
 	shift 3
-	for _of_ses in "$@"; do
-		for _of_dom in '' self-implemented; do
-			_of_dead= _of_n=0
-			while [ "$_of_n" -lt 12 ]; do
-				# shellcheck disable=SC2086 # the optional domain, absent when empty
-				_of_ans=$(env -C "$_of_tree" AGENT_HARNESS_SELF="$_of_h" AGENT_SESSION_MODEL="$_of_ses" AGENT_UNREACHABLE_MODELS="$_of_dead" AGENTS_TIER_QUIET=1 sh scripts/agents.kit.sh reviewer $_of_dom)
-				[ -n "$_of_ans" ] || break
-				[ "$(_k_fold "$_of_ans")" = "$_of_rev" ] || echo "'$_of_ses' reviewer${_of_dom:+ $_of_dom} -> $_of_ans"
-				_of_dead="$_of_dead $_of_ans"
-				_of_n=$((_of_n + 1))
-			done
+	walk_answers "$_of_tree" "$_of_h" "$@" | {
+		_of_n=0
+		while read -r _of_ses _of_dom _of_ans; do
+			_of_n=$((_of_n + 1))
+			[ "$_of_ans" != NEVER-SPENT ] && [ "$(_k_fold "$_of_ans")" = "$_of_rev" ] ||
+				echo "'$_of_ses' reviewer $_of_dom -> $_of_ans"
 		done
-	done
+		[ "$_of_n" -gt 0 ] || echo "none answered"
+	}
 }
 OFFFAM="$SCRATCH/off-family"
 mkdir -p "$OFFFAM/scripts"
@@ -1126,8 +1143,12 @@ AGENT_TIER_REVIEWER='small'
 AGENT_TIER_REVIEWER_FALLBACK='strong vendor-third-3'
 OFFFAM_CFG
 case "$(off_family "$OFFFAM" bait small strong small)" in
-*"'small' reviewer -> strong"*) pass "the Sonnet-only walk catches a fallback of another family on its bait" ;;
+*"'small' reviewer - -> strong"*) pass "the Sonnet-only walk catches a fallback of another family on its bait" ;;
 *) fail "the Sonnet-only walk missed its bait — the check is vacuous" ;;
+esac
+case "$(off_family "$SCRATCH/no-such-tree" '' small small 2>/dev/null)" in
+*"none answered"*) pass "the Sonnet-only walk reports a walk that answered nothing, rather than passing vacuously" ;;
+*) fail "the Sonnet-only walk passed a walk that answered nothing" ;;
 esac
 # shellcheck disable=SC2086 # the session list, split on purpose
 _k_off=$(off_family "$KIT" '' "$_k_rev" $_k_sessions)
@@ -1267,6 +1288,7 @@ case "$W_ERR_TEXT" in
 *"session's own"*"($K_SELF)"*) pass "…and warns that the mapped answer was the session's own model" ;;
 *) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
 esac
+K_BARE_ERR=$W_ERR_TEXT
 
 # (2) The session runs on the plain reviewer's model and asks for the plain
 # reviewer: refused, nothing printed — never the session's own model — and
@@ -1314,10 +1336,9 @@ wrap "$K_SELF" --model reviewer self-implemented
 [ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
 	pass "'--model reviewer self-implemented' is refused like the bare form, printing nothing" ||
 	fail "'--model reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — the flagged spelling walks past the refusal"
-case "$W_ERR_TEXT" in
-*"session's own"*) pass "…and warns as the bare form does" ;;
-*) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
-esac
+[ -n "$W_ERR_TEXT" ] && [ "$W_ERR_TEXT" = "$K_BARE_ERR" ] &&
+	pass "…and warns exactly as the bare form does" ||
+	fail "…but its warning differs from the bare form's — stderr: '$W_ERR_TEXT', bare: '$K_BARE_ERR'"
 # The harness half is a different question: a harness token is not a model, so
 # it is never compared and never refused. This case and the empty-answer guard
 # beside it are proved by CONSTRUCTION, not by observation: the wrapper pins its
