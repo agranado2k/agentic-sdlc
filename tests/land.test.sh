@@ -205,16 +205,38 @@ s_assert_status 2 "a PR that is not a number is a usage error"
 land
 s_assert_status 2 "no PR at all is a usage error"
 
-# iterated <PR>… — record a /pr-iterate iteration on each PR, now: the stub's
-# head commit is dated 2000 unless a case says otherwise, so each event sits
-# at its head. Section 1's PRs are refused before the trace is read, and #140
-# is section 4's unconfigured run, whose trace must stay empty.
-iterated() {
-	for _it_pr in "$@"; do
-		env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=pr.iterate \
-			"subject=pr:#$_it_pr" outcome=stopped data.iteration=1 reason=seeded </dev/null >/dev/null 2>&1 ||
-			fail "could not seed a pr.iterate event on pr:#$_it_pr"
+# seed <kind> <outcome> <PR>… — record one <kind> event on each PR, now: the
+# stub's head commit is dated 2000 unless a case says otherwise, so each event
+# sits at its head.
+seed() {
+	_sd_kind=$1
+	_sd_outcome=$2
+	shift 2
+	# The keys each kind's shape asks for; one word each, split on purpose.
+	case $_sd_kind in
+	pr.iterate) _sd_data='data.iteration=1 data.applied=0 data.rejected=0 data.escalated=0' ;;
+	*)
+		# `confirm` is Axis 2's word alone, so its verdict is Axis 2's.
+		_sd_data='data.axis=1'
+		[ "$_sd_outcome" != confirm ] || _sd_data='data.axis=2'
+		;;
+	esac
+	for _sd_pr in "$@"; do
+		# shellcheck disable=SC2086
+		env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit "kind=$_sd_kind" \
+			"subject=pr:#$_sd_pr" "outcome=$_sd_outcome" $_sd_data reason=seeded </dev/null >/dev/null 2>&1 ||
+			fail "could not seed a $_sd_kind event on pr:#$_sd_pr"
 	done
+}
+# reviewed <PR>… — a /review-pr verdict at each PR's head (#673).
+reviewed() { seed review.verdict pass "$@"; }
+# iterated <PR>… — a PR the loop drove to its head: a /pr-iterate iteration
+# (#630) and the verdict of the review it ran (#673). Section 1's PRs are
+# refused before the trace is read, and #140 is section 4's unconfigured run,
+# whose trace must stay empty.
+iterated() {
+	seed pr.iterate stopped "$@"
+	reviewed "$@"
 }
 _seed=120
 while [ "$_seed" -le 210 ]; do
@@ -720,6 +742,7 @@ landed_with 304 "a pr.iterate at the head commit" '"iterated":"yes"'
 show 'pr:#304' --kind merge.land | grep -qF '"no_iteration"' && fail "an iterated landing carries a no_iteration reason" ||
 	pass "and carries no no_iteration reason"
 
+reviewed 305 307
 land 305 --no-iteration 'hotfix: the operator ran the checks by hand'
 landed_with 305 "no pr.iterate, with --no-iteration" '"iterated":"no"' '"no_iteration":"hotfix: the operator ran the checks by hand"'
 [ "$(merges)" = 1 ] && pass "--no-iteration: one merge call" || fail "--no-iteration: $(merges) merge calls"
@@ -764,10 +787,11 @@ banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
 # reader joins them as one kind, so they write one field set. The script's set
 # is every data key its landed merge.land events above carry — a release, a
 # tier and an override among them — and the train's is the data keys its emit
-# line names, compared whole. Two keys are the script's alone: data.iterated and
-# data.no_iteration answer a trace read (ADR-0019) that no chain skill makes
-# (ADR-0008 clause 7), so the train names neither.
-LAND_ONLY='iterated no_iteration'
+# line names, compared whole. Four keys are the script's alone: data.iterated,
+# data.no_iteration, data.reviewed and data.no_review answer a trace read
+# (ADR-0019) that no chain skill makes (ADR-0008 clause 7), so the train names
+# none of them.
+LAND_ONLY='iterated no_iteration reviewed no_review'
 land_keys=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" export 2>/dev/null |
 	grep -F '"kind":"merge.land"' | grep -F '"outcome":"landed"' |
 	sed 's/.*"data":{//' | grep -oE '(^|,)"[a-z_]+":' | tr -d ',":' | sort -u)
@@ -954,6 +978,7 @@ opens 403 | grep -qF '"related":"branch:feat/x"' && pass "with no ticket known, 
 land 404
 [ "$(events 404 pr.open)" = 0 ] && pass "a refused PR gets no pr.open either" || fail "a refused PR was recorded opened"
 
+reviewed 405
 land STUB_MERGE_RC=1 405 --no-iteration 'forge rejects it'
 [ "$(events 405 pr.open)" = 1 ] && pass "a merge the forge rejects still records the PR opened" ||
 	fail "$(events 405 pr.open) pr.open events for the rejected pr:#405"
@@ -999,5 +1024,100 @@ s_assert_err_has "drop --unasked" "and stderr names --unasked as what made it on
 grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- '--train' &&
 	pass "the root manual's landing row names --train" ||
 	fail "the root manual's landing row does not name --train — the train cannot tell how to run the script"
+
+# ---------------------------------------------------------------------------
+banner "14. No review.verdict at the head commit: refused, or landed on a named reason and recorded (#673)"
+# ---------------------------------------------------------------------------
+# On 2026-10-09 #665's review degraded and posted with no review.verdict; the
+# landing checked for an iteration at the head and not for a review, and
+# landed it. The same check as section 9's, for the review: a review.verdict
+# on the PR, any axis and any outcome, stamped at or after its head commit's
+# date — else exit 2, nothing merged, nothing recorded, unless --no-review
+# names why, and then merge.land says the landing had none. Every PR here is
+# #600 up, so no seed above reaches it.
+# no_rev <label> <pr> — refused on the review check, the trace untouched.
+no_rev() {
+	_nr_label=$1
+	not_landed "$2" "$_nr_label"
+	[ "$(events "$2" merge.land)" = 0 ] && [ "$(events "$2" feedback)" = 0 ] &&
+		pass "$_nr_label: no landing reached the trace" || fail "$_nr_label: a landing was recorded: $(show "pr:#$2")"
+	s_assert_err_has "review-pr" "$_nr_label: stderr sends it to /review-pr"
+	s_assert_err_has "--no-review" "$_nr_label: and names the override"
+}
+seed pr.iterate green 600
+land 600
+no_rev "an iteration at head and no review.verdict at all" 600
+s_assert_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
+
+land 601
+no_rev "neither an iteration nor a verdict" 601
+s_assert_err_has "pr-iterate" "and the one refusal names the missing iteration as well"
+s_assert_err_has "--no-iteration" "and both overrides"
+
+reviewed 602
+land STUB_HEAD_DATE=2999-01-01T00:00:00Z 602 --no-iteration 'iteration aside'
+no_rev "a review.verdict older than the head commit" 602
+
+reviewed 6030
+seed pr.iterate green 603
+land 603
+no_rev "a review.verdict on another PR only (#6030)" 603
+
+seed pr.iterate green 604
+land STUB_HEAD_RC=1 604 --no-iteration 'iteration aside'
+no_rev "a forge that does not date the head commit" 604
+
+seed review.verdict blocked 605
+seed pr.iterate red 605
+land 605
+landed_with 605 "a blocked verdict at the head — any outcome counts; the gate judges the checks" '"reviewed":"yes"'
+
+seed pr.iterate green 606
+seed review.verdict confirm 606
+land 606
+landed_with 606 "an Axis-2 verdict at the head" '"reviewed":"yes"' '"iterated":"yes"'
+show 'pr:#606' --kind merge.land | grep -qF '"no_review"' && fail "a reviewed landing carries a no_review reason" ||
+	pass "and carries no no_review reason"
+
+seed pr.iterate green 607
+land 607 --no-review 'the review degraded; read by hand'
+landed_with 607 "no review.verdict, with --no-review" '"reviewed":"no"' '"no_review":"the review degraded; read by hand"' '"iterated":"yes"'
+[ "$(merges)" = 1 ] && pass "--no-review: one merge call" || fail "--no-review: $(merges) merge calls"
+
+iterated 608
+land 608 --no-review 'not needed'
+landed_with 608 "a verdict at head and --no-review both" '"reviewed":"yes"'
+show 'pr:#608' --kind merge.land | grep -qF '"no_review"' && fail "an unused --no-review reason was recorded" ||
+	pass "and the unused override's reason is not recorded"
+
+# The documented path for a prose-only PR — a diary stamp nobody iterated or
+# reviewed: both overrides, each naming why, and both recorded.
+land 609 --no-iteration 'prose-only: diary stamp' --no-review 'prose-only: diary stamp'
+landed_with 609 "a prose-only PR on both overrides" '"iterated":"no"' '"reviewed":"no"' '"no_review":"prose-only: diary stamp"'
+
+seed pr.iterate green 610
+land STUB_MERGE_RC=1 610 --no-review 'forge rejects it'
+show 'pr:#610' --kind merge.land | grep -qF '"reviewed":"no"' && pass "a rejected merge's merge.land stopped says it had no review too" ||
+	fail "the stopped merge.land lacks reviewed=no: $(show 'pr:#610' --kind merge.land)"
+
+land 611 --no-review ''
+s_assert_status 2 "--no-review with an empty reason is a usage error"
+land 611 --no-review
+s_assert_status 2 "--no-review with no reason is a usage error"
+land 611 "--no-review" "two
+lines"
+s_assert_status 2 "--no-review with a reason that is not one line is a usage error"
+[ "$(merges)" = 0 ] && pass "and nothing reached the forge" || fail "a multi-line reason was merged on: $(merges) merge calls"
+
+# Unconfigured, the review is not checked either, and stderr says so.
+: >"$STUB_LOG"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 612 </dev/null
+s_assert_status 0 "unconfigured, a PR with no recorded verdict still lands"
+s_assert_err_has "review" "and stderr says the review verdict was not checked"
+
+# The manual's row is where the operator reads the override.
+grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- "--no-review" &&
+	pass "the root manual's landing row names --no-review" ||
+	fail "the root manual's landing row does not name --no-review"
 
 t_done "land one PR by hand"
