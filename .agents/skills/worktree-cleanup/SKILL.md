@@ -54,7 +54,7 @@ project's own memory.
 4. **Report** the script's summary block plus the diary edit: base branch before
    → after, worktrees removed, worktrees kept and why. Record each worktree's
    fate from that summary, one event per worktree the script named:
-   `sh scripts/trace.sh emit kind=worktree.prune subject=worktree:<slug> outcome=removed|kept reason='<merged, and how the script knew; or why it was kept — dirty, unmerged, fresh>' || :`.
+   `sh scripts/trace.sh emit kind=worktree.prune subject=worktree:<slug> outcome=removed|kept reason='<merged, and how the script knew; or why it was kept — dirty, unmerged, fresh, live>' || :`.
    The trace is written here and never read (the kit's ADR-0008); unconfigured, the
    call is a silent no-op.
 
@@ -67,7 +67,11 @@ ancestry can never succeed for them. Anything that satisfies neither test is
 kept. A **fresh** branch — one that has not moved since it was created, so it
 has no commits of its own — is kept and reported as fresh before either test
 runs, because ancestry would otherwise read a session that is just starting as
-merged and remove its worktree.
+merged and remove its worktree. A **live** worktree — merged and clean, but
+still held by a session, which the script reads from an open run on its run
+stack or a process working in it — is kept too, and the summary names the run
+or the process; a session that is finishing up after its pull request landed
+looks exactly like a finished one otherwise.
 
 ## Configuration
 
