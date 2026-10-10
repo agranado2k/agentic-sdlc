@@ -34,7 +34,8 @@ STUBTREE="$SCRATCH/stubtree"
 mkdir -p "$STUBTREE/scripts"
 cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" \
 	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" \
-	"$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
+	"$ROOT/scripts/trace.sh" "$ROOT/scripts/stamp.sh" "$ROOT/scripts/vocab.sh" \
+	"$ROOT/scripts/vocab.config.sh" "$STUBTREE/scripts/"
 cp -R "$ROOT/.agents" "$STUBTREE/.agents"
 TRACE_DIR_T="$SCRATCH/trace"
 printf "TRACE_DIR='%s'\n" "$TRACE_DIR_T" >"$STUBTREE/scripts/trace.kit.config.sh"
@@ -374,6 +375,83 @@ _esc_models=$(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | 
 	pass "the rung records carry the cheap model, then the implementer's" ||
 	fail "the rung records' models read '$_esc_models'"
 write_policy 'stub:model-cheap'
+
+# ---------------------------------------------------------------------------
+banner "6. With no --tier, a ticket file's stamp sizes the run (#672)"
+# ---------------------------------------------------------------------------
+# A cascade dry run sized `implement --ticket-file <f>` from the skill's own
+# phase and ignored the file's `Tier: mechanical`, so a mechanical ticket never
+# reached the cascade unless the caller repeated the tier by hand.
+stamped() { # <file> <stamp lines…> — the oracle ticket, stamped
+	cp "$T_ORACLE" "$1"
+	_sf=$1
+	shift
+	printf '\n' >>"$_sf"
+	printf '%s\n' "$@" >>"$_sf"
+}
+T_MECH="$SCRATCH/ticket-mech.md"
+stamped "$T_MECH" 'Blocked by: none' 'Tier: mechanical' 'Confidence: high'
+nostamp() { # <ticket file> [extra args…] — the dispatch with no --tier
+	_tf=$1
+	shift
+	rm -rf "$TRACE_DIR_T"
+	t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+		implement --ticket-file "$_tf" --worktree "$WT" --base "$BASE" --prompt 'do the ticket' "$@"
+}
+
+fresh_wt
+nostamp "$T_MECH"
+[ "$S_STATUS" = 0 ] && [ "$(spawn_rungs | awk '{print $1 $2}' | tr '\n' ' ')" = "escalated1 passed2 " ] &&
+	pass "a 'Tier: mechanical' ticket file with no --tier dispatches as mechanical, and cascades" ||
+	fail "a stamped mechanical ticket gave status $S_STATUS, rungs '$(spawn_rungs)': $S_ERR"
+
+fresh_wt
+nostamp "$T_MECH" --dry-run
+case "$S_ERR" in
+*"tier 'mechanical'"*"ticket file's stamp"*) pass "--dry-run names the ticket file's stamp as the source" ;;
+*) fail "--dry-run does not name the file's stamp: $S_ERR" ;;
+esac
+
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier implementer --ticket-file "$T_MECH" --worktree "$WT" --base "$BASE" --prompt 'x'
+printf '%s\n' "$S_OUT" | grep -q 'model-for-building' && [ -z "$(spawn_rungs)" ] &&
+	pass "an explicit --tier overrides the file's stamp" || fail "--tier implementer over a mechanical stamp reached: $S_OUT"
+
+fresh_wt
+nostamp "$T_ORACLE" --dry-run
+case "$S_ERR" in
+*"tier 'implementer'"*"implement's own phase"*) pass "a stampless file falls back to the skill's phase, saying so" ;;
+*) fail "a stampless file did not fall back to the phase: $S_ERR" ;;
+esac
+case "$S_ERR" in
+*"no stamp"*) pass "…and says the file carried no stamp" ;;
+*) fail "…but nothing says the file carried no stamp: $S_ERR" ;;
+esac
+
+# The domain travels with the tier; a refused stamp is never a sizing.
+T_DOM="$SCRATCH/ticket-dom.md"
+stamped "$T_DOM" 'Tier: mechanical' 'Domain: content'
+fresh_wt
+nostamp "$T_DOM" --dry-run
+case "$S_ERR" in
+*"tier 'mechanical content'"*"ticket file's stamp"*) pass "the stamp's Domain: line travels with its tier" ;;
+*) fail "the stamp's domain was lost: $S_ERR" ;;
+esac
+T_BAD="$SCRATCH/ticket-bad.md"
+stamped "$T_BAD" 'Tier: wizard'
+fresh_wt
+nostamp "$T_BAD" --dry-run
+[ "$S_STATUS" = 2 ] && [ ! -e "$WT/work.txt" ] &&
+	pass "a refused stamp is exit 2, and nothing runs" || fail "a refused stamp exited $S_STATUS: $S_ERR"
+case "$S_ERR" in
+*wizard*) fail "the refused value was printed: $S_ERR" ;;
+*) pass "…and the refused value, ticket text, is never printed" ;;
+esac
+fresh_wt
+nostamp "$SCRATCH/no-such-ticket.md" --dry-run
+[ "$S_STATUS" = 2 ] && pass "a --ticket-file that is no file is exit 2" || fail "a missing ticket file exited $S_STATUS: $S_ERR"
 
 SHIPPED="$ROOT/scripts/agents.config.sh"
 grep -q "^AGENT_CASCADE_MECHANICAL=''" "$SHIPPED" &&
