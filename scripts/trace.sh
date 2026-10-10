@@ -1246,13 +1246,18 @@ trace_stack_tops() {
 	_st_dir=$1
 	_st_out=
 	_st_own=$(trace_stack_name '')
+	# Every session's name: the `*` trace_stack_name was handed is the one
+	# unquoted part, so a trace root holding a glob character matches itself.
 	_st_any=$(trace_stack_name '*')
+	_st_suf=${_st_any##*\*}
+	_st_pre=${_st_any%"$_st_suf"}
+	_st_pre=${_st_pre%\*}
 	_st_set=$-
 	set +f
 	set -- "$TRACE_ROOT_DIR/current"/*
 	case $_st_set in *f*) set -f ;; esac
 	for TRACE_STACK in "$@"; do
-		case $TRACE_STACK in "$_st_own" | $_st_any) ;; *) continue ;; esac
+		case $TRACE_STACK in "$_st_own" | "$_st_pre"*"$_st_suf") ;; *) continue ;; esac
 		[ -e "$TRACE_STACK" ] || continue
 		trace_stack_readable || die "cannot read the run stack of $_st_dir"
 		_st_top=$(trace_stack top) || die "cannot read the run stack of $_st_dir"

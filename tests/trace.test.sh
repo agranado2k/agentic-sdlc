@@ -2406,6 +2406,14 @@ if [ "$(id -u)" != 0 ]; then
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi
+# A trace root whose path carries a glob character still finds every stack:
+# a stack missed would read as "nothing open", the unsafe direction.
+AL2="$SCRATCH/stack-all-[680]"; AL2ON=$(policy "$AL2")
+AL2_RUN=$(cd "$AL_WT" && env TRACE_CONFIG="$AL2ON" TRACE_SESSION=al-g sh scripts/trace.sh begin implement 2>/dev/null)
+t_run_split env TRACE_CONFIG="$AL2ON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$AL_WT" --all
+[ "$S_STATUS" = 0 ] && [ -n "$AL2_RUN" ] && [ "$S_OUT" = "$AL2_RUN" ] &&
+	pass "a trace root named with [ ] still yields its session's open run" ||
+	fail "--all under a bracketed trace root: exit $S_STATUS, stdout '$S_OUT', want '$AL2_RUN'; stderr '$S_ERR'"
 t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$AL_WT" --all
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, --all prints nothing and exits 0" ||
 	fail "unconfigured --all: exit $S_STATUS, stdout '$S_OUT'"
