@@ -4982,7 +4982,7 @@ banner "54. A transcript finalised just past the kit's wait bound is read by the
 # from whatever the policy says would follow a changed bound silently. A new
 # bound fails this leg until the case is re-read against it.
 B674_PINNED=3000
-D674=3500
+D674=$((B674_PINNED + 500))
 B674=$(sed -n "s/^TRACE_AGENT_WAIT_MS='\([1-9][0-9]*\)'$/\1/p" "$KIT/scripts/trace.kit.config.sh")
 [ "$B674" = "$B674_PINNED" ] && pass "the kit's policy names the wait bound this case is built on ($B674_PINNED ms)" ||
 	fail "scripts/trace.kit.config.sh names TRACE_AGENT_WAIT_MS '$B674', not the $B674_PINNED ms this case's $D674 ms delay is built on — re-read the case against the new bound"
@@ -5032,4 +5032,7 @@ else
 	note "node is not on PATH: the late hand-back legs did not run"
 fi
 
+if [ "$SKIPPED" -gt 0 ]; then
+	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
+fi
 t_done "trace hooks"
