@@ -1236,4 +1236,114 @@ grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- "--no-revie
 	pass "the root manual's landing row names --no-review" ||
 	fail "the root manual's landing row does not name --no-review"
 
+banner "15. Every kind the script reads from the trace is named by ADR-0019 (#723)"
+# The script is an operator-run reader of the trace (ADR-0019 clause 1), and
+# the record is where each read it makes is decided. A `show --kind` read the
+# record does not name is an undecided read, so this section reads every kind
+# the script asks `show` for and fails on one the record's Decision outcome
+# and amendments do not name in backticks. A read through a wrapper — a
+# function passing its "$1" as the kind — is followed to the wrapper's calls;
+# a kind the reader cannot spell out is named as unreadable, never skipped.
+ADR19=$(ls "$KIT"/docs/adr/0019-*.md 2>/dev/null | head -1)
+# land_read_kinds <script> — one line per read: its kind; `?<line>` for a
+# read whose kind is neither a literal nor a wrapper's "$1", or a wrapper
+# called with a kind it cannot spell; `!<subcommand> <line>` for a trace read
+# through any subcommand but `show` and `dir`. A backslash-continued line is
+# read with the next, and a function's name is dropped at its closing brace,
+# so a top-level "$1" read follows no wrapper.
+land_read_kinds() {
+	awk '
+		pend != "" { $0 = pend $0; pend = "" }
+		/\\$/ { sub(/\\$/, ""); pend = $0 " "; next }
+		/^[ \t]*#/ { next }
+		{ n++; L[n] = $0; at[n] = NR }
+		/^[A-Za-z_][A-Za-z0-9_]*\(\) *\{/ { fn = $0; sub(/\(\).*/, "", fn) }
+		/^}/ { fn = "" }
+		/trace_read[ \t]+[a-z]/ {
+			c = $0; sub(/.*trace_read[ \t]+/, "", c); sub(/[^a-z].*/, "", c)
+			if (c != "show" && c != "dir") print "!" c " " NR
+		}
+		/show[^|]*--kind/ {
+			k = $0; sub(/.*--kind[ =]*/, "", k); sub(/[ \t|;)].*/, "", k)
+			if (k == "\"$1\"" || k == "$1") { if (fn != "") W[fn] = 1; else print "?" NR }
+			else if (k ~ /^[a-z][a-z._]*$/) print k
+			else print "?" NR
+		}
+		END {
+			for (f in W) for (i = 1; i <= n; i++) {
+				s = L[i]
+				if (s ~ ("^" f "\\(\\)")) continue
+				while (match(s, "(^|[^A-Za-z0-9_])" f "[ \t]+")) {
+					s = substr(s, RSTART + RLENGTH); k = s; sub(/[ \t|;)&].*/, "", k)
+					if (k ~ /^[a-z][a-z._]*$/) print k; else print "?" at[i]
+				}
+			}
+		}' "$1" | sort -u
+}
+# land_reads_unnamed <script> <record> — every read <record> does not name,
+# one per line; nothing when each is named. A script with no read found is
+# named too: a check that read nothing has checked nothing.
+land_reads_unnamed() {
+	_lr_kinds=$(land_read_kinds "$1" | tr ' ' '_')
+	[ -n "$_lr_kinds" ] || { echo "no show --kind read found in $1"; return; }
+	_lr_text=$(sed -n '/^## Decision outcome/,$p' "${2:-/dev/null}" 2>/dev/null)
+	for _lr_k in $_lr_kinds; do
+		case $_lr_k in
+		'?'*) echo "an unreadable kind at line ${_lr_k#?}" ;;
+		'!'*) _lr_c=${_lr_k#!} && echo "a ${_lr_c%%_*} read at line ${_lr_c#*_}, beyond show" ;;
+		*) case $_lr_text in *"\`$_lr_k\`"*) ;; *) echo "$_lr_k" ;; esac ;;
+		esac
+	done
+}
+_lr_read=$(land_read_kinds "$LAND" | tr '\n' ' ')
+[ "$_lr_read" = "pr.iterate pr.open review.verdict " ] &&
+	pass "the script's reads are the three kinds: $_lr_read" ||
+	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open and review.verdict"
+_lr_miss=$(land_reads_unnamed "$LAND" "$ADR19")
+[ -z "$_lr_miss" ] && pass "ADR-0019 names every kind the landing script reads" ||
+	fail "ADR-0019 does not name the landing script's read of: $(echo $_lr_miss)"
+LR_BAIT="$SCRATCH/land.reads-bait"
+mkdir -p "$LR_BAIT"
+{ cat "$LAND"; printf '%s\n' 'trace_read show "pr:#$PR" --kind feedback >/dev/null'; } >"$LR_BAIT/literal.sh"
+[ "$(land_reads_unnamed "$LR_BAIT/literal.sh" "$ADR19")" = feedback ] &&
+	pass "bait: a new show --kind read the record does not name turns the check red, naming it" ||
+	fail "bait: an unnamed literal read was not named: $(land_reads_unnamed "$LR_BAIT/literal.sh" "$ADR19")"
+{ cat "$LAND"; printf '%s\n' 'seen() {' '	trace_read show "pr:#$PR" --kind "$1"' '}' 'seen spawn.end'; } >"$LR_BAIT/wrapper.sh"
+[ "$(land_reads_unnamed "$LR_BAIT/wrapper.sh" "$ADR19")" = spawn.end ] &&
+	pass "bait: a read through a new wrapper is followed to its call, and named" ||
+	fail "bait: a wrapped unnamed read was not named: $(land_reads_unnamed "$LR_BAIT/wrapper.sh" "$ADR19")"
+{ cat "$LAND"; printf '%s\n' 'trace_read show "pr:#$PR" --kind "$K"'; } >"$LR_BAIT/variable.sh"
+case $(land_reads_unnamed "$LR_BAIT/variable.sh" "$ADR19") in
+*unreadable*) pass "bait: a kind the check cannot spell out is named unreadable, never skipped" ;;
+*) fail "bait: a read of a variable kind passed unread" ;;
+esac
+# lr_bait <name> <expected substring> <what it proves> <line>… — the check on
+# a copy of the script with <line>s appended names <expected substring>.
+lr_bait() {
+	_lb_n=$1 _lb_x=$2 _lb_w=$3
+	shift 3
+	{ cat "$LAND"; printf '%s\n' "$@"; } >"$LR_BAIT/$_lb_n.sh"
+	case $(land_reads_unnamed "$LR_BAIT/$_lb_n.sh" "$ADR19") in
+	*"$_lb_x"*) pass "bait: $_lb_w" ;;
+	*) fail "bait: not caught — $_lb_w: $(land_reads_unnamed "$LR_BAIT/$_lb_n.sh" "$ADR19")" ;;
+	esac
+}
+lr_bait continued feedback "a read split by a backslash across lines is read whole, and named" \
+	'trace_read show "pr:#$PR" \' '	--kind feedback >/dev/null'
+lr_bait toplevel 'unreadable kind' 'a top-level "$1" read after a function follows no wrapper, and is named unreadable' \
+	'trace_read show "pr:#$PR" --kind "$1"'
+lr_bait wrapper-var 'unreadable kind' 'a wrapper called with a kind it cannot spell is named unreadable' \
+	'seen() {' '	trace_read show "pr:#$PR" --kind "$1"' '}' 'seen "$K"'
+lr_bait summary 'a summary read' 'a trace read through a subcommand beyond show is named' \
+	'trace_read summary --by kind >/dev/null'
+grep -vF 'pr.open' "${ADR19:-/dev/null}" >"$LR_BAIT/record.md"
+[ "$(land_reads_unnamed "$LAND" "$LR_BAIT/record.md")" = pr.open ] &&
+	pass "bait: with pr.open cut from the record, the check names it" ||
+	fail "bait: a record that does not name pr.open passed: $(land_reads_unnamed "$LAND" "$LR_BAIT/record.md")"
+printf '%s\n' 'echo no reads here' >"$LR_BAIT/none.sh"
+case $(land_reads_unnamed "$LR_BAIT/none.sh" "$ADR19") in
+*'no show --kind read'*) pass "bait: a script with no read found fails, having read nothing" ;;
+*) fail "bait: a script with no read passed the check" ;;
+esac
+
 t_done "land one PR by hand"

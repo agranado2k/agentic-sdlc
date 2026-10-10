@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the implementer session for #630, on the operator's standing delegation of rulings (2026-10-08); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: ADR-0008 clause 7, in one respect — it names one more operator-run reader of the trace (clause 1 below)
-- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; see the amendment below)
+- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; see the amendments below)
 
 ## Context and problem statement
 
@@ -113,3 +113,28 @@ delegation; the merge of its pull request is the operator's yes.
 `tests/land.test.sh` section 14 drives each branch; the train's `merge.land`
 names neither `reviewed` nor `no_review`, the script's alone like the
 iteration keys (section 10).
+
+## Amendment 2026-10-10 — the `pr.open` read (#723)
+
+Since #657 (ticket #638) the script has read one more kind, and nothing
+recorded it: clause 1 and the #673 amendment name two. Found by the
+operator's review of PR #722. Decided by the implementer session for #723 on
+the operator's standing delegation; the merge of its pull request is the
+operator's yes.
+
+1. **Clause 1 reads a third kind.** The script reads `show` for `pr.open` on
+   the PR it lands, beside `pr.iterate` and `review.verdict`; still no skill
+   gains a read.
+2. **What the read is for.** A PR opened outside `/implement` left no
+   `pr.open`, and `/retro` joins a ticket to its PR through that event's
+   `related` field. When the trace holds none on `pr:#<N>`, the script
+   writes one before the merge, marked `data.via=land`, its `related` the
+   ticket and a head branch of bounded shape when it has them. It is no
+   check: it never refuses and takes no override. Unconfigured, nothing is
+   read and nothing written (clause 5).
+3. **Every read is named here.** The kinds the script asks `show` for are
+   `pr.iterate`, `review.verdict` and `pr.open`, and a fourth is a decision
+   this record has to name first. `tests/land.test.sh` section 15 reads
+   every `show --kind` read in the script, following a wrapper's `"$1"` to
+   its calls, and fails on a kind this record's Decision outcome and
+   amendments do not name; its baits prove it can.

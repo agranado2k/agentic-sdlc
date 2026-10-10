@@ -754,7 +754,7 @@ while IFS='|' read -r _kr_c _kr_src _kr_s; do
 		pass "bait: with the $_kr_src sentence cut from clause $_kr_c, the check fails"
 done <<'EOF'
 5|#543|Unconfigured, a named `end` is the silent no-op every call is.
-7|ADR-0019 clause 1|the landing script reads `show` only, for `pr.iterate` and `review.verdict` on the PR it lands (ADR-0019)
+7|ADR-0019 clause 1|the landing script reads `show` only, for `pr.iterate`, `review.verdict` and `pr.open` on the PR it lands (ADR-0019)
 5|#627|The subagent-stop hook reads the first-line form too, through the same parser, so the guard refuses exactly the prompts the stop would record as `unattributed`.
 5|#453|The Claude Code adapter's subagent-stop hook keys the stack on the payload's `session_id` the same way.
 5|ADR-0023 clause 1|Its refusals are `stack <dir>`'s, exit 2 with nothing on stdout, and one more:

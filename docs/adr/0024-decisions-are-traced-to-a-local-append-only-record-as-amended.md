@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: the implementer session for #692, under ADR-0021 and the operator's delegation of rulings (2026-10-10); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: supersedes ADR-0008 whole, consolidating it with its clause numbers kept; written under ADR-0021 clauses 1 to 4, and it reverses nothing; folds in ADR-0023 clause 1 (clause 5 here) and the readers ADR-0019 clause 1 and ADR-0023 clause 3 name (clause 7 here), both of which stay binding for their own decisions
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it)
 
 ## Context and problem statement
 
@@ -382,11 +382,12 @@ Chosen: **option 1**.
    never a preloaded lessons file (shared invariant §11). A diagnosis reads
    the trace by the operator's hand: the operator runs the read and hands
    over what it printed, as data. Tools the operator runs read as the
-   operator: the landing script reads `show` only, for `pr.iterate` and
-   `review.verdict` on the PR it lands (ADR-0019), and the worktree cleanup
-   reads `stack <dir> --all` (ADR-0023). A hook's read of `stack` or of a
-   transcript is the adapter's business (clause 8). A skill that writes a
-   `Trace-Run:` line into a spawn prompt is writing, not reading.
+   operator: the landing script reads `show` only, for `pr.iterate`,
+   `review.verdict` and `pr.open` on the PR it lands (ADR-0019), and the
+   worktree cleanup reads `stack <dir> --all` (ADR-0023). A hook's read of
+   `stack` or of a transcript is the adapter's business (clause 8). A skill
+   that writes a `Trace-Run:` line into a spawn prompt is writing, not
+   reading.
 8. **The agent harness is the adapter's business.** Session, subagent and
    tool-call capture, and the transcript usage extractor, live under the
    Claude Code adapter, dormant for consumers; only a kit-only settings file
@@ -477,7 +478,8 @@ each was folded:
 - Clause 6 — the dated price table and its kit-only refresh (#270).
 - Clause 7 — the readers are the operator and `/retro` (#309); the landing
   script as an operator-run reader (ADR-0019, #630, and its review-verdict
-  check, #673); the worktree cleanup (ADR-0023 clause 3).
+  check, #673, and its `pr.open` read, #723); the worktree cleanup
+  (ADR-0023 clause 3).
 - Clause 8 — the turn-ending tool and the resume anchor (#565); the output
   snapshot (#608).
 
