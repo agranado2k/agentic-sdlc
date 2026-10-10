@@ -31,9 +31,12 @@ TRACE="$KIT/scripts/trace.sh"
 t_init
 
 # --- the stub forge CLI ------------------------------------------------------
-# The PR's state is one value per line, in the order the script asks for it:
-# state, isDraft, mergeable, mergeStateStatus, reviewDecision, base branch,
-# closing ticket, head branch, title. STUB_* variables set the forge's answers.
+# The PR's state is one `name=value` line per field — state, isDraft,
+# mergeable, mergeStateStatus, reviewDecision, baseRefName, ticket,
+# headRefName, title — and the head commit's is oid and committedDate. The
+# script reads each field by its name, never by its line (#684), so
+# STUB_ORDER=reversed answers the same fields bottom-up. STUB_* variables set
+# the forge's answers.
 STUBDIR="$SCRATCH/bin"
 mkdir -p "$STUBDIR"
 cat >"$STUBDIR/gh" <<'EOF'
@@ -41,13 +44,15 @@ cat >"$STUBDIR/gh" <<'EOF'
 printf 'ARGV: %s\n' "$*" >>"$STUB_LOG"
 # The forge's state for one run: knob assignments land() wrote for it.
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+# order — the answer's lines as asked, or bottom-up under STUB_ORDER=reversed.
+order() { if [ "${STUB_ORDER:-}" = reversed ]; then sed -n '1!G;h;$p'; else cat; fi; }
 case " $* " in
 *" pr view "*"mergeCommit"*) printf '%s\n' "${STUB_SHA-abcdef0123456789abcdef0123456789abcdef01}" ;;
 *" pr view "*"headRefOid"*)
 	# The head commit, and the date it was committed: the iteration check
 	# reads the trace for a pr.iterate at or after it (#630).
 	[ "${STUB_HEAD_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_HEAD_RC"; }
-	printf '%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}"
+	printf 'oid=%s\ncommittedDate=%s\n' "${STUB_HEAD_OID-1234567890123456789012345678901234567890}" "${STUB_HEAD_DATE-2000-01-01T00:00:00Z}" | order
 	;;
 *" pr view "*"body"*)
 	# The PR body is a file the case wrote — free text, quotes and all, so it
@@ -57,8 +62,9 @@ case " $* " in
 	;;
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
-	printf '%s\n' "${STUB_PRSTATE:-OPEN}" "${STUB_DRAFT:-false}" "${STUB_MERGEABLE:-MERGEABLE}" \
-		"${STUB_MSS:-CLEAN}" "${STUB_REVIEW-APPROVED}" main "${STUB_TICKET-77}" "${STUB_BRANCH-feat/x}" "${STUB_TITLE:-feat(x): a slice}"
+	printf '%s\n' "state=${STUB_PRSTATE:-OPEN}" "isDraft=${STUB_DRAFT:-false}" "mergeable=${STUB_MERGEABLE:-MERGEABLE}" \
+		"mergeStateStatus=${STUB_MSS:-CLEAN}" "reviewDecision=${STUB_REVIEW-APPROVED}" baseRefName=main "ticket=${STUB_TICKET-77}" \
+		"headRefName=${STUB_BRANCH-feat/x}" "title=${STUB_TITLE:-feat(x): a slice}" | order
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
@@ -287,6 +293,23 @@ land STUB_TICKET= 126
 fb=$(show 'pr:#126' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"subject":"pr:#126"' && pass "with no ticket known, feedback sits on the PR itself" ||
 	fail "with no ticket, feedback is not on pr:#126: $fb"
+
+# The forge's answer read by field name, never by line (#684): the same fields
+# answered bottom-up land the same PR, every value where it belongs — and a
+# draft answered bottom-up is still a draft.
+land STUB_ORDER=reversed STUB_TICKET=91 STUB_BRANCH=feat/reordered STUB_TITLE='feat(y): reordered' 127
+s_assert_status 0 "a forge answering the fields in another order lands the PR"
+ml=$(show 'pr:#127' --kind merge.land)
+for tok in '"related":"ticket:#91"' '"reason":"feat(y): reordered"' '"iterated":"yes"' '"reviewed":"yes"'; do
+	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "reordered, merge.land still carries $tok" || fail "reordered, merge.land lacks $tok: $ml"
+done
+po=$(show 'pr:#127' --kind pr.open)
+printf '%s\n' "$po" | grep -qF '"related":"ticket:#91 branch:feat/reordered"' && pass "reordered, pr.open names the head branch and the ticket" ||
+	fail "reordered, pr.open lost its ticket or branch: $po"
+grep -q '^ARGV: run list --branch main ' "$STUB_LOG" && pass "reordered, the base branch is still main" ||
+	fail "reordered, the base branch was misread: $(grep 'run list' "$STUB_LOG")"
+land STUB_ORDER=reversed STUB_DRAFT=true 108
+not_landed 108 "a draft answered bottom-up"
 
 # ---------------------------------------------------------------------------
 banner "3. The verdict question, asked at a terminal"
