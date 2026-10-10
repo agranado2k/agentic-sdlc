@@ -85,9 +85,9 @@ t_run_split sh "$VOCAB" fields
 	fail "run from the kit, the checker read something other than the shipped policy file"
 
 # ---------------------------------------------------------------------------
-banner "2. tier — the resolver's literal, and /to-tickets' stamp"
+banner "2. tier — the resolver's one spelling, and /to-tickets' stamp"
 # ---------------------------------------------------------------------------
-resolver_tiers=$(sed -n 's/^[[:space:]]*\([a-z]* | [a-z]* | [a-z]* | [a-z]*\)) _rt_known=1 ;;$/\1/p' "$RESOLVER" | sed 's/ | / /g')
+resolver_tiers=$(sh -c ". '$RESOLVER'; agents_tier_names")
 assert_equal "the tier vocabulary is the resolver's four names, in its order" "$resolver_tiers" "$(t_field_tokens tier)"
 stamp_tiers=$(sed -n 's/.*`Tier: <\([a-z|]*\)>`.*/\1/p' "$TICKETS" | head -1 | tr '|' ' ')
 assert_equal "/to-tickets stamps the same four, in the same order" "$stamp_tiers" "$(t_field_tokens tier)"
@@ -200,5 +200,34 @@ banner "11. author-kind — /pr-iterate's two kinds of review thread, in their o
 # headings — `**Bot review threads**`, `**Human threads**` — case folded.
 kinds=$(sed -n 's/^- \*\*\([A-Z][a-z]*\) \(review \)\{0,1\}threads\*\*.*/\1/p' "$ITERATE" | tr 'A-Z\n' 'a-z ' | sed 's/ $//')
 assert_equal "the author-kind vocabulary is the two thread kinds, in the skill's order" "$kinds" "$(t_field_tokens author-kind)"
+
+# ---------------------------------------------------------------------------
+banner "12. The four tier names are spelled together only in the vocabulary policy and its owner (#681)"
+# ---------------------------------------------------------------------------
+# The tier names live in the vocabulary policy and, once, in the resolver
+# that owns them (the policy file's header says so): agents_tier_names. The
+# resolver keeps that one spelling because it is also SOURCED with nothing
+# anchoring it — no directory, so no checker or policy file it could find —
+# and still owes such a caller a closed answer; section 2 holds it equal to
+# the policy. Everything else — the dispatchers, bootstrap — reads the names
+# from the resolver instead of spelling them. So three lines may carry the
+# four names together: the policy file's VOCAB_TIER, the checker's shipped
+# default it restates (section 1 holds them equal), and agents_tier_names.
+# The adapter's hooks are out of reach on purpose — hook.lib.sh records its
+# deliberate coupling: a hook reads no policy file to size a stop.
+tier_spellers() {
+	(cd "$1" && grep -rnE 'planner.{0,40}implementer.{0,40}mechanical.{0,40}reviewer' bootstrap.sh scripts) |
+		grep -vE "^scripts/vocab(\.config)?\.sh:[0-9]+:[[:space:]]*VOCAB_TIER='[a-z ]*'\$" |
+		grep -vE "^scripts/agents\.lib\.sh:[0-9]+:agents_tier_names\(\) \{ printf '%s' '[a-z ]*'; \}\$"
+}
+spellers=$(tier_spellers "$KIT")
+assert_equal "no script and not bootstrap spells the four tier names together" "$spellers" ""
+
+# BAIT — the grep must see a spelling where one is planted.
+mkdir -p "$SCRATCH/bait-tiers/scripts"
+printf '%s\n' "for t in planner implementer mechanical reviewer; do :; done" >"$SCRATCH/bait-tiers/bootstrap.sh"
+printf '%s\n' "VOCAB_TIER='planner implementer mechanical reviewer'" >"$SCRATCH/bait-tiers/scripts/vocab.config.sh"
+bait_spellers=$(tier_spellers "$SCRATCH/bait-tiers")
+assert_equal "bait: a planted loop is found, the policy line is not" "$bait_spellers" "bootstrap.sh:1:for t in planner implementer mechanical reviewer; do :; done"
 
 t_done "vocab-policy"

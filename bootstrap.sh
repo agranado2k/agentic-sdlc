@@ -449,7 +449,7 @@ agents_wizard() {
 	echo ""
 
 	_aw_declared=""
-	for _aw_tier in planner implementer mechanical reviewer; do
+	for _aw_tier in $TIER_NAMES; do
 		_aw_upper=$(printf '%s' "$_aw_tier" | tr 'a-z' 'A-Z')
 
 		# A tier the project already mapped is not asked about at all. Asking
@@ -669,7 +669,13 @@ KIT_ONLY="tests/catalogue.test.sh tests/kit-demo.sh tests/gate-path-roots.test.s
 # .claude/agents/<tier>.md: the kit's own wiring of the Claude Code adapter's
 # agent types, links into adapters/ (#588). Stripped like .claude/settings.json
 # below, so a consumer's agent types arrive dormant, wired only by them.
-KIT_ONLY="tests/task.test.sh .claude/agents/planner.md .claude/agents/implementer.md .claude/agents/mechanical.md .claude/agents/reviewer.md $KIT_ONLY"
+# One per tier, named from the resolver that owns the tier names (#681) —
+# read here, before the cd below, from the scripts/ beside this script.
+TIER_NAMES=$(. "$(dirname -- "$0")/scripts/agents.lib.sh" && agents_tier_names) ||
+	die "cannot read the tier names from scripts/agents.lib.sh beside $0"
+_tier_agents=
+for _tn in $TIER_NAMES; do _tier_agents="$_tier_agents .claude/agents/$_tn.md"; done
+KIT_ONLY="tests/task.test.sh$_tier_agents $KIT_ONLY"
 
 # ON the list, and the reason is the whole shape of ADR-0008 clause 8:
 # .claude/settings.json. The trace hooks under adapters/claude-code/hooks/ SHIP
