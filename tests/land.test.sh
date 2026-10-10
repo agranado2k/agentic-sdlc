@@ -412,7 +412,16 @@ land STUB_RUNS= STUB_CATFILE_RC=128 "STUB_WORKFLOWS=$SCRATCH/wf-nopush" 157
 s_assert_status 1 "no run, and a merge commit whose workflows cannot be read here: exit 1"
 show 'pr:#157' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
 	fail "an unreadable workflow tree was recorded as known: $(show 'pr:#157')"
-s_assert_err_has "unverified" "stderr says the merge is unverified"
+s_assert_err_has "could not be read" "stderr says the merge's workflows could not be read — the merge is unverified"
+# A workflow file the tree lists but git cannot read is no answer either: a
+# directory named like one stands in for it, beside a file with no push.
+mkdir -p "$SCRATCH/wf-unread/broken.yml"
+cp "$SCRATCH/wf-nopush/manual.yml" "$SCRATCH/wf-unread/"
+land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-unread" 159
+s_assert_status 1 "no run, and a workflow file that cannot be read: exit 1, never none"
+show 'pr:#159' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
+	fail "an unreadable workflow file was read as no push trigger: $(show 'pr:#159')"
+s_assert_err_has "could not be read" "stderr says the workflows could not be read"
 
 land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-push" 158 --train
 s_assert_status 1 "the train's landing of an unverified merge is exit 1 — the train stops on it"

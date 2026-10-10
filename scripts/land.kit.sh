@@ -352,23 +352,21 @@ if [ -n "$RELEASE" ]; then
 	fi
 fi
 
-# --- 3. the base branch's workflows on the merge commit -----------------------
-# Listed until nothing new appears: a workflow the forge registers a beat
-# after the first is watched too. With no sha there is nothing to list.
 # push_workflows <commit> — the workflow files under .github/workflows/, as
 # the merge commit holds them, that declare a push trigger: one name per
-# line. Exit 1 when the commit itself is not here to read; a commit with no
-# workflow directory declares none. A trigger is `push` in the top-level
-# `on:` value (`on: push`, `on: [push, …]`) or a `push` key under it. Its
-# branch filters are not read: a push trigger that excludes the base reads as
-# expected, and a wrong `unknown` stops a train where a wrong `none` would
-# call an unverified merge verified.
+# line. Exit 1 when the commit, or one of its workflow files, is not here to
+# read; a commit with no workflow directory declares none. A trigger is
+# `push` in the top-level `on:` value (`on: push`, `on: [push, …]`) or a
+# `push` key under it. Its branch filters are not read: a push trigger that
+# excludes the base reads as expected, and a wrong `unknown` stops a train
+# where a wrong `none` would call an unverified merge verified.
 push_workflows() {
 	git -C "$ROOT" cat-file -e "$1^{commit}" 2>/dev/null || return 1
 	_pw_names=$(git -C "$ROOT" ls-tree --name-only "$1:.github/workflows" 2>/dev/null) || return 0
-	for _pw_f in $_pw_names; do
+	printf '%s\n' "$_pw_names" | while IFS= read -r _pw_f; do
 		case $_pw_f in *.yml | *.yaml) ;; *) continue ;; esac
-		git -C "$ROOT" show "$1:.github/workflows/$_pw_f" 2>/dev/null | awk '
+		_pw_text=$(git -C "$ROOT" show "$1:.github/workflows/$_pw_f" 2>/dev/null) || exit 1
+		if printf '%s\n' "$_pw_text" | awk '
 			{ sub(/^#.*/, ""); sub(/[ \t]#.*/, "") }
 			/^[^ \t]/ { on = 0 }
 			/^["\047]?on["\047]?[ \t]*:/ {
@@ -377,10 +375,15 @@ push_workflows() {
 				on = 1; next
 			}
 			on && /^[ \t]+(-[ \t]+)?["\047]?push["\047]?[ \t]*(:|$)/ { f = 1 }
-			END { exit !f }' && printf '%s\n' "$_pw_f"
+			END { exit !f }'; then
+			printf '%s\n' "$_pw_f"
+		fi
 	done
-	return 0
 }
+
+# --- 3. the base branch's workflows on the merge commit -----------------------
+# Listed until nothing new appears: a workflow the forge registers a beat
+# after the first is watched too. With no sha there is nothing to list.
 START=$(date +%s)
 WORKFLOWS=success
 WATCHED=
