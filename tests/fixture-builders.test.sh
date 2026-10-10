@@ -175,6 +175,20 @@ probe=$(TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONF
 	fail "the trace scrub is not effective: the sourced suite still sees $probe"
 
 # ---------------------------------------------------------------------------
+banner "A skip note under set -u does not kill the suite"
+# ---------------------------------------------------------------------------
+# note counts into SKIPPED, and every suite that calls it runs under set -u.
+# A counter the suite never initialised killed the stop-hook suite at its
+# first skip, on a host without a millisecond clock (#709) — and self-host,
+# forge-broker, trace and nine more took the same path (#716). The probe
+# sources the lib under set -u, takes the skip path once and prints the count
+# between sentinels: an unbound counter dies before the closing one.
+probe=$(AGENT_SUITE_BUDGET=off sh -u -c '. "$0"; note "probe skip" >/dev/null; printf "counted[%s]" "$SKIPPED"' "$KIT/tests/lib.sh" 2>/dev/null)
+[ "$probe" = "counted[1]" ] &&
+	pass "after sourcing tests/lib.sh under set -u, a note completes and counts one skip" ||
+	fail "a note under set -u did not complete with SKIPPED=1 — the lib leaves the counter unbound: '$probe'"
+
+# ---------------------------------------------------------------------------
 banner "The split-stream helpers can go red"
 # ---------------------------------------------------------------------------
 # Three suites lean on t_run_split and the s_assert_* family for every claim

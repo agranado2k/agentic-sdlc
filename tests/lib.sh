@@ -15,6 +15,9 @@
 # would fail these tests for reasons that have nothing to do with the guards.
 
 failures=0
+# note() counts into SKIPPED; bound here so a suite under set -u that never
+# initialised it does not die at its first skip (#709, #716).
+SKIPPED=0
 LAST_OUT=""
 LAST_STATUS=0
 
