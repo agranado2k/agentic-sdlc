@@ -661,14 +661,23 @@ t_done() {
 # ---------------------------------------------------------------------------
 
 # t_kit_tree <kit> <dest> — a .git-free copy of the kit's working tree at
-# <dest>, nested worktrees stripped. The source is resolved to its physical
-# path first: git reports worktrees that way, and the strip matches on the
-# prefix, so a symlinked source (macOS's /var → /private/var, say) would
-# otherwise keep every nested worktree in silence.
+# <dest>, as git would hand it over: tracked files with their working changes,
+# plus untracked files no ignore rule names, and nothing else (#690). An
+# ignored directory — the trace, the retro folder, worktree/ — never arrives:
+# "Use this template" hands nobody those, and the trace alone runs to hundreds
+# of megabytes on a working machine. A tracked file deleted in the working tree
+# is skipped. Nested worktrees are still stripped, for one checked out under a
+# path no ignore rule covers. The source is resolved to its physical path
+# first: git reports worktrees that way, and the strip matches on the prefix,
+# so a symlinked source (macOS's /var → /private/var, say) would otherwise keep
+# every nested worktree in silence.
 t_kit_tree() {
 	_kt_src=$(cd "$1" && pwd -P) || exit 2
 	mkdir -p "$2"
-	cp -R "$_kt_src/." "$2/"
+	git -C "$_kt_src" -c core.quotePath=false ls-files -co --exclude-standard |
+		while IFS= read -r _kt_path; do
+			{ [ -e "$_kt_src/$_kt_path" ] || [ -L "$_kt_src/$_kt_path" ]; } && printf '%s\n' "$_kt_path"
+		done | (cd "$_kt_src" && tar -cf - -T -) | (cd "$2" && tar -xf -) || exit 2
 	strip_nested_worktrees "$_kt_src" "$2"
 	rm -rf "$2/.git"
 }
