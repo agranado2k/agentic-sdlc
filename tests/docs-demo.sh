@@ -57,7 +57,10 @@ trap 'rm -rf "$SCRATCH"' EXIT INT TERM HUP
 # kept as written — and that names a bare tmp.XXXXXX in the shared TMPDIR that
 # outlives the run. Pointing TMPDIR inside the scratch puts every such
 # directory under the prefix, so the trap removes it and a killed run's sweep
-# can find it (#677; section E checks it held).
+# can find it (#677; section E checks it held). The real TMPDIR and a mark of
+# the moment are kept, so E can look there for anything that escaped anyway.
+E_ROOT=${TMPDIR:-/tmp}
+: >"$SCRATCH/e-start.mark"
 TMPDIR="$SCRATCH/tmp"
 mkdir "$TMPDIR" || exit 2
 export TMPDIR
@@ -2316,21 +2319,23 @@ prose_probe "the ADD commentary bold-quote"       '^\*\*`ADD .*is new at v0\.'
 # ---------------------------------------------------------------------------
 banner "E. The recipe's anonymous scratch stayed inside this suite's own (#677)"
 # ---------------------------------------------------------------------------
-# The recipe's `WORK=$(mktemp -d)` and `VERIFY=$(mktemp -d)` are text a
-# consumer reads, so they stay as written — and run here, each one named a bare
-# tmp.XXXXXX nobody could tell from any other program's: 1857 of them on one
-# host by the 2026-10-09 housekeeping. TMPDIR points inside $SCRATCH for the
-# whole run, so they land under the prefixed scratch the trap removes and a
-# killed run's sweep finds. Both halves are checked: the redirect held, and the
-# recipe's mktemp calls actually went through it (none would mean the cases
-# above stopped running the recipe, or the redirect stopped reaching them).
-if [ "${TMPDIR:-}" = "$SCRATCH/tmp" ]; then
-	pass "TMPDIR still points inside the suite's scratch"
+# The redirect is set up beside the trap, near the top. Two checks hold it:
+# the run left no bare tmp.* of its own in the real TMPDIR (a directory owned
+# by this user, made after the run's start mark — on a busy host another
+# program's could match, and the name it prints says whose it is), and the
+# recipe's `WORK=$(mktemp -d)` did go through the redirect — none landing in
+# the scratch would mean the cases above stopped running the recipe, and the
+# first check would then pass on nothing.
+e_escaped=$(find "$E_ROOT/." ! -name . -prune -type d -name 'tmp.*' -user "$(id -u)" \
+	-newer "$SCRATCH/e-start.mark" -print 2>/dev/null)
+if [ -z "$e_escaped" ]; then
+	pass "the run left no bare tmp.* in $E_ROOT"
 else
-	fail "TMPDIR is '${TMPDIR:-}', not \$SCRATCH/tmp — the recipe's mktemp -d escapes to a bare tmp.*"
+	fail "the run left bare tmp.* in $E_ROOT — a mktemp -d escaped the redirect:"
+	printf '%s\n' "$e_escaped" | sed 's/^/        | /'
 fi
-e_bare=$(find "$SCRATCH/tmp/." ! -name . -prune -type d -name 'tmp.*' 2>/dev/null | wc -l | tr -d ' ')
-if [ "${e_bare:-0}" -gt 0 ]; then
+e_bare=$(find "$SCRATCH/tmp/." ! -name . -prune -type d -name 'tmp.*' | wc -l | tr -d ' ')
+if [ "$e_bare" -gt 0 ]; then
 	pass "the recipe's $e_bare anonymous work dir(s) were made inside the suite's scratch"
 else
 	fail "no anonymous work dir landed in \$SCRATCH/tmp — the recipe's mktemp -d went elsewhere"
