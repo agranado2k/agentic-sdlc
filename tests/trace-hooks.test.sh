@@ -1515,12 +1515,13 @@ stop_on() {
 		set_key agent_transcript_path "$1" >"$SCRATCH/stop-308.json"
 }
 
-# late_writer <transcript> [seconds] — in the background, append the final
-# turn to that transcript once the hook has taken its first nap, and that many
-# seconds after it (default none, a fraction allowed). Driven by the nap log, never by a clock, so
+# late_writer <transcript> [seconds] [tail] — in the background, append the
+# final turn (the tail file, default section 27's) to that transcript once the
+# hook has taken its first nap, and that many seconds after it (default none,
+# a fraction allowed). Driven by the nap log, never by a clock, so
 # a slow preamble cannot let the turn land before the hook first looks. Clears
 # the nap log first; sets LATE_WRITER to the writer's pid, for the caller to
-# wait on. Sections 27 and 44 both race the hook with it.
+# wait on. Sections 27, 44 and 54 race the hook with it.
 late_writer() {
 	: >"$SCRATCH/naps-308.log"
 	(
@@ -1531,7 +1532,7 @@ late_writer() {
 		done
 		# A sleep that refuses a fraction rounds it up to the next whole second.
 		[ -z "${2:-}" ] || sleep "$2" 2>/dev/null || sleep "$((${2%%.*} + 1))"
-		cat "$SCRATCH/sub-tail-308.jsonl" >>"$1"
+		cat "${3:-$SCRATCH/sub-tail-308.jsonl}" >>"$1"
 	) &
 	LATE_WRITER=$!
 }
@@ -4955,5 +4956,64 @@ for w in 'gh pr checks "$PR" --watch' 'timeout 0 gh pr checks "$PR" --watch' "un
 	bounded_637 "$w" && fail "the bound probe passed an unbounded wait — the check is vacuous: $w" ||
 		pass "the bound probe rejects an unbounded wait: $w"
 done
+
+# ---------------------------------------------------------------------------
+banner "54. A transcript finalised just past the kit's wait bound is read by the agent's next stop (#674)"
+# ---------------------------------------------------------------------------
+# Retro 20261009T112925Z: the stops that gave up rose to 6 of 55, and all 15
+# in the window carried a last line aged 2,986 to 3,570 ms — at the kit's
+# 3000 ms bound — so the retro asked for a longer one. The transcripts, read
+# as data on the capturing machine (#674), say what that age is. 25 of the 27
+# give-ups since 2026-10-08 stood, at their stop, on an end_turn followed by
+# the agent harness's hand-back nudge (an `isMeta` user line), written as the
+# stop fired: the age is the nudge's, not a final message's. Every one of
+# those agents stopped again, and the line that ended its run landed 7.4 s to
+# 157 s after the first stop began (p50 9.9 s) — past any bound that holds a
+# session for a few seconds. The bound the policy file names, and the evidence
+# beside it, are scripts/trace.kit.config.sh's.
+#
+# So this is the case the ticket names, in the shape the trace measured: the
+# hand-back lands half a second past the kit's own bound. The first stop
+# gives up, recorded — never silent — and leaves no anchor (ADR-0008's #565
+# amendment); the agent's next stop reads the transcript the late line
+# finalised, and counts every message. Nothing the late line closed is lost.
+B674=$(sed -n "s/^TRACE_AGENT_WAIT_MS='\([1-9][0-9]*\)'$/\1/p" "$KIT/scripts/trace.kit.config.sh")
+[ -n "$B674" ] && pass "the kit's policy names its wait bound ($B674 ms)" ||
+	fail "scripts/trace.kit.config.sh names no TRACE_AGENT_WAIT_MS this section can read"
+assert_file_has "$KIT/scripts/trace.kit.config.sh" "(#674)" "the kit's bound carries the #674 measurement beside it"
+if [ "$HAVE_NODE" = 1 ] && [ -n "$B674" ]; then
+	D674=$((B674 + 500))
+	head -n 16 "$HB" >"$SCRATCH/hb-late-674.jsonl"
+	sed -n '17,$p' "$HB" >"$SCRATCH/hb-tail-674.jsonl"
+	grep -q '"isMeta":true' "$SCRATCH/hb-late-674.jsonl" && [ "$(sed -n '$p' "$SCRATCH/hb-late-674.jsonl" | grep -c '"isMeta":true')" = 1 ] &&
+		pass "premise: the first stop sees an end_turn, then the harness's prompt — the measured shape" ||
+		fail "premise: the hand-back fixture's line 16 is no longer the harness's isMeta prompt"
+	new_trace
+	stop_on "$SCRATCH/hb-late-674.jsonl"
+	late_writer "$SCRATCH/hb-late-674.jsonl" "$((D674 / 1000)).$(printf '%03d' $((D674 % 1000)))" "$SCRATCH/hb-tail-674.jsonl"
+	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh"
+	wait "$LATE_WRITER"
+	timed TRACE_DIR="$TDIR" TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh"
+	F1=$(ev_of agent.stop | sed -n '1p')
+	F2=$(ev_of agent.stop | sed -n '2p')
+	[ "$(ev_of agent.stop | wc -l | tr -d ' ')" = 2 ] && [ "$S_STATUS" = 0 ] &&
+		pass "both stops are recorded, neither one silent" ||
+		fail "expected two agent.stop events, got $(ev_of agent.stop | wc -l): $(events)"
+	[ "$(str "$F2" outcome)" != fail ] && [ "$(str "$F2" final)" = tool ] &&
+		pass "the stop after the late hand-back reads it as final (data.final=tool)" ||
+		fail "the stop after the late hand-back did not read it as final: $F2"
+	[ "$(sum_tok tok_out agent.stop)" = 301 ] && [ "$(sum_tok tok_in agent.stop)" = 20 ] &&
+		pass "and the agent's stops price the whole transcript (tok_in 20, tok_out 301) — nothing lost past the bound" ||
+		fail "the agent's stops sum to tok_in '$(sum_tok tok_in agent.stop)', tok_out '$(sum_tok tok_out agent.stop)', not 20/301"
+	if [ "$HAVE_MS_CLOCK" = 1 ]; then
+		[ "$(str "$F1" outcome)" = fail ] && [ "$(str "$F1" waited_ms)" -ge "$B674" ] 2>/dev/null && [ -z "$(str "$F1" last_msg)" ] &&
+			pass "the first stop gave up at the bound (waited_ms $(str "$F1" waited_ms)) and left no anchor" ||
+			fail "the first stop did not give up at the $B674 ms bound without an anchor — the line landed inside it: $F1"
+	else
+		note "no millisecond clock on this host: the first stop's give-up at the bound was not asserted"
+	fi
+else
+	note "node is not on PATH, or the kit names no bound: the late hand-back legs did not run"
+fi
 
 t_done "trace hooks"
