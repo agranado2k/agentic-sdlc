@@ -1049,7 +1049,7 @@ walk_answers() {
 		done
 	done
 }
-_k_famwalk_bad= _k_famwalk_n=0 _k_offfam=
+_k_famwalk_bad= _k_famwalk_n=0
 _k_sessions="$_k_rev $_k_vendor-$_k_rev-9-9"
 for _k_spec in planner implementer mechanical 'implementer content'; do
 	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
@@ -1072,8 +1072,6 @@ while read -r _k_ses _k_dom _k_ans; do
 	fi
 	_k_famwalk_n=$((_k_famwalk_n + 1))
 	[ "$(_k_fold "$_k_ans")" = "$(_k_fold "$_k_ses")" ] && _k_famwalk_bad="$_k_famwalk_bad '$_k_ses' reviewer $_k_dom -> $_k_ans;"
-	# The same walk holds the Sonnet-only rule (#724), checked below.
-	[ "$(_k_fold "$_k_ans")" = "$_k_rev" ] || _k_offfam="$_k_offfam '$_k_ses' reviewer $_k_dom -> $_k_ans;"
 done <<WALK
 $_k_walk
 WALK
@@ -1121,18 +1119,15 @@ t_run_split env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=opus AGENT_UNREACHABLE
 # Proved able to fail first, on a throwaway whose fallback names another
 # family — the shape both policies had until this ticket — and on a tree with
 # no wrapper at all: a walk that answers nothing is reported, never a pass.
-off_family() { # <tree> <harness or ''> <reviewer word> <session>... — prints each answer off that family, or "none answered"
-	_of_tree=$1 _of_h=$2 _of_rev=$3
-	shift 3
-	walk_answers "$_of_tree" "$_of_h" "$@" | {
-		_of_n=0
-		while read -r _of_ses _of_dom _of_ans; do
-			_of_n=$((_of_n + 1))
-			[ "$_of_ans" != NEVER-SPENT ] && [ "$(_k_fold "$_of_ans")" = "$_of_rev" ] ||
-				echo "'$_of_ses' reviewer $_of_dom -> $_of_ans"
-		done
-		[ "$_of_n" -gt 0 ] || echo "none answered"
-	}
+off_family() { # <reviewer word>, walk_answers lines on stdin — prints each answer off that family, or "none answered"
+	_of_n=0
+	while read -r _of_ses _of_dom _of_ans; do
+		[ -n "$_of_ses" ] || continue
+		_of_n=$((_of_n + 1))
+		[ "$_of_ans" != NEVER-SPENT ] && [ "$(_k_fold "$_of_ans")" = "$1" ] ||
+			echo "'$_of_ses' reviewer $_of_dom -> $_of_ans"
+	done
+	[ "$_of_n" -gt 0 ] || echo "none answered"
 }
 OFFFAM="$SCRATCH/off-family"
 mkdir -p "$OFFFAM/scripts"
@@ -1144,20 +1139,21 @@ AGENT_TIER_MECHANICAL='small'
 AGENT_TIER_REVIEWER='small'
 AGENT_TIER_REVIEWER_FALLBACK='strong vendor-third-3'
 OFFFAM_CFG
-case "$(off_family "$OFFFAM" bait small strong small)" in
+case "$(walk_answers "$OFFFAM" bait strong small | off_family small)" in
 *"'small' reviewer - -> strong"*) pass "the Sonnet-only walk catches a fallback of another family on its bait" ;;
 *) fail "the Sonnet-only walk missed its bait — the check is vacuous" ;;
 esac
-case "$(off_family "$SCRATCH/no-such-tree" '' small small 2>/dev/null)" in
+case "$(walk_answers "$SCRATCH/no-such-tree" '' small 2>/dev/null | off_family small)" in
 *"none answered"*) pass "the Sonnet-only walk reports a walk that answered nothing, rather than passing vacuously" ;;
 *) fail "the Sonnet-only walk passed a walk that answered nothing" ;;
 esac
-# The kit policy's walk is the family walk's above, read once: its answers
-# counted, so it cannot pass empty.
-[ -z "$_k_offfam" ] && [ "$_k_famwalk_n" -gt 0 ] &&
-	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family ($_k_famwalk_n answers over:$_k_sessions)" ||
-	fail "agents.kit.config.sh: a reviewer walk left the '$_k_rev' family, or answered nothing:$_k_offfam"
-_k_off=$(off_family "$KIT" codex "$_k_rev" opus claude-opus-5-5 gpt-5.6-sol "$_k_rev")
+# The kit policy's walk is the family walk's above, read once, through the
+# same baited check.
+_k_off=$(printf '%s\n' "$_k_walk" | off_family "$_k_rev")
+[ -z "$_k_off" ] &&
+	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family (over:$_k_sessions)" ||
+	fail "agents.kit.config.sh: a reviewer walk left the '$_k_rev' family, or answered nothing: $(printf '%s' "$_k_off" | tr '\n' ';')"
+_k_off=$(walk_answers "$KIT" codex opus claude-opus-5-5 gpt-5.6-sol "$_k_rev" | off_family "$_k_rev")
 [ -z "$_k_off" ] &&
 	pass "agents.kit.codex.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family" ||
 	fail "agents.kit.codex.config.sh: a reviewer walk left the '$_k_rev' family: $(printf '%s' "$_k_off" | tr '\n' ';')"
