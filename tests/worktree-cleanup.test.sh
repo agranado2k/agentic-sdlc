@@ -267,7 +267,10 @@ if [ -d /proc/self ]; then
 	wt_fixture
 	wt_branch busy
 	wt_land busy
-	(cd "$REPO/worktree/busy" && exec sleep 60) &
+	# From a directory below the worktree's top: a shell left in a subdirectory
+	# holds the worktree as surely as one at its root.
+	mkdir -p "$REPO/worktree/busy/deeper"
+	(cd "$REPO/worktree/busy/deeper" && exec sleep 60) &
 	BUSY_PID=$!
 	wt_run
 	kill "$BUSY_PID" 2>/dev/null
