@@ -1945,17 +1945,16 @@ banner "30. A converged iteration leaves a head a review.verdict judged (#699)"
 # act on makes the iteration not converged, so the next one triages it first.
 # pushed_review_missing <skill file> — one word per claim the stop conditions drop.
 pushed_review_missing() {
-	_pr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^### / { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	_pr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
 	printf '%s\n' "$_pr_sc" | grep -qE 'unanswered human threads \*\*AND\*\* a `review\.verdict`[^→]*head[^→]*→ ✅ converged' || echo converged-needs-verdict
 	printf '%s\n' "$_pr_sc" | grep -qiE 'iteration that pushed[^.]*run `/review-pr` again on (that|the new) head' || echo pushed-rereviews
 	printf '%s\n' "$_pr_sc" | grep -qE 'again on (that|the new) head \(do NOT post' || echo rereview-unposted
 	printf '%s\n' "$_pr_sc" | grep -qiE 'before (it records|recording) `green`' || echo before-green
-	printf '%s\n' "$_pr_sc" | grep -qiE 'finding[^.]*to act on[^.]*record `red`[^.]*next iteration' || echo finding-not-converged
+	printf '%s\n' "$_pr_sc" | grep -qiE 'finding[^.]*to act on[^.]*record `red`[^.]*the next iteration triages it first' || echo finding-not-converged
 	printf '%s\n' "$_pr_sc" | grep -qiE 'finding to act on \(a ⚠️ item is the operator.s, never one\)' || echo unspecified-not-blocking
 	printf '%s\n' "$_pr_sc" | grep -qE "reason='<the failing check by name, or the re-review, when red" || echo red-reason-names-review
 }
-PIM=$(skill_md pr-iterate)
-_pr=$(pushed_review_missing "$PIM")
+_pr=$(pushed_review_missing "$PI")
 [ -z "$_pr" ] && pass "/pr-iterate converges only on a head a review.verdict judged; a pushed head is reviewed again first" ||
 	fail "/pr-iterate drops: $(echo $_pr)"
 # Baits: one per claim, so none survives its own deletion.
@@ -1966,9 +1965,10 @@ for b in \
 	's/before it records `green`/after it records `green`/' \
 	's/record `red` instead/record `green` anyway/' \
 	's/ (a ⚠️ item is the operator.s, never one)//' \
-	's/by name, or the re-review, when red/by name when red/'; do
-	sed "$b" "$PIM" >"$SCRATCH/bait699.md"
-	if ! cmp -s "$SCRATCH/bait699.md" "$PIM" && [ -n "$(pushed_review_missing "$SCRATCH/bait699.md")" ]; then
+	's/by name, or the re-review, when red/by name when red/' \
+	's/the next iteration triages it first/the operator triages it/'; do
+	sed "$b" "$PI" >"$SCRATCH/bait699.md"
+	if ! cmp -s "$SCRATCH/bait699.md" "$PI" && [ -n "$(pushed_review_missing "$SCRATCH/bait699.md")" ]; then
 		pass "bait: '$b' goes red"
 	else
 		fail "bait: '$b' was not caught — or planted nothing"
