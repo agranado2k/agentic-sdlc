@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: the implementer session for #691, on the operator's direction of 2026-10-09 ("always use the Sonnet family to review") and the standing delegation of rulings
 - **Supersedes / amends**: supersedes ADR-0020 clause 5's third non-goal (the Codex session's policy, `scripts/agents.kit.codex.config.sh`, "is not touched by this record"); ADR-0020 clauses 1 to 4 and its bridge are unchanged
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-10-10 (#724): clauses 1 and 3 narrowed by ADR-0020's amendment of that date — the fallback is empty, so a session named `sonnet`, or one whose Sonnet is unreachable, is answered nothing; reviews run on the Sonnet family only)
 
 ## Context and problem statement
 

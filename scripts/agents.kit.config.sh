@@ -67,7 +67,7 @@
 #
 # THREE TIERS FOLLOW A FAMILY INSTEAD (the operator, 2026-10-08): the planner
 # is `opus` and the mechanical tier `sonnet` (ADR-0018), and the reviewer
-# `sonnet` too, with `opus` first on its fallback (ADR-0020) — the bare family
+# `sonnet` too, with no fallback past it (ADR-0020 as amended, #724) — the bare family
 # word, "the newest in that family", not a pinned id. The rule above holds for
 # every other tier. The trade: no diff and no decision when Opus or Sonnet
 # moves, in exchange for the tiers where the operator wants the current model
@@ -78,7 +78,7 @@
 # mapped family word is also the policy's own spelling for a session on that
 # tier: scripts/agents.kit.sh treats it and every pinned id that folds to it
 # as one family, so a `sonnet` session — or a claude-sonnet-* one — is never
-# handed the `sonnet` reviewer, and an Opus session never the `opus` fallback.
+# handed the `sonnet` reviewer.
 #
 # The cost of pinning is that the two consumption paths take different
 # spellings for a PINNED tier. `claude --model` (what scripts/agent-dispatch.sh
@@ -186,9 +186,10 @@ AGENT_CASCADE_MECHANICAL='sonnet'
 #           back to the plain tier — one decision, not two copies of it
 #      either form, a session on the Sonnet family — `sonnet` (the mechanical
 #      tier's word) or any pinned Sonnet id
-#        -> the fallback's first entry, `opus`: refused its own family by the
-#           kit wrapper's family bridge (ADR-0018 clause 4, widened by
-#           ADR-0020), never handed nothing
+#        -> NOTHING, and the resolver's spent-walk warning: refused its own
+#           family by the kit wrapper's family bridge (ADR-0018 clause 4,
+#           widened by ADR-0020), with no fallback past it (below). That
+#           session spawns no review; one off the Sonnet family spawns it.
 #
 #    The trade: a session that names nothing gets `sonnet` whatever it runs
 #    on, so a mechanical session that does not say what it runs on is handed
@@ -211,34 +212,27 @@ AGENT_TIER_REVIEWER='sonnet'
 #    asked with it, the resolver walks the same candidates, and the session's
 #    own family is refused by AGENT_SESSION_MODEL, not by a third model.
 #
-#    THE ORDERED FALLBACK (ADR-0013, #548) — the next answers when the
-#    reviewer is refused (the session's own family) or named unreachable by
-#    the caller in AGENT_UNREACHABLE_MODELS (a spawn that failed on its first
-#    call: a rate limit, a logged-out CLI). The walk is the domain answer,
-#    the plain reviewer, then this list in order; a spent list prints
-#    nothing, never the session's own model.
+#    THE ORDERED FALLBACK (ADR-0013, #548) IS EMPTY, BY DECISION. The
+#    operator, 2026-10-10 (ADR-0020's amendment, #724): reviews — the
+#    reviewer and every review lens — run on the Sonnet family only, with
+#    no Opus fallback. It was `opus claude-fable-5-1`, and on PR #722 a
+#    review that ran on Sonnet was recorded as Opus. So the walk is the
+#    domain answer and the plain reviewer, and nothing past them:
 #
-#      opus               the newest Opus, by family word (ADR-0020): where a
-#                         Sonnet session goes, and a Fable session whose
-#                         Sonnet is unreachable. An Opus session — the
-#                         implementer's claude-opus-5-5 or the planner's
-#                         `opus` — is refused it by the bridge.
-#      claude-fable-5-1   pinned: where an Opus session goes once Sonnet is
-#                         unreachable. A Fable session (the content domain)
-#                         is refused it exactly.
+#      a Sonnet session, or any session whose Sonnet is named unreachable
+#        -> nothing, with the resolver's warning. In THIS repo nothing
+#           printed is not "inherit the session": the session spawns no
+#           review, and a session off the Sonnet family spawns it on
+#           `sonnet` — or, Sonnet unreachable, the review waits and the
+#           report quotes the warning. Never an Opus or Fable review.
 #
-#    The cross-vendor reviewer (codex:gpt-5.6-sol) is deliberately NOT on the
-#    list yet: an entry that crosses agent harnesses has no in-session spawn
-#    word — `--alias` prints nothing for it, and an in-session spawn given
-#    nothing inherits the session, the self-review the walk exists to
-#    prevent. It joins when that CLI authenticates and the caller's dispatch
-#    path is the one that reads it.
+#    The cross-vendor reviewer comes back as a decision of its own, not as
+#    an entry here by default.
 #
-#    tests/agents-tiers.test.sh pins the list against the rule, not the ids:
-#    walked to its end through the kit wrapper for every session tier — by
-#    its value, by a mapped spawn word, and by a pinned id of the reviewer's
-#    family — no answer is of the session's own family.
-AGENT_TIER_REVIEWER_FALLBACK='opus claude-fable-5-1'
+#    tests/agents-tiers.test.sh pins the empty list, and walks every
+#    session through the kit wrapper to its end: every answer is the
+#    reviewer's family.
+AGENT_TIER_REVIEWER_FALLBACK=''
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN

@@ -132,6 +132,8 @@ resolver walks the answer, the plain tier, then the policy's ordered fallback,
 skipping yours. **A reviewer spawn that fails on its first call** (rate limit,
 login): re-resolve with `AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added.
 A spent walk prints nothing, with a warning your report quotes (ADR-0013).
+**Here the walk is Sonnet only** (ADR-0020, amended): nothing printed means spawn
+no review — never inherit — and a session off the Sonnet family spawns it.
 
 ## Agent trust boundary
 
