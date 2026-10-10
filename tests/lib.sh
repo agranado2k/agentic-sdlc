@@ -735,16 +735,26 @@ t_done() {
 # ---------------------------------------------------------------------------
 
 # t_kit_tree <kit> <dest> — a .git-free copy of the kit's working tree at
-# <dest>, nested worktrees stripped. The source is resolved to its physical
-# path first: git reports worktrees that way, and the strip matches on the
-# prefix, so a symlinked source (macOS's /var → /private/var, say) would
-# otherwise keep every nested worktree in silence.
+# <dest>, as git would hand it over: tracked files with their working changes,
+# plus untracked files no ignore rule names, and nothing else (#690). An
+# ignored directory — the trace, the retro folder, worktree/ — never arrives:
+# "Use this template" hands nobody those, and the trace alone runs to hundreds
+# of megabytes on a working machine. A tracked file deleted in the working tree
+# is skipped, a source git cannot list is refused (exit 2), and no .git is
+# ever listed, so none arrives. Nested worktrees are still stripped, for one
+# checked out under a path no ignore rule covers. The source is resolved to its physical path
+# first: git reports worktrees that way, and the strip matches on the prefix,
+# so a symlinked source (macOS's /var → /private/var, say) would otherwise keep
+# every nested worktree in silence.
 t_kit_tree() {
 	_kt_src=$(cd "$1" && pwd -P) || exit 2
+	_kt_list=$(git -C "$_kt_src" -c core.quotePath=false ls-files -co --exclude-standard) || exit 2
 	mkdir -p "$2"
-	cp -R "$_kt_src/." "$2/"
+	printf '%s\n' "$_kt_list" |
+		while IFS= read -r _kt_path; do
+			{ [ -e "$_kt_src/$_kt_path" ] || [ -L "$_kt_src/$_kt_path" ]; } && printf '%s\n' "$_kt_path"
+		done | (cd "$_kt_src" && tar -cf - -T -) | (cd "$2" && tar -xf -) || exit 2
 	strip_nested_worktrees "$_kt_src" "$2"
-	rm -rf "$2/.git"
 }
 
 # t_git_identity <dir> <name> <email> — init a repo on main with a fixture
@@ -809,7 +819,7 @@ t_consumer_from() {
 }
 
 # strip_nested_worktrees <src_repo> <dest_tree> — drop any git worktree that
-# lives INSIDE the source repo from a tree that was just `cp -R`'d out of it.
+# lives INSIDE the source repo from a tree that was just copied out of it.
 #
 # Why this exists: the kit's own convention is to develop in worktrees checked
 # out under the repo, and `cp -R` takes them along. A fixture built that way is

@@ -39,6 +39,32 @@ git -C "$FAKEKIT" worktree add -q "$FAKEKIT/worktree/nested" -b nested >/dev/nul
 TREE2="$SCRATCH/tree2"
 t_kit_tree "$FAKEKIT" "$TREE2"
 [ -f "$TREE2/README.md" ] && [ ! -e "$TREE2/worktree/nested" ] && pass "a nested worktree is stripped from the copy" || fail "the nested worktree rode into the copy"
+# The copy is what git would hand over (#690): tracked files with their working
+# changes, plus untracked files nobody ignored — the work in progress a suite
+# run is checking — and never an ignored directory, a tracked file deleted in
+# the working tree, or anything else the checkout merely happens to hold.
+printf '.trace/\nworktree/\n' >"$FAKEKIT/.gitignore"
+printf 'gone\n' >"$FAKEKIT/deleted.txt"
+git -C "$FAKEKIT" add -A >/dev/null; git -C "$FAKEKIT" commit -q -m "ignore and delete"
+rm "$FAKEKIT/deleted.txt"
+mkdir -p "$FAKEKIT/.trace/blobs"; printf 'trace\n' >"$FAKEKIT/.trace/blobs/big"
+printf 'edited\n' >"$FAKEKIT/README.md"
+printf 'fresh\n' >"$FAKEKIT/fresh.txt"
+ln -s no-such-target "$FAKEKIT/dangling"
+TREE3="$SCRATCH/tree3"
+t_kit_tree "$FAKEKIT" "$TREE3" 2>"$SCRATCH/tree3.err"
+[ ! -e "$TREE3/.trace" ] && pass "an ignored directory stays out of the copy" || fail "the ignored .trace/ rode into the copy"
+[ "$(cat "$TREE3/README.md" 2>/dev/null)" = edited ] && pass "a tracked file arrives with its working change" || fail "the tracked file's working change is missing"
+[ -f "$TREE3/fresh.txt" ] && pass "an untracked, unignored file arrives" || fail "an untracked, unignored file was left out"
+[ ! -e "$TREE3/deleted.txt" ] && [ ! -s "$SCRATCH/tree3.err" ] &&
+	pass "a tracked file deleted in the working tree is skipped in silence" ||
+	fail "the deleted file arrived or the copy complained: $(cat "$SCRATCH/tree3.err")"
+[ -L "$TREE3/dangling" ] && pass "a symlink whose target is missing arrives as a link" || fail "the dangling symlink was dropped from the copy"
+# A source git cannot list is refused, never copied as an empty fixture that
+# every assertion downstream would then misread.
+NOTGIT="$SCRATCH/notgit"; mkdir -p "$NOTGIT"; printf 'x\n' >"$NOTGIT/file"
+(t_kit_tree "$NOTGIT" "$SCRATCH/tree4") 2>/dev/null
+[ $? -eq 2 ] && pass "a source git cannot list is refused with exit 2" || fail "a source git cannot list was copied as if it were a kit"
 
 # ---------------------------------------------------------------------------
 banner "2. t_git_identity — a repo that commits and tags anywhere"
