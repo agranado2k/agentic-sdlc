@@ -104,14 +104,17 @@ Chosen: **option 1.**
 5. **The in-place amendment allowance is capped at five per record.** A record
    whose header already names five in-place amendments takes no sixth.
    The next change to its decision is a consolidating successor, written
-   under clauses 1 to 3 as they apply to that record. The cap counts dated
-   amendment notes in the header's "Superseded by" field, or in "Supersedes /
-   amends" where a record keeps them there. It applies to every record in
+   under clauses 1 to 3 as they apply to that record. The cap counts the dated
+   amendment notes in the record's header, from its title to its first
+   section, whichever field holds them. A note counts when it starts with
+   `amend` and is followed by its date. It applies to every record in
    `docs/adr/` from today and to each successor in turn. A successor starts
    at zero. A record past the cap today is held at the count it has:
-   ADR-0008 at twenty-four, ADR-0009 at seven. Neither takes another.
+   ADR-0008 at twenty-four, ADR-0009 at seven. Neither takes another. The
+   suite reads these ceilings from this line: `frozen: 0008:24 0009:7`.
    `tests/self-host.test.sh` section H counts every live record's header and
-   fails on one past its ceiling. A probe it baits proves the count can fail.
+   fails on one past its ceiling. A superseded record is skipped. A probe it
+   baits proves the count can fail.
 6. **Explicit non-goals.** This record does not write the successor: that
    build is #692, at the implementer tier. It changes no shipped
    file. It does not change the consumers' index template
