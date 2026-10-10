@@ -1187,8 +1187,8 @@ trace_bare_end_note() {
 # field — `./<dir>` names the same directory. Unconfigured, it prints nothing
 # and exits 0.
 #
-# `--all` in place of a session asks a wider question (#680, the kit's
-# ADR-0023): every run open in that checkout, whoever opened it — the top of
+# `--all` in place of a session asks a wider question (#680; the kit's ADR-0023
+# records it): every run open in that checkout, whoever opened it — the top of
 # each session's stack there and of the session-less one, one run per line,
 # in no promised order, and never a run below a top. Its caller is a worktree
 # cleanup, which stands in the root checkout, knows no session id but its own,
