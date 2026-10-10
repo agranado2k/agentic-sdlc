@@ -300,21 +300,15 @@ esac
 printf '%s\n' "$S_OUT" | grep -q 'REPORT from model-mapped' &&
 	pass "…and runs on the mapped model" || fail "a guardless worktree reached: $S_OUT"
 
-# A cascade model the dispatcher cannot run itself — no agent harness named,
-# so agent-dispatch hands it back for the caller to spawn — is refused too: an
-# oracle cannot judge work this process never ran.
+# A cascade model the dispatcher cannot run itself — no agent harness named —
+# was once refused here and fell through to the mapped model, so the kit's own
+# cascade never ran (#682). It is now handed back in-session: section 7.
 write_policy 'model-cheap-bare'
 fresh_wt
 cascade "$T_ORACLE"
-printf '%s\n' "$S_OUT" | grep -q 'REPORT from model-mapped' &&
-	pass "a cascade model with no agent harness falls through to the mapped model" ||
-	fail "a bare cascade model reached: $S_OUT"
-case "$S_ERR" in
-*"cascade refused"*"agent harness"*) pass "…saying the cascade model is not dispatchable" ;;
-*) fail "no refusal for an undispatchable cascade model: $S_ERR" ;;
-esac
-[ "$(spawn_rungs | awk '{print $1 $2}')" = refused1 ] &&
-	pass "spend/R21: …and the refused rung is recorded" || fail "spend/R21: the refused rung reads '$(spawn_rungs)'"
+printf '%s\n' "$S_OUT" | grep -q 'REPORT from' &&
+	fail "a cascade model with no agent harness still fell through to a dispatched rung: $S_OUT" ||
+	pass "a cascade model with no agent harness no longer falls through to the mapped model"
 write_policy 'stub:model-cheap'
 
 # ---------------------------------------------------------------------------
@@ -470,6 +464,161 @@ esac
 fresh_wt
 nostamp "$SCRATCH/no-such-ticket.md" --dry-run
 [ "$S_STATUS" = 2 ] && pass "a --ticket-file that is no file is exit 2" || fail "a missing ticket file exited $S_STATUS: $S_ERR"
+
+# ---------------------------------------------------------------------------
+banner "7. A rung whose model names no agent harness runs in-session, judged on return (#682)"
+# ---------------------------------------------------------------------------
+# The kit's own cascade model names no agent harness, so the dispatcher cannot
+# run its rung — only the calling session can spawn it. The dispatcher hands
+# the rung back (exit 3: the model on stdout, the spawn prompt in the
+# worktree's git dir), the session spawns it, then runs the same command again
+# with --rung-done: the oracle and the pairing guard run on what the rung
+# committed, the verdict is recorded, and the cascade escalates from there.
+# The "session" here is a stub in-session spawn: the stub worker, run in the
+# worktree on the handed-back model and fed the handed-back prompt.
+cascade_keep() { # <ticket file> [extra args…] — the cascade, the trace kept
+	_tf=$1
+	shift
+	t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+		implement --tier mechanical --ticket 682 --ticket-file "$_tf" --worktree "$WT" --base "$BASE" \
+		--prompt 'do the ticket' "$@"
+}
+state_dir() { echo "$(git -C "$WT" rev-parse --absolute-git-dir)/skill-cascade"; }
+spawn_in_session() { # <model> — the stub session's spawn of the handed-back rung
+	(cd "$WT" && "$STUB" --model "$1" <"$(state_dir)/prompt") >/dev/null
+}
+rung_seq() { spawn_rungs | awk '{print $1 $2}' | tr '\n' ' '; }
+
+write_policy 'model-cheap-bare'
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+cascade_keep "$T_ORACLE"
+[ "$S_STATUS" = 3 ] && printf '%s\n' "$S_OUT" | grep -qx 'model-cheap-bare' &&
+	pass "rung 1 with no agent harness is handed back: exit 3, its model on stdout" ||
+	fail "an in-session rung 1 exited $S_STATUS with '$S_OUT': $S_ERR"
+[ ! -e "$WT/work.txt" ] && [ -z "$(git -C "$WT" status --porcelain --untracked-files=all)" ] &&
+	pass "…nothing ran in the worktree, and the hand-back left it clean" ||
+	fail "the hand-back touched the worktree: $(git -C "$WT" status --porcelain)"
+_p="$(state_dir)/prompt"
+_l1=$(sed -n 1p "$_p" 2>/dev/null) _l2=$(sed -n 2p "$_p" 2>/dev/null)
+printf '%s\n' "$_l1" | grep -Eqx 'Trace-Run: [0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}( [0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8})?' &&
+	pass "the rung's prompt opens with a well-formed Trace-Run line" || fail "the rung prompt's first line reads '$_l1'"
+[ "$_l2" = 'Trace-Spawn: tier=mechanical domain=none skill=implement ticket=#682' ] &&
+	pass "…and a Trace-Spawn line under it, naming the tier, skill and ticket" ||
+	fail "the rung prompt's second line reads '$_l2'"
+grep -q 'do the ticket' "$_p" && grep -q "$WT" "$_p" && grep -qi 'never dispatch' "$_p" &&
+	pass "…carrying the caller's prompt, the worktree, and a bar on dispatching the ticket again" ||
+	fail "the rung prompt reads: $(cat "$_p" 2>/dev/null)"
+case "$S_ERR" in
+*"agent type 'mechanical'"*--rung-done*) pass "stderr names the agent type to spawn and the --rung-done call that follows" ;;
+*) fail "stderr does not say how to drive the rung: $S_ERR" ;;
+esac
+[ "$(rung_seq)" = "in-session1 " ] && pass "the hand-back is recorded in-session on rung 1" ||
+	fail "the hand-back recorded '$(spawn_rungs)'"
+
+# The stub session spawns the rung; the oracle wants the mapped model's work,
+# so rung 1 is red, and rung 2 — dispatchable — runs on the mapped model.
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+[ "$S_STATUS" = 0 ] && [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-mapped ] &&
+	pass "--rung-done judges the in-session rung red, resets, and the mapped rung passes" ||
+	fail "--rung-done exited $S_STATUS, work '$(cat "$WT/work.txt" 2>/dev/null)': $S_ERR"
+git -C "$WT" log --format=%s "$BASE..HEAD" | grep -q 'model-cheap-bare' &&
+	fail "the in-session rung's commit survived the reset" || pass "…the in-session rung's commit reset away"
+[ "$(rung_seq)" = "in-session1 escalated1 passed2 " ] &&
+	pass "the trace holds rung 1 in-session, then escalated, then rung 2 passed" ||
+	fail "the rung records read '$(spawn_rungs)'"
+[ "$(spawn_rungs | awk '{print $3}' | sort -u | wc -l | tr -d ' ')" = 1 ] &&
+	pass "…all under the one cascade run, across both calls" || fail "the rungs sit under different runs: $(spawn_rungs)"
+_r1=$(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"outcome":"escalated"')
+case "$_r1" in
+*'"oracle_exit":"1"'*'"guard_exit":"0"'* | *'"oracle_exit":1'*'"guard_exit":0'*) pass "…the escalation carries the oracle's and the guard's exit codes" ;;
+*) fail "the escalated rung's record reads: $_r1" ;;
+esac
+[ ! -e "$(state_dir)" ] && pass "a finished cascade leaves no hand-back state behind" ||
+	fail "the hand-back state survived the cascade"
+
+# Both rungs in-session: the escalation hands rung 2 back the same way, and a
+# green in-session rung 2 ends the cascade.
+write_policy 'model-cheap-bare' 'model-mapped-bare'
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1 FIXTURE_GUARD_RED_ON=model-cheap
+export FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+[ "$S_STATUS" = 3 ] && printf '%s\n' "$S_OUT" | grep -qx 'model-mapped-bare' &&
+	[ "$(sed -n 2p "$(state_dir)/prompt" 2>/dev/null)" = 'Trace-Spawn: tier=mechanical domain=none skill=implement ticket=#682' ] &&
+	pass "a red in-session rung 1 hands rung 2 back in-session, on the mapped model" ||
+	fail "rung 2's hand-back exited $S_STATUS with '$S_OUT': $S_ERR"
+spawn_in_session model-mapped-bare
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+[ "$S_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 escalated1 in-session2 passed2 " ] &&
+	pass "a green in-session rung 2 passes: rung 1 in-session, escalated, rung 2 in-session, passed" ||
+	fail "two in-session rungs gave status $S_STATUS, rungs '$(spawn_rungs)': $S_ERR"
+[ "$(cat "$WT/work.txt" 2>/dev/null)" = model-mapped-bare ] &&
+	pass "…and rung 2's work is kept" || fail "work.txt reads '$(cat "$WT/work.txt" 2>/dev/null)'"
+
+# A red in-session rung 2: nothing left to escalate to.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_RED=1
+export FIXTURE_ORACLE_RED
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+spawn_in_session model-mapped-bare
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_RED
+[ "$S_STATUS" = 1 ] && [ "$(rung_seq)" = "in-session1 escalated1 in-session2 failed2 " ] &&
+	pass "a red in-session rung 2 exits 1, recorded failed" ||
+	fail "a red in-session rung 2 gave status $S_STATUS, rungs '$(spawn_rungs)'"
+
+# A green in-session rung 1 ends the cascade there; its work is kept.
+write_policy 'model-cheap-bare'
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+[ "$S_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 passed1 " ] &&
+	[ "$(cat "$WT/work.txt" 2>/dev/null)" = model-cheap-bare ] &&
+	pass "a green in-session rung 1 passes, its work kept" ||
+	fail "a green in-session rung 1 gave status $S_STATUS, rungs '$(spawn_rungs)'"
+
+# A rung that committed nothing is judged on what it left: dirty is red.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+cascade_keep "$T_ORACLE"
+echo uncommitted >"$WT/work.txt"
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN
+[ "$(rung_seq | cut -d' ' -f1-2)" = "in-session1 escalated1" ] &&
+	pass "an in-session rung that left its work uncommitted escalates" ||
+	fail "uncommitted in-session work gave rungs '$(spawn_rungs)'"
+
+# --rung-done with no rung handed back in that worktree is refused.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+cascade_keep "$T_ORACLE" --rung-done
+[ "$S_STATUS" = 2 ] && [ ! -e "$WT/work.txt" ] && [ -z "$(spawn_rungs)" ] &&
+	pass "--rung-done with no hand-back in the worktree is exit 2, nothing judged" ||
+	fail "a stray --rung-done exited $S_STATUS: $S_ERR"
+# …and outside a cascade it means nothing.
+t_run_split env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier implementer --prompt x --rung-done
+[ "$S_STATUS" = 2 ] && pass "--rung-done outside a cascade is exit 2" || fail "--rung-done outside a cascade exited $S_STATUS"
+write_policy 'stub:model-cheap'
+
+# The calling skill says how a session drives a rung.
+_cascade_doc="$ROOT/.agents/skills/implement/CASCADE.md"
+grep -q -- '--rung-done' "$_cascade_doc" 2>/dev/null && grep -q 'CASCADE.md' "$ROOT/.agents/skills/implement/SKILL.md" &&
+	pass "/implement opens CASCADE.md, which names the --rung-done call" ||
+	fail "/implement does not say how a session drives an in-session rung"
 
 SHIPPED="$ROOT/scripts/agents.config.sh"
 grep -q "^AGENT_CASCADE_MECHANICAL=''" "$SHIPPED" &&
