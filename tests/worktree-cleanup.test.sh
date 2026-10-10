@@ -177,6 +177,151 @@ wt_has_worktree squashed && fail "the squash-merged worktree survived the real r
 	pass "the squash-merged worktree the forge records as merged is still pruned"
 
 # ---------------------------------------------------------------------------
+banner "A merged, clean worktree a live session still holds is kept and named"
+# ---------------------------------------------------------------------------
+# The regression this guards (#680): a session still working in its worktree
+# right after its pull request lands looks merged and clean, and a cleanup run
+# at that moment removed it out from under the session. The evidence it is
+# live is an open run on that checkout's run stack — any session's, read
+# through `scripts/trace.sh stack <dir> --all` — or a process working in it.
+# A worktree whose run was closed is finished, and still pruned.
+TRACE_SRC="$ROOT/scripts/trace.sh"
+WC_TRACE="$SCRATCH/wc-trace-680"
+WC_POLICY="$SCRATCH/wc-trace-680.policy.sh"
+printf "TRACE_DIR='%s'\n" "$WC_TRACE" >"$WC_POLICY"
+# wc_trace <dir> <session> <trace args…> — the fixture's trace script, run
+# from <dir> as a session there would run it.
+wc_trace() {
+	_wd=$1 _ws=$2
+	shift 2
+	(cd "$_wd" && env TRACE_CONFIG="$WC_POLICY" TRACE_SESSION="$_ws" sh scripts/trace.sh "$@" 2>/dev/null)
+}
+live_fixture() {
+	wt_fixture
+	mkdir -p "$REPO/scripts"
+	cp "$TRACE_SRC" "$REPO/scripts/trace.sh"
+	git -C "$REPO" add -A
+	git -C "$REPO" commit -q -m "chore: carry the trace script"
+	git -C "$REPO" push -q origin main
+	git -C "$REPO" fetch -q origin
+	rm -rf "$WC_TRACE"
+	wt_branch held
+	wt_land held
+	wt_branch done
+	wt_land done
+	wt_branch closed
+	wt_land closed
+}
+live_fixture
+HELD_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+CLOSED_RUN=$(wc_trace "$REPO/worktree/closed" other-session begin implement)
+wc_trace "$REPO/worktree/closed" other-session end "$CLOSED_RUN" outcome=ok
+[ -n "$HELD_RUN" ] && [ -n "$CLOSED_RUN" ] && pass "a session opens a run in the held worktree, another opens and closes one" ||
+	fail "the fixture's begins printed '$HELD_RUN' and '$CLOSED_RUN'"
+for mode in --dry-run real; do
+	if [ "$mode" = real ]; then
+		TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run
+	else
+		TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run --dry-run
+	fi
+	[ "$LAST_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
+		fail "$mode: the script exited $LAST_STATUS"
+	assert_out_has "worktree/held (feat/held) — live: open run $HELD_RUN"
+	assert_out_lacks "Removing merged worktree $REPO/worktree/held"
+	assert_out_has "Removing merged worktree $REPO/worktree/done"
+	assert_out_has "Removing merged worktree $REPO/worktree/closed"
+	wt_has_worktree held && wt_has_branch held &&
+		pass "$mode: the held worktree and its branch are kept" ||
+		fail "$mode: a worktree with an open run was pruned — a live session's worktree lost"
+done
+wt_has_worktree done && fail "the merged worktree with no run survived" ||
+	pass "a merged worktree with no open run is still pruned"
+wt_has_worktree closed && fail "the merged worktree whose run was closed survived" ||
+	pass "a merged worktree whose run was closed is pruned — finished, not live"
+# The session ends its run; the next cleanup prunes the worktree.
+wc_trace "$REPO/worktree/held" live-session end "$HELD_RUN" outcome=ok
+TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run
+assert_out_has "Removing merged worktree $REPO/worktree/held"
+wt_has_worktree held && fail "the held worktree survived after its run closed" ||
+	pass "once its run is closed, the held worktree is pruned"
+
+# The kit's own twin: in this repository the shipped trace policy is empty, so
+# the plain cleanup sees no run; scripts/worktree-cleanup.kit.sh hands it the
+# kit's policy, as agents.kit.sh and trace.kit.sh do theirs. Both scripts are
+# copied into the fixture with a kit policy of its own, so the wrapper runs
+# against the fixture and never against this checkout.
+live_fixture
+cp "$ROOT/scripts/worktree-cleanup.kit.sh" "$ROOT/scripts/worktree-cleanup.sh" "$REPO/scripts/" 2>/dev/null
+printf "TRACE_DIR='%s'\n" "$WC_TRACE" >"$REPO/scripts/trace.kit.config.sh"
+KIT_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+[ -n "$KIT_RUN" ] && pass "a session opens a run in the held worktree" || fail "the begin printed nothing"
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.kit.sh --dry-run'
+assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.sh --dry-run'
+assert_out_has "[dry-run] git worktree remove $REPO/worktree/held"
+# Run from a linked worktree, the wrapper still reads the policy beside it.
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO/worktree/done" && sh "$WC_REPO/scripts/worktree-cleanup.kit.sh" --dry-run'
+assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
+
+# Tracing off is no evidence either way: the open run is not seen, and the
+# merged, clean worktree is pruned exactly as before #680.
+live_fixture
+OFF_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+[ -n "$OFF_RUN" ] && pass "a run is open in the held worktree before the trace is turned off" ||
+	fail "the begin printed nothing — the tracing-off case proves nothing without a run"
+WC_OFF="$SCRATCH/wc-trace-680.off.sh"
+printf "TRACE_DIR=''\n" >"$WC_OFF"
+TRACE_CONFIG="$WC_OFF" TRACE_SESSION=the-cleanup wt_run
+assert_out_has "Removing merged worktree $REPO/worktree/held"
+assert_out_lacks "live:"
+
+# A trace that cannot answer keeps the worktree, naming the refusal: a partial
+# "nothing open" must never read as leave to prune.
+if [ "$(id -u)" != 0 ]; then
+	live_fixture
+	HELD_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+	HELD_STACK=$(ls "$WC_TRACE"/current/*.live-session.runs)
+	chmod 000 "$HELD_STACK"
+	TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run
+	chmod 600 "$HELD_STACK"
+	assert_out_has "worktree/held (feat/held) — live: the trace could not answer for its run stack"
+	wt_has_worktree held && pass "a worktree whose stack cannot be read is kept" ||
+		fail "a worktree whose run stack could not be read was pruned"
+else
+	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
+fi
+
+# A process working in the worktree is the second leg: a session between runs,
+# or a shell left standing in it. Read from /proc, where it exists.
+if [ -d /proc/self ]; then
+	wt_fixture
+	wt_branch busy
+	wt_land busy
+	# From a directory below the worktree's top: a shell left in a subdirectory
+	# holds the worktree as surely as one at its root.
+	mkdir -p "$REPO/worktree/busy/deeper"
+	(cd "$REPO/worktree/busy/deeper" && exec sleep 60) &
+	BUSY_PID=$!
+	# Wait for the child to stand in the directory before the cleanup looks.
+	_bw=0
+	until [ "$(readlink "/proc/$BUSY_PID/cwd" 2>/dev/null)" = "$REPO/worktree/busy/deeper" ] || [ "$_bw" -ge 50 ]; do
+		sleep 0.1
+		_bw=$((_bw + 1))
+	done
+	wt_run
+	kill "$BUSY_PID" 2>/dev/null
+	wait "$BUSY_PID" 2>/dev/null
+	assert_out_has "worktree/busy (feat/busy) — live: process $BUSY_PID works in it"
+	wt_has_worktree busy && pass "a merged worktree a process works in is kept" ||
+		fail "a merged worktree with a process inside it was pruned"
+	wt_run
+	wt_has_worktree busy && fail "the worktree survived after its process exited" ||
+		pass "once the process is gone, it is pruned"
+else
+	echo "  skip  no /proc — the process leg is silent here, by design"
+fi
+
+# ---------------------------------------------------------------------------
 banner "--dry-run changes nothing"
 # ---------------------------------------------------------------------------
 wt_fixture

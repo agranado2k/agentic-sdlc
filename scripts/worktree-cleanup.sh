@@ -12,7 +12,9 @@
 # the worktree and its local branch are removed ONLY when the branch is merged
 # into the base ref AND the worktree has no uncommitted changes. Everything else
 # is kept and reported with the reason — including a FRESH branch, one with no
-# commits of its own yet, which ancestry alone would misread as merged. Nothing
+# commits of its own yet, which ancestry alone would misread as merged, and a
+# LIVE one, merged and clean but still held by a session: an open run on its
+# run stack, or a process working in it (live_reason below says how). Nothing
 # is ever force-removed: the whole value of the script is that a human can run
 # it without reading it first.
 #
@@ -33,6 +35,10 @@
 #                               command that runs after every sync is worse than
 #                               a printed reminder. Set it once in your shell
 #                               profile or your local workflow article.
+#   TRACE_CONFIG                the trace's own policy seam, read by the
+#                               scripts/trace.sh this script asks whether a
+#                               session still holds a worktree. Unset, that
+#                               script reads scripts/trace.config.sh.
 #
 # THIS FILE IS YOURS. It is not part of the shared layer (see VERSION): it
 # encodes one worktree convention, and a project that arranges branches
@@ -123,6 +129,46 @@ is_fresh() {
 	[ -n "$1" ] && [ "$1" = "$2" ]
 }
 
+# live_reason <worktree> — prints why a live session still holds <worktree>,
+# and returns 0, or returns 1 with nothing printed when no evidence says so.
+# Asked only of a worktree the tests above would remove: merged and clean is
+# exactly what a session looks like in the minutes after its pull request
+# lands, while it still works in its worktree (#680; the kit's ADR-0023).
+#
+# Two kinds of evidence, each answered by whoever owns it:
+#   - an open run on that checkout's run stack, any session's — asked of
+#     `scripts/trace.sh stack <dir> --all` in the root checkout, the one reader
+#     of a stack's format. Tracing off, or no trace script, answers nothing; a
+#     trace that REFUSES to answer is doubt, and doubt keeps.
+#   - a process whose current directory is inside the worktree, read from
+#     /proc where it exists; elsewhere that leg is silent.
+# A run a crashed session left open keeps its worktree until it is closed —
+# the reason names the run, which is what the operator closes.
+live_reason() {
+	if [ -f "$ROOT/scripts/trace.sh" ]; then
+		if lr_runs=$(sh "$ROOT/scripts/trace.sh" stack "$1" --all 2>/dev/null); then
+			if [ -n "$lr_runs" ]; then
+				printf 'open run %s' "$(printf '%s\n' "$lr_runs" | head -n 1)"
+				return 0
+			fi
+		else
+			printf 'the trace could not answer for its run stack (exit %s) — kept until it can' "$?"
+			return 0
+		fi
+	fi
+	[ -d /proc/self ] || return 1
+	for lr_p in /proc/[0-9]*; do
+		lr_cwd=$(readlink "$lr_p/cwd" 2>/dev/null) || continue
+		case $lr_cwd in
+		"$1" | "$1"/*)
+			printf 'process %s works in it' "${lr_p#/proc/}"
+			return 0
+			;;
+		esac
+	done
+	return 1
+}
+
 say "==> git fetch --prune origin"
 git fetch --prune origin
 
@@ -192,7 +238,11 @@ while IFS= read -r wt; do
 		keep "$wt ($branch) — uncommitted changes"
 	elif is_fresh "$branch"; then
 		keep "$wt ($branch) — fresh: no commits of its own, nothing to merge"
-	elif is_merged "$branch"; then
+	elif ! is_merged "$branch"; then
+		keep "$wt ($branch) — not merged into $BASE"
+	elif live=$(live_reason "$wt"); then
+		keep "$wt ($branch) — live: $live"
+	else
 		say "==> Removing merged worktree $wt ($branch)"
 		run git worktree remove "$wt"
 		run git branch -D "$branch"
@@ -203,8 +253,6 @@ while IFS= read -r wt; do
 		REMOVED="$REMOVED$wt ($branch)
 "
 		n_removed=$((n_removed + 1))
-	else
-		keep "$wt ($branch) — not merged into $BASE"
 	fi
 done <"$listing"
 
