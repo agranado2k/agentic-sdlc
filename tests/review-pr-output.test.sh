@@ -779,8 +779,8 @@ done
 # Bait (#675): a second bullet citing a decision record, absent from the
 # twin, goes red — the twin's exemption is one bullet, not every record cited.
 bait675='- **A bait rule nobody declined** — declined by the kit'"'"'s ADR-0099, which no twin carries.'
-[ -n "$(declined_said_in "$TWIN" "$declined
-$bait675")" ] &&
+[ "$(declined_said_in "$TWIN" "$declined
+$bait675")" = "$bait675" ] &&
 	pass "bait: a second ADR-citing bullet missing from $TWIN goes red" ||
 	fail "bait: a second ADR-citing bullet missing from $TWIN still reads as carried — the exemption is a pattern, not the one bullet"
 
