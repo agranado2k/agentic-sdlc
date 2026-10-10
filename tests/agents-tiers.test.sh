@@ -1340,6 +1340,36 @@ done
 t_run_split env AGENTS_CONFIG="$CX_CONFIG" sh "$LIB" --harness reviewer
 [ -n "$S_OUT" ] && pass "agents.kit.codex.config.sh: the reviewer runs on agent harness '$S_OUT', not the session's own" ||
 	fail "agents.kit.codex.config.sh: the reviewer names no agent harness — the review shares the author's vendor"
+# The Codex policy's reviewer follows ADR-0020 too (its amendment of
+# 2026-10-10, #691): the Sonnet family, crossing to Claude Code, with the same
+# ordered fallback, `opus` then the pinned Fable. Asserted through the kit
+# wrapper, the one way this repo resolves (hard rule 10), for each session the
+# ticket names and the one a Codex session actually is. Every answer crosses:
+# the fallback carries its own agent harness, or the dispatcher would run a
+# Claude model in the Codex session. The sessions are named in the policy's
+# own words — the bridge never folds a crossing value (PR #553 M-1), so a
+# `claude-sonnet-*` id is compared exactly, which no Codex session can be.
+for _cx_case in \
+	'opus||sonnet' \
+	'claude-opus-5-5||sonnet' \
+	'gpt-5.6-sol||sonnet' \
+	'sonnet||opus' \
+	'opus|sonnet|claude-fable-5-1'; do
+	_cx_sess=${_cx_case%%|*} _cx_rest=${_cx_case#*|}
+	_cx_unr=${_cx_rest%%|*} _cx_want=${_cx_rest#*|}
+	for _cx_dom in '' self-implemented; do
+		# shellcheck disable=SC2086 # the optional domain, absent when empty
+		t_run_split env -C "$KIT" AGENT_HARNESS_SELF=codex AGENT_SESSION_MODEL="$_cx_sess" \
+			AGENT_UNREACHABLE_MODELS="$_cx_unr" sh scripts/agents.kit.sh reviewer $_cx_dom
+		_cx_got=$S_OUT
+		# shellcheck disable=SC2086
+		t_run_split env -C "$KIT" AGENT_HARNESS_SELF=codex AGENT_SESSION_MODEL="$_cx_sess" \
+			AGENT_UNREACHABLE_MODELS="$_cx_unr" sh scripts/agents.kit.sh --harness reviewer $_cx_dom
+		[ "$_cx_got" = "$_cx_want" ] && [ "$S_OUT" = claude-code ] &&
+			pass "Codex policy: reviewer${_cx_dom:+ $_cx_dom} for a '$_cx_sess' session${_cx_unr:+, '$_cx_unr' unreachable} is '$_cx_want' on claude-code (ADR-0020)" ||
+			fail "Codex policy: reviewer${_cx_dom:+ $_cx_dom} for a '$_cx_sess' session${_cx_unr:+, '$_cx_unr' unreachable} is '${_cx_got:-nothing}' on '${S_OUT:-the session}', expected '$_cx_want' on claude-code"
+	done
+done
 t_run_split env AGENTS_CONFIG="$CC_CONFIG" sh "$LIB" --harness reviewer
 [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
 	pass "agents.kit.config.sh: the reviewer is local — no agent harness while the crossing cannot authenticate" ||
