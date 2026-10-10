@@ -477,10 +477,7 @@ const skillDated = {
  */
 const supersession = {
   recordsDir: "docs/adr",
-  knownExceptions: [
-    "0007-a-review-never-resolves-to-the-sessions-own-model|0020-the-kits-reviewer-follows-the-sonnet-family",
-    "0018-two-kit-tiers-follow-a-model-family|0020-the-kits-reviewer-follows-the-sonnet-family",
-  ],
+  knownExceptions: [],
 };
 
 export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, supersession, traceOff };
