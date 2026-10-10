@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: a planner session for #679, under the operator's delegation of rulings (2026-10-10); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: — (refines the index's amendment convention: what "may be recorded in place" is bounded by; ADR-0008 stays binding until its successor lands)
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-10-10 for #692: ADR-0024 supersedes ADR-0008, which section H then skips, so ADR-0008's ceiling leaves the frozen line of clause 5 and the line names ADR-0009's alone)
 
 ## Context and problem statement
 
@@ -111,7 +111,8 @@ Chosen: **option 1.**
    `docs/adr/` from today and to each successor in turn. A successor starts
    at zero. A record past the cap today is held at the count it has:
    ADR-0008 at twenty-four, ADR-0009 at seven. Neither takes another. The
-   suite reads these ceilings from this line: `frozen: 0008:24 0009:7`.
+   suite reads these ceilings from this line: `frozen: 0009:7` (ADR-0008's
+   left it when ADR-0024 superseded it, #692).
    `tests/self-host.test.sh` section H counts every live record's header and
    fails on one past its ceiling. A superseded record is skipped. A probe it
    baits proves the count can fail.
