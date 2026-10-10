@@ -13,13 +13,15 @@
 // superseded record, the file that has to change.
 //
 // The policy is data in config.mjs's `supersession` block: the records
-// directory and the known exceptions, one `<superseded>|<superseding>` each
-// by record number (`NNNN|NNNN`), that a sweep removes. The POSIX twin in scripts/check.sh reads the same
+// directory and the known exceptions, one `<superseded>|<superseding>` each,
+// both named by file name without `.md` — never a bare number, which another
+// project's records share — that a sweep removes. The POSIX twin in scripts/check.sh reads the same
 // block by text and reports the same rule.
 
 export const id = "supersession";
 
 const RECORD = /^(\d{4})-.*\.md$/;
+const stem = (file) => file.slice(file.lastIndexOf("/") + 1, -".md".length);
 const header = (text, field) => {
   const m = text.match(new RegExp(`^- \\*\\*${field}\\*\\*:(.*)$`, "m"));
   return m ? m[1] : null;
@@ -47,7 +49,7 @@ export function run(ctx) {
       const old = records.get(target);
       if (target === self || !old) continue;
       if ((header(ctx.read(old) ?? "", "Superseded by") ?? "").includes(self)) continue;
-      if (known.has(`${target.slice(4)}|${self.slice(4)}`)) continue;
+      if (known.has(`${stem(old)}|${stem(file)}`)) continue;
       out.push({
         validator: id,
         file: old,

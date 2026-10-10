@@ -95,7 +95,7 @@ line has a `;`-separated clause opening "supersedes" — whole or a clause —
 fails unless each record that clause names carries its id on the
 "Superseded by" line; an amendment obliges nothing. The finding is filed on
 the superseded record, the file that has to change. The records directory
-and the known exceptions (`<superseded>|<superseding>` by record number, today's open links,
+and the known exceptions (`<superseded>|<superseding>`, each record by file name, today's open links,
 which a sweep closes) are `supersession` in `config.mjs`. Rule it reports:
 `supersession-one-sided`, a violation. Its POSIX twin in `check.sh` reads
 `supersession` by text, one `"<value>",` per line.

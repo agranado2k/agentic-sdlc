@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import defaultConfig from "../config.mjs";
@@ -42,6 +42,15 @@ test("a one-sided supersession fails, on the superseded record, naming both", ()
   assert.notEqual(out[0].severity, "warning");
   assert.ok(out[0].message.includes(A("0002")));
   assert.ok(out[0].message.includes(A("0001")));
+  cleanup(ctx);
+});
+
+test("a Superseded by line that names some other record does not close the link", () => {
+  const ctx = ctxFor(
+    { ...ONE_SIDED, [OLD]: record("0001", "Old", "—", `— (clause 1 superseded by ${A("0003")})`) },
+    policy(),
+  );
+  assert.deepEqual(run(ctx).map((f) => f.file), [OLD]);
   cleanup(ctx);
 });
 
@@ -103,13 +112,21 @@ test("no records directory, or no policy block, is no rule", () => {
   cleanup(bare);
 });
 
-test("a known exception silences exactly its pair", () => {
+test("a known exception silences exactly its pair, named by both records' file names", () => {
   const ctx = ctxFor(
     { ...ONE_SIDED, "docs/adr/0003-other.md": record("0003", "Other", "—", "—"), [NEW]: record("0002", "New", `supersedes ${A("0001")} and ${A("0003")}`, "—") },
-    policy({ knownExceptions: ["0001|0002"] }),
+    policy({ knownExceptions: ["0001-old|0002-new"] }),
   );
   assert.deepEqual(run(ctx).map((f) => f.file), ["docs/adr/0003-other.md"]);
   cleanup(ctx);
+});
+
+test("an exception for another project's records of the same numbers silences nothing", () => {
+  for (const entry of ["0001|0002", "0001-a-kit-record|0002-new", "0001-old|0002-a-kit-record"]) {
+    const ctx = ctxFor(ONE_SIDED, policy({ knownExceptions: [entry] }));
+    assert.deepEqual(run(ctx).map((f) => f.file), [OLD], entry);
+    cleanup(ctx);
+  }
 });
 
 test("the kit's own records pass under the policy it ships", () => {
@@ -119,9 +136,10 @@ test("the kit's own records pass under the policy it ships", () => {
 
 test("every known exception is still one-sided — a closed link leaves the list", () => {
   const ctx = makeContext({ repoRoot: KIT, config: policy() });
+  const stems = readdirSync(join(KIT, "docs/adr")).map((f) => f.replace(/\.md$/, ""));
   const open = new Set(run(ctx).map((f) => {
-    const [, old, by] = f.message.match(/^ADR-(\d{4}) is superseded by ADR-(\d{4})/);
-    return `${old}|${by}`;
+    const by = f.message.match(/ is superseded by ADR-(\d{4})/)[1];
+    return `${basename(f.file, ".md")}|${stems.find((s) => s.startsWith(`${by}-`))}`;
   }));
   for (const entry of defaultConfig.supersession.knownExceptions) {
     assert.ok(open.has(entry), `${entry} is listed but the link is no longer one-sided`);
@@ -180,7 +198,23 @@ test("the POSIX fallback holds every id in a supersedes clause, and skips the te
   assert.match(res.stderr, /0003-other\.md/);
 });
 
-test("the POSIX fallback's known exception silences exactly its pair", () => {
-  const res = posixProject(ONE_SIDED, ["0001|0002"]);
+test("the POSIX fallback is red when Superseded by names some other record", () => {
+  const res = posixProject({ ...ONE_SIDED, [OLD]: record("0001", "Old", "—", `— (superseded by ${A("0003")})`) });
+  assert.equal(res.status, 1, `expected exit 1, got ${res.status}\n${res.stdout}${res.stderr}`);
+  assert.equal(res.stderr.match(/\[supersession-one-sided\]/g)?.length, 1);
+});
+
+test("the POSIX fallback leaves a record with no file, and a record's own id, alone", () => {
+  const res = posixProject({ [NEW]: record("0002", "New", `supersedes ${A("0009")} and ${A("0002")}'s draft`, "—") });
   assert.equal(res.status, 0, `expected exit 0, got ${res.status}\n${res.stdout}${res.stderr}`);
+  assert.doesNotMatch(res.stderr, /supersession-one-sided/);
+});
+
+test("the POSIX fallback's known exception silences exactly its pair, by file names", () => {
+  const res = posixProject(ONE_SIDED, ["0001-old|0002-new"]);
+  assert.equal(res.status, 0, `expected exit 0, got ${res.status}\n${res.stdout}${res.stderr}`);
+  for (const entry of ["0001|0002", "0001-a-kit-record|0002-new"]) {
+    const other = posixProject(ONE_SIDED, [entry]);
+    assert.equal(other.status, 1, `${entry}: expected exit 1, got ${other.status}\n${other.stdout}${other.stderr}`);
+  }
 });

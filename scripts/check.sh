@@ -424,7 +424,8 @@ if [ "$engine" = "fallback" ]; then
 	# `;`-separated clause opening "supersedes" (any case) obliges every
 	# ADR-NNNN that clause names — itself and a record with no file aside — to
 	# carry its id on the "Superseded by" line, unless
-	# `<superseded>|<superseding>`, by record number, is on the knownExceptions. The block is read
+	# `<superseded>|<superseding>`, both by file name without .md, is on the
+	# knownExceptions. The block is read
 	# BY TEXT from config.mjs's `supersession` block; no block is no rule.
 	if [ -f "$ls_cfg" ]; then
 		ss_block=$(awk '/^const supersession = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
@@ -445,7 +446,7 @@ if [ "$engine" = "fallback" ]; then
 					done
 					[ -n "$ss_old" ] || continue
 					sed -n 's/^- \*\*Superseded by\*\*:\(.*\)$/\1/p' "$ss_old" | head -1 | grep -qF -- "$ss_self" && continue
-					printf '%s\n' "$ss_known" | grep -qxF -- "${ss_id#ADR-}|${ss_self#ADR-}" && continue
+					printf '%s\n' "$ss_known" | grep -qxF -- "$(basename "$ss_old" .md)|$(basename "$rec" .md)" && continue
 					report "supersession-one-sided" "$ss_old" \
 						"$ss_id is superseded by $ss_self (its \"Supersedes / amends\" line says so), but $ss_id's \"Superseded by\" line does not name $ss_self" \
 						"Name $ss_self on $ss_id's \"Superseded by\" line, and in what respect — the old record is where a reader learns it stopped binding."
