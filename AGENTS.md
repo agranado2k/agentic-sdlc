@@ -109,7 +109,7 @@ pushes straight past both gates.
 10. **In THIS repo, run the kit wrapper where a SKILL.md names the plain script:**
     `sh scripts/agents.kit.sh <tier> [domain]` for `sh scripts/agents.lib.sh …`,
     and `sh scripts/trace.kit.sh …` for `sh scripts/trace.sh …` — and
-    `TRACE_CONFIG=scripts/trace.kit.config.sh sh scripts/worktree-cleanup.sh`,
+    `sh scripts/worktree-cleanup.kit.sh` for `sh scripts/worktree-cleanup.sh`,
     so the cleanup sees a live session's open run. The plain command
     is correct for a consumer; here it reads the empty shipped policy file and
     silently does nothing. See "Capability tiers" below.
@@ -259,7 +259,7 @@ answers produce a clean project.
 | Walk a product's personas through its surface | `/dogfood` — optional at bootstrap; the kit has no surface of its own |
 | Drive an open PR to green           | `/pr-iterate` — one closed loop; compose as `/loop /pr-iterate <PR#>` |
 | Land a batch of green PRs           | `/merge-train` — **you** start it; no agent ever does. Its one-PR form, the **landing script**, is `sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]`; the train lands each PR through it with `--train`, after its own ordering and update-branch (`merge.land` marked `data.via=train`, the verdict left to the train; #662). It refuses a PR not green and mergeable, or with no `pr.iterate` or no `review.verdict` at its head commit unless `--no-iteration` or `--no-review` names why — a prose-only PR such as a diary stamp takes both (exit 2, nothing recorded; ADR-0019), merges, tags a release's merge commit before it waits (ADR-0015), waits for main's workflows — re-running a release's failures once — records `merge.land` and `feedback` — and `pr.open` first when the trace holds none for the PR — then fast-forwards the root checkout when it is clean and on the base branch, naming one it leaves (kit-only, never shipped) |
-| Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh` |
+| Prune merged worktrees              | `/worktree-cleanup` — wraps `scripts/worktree-cleanup.sh`; in THIS repo `sh scripts/worktree-cleanup.kit.sh` (hard rule 10), which keeps a worktree a live session still holds (ADR-0023) |
 | Know where a skill came from        | `.agents/skills/LICENSE-mattpocock-skills.md`    |
 | Admit declared runtime skill roots | `sh scripts/catalogue.sh check .` — exact names, source identity and executable references; `scripts/catalogue.md` documents caller roots |
 | Start or inspect the task contract | `sh scripts/task.sh start . <contract>` / `sh scripts/task.sh status .` — scope, endpoint, authority, baseline and catalogue provenance before edits |

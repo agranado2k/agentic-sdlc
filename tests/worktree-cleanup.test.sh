@@ -245,10 +245,30 @@ assert_out_has "Removing merged worktree $REPO/worktree/held"
 wt_has_worktree held && fail "the held worktree survived after its run closed" ||
 	pass "once its run is closed, the held worktree is pruned"
 
+# The kit's own twin: in this repository the shipped trace policy is empty, so
+# the plain cleanup sees no run; scripts/worktree-cleanup.kit.sh hands it the
+# kit's policy, as agents.kit.sh and trace.kit.sh do theirs. Both scripts are
+# copied into the fixture with a kit policy of its own, so the wrapper runs
+# against the fixture and never against this checkout.
+live_fixture
+cp "$ROOT/scripts/worktree-cleanup.kit.sh" "$ROOT/scripts/worktree-cleanup.sh" "$REPO/scripts/" 2>/dev/null
+printf "TRACE_DIR='%s'\n" "$WC_TRACE" >"$REPO/scripts/trace.kit.config.sh"
+KIT_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+[ -n "$KIT_RUN" ] && pass "a session opens a run in the held worktree" || fail "the begin printed nothing"
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.kit.sh --dry-run'
+assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.sh --dry-run'
+assert_out_has "[dry-run] git worktree remove $REPO/worktree/held"
+# Run from a linked worktree, the wrapper still reads the policy beside it.
+t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO/worktree/done" && sh "$WC_REPO/scripts/worktree-cleanup.kit.sh" --dry-run'
+assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
+
 # Tracing off is no evidence either way: the open run is not seen, and the
 # merged, clean worktree is pruned exactly as before #680.
 live_fixture
-wc_trace "$REPO/worktree/held" live-session begin implement >/dev/null
+OFF_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
+[ -n "$OFF_RUN" ] && pass "a run is open in the held worktree before the trace is turned off" ||
+	fail "the begin printed nothing — the tracing-off case proves nothing without a run"
 WC_OFF="$SCRATCH/wc-trace-680.off.sh"
 printf "TRACE_DIR=''\n" >"$WC_OFF"
 TRACE_CONFIG="$WC_OFF" TRACE_SESSION=the-cleanup wt_run
@@ -282,6 +302,12 @@ if [ -d /proc/self ]; then
 	mkdir -p "$REPO/worktree/busy/deeper"
 	(cd "$REPO/worktree/busy/deeper" && exec sleep 60) &
 	BUSY_PID=$!
+	# Wait for the child to stand in the directory before the cleanup looks.
+	_bw=0
+	until [ "$(readlink "/proc/$BUSY_PID/cwd" 2>/dev/null)" = "$REPO/worktree/busy/deeper" ] || [ "$_bw" -ge 50 ]; do
+		sleep 0.1
+		_bw=$((_bw + 1))
+	done
 	wt_run
 	kill "$BUSY_PID" 2>/dev/null
 	wait "$BUSY_PID" 2>/dev/null

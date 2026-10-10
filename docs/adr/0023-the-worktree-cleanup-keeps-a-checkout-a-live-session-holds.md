@@ -61,9 +61,9 @@ Chosen: **option 1.**
    there and of the session-less one, one run per line, in no promised order,
    never a run below a top. `--all` takes the place of `session=`; both at
    once is a usage error, exit 2. Its refusals are `stack <dir>`'s, with one
-   addition: one stack that exists and cannot be read refuses the whole
-   answer, exit 2, nothing on stdout — a partial "nothing open" would read as
-   leave to prune. Unconfigured, it prints nothing and exits 0. It reads
+   addition: one stack that exists and cannot be read, or a run directory
+   that cannot be listed, refuses the whole answer, exit 2, nothing on stdout
+   — a partial "nothing open" would read as leave to prune. Unconfigured, it prints nothing and exits 0. It reads
    stacks, never an event, and writes nothing.
 2. **The cleanup keeps a merged, clean worktree that a live session holds**,
    and names why: `live: open run <run id>` when `stack <wt> --all` printed a
@@ -80,8 +80,10 @@ Chosen: **option 1.**
 4. **The policy the cleanup's trace reads is the trace's own seam.** The
    cleanup runs `scripts/trace.sh` from the root checkout, so it reads that
    checkout's `scripts/trace.config.sh`, or `TRACE_CONFIG` when set. The kit's
-   own policy is the kit-only twin, so in the kit the cleanup is run with
-   `TRACE_CONFIG=scripts/trace.kit.config.sh` (the root manual's hard rule 10).
+   own policy is the kit-only twin, so the kit runs the cleanup through a
+   kit-only wrapper, `scripts/worktree-cleanup.kit.sh`, which sets that seam
+   once — ADR-0003's arrangement, as `agents.kit.sh` and `trace.kit.sh` have
+   it — and the root manual's hard rule 10 names it.
 
 ## Consequences
 
