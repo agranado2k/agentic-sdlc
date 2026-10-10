@@ -1951,6 +1951,8 @@ pushed_review_missing() {
 	printf '%s\n' "$_pr_sc" | grep -qE 'again on (that|the new) head \(do NOT post' || echo rereview-unposted
 	printf '%s\n' "$_pr_sc" | grep -qiE 'before (it records|recording) `green`' || echo before-green
 	printf '%s\n' "$_pr_sc" | grep -qiE 'finding[^.]*to act on[^.]*record `red`[^.]*next iteration' || echo finding-not-converged
+	printf '%s\n' "$_pr_sc" | grep -qiE 'finding to act on \(a ⚠️ item is the operator.s, never one\)' || echo unspecified-not-blocking
+	printf '%s\n' "$_pr_sc" | grep -qE "reason='<the failing check by name, or the re-review, when red" || echo red-reason-names-review
 }
 PIM=$(skill_md pr-iterate)
 _pr=$(pushed_review_missing "$PIM")
@@ -1962,7 +1964,9 @@ for b in \
 	's/run `\/review-pr` again on that head/run step 2 again/' \
 	's/again on that head (do NOT post/again on that head (post/' \
 	's/before it records `green`/after it records `green`/' \
-	's/record `red` instead/record `green` anyway/'; do
+	's/record `red` instead/record `green` anyway/' \
+	's/ (a ⚠️ item is the operator.s, never one)//' \
+	's/by name, or the re-review, when red/by name when red/'; do
 	sed "$b" "$PIM" >"$SCRATCH/bait699.md"
 	if ! cmp -s "$SCRATCH/bait699.md" "$PIM" && [ -n "$(pushed_review_missing "$SCRATCH/bait699.md")" ]; then
 		pass "bait: '$b' goes red"
