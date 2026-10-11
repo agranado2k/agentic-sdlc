@@ -93,6 +93,9 @@ jobs:
       # The harness is dependency-free plain ESM, so there is no install step.
       - name: Validator fixture tests
         run: node --test scripts/docs-conformance/test/*.test.mjs
+      # Same job, same node: a full run must leave no docs-conf-* fixture behind (#731).
+      - name: Fixture cleanup suite
+        run: sh tests/harness-fixture-cleanup.test.sh
 
   portability:
     name: Shared layer is portable
