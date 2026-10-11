@@ -32,7 +32,12 @@
 #      or reviewed — a diary stamp — lands on both overrides, each with its
 #      reason. Unconfigured, the trace holds nothing to read and records
 #      nothing: both checks are skipped, and stderr says so.
-#   1c. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
+#   1c. REFUSES the same way a PR that moves a file VERSION's files: list
+#      names — at its merge base or its head — with no new version on the
+#      shared-layer line (#728, ADR-0025): a shared-layer change is a release
+#      (hard rule 3). The diff is the PR's own, read with git from its merge
+#      base; one that cannot be read refuses too. No override.
+#   1d. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
 #      the head branch) when the trace holds none for it: a PR opened outside
 #      /implement still joins its ticket for /retro (#638).
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
@@ -231,15 +236,17 @@ at_head() {
 			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
 			END { exit !f }'
 }
+# The head commit and its date: the trace checks here and the shared-layer
+# check below (#728) read the same one.
+HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h
+	| {oid: $h, committedDate: ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")}
+	| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"' 2>/dev/null) || HEAD=
+HEAD_OID=$(named "$HEAD" oid)
+HEAD_AT=$(named "$HEAD" committedDate)
+case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
 if [ -z "$(trace_read dir)" ]; then
 	note "the trace is unconfigured — whether /pr-iterate ran and /review-pr recorded a verdict at the head of PR #$PR is not checked"
 else
-	HEAD=$(gh pr view "$PR" --json headRefOid,commits --jq '.headRefOid as $h
-		| {oid: $h, committedDate: ((.commits // []) | map(select(.oid == $h)) | last | .committedDate // "")}
-		| to_entries[] | "\(.key)=\(.value | tostring | gsub("[\r\n]"; " "))"' 2>/dev/null) || HEAD=
-	HEAD_OID=$(named "$HEAD" oid)
-	HEAD_AT=$(named "$HEAD" committedDate)
-	case $HEAD_OID in '' | *[!0-9a-f]*) HEAD_OID='<unnamed>' ;; esac
 	ITERATED=no
 	REVIEWED=no
 	case $HEAD_AT in
@@ -262,6 +269,49 @@ else
 fi
 
 BASE=$(field baseRefName)
+
+# --- 1c. the shared layer moves only with a version bump (#728, ADR-0025) ------
+# A PR that moves a file VERSION's files: list names is a release (hard rule
+# 3): it lands only with VERSION's shared-layer line moved to a new version.
+# The diff is the PR's own, from its merge base with the base branch to its
+# head, as the forge's diff is; the list is read at both ends, so a file
+# joining or leaving the manifest counts. A diff that cannot be read refuses:
+# this check cannot vouch for what it did not see. No override.
+. "$ROOT/scripts/manifest.lib.sh"
+# layer_version <VERSION text> — the shared-layer value, only when it is a
+# version: anything else is no release and is never typed into a tag.
+layer_version() {
+	printf '%s\n' "$1" | sed -n 's/^shared-layer: *\([0-9]\{1,6\}\.[0-9]\{1,6\}\.[0-9]\{1,6\}\) *$/\1/p' | head -1
+}
+# bumped <VERSION before> <VERSION after> — print the new version and exit 0
+# when the shared-layer line moved to a version; a line that moved to no
+# version, or did not move, is no bump. Step 2b's release is the same question.
+bumped() {
+	_bp_v=$(layer_version "$2")
+	[ -n "$_bp_v" ] && [ "$_bp_v" != "$(layer_version "$1")" ] && printf '%s\n' "$_bp_v"
+}
+_sl_unread="its diff could not be read to check the shared layer"
+[ "$HEAD_OID" != '<unnamed>' ] || refuse "the forge did not name its head commit, so $_sl_unread"
+git -C "$ROOT" fetch -q origin "$BASE" "refs/pull/$PR/head" >/dev/null 2>&1 ||
+	refuse "fetching origin $BASE and the PR's head failed, so $_sl_unread"
+_sl_mb=$(git -C "$ROOT" merge-base "refs/remotes/origin/$BASE" "$HEAD_OID" 2>/dev/null) && [ -n "$_sl_mb" ] ||
+	refuse "its head $HEAD_OID has no merge base with origin/$BASE here, so $_sl_unread"
+# quotePath off: a listed path git would print quoted must still match.
+_sl_moved=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.quotePath GIT_CONFIG_VALUE_0=false git -C "$ROOT" diff --name-only --no-renames "$_sl_mb" "$HEAD_OID" 2>/dev/null) ||
+	refuse "git could not diff $_sl_mb..$HEAD_OID, so $_sl_unread"
+_sl_before=$(git -C "$ROOT" show "$_sl_mb:VERSION" 2>/dev/null) && _sl_after=$(git -C "$ROOT" show "$HEAD_OID:VERSION" 2>/dev/null) ||
+	refuse "VERSION could not be read at its merge base and head, so $_sl_unread"
+_sl_listed=$({ printf '%s\n' "$_sl_before" | manifest_section files; printf '%s\n' "$_sl_after" | manifest_section files; } | sort -u)
+[ -n "$_sl_listed" ] || refuse "VERSION's files: list reads empty at its merge base and head, so $_sl_unread"
+# The moved paths the manifest names, at either end, one per line.
+_sl_hit=$(printf '%s\n' "$_sl_moved" | while IFS= read -r _sl_p; do
+	[ -n "$_sl_p" ] && printf '%s\n' "$_sl_listed" | grep -qxF -- "$_sl_p" && printf '%s\n' "$_sl_p"
+done)
+if [ -n "$_sl_hit" ] && ! bumped "$_sl_before" "$_sl_after" >/dev/null; then
+	_sl_was=$(layer_version "$_sl_before") _sl_now=$(layer_version "$_sl_after")
+	refuse "it moves the shared layer — $(printf '%s\n' "$_sl_hit" | tr '\n' ' ')— with no new version on VERSION's shared-layer line (${_sl_was:-no version} at its merge base, ${_sl_now:-no version} at its head); a shared-layer change is a release (AGENTS.md hard rule 3): bump the minor in VERSION, record it in UPDATING.md, re-capture the pinned transcripts"
+fi
+
 [ -n "$TICKET" ] || TICKET=$(field ticket)
 TITLE=$(field title)
 if [ -n "$TICKET" ]; then
@@ -276,7 +326,7 @@ fi
 [ -z "$REVIEWED" ] || set -- "$@" "data.reviewed=$REVIEWED"
 [ "$REVIEWED" != no ] || set -- "$@" "data.no_review=$NO_REVIEW"
 
-# --- 1c. a PR the trace never saw opened (#638) --------------------------------
+# --- 1d. a PR the trace never saw opened (#638) --------------------------------
 # A PR opened outside /implement left no pr.open, and /retro joins a ticket to
 # its PR through that event's related field. When the trace holds none on
 # pr:#<N>, the landing writes it, marked data.via=land. The head branch is
@@ -319,19 +369,13 @@ done
 # once what failed without it. An existing tag is never moved.
 RELEASE=
 TAGGED=
-# layer_version <VERSION text> — the shared-layer value, only when it is a
-# version: anything else is no release and is never typed into a tag.
-layer_version() {
-	printf '%s\n' "$1" | sed -n 's/^shared-layer: *\([0-9]\{1,6\}\.[0-9]\{1,6\}\.[0-9]\{1,6\}\) *$/\1/p' | head -1
-}
 if [ -n "$SHA" ]; then
 	if git -C "$ROOT" fetch -q origin "$BASE" >/dev/null 2>&1 &&
 		_ver_after=$(git -C "$ROOT" show "$SHA:VERSION" 2>/dev/null) &&
 		_ver_before=$(git -C "$ROOT" show "$SHA^1:VERSION" 2>/dev/null); then
-		_v=$(layer_version "$_ver_after")
-		if [ -n "$_v" ] && [ "$_v" != "$(layer_version "$_ver_before")" ]; then
+		if _v=$(bumped "$_ver_before" "$_ver_after"); then
 			RELEASE=v$_v
-		elif [ -z "$_v" ] && printf '%s\n' "$_ver_after" | grep -q '^shared-layer:'; then
+		elif [ -z "$(layer_version "$_ver_after")" ] && printf '%s\n' "$_ver_after" | grep -q '^shared-layer:'; then
 			note "VERSION's shared-layer line at $SHA is not a version — nothing tagged"
 		fi
 	else

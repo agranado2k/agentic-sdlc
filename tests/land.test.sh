@@ -122,12 +122,38 @@ _c=
 [ "${1:-}" = -C ] && { _c=$2; shift 2; }
 case ${1:-} in
 fetch | show | ls-remote | tag | push | cat-file | ls-tree) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
+# The PR's own diff (#728): its merge base and the paths it moves are the
+# stub's; the root checkout's `diff --quiet` and `merge-base --is-ancestor`
+# still reach the real git.
+diff) case " $* " in *' --name-only '*) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;; *) exec "$REAL_GIT" ${_c:+-C "$_c"} "$@" ;; esac ;;
+merge-base) case " $* " in *' --is-ancestor '*) exec "$REAL_GIT" ${_c:+-C "$_c"} "$@" ;; *) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;; esac ;;
 *) if [ -n "$_c" ]; then exec "$REAL_GIT" -C "$_c" "$@"; else exec "$REAL_GIT" "$@"; fi ;;
 esac
+# pr_version <shared-layer value> <extra entry>… — a VERSION as the PR's
+# merge base or head holds it: the version line, then the files: list.
+pr_version() {
+	printf '# a note\nshared-layer: %s\n\nfiles:\n' "$1"
+	shift
+	[ -z "${STUB_PR_NO_LIST:-}" ] || { printf 'skills:\n  grill-me\n'; return; }
+	for _e in scripts/shared.sh UPDATING.md "$@"; do printf '  %s  annotated\n' "$_e"; done
+	printf 'skills:\n  grill-me\n'
+}
+_mb=ba5eba5eba5eba5eba5eba5eba5eba5eba5eba5e
+_ho=${STUB_HEAD_OID-1234567890123456789012345678901234567890}
 case $1 in
-fetch) exit "${STUB_FETCH_RC:-0}" ;;
+fetch)
+	case " $* " in *' refs/pull/'*) exit "${STUB_PR_FETCH_RC:-0}" ;; esac
+	exit "${STUB_FETCH_RC:-0}"
+	;;
+merge-base) [ "${STUB_MB_RC:-0}" = 0 ] || exit "$STUB_MB_RC"; printf '%s\n' "$_mb" ;;
+diff) [ "${STUB_PR_DIFF_RC:-0}" = 0 ] || exit "$STUB_PR_DIFF_RC"; for _f in ${STUB_PR_FILES:-}; do printf '%s\n' "$_f"; done ;;
 show)
 	case $2 in
+	"$_mb:VERSION") [ "${STUB_PR_BASE_SHOW_RC:-0}" = 0 ] || exit "$STUB_PR_BASE_SHOW_RC"; pr_version 0.1.0 ${STUB_MANIFEST_BASE_EXTRA:-} ;;
+	"$_ho:VERSION")
+		[ "${STUB_PR_HEAD_SHOW_RC:-0}" = 0 ] || exit "$STUB_PR_HEAD_SHOW_RC"
+		pr_version "${STUB_PR_VER_HEAD:-0.1.0}" ${STUB_MANIFEST_HEAD_EXTRA:-}
+		;;
 	*'^1:VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_BEFORE:-0.1.0}" ;;
 	*':VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_AFTER:-0.1.0}" ;;
 	*':.github/workflows/'?*) cat "${STUB_WORKFLOWS:-/nonexistent}/${2##*/}" 2>/dev/null || exit 128 ;;
@@ -1345,5 +1371,82 @@ case $(land_reads_unnamed "$LR_BAIT/none.sh" "$ADR19") in
 *'no show --kind read'*) pass "bait: a script with no read found fails, having read nothing" ;;
 *) fail "bait: a script with no read passed the check" ;;
 esac
+
+banner "16. A PR that moves the shared layer with no version bump is refused (#728)"
+# PR #693 moved manifest-listed files with no VERSION bump and landed, and
+# main stayed red until another session cut a release. The landing reads the
+# PR's diff against its merge base and VERSION's files: list at both ends;
+# a moved listed path with the shared-layer line unchanged refuses it — exit
+# 2, nothing merged, nothing recorded, the moved files and hard rule 3 named.
+# No override: a shared-layer change is a release, never an exception.
+# no_bump <pr> <label> — refused on the shared-layer check.
+no_bump() {
+	not_landed "$1" "$2"
+	[ "$(events "$1" merge.land)" = 0 ] && [ "$(events "$1" feedback)" = 0 ] && [ "$(events "$1" pr.open)" = 0 ] &&
+		pass "$2: no landing reached the trace" || fail "$2: a landing was recorded: $(show "pr:#$1")"
+	s_assert_err_has "hard rule 3" "$2: stderr names the hard rule"
+}
+iterated 700 701 702 703 704 705 707 708 709 710 714 715 716
+land STUB_PR_FILES='scripts/shared.sh docs/notes.md' 700
+no_bump 700 "a manifest-listed file moved, the version unchanged"
+s_assert_err_has "scripts/shared.sh" "stderr names the moved manifest-listed file"
+printf '%s\n' "$S_ERR" | grep -qF 'docs/notes.md' && fail "the refusal names a file outside the manifest: $S_ERR" ||
+	pass "and names no file outside the manifest"
+s_assert_err_has "0.1.0" "and the shared-layer version it still reads"
+grep -qE '^ARGV: git diff --name-only .*ba5eba5e' "$STUB_LOG" && pass "the diff it read is the PR's, from its merge base" ||
+	fail "the diff was not read from the merge base: $(grep '^ARGV: git' "$STUB_LOG")"
+
+land STUB_PR_FILES='scripts/shared.sh docs/notes.md VERSION UPDATING.md' STUB_PR_VER_HEAD=0.2.0 701
+s_assert_status 0 "the same diff with a shared-layer bump lands"
+[ "$(events 701 merge.land)" = 1 ] && pass "and records its merge.land" || fail "a bumped PR left $(events 701 merge.land) merge.land"
+
+land STUB_PR_FILES='docs/notes.md README.md tests/x.test.sh' 702
+s_assert_status 0 "a diff that moves no manifest-listed file lands"
+
+land STUB_PR_FILES='VERSION scripts/joins.sh' STUB_MANIFEST_HEAD_EXTRA=scripts/joins.sh 703
+no_bump 703 "a file joining the manifest with no bump"
+s_assert_err_has "scripts/joins.sh" "the joining file is named"
+
+land STUB_PR_FILES='VERSION scripts/leaves.sh' STUB_MANIFEST_BASE_EXTRA=scripts/leaves.sh 704
+no_bump 704 "a file leaving the manifest with no bump"
+s_assert_err_has "scripts/leaves.sh" "the leaving file is named"
+
+land STUB_PR_FILES='scripts/shared.sh' STUB_PR_VER_HEAD=banana 705
+no_bump 705 "a shared-layer line moved to no version"
+
+land STUB_PR_FILES='scripts/shared.sh' 713 --no-iteration 'aside' --no-review 'aside'
+no_bump 713 "the trace overrides do not reach the shared-layer check"
+
+land STUB_PR_FILES='scripts/shared.sh' 707 --train
+no_bump 707 "a train's landing"
+
+land STUB_PR_FETCH_RC=1 708
+not_landed 708 "a PR whose head could not be fetched"
+s_assert_err_has "could not be read" "stderr says the diff could not be read"
+land STUB_MB_RC=1 709
+not_landed 709 "a PR with no merge base"
+s_assert_err_has "no merge base" "stderr names the missing merge base"
+s_assert_err_has "could not be read" "and says the diff could not be read"
+land STUB_PR_HEAD_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 710
+not_landed 710 "a PR whose head VERSION could not be read"
+s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION"
+land STUB_PR_BASE_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 714
+not_landed 714 "a PR whose merge base VERSION could not be read"
+s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION at the merge base"
+land STUB_PR_NO_LIST=1 STUB_PR_FILES='scripts/shared.sh' 716
+not_landed 716 "a PR whose VERSION lists no files at either end"
+s_assert_err_has "reads empty" "stderr says the list read empty"
+land STUB_PR_DIFF_RC=128 715
+not_landed 715 "a PR whose diff git could not compute"
+s_assert_err_has "could not diff" "stderr names the failed diff"
+
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 711 </dev/null
+s_assert_status 0 "unconfigured, a PR moving nothing listed still lands"
+: >"$STUB_LOG"
+printf '%s\n' "STUB_PR_FILES='scripts/shared.sh'" >"$STUB_KNOBS"
+t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 712 </dev/null
+: >"$STUB_KNOBS"
+not_landed 712 "unconfigured, an unbumped shared-layer move"
+s_assert_err_has "hard rule 3" "unconfigured, the refusal is the shared-layer one"
 
 t_done "land one PR by hand"
