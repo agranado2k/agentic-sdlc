@@ -1304,7 +1304,6 @@ rm -rf "$SCRATCH/bt-bait"
 # ---------------------------------------------------------------------------
 banner "18. The lenses resolve against the author's model, not the orchestrator's (#730)"
 # ---------------------------------------------------------------------------
-IMPLEMENT_ABS="$ROOT/.agents/skills/implement/SKILL.md"
 # shellcheck disable=SC2016 # the span is matched as text, never expanded here
 resolve_span=$(grep -o '`model=$(AGENT_SESSION_MODEL=[^`]*`' "$SKILL_ABS" | head -n 1 | tr -d '`')
 case $resolve_span in
@@ -1336,6 +1335,14 @@ case $S_ERR in
 	fail "a diff authored on the reviewer's own model resolved '$S_OUT' — the author's model reviewing itself" ;;
 *) fail "a diff authored on the reviewer's own model did not warn — stderr '$S_ERR'" ;;
 esac
+# No Author-Model line names nobody: the empty session turns the self-check
+# off rather than falling back to the orchestrator's own model.
+lens_resolve "$resolve_span" ''
+if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = stand-in-reviewer ] && [ -z "$S_ERR" ]; then
+	pass "no author named: the lenses resolve to the reviewer, no warning"
+else
+	fail "no author named: expected 'stand-in-reviewer' and no warning, got status $S_STATUS, '$S_OUT', stderr '$S_ERR'"
+fi
 # The bait: the span before #730, the session left to the orchestrator.
 # shellcheck disable=SC2016
 lens_resolve 'model=$(sh scripts/agents.lib.sh reviewer)' stand-in-implementer
