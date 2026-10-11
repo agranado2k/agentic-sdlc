@@ -14,6 +14,8 @@
 #   sh scripts/trace.sh dir
 #   sh scripts/trace.sh stack <dir> [session=<id>]
 #   sh scripts/trace.sh stack <dir> --all
+#   sh scripts/trace.sh current
+#   sh scripts/trace.sh id [--check <id>]
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -25,7 +27,8 @@
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else — `dir`
 # prints the resolved directory, `begin` the run id it just opened, `show` the
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
-# line it would append, `stack` a checkout's open run and the run below it; a
+# line it would append, `stack` a checkout's open run and the run below it, `current` this
+# process's own run and its parent, `id` a fresh run id; a
 # successful `emit` and a successful `end` print nothing on stdout — a bare
 # `end`, with no <run>, is deprecated and says so in one stderr line naming
 # the run it closed (#560). Every diagnostic is on stderr, prefixed `trace:`.
@@ -236,6 +239,8 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh dir
        sh scripts/trace.sh stack <dir> [session=<id>]
        sh scripts/trace.sh stack <dir> --all
+       sh scripts/trace.sh current
+       sh scripts/trace.sh id [--check <id>]
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
@@ -572,6 +577,48 @@ trace_id() {
 	_ti_rand=$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
 	[ -n "$_ti_rand" ] || _ti_rand=$(awk 'BEGIN { srand(); printf "%08x", int(rand() * 4294967295) }')
 	printf '%s-%s-%s' "$(date -u +%Y%m%dT%H%M%SZ)" "$$" "$_ti_rand"
+}
+
+# THE RUN ID'S SHAPE, the one spelling of it: what trace_id mints, and nothing
+# else — a UTC second, the minting process's id, eight lower-case hex digits.
+# A caller that holds a `Trace-Run:` line or a handed-in run to the shape asks
+# `id --check` rather than spelling the expression again (#744).
+TRACE_RUN_ID_ERE='[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}'
+
+# trace_id_cmd [--check <id>] — `id`: a fresh run id on stdout, nothing
+# written and no trace needed, since minting reads no policy; `--check <id>`
+# is 0 when <id> is, whole, the shape trace_id mints and 1 otherwise — a
+# value with a newline in it is two lines and never one id.
+trace_id_cmd() {
+	case $# in
+	0) trace_id; echo; return 0 ;;
+	2) [ "$1" = --check ] || usage ;;
+	*) usage ;;
+	esac
+	case $2 in *"$_trace_nl"*) return 1 ;; esac
+	trace_matches "$2" "$TRACE_RUN_ID_ERE"
+}
+
+# trace_current — `current`: the run and parent an emit from this process
+# would stamp, `<run> [<parent>]` on one line, read through trace_identity so
+# the precedence is an emit's own — the environment, then this session's stack
+# in this checkout. Nothing, exit 0, when no run is open, when TRACE_RUN is set
+# empty (a caller saying it has no run, whatever TRACE_PARENT says), and when
+# the trace is unconfigured. A stack that exists and cannot be read refuses
+# with exit 2, as `stack` does: "no run open" would be a wrong answer, not an
+# absent one. `stack <dir>` stays the reader for a caller in ANOTHER checkout,
+# and it ignores the environment; this one is the caller's own identity
+# (the kit's ADR-0024 clause 5).
+trace_current() {
+	[ $# -eq 0 ] || usage
+	trace_dir || { trace_unconfigured_note; return 0; }
+	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
+	if [ -z "${TRACE_RUN+set}" ]; then
+		trace_stack_readable || die "cannot read this session's run stack in this working tree"
+	fi
+	trace_identity
+	[ -n "$_id_run" ] || return 0
+	printf '%s%s\n' "$_id_run" "${_id_parent:+ $_id_parent}"
 }
 
 # ---------------------------------------------------------------------------
@@ -2234,5 +2281,7 @@ export) trace_export "$@"; exit $? ;;
 verify) trace_verify "$@"; exit $? ;;
 dir) trace_dir && printf '%s\n' "$TRACE_ROOT_DIR"; exit 0 ;;
 stack) trace_stack_of "$@" ;;
+current) trace_current "$@" ;;
+id) trace_id_cmd "$@"; exit $? ;;
 *) usage ;;
 esac
