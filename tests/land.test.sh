@@ -214,7 +214,7 @@ land() {
 		esac
 		shift
 	done
-	t_run_split env LAND_POLL_SECONDS=0 sh "$LAND" "$@" </dev/null
+	t_exec env LAND_POLL_SECONDS=0 sh "$LAND" "$@" </dev/null
 	: >"$STUB_KNOBS"
 }
 merges() { grep -c '^ARGV: pr merge' "$STUB_LOG"; }
@@ -225,7 +225,7 @@ banner "1. A PR that is not green and mergeable is refused: exit 2, nothing merg
 # ---------------------------------------------------------------------------
 # not_landed <pr> <label> — the last run refused: exit 2, no merge call.
 not_landed() {
-	s_assert_status 2 "$2: refused with exit 2"
+	expect_status 2 "$2: refused with exit 2"
 	[ "$(merges)" = 0 ] && pass "$2: no merge call reached the forge" ||
 		fail "$2: the forge was asked to merge a PR the script should have refused"
 }
@@ -246,13 +246,13 @@ refused STUB_MSS=BEHIND 105 "a PR behind its base"
 refused STUB_PRSTATE=MERGED 106 "a PR already merged"
 refused STUB_CHECKS_RC=8 107 "pending checks"
 land STUB_CHECKS_RC=1 109
-printf '%s\n' "$S_ERR" | grep -qi 'checks' && pass "a red refusal names the checks" ||
-	fail "a red refusal does not say the checks are what refused it: $S_ERR"
+printf '%s\n' "$T_ERR" | grep -qi 'checks' && pass "a red refusal names the checks" ||
+	fail "a red refusal does not say the checks are what refused it: $T_ERR"
 refused STUB_VIEW_RC=1 110 "a forge that does not answer for the PR"
 land abc
-s_assert_status 2 "a PR that is not a number is a usage error"
+expect_status 2 "a PR that is not a number is a usage error"
 land
-s_assert_status 2 "no PR at all is a usage error"
+expect_status 2 "no PR at all is a usage error"
 
 # seed <kind> <outcome> <PR>… — record one <kind> event on each PR, now: the
 # stub's head commit is dated 2000 unless a case says otherwise, so each event
@@ -297,14 +297,14 @@ done
 banner "2. A green PR lands: one merge.land, one feedback"
 # ---------------------------------------------------------------------------
 land 123
-s_assert_status 0 "a green PR lands with exit 0"
+expect_status 0 "a green PR lands with exit 0"
 grep -q '^ARGV: pr merge 123 --merge' "$STUB_LOG" && pass "merged with the merge-commit method (gh pr merge 123 --merge)" ||
 	fail "the merge call was not 'gh pr merge 123 --merge': $(grep 'pr merge' "$STUB_LOG")"
 [ "$(merges)" = 1 ] && pass "exactly one merge call" || fail "$(merges) merge calls"
 grep -q "^ARGV: run list.*$STUB_SHA" "$STUB_LOG" && pass "it looks for main's workflows on the merge commit" ||
 	fail "it never listed the workflow runs on the merge commit"
 grep -q '^ARGV: run watch 901' "$STUB_LOG" && pass "and waits for each one" || fail "it never watched run 901"
-s_assert_out_has "$STUB_SHA" "stdout names the merge sha"
+expect_out_has "$STUB_SHA" "stdout names the merge sha"
 [ "$(events 123 merge.land)" = 1 ] && pass "one merge.land for pr:#123" || fail "$(events 123 merge.land) merge.land events for pr:#123"
 [ "$(events 123 feedback)" = 1 ] && pass "one feedback for pr:#123" || fail "$(events 123 feedback) feedback events for pr:#123"
 ml=$(show 'pr:#123' --kind merge.land)
@@ -323,7 +323,7 @@ order=$(show 'pr:#123' | grep -oE '"kind":"(merge.land|feedback)"' | tr '\n' ' '
 	fail "the events are out of order: $order"
 
 land 124 --unasked 'operator said land and do not stop'
-s_assert_status 0 "--unasked lands too"
+expect_status 0 "--unasked lands too"
 fb=$(show 'pr:#124' --kind feedback)
 printf '%s\n' "$fb" | grep -qF '"outcome":"unasked"' && printf '%s\n' "$fb" | grep -qF '"reason":"operator said land and do not stop"' &&
 	pass "--unasked records unasked with the reason given" || fail "--unasked did not record its reason: $fb"
@@ -341,7 +341,7 @@ printf '%s\n' "$fb" | grep -qF '"subject":"pr:#126"' && pass "with no ticket kno
 # answered bottom-up land the same PR, every value where it belongs — and a
 # draft answered bottom-up is still a draft.
 land STUB_ORDER=reversed STUB_TICKET=91 STUB_BRANCH=feat/reordered STUB_TITLE='feat(y): reordered' 127
-s_assert_status 0 "a forge answering the fields in another order lands the PR"
+expect_status 0 "a forge answering the fields in another order lands the PR"
 ml=$(show 'pr:#127' --kind merge.land)
 for tok in '"related":"ticket:#91"' '"reason":"feat(y): reordered"' '"iterated":"yes"' '"reviewed":"yes"'; do
 	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "reordered, merge.land still carries $tok" || fail "reordered, merge.land lacks $tok: $ml"
@@ -353,8 +353,8 @@ grep -q '^ARGV: run list --branch main ' "$STUB_LOG" && pass "reordered, the bas
 	fail "reordered, the base branch was misread: $(grep 'run list' "$STUB_LOG")"
 land STUB_ORDER=reversed STUB_DRAFT=true 108
 not_landed 108 "a draft answered bottom-up"
-printf '%s\n' "$S_ERR" | grep -qF 'it is a draft' && pass "a draft answered bottom-up is refused as a draft" ||
-	fail "a draft answered bottom-up was refused for another reason: $S_ERR"
+printf '%s\n' "$T_ERR" | grep -qF 'it is a draft' && pass "a draft answered bottom-up is refused as a draft" ||
+	fail "a draft answered bottom-up was refused for another reason: $T_ERR"
 # The query's own keys, not only the stub's (#684, review M-1): where jq is on
 # PATH, the stub runs the script's --jq programs over a forge answer whose keys
 # sit in another order than the query names them. A field the script reads by
@@ -367,7 +367,7 @@ if command -v jq >/dev/null 2>&1; then
  "headRefOid": "1234567890123456789012345678901234567890"}
 JSON
 	land STUB_PR_JSON="$SCRATCH/pr128.json" 128
-	s_assert_status 0 "the script's own --jq programs, run by jq, land the PR"
+	expect_status 0 "the script's own --jq programs, run by jq, land the PR"
 	ml=$(show 'pr:#128' --kind merge.land)
 	for tok in '"related":"ticket:#93"' '"reason":"feat(z): through jq"' '"iterated":"yes"' '"reviewed":"yes"'; do
 		printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "through jq, merge.land carries $tok" || fail "through jq, merge.land lacks $tok: $ml"
@@ -408,17 +408,17 @@ fi
 banner "4. The trace unconfigured leaves the merge unchanged"
 # ---------------------------------------------------------------------------
 land 123
-traced_out=$S_OUT
+traced_out=$T_OUT
 : >"$STUB_LOG"
 # The second run's workflow takes seconds the first one's did not: the waited
 # figure is the clock's, so it differs, and the comparison is not about it.
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 STUB_WATCH_SLEEP=2 sh "$LAND" 140 </dev/null
-s_assert_status 0 "unconfigured, a green PR still lands with exit 0"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 STUB_WATCH_SLEEP=2 sh "$LAND" 140 </dev/null
+expect_status 0 "unconfigured, a green PR still lands with exit 0"
 [ "$(merges)" = 1 ] && pass "unconfigured, the merge call is the same one call" || fail "unconfigured: $(merges) merge calls"
 # norm <PR> — stdout with the PR number and the waited seconds masked.
 norm() { sed "s/#$1/#N/g; s/waited [0-9]*s/waited Ns/"; }
-[ "$(printf '%s\n' "$S_OUT" | norm 140)" = "$(printf '%s\n' "$traced_out" | norm 123)" ] &&
-	pass "and stdout is what a traced run prints" || fail "unconfigured stdout differs: '$S_OUT' vs '$traced_out'"
+[ "$(printf '%s\n' "$T_OUT" | norm 140)" = "$(printf '%s\n' "$traced_out" | norm 123)" ] &&
+	pass "and stdout is what a traced run prints" || fail "unconfigured stdout differs: '$T_OUT' vs '$traced_out'"
 [ "$(show 'pr:#140' | grep -c '"kind"' | tr -d ' ')" = 0 ] && pass "and nothing reached the trace" ||
 	fail "an unconfigured run wrote to the trace"
 
@@ -426,24 +426,24 @@ norm() { sed "s/#$1/#N/g; s/waited [0-9]*s/waited Ns/"; }
 banner "5. The forge's answers after the decision"
 # ---------------------------------------------------------------------------
 land STUB_MERGE_RC=1 150
-[ "$S_STATUS" != 0 ] && pass "a merge the forge rejects is not exit 0 (got $S_STATUS)" || fail "a rejected merge exited 0"
+[ "$T_STATUS" != 0 ] && pass "a merge the forge rejects is not exit 0 (got $T_STATUS)" || fail "a rejected merge exited 0"
 show 'pr:#150' --kind merge.land | grep -qF '"outcome":"stopped"' && pass "and records merge.land stopped" ||
 	fail "a rejected merge did not record merge.land stopped: $(show 'pr:#150')"
 [ "$(events 150 feedback)" = 0 ] && pass "and asks no verdict of a PR that did not land" || fail "a rejected merge recorded feedback"
 land STUB_WATCH_RC=1 151
-[ "$S_STATUS" = 1 ] && pass "a failed post-merge workflow is exit 1 — escalate, as the train's hard rule 6 says" ||
-	fail "a failed post-merge workflow exited $S_STATUS"
+[ "$T_STATUS" = 1 ] && pass "a failed post-merge workflow is exit 1 — escalate, as the train's hard rule 6 says" ||
+	fail "a failed post-merge workflow exited $T_STATUS"
 show 'pr:#151' --kind merge.land | grep -qF '"workflows":"failure"' && pass "the landing still records, with data.workflows=failure" ||
 	fail "a failed post-merge workflow was not recorded on merge.land: $(show 'pr:#151')"
 [ "$(events 151 feedback)" = 1 ] && pass "and the landing still gets its feedback" || fail "no feedback after a failed workflow"
-printf '%s\n' "$S_ERR" | grep -qi 'escalate' && pass "stderr says to escalate" || fail "stderr does not say escalate: $S_ERR"
+printf '%s\n' "$T_ERR" | grep -qi 'escalate' && pass "stderr says to escalate" || fail "stderr does not say escalate: $T_ERR"
 grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a merge that bumps nothing had a failed run re-run" ||
 	pass "a merge that bumps nothing re-runs no failed workflow — its red is the verdict"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a merge that bumps nothing was tagged: $(grep '^ARGV: git' "$STUB_LOG")" ||
 	pass "and is not tagged"
 
 land STUB_RUNS= 152
-s_assert_status 0 "no workflow on the merge commit: still a landing, exit 0"
+expect_status 0 "no workflow on the merge commit: still a landing, exit 0"
 [ "$(grep -c '^ARGV: run list' "$STUB_LOG")" = 12 ] && pass "it looked LAND_POLL_TRIES times (12) before giving up" ||
 	fail "it listed the runs $(grep -c '^ARGV: run list' "$STUB_LOG") times, not 12"
 show 'pr:#152' --kind merge.land | grep -qF '"workflows":"none"' && pass "and records data.workflows=none" ||
@@ -454,14 +454,14 @@ grep -q '^ARGV: run watch 902' "$STUB_LOG" && pass "a workflow the forge registe
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and the first is watched once" ||
 	fail "run 901 was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
 land STUB_SHA= 154
-s_assert_status 1 "a merge commit the forge never reports is exit 1"
+expect_status 1 "a merge commit the forge never reports is exit 1"
 grep -q '^ARGV: run list' "$STUB_LOG" && fail "it listed runs for an empty merge commit" ||
 	pass "and no runs are listed for an empty commit"
 ml=$(show 'pr:#154' --kind merge.land)
 printf '%s\n' "$ml" | grep -qF '"outcome":"landed"' && printf '%s\n' "$ml" | grep -qF '"workflows":"unknown"' &&
 	pass "the landing still records, landed with data.workflows=unknown" || fail "an unknown sha was not recorded as such: $ml"
 printf '%s\n' "$ml" | grep -qF '"merge_sha"' && fail "an empty merge_sha was recorded: $ml" || pass "and no empty merge_sha"
-printf '%s\n' "$S_ERR" | grep -qi 'merge commit' && pass "stderr says the merge commit is unknown" || fail "stderr: $S_ERR"
+printf '%s\n' "$T_ERR" | grep -qi 'merge commit' && pass "stderr says the merge commit is unknown" || fail "stderr: $T_ERR"
 
 # No run for a merge whose base branch's workflows declare a push trigger is
 # no verdict (#688): on 2026-10-09 the forge made no push run for the merge of
@@ -477,40 +477,40 @@ printf 'name: manual\non: workflow_dispatch\njobs: {}\n' >"$SCRATCH/wf-nopush/ma
 printf 'push: not a workflow\n' >"$SCRATCH/wf-nopush/README.md"
 
 land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-push" 155
-s_assert_status 1 "no run for a merge whose workflows declare a push trigger is exit 1 — not 2, so a train stops"
+expect_status 1 "no run for a merge whose workflows declare a push trigger is exit 1 — not 2, so a train stops"
 ml=$(show 'pr:#155' --kind merge.land)
 printf '%s\n' "$ml" | grep -qF '"outcome":"landed"' && printf '%s\n' "$ml" | grep -qF '"workflows":"unknown"' &&
 	pass "and records landed with data.workflows=unknown, not none" || fail "an unverified merge was not recorded unknown: $ml"
-s_assert_err_has "unverified" "stderr says the merge is unverified"
-s_assert_err_has "ci.yml" "stderr names a block-form push workflow it expected"
-s_assert_err_has "release.yaml" "stderr names a flow-form push workflow it expected"
-printf '%s\n' "$S_ERR" | grep -qF 'lint.yml' && fail "a pull_request-only workflow was named as expected on push: $S_ERR" ||
+expect_err_has "unverified" "stderr says the merge is unverified"
+expect_err_has "ci.yml" "stderr names a block-form push workflow it expected"
+expect_err_has "release.yaml" "stderr names a flow-form push workflow it expected"
+printf '%s\n' "$T_ERR" | grep -qF 'lint.yml' && fail "a pull_request-only workflow was named as expected on push: $T_ERR" ||
 	pass "and does not name a workflow with no push trigger"
-s_assert_out_has "workflows unknown" "stdout's landing line says workflows unknown"
+expect_out_has "workflows unknown" "stdout's landing line says workflows unknown"
 [ "$(events 155 feedback)" = 1 ] && pass "and the landing still gets its feedback" || fail "no feedback after an unverified merge"
 
 land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-nopush" 156
-s_assert_status 0 "no run for a merge whose workflows declare no push trigger: still exit 0"
+expect_status 0 "no run for a merge whose workflows declare no push trigger: still exit 0"
 show 'pr:#156' --kind merge.land | grep -qF '"workflows":"none"' && pass "and records data.workflows=none" ||
 	fail "a tree with no push trigger was not recorded workflows=none: $(show 'pr:#156')"
 
 land STUB_RUNS= STUB_CATFILE_RC=128 "STUB_WORKFLOWS=$SCRATCH/wf-nopush" 157
-s_assert_status 1 "no run, and a merge commit whose workflows cannot be read here: exit 1"
+expect_status 1 "no run, and a merge commit whose workflows cannot be read here: exit 1"
 show 'pr:#157' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
 	fail "an unreadable workflow tree was recorded as known: $(show 'pr:#157')"
-s_assert_err_has "could not be read" "stderr says the merge's workflows could not be read — the merge is unverified"
+expect_err_has "could not be read" "stderr says the merge's workflows could not be read — the merge is unverified"
 # A workflow file the tree lists but git cannot read is no answer either: a
 # directory named like one stands in for it, beside a file with no push.
 mkdir -p "$SCRATCH/wf-unread/broken.yml"
 cp "$SCRATCH/wf-nopush/manual.yml" "$SCRATCH/wf-unread/"
 land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-unread" 159
-s_assert_status 1 "no run, and a workflow file that cannot be read: exit 1, never none"
+expect_status 1 "no run, and a workflow file that cannot be read: exit 1, never none"
 show 'pr:#159' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown" ||
 	fail "an unreadable workflow file was read as no push trigger: $(show 'pr:#159')"
-s_assert_err_has "could not be read" "stderr says the workflows could not be read"
+expect_err_has "could not be read" "stderr says the workflows could not be read"
 
 land STUB_RUNS= "STUB_WORKFLOWS=$SCRATCH/wf-push" 158 --train
-s_assert_status 1 "the train's landing of an unverified merge is exit 1 — the train stops on it"
+expect_status 1 "the train's landing of an unverified merge is exit 1 — the train stops on it"
 show 'pr:#158' --kind merge.land | grep -qF '"workflows":"unknown"' && pass "and records data.workflows=unknown, via the train" ||
 	fail "the train's unverified merge was not recorded unknown: $(show 'pr:#158')"
 
@@ -532,7 +532,7 @@ landed_with() {
 	_lw_pr=$1
 	_lw_label=$2
 	shift 2
-	s_assert_status 0 "$_lw_label: the PR lands, exit 0"
+	expect_status 0 "$_lw_label: the PR lands, exit 0"
 	_lw_ml=$(show "pr:#$_lw_pr" --kind merge.land)
 	for _lw_tok in "$@"; do
 		printf '%s\n' "$_lw_ml" | grep -qF -- "$_lw_tok" && pass "$_lw_label: merge.land carries $_lw_tok" ||
@@ -567,7 +567,7 @@ grep -qF 'ARGV: pr view 160 --json body --jq .body // ""' "$STUB_LOG" && pass "t
 land 161
 landed_with 161 "no line in the body" '"implement":"no"'
 no_tier 161 "no line in the body"
-# Section 2's landing, read back without its exit status: S_STATUS is the
+# Section 2's landing, read back without its exit status: T_STATUS is the
 # last run's, #161's, and a pass line here must report on #123 alone.
 show 'pr:#123' --kind merge.land | grep -qF '"implement":"no"' &&
 	pass "an empty body (section 2's landing): merge.land carries \"implement\":\"no\"" ||
@@ -670,7 +670,7 @@ line_of() { grep -n -m1 -- "$1" "$STUB_LOG" | cut -d: -f1 | grep . || echo 0; }
 
 # shellcheck disable=SC2086 # REL is two knob words, split on purpose
 land $REL STUB_WATCH_RC=1 STUB_WATCH_RC_AFTER=0 190
-s_assert_status 0 "a release whose first run failed untagged, green on its re-run, lands with exit 0"
+expect_status 0 "a release whose first run failed untagged, green on its re-run, lands with exit 0"
 grep -qF "ARGV: git tag -a v0.2.0" "$STUB_LOG" && grep -F "ARGV: git tag -a v0.2.0" "$STUB_LOG" | grep -qF "$STUB_SHA" &&
 	pass "it tags the merge commit v0.2.0 (git tag -a v0.2.0 … $STUB_SHA)" ||
 	fail "the merge commit was not tagged v0.2.0: $(grep '^ARGV: git' "$STUB_LOG")"
@@ -692,61 +692,61 @@ ml=$(show 'pr:#190' --kind merge.land)
 for tok in '"workflows":"success"' '"release":"v0.2.0"' '"tagged":"yes"' '"reruns":"1"'; do
 	printf '%s\n' "$ml" | grep -qF -- "$tok" && pass "merge.land carries $tok" || fail "merge.land lacks $tok: $ml"
 done
-s_assert_out_has "tagged v0.2.0" "stdout says the release was tagged"
-s_assert_err_lacks "land nothing else" "and stderr raises no failure"
+expect_out_has "tagged v0.2.0" "stdout says the release was tagged"
+expect_err_lacks "land nothing else" "and stderr raises no failure"
 
 # shellcheck disable=SC2086
 land $REL 191
-s_assert_status 0 "a release green on its first runs lands with exit 0"
+expect_status 0 "a release green on its first runs lands with exit 0"
 grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a green release was re-run" || pass "and nothing is re-run"
 grep -qE "^ARGV: git push origin (refs/tags/)?v0\.2\.0$" "$STUB_LOG" && pass "and it is still tagged" || fail "a green release was not tagged"
 
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 STUB_WATCH_RC_AFTER=1 192
-s_assert_status 1 "a release still red after its one re-run is exit 1"
+expect_status 1 "a release still red after its one re-run is exit 1"
 [ "$(grep -c '^ARGV: run rerun' "$STUB_LOG")" = 1 ] && pass "re-run once, never twice" ||
 	fail "re-run $(grep -c '^ARGV: run rerun' "$STUB_LOG") times"
 show 'pr:#192' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
 	fail "a release red after its re-run was not recorded as failure: $(show 'pr:#192' --kind merge.land)"
-s_assert_err_has "land nothing else" "stderr says to land nothing else"
+expect_err_has "land nothing else" "stderr says to land nothing else"
 
 # shellcheck disable=SC2086
 land $REL STUB_PUSH_RC=1 STUB_WATCH_RC=1 193
-s_assert_status 1 "a release whose tag the forge refused is exit 1"
+expect_status 1 "a release whose tag the forge refused is exit 1"
 grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a run was re-run with no tag on the forge" ||
 	pass "and nothing is re-run — a re-run with no tag fails the same way"
-s_assert_err_has "git tag -a v0.2.0 $STUB_SHA" "stderr names the tag command to run by hand"
+expect_err_has "git tag -a v0.2.0 $STUB_SHA" "stderr names the tag command to run by hand"
 show 'pr:#193' --kind merge.land | grep -qF '"tagged":"no"' && pass "and merge.land records tagged=no" ||
 	fail "a refused tag was not recorded: $(show 'pr:#193' --kind merge.land)"
 
 # shellcheck disable=SC2086
 land $REL STUB_PUSH_RC=1 194
-s_assert_status 1 "an untagged release is exit 1 even with main green — it is not landed (hard rule 3)"
+expect_status 1 "an untagged release is exit 1 even with main green — it is not landed (hard rule 3)"
 
 # shellcheck disable=SC2086
 land $REL "STUB_REMOTE_TAG=$STUB_SHA" STUB_WATCH_RC=1 195
-s_assert_status 0 "a release already tagged at its merge commit lands with exit 0"
+expect_status 0 "a release already tagged at its merge commit lands with exit 0"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "an existing tag was cut again" || pass "and the tag is not cut again"
 [ "$(grep -c '^ARGV: run rerun' "$STUB_LOG")" = 1 ] && pass "but a run that failed is still re-run once" || fail "the failed run was not re-run"
 
 # shellcheck disable=SC2086
 land $REL STUB_REMOTE_TAG=1111111111111111111111111111111111111111 196
-s_assert_status 1 "a release whose tag already names another commit is exit 1"
+expect_status 1 "a release whose tag already names another commit is exit 1"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a tag naming another commit was moved or re-cut" ||
 	pass "and the tag is never moved"
-s_assert_err_has "1111111111111111111111111111111111111111" "stderr names the commit the tag already holds"
-s_assert_err_lacks "2222222222222222222222222222222222222222" "and reads the commit an annotated tag peels to, never its tag object"
+expect_err_has "1111111111111111111111111111111111111111" "stderr names the commit the tag already holds"
+expect_err_lacks "2222222222222222222222222222222222222222" "and reads the commit an annotated tag peels to, never its tag object"
 
 # A lightweight tag lists the commit alone, with no peeled line (M-2 of the
 # review of PR #577).
 # shellcheck disable=SC2086
 land $REL "STUB_REMOTE_TAG=$STUB_SHA" STUB_REMOTE_TAG_KIND=lightweight 199
-s_assert_status 0 "a lightweight tag already on the merge commit is the release's tag: exit 0"
+expect_status 0 "a lightweight tag already on the merge commit is the release's tag: exit 0"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag on the merge commit was cut again" ||
 	pass "and is not cut again"
 # shellcheck disable=SC2086
 land $REL STUB_REMOTE_TAG=1111111111111111111111111111111111111111 STUB_REMOTE_TAG_KIND=lightweight 200
-s_assert_status 1 "a lightweight tag naming another commit is exit 1"
+expect_status 1 "a lightweight tag naming another commit is exit 1"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag naming another commit was moved" ||
 	pass "and is never moved"
 
@@ -754,7 +754,7 @@ grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a lightweight tag naming a
 # it: a watch on the old attempt would report the old failure (M-1).
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 STUB_COMPLETED_VIEWS=2 201
-s_assert_status 0 "a re-run whose new attempt shows completed twice first still lands green"
+expect_status 0 "a re-run whose new attempt shows completed twice first still lands green"
 [ "$(grep -c '^ARGV: run view 901' "$STUB_LOG")" = 3 ] &&
 	pass "it asked the run's status until it left completed (three asks)" ||
 	fail "it asked the run's status $(grep -c '^ARGV: run view 901' "$STUB_LOG") times, not 3"
@@ -767,12 +767,12 @@ _second_watch=$(grep -n '^ARGV: run watch 901' "$STUB_LOG" | sed -n 2p | cut -d:
 # A re-run the forge refuses is a failure, not a pass (M-3).
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 STUB_RERUN_RC=1 202
-s_assert_status 1 "a re-run the forge refuses is exit 1"
+expect_status 1 "a re-run the forge refuses is exit 1"
 show 'pr:#202' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
 	fail "a refused re-run was not recorded as failure: $(show 'pr:#202' --kind merge.land)"
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and a refused re-run is not watched" ||
 	fail "a refused re-run was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
-s_assert_err_has "run cannot be rerun" "and stderr carries the forge's refusal"
+expect_err_has "run cannot be rerun" "and stderr carries the forge's refusal"
 
 # A re-run refused because the run is still going is no verdict: the landing
 # waits for that run and judges its end (#661 — #659's release was recorded
@@ -782,38 +782,38 @@ BUSY_ERR="STUB_RERUN_ERR=run 901 cannot be rerun; This workflow is already runni
 iterated 230 231 232
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 $BUSY "$BUSY_ERR" STUB_WATCH_RC_AFTER=0 230
-s_assert_status 0 "a re-run refused as already running, whose run then ends green, lands with exit 0"
+expect_status 0 "a re-run refused as already running, whose run then ends green, lands with exit 0"
 show 'pr:#230' --kind merge.land | grep -qF '"workflows":"success"' && pass "and is recorded with data.workflows=success" ||
 	fail "a still-running run that ended green was not recorded success: $(show 'pr:#230' --kind merge.land)"
 show 'pr:#230' --kind merge.land | grep -qF '"reruns":"0"' && pass "and data.reruns=0 — the forge started no re-run" ||
 	fail "a refused re-run was counted as one: $(show 'pr:#230' --kind merge.land)"
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 2 ] && pass "it watched the running run to its end" ||
 	fail "run 901 was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times, not twice"
-s_assert_err_has "already running" "stderr says the run was still going"
-s_assert_err_lacks "land nothing else" "and raises no failure"
+expect_err_has "already running" "stderr says the run was still going"
+expect_err_lacks "land nothing else" "and raises no failure"
 
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 $BUSY "$BUSY_ERR" STUB_WATCH_RC_AFTER=1 231
-s_assert_status 1 "a re-run refused as already running, whose run then ends red, is exit 1"
+expect_status 1 "a re-run refused as already running, whose run then ends red, is exit 1"
 show 'pr:#231' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and is recorded with data.workflows=failure" ||
 	fail "a still-running run that ended red was not recorded failure: $(show 'pr:#231' --kind merge.land)"
-s_assert_err_has "land nothing else" "stderr says to land nothing else"
+expect_err_has "land nothing else" "stderr says to land nothing else"
 
 # shellcheck disable=SC2086
 land $REL STUB_WATCH_RC=1 $BUSY "STUB_RERUN_ERR=HTTP 403: Resource not accessible by integration" 232
-s_assert_status 1 "a re-run refused for any other reason is still exit 1"
+expect_status 1 "a re-run refused for any other reason is still exit 1"
 show 'pr:#232' --kind merge.land | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
 	fail "a re-run refused for another reason was not recorded failure: $(show 'pr:#232' --kind merge.land)"
 show 'pr:#232' --kind merge.land | grep -qF '"reruns":"0"' && pass "and data.reruns=0 — a refused re-run is never counted" ||
 	fail "a re-run refused for another reason was counted as one: $(show 'pr:#232' --kind merge.land)"
 [ "$(grep -c '^ARGV: run watch 901' "$STUB_LOG")" = 1 ] && pass "and its run is not watched again" ||
 	fail "a run refused for another reason was watched $(grep -c '^ARGV: run watch 901' "$STUB_LOG") times"
-s_assert_err_has "Resource not accessible" "and stderr names the refusal"
+expect_err_has "Resource not accessible" "and stderr names the refusal"
 
 land STUB_FETCH_RC=1 STUB_WATCH_RC=1 197
-s_assert_status 1 "with the merge commit unreadable, the landing is judged as before (a red run is exit 1)"
+expect_status 1 "with the merge commit unreadable, the landing is judged as before (a red run is exit 1)"
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "an unreadable merge was tagged" || pass "and nothing is tagged"
-s_assert_err_has "VERSION" "stderr says it could not read whether the merge bumped VERSION"
+expect_err_has "VERSION" "stderr says it could not read whether the merge bumped VERSION"
 
 land STUB_VER_BEFORE=0.1.0 'STUB_VER_AFTER=0.2.0; touch pwned' 198
 grep -qE '^ARGV: git (tag|push)' "$STUB_LOG" && fail "a malformed version line was tagged" ||
@@ -857,12 +857,12 @@ no_iter() {
 	not_landed "$2" "$_ni_label"
 	[ "$(events "$2" merge.land)" = 0 ] && [ "$(events "$2" feedback)" = 0 ] &&
 		pass "$_ni_label: no landing reached the trace" || fail "$_ni_label: a landing was recorded: $(show "pr:#$2")"
-	s_assert_err_has "pr-iterate" "$_ni_label: stderr sends it to /pr-iterate"
-	s_assert_err_has "--no-iteration" "$_ni_label: and names the override"
+	expect_err_has "pr-iterate" "$_ni_label: stderr sends it to /pr-iterate"
+	expect_err_has "--no-iteration" "$_ni_label: and names the override"
 }
 land 300
 no_iter "no pr.iterate event at all" 300
-s_assert_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
+expect_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
 
 iterated 301
 land STUB_HEAD_DATE=2999-01-01T00:00:00Z 301
@@ -901,26 +901,26 @@ show 'pr:#307' --kind merge.land | grep -qF '"iterated":"no"' && pass "a rejecte
 
 land 308 "--no-iteration" "two
 lines"
-s_assert_status 2 "--no-iteration with a reason that is not one line is a usage error, before any merge"
+expect_status 2 "--no-iteration with a reason that is not one line is a usage error, before any merge"
 [ "$(merges)" = 0 ] && pass "and nothing reached the forge" || fail "a multi-line reason was merged on: $(merges) merge calls"
 
 land STUB_HEAD_OID='not-a-sha' 310
 no_iter "a head the forge names in no sha shape" 310
-s_assert_err_has "<unnamed>" "stderr marks the head commit unnamed, never echoing the forge's text"
+expect_err_has "<unnamed>" "stderr marks the head commit unnamed, never echoing the forge's text"
 land STUB_HEAD_DATE= 310
-s_assert_err_has "<undated>" "stderr marks an undated head as such"
+expect_err_has "<undated>" "stderr marks an undated head as such"
 
 land 308 --no-iteration ''
-s_assert_status 2 "--no-iteration with an empty reason is a usage error"
+expect_status 2 "--no-iteration with an empty reason is a usage error"
 land 308 --no-iteration
-s_assert_status 2 "--no-iteration with no reason is a usage error"
+expect_status 2 "--no-iteration with no reason is a usage error"
 
 # Unconfigured, nothing can be read and nothing is recorded: the check is
 # skipped, said on stderr, and the merge goes on (ADR-0008 clause 2).
 : >"$STUB_LOG"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 309 </dev/null
-s_assert_status 0 "unconfigured, a PR with no recorded iteration still lands"
-s_assert_err_has "not checked" "and stderr says the iteration was not checked"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 309 </dev/null
+expect_status 0 "unconfigured, a PR with no recorded iteration still lands"
+expect_err_has "not checked" "and stderr says the iteration was not checked"
 
 # ---------------------------------------------------------------------------
 banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
@@ -972,7 +972,7 @@ landed_with_root() {
 	_lr_pr=$2
 	shift 2
 	: >"$STUB_LOG"
-	t_run_split env LAND_ROOT_CHECKOUT="$_lr_root" LAND_POLL_SECONDS=0 "$@" sh "$LAND" "$_lr_pr" </dev/null
+	t_exec env LAND_ROOT_CHECKOUT="$_lr_root" LAND_POLL_SECONDS=0 "$@" sh "$LAND" "$_lr_pr" </dev/null
 }
 iterated 211 212 213 214 215
 
@@ -980,49 +980,49 @@ R="$SCRATCH/root-clean"
 mkroot "$R" || fail "could not build the clean root checkout"
 want=$("$REAL_GIT" -C "$R" rev-parse origin/main)
 landed_with_root "$R" 205
-s_assert_status 0 "a landing with a clean root checkout exits 0"
+expect_status 0 "a landing with a clean root checkout exits 0"
 [ "$(head_of "$R")" = "$want" ] && pass "the clean root checkout on main is fast-forwarded to origin/main" ||
 	fail "the clean root checkout was not fast-forwarded: HEAD $(head_of "$R"), origin/main $want"
 # One fetch for the release question, one in the root checkout before it moves.
 [ "$(grep -c '^ARGV: git fetch -q origin main$' "$STUB_LOG")" = 2 ] && pass "it fetches the base again for the root checkout" ||
 	fail "it did not fetch the base for the root checkout: $(grep 'git' "$STUB_LOG")"
-s_assert_err_has "fast-forwarded the root checkout $R" "stderr says the root was fast-forwarded, and where"
+expect_err_has "fast-forwarded the root checkout $R" "stderr says the root was fast-forwarded, and where"
 
 R="$SCRATCH/root-dirty"
 mkroot "$R" || fail "could not build the dirty root checkout"
 was=$(head_of "$R")
 echo edit >"$R/f"
 landed_with_root "$R" 206
-s_assert_status 0 "a dirty root checkout does not fail the landing"
+expect_status 0 "a dirty root checkout does not fail the landing"
 [ "$(head_of "$R")" = "$was" ] && [ "$(cat "$R/f")" = edit ] && pass "a dirty root checkout is left alone, its edit intact" ||
 	fail "a dirty root checkout was touched: HEAD $(head_of "$R"), f '$(cat "$R/f")'"
-s_assert_err_has "left the root checkout $R alone" "stderr names the dirty root it left"
-s_assert_err_has "uncommitted" "and says why: uncommitted changes"
+expect_err_has "left the root checkout $R alone" "stderr names the dirty root it left"
+expect_err_has "uncommitted" "and says why: uncommitted changes"
 
 R="$SCRATCH/root-branch"
 mkroot "$R" || fail "could not build the off-main root checkout"
 git -C "$R" checkout -q -b feat/elsewhere
 was=$(head_of "$R")
 landed_with_root "$R" 207
-s_assert_status 0 "a root checkout off main does not fail the landing"
+expect_status 0 "a root checkout off main does not fail the landing"
 [ "$(head_of "$R")" = "$was" ] && [ "$("$REAL_GIT" -C "$R" rev-parse main)" = "$was" ] &&
 	pass "a root checkout off main is left alone, main not moved" || fail "a root checkout off main was touched"
-s_assert_err_has "left the root checkout $R alone" "stderr names the off-main root it left"
-s_assert_err_has "feat/elsewhere" "and says which branch it is on"
+expect_err_has "left the root checkout $R alone" "stderr names the off-main root it left"
+expect_err_has "feat/elsewhere" "and says which branch it is on"
 
 R="$SCRATCH/root-diverged"
 mkroot "$R" || fail "could not build the diverged root checkout"
 t_write "$R" g three && t_commit "$R" local >/dev/null
 was=$(head_of "$R")
 landed_with_root "$R" 208
-s_assert_status 0 "a diverged root checkout does not fail the landing"
+expect_status 0 "a diverged root checkout does not fail the landing"
 [ "$(head_of "$R")" = "$was" ] && pass "a diverged root checkout is left alone" || fail "a diverged root checkout was moved"
-s_assert_err_has "left the root checkout $R alone" "stderr names the diverged root it left"
-s_assert_err_has "diverged" "and says it has diverged"
+expect_err_has "left the root checkout $R alone" "stderr names the diverged root it left"
+expect_err_has "diverged" "and says it has diverged"
 
 landed_with_root "$SCRATCH/no-root" 209
-s_assert_status 0 "a root path that is no checkout does not fail the landing"
-s_assert_err_has "is not a checkout" "and stderr says so"
+expect_status 0 "a root path that is no checkout does not fail the landing"
+expect_err_has "is not a checkout" "and stderr says so"
 
 R="$SCRATCH/root-untracked"
 mkroot "$R" || fail "could not build the root checkout with an untracked file"
@@ -1030,7 +1030,7 @@ t_write "$R" scratch.txt note
 landed_with_root "$R" 211
 [ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] && [ -f "$R/scratch.txt" ] &&
 	pass "an untracked file alone does not hold the root back: fast-forwarded, the file kept (worktree-cleanup's rule)" ||
-	fail "a root with only an untracked file was not fast-forwarded: $S_ERR"
+	fail "a root with only an untracked file was not fast-forwarded: $T_ERR"
 
 R="$SCRATCH/root-detached"
 mkroot "$R" || fail "could not build the detached root checkout"
@@ -1038,21 +1038,21 @@ git -C "$R" checkout -q --detach
 was=$(head_of "$R")
 landed_with_root "$R" 203
 [ "$(head_of "$R")" = "$was" ] && pass "a detached root checkout is left alone" || fail "a detached root checkout was moved"
-s_assert_err_has "detached" "and stderr says its HEAD is detached"
+expect_err_has "detached" "and stderr says its HEAD is detached"
 
 R="$SCRATCH/root-current"
 mkroot "$R" || fail "could not build the up-to-date root checkout"
 git -C "$R" merge -q --ff-only origin/main
 landed_with_root "$R" 204
-s_assert_err_has "already at origin/main" "a root already at origin/main is said to be so"
+expect_err_has "already at origin/main" "a root already at origin/main is said to be so"
 
 R="$SCRATCH/root-nofetch"
 mkroot "$R" || fail "could not build the root checkout whose fetch fails"
 was=$(head_of "$R")
 landed_with_root "$R" 210 STUB_FETCH_RC=1
-s_assert_status 0 "a fetch that fails in the root does not fail the landing"
+expect_status 0 "a fetch that fails in the root does not fail the landing"
 [ "$(head_of "$R")" = "$was" ] && pass "a root whose fetch failed is left alone" || fail "a root whose fetch failed was moved"
-s_assert_err_has "fetching origin main there failed" "and stderr says the fetch failed"
+expect_err_has "fetching origin main there failed" "and stderr says the fetch failed"
 
 R="$SCRATCH/root-noorigin"
 mkroot "$R" || fail "could not build the root checkout with no origin/main"
@@ -1060,7 +1060,7 @@ git -C "$R" update-ref -d refs/remotes/origin/main
 was=$(head_of "$R")
 landed_with_root "$R" 212
 [ "$(head_of "$R")" = "$was" ] && pass "a root with no origin/main is left alone" || fail "a root with no origin/main was moved"
-s_assert_err_has "no origin/main to follow" "and stderr says there is nothing to follow"
+expect_err_has "no origin/main to follow" "and stderr says there is nothing to follow"
 
 # The default: the main worktree of the repo the script runs from — here a
 # scratch repo whose linked worktree holds a copy of the kit's scripts.
@@ -1070,11 +1070,11 @@ mkroot "$R" || fail "could not build the default root checkout"
 git -C "$R" worktree add -q "$W" -b side 2>/dev/null && cp -R "$KIT/scripts" "$W/" ||
 	fail "could not build the linked worktree the default case runs from"
 : >"$STUB_LOG"
-t_run_split env LAND_ROOT_CHECKOUT= LAND_POLL_SECONDS=0 sh "$W/scripts/land.kit.sh" 213 </dev/null
-s_assert_status 0 "with no LAND_ROOT_CHECKOUT, the landing still exits 0"
+t_exec env LAND_ROOT_CHECKOUT= LAND_POLL_SECONDS=0 sh "$W/scripts/land.kit.sh" 213 </dev/null
+expect_status 0 "with no LAND_ROOT_CHECKOUT, the landing still exits 0"
 [ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] &&
 	pass "with no LAND_ROOT_CHECKOUT, the main worktree of the script's repo is the root fast-forwarded" ||
-	fail "the default root was not the main worktree: $S_ERR"
+	fail "the default root was not the main worktree: $T_ERR"
 
 # ---------------------------------------------------------------------------
 banner "12. A PR the trace never saw opened gets its pr.open from the landing (#638)"
@@ -1086,7 +1086,7 @@ banner "12. A PR the trace never saw opened gets its pr.open from the landing (#
 opens() { show "pr:#$1" --kind pr.open; }
 iterated 400 401 402 403
 land 400
-s_assert_status 0 "a PR with no pr.open lands"
+expect_status 0 "a PR with no pr.open lands"
 [ "$(events 400 pr.open)" = 1 ] && pass "the landing wrote one pr.open for pr:#400" ||
 	fail "$(events 400 pr.open) pr.open events for pr:#400"
 po=$(opens 400)
@@ -1139,15 +1139,15 @@ banner "13. The train lands through this script: --train (#662)"
 # no feedback of its own.
 iterated 500 501 502
 land STUB_CHECKS_RC=1 500 --train
-s_assert_status 2 "the train's landing of a PR with a red required check is refused: exit 2, the train's skip"
+expect_status 2 "the train's landing of a PR with a red required check is refused: exit 2, the train's skip"
 [ "$(merges)" = 0 ] && pass "and the PR is skipped, not merged — no merge call reached the forge" ||
 	fail "the train's landing merged a PR with a red required check"
 [ "$(show 'pr:#500' --kind merge.land | grep -c .)" = 0 ] && pass "and no merge.land is recorded for the skipped PR" ||
 	fail "a refused train landing recorded a merge.land: $(show 'pr:#500' --kind merge.land)"
-s_assert_err_has "checks" "and stderr names the checks as what refused it"
+expect_err_has "checks" "and stderr names the checks as what refused it"
 
 land 501 --train
-s_assert_status 0 "a green PR the train lands through the script exits 0"
+expect_status 0 "a green PR the train lands through the script exits 0"
 [ "$(merges)" = 1 ] && pass "merged once" || fail "$(merges) merge calls for the train's green PR"
 ml=$(show 'pr:#501' --kind merge.land)
 for tok in '"outcome":"landed"' '"via":"train"' "\"merge_sha\":\"$STUB_SHA\"" '"iterated":"yes"'; do
@@ -1155,12 +1155,12 @@ for tok in '"outcome":"landed"' '"via":"train"' "\"merge_sha\":\"$STUB_SHA\"" '"
 done
 [ "$(events 501 feedback)" = 0 ] && pass "--train writes no feedback: the verdict is the train's to record" ||
 	fail "--train wrote $(events 501 feedback) feedback event(s) — the train's own would make a second"
-s_assert_out_has "feedback: left to the train" "stdout says the verdict is left to the train"
+expect_out_has "feedback: left to the train" "stdout says the verdict is left to the train"
 
 land 502 --train --unasked 'nobody here'
-s_assert_status 2 "--train with --unasked is a usage error: the train records the verdict"
+expect_status 2 "--train with --unasked is a usage error: the train records the verdict"
 [ "$(merges)" = 0 ] && pass "and nothing is merged" || fail "a usage error still merged"
-s_assert_err_has "drop --unasked" "and stderr names --unasked as what made it one"
+expect_err_has "drop --unasked" "and stderr names --unasked as what made it one"
 
 # The manual's row is where the train reads how to run the script.
 grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- '--train' &&
@@ -1183,18 +1183,18 @@ no_rev() {
 	not_landed "$2" "$_nr_label"
 	[ "$(events "$2" merge.land)" = 0 ] && [ "$(events "$2" feedback)" = 0 ] &&
 		pass "$_nr_label: no landing reached the trace" || fail "$_nr_label: a landing was recorded: $(show "pr:#$2")"
-	s_assert_err_has "review-pr" "$_nr_label: stderr sends it to /review-pr"
-	s_assert_err_has "--no-review" "$_nr_label: and names the override"
+	expect_err_has "review-pr" "$_nr_label: stderr sends it to /review-pr"
+	expect_err_has "--no-review" "$_nr_label: and names the override"
 }
 seed pr.iterate green 600
 land 600
 no_rev "an iteration at head and no review.verdict at all" 600
-s_assert_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
+expect_err_has "1234567890123456789012345678901234567890" "stderr names the head commit"
 
 land 601
 no_rev "neither an iteration nor a verdict" 601
-s_assert_err_has "pr-iterate" "and the one refusal names the missing iteration as well"
-s_assert_err_has "--no-iteration" "and both overrides"
+expect_err_has "pr-iterate" "and the one refusal names the missing iteration as well"
+expect_err_has "--no-iteration" "and both overrides"
 
 reviewed 602
 land STUB_HEAD_DATE=2999-01-01T00:00:00Z 602 --no-iteration 'iteration aside'
@@ -1243,19 +1243,19 @@ show 'pr:#610' --kind merge.land | grep -qF '"reviewed":"no"' && pass "a rejecte
 	fail "the stopped merge.land lacks reviewed=no: $(show 'pr:#610' --kind merge.land)"
 
 land 611 --no-review ''
-s_assert_status 2 "--no-review with an empty reason is a usage error"
+expect_status 2 "--no-review with an empty reason is a usage error"
 land 611 --no-review
-s_assert_status 2 "--no-review with no reason is a usage error"
+expect_status 2 "--no-review with no reason is a usage error"
 land 611 "--no-review" "two
 lines"
-s_assert_status 2 "--no-review with a reason that is not one line is a usage error"
+expect_status 2 "--no-review with a reason that is not one line is a usage error"
 [ "$(merges)" = 0 ] && pass "and nothing reached the forge" || fail "a multi-line reason was merged on: $(merges) merge calls"
 
 # Unconfigured, the review is not checked either, and stderr says so.
 : >"$STUB_LOG"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 612 </dev/null
-s_assert_status 0 "unconfigured, a PR with no recorded verdict still lands"
-s_assert_err_has "review" "and stderr says the review verdict was not checked"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 612 </dev/null
+expect_status 0 "unconfigured, a PR with no recorded verdict still lands"
+expect_err_has "review" "and stderr says the review verdict was not checked"
 
 # The manual's row is where the operator reads the override.
 grep -F '| Land a batch of green PRs' "$KIT/AGENTS.md" | grep -qF -- "--no-review" &&
@@ -1384,32 +1384,32 @@ no_bump() {
 	not_landed "$1" "$2"
 	[ "$(events "$1" merge.land)" = 0 ] && [ "$(events "$1" feedback)" = 0 ] && [ "$(events "$1" pr.open)" = 0 ] &&
 		pass "$2: no landing reached the trace" || fail "$2: a landing was recorded: $(show "pr:#$1")"
-	s_assert_err_has "hard rule 3" "$2: stderr names the hard rule"
+	expect_err_has "hard rule 3" "$2: stderr names the hard rule"
 }
 iterated 700 701 702 703 704 705 707 708 709 710 714 715 716
 land STUB_PR_FILES='scripts/shared.sh docs/notes.md' 700
 no_bump 700 "a manifest-listed file moved, the version unchanged"
-s_assert_err_has "scripts/shared.sh" "stderr names the moved manifest-listed file"
-printf '%s\n' "$S_ERR" | grep -qF 'docs/notes.md' && fail "the refusal names a file outside the manifest: $S_ERR" ||
+expect_err_has "scripts/shared.sh" "stderr names the moved manifest-listed file"
+printf '%s\n' "$T_ERR" | grep -qF 'docs/notes.md' && fail "the refusal names a file outside the manifest: $T_ERR" ||
 	pass "and names no file outside the manifest"
-s_assert_err_has "0.1.0" "and the shared-layer version it still reads"
+expect_err_has "0.1.0" "and the shared-layer version it still reads"
 grep -qE '^ARGV: git diff --name-only .*ba5eba5e' "$STUB_LOG" && pass "the diff it read is the PR's, from its merge base" ||
 	fail "the diff was not read from the merge base: $(grep '^ARGV: git' "$STUB_LOG")"
 
 land STUB_PR_FILES='scripts/shared.sh docs/notes.md VERSION UPDATING.md' STUB_PR_VER_HEAD=0.2.0 701
-s_assert_status 0 "the same diff with a shared-layer bump lands"
+expect_status 0 "the same diff with a shared-layer bump lands"
 [ "$(events 701 merge.land)" = 1 ] && pass "and records its merge.land" || fail "a bumped PR left $(events 701 merge.land) merge.land"
 
 land STUB_PR_FILES='docs/notes.md README.md tests/x.test.sh' 702
-s_assert_status 0 "a diff that moves no manifest-listed file lands"
+expect_status 0 "a diff that moves no manifest-listed file lands"
 
 land STUB_PR_FILES='VERSION scripts/joins.sh' STUB_MANIFEST_HEAD_EXTRA=scripts/joins.sh 703
 no_bump 703 "a file joining the manifest with no bump"
-s_assert_err_has "scripts/joins.sh" "the joining file is named"
+expect_err_has "scripts/joins.sh" "the joining file is named"
 
 land STUB_PR_FILES='VERSION scripts/leaves.sh' STUB_MANIFEST_BASE_EXTRA=scripts/leaves.sh 704
 no_bump 704 "a file leaving the manifest with no bump"
-s_assert_err_has "scripts/leaves.sh" "the leaving file is named"
+expect_err_has "scripts/leaves.sh" "the leaving file is named"
 
 land STUB_PR_FILES='scripts/shared.sh' STUB_PR_VER_HEAD=banana 705
 no_bump 705 "a shared-layer line moved to no version"
@@ -1422,32 +1422,32 @@ no_bump 707 "a train's landing"
 
 land STUB_PR_FETCH_RC=1 708
 not_landed 708 "a PR whose head could not be fetched"
-s_assert_err_has "could not be read" "stderr says the diff could not be read"
+expect_err_has "could not be read" "stderr says the diff could not be read"
 land STUB_MB_RC=1 709
 not_landed 709 "a PR with no merge base"
-s_assert_err_has "no merge base" "stderr names the missing merge base"
-s_assert_err_has "could not be read" "and says the diff could not be read"
+expect_err_has "no merge base" "stderr names the missing merge base"
+expect_err_has "could not be read" "and says the diff could not be read"
 land STUB_PR_HEAD_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 710
 not_landed 710 "a PR whose head VERSION could not be read"
-s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION"
+expect_err_has "VERSION could not be read" "stderr names the unread VERSION"
 land STUB_PR_BASE_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 714
 not_landed 714 "a PR whose merge base VERSION could not be read"
-s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION at the merge base"
+expect_err_has "VERSION could not be read" "stderr names the unread VERSION at the merge base"
 land STUB_PR_NO_LIST=1 STUB_PR_FILES='scripts/shared.sh' 716
 not_landed 716 "a PR whose VERSION lists no files at either end"
-s_assert_err_has "reads empty" "stderr says the list read empty"
+expect_err_has "reads empty" "stderr says the list read empty"
 land STUB_PR_DIFF_RC=128 715
 not_landed 715 "a PR whose diff git could not compute"
-s_assert_err_has "could not diff" "stderr names the failed diff"
+expect_err_has "could not diff" "stderr names the failed diff"
 
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 711 </dev/null
-s_assert_status 0 "unconfigured, a PR moving nothing listed still lands"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 711 </dev/null
+expect_status 0 "unconfigured, a PR moving nothing listed still lands"
 : >"$STUB_LOG"
 printf '%s\n' "STUB_PR_FILES='scripts/shared.sh'" >"$STUB_KNOBS"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 712 </dev/null
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 712 </dev/null
 : >"$STUB_KNOBS"
 not_landed 712 "unconfigured, an unbumped shared-layer move"
-s_assert_err_has "hard rule 3" "unconfigured, the refusal is the shared-layer one"
+expect_err_has "hard rule 3" "unconfigured, the refusal is the shared-layer one"
 
 
 # ---------------------------------------------------------------------------

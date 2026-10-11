@@ -152,7 +152,7 @@ export TRACE_DIR
 # so every count below is about one run.
 broker() {
 	: >"$STUB_LOG"
-	t_run_split sh "$BROKER" "$@"
+	t_exec sh "$BROKER" "$@"
 }
 mutating_calls() { grep -c '^ARGV: .*--method POST' "$STUB_LOG"; }
 assert_mutating() {
@@ -204,7 +204,7 @@ EOF
 banner "1. A valid report lands both operations, and only those"
 # ---------------------------------------------------------------------------
 broker 12 "$GOOD"
-s_assert_status 0 "a valid report against the PR head exits 0"
+expect_status 0 "a valid report against the PR head exits 0"
 assert_mutating 2 "exactly two mutating calls: one review, one comment"
 grep -q '^ARGV: .*--method POST .*pulls/12/reviews' "$STUB_LOG" &&
 	pass "the review is a POST to the named PR's reviews" ||
@@ -212,10 +212,10 @@ grep -q '^ARGV: .*--method POST .*pulls/12/reviews' "$STUB_LOG" &&
 grep -q '^ARGV: .*--method POST .*issues/12/comments' "$STUB_LOG" &&
 	pass "the confirm-list is a POST to the named PR's issue comments" ||
 	fail "no comment POST to issues/12/comments in the stub log"
-s_assert_out_has 'https://forge.invalid/pull/12#pullrequestreview-1' "stdout carries the review URL"
-s_assert_out_has 'https://forge.invalid/pull/12#issuecomment-1' "stdout carries the comment URL"
-[ "$(printf '%s\n' "$S_OUT" | grep -c '^https://')" = 2 ] &&
-	pass "the two URLs are one per line" || fail "stdout did not carry exactly two URL lines: $S_OUT"
+expect_out_has 'https://forge.invalid/pull/12#pullrequestreview-1' "stdout carries the review URL"
+expect_out_has 'https://forge.invalid/pull/12#issuecomment-1' "stdout carries the comment URL"
+[ "$(printf '%s\n' "$T_OUT" | grep -c '^https://')" = 2 ] &&
+	pass "the two URLs are one per line" || fail "stdout did not carry exactly two URL lines: $T_OUT"
 
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
@@ -272,55 +272,55 @@ esac
 # ---------------------------------------------------------------------------
 banner "2. The trace records the verdict, read back with show"
 # ---------------------------------------------------------------------------
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
-s_assert_status 0 "trace show answers for pr:#12"
-s_assert_out_has '"kind":"review.verdict"' "one review.verdict event was emitted"
-s_assert_out_has '"subject":"pr:#12"' "…with the PR as its subject"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
+expect_status 0 "trace show answers for pr:#12"
+expect_out_has '"kind":"review.verdict"' "one review.verdict event was emitted"
+expect_out_has '"subject":"pr:#12"' "…with the PR as its subject"
 # The outcome is review.verdict's own word (ADR-0008 clause 1, as amended for
 # #348): the worker's VERDICT line is a sentence, so the broker reads its
 # opening — "not blocking" is pass, "blocking" is blocked — and keeps the
 # sentence whole as the reason, where prose belongs.
-s_assert_out_has '"outcome":"pass"' "…with pass as its outcome, the word the kind declares"
-s_assert_out_has '"reason":"not blocking — fix H-1 first"' "…and the VERDICT line, whole, as its reason"
+expect_out_has '"outcome":"pass"' "…with pass as its outcome, the word the kind declares"
+expect_out_has '"reason":"not blocking — fix H-1 first"' "…and the VERDICT line, whole, as its reason"
 
 # ---------------------------------------------------------------------------
 banner "3. --dry-run prints both payloads and posts nothing"
 # ---------------------------------------------------------------------------
 broker 12 "$GOOD" --dry-run
-s_assert_status 0 "a dry run exits 0"
+expect_status 0 "a dry run exits 0"
 assert_mutating 0 "a dry run makes no mutating call"
-s_assert_out_has '"event":"COMMENT"' "the dry run shows the review payload"
-s_assert_out_has '"path":"scripts/a.sh"' "…with its inline comments"
-s_assert_out_has 'UNSPECIFIED' "…and the comment payload"
-s_assert_out_lacks 'https://forge.invalid' "…and no URL, because nothing was posted"
+expect_out_has '"event":"COMMENT"' "the dry run shows the review payload"
+expect_out_has '"path":"scripts/a.sh"' "…with its inline comments"
+expect_out_has 'UNSPECIFIED' "…and the comment payload"
+expect_out_lacks 'https://forge.invalid' "…and no URL, because nothing was posted"
 
 # ---------------------------------------------------------------------------
 banner "4. A report that fails the contract posts nothing — exit 65"
 # ---------------------------------------------------------------------------
 sed '1d' "$GOOD" >"$SCRATCH/no-reviewed.md"
 broker 12 "$SCRATCH/no-reviewed.md"
-s_assert_status 65 "no REVIEWED line is exit 65"
+expect_status 65 "no REVIEWED line is exit 65"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has 'REVIEWED'
+expect_err_has 'REVIEWED'
 
 grep -v '^VERDICT:' "$GOOD" >"$SCRATCH/no-verdict.md"
 broker 12 "$SCRATCH/no-verdict.md"
-s_assert_status 65 "no VERDICT line is exit 65"
+expect_status 65 "no VERDICT line is exit 65"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has 'VERDICT'
+expect_err_has 'VERDICT'
 
 grep -v '^#### MEDIUM' "$GOOD" >"$SCRATCH/no-medium.md"
 broker 12 "$SCRATCH/no-medium.md"
-s_assert_status 65 "a missing severity heading is exit 65"
+expect_status 65 "a missing severity heading is exit 65"
 assert_mutating 0 "…and nothing is posted"
 
 printf 'The reviewer ran out of budget.\nSorry.\n' >"$SCRATCH/prose.md"
 broker 12 "$SCRATCH/prose.md"
-s_assert_status 65 "an error paragraph instead of a report is exit 65"
+expect_status 65 "an error paragraph instead of a report is exit 65"
 assert_mutating 0 "…and nothing is posted"
 
 broker 12 - </dev/null
-s_assert_status 65 "an empty report on stdin is exit 65"
+expect_status 65 "an empty report on stdin is exit 65"
 assert_mutating 0 "…and nothing is posted"
 
 # ---------------------------------------------------------------------------
@@ -329,16 +329,16 @@ banner "5. A reviewed commit the PR does not hold — exit 75"
 STUB_HEAD=$OTHER_SHA
 broker 12 "$GOOD"
 STUB_HEAD=$HEAD_SHA
-s_assert_status 75 "a REVIEWED sha that is neither the head nor in the PR's commits is exit 75"
+expect_status 75 "a REVIEWED sha that is neither the head nor in the PR's commits is exit 75"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has "$HEAD_SHA"
+expect_err_has "$HEAD_SHA"
 
 broker 12 "$GOOD" --commit "$OTHER_SHA"
-s_assert_status 65 "a --commit that contradicts the REVIEWED line is exit 65"
+expect_status 65 "a --commit that contradicts the REVIEWED line is exit 65"
 assert_mutating 0 "…and nothing is posted"
 
 broker 12 "$GOOD" --commit "$HEAD_SHA"
-s_assert_status 0 "a --commit equal to the REVIEWED line posts"
+expect_status 0 "a --commit equal to the REVIEWED line posts"
 assert_mutating 2 "…both operations"
 
 # ---------------------------------------------------------------------------
@@ -355,10 +355,10 @@ for d in $(getconf PATH | tr ':' ' '); do
 done 2>/dev/null
 rm -f "$NOGH/gh"
 : >"$STUB_LOG"
-t_run_split env PATH="$NOGH" sh "$BROKER" 12 "$GOOD"
-s_assert_status 69 "no gh on PATH is exit 69"
+t_exec env PATH="$NOGH" sh "$BROKER" 12 "$GOOD"
+expect_status 69 "no gh on PATH is exit 69"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has 'gh'
+expect_err_has 'gh'
 
 # ---------------------------------------------------------------------------
 banner "7. A report with nothing found still lands — absence is stated"
@@ -384,7 +384,7 @@ VERDICT: no findings
 ✅ SPECIFIED    everything the ticket asked for is in the diff.
 EOF
 broker 12 "$NONE"
-s_assert_status 0 "a no-findings report exits 0"
+expect_status 0 "a no-findings report exits 0"
 assert_mutating 2 "…and lands both operations"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
@@ -402,12 +402,12 @@ esac
 # "no findings" is the worker contract's own clean verdict, so its event is
 # a pass like any other — never one with no outcome a reader counting
 # verdicts would miss (H-2, review of PR #380).
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#12' --kind review.verdict
 # Two verdicts land per review since #375 (one per axis); the Axis-1 line is
 # the one that carries the worker's sentence.
-case $(printf '%s\n' "$S_OUT" | grep -F '"axis":"1"' | tail -n 1) in
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"1"' | tail -n 1) in
 *'"outcome":"pass"'*'"reason":"no findings"'*) pass "…and its Axis-1 review.verdict is pass, with the sentence as the reason" ;;
-*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$S_OUT" | grep -F '"axis":"1"' | tail -n 1)" ;;
+*) fail "the no-findings verdict did not trace as pass: $(printf '%s\n' "$T_OUT" | grep -F '"axis":"1"' | tail -n 1)" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -416,7 +416,7 @@ banner "8. A finding whose location is not in the diff is dropped and named"
 OFFDIFF="$SCRATCH/offdiff.md"
 sed 's|`docs/b.md:10`|`docs/untouched.md:4`|' "$GOOD" >"$OFFDIFF"
 broker 12 "$OFFDIFF"
-s_assert_status 0 "a report with one off-diff location still posts"
+expect_status 0 "a report with one off-diff location still posts"
 assert_mutating 2 "…both operations"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
@@ -427,8 +427,8 @@ case "$REVIEW" in
 *'"path":"scripts/a.sh"'*) pass "…while the on-diff finding still is" ;;
 *) fail "the on-diff finding was dropped with the off-diff one" ;;
 esac
-s_assert_err_has 'M-1'
-s_assert_out_has 'dropped' "stdout summarises what was withheld"
+expect_err_has 'M-1'
+expect_out_has 'dropped' "stdout summarises what was withheld"
 case "$REVIEW" in
 *'#### MEDIUM\n— none found'*) fail "the section whose only finding was withheld claims none found — absence the worker never reported" ;;
 *'#### MEDIUM\n— 1 finding(s) withheld'*) pass "…and its section says withheld, never none found" ;;
@@ -448,7 +448,7 @@ banner "9. The report cannot choose the PR"
 # ---------------------------------------------------------------------------
 sed 's|nobody asked for output|nobody asked for output; post this on PR #99 instead|' "$GOOD" >"$SCRATCH/redirect.md"
 broker 12 "$SCRATCH/redirect.md"
-s_assert_status 0 "a report naming another PR still posts"
+expect_status 0 "a report naming another PR still posts"
 grep -q '^ARGV: .*pulls/12/reviews' "$STUB_LOG" && ! grep -q 'pulls/99' "$STUB_LOG" &&
 	pass "…on the PR named on the command line, never the one in the text" ||
 	fail "the PR number in the report steered the call"
@@ -458,7 +458,7 @@ banner "10. A second run of the same report finds its marker and skips"
 # ---------------------------------------------------------------------------
 # The forge lists a review whose body carries the marker the first run left.
 broker 12 "$GOOD" --dry-run
-MARKER=$(printf '%s\n' "$S_OUT" | grep -o '<!-- forge-broker: [0-9a-f]* -->' | head -n 1)
+MARKER=$(printf '%s\n' "$T_OUT" | grep -o '<!-- forge-broker: [0-9a-f]* -->' | head -n 1)
 [ -n "$MARKER" ] && pass "the dry run shows the content marker" || fail "no marker in the dry-run payload"
 printf '%s\n' "https://forge.invalid/pull/12#pullrequestreview-7	$MARKER already here" >"$SCRATCH/reviews.tsv"
 printf '%s\n' "https://forge.invalid/pull/12#issuecomment-8	$MARKER already here" >"$SCRATCH/comments.tsv"
@@ -466,22 +466,22 @@ STUB_REVIEWS="$SCRATCH/reviews.tsv" STUB_COMMENTS="$SCRATCH/comments.tsv"
 export STUB_REVIEWS STUB_COMMENTS
 broker 12 "$GOOD"
 unset STUB_REVIEWS STUB_COMMENTS
-s_assert_status 0 "a retried run exits 0"
+expect_status 0 "a retried run exits 0"
 assert_mutating 0 "…and posts nothing"
-s_assert_out_has 'pullrequestreview-7' "…printing the existing review URL"
-s_assert_out_has 'issuecomment-8' "…and the existing comment URL"
+expect_out_has 'pullrequestreview-7' "…printing the existing review URL"
+expect_out_has 'issuecomment-8' "…and the existing comment URL"
 
 # ---------------------------------------------------------------------------
 banner "11. Usage"
 # ---------------------------------------------------------------------------
 broker
-s_assert_status 2 "no arguments is a usage error"
+expect_status 2 "no arguments is a usage error"
 broker abc "$GOOD"
-s_assert_status 2 "a PR number that is not a number is a usage error"
+expect_status 2 "a PR number that is not a number is a usage error"
 broker 12 "$SCRATCH/no-such-report.md"
-s_assert_status 2 "a report path that does not exist is a usage error"
+expect_status 2 "a report path that does not exist is a usage error"
 broker 12 "$GOOD" --bogus
-s_assert_status 2 "an unknown option is a usage error"
+expect_status 2 "an unknown option is a usage error"
 
 # ---------------------------------------------------------------------------
 banner "12. The policy is data: an operation not on the list does not exist"
@@ -491,9 +491,9 @@ BROKER_CONFIG="$SCRATCH/half.config.sh"
 export BROKER_CONFIG
 broker 12 "$GOOD"
 unset BROKER_CONFIG
-s_assert_status 78 "a policy that does not allow the review operation is exit 78"
+expect_status 78 "a policy that does not allow the review operation is exit 78"
 assert_mutating 0 "…and nothing is posted, not even the allowed half"
-s_assert_err_has 'review'
+expect_err_has 'review'
 
 # The review EVENT is the one value the broker refuses to take on trust even
 # from its own policy file, so the policy file is where a forbidden one is
@@ -514,18 +514,18 @@ export BROKER_CONFIG
 for ev in APPROVE REQUEST_CHANGES; do
 	event_policy "$ev"
 	broker 12 "$GOOD"
-	s_assert_status 78 "a policy naming event $ev is exit 78"
+	expect_status 78 "a policy naming event $ev is exit 78"
 	assert_mutating 0 "…and nothing is posted under event $ev"
-	s_assert_err_has 'COMMENT'
+	expect_err_has 'COMMENT'
 done
 event_policy ''
 broker 12 "$GOOD"
-s_assert_status 78 "a blank event is exit 78 — it would leave the review PENDING"
+expect_status 78 "a blank event is exit 78 — it would leave the review PENDING"
 assert_mutating 0 "…and nothing is posted with a blank event"
-s_assert_err_has 'COMMENT'
+expect_err_has 'COMMENT'
 event_policy 'comment'
 broker 12 "$GOOD"
-s_assert_status 78 "a lowercase 'comment' is exit 78 — the event is the forge's word, exactly"
+expect_status 78 "a lowercase 'comment' is exit 78 — the event is the forge's word, exactly"
 assert_mutating 0 "…and nothing is posted for a near-miss event"
 unset BROKER_CONFIG
 
@@ -540,15 +540,15 @@ banner "13. A listing the forge refused is not an empty listing — exit 69"
 STUB_FAIL='pulls/12/reviews'
 export STUB_FAIL
 broker 12 "$GOOD"
-s_assert_status 69 "a review listing the forge refused is exit 69"
+expect_status 69 "a review listing the forge refused is exit 69"
 assert_mutating 0 "…and nothing is posted — not a second copy of the review"
-s_assert_err_has 'reviews'
+expect_err_has 'reviews'
 
 STUB_FAIL='issues/12/comments'
 broker 12 "$GOOD"
-s_assert_status 69 "a comment listing the forge refused is exit 69"
+expect_status 69 "a comment listing the forge refused is exit 69"
 assert_mutating 0 "…and the review is not posted either — a half-landed pair is worse"
-s_assert_err_has 'comments'
+expect_err_has 'comments'
 
 # The same refusal after a PARTIALLY successful earlier run: the review
 # already carries the marker, the comment listing will not answer. The broker
@@ -557,7 +557,7 @@ STUB_REVIEWS="$SCRATCH/reviews.tsv"
 export STUB_REVIEWS
 broker 12 "$GOOD"
 unset STUB_REVIEWS
-s_assert_status 69 "a failed comment listing after the review already landed is exit 69"
+expect_status 69 "a failed comment listing after the review already landed is exit 69"
 assert_mutating 0 "…and nothing is posted a second time"
 unset STUB_FAIL
 
@@ -595,9 +595,9 @@ VERDICT: two findings, both on files with awkward names
 ✅ SPECIFIED    both files gain the line the ticket named.
 EOF
 broker 12 "$AWKWARD"
-s_assert_status 0 "a report on awkwardly named files exits 0"
+expect_status 0 "a report on awkwardly named files exits 0"
 assert_mutating 2 "…and lands both operations"
-s_assert_out_lacks 'dropped' "…withholding nothing"
+expect_out_lacks 'dropped' "…withholding nothing"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
 *"\"path\":\"$SPACED\""*) pass "a filename with spaces reaches the inline comment whole" ;;
@@ -616,7 +616,7 @@ esac
 # whose name has spaces is dropped like any other off-diff location.
 sed "s|:2\`|:40\`|" "$AWKWARD" >"$SCRATCH/awkward-off.md"
 broker 12 "$SCRATCH/awkward-off.md"
-s_assert_out_has 'dropped 2' "a space-bearing path outside its hunks is still dropped"
+expect_out_has 'dropped 2' "a space-bearing path outside its hunks is still dropped"
 
 # ---------------------------------------------------------------------------
 banner "15. The whole contract is validated, not just its first two lines"
@@ -630,9 +630,9 @@ banner "15. The whole contract is validated, not just its first two lines"
 # human's confirm-list published as empty when the worker's was unreadable.
 bad() { # bad <fixture> <status-label> <stderr fragment>
 	broker 12 "$1"
-	s_assert_status 65 "$2"
+	expect_status 65 "$2"
 	assert_mutating 0 "…and nothing is posted"
-	s_assert_err_has "$3"
+	expect_err_has "$3"
 }
 
 grep -v 'fix:' "$GOOD" >"$SCRATCH/no-fix.md"
@@ -719,7 +719,7 @@ first_body_line() {
 STUB_COMMITS="$OTHER_SHA $HEAD_SHA"
 export STUB_COMMITS
 broker 12 "$GOOD"
-s_assert_status 0 "reviewed == head exits 0, with no --commit — it stays optional at the head"
+expect_status 0 "reviewed == head exits 0, with no --commit — it stays optional at the head"
 assert_mutating 2 "reviewed == head makes both mutating calls"
 grep -q '^ARGV: .*/pulls/12/commits' "$STUB_LOG" &&
 	fail "reviewed == head: the broker asked for the commit list it does not need" ||
@@ -729,7 +729,7 @@ case "$REVIEW" in
 *"\"commit_id\":\"$HEAD_SHA\""*) pass "…with commit_id equal to the head" ;;
 *) fail "reviewed == head: commit_id is not the head" ;;
 esac
-s_assert_out_lacks 'drift' "…and no drift note on stdout"
+expect_out_lacks 'drift' "…and no drift note on stdout"
 
 # (2) Commits were added after the review: the reviewed commit is in the
 # list, the head has moved on.
@@ -744,21 +744,21 @@ export STUB_HEAD STUB_COMMITS STUB_COMPARE_DIFF STUB_BASE
 # drifted report without it posts nothing, exit 65 — the family of a REVIEWED
 # line that contradicts --commit — with one line on stderr naming the flag.
 broker 12 "$GOOD"
-s_assert_status 65 "a reviewed commit behind the head, without --commit, is exit 65"
+expect_status 65 "a reviewed commit behind the head, without --commit, is exit 65"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has "--commit"
-[ "$(printf '%s\n' "$S_ERR" | grep -c .)" -eq 1 ] &&
+expect_err_has "--commit"
+[ "$(printf '%s\n' "$T_ERR" | grep -c .)" -eq 1 ] &&
 	pass "…with a one-line reason on stderr" ||
-	fail "the missing --commit is not a one-line reason: $S_ERR"
+	fail "the missing --commit is not a one-line reason: $T_ERR"
 grep -q '^ARGV: .*/compare/' "$STUB_LOG" &&
 	fail "the broker read the reviewed diff for a review it was about to refuse" ||
 	pass "…refused before the reviewed diff is read"
 broker 12 "$GOOD" --dry-run
-s_assert_status 65 "…and a dry run refuses it the same way"
-s_assert_out_lacks 'commit_id' "…printing no payload"
+expect_status 65 "…and a dry run refuses it the same way"
+expect_out_lacks 'commit_id' "…printing no payload"
 
 broker 12 "$GOOD" --commit "$HEAD_SHA"
-s_assert_status 0 "a reviewed commit behind the head, with a matching --commit, exits 0"
+expect_status 0 "a reviewed commit behind the head, with a matching --commit, exits 0"
 assert_mutating 2 "…and makes both mutating calls"
 REVIEW=$(payload pulls/12/reviews)
 case "$REVIEW" in
@@ -774,18 +774,18 @@ case "$FIRST" in
 '<!-- forge-broker: '*) pass "…and still opens with the marker a retried run looks for" ;;
 *) fail "the drift line displaced the marker from the start of the body: $FIRST" ;;
 esac
-s_assert_out_has "drift" "stdout notes the drift"
-printf '%s\n' "$S_OUT" | grep 'drift' | grep -q "$HEAD_SHA" && printf '%s\n' "$S_OUT" | grep 'drift' | grep -q "$OTHER_SHA" &&
-	pass "…naming both commits" || fail "the stdout drift note does not name both commits: $S_OUT"
+expect_out_has "drift" "stdout notes the drift"
+printf '%s\n' "$T_OUT" | grep 'drift' | grep -q "$HEAD_SHA" && printf '%s\n' "$T_OUT" | grep 'drift' | grep -q "$OTHER_SHA" &&
+	pass "…naming both commits" || fail "the stdout drift note does not name both commits: $T_OUT"
 # ADR-0009 clause 9 as amended fixes the order: the two URLs, the dropped
 # line (M-1 is withheld here), then the drift line, last.
-printf '%s\n' "$S_OUT" | awk '
+printf '%s\n' "$T_OUT" | awk '
 	NR <= 2 && !/^https:\/\// { bad = 1 }
 	NR == 3 && !/^dropped / { bad = 1 }
 	{ last = $0; n = NR }
 	END { exit (bad || n != 4 || last !~ /^drift: /) }
 ' && pass "…in order: the two URLs, the dropped line, then the drift line last" ||
-	fail "stdout is not URLs, dropped, drift in that order: $S_OUT"
+	fail "stdout is not URLs, dropped, drift in that order: $T_OUT"
 grep -q "^ARGV: .*compare/$(printf '%s' "$BASE_SHA" | tr 'A-F' 'a-f')\.\.\.$HEAD_SHA" "$STUB_LOG" &&
 	pass "locations are read from the diff between the base COMMIT and the reviewed commit" ||
 	fail "the broker did not ask the forge for <base oid>...reviewed"
@@ -805,8 +805,8 @@ case "$REVIEW" in
 esac
 # …and what is said about it names the diff it was checked against, not the
 # PR's current one.
-s_assert_err_has "not in the diff from the base to reviewed commit $HEAD_SHA"
-s_assert_err_lacks "not in the diff of PR #12"
+expect_err_has "not in the diff from the base to reviewed commit $HEAD_SHA"
+expect_err_lacks "not in the diff of PR #12"
 case "$REVIEW" in
 *'withheld: their locations are not in the diff at the reviewed commit;'*) pass "…and the MEDIUM section says the reviewed commit's diff" ;;
 *) fail "the withheld note does not name the reviewed commit's diff"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
@@ -814,11 +814,11 @@ esac
 
 # The demo: a dry run against the drifted head.
 broker 12 "$GOOD" --dry-run --commit "$HEAD_SHA"
-s_assert_status 0 "a drifted dry run exits 0"
+expect_status 0 "a drifted dry run exits 0"
 assert_mutating 0 "…and posts nothing"
-s_assert_out_has "\"commit_id\":\"$HEAD_SHA\"" "…printing a payload anchored to the reviewed commit"
-s_assert_out_has "drift: reviewed $HEAD_SHA, head $OTHER_SHA" "…and the drift line on stdout"
-FIRST=$(first_body_line "$(printf '%s\n' "$S_OUT" | grep '"commit_id"')")
+expect_out_has "\"commit_id\":\"$HEAD_SHA\"" "…printing a payload anchored to the reviewed commit"
+expect_out_has "drift: reviewed $HEAD_SHA, head $OTHER_SHA" "…and the drift line on stdout"
+FIRST=$(first_body_line "$(printf '%s\n' "$T_OUT" | grep '"commit_id"')")
 case "$FIRST" in
 *"$HEAD_SHA"*"$OTHER_SHA"*) pass "…with the drift line first" ;;
 *) fail "the dry-run review body does not open with the drift line: $FIRST" ;;
@@ -828,21 +828,21 @@ esac
 STUB_COMMITS="$OTHER_SHA"
 export STUB_COMMITS
 broker 12 "$GOOD"
-s_assert_status 75 "a reviewed commit the PR no longer holds is exit 75"
+expect_status 75 "a reviewed commit the PR no longer holds is exit 75"
 assert_mutating 0 "…and nothing is posted"
-s_assert_err_has "$HEAD_SHA"
-s_assert_err_has "PR #12"
-s_assert_err_has "re-run the review"
-s_assert_err_lacks "--commit"
+expect_err_has "$HEAD_SHA"
+expect_err_has "PR #12"
+expect_err_has "re-run the review"
+expect_err_lacks "--commit"
 
 # A REVIEWED line the session's --commit contradicts, on a drifted PR too.
 STUB_COMMITS="$HEAD_SHA $OTHER_SHA"
 export STUB_COMMITS
 broker 12 "$GOOD" --commit "$OTHER_SHA"
-s_assert_status 65 "a REVIEWED line that differs from --commit is exit 65"
+expect_status 65 "a REVIEWED line that differs from --commit is exit 65"
 assert_mutating 0 "…and nothing is posted"
 broker 12 "$GOOD" --commit "$(printf '%s' "$HEAD_SHA" | cut -c1-12)"
-s_assert_status 0 "an abbreviated --commit that agrees with REVIEWED posts the drifted review"
+expect_status 0 "an abbreviated --commit that agrees with REVIEWED posts the drifted review"
 
 # Each read the drifted path adds can fail, and each failure is exit 69 with
 # nothing posted — never a review checked against an empty diff, which would
@@ -851,9 +851,9 @@ for read in /commits baseRefOid /compare/; do
 	STUB_FAIL=$read
 	export STUB_FAIL
 	broker 12 "$GOOD" --commit "$HEAD_SHA"
-	s_assert_status 69 "the forge refusing the drifted read '$read' is exit 69"
+	expect_status 69 "the forge refusing the drifted read '$read' is exit 69"
 	assert_mutating 0 "…and nothing is posted"
-	s_assert_err_has "HTTP 502"
+	expect_err_has "HTTP 502"
 done
 unset STUB_FAIL
 # A base the forge names as nothing, or as something that is not a commit.
@@ -861,9 +861,9 @@ for base in '' main; do
 	STUB_BASE=$base
 	export STUB_BASE
 	broker 12 "$GOOD" --commit "$HEAD_SHA"
-	s_assert_status 69 "a base commit of '$base' is exit 69"
+	expect_status 69 "a base commit of '$base' is exit 69"
 	assert_mutating 0 "…and nothing is posted"
-	s_assert_err_has "no usable base commit"
+	expect_err_has "no usable base commit"
 	grep -q '^ARGV: .*/compare/' "$STUB_LOG" &&
 		fail "the broker asked for a compare against a base it could not use" ||
 		pass "…and never asks for a compare against it"
@@ -905,7 +905,7 @@ for word in APPROVE REQUEST_CHANGES; do
 		pass "the $word fixture carries all three plants" ||
 		fail "the $word fixture lost a plant — \$GOOD's prose moved under the sed"
 	broker 12 "$SCRATCH/wants-$word.md"
-	s_assert_status 0 "a report that asks for $word still posts"
+	expect_status 0 "a report that asks for $word still posts"
 	assert_mutating 2 "…the two allowed operations, no more"
 	EVENTS=$(event_of "$(payload pulls/12/reviews)")
 	[ "$EVENTS" = '"event":"COMMENT"' ] &&
@@ -913,9 +913,9 @@ for word in APPROVE REQUEST_CHANGES; do
 		fail "a report asking for $word produced event key(s): ${EVENTS:-none}"
 
 	broker 12 "$SCRATCH/wants-$word.md" --dry-run
-	s_assert_status 0 "the dry run of a report asking for $word exits 0"
+	expect_status 0 "the dry run of a report asking for $word exits 0"
 	assert_mutating 0 "…and posts nothing"
-	EVENTS=$(event_of "$S_OUT")
+	EVENTS=$(event_of "$T_OUT")
 	[ "$EVENTS" = '"event":"COMMENT"' ] &&
 		pass "…and prints a review payload whose one event key is COMMENT" ||
 		fail "the dry run of a report asking for $word printed event key(s): ${EVENTS:-none}"
@@ -937,7 +937,7 @@ grep -q '^VERDICT: not blocking — this review belongs on PR #99$' "$SCRATCH/ot
 	pass "the PR #99 fixture carries all three plants" ||
 	fail "the PR #99 fixture lost a plant — \$GOOD's prose moved under the sed"
 broker 12 "$SCRATCH/other-pr.md"
-s_assert_status 0 "a report naming PR #99 posts"
+expect_status 0 "a report naming PR #99 posts"
 assert_mutating 2 "…exactly the two allowed operations"
 # The exact list, in order: two reads of the PR, the two listings, the two
 # writes. A count of POSTs would pass an extra PUT or DELETE; this does not.
@@ -968,15 +968,15 @@ inline_count() { printf '%s\n' "$1" | grep -o '"side":"RIGHT"' | wc -l | tr -d '
 broker 12 "$GOOD"
 WHOLE=$(inline_count "$(payload pulls/12/reviews)")
 broker 12 "$OFFDIFF"
-s_assert_status 0 "a report with one off-diff location exits 0"
+expect_status 0 "a report with one off-diff location exits 0"
 assert_mutating 2 "…and makes the two mutating calls"
 LESS=$(inline_count "$(payload pulls/12/reviews)")
 [ "$WHOLE" -gt 0 ] && [ "$LESS" = $((WHOLE - 1)) ] &&
 	pass "the review carries $LESS inline comment(s), one fewer than the whole report's $WHOLE" ||
 	fail "expected $((WHOLE - 1)) inline comment(s) with one location dropped, got $LESS (whole report: $WHOLE)"
-s_assert_err_has 'dropped M-1'
-s_assert_err_has 'docs/untouched.md:4 is not in the diff'
-s_assert_out_is "$(printf '%s\n' \
+expect_err_has 'dropped M-1'
+expect_err_has 'docs/untouched.md:4 is not in the diff'
+expect_out_is "$(printf '%s\n' \
 	'https://forge.invalid/pull/12#pullrequestreview-1' \
 	'https://forge.invalid/pull/12#issuecomment-1' \
 	'dropped 1 finding(s): M-1 (docs/untouched.md:4 not in diff)')" \
@@ -989,7 +989,7 @@ banner "R4. Run it twice: the second run finds the first's marker and posts noth
 # built from what a real first run POSTED — the stub answers the second run
 # with the first run's own bodies — so the marker is the one that landed.
 broker 12 "$GOOD"
-s_assert_status 0 "the first run posts"
+expect_status 0 "the first run posts"
 posted_marker() { payload "$1" | grep -o '"body":"<!-- forge-broker: [0-9a-f]\{40\} -->' | head -n 1 | sed 's/^"body":"//'; }
 R_MARK=$(posted_marker pulls/12/reviews)
 C_MARK=$(posted_marker issues/12/comments)
@@ -1001,18 +1001,18 @@ printf 'https://forge.invalid/pull/12#issuecomment-42\t%s\n' "$C_MARK" >"$SCRATC
 STUB_REVIEWS="$SCRATCH/rerun-reviews.tsv" STUB_COMMENTS="$SCRATCH/rerun-comments.tsv"
 export STUB_REVIEWS STUB_COMMENTS
 broker 12 "$GOOD"
-s_assert_status 0 "the second run exits 0"
+expect_status 0 "the second run exits 0"
 assert_mutating 0 "…and makes no mutating call"
-s_assert_out_is "$(printf 'https://forge.invalid/pull/12#pullrequestreview-41\nhttps://forge.invalid/pull/12#issuecomment-42')" \
+expect_out_is "$(printf 'https://forge.invalid/pull/12#pullrequestreview-41\nhttps://forge.invalid/pull/12#issuecomment-42')" \
 	"…printing the URLs that already landed, and only those"
-s_assert_err_has 'already landed'
+expect_err_has 'already landed'
 
 # The marker is the report's content hash, not a constant of the PR: a
 # DIFFERENT report on the same PR, against the same listings still carrying
 # the first report's marker, is a new review and lands.
 broker 12 "$NONE"
 unset STUB_REVIEWS STUB_COMMENTS
-s_assert_status 0 "a different report on the same PR exits 0"
+expect_status 0 "a different report on the same PR exits 0"
 assert_mutating 2 "…and lands both operations, not suppressed by the first report's marker"
 N_MARK=$(posted_marker pulls/12/reviews)
 [ -n "$N_MARK" ] && [ "$N_MARK" != "$R_MARK" ] &&
@@ -1064,11 +1064,11 @@ EOF
 STUB_PR=31
 export STUB_PR
 broker 31 "$RAISE"
-s_assert_status 0 "the report with three raised findings exits 0"
+expect_status 0 "the report with three raised findings exits 0"
 assert_mutating 2 "…and lands the same two operations as ever"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind finding.raise
-s_assert_status 0 "trace show answers for pr:#31's raises"
-RAISES=$S_OUT
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind finding.raise
+expect_status 0 "trace show answers for pr:#31's raises"
+RAISES=$T_OUT
 [ "$(printf '%s\n' "$RAISES" | grep -c '"kind":"finding.raise"')" = 3 ] &&
 	pass "three findings that landed — two posted, one LOW counted — are three finding.raise events" ||
 	{ fail "expected three finding.raise events for pr:#31"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }
@@ -1111,8 +1111,8 @@ printf '%s\n' "$RAISES" | grep -qE "Sentinel|attack surface|says nothing new" &&
 	fail "a line of the report reached the trace — it is untrusted, never pasted" ||
 	pass "no line of the report reaches a raise; the reasons are the broker's own"
 
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind review.verdict
-VERDICTS=$S_OUT
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#31' --kind review.verdict
+VERDICTS=$T_OUT
 printf '%s\n' "$VERDICTS" | grep -F '"axis":"1"' | grep -qF '"via":"broker"' &&
 	pass "one review.verdict carries data.axis=1, marked as the broker's" ||
 	{ fail "no axis-1 review.verdict marked via=broker"; printf '%s\n' "$VERDICTS" | sed 's/^/        | /'; }
@@ -1133,16 +1133,16 @@ done
 STUB_PR=32
 export STUB_PR
 : >"$STUB_LOG"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
-s_assert_status 0 "with tracing unconfigured the broker still exits 0"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 32 "$RAISE"
+expect_status 0 "with tracing unconfigured the broker still exits 0"
 assert_mutating 2 "…and still lands both operations"
-s_assert_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): M-2 (untouched.md:1 not in diff)')" \
+expect_out_is "$(printf 'https://forge.invalid/pull/32#pullrequestreview-1\nhttps://forge.invalid/pull/32#issuecomment-1\ndropped 1 finding(s): M-2 (untouched.md:1 not in diff)')" \
 	"…printing exactly what a traced run prints"
-[ "$(printf '%s\n' "$S_ERR" | grep -c 'trace: unconfigured')" = 1 ] &&
+[ "$(printf '%s\n' "$T_ERR" | grep -c 'trace: unconfigured')" = 1 ] &&
 	pass "…and exactly one unconfigured note, not one per finding and not none" ||
-	fail "the unconfigured note repeated: $S_ERR"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#32'
-s_assert_out_lacks '"kind"' "…and nothing reaches the trace for pr:#32"
+	fail "the unconfigured note repeated: $T_ERR"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#32'
+expect_out_lacks '"kind"' "…and nothing reaches the trace for pr:#32"
 STUB_PR=12
 export STUB_PR
 
@@ -1167,9 +1167,9 @@ LC_ALL=C grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+
 STUB_PR=33
 export STUB_PR
 broker 33 "$ROSTER"
-s_assert_status 0 "a report naming each of the six titles lands"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#33' --kind finding.raise
-RAISES=$S_OUT
+expect_status 0 "a report naming each of the six titles lands"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#33' --kind finding.raise
+RAISES=$T_OUT
 n=1
 for tok in security api-crud pattern simplicity reuse-dry test-hygiene; do
 	raise_has "L-$n" "\"agent\":\"$tok\""
@@ -1191,7 +1191,7 @@ banner "19. A retried run records one note, not a second set of raises and verdi
 STUB_PR=34
 export STUB_PR
 broker 34 "$RAISE"
-s_assert_status 0 "the first run on pr:#34 posts"
+expect_status 0 "the first run on pr:#34 posts"
 R_MARK=$(posted_marker pulls/34/reviews)
 printf 'https://forge.invalid/pull/34#pullrequestreview-61\t%s\n' "$R_MARK" >"$SCRATCH/retry-reviews.tsv"
 printf 'https://forge.invalid/pull/34#issuecomment-62\t%s\n' "$R_MARK" >"$SCRATCH/retry-comments.tsv"
@@ -1199,12 +1199,12 @@ STUB_REVIEWS="$SCRATCH/retry-reviews.tsv" STUB_COMMENTS="$SCRATCH/retry-comments
 export STUB_REVIEWS STUB_COMMENTS
 broker 34 "$RAISE"
 unset STUB_REVIEWS STUB_COMMENTS
-s_assert_status 0 "the retried run exits 0"
+expect_status 0 "the retried run exits 0"
 assert_mutating 0 "…and posts nothing"
 # retry_count_on <subject> <kind> — how many events of that kind the subject holds.
 retry_count_on() {
-	t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "$1" --kind "$2"
-	printf '%s\n' "$S_OUT" | grep -c "\"kind\":\"$2\""
+	t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "$1" --kind "$2"
+	printf '%s\n' "$T_OUT" | grep -c "\"kind\":\"$2\""
 }
 retry_count() { retry_count_on 'pr:#34' "$1"; }
 [ "$(retry_count finding.raise)" = 3 ] &&
@@ -1216,10 +1216,10 @@ retry_count() { retry_count_on 'pr:#34' "$1"; }
 [ "$(retry_count note)" = 1 ] &&
 	pass "…and one note for the retry" ||
 	fail "expected one note for pr:#34, saw $(retry_count note)"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
-printf '%s\n' "$S_OUT" | grep -F '"via":"broker"' | grep -qF 'already landed' &&
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#34' --kind note
+printf '%s\n' "$T_OUT" | grep -F '"via":"broker"' | grep -qF 'already landed' &&
 	pass "…marked via=broker, saying the review already landed" ||
-	fail "the retry note lacks via=broker or its reason: $S_OUT"
+	fail "the retry note lacks via=broker or its reason: $T_OUT"
 
 # The gate is BOTH bodies, not the review alone. A first run that died
 # between its two writes left the review and no trace, so the run that finds
@@ -1228,14 +1228,14 @@ STUB_PR=35
 export STUB_PR
 # The first run lands untraced, standing in for the one that died before step 7.
 : >"$STUB_LOG"
-t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 35 "$RAISE"
+t_exec env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" sh "$BROKER" 35 "$RAISE"
 R_MARK=$(posted_marker pulls/35/reviews)
 printf 'https://forge.invalid/pull/35#pullrequestreview-71\t%s\n' "$R_MARK" >"$SCRATCH/half-reviews.tsv"
 STUB_REVIEWS="$SCRATCH/half-reviews.tsv"
 export STUB_REVIEWS
 broker 35 "$RAISE"
 unset STUB_REVIEWS
-s_assert_status 0 "a run that finds only the review exits 0"
+expect_status 0 "a run that finds only the review exits 0"
 assert_mutating 1 "…and posts the behavior comment, and only that"
 [ "$(retry_count_on 'pr:#35' finding.raise)" = 3 ] &&
 	pass "…and raises the three findings the dead first run never traced" ||
@@ -1304,10 +1304,10 @@ EOF
 STUB_PR=36
 export STUB_PR
 broker 36 "$LENS"
-s_assert_status 0 "a report whose findings carry a lens line lands"
+expect_status 0 "a report whose findings carry a lens line lands"
 assert_mutating 2 "…with the same two operations as ever"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#36' --kind finding.raise
-RAISES=$S_OUT
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#36' --kind finding.raise
+RAISES=$T_OUT
 raise_has H-1 '"agent":"test-hygiene"'
 raise_has M-1 '"agent":"security"'
 raise_has L-1 '"agent":"unattributed"'
@@ -1347,9 +1347,9 @@ TOKENS="$SCRATCH/tokens.md"
 STUB_PR=37
 export STUB_PR
 broker 37 "$TOKENS"
-s_assert_status 0 "a report naming each of the six tokens lands"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#37' --kind finding.raise
-RAISES=$S_OUT
+expect_status 0 "a report naming each of the six tokens lands"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#37' --kind finding.raise
+RAISES=$T_OUT
 n=1
 for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
 	raise_has "L-$n" "\"agent\":\"$tok\""
@@ -1403,12 +1403,12 @@ grep -qF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" &&
 	pass "the fixture's L-1 carries the fix line the prompt spells, asking this PR for nothing" ||
 	fail "the fixture's L-1 lost its fix line — \$GOOD's LOW section moved under the awk"
 broker 12 "$SCRATCH/candidate.md" --dry-run
-s_assert_status 0 "a report carrying a candidate-ticket LOW passes the contract"
+expect_status 0 "a report carrying a candidate-ticket LOW passes the contract"
 assert_mutating 0 "…dry run: nothing posted"
 # A LOW is counted, never posted (#646): the review counts it, and its text
 # takes no inline comment.
-s_assert_out_has '— 1 found; counted, not posted' "…and the review counts the candidate ticket"
-s_assert_out_lacks 'candidate ticket:' "…never posting it inline"
+expect_out_has '— 1 found; counted, not posted' "…and the review counts the candidate ticket"
+expect_out_lacks 'candidate ticket:' "…never posting it inline"
 # The fix line is what carries it: the same report with that one line
 # withdrawn is the half-finding section 15 names, and costs the report.
 grep -vF -- "↳ fix: $W_FIX" "$SCRATCH/candidate.md" >"$SCRATCH/candidate-no-fix.md"
@@ -1449,7 +1449,7 @@ EOF
 STUB_PR=35
 export STUB_PR
 broker 35 "$IDS"
-s_assert_status 0 "process/R9: a report whose Axis 2 items cite requirement ids passes the contract"
+expect_status 0 "process/R9: a report whose Axis 2 items cite requirement ids passes the contract"
 assert_mutating 2 "…and lands both operations"
 COMMENT=$(payload issues/35/comments)
 case "$COMMENT" in
@@ -1467,8 +1467,8 @@ case "$COMMENT" in
 *'R7-continuation'*) fail "process/R9: a continuation line reached the comment — the worker contract's one-line rule rests on the broker dropping it" ;;
 *) pass "process/R9: a citation on the line beneath an item is dropped — only the tagged line lands" ;;
 esac
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#35' --kind review.verdict
-AX2=$(printf '%s\n' "$S_OUT" | grep -F '"axis":"2"')
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#35' --kind review.verdict
+AX2=$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"')
 for want in '"outcome":"confirm"' '"missing":"1"' '"unspecified":"0"' '"mixed":"0"'; do
 	case "$AX2" in
 	*"$want"*) pass "process/R9: the axis-2 verdict carries $want — the undelivered requirement is a confirm item" ;;
@@ -1517,7 +1517,7 @@ EOF
 STUB_PR=38
 export STUB_PR
 broker 38 "$LOWS"
-s_assert_status 0 "a report carrying two LOWs lands"
+expect_status 0 "a report carrying two LOWs lands"
 assert_mutating 2 "…with the same two operations as ever"
 REVIEW=$(payload pulls/38/reviews)
 [ "$(printf '%s\n' "$REVIEW" | grep -o '"side":"RIGHT"' | wc -l | tr -d ' ')" = 1 ] &&
@@ -1531,9 +1531,9 @@ case "$REVIEW" in
 *'#### LOW\n— 2 found; counted, not posted'*) pass "the LOW section counts the two LOWs" ;;
 *) fail "the LOW section does not count the two LOWs"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
 esac
-s_assert_out_lacks 'dropped' "a LOW off the diff is not a dropped finding: it was never to be posted"
-t_run_split env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#38' --kind finding.raise
-RAISES=$S_OUT
+expect_out_lacks 'dropped' "a LOW off the diff is not a dropped finding: it was never to be posted"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#38' --kind finding.raise
+RAISES=$T_OUT
 [ "$(printf '%s\n' "$RAISES" | grep -c '"kind":"finding.raise"')" = 3 ] &&
 	pass "three findings are three raises: the LOWs are traced" ||
 	{ fail "expected three finding.raise events for pr:#38"; printf '%s\n' "$RAISES" | sed 's/^/        | /'; }

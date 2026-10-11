@@ -24,7 +24,7 @@ VOCAB="$KIT/scripts/vocab.sh"
 t_init
 
 # vocab <args…> — the script, run as a skill runs it, streams kept apart.
-vocab() { t_run_split sh "$VOCAB" "$@"; }
+vocab() { t_exec sh "$VOCAB" "$@"; }
 
 # ---------------------------------------------------------------------------
 banner "The demo — PRD scenario 1: a misspelled tier is refused before the quiz"
@@ -35,13 +35,13 @@ banner "The demo — PRD scenario 1: a misspelled tier is refused before the qui
 # names the field, the value and the vocabulary, and exits 2.
 unset VOCAB_CONFIG
 vocab 'Tier: Implementor'
-s_assert_status 2 "'Tier: Implementor' is refused with exit 2"
-s_assert_err_has "tier: 'Implementor' is not one of planner implementer mechanical reviewer"
-[ -z "$S_OUT" ] && pass "stdout carries nothing — the reasons are diagnostics, on stderr" ||
-	fail "stdout should be empty, got '$S_OUT'"
+expect_status 2 "'Tier: Implementor' is refused with exit 2"
+expect_err_has "tier: 'Implementor' is not one of planner implementer mechanical reviewer"
+[ -z "$T_OUT" ] && pass "stdout carries nothing — the reasons are diagnostics, on stderr" ||
+	fail "stdout should be empty, got '$T_OUT'"
 
 vocab 'Tier: implementer'
-s_assert_resolved "" "'Tier: implementer' is accepted with exit 0 and no output"
+expect_resolved "" "'Tier: implementer' is accepted with exit 0 and no output"
 
 # ---------------------------------------------------------------------------
 banner "Every shipped vocabulary accepts its own tokens, in the shipped words"
@@ -51,12 +51,12 @@ banner "Every shipped vocabulary accepts its own tokens, in the shipped words"
 # script SAYS it accepts, it accepts — read back through `fields`, so the
 # list this loop walks is the script's own answer and not a copy.
 vocab fields
-s_assert_status 0 "'fields' prints the effective vocabularies"
-s_assert_out_has "tier: planner implementer mechanical reviewer" "the tier's four names, in the manual's order"
-s_assert_out_has "domain (open):" "the task domain is marked OPEN — membership is not enforced on it"
+expect_status 0 "'fields' prints the effective vocabularies"
+expect_out_has "tier: planner implementer mechanical reviewer" "the tier's four names, in the manual's order"
+expect_out_has "domain (open):" "the task domain is marked OPEN — membership is not enforced on it"
 # One pass, from a file rather than a pipeline so a failure reaches
 # $failures, with the `rule:` lines left out — a rule is not a field.
-printf '%s\n' "$S_OUT" | grep -v '^rule: ' | sed 's/ (open)//' >"$SCRATCH/fields"
+printf '%s\n' "$T_OUT" | grep -v '^rule: ' | sed 's/ (open)//' >"$SCRATCH/fields"
 : >"$SCRATCH/refused"
 while IFS=: read -r field tokens; do
 	for tok in $tokens; do
@@ -74,50 +74,50 @@ done
 banner "An invented token, an empty value, a value outside the shape"
 # ---------------------------------------------------------------------------
 vocab 'Severity: Medium-High'
-s_assert_status 2 "'Severity: Medium-High' — a band nobody declared — is exit 2"
-s_assert_err_has "severity: 'Medium-High' is not one of critical high medium low"
+expect_status 2 "'Severity: Medium-High' — a band nobody declared — is exit 2"
+expect_err_has "severity: 'Medium-High' is not one of critical high medium low"
 
 vocab 'Tier: senior'
-s_assert_status 2 "'Tier: senior' — an invented tier — is exit 2"
-s_assert_err_has "tier: 'senior' is not one of"
+expect_status 2 "'Tier: senior' — an invented tier — is exit 2"
+expect_err_has "tier: 'senior' is not one of"
 
 vocab 'Tier:'
-s_assert_status 2 "'Tier:' with no value is exit 2"
-s_assert_err_has "tier: the value is empty"
+expect_status 2 "'Tier:' with no value is exit 2"
+expect_err_has "tier: the value is empty"
 
 vocab 'Confidence:    '
-s_assert_status 2 "a value that is only blanks is empty too"
-s_assert_err_has "confidence: the value is empty"
+expect_status 2 "a value that is only blanks is empty too"
+expect_err_has "confidence: the value is empty"
 
 # The task domain is OPEN — an undeclared token is local policy, never an
 # error (the resolver falls back to the tier in silence) — but its SHAPE is
 # not: the token is interpolated into a variable name.
 vocab 'Domain: judge'
-s_assert_resolved "" "an undeclared domain token of the right shape is accepted — the domain is open"
+expect_resolved "" "an undeclared domain token of the right shape is accepted — the domain is open"
 vocab 'Domain: Content'
-s_assert_status 2 "a domain token outside the shape is exit 2"
-s_assert_err_has "domain: 'Content' is not a well-formed token"
-s_assert_err_has "[a-z][a-z0-9-]*"
+expect_status 2 "a domain token outside the shape is exit 2"
+expect_err_has "domain: 'Content' is not a well-formed token"
+expect_err_has "[a-z][a-z0-9-]*"
 vocab 'Domain: html report'
-s_assert_status 2 "a domain token with a space is exit 2"
+expect_status 2 "a domain token with a space is exit 2"
 
 # A value that is SEVERAL tokens at once is no member: `Tier: planner
 # implementer` is an agent echoing the vocabulary instead of choosing from
 # it, and `Action: apply reply` would carry `apply` past the shipped rule's
 # `!=` — a contiguous run of the list is still not one of its tokens.
 vocab 'Tier: planner implementer'
-s_assert_status 2 "a value made of two tokens is exit 2 — a closed field takes one"
-s_assert_err_has "tier: 'planner implementer' is not one of planner implementer mechanical reviewer"
+expect_status 2 "a value made of two tokens is exit 2 — a closed field takes one"
+expect_err_has "tier: 'planner implementer' is not one of planner implementer mechanical reviewer"
 vocab 'Command shaped: yes' 'Action: apply reply'
-s_assert_status 2 "…so two tokens cannot smuggle 'apply' past the shipped rule"
-s_assert_err_has "action: 'apply reply' is not one of apply reply escalate"
+expect_status 2 "…so two tokens cannot smuggle 'apply' past the shipped rule"
+expect_err_has "action: 'apply reply' is not one of apply reply escalate"
 
 # Several violations, several reasons — one line each, all of them.
 vocab 'Tier: senior' 'Label: hitl' 'Severity: critical'
-s_assert_status 2 "two bad values in one call are exit 2"
-s_assert_err_has "tier: 'senior'"
-s_assert_err_has "label: 'hitl'"
-s_assert_err_lacks "severity:"
+expect_status 2 "two bad values in one call are exit 2"
+expect_err_has "tier: 'senior'"
+expect_err_has "label: 'hitl'"
+expect_err_lacks "severity:"
 
 # ---------------------------------------------------------------------------
 banner "The input is lines — arguments, or stdin; a whole body may be handed over"
@@ -136,44 +136,44 @@ Note: this line has a colon and is not a decision.
 ## Acceptance
 - A suite drives the script red first: every shipped vocabulary accepts.
 BODYEOF
-t_run_split sh "$VOCAB" <"$BODY"
-s_assert_resolved "" "a whole ticket body on stdin checks clean — prose lines with colons are not decisions"
+t_exec sh "$VOCAB" <"$BODY"
+expect_resolved "" "a whole ticket body on stdin checks clean — prose lines with colons are not decisions"
 sed 's/^Tier: planner$/tier: Implementor/' "$BODY" >"$SCRATCH/bad.body"
-t_run_split sh "$VOCAB" <"$SCRATCH/bad.body"
-s_assert_status 2 "the same body with a misspelled tier is exit 2 on stdin"
-s_assert_err_has "tier: 'Implementor'"
-t_run_split sh "$VOCAB" check <"$SCRATCH/bad.body"
-s_assert_status 2 "'check' spelled out reads stdin the same way"
+t_exec sh "$VOCAB" <"$SCRATCH/bad.body"
+expect_status 2 "the same body with a misspelled tier is exit 2 on stdin"
+expect_err_has "tier: 'Implementor'"
+t_exec sh "$VOCAB" check <"$SCRATCH/bad.body"
+expect_status 2 "'check' spelled out reads stdin the same way"
 printf 'Tier: Implementor' >"$SCRATCH/nonl"
-t_run_split sh "$VOCAB" <"$SCRATCH/nonl"
-s_assert_status 2 "a last line with no trailing newline is still read — refused, so the read is proved"
-s_assert_err_has "tier: 'Implementor'"
-t_run_split sh "$VOCAB" </dev/null
-s_assert_resolved "" "empty stdin — a body with no decision line in it yet — is legal"
+t_exec sh "$VOCAB" <"$SCRATCH/nonl"
+expect_status 2 "a last line with no trailing newline is still read — refused, so the read is proved"
+expect_err_has "tier: 'Implementor'"
+t_exec sh "$VOCAB" </dev/null
+expect_resolved "" "empty stdin — a body with no decision line in it yet — is legal"
 
 # The field name is matched without regard to case or separator; the value
 # exactly.
 vocab 'TIER: mechanical'
-s_assert_resolved "" "the field name is case-insensitive"
+expect_resolved "" "the field name is case-insensitive"
 vocab 'Tier: planner' 'tier: planner'
-s_assert_resolved "" "a field repeated with the same value is one answer"
+expect_resolved "" "a field repeated with the same value is one answer"
 vocab 'Command shaped: yes' 'command_shaped: no'
-s_assert_status 2 "spaces and underscores in a field name read as hyphens — the two spellings are one field, and it now has two values"
-s_assert_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
+expect_status 2 "spaces and underscores in a field name read as hyphens — the two spellings are one field, and it now has two values"
+expect_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
 vocab 'Tier: MECHANICAL'
-s_assert_status 2 "the value is not case-folded — a token is spelled one way"
+expect_status 2 "the value is not case-folded — a token is spelled one way"
 
 # A body that carries no decision line at all is legal: nothing to refuse.
 vocab check 'just prose'
-s_assert_resolved "" "a line with no colon is ignored"
+expect_resolved "" "a line with no colon is ignored"
 vocab 'Blocked by: #12'
-s_assert_resolved "" "a line whose key is not a declared field is ignored"
+expect_resolved "" "a line whose key is not a declared field is ignored"
 # …but a FIRST argument with no colon is not a line at all: it is a
 # subcommand nobody declared, and a silent exit 0 on `fieldz` would be a
 # pass a caller never earned.
 vocab fieldz
-s_assert_status 2 "a first argument that is neither a subcommand nor a 'Field: value' line is a usage error"
-s_assert_err_has "usage"
+expect_status 2 "a first argument that is neither a subcommand nor a 'Field: value' line is a usage error"
+expect_err_has "usage"
 
 # One check is bounded in CPU time at the sizes the callers send. The claim
 # is about the CHECKER's work, so it is the checker's own CPU time that is
@@ -552,11 +552,11 @@ exemption_bait prose .agents/skills/to-tickets/SKILL.md "prose mention"
 banner "Usage — a caller that asks the wrong thing gets an error, not a guess"
 # ---------------------------------------------------------------------------
 vocab --frobnicate
-s_assert_status 2 "an unknown option exits 2"
-s_assert_err_has "usage"
+expect_status 2 "an unknown option exits 2"
+expect_err_has "usage"
 vocab fields extra
-s_assert_status 2 "'fields' takes no argument"
-s_assert_err_has "usage"
+expect_status 2 "'fields' takes no argument"
+expect_err_has "usage"
 
 # ---------------------------------------------------------------------------
 banner "Bare lines — a markdown-wrapped line is not a decision line"
@@ -568,9 +568,9 @@ banner "Bare lines — a markdown-wrapped line is not a decision line"
 # pinned beside the words, so the day the checker learns to read through
 # markup the sentence that says it does not goes red with it.
 vocab fieldz
-s_assert_err_has "the caller hands it bare \`Field: value\` lines" "the usage text says what the caller hands over"
-s_assert_err_has "a markdown-wrapped line" "…and names the line it does not read"
-s_assert_err_has "is not a decision line to it" "…in those words"
+expect_err_has "the caller hands it bare \`Field: value\` lines" "the usage text says what the caller hands over"
+expect_err_has "a markdown-wrapped line" "…and names the line it does not read"
+expect_err_has "is not a decision line to it" "…in those words"
 assert_file_has "$VOCAB" "The caller hands it BARE \`Field: value\` lines" "the header says it too"
 assert_file_has "$VOCAB" "is not a decision line to" "the header says it too"
 # The header no longer invites a body (#401): since v0.35.0 every call site
@@ -581,13 +581,13 @@ assert_file_lacks "$VOCAB" "body may be piped in" "the contract changed in v0.35
 assert_file_lacks "$VOCAB" "the caller may hand over a" "nor does a function comment invite one"
 assert_file_has "$VOCAB" "a calling skill lifts the decision" "the header states the contract: lifting is the caller's job"
 printf '%s\n' '- Tier: Implementor' >"$SCRATCH/listed"
-t_run_split sh "$VOCAB" <"$SCRATCH/listed"
-s_assert_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"
+t_exec sh "$VOCAB" <"$SCRATCH/listed"
+expect_resolved "" "a list-marked line on stdin is ignored, not checked — its key is '- Tier', no declared field"
 vocab '**Tier:** Implementor'
-s_assert_resolved "" "an emphasized line is ignored, not checked"
+expect_resolved "" "an emphasized line is ignored, not checked"
 vocab check '- Tier: Implementor' 'Tier: Implementor'
-s_assert_status 2 "the same line handed over bare is refused — lifting it out is the caller's job"
-s_assert_err_has "tier: 'Implementor' is not one of"
+expect_status 2 "the same line handed over bare is refused — lifting it out is the caller's job"
+expect_err_has "tier: 'Implementor' is not one of"
 
 # A declared field is a word every body handed over is now read for, so it
 # must be a word no ordinary body uses as a key. `Author:` is one a ticket, a
@@ -595,11 +595,11 @@ s_assert_err_has "tier: 'Implementor' is not one of"
 # a whole body piped in went from exit 0 to exit 2 on its author's name
 # (review of PR #318). The field is `author-kind`, and `Author:` is prose.
 printf 'Author: Arthur\n' >"$SCRATCH/authored"
-t_run_split sh "$VOCAB" <"$SCRATCH/authored"
-s_assert_resolved "" "a plain 'Author: <name>' line in a body is not a decision line"
+t_exec sh "$VOCAB" <"$SCRATCH/authored"
+expect_resolved "" "a plain 'Author: <name>' line in a body is not a decision line"
 vocab 'Author-kind: maintainer'
-s_assert_status 2 "'Author-kind: maintainer' — a kind nobody declared — is refused"
-s_assert_err_has "author-kind: 'maintainer' is not one of bot human"
+expect_status 2 "'Author-kind: maintainer' — a kind nobody declared — is refused"
+expect_err_has "author-kind: 'maintainer' is not one of bot human"
 
 # ---------------------------------------------------------------------------
 banner "Where the vocabularies come from"
@@ -622,14 +622,14 @@ t_write "$SCRATCH" own.config.sh "$CONFIG_OWN"
 VOCAB_CONFIG=$OWN
 export VOCAB_CONFIG
 vocab 'Severity: advisory' 'Mood: brisk'
-s_assert_resolved "" "a named policy file's own vocabularies answer"
+expect_resolved "" "a named policy file's own vocabularies answer"
 vocab 'Severity: high'
-s_assert_status 2 "the shipped severity is refused once a project narrowed the scale"
-s_assert_err_has "severity: 'high' is not one of blocking advisory"
+expect_status 2 "the shipped severity is refused once a project narrowed the scale"
+expect_err_has "severity: 'high' is not one of blocking advisory"
 vocab 'Domain: content'
-s_assert_resolved "" "a field the policy file does not declare is not a decision line — ignored"
+expect_resolved "" "a field the policy file does not declare is not a decision line — ignored"
 vocab fields
-s_assert_out_is "tier: planner implementer mechanical reviewer
+expect_out_is "tier: planner implementer mechanical reviewer
 severity: blocking advisory
 mood: calm brisk" "'fields' prints the named file's vocabularies, one field per line, canonical order"
 
@@ -642,20 +642,20 @@ VOCAB_ACTION='apply reply escalate'
 VOCAB_COMMAND_SHAPED='yes no'"
 VOCAB_CONFIG="$SCRATCH/norules.config.sh"
 vocab 'Command shaped: yes' 'Action: apply'
-s_assert_resolved "" "a policy file with no VOCAB_RULES line enforces no rule — the shipped rule is not sourced beneath it"
+expect_resolved "" "a policy file with no VOCAB_RULES line enforces no rule — the shipped rule is not sourced beneath it"
 vocab fields
-s_assert_out_is "action: apply reply escalate
+expect_out_is "action: apply reply escalate
 command-shaped: yes no" "'fields' prints the file's two fields and no rule — nothing of the defaults leaks through"
 : >"$SCRATCH/empty.config.sh"
 VOCAB_CONFIG="$SCRATCH/empty.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "an EMPTY policy file declares no field, and is refused as such rather than falling back to the shipped words"
-s_assert_err_has "policy: VOCAB_FIELDS declares no field"
+expect_status 2 "an EMPTY policy file declares no field, and is refused as such rather than falling back to the shipped words"
+expect_err_has "policy: VOCAB_FIELDS declares no field"
 
 VOCAB_CONFIG="$SCRATCH/absent.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a policy file named explicitly and missing is exit 2"
-s_assert_err_has "does not exist"
+expect_status 2 "a policy file named explicitly and missing is exit 2"
+expect_err_has "does not exist"
 unset VOCAB_CONFIG
 
 # A slash-less name is the cwd's file — the one the existence check saw —
@@ -667,10 +667,10 @@ t_write "$SCRATCH/onpath" decoy.config.sh "echo DECOY-FROM-PATH >&2
 VOCAB_FIELDS='tier'
 VOCAB_TIER='planner'"
 _run_cwd_body() { cd "$SCRATCH/cwd" && PATH="$SCRATCH/onpath:$PATH" VOCAB_CONFIG=decoy.config.sh sh "$VOCAB" fields; }
-t_run_split _run_cwd_body
-s_assert_status 0 "a slash-less VOCAB_CONFIG loads"
-s_assert_out_has "mood: calm brisk" "…the cwd's file, the one the existence check saw"
-s_assert_err_lacks "DECOY-FROM-PATH"
+t_exec _run_cwd_body
+expect_status 0 "a slash-less VOCAB_CONFIG loads"
+expect_out_has "mood: calm brisk" "…the cwd's file, the one the existence check saw"
+expect_err_lacks "DECOY-FROM-PATH"
 
 # Orders 2 and 3 anchor on where the SCRIPT lives — never on the cwd. The
 # fixture is the resolver suite's: the operator's own copy, invoked by
@@ -681,14 +681,14 @@ install_vocab() {
 	cp "$VOCAB" "$1/vocab.sh"
 }
 _run_from_body() { _rf_cwd=$1; _rf_script=$2; shift 2; cd "$_rf_cwd" && unset VOCAB_CONFIG && sh "$_rf_script" "$@"; }
-run_from() { t_run_split _run_from_body "$@"; }
+run_from() { t_exec _run_from_body "$@"; }
 
 t_repo
 OWN_REPO=$REPO
 install_vocab "$OWN_REPO/tools"
 t_write "$OWN_REPO" scripts/vocab.config.sh "$CONFIG_OWN"
 run_from "$OWN_REPO" "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
-s_assert_resolved "" "the script's own repo root supplies scripts/vocab.config.sh with no env var set"
+expect_resolved "" "the script's own repo root supplies scripts/vocab.config.sh with no env var set"
 
 t_repo
 FOREIGN=$REPO
@@ -700,30 +700,30 @@ VOCAB_SEVERITY='foreign'
 EOFC
 )"
 run_from "$FOREIGN" "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
-s_assert_resolved "" "the script's own repo supplies the vocabularies, not the repo the caller stands in"
-s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+expect_resolved "" "the script's own repo supplies the vocabularies, not the repo the caller stands in"
+expect_err_lacks "FOREIGN-CONFIG-EXECUTED"
 # …nor the repo an inherited GIT_DIR points at: git exports it into hooks,
 # and .githooks/pre-push is a real caller. The script unsets both before it
 # asks git where it lives.
-t_run_split env GIT_DIR="$FOREIGN/.git" GIT_WORK_TREE="$FOREIGN" sh "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
-s_assert_resolved "" "an inherited GIT_DIR/GIT_WORK_TREE aimed at the foreign clone does not redirect discovery"
-s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+t_exec env GIT_DIR="$FOREIGN/.git" GIT_WORK_TREE="$FOREIGN" sh "$OWN_REPO/tools/vocab.sh" 'Severity: advisory'
+expect_resolved "" "an inherited GIT_DIR/GIT_WORK_TREE aimed at the foreign clone does not redirect discovery"
+expect_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
 LOOSE="$SCRATCH/loose"
 install_vocab "$LOOSE"
 t_write "$LOOSE" vocab.config.sh "$CONFIG_OWN"
 run_from "$FOREIGN" "$LOOSE/vocab.sh" 'Mood: calm'
-s_assert_resolved "" "a sibling vocab.config.sh is found for a script outside any repo"
-s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+expect_resolved "" "a sibling vocab.config.sh is found for a script outside any repo"
+expect_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
 # No policy file anywhere is a WORKING STATE: the shipped vocabularies apply.
 BARE="$SCRATCH/bare"
 install_vocab "$BARE"
 run_from "$FOREIGN" "$BARE/vocab.sh" 'Severity: high'
-s_assert_resolved "" "with no policy file anywhere the shipped vocabularies apply"
+expect_resolved "" "with no policy file anywhere the shipped vocabularies apply"
 run_from "$FOREIGN" "$BARE/vocab.sh" 'Severity: foreign'
-s_assert_status 2 "…and the foreign repo's word is not among them"
-s_assert_err_lacks "FOREIGN-CONFIG-EXECUTED"
+expect_status 2 "…and the foreign repo's word is not among them"
+expect_err_lacks "FOREIGN-CONFIG-EXECUTED"
 
 # ---------------------------------------------------------------------------
 banner "A cross-field rule refuses the forbidden pair and accepts the others"
@@ -733,27 +733,27 @@ banner "A cross-field rule refuses the forbidden pair and accepts the others"
 # by a script rather than remembered by an agent.
 unset VOCAB_CONFIG
 vocab 'Command shaped: yes' 'Action: apply'
-s_assert_status 2 "command-shaped=yes with action=apply is refused"
-s_assert_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
+expect_status 2 "command-shaped=yes with action=apply is refused"
+expect_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
 vocab 'Command shaped: yes' 'Action: escalate'
-s_assert_resolved "" "command-shaped=yes with action=escalate is accepted"
+expect_resolved "" "command-shaped=yes with action=escalate is accepted"
 vocab 'Command shaped: no' 'Action: apply'
-s_assert_resolved "" "command-shaped=no with action=apply is accepted — the antecedent does not hold"
+expect_resolved "" "command-shaped=no with action=apply is accepted — the antecedent does not hold"
 vocab 'Action: apply'
-s_assert_resolved "" "action=apply alone is accepted — the rule constrains a pair, not a field"
+expect_resolved "" "action=apply alone is accepted — the rule constrains a pair, not a field"
 vocab 'Command shaped: yes'
-s_assert_resolved "" "command-shaped=yes alone is accepted — the consequent's field is absent"
+expect_resolved "" "command-shaped=yes alone is accepted — the consequent's field is absent"
 
 # A field that appears twice with two different values has no single value:
 # refused, whichever line comes last — so appending one line to an untrusted
 # body cannot talk a firing rule out of firing.
 vocab 'Command shaped: yes' 'Action: apply' 'Command shaped: no'
-s_assert_status 2 "a later line cannot withdraw the antecedent — the repeat is refused"
-s_assert_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
+expect_status 2 "a later line cannot withdraw the antecedent — the repeat is refused"
+expect_err_has "command-shaped: 'no' repeats the field, which already read 'yes'"
 vocab 'Command shaped: yes' 'Action: apply' 'Action: reply'
-s_assert_status 2 "…nor replace the consequent's value"
-s_assert_err_has "action: 'reply' repeats the field, which already read 'apply'"
-s_assert_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
+expect_status 2 "…nor replace the consequent's value"
+expect_err_has "action: 'reply' repeats the field, which already read 'apply'"
+expect_err_has "action: 'apply' is refused by the rule command-shaped=yes => action!=apply"
 
 # The other direction of an implication: `=>` with `=`.
 CONFIG_RULES=$(
@@ -772,14 +772,14 @@ t_write "$SCRATCH" rules.config.sh "$CONFIG_RULES"
 VOCAB_CONFIG=$RULES
 export VOCAB_CONFIG
 vocab 'Kind: spike' 'Tier: planner'
-s_assert_resolved "" "a rule demanding a value accepts that value"
+expect_resolved "" "a rule demanding a value accepts that value"
 vocab 'Kind: spike' 'Tier: implementer'
-s_assert_status 2 "…and refuses another"
-s_assert_err_has "tier: 'implementer' is refused by the rule kind=spike => tier=planner"
+expect_status 2 "…and refuses another"
+expect_err_has "tier: 'implementer' is refused by the rule kind=spike => tier=planner"
 vocab 'Kind: build' 'Tier: implementer'
-s_assert_resolved "" "the antecedent not holding, the rule is silent"
+expect_resolved "" "the antecedent not holding, the rule is silent"
 vocab fields
-s_assert_out_has "rule: kind=spike => tier=planner" "'fields' prints each rule after the fields"
+expect_out_has "rule: kind=spike => tier=planner" "'fields' prints each rule after the fields"
 
 # ---------------------------------------------------------------------------
 banner "A rule set no combination can satisfy is a POLICY CONTRADICTION"
@@ -801,14 +801,14 @@ CONTRA="$SCRATCH/contra.config.sh"
 t_write "$SCRATCH" contra.config.sh "$CONFIG_CONTRA"
 VOCAB_CONFIG=$CONTRA
 vocab 'Tier: planner' 'Label: none'
-s_assert_status 2 "two rules on one antecedent that cannot both hold are exit 2"
-s_assert_err_has "policy contradiction"
-s_assert_err_has "tier=planner => label=none"
-s_assert_err_has "tier=planner => label!=none"
-s_assert_err_lacks "is not one of"
+expect_status 2 "two rules on one antecedent that cannot both hold are exit 2"
+expect_err_has "policy contradiction"
+expect_err_has "tier=planner => label=none"
+expect_err_has "tier=planner => label!=none"
+expect_err_lacks "is not one of"
 vocab fields
-s_assert_status 2 "'fields' reports the contradiction too — the file is wrong before any value arrives"
-s_assert_err_has "policy contradiction"
+expect_status 2 "'fields' reports the contradiction too — the file is wrong before any value arrives"
+expect_err_has "policy contradiction"
 
 # Two antecedents that hold together, demanding two different values of one
 # closed field: satisfiable rule by rule, unsatisfiable for these inputs.
@@ -827,18 +827,18 @@ CONTRA2="$SCRATCH/contra2.config.sh"
 t_write "$SCRATCH" contra2.config.sh "$CONFIG_CONTRA2"
 VOCAB_CONFIG=$CONTRA2
 vocab fields
-s_assert_status 0 "rule by rule the set is fine — 'fields' is green"
+expect_status 0 "rule by rule the set is fine — 'fields' is green"
 vocab 'Kind: spike' 'Tier: mechanical' 'Label: none'
-s_assert_status 2 "a mechanical spike has no legal label — a contradiction for these inputs"
-s_assert_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
+expect_status 2 "a mechanical spike has no legal label — a contradiction for these inputs"
+expect_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
 # With the label not given at all, no ordinary rule check can speak — the
 # check-time contradiction pass is the one thing that does.
 vocab 'Kind: spike' 'Tier: mechanical'
-s_assert_status 2 "…and with no label given, the contradiction is the one reason — the ordinary rule check is silent"
-s_assert_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
-s_assert_err_lacks "is refused by the rule"
+expect_status 2 "…and with no label given, the contradiction is the one reason — the ordinary rule check is silent"
+expect_err_has "policy contradiction: 'kind=spike => label=none' and 'tier=mechanical => label=ready-for-agent' cannot both hold"
+expect_err_lacks "is refused by the rule"
 vocab 'Kind: build' 'Tier: mechanical' 'Label: ready-for-agent'
-s_assert_resolved "" "a build on the mechanical tier is fine — only one rule fires"
+expect_resolved "" "a build on the mechanical tier is fine — only one rule fires"
 
 # A `!=` for every token of a closed field leaves nothing to choose.
 CONFIG_CONTRA3=$(
@@ -855,8 +855,8 @@ CONTRA3="$SCRATCH/contra3.config.sh"
 t_write "$SCRATCH" contra3.config.sh "$CONFIG_CONTRA3"
 VOCAB_CONFIG=$CONTRA3
 vocab 'Kind: spike'
-s_assert_status 2 "rules excluding every token of a field are a contradiction"
-s_assert_err_has "policy contradiction: the rules on label exclude every one of its tokens"
+expect_status 2 "rules excluding every token of a field are a contradiction"
+expect_err_has "policy contradiction: the rules on label exclude every one of its tokens"
 
 # ---------------------------------------------------------------------------
 banner "The policy file is held to the same rules as a value — at load"
@@ -874,8 +874,8 @@ EOFC
 t_write "$SCRATCH" badrule.config.sh "$CONFIG_BADRULE"
 VOCAB_CONFIG="$SCRATCH/badrule.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a rule naming an undeclared field is a policy error"
-s_assert_err_has "policy: rule 'tier=planner => label=none' names 'label', which is not a declared field"
+expect_status 2 "a rule naming an undeclared field is a policy error"
+expect_err_has "policy: rule 'tier=planner => label=none' names 'label', which is not a declared field"
 
 CONFIG_BADTOK=$(
 	cat <<'EOFC'
@@ -888,8 +888,8 @@ EOFC
 t_write "$SCRATCH" badtok.config.sh "$CONFIG_BADTOK"
 VOCAB_CONFIG="$SCRATCH/badtok.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a rule naming a token outside its field's vocabulary is a policy error"
-s_assert_err_has "policy: rule 'tier=senior => tier!=planner' names 'senior', which tier does not declare"
+expect_status 2 "a rule naming a token outside its field's vocabulary is a policy error"
+expect_err_has "policy: rule 'tier=senior => tier!=planner' names 'senior', which tier does not declare"
 
 CONFIG_BADSHAPE=$(
 	cat <<'EOFC'
@@ -902,8 +902,8 @@ EOFC
 t_write "$SCRATCH" badshape.config.sh "$CONFIG_BADSHAPE"
 VOCAB_CONFIG="$SCRATCH/badshape.config.sh"
 vocab 'Severity: Critical'
-s_assert_status 2 "a token outside the shape IN THE POLICY FILE is a policy error"
-s_assert_err_has "policy: severity token 'Critical' is not a well-formed token"
+expect_status 2 "a token outside the shape IN THE POLICY FILE is a policy error"
+expect_err_has "policy: severity token 'Critical' is not a well-formed token"
 
 CONFIG_NOTOK=$(
 	cat <<'EOFC'
@@ -916,8 +916,8 @@ EOFC
 t_write "$SCRATCH" notok.config.sh "$CONFIG_NOTOK"
 VOCAB_CONFIG="$SCRATCH/notok.config.sh"
 vocab 'Severity: high'
-s_assert_status 2 "a declared closed field with no tokens is a policy error"
-s_assert_err_has "policy: field 'mood' declares no tokens"
+expect_status 2 "a declared closed field with no tokens is a policy error"
+expect_err_has "policy: field 'mood' declares no tokens"
 
 # A malformed rule is a policy error, never a rule quietly ignored — `fields`
 # would print nothing for it, and nothing else would say.
@@ -928,16 +928,16 @@ VOCAB_LABEL='ready-for-agent none'
 VOCAB_RULES='tier planner => label=none'"
 VOCAB_CONFIG="$SCRATCH/malformed.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a rule with no '=' on its left is malformed — a policy error"
-s_assert_err_has "policy: rule 'tier planner => label=none' is malformed"
+expect_status 2 "a rule with no '=' on its left is malformed — a policy error"
+expect_err_has "policy: rule 'tier planner => label=none' is malformed"
 t_write "$SCRATCH" malformed2.config.sh "VOCAB_FIELDS='tier'
 VOCAB_OPEN=''
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='tier=planner'"
 VOCAB_CONFIG="$SCRATCH/malformed2.config.sh"
 vocab fields
-s_assert_status 2 "a rule with no '=>' is malformed too, and 'fields' says so before any value arrives"
-s_assert_err_has "policy: rule 'tier=planner' is malformed"
+expect_status 2 "a rule with no '=>' is malformed too, and 'fields' says so before any value arrives"
+expect_err_has "policy: rule 'tier=planner' is malformed"
 
 # A field may not take one of the checker's own names: `fields` would make
 # the field list its own vocabulary, and nothing would say so.
@@ -948,8 +948,8 @@ VOCAB_TIER='planner'
 VOCAB_RULES=''"
 	VOCAB_CONFIG="$SCRATCH/reserved.config.sh"
 	vocab fields
-	s_assert_status 2 "a field named '$reserved' is refused at load — the name is the checker's own"
-	s_assert_err_has "policy: field name '$reserved' is reserved"
+	expect_status 2 "a field named '$reserved' is refused at load — the name is the checker's own"
+	expect_err_has "policy: field name '$reserved' is reserved"
 done
 
 # A FIELD NAME is held to the shape as a token is.
@@ -959,8 +959,8 @@ VOCAB_TIER='planner'
 VOCAB_RULES=''"
 VOCAB_CONFIG="$SCRATCH/badfield.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a field name outside the shape is a policy error"
-s_assert_err_has "policy: field name 'Tier' is not a well-formed token"
+expect_status 2 "a field name outside the shape is a policy error"
+expect_err_has "policy: field name 'Tier' is not a well-formed token"
 
 # A rule may name an OPEN field, whose values have only the shape to meet.
 t_write "$SCRATCH" openrule.config.sh "VOCAB_FIELDS='domain tier'
@@ -969,16 +969,16 @@ VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='domain=Content => tier=planner'"
 VOCAB_CONFIG="$SCRATCH/openrule.config.sh"
 vocab 'Tier: planner'
-s_assert_status 2 "a rule naming an out-of-shape value on an open field is a policy error"
-s_assert_err_has "policy: rule 'domain=Content => tier=planner' names 'Content', which is not a well-formed token"
+expect_status 2 "a rule naming an out-of-shape value on an open field is a policy error"
+expect_err_has "policy: rule 'domain=Content => tier=planner' names 'Content', which is not a well-formed token"
 t_write "$SCRATCH" openrule2.config.sh "VOCAB_FIELDS='domain tier'
 VOCAB_OPEN='domain'
 VOCAB_TIER='planner implementer mechanical reviewer'
 VOCAB_RULES='domain=content => tier=planner'"
 VOCAB_CONFIG="$SCRATCH/openrule2.config.sh"
 vocab 'Domain: content' 'Tier: implementer'
-s_assert_status 2 "…and a well-formed one fires like any other rule"
-s_assert_err_has "tier: 'implementer' is refused by the rule domain=content => tier=planner"
+expect_status 2 "…and a well-formed one fires like any other rule"
+expect_err_has "tier: 'implementer' is refused by the rule domain=content => tier=planner"
 
 # ---------------------------------------------------------------------------
 banner "The NEUTRAL-NAME rule — no token carries its answer in its spelling"
@@ -998,10 +998,10 @@ EOFC
 t_write "$SCRATCH" leading.config.sh "$CONFIG_LEADING"
 VOCAB_CONFIG="$SCRATCH/leading.config.sh"
 vocab 'Action: risky'
-s_assert_status 2 "a vocabulary whose tokens carry their answer is refused"
-s_assert_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
-s_assert_err_has "policy: action token 'risky' carries its answer in its spelling ('risky')"
-s_assert_err_has "neutral"
+expect_status 2 "a vocabulary whose tokens carry their answer is refused"
+expect_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
+expect_err_has "policy: action token 'risky' carries its answer in its spelling ('risky')"
+expect_err_has "neutral"
 
 # The rule walks EVERY hyphen-separated word, not only the first: the answer
 # hides as readily at the end of a token.
@@ -1011,8 +1011,8 @@ VOCAB_ACTION='apply mostly-risky'
 VOCAB_RULES=''"
 VOCAB_CONFIG="$SCRATCH/leading2.config.sh"
 vocab 'Action: apply'
-s_assert_status 2 "a token whose offending word is not its first is refused too"
-s_assert_err_has "policy: action token 'mostly-risky' carries its answer in its spelling ('risky')"
+expect_status 2 "a token whose offending word is not its first is refused too"
+expect_err_has "policy: action token 'mostly-risky' carries its answer in its spelling ('risky')"
 
 # The deny list is the CHECKER'S, not the policy file's: a file that
 # reassigns it — or empties it — has not switched the rule off.
@@ -1023,8 +1023,8 @@ VOCAB_ACTION='safe-to-apply risky'
 VOCAB_RULES=''"
 VOCAB_CONFIG="$SCRATCH/off.config.sh"
 vocab 'Action: risky'
-s_assert_status 2 "a policy file cannot switch the neutral-name rule off by emptying the word list"
-s_assert_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
+expect_status 2 "a policy file cannot switch the neutral-name rule off by emptying the word list"
+expect_err_has "policy: action token 'safe-to-apply' carries its answer in its spelling ('safe')"
 
 CONFIG_NEUTRAL=$(
 	cat <<'EOFC'
@@ -1037,7 +1037,7 @@ EOFC
 t_write "$SCRATCH" neutral.config.sh "$CONFIG_NEUTRAL"
 VOCAB_CONFIG="$SCRATCH/neutral.config.sh"
 vocab 'Action: escalate'
-s_assert_resolved "" "the neutral pair — apply, escalate — passes"
+expect_resolved "" "the neutral pair — apply, escalate — passes"
 unset VOCAB_CONFIG
 
 # ---------------------------------------------------------------------------
@@ -1060,12 +1060,12 @@ t_write "$SCRATCH" fifth.config.sh "$CONFIG_FIFTH"
 VOCAB_CONFIG="$SCRATCH/fifth.config.sh"
 export VOCAB_CONFIG
 vocab 'Tier: senior'
-s_assert_resolved "" "the checker accepts a fifth tier the policy file declares — the file is the consumer's"
+expect_resolved "" "the checker accepts a fifth tier the policy file declares — the file is the consumer's"
 unset VOCAB_CONFIG
 printf '%s\n' "AGENT_TIER_PLANNER='m'" >"$SCRATCH/agents.config.sh"
-AGENTS_CONFIG="$SCRATCH/agents.config.sh" t_run_split sh "$KIT/scripts/agents.lib.sh" senior
-s_assert_status 2 "the resolver still refuses it — the tier vocabulary is closed where it is owned"
-s_assert_err_has "unknown capability tier 'senior'"
+AGENTS_CONFIG="$SCRATCH/agents.config.sh" t_exec sh "$KIT/scripts/agents.lib.sh" senior
+expect_status 2 "the resolver still refuses it — the tier vocabulary is closed where it is owned"
+expect_err_has "unknown capability tier 'senior'"
 assert_file_has "$KIT/scripts/vocab.config.sh" "owned by" "the shipped policy file says who owns each field"
 
 t_done "vocab"
