@@ -2737,7 +2737,14 @@
 # always printed — every dry-run budget line, every stderr note and the
 # exits 71 and 124 are byte-identical, and the kit's ADR-0006 inputs are
 # unchanged (the AGENT_BUDGET_* policy in your agents config, the outer
-# dispatch's AGENT_DISPATCH_BUDGET_* pair, the host's /proc and /sys). Its
+# dispatch's AGENT_DISPATCH_BUDGET_* pair, the host's /proc and /sys). ONE
+# outcome is new, a fix that rides with the move: a scope that outlives the
+# wrapper inside it has its counters read from outside, so a ceiling hit
+# there exits 71 where the run's own status passed through with "the verdict
+# cannot be read". And budget_run refuses, returning 2, a record whose mode
+# or rung it does not know or whose derived ceilings are not whole numbers —
+# never reached by the dispatcher, whose record is budget_derive's own.
+# budget_inherited_bounds ships ahead of its caller, the test harness. Its
 # sourced layer stays until the test harness moves onto the library. And
 # UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.

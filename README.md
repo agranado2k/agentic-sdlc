@@ -87,7 +87,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
-| `scripts/budget.lib.sh` | The worker Budget: a task and a memory ceiling on a command's whole process tree, derived from the host and applied down the strongest rung it offers. Four sourced functions — `budget_derive`, `budget_run`, `budget_verdict`, `budget_inherited_bounds` — that the dispatcher calls. Shared layer. |
+| `scripts/budget.lib.sh` | The worker Budget: a task and a memory ceiling on a command's whole process tree, derived from the host and applied down the strongest rung it offers. Four sourced functions: the dispatcher calls `budget_derive`, `budget_run` and `budget_verdict`; `budget_inherited_bounds` ships ahead of its caller, the test harness (#748), and until then only its suite drives it. Shared layer. |
 | `scripts/agents.config.sh` | **Yours.** Tier → model id, for your provider. Ships empty on purpose — the kit names no model, because model ids rot faster than anything else it could carry. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |

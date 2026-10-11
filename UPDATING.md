@@ -235,7 +235,12 @@ dispatcher now sources it from beside itself — so take both together: a
 dispatcher with no library beside it refuses to run, exit 2, naming the
 file. Everything the dispatcher prints about a budget, and its exits 71 and
 124, read exactly as before, and the `AGENT_BUDGET_*` values in your
-`scripts/agents.config.sh` mean what they meant. Part 2 has nothing to take.
+`scripts/agents.config.sh` mean what they meant. One outcome is new: a
+worker whose scope outlives the wrapper that reads its counters — a pressure
+kill took the wrapper, a child holds the scope open — has those counters
+read from outside, so a ceiling it hit exits 71 where the run's own status
+used to pass through beside "the verdict cannot be read". Part 2 has nothing
+to take.
 
 **Arriving from 0.69.0 or older, the trace answers "which run am I in?".**
 No file joins or leaves at 0.70.0. One shared file changes content besides

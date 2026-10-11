@@ -637,7 +637,11 @@ budget_verdict() (
 	return 0
 )
 
-# budget_inherited_bounds — see the header. A transient scope opened from a
+# budget_inherited_bounds — see the header. It ships AHEAD OF ITS CALLER: the
+# dispatcher inherits by environment and never asks, and the test harness,
+# which does ask, still carries a copy of this test until it moves onto the
+# library (#748). Until then tests/budget-lib.test.sh is all that drives it.
+# A transient scope opened from a
 # cgroup that already bounds the caller would be a SIBLING under the user
 # manager, outside that cgroup and above its ceilings (the kit's ADR-0006
 # clause 7). The root is every scope's ancestor — a container with a
