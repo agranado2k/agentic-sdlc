@@ -292,7 +292,7 @@ banner "Only the test harness defines an assertion (#749)"
 # claims then rest on a copy nobody drives red (kit-demo's assert_out_lacks did).
 # shadowed_assertions <tests-dir> — prints file:name for every function defined
 # under <tests-dir>, outside lib.sh, that carries an assertion's name from lib.sh.
-_assertion_names=$(sed -n 's/^\([a-z_]*assert_[a-z_]*\|expect_[a-z_]*\)() *{.*/\1/p' "$KIT/tests/lib.sh")
+_assertion_names=$(sed -n -e 's/^\([a-z_]*assert_[a-z_]*\)() *{.*/\1/p' -e 's/^\(expect_[a-z_]*\)() *{.*/\1/p' "$KIT/tests/lib.sh")
 shadowed_assertions() {
 	grep -rnE '^[[:space:]]*[a-z_]+[[:space:]]*\(\)' "$1" 2>/dev/null |
 		while IFS= read -r _hit; do
