@@ -437,6 +437,7 @@ expect_status() {
 # expect_exit <n> <label> -- <cmd...> — t_exec the command, then expect_status.
 expect_exit() {
 	if [ "${3:-}" != "--" ]; then
+		T_OUT='' T_ERR='' T_STATUS=''
 		fail "expect_exit $1 '$2' — no '--' before the command"
 		return 0
 	fi

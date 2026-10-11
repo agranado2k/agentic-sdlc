@@ -268,6 +268,12 @@ green expect_exit 3 x -- sh -c 'exit 3' && pass "expect_exit passes on the expec
 red expect_exit 0 x -- sh -c 'exit 3' && pass "expect_exit fails on a wrong status" || fail "expect_exit passed a wrong status"
 expect_exit 4 "expect_exit fills the registers" -- sh -c 'echo o; echo e >&2; exit 4'
 [ "$T_OUT" = o ] && [ "$T_ERR" = e ] && pass "expect_exit leaves T_OUT and T_ERR for the next expect_*" || fail "expect_exit left out='$T_OUT' err='$T_ERR'"
+# A call missing its '--' is a malformed assertion: it fails, and it empties the
+# registers, so a later expect_* cannot pass on the previous command's output.
+red expect_exit 3 x sh -c 'exit 3' && pass "expect_exit fails when the '--' is missing" || fail "expect_exit passed with no '--' before the command"
+(failures=0; expect_exit 3 x sh -c 'exit 3' >/dev/null; [ -z "$T_OUT$T_ERR$T_STATUS" ]) &&
+	pass "expect_exit with no '--' leaves no stale registers behind" ||
+	fail "expect_exit with no '--' kept the previous command's registers"
 
 # What a failure looks like: one FAIL line, stdout lines under '>', stderr under '|'.
 t_exec sh -c 'printf "o1\no2\n"; printf "e1\ne2\n" >&2; exit 3'
