@@ -1320,33 +1320,33 @@ t_write_config "$AUTHOR_POLICY" "AGENT_TIER_REVIEWER='stand-in-reviewer'
 AGENT_TIER_IMPLEMENTER='stand-in-implementer'"
 lens_resolve() {
 	_lr_cmd=$(printf '%s' "$1" | sed "s/<author>/$2/")
-	t_run_split env AGENTS_TIER_QUIET= AGENTS_CONFIG="$AUTHOR_POLICY" \
+	t_exec env AGENTS_TIER_QUIET= AGENTS_CONFIG="$AUTHOR_POLICY" \
 		AGENT_SESSION_MODEL=stand-in-reviewer sh -c "$_lr_cmd; printf '%s' \"\$model\""
 }
 lens_resolve "$resolve_span" stand-in-implementer
-if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = stand-in-reviewer ] && [ -z "$S_ERR" ]; then
+if [ "$T_STATUS" = 0 ] && [ "$T_OUT" = stand-in-reviewer ] && [ -z "$T_ERR" ]; then
 	pass "a diff authored on another model: the lenses resolve to the reviewer, no warning"
 else
-	fail "a diff authored on another model: expected 'stand-in-reviewer' and no warning, got status $S_STATUS, '$S_OUT', stderr '$S_ERR'"
+	fail "a diff authored on another model: expected 'stand-in-reviewer' and no warning, got status $T_STATUS, '$T_OUT', stderr '$T_ERR'"
 fi
 lens_resolve "$resolve_span" stand-in-reviewer
-case $S_ERR in
-*"share the author's model"*) [ -z "$S_OUT" ] && pass "a diff authored on the reviewer's own model: nothing resolves, and it warns" ||
-	fail "a diff authored on the reviewer's own model resolved '$S_OUT' — the author's model reviewing itself" ;;
-*) fail "a diff authored on the reviewer's own model did not warn — stderr '$S_ERR'" ;;
+case $T_ERR in
+*"share the author's model"*) [ -z "$T_OUT" ] && pass "a diff authored on the reviewer's own model: nothing resolves, and it warns" ||
+	fail "a diff authored on the reviewer's own model resolved '$T_OUT' — the author's model reviewing itself" ;;
+*) fail "a diff authored on the reviewer's own model did not warn — stderr '$T_ERR'" ;;
 esac
 # No Author-Model line names nobody: the empty session turns the self-check
 # off rather than falling back to the orchestrator's own model.
 lens_resolve "$resolve_span" ''
-if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = stand-in-reviewer ] && [ -z "$S_ERR" ]; then
+if [ "$T_STATUS" = 0 ] && [ "$T_OUT" = stand-in-reviewer ] && [ -z "$T_ERR" ]; then
 	pass "no author named: the lenses resolve to the reviewer, no warning"
 else
-	fail "no author named: expected 'stand-in-reviewer' and no warning, got status $S_STATUS, '$S_OUT', stderr '$S_ERR'"
+	fail "no author named: expected 'stand-in-reviewer' and no warning, got status $T_STATUS, '$T_OUT', stderr '$T_ERR'"
 fi
 # The bait: the span before #730, the session left to the orchestrator.
 # shellcheck disable=SC2016
 lens_resolve 'model=$(sh scripts/agents.lib.sh reviewer)' stand-in-implementer
-case $S_ERR in
+case $T_ERR in
 *"share the author's model"*) pass "bait: the orchestrator's own model as the session warns falsely on another author's diff" ;;
 *) fail "bait: the pre-#730 span did not warn — the leg above cannot fail" ;;
 esac
