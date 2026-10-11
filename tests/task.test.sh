@@ -32,9 +32,9 @@ authorization|The operator authorized this task.
 provenance|ticket:#fixture
 EOF
 
-assert_status 2 'a contract without scope is refused before task state exists' -- \
+expect_exit 2 'a contract without scope is refused before task state exists' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/missing-scope.task"
-assert_out_has 'missing scope'
+expect_said 'missing scope'
 STATE=$(git -C "$REPO" rev-parse --path-format=absolute --git-dir)/agentic-sdlc/task
 [ ! -e "$STATE" ] && pass 'missing scope created no task state' || fail 'missing scope created task state'
 
@@ -51,23 +51,23 @@ authorization|The operator authorized implementation, push, and review; merge st
 provenance|ticket:#fixture
 EOF
 
-assert_status 0 'a small implementation contract starts through the public boundary' -- \
+expect_exit 0 'a small implementation contract starts through the public boundary' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/small.task"
-assert_out_has 'started|1'
-assert_status 0 'status returns the admitted task-local contract' -- sh "$COMMAND" status "$REPO"
-assert_out_has 'kind|implementation'
-assert_out_has 'scope|Change only the example task boundary.'
-assert_out_has 'acceptance|Missing scope is refused before state exists.'
-assert_out_has 'endpoint|reviewed-pr'
-assert_out_has 'authorization|The operator authorized implementation, push, and review; merge stays human-only.'
-assert_out_has 'provenance|ticket:#fixture'
+expect_said 'started|1'
+expect_exit 0 'status returns the admitted task-local contract' -- sh "$COMMAND" status "$REPO"
+expect_said 'kind|implementation'
+expect_said 'scope|Change only the example task boundary.'
+expect_said 'acceptance|Missing scope is refused before state exists.'
+expect_said 'endpoint|reviewed-pr'
+expect_said 'authorization|The operator authorized implementation, push, and review; merge stays human-only.'
+expect_said 'provenance|ticket:#fixture'
 PHYSICAL_REPO=$(cd "$REPO" && pwd -P)
-assert_out_has "worktree|$PHYSICAL_REPO"
-assert_out_has 'branch|main'
-assert_out_has 'catalogue-receipt|'
+expect_said "worktree|$PHYSICAL_REPO"
+expect_said 'branch|main'
+expect_said 'catalogue-receipt|'
 printf '%s\n' '# Changed skill bytes' >"$REPO/.agents/skills/example/SKILL.md"
-assert_status 2 'status refuses catalogue bytes that changed after task start' -- sh "$COMMAND" status "$REPO"
-assert_out_has 'catalogue changed; start a new task contract'
+expect_exit 2 'status refuses catalogue bytes that changed after task start' -- sh "$COMMAND" status "$REPO"
+expect_said 'catalogue changed; start a new task contract'
 
 task_repo
 printf '%s\n' 'committed base' >"$REPO/product.txt"
@@ -89,25 +89,25 @@ endpoint|reviewed-pr
 authorization|The operator authorized this bounded change.
 provenance|ordinary-request
 EOF
-assert_status 2 'task start refuses a production edit made before scope admission' -- \
+expect_exit 2 'task start refuses a production edit made before scope admission' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/late.task"
-assert_out_has 'dirty baseline requires baseline|preserve'
+expect_said 'dirty baseline requires baseline|preserve'
 STATE=$(git -C "$REPO" rev-parse --path-format=absolute --git-dir)/agentic-sdlc/task
 [ ! -e "$STATE" ] && pass 'pre-scope edit created no task state' || fail 'pre-scope edit created task state'
 
 sed '/^provenance|/i\
 baseline|preserve' "$SCRATCH/late.task" >"$SCRATCH/preserve.task"
-assert_status 0 'an explicitly acknowledged dirty baseline is preserved' -- \
+expect_exit 0 'an explicitly acknowledged dirty baseline is preserved' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
-assert_status 0 'dirty baseline status carries separate content identities' -- sh "$COMMAND" status "$REPO"
-INDEX_ID=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-index|//p')
-WORKTREE_ID=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-worktree|//p')
-UNTRACKED_ID=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-untracked|//p')
-assert_out_has 'baseline|preserve'
-assert_out_has 'baseline-head|'
-assert_out_has 'baseline-index|'
-assert_out_has 'baseline-worktree|'
-assert_out_has 'baseline-untracked|'
+expect_exit 0 'dirty baseline status carries separate content identities' -- sh "$COMMAND" status "$REPO"
+INDEX_ID=$(printf '%s\n' "$T_OUT" | sed -n 's/^baseline-index|//p')
+WORKTREE_ID=$(printf '%s\n' "$T_OUT" | sed -n 's/^baseline-worktree|//p')
+UNTRACKED_ID=$(printf '%s\n' "$T_OUT" | sed -n 's/^baseline-untracked|//p')
+expect_said 'baseline|preserve'
+expect_said 'baseline-head|'
+expect_said 'baseline-index|'
+expect_said 'baseline-worktree|'
+expect_said 'baseline-untracked|'
 [ "$INDEX_ID" != "$WORKTREE_ID" ] && pass 'staged and unstaged baseline identities are distinct' ||
 	fail 'staged and unstaged baseline identities collapsed into one receipt'
 [ "$(cat "$REPO/product.txt")" = 'staged before scope was admitted' ] &&
@@ -118,27 +118,27 @@ assert_out_has 'baseline-untracked|'
 
 task_repo
 printf '%s\n' 'untracked before scope was admittee' >"$REPO/untracked.txt"
-assert_status 0 'a second acknowledged untracked baseline starts' -- \
+expect_exit 0 'a second acknowledged untracked baseline starts' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
-assert_status 0 'the second baseline reports its identities' -- sh "$COMMAND" status "$REPO"
-CHANGED_UNTRACKED_ID=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-untracked|//p')
+expect_exit 0 'the second baseline reports its identities' -- sh "$COMMAND" status "$REPO"
+CHANGED_UNTRACKED_ID=$(printf '%s\n' "$T_OUT" | sed -n 's/^baseline-untracked|//p')
 [ "$UNTRACKED_ID" != "$CHANGED_UNTRACKED_ID" ] &&
 	pass 'a one-byte untracked change changes the baseline identity' ||
 	fail 'a one-byte untracked change kept the same baseline identity'
 
 task_repo
 printf '%s\n' 'ambiguous path' >"$REPO/bad|path"
-assert_status 2 'an untracked path that cannot be represented is refused' -- \
+expect_exit 2 'an untracked path that cannot be represented is refused' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
-assert_out_has 'unsupported untracked path: bad|path'
+expect_said 'unsupported untracked path: bad|path'
 STATE=$(git -C "$REPO" rev-parse --path-format=absolute --git-dir)/agentic-sdlc/task
 [ ! -e "$STATE" ] && pass 'unsupported path created no task state' || fail 'unsupported path created task state'
 
 task_repo
 ln -s /etc/passwd "$REPO/untracked-link"
-assert_status 2 'an untracked symlink cannot pull outside bytes into the baseline' -- \
+expect_exit 2 'an untracked symlink cannot pull outside bytes into the baseline' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
-assert_out_has 'unsupported untracked symlink: untracked-link'
+expect_said 'unsupported untracked symlink: untracked-link'
 
 task_repo
 REAL_GIT=$(command -v git)
@@ -149,9 +149,9 @@ case "\$*" in *'diff --cached'*) exit 70 ;; esac
 exec "$REAL_GIT" "\$@"
 EOF
 chmod +x "$SCRATCH/failing-git/git"
-assert_status 2 'a staged-diff read failure cannot be masked by hashing an empty stream' -- \
+expect_exit 2 'a staged-diff read failure cannot be masked by hashing an empty stream' -- \
 	env PATH="$SCRATCH/failing-git:$PATH" sh "$COMMAND" start "$REPO" "$SCRATCH/small.task"
-assert_out_has 'cannot read staged baseline'
+expect_said 'cannot read staged baseline'
 
 task_repo
 printf '%s\n' 'untracked input' >"$REPO/untracked.txt"
@@ -162,9 +162,9 @@ case "\$*" in *'hash-object --no-filters -- '*'untracked.txt') exit 71 ;; esac
 exec "$REAL_GIT" "\$@"
 EOF
 chmod +x "$SCRATCH/failing-untracked-hash/git"
-assert_status 2 'an untracked-content hash failure cannot be masked by receipt formatting' -- \
+expect_exit 2 'an untracked-content hash failure cannot be masked by receipt formatting' -- \
 	env PATH="$SCRATCH/failing-untracked-hash:$PATH" sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
-assert_out_has 'cannot hash untracked file: untracked.txt'
+expect_said 'cannot hash untracked file: untracked.txt'
 
 task_repo
 mkdir "$SCRATCH/failing-status"
@@ -174,9 +174,9 @@ case "\$*" in *'status --porcelain --untracked-files=all'*) exit 72 ;; esac
 exec "$REAL_GIT" "\$@"
 EOF
 chmod +x "$SCRATCH/failing-status/git"
-assert_status 2 'a worktree-status failure cannot look like a clean baseline' -- \
+expect_exit 2 'a worktree-status failure cannot look like a clean baseline' -- \
 	env PATH="$SCRATCH/failing-status:$PATH" sh "$COMMAND" start "$REPO" "$SCRATCH/small.task"
-assert_out_has 'cannot read worktree status'
+expect_said 'cannot read worktree status'
 
 task_repo
 cat >"$SCRATCH/wave-incomplete.task" <<'EOF'
@@ -190,25 +190,25 @@ endpoint|tickets
 authorization|The operator authorized planning this wave.
 provenance|prd:#fixture
 EOF
-assert_status 2 'a wave cannot reach production work before decomposition' -- \
+expect_exit 2 'a wave cannot reach production work before decomposition' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/wave-incomplete.task"
-assert_out_has 'missing required phase for implementation/wave: decomposition'
+expect_said 'missing required phase for implementation/wave: decomposition'
 sed 's/phases|specification/phases|specification decomposition/' \
 	"$SCRATCH/wave-incomplete.task" >"$SCRATCH/wave.task"
-assert_status 0 'a decomposed wave ends at bounded tickets' -- \
+expect_exit 0 'a decomposed wave ends at bounded tickets' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/wave.task"
-assert_status 0 'wave status records the tickets endpoint' -- sh "$COMMAND" status "$REPO"
-assert_out_has 'endpoint|tickets'
-printf '%s\n' "$LAST_OUT" | grep -qx 'phases|specification decomposition' &&
+expect_exit 0 'wave status records the tickets endpoint' -- sh "$COMMAND" status "$REPO"
+expect_said 'endpoint|tickets'
+printf '%s\n' "$T_OUT" | grep -qx 'phases|specification decomposition' &&
 	pass 'wave status carries the exact admitted phases record' ||
 	fail 'wave status does not carry the exact phases record'
 
 task_repo
 sed 's/phases|specification decomposition/phases|specification decomposition implementation/' \
 	"$SCRATCH/wave.task" >"$SCRATCH/wave-implementation.task"
-assert_status 2 'a wave contract naming the implementation phase is refused' -- \
+expect_exit 2 'a wave contract naming the implementation phase is refused' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/wave-implementation.task"
-assert_out_has 'phase implementation is not permitted for implementation/wave'
+expect_said 'phase implementation is not permitted for implementation/wave'
 
 task_repo
 cat >"$SCRATCH/investigation-wave.task" <<'EOF'
@@ -222,13 +222,13 @@ endpoint|artifact
 authorization|The operator authorized read-only investigation.
 provenance|ordinary-request
 EOF
-assert_status 2 'a multi-session investigation must decompose before investigating' -- \
+expect_exit 2 'a multi-session investigation must decompose before investigating' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/investigation-wave.task"
-assert_out_has 'wave investigation endpoint must be tickets'
+expect_said 'wave investigation endpoint must be tickets'
 sed -e 's/phases|investigation artifact/phases|specification decomposition/' \
 	-e 's/endpoint|artifact/endpoint|tickets/' \
 	"$SCRATCH/investigation-wave.task" >"$SCRATCH/investigation-tickets.task"
-assert_status 0 'a multi-session investigation ends at bounded tickets' -- \
+expect_exit 0 'a multi-session investigation ends at bounded tickets' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/investigation-tickets.task"
 
 task_repo
@@ -243,25 +243,25 @@ endpoint|artifact
 authorization|The operator authorized read-only inspection and the report artifact.
 provenance|ordinary-request
 EOF
-assert_status 0 'a report-only request ends at its artifact without an invented PR' -- \
+expect_exit 0 'a report-only request ends at its artifact without an invented PR' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/report.task"
-assert_status 0 'report status preserves its explicit endpoint and authorization' -- sh "$COMMAND" status "$REPO"
-assert_out_has 'kind|report-only'
-assert_out_has 'phases|analysis artifact'
-assert_out_has 'endpoint|artifact'
-assert_out_has 'authorization|The operator authorized read-only inspection and the report artifact.'
-assert_out_lacks 'reviewed-pr'
+expect_exit 0 'report status preserves its explicit endpoint and authorization' -- sh "$COMMAND" status "$REPO"
+expect_said 'kind|report-only'
+expect_said 'phases|analysis artifact'
+expect_said 'endpoint|artifact'
+expect_said 'authorization|The operator authorized read-only inspection and the report artifact.'
+expect_unsaid 'reviewed-pr'
 
 task_repo
 sed 's/kind|report-only/kind|read-only/' "$SCRATCH/report.task" >"$SCRATCH/read-only.task"
-assert_status 0 'a read-only request also ends at its artifact' -- \
+expect_exit 0 'a read-only request also ends at its artifact' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/read-only.task"
 
 task_repo
 sed 's/endpoint|artifact/endpoint|reviewed-pr/' "$SCRATCH/report.task" >"$SCRATCH/report-pr.task"
-assert_status 2 'report-only scope cannot silently grow to a PR endpoint' -- \
+expect_exit 2 'report-only scope cannot silently grow to a PR endpoint' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/report-pr.task"
-assert_out_has 'report-only endpoint must be artifact'
+expect_said 'report-only endpoint must be artifact'
 
 task_repo
 cat >"$SCRATCH/local.task" <<'EOF'
@@ -277,26 +277,26 @@ provenance|ordinary-request
 exception|The operator explicitly said do not push.
 consequence|No remote delivery or reviewed-PR completion may be claimed.
 EOF
-assert_status 0 'an explicit do-not-push implementation ends in the local worktree' -- \
+expect_exit 0 'an explicit do-not-push implementation ends in the local worktree' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/local.task"
-assert_status 0 'local endpoint status preserves its exception and consequence' -- sh "$COMMAND" status "$REPO"
-assert_out_has 'endpoint|local-worktree'
-assert_out_has 'phases|implementation technical-verification review'
-assert_out_has 'exception|The operator explicitly said do not push.'
-assert_out_has 'consequence|No remote delivery or reviewed-PR completion may be claimed.'
+expect_exit 0 'local endpoint status preserves its exception and consequence' -- sh "$COMMAND" status "$REPO"
+expect_said 'endpoint|local-worktree'
+expect_said 'phases|implementation technical-verification review'
+expect_said 'exception|The operator explicitly said do not push.'
+expect_said 'consequence|No remote delivery or reviewed-PR completion may be claimed.'
 
 task_repo
 sed '/^exception|/d' "$SCRATCH/local.task" >"$SCRATCH/local-no-exception.task"
-assert_status 2 'a local endpoint without an explicit exception is refused' -- \
+expect_exit 2 'a local endpoint without an explicit exception is refused' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/local-no-exception.task"
-assert_out_has 'local-worktree endpoint requires exception and consequence'
+expect_said 'local-worktree endpoint requires exception and consequence'
 
 task_repo
 sed 's/phases|implementation technical-verification review/phases|implementation technical-verification review delivery/' \
 	"$SCRATCH/local.task" >"$SCRATCH/local-delivery.task"
-assert_status 2 'a local endpoint cannot claim remote delivery' -- \
+expect_exit 2 'a local endpoint cannot claim remote delivery' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/local-delivery.task"
-assert_out_has 'phase delivery is not permitted for implementation/small'
+expect_said 'phase delivery is not permitted for implementation/small'
 
 task_repo
 printf '%s\n' 'task|1' 'kind|implementation' 'size|small' \
@@ -305,11 +305,11 @@ printf '%s\n' 'task|1' 'kind|implementation' 'size|small' \
 	'phases|implementation technical-verification review delivery' \
 	'endpoint|reviewed-pr' 'authorization|The operator authorized this task.' >"$SCRATCH/unterminated.task"
 printf '%s' 'provenance|ticket:#fixture' >>"$SCRATCH/unterminated.task"
-assert_status 0 'a contract whose last record has no newline starts' -- \
+expect_exit 0 'a contract whose last record has no newline starts' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/unterminated.task"
-assert_status 0 'status reads back the state an unterminated contract wrote' -- \
+expect_exit 0 'status reads back the state an unterminated contract wrote' -- \
 	sh "$COMMAND" status "$REPO"
-printf '%s\n' "$LAST_OUT" | grep -qx 'provenance|ticket:#fixture' &&
+printf '%s\n' "$T_OUT" | grep -qx 'provenance|ticket:#fixture' &&
 	pass 'the last contract record stays its own record' ||
 	fail 'the last contract record ran into the generated identity'
 

@@ -49,7 +49,7 @@ branch() { git -C "$1" checkout -q -b "$2"; }
 
 # The lines of the commit-separation section, or empty when it was not printed.
 separation_block() {
-	printf '%s\n' "$LAST_OUT" | awk '
+	printf '%s\n' "$T_OUT" | awk '
 		/^## Commit separation/ { inside = 1; next }
 		inside && /^## /        { inside = 0 }
 		inside                  { print }
@@ -62,7 +62,7 @@ assert_separation_has() {
 	*"$1"*) pass "commit-separation section names '$1'" ;;
 	*)
 		fail "commit-separation section does not name '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
+		printf '%s\n' "$T_OUT" | sed 's/^/        | /'
 		;;
 	esac
 }
@@ -72,7 +72,7 @@ assert_separation_lacks() {
 	case "$_block" in
 	*"$1"*)
 		fail "commit-separation section should NOT name '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
+		printf '%s\n' "$T_OUT" | sed 's/^/        | /'
 		;;
 	*) pass "commit-separation section does not name '$1'" ;;
 	esac
@@ -92,18 +92,18 @@ t_write "$repo" "docs/api/openapi.yaml" "openapi: 3.1.0
 t_commit "$repo" "feat(api): add a path" >/dev/null
 t_guards_config "$repo" "BEHAVIOR_DELTA_SURFACES=''"
 
-assert_status 0 "an unconfigured script says so" -- run_delta "$repo"
-assert_out_has "No contract artifacts configured"
-assert_out_lacks "No contract-artifact deltas"
+expect_exit 0 "an unconfigured script says so" -- run_delta "$repo"
+expect_said "No contract artifacts configured"
+expect_unsaid "No contract-artifact deltas"
 
 # ---------------------------------------------------------------------------
 banner "Branch-level sections"
 # ---------------------------------------------------------------------------
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "lists an API-surface delta under its own section" -- run_delta "$repo"
-assert_out_has "## API surface (docs/api/openapi.yaml)"
-assert_out_has "docs/api/openapi.yaml"
-assert_out_lacks "No contract-artifact deltas"
+expect_exit 0 "lists an API-surface delta under its own section" -- run_delta "$repo"
+expect_said "## API surface (docs/api/openapi.yaml)"
+expect_said "docs/api/openapi.yaml"
+expect_unsaid "No contract-artifact deltas"
 
 t_repo
 repo=$REPO
@@ -115,8 +115,8 @@ t_write "$repo" "src/a.ts" "const b = 1;
 "
 t_commit "$repo" "refactor(domain): rename a local" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "reports no deltas when the branch touches nothing under contract" -- run_delta "$repo"
-assert_out_has "No contract-artifact deltas on this branch."
+expect_exit 0 "reports no deltas when the branch touches nothing under contract" -- run_delta "$repo"
+expect_said "No contract-artifact deltas on this branch."
 
 t_repo
 repo=$REPO
@@ -130,10 +130,10 @@ t_write "$repo" "src/new.test.ts" "// added
 "
 t_commit "$repo" "test: touch both" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "lists an edited existing test but not a newly added one" -- run_delta "$repo"
-assert_out_has "## Edited existing tests"
-assert_out_has "src/old.test.ts"
-assert_out_lacks "src/new.test.ts"
+expect_exit 0 "lists an edited existing test but not a newly added one" -- run_delta "$repo"
+expect_said "## Edited existing tests"
+expect_said "src/old.test.ts"
+expect_unsaid "src/new.test.ts"
 
 t_repo
 repo=$REPO
@@ -144,9 +144,9 @@ branch "$repo" "refactor/move"
 git -C "$repo" mv db/old.sql db/new.sql
 t_commit "$repo" "refactor(db): move the query" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "reports the path that exists at HEAD for a renamed contract file" -- run_delta "$repo"
-assert_out_has "db/new.sql"
-assert_out_lacks "db/old.sql"
+expect_exit 0 "reports the path that exists at HEAD for a renamed contract file" -- run_delta "$repo"
+expect_said "db/new.sql"
+expect_unsaid "db/old.sql"
 
 # ---------------------------------------------------------------------------
 banner "Commit separation — a refactor commit that is not one"
@@ -165,7 +165,7 @@ paths: {}
 t_commit "$repo" "refactor(api): tidy the handler" >/dev/null
 mixed_sha=$(t_short "$repo")
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "flags a refactor commit that also edits a contract artifact" -- run_delta "$repo"
+expect_exit 0 "flags a refactor commit that also edits a contract artifact" -- run_delta "$repo"
 assert_separation_has "$mixed_sha"
 assert_separation_has "refactor(api): tidy the handler"
 assert_separation_has "docs/api/openapi.yaml"
@@ -180,7 +180,7 @@ t_write "$repo" "security/csp.conf" "default-src 'self'
 "
 t_commit "$repo" "style(security): reformat" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "flags a style commit just as it flags a refactor one" -- run_delta "$repo"
+expect_exit 0 "flags a style commit just as it flags a refactor one" -- run_delta "$repo"
 assert_separation_has "security/csp.conf"
 
 t_repo
@@ -196,11 +196,11 @@ t_write "$repo" "docs/api/openapi.yaml" "openapi: 3.1.0
 "
 t_commit "$repo" "feat(api): add a path" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "prints no separation section when every commit is honest about its type" -- run_delta "$repo"
-assert_out_lacks "## Commit separation"
+expect_exit 0 "prints no separation section when every commit is honest about its type" -- run_delta "$repo"
+expect_unsaid "## Commit separation"
 # The behavior-changing commit is still on the branch-level list — the section
 # narrows the claim, it does not swallow the candidate.
-assert_out_has "## API surface"
+expect_said "## API surface"
 
 # ---------------------------------------------------------------------------
 banner "Commit separation — the false positives it refuses to raise"
@@ -214,8 +214,8 @@ branch "$repo" "refactor/pure-move"
 git -C "$repo" mv db/old.sql db/new.sql
 t_commit "$repo" "refactor(db): move the query" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "does not flag a refactor commit that only renames a contract file" -- run_delta "$repo"
-assert_out_lacks "## Commit separation"
+expect_exit 0 "does not flag a refactor commit that only renames a contract file" -- run_delta "$repo"
+expect_unsaid "## Commit separation"
 
 t_repo
 repo=$REPO
@@ -227,8 +227,8 @@ t_write "$repo" "db/schema.test.ts" "// characterization
 "
 t_commit "$repo" "refactor(db): pin the current shape first" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "does not flag a refactor commit that only ADDS a test under a contract path" -- run_delta "$repo"
-assert_out_lacks "## Commit separation"
+expect_exit 0 "does not flag a refactor commit that only ADDS a test under a contract path" -- run_delta "$repo"
+expect_unsaid "## Commit separation"
 
 t_repo
 repo=$REPO
@@ -246,7 +246,7 @@ t_commit "$repo" "refactor(db): rename oldName to newName" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
 # The SOURCE edit under db/ is the finding; the co-moving unit test must not add
 # a second, noisier one — call-site churn is what a rename IS.
-assert_status 0 "does not flag the unit test that moved with a rename" -- run_delta "$repo"
+expect_exit 0 "does not flag the unit test that moved with a rename" -- run_delta "$repo"
 assert_separation_has "db/query.ts"
 assert_separation_lacks "db/query.test.ts"
 
@@ -266,9 +266,9 @@ t_write "$repo" "security/csp.conf" "default-src
 t_commit "$repo" "wip: not conventional at all" >/dev/null
 git -C "$repo" merge -q --no-ff -m "Merge branch 'chore/side'" chore/side
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "ignores merge commits and subjects that are not Conventional Commits" -- run_delta "$repo"
-assert_out_lacks "Merge branch"
-assert_out_lacks "wip: not conventional"
+expect_exit 0 "ignores merge commits and subjects that are not Conventional Commits" -- run_delta "$repo"
+expect_unsaid "Merge branch"
+expect_unsaid "wip: not conventional"
 
 # ---------------------------------------------------------------------------
 banner "Executable specs are the exception to skipping the test tier"
@@ -284,7 +284,7 @@ t_write "$repo" "features/x.feature" "Feature: a
 "
 t_commit "$repo" "refactor(e2e): tidy the scenario" >/dev/null
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "does flag a refactor commit that edits an existing scenario" -- run_delta "$repo"
+expect_exit 0 "does flag a refactor commit that edits an existing scenario" -- run_delta "$repo"
 assert_separation_has "features/x.feature"
 
 # ---------------------------------------------------------------------------
@@ -309,10 +309,10 @@ exit 2
 t_commit "$repo" "refactor(adapter): tidy the pre-tool hook" >/dev/null
 hook_sha=$(t_short "$repo")
 t_guards_config "$repo" "$(cat "$KIT/scripts/guards.config.sh")"
-assert_status 0 "lists a changed adapter hook under the agent and process surface" -- run_delta "$repo"
-assert_out_has "## Agent & process surfaces"
-assert_out_has "  adapters/claude-code/hooks/tool-pre.sh"
-assert_out_lacks "No contract-artifact deltas"
+expect_exit 0 "lists a changed adapter hook under the agent and process surface" -- run_delta "$repo"
+expect_said "## Agent & process surfaces"
+expect_said "  adapters/claude-code/hooks/tool-pre.sh"
+expect_unsaid "No contract-artifact deltas"
 assert_separation_has "$hook_sha"
 assert_separation_has "adapters/claude-code/hooks/tool-pre.sh"
 
@@ -337,7 +337,7 @@ t_write "$repo" "docs/events.md" "# Events
 t_commit "$repo" "refactor(events): rename the emitter" >/dev/null
 mixed_sha=$(t_short "$repo")
 t_guards_config "$repo" "$CONFIG_STD"
-assert_status 0 "flags only the mixed commit on a branch that also carries a clean refactor" -- run_delta "$repo"
+expect_exit 0 "flags only the mixed commit on a branch that also carries a clean refactor" -- run_delta "$repo"
 assert_separation_has "$mixed_sha"
 assert_separation_lacks "$clean_sha"
 assert_separation_has "docs/events.md"

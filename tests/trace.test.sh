@@ -56,28 +56,28 @@ QUIET_REPO=$REPO
 mkdir -p "$QUIET_REPO/scripts"
 cp "$TRACE" "$QUIET_REPO/scripts/trace.sh"
 printf "TRACE_DIR=''\n" >"$QUIET_REPO/scripts/trace.config.sh"
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" emit kind=note reason=hello
-[ "$S_STATUS" = 0 ] && pass "an unconfigured emit exits 0" || fail "an unconfigured emit exited $S_STATUS, not 0"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "stdout carried: $S_OUT"
-case $S_ERR in *unconfigured*) pass "and says 'unconfigured' on stderr" ;; *) fail "stderr did not say unconfigured: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" emit kind=note reason=hello
+[ "$T_STATUS" = 0 ] && pass "an unconfigured emit exits 0" || fail "an unconfigured emit exited $T_STATUS, not 0"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "stdout carried: $T_OUT"
+case $T_ERR in *unconfigured*) pass "and says 'unconfigured' on stderr" ;; *) fail "stderr did not say unconfigured: $T_ERR" ;; esac
 ( cd "$QUIET_REPO" && sh scripts/trace.sh emit kind=note reason=hello 2>/dev/null )
 [ -z "$(find "$QUIET_REPO" -name '*.jsonl' -o -name events -o -name .trace 2>/dev/null)" ] &&
 	pass "and wrote nothing anywhere under a fixture whose policy file is empty" || fail "an unconfigured emit wrote under $QUIET_REPO: $(find "$QUIET_REPO" -name '*.jsonl' -o -name .trace)"
-t_run_split env TRACE_CONFIG=$OFF TRACE_QUIET=1 sh "$TRACE" emit kind=note reason=hello
-[ -z "$S_ERR" ] && pass "TRACE_QUIET=1 silences the note" || fail "TRACE_QUIET=1 still printed: $S_ERR"
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" dir
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "dir prints nothing when unconfigured" || fail "dir printed '$S_OUT' (exit $S_STATUS)"
+t_exec env TRACE_CONFIG=$OFF TRACE_QUIET=1 sh "$TRACE" emit kind=note reason=hello
+[ -z "$T_ERR" ] && pass "TRACE_QUIET=1 silences the note" || fail "TRACE_QUIET=1 still printed: $T_ERR"
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" dir
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "dir prints nothing when unconfigured" || fail "dir printed '$T_OUT' (exit $T_STATUS)"
 
 banner "2. A policy file named explicitly and missing is a caller error"
-assert_status 2 "TRACE_CONFIG pointing nowhere is exit 2" -- env TRACE_CONFIG="$SCRATCH/no-such-policy.sh" sh "$TRACE" emit kind=note reason=x
-assert_out_has "does not exist"
+expect_exit 2 "TRACE_CONFIG pointing nowhere is exit 2" -- env TRACE_CONFIG="$SCRATCH/no-such-policy.sh" sh "$TRACE" emit kind=note reason=x
+expect_said "does not exist"
 
 banner "3. A configured emit appends one line to today's file, fields in a fixed order"
 DIR="$SCRATCH/abs-trace"
 ON=$(policy "$DIR")
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=ticket.write subject='ticket:#34' related='prd:#12' tier=implementer domain=content outcome=stamped reason='the first slice' data.position=1/7 data.label=''
-[ "$S_STATUS" = 0 ] && pass "emit exits 0" || fail "emit exited $S_STATUS: $S_ERR"
-[ -z "$S_OUT" ] && [ -z "$S_ERR" ] && pass "and is silent on both streams" || fail "emit was not silent — out: '$S_OUT' err: '$S_ERR'"
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=ticket.write subject='ticket:#34' related='prd:#12' tier=implementer domain=content outcome=stamped reason='the first slice' data.position=1/7 data.label=''
+[ "$T_STATUS" = 0 ] && pass "emit exits 0" || fail "emit exited $T_STATUS: $T_ERR"
+[ -z "$T_OUT" ] && [ -z "$T_ERR" ] && pass "and is silent on both streams" || fail "emit was not silent — out: '$T_OUT' err: '$T_ERR'"
 FILE="$DIR/events/$TODAY.jsonl"
 [ -f "$FILE" ] && pass "today's file exists at events/$TODAY.jsonl" || fail "no $FILE"
 [ "$(wc -l <"$FILE" | tr -d ' ')" = 1 ] && pass "with exactly one line" || fail "expected one line, got $(wc -l <"$FILE")"
@@ -85,18 +85,18 @@ LINE=$(cat "$FILE")
 case $LINE in '{"v":1,"ts":"'*) pass "the line opens with the schema version and the timestamp" ;; *) fail "unexpected opening: $LINE" ;; esac
 case $LINE in *'"kind":"ticket.write","subject":"ticket:#34","related":"prd:#12","tier":"implementer","domain":"content","outcome":"stamped","reason":"the first slice","data":{"position":"1/7","label":""}}') pass "fields follow the documented order, absent optionals omitted, empty data values kept" ;; *) fail "field order or content wrong: $LINE" ;; esac
 case $LINE in *'"id":"'[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-*) pass "the id opens with a sortable UTC stamp" ;; *) fail "id shape wrong: $LINE" ;; esac
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit --dry-run kind=note reason=dry
-case $S_OUT in '{"v":1,'*'"kind":"note"'*'"reason":"dry"}') pass "--dry-run prints the line it would append" ;; *) fail "--dry-run printed: $S_OUT" ;; esac
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit --dry-run kind=note reason=dry
+case $T_OUT in '{"v":1,'*'"kind":"note"'*'"reason":"dry"}') pass "--dry-run prints the line it would append" ;; *) fail "--dry-run printed: $T_OUT" ;; esac
 [ "$(wc -l <"$FILE" | tr -d ' ')" = 1 ] && pass "and writes nothing" || fail "--dry-run appended a line"
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=session.usage subject='session:abc' model=m tok_in=10 tok_out=20 tok_cache_w=0 tok_cache_r=5
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=session.usage subject='session:abc' model=m tok_in=10 tok_out=20 tok_cache_w=0 tok_cache_r=5
 case $(tail -n 1 "$FILE") in *'"model":"m","tok_in":10,"tok_out":20,"tok_cache_w":0,"tok_cache_r":5}') pass "token counts are written as bare numbers" ;; *) fail "token fields wrong: $(tail -n 1 "$FILE")" ;; esac
-assert_status 2 "a non-numeric token count is refused" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=session.usage tok_in=ten
+expect_exit 2 "a non-numeric token count is refused" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=session.usage tok_in=ten
 
 banner "4. The escaper: quotes, backslashes, tabs and non-ASCII survive; a newline is refused"
 TAB=$(printf '\t')
 MARK=$(t_mark NOT_A_MARK)
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=note reason="say \"hi\" \\ back${TAB}tab é ${MARK}"
-[ "$S_STATUS" = 0 ] && pass "the awkward reason is accepted" || fail "escaper refused a legal value: $S_ERR"
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=note reason="say \"hi\" \\ back${TAB}tab é ${MARK}"
+[ "$T_STATUS" = 0 ] && pass "the awkward reason is accepted" || fail "escaper refused a legal value: $T_ERR"
 case $(tail -n 1 "$FILE") in *'"reason":"say \"hi\" \\ back\ttab é '"$MARK"'"}') pass "quotes, backslashes and tabs are escaped, UTF-8 and the mark-shaped literal pass through" ;; *) fail "escaping wrong: $(tail -n 1 "$FILE")" ;; esac
 if command -v node >/dev/null 2>&1; then
 	node -e 'const fs=require("fs");for(const l of fs.readFileSync(process.argv[1],"utf8").split("\n"))if(l)JSON.parse(l)' "$FILE" 2>/dev/null &&
@@ -106,22 +106,22 @@ else
 	echo "  skip  node is not on PATH — JSON.parse check not run"
 fi
 NL=$(printf 'two\nlines')
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=note reason="$NL"
-[ "$S_STATUS" = 2 ] && pass "a value with a newline is exit 2" || fail "a newline was accepted (exit $S_STATUS)"
-case $S_ERR in *blob*) pass "and the refusal points at --blob" ;; *) fail "the refusal did not point at --blob: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=note reason="$NL"
+[ "$T_STATUS" = 2 ] && pass "a value with a newline is exit 2" || fail "a newline was accepted (exit $T_STATUS)"
+case $T_ERR in *blob*) pass "and the refusal points at --blob" ;; *) fail "the refusal did not point at --blob: $T_ERR" ;; esac
 
 banner "5. The vocabulary is closed and the grammar is checked at emit"
-assert_status 2 "an unknown kind is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=bogus
-assert_out_has "kind"
-assert_status 2 "a subject with a space is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note subject='ticket 34'
-assert_status 2 "a subject with no type prefix is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note subject='34'
-assert_status 2 "an unknown top-level key is exit 2 (almost always a typo for data.)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note reasn=x
-assert_status 2 "a capitalised key is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note Data.x=1
-assert_status 2 "no kind at all is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit reason=x
-assert_status 2 "an unknown subcommand is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" frobnicate
-assert_status 2 "a leading-zero token count is exit 2 — it is not a JSON integer (H-1)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=session.usage tok_in=01
-assert_status 2 "two adjacent kinds in one value are exit 2 — membership is per entry, not substring (H-4)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit 'kind=run.start run.end'
-assert_status 2 "a field name with a space is exit 2, never a membership hit or an eval" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note 'subject related=x'
+expect_exit 2 "an unknown kind is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=bogus
+expect_said "kind"
+expect_exit 2 "a subject with a space is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note subject='ticket 34'
+expect_exit 2 "a subject with no type prefix is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note subject='34'
+expect_exit 2 "an unknown top-level key is exit 2 (almost always a typo for data.)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note reasn=x
+expect_exit 2 "a capitalised key is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note Data.x=1
+expect_exit 2 "no kind at all is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit reason=x
+expect_exit 2 "an unknown subcommand is exit 2" -- env TRACE_CONFIG="$ON" sh "$TRACE" frobnicate
+expect_exit 2 "a leading-zero token count is exit 2 — it is not a JSON integer (H-1)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=session.usage tok_in=01
+expect_exit 2 "two adjacent kinds in one value are exit 2 — membership is per entry, not substring (H-4)" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit 'kind=run.start run.end'
+expect_exit 2 "a field name with a space is exit 2, never a membership hit or an eval" -- env TRACE_CONFIG="$ON" sh "$TRACE" emit kind=note 'subject related=x'
 [ "$(wc -l <"$FILE" | tr -d ' ')" = 3 ] && pass "none of the refusals wrote a line" || fail "a refused emit still wrote: $(wc -l <"$FILE") lines"
 
 banner "5a. feedback is in the vocabulary — the human's verdict on a landed slice (PRD #237, scenario 13; ticket #250)"
@@ -129,8 +129,8 @@ banner "5a. feedback is in the vocabulary — the human's verdict on a landed sl
 # landing, /pr-iterate when a human comment changes the plan. Before #250 the
 # kind was unknown and exit 2, the same refusal `bogus` gets above.
 for _fb in hit adjusted missed; do
-	t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=feedback subject='ticket:#247' outcome=$_fb reason='#248 and #253 re-cut after the review'
-	[ "$S_STATUS" = 0 ] && pass "feedback outcome=$_fb is accepted" || fail "feedback outcome=$_fb exited $S_STATUS: $S_ERR"
+	t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=feedback subject='ticket:#247' outcome=$_fb reason='#248 and #253 re-cut after the review'
+	[ "$T_STATUS" = 0 ] && pass "feedback outcome=$_fb is accepted" || fail "feedback outcome=$_fb exited $T_STATUS: $T_ERR"
 done
 case $(tail -n 1 "$FILE") in *'"kind":"feedback"'*'"subject":"ticket:#247"'*'"outcome":"missed","reason":"#248 and #253 re-cut after the review"}') pass "and the line carries the slice, the verdict and its reason" ;; *) fail "feedback line wrong: $(tail -n 1 "$FILE")" ;; esac
 
@@ -139,18 +139,18 @@ banner "5b. finding.dismiss is in the vocabulary — a human closed a posted fin
 # review dismissed, no commit answering it. It sits on the subject of the
 # finding.raise it answers and carries that raise's data.where, so severity is
 # read through the join. Before #277 the kind was unknown and exit 2.
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.raise subject='pr:#277' outcome=raised data.id=H-1 data.severity=high data.where=scripts/trace.sh:142 reason='the vocabulary moved without its suite'
-[ "$S_STATUS" = 0 ] || fail "the raise the dismissal answers was refused: $S_ERR"
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.dismiss subject='pr:#277' outcome=dismissed data.via=thread data.where=scripts/trace.sh:142 data.thread=PRRT_x reason='resolved by a human, no commit since the comment, no reply'
-[ "$S_STATUS" = 0 ] && pass "finding.dismiss is accepted" || fail "finding.dismiss exited $S_STATUS: $S_ERR"
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277'
-case $S_OUT in
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.raise subject='pr:#277' outcome=raised data.id=H-1 data.severity=high data.where=scripts/trace.sh:142 reason='the vocabulary moved without its suite'
+[ "$T_STATUS" = 0 ] || fail "the raise the dismissal answers was refused: $T_ERR"
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" emit kind=finding.dismiss subject='pr:#277' outcome=dismissed data.via=thread data.where=scripts/trace.sh:142 data.thread=PRRT_x reason='resolved by a human, no commit since the comment, no reply'
+[ "$T_STATUS" = 0 ] && pass "finding.dismiss is accepted" || fail "finding.dismiss exited $T_STATUS: $T_ERR"
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277'
+case $T_OUT in
 *'"kind":"finding.raise"'*'"severity":"high","where":"scripts/trace.sh:142"'*'"kind":"finding.dismiss"'*'"outcome":"dismissed"'*'"where":"scripts/trace.sh:142"'*) pass "show pr:#277 prints the dismissal beside the raise it answers, joined on data.where" ;;
-*) fail "show pr:#277 did not print the raise and its dismissal: $S_OUT" ;;
+*) fail "show pr:#277 did not print the raise and its dismissal: $T_OUT" ;;
 esac
-t_run_split env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277' --kind finding.dismiss
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] && pass "and --kind finding.dismiss narrows to the one event" ||
-	fail "show --kind finding.dismiss exited $S_STATUS with: $S_OUT $S_ERR"
+t_exec env TRACE_CONFIG=$ON sh "$TRACE" show 'pr:#277' --kind finding.dismiss
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 1 ] && pass "and --kind finding.dismiss narrows to the one event" ||
+	fail "show --kind finding.dismiss exited $T_STATUS with: $T_OUT $T_ERR"
 
 banner "6. A relative TRACE_DIR resolves to the ROOT checkout — from inside a linked worktree too"
 t_repo
@@ -178,14 +178,14 @@ git -C "$FOREIGN" init -q -b main 2>/dev/null
 # Git exports GIT_DIR and GIT_WORK_TREE into hooks and some callers inherit
 # them; a pinned pair makes rev-parse answer for the pinned repo, so both
 # anchored lookups must scrub them (C-1, PR #257; the guards loader does).
-t_run_split env GIT_DIR="$FOREIGN/.git" GIT_WORK_TREE="$FOREIGN" sh "$REPO/scripts/trace.sh" dir
-[ "$S_OUT" = "$REPO/.trace" ] && pass "an inherited GIT_DIR/GIT_WORK_TREE cannot redirect discovery to a foreign checkout's policy" || fail "inherited git identity redirected discovery: dir printed '$S_OUT'"
+t_exec env GIT_DIR="$FOREIGN/.git" GIT_WORK_TREE="$FOREIGN" sh "$REPO/scripts/trace.sh" dir
+[ "$T_OUT" = "$REPO/.trace" ] && pass "an inherited GIT_DIR/GIT_WORK_TREE cannot redirect discovery to a foreign checkout's policy" || fail "inherited git identity redirected discovery: dir printed '$T_OUT'"
 
 banner "7. The environment overrides the policy file — including with an explicitly empty value"
-t_run_split env TRACE_CONFIG=$ON TRACE_DIR="$SCRATCH/env-abs" sh "$TRACE" dir
-[ "$S_OUT" = "$SCRATCH/env-abs" ] && pass "an absolute TRACE_DIR in the environment beats the file" || fail "dir printed '$S_OUT'"
-t_run_split env TRACE_CONFIG=$ON TRACE_DIR= sh "$TRACE" dir
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "TRACE_DIR set to the empty string turns tracing OFF for that process (H-3)" || fail "an empty environment TRACE_DIR did not switch tracing off: dir printed '$S_OUT'"
+t_exec env TRACE_CONFIG=$ON TRACE_DIR="$SCRATCH/env-abs" sh "$TRACE" dir
+[ "$T_OUT" = "$SCRATCH/env-abs" ] && pass "an absolute TRACE_DIR in the environment beats the file" || fail "dir printed '$T_OUT'"
+t_exec env TRACE_CONFIG=$ON TRACE_DIR= sh "$TRACE" dir
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "TRACE_DIR set to the empty string turns tracing OFF for that process (H-3)" || fail "an empty environment TRACE_DIR did not switch tracing off: dir printed '$T_OUT'"
 ( cd "$REPO" && TRACE_DIR=elsewhere sh scripts/trace.sh dir ) | grep -qx "$REPO/elsewhere" &&
 	pass "a relative one still resolves under the root checkout" || fail "relative env TRACE_DIR did not resolve under the root"
 
@@ -194,24 +194,24 @@ Q="$SCRATCH/q"; QON=$(policy "$Q")
 TRACE_CONFIG=$QON sh "$TRACE" emit kind=ticket.write subject='ticket:#3' reason=three
 TRACE_CONFIG=$QON sh "$TRACE" emit kind=ticket.write subject='ticket:#34' reason=thirty-four
 TRACE_CONFIG=$QON sh "$TRACE" emit kind=pr.open subject='pr:#9' related='ticket:#3 branch:feat/x' reason=opened
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3'
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 2 ] && pass "show ticket:#3 returns the two events that name it" || fail "show returned: $S_OUT"
-case $S_OUT in *thirty-four*) fail "ticket:#3 matched ticket:#34 — a prefix match, not an exact one" ;; *) pass "and never the longer ticket:#34" ;; esac
-case $S_OUT in *opened*) pass "a related token counts as a match" ;; *) fail "the related token was not matched" ;; esac
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --kind pr.open
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] && pass "--kind narrows to one" || fail "--kind returned: $S_OUT"
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --since 2999-01-01
-[ -z "$S_OUT" ] && [ "$S_STATUS" = 0 ] && pass "--since a future date returns nothing, exit 0" || fail "--since returned '$S_OUT' (exit $S_STATUS)"
-assert_status 2 "show with a malformed subject is exit 2" -- env TRACE_CONFIG="$QON" sh "$TRACE" show 'ticket 3'
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3'
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] && pass "show ticket:#3 returns the two events that name it" || fail "show returned: $T_OUT"
+case $T_OUT in *thirty-four*) fail "ticket:#3 matched ticket:#34 — a prefix match, not an exact one" ;; *) pass "and never the longer ticket:#34" ;; esac
+case $T_OUT in *opened*) pass "a related token counts as a match" ;; *) fail "the related token was not matched" ;; esac
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --kind pr.open
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 1 ] && pass "--kind narrows to one" || fail "--kind returned: $T_OUT"
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --since 2999-01-01
+[ -z "$T_OUT" ] && [ "$T_STATUS" = 0 ] && pass "--since a future date returns nothing, exit 0" || fail "--since returned '$T_OUT' (exit $T_STATUS)"
+expect_exit 2 "show with a malformed subject is exit 2" -- env TRACE_CONFIG="$QON" sh "$TRACE" show 'ticket 3'
 # The data map is open: a key may be called subject, related or kind. The
 # reader must look at the envelope only (H-2, PR #257).
 TRACE_CONFIG=$QON sh "$TRACE" emit kind=note subject='ticket:#34' data.subject='ticket:#3' data.related='ticket:#3' reason=decoy
 TRACE_CONFIG=$QON sh "$TRACE" emit kind=note subject='ticket:#3' data.kind=pr.open reason=decoy-kind
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3'
-case $S_OUT in *'"reason":"decoy"'*) fail "show matched a data.subject/data.related decoy — it read the data map, not the envelope" ;; *) pass "a data.subject or data.related named ticket:#3 is not a match" ;; esac
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --kind pr.open
-case $S_OUT in *decoy-kind*) fail "--kind matched a data.kind decoy" ;; *) pass "a data.kind is not the event's kind" ;; esac
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 1 ] && pass "--kind pr.open still finds the one real pr.open" || fail "--kind returned: $S_OUT"
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3'
+case $T_OUT in *'"reason":"decoy"'*) fail "show matched a data.subject/data.related decoy — it read the data map, not the envelope" ;; *) pass "a data.subject or data.related named ticket:#3 is not a match" ;; esac
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" show 'ticket:#3' --kind pr.open
+case $T_OUT in *decoy-kind*) fail "--kind matched a data.kind decoy" ;; *) pass "a data.kind is not the event's kind" ;; esac
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 1 ] && pass "--kind pr.open still finds the one real pr.open" || fail "--kind returned: $T_OUT"
 
 banner "8b. show run:<id> reads the envelope's run field, and a child run's pair under its parent"
 # PRD #237 story 25, found missing by #263's review: a run id lives in the `run`
@@ -231,30 +231,30 @@ TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run=r12 reason=longer-run
 TRACE_CONFIG=$RON sh "$TRACE" emit kind=note data.run=r1 reason=run-decoy
 TRACE_CONFIG=$RON sh "$TRACE" emit kind=note subject='run:r1' reason=about-the-run
 
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1'
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 7 ] && pass "show run:r1 returns the seven events that belong to it" || fail "show run:r1 returned: $S_OUT"
-case $S_OUT in *outer-start*) pass "the run's own run.start is one of them" ;; *) fail "run.start was not matched: $S_OUT" ;; esac
-case $S_OUT in *inside-one*) pass "and an event emitted inside the run" ;; *) fail "an event carrying run=r1 was not matched: $S_OUT" ;; esac
-case $S_OUT in *about-the-run*) pass "and an event that names the run as its SUBJECT — the run field is added to the match, not substituted for it" ;; *) fail "subject='run:r1' stopped matching: $S_OUT" ;; esac
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1'
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 7 ] && pass "show run:r1 returns the seven events that belong to it" || fail "show run:r1 returned: $T_OUT"
+case $T_OUT in *outer-start*) pass "the run's own run.start is one of them" ;; *) fail "run.start was not matched: $T_OUT" ;; esac
+case $T_OUT in *inside-one*) pass "and an event emitted inside the run" ;; *) fail "an event carrying run=r1 was not matched: $T_OUT" ;; esac
+case $T_OUT in *about-the-run*) pass "and an event that names the run as its SUBJECT — the run field is added to the match, not substituted for it" ;; *) fail "subject='run:r1' stopped matching: $T_OUT" ;; esac
 # The one thing a prefix reader gets wrong, exactly as ticket:#3 must never
 # find ticket:#34: r1 is a prefix of r12, and an id is matched whole or not
 # at all.
-case $S_OUT in *longer-run*) fail "show run:r1 matched run=r12 — a prefix match, not an exact one" ;; *) pass "and never the longer run=r12" ;; esac
-case $S_OUT in *run-decoy*) fail "show run:r1 matched a data.run decoy — it read the data map, not the envelope" ;; *) pass "a data.run named r1 is not the event's run" ;; esac
+case $T_OUT in *longer-run*) fail "show run:r1 matched run=r12 — a prefix match, not an exact one" ;; *) pass "and never the longer run=r12" ;; esac
+case $T_OUT in *run-decoy*) fail "show run:r1 matched a data.run decoy — it read the data map, not the envelope" ;; *) pass "a data.run named r1 is not the event's run" ;; esac
 # A dispatched worker's pair shows under the run that dispatched it (PRD
 # scenario 11), which is the whole point of reading `parent` — but only for the
 # pair: an event a child emitted between them belongs to the child's own id, or
 # a nested run would flatten its whole body into its parent's view.
-case $S_OUT in *child-start*) pass "the child run's run.start appears under its parent's id" ;; *) fail "a child run.start with parent=r1 was not matched: $S_OUT" ;; esac
-case $S_OUT in *child-end*) pass "and its run.end" ;; *) fail "a child run.end with parent=r1 was not matched: $S_OUT" ;; esac
-case $S_OUT in *inside-child*) fail "an event the child emitted (parent=r1, kind note) was flattened into the parent's view" ;; *) pass "but not the events between them — those are the child run's own" ;; esac
+case $T_OUT in *child-start*) pass "the child run's run.start appears under its parent's id" ;; *) fail "a child run.start with parent=r1 was not matched: $T_OUT" ;; esac
+case $T_OUT in *child-end*) pass "and its run.end" ;; *) fail "a child run.end with parent=r1 was not matched: $T_OUT" ;; esac
+case $T_OUT in *inside-child*) fail "an event the child emitted (parent=r1, kind note) was flattened into the parent's view" ;; *) pass "but not the events between them — those are the child run's own" ;; esac
 
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1c'
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "show run:r1c returns the child's own three events" || fail "show run:r1c returned: $S_OUT"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --kind note
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "--kind still narrows a run's view" || fail "--kind note over run:r1 returned: $S_OUT"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
-[ -z "$S_OUT" ] && [ "$S_STATUS" = 0 ] && pass "--since still narrows it, exit 0" || fail "--since over run:r1 returned '$S_OUT' (exit $S_STATUS)"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1c'
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 3 ] && pass "show run:r1c returns the child's own three events" || fail "show run:r1c returned: $T_OUT"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --kind note
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 3 ] && pass "--kind still narrows a run's view" || fail "--kind note over run:r1 returned: $T_OUT"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
+[ -z "$T_OUT" ] && [ "$T_STATUS" = 0 ] && pass "--since still narrows it, exit 0" || fail "--since over run:r1 returned '$T_OUT' (exit $T_STATUS)"
 # The ids above are hand-written so the cases stay hermetic, but the id an
 # operator actually types is the one `begin` mints — a stamp, a process id and
 # eight hex digits, uppercase letters and hyphens included. Round-trip one, so
@@ -263,8 +263,8 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'run:r1' --since 2999-01-01
 REAL=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#272')
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason=real-id-inside
 env TRACE_CONFIG=$RON sh "$TRACE" end "$REAL" outcome=ok reason=real-id-done
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $S_OUT"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 3 ] && pass "an id begin actually minted round-trips through show" || fail "show run:<a minted id> returned: $T_OUT"
 # The type is what switches the run field on: a ticket subject must not start
 # matching run ids, or `show ticket:#3` in section 8 would answer for a run
 # called `#3`. The decoy carries the REFERENCE the subject would be reduced to
@@ -272,27 +272,27 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show "run:$REAL"
 # wrong shape leaves the assertion passing with the type switch deleted, which
 # is a check that cannot fail (H-1, review of PR #284).
 TRACE_CONFIG=$RON sh "$TRACE" emit kind=note run='#3' reason=run-called-three
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" show 'ticket:#3'
-[ -z "$S_OUT" ] && pass "and a non-run subject never reads the run field" || fail "show ticket:#3 matched on the run field: $S_OUT"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" show 'ticket:#3'
+[ -z "$T_OUT" ] && pass "and a non-run subject never reads the run field" || fail "show ticket:#3 matched on the run field: $T_OUT"
 
 banner "9. verify names the file and line of a bad event, and exits 1"
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "a clean trace verifies (exit 0)" || fail "verify failed a clean trace: $S_OUT $S_ERR"
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "a clean trace verifies (exit 0)" || fail "verify failed a clean trace: $T_OUT $T_ERR"
 printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"x","kind":"bogus","reason":"hand-edited"}\n' >>"$Q/events/$TODAY.jsonl"
 printf 'not json at all\n' >>"$Q/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG=$QON sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && pass "a trace with bad lines is exit 1" || fail "verify exited $S_STATUS on bad lines"
-case $S_OUT in *"$TODAY.jsonl:6"*) pass "the unknown kind is named by file:line" ;; *) fail "line 6 not named: $S_OUT" ;; esac
-case $S_OUT in *"$TODAY.jsonl:7"*) pass "the non-JSON line is named by file:line" ;; *) fail "line 7 not named: $S_OUT" ;; esac
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify on an unconfigured trace is exit 0 — nothing to check" || fail "verify unconfigured exited $S_STATUS — out: $S_OUT err: $S_ERR"
+t_exec env TRACE_CONFIG=$QON sh "$TRACE" verify
+[ "$T_STATUS" = 1 ] && pass "a trace with bad lines is exit 1" || fail "verify exited $T_STATUS on bad lines"
+case $T_OUT in *"$TODAY.jsonl:6"*) pass "the unknown kind is named by file:line" ;; *) fail "line 6 not named: $T_OUT" ;; esac
+case $T_OUT in *"$TODAY.jsonl:7"*) pass "the non-JSON line is named by file:line" ;; *) fail "line 7 not named: $T_OUT" ;; esac
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify on an unconfigured trace is exit 0 — nothing to check" || fail "verify unconfigured exited $T_STATUS — out: $T_OUT err: $T_ERR"
 
 banner "10. A run has an identity: begin hands one out, an emit picks it up, end closes it"
 R="$SCRATCH/runs"; RON=$(policy "$R")
 RFILE="$R/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#248'
-[ "$S_STATUS" = 0 ] && pass "begin exits 0" || fail "begin exited $S_STATUS — out: '$S_OUT' err: '$S_ERR'"
-RUN1=$S_OUT
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" begin implement subject='ticket:#248'
+[ "$T_STATUS" = 0 ] && pass "begin exits 0" || fail "begin exited $T_STATUS — out: '$T_OUT' err: '$T_ERR'"
+RUN1=$T_OUT
 printf '%s\n' "$RUN1" | grep -qE '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}$' &&
 	pass "begin prints a run id of the documented shape: sortable stamp, pid, random bytes" || fail "begin printed '$RUN1'"
 case $(tail -n 1 "$RFILE") in
@@ -302,43 +302,43 @@ esac
 case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "the outermost run was given a parent" ;; *) pass "the outermost run has no parent — the field is omitted, not empty" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=red reason='the first case'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN1"'"'*) pass "an emit inside the run carries it without being told" ;; *) fail "the emit did not pick the run up: $(tail -n 1 "$RFILE")" ;; esac
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" begin tdd
-RUN2=$S_OUT
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" begin tdd
+RUN2=$T_OUT
 [ -n "$RUN2" ] && [ "$RUN2" != "$RUN1" ] && pass "a nested begin hands out a different id" || fail "the nested begin printed '$RUN2'"
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "and records the run it nests inside as parent" ;; *) fail "the nested run.start: $(tail -n 1 "$RFILE")" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=tdd.cycle outcome=green reason='it passes'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*) pass "an emit inside the nested run carries both" ;; *) fail "the nested emit: $(tail -n 1 "$RFILE")" ;; esac
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN2" outcome=ok reason='the cycle is done'
-[ "$S_STATUS" = 0 ] && pass "end exits 0" || fail "end exited $S_STATUS: $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN2" outcome=ok reason='the cycle is done'
+[ "$T_STATUS" = 0 ] && pass "end exits 0" || fail "end exited $T_STATUS: $T_ERR"
 case $(tail -n 1 "$RFILE") in *'"kind":"run.end"'*'"run":"'"$RUN2"'","parent":"'"$RUN1"'"'*'"outcome":"ok"'*) pass "and emits run.end for the run it popped" ;; *) fail "run.end wrong: $(tail -n 1 "$RFILE")" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='after the pop'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN1"'"'*) pass "the next emit is back on the outer run — end popped, it did not clear" ;; *) fail "after the pop: $(tail -n 1 "$RFILE")" ;; esac
 case $(tail -n 1 "$RFILE") in *'"parent"'*) fail "the outer run acquired a parent" ;; *) pass "and has no parent again" ;; esac
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1" outcome=ok
-[ "$S_STATUS" = 0 ] && pass "the outer run closes too" || fail "the second end exited $S_STATUS: $S_ERR"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1"
-[ "$S_STATUS" = 2 ] && pass "end with no run open is exit 2 — there is nothing to close" || fail "end on an empty stack exited $S_STATUS"
-case $S_ERR in *begin*) pass "and the refusal says what opens one" ;; *) fail "the refusal did not name begin: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1" outcome=ok
+[ "$T_STATUS" = 0 ] && pass "the outer run closes too" || fail "the second end exited $T_STATUS: $T_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN1"
+[ "$T_STATUS" = 2 ] && pass "end with no run open is exit 2 — there is nothing to close" || fail "end on an empty stack exited $T_STATUS"
+case $T_ERR in *begin*) pass "and the refusal says what opens one" ;; *) fail "the refusal did not name begin: $T_ERR" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='no run open'
 case $(tail -n 1 "$RFILE") in *'"run"'*) fail "an emit outside any run still carried one: $(tail -n 1 "$RFILE")" ;; *) pass "with no run open the run field is omitted" ;; esac
-assert_status 2 "begin being told its kind is exit 2 — the subcommand owns it" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement kind=note
-assert_out_has "begin sets kind itself"
-assert_status 2 "end being told which run it closes is exit 2 — the stack says which" -- env TRACE_CONFIG="$RON" sh "$TRACE" end "$RUN1" run=made-up
-assert_out_has "end sets run itself"
-assert_status 2 "begin with no skill is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin
+expect_exit 2 "begin being told its kind is exit 2 — the subcommand owns it" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement kind=note
+expect_said "begin sets kind itself"
+expect_exit 2 "end being told which run it closes is exit 2 — the stack says which" -- env TRACE_CONFIG="$RON" sh "$TRACE" end "$RUN1" run=made-up
+expect_said "end sets run itself"
+expect_exit 2 "begin with no skill is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin
 # Review C-1..L-7 (PR #263): begin owns `skill` through its positional argument
 # as firmly as it owns `kind`, and a trailing skill= silently won (L-2).
-assert_status 2 "begin being told a second skill is exit 2 — the positional argument is the skill" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement skill=something-else
-assert_out_has "begin sets skill itself"
+expect_exit 2 "begin being told a second skill is exit 2 — the positional argument is the skill" -- env TRACE_CONFIG="$RON" sh "$TRACE" begin implement skill=something-else
+expect_said "begin sets skill itself"
 # H-1: end popped BEFORE its own event could be refused, so a rejected
 # argument destroyed the entry, wrote no run.end, and the retry closed the run
 # OUTSIDE it — permanently wrong in a record that can only be appended to.
 RUN_A=$(env TRACE_CONFIG=$RON sh "$TRACE" begin implement)
 RUN_B=$(env TRACE_CONFIG=$RON sh "$TRACE" begin tdd)
 OVER=$(awk 'BEGIN { while (i++ < 4100) printf "x" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason="$OVER"
-[ "$S_STATUS" = 2 ] && pass "an end whose own event is refused is exit 2" || fail "the refused end exited $S_STATUS"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason='the retry'
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason="$OVER"
+[ "$T_STATUS" = 2 ] && pass "an end whose own event is refused is exit 2" || fail "the refused end exited $T_STATUS"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_B" outcome=ok reason='the retry'
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN_B"'"'*) pass "and the retry closes the run that was still open, not the one outside it" ;; *) fail "the refused end popped anyway — the retry closed: $(tail -n 1 "$RFILE")" ;; esac
 case $(tail -n 1 "$RFILE") in *'"run":"'"$RUN_A"'"'*) fail "the retry closed the OUTER run — the stack lost an entry to a refusal" ;; *) pass "and the outer run is untouched by either" ;; esac
 env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN_A" outcome=ok reason='and the outer one'
@@ -376,9 +376,9 @@ case $(tail -n 1 "$RFILE") in *'"session"'*) fail "TRACE_SESSION set to the empt
 # L-6: a pointer naming something `show` could never match would be written to
 # every line and queryable from none of them.
 printf 'not a session at all\n' >"$R/current/$KEY"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='an unqueryable pointer'
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='an unqueryable pointer'
 case $(tail -n 1 "$RFILE") in *'"session"'*) fail "an unqueryable session id reached the line: $(tail -n 1 "$RFILE")" ;; *) pass "a session id show could never match is ignored rather than written" ;; esac
-case $S_ERR in *"trace:"*) pass "and the reason is on stderr, trace-prefixed" ;; *) fail "nothing was said about it: $S_ERR" ;; esac
+case $T_ERR in *"trace:"*) pass "and the reason is on stderr, trace-prefixed" ;; *) fail "nothing was said about it: $T_ERR" ;; esac
 printf 'sess-from-pointer\n' >"$R/current/$KEY"
 
 banner "12. Only begin and end rewrite the run stack, and both by rename"
@@ -402,13 +402,13 @@ env TRACE_CONFIG=$RON sh "$TRACE" end "$RUN12" outcome=ok
 if [ "$(id -u)" != 0 ]; then
 	STACK_WAS=$(cat "$STACK")
 	chmod 000 "$STACK"
-	t_run_split env TRACE_CONFIG=$RON sh "$TRACE" begin review-pr
+	t_exec env TRACE_CONFIG=$RON sh "$TRACE" begin review-pr
 	chmod 600 "$STACK"
-	[ "$S_STATUS" != 0 ] && pass "a begin that cannot read the run stack refuses instead of reporting success" || fail "begin exited 0 on an unreadable stack"
+	[ "$T_STATUS" != 0 ] && pass "a begin that cannot read the run stack refuses instead of reporting success" || fail "begin exited 0 on an unreadable stack"
 	[ "$(cat "$STACK")" = "$STACK_WAS" ] && pass "and every open run is still there — nothing was overwritten" || fail "the unreadable stack was replaced by: $(cat "$STACK")"
-	case $S_ERR in *"trace:"*) pass "and every diagnostic is trace-prefixed, none of them raw from awk or cat" ;; *) fail "the diagnostics were not trace-prefixed: $S_ERR" ;; esac
-	case $S_ERR in *"awk:"* | *"cat:"*) fail "a raw awk or cat diagnostic leaked: $S_ERR" ;; *) pass "and no tool's own error text leaked past it (M-4)" ;; esac
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'exists and cannot be read')" = 1 ] && pass "and says it once, not once per question asked of the stack" || fail "the note was repeated: $S_ERR"
+	case $T_ERR in *"trace:"*) pass "and every diagnostic is trace-prefixed, none of them raw from awk or cat" ;; *) fail "the diagnostics were not trace-prefixed: $T_ERR" ;; esac
+	case $T_ERR in *"awk:"* | *"cat:"*) fail "a raw awk or cat diagnostic leaked: $T_ERR" ;; *) pass "and no tool's own error text leaked past it (M-4)" ;; esac
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'exists and cannot be read')" = 1 ] && pass "and says it once, not once per question asked of the stack" || fail "the note was repeated: $T_ERR"
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi
@@ -431,8 +431,8 @@ done
 wait
 PFILE="$P/events/$TODAY.jsonl"
 [ "$(grep -c '"reason":"parallel ' "$PFILE")" = 50 ] && pass "fifty backgrounded emits appended fifty whole lines" || fail "expected 50 parallel lines, got $(grep -c '"reason":"parallel ' "$PFILE")"
-t_run_split env TRACE_CONFIG=$PON sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "and every one of them verifies" || fail "verify failed after fifty parallel appends: $S_OUT"
+t_exec env TRACE_CONFIG=$PON sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "and every one of them verifies" || fail "verify failed after fifty parallel appends: $T_OUT"
 [ "$(grep -c "\"run\":\"$PRUN\"" "$PFILE")" = 51 ] && pass "and all fifty carry the run that was open, as does the run.start above them" || fail "only $(grep -c "\"run\":\"$PRUN\"" "$PFILE") of the 51 lines carry the run"
 [ "$(ls -i "$PSTACK" | awk '{ print $1 }')" = "$PINODE" ] && pass "and not one of them touched the run stack — fifty readers, no writer" || fail "a parallel emit rewrote the run stack"
 [ "$(grep -c . "$PSTACK")" = 1 ] && pass "which still holds exactly the one run that was opened" || fail "the stack holds $(grep -c . "$PSTACK") entries, not 1"
@@ -442,14 +442,14 @@ t_run_split env TRACE_CONFIG=$PON sh "$TRACE" verify
 banner "14. An event is capped at 4000 bytes, so an append stays one write"
 BEFORE=$(wc -l <"$RFILE" | tr -d ' ')
 BIG=$(awk 'BEGIN { while (i++ < 4100) printf "x" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$BIG"
-[ "$S_STATUS" = 2 ] && pass "a line over the cap is exit 2" || fail "an over-cap line exited $S_STATUS"
-case $S_ERR in *4000*) pass "and the refusal names the cap" ;; *) fail "the refusal did not name the cap: $S_ERR" ;; esac
-case $S_ERR in *--blob*) pass "and points at --blob, where a payload that size belongs" ;; *) fail "the refusal did not point at --blob: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$BIG"
+[ "$T_STATUS" = 2 ] && pass "a line over the cap is exit 2" || fail "an over-cap line exited $T_STATUS"
+case $T_ERR in *4000*) pass "and the refusal names the cap" ;; *) fail "the refusal did not name the cap: $T_ERR" ;; esac
+case $T_ERR in *--blob*) pass "and points at --blob, where a payload that size belongs" ;; *) fail "the refusal did not point at --blob: $T_ERR" ;; esac
 [ "$(wc -l <"$RFILE" | tr -d ' ')" = "$BEFORE" ] && pass "and nothing was appended" || fail "the refused event was written anyway"
 NEARLY=$(awk 'BEGIN { while (i++ < 3600) printf "y" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$NEARLY"
-[ "$S_STATUS" = 0 ] && pass "a long line under the cap is still written" || fail "a line under the cap was refused: $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$NEARLY"
+[ "$T_STATUS" = 0 ] && pass "a long line under the cap is still written" || fail "a line under the cap was refused: $T_ERR"
 # M-5 (review, PR #263): 3600 accepted and 4100 refused left a 500-byte gap in
 # which the enforced number could be anything, and the assertion that names the
 # cap reads the MESSAGE, which interpolates the constant. The probe below is
@@ -460,11 +460,11 @@ t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$NEARLY"
 CAP=4000
 BASE=$(env TRACE_CONFIG=$RON sh "$TRACE" emit --dry-run kind=note reason=x | wc -c | tr -d ' ')
 UNDER=$(awk -v n=$((CAP - BASE - 1)) 'BEGIN { while (i++ < n) printf "z" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$UNDER"
-[ "$S_STATUS" = 0 ] && pass "a line two bytes under the cap is accepted" || fail "a line two bytes under the cap was refused: $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$UNDER"
+[ "$T_STATUS" = 0 ] && pass "a line two bytes under the cap is accepted" || fail "a line two bytes under the cap was refused: $T_ERR"
 OVERBY=$(awk -v n=$((CAP - BASE + 3)) 'BEGIN { while (i++ < n) printf "z" }')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$OVERBY"
-[ "$S_STATUS" = 2 ] && pass "and a line two bytes over it is refused" || fail "a line two bytes over the cap was accepted"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason="$OVERBY"
+[ "$T_STATUS" = 2 ] && pass "and a line two bytes over it is refused" || fail "a line two bytes over the cap was accepted"
 
 banner "15. --blob gives a payload a home: git's own content hash, stored once, moved into place"
 PAY="$SCRATCH/payload.txt"
@@ -472,8 +472,8 @@ printf 'line one\nline two\na quote " and a backslash \\ and a tab\there\n' >"$P
 HASH=$(git hash-object "$PAY")
 FAN=$(printf '%.2s' "$HASH")
 BYTES=$(wc -c <"$PAY" | tr -d ' ')
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob "$PAY" outcome=true reason='the evidence is in the blob'
-[ "$S_STATUS" = 0 ] && pass "an emit carrying a blob exits 0" || fail "the blob emit exited $S_STATUS: $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob "$PAY" outcome=true reason='the evidence is in the blob'
+[ "$T_STATUS" = 0 ] && pass "an emit carrying a blob exits 0" || fail "the blob emit exited $T_STATUS: $T_ERR"
 [ -f "$R/blobs/$FAN/$HASH" ] && pass "the payload is stored at blobs/<first two of the hash>/<the hash>" || fail "no blob at $R/blobs/$FAN/$HASH"
 [ "$HASH" = "$(git hash-object "$R/blobs/$FAN/$HASH")" ] && pass "and its name is git's hash of its own content — one hashing mechanism, not a second one" || fail "the stored blob does not hash to its name"
 cmp -s "$PAY" "$R/blobs/$FAN/$HASH" && pass "byte for byte what was handed in" || fail "the stored blob differs from the payload"
@@ -487,7 +487,7 @@ BLOB_OUT=$(cat "$PAY" | env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note --blob 
 case $(tail -n 1 "$RFILE") in *'"blob":"'"$HASH"'"'*) pass "--blob - hashes what it reads on stdin to the very same name" ;; *) fail "stdin hashed differently: $(tail -n 1 "$RFILE") ($BLOB_OUT)" ;; esac
 [ "$(find "$R/blobs" -type f | wc -l | tr -d ' ')" = 1 ] && pass "and that payload too was stored once" || fail "the stdin payload was stored again"
 [ -z "$(find "$R/tmp" -type f 2>/dev/null)" ] && pass "and the scratch it staged through is left with nothing in it" || fail "staging files survive under $R/tmp"
-assert_status 2 "--blob naming no file is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload"
+expect_exit 2 "--blob naming no file is exit 2" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload"
 # C-1 (review, PR #263 — CRITICAL): the name has to be git's hash of the bytes
 # that were STORED. git trusts st_size on a seekable descriptor, so hashing a
 # payload whose size the filesystem does not know THROUGH A REDIRECTION read
@@ -495,8 +495,8 @@ assert_status 2 "--blob naming no file is exit 2" -- env TRACE_CONFIG="$RON" sh 
 # real bytes: a 28-byte payload stored at the empty blob's address, where every
 # later empty payload would then find it instead of its own.
 if [ -r /proc/loadavg ]; then
-	t_run_split env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob /proc/loadavg reason='a payload whose size the filesystem does not know'
-	[ "$S_STATUS" = 0 ] && pass "a payload whose st_size is 0 and whose content is not is accepted" || fail "it was refused: $S_ERR"
+	t_exec env TRACE_CONFIG=$RON sh "$TRACE" emit kind=spike.verdict subject='ticket:#248' --blob /proc/loadavg reason='a payload whose size the filesystem does not know'
+	[ "$T_STATUS" = 0 ] && pass "a payload whose st_size is 0 and whose content is not is accepted" || fail "it was refused: $T_ERR"
 	STsomething=$(tail -n 1 "$RFILE")
 	NAMED=$(printf '%s' "$STsomething" | sed -n 's/.*"blob":"\([^"]*\)".*/\1/p')
 	NAMED_BYTES=$(printf '%s' "$STsomething" | sed -n 's/.*"blob_bytes":\([0-9]*\).*/\1/p')
@@ -515,8 +515,8 @@ DRY="$SCRATCH/dry-trace"; DRYON=$(policy "$DRY")
 DRY_OUT=$(cat "$PAY" | env TRACE_CONFIG=$DRYON sh "$TRACE" emit --dry-run kind=note --blob - reason='a dry run carrying a payload' 2>&1)
 case $DRY_OUT in *'"blob":"'"$HASH"'"'*) pass "--dry-run still names the blob it would have stored" ;; *) fail "--dry-run printed: $DRY_OUT" ;; esac
 [ ! -e "$DRY" ] && pass "and created nothing whatever — not even the store it would have written into" || fail "a dry run brought $DRY into being: $(find "$DRY")"
-assert_status 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
-assert_status 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
+expect_exit 0 "an unconfigured emit whose --blob names nothing is still a silent no-op, never an exit status a caller acts on" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" emit kind=note --blob "$SCRATCH/no-such-payload" reason=x
+expect_exit 2 "blob= as a field is exit 2 — a blob is stored by --blob, never asserted" -- env TRACE_CONFIG="$RON" sh "$TRACE" emit kind=note blob=deadbeef
 
 
 banner "15b. blob stores a payload WITHOUT an event: the same store, the same name, one line of answer (ticket #306)"
@@ -530,11 +530,11 @@ BPAY="$SCRATCH/blob-payload.txt"
 printf 'a tool result\nwith a "quote", a \\ and a tab\there\n' >"$BPAY"
 BHASH=$(git hash-object "$BPAY")
 BBYTES=$(wc -c <"$BPAY" | tr -d ' ')
-t_run_split env TRACE_CONFIG=$BLON sh -c 'umask 022; exec sh "$1" blob "$2"' probe "$TRACE" "$BPAY"
-[ "$S_STATUS" = 0 ] && pass "blob <file> exits 0" || fail "blob <file> exited $S_STATUS: $S_ERR"
-[ "$S_OUT" = "$BHASH $BBYTES" ] && pass "and prints '<hash> <bytes>' on one line, the hash git's own for the same bytes" ||
-	fail "blob printed '$S_OUT', git says '$BHASH $BBYTES'"
-[ -z "$S_ERR" ] && pass "and says nothing on stderr" || fail "blob spoke on stderr: $S_ERR"
+t_exec env TRACE_CONFIG=$BLON sh -c 'umask 022; exec sh "$1" blob "$2"' probe "$TRACE" "$BPAY"
+[ "$T_STATUS" = 0 ] && pass "blob <file> exits 0" || fail "blob <file> exited $T_STATUS: $T_ERR"
+[ "$T_OUT" = "$BHASH $BBYTES" ] && pass "and prints '<hash> <bytes>' on one line, the hash git's own for the same bytes" ||
+	fail "blob printed '$T_OUT', git says '$BHASH $BBYTES'"
+[ -z "$T_ERR" ] && pass "and says nothing on stderr" || fail "blob spoke on stderr: $T_ERR"
 BSTORED="$BL/blobs/$(printf '%.2s' "$BHASH")/$BHASH"
 cmp -s "$BPAY" "$BSTORED" && pass "the bytes are stored at blobs/<first two>/<hash>, byte for byte" ||
 	fail "no faithful copy at $BSTORED"
@@ -565,38 +565,38 @@ BSTDIN=$(env TRACE_CONFIG=$BLON sh "$TRACE" blob - <"$BPAY")
 # Unconfigured is the working state every write has: nothing stored, nothing on
 # stdout, exit 0 — and the payload is not even read, so a missing file cannot
 # hand a consumer who never opened the policy file a new exit status.
-t_run_split env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$BPAY"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+t_exec env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$BPAY"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$T_ERR" ] &&
 	pass "unconfigured, blob is a silent no-op: exit 0, nothing on either stream" ||
-	fail "unconfigured blob: status $S_STATUS, out '$S_OUT', err '$S_ERR'"
-assert_status 0 "and a missing payload is still exit 0 when nothing would be stored" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$SCRATCH/no-such-payload"
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" blob "$BPAY"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "without TRACE_QUIET it still prints nothing on stdout, where a caller reads the name" ||
-	fail "unconfigured blob printed '$S_OUT' (status $S_STATUS)"
+	fail "unconfigured blob: status $T_STATUS, out '$T_OUT', err '$T_ERR'"
+expect_exit 0 "and a missing payload is still exit 0 when nothing would be stored" -- env TRACE_DIR= TRACE_QUIET=1 sh "$TRACE" blob "$SCRATCH/no-such-payload"
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" blob "$BPAY"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "without TRACE_QUIET it still prints nothing on stdout, where a caller reads the name" ||
+	fail "unconfigured blob printed '$T_OUT' (status $T_STATUS)"
 # Configured, the grammar is the caller's to get right.
-assert_status 2 "blob naming no file is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$SCRATCH/no-such-payload"
-assert_status 2 "blob with no argument is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob
-assert_status 2 "blob with two arguments is exit 2 — one payload, one name" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$BPAY" "$BPAY"
+expect_exit 2 "blob naming no file is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$SCRATCH/no-such-payload"
+expect_exit 2 "blob with no argument is exit 2" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob
+expect_exit 2 "blob with two arguments is exit 2 — one payload, one name" -- env TRACE_CONFIG="$BLON" sh "$TRACE" blob "$BPAY" "$BPAY"
 # A dash-led argument is refused as an OPTION, with the usage text, even when
 # a file of that name exists — without the refusal it reached `cat` as a flag
 # and died naming the wrong problem (review of PR #317). Such a file is
 # reached as ./-x.
 mkdir -p "$SCRATCH/dashdir" && printf 'x' >"$SCRATCH/dashdir/-x"
-t_run_split env TRACE_CONFIG=$BLON sh -c 'cd "$1" && exec sh "$2" blob -x' probe "$SCRATCH/dashdir" "$TRACE"
-[ "$S_STATUS" = 2 ] && case $S_ERR in *'usage:'*) true ;; *) false ;; esac &&
+t_exec env TRACE_CONFIG=$BLON sh -c 'cd "$1" && exec sh "$2" blob -x' probe "$SCRATCH/dashdir" "$TRACE"
+[ "$T_STATUS" = 2 ] && case $T_ERR in *'usage:'*) true ;; *) false ;; esac &&
 	pass "blob -x is exit 2 with the usage text — an option is not a payload, and blob has none" ||
-	fail "blob -x: status $S_STATUS, stderr '$S_ERR'"
-assert_status 0 "and the same file reached as ./-x is stored" -- env TRACE_CONFIG="$BLON" sh -c 'cd "$1" && exec sh "$2" blob ./-x' probe "$SCRATCH/dashdir" "$TRACE"
+	fail "blob -x: status $T_STATUS, stderr '$T_ERR'"
+expect_exit 0 "and the same file reached as ./-x is stored" -- env TRACE_CONFIG="$BLON" sh -c 'cd "$1" && exec sh "$2" blob ./-x' probe "$SCRATCH/dashdir" "$TRACE"
 
 banner "16. The trace directory says which schema its lines are, and the marker survives an interrupted write (the refusal itself is section 20's)"
 [ "$(cat "$R/SCHEMA" 2>/dev/null)" = 1 ] && pass "the first write left a SCHEMA file naming version 1" || fail "SCHEMA says '$(cat "$R/SCHEMA" 2>/dev/null)'"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify is green on a schema it knows" || fail "verify failed a clean trace: $S_OUT $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify is green on a schema it knows" || fail "verify failed a clean trace: $T_OUT $T_ERR"
 # M-6 (review, PR #263): an interrupted first write can leave a marker that
 # names nothing, and an existence-only guard declined to repair it for good.
 : >"$R/SCHEMA"
-t_run_split env TRACE_CONFIG=$RON sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "a marker that names nothing reads as a trace from before the marker existed — verify proceeds rather than refusing" || fail "verify refused an empty marker (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG=$RON sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "a marker that names nothing reads as a trace from before the marker existed — verify proceeds rather than refusing" || fail "verify refused an empty marker (exit $T_STATUS): $T_ERR"
 env TRACE_CONFIG=$RON sh "$TRACE" emit kind=note reason='after the marker was emptied'
 [ "$(cat "$R/SCHEMA")" = 1 ] && pass "and the next write repairs it, so no trace stays nameless" || fail "SCHEMA is still '$(cat "$R/SCHEMA")'"
 
@@ -801,89 +801,89 @@ PRICED="$SCRATCH/policy.priced.sh"
 # the assertions read the numbers and never the column widths.
 summary_row() { printf '%s\n' "$1" | awk -v k="$2" '$1 == k { print $2, $3, $4, $5, $6, $7 }'; }
 
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model
-[ "$S_STATUS" = 0 ] && pass "summary --by model exits 0" || fail "summary exited $S_STATUS: $S_ERR"
-case $(printf '%s\n' "$S_OUT" | head -1) in
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model
+[ "$T_STATUS" = 0 ] && pass "summary --by model exits 0" || fail "summary exited $T_STATUS: $T_ERR"
+case $(printf '%s\n' "$T_OUT" | head -1) in
 model*events*tok_in*tok_out*tok_cache_w*tok_cache_r*cost_usd*) pass "the header names the axis and the six columns" ;;
-*) fail "unexpected header: $(printf '%s\n' "$S_OUT" | head -1)" ;;
+*) fail "unexpected header: $(printf '%s\n' "$T_OUT" | head -1)" ;;
 esac
-[ "$(summary_row "$S_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
+[ "$(summary_row "$T_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
 	pass "m1: two events, the token sums, and 20.103000 — 3 and 15 per million on input and output, then 400000 cache writes at 3.75 and 2000000 cache reads at 0.30" ||
-	fail "m1 row was: $(summary_row "$S_OUT" m1)"
-[ "$(summary_row "$S_OUT" 'v:pro-1.5')" = "1 2000000 1000000 0 0 4.000000" ] &&
+	fail "m1 row was: $(summary_row "$T_OUT" m1)"
+[ "$(summary_row "$T_OUT" 'v:pro-1.5')" = "1 2000000 1000000 0 0 4.000000" ] &&
 	pass "v:pro-1.5: the model id folds through a colon and a dot to reach its price" ||
-	fail "v:pro-1.5 row was: $(summary_row "$S_OUT" 'v:pro-1.5')"
-[ "$(summary_row "$S_OUT" m2)" = "1 5000 0 0 0 unpriced" ] &&
+	fail "v:pro-1.5 row was: $(summary_row "$T_OUT" 'v:pro-1.5')"
+[ "$(summary_row "$T_OUT" m2)" = "1 5000 0 0 0 unpriced" ] &&
 	pass "m2 carries tokens and no price, so its cost reads unpriced and never 0" ||
-	fail "m2 row was: $(summary_row "$S_OUT" m2)"
-[ "$(summary_row "$S_OUT" 9-bad)" = "1 1000 0 0 0 unpriced" ] &&
+	fail "m2 row was: $(summary_row "$T_OUT" m2)"
+[ "$(summary_row "$T_OUT" 9-bad)" = "1 1000 0 0 0 unpriced" ] &&
 	pass "a model whose folded name is no legal variable is unpriced, never evaluated" ||
-	fail "9-bad row was: $(summary_row "$S_OUT" 9-bad)"
-[ "$(summary_row "$S_OUT" '(none)')" = "1 0 0 0 0 0.000000" ] &&
+	fail "9-bad row was: $(summary_row "$T_OUT" 9-bad)"
+[ "$(summary_row "$T_OUT" '(none)')" = "1 0 0 0 0 0.000000" ] &&
 	pass "an event with no model and no tokens groups under (none) and costs 0 — zero tokens cost nothing at any price" ||
-	fail "(none) row was: $(summary_row "$S_OUT" '(none)')"
-[ "$(summary_row "$S_OUT" TOTAL)" = "6 3007000 2000000 400000 2000000 unpriced" ] &&
+	fail "(none) row was: $(summary_row "$T_OUT" '(none)')"
+[ "$(summary_row "$T_OUT" TOTAL)" = "6 3007000 2000000 400000 2000000 unpriced" ] &&
 	pass "TOTAL sums every group and refuses to name a figure while any token-bearing event is unpriced" ||
-	fail "TOTAL row was: $(summary_row "$S_OUT" TOTAL)"
-case $S_ERR in *m2*) pass "stderr names a model that carried tokens and had no price" ;; *) fail "stderr did not name m2: $S_ERR" ;; esac
-case $S_ERR in *9-bad*) pass "and the digit-initial one the table does not price" ;; *) fail "stderr did not name 9-bad: $S_ERR" ;; esac
+	fail "TOTAL row was: $(summary_row "$T_OUT" TOTAL)"
+case $T_ERR in *m2*) pass "stderr names a model that carried tokens and had no price" ;; *) fail "stderr did not name m2: $T_ERR" ;; esac
+case $T_ERR in *9-bad*) pass "and the digit-initial one the table does not price" ;; *) fail "stderr did not name 9-bad: $T_ERR" ;; esac
 
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by skill
-[ "$(summary_row "$S_OUT" implement)" = "2 1000000 1000000 400000 2000000 20.100000" ] &&
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by skill
+[ "$(summary_row "$T_OUT" implement)" = "2 1000000 1000000 400000 2000000 20.100000" ] &&
 	pass "--by skill prices a group whose only token-bearing event is priced" ||
-	fail "implement row was: $(summary_row "$S_OUT" implement)"
-[ "$(summary_row "$S_OUT" review-pr)" = "4 2007000 1000000 0 0 unpriced" ] &&
+	fail "implement row was: $(summary_row "$T_OUT" implement)"
+[ "$(summary_row "$T_OUT" review-pr)" = "4 2007000 1000000 0 0 unpriced" ] &&
 	pass "and a group that mixes a priced and an unpriced model reads unpriced, never a partial sum" ||
-	fail "review-pr row was: $(summary_row "$S_OUT" review-pr)"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by kind
-[ "$(summary_row "$S_OUT" session.usage)" = "5 3007000 2000000 400000 2000000 unpriced" ] && pass "--by kind groups on the closed vocabulary" || fail "session.usage row was: $(summary_row "$S_OUT" session.usage)"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by session
-[ "$(summary_row "$S_OUT" s1)" = "1 1000000 1000000 400000 2000000 20.100000" ] && pass "--by session groups on the session field" || fail "s1 row was: $(summary_row "$S_OUT" s1)"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model --since "$TODAY"
-[ "$(summary_row "$S_OUT" m1)" = "1 1000 0 0 0 0.003000" ] &&
+	fail "review-pr row was: $(summary_row "$T_OUT" review-pr)"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by kind
+[ "$(summary_row "$T_OUT" session.usage)" = "5 3007000 2000000 400000 2000000 unpriced" ] && pass "--by kind groups on the closed vocabulary" || fail "session.usage row was: $(summary_row "$T_OUT" session.usage)"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by session
+[ "$(summary_row "$T_OUT" s1)" = "1 1000000 1000000 400000 2000000 20.100000" ] && pass "--by session groups on the session field" || fail "s1 row was: $(summary_row "$T_OUT" s1)"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by model --since "$TODAY"
+[ "$(summary_row "$T_OUT" m1)" = "1 1000 0 0 0 0.003000" ] &&
 	pass "--since drops the older day's file: 1000 input tokens at 3 per million is 0.003000" ||
-	fail "m1 row since $TODAY was: $(summary_row "$S_OUT" m1)"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary
-case $(printf '%s\n' "$S_OUT" | head -1) in kind*) pass "--by defaults to kind" ;; *) fail "the default axis is not kind: $(printf '%s\n' "$S_OUT" | head -1)" ;; esac
+	fail "m1 row since $TODAY was: $(summary_row "$T_OUT" m1)"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary
+case $(printf '%s\n' "$T_OUT" | head -1) in kind*) pass "--by defaults to kind" ;; *) fail "the default axis is not kind: $(printf '%s\n' "$T_OUT" | head -1)" ;; esac
 # #583: tier and domain join the axes — the columns a spawn's Trace-Spawn line
 # fills on its agent.stop. None of these events carries either, so each groups
 # whole under (none), priced as any other axis is.
 for ax583 in tier domain; do
-	t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by $ax583
-	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | head -1 | awk '{ print $1 }')" = "$ax583" ] &&
-		[ "$(summary_row "$S_OUT" '(none)')" = "$(summary_row "$S_OUT" TOTAL)" ] &&
+	t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" summary --by $ax583
+	[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | head -1 | awk '{ print $1 }')" = "$ax583" ] &&
+		[ "$(summary_row "$T_OUT" '(none)')" = "$(summary_row "$T_OUT" TOTAL)" ] &&
 		pass "summary --by $ax583 is accepted, and events carrying no $ax583 group under (none)" ||
-		fail "summary --by $ax583: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+		fail "summary --by $ax583: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 done
-assert_status 2 "an unknown --by axis is exit 2 — the axis vocabulary is closed" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --by bogus
-assert_out_has "kind, skill, model, session, tier, domain"
-assert_status 2 "a malformed --since is exit 2" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --since yesterday
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" summary --by model
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "summary on an unconfigured trace is exit 0 and silent on stdout" || fail "summary unconfigured printed '$S_OUT' (exit $S_STATUS)"
+expect_exit 2 "an unknown --by axis is exit 2 — the axis vocabulary is closed" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --by bogus
+expect_said "kind, skill, model, session, tier, domain"
+expect_exit 2 "a malformed --since is exit 2" -- env TRACE_CONFIG="$PRICED" sh "$TRACE" summary --since yesterday
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" summary --by model
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "summary on an unconfigured trace is exit 0 and silent on stdout" || fail "summary unconfigured printed '$T_OUT' (exit $T_STATUS)"
 
 banner "13. A price is four numbers per million tokens, and a malformed one is the operator error it is"
 BADP="$SCRATCH/policy.badprice.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15'\n" "$SUM" >"$BADP"
-assert_status 2 "a price missing two of its four fields is exit 2" -- env TRACE_CONFIG="$BADP" sh "$TRACE" summary --by model
-assert_out_has "TRACE_PRICE_M1"
+expect_exit 2 "a price missing two of its four fields is exit 2" -- env TRACE_CONFIG="$BADP" sh "$TRACE" summary --by model
+expect_said "TRACE_PRICE_M1"
 BADP2="$SCRATCH/policy.badprice2.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,free,0.30'\n" "$SUM" >"$BADP2"
-assert_status 2 "a price field that is not a number is exit 2, never silently zero" -- env TRACE_CONFIG="$BADP2" sh "$TRACE" summary --by model
+expect_exit 2 "a price field that is not a number is exit 2, never silently zero" -- env TRACE_CONFIG="$BADP2" sh "$TRACE" summary --by model
 
 banner "14. export is the importable artifact: JSONL verbatim, CSV flat and priced"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 6 ] && pass "export prints the six selected events" || fail "export printed $(printf '%s\n' "$S_OUT" | grep -c .) lines (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" export
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 6 ] && pass "export prints the six selected events" || fail "export printed $(printf '%s\n' "$T_OUT" | grep -c .) lines (exit $T_STATUS): $T_ERR"
 # The WHOLE stream against the files, not just its first line: an export that
 # rewrote every event after the first would have passed a first-line check.
-[ "$S_OUT" = "$(cat "$OLD" "$NOW")" ] && pass "and prints them verbatim, every line of them, oldest day first — an event is a fact, so the JSONL form adds nothing" || fail "the JSONL form is not the files' own bytes"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --since "$TODAY"
+[ "$T_OUT" = "$(cat "$OLD" "$NOW")" ] && pass "and prints them verbatim, every line of them, oldest day first — an event is a fact, so the JSONL form adds nothing" || fail "the JSONL form is not the files' own bytes"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" export --since "$TODAY"
 # WHICH five, not how many: --since returning any five events would have passed
 # a count.
-[ "$S_OUT" = "$(cat "$NOW")" ] && pass "--since selects by the file's date — exactly today's five events, and the older day's not at all" || fail "export --since printed something other than today's file: $S_OUT"
+[ "$T_OUT" = "$(cat "$NOW")" ] && pass "--since selects by the file's date — exactly today's five events, and the older day's not at all" || fail "export --since printed something other than today's file: $T_OUT"
 
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
-[ "$S_STATUS" = 0 ] && pass "export --csv exits 0" || fail "export --csv exited $S_STATUS: $S_ERR"
-CSVH=$(printf '%s\n' "$S_OUT" | head -1)
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
+[ "$T_STATUS" = 0 ] && pass "export --csv exits 0" || fail "export --csv exited $T_STATUS: $T_ERR"
+CSVH=$(printf '%s\n' "$T_OUT" | head -1)
 # Head and tail rather than the whole row: the envelope's middle is the field
 # list in scripts/trace.sh, and a later slice adding a field there should widen
 # this CSV without failing this assertion.
@@ -895,22 +895,22 @@ WANT_H='v,ts,id,kind,skill,subject,related,session,run,parent,tier,domain,harnes
 [ "$CSVH" = "$WANT_H" ] &&
 	pass "the header is the event envelope's own columns in order, then the three computed on read, then the data map" ||
 	fail "CSV header is not the documented column list:$(printf '\n    got:  %s\n    want: %s' "$CSVH" "$WANT_H")"
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 7 ] && pass "one header row and six event rows" || fail "CSV had $(printf '%s\n' "$S_OUT" | grep -c .) lines"
-ROW1=$(printf '%s\n' "$S_OUT" | grep ',a1,')
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 7 ] && pass "one header row and six event rows" || fail "CSV had $(printf '%s\n' "$T_OUT" | grep -c .) lines"
+ROW1=$(printf '%s\n' "$T_OUT" | grep ',a1,')
 case $ROW1 in *,1000000,1000000,400000,2000000,20.100000,*) pass "the priced row carries bare token counts and its computed cost_usd" ;; *) fail "row a1 was: $ROW1" ;; esac
 case $ROW1 in *,20.100000,2[0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z,"$PRICED",*) pass "priced_at stamps when it was priced and price_src names the table that priced it" ;; *) fail "priced_at/price_src wrong in: $ROW1" ;; esac
-ROW3=$(printf '%s\n' "$S_OUT" | grep ',a3,')
+ROW3=$(printf '%s\n' "$T_OUT" | grep ',a3,')
 case $ROW3 in *,unpriced,*) pass "an unpriced model exports the word, not a number" ;; *) fail "row a3 was: $ROW3" ;; esac
 # The escaper's inverse: the CSV column carries the REAL value, so a quote is
 # doubled per RFC 4180 and the JSON backslash escapes are gone.
 WANT=$(printf '"say ""hi"", back\\ tab\there é"')
-ROW4=$(printf '%s\n' "$S_OUT" | grep ',a4,')
+ROW4=$(printf '%s\n' "$T_OUT" | grep ',a4,')
 case $ROW4 in *"$WANT"*) pass "a reason with a quote, a comma, a backslash, a tab and non-ASCII round-trips into one CSV field" ;; *) fail "the reason cell was not CSV-escaped: $ROW4" ;; esac
 case $ROW4 in *'"{""note"":""1,2""}"'*) pass "the data map travels as one JSON string column" ;; *) fail "the data cell was not one quoted JSON column: $ROW4" ;; esac
 case $ROW4 in *,0.000000,*) pass "an event with no tokens costs 0.000000 whatever its model" ;; *) fail "row a4 cost was not 0.000000: $ROW4" ;; esac
 case $ROW4 in *ticket:#253*) pass "and a value needing no quoting is left bare, so a database reads its own types" ;; *) fail "subject missing from row a4: $ROW4" ;; esac
 if command -v node >/dev/null 2>&1; then
-	printf '%s\n' "$S_OUT" | node -e '
+	printf '%s\n' "$T_OUT" | node -e '
 		const rows = require("fs").readFileSync(0, "utf8").trim().split("\n");
 		const cols = (l) => { const o = []; let f = "", q = false; for (let i = 0; i < l.length; i++) { const c = l[i];
 			if (q) { if (c === "\"" && l[i + 1] === "\"") { f += "\""; i++; } else if (c === "\"") q = false; else f += c; }
@@ -922,17 +922,17 @@ if command -v node >/dev/null 2>&1; then
 else
 	echo "  skip  node is not on PATH — the CSV field-count check not run"
 fi
-t_run_split env TRACE_CONFIG=$OFF sh "$TRACE" export --csv
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "export on an unconfigured trace is exit 0 and silent on stdout" || fail "export unconfigured printed '$S_OUT' (exit $S_STATUS)"
+t_exec env TRACE_CONFIG=$OFF sh "$TRACE" export --csv
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "export on an unconfigured trace is exit 0 and silent on stdout" || fail "export unconfigured printed '$T_OUT' (exit $T_STATUS)"
 
 banner "15. export refuses while verify fails — a corrupt trace is never an import"
 printf 'hand-edited, not an event\n' >>"$NOW"
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export
-[ "$S_STATUS" = 1 ] && pass "export over a trace with a bad line is exit 1 — verify's own verdict" || fail "export exited $S_STATUS on a bad line"
-[ -z "$S_OUT" ] && pass "and prints no rows at all, so half an import is impossible" || fail "export printed rows despite the bad line"
-case $S_ERR in *"$TODAY.jsonl:6"*) pass "and names the file and line on stderr" ;; *) fail "the refusal did not name file:line: $S_ERR" ;; esac
-t_run_split env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
-[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] && pass "the CSV form refuses the same way" || fail "export --csv did not refuse (exit $S_STATUS)"
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" export
+[ "$T_STATUS" = 1 ] && pass "export over a trace with a bad line is exit 1 — verify's own verdict" || fail "export exited $T_STATUS on a bad line"
+[ -z "$T_OUT" ] && pass "and prints no rows at all, so half an import is impossible" || fail "export printed rows despite the bad line"
+case $T_ERR in *"$TODAY.jsonl:6"*) pass "and names the file and line on stderr" ;; *) fail "the refusal did not name file:line: $T_ERR" ;; esac
+t_exec env TRACE_CONFIG=$PRICED sh "$TRACE" export --csv
+[ "$T_STATUS" = 1 ] && [ -z "$T_OUT" ] && pass "the CSV form refuses the same way" || fail "export --csv did not refuse (exit $T_STATUS)"
 
 banner "16. The price table is policy: the shipped file documents the shape, the kit twin carries it filled and dated"
 assert_file_has "$KIT/scripts/trace.config.sh" "TRACE_PRICE_" "the shipped policy file documents the price variable"
@@ -977,13 +977,13 @@ H1P="$SCRATCH/policy.h1.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_A_B='1,1,1,1'\nTRACE_PRICE_C_D='2,0,0,0'\n" "$H1" >"$H1P"
 TRACE_CONFIG=$H1P sh "$TRACE" emit kind=session.usage model='a"b' tok_in=1000000
 TRACE_CONFIG=$H1P sh "$TRACE" emit kind=session.usage model="c${TAB}d" tok_in=1000000
-t_run_split env TRACE_CONFIG=$H1P sh "$TRACE" summary --by model
-[ "$(summary_row "$S_OUT" 'a"b')" = "1 1000000 0 0 0 1.000000" ] &&
+t_exec env TRACE_CONFIG=$H1P sh "$TRACE" summary --by model
+[ "$(summary_row "$T_OUT" 'a"b')" = "1 1000000 0 0 0 1.000000" ] &&
 	pass "H-1: a model carrying a quote is priced by the name the operator typed, not by the escaped body" ||
-	fail "H-1: the a\"b row was: $(summary_row "$S_OUT" 'a\"b') / $(summary_row "$S_OUT" 'a"b')"
-case $S_ERR in *'a\"b'*) fail "H-1: the unpriced note still names the escaped body" ;; *) pass "H-1: and the diagnostics name the real id too" ;; esac
-t_run_split env TRACE_CONFIG=$H1P sh "$TRACE" export --csv
-case $S_OUT in *',2.000000,'*) pass "H-1: a model carrying a tab prices in the CSV as well" ;; *) fail "H-1: the tab-carrying model did not price: $S_OUT" ;; esac
+	fail "H-1: the a\"b row was: $(summary_row "$T_OUT" 'a\"b') / $(summary_row "$T_OUT" 'a"b')"
+case $T_ERR in *'a\"b'*) fail "H-1: the unpriced note still names the escaped body" ;; *) pass "H-1: and the diagnostics name the real id too" ;; esac
+t_exec env TRACE_CONFIG=$H1P sh "$TRACE" export --csv
+case $T_OUT in *',2.000000,'*) pass "H-1: a model carrying a tab prices in the CSV as well" ;; *) fail "H-1: the tab-carrying model did not price: $T_OUT" ;; esac
 
 # H-2. `for m in $models` and `set -- $(files)` field-split AND glob. A model
 # called `alpha*` was silently replaced by whatever file the CALLER's cwd
@@ -994,19 +994,19 @@ H2P="$SCRATCH/policy.h2.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_ALPHA_='5,0,0,0'\n" "$H2" >"$H2P"
 TRACE_CONFIG=$H2P sh "$TRACE" emit kind=session.usage model='alpha*' tok_in=1000000
 mkdir -p "$SCRATCH/globbait" && : >"$SCRATCH/globbait/alphax"
-t_run_split env TRACE_CONFIG=$H2P sh -c "cd '$SCRATCH/globbait' && sh '$TRACE' summary --by model"
-[ "$(summary_row "$S_OUT" 'alpha*')" = "1 1000000 0 0 0 5.000000" ] &&
+t_exec env TRACE_CONFIG=$H2P sh -c "cd '$SCRATCH/globbait' && sh '$TRACE' summary --by model"
+[ "$(summary_row "$T_OUT" 'alpha*')" = "1 1000000 0 0 0 5.000000" ] &&
 	pass "H-2: a model carrying a glob character is read literally, whatever files the caller's cwd holds" ||
-	fail "H-2: the alpha* row was: $(summary_row "$S_OUT" 'alpha*')"
-case $S_ERR in *alphax*) fail "H-2: a filename from the caller's cwd leaked into the price lookup" ;; *) pass "H-2: and no filename from that directory reached the diagnostics" ;; esac
+	fail "H-2: the alpha* row was: $(summary_row "$T_OUT" 'alpha*')"
+case $T_ERR in *alphax*) fail "H-2: a filename from the caller's cwd leaked into the price lookup" ;; *) pass "H-2: and no filename from that directory reached the diagnostics" ;; esac
 # The same expansion selects the event FILES, so a trace directory whose own
 # path carries a glob character must still be read.
 H2G="$SCRATCH/glob[1]dir"
 H2GP="$SCRATCH/policy.h2g.sh"
 printf "TRACE_DIR='%s'\n" "$H2G" >"$H2GP"
 TRACE_CONFIG=$H2GP sh "$TRACE" emit kind=note subject='ticket:#262' reason='under a bracketed path'
-t_run_split env TRACE_CONFIG=$H2GP sh "$TRACE" export
-case $S_OUT in *'under a bracketed path'*) pass "H-2: and a trace directory whose path carries a glob character is still read" ;; *) fail "H-2: export found nothing under $H2G: '$S_OUT'" ;; esac
+t_exec env TRACE_CONFIG=$H2GP sh "$TRACE" export
+case $T_OUT in *'under a bracketed path'*) pass "H-2: and a trace directory whose path carries a glob character is still read" ;; *) fail "H-2: export found nothing under $H2G: '$T_OUT'" ;; esac
 
 # H-3. The two-stage pipeline rounded each group to six places and then summed
 # the rounded rows, so the SAME events totalled differently depending on which
@@ -1029,10 +1029,10 @@ BY_MODEL=$(env TRACE_CONFIG=$H3P sh "$TRACE" summary --by model 2>/dev/null | aw
 # counted as four prices and was accepted.
 BADP3="$SCRATCH/policy.badprice3.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,3.75,0.30,'\n" "$SUM" >"$BADP3"
-assert_status 2 "M-1: a price with a trailing comma is exit 2 — word splitting hid the empty fifth field" -- env TRACE_CONFIG="$BADP3" sh "$TRACE" summary --by model
+expect_exit 2 "M-1: a price with a trailing comma is exit 2 — word splitting hid the empty fifth field" -- env TRACE_CONFIG="$BADP3" sh "$TRACE" summary --by model
 BADP4="$SCRATCH/policy.badprice4.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_M1=',3,15,3.75'\n" "$SUM" >"$BADP4"
-assert_status 2 "M-1: and a leading comma is too" -- env TRACE_CONFIG="$BADP4" sh "$TRACE" summary --by model
+expect_exit 2 "M-1: and a leading comma is too" -- env TRACE_CONFIG="$BADP4" sh "$TRACE" summary --by model
 
 # M-2. A missing field and a field whose literal value is the text `(none)`
 # were merged into one row, so both counts and both costs were wrong.
@@ -1040,11 +1040,11 @@ M2="$SCRATCH/m2"
 M2P=$(policy "$M2")
 TRACE_CONFIG=$M2P sh "$TRACE" emit kind=note reason='the skill field is absent'
 TRACE_CONFIG=$M2P sh "$TRACE" emit kind=note skill='(none)' reason='the skill field literally says (none)'
-t_run_split env TRACE_CONFIG=$M2P sh "$TRACE" summary --by skill
-[ "$(printf '%s\n' "$S_OUT" | awk '$1 == "(none)"' | grep -c .)" = 2 ] &&
+t_exec env TRACE_CONFIG=$M2P sh "$TRACE" summary --by skill
+[ "$(printf '%s\n' "$T_OUT" | awk '$1 == "(none)"' | grep -c .)" = 2 ] &&
 	pass "M-2: an absent field and a literal (none) are two rows, never one merged count" ||
-	fail "M-2: the two groups did not stay apart: $S_OUT"
-[ "$(printf '%s\n' "$S_OUT" | awk '$1 == "TOTAL" { print $2 }')" = 2 ] && pass "M-2: and the total still counts both events once" || fail "M-2: TOTAL was wrong: $S_OUT"
+	fail "M-2: the two groups did not stay apart: $T_OUT"
+[ "$(printf '%s\n' "$T_OUT" | awk '$1 == "TOTAL" { print $2 }')" = 2 ] && pass "M-2: and the total still counts both events once" || fail "M-2: TOTAL was wrong: $T_OUT"
 
 # M-3. The script lost its executable bit to a `mv` while it was being edited.
 # Nothing in this suite invokes it directly, which is exactly why the bit could
@@ -1058,10 +1058,10 @@ CACHE="$SCRATCH/cache"
 CACHEP="$SCRATCH/policy.cache.sh"
 printf "TRACE_DIR='%s'\nTRACE_PRICE_K='0,0,10,1'\n" "$CACHE" >"$CACHEP"
 TRACE_CONFIG=$CACHEP sh "$TRACE" emit kind=session.usage model=k tok_cache_w=100000 tok_cache_r=3000000
-t_run_split env TRACE_CONFIG=$CACHEP sh "$TRACE" summary --by model
-[ "$(summary_row "$S_OUT" k)" = "1 0 0 100000 3000000 4.000000" ] &&
+t_exec env TRACE_CONFIG=$CACHEP sh "$TRACE" summary --by model
+[ "$(summary_row "$T_OUT" k)" = "1 0 0 100000 3000000 4.000000" ] &&
 	pass "the cache rates are weighted by their own counts — 100000 at 10 plus 3000000 at 1 is 4.000000, and swapping the two rates would read 31.000000" ||
-	fail "the cache-only row was: $(summary_row "$S_OUT" k)"
+	fail "the cache-only row was: $(summary_row "$T_OUT" k)"
 
 banner "18. summary over a damaged trace says so in its own first line — a total nobody mistakes for clean (operator decision, 2026-09-28)"
 DAMAGED="$SCRATCH/damaged"
@@ -1070,25 +1070,25 @@ cp "$SUM/events/2026-01-02.jsonl" "$DAMAGED/events/"
 grep -v 'hand-edited' "$NOW" >"$DAMAGED/events/$TODAY.jsonl"
 DPOL=$(policy "$DAMAGED")
 printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n" >>"$DPOL"
-t_run_split env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
-[ "$S_STATUS" = 0 ] && pass "summary on a clean trace exits 0" || fail "summary exited $S_STATUS on a clean trace: $S_ERR"
-case $S_OUT in *"verify: FAILED"*) fail "a clean trace was marked as failed verify" ;; *) pass "and carries no verify marker when the trace is clean" ;; esac
+t_exec env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
+[ "$T_STATUS" = 0 ] && pass "summary on a clean trace exits 0" || fail "summary exited $T_STATUS on a clean trace: $T_ERR"
+case $T_OUT in *"verify: FAILED"*) fail "a clean trace was marked as failed verify" ;; *) pass "and carries no verify marker when the trace is clean" ;; esac
 printf 'hand-edited, not an event\n' >>"$DAMAGED/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
-[ "$S_STATUS" = 0 ] && pass "summary on a damaged trace still exits 0 — a glance is not an import" || fail "summary exited $S_STATUS on a damaged trace"
-case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: FAILED"*) pass "and its FIRST line says verify FAILED, so the totals below are never quoted as clean" ;; *) fail "the first line of summary did not mark the failed verify: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
-case $S_OUT in *"1 bad line"*) pass "and counts the bad LINES — one, however many findings verify raised for it" ;; *) fail "the marker does not count the bad lines: $S_OUT" ;; esac
+t_exec env TRACE_CONFIG=$DPOL sh "$TRACE" summary --by model
+[ "$T_STATUS" = 0 ] && pass "summary on a damaged trace still exits 0 — a glance is not an import" || fail "summary exited $T_STATUS on a damaged trace"
+case $(printf '%s\n' "$T_OUT" | sed -n 1p) in "verify: FAILED"*) pass "and its FIRST line says verify FAILED, so the totals below are never quoted as clean" ;; *) fail "the first line of summary did not mark the failed verify: $(printf '%s\n' "$T_OUT" | sed -n 1p)" ;; esac
+case $T_OUT in *"1 bad line"*) pass "and counts the bad LINES — one, however many findings verify raised for it" ;; *) fail "the marker does not count the bad lines: $T_OUT" ;; esac
 # The trap the count fell into once: with node on PATH verify names the same
 # line twice, structurally and from the parse, and a marker that counted
 # findings said 2. Pin the double report, so the count's job stays visible.
 if command -v node >/dev/null 2>&1; then
-	[ "$(printf '%s\n' "$S_ERR" | grep -c "$TODAY.jsonl:")" -ge 2 ] &&
+	[ "$(printf '%s\n' "$T_ERR" | grep -c "$TODAY.jsonl:")" -ge 2 ] &&
 		pass "verify reported that one line more than once on stderr (structural and parse), and the marker still said 1" ||
-		fail "expected verify to name the bad line at least twice with node present: $S_ERR"
+		fail "expected verify to name the bad line at least twice with node present: $T_ERR"
 fi
-case $S_ERR in *"$TODAY.jsonl:"*) pass "and verify's own findings go to stderr, file:line" ;; *) fail "stderr did not carry verify's file:line: $S_ERR" ;; esac
-[ "$(summary_row "$S_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
-	pass "and the rows themselves are still the rows" || fail "m1 row changed: $(summary_row "$S_OUT" m1)"
+case $T_ERR in *"$TODAY.jsonl:"*) pass "and verify's own findings go to stderr, file:line" ;; *) fail "stderr did not carry verify's file:line: $T_ERR" ;; esac
+[ "$(summary_row "$T_OUT" m1)" = "2 1001000 1000000 400000 2000000 20.103000" ] &&
+	pass "and the rows themselves are still the rows" || fail "m1 row changed: $(summary_row "$T_OUT" m1)"
 
 banner "19. A model id that starts with a digit is priceable — the fold's token only has to be a legal suffix (review of PR #262)"
 NINE="$SCRATCH/nine"
@@ -1096,10 +1096,10 @@ mkdir -p "$NINE/events"
 printf '%s\n' '{"v":1,"ts":"'"$TODAY"'T10:04:00Z","id":"n1","kind":"session.usage","skill":"review-pr","subject":"session:s9","session":"s9","model":"9-bad","tok_in":1000000,"tok_out":0,"tok_cache_w":0,"tok_cache_r":0}' >"$NINE/events/$TODAY.jsonl"
 NPOL=$(policy "$NINE")
 printf "TRACE_PRICE_9_BAD='2,0,0,0'\n" >>"$NPOL"
-t_run_split env TRACE_CONFIG=$NPOL sh "$TRACE" summary --by model
-[ "$(summary_row "$S_OUT" 9-bad)" = "1 1000000 0 0 0 2.000000" ] &&
+t_exec env TRACE_CONFIG=$NPOL sh "$TRACE" summary --by model
+[ "$(summary_row "$T_OUT" 9-bad)" = "1 1000000 0 0 0 2.000000" ] &&
 	pass "TRACE_PRICE_9_BAD prices the model 9-bad — a digit-initial token is a legal variable suffix" ||
-	fail "9-bad did not price through TRACE_PRICE_9_BAD: $(summary_row "$S_OUT" 9-bad)"
+	fail "9-bad did not price through TRACE_PRICE_9_BAD: $(summary_row "$T_OUT" 9-bad)"
 
 banner "20. A schema this reader does not know is its own exit code — 3, cannot judge this trace (ADR-0008 clause 4, amended 2026-09-28 for #271)"
 # The state the amendment separates from both its neighbours: nothing failed and
@@ -1113,52 +1113,52 @@ printf '%s\n' '{"v":1,"ts":"'"$TODAY"'T11:00:00Z","id":"u1","kind":"session.usag
 UPOL=$(policy "$UNS")
 printf "TRACE_PRICE_M1='3,15,3.75,0.30'\n" >>"$UPOL"
 # The two baselines first, because this section must move neither of them.
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "with no SCHEMA marker at all, verify is green — a trace from before the marker existed is still this reader's" || fail "verify exited $S_STATUS with no marker: $S_ERR"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "with no SCHEMA marker at all, verify is green — a trace from before the marker existed is still this reader's" || fail "verify exited $T_STATUS with no marker: $T_ERR"
 printf '1\n' >"$UNS/SCHEMA"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "and a marker naming version 1 is green too" || fail "verify exited $S_STATUS on schema 1: $S_ERR"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "and a marker naming version 1 is green too" || fail "verify exited $T_STATUS on schema 1: $T_ERR"
 
 printf '2\n' >"$UNS/SCHEMA"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 3 ] && pass "a SCHEMA of 2 makes verify exit 3 — no verdict is not a bad verdict (1), and the caller's command was well formed (2)" || fail "verify exited $S_STATUS on schema 2, and 3 is the code for a trace it cannot judge"
-case $S_ERR in *"schema 2"*) pass "and the refusal names the version it found" ;; *) fail "the refusal did not name version 2: $S_ERR" ;; esac
-case $S_ERR in *"reads 1"*) pass "and the version it does read, so the operator knows which end is behind" ;; *) fail "the refusal did not name the version it reads: $S_ERR" ;; esac
-[ -z "$S_OUT" ] && pass "and it judges no line" || fail "verify judged lines under a schema it cannot read: $S_OUT"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 3 ] && pass "a SCHEMA of 2 makes verify exit 3 — no verdict is not a bad verdict (1), and the caller's command was well formed (2)" || fail "verify exited $T_STATUS on schema 2, and 3 is the code for a trace it cannot judge"
+case $T_ERR in *"schema 2"*) pass "and the refusal names the version it found" ;; *) fail "the refusal did not name version 2: $T_ERR" ;; esac
+case $T_ERR in *"reads 1"*) pass "and the version it does read, so the operator knows which end is behind" ;; *) fail "the refusal did not name the version it reads: $T_ERR" ;; esac
+[ -z "$T_OUT" ] && pass "and it judges no line" || fail "verify judged lines under a schema it cannot read: $T_OUT"
 
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export
-[ "$S_STATUS" = 3 ] && pass "export refuses with the same 3 — a caller told 1 would hunt for a bad line there is none of" || fail "export exited $S_STATUS on an unsupported schema"
-[ -z "$S_OUT" ] && pass "and prints nothing at all" || fail "export printed rows under a schema it cannot read: $S_OUT"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" export
+[ "$T_STATUS" = 3 ] && pass "export refuses with the same 3 — a caller told 1 would hunt for a bad line there is none of" || fail "export exited $T_STATUS on an unsupported schema"
+[ -z "$T_OUT" ] && pass "and prints nothing at all" || fail "export printed rows under a schema it cannot read: $T_OUT"
 # H-1 (review, PR #292): matching *schema* here matched VERIFY's own line
 # flowing through, so deleting export's whole refusal branch left the suite
 # green. Match export's OWN sentence, and pin the absence of the wrong one.
-case $S_ERR in *"export refused — the schema"*) pass "and export's OWN refusal says the schema is why" ;; *) fail "export's refusal did not name the schema: $S_ERR" ;; esac
-case $S_ERR in *"verify fails on this selection"*) fail "export blamed a failing verify, the one message this state exists to suppress: $S_ERR" ;; *) pass "and never says verify fails, which would send the operator hunting for a bad line" ;; esac
-case $S_ERR in *"$TODAY.jsonl:"*) fail "export blamed a line when no line was judged: $S_ERR" ;; *) pass "and blames no line, because none was judged" ;; esac
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export --csv
-[ "$S_STATUS" = 3 ] && [ -z "$S_OUT" ] && pass "the CSV form refuses the same way, header included" || fail "export --csv did not refuse with 3 (exit $S_STATUS): $S_OUT"
+case $T_ERR in *"export refused — the schema"*) pass "and export's OWN refusal says the schema is why" ;; *) fail "export's refusal did not name the schema: $T_ERR" ;; esac
+case $T_ERR in *"verify fails on this selection"*) fail "export blamed a failing verify, the one message this state exists to suppress: $T_ERR" ;; *) pass "and never says verify fails, which would send the operator hunting for a bad line" ;; esac
+case $T_ERR in *"$TODAY.jsonl:"*) fail "export blamed a line when no line was judged: $T_ERR" ;; *) pass "and blames no line, because none was judged" ;; esac
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" export --csv
+[ "$T_STATUS" = 3 ] && [ -z "$T_OUT" ] && pass "the CSV form refuses the same way, header included" || fail "export --csv did not refuse with 3 (exit $T_STATUS): $T_OUT"
 
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
-[ "$S_STATUS" = 0 ] && pass "summary still exits 0 — a glance is not an import" || fail "summary exited $S_STATUS on an unsupported schema"
-case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: UNSUPPORTED SCHEMA 2") pass "and its FIRST line is that marker, naming the version" ;; *) fail "summary's first line was: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
-case $S_OUT in *"bad line"*) fail "summary counted bad lines under a schema it never judged: $S_OUT" ;; *) pass "and counts no bad lines, because it judged none" ;; esac
-[ "$(summary_row "$S_OUT" m1)" = "1 1000000 0 0 0 3.000000" ] && pass "and the rows below are still the rows, priced as ever" || fail "the m1 row changed under an unsupported schema: $(summary_row "$S_OUT" m1)"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
+[ "$T_STATUS" = 0 ] && pass "summary still exits 0 — a glance is not an import" || fail "summary exited $T_STATUS on an unsupported schema"
+case $(printf '%s\n' "$T_OUT" | sed -n 1p) in "verify: UNSUPPORTED SCHEMA 2") pass "and its FIRST line is that marker, naming the version" ;; *) fail "summary's first line was: $(printf '%s\n' "$T_OUT" | sed -n 1p)" ;; esac
+case $T_OUT in *"bad line"*) fail "summary counted bad lines under a schema it never judged: $T_OUT" ;; *) pass "and counts no bad lines, because it judged none" ;; esac
+[ "$(summary_row "$T_OUT" m1)" = "1 1000000 0 0 0 3.000000" ] && pass "and the rows below are still the rows, priced as ever" || fail "the m1 row changed under an unsupported schema: $(summary_row "$T_OUT" m1)"
 
 # The two states must not collapse into one another.
 printf '1\n' >"$UNS/SCHEMA"
 printf 'hand-edited, not an event\n' >>"$UNS/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && pass "a bad line under a KNOWN schema is still exit 1 — the verdict code did not move" || fail "verify exited $S_STATUS on a bad line"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" export
-[ "$S_STATUS" = 1 ] && pass "and export still carries that verdict out" || fail "export exited $S_STATUS on a bad line"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
-case $(printf '%s\n' "$S_OUT" | sed -n 1p) in "verify: FAILED — 1 bad line"*) pass "and summary still counts the bad line" ;; *) fail "summary's first line was: $(printf '%s\n' "$S_OUT" | sed -n 1p)" ;; esac
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 1 ] && pass "a bad line under a KNOWN schema is still exit 1 — the verdict code did not move" || fail "verify exited $T_STATUS on a bad line"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" export
+[ "$T_STATUS" = 1 ] && pass "and export still carries that verdict out" || fail "export exited $T_STATUS on a bad line"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" summary --by model
+case $(printf '%s\n' "$T_OUT" | sed -n 1p) in "verify: FAILED — 1 bad line"*) pass "and summary still counts the bad line" ;; *) fail "summary's first line was: $(printf '%s\n' "$T_OUT" | sed -n 1p)" ;; esac
 printf '2\n' >"$UNS/SCHEMA"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 3 ] && pass "and a damaged trace under an UNKNOWN schema reports the schema, not the damage — a reader that cannot read the shape cannot call the line bad" || fail "verify exited $S_STATUS on a bad line under schema 2"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 3 ] && pass "and a damaged trace under an UNKNOWN schema reports the schema, not the damage — a reader that cannot read the shape cannot call the line bad" || fail "verify exited $T_STATUS on a bad line under schema 2"
 : >"$UNS/SCHEMA"
-t_run_split env TRACE_CONFIG=$UPOL sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && pass "while a marker that names nothing is no version at all, and the bad line is judged as ever (M-6, PR #263)" || fail "verify exited $S_STATUS on an empty marker"
+t_exec env TRACE_CONFIG=$UPOL sh "$TRACE" verify
+[ "$T_STATUS" = 1 ] && pass "while a marker that names nothing is no version at all, and the bad line is judged as ever (M-6, PR #263)" || fail "verify exited $T_STATUS on an empty marker"
 
 # The contract is only widened where its readers look for it.
 case $(sed -n '/^# STREAMS AND EXIT CODES/,/^#$/p' "$TRACE") in *"exit 3"*) pass "the script's own exit-code paragraph names 3" ;; *) fail "the header's exit-code paragraph does not name exit 3" ;; esac
@@ -1185,37 +1185,37 @@ SPON="$SCRATCH/policy.spelling.sh"
 printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\n" "$SP" >"$SPON"
 OPEN="$SCRATCH/spelling-open"; OPENON=$(policy "$OPEN")
 for _sp_any in 'ticket:265' 'ticket:PROJ-12' 'pr:12' 'prd:#012'; do
-	assert_status 0 "with no TRACE_NUMBERED_TYPES, $_sp_any is accepted — the grammar stays open" -- env TRACE_CONFIG="$OPENON" sh "$TRACE" emit kind=note subject="$_sp_any"
+	expect_exit 0 "with no TRACE_NUMBERED_TYPES, $_sp_any is accepted — the grammar stays open" -- env TRACE_CONFIG="$OPENON" sh "$TRACE" emit kind=note subject="$_sp_any"
 done
-assert_status 0 "and the SHIPPED policy file keeps it open — ticket:PROJ-12 is a consumer's legitimate spelling" -- env TRACE_CONFIG="$KIT/scripts/trace.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:PROJ-12'
-assert_status 2 "while the kit's own twin holds this repo to the rule" -- env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:265'
+expect_exit 0 "and the SHIPPED policy file keeps it open — ticket:PROJ-12 is a consumer's legitimate spelling" -- env TRACE_CONFIG="$KIT/scripts/trace.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:PROJ-12'
+expect_exit 2 "while the kit's own twin holds this repo to the rule" -- env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_DIR="$OPEN" sh "$TRACE" emit kind=note subject='ticket:265'
 grep -q "^TRACE_NUMBERED_TYPES=''" "$KIT/scripts/trace.config.sh" && pass "the shipped policy file documents TRACE_NUMBERED_TYPES and carries it empty" || fail "scripts/trace.config.sh does not carry TRACE_NUMBERED_TYPES=''"
 grep -q "^TRACE_NUMBERED_TYPES='ticket pr prd'" "$KIT/scripts/trace.kit.config.sh" && pass "the kit twin sets it to ticket pr prd" || fail "scripts/trace.kit.config.sh does not set TRACE_NUMBERED_TYPES='ticket pr prd'"
 TRACE_NUMBERED_TYPES='ticket pr prd' TRACE_CONFIG=$OPENON sh "$TRACE" emit kind=note subject='ticket:265' 2>/dev/null &&
 	pass "the environment cannot switch the rule on — it is the policy file's to say" || fail "an environment TRACE_NUMBERED_TYPES was honoured"
 BADPOL="$SCRATCH/policy.badnumbered.sh"
 printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket PR'\n" "$OPEN" >"$BADPOL"
-assert_status 2 "a TRACE_NUMBERED_TYPES word that is not a lowercase type is the policy error it is" -- env TRACE_CONFIG="$BADPOL" sh "$TRACE" emit kind=note subject='pr:#1'
-assert_out_has "TRACE_NUMBERED_TYPES"
+expect_exit 2 "a TRACE_NUMBERED_TYPES word that is not a lowercase type is the policy error it is" -- env TRACE_CONFIG="$BADPOL" sh "$TRACE" emit kind=note subject='pr:#1'
+expect_said "TRACE_NUMBERED_TYPES"
 for _sp_bad in 'ticket:265' 'ticket:#abc' 'pr:12' 'prd:#' 'ticket:#12a' 'pr:#-1' 'ticket:#012' 'pr:#00'; do
-	assert_status 2 "emit subject='$_sp_bad' is refused" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_bad"
+	expect_exit 2 "emit subject='$_sp_bad' is refused" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_bad"
 done
-t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:265'
-case $S_ERR in *"ticket:#<digits>"*) pass "and the refusal names the accepted form, ticket:#<digits>" ;; *) fail "the refusal did not name the accepted form: $S_ERR" ;; esac
-t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:12'
-case $S_ERR in *"pr:#<digits>"*) pass "and names it per type — pr:#<digits> for a pr" ;; *) fail "the pr refusal did not name pr:#<digits>: $S_ERR" ;; esac
-assert_status 2 "related='prd:#12 ticket:34' is refused — every token is held to the rule, not only the first" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:#9' related='prd:#12 ticket:34'
-assert_status 2 "begin refuses the same spelling — it writes through emit" -- env TRACE_CONFIG="$SPON" TRACE_SESSION=spelling-305 sh "$TRACE" begin implement subject='ticket:265'
+t_exec env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:265'
+case $T_ERR in *"ticket:#<digits>"*) pass "and the refusal names the accepted form, ticket:#<digits>" ;; *) fail "the refusal did not name the accepted form: $T_ERR" ;; esac
+t_exec env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:12'
+case $T_ERR in *"pr:#<digits>"*) pass "and names it per type — pr:#<digits> for a pr" ;; *) fail "the pr refusal did not name pr:#<digits>: $T_ERR" ;; esac
+expect_exit 2 "related='prd:#12 ticket:34' is refused — every token is held to the rule, not only the first" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='pr:#9' related='prd:#12 ticket:34'
+expect_exit 2 "begin refuses the same spelling — it writes through emit" -- env TRACE_CONFIG="$SPON" TRACE_SESSION=spelling-305 sh "$TRACE" begin implement subject='ticket:265'
 [ ! -e "$SP/events/$TODAY.jsonl" ] && pass "none of the refusals wrote a line" || fail "a refused spelling was written: $(cat "$SP/events/$TODAY.jsonl")"
-t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:#265' related='prd:#12 pr:#34 branch:feat/x' reason=accepted
-[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && pass "ticket:#265 with related prd:#12 pr:#34 is accepted, silently" || fail "the accepted spelling was refused (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:#265' related='prd:#12 pr:#34 branch:feat/x' reason=accepted
+[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && pass "ticket:#265 with related prd:#12 pr:#34 is accepted, silently" || fail "the accepted spelling was refused (exit $T_STATUS): $T_ERR"
 for _sp_open in 'worktree:anything' 'run:r1' 'branch:feat/265' 'issue:265' 'session:abc'; do
-	assert_status 0 "an open type is untouched — $_sp_open" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_open"
+	expect_exit 0 "an open type is untouched — $_sp_open" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject="$_sp_open"
 done
-t_run_split env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:#265'
-case $S_OUT in *'"reason":"accepted"'*) pass "show ticket:#265 finds the accepted event" ;; *) fail "show did not find the accepted event: $S_OUT" ;; esac
-assert_status 2 "show refuses ticket:265 — a reader cannot ask for a spelling that cannot exist" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:265'
-assert_status 2 "and show refuses pr:12" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'pr:12'
+t_exec env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:#265'
+case $T_OUT in *'"reason":"accepted"'*) pass "show ticket:#265 finds the accepted event" ;; *) fail "show did not find the accepted event: $T_OUT" ;; esac
+expect_exit 2 "show refuses ticket:265 — a reader cannot ask for a spelling that cannot exist" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'ticket:265'
+expect_exit 2 "and show refuses pr:12" -- env TRACE_CONFIG="$SPON" sh "$TRACE" show 'pr:12'
 
 # verify: history is never rewritten, so an old spelling ALREADY in the trace
 # is an advisory — on stderr with file and line, never a bad line on stdout,
@@ -1234,30 +1234,30 @@ printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old3","kind":"note","reason":"d
 # A # with a non-digit after it: the awk twin must anchor both ends, as the
 # shell check does (M-1, review of PR #314).
 printf '{"v":1,"ts":"2026-09-23T00:00:00Z","id":"old4","kind":"note","subject":"ticket:#12a","reason":"half a number"}\n' >>"$VF/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify over an old spelling exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an old spelling: $S_OUT"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout — stdout is the bad-line verdict, and this line is not bad" || fail "verify printed on stdout: $S_OUT"
-case $S_ERR in *"$TODAY.jsonl:2"*"ticket:265"*) pass "and names the subject's file:line on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2 and ticket:265: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:3"*"ticket:34"*) pass "and a related token's file:line too" ;; *) fail "stderr did not name $TODAY.jsonl:3 and ticket:34: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves the clean line alone" ;; esac
-case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject or data.related as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
-case $S_ERR in *"$TODAY.jsonl:5"*"ticket:#12a"*) pass "and a # followed by more than digits is advised on too — the awk anchors both ends" ;; *) fail "stderr did not name $TODAY.jsonl:5 and ticket:#12a: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over an old spelling exits 0 — an advisory is not a verdict" || fail "verify exited $T_STATUS over an old spelling: $T_OUT"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout — stdout is the bad-line verdict, and this line is not bad" || fail "verify printed on stdout: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:2"*"ticket:265"*) pass "and names the subject's file:line on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2 and ticket:265: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3"*"ticket:34"*) pass "and a related token's file:line too" ;; *) fail "stderr did not name $TODAY.jsonl:3 and ticket:34: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $T_ERR" ;; *) pass "and leaves the clean line alone" ;; esac
+case $T_ERR in *"$TODAY.jsonl:4"*) fail "verify read a data.subject or data.related as the event's own: $T_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $T_ERR in *"$TODAY.jsonl:5"*"ticket:#12a"*) pass "and a # followed by more than digits is advised on too — the awk anchors both ends" ;; *) fail "stderr did not name $TODAY.jsonl:5 and ticket:#12a: $T_ERR" ;; esac
 # summary and export read through verify, but repeating every advisory on
 # every call would bury their own output under history nobody can rewrite:
 # ONE line with the count, and a pointer to verify, which lists each.
 for _sp_cmd in summary export; do
-	t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" $_sp_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_sp_cmd over old spellings still exits 0" || fail "$_sp_cmd exited $S_STATUS: $S_ERR"
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'numbered')" = 1 ] && pass "and $_sp_cmd says so in exactly one stderr line" || fail "$_sp_cmd did not print exactly one advisory line: $S_ERR"
-	case $S_ERR in *"3 "*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_sp_cmd's advisory line lacks the count or the pointer: $S_ERR" ;; esac
-	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_sp_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+	t_exec env TRACE_CONFIG="$VFON" sh "$TRACE" $_sp_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_sp_cmd over old spellings still exits 0" || fail "$_sp_cmd exited $T_STATUS: $T_ERR"
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'numbered')" = 1 ] && pass "and $_sp_cmd says so in exactly one stderr line" || fail "$_sp_cmd did not print exactly one advisory line: $T_ERR"
+	case $T_ERR in *"3 "*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_sp_cmd's advisory line lacks the count or the pointer: $T_ERR" ;; esac
+	case $T_ERR in *"$TODAY.jsonl:"*) fail "$_sp_cmd repeated verify's per-line advisories: $T_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
 done
-t_run_split env TRACE_CONFIG="$QON" sh "$TRACE" summary
-case $S_ERR in *numbered*) fail "summary advised over a trace with no old spelling: $S_ERR" ;; *) pass "and summary says nothing when there is nothing to say" ;; esac
+t_exec env TRACE_CONFIG="$QON" sh "$TRACE" summary
+case $T_ERR in *numbered*) fail "summary advised over a trace with no old spelling: $T_ERR" ;; *) pass "and summary says nothing when there is nothing to say" ;; esac
 printf 'not json at all\n' >>"$VF/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$VFON" sh "$TRACE" verify
-[ "$S_STATUS" = 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:6")" -ge 1 ] && [ "$(printf '%s\n' "$S_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
-	pass "a real bad line still fails verify, and the old spelling is still not among the bad lines" || fail "verify mixed the advisory into the verdict (exit $S_STATUS): $S_OUT"
+t_exec env TRACE_CONFIG="$VFON" sh "$TRACE" verify
+[ "$T_STATUS" = 1 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c "$TODAY.jsonl:6")" -ge 1 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c "$TODAY.jsonl:2")" = 0 ] &&
+	pass "a real bad line still fails verify, and the old spelling is still not among the bad lines" || fail "verify mixed the advisory into the verdict (exit $T_STATUS): $T_OUT"
 
 # The rule is written where the vocabulary lives, in one sentence.
 sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:#<digits>' &&
@@ -1304,18 +1304,18 @@ note *
 OV="$SCRATCH/outcome-vocab"; OVON=$(policy "$OV")
 
 # The demo, first: the ticket's two lines.
-t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome='not blocking'
-[ "$S_STATUS" = 2 ] && pass "review.verdict outcome='not blocking' is exit 2 — a sentence is not a verdict" || fail "a sentence in review.verdict's outcome exited $S_STATUS, not 2: $S_ERR"
-case $S_ERR in *review.verdict*"'not blocking'"*"pass blocked confirm"*) pass "and the refusal names the kind, the value and the vocabulary, the checker's shape" ;; *) fail "the refusal did not name kind, value and vocabulary: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome='not blocking'
+[ "$T_STATUS" = 2 ] && pass "review.verdict outcome='not blocking' is exit 2 — a sentence is not a verdict" || fail "a sentence in review.verdict's outcome exited $T_STATUS, not 2: $T_ERR"
+case $T_ERR in *review.verdict*"'not blocking'"*"pass blocked confirm"*) pass "and the refusal names the kind, the value and the vocabulary, the checker's shape" ;; *) fail "the refusal did not name kind, value and vocabulary: $T_ERR" ;; esac
 [ ! -e "$OV/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused outcome was written: $(cat "$OV/events/$TODAY.jsonl")"
-t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass
-[ "$S_STATUS" = 0 ] && grep -q '"outcome":"pass"' "$OV/events/$TODAY.jsonl" 2>/dev/null &&
-	pass "outcome=pass is written" || fail "review.verdict outcome=pass was not written (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass
+[ "$T_STATUS" = 0 ] && grep -q '"outcome":"pass"' "$OV/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "outcome=pass is written" || fail "review.verdict outcome=pass was not written (exit $T_STATUS): $T_ERR"
 
 # The table is the whole kind set: the closed kind list the script names on an
 # unknown kind is exactly the table's first column, so no kind is left open.
-t_run_split env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=bogus
-_ov_script=$(printf '%s\n' "$S_ERR" | sed -n 's/.*the vocabulary is closed: //p' | tr ' ' '\n' | sed '/^$/d' | sort)
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=bogus
+_ov_script=$(printf '%s\n' "$T_ERR" | sed -n 's/.*the vocabulary is closed: //p' | tr ' ' '\n' | sed '/^$/d' | sort)
 _ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
 [ -n "$_ov_script" ] && [ "$_ov_script" = "$_ov_table" ] && pass "every kind the script knows has a row in the table, and no row names a kind it does not" ||
 	fail "the kind list and the outcome table disagree: script [$(printf '%s' "$_ov_script" | tr '\n' ' ')] table [$(printf '%s' "$_ov_table" | tr '\n' ' ')]"
@@ -1366,18 +1366,18 @@ for _ov_row in $_ov_rows; do
 done
 IFS=$_ov_ifs
 [ -z "$_ov_bad" ] && pass "every row writes its own words and no outcome, and refuses another kind's word" || fail "the script disagrees with the table:$_ov_bad"
-assert_status 2 "a kind that carries no outcome refuses one — session.end outcome=ok" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=session.end outcome=ok
-assert_out_has "session.end"
-assert_status 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
+expect_exit 2 "a kind that carries no outcome refuses one — session.end outcome=ok" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=session.end outcome=ok
+expect_said "session.end"
+expect_exit 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
 OVR=$(env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement)
-assert_status 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=delivered
-assert_out_has "delivered"
+expect_exit 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=delivered
+expect_said "delivered"
 env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=ok
 # The skills print every vocabulary as `pass|blocked`, so the alternation
 # copied whole is the likeliest typo there is — and each word in it is
 # declared, so a substring test lets it through (H-1, review of PR #380).
-assert_status 2 "review.verdict outcome='pass|blocked' is refused — the alternation is not a word" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict outcome='pass|blocked'
-assert_status 2 "and run.end outcome='ok|stopped' too" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=run.end 'outcome=ok|stopped'
+expect_exit 2 "review.verdict outcome='pass|blocked' is refused — the alternation is not a word" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict outcome='pass|blocked'
+expect_exit 2 "and run.end outcome='ok|stopped' too" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=run.end 'outcome=ok|stopped'
 
 # Every word a shipped emitter writes today is declared: each literal
 # `kind=<k> … outcome=<a|b|c>` in a skill and each literal `outcome=<w>` beside
@@ -1424,20 +1424,20 @@ printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o2","kind":"run.end","outcome":
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o3","kind":"note","reason":"decoy","data":{"outcome":"a data key is not the outcome"}}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o4","kind":"agent.stop"}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o5","kind":"pr.iterate","outcome":"green|red|stopped"}\n' >>"$OVV/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify over undeclared outcomes exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over undeclared outcomes: $S_OUT"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
-case $S_ERR in *"$TODAY.jsonl:2"*review.verdict*"not blocking"*) pass "and names the sentence's file:line, kind and value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict and the sentence: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:3"*run.end*delivered*) pass "and run.end's delivered too" ;; *) fail "stderr did not name $TODAY.jsonl:3 run.end delivered: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $S_ERR" ;; *) pass "and leaves a declared outcome alone" ;; esac
-case $S_ERR in *"$TODAY.jsonl:4"*) fail "verify read data.outcome as the event's own: $S_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
-case $S_ERR in *"$TODAY.jsonl:5"*) fail "verify advised on an event with no outcome: $S_ERR" ;; *) pass "and an event with no outcome is no advisory" ;; esac
-case $S_ERR in *"$TODAY.jsonl:6"*"green|red|stopped"*) pass "and an alternation copied whole is advised on (H-1, review of PR #380)" ;; *) fail "verify did not advise on pr.iterate green|red|stopped: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$OVVON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over undeclared outcomes exits 0 — an advisory is not a verdict" || fail "verify exited $T_STATUS over undeclared outcomes: $T_OUT"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:2"*review.verdict*"not blocking"*) pass "and names the sentence's file:line, kind and value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict and the sentence: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3"*run.end*delivered*) pass "and run.end's delivered too" ;; *) fail "stderr did not name $TODAY.jsonl:3 run.end delivered: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:1"*) fail "verify flagged the clean line 1: $T_ERR" ;; *) pass "and leaves a declared outcome alone" ;; esac
+case $T_ERR in *"$TODAY.jsonl:4"*) fail "verify read data.outcome as the event's own: $T_ERR" ;; *) pass "and never reads the data map as the envelope" ;; esac
+case $T_ERR in *"$TODAY.jsonl:5"*) fail "verify advised on an event with no outcome: $T_ERR" ;; *) pass "and an event with no outcome is no advisory" ;; esac
+case $T_ERR in *"$TODAY.jsonl:6"*"green|red|stopped"*) pass "and an alternation copied whole is advised on (H-1, review of PR #380)" ;; *) fail "verify did not advise on pr.iterate green|red|stopped: $T_ERR" ;; esac
 for _ov_cmd in summary export; do
-	t_run_split env TRACE_CONFIG="$OVVON" sh "$TRACE" $_ov_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_ov_cmd over undeclared outcomes still exits 0" || fail "$_ov_cmd exited $S_STATUS: $S_ERR"
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'outcome')" = 1 ] && pass "and $_ov_cmd says so in exactly one stderr line" || fail "$_ov_cmd did not print exactly one outcome advisory: $S_ERR"
-	case $S_ERR in *"3 "*outcome*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $S_ERR" ;; esac
+	t_exec env TRACE_CONFIG="$OVVON" sh "$TRACE" $_ov_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_ov_cmd over undeclared outcomes still exits 0" || fail "$_ov_cmd exited $T_STATUS: $T_ERR"
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'outcome')" = 1 ] && pass "and $_ov_cmd says so in exactly one stderr line" || fail "$_ov_cmd did not print exactly one outcome advisory: $T_ERR"
+	case $T_ERR in *"3 "*outcome*verify*) pass "which carries the count, 3, and points at verify" ;; *) fail "$_ov_cmd's advisory lacks the count or the pointer: $T_ERR" ;; esac
 done
 
 # The vocabulary is written where the decisions live: the record's table
@@ -1475,19 +1475,19 @@ banner "23. The kind table holds two data keys to a shape: finding.triage's id a
 # naming the kind, the key and the shape, and nothing is written; a MISSING
 # key is no violation — data.* stays open.
 SH="$SCRATCH/shape"; SHON=$(policy "$SH")
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=accepted data.source=bot data.id='PRRC_1 8f3c1a2' reason='a sha beside the id'
-[ "$S_STATUS" = 2 ] && pass "finding.triage data.id='PRRC_1 8f3c1a2' is exit 2 — two tokens are not one id" || fail "a two-token data.id exited $S_STATUS, not 2: $S_ERR"
-case $S_ERR in *finding.triage*data.id*"'PRRC_1 8f3c1a2'"*'[A-Za-z0-9._#-]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=accepted data.source=bot data.id='PRRC_1 8f3c1a2' reason='a sha beside the id'
+[ "$T_STATUS" = 2 ] && pass "finding.triage data.id='PRRC_1 8f3c1a2' is exit 2 — two tokens are not one id" || fail "a two-token data.id exited $T_STATUS, not 2: $T_ERR"
+case $T_ERR in *finding.triage*data.id*"'PRRC_1 8f3c1a2'"*'[A-Za-z0-9._#-]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $T_ERR" ;; esac
 [ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.id was written: $(cat "$SH/events/$TODAY.jsonl")"
 # shape_refused <label> <key> <value shown> <emit args…> — exit 2 AND the
 # shape's own refusal of data.<key> on stderr, so an exit 2 for any other
 # reason is not a pass.
 shape_refused() {
 	_sr_label=$1 _sr_key=$2 _sr_val=$3; shift 3
-	t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit "$@"
-	case $S_STATUS:$S_ERR in
+	t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit "$@"
+	case $T_STATUS:$T_ERR in
 	2:*"data.$_sr_key '$_sr_val' is not ["*) pass "$_sr_label" ;;
-	*) fail "$_sr_label — exit $S_STATUS, not the shape's refusal: $S_ERR" ;;
+	*) fail "$_sr_label — exit $T_STATUS, not the shape's refusal: $T_ERR" ;;
 	esac
 }
 shape_refused "finding.triage data.id='' is refused by the shape — one or more characters" id '' kind=finding.triage data.id=''
@@ -1495,32 +1495,32 @@ shape_refused "finding.triage data.id='kit-ci/self-host' is refused by the shape
 shape_refused "a refusal holds whichever order: data.id before kind" id 'a b' data.id='a b' kind=finding.triage
 shape_refused "and every occurrence: a bad data.id after a good one is held" id 'a b' kind=finding.triage data.id=ok data.id='a b'
 shape_refused "and a good data.id after a bad one does not cover it" id 'a b' kind=finding.triage data.id='a b' data.id=ok
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=x reason=converged
-[ "$S_STATUS" = 2 ] && pass "pr.iterate data.iteration=x is exit 2 — an iteration is digits" || fail "pr.iterate data.iteration=x exited $S_STATUS, not 2: $S_ERR"
-case $S_ERR in *pr.iterate*data.iteration*"'x'"*'[0-9]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=x reason=converged
+[ "$T_STATUS" = 2 ] && pass "pr.iterate data.iteration=x is exit 2 — an iteration is digits" || fail "pr.iterate data.iteration=x exited $T_STATUS, not 2: $T_ERR"
+case $T_ERR in *pr.iterate*data.iteration*"'x'"*'[0-9]+'*) pass "and the refusal names the kind, the key, the value and the shape" ;; *) fail "the refusal did not name kind, key, value and shape: $T_ERR" ;; esac
 [ ! -e "$SH/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused data.iteration was written: $(cat "$SH/events/$TODAY.jsonl")"
 shape_refused "pr.iterate data.iteration='2 of 3' is refused by the shape" iteration '2 of 3' kind=pr.iterate data.iteration='2 of 3'
 # The good shapes write, and are written as given.
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=rejected data.source=check data.id='PRRC_kwDO#12.3-a_b' reason='ADR-0008'
-[ "$S_STATUS" = 0 ] && grep -qF '"id":"PRRC_kwDO#12.3-a_b"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
-	pass "finding.triage data.id='PRRC_kwDO#12.3-a_b' is written — every character class of the shape" || fail "a good data.id was not written (exit $S_STATUS): $S_ERR"
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=12 data.applied=1 data.rejected=0 data.escalated=0 reason=converged
-[ "$S_STATUS" = 0 ] && grep -qF '"iteration":"12"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
-	pass "pr.iterate data.iteration=12 is written" || fail "a good data.iteration was not written (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=rejected data.source=check data.id='PRRC_kwDO#12.3-a_b' reason='ADR-0008'
+[ "$T_STATUS" = 0 ] && grep -qF '"id":"PRRC_kwDO#12.3-a_b"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "finding.triage data.id='PRRC_kwDO#12.3-a_b' is written — every character class of the shape" || fail "a good data.id was not written (exit $T_STATUS): $T_ERR"
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=green data.iteration=12 data.applied=1 data.rejected=0 data.escalated=0 reason=converged
+[ "$T_STATUS" = 0 ] && grep -qF '"iteration":"12"' "$SH/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "pr.iterate data.iteration=12 is written" || fail "a good data.iteration was not written (exit $T_STATUS): $T_ERR"
 # A missing key is not a violation: the trace stays open in data.*.
 _sh_n=$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=escalated reason='no id given'
-_sh_s1=$S_STATUS
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red data.applied=0 data.rejected=0 data.escalated=0 reason='no iteration given'
-[ "$_sh_s1" = 0 ] && [ "$S_STATUS" = 0 ] && [ "$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')" = $((_sh_n + 2)) ] &&
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.triage subject='pr:#1' outcome=escalated reason='no id given'
+_sh_s1=$T_STATUS
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=pr.iterate subject='pr:#1' outcome=red data.applied=0 data.rejected=0 data.escalated=0 reason='no iteration given'
+[ "$_sh_s1" = 0 ] && [ "$T_STATUS" = 0 ] && [ "$(wc -l <"$SH/events/$TODAY.jsonl" | tr -d ' ')" = $((_sh_n + 2)) ] &&
 	pass "a finding.triage with no data.id and a pr.iterate with no data.iteration both write — a key no row requires is no violation when missing" ||
-	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $S_STATUS): $S_ERR"
+	fail "an emit missing a held key was refused or not written (exit $_sh_s1 and $T_STATUS): $T_ERR"
 # The shape is the kind's, not the key's: another kind's data.id stays open.
 # (finding.raise was this case's kind until #567 held a raise's id too.)
-t_run_split env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.dismiss subject='pr:#1' data.id='a b'
-[ "$S_STATUS" = 0 ] && grep -F '"kind":"finding.dismiss"' "$SH/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"a b"' &&
+t_exec env TRACE_CONFIG="$SHON" sh "$TRACE" emit kind=finding.dismiss subject='pr:#1' data.id='a b'
+[ "$T_STATUS" = 0 ] && grep -F '"kind":"finding.dismiss"' "$SH/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"a b"' &&
 	pass "finding.dismiss data.id='a b' is written as given — a kind with no id row leaves data.id open" ||
-	fail "finding.dismiss data.id='a b' was refused or not written (exit $S_STATUS): $S_ERR"
+	fail "finding.dismiss data.id='a b' was refused or not written (exit $T_STATUS): $T_ERR"
 # The shapes live in the kind table, beside the outcome words.
 grep -q "^TRACE_SHAPES='.*finding\.triage=id:.*pr\.iterate=iteration:" "$TRACE" &&
 	pass "the script declares both shapes in one TRACE_SHAPES table" || fail "scripts/trace.sh has no TRACE_SHAPES line declaring finding.triage's id and pr.iterate's iteration"
@@ -1544,11 +1544,11 @@ banner "24. A denied tool call has a word: tool.use declares denied (ticket #409
 # and never a post-tool one into `tool.use outcome=denied` at session end. The
 # word is tool.use's alone — ADR-0008 clause 1, amended 2026-10-02.
 OD="$SCRATCH/outcome-denied"; ODON=$(policy "$OD")
-t_run_split env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind=tool.use subject=session:od-409 outcome=denied data.tool=Bash
-[ "$S_STATUS" = 0 ] && grep -q '"kind":"tool.use".*"outcome":"denied"' "$OD/events/$TODAY.jsonl" 2>/dev/null &&
-	pass "tool.use outcome=denied is exit 0 and written" || fail "tool.use outcome=denied exited $S_STATUS: $S_ERR"
+t_exec env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind=tool.use subject=session:od-409 outcome=denied data.tool=Bash
+[ "$T_STATUS" = 0 ] && grep -q '"kind":"tool.use".*"outcome":"denied"' "$OD/events/$TODAY.jsonl" 2>/dev/null &&
+	pass "tool.use outcome=denied is exit 0 and written" || fail "tool.use outcome=denied exited $T_STATUS: $T_ERR"
 for _od_k in agent.stop session.usage spawn.end; do
-	assert_status 2 "$_od_k outcome=denied is exit 2 — denied is tool.use's word alone" -- env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind="$_od_k" outcome=denied
+	expect_exit 2 "$_od_k outcome=denied is exit 2 — denied is tool.use's word alone" -- env TRACE_CONFIG="$ODON" sh "$TRACE" emit kind="$_od_k" outcome=denied
 done
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _od_adr=$(ls "$KIT"/docs/adr/0008-*.md)
@@ -1579,8 +1579,8 @@ SSKEY=$(printf '%s' "$(git -C "$KIT" rev-parse --show-toplevel)" | git hash-obje
 [ -f "$SS/current/$SSKEY.sess-a.runs" ] && [ -f "$SS/current/$SSKEY.sess-b.runs" ] &&
 	pass "each session's stack sits at current/<toplevel key>.<session>.runs" || fail "no per-session stacks: $(ls "$SS/current" 2>&1)"
 [ ! -e "$SS/current/$SSKEY.runs" ] && pass "and the per-toplevel stack is not written when a session is known" || fail "a per-toplevel stack was written: $(cat "$SS/current/$SSKEY.runs")"
-t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok reason='B closes'
-[ "$S_STATUS" = 0 ] && pass "end in session B exits 0" || fail "end in B exited $S_STATUS: $S_ERR"
+t_exec env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok reason='B closes'
+[ "$T_STATUS" = 0 ] && pass "end in session B exits 0" || fail "end in B exited $T_STATUS: $T_ERR"
 case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RB"'"'*) pass "and closes B's run, the one it opened" ;; *) fail "end in B closed: $(tail -n 1 "$SSFILE")" ;; esac
 [ "$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)" = "$RA" ] && pass "and A's stack still holds A's run — end pops only its own session's stack" || fail "A's stack after B's end: '$(cat "$SS/current/$SSKEY.sess-a.runs" 2>/dev/null)'"
 env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason='A after B closed'
@@ -1590,9 +1590,9 @@ case $(tail -n 1 "$SSFILE") in *'"run":"'"$RA"'"'*) pass "so the next emit in A 
 # — how a hook told its session by a payload joins that session's run.
 env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" emit kind=note session=sess-a reason='A named on the line'
 case $(tail -n 1 "$SSFILE") in *'"session":"sess-a","run":"'"$RA"'"'*) pass "an emit naming session=sess-a carries A's run, though the environment names B" ;; *) fail "the explicit session= carried: $(tail -n 1 "$SSFILE")" ;; esac
-assert_status 2 "a second end in B is exit 2 — B has nothing open, whatever A holds" -- env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok
-t_run_split env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" show "run:$RA"
-case $S_OUT in *'said in session B'*) fail "show run:<A> holds B's emit: $S_OUT" ;; *'said in session A'*'A after B closed'*'A named on the line'*) pass "show run:<A> holds A's emits and none of B's" ;; *) fail "show run:<A> missed A's emits: $S_OUT" ;; esac
+expect_exit 2 "a second end in B is exit 2 — B has nothing open, whatever A holds" -- env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-b sh "$TRACE" end "$RB" outcome=ok
+t_exec env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" show "run:$RA"
+case $T_OUT in *'said in session B'*) fail "show run:<A> holds B's emit: $T_OUT" ;; *'said in session A'*'A after B closed'*'A named on the line'*) pass "show run:<A> holds A's emits and none of B's" ;; *) fail "show run:<A> missed A's emits: $T_OUT" ;; esac
 env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" end "$RA" outcome=ok reason='A closes'
 case $(tail -n 1 "$SSFILE") in *'"kind":"run.end"'*'"run":"'"$RA"'"'*) pass "and A's end closes A's run" ;; *) fail "end in A closed: $(tail -n 1 "$SSFILE")" ;; esac
 
@@ -1615,9 +1615,9 @@ env TRACE_CONFIG="$SSON" TRACE_SESSION=sess-a sh "$TRACE" emit kind=note reason=
 case $(tail -n 1 "$SSFILE") in *'"run"'*) fail "a session with an id borrowed the id-less stack's run: $(tail -n 1 "$SSFILE")" ;; *) pass "while a session with an id does not see it" ;; esac
 env TRACE_CONFIG="$SSON" TRACE_SESSION= sh "$TRACE" emit kind=note reason='no session, said explicitly'
 case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) pass "and TRACE_SESSION set to the empty string reads the per-toplevel stack too" ;; *) fail "TRACE_SESSION= carried: $(tail -n 1 "$SSFILE")" ;; esac
-t_run_split env TRACE_CONFIG="$SSON" sh "$TRACE" end "$RN" outcome=ok
-[ "$S_STATUS" = 0 ] && case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) true ;; *) false ;; esac &&
-	pass "and end with no session id closes it" || fail "the id-less end exited $S_STATUS: $(tail -n 1 "$SSFILE")"
+t_exec env TRACE_CONFIG="$SSON" sh "$TRACE" end "$RN" outcome=ok
+[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$SSFILE") in *'"run":"'"$RN"'"'*) true ;; *) false ;; esac &&
+	pass "and end with no session id closes it" || fail "the id-less end exited $T_STATUS: $(tail -n 1 "$SSFILE")"
 
 # A session id that is not one path segment keys nothing: the per-toplevel
 # stack answers, rather than a file under a directory the id invented.
@@ -1662,21 +1662,21 @@ LS="$SCRATCH/local-shape"; LSON=$(policy "$LS")
 ls_refused() {
 	_lr_label=$1 _lr_needle=$2; shift 2
 	_lr_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	t_run_split env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
+	t_exec env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
 	_lr_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	case $S_STATUS:$S_ERR in
+	case $T_STATUS:$T_ERR in
 	2:*"$_lr_needle"*) [ "$_lr_m" = "$_lr_n" ] && pass "$_lr_label" || fail "$_lr_label — refused, but a line was written" ;;
-	*) fail "$_lr_label — exit $S_STATUS, not the refusal naming '$_lr_needle': $S_ERR" ;;
+	*) fail "$_lr_label — exit $T_STATUS, not the refusal naming '$_lr_needle': $T_ERR" ;;
 	esac
 }
 # ls_writes <label> <emit args…> — exit 0 and one line more.
 ls_writes() {
 	_lw_label=$1; shift
 	_lw_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	t_run_split env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
+	t_exec env TRACE_CONFIG="$LSON" sh "$TRACE" emit "$@"
 	_lw_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	[ "$S_STATUS" = 0 ] && [ "$_lw_m" = $((_lw_n + 1)) ] && pass "$_lw_label" ||
-		fail "$_lw_label — exit $S_STATUS, $_lw_n -> $_lw_m lines: $S_ERR"
+	[ "$T_STATUS" = 0 ] && [ "$_lw_m" = $((_lw_n + 1)) ] && pass "$_lw_label" ||
+		fail "$_lw_label — exit $T_STATUS, $_lw_n -> $_lw_m lines: $T_ERR"
 }
 T='kind=finding.triage subject=pr:#1 outcome=accepted'
 # shellcheck disable=SC2086 # $T is the emit's fixed head, split on purpose
@@ -1759,10 +1759,10 @@ ls_writes "pr.iterate with no outcome and no counts writes — the rule reads th
 # expanded into the shape (review of #487).
 mkdir -p "$SCRATCH/ls-glob" && : >"$SCRATCH/ls-glob/pr.iterate=iteration:5+"
 _lg_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-t_run_split env TRACE_CONFIG="$LSON" sh -c "cd '$SCRATCH/ls-glob' && sh '$TRACE' emit kind=pr.iterate subject=pr:#1 outcome=stopped data.iteration=12"
-[ "$S_STATUS" = 0 ] && [ "$(wc -l <"$LS/events/$TODAY.jsonl" | tr -d ' ')" = $((_lg_n + 1)) ] &&
+t_exec env TRACE_CONFIG="$LSON" sh -c "cd '$SCRATCH/ls-glob' && sh '$TRACE' emit kind=pr.iterate subject=pr:#1 outcome=stopped data.iteration=12"
+[ "$T_STATUS" = 0 ] && [ "$(wc -l <"$LS/events/$TODAY.jsonl" | tr -d ' ')" = $((_lg_n + 1)) ] &&
 	pass "a file named like a row in the caller's directory does not become the shape — data.iteration=12 writes" ||
-	fail "a file named pr.iterate=iteration:5+ in the cwd changed the shape (exit $S_STATUS): $S_ERR"
+	fail "a file named pr.iterate=iteration:5+ in the cwd changed the shape (exit $T_STATUS): $T_ERR"
 grep -F '"kind":"pr.iterate"' "$LS/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"applied":"2","rejected":"1","escalated":"0"' &&
 	pass "the counts are written as given" || fail "pr.iterate's counts are not in the trace as given"
 
@@ -1774,12 +1774,12 @@ _lc_utf=$(locale -a 2>/dev/null | grep -i -m1 -E '^en_[A-Z][A-Z]\.utf-?8$')
 for _lc_case in "data.source=check data.id=Ｍ-1|data.id 'Ｍ-1'" "data.source=bot data.id=é|data.id 'é'"; do
 	_lc_n=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
 	# shellcheck disable=SC2086 # the case's data args, split on purpose
-	t_run_split env LC_ALL="${_lc_utf:-en_US.UTF-8}" TRACE_CONFIG="$LSON" sh "$TRACE" emit $T ${_lc_case%%|*}
+	t_exec env LC_ALL="${_lc_utf:-en_US.UTF-8}" TRACE_CONFIG="$LSON" sh "$TRACE" emit $T ${_lc_case%%|*}
 	_lc_m=$(cat "$LS/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	case $S_STATUS:$S_ERR in
+	case $T_STATUS:$T_ERR in
 	2:*"${_lc_case#*|}"*) [ "$_lc_m" = "$_lc_n" ] && pass "${_lc_case%%|*} is refused under LC_ALL=${_lc_utf:-en_US.UTF-8} — a shape is matched in the C locale" ||
 		fail "${_lc_case%%|*} — refused, but a line was written" ;;
-	*) fail "${_lc_case%%|*} under LC_ALL=${_lc_utf:-en_US.UTF-8} — exit $S_STATUS, not refused: $S_ERR" ;;
+	*) fail "${_lc_case%%|*} under LC_ALL=${_lc_utf:-en_US.UTF-8} — exit $T_STATUS, not refused: $T_ERR" ;;
 	esac
 done
 
@@ -1788,10 +1788,10 @@ done
 # (review of #487).
 mkdir -p "$SCRATCH/ls-cond"
 sed 's|pr\.iterate/outcome~green|pr.iterate/outcom~green|' "$TRACE" >"$SCRATCH/ls-cond/trace.sh"
-t_run_split env TRACE_CONFIG="$LSON" sh "$SCRATCH/ls-cond/trace.sh" emit kind=pr.iterate subject=pr:#1 outcome=green data.iteration=1
-case $S_STATUS:$S_ERR in
+t_exec env TRACE_CONFIG="$LSON" sh "$SCRATCH/ls-cond/trace.sh" emit kind=pr.iterate subject=pr:#1 outcome=green data.iteration=1
+case $T_STATUS:$T_ERR in
 2:*"unknown condition 'outcom~"*) pass "a TRACE_SHAPES row with an unknown condition (outcom~) is exit 2 naming it" ;;
-*) fail "a row with an unknown condition did not die naming it (exit $S_STATUS): $S_ERR" ;;
+*) fail "a row with an unknown condition did not die naming it (exit $T_STATUS): $T_ERR" ;;
 esac
 sed -n '1,/^set /s/^# *//p' "$TRACE" | tr '\n' ' ' | grep -q 'exit 2 is .* a data value its kind.s shape refuses (TRACE_SHAPES) or a data key a row requires and the line lacks' &&
 	pass "the script header's exit-2 list names a required key the line lacks" ||
@@ -1847,49 +1847,49 @@ sk_run() {
 		exec sh scripts/trace.sh stack "$@"
 	)
 }
-# sk_ask <the same> — sk_run, its exit, stdout and stderr in S_STATUS, S_OUT
-# and S_ERR.
-sk_ask() { t_run_split sk_run "$@"; }
+# sk_ask <the same> — sk_run, its exit, stdout and stderr in T_STATUS, T_OUT
+# and T_ERR.
+sk_ask() { t_exec sk_run "$@"; }
 sk_ask TRACE_SESSION=sk-s "$SK_WT"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "a checkout with no stack at all: exit 0, nothing on stdout" ||
-	fail "stack on a checkout with no stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "a checkout with no stack at all: exit 0, nothing on stdout" ||
+	fail "stack on a checkout with no stack: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 SK_OUTER=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION=sk-s sh scripts/trace.sh begin implement 2>/dev/null)
 sk_ask TRACE_SESSION=sk-s "$SK_WT"
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_OUTER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$SK_OUTER" ] &&
 	pass "one run open in the worktree: asked from the ROOT checkout, it prints that run, one line" ||
-	fail "one open run: exit $S_STATUS, stdout '$S_OUT', want '$SK_OUTER'; stderr '$S_ERR'"
+	fail "one open run: exit $T_STATUS, stdout '$T_OUT', want '$SK_OUTER'; stderr '$T_ERR'"
 SK_INNER=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION=sk-s sh scripts/trace.sh begin review-pr 2>/dev/null)
 sk_ask TRACE_SESSION=sk-s "$SK_WT"
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_INNER
-$SK_OUTER" ] && [ -z "$S_ERR" ] &&
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$SK_INNER
+$SK_OUTER" ] && [ -z "$T_ERR" ] &&
 	pass "two nested runs: the top on the first line, the run below it on the second, silent on stderr" ||
-	fail "two nested runs: exit $S_STATUS, stdout '$S_OUT', want '$SK_INNER' then '$SK_OUTER'; stderr '$S_ERR'"
+	fail "two nested runs: exit $T_STATUS, stdout '$T_OUT', want '$SK_INNER' then '$SK_OUTER'; stderr '$T_ERR'"
 mkdir -p "$SK_WT/deeper/still"
 sk_ask TRACE_SESSION=sk-s "$SK_WT/deeper/still"
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "a directory deep inside the worktree names the same checkout" ||
-	fail "a deep directory: exit $S_STATUS, stdout '$S_OUT'"
+	fail "a deep directory: exit $T_STATUS, stdout '$T_OUT'"
 mkdir -p "$SK_WT/a=b"
 sk_ask TRACE_SESSION=sk-s "$SK_WT/a=b"
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "a directory whose name carries '=' is a directory, not a field" ||
-	fail "a directory named a=b: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "a directory named a=b: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 sk_ask TRACE_SESSION=sk-s "$SK_REPO"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
 	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
-	fail "the idle root: exit $S_STATUS, stdout '$S_OUT'"
+	fail "the idle root: exit $T_STATUS, stdout '$T_OUT'"
 # The session: a session= on the line names the stack first, as it does for an
 # emit; TRACE_SESSION set to the empty string is a caller with none, and the
 # per-toplevel stack answers.
 sk_ask TRACE_SESSION=someone-else "$SK_WT" session=sk-s
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "session=<id> on the line names the stack, whatever the environment says" ||
-	fail "session= on the line: exit $S_STATUS, stdout '$S_OUT'"
+	fail "session= on the line: exit $T_STATUS, stdout '$T_OUT'"
 SK_NOID=$(cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh begin retro 2>/dev/null)
 sk_ask TRACE_SESSION= "$SK_WT"
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$SK_NOID" ] &&
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$SK_NOID" ] &&
 	pass "TRACE_SESSION set to the empty string reads the per-toplevel stack, and only it" ||
-	fail "TRACE_SESSION=: exit $S_STATUS, stdout '$S_OUT', want '$SK_NOID'"
+	fail "TRACE_SESSION=: exit $T_STATUS, stdout '$T_OUT', want '$SK_NOID'"
 # No session on the line and none in the environment: the NAMED checkout's
 # pointer file names it — the worktree's, never the root's the caller runs in.
 SK_TOP=$(git -C "$SK_WT" rev-parse --show-toplevel)
@@ -1897,7 +1897,7 @@ SK_KEY=$(printf '%s' "$SK_TOP" | git hash-object --stdin)
 SK_ROOTKEY=$(printf '%s' "$(git -C "$SK_REPO" rev-parse --show-toplevel)" | git hash-object --stdin)
 printf 'sk-s\n' >"$SK/current/$SK_KEY"
 printf 'someone-else\n' >"$SK/current/$SK_ROOTKEY"
-(unset TRACE_SESSION && sk_ask "$SK_WT" && printf '%s\n%s\n%s\n' "$S_STATUS" "$S_OUT" "$S_ERR") >"$SCRATCH/sk-pointer.out"
+(unset TRACE_SESSION && sk_ask "$SK_WT" && printf '%s\n%s\n%s\n' "$T_STATUS" "$T_OUT" "$T_ERR") >"$SCRATCH/sk-pointer.out"
 [ "$(sed -n 1p "$SCRATCH/sk-pointer.out")" = 0 ] && [ "$(sed -n 2p "$SCRATCH/sk-pointer.out")" = "$SK_INNER" ] &&
 	pass "with no session given, the named checkout's pointer file names the stack — not the caller's" ||
 	fail "the pointer fallback: '$(cat "$SCRATCH/sk-pointer.out")', want exit 0 and '$SK_INNER' first"
@@ -1905,30 +1905,30 @@ rm -f "$SK/current/$SK_KEY" "$SK/current/$SK_ROOTKEY"
 # A session= the script would never key on is refused, not read as none.
 for _sk_bad in 'session=a b' 'session=../../x'; do
 	sk_ask TRACE_SESSION= "$SK_WT" "$_sk_bad"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
 		pass "stack refuses '$_sk_bad' with exit 2 — never the per-toplevel stack in its place" ||
-		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+		fail "stack '$_sk_bad': exit $T_STATUS, stdout '$T_OUT'"
 done
 # A <dir> that reads as an option or a field is refused, as the usage says;
 # ./ in front names the same directory.
 mkdir -p "$SK_WT/-x" "$SK_WT/session=y"
 for _sk_bad in -x session=y; do
-	t_run_split sk_run TRACE_SESSION=sk-s "$_sk_bad"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+	t_exec sk_run TRACE_SESSION=sk-s "$_sk_bad"
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
 		pass "a <dir> written '$_sk_bad' is a usage error, exit 2" ||
-		fail "stack '$_sk_bad': exit $S_STATUS, stdout '$S_OUT'"
+		fail "stack '$_sk_bad': exit $T_STATUS, stdout '$T_OUT'"
 	sk_ask TRACE_SESSION=sk-s "$SK_WT/$_sk_bad"
-	[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+	[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 		pass "and the same directory named by a path is read" ||
-		fail "stack '$SK_WT/$_sk_bad': exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+		fail "stack '$SK_WT/$_sk_bad': exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 done
 # An empty stack — the file is there, every run closed — is no run, exit 0.
 (cd "$SK_WT" && env TRACE_CONFIG="$SKON" TRACE_SESSION= sh scripts/trace.sh end "$SK_NOID" outcome=ok 2>/dev/null)
 sk_ask TRACE_SESSION= "$SK_WT"
 SK_BYTES=$(sk_run TRACE_SESSION= "$SK_WT" 2>/dev/null | wc -c | tr -d ' ')
-[ "$SK_BYTES" = 0 ] && [ -f "$SK/current/$SK_KEY.runs" ] && [ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+[ "$SK_BYTES" = 0 ] && [ -f "$SK/current/$SK_KEY.runs" ] && [ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$T_ERR" ] &&
 	pass "an empty stack — the file there, every run closed: exit 0, nothing on either stream" ||
-	fail "an empty stack: file $(ls "$SK/current" 2>&1), exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "an empty stack: file $(ls "$SK/current" 2>&1), exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 # It reads; it never writes. The stack it answered from is byte for byte what it was.
 SK_STACK="$SK/current/$SK_KEY.sk-s.runs"
 SK_BEFORE=$(cat "$SK_STACK")
@@ -1942,51 +1942,51 @@ if [ "$(id -u)" != 0 ]; then
 	chmod 000 "$SK_STACK"
 	sk_ask TRACE_SESSION=sk-s "$SK_WT"
 	chmod 600 "$SK_STACK"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
 		pass "a stack that exists and cannot be read is refused, exit 2, nothing on stdout" ||
-		fail "an unreadable stack: exit $S_STATUS, stdout '$S_OUT'"
-	case $S_ERR in *"$SK_STACK exists and cannot be read"*) pass "and stderr names the stack it could not read" ;;
-	*) fail "an unreadable stack's stderr does not name it: '$S_ERR'" ;; esac
-	case $S_ERR in *"awk:"* | *"cat:"* | *"sed:"*) fail "a raw tool diagnostic leaked: $S_ERR" ;; *) pass "and no tool's own error text leaks past it" ;; esac
+		fail "an unreadable stack: exit $T_STATUS, stdout '$T_OUT'"
+	case $T_ERR in *"$SK_STACK exists and cannot be read"*) pass "and stderr names the stack it could not read" ;;
+	*) fail "an unreadable stack's stderr does not name it: '$T_ERR'" ;; esac
+	case $T_ERR in *"awk:"* | *"cat:"* | *"sed:"*) fail "a raw tool diagnostic leaked: $T_ERR" ;; *) pass "and no tool's own error text leaks past it" ;; esac
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi
 SK_OTHER="$SCRATCH/other-repo-472"
 git init -q "$SK_OTHER"
 sk_ask TRACE_SESSION=sk-s "$SK_OTHER"
-[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
 	pass "a checkout of ANOTHER repository is refused, exit 2, nothing on stdout — its stack would be a stranger's" ||
-	fail "another repository: exit $S_STATUS, stdout '$S_OUT'"
-case $S_ERR in *"trace:"*"not a checkout of"*) pass "and stderr says it is not a checkout of this repository" ;;
-*) fail "another repository's refusal does not say why: '$S_ERR'" ;; esac
+	fail "another repository: exit $T_STATUS, stdout '$T_OUT'"
+case $T_ERR in *"trace:"*"not a checkout of"*) pass "and stderr says it is not a checkout of this repository" ;;
+*) fail "another repository's refusal does not say why: '$T_ERR'" ;; esac
 sk_ask TRACE_SESSION=sk-s GIT_DIR="$SK_OTHER/.git" GIT_WORK_TREE="$SK_OTHER" "$SK_WT"
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sed -n 1p)" = "$SK_INNER" ] &&
 	pass "an inherited GIT_DIR/GIT_WORK_TREE pinned to another repository moves nothing" ||
-	fail "with GIT_DIR pinned elsewhere: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "with GIT_DIR pinned elsewhere: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 sk_ask TRACE_SESSION=sk-s "$SK_REPO/.git"
-[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
 	pass "a directory inside .git — git names no working tree — is refused, exit 2, saying so" ||
-	fail "a .git directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "a .git directory: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 mkdir -p "$SCRATCH/nowhere-472"
 sk_ask GIT_CEILING_DIRECTORIES="$SCRATCH" "$SCRATCH/nowhere-472"
-[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
 	pass "a directory in no checkout at all is refused, exit 2, saying so" ||
-	fail "a directory in no checkout: exit $S_STATUS, stdout '$S_OUT'"
+	fail "a directory in no checkout: exit $T_STATUS, stdout '$T_OUT'"
 sk_ask "$SCRATCH/never-there-472"
-[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *"not a checkout of"*) true ;; *) false ;; esac &&
 	pass "a directory that does not exist is refused, exit 2, saying so" ||
-	fail "a missing directory: exit $S_STATUS, stdout '$S_OUT'"
-assert_status 2 "stack with no directory is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack
-assert_status 2 "stack with an argument it does not take is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" --since 2026-01-01
-assert_status 2 "stack with two directories is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" "$KIT"
+	fail "a missing directory: exit $T_STATUS, stdout '$T_OUT'"
+expect_exit 2 "stack with no directory is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack
+expect_exit 2 "stack with an argument it does not take is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" --since 2026-01-01
+expect_exit 2 "stack with two directories is a usage error" -- env TRACE_CONFIG="$SKON" sh "$TRACE" stack "$KIT" "$KIT"
 # Unconfigured is a working state here too: nothing on stdout, exit 0.
-t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$KIT"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, stack prints nothing and exits 0" ||
-	fail "unconfigured stack: exit $S_STATUS, stdout '$S_OUT'"
+t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$KIT"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "unconfigured, stack prints nothing and exits 0" ||
+	fail "unconfigured stack: exit $T_STATUS, stdout '$T_OUT'"
 # The interface is recorded where a caller reads it: the usage, the header, the record.
-t_run_split sh "$TRACE"
-case $S_ERR in *'trace.sh stack <dir> [session=<id>]'*) pass "the usage names stack <dir> [session=<id>]" ;; *) fail "the usage does not name 'stack <dir> [session=<id>]': $S_ERR" ;; esac
-case $S_ERR in *'a <dir> beginning with - or session= is refused'*) pass "and says which <dir> it refuses" ;; *) fail "the usage does not say a <dir> beginning with - or session= is refused: $S_ERR" ;; esac
+t_exec sh "$TRACE"
+case $T_ERR in *'trace.sh stack <dir> [session=<id>]'*) pass "the usage names stack <dir> [session=<id>]" ;; *) fail "the usage does not name 'stack <dir> [session=<id>]': $T_ERR" ;; esac
+case $T_ERR in *'a <dir> beginning with - or session= is refused'*) pass "and says which <dir> it refuses" ;; *) fail "the usage does not say a <dir> beginning with - or session= is refused: $T_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> [session=<id>]' &&
 	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> [session=<id>]"
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
@@ -2020,55 +2020,55 @@ OWC=$(ow begin review-pr subject='pr:#543')
 	fail "the begins printed '$OWP' and '$OWC'"
 # The parent closing its own run while the subagent's is still open on top of it.
 _ow_n=$(ow_lines)
-t_run_split ow end "$OWP" outcome=ok reason='the parent, too early'
-[ "$S_STATUS" = 2 ] && pass "the parent's end naming its run, under the subagent's open run, is exit 2" ||
-	fail "end <parent> under an open child exited $S_STATUS: $S_ERR"
-case $S_ERR in *"$OWC"*) pass "and the refusal names the run that is open instead" ;; *) fail "the refusal did not name the open run $OWC: $S_ERR" ;; esac
+t_exec ow end "$OWP" outcome=ok reason='the parent, too early'
+[ "$T_STATUS" = 2 ] && pass "the parent's end naming its run, under the subagent's open run, is exit 2" ||
+	fail "end <parent> under an open child exited $T_STATUS: $T_ERR"
+case $T_ERR in *"$OWC"*) pass "and the refusal names the run that is open instead" ;; *) fail "the refusal did not name the open run $OWC: $T_ERR" ;; esac
 [ "$(ow_lines)" = "$_ow_n" ] && pass "and writes no run.end" || fail "a refused end wrote: $(tail -n 1 "$OWFILE")"
 # A subagent that never began — the #529 case — naming a run that is not open.
-t_run_split ow end 20261005T111906Z-1-deadbeef outcome=ok
-[ "$S_STATUS" = 2 ] && [ "$(ow_lines)" = "$_ow_n" ] &&
+t_exec ow end 20261005T111906Z-1-deadbeef outcome=ok
+[ "$T_STATUS" = 2 ] && [ "$(ow_lines)" = "$_ow_n" ] &&
 	pass "an end naming a run nobody opened here is exit 2 and writes nothing" ||
-	fail "end <a run never begun> exited $S_STATUS, the file grew to $(ow_lines)"
-t_run_split ow end "$OWC" outcome=ok reason='the subagent'
-[ "$S_STATUS" = 0 ] && pass "the subagent's end naming its own run exits 0" || fail "end <child> exited $S_STATUS: $S_ERR"
+	fail "end <a run never begun> exited $T_STATUS, the file grew to $(ow_lines)"
+t_exec ow end "$OWC" outcome=ok reason='the subagent'
+[ "$T_STATUS" = 0 ] && pass "the subagent's end naming its own run exits 0" || fail "end <child> exited $T_STATUS: $T_ERR"
 case $(tail -n 1 "$OWFILE") in *'"kind":"run.end"'*'"run":"'"$OWC"'","parent":"'"$OWP"'"'*'"reason":"the subagent"'*) pass "and closes the subagent's run" ;;
 *) fail "end <child> wrote: $(tail -n 1 "$OWFILE")" ;; esac
-t_run_split ow end "$OWP" outcome=ok reason='the parent'
-[ "$S_STATUS" = 0 ] && pass "then the parent's end naming its own run exits 0" || fail "end <parent> exited $S_STATUS: $S_ERR"
+t_exec ow end "$OWP" outcome=ok reason='the parent'
+[ "$T_STATUS" = 0 ] && pass "then the parent's end naming its own run exits 0" || fail "end <parent> exited $T_STATUS: $T_ERR"
 case $(tail -n 1 "$OWFILE") in *'"kind":"run.end"'*'"run":"'"$OWP"'"'*'"reason":"the parent"'*) pass "and closes the parent's run — each closed by its own end" ;;
 *) fail "end <parent> wrote: $(tail -n 1 "$OWFILE")" ;; esac
 [ "$(grep -c '"kind":"run.end"' "$OWFILE")" = 2 ] && pass "two runs, two run.end lines" || fail "run.end lines: $(grep -c '"kind":"run.end"' "$OWFILE")"
 # Nothing open: a named end is the same refusal a bare one is.
-t_run_split ow end "$OWP" outcome=ok
-[ "$S_STATUS" = 2 ] && case $S_ERR in *begin*) true ;; *) false ;; esac &&
-	pass "a named end with no run open is exit 2, saying what opens one" || fail "a named end on an empty stack exited $S_STATUS: $S_ERR"
+t_exec ow end "$OWP" outcome=ok
+[ "$T_STATUS" = 2 ] && case $T_ERR in *begin*) true ;; *) false ;; esac &&
+	pass "a named end with no run open is exit 2, saying what opens one" || fail "a named end on an empty stack exited $T_STATUS: $T_ERR"
 # The run is held to the shape begin mints, and is never a field.
 OWX=$(ow begin implement subject='ticket:#543')
 _ow_n=$(ow_lines)
-assert_status 2 "an end naming a run that is not one token of [A-Za-z0-9._-] is exit 2" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end 'x/y' outcome=ok
+expect_exit 2 "an end naming a run that is not one token of [A-Za-z0-9._-] is exit 2" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end 'x/y' outcome=ok
 # Review M-2 (PR #551): an empty first argument — `end "$RUN"` with RUN unset —
 # is a caller who meant to name a run and lost it; read as a bare end it would
 # pop the top, the very case #543 closes.
-assert_status 2 "an end handed an empty run id is exit 2, not a bare end" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end '' outcome=ok
-assert_out_has "empty run id"
+expect_exit 2 "an end handed an empty run id is exit 2, not a bare end" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end '' outcome=ok
+expect_said "empty run id"
 # Review M-3 (PR #551): an option and a field are never read as a run id.
-assert_status 2 "end -x is a usage error" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end -x
-t_run_split ow end id=1 # bare end: a field is never read as a run id
-case $S_ERR in *'end <run> closes only'*) fail "end id=1 was read as a run id: $S_ERR" ;; *) pass "end id=1 is a field, never read as a run id" ;; esac
+expect_exit 2 "end -x is a usage error" -- env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" end -x
+t_exec ow end id=1 # bare end: a field is never read as a run id
+case $T_ERR in *'end <run> closes only'*) fail "end id=1 was read as a run id: $T_ERR" ;; *) pass "end id=1 is a field, never read as a run id" ;; esac
 [ "$(ow_lines)" = "$_ow_n" ] &&
 	pass "and none of the refused ends wrote a line or popped the run" || fail "a refused end wrote or popped: $(tail -n 1 "$OWFILE")"
 [ "$(env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" stack "$KIT" | sed -n 1p)" = "$OWX" ] &&
 	pass "the open run is still the one begin opened" || fail "the stack top moved after refused ends"
 # Back-compat: a bare end still closes the top, whoever began it.
-t_run_split ow end outcome=ok reason='bare' # bare end: the back-compat case #560 keeps
-[ "$S_STATUS" = 0 ] && case $(tail -n 1 "$OWFILE") in *'"run":"'"$OWX"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
-	pass "a bare end still closes the top of the stack" || fail "the bare end exited $S_STATUS: $(tail -n 1 "$OWFILE")"
+t_exec ow end outcome=ok reason='bare' # bare end: the back-compat case #560 keeps
+[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$OWFILE") in *'"run":"'"$OWX"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
+	pass "a bare end still closes the top of the stack" || fail "the bare end exited $T_STATUS: $(tail -n 1 "$OWFILE")"
 # Unconfigured, a named end is the no-op every call is — even a malformed one.
-assert_status 0 "unconfigured, end 'x/y' is the silent no-op" -- env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end 'x/y'
+expect_exit 0 "unconfigured, end 'x/y' is the silent no-op" -- env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end 'x/y'
 # The interface is recorded where a caller reads it.
-t_run_split sh "$TRACE"
-case $S_ERR in *'trace.sh end [<run>] [outcome='*) pass "the usage names end [<run>]" ;; *) fail "the usage does not name 'end [<run>]': $S_ERR" ;; esac
+t_exec sh "$TRACE"
+case $T_ERR in *'trace.sh end [<run>] [outcome='*) pass "the usage names end [<run>]" ;; *) fail "the usage does not name 'end [<run>]': $T_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh end [<run>] [outcome=' &&
 	pass "and so does the script's header" || fail "the header's command list does not name end [<run>]"
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
@@ -2097,32 +2097,32 @@ DP="$SCRATCH/deprecate-560"; DPON=$(policy "$DP")
 DPFILE="$DP/events/$TODAY.jsonl"
 dp() { env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 sh "$TRACE" "$@"; }
 DPR=$(dp begin implement subject='ticket:#560')
-t_run_split dp end outcome=ok reason='bare' # bare end: the deprecated form, driven on purpose
-[ "$S_STATUS" = 0 ] && case $(tail -n 1 "$DPFILE") in *'"kind":"run.end"'*'"run":"'"$DPR"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
-	pass "a bare end still closes the top of the stack, exit 0" || fail "the bare end exited $S_STATUS: $(tail -n 1 "$DPFILE")"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "a bare end printed on stdout: $S_OUT"
-[ "$(printf '%s\n' "$S_ERR" | grep -c .)" = 1 ] && pass "and exactly one line on stderr" || fail "a bare end said, on stderr: $S_ERR"
-case $S_ERR in *'trace:'*deprecated*) pass "a trace-prefixed line saying a bare end is deprecated" ;; *) fail "the stderr line does not say deprecated: $S_ERR" ;; esac
-case $S_ERR in *"$DPR"*) pass "naming the run it closed" ;; *) fail "the stderr line does not name the run it closed, $DPR: $S_ERR" ;; esac
-case $S_ERR in *"trace.sh end $DPR"*) pass "and the named form that closes it: trace.sh end <that run>" ;; *) fail "the stderr line does not give 'trace.sh end $DPR': $S_ERR" ;; esac
-case $S_ERR in *mandatory*) pass "and that a later release makes the id mandatory" ;; *) fail "the stderr line does not say the id becomes mandatory: $S_ERR" ;; esac
+t_exec dp end outcome=ok reason='bare' # bare end: the deprecated form, driven on purpose
+[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$DPFILE") in *'"kind":"run.end"'*'"run":"'"$DPR"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
+	pass "a bare end still closes the top of the stack, exit 0" || fail "the bare end exited $T_STATUS: $(tail -n 1 "$DPFILE")"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "a bare end printed on stdout: $T_OUT"
+[ "$(printf '%s\n' "$T_ERR" | grep -c .)" = 1 ] && pass "and exactly one line on stderr" || fail "a bare end said, on stderr: $T_ERR"
+case $T_ERR in *'trace:'*deprecated*) pass "a trace-prefixed line saying a bare end is deprecated" ;; *) fail "the stderr line does not say deprecated: $T_ERR" ;; esac
+case $T_ERR in *"$DPR"*) pass "naming the run it closed" ;; *) fail "the stderr line does not name the run it closed, $DPR: $T_ERR" ;; esac
+case $T_ERR in *"trace.sh end $DPR"*) pass "and the named form that closes it: trace.sh end <that run>" ;; *) fail "the stderr line does not give 'trace.sh end $DPR': $T_ERR" ;; esac
+case $T_ERR in *mandatory*) pass "and that a later release makes the id mandatory" ;; *) fail "the stderr line does not say the id becomes mandatory: $T_ERR" ;; esac
 # The named form prints nothing new — on either stream.
 DPR=$(dp begin implement subject='ticket:#560')
-t_run_split dp end "$DPR" outcome=ok reason='named'
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
-	pass "a named end closes its run and prints nothing on either stream" || fail "the named end: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+t_exec dp end "$DPR" outcome=ok reason='named'
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$T_ERR" ] &&
+	pass "a named end closes its run and prints nothing on either stream" || fail "the named end: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 # A note, like every other note the script says: TRACE_QUIET=1 silences it.
 DPR=$(dp begin implement subject='ticket:#560')
-t_run_split env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: TRACE_QUIET over the deprecated form
-[ "$S_STATUS" = 0 ] && [ -z "$S_ERR" ] && case $(tail -n 1 "$DPFILE") in *'"run":"'"$DPR"'"'*) true ;; *) false ;; esac &&
-	pass "TRACE_QUIET=1 silences the notice, and the bare end still closes the run" || fail "a quiet bare end: exit $S_STATUS, stderr '$S_ERR'"
+t_exec env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: TRACE_QUIET over the deprecated form
+[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && case $(tail -n 1 "$DPFILE") in *'"run":"'"$DPR"'"'*) true ;; *) false ;; esac &&
+	pass "TRACE_QUIET=1 silences the notice, and the bare end still closes the run" || fail "a quiet bare end: exit $T_STATUS, stderr '$T_ERR'"
 # Closing nothing, it names nothing: the refusals are what they were.
-t_run_split dp end outcome=ok # bare end: nothing open, so nothing to name
-[ "$S_STATUS" = 2 ] && case $S_ERR in *deprecated*) false ;; *) true ;; esac &&
-	pass "a bare end with nothing open is exit 2 and carries no notice — it closed nothing" || fail "a bare end on an empty stack: exit $S_STATUS, stderr '$S_ERR'"
-t_run_split env TRACE_CONFIG="$OFF" sh "$TRACE" end outcome=ok # bare end: unconfigured, the no-op
-[ "$S_STATUS" = 0 ] && case $S_ERR in *deprecated*) false ;; *) true ;; esac &&
-	pass "unconfigured, a bare end is the no-op it was, with no notice" || fail "an unconfigured bare end: exit $S_STATUS, stderr '$S_ERR'"
+t_exec dp end outcome=ok # bare end: nothing open, so nothing to name
+[ "$T_STATUS" = 2 ] && case $T_ERR in *deprecated*) false ;; *) true ;; esac &&
+	pass "a bare end with nothing open is exit 2 and carries no notice — it closed nothing" || fail "a bare end on an empty stack: exit $T_STATUS, stderr '$T_ERR'"
+t_exec env TRACE_CONFIG="$OFF" sh "$TRACE" end outcome=ok # bare end: unconfigured, the no-op
+[ "$T_STATUS" = 0 ] && case $T_ERR in *deprecated*) false ;; *) true ;; esac &&
+	pass "unconfigured, a bare end is the no-op it was, with no notice" || fail "an unconfigured bare end: exit $T_STATUS, stderr '$T_ERR'"
 # The interface is recorded where a caller reads it.
 sed -n '2,32p' "$TRACE" | sed 's/^# *//' | tr '\n' ' ' | grep -q 'bare `end`[^.]*deprecated' &&
 	pass "the script's header says a bare end is deprecated" || fail "the header does not say a bare \`end\` is deprecated"
@@ -2181,33 +2181,33 @@ RI="$SCRATCH/raise-id"; RION=$(policy "$RI")
 # ri_emit <emit args…> — runs the emit and sets RI_GREW to the lines it added.
 ri_emit() {
 	_ri_n=$(cat "$RI/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	t_run_split env TRACE_CONFIG="$RION" sh "$TRACE" emit "$@"
+	t_exec env TRACE_CONFIG="$RION" sh "$TRACE" emit "$@"
 	RI_GREW=$(($(cat "$RI/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ') - _ri_n))
 }
 R='kind=finding.raise subject=pr:#535 outcome=raised data.severity=low data.agent=simplicity'
 # shellcheck disable=SC2086 # $R is the emit's fixed head, split on purpose
 {
 ri_emit $R data.id=INITIAL-1
-case $S_STATUS:$RI_GREW:$S_ERR in
+case $T_STATUS:$RI_GREW:$T_ERR in
 2:0:*"finding.raise: data.id 'INITIAL-1' is not [CHML]-[0-9]+"*) pass "finding.raise data.id=INITIAL-1 is exit 2, names the kind, the value and the shape, and writes nothing" ;;
-*) fail "finding.raise data.id=INITIAL-1 was not refused by shape (exit $S_STATUS, $RI_GREW line(s) written): $S_ERR" ;;
+*) fail "finding.raise data.id=INITIAL-1 was not refused by shape (exit $T_STATUS, $RI_GREW line(s) written): $T_ERR" ;;
 esac
 for _ri_bad in INITIAL-N A2-1 X-1 h-3 H- H-3a local-H-3 'H 3' PRRC_kwDO12; do
 	ri_emit $R "data.id=$_ri_bad"
-	[ "$S_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and data.id='$_ri_bad' is refused" ||
-		fail "finding.raise data.id='$_ri_bad' was not refused (exit $S_STATUS, $RI_GREW line(s)): $S_ERR"
+	[ "$T_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and data.id='$_ri_bad' is refused" ||
+		fail "finding.raise data.id='$_ri_bad' was not refused (exit $T_STATUS, $RI_GREW line(s)): $T_ERR"
 done
 ri_emit $R data.id=H-1 data.id=INITIAL-2
-[ "$S_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and a second data.id is held too" ||
-	fail "a second, malformed data.id on a raise was not refused (exit $S_STATUS): $S_ERR"
+[ "$T_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "…and a second data.id is held too" ||
+	fail "a second, malformed data.id on a raise was not refused (exit $T_STATUS): $T_ERR"
 for _ri_ok in H-3 C-1 M-12 L-7; do
 	ri_emit $R "data.id=$_ri_ok"
-	[ "$S_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "finding.raise data.id=$_ri_ok writes" ||
-		fail "finding.raise data.id=$_ri_ok was refused or not written (exit $S_STATUS): $S_ERR"
+	[ "$T_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "finding.raise data.id=$_ri_ok writes" ||
+		fail "finding.raise data.id=$_ri_ok was refused or not written (exit $T_STATUS): $T_ERR"
 done
 ri_emit $R
-[ "$S_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "a raise with no data.id still writes — a missing key is no violation" ||
-	fail "a raise with no data.id was refused (exit $S_STATUS): $S_ERR"
+[ "$T_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "a raise with no data.id still writes — a missing key is no violation" ||
+	fail "a raise with no data.id was refused (exit $T_STATUS): $T_ERR"
 }
 grep -F '"kind":"finding.raise"' "$RI/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"H-3"' &&
 	pass "and H-3 is in the trace as given" || fail "the raise H-3 is not in the trace as given"
@@ -2229,36 +2229,36 @@ printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r2","kind":"finding.triage","su
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r3","kind":"finding.raise","subject":"pr:#541","outcome":"raised","data":{"severity":"low","thread_id":"x","id":"M-2"}}\n' >>"$RIV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r4","kind":"finding.raise","subject":"pr:#541","outcome":"raised","data":{"agent":"simplicity","id":"INITIAL-2"}}\n' >>"$RIV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r5","kind":"finding.raise","subject":"pr:#541","outcome":"raised"}\n' >>"$RIV/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify over a malformed raise id exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over a malformed raise id: $S_OUT"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
-case $S_ERR in *"$TODAY.jsonl:2:"*finding.raise*INITIAL-1*"[CHML]-[0-9]+"*advisory*) pass "and names the raise's file:line, the value and the shape on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, finding.raise, INITIAL-1 and the shape: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:5:"*INITIAL-2*) pass "and the second raise too, its id after another key" ;; *) fail "stderr did not name $TODAY.jsonl:5 INITIAL-2: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"*) fail "verify advised on a raise whose id is a severity id: $S_ERR" ;; *) pass "and leaves a severity id alone, beside a key ending in id" ;; esac
-case $S_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's data.id to the raise shape: $S_ERR" ;; *) pass "and holds no other kind's id to it" ;; esac
-case $S_ERR in *"$TODAY.jsonl:6:"*) fail "verify advised on a raise with no id: $S_ERR" ;; *) pass "and a raise with no id is no advisory" ;; esac
+t_exec env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over a malformed raise id exits 0 — an advisory is not a verdict" || fail "verify exited $T_STATUS over a malformed raise id: $T_OUT"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:2:"*finding.raise*INITIAL-1*"[CHML]-[0-9]+"*advisory*) pass "and names the raise's file:line, the value and the shape on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, finding.raise, INITIAL-1 and the shape: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:5:"*INITIAL-2*) pass "and the second raise too, its id after another key" ;; *) fail "stderr did not name $TODAY.jsonl:5 INITIAL-2: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"*) fail "verify advised on a raise whose id is a severity id: $T_ERR" ;; *) pass "and leaves a severity id alone, beside a key ending in id" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's data.id to the raise shape: $T_ERR" ;; *) pass "and holds no other kind's id to it" ;; esac
+case $T_ERR in *"$TODAY.jsonl:6:"*) fail "verify advised on a raise with no id: $T_ERR" ;; *) pass "and a raise with no id is no advisory" ;; esac
 # summary and export say the count once, as they do for the older advisories,
 # and repeat none of verify's per-line notes (review of PR #605, M-1).
 for _ri_cmd in summary export; do
-	t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" $_ri_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_ri_cmd over malformed raise ids still exits 0" || fail "$_ri_cmd exited $S_STATUS: $S_ERR"
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'raise')" = 1 ] && pass "and $_ri_cmd says so in exactly one stderr line" || fail "$_ri_cmd did not print exactly one raise advisory: $S_ERR"
-	case $S_ERR in *"2 "*raise*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_ri_cmd's raise advisory lacks the count or the pointer: $S_ERR" ;; esac
-	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_ri_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+	t_exec env TRACE_CONFIG="$RIVON" sh "$TRACE" $_ri_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_ri_cmd over malformed raise ids still exits 0" || fail "$_ri_cmd exited $T_STATUS: $T_ERR"
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'raise')" = 1 ] && pass "and $_ri_cmd says so in exactly one stderr line" || fail "$_ri_cmd did not print exactly one raise advisory: $T_ERR"
+	case $T_ERR in *"2 "*raise*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_ri_cmd's raise advisory lacks the count or the pointer: $T_ERR" ;; esac
+	case $T_ERR in *"$TODAY.jsonl:"*) fail "$_ri_cmd repeated verify's per-line advisories: $T_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
 done
 # A table that lost the raise row is a table error, refused, never a silent
 # advisory that matches nothing (review of PR #605, M-3).
 RIX="$SCRATCH/raise-norow"; mkdir -p "$RIX"
 sed "s/^TRACE_SHAPES='finding\.raise=id:\[CHML\]-\[0-9\]+ /TRACE_SHAPES='/" "$TRACE" >"$RIX/trace.sh"
 grep -q "^TRACE_SHAPES='.*finding\.raise=id:" "$RIX/trace.sh" && fail "the fixture still carries the raise row — the bait proves nothing" || pass "bait: a copy of the script without the raise row"
-t_run_split env TRACE_CONFIG="$RIVON" sh "$RIX/trace.sh" verify
-case $S_STATUS:$S_ERR in 2:*"finding.raise=id"*) pass "verify on a table with no raise row is exit 2, naming the row" ;; *) fail "verify without the raise row exited $S_STATUS, not 2 naming the row: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$RIVON" sh "$RIX/trace.sh" verify
+case $T_STATUS:$T_ERR in 2:*"finding.raise=id"*) pass "verify on a table with no raise row is exit 2, naming the row" ;; *) fail "verify without the raise row exited $T_STATUS, not 2 naming the row: $T_ERR" ;; esac
 printf 'not json at all\n' >>"$RIV/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
+t_exec env TRACE_CONFIG="$RIVON" sh "$TRACE" verify
 _ri_v=no
-[ "$S_STATUS" = 1 ] && case $S_OUT in *"$TODAY.jsonl:2:"*) ;; *"$TODAY.jsonl:7:"*) _ri_v=yes ;; esac
+[ "$T_STATUS" = 1 ] && case $T_OUT in *"$TODAY.jsonl:2:"*) ;; *"$TODAY.jsonl:7:"*) _ri_v=yes ;; esac
 [ "$_ri_v" = yes ] && pass "a real bad line still fails verify, and the old raise is not among the bad lines" ||
-	fail "verify mixed the raise advisory into the verdict (exit $S_STATUS): $S_OUT"
+	fail "verify mixed the raise advisory into the verdict (exit $T_STATUS): $T_OUT"
 
 # The decision is recorded where decisions live, and the review's own raise
 # lines name the shape the script holds them to — never the placeholder.
@@ -2300,50 +2300,50 @@ SMEMPTY="$SCRATCH/spawn-model.empty.sh"; : >"$SMEMPTY"
 sm_emit() {
 	_sm_cfg=$1; shift
 	_sm_n=$(cat "$SM/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-	t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$_sm_cfg" sh "$TRACE" emit "$@"
+	t_exec env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$_sm_cfg" sh "$TRACE" emit "$@"
 	SM_GREW=$(($(cat "$SM/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ') - _sm_n))
 }
 SP='kind=spawn subject=pr:#1 tier=reviewer outcome=in-session'
 # shellcheck disable=SC2086 # $SP is the emit's fixed head, split on purpose
 {
 sm_emit "$SMA" $SP model=wise
-case $S_STATUS:$SM_GREW:$S_ERR in
+case $T_STATUS:$SM_GREW:$T_ERR in
 2:0:*"spawn: model 'wise' is not"*maker-wise-3-1*) pass "a spawn word is exit 2, names the value and the ids the policy maps, and writes nothing" ;;
-*) fail "spawn model=wise was not refused (exit $S_STATUS, $SM_GREW line(s)): $S_ERR" ;;
+*) fail "spawn model=wise was not refused (exit $T_STATUS, $SM_GREW line(s)): $T_ERR" ;;
 esac
 for _sm_bad in maker-wise maker-wise-3-1x other:remote-x 'maker-big-2-0 maker-mid-1-0' MAKER-BIG-2-0; do
 	sm_emit "$SMA" $SP "model=$_sm_bad"
-	[ "$S_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "…and model='$_sm_bad' is refused" ||
-		fail "spawn model='$_sm_bad' was not refused (exit $S_STATUS, $SM_GREW line(s)): $S_ERR"
+	[ "$T_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "…and model='$_sm_bad' is refused" ||
+		fail "spawn model='$_sm_bad' was not refused (exit $T_STATUS, $SM_GREW line(s)): $T_ERR"
 done
 for _sm_ok in maker-big-2-0 maker-wise-3-1 maker-mid-1-0 remote-x; do
 	sm_emit "$SMA" $SP "model=$_sm_ok"
-	[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "spawn model=$_sm_ok writes — a mapped id, the fallback's included, a crossing's model part too" ||
-		fail "spawn model=$_sm_ok was refused or not written (exit $S_STATUS): $S_ERR"
+	[ "$T_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "spawn model=$_sm_ok writes — a mapped id, the fallback's included, a crossing's model part too" ||
+		fail "spawn model=$_sm_ok was refused or not written (exit $T_STATUS): $T_ERR"
 done
 sm_emit "$SMA" $SP
-[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "a spawn with no model writes — the inherited case" || fail "a spawn with no model was refused (exit $S_STATUS): $S_ERR"
+[ "$T_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "a spawn with no model writes — the inherited case" || fail "a spawn with no model was refused (exit $T_STATUS): $T_ERR"
 sm_emit "$SMA" $SP model=
-[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "…and so does model= empty, what an unmapped resolver hands \$model" || fail "spawn model= empty was refused (exit $S_STATUS): $S_ERR"
+[ "$T_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "…and so does model= empty, what an unmapped resolver hands \$model" || fail "spawn model= empty was refused (exit $T_STATUS): $T_ERR"
 sm_emit "$SMA" kind=session.usage model=wise tok_in=1
-[ "$S_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "another kind's model is not held — a harness reports its own" || fail "session.usage model=wise was refused (exit $S_STATUS): $S_ERR"
+[ "$T_STATUS" = 0 ] && [ "$SM_GREW" = 1 ] && pass "another kind's model is not held — a harness reports its own" || fail "session.usage model=wise was refused (exit $T_STATUS): $T_ERR"
 sm_emit "$SMEMPTY" $SP model=maker-big-2-0
-case $S_STATUS:$SM_GREW:$S_ERR in
+case $T_STATUS:$SM_GREW:$T_ERR in
 2:0:*"maps no model"*) pass "an agents policy that maps nothing refuses any model — the resolver printed nothing, so the spawn inherited" ;;
-*) fail "an empty agents policy let a spawn model through (exit $S_STATUS, $SM_GREW): $S_ERR" ;;
+*) fail "an empty agents policy let a spawn model through (exit $T_STATUS, $SM_GREW): $T_ERR" ;;
 esac
 sm_emit "$SCRATCH/spawn-model.missing.sh" $SP model=maker-big-2-0
-[ "$S_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "a named agents policy that is missing refuses the model — never a silent pass" ||
-	fail "a missing agents policy let a spawn model through (exit $S_STATUS, $SM_GREW): $S_ERR"
+[ "$T_STATUS" = 2 ] && [ "$SM_GREW" = 0 ] && pass "a named agents policy that is missing refuses the model — never a silent pass" ||
+	fail "a missing agents policy let a spawn model through (exit $T_STATUS, $SM_GREW): $T_ERR"
 sm_emit "$SMA" $SP model=wise --dry-run
-[ "$S_STATUS" = 2 ] && pass "--dry-run is held to the same rule" || fail "--dry-run let model=wise through (exit $S_STATUS)"
+[ "$T_STATUS" = 2 ] && pass "--dry-run is held to the same rule" || fail "--dry-run let model=wise through (exit $T_STATUS)"
 }
 # A copy of the script with no resolver beside it cannot judge the rule, and
 # writes: a project that removed the resolver has no ids to hold a model to.
 SMX="$SCRATCH/spawn-model-nolib"; mkdir -p "$SMX"; cp "$TRACE" "$SMX/trace.sh"
-t_run_split env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" emit $SP model=wise
-[ "$S_STATUS" = 0 ] && pass "with no resolver beside the script the rule is off, and the spawn writes" ||
-	fail "a script with no resolver beside it refused the spawn (exit $S_STATUS): $S_ERR"
+t_exec env TRACE_CONFIG="$SMON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" emit $SP model=wise
+[ "$T_STATUS" = 0 ] && pass "with no resolver beside the script the rule is off, and the spawn writes" ||
+	fail "a script with no resolver beside it refused the spawn (exit $T_STATUS): $T_ERR"
 # The kit's own wrapper points the resolver at the kit's policy: the kit's
 # implementer id writes, and a PINNED tier's spawn word is refused — the
 # content domain's, since ADR-0018 and ADR-0020 map the planner, the
@@ -2353,13 +2353,13 @@ _sm_id=$(cd "$KIT" && sh scripts/agents.kit.sh implementer)
 _sm_word=$(cd "$KIT" && sh scripts/agents.kit.sh --alias implementer content)
 _sm_fam=$(cd "$KIT" && sh scripts/agents.kit.sh mechanical)
 _sm_kit() { cd "$KIT" && env -u AGENTS_CONFIG sh scripts/trace.kit.sh emit "$@" --dry-run; }
-t_run_split _sm_kit $SP "model=$_sm_id"
-[ "$S_STATUS" = 0 ] && pass "through the kit wrapper the kit's implementer id ($_sm_id) is accepted" || fail "the kit wrapper refused $_sm_id (exit $S_STATUS): $S_ERR"
-t_run_split _sm_kit $SP "model=$_sm_word"
-[ "$S_STATUS" = 2 ] && pass "and its spawn word ($_sm_word) is refused" || fail "the kit wrapper let the spawn word $_sm_word through (exit $S_STATUS)"
-t_run_split _sm_kit $SP "model=$_sm_fam"
-[ "$S_STATUS" = 0 ] && pass "and a family word a tier maps ($_sm_fam, ADR-0018) is an id, accepted" ||
-	fail "the kit wrapper refused the mapped family word $_sm_fam (exit $S_STATUS): $S_ERR"
+t_exec _sm_kit $SP "model=$_sm_id"
+[ "$T_STATUS" = 0 ] && pass "through the kit wrapper the kit's implementer id ($_sm_id) is accepted" || fail "the kit wrapper refused $_sm_id (exit $T_STATUS): $T_ERR"
+t_exec _sm_kit $SP "model=$_sm_word"
+[ "$T_STATUS" = 2 ] && pass "and its spawn word ($_sm_word) is refused" || fail "the kit wrapper let the spawn word $_sm_word through (exit $T_STATUS)"
+t_exec _sm_kit $SP "model=$_sm_fam"
+[ "$T_STATUS" = 0 ] && pass "and a family word a tier maps ($_sm_fam, ADR-0018) is an id, accepted" ||
+	fail "the kit wrapper refused the mapped family word $_sm_fam (exit $T_STATUS): $T_ERR"
 
 # verify: a spawn already written with a model off the rule is history — an
 # advisory naming file, line and value, never a bad line, never the verdict.
@@ -2370,42 +2370,42 @@ printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s2","kind":"session.usage","mod
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s3","kind":"spawn","subject":"pr:#541","outcome":"in-session","data":{"model":"opus"}}\n' >>"$SMV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s4","kind":"spawn","subject":"pr:#541","model":"claude-sonnet","outcome":"in-session"}\n' >>"$SMV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"s5","kind":"spawn","subject":"pr:#541","model":"maker-mid-1-0","outcome":"in-session"}\n' >>"$SMV/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify over an off-rule spawn model exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over an off-rule spawn model: $S_OUT"
-[ -z "$S_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $S_OUT"
-case $S_ERR in *"$TODAY.jsonl:2:"*spawn*"model 'opus'"*advisory*) pass "and names the spawn's file:line and the value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, spawn and 'opus': $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:5:"*claude-sonnet*) pass "and the second one too" ;; *) fail "stderr did not name $TODAY.jsonl:5 claude-sonnet: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:6:"*) fail "verify advised on a spawn whose model is a mapped id: $S_ERR" ;; *) pass "and leaves a mapped id alone" ;; esac
-case $S_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's model to the rule: $S_ERR" ;; *) pass "and holds no other kind's model to it" ;; esac
-case $S_ERR in *"$TODAY.jsonl:4:"*) fail "verify read a data key called model as the spawn's: $S_ERR" ;; *) pass "and never reads a data key called model as the envelope's" ;; esac
+t_exec env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over an off-rule spawn model exits 0 — an advisory is not a verdict" || fail "verify exited $T_STATUS over an off-rule spawn model: $T_OUT"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:2:"*spawn*"model 'opus'"*advisory*) pass "and names the spawn's file:line and the value on stderr" ;; *) fail "stderr did not name $TODAY.jsonl:2, spawn and 'opus': $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:5:"*claude-sonnet*) pass "and the second one too" ;; *) fail "stderr did not name $TODAY.jsonl:5 claude-sonnet: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:6:"*) fail "verify advised on a spawn whose model is a mapped id: $T_ERR" ;; *) pass "and leaves a mapped id alone" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's model to the rule: $T_ERR" ;; *) pass "and holds no other kind's model to it" ;; esac
+case $T_ERR in *"$TODAY.jsonl:4:"*) fail "verify read a data key called model as the spawn's: $T_ERR" ;; *) pass "and never reads a data key called model as the envelope's" ;; esac
 for _sm_cmd in summary export; do
-	t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" $_sm_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_sm_cmd over off-rule spawn models still exits 0" || fail "$_sm_cmd exited $S_STATUS: $S_ERR"
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'spawn model')" = 1 ] && pass "and $_sm_cmd says so in exactly one stderr line" || fail "$_sm_cmd did not print exactly one spawn-model advisory: $S_ERR"
-	case $S_ERR in *"2 spawn model"*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_sm_cmd's spawn-model advisory lacks the count or the pointer: $S_ERR" ;; esac
-	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_sm_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+	t_exec env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$TRACE" $_sm_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_sm_cmd over off-rule spawn models still exits 0" || fail "$_sm_cmd exited $T_STATUS: $T_ERR"
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'spawn model')" = 1 ] && pass "and $_sm_cmd says so in exactly one stderr line" || fail "$_sm_cmd did not print exactly one spawn-model advisory: $T_ERR"
+	case $T_ERR in *"2 spawn model"*verify*) pass "which carries the count, 2, and points at verify" ;; *) fail "$_sm_cmd's spawn-model advisory lacks the count or the pointer: $T_ERR" ;; esac
+	case $T_ERR in *"$TODAY.jsonl:"*) fail "$_sm_cmd repeated verify's per-line advisories: $T_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
 done
-t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" verify
-case $S_ERR in *"spawn"*) fail "a script with no resolver beside it advised on spawn models: $S_ERR" ;; *) pass "and with no resolver beside the script, verify says nothing of spawn models" ;; esac
+t_exec env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMA" sh "$SMX/trace.sh" verify
+case $T_ERR in *"spawn"*) fail "a script with no resolver beside it advised on spawn models: $T_ERR" ;; *) pass "and with no resolver beside the script, verify says nothing of spawn models" ;; esac
 # An agents policy that maps nothing advises on every spawn model, as the
 # emit refuses every one (review of PR #611, M-1).
-t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMEMPTY" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify under an empty agents policy still exits 0" || fail "verify under an empty agents policy exited $S_STATUS"
-case $S_ERR in *"$TODAY.jsonl:1:"*spawn*"$TODAY.jsonl:6:"*maker-mid-1-0*) pass "and advises on every spawn model, a once-mapped id included" ;; *) fail "verify under an empty policy did not advise on lines 1 and 6: $S_ERR" ;; esac
+t_exec env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SMEMPTY" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify under an empty agents policy still exits 0" || fail "verify under an empty agents policy exited $T_STATUS"
+case $T_ERR in *"$TODAY.jsonl:1:"*spawn*"$TODAY.jsonl:6:"*maker-mid-1-0*) pass "and advises on every spawn model, a once-mapped id included" ;; *) fail "verify under an empty policy did not advise on lines 1 and 6: $T_ERR" ;; esac
 # A resolver that fails judges nothing, and says so once — never a silent
 # skip beside an emit that refuses (review of PR #611, M-1 and L-1).
 for _sm_cmd in verify summary; do
-	t_run_split env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SCRATCH/spawn-model.missing.sh" sh "$TRACE" $_sm_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_sm_cmd with a failing resolver still exits 0" || fail "$_sm_cmd with a failing resolver exited $S_STATUS: $S_ERR"
-	[ "$(printf '%s\n' "$S_ERR" | grep -c 'spawn models are not judged')" = 1 ] &&
-		pass "and $_sm_cmd says once that spawn models are not judged" || fail "$_sm_cmd did not say once that spawn models are not judged: $S_ERR"
-	case $S_ERR in *"spawn model '"*) fail "$_sm_cmd advised per line with no list to judge against: $S_ERR" ;; *) pass "and advises on no line" ;; esac
+	t_exec env TRACE_CONFIG="$SMVON" AGENTS_CONFIG="$SCRATCH/spawn-model.missing.sh" sh "$TRACE" $_sm_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_sm_cmd with a failing resolver still exits 0" || fail "$_sm_cmd with a failing resolver exited $T_STATUS: $T_ERR"
+	[ "$(printf '%s\n' "$T_ERR" | grep -c 'spawn models are not judged')" = 1 ] &&
+		pass "and $_sm_cmd says once that spawn models are not judged" || fail "$_sm_cmd did not say once that spawn models are not judged: $T_ERR"
+	case $T_ERR in *"spawn model '"*) fail "$_sm_cmd advised per line with no list to judge against: $T_ERR" ;; *) pass "and advises on no line" ;; esac
 done
 # The kit wrapper's agents-policy lookup failing is said, never a bare exit
 # (review of PR #611, M-3).
 SMK="$SCRATCH/spawn-model-kit"; mkdir -p "$SMK/scripts"; cp "$KIT/scripts/trace.kit.sh" "$SMK/scripts/"
-t_run_split sh -c 'cd "$1" && sh scripts/trace.kit.sh dir' _ "$SMK"
-case $S_STATUS:$S_ERR in 2:*"trace.kit.sh: "*"agents.kit.sh --policy"*) pass "the kit wrapper with no agents policy to name is exit 2, naming the lookup" ;; *) fail "the kit wrapper's failed policy lookup was not exit 2 naming it (exit $S_STATUS): $S_ERR" ;; esac
+t_exec sh -c 'cd "$1" && sh scripts/trace.kit.sh dir' _ "$SMK"
+case $T_STATUS:$T_ERR in 2:*"trace.kit.sh: "*"agents.kit.sh --policy"*) pass "the kit wrapper with no agents policy to name is exit 2, naming the lookup" ;; *) fail "the kit wrapper's failed policy lookup was not exit 2 naming it (exit $T_STATUS): $T_ERR" ;; esac
 
 # The decision is recorded where decisions live, and the skills that record a
 # spawn say which form to pass.
@@ -2483,16 +2483,16 @@ printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l1","kind":"review.verdict","su
 printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l2","kind":"review.verdict","subject":"pr:#649","outcome":"pass","data":{"axis":"1","lenses":"0","roster":"all"}}\n' >>"$RLV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l3","kind":"note","subject":"pr:#649","data":{"lenses":"many"}}\n' >>"$RLV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-08T00:00:00Z","id":"l4","kind":"review.verdict","subject":"pr:#649","outcome":"pass","data":{"axis":"2"}}\n' >>"$RLV/events/$TODAY.jsonl"
-t_run_split env TRACE_CONFIG="$RLVON" sh "$TRACE" verify
-[ "$S_STATUS" = 0 ] && pass "verify over a malformed lens count exits 0 — an advisory is not a verdict" || fail "verify exited $S_STATUS over a malformed lens count: $S_OUT"
-case $S_ERR in *"$TODAY.jsonl:2:"*review.verdict*lenses*six*"[0-9]+"*advisory*) pass "and names the verdict's file:line, the key, the value and the shape" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict, lenses, six and the shape: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:3:"*roster*all*) pass "and the roster key too" ;; *) fail "stderr did not name $TODAY.jsonl:3 roster all: $S_ERR" ;; esac
-case $S_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"* | *"$TODAY.jsonl:5:"*) fail "verify advised on a digit count, another kind, or a verdict with no count: $S_ERR" ;; *) pass "and leaves digits, another kind's key and a count-less verdict alone" ;; esac
+t_exec env TRACE_CONFIG="$RLVON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over a malformed lens count exits 0 — an advisory is not a verdict" || fail "verify exited $T_STATUS over a malformed lens count: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:2:"*review.verdict*lenses*six*"[0-9]+"*advisory*) pass "and names the verdict's file:line, the key, the value and the shape" ;; *) fail "stderr did not name $TODAY.jsonl:2, review.verdict, lenses, six and the shape: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3:"*roster*all*) pass "and the roster key too" ;; *) fail "stderr did not name $TODAY.jsonl:3 roster all: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"* | *"$TODAY.jsonl:5:"*) fail "verify advised on a digit count, another kind, or a verdict with no count: $T_ERR" ;; *) pass "and leaves digits, another kind's key and a count-less verdict alone" ;; esac
 for _rl_cmd in summary export; do
-	t_run_split env TRACE_CONFIG="$RLVON" sh "$TRACE" $_rl_cmd
-	[ "$S_STATUS" = 0 ] && pass "$_rl_cmd over malformed lens counts still exits 0" || fail "$_rl_cmd exited $S_STATUS: $S_ERR"
-	case $S_ERR in *"2 review.verdict lens count"*verify*) pass "and $_rl_cmd says the count, 2, once, pointing at verify" ;; *) fail "$_rl_cmd's lens-count advisory lacks the count or the pointer: $S_ERR" ;; esac
-	case $S_ERR in *"$TODAY.jsonl:"*) fail "$_rl_cmd repeated verify's per-line advisories: $S_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+	t_exec env TRACE_CONFIG="$RLVON" sh "$TRACE" $_rl_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_rl_cmd over malformed lens counts still exits 0" || fail "$_rl_cmd exited $T_STATUS: $T_ERR"
+	case $T_ERR in *"2 review.verdict lens count"*verify*) pass "and $_rl_cmd says the count, 2, once, pointing at verify" ;; *) fail "$_rl_cmd's lens-count advisory lacks the count or the pointer: $T_ERR" ;; esac
+	case $T_ERR in *"$TODAY.jsonl:"*) fail "$_rl_cmd repeated verify's per-line advisories: $T_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
 done
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 sed -n '/Amended 2026-10-09 (#663)/,/^[0-9][0-9]*\. /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ' | grep -qF 'data.lenses' &&
@@ -2517,12 +2517,12 @@ git -C "$AL_REPO" worktree add -q "$AL_REPO/worktree/al" -b feat/al 2>/dev/null 
 AL_WT="$AL_REPO/worktree/al"
 AL="$SCRATCH/stack-all-680"; ALON=$(policy "$AL")
 al_begin() { (cd "$1" && env TRACE_CONFIG="$ALON" TRACE_SESSION="$2" sh scripts/trace.sh begin "$3" 2>/dev/null); }
-al_ask() { t_run_split env TRACE_CONFIG="$ALON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$@"; }
+al_ask() { t_exec env TRACE_CONFIG="$ALON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$@"; }
 al_sorted() { printf '%s\n' "$@" | sort; }
 al_ask "$AL_WT" --all
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && [ -z "$S_ERR" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$T_ERR" ] &&
 	pass "--all on a checkout with no run open anywhere: exit 0, nothing on either stream" ||
-	fail "--all, nothing open: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "--all, nothing open: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 AL_A1=$(al_begin "$AL_WT" al-a implement)
 AL_A2=$(al_begin "$AL_WT" al-a review-pr)
 AL_B=$(al_begin "$AL_WT" al-b implement)
@@ -2531,43 +2531,43 @@ AL_N=$(al_begin "$AL_WT" '' retro)
 	pass "two sessions and a session-less caller each open a run in the worktree" ||
 	fail "the begins printed '$AL_A1' '$AL_A2' '$AL_B' '$AL_N'"
 al_ask "$AL_WT"
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
 	pass "without --all, a caller of another session sees none of them — the gap --all closes" ||
-	fail "stack without --all, another session: exit $S_STATUS, stdout '$S_OUT'"
+	fail "stack without --all, another session: exit $T_STATUS, stdout '$T_OUT'"
 al_ask "$AL_WT" --all
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_B" "$AL_N")" ] && [ -z "$S_ERR" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_B" "$AL_N")" ] && [ -z "$T_ERR" ] &&
 	pass "--all prints the top of every session's stack and of the session-less one, one per line" ||
-	fail "--all: exit $S_STATUS, stdout '$S_OUT', want $AL_A2 $AL_B $AL_N; stderr '$S_ERR'"
+	fail "--all: exit $T_STATUS, stdout '$T_OUT', want $AL_A2 $AL_B $AL_N; stderr '$T_ERR'"
 al_ask "$AL_REPO" --all
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
 	pass "the root checkout, where no run is open, answers with nothing — never the worktree's" ||
-	fail "--all on the idle root: exit $S_STATUS, stdout '$S_OUT'"
+	fail "--all on the idle root: exit $T_STATUS, stdout '$T_OUT'"
 AL_R=$(al_begin "$AL_REPO" al-a implement)
 al_ask "$AL_WT" --all
-case $S_OUT in *"$AL_R"*) fail "--all on the worktree printed the root's run: $S_OUT" ;; *) pass "a run open in another checkout of the repository is not this one's" ;; esac
+case $T_OUT in *"$AL_R"*) fail "--all on the worktree printed the root's run: $T_OUT" ;; *) pass "a run open in another checkout of the repository is not this one's" ;; esac
 (cd "$AL_WT" && env TRACE_CONFIG="$ALON" TRACE_SESSION=al-b sh scripts/trace.sh end "$AL_B" outcome=ok 2>/dev/null)
 al_ask "$AL_WT" --all
-[ "$S_STATUS" = 0 ] && [ "$(printf '%s\n' "$S_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_N")" ] &&
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | sort)" = "$(al_sorted "$AL_A2" "$AL_N")" ] &&
 	pass "a closed run leaves --all, and an emptied stack prints nothing" ||
-	fail "after al-b's end: exit $S_STATUS, stdout '$S_OUT'"
-assert_status 2 "--all with a session= is a usage error — it names every session" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" --all session=al-a
-assert_status 2 "and so is session= before --all" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" session=al-a --all
+	fail "after al-b's end: exit $T_STATUS, stdout '$T_OUT'"
+expect_exit 2 "--all with a session= is a usage error — it names every session" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" --all session=al-a
+expect_exit 2 "and so is session= before --all" -- env TRACE_CONFIG="$ALON" sh "$TRACE" stack "$AL_WT" session=al-a --all
 AL_KEY=$(printf '%s' "$(git -C "$AL_WT" rev-parse --show-toplevel)" | git hash-object --stdin)
 if [ "$(id -u)" != 0 ]; then
 	chmod 000 "$AL/current/$AL_KEY.al-a.runs"
 	al_ask "$AL_WT" --all
 	chmod 600 "$AL/current/$AL_KEY.al-a.runs"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL_KEY.al-a.runs exists and cannot be read"*) true ;; *) false ;; esac &&
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *"$AL_KEY.al-a.runs exists and cannot be read"*) true ;; *) false ;; esac &&
 		pass "one stack that exists and cannot be read refuses the whole answer, exit 2, naming it" ||
-		fail "--all over an unreadable stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+		fail "--all over an unreadable stack: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 	# A run directory that cannot be listed hides every stack in it: refused
 	# too, never answered as "nothing open".
 	chmod 000 "$AL/current"
 	al_ask "$AL_WT" --all
 	chmod 700 "$AL/current"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && case $S_ERR in *"$AL/current"*) true ;; *) false ;; esac &&
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *"$AL/current"*) true ;; *) false ;; esac &&
 		pass "a run directory that cannot be listed refuses the answer, exit 2, naming it" ||
-		fail "--all over an unlistable run directory: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+		fail "--all over an unlistable run directory: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi
@@ -2575,15 +2575,15 @@ fi
 # a stack missed would read as "nothing open", the unsafe direction.
 AL2="$SCRATCH/stack-all-[680]"; AL2ON=$(policy "$AL2")
 AL2_RUN=$(cd "$AL_WT" && env TRACE_CONFIG="$AL2ON" TRACE_SESSION=al-g sh scripts/trace.sh begin implement 2>/dev/null)
-t_run_split env TRACE_CONFIG="$AL2ON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$AL_WT" --all
-[ "$S_STATUS" = 0 ] && [ -n "$AL2_RUN" ] && [ "$S_OUT" = "$AL2_RUN" ] &&
+t_exec env TRACE_CONFIG="$AL2ON" TRACE_SESSION=the-cleanup sh "$AL_REPO/scripts/trace.sh" stack "$AL_WT" --all
+[ "$T_STATUS" = 0 ] && [ -n "$AL2_RUN" ] && [ "$T_OUT" = "$AL2_RUN" ] &&
 	pass "a trace root named with [ ] still yields its session's open run" ||
-	fail "--all under a bracketed trace root: exit $S_STATUS, stdout '$S_OUT', want '$AL2_RUN'; stderr '$S_ERR'"
-t_run_split env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$AL_WT" --all
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, --all prints nothing and exits 0" ||
-	fail "unconfigured --all: exit $S_STATUS, stdout '$S_OUT'"
-t_run_split sh "$TRACE"
-case $S_ERR in *'trace.sh stack <dir> --all'*) pass "the usage names stack <dir> --all" ;; *) fail "the usage does not name 'stack <dir> --all': $S_ERR" ;; esac
+	fail "--all under a bracketed trace root: exit $T_STATUS, stdout '$T_OUT', want '$AL2_RUN'; stderr '$T_ERR'"
+t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" stack "$AL_WT" --all
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "unconfigured, --all prints nothing and exits 0" ||
+	fail "unconfigured --all: exit $T_STATUS, stdout '$T_OUT'"
+t_exec sh "$TRACE"
+case $T_ERR in *'trace.sh stack <dir> --all'*) pass "the usage names stack <dir> --all" ;; *) fail "the usage does not name 'stack <dir> --all': $T_ERR" ;; esac
 sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh stack <dir> --all' &&
 	pass "and so does the script's header" || fail "the header's command list does not name stack <dir> --all"
 _al_adr=$(ls "$KIT"/docs/adr/0023-*.md 2>/dev/null | head -n 1)

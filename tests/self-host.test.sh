@@ -111,8 +111,8 @@ banner "B. The kit's own gate is GREEN at the kit root"
 # This is the claim the whole ticket exists for. Run from the kit root, both
 # engines: the harness (which alone sees shims, reachability and commands) and
 # the POSIX fallback a consumer without node would get.
-assert_status 0 "check.sh passes at the kit root" -- sh "$KIT/scripts/check.sh"
-assert_status 0 "check.sh passes at the kit root without node" -- \
+expect_exit 0 "check.sh passes at the kit root" -- sh "$KIT/scripts/check.sh"
+expect_exit 0 "check.sh passes at the kit root without node" -- \
 	env DOCS_CHECK_NO_NODE=1 sh "$KIT/scripts/check.sh"
 
 # spend/R8: the kit's own policy holds its largest skills to a byte ceiling,
@@ -133,27 +133,27 @@ if [ -z "$ceiling" ]; then
 else
 	head -c "$((ceiling + 1))" /dev/zero | tr '\0' x >"$CEIL/.agents/skills/review-pr/SKILL.md"
 	ceil_check() {
-		t_run env GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" sh -c 'cd "$1" && sh scripts/check.sh' sh "$CEIL"
+		t_exec env GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" sh -c 'cd "$1" && sh scripts/check.sh' sh "$CEIL"
 		# Each engine lays the finding out its own way, so each part is
 		# asked for on its own: the rule, the file, and size with ceiling.
 		_cc_named=0
 		for _cc_shape in "skill-over-ceiling] .agents/skills/review-pr/SKILL.md" ".agents/skills/review-pr/SKILL.md [skill-over-ceiling]"; do
-			printf '%s\n' "$LAST_OUT" | grep -qF "$_cc_shape" && _cc_named=1
+			printf '%s\n' "$T_ERR" | grep -qF "$_cc_shape" && _cc_named=1
 		done
-		if [ "$LAST_STATUS" = 1 ] && [ "$_cc_named" = 1 ] &&
-			printf '%s\n' "$LAST_OUT" | grep -qF "is $((ceiling + 1)) bytes, over its ceiling of $ceiling bytes"; then
+		if [ "$T_STATUS" = 1 ] && [ "$_cc_named" = 1 ] &&
+			printf '%s\n' "$T_ERR" | grep -qF "is $((ceiling + 1)) bytes, over its ceiling of $ceiling bytes"; then
 			return 0
 		fi
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
+		printf '%s\n%s\n' "$T_OUT" "$T_ERR" | sed 's/^/        | /'
 		return 1
 	}
 	ceil_check DOCS_CHECK_NO_NODE=1 &&
 		pass "spend/R8: without node, a skill one byte past its ceiling fails the gate, naming file, size and ceiling" ||
-		fail "spend/R8: without node, a skill past its ceiling did not fail the gate as named (exit $LAST_STATUS)"
+		fail "spend/R8: without node, a skill past its ceiling did not fail the gate as named (exit $T_STATUS)"
 	if command -v node >/dev/null 2>&1; then
 		ceil_check DOCS_CHECK_NO_NODE= &&
 			pass "spend/R8: with the docs harness, the same skill fails the gate, naming file, size and ceiling" ||
-			fail "spend/R8: with the docs harness, a skill past its ceiling did not fail the gate as named (exit $LAST_STATUS)"
+			fail "spend/R8: with the docs harness, a skill past its ceiling did not fail the gate as named (exit $T_STATUS)"
 	else
 		skip "spend/R8: node is not on PATH — the docs harness engine is not run here"
 	fi
@@ -256,7 +256,7 @@ t_kit_copy "$PROJ"
 [ ! -e "$PROJ/worktree/self-host-probe.$$" ] &&
 	pass "an ignored directory in the checkout never reaches the fixture (#690)" ||
 	fail "the fixture took in an ignored directory: worktree/self-host-probe.$$"
-assert_status 0 "bootstrap runs on a tree that already holds the kit's own files" -- \
+expect_exit 0 "bootstrap runs on a tree that already holds the kit's own files" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
 # The manual is the CONSUMER's, stamped from the template — not the kit's.
@@ -378,7 +378,7 @@ grep -q "^TRACE_NUMBERED_TYPES=''" "$PROJ/scripts/trace.config.sh" &&
 	pass "the consumer's scripts/vocab.config.sh arrived filled — the vocabularies are the kit's to name" ||
 	fail "the consumer's scripts/vocab.config.sh is missing or empty"
 
-assert_status 0 "the stamped project's gate is green" -- \
+expect_exit 0 "the stamped project's gate is green" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 # The sweep the spot-checks above cannot be (#562): any `*.kit.*` name, any
@@ -405,9 +405,9 @@ t_assert_no_kit_record_cite "$KIT/.agents/skills/dogfood" "the optional /dogfood
 # a silent re-stamp. It is guarded on the kit's own sentinel, and a stamped
 # project carries neither that nor the template.
 cp "$KIT/bootstrap.sh" "$PROJ/bootstrap.sh"
-assert_status 1 "a second bootstrap is still refused" -- \
+expect_exit 1 "a second bootstrap is still refused" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh 'Other Name'"
-assert_out_has "already exists"
+expect_said "already exists"
 rm -f "$PROJ/bootstrap.sh"
 
 # ---------------------------------------------------------------------------
@@ -420,7 +420,7 @@ BASE="$SCRATCH/baseline"
 t_kit_copy "$BASE"
 for f in $KIT_OWN; do rm -rf "${BASE:?}/$f"; done
 rm -rf "$BASE/docs"
-assert_status 0 "bootstrap runs on a tree with the kit-own files pre-removed" -- \
+expect_exit 0 "bootstrap runs on a tree with the kit-own files pre-removed" -- \
 	sh -c "cd '$BASE' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
 rm -rf "$PROJ/.git" "$BASE/.git"
@@ -466,9 +466,9 @@ git -C "$HAND" add AGENTS.md
 git -C "$HAND" commit -q -m "docs: our own manual"
 cp "$HAND/AGENTS.md" "$SCRATCH/hand-written.AGENTS.md"
 
-assert_status 1 "a hand-written manual with no sentinel is refused" -- \
+expect_exit 1 "a hand-written manual with no sentinel is refused" -- \
 	sh -c "cd '$HAND' && sh bootstrap.sh --no-dogfood 'Other Name' 'One line.'"
-assert_out_has "already exists"
+expect_said "already exists"
 if cmp -s "$HAND/AGENTS.md" "$SCRATCH/hand-written.AGENTS.md"; then
 	pass "the hand-written manual is byte-identical after the refusal"
 else
@@ -490,7 +490,7 @@ git -C "$ADRS" commit -q -m "docs: our first decision"
 printf '# We will queue with SQS\n\nStill a draft, never committed.\n' \
 	>"$ADRS/docs/adr/0003-draft.md"
 
-assert_status 0 "bootstrap still runs on a tree holding consumer ADRs" -- \
+expect_exit 0 "bootstrap still runs on a tree holding consumer ADRs" -- \
 	sh -c "cd '$ADRS' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 assert_file_has "$ADRS/docs/adr/0002-we-will-use-postgres.md" "Recorded and committed" \
 	"a consumer's committed ADR is not the kit's to delete"
@@ -508,9 +508,9 @@ EDITED="$SCRATCH/edited-manual"
 consumer_repo "$EDITED"
 printf '\n## Our house rule\n\nAlways rebase, never merge.\n' >>"$EDITED/AGENTS.md"
 
-assert_status 1 "the kit's manual with local edits is refused, not deleted" -- \
+expect_exit 1 "the kit's manual with local edits is refused, not deleted" -- \
 	sh -c "cd '$EDITED' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "local changes"
+expect_said "local changes"
 assert_file_has "$EDITED/AGENTS.md" "Always rebase, never merge." \
 	"the edit survives — the refusal is the point of condition 3"
 # And the refusal is atomic: the whole set is checked before any of it is
