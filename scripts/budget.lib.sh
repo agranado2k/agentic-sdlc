@@ -40,7 +40,7 @@
 # that cannot be a budget is `return 2` with the reason on stderr, and the
 # names below stay private. A caller that wants a field reads the record.
 #
-# INPUTS, unchanged from ADR-0006: the AGENT_BUDGET_* policy in the tier
+# INPUTS, unchanged from the kit's ADR-0006: the AGENT_BUDGET_* policy in the tier
 # policy file (scripts/agents.config.sh, read through scripts/agents.lib.sh
 # beside this file; empty there is the defaults below), the outer dispatch's
 # AGENT_DISPATCH_BUDGET_TASKS / AGENT_DISPATCH_BUDGET_MEMORY_MIB, and the
@@ -114,8 +114,9 @@ _budget_policy_numbers() {
 	)
 }
 
-# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99 (the kit's
-# ADR-0006 clause 3): the budget sits BELOW the ceiling the session shares.
+# _budget_percent_below_100 <suffix> <value> — a percentage is 1–99
+# (the kit's ADR-0006 clause 3): the budget sits BELOW the ceiling the
+# session shares.
 _budget_percent_below_100() {
 	[ "$2" -lt 100 ] ||
 		_budget_die "AGENT_BUDGET_$1 must be below 100 — the budget sits below the ceiling the session shares (the kit's ADR-0006), got $2"
@@ -131,8 +132,8 @@ _budget_floor_at_most_ceiling() {
 # _budget_session_tasks — the task ceiling this session runs under: the
 # smallest numeric pids.max on the path from this process's own cgroup up to
 # the root. On a systemd host that is the user slice's TasksMax — 33% of
-# threads-max by default, and the ceiling the incident behind the kit's
-# ADR-0006 filled. Prints "<ceiling> <cgroup>"; fails when no cgroup on the
+# threads-max by default, and the ceiling the incident behind
+# the kit's ADR-0006 filled. Prints "<ceiling> <cgroup>"; fails when no cgroup on the
 # path sets one, which is also what a host without cgroup v2 (no `0::` line)
 # looks like.
 _budget_session_tasks() {
@@ -261,8 +262,8 @@ _budget_field() {
 }
 
 # The Budget's three modes: disabled by flag, inherited from an outer
-# dispatch, or derived here. An inner dispatch derives nothing (the kit's
-# ADR-0006 clause 7): a scope opened inside a scope is a sibling, not a
+# dispatch, or derived here. An inner dispatch derives nothing
+# (the kit's ADR-0006 clause 7): a scope opened inside a scope is a sibling, not a
 # child, and would escape the outer's ceiling — so the outer's numbers arrive
 # by environment and are taken as given.
 #
@@ -537,8 +538,8 @@ budget_run() (
 # budget_verdict — see the header. On a scope rung the verdict is the cgroup
 # counters the wrapper wrote: a task ceiling hit (pids.events max > 0) or, on
 # the full scope rung, a memory ceiling hit (memory.events oom_kill > 0). On
-# the rlimit and no-op rungs there is no counter, and nothing is printed (the
-# kit's ADR-0006 clause 6). A verdict that cannot be read is its own outcome
+# the rlimit and no-op rungs there is no counter, and nothing is printed
+# (the kit's ADR-0006 clause 6). A verdict that cannot be read is its own outcome
 # — never a silent zero (driver 4): the marker missing (the wrapper never
 # ran), the verdict file missing or malformed (a pressure kill takes every
 # process in the cgroup, wrapper included), or a counter marked unreadable.

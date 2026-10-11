@@ -355,6 +355,15 @@ jobs:
       # because its sh is dash and dash spells the process limit `ulimit -p`.
       - name: Suite-budget suite
         run: sh tests/suite-budget.test.sh
+  budget-lib:
+    name: The worker Budget, through its four functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No node: the library and its suite are sh, and this runner's sh is
+      # dash — the rlimit leg reads the process limit back as `ulimit -p`.
+      - name: Budget-library suite
+        run: sh tests/budget-lib.test.sh
 
   gate-path-roots:
     name: The gate's two engines agree on their path roots
