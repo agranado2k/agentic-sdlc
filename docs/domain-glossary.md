@@ -378,6 +378,15 @@ Grouped by the seam each term belongs to. Entry shape:
   `run.start`/`run.end` pair under the id of the run that opened it.
   - _Avoid_: "session" for this — a session is the agent harness's, and holds
     many runs.
+- **Open-run registry** — the live view of every run that has begun and not
+  ended, keyed by run id, whoever opened it: a run on a stack, or a
+  **detached run** minted for a dispatched worker or a cascade. A run handed to
+  a subagent on a `Trace-Run:` line is the spawner's own, already there. An entry names the run's parent, session, checkout and
+  start; one whose process is gone reads as **stale**, never as closed. The
+  event log stays the durable record; the registry answers only "what is
+  running now". Ref: PRD #742.
+  - _Avoid_: "run list", "run table" (one name per concept); "current run"
+    for an entry — the current run is the one identity an emit would stamp.
 - **Blob** — a payload too large or too shaped for one event line — a prompt,
   a tool result, spike evidence — stored once under the trace directory by
   content hash and referenced from the event: `--blob <file>` (or `-` for
