@@ -85,15 +85,15 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier implementer
-s_assert_resolved 'model-for-implementing' "a bare mapping still resolves to the model id, with no flag"
-s_assert_err_lacks "agent harness"
+expect_resolved 'model-for-implementing' "a bare mapping still resolves to the model id, with no flag"
+expect_err_lacks "agent harness"
 
 t_resolve_tier --model implementer
-s_assert_resolved 'model-for-implementing' "--model is the same answer, said explicitly"
+expect_resolved 'model-for-implementing' "--model is the same answer, said explicitly"
 
 t_resolve_tier --harness implementer
-s_assert_resolved '' "a bare mapping resolves to NO agent harness — meaning the caller's own"
-s_assert_status 0 "and that emptiness is a success, not a failure"
+expect_resolved '' "a bare mapping resolves to NO agent harness — meaning the caller's own"
+expect_status 0 "and that emptiness is a success, not a failure"
 
 # ---------------------------------------------------------------------------
 banner "The axis — a value that names an agent harness"
@@ -104,17 +104,17 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --harness implementer
-s_assert_resolved 'beta' "'beta:<id>' resolves its agent harness"
+expect_resolved 'beta' "'beta:<id>' resolves its agent harness"
 t_resolve_tier --model implementer
-s_assert_resolved 'model-for-implementing' "…and its model, without the prefix"
+expect_resolved 'model-for-implementing' "…and its model, without the prefix"
 
 t_resolve_tier --harness reviewer
-s_assert_resolved 'gamma' "a second tier resolves a DIFFERENT agent harness — the point of the axis"
+expect_resolved 'gamma' "a second tier resolves a DIFFERENT agent harness — the point of the axis"
 
 t_resolve_tier --harness planner
-s_assert_resolved '' "a bare tier beside prefixed ones still means the caller's own agent harness"
+expect_resolved '' "a bare tier beside prefixed ones still means the caller's own agent harness"
 t_resolve_tier --model planner
-s_assert_resolved 'model-for-planning' "…and still resolves its model"
+expect_resolved 'model-for-planning' "…and still resolves its model"
 
 # ---------------------------------------------------------------------------
 banner "The two optional axes compose"
@@ -122,13 +122,13 @@ banner "The two optional axes compose"
 # A task domain may legitimately change the agent harness as well as the model:
 # the best prose model and the best coding model need not live at one vendor.
 t_resolve_tier --harness implementer content
-s_assert_resolved 'alpha' "the domain override carries its own agent harness"
+expect_resolved 'alpha' "the domain override carries its own agent harness"
 t_resolve_tier --model implementer content
-s_assert_resolved 'model-for-writing-prose' "…and its own model"
+expect_resolved 'model-for-writing-prose' "…and its own model"
 
 t_resolve_tier --harness implementer code
-s_assert_resolved 'beta' "an UNMAPPED domain falls back to the tier's agent harness, silently"
-s_assert_err_lacks "not a declared"
+expect_resolved 'beta' "an UNMAPPED domain falls back to the tier's agent harness, silently"
+expect_err_lacks "not a declared"
 
 # ---------------------------------------------------------------------------
 banner "An agent harness with no model resolves — unset is a working state"
@@ -138,11 +138,11 @@ banner "An agent harness with no model resolves — unset is a working state"
 # one case the rest of the file treats as normal (ADR-0005 clause 6), so
 # `alpha:` means "that agent harness, on its own default model".
 t_resolve_tier --harness mechanical
-s_assert_resolved 'alpha' "'alpha:' resolves the agent harness"
+expect_resolved 'alpha' "'alpha:' resolves the agent harness"
 t_resolve_tier --model mechanical
-s_assert_resolved '' "…and NO model, rather than refusing"
-s_assert_status 0 "which is a success"
-s_assert_err_has "no model"
+expect_resolved '' "…and NO model, rather than refusing"
+expect_status 0 "which is a success"
+expect_err_has "no model"
 
 # ---------------------------------------------------------------------------
 banner "A colon is legal inside a model id — the split must be decidable"
@@ -153,11 +153,11 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --model mechanical
-s_assert_resolved 'runtime-thing:8b' "an UNDECLARED prefix leaves the value whole — it was never an agent harness"
-s_assert_err_has "not a declared"
+expect_resolved 'runtime-thing:8b' "an UNDECLARED prefix leaves the value whole — it was never an agent harness"
+expect_err_has "not a declared"
 
 t_resolve_tier --harness mechanical
-s_assert_resolved '' "…and resolves no agent harness, rather than inventing 'runtime-thing'"
+expect_resolved '' "…and resolves no agent harness, rather than inventing 'runtime-thing'"
 
 CFG="$SCRATCH/colon2/agents.config.sh"
 t_write_config "$CFG" "$CONFIG_COLON_UNDECLARED"
@@ -165,8 +165,8 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --model mechanical
-s_assert_resolved 'runtime-thing:8b' "a project that declared NO agent harness keeps its colon'd id"
-s_assert_err_lacks "not a declared"
+expect_resolved 'runtime-thing:8b' "a project that declared NO agent harness keeps its colon'd id"
+expect_err_lacks "not a declared"
 
 # ---------------------------------------------------------------------------
 banner "A caller that predates the axis is told when it drops one"
@@ -176,30 +176,30 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier implementer
-s_assert_resolved 'model-for-implementing' "the no-flag caller still receives the model — the contract holds"
-s_assert_err_has "DROPPED"
+expect_resolved 'model-for-implementing' "the no-flag caller still receives the model — the contract holds"
+expect_err_has "DROPPED"
 
 t_resolve_tier --model implementer
-s_assert_err_lacks "DROPPED"
+expect_err_lacks "DROPPED"
 
 t_resolve_tier --harness implementer
-s_assert_err_lacks "DROPPED"
+expect_err_lacks "DROPPED"
 
 # ---------------------------------------------------------------------------
 banner "Bad input points at the thing that is actually wrong"
 # ---------------------------------------------------------------------------
 t_resolve_tier --harnes implementer
-s_assert_status 2 "a mistyped flag is refused"
-s_assert_err_has "unknown option"
-s_assert_err_lacks "unknown capability tier"
+expect_status 2 "a mistyped flag is refused"
+expect_err_has "unknown option"
+expect_err_lacks "unknown capability tier"
 
 t_resolve_tier --harness not-a-tier
-s_assert_status 2 "the closed tier vocabulary still closes, whichever half is asked for"
-s_assert_err_has "unknown capability tier"
+expect_status 2 "the closed tier vocabulary still closes, whichever half is asked for"
+expect_err_has "unknown capability tier"
 
 t_resolve_tier --harness implementer NOT-A-DOMAIN
-s_assert_status 2 "the domain's shape check still runs behind the flag"
-s_assert_err_has "malformed task domain"
+expect_status 2 "the domain's shape check still runs behind the flag"
+expect_err_has "malformed task domain"
 
 # ---------------------------------------------------------------------------
 banner "A malformed prefix is never silent"
@@ -219,16 +219,16 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --model reviewer
-s_assert_resolved 'Alpha:some-model' "an upper-case prefix leaves the value whole"
-s_assert_err_has "not a well-formed"
+expect_resolved 'Alpha:some-model' "an upper-case prefix leaves the value whole"
+expect_err_has "not a well-formed"
 
 t_resolve_tier --harness planner
-s_assert_resolved '' "a leading colon resolves no agent harness"
-s_assert_err_has "not a well-formed"
+expect_resolved '' "a leading colon resolves no agent harness"
+expect_err_has "not a well-formed"
 
 t_resolve_tier --model mechanical
-s_assert_resolved 'alpha_x:some-model' "an underscore is not in the token alphabet"
-s_assert_err_has "not a well-formed"
+expect_resolved 'alpha_x:some-model' "an underscore is not in the token alphabet"
+expect_err_has "not a well-formed"
 
 # ---------------------------------------------------------------------------
 banner "The declaration, and the warnings, behave as the file claims"
@@ -245,33 +245,33 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --harness reviewer
-s_assert_resolved 'gamma' "a declaration split across lines and tabs still declares its tokens"
+expect_resolved 'gamma' "a declaration split across lines and tabs still declares its tokens"
 
 t_resolve_tier --model planner
-s_assert_resolved 'alph:some-model' "a PREFIX of a declared token does not match it"
+expect_resolved 'alph:some-model' "a PREFIX of a declared token does not match it"
 t_resolve_tier --model implementer
-s_assert_resolved 'alphabet:some-model' "…and neither does a token that merely starts with one"
+expect_resolved 'alphabet:some-model' "…and neither does a token that merely starts with one"
 
 # The escape hatch the rest of the file honours has to cover the new warnings
 # too, or a caller that silenced the resolver still gets noise on stdout's
 # neighbour.
-t_run_split env AGENTS_TIER_QUIET=1 sh "$LIB" --model planner
-if [ -n "$S_ERR" ]; then
+t_exec env AGENTS_TIER_QUIET=1 sh "$LIB" --model planner
+if [ -n "$T_ERR" ]; then
 	fail "AGENTS_TIER_QUIET=1 did not silence the malformed/undeclared warning"
-	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	printf '%s\n' "$T_ERR" | sed 's/^/        | /'
 else
 	pass "AGENTS_TIER_QUIET=1 silences the new warnings, as it does the old one"
 fi
 
 # Once per process, not once per resolution: a script resolving four tiers
 # should hear about a broken declaration once.
-t_run_split sh -c '. "$1"; _agents_here=$(dirname "$1"); resolve_tier --model planner >/dev/null; resolve_tier --model implementer >/dev/null' _ "$LIB"
-count=$(printf '%s\n' "$S_ERR" | grep -c "resolves as a MODEL ID" 2>/dev/null || echo 0)
+t_exec sh -c '. "$1"; _agents_here=$(dirname "$1"); resolve_tier --model planner >/dev/null; resolve_tier --model implementer >/dev/null' _ "$LIB"
+count=$(printf '%s\n' "$T_ERR" | grep -c "resolves as a MODEL ID" 2>/dev/null || echo 0)
 if [ "$count" = 1 ]; then
 	pass "the warning is memoised per process — two resolutions, one warning"
 else
 	fail "expected exactly one warning across two resolutions, got $count"
-	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	printf '%s\n' "$T_ERR" | sed 's/^/        | /'
 fi
 
 # ---------------------------------------------------------------------------
@@ -284,9 +284,9 @@ AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 t_resolve_tier --harness reviewer
-s_assert_resolved 'alpha' "the FIRST colon splits"
+expect_resolved 'alpha' "the FIRST colon splits"
 t_resolve_tier --model reviewer
-s_assert_resolved 'runtime-thing:8b' "…and every later one stays in the model id"
+expect_resolved 'runtime-thing:8b' "…and every later one stays in the model id"
 
 # ---------------------------------------------------------------------------
 banner "zsh — the shell the resolver documents having been bitten by"

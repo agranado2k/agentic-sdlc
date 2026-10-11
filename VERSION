@@ -31,7 +31,8 @@
 #
 # Versioning, pre-1.0: the MINOR bumps whenever the set of shared files or their
 # content changes, so a consumer can always ask "is my layer byte-identical to
-# the release I claim?" and get a yes/no. There is no patch-level for prose.
+# the release I claim?" and get a yes/no. There is no patch-level for prose;
+# a behaviour fix to a shared file that adds nothing takes the PATCH.
 # The split is deliberate: the validator ENGINE is shared because a fix to it
 # should reach every project, while the RULES are local because they are the
 # thing each project must own and review.
@@ -2688,8 +2689,59 @@
 # #671, the third housekeeping pass; #715 (ticket #692), ADR-0024 succeeds
 # ADR-0008; ADR-0020, ADR-0021, ADR-0023 and the
 # index rows; scripts/worktree-cleanup.kit.sh.
+# 0.70.0 — the trace answers "which run am I in?" and owns the run id's
+# shape (ticket #744, PRD #742). Releases what landed on main after v0.69.0
+# with no bump, up to the main this branch was cut from (7d40460), by the
+# standing ruling that the first release to land absorbs another wave's
+# unbumped landings.
+# NO file joins and NO file leaves the shared layer. TWO shared files change
+# content. scripts/trace.sh gains two verbs: `current` prints the run and
+# parent an emit from the same process would stamp, `<run> [<parent>]` on one
+# line, the environment over this session's stack in this checkout, and
+# nothing, exit 0, when no run is open, when TRACE_RUN is set empty, or when
+# the trace is unconfigured — a stack that cannot be read is exit 2; `id`
+# prints a fresh run id and writes nothing, and `id --check <id>` exits 0 for
+# every id the trace mints and 1 for anything else. Every call valid at
+# 0.69.0 behaves as it did. And UPDATING.md: the arriving-from paragraph, and
+# both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): from #736 (ticket #732), /review-pr and its six lens files
+# (lens-api-crud.md, lens-pattern.md, lens-reuse-dry.md, lens-security.md,
+# lens-simplicity.md, lens-test-hygiene.md) raise a LOW only when it passes
+# §5's band test, a clear and mechanical fix inside the diff; from #739 (ticket #730), /review-pr resolves its
+# lenses against the diff author's model, read from an `Author-Model:` line,
+# never its own, and /implement's in-session reviewer spawn carries that
+# line; from #740 (ticket #729), /merge-train lands only through the landing
+# script where the root manual names one, never a merge or a merge.land of
+# its own. Take the three skill directories whole.
+# Templates (9c): from #736, templates/workflows/ai-review-prompt.md carries
+# the same LOW band rule.
+# Kit-only, never shipped: this PR's ADR-0024 clause 5 amendment and the
+# index row; tests/trace.test.sh section 35; #734 (ticket #728) and ADR-0025,
+# the landing script refuses a shared-layer move with no bump; #727 (ticket
+# #724), the kit's reviewer walk is Sonnet only (ADR-0020, amended); #702
+# (ticket #691), ADR-0022; #726 (ticket #723), #722 (ticket #718) and #721
+# (ticket #719), the records' reads and checks; #735 (ticket #731), #698
+# (ticket #690) and #717 (ticket #716), suite fixes; the diary entries.
+# 0.70.1 — a dispatched worker's run id has the shape the trace mints
+# (ticket #743). A PATCH: it releases this fix alone.
+# NO file joins and NO file leaves the shared layer. ONE shared file changes
+# behaviour besides UPDATING.md. scripts/agent-dispatch.sh minted a worker's
+# run as a UTC timestamp, its pid and its scratch directory's six-character
+# mktemp suffix; the trace's ids end in eight hex characters, and every
+# reader that checks a run id refused the suffix — so a skill dispatch inside
+# a dispatched worker dropped its Trace-Run and Trace-Spawn lines in silence.
+# The run now ends in the scratch path's CRC, printed as eight hex. And
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+# This header gains its PATCH sentence: a behaviour fix to a shared file that
+# adds nothing takes the patch.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# None: no skill, wiring or template moves.
+# Kit-only, never shipped: the root manual's hard rule 3 names the patch
+# beside the minor; tests/agent-dispatch.test.sh and tests/skill-phase.test.sh
+# hold the worker run's shape and the nested lines.
 
-shared-layer: 0.69.0
+shared-layer: 0.70.1
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

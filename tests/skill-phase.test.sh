@@ -102,36 +102,36 @@ banner "3. A phase resolves to a tier the resolver accepts"
 	t_done "skill phases"
 }
 for p in $PHASES; do
-	t_run_split sh "$DISPATCH" --phase-tier "$p"
+	t_exec sh "$DISPATCH" --phase-tier "$p"
 	case "$p" in
 	tester) want="implementer tests" ;;
 	*) want="$p" ;;
 	esac
-	[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$want" ] &&
+	[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$want" ] &&
 		pass "phase '$p' resolves to tier '$want'" ||
-		fail "phase '$p' resolved '$S_OUT' (status $S_STATUS), expected '$want'"
+		fail "phase '$p' resolved '$T_OUT' (status $T_STATUS), expected '$want'"
 done
-t_run_split sh "$DISPATCH" --phase-tier not-a-phase
-[ "$S_STATUS" = 2 ] && pass "an unknown phase is a usage error, not a guess" ||
-	fail "an unknown phase exited $S_STATUS, expected 2"
+t_exec sh "$DISPATCH" --phase-tier not-a-phase
+[ "$T_STATUS" = 2 ] && pass "an unknown phase is a usage error, not a guess" ||
+	fail "an unknown phase exited $T_STATUS, expected 2"
 
 # ---------------------------------------------------------------------------
 banner "4. A skill name resolves to its own phase's model"
 # ---------------------------------------------------------------------------
 # The whole point: one command, and the session need not know which tier a
 # skill is. --dry-run is the seam; nothing else here runs another vendor's CLI.
-t_run_split sh "$DISPATCH" --tier-of /review-pr
-[ "$S_OUT" = reviewer ] && pass "/review-pr is reviewer work, by its own declaration" ||
-	fail "/review-pr resolved tier '$S_OUT'"
-t_run_split sh "$DISPATCH" --tier-of /tdd
-[ "$S_OUT" = "implementer tests" ] && pass "/tdd is tester work, carried as the tests domain" ||
-	fail "/tdd resolved tier '$S_OUT'"
-t_run_split sh "$DISPATCH" --tier-of to-tickets
-[ "$S_OUT" = planner ] && pass "the leading slash is optional — 'to-tickets' resolves too" ||
-	fail "'to-tickets' resolved tier '$S_OUT'"
-t_run_split sh "$DISPATCH" --tier-of /no-such-skill
-[ "$S_STATUS" = 2 ] && pass "a skill that does not exist is a usage error" ||
-	fail "an unknown skill exited $S_STATUS, expected 2"
+t_exec sh "$DISPATCH" --tier-of /review-pr
+[ "$T_OUT" = reviewer ] && pass "/review-pr is reviewer work, by its own declaration" ||
+	fail "/review-pr resolved tier '$T_OUT'"
+t_exec sh "$DISPATCH" --tier-of /tdd
+[ "$T_OUT" = "implementer tests" ] && pass "/tdd is tester work, carried as the tests domain" ||
+	fail "/tdd resolved tier '$T_OUT'"
+t_exec sh "$DISPATCH" --tier-of to-tickets
+[ "$T_OUT" = planner ] && pass "the leading slash is optional — 'to-tickets' resolves too" ||
+	fail "'to-tickets' resolved tier '$T_OUT'"
+t_exec sh "$DISPATCH" --tier-of /no-such-skill
+[ "$T_STATUS" = 2 ] && pass "a skill that does not exist is a usage error" ||
+	fail "an unknown skill exited $T_STATUS, expected 2"
 
 # The dispatch itself needs the OTHER vendor's CLI on PATH, and the dispatcher
 # checks that before it prints anything — even for a dry run, deliberately, so
@@ -172,11 +172,11 @@ AGENT_TIER_IMPLEMENTER_TESTS='stub:model-for-testing'
 AGENT_TIER_MECHANICAL='stub:model-for-mechanics'
 AGENT_TIER_REVIEWER='stub:model-for-reviewing'
 STUB_CFG
-stub_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
+stub_dispatch() { t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh "$@"; }
 
 # staged_prompt — what the stub read on stdin, which is the prompt the worker
 # would have received: the dispatcher's own stdout is the worker's.
-staged_prompt() { printf '%s\n' "$S_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p'; }
+staged_prompt() { printf '%s\n' "$T_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p'; }
 
 # A reviewer-phase skill reaches the reviewer's model — and what arrives is
 # NOT "Run /review-pr." (#266, PRD #261). That skill needs a `git fetch`, a
@@ -189,11 +189,11 @@ staged_prompt() { printf '%s\n' "$S_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/
 # is offline, so the budget goes on the diff rather than on discovering the
 # sandbox.
 stub_dispatch /review-pr --prompt 'review the branch'
-if [ "$S_STATUS" = 0 ]; then
+if [ "$T_STATUS" = 0 ]; then
 	pass "a dispatch of /review-pr runs end to end against a stub agent harness"
-	printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
+	printf '%s\n' "$T_OUT" | grep -q 'model-for-reviewing' &&
 		pass "…on the model its reviewer phase resolves to" ||
-		fail "…but not on the reviewer's model: $S_OUT"
+		fail "…but not on the reviewer's model: $T_OUT"
 	staged=$(staged_prompt)
 	printf '%s\n' "$staged" | grep -q 'Run /review-pr\.' &&
 		fail "…but the worker was told to run /review-pr, which needs a fetch, a forge and a human it does not have" ||
@@ -213,10 +213,10 @@ if [ "$S_STATUS" = 0 ]; then
 		fail "…but the contract has no REVIEWED line — the session cannot tell a moved head from a missed commit"
 	printf '%s\n' "$staged" | grep -q 'review the branch' &&
 		pass "…with the caller's own prompt filling the contract's spec slot" ||
-		fail "…and the caller's prompt was lost: $S_OUT"
+		fail "…and the caller's prompt was lost: $T_OUT"
 else
-	fail "a stub dispatch of /review-pr exited $S_STATUS"
-	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
+	fail "a stub dispatch of /review-pr exited $T_STATUS"
+	printf '%s\n' "$T_ERR" | sed 's/^/        | /'
 fi
 
 # The contract's other markers are the shared dispatcher's own --set path,
@@ -226,9 +226,9 @@ stub_dispatch /review-pr --prompt 'x' --set BRANCH=feat/under-review --set BASE=
 staged=$(staged_prompt)
 printf '%s\n' "$staged" | grep -q 'feat/under-review' &&
 	pass "--set BRANCH=… reaches the contract's %%BRANCH%% through the dispatcher's own substitution" ||
-	fail "the BRANCH marker was not filled from --set: $S_OUT"
-case "$S_ERR" in
-*"unfilled marker"*) fail "every marker was set and the dispatcher still reports one unfilled: $S_ERR" ;;
+	fail "the BRANCH marker was not filled from --set: $T_OUT"
+case "$T_ERR" in
+*"unfilled marker"*) fail "every marker was set and the dispatcher still reports one unfilled: $T_ERR" ;;
 *) pass "…and with BRANCH, BASE and SPEC all set, nothing is reported unfilled" ;;
 esac
 
@@ -237,26 +237,26 @@ esac
 # dispatcher does not demand one. Every other skill still does, below.
 printf 'the whole ticket body\n' >"$SCRATCH/spec.md"
 stub_dispatch /review-pr --set-file "SPEC=$SCRATCH/spec.md" --set BRANCH=b --set BASE=main
-[ "$S_STATUS" = 0 ] && pass "/review-pr dispatches with no --prompt at all — the contract is the prompt" ||
-	fail "/review-pr with --set-file SPEC and no --prompt exited $S_STATUS: $S_ERR"
+[ "$T_STATUS" = 0 ] && pass "/review-pr dispatches with no --prompt at all — the contract is the prompt" ||
+	fail "/review-pr with --set-file SPEC and no --prompt exited $T_STATUS: $T_ERR"
 staged_prompt | grep -q 'the whole ticket body' &&
 	pass "…and the --set-file spec reaches the worker" ||
-	fail "…but the --set-file spec did not arrive: $S_OUT"
+	fail "…but the --set-file spec did not arrive: $T_OUT"
 stub_dispatch /tdd --set BRANCH=b
-[ "$S_STATUS" = 2 ] && pass "any other skill with no --prompt is still refused — there is nothing to send" ||
-	fail "/tdd with no prompt exited $S_STATUS, expected 2"
+[ "$T_STATUS" = 2 ] && pass "any other skill with no --prompt is still refused — there is nothing to send" ||
+	fail "/tdd with no prompt exited $T_STATUS, expected 2"
 
 # The tester phase carries its domain across the hop — the one phase that is
 # not a tier, so the one whose resolution a wrapper could silently drop. And
 # its prompt keeps today's shape: the skill-name prefix is what every skill
 # but /review-pr still receives.
 stub_dispatch /tdd --prompt 'write the failing test'
-printf '%s\n' "$S_OUT" | grep -q 'model-for-testing' &&
+printf '%s\n' "$T_OUT" | grep -q 'model-for-testing' &&
 	pass "/tdd reaches the tests domain's model, not the plain implementer's" ||
-	fail "/tdd reached '$S_OUT'"
+	fail "/tdd reached '$T_OUT'"
 staged_prompt | grep -q 'Run /tdd\. write the failing test' &&
 	pass "…and its prompt still opens with 'Run /tdd.' — the contract swap is /review-pr's alone" ||
-	fail "…but /tdd's prompt lost its skill-name prefix: $S_OUT"
+	fail "…but /tdd's prompt lost its skill-name prefix: $T_OUT"
 
 # A --prompt-file is the caller's own document: passed through unrewritten,
 # because rewriting a file someone wrote is a surprise. This pair is a
@@ -266,10 +266,10 @@ staged_prompt | grep -q 'Run /tdd\. write the failing test' &&
 # day someone teaches it to read the file.
 echo 'the file the caller wrote' >"$SCRATCH/caller-prompt.md"
 stub_dispatch /review-pr --prompt-file "$SCRATCH/caller-prompt.md"
-printf '%s\n' "$S_OUT" | grep -q 'the file the caller wrote' &&
+printf '%s\n' "$T_OUT" | grep -q 'the file the caller wrote' &&
 	pass "a --prompt-file reaches the other session verbatim" ||
-	fail "the prompt file did not arrive: $S_OUT"
-printf '%s\n' "$S_OUT" | grep -q 'Run /review-pr\.' &&
+	fail "the prompt file did not arrive: $T_OUT"
+printf '%s\n' "$T_OUT" | grep -q 'Run /review-pr\.' &&
 	fail "the prompt file was rewritten — a file the caller wrote is not ours to edit" ||
 	pass "…and was not rewritten on the way"
 staged_prompt | grep -q 'no network' &&
@@ -280,8 +280,8 @@ staged_prompt | grep -q 'no network' &&
 # split, it would arrive as a stray positional the dispatcher reads as a task
 # domain, and the work would silently resolve somewhere else.
 stub_dispatch /review-pr --prompt 'x' --set 'TITLE=two words'
-printf '%s\n' "$S_OUT$S_ERR" | grep -q 'domain' &&
-	fail "a --set value with a space was split into a task domain: $S_ERR" ||
+printf '%s\n' "$T_OUT$T_ERR" | grep -q 'domain' &&
+	fail "a --set value with a space was split into a task domain: $T_ERR" ||
 	pass "a --set value with a space survives the hop as one argument"
 
 # ---------------------------------------------------------------------------
@@ -295,56 +295,56 @@ banner "4b. A ticket's stamp beats the skill's phase (#229)"
 # the phase is the DEFAULT and the stamp OVERRIDES it; without that rule the
 # dispatcher silently replaces a decomposer's decision with a skill author's.
 stub_dispatch /review-pr --tier mechanical --prompt 'x'
-printf '%s\n' "$S_OUT" | grep -q 'model-for-mechanics' &&
+printf '%s\n' "$T_OUT" | grep -q 'model-for-mechanics' &&
 	pass "an explicit --tier beats the skill's own phase" ||
-	fail "--tier mechanical on /review-pr reached '$S_OUT'"
+	fail "--tier mechanical on /review-pr reached '$T_OUT'"
 stub_dispatch /review-pr --tier implementer --domain tests --prompt 'x'
-printf '%s\n' "$S_OUT" | grep -q 'model-for-testing' &&
+printf '%s\n' "$T_OUT" | grep -q 'model-for-testing' &&
 	pass "--tier with --domain resolves the pair, not the tier alone" ||
-	fail "--tier implementer --domain tests reached '$S_OUT'"
+	fail "--tier implementer --domain tests reached '$T_OUT'"
 stub_dispatch /review-pr --prompt 'x'
-printf '%s\n' "$S_OUT" | grep -q 'model-for-reviewing' &&
+printf '%s\n' "$T_OUT" | grep -q 'model-for-reviewing' &&
 	pass "with no override the phase still answers — the default is unchanged" ||
-	fail "an un-overridden dispatch reached '$S_OUT'"
+	fail "an un-overridden dispatch reached '$T_OUT'"
 # The override is held to the same closed vocabulary as every other tier.
 stub_dispatch /review-pr --tier janitor --prompt 'x'
-[ "$S_STATUS" = 2 ] && pass "an override outside the four tiers is exit 2, like every other unknown tier" ||
-	fail "--tier janitor exited $S_STATUS"
+[ "$T_STATUS" = 2 ] && pass "an override outside the four tiers is exit 2, like every other unknown tier" ||
+	fail "--tier janitor exited $T_STATUS"
 # A trailing `--tier` has nothing after it to take, which is the shape the
 # guard exists for. `--tier --prompt x` is NOT that shape — it swallows the
 # next word and dies on the unknown tier `--prompt`, loudly but for another
 # reason, so asserting only the status let the guard be deleted.
 stub_dispatch /review-pr --prompt 'x' --tier
-[ "$S_STATUS" = 2 ] && pass "a trailing --tier with nothing after it is a usage error" ||
-	fail "a trailing --tier exited $S_STATUS"
-case "$S_ERR" in
+[ "$T_STATUS" = 2 ] && pass "a trailing --tier with nothing after it is a usage error" ||
+	fail "a trailing --tier exited $T_STATUS"
+case "$T_ERR" in
 *"--tier needs one of"*) pass "…and says what it needed" ;;
-*) fail "…without saying what it needed: '$S_ERR'" ;;
+*) fail "…without saying what it needed: '$T_ERR'" ;;
 esac
 stub_dispatch /review-pr --tier --prompt 'x'
-[ "$S_STATUS" = 2 ] && pass "--tier followed by another flag dies on the tier it read, not silently" ||
-	fail "--tier --prompt exited $S_STATUS"
-case "$S_ERR" in
+[ "$T_STATUS" = 2 ] && pass "--tier followed by another flag dies on the tier it read, not silently" ||
+	fail "--tier --prompt exited $T_STATUS"
+case "$T_ERR" in
 *"unknown tier '--prompt'"*) pass "…naming the word it took, so the cause is legible" ;;
-*) fail "…without naming what it read: '$S_ERR'" ;;
+*) fail "…without naming what it read: '$T_ERR'" ;;
 esac
 # A domain is the second half of a ticket's stamp, never a sizing of its own.
 stub_dispatch /review-pr --domain tests --prompt 'x'
-[ "$S_STATUS" = 2 ] && pass "--domain without --tier is refused" || fail "--domain alone exited $S_STATUS"
-case "$S_ERR" in
+[ "$T_STATUS" = 2 ] && pass "--domain without --tier is refused" || fail "--domain alone exited $T_STATUS"
+case "$T_ERR" in
 *"not a sizing of its own"*) pass "…and says why" ;;
-*) fail "…without saying why: '$S_ERR'" ;;
+*) fail "…without saying why: '$T_ERR'" ;;
 esac
 # A dry run says WHICH of the two answered, so an operator reading it can tell
 # a ticket's decision from a skill's default.
 stub_dispatch /review-pr --tier mechanical --prompt 'x' --dry-run
-printf '%s\n' "$S_ERR$S_OUT" | grep -qi "ticket" &&
+printf '%s\n' "$T_ERR$T_OUT" | grep -qi "ticket" &&
 	pass "a dry run names the ticket as the source when it overrode the phase" ||
-	fail "the dry run does not say where the tier came from: $S_ERR"
+	fail "the dry run does not say where the tier came from: $T_ERR"
 stub_dispatch /review-pr --prompt 'x' --dry-run
-printf '%s\n' "$S_ERR$S_OUT" | grep -qi "phase" &&
+printf '%s\n' "$T_ERR$T_OUT" | grep -qi "phase" &&
 	pass "…and names the phase when the phase answered" ||
-	fail "the dry run does not name the phase as the source: $S_ERR"
+	fail "the dry run does not name the phase as the source: $T_ERR"
 
 # ---------------------------------------------------------------------------
 banner "4c. The kit's own dispatches are traced (owed since #249's review)"
@@ -361,7 +361,7 @@ stub_dispatch /review-pr --prompt 'traced review'
 if grep -rqs '"kind":"spawn"' "$SCRATCH/kit-trace"; then
 	pass "a kit dispatch writes its spawn record to the kit's own trace"
 else
-	fail "a kit dispatch wrote no spawn record — the wrapper does not name scripts/trace.kit.config.sh (exit $S_STATUS)"
+	fail "a kit dispatch wrote no spawn record — the wrapper does not name scripts/trace.kit.config.sh (exit $T_STATUS)"
 fi
 rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
 
@@ -378,13 +378,13 @@ banner "4d. A dispatched worker's prompt opens with the run and what the spawn s
 # is nothing for the second line to sit under, and neither is written.
 RUN587=20261007T104205Z-4242-0a1b2c3d
 PARENT587=20261007T090000Z-17-deadbeef
-spawn_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub "$@"; }
+spawn_dispatch() { t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=stub "$@"; }
 # dry_prompt — the prompt a dry run shows, between its two rules.
-dry_prompt() { printf '%s\n' "$S_OUT" | sed -n '/^--- prompt (/,/^--- end prompt ---$/p' | sed '1d;$d'; }
+dry_prompt() { printf '%s\n' "$T_OUT" | sed -n '/^--- prompt (/,/^--- end prompt ---$/p' | sed '1d;$d'; }
 
 spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket 587 --prompt 'build it' --dry-run
 p=$(dry_prompt)
-[ "$S_STATUS" = 0 ] || fail "a dry run with --ticket exited $S_STATUS: $S_ERR"
+[ "$T_STATUS" = 0 ] || fail "a dry run with --ticket exited $T_STATUS: $T_ERR"
 [ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $RUN587" ] &&
 	pass "a dry run's prompt opens with the run it was dispatched under" ||
 	fail "the prompt's first line is not 'Trace-Run: $RUN587': $(printf '%s\n' "$p" | sed -n 1p)"
@@ -425,9 +425,45 @@ p=$(dry_prompt)
 
 for bad in 0587 abc '#' 1234567 '587 x'; do
 	spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --ticket "$bad" --prompt 'x' --dry-run
-	[ "$S_STATUS" = 2 ] && pass "--ticket '$bad' is refused (exit 2)" ||
-		fail "--ticket '$bad' exited $S_STATUS"
+	[ "$T_STATUS" = 2 ] && pass "--ticket '$bad' is refused (exit 2)" ||
+		fail "--ticket '$bad' exited $T_STATUS"
 done
+
+# INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh mints the
+# worker's run and hands it down as TRACE_RUN, the dispatching run as
+# TRACE_PARENT; a skill dispatch the worker runs reads both back through the
+# trace script and checks each against the trace's id shape. A worker run in
+# any other shape is dropped there, and the two lines with it — so this leg
+# runs the real crossing, a stub worker that dispatches a skill, and reads the
+# prompt that worker's skill dispatch staged.
+NEST743="$SCRATCH/nesting-worker"
+cat >"$NEST743" <<NEST_EOF
+#!/bin/sh
+cat >/dev/null
+echo "worker TRACE_RUN=\${TRACE_RUN-unset}"
+cd "$STUBTREE" && AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket 743 --prompt 'nested' --dry-run
+NEST_EOF
+chmod +x "$NEST743"
+cat >"$SCRATCH/nesting.config.sh" <<NEST_CFG
+AGENT_HARNESSES='nest'
+AGENT_HARNESS_NEST_CMD='$NEST743 {model_flag} < {prompt_file}'
+AGENT_HARNESS_NEST_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='nest:'
+NEST_CFG
+cp "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
+printf "TRACE_DIR='%s'\n" "$SCRATCH/nest-trace" >"$STUBTREE/scripts/trace.kit.config.sh"
+spawn_dispatch AGENTS_CONFIG="$SCRATCH/nesting.config.sh" TRACE_DIR="$SCRATCH/nest-trace" \
+	TRACE_RUN=$PARENT587 sh scripts/agent-dispatch.sh implementer --prompt 'x'
+rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+[ "$T_STATUS" = 0 ] || fail "the dispatch whose worker runs a skill dispatch exited $T_STATUS: $T_ERR"
+worker743=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+p=$(dry_prompt)
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $worker743 $PARENT587" ] &&
+	pass "a skill dispatch inside a dispatched worker opens with the worker's run, the dispatching run its parent" ||
+	fail "the nested prompt's first line is not 'Trace-Run: $worker743 $PARENT587': $(printf '%s\n' "$p" | sed -n 1p)"
+[ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=none skill=tdd ticket=#743" ] &&
+	pass "…then the Trace-Spawn line" ||
+	fail "the nested prompt's second line is not the Trace-Spawn line: $(printf '%s\n' "$p" | sed -n 2p)"
 
 # ---------------------------------------------------------------------------
 banner "4e. A dry run names the spawn's agent type and model (#588)"
@@ -441,28 +477,28 @@ cat >"$STUBTREE/scripts/agents.kit.local.config.sh" <<'LOCAL_CFG'
 AGENT_TIER_REVIEWER='model-for-reviewing'
 AGENT_TIER_IMPLEMENTER_TESTS='model-for-testing'
 LOCAL_CFG
-local_dispatch() { t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh "$@"; }
+local_dispatch() { t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh "$@"; }
 local_dispatch /review-pr --prompt 'x' --dry-run
-case "$S_ERR" in
+case "$T_ERR" in
 *"agent type 'reviewer', model 'model-for-reviewing'"*) pass "a mapped tier's dry run names its agent type and the resolver's model" ;;
-*) fail "the dry run does not name agent type and model for a mapped tier: $S_ERR" ;;
+*) fail "the dry run does not name agent type and model for a mapped tier: $T_ERR" ;;
 esac
 local_dispatch /tdd --tier implementer --domain tests --prompt 'x' --dry-run
-case "$S_ERR" in
+case "$T_ERR" in
 *"agent type 'implementer', model 'model-for-testing'"*) pass "…the model is the tier-and-domain answer, the type the tier's" ;;
-*) fail "the dry run does not resolve the domain for the model: $S_ERR" ;;
+*) fail "the dry run does not resolve the domain for the model: $T_ERR" ;;
 esac
 local_dispatch /tdd --tier planner --prompt 'x' --dry-run
-case "$S_ERR" in
+case "$T_ERR" in
 *"agent type 'planner', no model"*) pass "an unmapped tier's dry run names its agent type and no model — the spawn inherits" ;;
-*) fail "the dry run does not name the agent type with no model for an unmapped tier: $S_ERR" ;;
+*) fail "the dry run does not name the agent type with no model for an unmapped tier: $T_ERR" ;;
 esac
 # A resolver that REFUSES is not an unmapped tier: a value it cannot accept
 # must not read as "no model — the spawn inherits" (PR #618 review, M-2):
 # here the policy file the dispatch names does not exist.
-t_run_split env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=absent sh scripts/skill-dispatch.kit.sh /tdd --tier planner --prompt 'x' --dry-run
-case "$S_STATUS:$S_ERR" in
-0:* | *"no model"*) fail "a refused resolution read as an unmapped tier (exit $S_STATUS): $S_ERR" ;;
+t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$STUBTREE" AGENT_HARNESS_SELF=absent sh scripts/skill-dispatch.kit.sh /tdd --tier planner --prompt 'x' --dry-run
+case "$T_STATUS:$T_ERR" in
+0:* | *"no model"*) fail "a refused resolution read as an unmapped tier (exit $T_STATUS): $T_ERR" ;;
 *) pass "a resolver that refuses fails the dry run instead of printing 'no model'" ;;
 esac
 

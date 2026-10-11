@@ -1313,8 +1313,8 @@ t_write_config() {
 }
 
 # t_resolve_tier <args> — scripts/agents.lib.sh, run as an agent runs it,
-# streams kept apart (t_run_split owns why).
-t_resolve_tier() { t_run_split sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
+# streams kept apart (t_exec owns why).
+t_resolve_tier() { t_exec sh "$T_ROOT/scripts/agents.lib.sh" "$@"; }
 
 # t_line_of <file> <literal> — the number of the first line of <file> holding
 # <literal> as a fixed string; empty when none does.
