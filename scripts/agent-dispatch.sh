@@ -1193,7 +1193,9 @@ _budget_announce
 # The budget is applied by budget_run, which wraps the worker on both spawn
 # paths: a derived budget runs it down the rung the record names — the scope
 # rung decided by a pre-flight before the spawn, falling to rlimits out loud
-# when systemd-run refuses — and an inherited or disabled one runs it bare.
+# when systemd-run refuses — and an inherited or disabled one runs it bare:
+# under the watchdog through budget_run, and with no timeout by this file's
+# own eval, which _spawn_run explains.
 # What the run leaves behind is BUDGET_VERDICT: the scope's pids.events /
 # memory.events counters, written by a wrapper inside the scope after the
 # worker exits, and read back by budget_verdict. The verdict is that flag,
@@ -1300,7 +1302,21 @@ _spawn_run() {
 	# template that redirects `< {prompt_file}` still wins over this </dev/null.
 	if [ -z "$TIMEOUT" ]; then
 		_WORKER_STARTED=1
-		budget_run "$BUDGET_RECORD_FILE" "$BUDGET_VERDICT" --unit "$SCOPE_UNIT" -- sh -c "$CMD" </dev/null
+		if [ "$RUN_RUNG" = none ]; then
+			# No rung to open, so the template is eval'd HERE, in this shell, as
+			# it always was — not handed to budget_run. The library runs its
+			# command in a subshell of its own (that is how it never exits or
+			# writes to its caller), and a template has always had this shell:
+			# the variables it never exported, and a `cd` or an `exit` of its
+			# own taking effect here. A subshell cannot give it those, so this
+			# one rung stays with the dispatcher (PRD #742 R19). The one path
+			# that still reaches the library's bare run is a scope refused at
+			# its pre-flight on a sh whose ulimit sets no process count: that
+			# worker runs under `sh -c`, as the rlimit rung's always did.
+			eval "$CMD" </dev/null
+		else
+			budget_run "$BUDGET_RECORD_FILE" "$BUDGET_VERDICT" --unit "$SCOPE_UNIT" -- sh -c "$CMD" </dev/null
+		fi
 		_worker_status=$?
 		_ran_rung
 		return 0

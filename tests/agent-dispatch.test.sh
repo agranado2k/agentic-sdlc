@@ -1909,6 +1909,21 @@ case "$S_OUT" in
 *) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$S_OUT" | grep CG=)" ;;
 esac
 
+# With no budget and no timeout the command template is eval'd in the
+# dispatcher's OWN shell, as it was before the Budget moved into its library
+# (#747): the template reads a variable the dispatcher holds and never
+# exported. A worker run through the library, or a `sh -c`, would not see it.
+CFG_PEEK="$SCRATCH/peek.config.sh"
+cat >"$CFG_PEEK" <<'EOF'
+AGENT_HARNESSES='peek'
+AGENT_HARNESS_PEEK_CMD='echo "TIER-SEEN=${TIER:-unset}" {model_flag} < {prompt_file}'
+AGENT_HARNESS_PEEK_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='peek:'
+EOF
+AGENTS_CONFIG="$CFG_PEEK" dispatch implementer --prompt 'x' --no-budget
+s_assert_status 0 "--no-budget with no timeout runs the worker"
+s_assert_out_has 'TIER-SEEN=implementer' "…in the dispatcher's own shell — its unexported variables reach the template"
+
 # NESTING (ADR-0006 clause 7): a dispatch that finds the budget in its
 # environment inherits it and OPENS NO SCOPE. A fake systemd-run on PATH records
 # whether it was called; an inherited dispatch must never call it, and the
