@@ -57,16 +57,6 @@ failures=0
 HAVE_NODE=0
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
-assert_out_lacks() {
-	case "$LAST_OUT" in
-	*"$1"*)
-		fail "output unexpectedly mentions '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-		;;
-	*) pass "output does not mention '$1' (as documented)" ;;
-	esac
-}
-
 # The double-brace MARK, assembled from variables so this script never contains
 # a literal one.
 #

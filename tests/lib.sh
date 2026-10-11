@@ -394,6 +394,101 @@ s_assert_err_lacks() {
 	esac
 }
 
+# --- the expect_* family -----------------------------------------------------
+# The one assertion family every suite is migrating to (#749, #750, #751). It
+# sits beside the merged family (t_run / LAST_OUT / assert_status /
+# assert_out_*) and the split family (t_run_split / S_* / s_assert_*) under
+# names that collide with neither, so both can move across one suite at a time.
+#
+# t_exec <cmd...> — run it with stdout, stderr and the exit status kept apart,
+# in T_OUT, T_ERR and T_STATUS. Always returns 0. Needs SCRATCH (t_init).
+t_exec() {
+	_te_err=$(mktemp "$SCRATCH/err.XXXXXX") || exit 2
+	T_OUT=$("$@" 2>"$_te_err")
+	T_STATUS=$?
+	T_ERR=$(cat "$_te_err")
+	rm -f "$_te_err"
+	return 0
+}
+
+# _t_expect <held: 0|1> <label> <why> — the one verdict every expect_* reaches:
+# a pass, or one FAIL line followed by both streams, stdout under '>' and
+# stderr under '|', an empty stream left out.
+_t_expect() {
+	if [ "$1" = 0 ]; then
+		pass "$2"
+		return 0
+	fi
+	fail "$2 — $3"
+	[ -n "$T_OUT" ] && printf '%s\n' "$T_OUT" | sed 's/^/        > /'
+	[ -n "$T_ERR" ] && printf '%s\n' "$T_ERR" | sed 's/^/        | /'
+	return 0
+}
+
+# _t_has <haystack> <needle> — 0 when the needle is in it.
+_t_has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
+
+# expect_status <n> <label> — the last t_exec exited n.
+expect_status() {
+	[ "$T_STATUS" = "$1" ]
+	_t_expect $? "$2" "expected status $1, got $T_STATUS"
+}
+
+# expect_exit <n> <label> -- <cmd...> — t_exec the command, then expect_status.
+expect_exit() {
+	if [ "${3:-}" != "--" ]; then
+		fail "expect_exit $1 '$2' — no '--' before the command"
+		return 0
+	fi
+	_ee_n=$1
+	_ee_label=$2
+	shift 3
+	t_exec "$@"
+	expect_status "$_ee_n" "$_ee_label"
+}
+
+# expect_out_is <expected> <label> — exactly that stdout, whatever the status.
+expect_out_is() {
+	[ "$T_OUT" = "$1" ]
+	_t_expect $? "$2" "expected stdout exactly '$1'"
+}
+
+# expect_resolved <expected> <label> — status 0 AND exactly that stdout.
+expect_resolved() {
+	[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$1" ]
+	_t_expect $? "$2" "expected status 0 and stdout '$1', got status $T_STATUS"
+}
+
+# expect_out_has / expect_out_lacks / expect_err_has / expect_err_lacks
+# <needle> [<label>] — the needle is (or is not) in that one stream.
+expect_out_has() {
+	_t_has "$T_OUT" "$1"
+	_t_expect $? "${2:-stdout mentions '$1'}" "stdout lacks '$1'"
+}
+expect_out_lacks() {
+	! _t_has "$T_OUT" "$1"
+	_t_expect $? "${2:-stdout does not mention '$1'}" "stdout should NOT contain '$1'"
+}
+expect_err_has() {
+	_t_has "$T_ERR" "$1"
+	_t_expect $? "${2:-stderr mentions '$1'}" "stderr lacks '$1'"
+}
+expect_err_lacks() {
+	! _t_has "$T_ERR" "$1"
+	_t_expect $? "${2:-stderr does not mention '$1'}" "stderr should NOT contain '$1'"
+}
+
+# expect_said / expect_unsaid <needle> [<label>] — the needle is (or is not)
+# in EITHER stream: the merged family's claim, made on split registers.
+expect_said() {
+	_t_has "$T_OUT" "$1" || _t_has "$T_ERR" "$1"
+	_t_expect $? "${2:-output mentions '$1'}" "neither stream mentions '$1'"
+}
+expect_unsaid() {
+	! { _t_has "$T_OUT" "$1" || _t_has "$T_ERR" "$1"; }
+	_t_expect $? "${2:-output does not mention '$1'}" "output should NOT mention '$1'"
+}
+
 # t_mark <NAME> — the double-brace placeholder mark, e.g. `t_mark PROJECT_OWNER`.
 #
 # Assembled from variables so no suite contains a LITERAL mark. The kit repo is

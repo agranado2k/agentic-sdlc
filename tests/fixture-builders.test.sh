@@ -209,6 +209,107 @@ red s_assert_err_has "absent"       && pass "s_assert_err_has fails on a missing
 red s_assert_err_lacks "err"        && pass "s_assert_err_lacks fails on a present needle"   || fail "s_assert_err_lacks passed a present needle"
 
 # ---------------------------------------------------------------------------
+banner "The merged-family assertions can go red"
+# ---------------------------------------------------------------------------
+# assert_status and assert_out_* carry most suites' claims and, until the
+# migration to the expect_* family lands, nothing drove them red: an
+# assertion that always passed would pass every suite that leans on it.
+red assert_status 0 x -- sh -c 'exit 3' && pass "assert_status fails on a wrong status" || fail "assert_status passed a wrong status"
+t_run sh -c 'echo out; echo err >&2'
+red assert_out_has "absent"  && pass "assert_out_has fails on a missing needle"  || fail "assert_out_has passed a missing needle"
+red assert_out_lacks "err"   && pass "assert_out_lacks fails on a present needle" || fail "assert_out_lacks passed a present needle"
+
+# ---------------------------------------------------------------------------
+banner "The expect_* family: t_exec keeps three registers, every expect_* goes red and green"
+# ---------------------------------------------------------------------------
+# One family for every suite's claims (#749): t_exec fills T_OUT, T_ERR and
+# T_STATUS apart; an expect_* that does not hold prints FAIL, counts exactly
+# one failure and shows both streams — stdout under '>', stderr under '|'.
+t_exec sh -c 'echo out; echo err >&2; exit 3'
+[ "$T_OUT" = "out" ] && [ "$T_ERR" = "err" ] && [ "$T_STATUS" = 3 ] &&
+	pass "t_exec keeps stdout, stderr and status apart" ||
+	fail "t_exec mixed its registers: out='$T_OUT' err='$T_ERR' status=$T_STATUS"
+t_exec sh -c 'exit 0' && pass "t_exec itself returns 0 whatever the command exits" || fail "t_exec returned non-zero"
+
+# green <assertion…> — it passes: no failure counted, an ok line printed.
+green() {
+	_g=$( (failures=0; "$@"; echo "counted=$failures") 2>&1)
+	case "$_g" in *"counted=0"*) case "$_g" in *"  ok "*) return 0 ;; esac ;; esac
+	return 1
+}
+t_exec sh -c 'echo out; echo err >&2; exit 3'
+for _case in \
+	"expect_status|3|0" \
+	"expect_out_is|out|nope" \
+	"expect_out_has|ou|absent" \
+	"expect_out_lacks|absent|out" \
+	"expect_err_has|er|absent" \
+	"expect_err_lacks|absent|err" \
+	"expect_said|err|absent" \
+	"expect_unsaid|absent|out"; do
+	IFS='|' read -r _fn _ok _bad <<CASE
+$_case
+CASE
+	green "$_fn" "$_ok" x && pass "$_fn passes when it holds" || fail "$_fn failed on '$_ok', which holds"
+	red "$_fn" "$_bad" x && pass "$_fn fails when it does not hold" || fail "$_fn passed on '$_bad', which does not hold"
+done
+# expect_said / expect_unsaid read EITHER stream — the stdout needle as well as the stderr one.
+green expect_said out x && pass "expect_said finds a needle on stdout too" || fail "expect_said missed a stdout needle"
+red expect_unsaid err x && pass "expect_unsaid fails on a needle on stderr" || fail "expect_unsaid passed a stderr needle"
+red expect_unsaid out x && pass "expect_unsaid fails on a needle on stdout" || fail "expect_unsaid passed a stdout needle"
+# expect_resolved: status 0 AND exactly that stdout.
+t_exec sh -c 'echo model-a; echo warn >&2'
+green expect_resolved model-a x && pass "expect_resolved passes on status 0 and the exact answer" || fail "expect_resolved failed a right answer"
+red expect_resolved model-b x && pass "expect_resolved fails on a wrong answer" || fail "expect_resolved passed a wrong answer"
+t_exec sh -c 'echo model-a; exit 1'
+red expect_resolved model-a x && pass "expect_resolved fails on a non-zero status" || fail "expect_resolved passed a non-zero status"
+# expect_exit runs the command itself.
+green expect_exit 3 x -- sh -c 'exit 3' && pass "expect_exit passes on the expected status" || fail "expect_exit failed the expected status"
+red expect_exit 0 x -- sh -c 'exit 3' && pass "expect_exit fails on a wrong status" || fail "expect_exit passed a wrong status"
+expect_exit 4 "expect_exit fills the registers" -- sh -c 'echo o; echo e >&2; exit 4'
+[ "$T_OUT" = o ] && [ "$T_ERR" = e ] && pass "expect_exit leaves T_OUT and T_ERR for the next expect_*" || fail "expect_exit left out='$T_OUT' err='$T_ERR'"
+
+# What a failure looks like: one FAIL line, stdout lines under '>', stderr under '|'.
+t_exec sh -c 'printf "o1\no2\n"; printf "e1\ne2\n" >&2; exit 3'
+_f=$( (failures=0; expect_status 0 "the label"; echo "counted=$failures") 2>&1)
+[ "$(printf '%s\n' "$_f" | grep -c 'FAIL')" = 1 ] && printf '%s\n' "$_f" | grep -q 'FAIL.*the label' &&
+	pass "a failing expect_* prints one FAIL line carrying its label" || fail "the failure did not print one labelled FAIL line: $_f"
+printf '%s\n' "$_f" | grep -q 'counted=1$' && pass "a failing expect_* counts exactly one failure" || fail "the failure count was not 1: $_f"
+for _l in '> o1' '> o2' '| e1' '| e2'; do
+	printf '%s\n' "$_f" | grep -qx "[[:space:]]*$_l" && pass "the dump shows '$_l'" || fail "the dump lacks '$_l': $_f"
+done
+
+# ---------------------------------------------------------------------------
+banner "Only the test harness defines an assertion (#749)"
+# ---------------------------------------------------------------------------
+# A suite that redefines one of tests/lib.sh's assertions shadows it, and its
+# claims then rest on a copy nobody drives red (kit-demo's assert_out_lacks did).
+# shadowed_assertions <tests-dir> — prints file:name for every function defined
+# under <tests-dir>, outside lib.sh, that carries an assertion's name from lib.sh.
+_assertion_names=$(sed -n 's/^\([a-z_]*assert_[a-z_]*\|expect_[a-z_]*\)() *{.*/\1/p' "$KIT/tests/lib.sh")
+shadowed_assertions() {
+	grep -rnE '^[[:space:]]*[a-z_]+[[:space:]]*\(\)' "$1" 2>/dev/null |
+		while IFS= read -r _hit; do
+			_file=${_hit%%:*}
+			[ "${_file##*/}" = lib.sh ] && continue
+			_name=$(printf '%s\n' "${_hit#*:*:}" | sed 's/^[[:space:]]*\([a-z_]*\).*/\1/')
+			printf '%s\n' "$_assertion_names" | grep -qx -- "$_name" && printf '%s:%s\n' "${_file#"$1"/}" "$_name"
+		done
+}
+printf '%s\n' "$_assertion_names" | grep -qx expect_said && printf '%s\n' "$_assertion_names" | grep -qx assert_status &&
+	pass "the scan reads both families' names out of tests/lib.sh" || fail "the scan read no assertion names: '$_assertion_names'"
+_bait="$SCRATCH/749-shadow"
+mkdir -p "$_bait/nested"
+printf '%s_%s() { :; }\n' assert out_lacks >"$_bait/nested/bait.test.sh"
+printf '%s_%s() { :; }\n' expect said >"$_bait/lib.sh"
+_shadow=$(shadowed_assertions "$_bait")
+[ "$_shadow" = "nested/bait.test.sh:assert_out_lacks" ] &&
+	pass "a planted redefinition is caught, lib.sh's own definitions are not" || fail "the scan missed the bait or flagged lib.sh: '$_shadow'"
+_shadow=$(shadowed_assertions "$KIT/tests")
+[ -z "$_shadow" ] && pass "no file under tests/ but the test harness defines an assertion" ||
+	fail "these files redefine a test-harness assertion: $(echo $_shadow)"
+
+# ---------------------------------------------------------------------------
 banner "Suite scratch names itself, and stale scratch is swept (#221)"
 # ---------------------------------------------------------------------------
 # A suite killed at its budget (#209) dies before its trap, by design, so its
