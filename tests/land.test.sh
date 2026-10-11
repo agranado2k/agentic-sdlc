@@ -1516,7 +1516,9 @@ bait scripts/train-helper.sh 'gh pr merge "$n" --merge --admin' "a session's hel
 bait scripts/train-helper.sh "sh scripts/trace.sh emit kind=merge.land subject=pr:#\$n data.via=train-helper" "a helper emitting merge.land"
 bait scripts/train-helper.sh 'gh api -X PUT "repos/o/r/pulls/$n/merge"' "a helper calling the REST merge endpoint"
 bait scripts/train-helper.sh 'gh api graphql -f query="mutation { mergePullRequest(input: {}) { clientMutationId } }"' "a helper calling the GraphQL merge"
-bait scripts/train-helper.sh 'printf "{\"kind\":\"merge.land\"}" >>"$trace"' "a helper writing merge.land as JSON"
+bait scripts/train-helper.sh 'printf "{\"kind\":\"merge.land\"}" >>"$trace"' "a helper writing merge.land as escaped JSON"
+bait scripts/emit.mjs 'appendFileSync(trace, JSON.stringify({"kind":"merge.land"}))' "a script writing merge.land as plain JSON"
+bait scripts/emit.mjs '{ "kind": "merge.land", "subject": "pr:#1" }' "a JSON line with spaces around its colon"
 bait .agents/skills/merge-train/SKILL.md 'sh scripts/trace.sh emit kind=merge.land data.via=train-helper' "a second emit line in the train skill"
 bait .agents/skills/merge-train/SKILL.md 'gh pr merge "$PR" --admin' "a second merge line in the train skill"
 bait .agents/skills/review-pr/SKILL.md 'gh pr merge <N> --auto' "a merge in another skill"
@@ -1525,7 +1527,7 @@ bait .agents/skills/review-pr/SKILL.md 'gh pr merge <N> --auto' "a merge in anot
 
 # The train skill says it in one line, and says how a release-bound red lands.
 MT="$KIT/.agents/skills/merge-train/SKILL.md"
-assert_file_has "$MT" "A merge outside the landing script is not a landing"
+assert_file_has "$MT" "a merge outside the landing script is not a landing"
 assert_file_has "$MT" "lands only after the release is cut"
 
 t_done "land one PR by hand"
