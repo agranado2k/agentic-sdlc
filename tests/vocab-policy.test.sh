@@ -80,8 +80,8 @@ else
 fi
 # …and it is the file the kit itself is held to: run from the kit with no
 # env var, discovery finds this file (order 2), not another.
-t_run_split sh "$VOCAB" fields
-[ "$S_OUT" = "$FIELDS" ] && pass "run from the kit, the checker reads scripts/vocab.config.sh" ||
+t_exec sh "$VOCAB" fields
+[ "$T_OUT" = "$FIELDS" ] && pass "run from the kit, the checker reads scripts/vocab.config.sh" ||
 	fail "run from the kit, the checker read something other than the shipped policy file"
 
 # ---------------------------------------------------------------------------
@@ -237,18 +237,18 @@ bait_lines=$(tier_spellers "$SCRATCH/bait-tiers" | grep -c '^scripts/agents\.lib
 assert_equal "bait: exactly the echo line of the planted resolver is found" "$bait_lines" "1"
 
 # The names the dispatchers print are the resolver's, read rather than spelled.
-t_run_split sh "$KIT/scripts/skill-dispatch.kit.sh" --phase-tier bogus
-s_assert_status 2 "the skill dispatcher refuses an unknown phase"
-s_assert_err_has "The vocabulary is closed: planner implementer tester mechanical reviewer." "…naming the phases, tester after implementer"
-t_run_split sh "$KIT/scripts/agent-dispatch.sh"
-s_assert_err_has "tier is one of: planner implementer mechanical reviewer" "the agent-harness dispatcher's usage names the resolver's tiers"
+t_exec sh "$KIT/scripts/skill-dispatch.kit.sh" --phase-tier bogus
+expect_status 2 "the skill dispatcher refuses an unknown phase"
+expect_err_has "The vocabulary is closed: planner implementer tester mechanical reviewer." "…naming the phases, tester after implementer"
+t_exec sh "$KIT/scripts/agent-dispatch.sh"
+expect_err_has "tier is one of: planner implementer mechanical reviewer" "the agent-harness dispatcher's usage names the resolver's tiers"
 
 # A skill dispatcher with no resolver beside it says so, never "closed: ."
 mkdir -p "$SCRATCH/lonely/scripts"
 cp "$KIT/scripts/skill-dispatch.kit.sh" "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.kit.config.sh" "$SCRATCH/lonely/scripts/"
-t_run_split sh "$SCRATCH/lonely/scripts/skill-dispatch.kit.sh" --phase-tier reviewer
-s_assert_status 2 "a skill dispatcher with no resolver beside it exits 2"
-s_assert_err_has "cannot read the tier names" "…and says it could not read the tier names"
+t_exec sh "$SCRATCH/lonely/scripts/skill-dispatch.kit.sh" --phase-tier reviewer
+expect_status 2 "a skill dispatcher with no resolver beside it exits 2"
+expect_err_has "cannot read the tier names" "…and says it could not read the tier names"
 
 # Bootstrap asks the checker, not the resolver: a kit tree older than the
 # resolver (docs-demo's 0.3.0 kit) still bootstraps and still strips the
@@ -258,8 +258,8 @@ t_kit_tree "$KIT" "$OLDKIT"
 rm -f "$OLDKIT/scripts/agents.lib.sh"
 (cd "$OLDKIT" && git init -q -b main && git config user.name t && git config user.email t@example.invalid &&
 	git config commit.gpgsign false && git add -A && git commit -q -m init --no-verify)
-t_run_split sh -c "cd '$OLDKIT' && sh bootstrap.sh 'Old Kit' 'A kit tree with no resolver.' </dev/null"
-s_assert_status 0 "bootstrap runs in a kit tree with no resolver"
+t_exec sh -c "cd '$OLDKIT' && sh bootstrap.sh 'Old Kit' 'A kit tree with no resolver.' </dev/null"
+expect_status 0 "bootstrap runs in a kit tree with no resolver"
 left=$(ls "$OLDKIT/.claude/agents" 2>/dev/null | tr '\n' ' ')
 assert_equal "…and strips every tier's agent type" "$left" ""
 
