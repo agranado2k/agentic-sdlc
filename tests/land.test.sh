@@ -134,6 +134,7 @@ esac
 pr_version() {
 	printf '# a note\nshared-layer: %s\n\nfiles:\n' "$1"
 	shift
+	[ -z "${STUB_PR_NO_LIST:-}" ] || { printf 'skills:\n  grill-me\n'; return; }
 	for _e in scripts/shared.sh UPDATING.md "$@"; do printf '  %s  annotated\n' "$_e"; done
 	printf 'skills:\n  grill-me\n'
 }
@@ -1385,7 +1386,7 @@ no_bump() {
 		pass "$2: no landing reached the trace" || fail "$2: a landing was recorded: $(show "pr:#$1")"
 	s_assert_err_has "hard rule 3" "$2: stderr names the hard rule"
 }
-iterated 700 701 702 703 704 705 707 708 709 710 714 715
+iterated 700 701 702 703 704 705 707 708 709 710 714 715 716
 land STUB_PR_FILES='scripts/shared.sh docs/notes.md' 700
 no_bump 700 "a manifest-listed file moved, the version unchanged"
 s_assert_err_has "scripts/shared.sh" "stderr names the moved manifest-listed file"
@@ -1432,6 +1433,9 @@ s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION"
 land STUB_PR_BASE_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 714
 not_landed 714 "a PR whose merge base VERSION could not be read"
 s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION at the merge base"
+land STUB_PR_NO_LIST=1 STUB_PR_FILES='scripts/shared.sh' 716
+not_landed 716 "a PR whose VERSION lists no files at either end"
+s_assert_err_has "reads empty" "stderr says the list read empty"
 land STUB_PR_DIFF_RC=128 715
 not_landed 715 "a PR whose diff git could not compute"
 s_assert_err_has "could not diff" "stderr names the failed diff"

@@ -302,6 +302,7 @@ _sl_moved=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.quotePath GIT_CONFIG_VALUE_
 _sl_before=$(git -C "$ROOT" show "$_sl_mb:VERSION" 2>/dev/null) && _sl_after=$(git -C "$ROOT" show "$HEAD_OID:VERSION" 2>/dev/null) ||
 	refuse "VERSION could not be read at its merge base and head, so $_sl_unread"
 _sl_listed=$({ printf '%s\n' "$_sl_before" | manifest_section files; printf '%s\n' "$_sl_after" | manifest_section files; } | sort -u)
+[ -n "$_sl_listed" ] || refuse "VERSION's files: list reads empty at its merge base and head, so $_sl_unread"
 # The moved paths the manifest names, at either end, one per line.
 _sl_hit=$(printf '%s\n' "$_sl_moved" | while IFS= read -r _sl_p; do
 	[ -n "$_sl_p" ] && printf '%s\n' "$_sl_listed" | grep -qxF -- "$_sl_p" && printf '%s\n' "$_sl_p"
