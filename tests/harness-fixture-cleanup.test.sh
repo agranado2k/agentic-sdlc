@@ -39,12 +39,12 @@ banner "1. the full harness run leaves the docs-conf-* count unchanged"
 # ---------------------------------------------------------------------------
 TMP1="$SCRATCH/tmp-full"
 mkdir -p "$TMP1"
-before=$(leftovers "$TMP1")
 status=$(harness "$ROOT/scripts/docs-conformance" "$TMP1")
 [ "$status" = 0 ] && pass "the harness passes" || fail "the harness exited $status — see $(tail -20 "$TMP1.log" | tr '\n' '|')"
 after=$(leftovers "$TMP1")
-[ "$after" = "$before" ] && pass "docs-conf-* count unchanged ($before before, $after after)" ||
-	fail "the harness left $((after - before)) docs-conf-* directories behind"
+# The private temp directory starts empty, so "unchanged" is zero.
+[ "$after" = 0 ] && pass "docs-conf-* count unchanged (0 before, 0 after)" ||
+	fail "the harness left $after docs-conf-* directories behind"
 
 # ---------------------------------------------------------------------------
 banner "2. the count goes red when the helper's after-hook is gone"
