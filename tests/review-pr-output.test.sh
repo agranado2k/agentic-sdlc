@@ -72,6 +72,13 @@
 #      the bands with its evidence, path (a) and the relay raise a LOW
 #      data.posted=no and post none, and /pr-iterate applies a mechanical LOW
 #      or declines it citing the band — never escalates one.
+#  18. The lenses resolve against the AUTHOR's model (#730): §3's one resolve
+#      names the session model as the author's — read from the spawn prompt's
+#      `Author-Model:` line, never the orchestrator's own — and /implement's
+#      step 9(b) writes that line. Run as written against a throwaway policy,
+#      with an orchestrator on the reviewer's own model: a diff authored on
+#      another model resolves the reviewer with no warning, one authored on the
+#      reviewer's model warns. The pre-#730 span is the bait: it warns falsely.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1293,5 +1300,56 @@ for b in \
 		fail "bait: ${b%%|*} with the band test reworded was not caught — or the bait planted nothing"
 done
 rm -rf "$SCRATCH/bt-bait"
+
+# ---------------------------------------------------------------------------
+banner "18. The lenses resolve against the author's model, not the orchestrator's (#730)"
+# ---------------------------------------------------------------------------
+# shellcheck disable=SC2016 # the span is matched as text, never expanded here
+resolve_span=$(grep -o '`model=$(AGENT_SESSION_MODEL=[^`]*`' "$SKILL_ABS" | head -n 1 | tr -d '`')
+case $resolve_span in
+*"'<author>'"*"sh scripts/agents.lib.sh reviewer)") pass "§3 resolves the reviewer tier with the author named as the session: $resolve_span" ;;
+*) fail "§3's one resolve no longer names the author as the session model — got '$resolve_span' (#730)" ;;
+esac
+assert_file_has "$SKILL" "\`Author-Model:\` line"
+assert_file_has ".agents/skills/implement/SKILL.md" "\`Author-Model: <"
+# lens_resolve <span> <author> — the span run as an agent runs it, from the
+# root, by an orchestrator that exported its OWN model (the reviewer's) as the
+# session, against a policy where the reviewer and the author differ.
+AUTHOR_POLICY="$SCRATCH/730-agents.config.sh"
+t_write_config "$AUTHOR_POLICY" "AGENT_TIER_REVIEWER='stand-in-reviewer'
+AGENT_TIER_IMPLEMENTER='stand-in-implementer'"
+lens_resolve() {
+	_lr_cmd=$(printf '%s' "$1" | sed "s/<author>/$2/")
+	t_run_split env AGENTS_TIER_QUIET= AGENTS_CONFIG="$AUTHOR_POLICY" \
+		AGENT_SESSION_MODEL=stand-in-reviewer sh -c "$_lr_cmd; printf '%s' \"\$model\""
+}
+lens_resolve "$resolve_span" stand-in-implementer
+if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = stand-in-reviewer ] && [ -z "$S_ERR" ]; then
+	pass "a diff authored on another model: the lenses resolve to the reviewer, no warning"
+else
+	fail "a diff authored on another model: expected 'stand-in-reviewer' and no warning, got status $S_STATUS, '$S_OUT', stderr '$S_ERR'"
+fi
+lens_resolve "$resolve_span" stand-in-reviewer
+case $S_ERR in
+*"share the author's model"*) [ -z "$S_OUT" ] && pass "a diff authored on the reviewer's own model: nothing resolves, and it warns" ||
+	fail "a diff authored on the reviewer's own model resolved '$S_OUT' — the author's model reviewing itself" ;;
+*) fail "a diff authored on the reviewer's own model did not warn — stderr '$S_ERR'" ;;
+esac
+# No Author-Model line names nobody: the empty session turns the self-check
+# off rather than falling back to the orchestrator's own model.
+lens_resolve "$resolve_span" ''
+if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = stand-in-reviewer ] && [ -z "$S_ERR" ]; then
+	pass "no author named: the lenses resolve to the reviewer, no warning"
+else
+	fail "no author named: expected 'stand-in-reviewer' and no warning, got status $S_STATUS, '$S_OUT', stderr '$S_ERR'"
+fi
+# The bait: the span before #730, the session left to the orchestrator.
+# shellcheck disable=SC2016
+lens_resolve 'model=$(sh scripts/agents.lib.sh reviewer)' stand-in-implementer
+case $S_ERR in
+*"share the author's model"*) pass "bait: the orchestrator's own model as the session warns falsely on another author's diff" ;;
+*) fail "bait: the pre-#730 span did not warn — the leg above cannot fail" ;;
+esac
+rm -f "$AUTHOR_POLICY"
 
 t_done "/review-pr output contract"

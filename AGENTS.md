@@ -129,8 +129,9 @@ behind it and the domain axis (`content`, `self-implemented`, `judge`) are
 **Before you spawn a reviewer, say what you run on:** `AGENT_SESSION_MODEL=<the
 word the policy file uses> sh scripts/agents.kit.sh reviewer [domain]`: the
 resolver walks the answer, the plain tier, then the policy's ordered fallback,
-skipping yours. **A reviewer spawn that fails on its first call** (rate limit,
-login): re-resolve with `AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added.
+skipping yours — a review's lenses name the diff's author instead (`/review-pr`
+§3). **A reviewer spawn that fails on its first call** (rate limit, login):
+re-resolve with `AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added.
 A spent walk prints nothing, with a warning your report quotes (ADR-0013).
 **Here the walk is Sonnet only** (ADR-0020, amended): nothing printed means spawn
 no review — never inherit — and a session off the Sonnet family spawns it.
