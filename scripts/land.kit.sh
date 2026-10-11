@@ -290,8 +290,6 @@ bumped() {
 	_bp_v=$(layer_version "$2")
 	[ -n "$_bp_v" ] && [ "$_bp_v" != "$(layer_version "$1")" ] && printf '%s\n' "$_bp_v"
 }
-# sl_value <VERSION text> — the shared-layer line's value as written, for a message.
-sl_value() { printf '%s\n' "$1" | sed -n 's/^shared-layer: *//p' | head -1 | tr -cd '[:print:]' | cut -c1-40; }
 _sl_unread="its diff could not be read to check the shared layer"
 [ "$HEAD_OID" != '<unnamed>' ] || refuse "the forge did not name its head commit, so $_sl_unread"
 git -C "$ROOT" fetch -q origin "$BASE" "refs/pull/$PR/head" >/dev/null 2>&1 ||
@@ -309,7 +307,8 @@ _sl_hit=$(printf '%s\n' "$_sl_moved" | while IFS= read -r _sl_p; do
 	[ -n "$_sl_p" ] && printf '%s\n' "$_sl_listed" | grep -qxF -- "$_sl_p" && printf '%s\n' "$_sl_p"
 done)
 if [ -n "$_sl_hit" ] && ! bumped "$_sl_before" "$_sl_after" >/dev/null; then
-	refuse "it moves the shared layer — $(printf '%s\n' "$_sl_hit" | tr '\n' ' ')— with no new version on VERSION's shared-layer line ($(sl_value "$_sl_before") at its merge base, $(sl_value "$_sl_after") at its head); a shared-layer change is a release (AGENTS.md hard rule 3): bump the minor in VERSION, record it in UPDATING.md, re-capture the pinned transcripts"
+	_sl_was=$(layer_version "$_sl_before") _sl_now=$(layer_version "$_sl_after")
+	refuse "it moves the shared layer — $(printf '%s\n' "$_sl_hit" | tr '\n' ' ')— with no new version on VERSION's shared-layer line (${_sl_was:-no version} at its merge base, ${_sl_now:-no version} at its head); a shared-layer change is a release (AGENTS.md hard rule 3): bump the minor in VERSION, record it in UPDATING.md, re-capture the pinned transcripts"
 fi
 
 [ -n "$TICKET" ] || TICKET=$(field ticket)

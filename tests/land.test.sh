@@ -145,10 +145,10 @@ fetch)
 	exit "${STUB_FETCH_RC:-0}"
 	;;
 merge-base) [ "${STUB_MB_RC:-0}" = 0 ] || exit "$STUB_MB_RC"; printf '%s\n' "$_mb" ;;
-diff) for _f in ${STUB_PR_FILES:-}; do printf '%s\n' "$_f"; done ;;
+diff) [ "${STUB_PR_DIFF_RC:-0}" = 0 ] || exit "$STUB_PR_DIFF_RC"; for _f in ${STUB_PR_FILES:-}; do printf '%s\n' "$_f"; done ;;
 show)
 	case $2 in
-	"$_mb:VERSION") pr_version 0.1.0 ${STUB_MANIFEST_BASE_EXTRA:-} ;;
+	"$_mb:VERSION") [ "${STUB_PR_BASE_SHOW_RC:-0}" = 0 ] || exit "$STUB_PR_BASE_SHOW_RC"; pr_version 0.1.0 ${STUB_MANIFEST_BASE_EXTRA:-} ;;
 	"$_ho:VERSION")
 		[ "${STUB_PR_HEAD_SHOW_RC:-0}" = 0 ] || exit "$STUB_PR_HEAD_SHOW_RC"
 		pr_version "${STUB_PR_VER_HEAD:-0.1.0}" ${STUB_MANIFEST_HEAD_EXTRA:-}
@@ -1385,7 +1385,7 @@ no_bump() {
 		pass "$2: no landing reached the trace" || fail "$2: a landing was recorded: $(show "pr:#$1")"
 	s_assert_err_has "hard rule 3" "$2: stderr names the hard rule"
 }
-iterated 700 701 702 703 704 705 706 707 708 709 710
+iterated 700 701 702 703 704 705 707 708 709 710 714 715
 land STUB_PR_FILES='scripts/shared.sh docs/notes.md' 700
 no_bump 700 "a manifest-listed file moved, the version unchanged"
 s_assert_err_has "scripts/shared.sh" "stderr names the moved manifest-listed file"
@@ -1413,8 +1413,8 @@ s_assert_err_has "scripts/leaves.sh" "the leaving file is named"
 land STUB_PR_FILES='scripts/shared.sh' STUB_PR_VER_HEAD=banana 705
 no_bump 705 "a shared-layer line moved to no version"
 
-land STUB_PR_FILES='scripts/shared.sh' 706 --no-iteration 'aside' --no-review 'aside'
-no_bump 706 "the trace overrides do not reach the shared-layer check"
+land STUB_PR_FILES='scripts/shared.sh' 713 --no-iteration 'aside' --no-review 'aside'
+no_bump 713 "the trace overrides do not reach the shared-layer check"
 
 land STUB_PR_FILES='scripts/shared.sh' 707 --train
 no_bump 707 "a train's landing"
@@ -1429,6 +1429,12 @@ s_assert_err_has "could not be read" "and says the diff could not be read"
 land STUB_PR_HEAD_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 710
 not_landed 710 "a PR whose head VERSION could not be read"
 s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION"
+land STUB_PR_BASE_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 714
+not_landed 714 "a PR whose merge base VERSION could not be read"
+s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION at the merge base"
+land STUB_PR_DIFF_RC=128 715
+not_landed 715 "a PR whose diff git could not compute"
+s_assert_err_has "could not diff" "stderr names the failed diff"
 
 t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 711 </dev/null
 s_assert_status 0 "unconfigured, a PR moving nothing listed still lands"
@@ -1437,5 +1443,6 @@ printf '%s\n' "STUB_PR_FILES='scripts/shared.sh'" >"$STUB_KNOBS"
 t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 712 </dev/null
 : >"$STUB_KNOBS"
 not_landed 712 "unconfigured, an unbumped shared-layer move"
+s_assert_err_has "hard rule 3" "unconfigured, the refusal is the shared-layer one"
 
 t_done "land one PR by hand"
