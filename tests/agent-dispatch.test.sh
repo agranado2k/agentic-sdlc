@@ -2262,6 +2262,18 @@ t_exec env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
 	pass "show run:<the worker's run> prints the pair — the operator's one command" ||
 	fail "show found $(printf '%s\n' "$T_OUT" | grep -c .) lines for run:$WORKER_RUN"
 
+# THE WORKER'S RUN HAS THE SHAPE THE TRACE MINTS (#743). The trace's ids are a
+# UTC timestamp, a pid and eight hex characters, and every reader that checks a
+# run id — the skill dispatcher's Trace-Run line among them — checks that
+# shape. A worker run minted with the scratch directory's six-character mktemp
+# suffix in the last place failed it, so a skill dispatch inside the worker
+# dropped its Trace-Run and Trace-Spawn lines in silence.
+printf '%s\n' "$WORKER_RUN" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}' &&
+	pass "the worker's run takes the trace's id shape — timestamp, pid, eight hex" ||
+	fail "the worker's run is not in the trace's id shape: $WORKER_RUN"
+# tests/skill-phase.test.sh 4d holds what the shape is for: a skill dispatch
+# inside a worker keeps both lines.
+
 # A STALE PARENT IS WORSE THAN NONE. This process's own TRACE_PARENT was set by
 # whoever dispatched IT, and passing it on would name the worker's grandparent
 # as its parent. So the worker's is always set explicitly — to the empty string

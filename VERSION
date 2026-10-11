@@ -31,7 +31,8 @@
 #
 # Versioning, pre-1.0: the MINOR bumps whenever the set of shared files or their
 # content changes, so a consumer can always ask "is my layer byte-identical to
-# the release I claim?" and get a yes/no. There is no patch-level for prose.
+# the release I claim?" and get a yes/no. There is no patch-level for prose;
+# a behaviour fix to a shared file that adds nothing takes the PATCH.
 # The split is deliberate: the validator ENGINE is shared because a fix to it
 # should reach every project, while the RULES are local because they are the
 # thing each project must own and review.
@@ -2722,6 +2723,23 @@
 # (ticket #691), ADR-0022; #726 (ticket #723), #722 (ticket #718) and #721
 # (ticket #719), the records' reads and checks; #735 (ticket #731), #698
 # (ticket #690) and #717 (ticket #716), suite fixes; the diary entries.
+# 0.70.1 — a dispatched worker's run id has the shape the trace mints
+# (ticket #743). A PATCH: it releases this fix alone.
+# NO file joins and NO file leaves the shared layer. ONE shared file changes
+# behaviour besides UPDATING.md. scripts/agent-dispatch.sh minted a worker's
+# run as a UTC timestamp, its pid and its scratch directory's six-character
+# mktemp suffix; the trace's ids end in eight hex characters, and every
+# reader that checks a run id refused the suffix — so a skill dispatch inside
+# a dispatched worker dropped its Trace-Run and Trace-Spawn lines in silence.
+# The run now ends in the scratch path's CRC, printed as eight hex. And
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+# This header gains its PATCH sentence: a behaviour fix to a shared file that
+# adds nothing takes the patch.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# None: no skill, wiring or template moves.
+# Kit-only, never shipped: the root manual's hard rule 3 names the patch
+# beside the minor; tests/agent-dispatch.test.sh and tests/skill-phase.test.sh
+# hold the worker run's shape and the nested lines.
 
 # 0.71.0 — the worker Budget lives in its own library (ticket #747, PRD
 # #742). ONE file JOINS the shared layer: scripts/budget.lib.sh, the kit's

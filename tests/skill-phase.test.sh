@@ -429,6 +429,42 @@ for bad in 0587 abc '#' 1234567 '587 x'; do
 		fail "--ticket '$bad' exited $T_STATUS"
 done
 
+# INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh mints the
+# worker's run and hands it down as TRACE_RUN, the dispatching run as
+# TRACE_PARENT; a skill dispatch the worker runs reads both back through the
+# trace script and checks each against the trace's id shape. A worker run in
+# any other shape is dropped there, and the two lines with it — so this leg
+# runs the real crossing, a stub worker that dispatches a skill, and reads the
+# prompt that worker's skill dispatch staged.
+NEST743="$SCRATCH/nesting-worker"
+cat >"$NEST743" <<NEST_EOF
+#!/bin/sh
+cat >/dev/null
+echo "worker TRACE_RUN=\${TRACE_RUN-unset}"
+cd "$STUBTREE" && AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket 743 --prompt 'nested' --dry-run
+NEST_EOF
+chmod +x "$NEST743"
+cat >"$SCRATCH/nesting.config.sh" <<NEST_CFG
+AGENT_HARNESSES='nest'
+AGENT_HARNESS_NEST_CMD='$NEST743 {model_flag} < {prompt_file}'
+AGENT_HARNESS_NEST_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='nest:'
+NEST_CFG
+cp "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
+printf "TRACE_DIR='%s'\n" "$SCRATCH/nest-trace" >"$STUBTREE/scripts/trace.kit.config.sh"
+spawn_dispatch AGENTS_CONFIG="$SCRATCH/nesting.config.sh" TRACE_DIR="$SCRATCH/nest-trace" \
+	TRACE_RUN=$PARENT587 sh scripts/agent-dispatch.sh implementer --prompt 'x'
+rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+[ "$T_STATUS" = 0 ] || fail "the dispatch whose worker runs a skill dispatch exited $T_STATUS: $T_ERR"
+worker743=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+p=$(dry_prompt)
+[ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $worker743 $PARENT587" ] &&
+	pass "a skill dispatch inside a dispatched worker opens with the worker's run, the dispatching run its parent" ||
+	fail "the nested prompt's first line is not 'Trace-Run: $worker743 $PARENT587': $(printf '%s\n' "$p" | sed -n 1p)"
+[ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=none skill=tdd ticket=#743" ] &&
+	pass "…then the Trace-Spawn line" ||
+	fail "the nested prompt's second line is not the Trace-Spawn line: $(printf '%s\n' "$p" | sed -n 2p)"
+
 # ---------------------------------------------------------------------------
 banner "4e. A dry run names the spawn's agent type and model (#588)"
 # ---------------------------------------------------------------------------

@@ -227,7 +227,7 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.70.0 or older, the worker Budget lives in its own library.**
+**Arriving from 0.70.1 or older, the worker Budget lives in its own library.**
 One file joins at 0.71.0, `scripts/budget.lib.sh`; none leaves. It is the
 budget a dispatched worker runs under, moved out of
 `scripts/agent-dispatch.sh` behind four sourced functions, and the
@@ -241,6 +241,15 @@ kill took the wrapper, a child holds the scope open — has those counters
 read from outside, so a ceiling it hit exits 71 where the run's own status
 used to pass through beside "the verdict cannot be read". Part 2 has nothing
 to take.
+
+**Arriving from 0.70.0 or older, a dispatched worker's run id has the trace's shape.**
+No file joins or leaves at 0.70.1, a patch. One shared file changes behaviour
+besides this recipe: `scripts/agent-dispatch.sh` mints a worker's run ending
+in eight hex characters, the shape the trace's own ids take, where it ended
+in the scratch directory's six-character suffix — which every reader that
+checks a run id refused, so a skill dispatch inside a dispatched worker
+dropped its `Trace-Run:` and `Trace-Spawn:` lines. Nothing to set, and
+nothing for Part 2: no skill, wiring or template moves.
 
 **Arriving from 0.69.0 or older, the trace answers "which run am I in?".**
 No file joins or leaves at 0.70.0. One shared file changes content besides
@@ -1261,10 +1270,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2942 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2956 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3096 insertions(+), 1 deletion(-)
+ 3 files changed, 3110 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

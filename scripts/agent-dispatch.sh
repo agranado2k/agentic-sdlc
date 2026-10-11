@@ -946,9 +946,11 @@ done
 # dispatch is not a skill invocation: the stack's owner is a skill's main
 # thread, and two concurrent dispatches pushing it would lose a run. So the id
 # is made from the two things this process already holds that no other dispatch
-# shares — its scratch's own mktemp suffix and its pid — behind a UTC
-# timestamp, which is the shape the trace script's own ids take.
-WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-${SCRATCH##*.}"
+# shares — its scratch directory and its pid — behind a UTC timestamp, in the
+# shape the trace script's own ids take: timestamp, pid, eight hex characters.
+# The scratch's mktemp suffix is not hex and is six long, and every reader that
+# checks a run id rejects it (#743) — so the path's CRC is printed as the hex.
+WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-$(printf '%08x' "$(printf '%s' "$SCRATCH" | cksum | cut -d' ' -f1)")"
 
 # _trace_spawn — the spawn, ONE definition, called at each site that is about
 # to cross (or to fail at crossing). `dispatched` is this dispatcher's own
