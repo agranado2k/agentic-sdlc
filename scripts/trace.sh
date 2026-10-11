@@ -1134,7 +1134,7 @@ trace_emit() {
 # an agent harness's one-command shell — registers a process that is gone the
 # moment the command returns, so its entry reads `stale` while its run is
 # still open; stale is a report, never a verdict, which is why nothing but
-# `end` removes an entry (ADR-0026 records the limit).
+# `end` removes an entry (the kit's ADR-0026 records the limit).
 
 # trace_register <run> <parent> <opened> — lands <run>'s entry. Needs
 # TRACE_ROOT_DIR, and trace_key and trace_identity already asked.
