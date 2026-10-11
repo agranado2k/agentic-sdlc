@@ -31,7 +31,8 @@
 #
 # Versioning, pre-1.0: the MINOR bumps whenever the set of shared files or their
 # content changes, so a consumer can always ask "is my layer byte-identical to
-# the release I claim?" and get a yes/no. There is no patch-level for prose.
+# the release I claim?" and get a yes/no. There is no patch-level for prose;
+# a behaviour fix to a shared file that adds nothing takes the PATCH.
 # The split is deliberate: the validator ENGINE is shared because a fix to it
 # should reach every project, while the RULES are local because they are the
 # thing each project must own and review.
@@ -2689,7 +2690,38 @@
 # ADR-0008; ADR-0020, ADR-0021, ADR-0023 and the
 # index rows; scripts/worktree-cleanup.kit.sh.
 
-shared-layer: 0.69.0
+# 0.69.1 — a dispatched worker's run id has the shape the trace mints
+# (ticket #743). Releases what landed on main after v0.69.0 with no bump, up
+# to origin/main at 7d40460, by the standing ruling that the first release to
+# land absorbs another wave's unbumped landings.
+# A PATCH: no file joins or leaves, and one shared file changes behaviour.
+# scripts/agent-dispatch.sh minted a worker's run as a UTC timestamp, its pid
+# and its scratch directory's six-character mktemp suffix; the trace's ids end
+# in eight hex characters, and every reader that checks a run id refused the
+# suffix — so a skill dispatch inside a dispatched worker dropped its
+# Trace-Run and Trace-Spawn lines in silence. The run now ends in the scratch
+# path's CRC, printed as eight hex. And UPDATING.md: the arriving-from
+# paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# From #736 (ticket #732): a /review-pr lens raises a LOW only when it passes
+# the band rule's test, and .agents/prompts/review-worker.md (9f) and
+# templates/workflows/ai-review-prompt.md (9c) carry the same rule (9a — take
+# /review-pr whole, its six lens files with it). From #739 (ticket #730):
+# /review-pr resolves its lenses against the author's model, never the
+# orchestrator's, and /implement's review spawn names that author on an
+# Author-Model line (9a). From #740 (ticket #729): /merge-train records no
+# merge.land of its own where the landing script lands the PR (9a).
+# Kit-only, never shipped: this PR (ticket #743) — tests/agent-dispatch and
+# tests/skill-phase hold the worker run's shape and the nested lines; #734
+# (ticket #728), the landing script refuses a shared-layer move with no
+# version bump (ADR-0025); #740's landing script as the kit's one merge.land
+# emitter; #735 (ticket #731), the harness fixture-cleanup suite, which
+# bootstrap strips; #727 (ticket #724) and #702 (ticket #691), the kit's and
+# the Codex session's reviewer follow the Sonnet family (ADR-0020 amended,
+# ADR-0022); #721 (ticket #719), #722 (ticket #718) and #726 (ticket #723),
+# record fixes; #698 (ticket #690) and #717 (ticket #716), suite fixes.
+
+shared-layer: 0.69.1
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
