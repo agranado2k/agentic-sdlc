@@ -66,7 +66,7 @@ the PR can be landed past by hand. The refusal has to sit at the merge.
 5. **An unread diff refuses.** The script refuses the same way, naming what
    failed, when any of these fails: the forge names no head commit, the
    fetch fails, there is no merge base, the diff fails, or `VERSION` cannot
-   be read at either end.
+   be read at either end, or the `files:` list reads empty at both ends.
 6. **Where it runs.** The check comes after ADR-0019's checks (step 1b) and
    before the `pr.open` write (step 1d). So a PR that fails both checks is
    named for the iteration and review first.
