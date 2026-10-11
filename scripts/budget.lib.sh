@@ -26,10 +26,11 @@
 #   budget_verdict <verdict-file> [--timed-out]
 #       prints `tasks` or `memory` — the ceiling the run hit — or nothing.
 #       Returns 1 with the reason on stderr when the verdict cannot be read.
+#       While the run's scope still lives and its wrapper has written
+#       nothing, the scope's counters are recorded from outside first.
 #       --timed-out is a watchdog's call, made before it signals a run that
-#       outlived its time: while the run's scope still lives and its wrapper
-#       has written nothing, the scope's counters are recorded from outside
-#       first, with 124 — a timeout's status — as the run's.
+#       outlived its time: that record carries 124, a timeout's status, as
+#       the run's; without it the status is `-`, none seen.
 #   budget_inherited_bounds [<record-file>]
 #       prints the enclosing cgroup's limits — cgroup, tasks (<n> or max),
 #       memory_mib (<n> or max) — when that cgroup already bounds the caller:
@@ -53,8 +54,8 @@
 #
 # THE VERDICT FILE is `<pids.events max> <memory.events oom_kill> <status>`,
 # written from inside the scope after the command exits — `-` for a counter
-# that could not be read, never 0 — or from outside it by --timed-out, the
-# status then 124. Three files beside it carry the rest:
+# that could not be read, never 0 — or from outside it by budget_verdict, the
+# status then 124 under --timed-out and `-` otherwise. Three files beside it carry the rest:
 # <verdict-file>.started (written inside the scope before the command runs),
 # .rung (the rung the command ran under) and .unit (the scope's name).
 #
@@ -559,16 +560,20 @@ budget_verdict() (
 	scope | scope-tasks) ;;
 	*) return 0 ;;
 	esac
-	# From outside the scope, while it lives, for a watchdog about to signal:
+	# From outside the scope, while it lives. For a watchdog about to signal:
 	# once the scope empties, its cgroup and the counters are gone, and a
-	# ceiling hit before the watchdog fired is the earlier event.
-	if [ "$_bv_timed_out" = 1 ] && [ ! -f "$_bv" ] && [ -f "$_bv.unit" ]; then
+	# ceiling hit before the watchdog fired is the earlier event. And for a
+	# run whose wrapper died while something of its tree still holds the
+	# scope open: the counters outlived the wrapper, so they are read rather
+	# than reported missing.
+	if [ ! -f "$_bv" ] && [ -f "$_bv.unit" ]; then
 		read -r _bv_unit <"$_bv.unit"
 		_bv_cg=$(systemctl --user show -p ControlGroup --value "$_bv_unit" 2>/dev/null)
 		if [ -n "$_bv_cg" ]; then
 			eval "$(_budget_counters_text)"
 			_cg_counters "$_bv_cg"
-			printf '%s %s %s\n' "$_pm" "$_ok" 124 >"$_bv"
+			if [ "$_bv_timed_out" = 1 ]; then _bv_status=124; else _bv_status=-; fi
+			printf '%s %s %s\n' "$_pm" "$_ok" "$_bv_status" >"$_bv"
 		fi
 	fi
 	if [ ! -f "$_bv.started" ]; then

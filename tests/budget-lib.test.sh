@@ -261,8 +261,8 @@ s_assert_out_is "" "…and nothing is printed"
 # From outside the scope, while it lives. The stub manager names the unit's
 # cgroup by a path that climbs out of /sys/fs/cgroup into this suite's
 # scratch, so the counters read are a fixture's: a task ceiling already hit.
-# Only a caller whose watchdog is about to signal asks for that read, with
-# --timed-out, and the verdict it leaves carries the status a timeout has.
+# A watchdog about to signal says --timed-out, and the verdict that read
+# leaves carries the status a timeout has.
 SDCG="$SCRATCH/sd-cg"
 mkdir -p "$SDCG" "$SCRATCH/cg"
 printf '#!/bin/sh\necho "/../../..%s"\n' "$SCRATCH/cg" >"$SDCG/systemctl"
@@ -282,10 +282,14 @@ if [ -d /sys/fs/cgroup ]; then
 	s_assert_status 0 "--timed-out reads a live scope's counters from outside"
 	s_assert_out_is tasks "…and a ceiling already hit on them is the verdict"
 	[ "$(cat "$V" 2>/dev/null)" = "3 0 124" ] && pass "…recorded with the status a timeout has, 124" || fail "the verdict written from outside is '$(cat "$V" 2>/dev/null)', expected '3 0 124'"
+	# The wrapper died and the scope outlived it — a pressure kill took the
+	# wrapper, a child it left holds the cgroup open: the counters are still
+	# there, and the verdict is read from them rather than given up on. No
+	# watchdog fired, so the run's status is the unknown one, `-`.
 	outside
-	s_assert_status 1 "without --timed-out a missing verdict file is unreadable"
-	s_assert_err_has "verdict file is missing"
-	[ -f "$V" ] && fail "a verdict was written from outside without --timed-out" || pass "…and nothing is read from outside the scope"
+	s_assert_status 0 "a wrapper that died in a scope still alive leaves a verdict that reads"
+	s_assert_out_is tasks "…the ceiling its counters show"
+	[ "$(cat "$V" 2>/dev/null)" = "3 0 -" ] && pass "…recorded with no status, since none was seen" || fail "the verdict written from outside is '$(cat "$V" 2>/dev/null)', expected '3 0 -'"
 else
 	skip "no /sys/fs/cgroup here — the outside read is not judged"
 fi
