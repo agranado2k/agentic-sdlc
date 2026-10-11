@@ -1449,4 +1449,85 @@ t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL
 not_landed 712 "unconfigured, an unbumped shared-layer move"
 s_assert_err_has "hard rule 3" "unconfigured, the refusal is the shared-layer one"
 
+
+# ---------------------------------------------------------------------------
+banner "17. The landing script is the kit's one merge.land emitter and one forge merge (#729)"
+# ---------------------------------------------------------------------------
+# On 2026-10-10 a session landed 17 PRs through a train helper of its own:
+# it merged past this script's gate and wrote merge.land itself, after #662
+# had made the script the train's per-PR step. A rule the prose states and no
+# check holds routes around as easily as that, so this section scans the
+# kit's tracked files for a merge.land emitter (a `kind=merge.land` emit, or
+# the event spelled as JSON, its quotes escaped or not) and a forge merge call (`gh pr merge`, the REST
+# merge endpoint, the GraphQL mutation), and fails on any outside the landing
+# script and /merge-train's no-script path — one emit line and one merge line,
+# for a consumer with no landing script. The suites (which stub and forbid
+# these calls) and the history records (which narrate them) are not scanned:
+# neither runs, and neither instructs an agent.
+LAND_EMIT_RE='kind=merge\.land|\\?"kind\\?" *: *\\?"merge\.land|gh pr merge|pulls/[^ /]*/merge([^-a-z_]|$)|mergePullRequest'
+# landing_emitters <root> — every hit in <root>'s tracked files, `<path>:<line>:<text>`.
+landing_emitters() {
+	git -C "$1" grep -nE "$LAND_EMIT_RE" -- . ':!tests' ':!docs/adr' ':!docs/diary.md'
+}
+# landing_strays <root> — the hits nothing allows: the landing script's are
+# allowed whole; the train skill's first emit line and first merge line are
+# its no-script path, and a second of either is a stray.
+landing_strays() {
+	landing_emitters "$1" | awk -F: '
+		$1 == "scripts/land.kit.sh" { next }
+		$1 == ".agents/skills/merge-train/SKILL.md" && /kind=merge\.land/ && !e++ { next }
+		$1 == ".agents/skills/merge-train/SKILL.md" && /gh pr merge/ && !m++ { next }
+		{ print }'
+}
+
+hits=$(landing_emitters "$KIT")
+printf '%s\n' "$hits" | grep -q '^scripts/land\.kit\.sh:[0-9]*:.*kind=merge\.land' &&
+	printf '%s\n' "$hits" | grep -q '^scripts/land\.kit\.sh:[0-9]*:.*gh pr merge' &&
+	pass "the scan finds the landing script's own emitter and merge — it is not blind" ||
+	fail "the scan does not find the landing script's emitter and merge: $hits"
+strays=$(landing_strays "$KIT")
+[ -z "$strays" ] && pass "no kit file but the landing script and the train's no-script path emits merge.land or merges" ||
+	fail "merge.land emitters or forge merges outside the landing script: $strays"
+
+# The bait: a scratch repo shaped like the kit, the allowed lines in place,
+# then one stray at a time — each must be named, and the allowed shape not.
+BAIT="$SCRATCH/emitters"
+mkdir -p "$BAIT/scripts" "$BAIT/.agents/skills/merge-train" "$BAIT/tests"
+git -C "$BAIT" init -q
+printf '%s\n' 'gh pr merge "$PR" --merge' 'trace loud kind=merge.land "$@"' >"$BAIT/scripts/land.kit.sh"
+printf '%s\n' 'gh pr merge "$PR" --merge' '`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N>`' \
+	'gh api -X PUT "repos/{owner}/{repo}/pulls/$PR/update-branch"' >"$BAIT/.agents/skills/merge-train/SKILL.md"
+printf '%s\n' 'gh pr merge 1 --merge' 'kind=merge.land' >"$BAIT/tests/x.test.sh"
+git -C "$BAIT" add -A
+[ -z "$(landing_strays "$BAIT")" ] && pass "bait: the allowed shape, an update-branch call and a suite's stub are no strays" ||
+	fail "bait: the allowed shape was flagged: $(landing_strays "$BAIT")"
+# bait <path> <line> <label> — the line planted at <path> is named a stray.
+bait() {
+	mkdir -p "$(dirname "$BAIT/$1")"
+	cp "$BAIT/$1" "$SCRATCH/emitters.held" 2>/dev/null || : >"$SCRATCH/emitters.held"
+	printf '%s\n' "$2" >>"$BAIT/$1"
+	git -C "$BAIT" add -A
+	landing_strays "$BAIT" | grep -q "^$1:" && pass "bait: $3 is named" || fail "bait: $3 went unnamed"
+	cp "$SCRATCH/emitters.held" "$BAIT/$1"
+	[ -s "$BAIT/$1" ] || rm -f "$BAIT/$1"
+	git -C "$BAIT" add -A
+}
+bait scripts/train-helper.sh 'gh pr merge "$n" --merge --admin' "a session's helper calling gh pr merge"
+bait scripts/train-helper.sh "sh scripts/trace.sh emit kind=merge.land subject=pr:#\$n data.via=train-helper" "a helper emitting merge.land"
+bait scripts/train-helper.sh 'gh api -X PUT "repos/o/r/pulls/$n/merge"' "a helper calling the REST merge endpoint"
+bait scripts/train-helper.sh 'gh api graphql -f query="mutation { mergePullRequest(input: {}) { clientMutationId } }"' "a helper calling the GraphQL merge"
+bait scripts/train-helper.sh 'printf "{\"kind\":\"merge.land\"}" >>"$trace"' "a helper writing merge.land as escaped JSON"
+bait scripts/emit.mjs 'appendFileSync(trace, JSON.stringify({"kind":"merge.land"}))' "a script writing merge.land as plain JSON"
+bait scripts/emit.mjs '{ "kind": "merge.land", "subject": "pr:#1" }' "a JSON line with spaces around its colon"
+bait .agents/skills/merge-train/SKILL.md 'sh scripts/trace.sh emit kind=merge.land data.via=train-helper' "a second emit line in the train skill"
+bait .agents/skills/merge-train/SKILL.md 'gh pr merge "$PR" --admin' "a second merge line in the train skill"
+bait .agents/skills/review-pr/SKILL.md 'gh pr merge <N> --auto' "a merge in another skill"
+[ -z "$(landing_strays "$BAIT")" ] && pass "bait: each stray removed, the shape is clean again" ||
+	fail "bait: a stray outlived its removal: $(landing_strays "$BAIT")"
+
+# The train skill says it in one line, and says how a release-bound red lands.
+MT="$KIT/.agents/skills/merge-train/SKILL.md"
+assert_file_has "$MT" "a merge outside the landing script is not a landing"
+assert_file_has "$MT" "lands only after the release is cut"
+
 t_done "land one PR by hand"

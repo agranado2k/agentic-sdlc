@@ -160,6 +160,11 @@ non-zero exit other than 2 stops the train, as a failed 4d does (hard rule
 6); 0 is landed. The train then writes no `merge.land` of its own for that
 PR: the line below is the no-script path only. The `feedback` after it stays
 the train's on both paths.
+Where it names one, a merge outside the landing script is not a landing —
+no helper of the train's own, no bare forge merge, and no `merge.land` the
+script did not write. A PR red only because it waits on a release
+lands only after the release is cut, through the script, never merged past
+its gate.
 
 **With no landing script, record each PR's fate as the train decides it**,
 one event per PR (`<ticket>` is the ticket it implemented), in the landing
