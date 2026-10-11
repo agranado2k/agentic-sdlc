@@ -1,12 +1,23 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { after } from "node:test";
 import defaultConfig from "../config.mjs";
 import { makeContext } from "../context.mjs";
+
+// Every fixture this test file made, removed when the file's tests finish —
+// passed, failed or never cleaned up by hand (#731). Each test file runs in
+// its own process under `node --test`, so a root-level after-hook is per file.
+const made = new Set();
+after(() => {
+  for (const root of made) rmSync(root, { recursive: true, force: true });
+  made.clear();
+});
 
 /** Write a `{ 'rel/path': 'content' }` map into a fresh temp dir; return root. */
 export function makeFixture(files) {
   const root = mkdtempSync(join(tmpdir(), "docs-conf-"));
+  made.add(root);
   for (const [rel, content] of Object.entries(files)) {
     const p = join(root, rel);
     mkdirSync(dirname(p), { recursive: true });

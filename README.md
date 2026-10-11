@@ -795,6 +795,10 @@ skeleton (K0).
   command, usage errors and a non-kit tree refused with exit 2, the exit code
   propagated, a dropped executable bit handed back without touching content,
   and Stryker's backup kept after a failed run.
+- `sh tests/harness-fixture-cleanup.test.sh` runs the whole docs harness with
+  a private temp directory and holds its `docs-conf-*` count unchanged — the
+  fixture helper removes every fixture a test file made, failed tests' too —
+  then disables the helper's after-hook in a copy to prove the count goes red.
 - `sh tests/harness-helpers.test.sh` drives the folded assertion helpers in
   `tests/lib.sh` — `t_text_has`, `t_fence`, `t_check_run` and `t_verdict_is` —
   through each branch, the failing ones included: a refusal assertion with no
@@ -975,6 +979,7 @@ sh tests/trace-prices.test.sh                          # the price table's stale
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
 sh tests/fixture-builders.test.sh                      # the test harness's fixture builders
 sh tests/harness-helpers.test.sh                       # the test harness's folded assertion helpers
+sh tests/harness-fixture-cleanup.test.sh               # a full docs-harness run leaves no fixture behind
 sh tests/design-brief-skill.test.sh                    # the /design-brief contract
 sh tests/housekeeping-skill.test.sh                    # the /housekeeping contract
 sh tests/retro-skill.test.sh                           # the /retro contract
