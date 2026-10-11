@@ -52,6 +52,12 @@ major pattern violations, a reimplemented helper duplicating an existing
 export; MEDIUM is redundant tests, unnecessary complexity, copy-paste
 blocks worth extracting once; LOW is minor simplifications and style.
 
+**Raise a LOW only when it passes the test of `/review-pr` §5's band
+rule, a clear and mechanical fix inside this diff;** drop every other
+LOW before it reaches the report, since triage declines it under that
+rule anyway, and only a candidate ticket, a LOW that asks this PR for
+nothing, is exempt.
+
 **Then ask which case the duplication is, because the two leave the
 report differently.** A duplication **the diff ADDS** — a new copy of
 something that already exists, or the same logic pasted twice within

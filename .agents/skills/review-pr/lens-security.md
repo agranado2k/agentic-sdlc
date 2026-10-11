@@ -21,3 +21,5 @@ Audit for injection of every kind the stack admits (SQL/NoSQL, command, template
 
 - **Truncate-before-failure (§11) — HIGH.** A `>` aimed at a file the repo or operator cannot lose, fed by a command that can fail — the redirect empties the target before the producer runs. Scratch-then-move is the fix; flag the bare form even when today's producer "cannot fail", because the next edit changes the producer, not the redirect.
 - **Interpreter drift (§12) — HIGH.** A snippet with no declared shell, or an unbraced expansion followed by text an interactive shell can reinterpret (`"$REF:x"` forms). The finding is the unpinned form itself, never whether the author's own shell happens to bite today — the operator's shell is not the author's.
+
+**Raise a LOW only when it passes the test of `/review-pr` §5's band rule, a clear and mechanical fix inside this diff;** drop every other LOW before it reaches the report, since triage declines it under that rule anyway, and only a candidate ticket, a LOW that asks this PR for nothing, is exempt.

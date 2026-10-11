@@ -25,3 +25,5 @@ Distinguish **genuine duplication worth removing** from **incidental similarity*
 - **A consolidation whose shared home is a shared-layer file**, or that ties a kit-only list to one — declined by the kit's root manual, hard rule 3: a shared-layer edit is a release action, never a passenger on a ticket.
 - **The kit wrapper's spawn-word bridge, read as a copy of the resolver's agent-harness split** — declined by the kit's ADR-0013 clause 2, which puts the spawn-word bridge in the wrapper on purpose.
 - **A restated bound that is the observable contract**, such as the coverage grammar's id bounds a suite holds beside `scripts/coverage.sh` — declined by the kit's living spec requirement process/R7, which makes those bounds the contract.
+
+**Raise a LOW only when it passes the test of `/review-pr` §5's band rule, a clear and mechanical fix inside this diff;** drop every other LOW before it reaches the report, since triage declines it under that rule anyway, and only a candidate ticket, a LOW that asks this PR for nothing, is exempt.

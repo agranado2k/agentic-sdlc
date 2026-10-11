@@ -36,3 +36,5 @@ When a mutation delta IS available, use its output like this:
 - **Never report the score itself as a finding.** This is a diagnostic, not a gate, and the score drifts run to run. Report mutants, which are reproducible; small score movements are noise.
 - **"The mutant is equivalent" is a legitimate resolution** — some mutants provably cannot be killed. If the author has already argued equivalence for a mutant, that closes it; do not re-raise it.
 - **Its silence is not coverage.** A mutation run covers only the tree the adapter scopes it to, so points 1–8 still apply across every other tree in the diff.
+
+**Raise a LOW only when it passes the test of `/review-pr` §5's band rule, a clear and mechanical fix inside this diff;** drop every other LOW before it reaches the report, since triage declines it under that rule anyway, and only a candidate ticket, a LOW that asks this PR for nothing, is exempt.
