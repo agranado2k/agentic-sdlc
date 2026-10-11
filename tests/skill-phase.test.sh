@@ -455,8 +455,8 @@ printf "TRACE_DIR='%s'\n" "$SCRATCH/nest-trace" >"$STUBTREE/scripts/trace.kit.co
 spawn_dispatch AGENTS_CONFIG="$SCRATCH/nesting.config.sh" TRACE_DIR="$SCRATCH/nest-trace" \
 	TRACE_RUN=$PARENT587 sh scripts/agent-dispatch.sh implementer --prompt 'x'
 rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
-[ "$S_STATUS" = 0 ] || fail "the dispatch whose worker runs a skill dispatch exited $S_STATUS: $S_ERR"
-worker743=$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+[ "$T_STATUS" = 0 ] || fail "the dispatch whose worker runs a skill dispatch exited $T_STATUS: $T_ERR"
+worker743=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
 p=$(dry_prompt)
 [ "$(printf '%s\n' "$p" | sed -n 1p)" = "Trace-Run: $worker743 $PARENT587" ] &&
 	pass "a skill dispatch inside a dispatched worker opens with the worker's run, the dispatching run its parent" ||
